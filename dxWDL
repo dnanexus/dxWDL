@@ -1,0 +1,141 @@
+#!/usr/bin/env python
+from __future__ import print_function
+
+import argparse
+import dxpy
+import fnmatch
+import json
+import pprint
+import os
+import subprocess
+import sys
+import time
+
+top_dir = os.path.dirname(sys.argv[0])
+asset_id = None
+project_id = None
+lib_object_ids = None
+required_libs = ["dnanexus-api-0.1.0-SNAPSHOT-jar-with-dependencies.jar",
+                 "dxWDL.jar"]
+
+def main():
+    argparser = argparse.ArgumentParser(description="compiler from WDL to dnanexus")
+    argparser.add_argument("command", choices=["compile"], help="command to issue to dxWDL")
+    argparser.add_argument("wdl_file", help="WDL workflow file")
+    argparser.add_argument("--destination", help="Output folder for workflow")
+    argparser.add_argument("--asset", help="Override configuration file asset Id")
+    args = argparser.parse_args()
+
+    if args.command == "compile":
+        cmd_compile(args)
+    else:
+        print("Unknown command {}".format(args.command), file=sys.stderr)
+        exit(1)
+
+def cmd_compile(args):
+    global asset_id
+
+    # Where should we write the result?
+    if args.destination is None:
+        destination = dxpy.config.get('DX_CLI_WD', u'/')
+    else:
+        destination = args.destination
+
+    # Figure out the asset ID
+    if args.asset is not None:
+        asset_id = args.asset
+    if asset_id is None:
+        print("Asset ID is undefined", file=sys.stderr)
+        exit(1)
+
+    jars = construct_java_classpath()
+    classpath = ":".join(jars)
+
+    # Print version
+    record = dxpy.DXRecord(asset_id)
+    desc = record.describe(incl_properties=True)
+    props = desc["properties"]
+    version = props["version"]
+    print("version={}".format(version), file=sys.stderr)
+
+    compile_workflow(args.wdl_file, destination, asset_id, classpath)
+
+# Build a workflow.
+#
+# wf             workflow name
+# classpath      java classpath needed for running compilation
+# destination    output path on the platform
+#
+# return --      workflow ID
+def compile_workflow(wf_file, destination, asset_id, classpath):
+    print("Compiling {}".format(wf_file), file=sys.stderr)
+    cmd_line = [
+        "java", "-cp", classpath, "dxWDL.Main", "compile", wf_file,
+        "-o", destination,
+        "-asset", asset_id
+    ]
+    print((" ".join(cmd_line)), file=sys.stderr)
+
+    # Call java/scala dxWDL compiler, and pipe stdout/stderr
+    outstr = subprocess.check_output(cmd_line)
+    wf = outstr.rstrip().split('\n')[-1]
+    print("wf={}".format(wf))
+    if "workflow-" not in wf:
+        print("Compilation error, aborting", file=sys.stderr)
+        exit(1)
+    return wf
+
+# Search for the jars locally. If not found, download
+# from the platform.
+def construct_java_classpath():
+    classpath = lookup_local_jars()
+    if classpath is not None:
+        return classpath
+    download_libs()
+    classpath = lookup_local_jars()
+    if classpath is None:
+        print("Error, could not find jars, after download", file=sys.stderr)
+        exit(1)
+    return classpath
+
+# Download libraries from the platform
+def download_libs():
+    if (lib_object_ids is None or
+        len(lib_object_ids) == 0):
+        print("Can't download libraries, download objects are not set", file=sys.stderr)
+        exit(1)
+
+    # We don't have all jars locally. Download them from the platform.
+    for fid in lib_object_ids:
+        dxfile = dxpy.DXFile(fid, project=project_id)
+        name = dxfile.describe()["name"]
+        print("downloading {}".format(name), file=sys.stderr)
+        dxpy.download_dxfile(fid, os.path.join(top_dir, name))
+
+def lookup_local_jars():
+    [jar_names, jar_paths] = find('*.jar', top_dir)
+    print("found {}".format(jar_names), file=sys.stderr)
+    classpath = []
+    for lib in required_libs:
+        if lib in jar_names:
+            index = jar_names.index(lib)
+            classpath.append(jar_paths[index])
+        else:
+            print("Not found {}".format(lib), file=sys.stderr)
+            return None
+    return classpath
+
+# Find all files that match regular expression [pattern]
+# starting from [path]
+def find(pattern, path):
+    names = []
+    paths = []
+    for root, dirs, files in os.walk(path):
+        for name in files:
+            if fnmatch.fnmatch(name, pattern):
+                names.append(name)
+                paths.append(os.path.join(root, name))
+    return [names, paths]
+
+if __name__ == '__main__':
+    main()

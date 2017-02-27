@@ -1,0 +1,6 @@
+{
+  "X.ia": [1, 2, 3],
+  "X.fa": [1.4, 3.14, 1.618],
+  "X.ba": [false, true, true],
+  "X.sa": ["hello", "Mrs", "Robinson"]
+}
