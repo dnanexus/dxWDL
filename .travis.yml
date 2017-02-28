@@ -1,0 +1,34 @@
+language: scala
+sudo: yes
+dist: xenial
+
+# Install java v1.8
+addons:
+  apt:
+    packages:
+      - openjdk-8-jdk-headless
+      - apt-transport-https
+      - wget
+      - git
+      - openssh-server
+      - tree
+      - python2.7
+      - python-pip
+      - maven
+
+before_install:
+  - .travis/before_install.sh
+
+script:
+  # Report software versions
+  - sbt about
+  - java -version
+  - cd dxWDL && make all
+  - ./run_tests.py
+
+env:
+  global:
+    # DX_WDL_TEST_PROJECT_ID
+    - secure:
+    # DX_AUTH_TOKEN (orodeh)
+    - secure:

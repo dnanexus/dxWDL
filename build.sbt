@@ -1,6 +1,8 @@
-import com.typesafe.sbt.GitPlugin.autoImport._
+//import com.typesafe.sbt.GitPlugin.autoImport._
 import sbt.Keys._
+enablePlugins(GitVersioning)
 
+//scalaVersion := "2.11.8"
 scalaVersion := "2.11.6"
 
 name := "dxWDL"

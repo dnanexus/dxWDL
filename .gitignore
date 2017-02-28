@@ -1,7 +1,7 @@
-project/
+project/project
+project/target
 target/
 execution/
-
 
 # compiled java classes
 *.class
