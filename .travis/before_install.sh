@@ -18,3 +18,11 @@ make -C dx-toolkit java
 git clone https://github.com/dnanexus-rnd/dxWDL.git
 mkdir -p dxWDL/lib
 cp dx-toolkit/lib/java/dnanexus-api-0.1.0-SNAPSHOT-jar-with-dependencies.jar dxWDL/lib
+
+# install dx-toolkit
+wget https://wiki.dnanexus.com/images/files/dx-toolkit-current-ubuntu-12.04-amd64.tar.gz
+tar zxf dx-toolkit-current-ubuntu-12.04-amd64.tar.gz
+source dx-toolkit/environment
+
+# login to the platform, with limited access to the test project only
+dx login --token ${DX_AUTH_TOKEN}
