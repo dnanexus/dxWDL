@@ -154,7 +154,7 @@ class WdlUnitTest extends FlatSpec with BeforeAndAfterEach with OneInstancePerTe
         //System.out.println(s"ns=${ns.toWdlString}")
     }
 
-    "AppletRunner" should "evaluate simple calls" in {
+    ignore should "evaluate simple calls" in {
         val wdl = """|task Add {
                      |  Int a
                      |  Int b
@@ -183,12 +183,12 @@ class WdlUnitTest extends FlatSpec with BeforeAndAfterEach with OneInstancePerTe
         val call : Call = getCallFromNamespace(ns, "Add2")
         val inputs = Map("Add.sum" -> WdlInteger(1))
         val outputs : Seq[(String, WdlType, WdlValue)] = evalCall(call, inputs)
-        assert(outputs.length == 1)
+        assert(outputs.length == 1);
         val result = outputs.head
         assert(result == ("sum",WdlIntegerType,WdlInteger(5)))
     }
 
-    it should "evaluate calls with a string array" in {
+    ignore should "evaluate calls with a string array" in {
         val wdl = """|task Concat {
                      |    Array[String] words
                      |
@@ -225,7 +225,7 @@ class WdlUnitTest extends FlatSpec with BeforeAndAfterEach with OneInstancePerTe
                    outputs.head == ("result",WdlStringType,WdlString("")))
     }
 
-    it should "evaluate calls with an int array" in {
+    ignore should "evaluate calls with an int array" in {
         val wdl = """|task Concat {
                      |    Array[Int] words
                      |
@@ -266,7 +266,7 @@ class WdlUnitTest extends FlatSpec with BeforeAndAfterEach with OneInstancePerTe
         Files.write(Paths.get(path), str.getBytes(StandardCharsets.UTF_8))
     }
 
-    "AppletRunner" should "evaluate calls with a file array" in {
+    ignore should "evaluate calls with a file array" in {
         val wdl = """|task wc {
                      |    Array[File] files
                      |
@@ -309,7 +309,7 @@ class WdlUnitTest extends FlatSpec with BeforeAndAfterEach with OneInstancePerTe
         assert(wdlType == WdlStringType)
     }
 
-    it should "evaluate calls with primitive array types" in {
+    ignore should "evaluate calls with primitive array types" in {
         val wdl = """|task Concat {
                      |    Array[Int] ia
                      |    Array[Float] fa
@@ -372,7 +372,7 @@ class WdlUnitTest extends FlatSpec with BeforeAndAfterEach with OneInstancePerTe
                    v == WdlString(""))
     }
 
-    it should "handle output arrays" in {
+    ignore should "handle output arrays" in {
         val wdl = """|task prepare {
                      |    command <<<
                      |    python -c "print('one\ntwo\nthree\nfour')"
@@ -542,7 +542,7 @@ class WdlUnitTest extends FlatSpec with BeforeAndAfterEach with OneInstancePerTe
         assert(info("ai") == Some(WdlIntegerType))
     }
 
-    "AppletRunner" should "exit with an error code for a bad shell command" in {
+    ignore should "exit with an error code for a bad shell command" in {
         // We want to test all combinations of the following:
         //  shell command |  docker
         // --------------------------------
@@ -600,7 +600,6 @@ class WdlUnitTest extends FlatSpec with BeforeAndAfterEach with OneInstancePerTe
             val (fieldName, wdlType, outstr) = outputs.head
             assert(fieldName == "out")
             assert(wdlType == WdlStringType)
-            //, WdlString("hello world")))
         }
     }
 }

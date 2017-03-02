@@ -13,13 +13,46 @@ addons:
     - python2.7
     - python-pip
     - maven
+#before_install:
+#- ".travis/before_install.sh"
+
 before_install:
-- ".travis/before_install.sh"
+  - mkdir -p /tmp/ci_tests
+  - cd /tmp/ci_tests
+
+install:
+  # Install scala 2.11.8
+  - wget www.scala-lang.org/files/archive/scala-2.11.8.deb
+  - sudo dpkg -i scala-2.11.8.deb
+
+  # Install sbt
+  - echo "deb https://dl.bintray.com/sbt/debian /" | sudo tee -a /etc/apt/sources.list.d/sbt.list
+  - sudo apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv 2EE0EA64E40A89B84B2DF73499E82A75642AC823
+  - sudo apt-get update
+  - sudo apt-get install sbt
+
+  # Clone and make the python and java dxpy version
+  - pwd
+  - git clone https://github.com/dnanexus/dx-toolkit.git
+  - make -C dx-toolkit python java
+
+  # Clone dxWDL into a new directory,
+  - pwd
+  - git clone https://github.com/dnanexus-rnd/dxWDL.git
+  - ls -R dxWDL
+  - mkdir -p dxWDL/lib
+  - cp dx-toolkit/lib/java/dnanexus-api-0.1.0-SNAPSHOT-jar-with-dependencies.jar dxWDL/lib/
+
+before_script:
+  - cd /tmp/ci_tests
+
 script:
-- sbt about
-- java -version
-- cd dxWDL && make all
-- "./run_tests.py"
+  - pwd
+  - source dx-toolkit/environment
+  - dx login --token ${DX_AUTH_TOKEN} --noprojects
+  - java -version
+  - cd dxWDL && sbt assembly
+  - "./run_tests.py"
 env:
   global:
     # DX_AUTH_TOKEN (orodeh)
