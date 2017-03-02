@@ -9,7 +9,6 @@ To learn more on WDL, please check out these links:
 * [wdl4s scaladoc](http://broadinstitute.github.io/wdl4s/0.9/#package) - the compiler uses this library to parse WDL input
 
 ## Release status
-
 This project is in alpha testing, and does not yet support all WDL features. Initially, we have focused on enabling the [GATK best
 practices pipeline](https://github.com/broadinstitute/wdl/blob/develop/scripts/broad_pipelines/PublicPairedSingleSampleWf_160927.wdl). Other
 features will be added as the project matures and according to user interest.
@@ -52,6 +51,7 @@ inspect it, use: ```dx get --omit-resources  <applet path>```. This will refrain
 downloading the large resource files that go into the applet.
 
 # Developer zone
+<a href="https://travis-ci.org/dnanexus-rnd/dxWDL"><img src="https://travis-ci.org/dnanexus-rnd/dxWDL.svg?branch=master"/></a>
 
 This section is intended for people interested in making modifications
 to the compiler, or building it on their own.
@@ -91,8 +91,8 @@ downloads all required packages.
 
 Checkout the code, and build it.
 ```
-git clone git@github.com:dnanexus/dx-toolkit.git
-git clone git@github.com:dnanexus-rnd/dxWDL.git
+git clone https://github.com/dnanexus/dx-toolkit.git
+git clone https://github.com/dnanexus-rnd/dxWDL.git
 make -C dx-toolkit java
 mkdir dxWDL/lib && cp dx-toolkit/lib/java/dnanexus-api-0.1.0-SNAPSHOT-jar-with-dependencies.jar dxWDL/lib
 cd dxWDL && make all
@@ -247,7 +247,7 @@ collects the ouputs into arrays.
 
 ## Challenges
 
-We wish to avoid creating controlling applet that would run and manage
+We wish to avoid creating a controlling applet that would run and manage
 a WDL workflow. Such an applet might get killed due to temporary
 resource shortage, causing an expensive workflow to fail. Further, it is desirable
 to minimize the context that needs to be kept around for the
@@ -265,8 +265,10 @@ we map WDL types to the dx equivalent. This works for primitive types
 (Boolean, Int, String, Float, File), and for single dimensional arrays
 of primitives. However, difficulties arise with complex types. For
 example, a ragged array of strings `Array[Array[String]]` presents two issues:
+
 1. Type: Which dx type to use, so that it will be presented intuitively in the UI
 2. Size: variables of this type can be very large, we have seen 100KB
+
 sized values. This is much too large for dx string, that is passed to
 the bash, stored in a database, etc.
 
