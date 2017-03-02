@@ -6,6 +6,7 @@ dist: xenial
 branches:
     only:
         - master
+        - develop
 
 addons:
   apt:
