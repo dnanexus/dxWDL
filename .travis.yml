@@ -1,6 +1,12 @@
 language: scala
 sudo: true
 dist: xenial
+
+# safelist
+branches:
+    only:
+        - master
+
 addons:
   apt:
     packages:
@@ -13,8 +19,6 @@ addons:
     - python2.7
     - python-pip
     - maven
-#before_install:
-#- ".travis/before_install.sh"
 
 before_install:
   - mkdir -p /tmp/ci_tests
