@@ -154,7 +154,7 @@ class WdlUnitTest extends FlatSpec with BeforeAndAfterEach with OneInstancePerTe
         //System.out.println(s"ns=${ns.toWdlString}")
     }
 
-    ignore should "evaluate simple calls" in {
+    it should "evaluate simple calls" in {
         val wdl = """|task Add {
                      |  Int a
                      |  Int b
@@ -188,7 +188,7 @@ class WdlUnitTest extends FlatSpec with BeforeAndAfterEach with OneInstancePerTe
         assert(result == ("sum",WdlIntegerType,WdlInteger(5)))
     }
 
-    ignore should "evaluate calls with a string array" in {
+    it should "evaluate calls with a string array" in {
         val wdl = """|task Concat {
                      |    Array[String] words
                      |
@@ -225,7 +225,7 @@ class WdlUnitTest extends FlatSpec with BeforeAndAfterEach with OneInstancePerTe
                    outputs.head == ("result",WdlStringType,WdlString("")))
     }
 
-    ignore should "evaluate calls with an int array" in {
+    it should "evaluate calls with an int array" in {
         val wdl = """|task Concat {
                      |    Array[Int] words
                      |
@@ -266,7 +266,7 @@ class WdlUnitTest extends FlatSpec with BeforeAndAfterEach with OneInstancePerTe
         Files.write(Paths.get(path), str.getBytes(StandardCharsets.UTF_8))
     }
 
-    ignore should "evaluate calls with a file array" in {
+    it should "evaluate calls with a file array" in {
         val wdl = """|task wc {
                      |    Array[File] files
                      |
@@ -309,7 +309,7 @@ class WdlUnitTest extends FlatSpec with BeforeAndAfterEach with OneInstancePerTe
         assert(wdlType == WdlStringType)
     }
 
-    ignore should "evaluate calls with primitive array types" in {
+    it should "evaluate calls with primitive array types" in {
         val wdl = """|task Concat {
                      |    Array[Int] ia
                      |    Array[Float] fa
@@ -372,7 +372,7 @@ class WdlUnitTest extends FlatSpec with BeforeAndAfterEach with OneInstancePerTe
                    v == WdlString(""))
     }
 
-    ignore should "handle output arrays" in {
+    it should "handle output arrays" in {
         val wdl = """|task prepare {
                      |    command <<<
                      |    python -c "print('one\ntwo\nthree\nfour')"
@@ -542,7 +542,7 @@ class WdlUnitTest extends FlatSpec with BeforeAndAfterEach with OneInstancePerTe
         assert(info("ai") == Some(WdlIntegerType))
     }
 
-    ignore should "exit with an error code for a bad shell command" in {
+    it should "exit with an error code for a bad shell command" in {
         // We want to test all combinations of the following:
         //  shell command |  docker
         // --------------------------------
@@ -602,4 +602,67 @@ class WdlUnitTest extends FlatSpec with BeforeAndAfterEach with OneInstancePerTe
             assert(wdlType == WdlStringType)
         }
     }
+
+    it should "Handle array access" in {
+        val wdl = """|task diff {
+                     |  File A
+                     |  File B
+                     |  command {
+                     |    diff ${A} ${B} | wc -l
+                     |  }
+                     |  output {
+                     |    Int result = read_int(stdout())
+                     |  }
+                     |}
+                     |
+                     |workflow file_array {
+                     |  Array[File] fs
+                     |  call diff {
+                     |    input : A=fs[0], B=fs[1]
+                     |  }
+                     |  output {
+                     |    diff.result
+                     |  }
+                     |}""".stripMargin.trim
+
+        val ns = WdlNamespaceWithWorkflow.load(wdl)
+        val wf: Workflow = ns.workflow
+        val call : Call = getCallFromNamespace(ns, "diff")
+
+        var env : Compile.CallEnv = Map.empty[String, WdlVarLinks]
+        var closure = Map.empty[String, WdlVarLinks]
+        call.inputMappings.foreach { case (_, expr) =>
+            System.err.println(s"${expr} --> ${expr.ast}")
+            closure = Compile.updateClosure(closure, env, expr, true)
+        }
+    }
+
+    it should "Allow adding unbound argument" in {
+        val wdl = """|task mul2 {
+                     |    Int i
+                     |
+                     |    command {
+                     |        python -c "print(${i} + ${i})"
+                     |    }
+                     |    output {
+                     |        Int result = read_int(stdout())
+                     |    }
+                     |}
+                     |
+                     |workflow optionals {
+                     |    Int arg1
+                     |
+                     |    # A call missing a compulsory argument
+                     |    call mul2
+                     |    output {
+                     |        mul2.result
+                     |    }
+                     |}""".stripMargin.trim
+
+        val ns = WdlNamespaceWithWorkflow.load(wdl)
+        val call : Call = getCallFromNamespace(ns, "mul2")
+        val inputs : Map[String,WdlValue] = Map("i" -> WdlInteger(3))
+        val outputs : Seq[(String, WdlType, WdlValue)] = evalCall(call, inputs)
+    }
+
 }

@@ -34,8 +34,8 @@ task set_def {
 
 # A task that does not use its input arguments.
 task unused_args {
-#    Int a
-#    Int b
+    Int a
+    Int b
     Int? c
     Int? d
 

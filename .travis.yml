@@ -2,11 +2,14 @@ language: scala
 sudo: true
 dist: xenial
 
-# safelist
+# We do not want to start a travis build
+# for modifications to any branch.
 branches:
+    except:
+        - develop
     only:
         - master
-        - develop
+        - citest
 
 addons:
   apt:

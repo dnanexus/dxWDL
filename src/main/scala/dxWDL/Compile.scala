@@ -69,7 +69,7 @@ object Compile {
     // Currently, we handle only ragged arrays. All cases aside from Array[Array[File]
     // are encoded as a json string. Ragged file arrays are passed as two fields: a
     // json string, and a flat file array.
-    def wdlVarToSpec(varName: String, wdlType : WdlType) : List[JsValue] = {
+    def wdlVarToSpec(varName: String, wdlType : WdlType, mkDxOpt: Boolean=false) : List[JsValue] = {
         val name = Utils.encodeAppletVarName(varName)
         def mkPrimitive(dxType: String) : List[Map[String, JsValue]] = {
             List(Map("name" -> JsString(name),
@@ -126,7 +126,11 @@ object Compile {
                 l.map{ m => JsObject(m + ("optional" -> JsBoolean(true))) }
             case t =>
                 val l : List[Map[String,JsValue]] = nonOptional(t)
-                l.map{ m => JsObject(m) }
+                if (mkDxOpt) {
+                    l.map{ m => JsObject(m + ("optional" -> JsBoolean(true))) }
+                } else {
+                    l.map{ m => JsObject(m)}
+                }
         }
     }
 
@@ -367,7 +371,8 @@ object Compile {
                             throw new Exception(s"Variable ${fqn} is not found in the scope")
                         closure
                 }
-            case a: Ast if a.isFunctionCall || a.isUnaryOperator || a.isBinaryOperator || a.isTupleLiteral=>
+            case a: Ast if a.isFunctionCall || a.isUnaryOperator || a.isBinaryOperator
+                  || a.isTupleLiteral || a.isArrayOrMapLookup =>
                 // Figure out which variables are needed to calculate this expression,
                 // and add bindings for them
                 val memberAccesses = a.findTopLevelMemberAccesses().map(
@@ -530,6 +535,81 @@ object Compile {
         (dxapp, closure, Utils.COMMENCE, outputs)
     }
 
+    // Figure out which required inputs are unbound. Print out a warning,
+    // and return a list.
+    def unboundRequiredTaskInputs(call: Call) : Seq[WdlVarLinks] = {
+        val task = Utils.taskOfCall(call)
+        val provided = call.inputMappings.map{ case (varName, _) => varName }.toSet
+        val required = task.declarations.map{ decl =>
+            decl.expression match {
+                case Some(_) =>
+                    // Variable calculation
+                    None
+                case None =>
+                    // An input, filter out optionals
+                    if (Utils.isOptional(decl.wdlType)) {
+                        None
+                    } else {
+                        Some((decl.unqualifiedName, decl.wdlType))
+                    }
+            }
+        }.flatten
+        // Check for each required variable, if it is provided
+        required.map{ case (varName, wdlType) =>
+            if (provided contains varName) {
+                None
+            } else {
+                val callName = callUniqueName(call)
+                System.err.println(s"""|Warning: required variable ${varName} is not provided in call
+                                       |${callName}""".stripMargin.replaceAll("\n", " "))
+                Some(WdlVarLinks(varName, wdlType, None))
+            }
+        }.flatten
+    }
+
+    // List task optional inputs, there were NOT provided in the call.
+    def unboundOptionalTaskInputs(call: Call) : Seq[WdlVarLinks] = {
+        val task = Utils.taskOfCall(call)
+        val provided = call.inputMappings.map{ case (varName, _) => varName }.toSet
+        val optionals = task.declarations.map{ decl =>
+            decl.expression match {
+                case Some(_) =>
+                    // Variable calculation
+                    None
+                case None =>
+                    // An input, filter out optionals
+                    if (Utils.isOptional(decl.wdlType)) {
+                        Some((decl.unqualifiedName, decl.wdlType))
+                    } else {
+                        None
+                    }
+            }
+        }.flatten
+        // Check for each optional variable, if it is provided
+        optionals.map{ case (varName, wdlType) =>
+            if (provided contains varName) {
+                None
+            } else {
+                Some(WdlVarLinks(varName, wdlType, None))
+            }
+        }.flatten
+    }
+
+    def unboundOrOptionalInputsSpec(call: Call) : Seq[JsValue] = {
+        // Allow the user to provide required inputs, that the workflow
+        // does not give. Export them as optional arguments on the platform.
+        val unboundRequiredInputs :Seq[WdlVarLinks] = unboundRequiredTaskInputs(call)
+        val unboundSpec = unboundRequiredInputs.map(x =>
+            wdlVarToSpec(x.varName, x.wdlType))
+
+        // Allow the user to provide optionals, not provided in the
+        // workflow, through the platform.
+        val unboundOptionalInputs :Seq[WdlVarLinks] = unboundOptionalTaskInputs(call)
+        val optsSpec = unboundOptionalInputs.map(x => wdlVarToSpec(x.varName, x.wdlType, mkDxOpt=true))
+
+        unboundSpec.flatten ++ optsSpec.flatten
+    }
+
     // Compile a WDL call into an applet.
     //
     // We need to support calculations done in the workflow, inside a
@@ -562,11 +642,12 @@ object Compile {
             closure = updateClosure(closure, env, expr, true)
         }
         val inputSpec : Seq[JsValue] = closureToAppletInputSpec(closure)
+        val unboundOrOptionalSpec : Seq[JsValue] = unboundOrOptionalInputsSpec(call)
         val appletFqn : String = wf.unqualifiedName ++ "." ++ callUName
 
         val attrs = Map(
             "name" -> JsString(appletFqn),
-            "inputSpec" -> JsArray(inputSpec.toVector),
+            "inputSpec" -> JsArray(inputSpec.toVector ++ unboundOrOptionalSpec.toVector),
             "outputSpec" -> JsArray(outputDecls.toVector),
             "runSpec" -> runSpec
         )

@@ -737,40 +737,38 @@ workflow gatk_160927 {
   }
 
   # Call variants in parallel over WGS calling intervals
-#  scatter (subInterval in scattered_calling_intervals) {
-#
-#    # Generate GVCF by interval
-#    call HaplotypeCaller {
-#      input:
-#        input_bam = GatherBamFiles.output_bam,
-#        input_bam_index = GatherBamFiles.output_bam_index,
-#        interval_list = subInterval,
-#        gvcf_basename = sample_name,
-#        ref_dict = ref_dict,
-#        ref_fasta = ref_fasta,
-#        ref_fasta_index = ref_fasta_index,
-#        disk_size = agg_small_disk,
-#        preemptible_tries = agg_preemptible_tries
-#     }
-#  }
-#
-#  # Combine by-interval GVCFs into a single sample GVCF file
-#  call GatherVCFs {
-#    input:
-#      input_vcfs = HaplotypeCaller.output_gvcf,
-#      input_vcfs_indexes = HaplotypeCaller.output_gvcf_index,
-#      output_vcf_name = final_gvcf_name,
-#      disk_size = agg_small_disk,
-#      preemptible_tries = agg_preemptible_tries
-#  }
+  scatter (subInterval in scattered_calling_intervals) {
+
+    # Generate GVCF by interval
+    call HaplotypeCaller {
+      input:
+        input_bam = GatherBamFiles.output_bam,
+        input_bam_index = GatherBamFiles.output_bam_index,
+        interval_list = subInterval,
+        gvcf_basename = sample_name,
+        ref_dict = ref_dict,
+        ref_fasta = ref_fasta,
+        ref_fasta_index = ref_fasta_index,
+        disk_size = agg_small_disk,
+        preemptible_tries = agg_preemptible_tries
+     }
+  }
+
+  # Combine by-interval GVCFs into a single sample GVCF file
+  call GatherVCFs {
+    input:
+      input_vcfs = HaplotypeCaller.output_gvcf,
+      input_vcfs_indexes = HaplotypeCaller.output_gvcf_index,
+      output_vcf_name = final_gvcf_name,
+      disk_size = agg_small_disk,
+      preemptible_tries = agg_preemptible_tries
+  }
 
   # Outputs that will be retained when execution is complete
-
   output {
     MarkDuplicates.duplicate_metrics
     GatherBqsrReports.*
     ConvertToCram.*
-#    GatherVCFs.*
-    }
-
+    GatherVCFs.*
+  }
 }

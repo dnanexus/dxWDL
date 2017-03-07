@@ -253,10 +253,6 @@ resource shortage, causing an expensive workflow to fail. Further, it is desirab
 to minimize the context that needs to be kept around for the
 WDL workflow, because it limits job manager scalability.
 
-1. Mapping data types from WDL to dx
-2. Scatters
-3. Declarations requiring computation
-
 ### Data types
 
 WDL supports complex and recursive data types, which do not have
@@ -268,8 +264,7 @@ example, a ragged array of strings `Array[Array[String]]` presents two issues:
 
 1. Type: Which dx type to use, so that it will be presented intuitively in the UI
 2. Size: variables of this type can be very large, we have seen 100KB
-
-sized values. This is much too large for dx string, that is passed to
+sized values. This is much too large for a dx:string, that is passed to
 the bash, stored in a database, etc.
 
 ### Scatters

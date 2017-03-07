@@ -20,9 +20,13 @@ test_output={}
 test_failing=set([])
 reserved_test_names=['S', 'M', 'All', 'list']
 default_test_list = [
-    "system_calls", "var_types", "system_calls2", "math_expr",
-    "call_expressions2", "string_array", "file_array", "sg_sum3", "sg_files",
+    "system_calls", "var_types", "math_expr",
+    "call_expressions2", "string_array", "sg_sum3", "sg_files",
     "ragged_array2", "advanced",
+    "file_disambiguation", "file_array",
+
+    # optional arguments
+    "optionals",
 
     # docker
     "bwa_version",
@@ -308,6 +312,11 @@ Tests are run via sbt test. Note that the tests do require Docker to be running.
     dxfile3 = dxpy.upload_string(buf3, project=project.get_id(), name="fileC",
                                  folder="/test_data", wait_on_close=True)
 
+    # Another version of [dxfile]
+    dxfile_v2 = dxpy.upload_string("ABCD 1234", project=project.get_id(), name="fileA",
+                                   folder="/test_data", wait_on_close=True)
+
+
     register_test("math",
                    {'0.ai' : 7},
                    {'2.result': 20})
@@ -382,10 +391,14 @@ Tests are run via sbt test. Note that the tests do require Docker to be running.
                   { '0.fs' : [dxpy.dxlink(dxfile.get_id(), project.get_id()),
                               dxpy.dxlink(dxfile2.get_id(), project.get_id()),
                               dxpy.dxlink(dxfile3.get_id(), project.get_id()) ]},
-                  {})
+                  { '3.result' : "True"})
     register_test("output_array",
                   {},
                   {'1.array' : [u'one', u'two', u'three', u'four']})
+    register_test("file_disambiguation",
+                  { '0.f1' : dxpy.dxlink(dxfile.get_id(), project.get_id()),
+                    '0.f2' : dxpy.dxlink(dxfile_v2.get_id(), project.get_id()) },
+                  { '1.result' : "False"})
 
     # Scatter/gather
     register_test("sg_sum",
@@ -408,6 +421,15 @@ Tests are run via sbt test. Note that the tests do require Docker to be running.
     register_test("ragged_array2",
                   {},
                   {'4.result':  ["1", "2", "3 INPUT=4", "5", "6 INPUT=7 INPUT=8"]})
+
+    # optionals
+    register_test("optionals",
+                  { "0.arg1": 10,
+                    "mul2.i": 5,
+                    "add.a" : 1,
+                    "add.b" : 3},
+                  { "1.result" : 10,
+                    "4.result" : 4 })
 
     # docker
     register_test("bwa_version",

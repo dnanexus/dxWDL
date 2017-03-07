@@ -67,14 +67,26 @@ object AppletRunner {
         def lookup(varName : String) : WdlValue =
             callInputs.get(varName) match {
                 case Some(x) => x
-                case None => throw new AppInternalException(s"No value found for variable ${varName}")
+                case None => throw new UnboundVariableException(varName)
             }
 
-        call.inputMappings.map { case (varName,expr) =>
+        val providedInputs = call.inputMappings.map { case (varName,expr) =>
             System.err.println(s"evalCallInputs ${varName} ${expr.toWdlString}")
             val v : WdlValue = expr.evaluate(lookup, DxFunctions).get
             varName -> v
         }.toMap
+
+        // Pass inputs passed not listed in the inputMappings. This allows
+        // the user to pass inputs directly to the task.
+        val extraInputs = callInputs.map{ case (varName, wdlValue) =>
+            if (call.inputMappings.contains(varName)) {
+                None
+            } else {
+                Some(varName -> wdlValue)
+            }
+        }.flatten.toMap
+
+        providedInputs ++ extraInputs
     }
 
     def evalTaskInputs(task : Task, taskInputs : Map[String, WdlValue])
@@ -83,7 +95,7 @@ object AppletRunner {
         def lookup(varName : String) : WdlValue =
             env.get(varName) match {
                 case Some(x) => x
-                case None => throw new AppInternalException(s"No value found for variable ${varName}")
+                case None => throw new UnboundVariableException(varName)
             }
 
         def evalDecl(decl : Declaration) : Option[WdlValue] = {
@@ -95,9 +107,16 @@ object AppletRunner {
                         case Some(x) => Some(x)
                     }
 
-                    // compulstory input
+                    // compulstory input.
+                    // Here, we need to take into account the possibility
+                    // that the input will be unbound.
                 case (_, None) =>
-                    Some(taskInputs(decl.unqualifiedName))
+                    taskInputs.get(decl.unqualifiedName) match {
+                        case None =>
+                            lazy val e = throw new UnboundVariableException(decl.unqualifiedName)
+                            Some(e)
+                        case Some(x) => Some(x)
+                    }
 
                 // declaration to evalute, not an input
                 case (_, Some(expr)) =>
@@ -106,7 +125,7 @@ object AppletRunner {
             }
         }
 
-        // evaluate the declarations, and discard an optionals that did not have an
+        // evaluate the declarations, and discard any optionals that did not have an
         // input
         task.declarations.map{ decl =>
             evalDecl(decl) match {

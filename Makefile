@@ -2,7 +2,7 @@ SHELL=/bin/bash -e
 GIT_VERSION := $(shell git describe --always --tags)
 
 all:
-	sbt assembly
+	sbt "set test in assembly := {}" assembly
 	mkdir -p applet_resources/resources
 	(DX_WDL_JAR=$$(find target -name "dxWDL-*${GIT_VERSION}*.jar"); cp $$DX_WDL_JAR applet_resources/resources/dxWDL.jar)
 

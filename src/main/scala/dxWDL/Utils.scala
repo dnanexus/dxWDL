@@ -33,6 +33,10 @@ class AppException private(ex: RuntimeException) extends RuntimeException(ex) {
     def this(message:String) = this(new RuntimeException(message))
 }
 
+class UnboundVariableException private(ex: RuntimeException) extends RuntimeException(ex) {
+    def this(varName: String) = this(new RuntimeException(s"Variable ${varName} is unbound"))
+}
+
 
 object Utils {
     // Long strings cause problems with bash and the UI
@@ -452,13 +456,15 @@ object Utils {
     }
 
     // download a file from the platform to a path on the local disk.
+    //
+    // Note: this function assumes that the target path does not exist yet
     def downloadFile(path: Path, dxfile: DXFile) = {
         def downloadOneFile(path: Path, dxfile: DXFile, counter: Int) : Boolean = {
             val fid = dxfile.getId()
             try {
                 if (DXPY_FILE_TRANSFER) {
                     // Use dx download
-                    val dxDownloadCmd = s"dx download ${fid} -f -o ${path.toString()}"
+                    val dxDownloadCmd = s"dx download ${fid} -o ${path.toString()}"
                     println(s"--  ${dxDownloadCmd}")
                     val (outmsg, errmsg) = execCommand(dxDownloadCmd)
                 } else {
@@ -543,5 +549,13 @@ object Utils {
             counter = counter + 1
         }
         throw new Exception(s"Failure to upload file ${path}")
+    }
+
+    // types
+    def isOptional(t: WdlType) : Boolean = {
+        t match {
+            case WdlOptionalType(_) => true
+            case t => false
+        }
     }
 }

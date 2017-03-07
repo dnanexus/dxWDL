@@ -19,10 +19,14 @@ object WdlYamlTree {
             YamlString("type") -> YamlString(decl.wdlType.toWdlString),
             YamlString("name") -> YamlString(decl.unqualifiedName)
         )
-        // TODO: Figure out how to get the quantifier information
-        // for this declaration from the AST
+        val opt: Map[YamlValue, YamlValue] =
+            if (Utils.isOptional(decl.wdlType)) {
+                Map(YamlString("optional") -> YamlBoolean(true))
+            } else {
+                Map()
+            }
+        // TODO
         /*    var pq = decl.postfixQuantifier match {
-         case Some("?") => Map(YamlString("optional") -> YamlBoolean(true))
          case Some("+") => Map(YamlString("nonempty") -> YamlBoolean(true))
          case None => Map()
          }*/
@@ -30,8 +34,7 @@ object WdlYamlTree {
             case Some(ex) => Map(YamlString("expression") -> apply(ex))
             case None => Map()
         }
-        //YamlObject(base ++ pq ++ expr)
-        YamlObject(base ++ expr)
+        YamlObject(base ++ opt ++ expr)
     }
 
     def apply(tso: TaskOutput): YamlObject = {

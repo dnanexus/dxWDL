@@ -1,3 +1,3 @@
 {
-  "file_array.fs" : ["/tmp/X.txt", "/tmp/Y.txt", "/tmp/Z.txt"]
+  "file_array.fs" : ["X.txt", "Y.txt", "Z.txt"]
 }

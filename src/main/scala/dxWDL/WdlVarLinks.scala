@@ -3,7 +3,7 @@ package dxWDL
 // DX bindings
 import com.dnanexus.{DXApplet, DXFile, DXJob, DXProject, DXWorkflow}
 import com.fasterxml.jackson.databind.JsonNode
-import java.nio.file.{Path, Paths}
+import java.nio.file.{Files, Path, Paths}
 import scala.collection.mutable.ListBuffer
 import spray.json._
 import spray.json.DefaultJsonProtocol
@@ -299,10 +299,24 @@ object WdlVarLinks {
         def wdlFileOfDxLink(jsValue : JsValue) : WdlValue = {
             // Download the file, and
             // place it in a local file, with the same name as the
-            // platform. The file is placed in:  $HOME/<file name>
+            // platform. All files have to be downloaded into the same
+            // directory; the only exception we make is for disambiguatio
+            // purposes.
             val dxfile = dxFileOfJsValue(jsValue)
             val fName = dxfile.describe().getName()
-            val path : Path = Utils.inputFilesDirPath.resolve(fName)
+            val shortPath = Utils.inputFilesDirPath.resolve(fName)
+            val path : Path =
+                if (Files.exists(shortPath)) {
+                    // Short path already exists. Note: this check is brittle in the case
+                    // of concurrent downloads.
+                    val fid = dxfile.getId()
+                    System.err.println(s"Disambiguating file ${fid} with name ${fName}")
+                    val dir = Utils.inputFilesDirPath.resolve(fid).toFile
+                    assert(dir.mkdir())
+                    Utils.inputFilesDirPath.resolve(fid).resolve(fName)
+                } else {
+                    shortPath
+                }
             Utils.downloadFile(path, dxfile)
             WdlSingleFile(path.toString)
         }
