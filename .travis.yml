@@ -59,8 +59,7 @@ script:
   - source dx-toolkit/environment
   - dx login --token ${DX_AUTH_TOKEN} --noprojects
   - java -version
-  - cd dxWDL && sbt assembly
-  - "./run_tests.py"
+  - cd dxWDL && ./run_tests.py
 env:
   global:
     # DX_AUTH_TOKEN (orodeh)
