@@ -17,7 +17,8 @@ import spray.json.DefaultJsonProtocol
 import spray.json.JsString
 import wdl4s.AstTools
 import wdl4s.AstTools.EnhancedAstNode
-import wdl4s.{Call, Declaration, Scatter, Scope, Task, WdlExpression, WdlNamespaceWithWorkflow, WdlNamespace, Workflow}
+import wdl4s.{Call, Declaration, Scatter, Scope, Task, WdlExpression, WdlNamespaceWithWorkflow,
+    WdlNamespace, WdlSource, Workflow}
 import wdl4s.parser.WdlParser.{Ast, AstNode, Terminal}
 import wdl4s.types._
 import wdl4s.values._
@@ -37,8 +38,9 @@ class UnboundVariableException private(ex: RuntimeException) extends RuntimeExce
     def this(varName: String) = this(new RuntimeException(s"Variable ${varName} is unbound"))
 }
 
-
 object Utils {
+    val VERSION = "0.11"
+
     // Long strings cause problems with bash and the UI
     val MAX_STRING_LEN = 8 * 1024
     val FLAT_FILE_ARRAY_SUFFIX = "_ffa"
@@ -52,9 +54,9 @@ object Utils {
     val reservedSubstrings = List("___")
 
     // Prefixes used for generated applets
-    val COMMENCE = "commence"
+    val COMMON = "common"
     val SCATTER = "scatter"
-    val reservedAppletPrefixes = List(SCATTER, COMMENCE)
+    val reservedAppletPrefixes = List(SCATTER, COMMON)
 
     lazy val execDirPath : Path = {
         val currentDir = System.getProperty("user.dir")
@@ -558,4 +560,13 @@ object Utils {
             case t => false
         }
     }
+
+    // syntax errors
+    def line(t:Terminal,
+             terminalMap: Map[Terminal, WdlSource]): String =
+        terminalMap.get(t).get.split("\n")(t.getLine - 1)
+    def pointToSource(t: Terminal,
+                      terminalMap: Map[Terminal, WdlSource]): String =
+        s"${line(t, terminalMap)}\n${" " * (t.getColumn - 1)}^"
+
 }

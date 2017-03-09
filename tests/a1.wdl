@@ -1,28 +1,56 @@
-task printTask {
-    String output_bam_basename
+task inc {
+    Int i
 
-    command {
-       echo '${output_bam_basename}'
-    }
+    command <<<
+        python -c "print(${i} + 1)"
+    >>>
     output {
-        String result = read_string(stdout())
+        Int result = read_int(stdout())
+    }
+}
+
+task twice {
+    Int i
+
+    command <<<
+        python -c "print(${i} * 2)"
+    >>>
+    output {
+        Int result = read_int(stdout())
+    }
+}
+
+task mod7 {
+    Int i
+
+    command <<<
+        python -c "print(${i} % 7)"
+    >>>
+    output {
+        Int result = read_int(stdout())
+    }
+}
+
+task sum {
+    Array[Int] ints
+
+    command <<<
+        python -c "print(${sep="+" ints})"
+    >>>
+    output {
+        Int sum = read_int(stdout())
     }
 }
 
 workflow a1 {
-    Array[File] flowcell_unmapped_bams = ["/tmp/AAA.bam", "/tmp/B.bam", "/tmp/C125.bam"]
-    String unmapped_bam_suffix = "bam"
+    Array[Int] integers
+    Array[Array[Array[Int]]] aaai
 
-    scatter (unmapped_bam in flowcell_unmapped_bams) {
-        String sub_strip_path = "gs://.*/"
-        String sub_strip_unmapped = unmapped_bam_suffix + "$"
+    scatter (i in integers) {
+        call inc {input: i=i}
 
-        call printTask {input:
-                          pattern = "AXX",
-                          output_bam_basename = sub(sub(unmapped_bam, sub_strip_path, ""), sub_strip_unmapped, "") + ".unmerged"
-        }
-    }
-    output {
-        printTask.result
+        # declaration in the middle of a scatter should cause an exception
+        String s = "abc"
+        call inc as inc2 {input: i=i}
     }
 }

@@ -9,6 +9,7 @@ import spray.json._
 import spray.json.DefaultJsonProtocol
 import spray.json.JsString
 import Utils.{MAX_STRING_LEN}
+import wdl4s.parser.WdlParser.{Ast, Terminal}
 import wdl4s.types._
 import wdl4s.values._
 

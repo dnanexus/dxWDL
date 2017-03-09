@@ -9,8 +9,9 @@ import scala.util.{Failure, Success, Try}
 import wdl4s.AstTools
 import wdl4s.AstTools.EnhancedAstNode
 import wdl4s.{Call, Declaration, Scatter, Scope, Task, TaskOutput, WdlExpression,
-    WdlNamespace, WdlNamespaceWithWorkflow, Workflow}
+    WdlNamespace, WdlNamespaceWithWorkflow, WdlSource, Workflow}
 import wdl4s.expression.{NoFunctions, WdlStandardLibraryFunctionsType}
+//import wdl4s.parser.WdlParser._
 import wdl4s.parser.WdlParser.{Ast, AstNode, Terminal}
 import wdl4s.types._
 import wdl4s.values._
@@ -39,26 +40,40 @@ import DefaultJsonProtocol._
   */
 
 // There are several kinds of applets
-//   Commence:  beginning of a workflow
+//   Common:    beginning of a workflow
 //   Scatter:   utility block for scatter/gather
 //   Command:   call a task, execute a shell command (usually)
 object AppletKind extends Enumeration {
-    val Commence, Scatter, Command = Value
+    val Common, Scatter, Command = Value
 }
 
-// Exception used for AppInternError
-class CompileException private(ex: RuntimeException) extends RuntimeException(ex) {
-    def this(message:String) = this(new RuntimeException(message))
+class DynamicInstanceTypesException private(ex: Exception) extends RuntimeException(ex) {
+    def this() = this(new RuntimeException(
+                          "Only runtime constants are supported, currently, instance types should be known at compile time."))
 }
+
+// At compile time, we need to keep track of the syntax-tree, for error
+// reporting purposes.
+case class CompileVar(wvl: WdlVarLinks, ast: Ast)
 
 object Compile {
     // Environment (scope) where a call is made
-    type CallEnv = Map[String, WdlVarLinks]
+    type CallEnv = Map[String, CompileVar]
 
     // The minimal environment needed to execute a call
     type Closure =  CallEnv
 
-    case class VarOutput(unqualifiedName: String, wdlType: WdlType)
+    case class VarOutput(unqualifiedName: String, wdlType: WdlType, ast: Ast)
+
+    // Packs common arguments passed between methods.
+    case class State(wdlSourceFile : Path, destination : String, dxWDLrtId: String,
+                     verbose: Boolean, errFmt: CompileErrorFormatter)
+
+    def trace(verbose: Boolean, msg: String) : Unit = {
+        if (!verbose)
+            return
+        System.err.println(msg)
+    }
 
     // For primitive types, and arrays of such types, we can map directly
     // to the equivalent dx types. For example,
@@ -69,7 +84,11 @@ object Compile {
     // Currently, we handle only ragged arrays. All cases aside from Array[Array[File]
     // are encoded as a json string. Ragged file arrays are passed as two fields: a
     // json string, and a flat file array.
-    def wdlVarToSpec(varName: String, wdlType : WdlType, mkDxOpt: Boolean=false) : List[JsValue] = {
+    def wdlVarToSpec(varName: String,
+                     wdlType : WdlType,
+                     ast: Ast,
+                     cState: State,
+                     mkDxOpt: Boolean=false) : List[JsValue] = {
         val name = Utils.encodeAppletVarName(varName)
         def mkPrimitive(dxType: String) : List[Map[String, JsValue]] = {
             List(Map("name" -> JsString(name),
@@ -116,7 +135,7 @@ object Compile {
             case WdlArrayType(WdlArrayType(WdlStringType)) => mkRaggedArray()
 
             case _ =>
-                throw new Exception(s"WDL type ${wdlType} is currently unsupported")
+                throw new Exception(cState.errFmt.notCurrentlySupported(ast, s"type ${wdlType}"))
         }
 
         wdlType match {
@@ -134,31 +153,31 @@ object Compile {
         }
     }
 
-    def callUniqueName(call : Call) = {
+    def callUniqueName(call : Call, cState: State) = {
         val nm = call.alias match {
             case Some(x) => x
             case None => Utils.taskOfCall(call).name
         }
         Utils.reservedAppletPrefixes.foreach{ prefix =>
             if (nm.startsWith(prefix))
-                throw new Exception(s"Call name cannot start with reserved prefix ${prefix}")
+                throw new Exception(cState.errFmt.illegalCallName(call))
         }
         Utils.reservedSubstrings.foreach{ sb =>
             if (nm contains sb)
-                throw new Exception(s"Call name cannot contain reserved substring ${sb}")
+                throw new Exception(cState.errFmt.illegalCallName(call))
         }
         nm
     }
 
     def genBashScript(appKind: AppletKind.Value, docker: Option[String]) : String = {
         appKind match {
-            case AppletKind.Commence =>
+            case AppletKind.Common =>
                 s"""|#!/bin/bash -ex
                     |main() {
                     |    echo "working directory =$${PWD}"
                     |    echo "home dir =$${HOME}"
                     |    echo "user= $${USER}"
-                    |    java -cp $${DX_FS_ROOT}/dxWDL.jar:$${CLASSPATH} dxWDL.Main workflowCommence $${DX_FS_ROOT}/*.wdl $${HOME}
+                    |    java -cp $${DX_FS_ROOT}/dxWDL.jar:$${CLASSPATH} dxWDL.Main workflowCommon $${DX_FS_ROOT}/*.wdl $${HOME}
                     |}""".stripMargin.trim
 
             case AppletKind.Scatter =>
@@ -267,7 +286,7 @@ object Compile {
     // we convert it to a moderatly high constant.
     def calcInstanceType(task: Task) : String = {
         def lookup(varName : String) : WdlValue = {
-            throw new CompileException("Only runtime constants are supported, currently, instance types should be known at compile time.")
+            throw new DynamicInstanceTypesException()
         }
         def evalAttr(attrName: String, defaultValue: WdlValue) : Option[WdlValue] = {
             task.runtimeAttributes.attrs.get(attrName) match {
@@ -276,7 +295,7 @@ object Compile {
                     try {
                         Some(expr.evaluate(lookup, NoFunctions).get)
                     } catch {
-                        case e : CompileException =>
+                        case e : DynamicInstanceTypesException =>
                             val v = Some(defaultValue)
                             System.err.println(
                                 s"""|Warning: runtime expressions are used in
@@ -334,21 +353,19 @@ object Compile {
     def updateClosure(closure : Closure,
                       env : CallEnv,
                       expr : WdlExpression,
-                      strict : Boolean) : Closure = {
+                      strict : Boolean,
+                      cState: State) : Closure = {
         expr.ast match {
             case t: Terminal =>
                 val srcStr = t.getSourceString
                 t.getTerminalStr match {
                     case "identifier" =>
-                        val wvl : WdlVarLinks = env.get(srcStr) match {
+                        val cVar : CompileVar = env.get(srcStr) match {
                             case Some(x) => x
-                            case None =>
-                                System.err.println(s"Could not find identifer ${srcStr}")
-                                System.err.println(s"env= ${env}")
-                                throw new Exception(s"Identifier ${srcStr} is unbound")
+                            case None => throw new Exception(cState.errFmt.missingVarRefException(t))
                         }
                         val fqn = WdlExpression.toString(t)
-                        closure + (fqn -> wvl)
+                        closure + (fqn -> cVar)
                     case _ => closure
                 }
 
@@ -357,18 +374,17 @@ object Compile {
                 // The RHS is C, and the LHS is A.B
                 val rhs : Terminal = a.getAttribute("rhs") match {
                     case rhs:Terminal if rhs.getTerminalStr == "identifier" => rhs
-                    case _ => throw new Exception(
-                        s"Right-hand side of expression ${expr.toWdlString} must be an identifier")
+                    case _ => throw new Exception(cState.errFmt.rightSideMustBeIdentifer(a))
                 }
 
                 // The FQN is "A.B.C"
                 val fqn = WdlExpression.toString(a)
                 env.get(fqn) match {
-                    case Some(wvl) =>
-                        closure + (fqn -> wvl)
+                    case Some(cVar) =>
+                        closure + (fqn -> cVar)
                     case None =>
                         if (strict)
-                            throw new Exception(s"Variable ${fqn} is not found in the scope")
+                            throw new Exception(cState.errFmt.missingVarRefException(a))
                         closure
                 }
             case a: Ast if a.isFunctionCall || a.isUnaryOperator || a.isBinaryOperator
@@ -384,7 +400,7 @@ object Compile {
                 }
                 val allDeps = (memberAccesses ++ variables).map{ fqn =>
                     env.get(fqn) match {
-                        case Some(wvl) => Some(fqn -> wvl)
+                        case Some(cVar) => Some(fqn -> cVar)
 
                         // There are cases where
                         // [findVariableReferences] gives us previous
@@ -395,29 +411,31 @@ object Compile {
                 }.flatten
                 closure ++ allDeps
 
-            case _ =>
-                throw new Exception(s"The expression ${expr.toString} is currently not handled")
+            case a: Ast =>
+                throw new Exception(cState.errFmt.notCurrentlySupported(
+                                        a,
+                                        s"The expression ${expr.toString} is currently not handled"))
         }
     }
 
 
     // Calculate the applet input specification from the call closure
-    def closureToAppletInputSpec(closure : Closure) : Seq[JsValue] = {
+    def closureToAppletInputSpec(closure : Closure, cState: State) : Seq[JsValue] = {
         closure.map {
-            case (varName, wvl) => wdlVarToSpec(varName, wvl.wdlType)
+            case (varName, cVar) => wdlVarToSpec(varName, cVar.wvl.wdlType, cVar.ast, cState)
         }.toList.flatten
     }
 
     // Calculate the stage inputs from the call closure
     //
     // It comprises mappings from variable name to WdlType.
-    def closureToStageInputs(closure : Closure) : JsonNode = {
+    def closureToStageInputs(closure : Closure, cState: State) : JsonNode = {
         var builder : DXJSON.ObjectBuilder = DXJSON.getObjectBuilder()
         closure.foreach {
-            case (varName, wvl) =>
-                wvl.dxlink match {
+            case (varName, cVar) =>
+                cVar.wvl.dxlink match {
                     case Some(l) =>
-                        WdlVarLinks.genFields(wvl, varName).foreach{
+                        WdlVarLinks.genFields(cVar.wvl, varName).foreach{
                             case(fieldName, jsonNode) =>
                                 builder = builder.put(fieldName, jsonNode)
                         }
@@ -425,7 +443,7 @@ object Compile {
                         // We do not have a value for this input at compile time.
                         //
                         // Is this legal? Could the user provide it at runtime?
-                        throw new Exception(s"Variable ${varName} is unbound")
+                        throw new Exception(cState.errFmt.missingVarRefException(cVar.ast))
                 }
         }
         builder.build()
@@ -434,12 +452,15 @@ object Compile {
 
     // Perform a "dx build" on a local directory representing an applet
     //
-    def dxBuildApp(appletDir : Path, appletFqn : String, destination : String) : DXApplet = {
+    def dxBuildApp(appletDir : Path,
+                   appletFqn : String,
+                   destination : String,
+                   verbose: Boolean) : DXApplet = {
+        trace(verbose, s"Building applet ${appletFqn}")
         val dest =
             if (destination.endsWith("/")) (destination ++ appletFqn)
             else (destination ++ "/" ++ appletFqn)
         val buildCmd = List("dx", "build", "-f", appletDir.toString(), "--destination", dest)
-
         def build() : Option[DXApplet] = {
             try {
                 // Run the dx-build command
@@ -487,15 +508,14 @@ object Compile {
     //  must be defined on the command line. [cmdline] is a calculation that
     //  uses constants and variables.
     //
-    def compileCommence(wf : Workflow,
+    def compileCommon(wf : Workflow,
                         topDeclarations: Seq[Declaration],
-                        wdlSourceFile : Path,
                         env : CallEnv,
-                        destination : String,
-                        dxWDLrtId: String): (DXApplet, Closure, String, Seq[VarOutput]) = {
+                        cState: State) : (DXApplet, Closure, String, Seq[VarOutput]) = {
+        trace(cState.verbose, s"Compiling workflow initialization sequence")
         // We need minimal compute resources, use the default instance type
-        val runSpec : JsValue = calcRunSpec(None, destination, dxWDLrtId)
-        val appletFqn : String = wf.unqualifiedName ++ "." ++ Utils.COMMENCE
+        val runSpec : JsValue = calcRunSpec(None, cState.destination, cState.dxWDLrtId)
+        val appletFqn : String = wf.unqualifiedName ++ "." ++ Utils.COMMON
 
         // Only workflow declarations that do not have an expression,
         // needs to be provide by the user.
@@ -509,12 +529,12 @@ object Compile {
         // y, pi -- calculated, non inputs
         val inputSpec : Seq[JsValue] =  topDeclarations.map{ decl =>
             decl.expression match {
-                case None => wdlVarToSpec(decl.unqualifiedName, decl.wdlType)
+                case None => wdlVarToSpec(decl.unqualifiedName, decl.wdlType, decl.ast, cState)
                 case Some(_) => List()
             }
         }.flatten
         val outputSpec : Seq[JsValue] = topDeclarations.map{ decl =>
-            wdlVarToSpec(decl.unqualifiedName, decl.wdlType)
+            wdlVarToSpec(decl.unqualifiedName, decl.wdlType, decl.ast, cState)
         }.flatten
 
         val attrs = Map(
@@ -525,19 +545,19 @@ object Compile {
         )
 
         // create a directory structure for this applet
-        val appletDir = createAppletDirStruct(appletFqn, wdlSourceFile,
-                                              JsObject(attrs), AppletKind.Commence, None)
-        val dxapp = dxBuildApp(appletDir, appletFqn, destination)
-        val closure = Map.empty[String, WdlVarLinks]
+        val appletDir = createAppletDirStruct(appletFqn, cState.wdlSourceFile,
+                                              JsObject(attrs), AppletKind.Common, None)
+        val dxapp = dxBuildApp(appletDir, appletFqn, cState.destination, cState.verbose)
+        val closure = Map.empty[String, CompileVar]
         val outputs = topDeclarations.map(decl =>
-            VarOutput(decl.unqualifiedName, decl.wdlType)
+            VarOutput(decl.unqualifiedName, decl.wdlType, decl.ast)
         )
-        (dxapp, closure, Utils.COMMENCE, outputs)
+        (dxapp, closure, Utils.COMMON, outputs)
     }
 
     // Figure out which required inputs are unbound. Print out a warning,
     // and return a list.
-    def unboundRequiredTaskInputs(call: Call) : Seq[WdlVarLinks] = {
+    def unboundRequiredTaskInputs(call: Call, cState: State) : Seq[CompileVar] = {
         val task = Utils.taskOfCall(call)
         val provided = call.inputMappings.map{ case (varName, _) => varName }.toSet
         val required = task.declarations.map{ decl =>
@@ -550,25 +570,27 @@ object Compile {
                     if (Utils.isOptional(decl.wdlType)) {
                         None
                     } else {
-                        Some((decl.unqualifiedName, decl.wdlType))
+                        Some((decl.unqualifiedName, decl))
                     }
             }
         }.flatten
         // Check for each required variable, if it is provided
-        required.map{ case (varName, wdlType) =>
+        required.map{ case (varName, decl) =>
             if (provided contains varName) {
                 None
             } else {
-                val callName = callUniqueName(call)
-                System.err.println(s"""|Warning: required variable ${varName} is not provided in call
-                                       |${callName}""".stripMargin.replaceAll("\n", " "))
-                Some(WdlVarLinks(varName, wdlType, None))
+                val callName = callUniqueName(call, cState)
+                System.err.println(s"""|Note: workflow doesn't supply required input
+                                       |${varName} to call ${callName};
+                                       |leaving corresponding DNAnexus workflow input unbound"""
+                                       .stripMargin.replaceAll("\n", " "))
+                Some(CompileVar(WdlVarLinks(varName, decl.wdlType, None), decl.ast))
             }
         }.flatten
     }
 
     // List task optional inputs, there were NOT provided in the call.
-    def unboundOptionalTaskInputs(call: Call) : Seq[WdlVarLinks] = {
+    def unboundOptionalTaskInputs(call: Call) : Seq[CompileVar] = {
         val task = Utils.taskOfCall(call)
         val provided = call.inputMappings.map{ case (varName, _) => varName }.toSet
         val optionals = task.declarations.map{ decl =>
@@ -579,34 +601,37 @@ object Compile {
                 case None =>
                     // An input, filter out optionals
                     if (Utils.isOptional(decl.wdlType)) {
-                        Some((decl.unqualifiedName, decl.wdlType))
+                        Some((decl.unqualifiedName, decl))
                     } else {
                         None
                     }
             }
         }.flatten
         // Check for each optional variable, if it is provided
-        optionals.map{ case (varName, wdlType) =>
+        optionals.map{ case (varName, decl) =>
             if (provided contains varName) {
                 None
             } else {
-                Some(WdlVarLinks(varName, wdlType, None))
+                Some(CompileVar(WdlVarLinks(varName, decl.wdlType, None),
+                                decl.ast))
             }
         }.flatten
     }
 
-    def unboundOrOptionalInputsSpec(call: Call) : Seq[JsValue] = {
+    def unboundOrOptionalInputsSpec(call: Call, cState: State) : Seq[JsValue] = {
         // Allow the user to provide required inputs, that the workflow
         // does not give. Export them as optional arguments on the platform.
-        val unboundRequiredInputs :Seq[WdlVarLinks] = unboundRequiredTaskInputs(call)
+        val unboundRequiredInputs :Seq[CompileVar] = unboundRequiredTaskInputs(call, cState)
         val unboundSpec = unboundRequiredInputs.map(x =>
-            wdlVarToSpec(x.varName, x.wdlType))
+            wdlVarToSpec(x.wvl.varName, x.wvl.wdlType, x.ast, cState)
+        )
 
         // Allow the user to provide optionals, not provided in the
         // workflow, through the platform.
-        val unboundOptionalInputs :Seq[WdlVarLinks] = unboundOptionalTaskInputs(call)
-        val optsSpec = unboundOptionalInputs.map(x => wdlVarToSpec(x.varName, x.wdlType, mkDxOpt=true))
-
+        val unboundOptionalInputs :Seq[CompileVar] = unboundOptionalTaskInputs(call)
+        val optsSpec = unboundOptionalInputs.map(cVar =>
+            wdlVarToSpec(cVar.wvl.varName, cVar.wvl.wdlType, cVar.ast, cState, mkDxOpt=true)
+        )
         unboundSpec.flatten ++ optsSpec.flatten
     }
 
@@ -626,23 +651,23 @@ object Compile {
     //
     def compileCall(wf : Workflow,
                     call: Call,
-                    wdlSourceFile : Path,
                     env : CallEnv,
-                    destination : String,
-                    dxWDLrtId: String): (DXApplet, Closure, String, Seq[VarOutput]) = {
-        val callUName = callUniqueName(call)
-        //System.err.println(s"Compiling call ${callUName}")
+                    cState: State) : (DXApplet, Closure, String, Seq[VarOutput]) = {
+        val callUName = callUniqueName(call, cState)
+        trace(cState.verbose, s"Compiling call ${callUName}")
         val task = Utils.taskOfCall(call)
         val outputDecls : Seq[JsValue] =
-            task.outputs.map(tso => wdlVarToSpec(tso.unqualifiedName, tso.wdlType)).flatten
-        val runSpec : JsValue = calcRunSpec(Some(task), destination, dxWDLrtId)
+            task.outputs.map(tso =>
+                wdlVarToSpec(tso.unqualifiedName, tso.wdlType, tso.ast, cState)
+            ).flatten
+        val runSpec : JsValue = calcRunSpec(Some(task), cState.destination, cState.dxWDLrtId)
 
-        var closure = Map.empty[String, WdlVarLinks]
+        var closure = Map.empty[String, CompileVar]
         call.inputMappings.foreach { case (_, expr) =>
-            closure = updateClosure(closure, env, expr, true)
+            closure = updateClosure(closure, env, expr, true, cState)
         }
-        val inputSpec : Seq[JsValue] = closureToAppletInputSpec(closure)
-        val unboundOrOptionalSpec : Seq[JsValue] = unboundOrOptionalInputsSpec(call)
+        val inputSpec : Seq[JsValue] = closureToAppletInputSpec(closure, cState)
+        val unboundOrOptionalSpec : Seq[JsValue] = unboundOrOptionalInputsSpec(call, cState)
         val appletFqn : String = wf.unqualifiedName ++ "." ++ callUName
 
         val attrs = Map(
@@ -668,34 +693,39 @@ object Compile {
         val json = JsObject(attrs ++ networkAccess)
 
         // create a directory structure for this applet
-        val appletDir = createAppletDirStruct(appletFqn, wdlSourceFile, json,
+        val appletDir = createAppletDirStruct(appletFqn, cState.wdlSourceFile, json,
                                               AppletKind.Command, docker)
-        val dxapp = dxBuildApp(appletDir, appletFqn, destination)
-        val outputs = task.outputs.map(tso => VarOutput(tso.unqualifiedName, tso.wdlType))
+        val dxapp = dxBuildApp(appletDir, appletFqn, cState.destination, cState.verbose)
+        val outputs = task.outputs.map(tso => VarOutput(tso.unqualifiedName, tso.wdlType, tso.ast))
         (dxapp, closure, callUName, outputs)
     }
 
     // Compile a scatter block
     def compileScatter(wf : Workflow,
                        scatter: Scatter,
-                       wdlSourceFile : Path,
                        env : CallEnv,
-                       destination : String,
-                       dxWDLrtId: String): (DXApplet, Closure, String, Seq[VarOutput]) = {
+                       cState: State) : (DXApplet, Closure, String, Seq[VarOutput]) = {
+        def unsupported(ast: Ast, msg: String) : String = {
+            cState.errFmt.notCurrentlySupported(ast, msg)
+        }
         val (topDecls, rest) = Utils.splitBlockDeclarations(scatter.children.toList)
         val calls : Seq[Call] = rest.map {
             case call: Call => call
-            case decl: Declaration => throw new NotImplementedError("Declarations in the middle of a scatter block")
-            case ssc: Scatter => throw new NotImplementedError("Nested scatters")
-            case swf: Workflow => throw new NotImplementedError("Nested workflow inside scatter")
+            case decl: Declaration =>
+                throw new Exception(unsupported(decl.ast, "Declarations in the middle of a scatter block"))
+            case ssc: Scatter =>
+                throw new Exception(unsupported(ssc.ast, "Nested scatters"))
+            case swf: Workflow =>
+                throw new Exception(unsupported(swf.ast, "Nested workflow inside scatter"))
         }
         if (calls.isEmpty)
-            throw new NotImplementedError("Scatters with no calls are not supported")
+            throw new Exception(unsupported(scatter.ast, "Scatters with no calls"))
 
         // Construct a unique stage name by adding "scatter" to the
         // first call name. This is guaranteed to be unique within a
         // workflow, because call names must be unique (or aliased)
-        val stageName = Utils.SCATTER ++ "___" ++ callUniqueName(calls(0))
+        val stageName = Utils.SCATTER ++ "___" ++ callUniqueName(calls(0), cState)
+        trace(cState.verbose, "compiling scatter ${stageName}")
 
         // Construct the block output by unifying individual call outputs.
         // Each applet output becomes an array of that type. For example,
@@ -703,27 +733,29 @@ object Compile {
         val outputDecls : Seq[VarOutput] = calls.map { call =>
             val task = Utils.taskOfCall(call)
             task.outputs.map { tso =>
-                VarOutput(callUniqueName(call) ++ "." ++ tso.unqualifiedName,
-                          WdlArrayType(tso.wdlType))
+                VarOutput(callUniqueName(call, cState) ++ "." ++ tso.unqualifiedName,
+                          WdlArrayType(tso.wdlType), tso.ast)
             }
         }.flatten
 
         // We need minimal compute resources to execute a scatter
-        val runSpec : JsValue = calcRunSpec(None, destination, dxWDLrtId)
+        val runSpec : JsValue = calcRunSpec(None, cState.destination, cState.dxWDLrtId)
 
         // Figure out the closure, we need the expression being looped over.
-        var closure = Map.empty[String, WdlVarLinks]
-        closure = updateClosure(closure, env, scatter.collection, true)
+        var closure = Map.empty[String, CompileVar]
+        closure = updateClosure(closure, env, scatter.collection, true, cState)
 
         // Figure out the type of the iteration variable,
         // and ignore it for closure purposes
-        val typeEnv : Map[String, WdlType] = env.map { case (x,wvl) => x -> wvl.wdlType }.toMap
+        val typeEnv : Map[String, WdlType] = env.map { case (x,cVar) => x -> cVar.wvl.wdlType }.toMap
         val iterVarType : WdlType = Utils.calcIterWdlType(scatter, typeEnv)
-        var innerEnv : CallEnv = env + (scatter.item -> WdlVarLinks(scatter.item, iterVarType, None))
+        val cVar = CompileVar(WdlVarLinks(scatter.item, iterVarType, None), scatter.ast)
+        var innerEnv : CallEnv = env + (scatter.item -> cVar)
 
         // Add the declarations at the top of the block
         val localDecls = topDecls.map( decl =>
-            decl.unqualifiedName -> WdlVarLinks(decl.unqualifiedName, decl.wdlType, None)
+            decl.unqualifiedName -> CompileVar(WdlVarLinks(decl.unqualifiedName, decl.wdlType, None),
+                                               decl.ast)
         ).toMap
         innerEnv = innerEnv ++ localDecls
 
@@ -731,13 +763,13 @@ object Compile {
         topDecls.foreach { decl =>
             decl.expression match {
                 case Some(expr) =>
-                    closure = updateClosure(closure, innerEnv, expr, false)
+                    closure = updateClosure(closure, innerEnv, expr, false, cState)
                 case None => ()
             }
         }
         calls.foreach { call =>
             call.inputMappings.foreach { case (_, expr) =>
-                closure = updateClosure(closure, innerEnv, expr, false)
+                closure = updateClosure(closure, innerEnv, expr, false, cState)
             }
         }
 
@@ -747,10 +779,11 @@ object Compile {
         topDecls.foreach( decl =>
             closure -= decl.unqualifiedName
         )
-        //System.err.println(s"scatter closure=${closure}")
-        val inputSpec : Seq[JsValue] = closureToAppletInputSpec(closure)
+        trace(cState.verbose, s"scatter closure=${closure}")
+        val inputSpec : Seq[JsValue] = closureToAppletInputSpec(closure, cState)
         val outputSpec : Seq[JsValue] = outputDecls.map(tso =>
-            wdlVarToSpec(tso.unqualifiedName, tso.wdlType)).flatten
+            wdlVarToSpec(tso.unqualifiedName, tso.wdlType, tso.ast, cState)
+        ).flatten
         val scatterFqn = wf.unqualifiedName ++ "." ++ stageName
         val json = JsObject(
             "name" -> JsString(scatterFqn),
@@ -761,21 +794,23 @@ object Compile {
         )
 
         // create a directory structure for this applet
-        val appletDir = createAppletDirStruct(scatterFqn, wdlSourceFile, json,
+        val appletDir = createAppletDirStruct(scatterFqn, cState.wdlSourceFile, json,
                                               AppletKind.Scatter, None)
-        val dxapp = dxBuildApp(appletDir, scatterFqn, destination)
+        val dxapp = dxBuildApp(appletDir, scatterFqn, cState.destination, cState.verbose)
 
         // Compile each of the calls in the scatter block into an applet.
         // These will be called from the scatter stage at runtime.
         calls.foreach { call =>
             val (_, _, _, outputs) =
-                compileCall(wf, call, wdlSourceFile, innerEnv, destination, dxWDLrtId)
+                compileCall(wf, call, innerEnv, cState)
             // Add bindings for all call output variables. This allows later calls to refer
             // to these results. Links to their values are unknown at compile time, which
             // is why they are set to None.
             for (tso <- outputs) {
-                val fqVarName = callUniqueName(call) ++ "." ++ tso.unqualifiedName
-                innerEnv = innerEnv + (fqVarName -> WdlVarLinks(fqVarName, tso.wdlType, None))
+                val fqVarName = callUniqueName(call, cState) ++ "." ++ tso.unqualifiedName
+                innerEnv = innerEnv + (fqVarName ->
+                                           CompileVar(WdlVarLinks(fqVarName, tso.wdlType, None),
+                                                      call.ast))
             }
         }
 
@@ -783,12 +818,13 @@ object Compile {
     }
 
     def compileWorkflow(wf: Workflow,
-                        wdlSourceFile: Path,
                         dxwfl: DXWorkflow,
-                        destination : String,
-                        dxWDLrtId: String) : DXWorkflow = {
+                        cState: State) : DXWorkflow = {
+        def unsupported(ast: Ast, msg: String) : String = {
+            cState.errFmt.notCurrentlySupported(ast, msg)
+        }
         // An environment where variables are defined
-        var env : CallEnv = Map.empty[String, WdlVarLinks]
+        var env : CallEnv = Map.empty[String, CompileVar]
 
         // Deal with the toplevel declarations, and leave only
         // children we can deal with. Lift all declarations that can
@@ -800,10 +836,12 @@ object Compile {
         val calls : Seq[Scope] = wfCore.map {
             case call: Call => call
             case decl: Declaration =>
-                throw new NotImplementedError(
-                    s"Declaration in the middle of workflow ${decl.toWdlString} could not be lifted")
+                throw new Exception(unsupported(decl.ast,
+                                                "Declaration in the middle of workflow could not be lifted"))
             case ssc: Scatter => ssc
-            case swf: Workflow => throw new NotImplementedError("Nested workflow inside scatter")
+            case swf: Workflow =>
+                throw new Exception(unsupported(swf.ast,
+                                                "Nested workflow inside scatter"))
         }
 
         // - Create a preliminary stage to handle workflow inputs, and top-level
@@ -813,15 +851,14 @@ object Compile {
         (wf :: calls.toList).foreach { child =>
             val (applet, closure, stageName, outputs) = child match {
                 case _ : Workflow =>
-                    compileCommence(wf, topDecls ++ liftedDecls, wdlSourceFile, env, destination,
-                                    dxWDLrtId)
+                    compileCommon(wf, topDecls ++ liftedDecls, env, cState)
                 case call: Call =>
-                    compileCall(wf, call, wdlSourceFile, env, destination, dxWDLrtId)
+                    compileCall(wf, call, env, cState)
                 case scatter : Scatter =>
-                    compileScatter(wf, scatter, wdlSourceFile, env, destination, dxWDLrtId)
+                    compileScatter(wf, scatter, env, cState)
             }
 
-            val inputs = closureToStageInputs(closure)
+            val inputs = closureToStageInputs(closure, cState)
             //System.err.println(s"inputs=${Utils.jsValueOfJsonNode(inputs).prettyPrint}")
             val modif : DXWorkflow.Modification[DXWorkflow.Stage] =
                 dxwfl.addStage(applet, stageName, inputs, version)
@@ -838,8 +875,9 @@ object Compile {
                     case _ => throw new Exception("Sanity")
                 }
                 env = env + (fqVarName ->
-                                 WdlVarLinks(tso.unqualifiedName, tso.wdlType,
-                                             Some(IORef.Output, DxlStage(dxStage))))
+                                 CompileVar(WdlVarLinks(tso.unqualifiedName, tso.wdlType,
+                                                        Some(IORef.Output, DxlStage(dxStage))),
+                                            tso.ast))
             }
             //System.err.println(s"env(${stageName}) = ${env}")
         }
@@ -851,6 +889,20 @@ object Compile {
         val wf = ns match {
             case nswf : WdlNamespaceWithWorkflow => nswf.workflow
             case _ => throw new Exception("WDL does not have a workflow")
+        }
+
+        // verify version ID
+        options.get("expectedVersion") match {
+            case Some(vid) if vid != Utils.VERSION =>
+                throw new Exception(s"""|Version mismatch, library is ${Utils.VERSION},
+                                        |expected version is ${vid}"""
+                                        .stripMargin.replaceAll("\n", " "))
+            case _ => ()
+        }
+
+        val verbose = options.get("verbose") match {
+            case None => false
+            case Some(_) => true
         }
 
         // deal with the various options
@@ -901,7 +953,9 @@ object Compile {
             .setName(wf.unqualifiedName).build()
 
         // Wire everything together to create a workflow
-        compileWorkflow(wf, wdlSourceFile, dxwfl, destination, dxWDLrtId)
+        val cState = new State(wdlSourceFile, destination, dxWDLrtId, verbose,
+                               new CompileErrorFormatter(wf.wdlSyntaxErrorFormatter.terminalMap))
+        compileWorkflow(wf, dxwfl, cState)
         dxwfl.close()
         dxwfl.getId()
     }

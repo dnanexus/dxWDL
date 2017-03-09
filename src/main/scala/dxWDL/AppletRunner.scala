@@ -108,13 +108,12 @@ object AppletRunner {
                     }
 
                     // compulstory input.
-                    // Here, we need to take into account the possibility
-                    // that the input will be unbound.
+                    // Here, we fail if an input has not been provided. This
+                    // is not the Cromwell behavior, which allows unbound variables,
+                    // as long as they are not accessed.
                 case (_, None) =>
                     taskInputs.get(decl.unqualifiedName) match {
-                        case None =>
-                            lazy val e = throw new UnboundVariableException(decl.unqualifiedName)
-                            Some(e)
+                        case None => throw new UnboundVariableException(decl.unqualifiedName)
                         case Some(x) => Some(x)
                     }
 

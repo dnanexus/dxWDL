@@ -1,17 +1,17 @@
 {
-    "version": "0.1",
-    "name": "dxWDLrt",
-    "title": "dx WDL library",
-    "release": "14.04",
-    "distribution": "Ubuntu",
+    "version": "0.11\n", 
+    "name": "dxWDLrt", 
+    "title": "dx WDL library", 
+    "release": "14.04", 
+    "distribution": "Ubuntu", 
     "execDepends": [
         {
             "name": "dx-java-bindings"
-        },
+        }, 
         {
             "name": "openjdk-8-jre-headless"
         }
-    ],
-    "instanceType": "mem1_ssd1_x2",
+    ], 
+    "instanceType": "mem1_ssd1_x2", 
     "description": "Prerequisits for running WDL workflows compiled to the platform"
 }

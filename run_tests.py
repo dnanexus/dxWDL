@@ -454,6 +454,9 @@ Tests are run via sbt test. Note that the tests do require Docker to be running.
                    "2.result": "Yellow.aligned_Yellow.wgs",
                    "3.sum": 24})
 
+    register_test("viral-ngs-assembly",
+                  {},
+                  {})
 
 # The GATK pipeline takes many parameters, it is easier
 # to treat it is a script.

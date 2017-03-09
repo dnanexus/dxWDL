@@ -12,6 +12,7 @@ import sys
 import time
 
 top_dir = os.path.dirname(sys.argv[0])
+version_id = None
 asset_id = None
 project_id = None
 lib_object_ids = None
@@ -24,6 +25,8 @@ def main():
     argparser.add_argument("wdl_file", help="WDL workflow file")
     argparser.add_argument("--destination", help="Output folder for workflow")
     argparser.add_argument("--asset", help="Override configuration file asset Id")
+    argparser.add_argument("--verbose", dest='verbose', action='store_true', default=False,
+                           help="Print detailed progress reports")
     args = argparser.parse_args()
 
     if args.command == "compile":
@@ -55,10 +58,17 @@ def cmd_compile(args):
     record = dxpy.DXRecord(asset_id)
     desc = record.describe(incl_properties=True)
     props = desc["properties"]
-    version = props["version"]
-    print("version={}".format(version), file=sys.stderr)
+    pkg_version_id = props["version"]
+    if version_id is not None:
+        validate_version_id(version_id, pkg_version_id)
+    compile_workflow(args.wdl_file, destination, asset_id, classpath, args.verbose)
 
-    compile_workflow(args.wdl_file, destination, asset_id, classpath)
+def validate_version_id(version_id, pkg_version_id):
+    if version_id == pkg_version_id:
+        print("version={}".format(version_id), file=sys.stderr)
+    else:
+        print("Version number mismatch, local={}, platform={}".format(version_id, pkg_version_id))
+        exit(1)
 
 # Build a workflow.
 #
@@ -67,13 +77,18 @@ def cmd_compile(args):
 # destination    output path on the platform
 #
 # return --      workflow ID
-def compile_workflow(wf_file, destination, asset_id, classpath):
+def compile_workflow(wf_file, destination, asset_id, classpath, verbose):
     print("Compiling {}".format(wf_file), file=sys.stderr)
     cmd_line = [
         "java", "-cp", classpath, "dxWDL.Main", "compile", wf_file,
         "-o", destination,
         "-asset", asset_id
     ]
+    if version_id is not None:
+        cmd_line.append(["-expected_version", version_id])
+    if verbose:
+        cmd_line.append("-verbose")
+
     print((" ".join(cmd_line)), file=sys.stderr)
 
     # Call java/scala dxWDL compiler, and pipe stdout/stderr

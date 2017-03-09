@@ -34,7 +34,7 @@ import WdlVarLinks._
 //     ref_fasta:   File
 //     cmdline      String
 //
-object WorkflowCommenceRunner {
+object WorkflowCommonRunner {
     lazy val dxEnv = DXEnvironment.create()
 
     def evalDeclarations(declarations: Seq[Declaration],

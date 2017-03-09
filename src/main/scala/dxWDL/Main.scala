@@ -14,8 +14,8 @@ object Main extends App {
     }
 
     object Actions extends Enumeration {
-        val AppletEpilog, AppletProlog, LaunchScatter, WorkflowCommence,
-            Compile, Inputs, Parse, Validate, Yaml  = Value
+        val AppletEpilog, AppletProlog, Compile, LaunchScatter,
+            Version, WorkflowCommon, Yaml  = Value
     }
 
     case class SuccessfulTermination(output: String) extends Termination {
@@ -30,38 +30,6 @@ object Main extends App {
         override val returnCode = 1
         override val output = additionalInfo
     }
-
-    def validate(args: Seq[String]): Termination = {
-        continueIf(args.length == 1) {
-            loadWdl(args.head) { _ => SuccessfulTermination("") }
-        }
-    }
-
-    def inputs(args: Seq[String]): Termination = {
-        continueIf(args.length == 1) {
-            try {
-                loadWdl(args.head) { namespace =>
-                    import wdl4s.types.WdlTypeJsonFormatter._
-                    val msg = namespace match {
-                        case x: WdlNamespaceWithWorkflow => x.workflow.inputs.toJson.prettyPrint
-                        case _ => "WDL does not have a local workflow"
-                    }
-
-                    SuccessfulTermination(msg)
-                }
-            } catch {
-                case e : Throwable =>
-                    UnsuccessfulTermination(Utils.exceptionToString(e))
-            }
-        }
-    }
-
-    def parse(args: Seq[String]): Termination = {
-        continueIf(args.length == 1) {
-            SuccessfulTermination(AstTools.getAst(Paths.get(args.head)).toPrettyString)
-        }
-    }
-
 
     def yaml(args: Seq[String]): Termination = {
         continueIf(args.length == 1) {
@@ -86,6 +54,10 @@ object Main extends App {
                         nextOption(map ++ Map("destination" -> value.toString), tail)
                     case "-asset" :: value :: tail =>
                         nextOption(map ++ Map("dxWDLrtId" -> value.toString), tail)
+                    case "-expected_version" :: value :: tail =>
+                        nextOption(map ++ Map("expectedVersion" -> value.toString), tail)
+                    case "-verbose" :: tail =>
+                        nextOption(map ++ Map("verbose" -> ""), tail)
                     case option :: tail =>
                         throw new IllegalArgumentException(s"Unknown option ${option}")
 
@@ -112,7 +84,7 @@ object Main extends App {
             val homeDir = Paths.get(args(1))
             val (jobInputPath, jobOutputPath, jobErrorPath, jobInfoPath) = Utils.jobFilesOfHomeDir(homeDir)
 
-            val wdlSource : String = scala.io.Source.fromFile(wdlDefPath).mkString
+            val wdlSource : String = Utils.readFileContent(Paths.get(wdlDefPath))
             val nswf : WdlNamespaceWithWorkflow = WdlNamespaceWithWorkflow.load(wdlSource)
             val wf : Workflow = nswf.workflow
 
@@ -125,8 +97,8 @@ object Main extends App {
                             AppletRunner.epilog(wf, jobInputPath, jobOutputPath, jobInfoPath)
                         case Actions.LaunchScatter =>
                             ScatterRunner.apply(wf, jobInputPath, jobOutputPath, jobInfoPath)
-                        case Actions.WorkflowCommence =>
-                            WorkflowCommenceRunner.apply(wf, jobInputPath, jobOutputPath, jobInfoPath)
+                        case Actions.WorkflowCommon =>
+                            WorkflowCommonRunner.apply(wf, jobInputPath, jobOutputPath, jobInfoPath)
                     }
                     true
                 } catch {
@@ -145,7 +117,7 @@ object Main extends App {
 
     private[this] def loadWdl(path: String)(f: WdlNamespace => Termination): Termination = {
         try {
-            val wdlSource : String = scala.io.Source.fromFile(path).mkString
+            val wdlSource : String = Utils.readFileContent(Paths.get(path))
             val nswf : WdlNamespaceWithWorkflow = WdlNamespaceWithWorkflow.load(wdlSource)
             f(nswf)
         } catch {
@@ -162,74 +134,57 @@ object Main extends App {
 
     def dispatchCommand(args: Seq[String]): Termination = {
         getAction(args) match {
-            case Some(x) if x == Actions.Validate => validate(args.tail)
-            case Some(x) if x == Actions.Inputs => inputs(args.tail)
-            case Some(x) if x == Actions.Parse => parse(args.tail)
-            case Some(x) if x == Actions.Yaml => yaml(args.tail)
-            case Some(x) if x == Actions.Compile => compile(args.tail)
             case Some(x) if x == Actions.AppletProlog => appletAction(x, args.tail)
             case Some(x) if x == Actions.AppletEpilog => appletAction(x, args.tail)
+            case Some(x) if x == Actions.Compile => compile(args.tail)
             case Some(x) if x == Actions.LaunchScatter => appletAction(x, args.tail)
-            case Some(x) if x == Actions.WorkflowCommence => appletAction(x, args.tail)
+            case Some(x) if x == Actions.WorkflowCommon => appletAction(x, args.tail)
+            case Some(x) if x == Actions.Version => SuccessfulTermination(Utils.VERSION)
+            case Some(x) if x == Actions.Yaml => yaml(args.tail)
             case _ => BadUsageTermination("")
         }
     }
 
-    val UsageMessage = """
-                       |java -jar dxWDL.jar <action> <parameters>
-                       |
-                       |Actions:
-                       |
-                       |validate <WDL file>
-                       |
-                       |  Performs full validation of the WDL file including syntax
-                       |  and semantic checking
-                       |
-                       |inputs <WDL file>
-                       |
-                       |  Print a JSON skeleton file of the inputs needed for this
-                       |  workflow.  Fill in the values in this JSON document and
-                       |  pass it in to the 'run' subcommand.
-                       |
-                       |parse <WDL file>
-                       |
-                       |  Compares a WDL file against the grammar and prints out an
-                       |  abstract syntax tree if it is valid, and a syntax error
-                       |  otherwise.  Note that higher-level AST checks are not done
-                       |  via this sub-command and the 'validate' subcommand should
-                       |  be used for full validation
-                       |
-                       |yaml <WDL file>
-                       |
-                       |  Perform full validation and print a YAML version of the
-                       |  syntax tree.
-                       |
-                       |compile <WDL file> <-asset dxId> [-o targetPath]
-                       |
-                       |  Compile a wdl file into a dnanexus workflow. The asset
-                       |  ID for the dxWDL runtime is required. Optionally, specify a
-                       |  destination path on the platform.
-                       |
-                       |appletProlog <WDL file> <home directory>
-                       |
-                       |  Run the initial part of a dx-applet
-                       |  originally compiled from a WDL workflow.
-                       |  Process the input arguments, and generate a bash script.
-                       |
-                       |appletEpilog <WDL file> <home directory>
-                       |
-                       |  After the bash script generated by the above command
-                       |  is done, collect the outputs and format them into
-                       |  WDL and dx.
-                       |
-                       |launchScatter <WDL file> <home directory>
-                       |
-                       |  Launch a WDL scatter compiled into a dx-applet
-                       |
-                       |workflowCommence <WDL file> <home directory>
-                       |
-                       |  Perform the toplevel declarations at the beginning of the workflow
-                     """.stripMargin
+    val UsageMessage =
+        """|java -jar dxWDL.jar <action> <parameters>
+           |
+           |Actions:
+           |
+           |yaml <WDL file>
+           |
+           |  Perform full validation and print a YAML version of the
+           |  syntax tree.
+           |
+           |compile <WDL file> <-asset dxId> [-o targetPath] [-expected_version vid] [-verbose]
+           |
+           |  Compile a wdl file into a dnanexus workflow. An asset
+           |  ID for the dxWDL runtime is required. Optionally, specify a
+           |  destination path on the platform.
+           |
+           |appletProlog <WDL file> <home directory>
+           |
+           |  Run the initial part of a dx-applet
+           |  originally compiled from a WDL workflow.
+           |  Process the input arguments, and generate a bash script.
+           |
+           |appletEpilog <WDL file> <home directory>
+           |
+           |  After the bash script generated by the above command
+           |  is done, collect the outputs and format them into
+           |  WDL and dx.
+           |
+           |launchScatter <WDL file> <home directory>
+           |
+           |  Launch a WDL scatter compiled into a dx-applet
+           |
+           |workflowCommon <WDL file> <home directory>
+           |
+           |  Perform the toplevel declarations at the beginning of the workflow
+           |
+           |version
+           |
+           |  Report the current version
+           |""".stripMargin
 
     val termination = dispatchCommand(args)
 

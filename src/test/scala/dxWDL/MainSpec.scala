@@ -24,44 +24,6 @@ class MainSpec extends FlatSpec with Matchers with BeforeAndAfterAll {
         Main.dispatchCommand(Seq.empty[String]) shouldBe BadUsageTermination("")
     }
 
-    it should "validate" in {
-        testWdl(ThreeStep) { wdlAndInputs =>
-            Main.dispatchCommand(Seq("validate", wdlAndInputs.wdl)) shouldBe SuccessfulTermination("")
-        }
-    }
-
-    it should "not validate invalid wdl" in {
-        testWdl(EmptyInvalid) { wdlAndInputs =>
-            val res = Main.dispatchCommand(Seq("validate", wdlAndInputs.wdl))
-            assert(res.isInstanceOf[UnsuccessfulTermination])
-            res.output should include("Finished parsing without consuming all tokens")
-        }
-    }
-
-    it should "parse" in {
-        testWdl(ThreeStep) { wdlAndInputs =>
-            val res = Main.dispatchCommand(Seq("parse", wdlAndInputs.wdl))
-            assert(res.isInstanceOf[SuccessfulTermination])
-            //res.output should include("(Document:")
-        }
-    }
-
-    it should "return inputs" in {
-        testWdl(ThreeStep) { wdlAndInputs =>
-            val res = Main.dispatchCommand(Seq("inputs", wdlAndInputs.wdl))
-            assert(res.isInstanceOf[SuccessfulTermination])
-            res.output should include("\"three_step.cgrep.pattern\"")
-        }
-    }
-
-    it should "not return inputs when there is no workflow" in {
-        testWdl(EmptyTask) { wdlAndInputs =>
-            val res = Main.dispatchCommand(Seq("inputs", wdlAndInputs.wdl))
-            assert(res.isInstanceOf[UnsuccessfulTermination])
-            res.output should include("does not have a local workflow")
-        }
-    }
-
     it should "produce YAML tree" in {
         testWdl(ThreeStep) { wdlAndInputs =>
             val expectedYaml =

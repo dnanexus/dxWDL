@@ -202,7 +202,7 @@ object ScatterRunner {
         // add the top declarations in the scatter block to the
         // environment
         val (topDecls,_) = Utils.splitBlockDeclarations(scatter.children.toList)
-        val env: ScatterEnv = WorkflowCommenceRunner.evalDeclarations(topDecls, outerScopeEnv).toMap
+        val env: ScatterEnv = WorkflowCommonRunner.evalDeclarations(topDecls, outerScopeEnv).toMap
 
         // Figure out the input/output specs for each applet.
         // Do this once per applet in the loop.
