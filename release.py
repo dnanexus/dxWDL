@@ -28,13 +28,15 @@ def main():
 
     # Figure out what the current version is
     version_id = release_version()
-    print("version_id={}".format(version_id))
+    print('version_id="{}"'.format(version_id))
 
     # Create release folder, if needed
     if args.folder is None:
         folder = time.strftime("/releases/%Y-%m-%d/%H%M%S")
         project.new_folder(folder, parents=True)
         make_prerequisits(project, folder, version_id)
+        print("Uploading jar files")
+        upload_libs(project, folder)
     else:
         folder = args.folder
 
@@ -46,9 +48,6 @@ def main():
                                              return_handler=True,
                                              more_ok=False)
     print("assetId={}".format(asset.get_id()))
-
-    print("Uploading jar files")
-    upload_libs(project, folder)
 
     print("resolving jar files -- validation ")
     objs = []
@@ -74,9 +73,10 @@ def main():
                             'project_id = "{}"\n'.format(project.get_id()))
     script = script.replace('lib_object_ids = None\n',
                             'lib_object_ids = {}\n'.format(lib_object_ids))
+    rm_silent('/tmp/dxWDL')
+    rm_silent('/tmp/dxWDL_latest')
     with open('/tmp/dxWDL', 'w') as fd:
         fd.write(script)
-
     upload_script(project, folder)
 
 def make_prerequisits(project, folder, version_id):
@@ -105,7 +105,7 @@ def release_version():
         top_dir + "/applet_resources/resources/dxWDL.jar"
     ]
     version_id = subprocess.check_output(["java", "-cp", ":".join(classpath), "dxWDL.Main", "version"])
-    return version_id
+    return version_id.strip()
 
 def make_asset_file(version_id):
     asset_spec = {
@@ -149,11 +149,19 @@ def upload_script(project, folder):
         name="dxWDL_latest",
         folder="/",
         return_handler=True))
-    dxpy.api.project_remove_objects(project.get_id(), {"objects": old_objs})
+    for obj in old_objs:
+        dxpy.api.project_remove_objects(project.get_id(), {"objects": [obj.get_id()]})
 
     # Update the latest release script
     copyfile("/tmp/dxWDL", "/tmp/dxWDL_latest")
     upload_one_file("/tmp/dxWDL_latest", "/")
+
+# Remove a file, and do not throw any exceptions
+def rm_silent(path):
+    try:
+        os.remove(path)
+    except:
+        pass
 
 
 if __name__ == '__main__':
