@@ -64,6 +64,8 @@ def cmd_compile(args):
     compile_workflow(args.wdl_file, destination, asset_id, classpath, args.verbose)
 
 def validate_version_id(version_id, pkg_version_id):
+    version_id = version_id.strip()
+    pkg_version_id = pkg_version_id.strip()
     if version_id == pkg_version_id:
         print("version={}".format(version_id), file=sys.stderr)
     else:
@@ -85,9 +87,9 @@ def compile_workflow(wf_file, destination, asset_id, classpath, verbose):
         "-asset", asset_id
     ]
     if version_id is not None:
-        cmd_line.append(["-expected_version", version_id])
+        cmd_line += ["-expected_version", version_id]
     if verbose:
-        cmd_line.append("-verbose")
+        cmd_line += ["-verbose"]
 
     print((" ".join(cmd_line)), file=sys.stderr)
 
