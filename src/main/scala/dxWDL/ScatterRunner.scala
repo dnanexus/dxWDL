@@ -130,19 +130,25 @@ object ScatterRunner {
     def buildAppletInputs(inputSpec : List[InputParameter],
                           env : ScatterEnv) : ObjectNode = {
         // Figure out which wdl fields this applet needs
-        val appInputVars = inputSpec.map(spec => spec.getName()).
-            filter(name => !name.endsWith(Utils.FLAT_FILE_ARRAY_SUFFIX)).
-            map(Utils.appletVarNameStripSuffix)
+        val appInputVars = inputSpec.map{ spec =>
+            val name = spec.getName()
+            if (name.endsWith(Utils.FLAT_FILE_ARRAY_SUFFIX))
+                None
+            else
+                Some((Utils.appletVarNameStripSuffix(name), spec))
+        }.flatten
         var builder : DXJSON.ObjectBuilder = DXJSON.getObjectBuilder()
-        appInputVars.foreach{ varName =>
-            val wvl : WdlVarLinks = env.get(varName) match {
+        appInputVars.foreach{ case (varName, spec) =>
+            env.get(varName) match {
                 case None =>
-                    throw new AppInternalException(s"""|Could not find variable ${varName}
-                                                       |in environment ${env}""".stripMargin.trim)
-                case Some(x) => x
-            }
-            WdlVarLinks.genFields(wvl, varName).foreach{ case (fieldName, jsNode) =>
-                builder = builder.put(fieldName, jsNode)
+                    if (!spec.isOptional()) {
+                        throw new AppInternalException(s"""|Could not find required variable ${varName}
+                                                           |in environment ${env}""".stripMargin.trim)
+                    }
+                case Some(wvl) =>
+                    WdlVarLinks.genFields(wvl, varName).foreach{ case (fieldName, jsNode) =>
+                        builder = builder.put(fieldName, jsNode)
+                    }
             }
         }
         builder.build()
@@ -183,7 +189,7 @@ object ScatterRunner {
         outputs.foreach{ case (key, jsNode) =>
             m(key) = m.get(key) match {
                 case None => List(jsNode)
-                case Some(l) => jsNode :: l
+                case Some(l) => l :+ jsNode
             }
         }
         m.map { case (key, jsl) =>
@@ -209,8 +215,7 @@ object ScatterRunner {
         val phases = calls.map { case (call, dxApplet) =>
             val d = dxApplet.describe()
             val inputSpec : List[InputParameter] = d.getInputSpecification().asScala.toList
-            val outputSpec : List[OutputParameter] = d.getOutputSpecification().asScala.toList
-            (call, dxApplet, inputSpec, outputSpec)
+            (call, dxApplet, inputSpec)
         }
         val collElements : Seq[WdlVarLinks] = WdlVarLinks.unpackWdlArray(collection)
         var scOutputs : List[ScatterEnv] = List()
@@ -218,7 +223,7 @@ object ScatterRunner {
             // Bind the iteration variable inside the loop
             var innerEnv = env + (scatter.item -> elem)
 
-            phases.foreach { case (call,dxApplet,inputSpec,outputSpec) =>
+            phases.foreach { case (call,dxApplet,inputSpec) =>
                 val inputs : ObjectNode = buildAppletInputs(inputSpec, innerEnv)
                 System.err.println(s"call=${callUniqueName(call)} inputs=${inputs}")
                 val dxJob : DXJob = dxApplet.newRun().setRawInput(inputs).run()

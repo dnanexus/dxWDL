@@ -402,10 +402,12 @@ Tests are run via sbt test. Note that the tests do require Docker to be running.
 
     # Scatter/gather
     register_test("sg_sum",
-                  {'0.integers' : [1,2,3,4,5] },
-                  {'2.sum' : 20 })
-
-    register_test("sg1", {},{})
+                  {'0.integers' :    [1,2,3,4,5] },
+                  {'1.incremented' : [2,3,4,5,6],
+                   '2.sum' : 20 })
+    register_test("sg1",
+                  {},
+                  {'3.str': "_one_ _two_ _three_ _four_"})
     register_test("sg_sum2",
                   {'0.integers' : [1,8,11] },
                   {'2.sum' : 11 })

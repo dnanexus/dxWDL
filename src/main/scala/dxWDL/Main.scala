@@ -1,11 +1,9 @@
 package dxWDL
 
 import java.nio.file.Paths
-
-import wdl4s.{AstTools, WdlNamespace, WdlNamespaceWithWorkflow, Workflow}
-import spray.json._
-
 import scala.util.{Failure, Success, Try}
+import spray.json._
+import wdl4s.{WdlNamespace, WdlNamespaceWithWorkflow, Workflow}
 
 object Main extends App {
     sealed trait Termination {

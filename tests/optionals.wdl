@@ -49,6 +49,7 @@ task unused_args {
 
 workflow optionals {
     Int arg1
+    Array[Int] integers = [1,2]
 
     # A call missing a compulsory argument
     call mul2
@@ -56,6 +57,10 @@ workflow optionals {
     call set_def
     call add
     call unused_args
+
+    scatter (x in integers) {
+        call unused_args as unused_args_b
+    }
     output {
         mul2.result
         set_def.result

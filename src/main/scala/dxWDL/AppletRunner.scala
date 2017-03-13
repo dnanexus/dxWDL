@@ -1,7 +1,7 @@
 package dxWDL
 
 // DX bindings
-import com.dnanexus.{DXFile, DXProject, DXEnvironment, DXApplet, InputParameter}
+import com.dnanexus.{DXFile, DXProject, DXEnvironment, DXApplet}
 
 import java.nio.file.{Path, Paths, Files}
 import scala.collection.JavaConverters._
