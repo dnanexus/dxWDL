@@ -440,6 +440,9 @@ Tests are run via sbt test. Note that the tests do require Docker to be running.
     register_test_fail("bad_status", {}, {})
     register_test_fail("bad_status2", {}, {})
 
+    # Output error
+    register_test_fail("missing_output", {}, {})
+
     # combination of featuers
     register_test("advanced",
                   { '0.pattern' : "github",

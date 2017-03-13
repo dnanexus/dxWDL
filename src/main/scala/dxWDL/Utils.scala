@@ -511,6 +511,8 @@ object Utils {
 
     // Upload a local file to the platform, and return a json link
     def uploadFile(path: Path) : JsValue = {
+        if (!Files.exists(path))
+            throw new AppException(s"Output file ${path.toString} is missing")
         def uploadOneFile(path: Path, counter: Int) : Option[String] = {
             try {
                 if (DXPY_FILE_TRANSFER) {
