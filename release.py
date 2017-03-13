@@ -26,19 +26,19 @@ def main():
     print("resolving project {}".format(args.project))
     project = dxpy.find_one_project(name = args.project, more_ok=False, return_handler=True)
 
-    # Figure out what the current version is
-    version_id = release_version()
-    print('version_id="{}"'.format(version_id))
-
     # Create release folder, if needed
     if args.folder is None:
         folder = time.strftime("/releases/%Y-%m-%d/%H%M%S")
         project.new_folder(folder, parents=True)
-        make_prerequisits(project, folder, version_id)
+        make_prerequisits(project, folder)
         print("Uploading jar files")
         upload_libs(project, folder)
     else:
         folder = args.folder
+
+    # Figure out what the current version is
+    version_id = release_version()
+    print('version_id="{}"'.format(version_id))
 
     print("resolving dxWDL runtime asset")
     asset = dxpy.search.find_one_data_object(classname="record",
@@ -79,7 +79,7 @@ def main():
         fd.write(script)
     upload_script(project, folder)
 
-def make_prerequisits(project, folder, version_id):
+def make_prerequisits(project, folder):
     # Run make, to ensure that we have an up-to-date jar file
     #
     # Be careful, so that the make invocation will work even if called from a different
@@ -89,6 +89,7 @@ def make_prerequisits(project, folder, version_id):
     print("")
 
     # Create the asset description file
+    version_id = release_version()
     make_asset_file(version_id)
 
     # Create an asset from the dxWDL jar file and its dependencies,
