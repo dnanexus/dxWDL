@@ -79,8 +79,11 @@ class MainSpec extends FlatSpec with Matchers with BeforeAndAfterAll {
           |        in_file: ps.procs
           """.stripMargin.trim
             val res = Main.dispatchCommand(Seq("yaml", wdlAndInputs.wdl))
-            assert(res.isInstanceOf[SuccessfulTermination])
-            res.output should include(expectedYaml)
+            res match {
+                case SuccessfulTermination(buf) =>
+                    buf should include(expectedYaml)
+                case _ => throw new Exception("Bad termination status")
+            }
         }
     }
 

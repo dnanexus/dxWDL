@@ -1,32 +1,21 @@
 package dxWDL
 
-import java.nio.file.Paths
+import java.nio.file.{Path, Paths, Files}
 import scala.util.{Failure, Success, Try}
 import spray.json._
+import spray.json.DefaultJsonProtocol
+import spray.json.JsString
 import wdl4s.{WdlNamespace, WdlNamespaceWithWorkflow, Workflow}
 
 object Main extends App {
-    sealed trait Termination {
-        def output: String
-        def returnCode: Int
-    }
+    sealed trait Termination
+    case class SuccessfulTermination(output: String) extends Termination
+    case class UnsuccessfulTermination(output: String) extends Termination
+    case class BadUsageTermination(info: String) extends Termination
 
     object Actions extends Enumeration {
         val AppletEpilog, AppletProlog, Compile, LaunchScatter,
             Version, WorkflowCommon, Yaml  = Value
-    }
-
-    case class SuccessfulTermination(output: String) extends Termination {
-        override val returnCode = 0
-    }
-
-    case class UnsuccessfulTermination(output: String) extends Termination {
-        override val returnCode = 1
-    }
-
-    case class BadUsageTermination(additionalInfo: String) extends Termination {
-        override val returnCode = 1
-        override val output = additionalInfo
     }
 
     def yaml(args: Seq[String]): Termination = {
@@ -35,6 +24,32 @@ object Main extends App {
                 SuccessfulTermination(WdlYamlTree(ns).print())
             }
         }
+    }
+
+    // Report an error, since this is called from a bash script, we
+    // can't simply raise an exception. Instead, we write the error to
+    // a standard JSON file.
+    def writeJobError(jobErrorPath : Path, e: Throwable) : Unit = {
+        val errType = e match {
+            case _ : AppException => "AppError"
+            case _ : AppInternalException => "AppInternalError"
+            case _ : Throwable => "AppInternalError"
+        }
+        // We are limited in what characters can be written to json, so we
+        // provide a short description for json.
+        //
+        // Note: we sanitize this string, to be absolutely sure that
+        // it does not contain problematic JSON characters.
+        val errMsg = JsObject(
+            "error" -> JsObject(
+                "type" -> JsString(errType),
+                "message" -> JsString(Utils.sanitize(e.getMessage))
+            )
+        ).prettyPrint
+        Utils.writeFileContent(jobErrorPath, errMsg)
+
+        // Write out a full stack trace to standard error.
+        System.err.println(Utils.exceptionToString(e))
     }
 
     def compile(args: Seq[String]): Termination = {
@@ -86,27 +101,22 @@ object Main extends App {
             val nswf : WdlNamespaceWithWorkflow = WdlNamespaceWithWorkflow.load(wdlSource)
             val wf : Workflow = nswf.workflow
 
-            val rc =
-                try {
-                    action match {
-                        case Actions.AppletProlog =>
-                            AppletRunner.prolog(wf, jobInputPath, jobOutputPath, jobInfoPath)
-                        case Actions.AppletEpilog =>
-                            AppletRunner.epilog(wf, jobInputPath, jobOutputPath, jobInfoPath)
-                        case Actions.LaunchScatter =>
-                            ScatterRunner.apply(wf, jobInputPath, jobOutputPath, jobInfoPath)
-                        case Actions.WorkflowCommon =>
-                            WorkflowCommonRunner.apply(wf, jobInputPath, jobOutputPath, jobInfoPath)
-                    }
-                    true
-                } catch {
-                    case e : Throwable =>
-                        Utils.writeJobErrorAndExit(jobErrorPath, e)
-                        false
+            try {
+                action match {
+                    case Actions.AppletProlog =>
+                        AppletRunner.prolog(wf, jobInputPath, jobOutputPath, jobInfoPath)
+                    case Actions.AppletEpilog =>
+                        AppletRunner.epilog(wf, jobInputPath, jobOutputPath, jobInfoPath)
+                    case Actions.LaunchScatter =>
+                        ScatterRunner.apply(wf, jobInputPath, jobOutputPath, jobInfoPath)
+                    case Actions.WorkflowCommon =>
+                        WorkflowCommonRunner.apply(wf, jobInputPath, jobOutputPath, jobInfoPath)
                 }
-            rc match {
-                case true =>  SuccessfulTermination(s"success ${action}")
-                case false => UnsuccessfulTermination(s"failure running ${action}")
+                SuccessfulTermination(s"success ${action}")
+            } catch {
+                case e : Throwable =>
+                    writeJobError(jobErrorPath, e)
+                    UnsuccessfulTermination(s"failure running ${action}")
             }
         }
     }
@@ -188,13 +198,10 @@ object Main extends App {
 
     termination match {
         case SuccessfulTermination(s) => println(s)
-        case UnsuccessfulTermination(s) => Console.err.println(s)
-        case BadUsageTermination(s) =>
-            if (s == "")
-                Console.err.println(UsageMessage)
-            else
-                Console.err.println(s)
+        case BadUsageTermination(s) if (s == "") => Console.err.println(UsageMessage)
+        case BadUsageTermination(s) => Console.err.println(s)
+        case UnsuccessfulTermination(s) =>
+            Console.err.println(s)
+            System.exit(1)
     }
-
-    termination.returnCode
 }

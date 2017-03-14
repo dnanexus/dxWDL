@@ -591,4 +591,11 @@ class WdlUnitTest extends FlatSpec with BeforeAndAfterEach with OneInstancePerTe
         val x2 = JsObject(m2)
         System.err.println(s"json=${x2.prettyPrint}")
     }
+
+    it should "sanitize json strings" in {
+        List("A", "2211", "abcf", "abc ABC 123").foreach(s =>
+            assert(Utils.sanitize(s) == s)
+        )
+        assert(Utils.sanitize("{}\\//") == "     ")
+    }
 }

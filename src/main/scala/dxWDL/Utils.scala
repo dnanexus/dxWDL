@@ -321,31 +321,6 @@ object Utils {
         (jobInputPath, jobOutputPath, jobErrorPath, jobInfoPath)
     }
 
-    // Report an error, since this is called from a bash script, we
-    // can't simply raise an exception. Instead, we write the error to
-    // a standard JSON file.
-    def writeJobErrorAndExit(jobErrorPath : Path, e: Throwable) : Unit = {
-        val errType = e match {
-            case _ : AppException => "AppError"
-            case _ : AppInternalException => "AppInternalError"
-            case _ : Throwable => "AppInternalError"
-        }
-        val message = exceptionToString(e)
-        val errorReport =
-            s"""|{
-                |  "error": {
-                |    "type": $errType,
-                |    "message": $message
-                |  }
-                |}""".stripMargin
-
-        // For some reason, sometimes the platform does not
-        // report this error properly. This line prints it
-        // to stderr as well.
-        System.err.println(errorReport)
-        writeFileContent(jobErrorPath, errorReport)
-    }
-
     // In a block, split off the beginning declarations, from the rest.
     // For example, the scatter block below, will be split into
     // the top two declarations, and the other calls.
@@ -512,7 +487,7 @@ object Utils {
     // Upload a local file to the platform, and return a json link
     def uploadFile(path: Path) : JsValue = {
         if (!Files.exists(path))
-            throw new AppException(s"Output file ${path.toString} is missing")
+            throw new AppInternalException(s"Output file ${path.toString} is missing")
         def uploadOneFile(path: Path, counter: Int) : Option[String] = {
             try {
                 if (DXPY_FILE_TRANSFER) {
@@ -563,12 +538,20 @@ object Utils {
         }
     }
 
-    // syntax errors
-    def line(t:Terminal,
-             terminalMap: Map[Terminal, WdlSource]): String =
-        terminalMap.get(t).get.split("\n")(t.getLine - 1)
-    def pointToSource(t: Terminal,
-                      terminalMap: Map[Terminal, WdlSource]): String =
-        s"${line(t, terminalMap)}\n${" " * (t.getColumn - 1)}^"
-
+    // Replace all special json characters from with white spaces.
+    def sanitize(s : String) : String = {
+        def sanitizeChar(ch: Char) : String = ch match {
+            case '}' => " "
+            case '{' => " "
+            case '$' => " "
+            case '/' => " "
+            case '\\' => " "
+            case '\"' => " "
+            case '\'' => " "
+            case _ if (ch.isLetterOrDigit) => ch.toString
+            case _ if (ch.isControl) =>  " "
+            case _ => ch.toString
+        }
+        s.flatMap(sanitizeChar)
+    }
 }
