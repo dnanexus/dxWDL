@@ -538,7 +538,7 @@ object Utils {
         }
     }
 
-    // Replace all special json characters from with white spaces.
+    // Replace all special json characters from with a white space.
     def sanitize(s : String) : String = {
         def sanitizeChar(ch: Char) : String = ch match {
             case '}' => " "
@@ -554,4 +554,11 @@ object Utils {
         }
         s.flatMap(sanitizeChar)
     }
+
+    def inputsToString(m: Map[String, WdlValue]) : String = {
+        m.map{ case(key, wVal) =>
+            key ++ " -> " ++ wVal.wdlType.toString ++ "(" ++ wVal.toWdlString ++ ")"
+        }.mkString("\n")
+    }
+
 }

@@ -63,7 +63,7 @@ object AppletRunner {
     // }
     // Start with a wdlValue for {Add.sum}, and get wdlValues for {a,b}
     def evalCallInputs(call : Call, callInputs : Map[String, WdlValue]) = {
-        System.err.println(s"callInputs=${callInputs}")
+        System.err.print(s"callInputs=\n${Utils.inputsToString(callInputs)}\n")
         def lookup(varName : String) : WdlValue =
             callInputs.get(varName) match {
                 case Some(x) => x
