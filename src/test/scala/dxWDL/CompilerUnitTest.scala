@@ -103,7 +103,7 @@ class CompilerUnitTest extends FlatSpec with BeforeAndAfterEach {
                      |   }
                      |}""".stripMargin.trim
 
-        val ns = WdlNamespaceWithWorkflow.load(wdl, Seq.empty)
+        val ns = WdlNamespaceWithWorkflow.load(wdl, Seq.empty).get
         val wf = ns.workflow
         val scatters = wf.scatters
         assert (scatters.size == 1)
@@ -138,7 +138,7 @@ class CompilerUnitTest extends FlatSpec with BeforeAndAfterEach {
                      |  }
                      |}""".stripMargin.trim
 
-        val ns = WdlNamespaceWithWorkflow.load(wdl, Seq.empty)
+        val ns = WdlNamespaceWithWorkflow.load(wdl, Seq.empty).get
         val wf: Workflow = ns.workflow
         val call : Call = getCallFromNamespace(ns, "diff")
 
