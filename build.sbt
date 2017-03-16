@@ -15,6 +15,7 @@ assemblyJarName in assembly := "dxWDL-" + git.gitHeadCommit.value + ".jar"
 
 logLevel in assembly := Level.Info
 
+scalacOptions ++= Seq("-unchecked", "-deprecation")
 resolvers ++= Seq(
   "Broad Artifactory Releases" at "https://artifactory.broadinstitute.org/artifactory/libs-release/",
   "Broad Artifactory Snapshots" at "https://artifactory.broadinstitute.org/artifactory/libs-snapshot/"

@@ -140,7 +140,7 @@ class WdlUnitTest extends FlatSpec with BeforeAndAfterEach with OneInstancePerTe
                      |}""".stripMargin.trim
 
 
-        val ns = WdlNamespaceWithWorkflow.load(wdl)
+        val ns = WdlNamespaceWithWorkflow.load(wdl, Seq.empty)
         ns.findTask("a") foreach { task =>
             assert(task.name == "a")
         }
@@ -179,7 +179,7 @@ class WdlUnitTest extends FlatSpec with BeforeAndAfterEach with OneInstancePerTe
                      |}""".stripMargin.trim
 
 
-        val ns = WdlNamespaceWithWorkflow.load(wdl)
+        val ns = WdlNamespaceWithWorkflow.load(wdl, Seq.empty)
         val call : Call = getCallFromNamespace(ns, "Add2")
         val inputs = Map("Add.sum" -> WdlInteger(1))
         val outputs : Seq[(String, WdlType, WdlValue)] = evalCall(call, inputs)
@@ -211,7 +211,7 @@ class WdlUnitTest extends FlatSpec with BeforeAndAfterEach with OneInstancePerTe
                      |    }
                      |}""".stripMargin.trim
 
-        val ns = WdlNamespaceWithWorkflow.load(wdl)
+        val ns = WdlNamespaceWithWorkflow.load(wdl, Seq.empty)
         val call : Call = getCallFromNamespace(ns, "Concat")
         val inputs : Map[String,WdlValue] =
             Map("str_array" ->
@@ -247,7 +247,7 @@ class WdlUnitTest extends FlatSpec with BeforeAndAfterEach with OneInstancePerTe
                      |        Concat.result
                      |    }
                      |}""".stripMargin.trim
-        val ns = WdlNamespaceWithWorkflow.load(wdl)
+        val ns = WdlNamespaceWithWorkflow.load(wdl, Seq.empty)
         val call : Call = getCallFromNamespace(ns, "Concat")
         val inputs : Map[String,WdlValue] =
             Map("int_array" ->
@@ -288,7 +288,7 @@ class WdlUnitTest extends FlatSpec with BeforeAndAfterEach with OneInstancePerTe
                      |         wc.result
                      |     }
                      |}""".stripMargin.trim
-        val ns = WdlNamespaceWithWorkflow.load(wdl)
+        val ns = WdlNamespaceWithWorkflow.load(wdl, Seq.empty)
         val call : Call = getCallFromNamespace(ns, "wc")
 
         // create a few files
@@ -340,7 +340,7 @@ class WdlUnitTest extends FlatSpec with BeforeAndAfterEach with OneInstancePerTe
                      |         Concat.result
                      |     }
                      |}""".stripMargin.trim
-        val ns = WdlNamespaceWithWorkflow.load(wdl)
+        val ns = WdlNamespaceWithWorkflow.load(wdl, Seq.empty)
         val call : Call = getCallFromNamespace(ns, "Concat")
 
         val inputs : Map[String,WdlValue] =
@@ -388,7 +388,7 @@ class WdlUnitTest extends FlatSpec with BeforeAndAfterEach with OneInstancePerTe
                      |    }
                      |}""".stripMargin.trim
 
-        val ns = WdlNamespaceWithWorkflow.load(wdl)
+        val ns = WdlNamespaceWithWorkflow.load(wdl, Seq.empty)
         val call : Call = getCallFromNamespace(ns, "prepare")
         val inputs : Map[String,WdlValue] = Map()
         val outputs : Seq[(String, WdlType, WdlValue)] = evalCall(call, inputs)
@@ -432,7 +432,7 @@ class WdlUnitTest extends FlatSpec with BeforeAndAfterEach with OneInstancePerTe
                          |  }
                          |}""".stripMargin.trim
 
-            val ns = WdlNamespaceWithWorkflow.load(wdl)
+            val ns = WdlNamespaceWithWorkflow.load(wdl, Seq.empty)
             val call : Call = getCallFromNamespace(ns, "BadCommand")
             evalCall(call, Map(), goodRetcode=false)
         }
@@ -454,7 +454,7 @@ class WdlUnitTest extends FlatSpec with BeforeAndAfterEach with OneInstancePerTe
                          |  }
                          |}""".stripMargin.trim
 
-            val ns = WdlNamespaceWithWorkflow.load(wdl)
+            val ns = WdlNamespaceWithWorkflow.load(wdl, Seq.empty)
             val call : Call = getCallFromNamespace(ns, "GoodCommand")
             val outputs : Seq[(String, WdlType, WdlValue)] = evalCall(call, Map())
             assert(outputs.length == 1)
@@ -486,7 +486,7 @@ class WdlUnitTest extends FlatSpec with BeforeAndAfterEach with OneInstancePerTe
                      |    }
                      |}""".stripMargin.trim
 
-        val ns = WdlNamespaceWithWorkflow.load(wdl)
+        val ns = WdlNamespaceWithWorkflow.load(wdl, Seq.empty)
         val call : Call = getCallFromNamespace(ns, "mul2")
         val inputs : Map[String,WdlValue] = Map("i" -> WdlInteger(3))
         val outputs : Seq[(String, WdlType, WdlValue)] = evalCall(call, inputs)

@@ -193,7 +193,7 @@ object ScatterRunner {
             }
         }
         m.map { case (key, jsl) =>
-            key ->  JsArray(jsl.map(Utils.jsValueOfJsonNode))
+            key ->  JsArray(jsl.map(Utils.jsValueOfJsonNode).toVector)
         }.toMap
     }
 

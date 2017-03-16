@@ -206,20 +206,20 @@ object WdlVarLinks {
                 JsArray(fileAr.map {case x : WdlString =>
                             val path = x.value
                             Utils.uploadFile(Paths.get(path))
-                        }.toList)
+                        }.toVector)
             case (WdlArrayType(WdlFileType), WdlArray(WdlArrayType(WdlFileType), fileAr)) =>
                 JsArray(fileAr.map {case x : WdlSingleFile =>
                             val path = x.value
                             Utils.uploadFile(Paths.get(path))
-                        }.toList)
+                        }.toVector)
             case (_, WdlArray(WdlArrayType(WdlBooleanType), boolAr)) =>
-                JsArray(boolAr.map {case x : WdlBoolean => JsBoolean(x.value)}.toList)
+                JsArray(boolAr.map {case x : WdlBoolean => JsBoolean(x.value)}.toVector)
             case (_, WdlArray(WdlArrayType(WdlIntegerType), intAr)) =>
-                JsArray(intAr.map {case x : WdlInteger => JsNumber(x.value)}.toList)
+                JsArray(intAr.map {case x : WdlInteger => JsNumber(x.value)}.toVector)
             case (_, WdlArray(WdlArrayType(WdlFloatType), fAr)) =>
-                JsArray(fAr.map {case x : WdlFloat => JsNumber(x.value)}.toList)
+                JsArray(fAr.map {case x : WdlFloat => JsNumber(x.value)}.toVector)
             case (_, WdlArray(WdlArrayType(WdlStringType), stAr)) =>
-                JsArray(stAr.map {case x : WdlString => jsStringLimited(x.value)}.toList)
+                JsArray(stAr.map {case x : WdlString => jsStringLimited(x.value)}.toVector)
 
             case _ => throw new AppInternalException(s"Unsupport type ${wdlValue.wdlType}")
         }
@@ -245,7 +245,7 @@ object WdlVarLinks {
                     case _ => throw new AppInternalException(s"unsupported type ${wdlType}")
                 }
                 val raggedAr: JsValue = wdlValue match {
-                    case WdlArray(_,l) => JsArray(l.toList.map{ case x =>
+                    case WdlArray(_,l) => JsArray(l.toVector.map{ case x =>
                                                       jsOfBasicWdlValue(WdlArrayType(t), x) })
                     case _ => throw new AppInternalException("Sanity")
                 }

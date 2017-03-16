@@ -98,7 +98,7 @@ object Main extends App {
             val (jobInputPath, jobOutputPath, jobErrorPath, jobInfoPath) = Utils.jobFilesOfHomeDir(homeDir)
 
             val wdlSource : String = Utils.readFileContent(Paths.get(wdlDefPath))
-            val nswf : WdlNamespaceWithWorkflow = WdlNamespaceWithWorkflow.load(wdlSource)
+            val nswf : WdlNamespaceWithWorkflow = WdlNamespaceWithWorkflow.load(wdlSource, Seq.empty)
             val wf : Workflow = nswf.workflow
 
             try {
@@ -126,7 +126,7 @@ object Main extends App {
     private[this] def loadWdl(path: String)(f: WdlNamespace => Termination): Termination = {
         try {
             val wdlSource : String = Utils.readFileContent(Paths.get(path))
-            val nswf : WdlNamespaceWithWorkflow = WdlNamespaceWithWorkflow.load(wdlSource)
+            val nswf : WdlNamespaceWithWorkflow = WdlNamespaceWithWorkflow.load(wdlSource, Seq.empty)
             f(nswf)
         } catch {
             case e : Throwable =>
