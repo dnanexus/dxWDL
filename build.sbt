@@ -18,7 +18,7 @@ resolvers ++= Seq(
   "Broad Artifactory Snapshots" at "https://artifactory.broadinstitute.org/artifactory/libs-snapshot/"
 )
 
-// Show deprecation errors
+// Show deprecation warnings
 scalacOptions ++= Seq("-unchecked", "-deprecation")
 
 // Exclude the dnanexus java bindings in the assembled fat JAR file.
@@ -38,3 +38,7 @@ libraryDependencies ++= Seq(
     "org.scalactic" %% "scalactic" % "3.0.1",
     "org.scalatest" %% "scalatest" % "3.0.1" % "test"
 )
+
+// If an exception is thrown during tests, show the full
+// stack trace
+testOptions in Test += Tests.Argument("-oF")
