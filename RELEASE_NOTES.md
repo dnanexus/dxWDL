@@ -1,5 +1,10 @@
 # Release Notes
 
+## 0.13
+- Upgrade to wdl4s v0.10
+- Improving version number handling
+- Minor improvements in debugging printout and error reporting
+
 ## 0.12
 1. The GATK pipeline compiles and runs (result not validated yet)
 2. Bug fixes:
