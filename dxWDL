@@ -37,6 +37,7 @@ def main():
 
 def cmd_compile(args):
     global asset_id
+    global version_id
 
     # Where should we write the result?
     if args.destination is None:
@@ -54,22 +55,35 @@ def cmd_compile(args):
     jars = construct_java_classpath()
     classpath = ":".join(jars)
 
-    # Print version
+    if version_id is not None:
+        version_id = version_id.strip()
+        validate_library_version(version_id, classpath)
+        validate_asset_version(version_id, asset_id)
+    compile_workflow(args.wdl_file, destination, asset_id, classpath, args.verbose)
+
+
+# Check if the local library has the correct version
+def validate_library_version(version_id, classpath):
+    cmd_line = ["java", "-cp", classpath, "dxWDL.Main", "version"]
+    outstr = subprocess.check_output(cmd_line)
+    lib_version_id = outstr.rstrip().split('\n')[-1].strip()
+    if lib_version_id != version_id:
+        print("Local jar files have incorrect version {}, should be {}".
+              format(lib_version_id, version_id), file=sys.stderr)
+        print("Please remove the local jar files, and rerun dxWDL.", file=sys.stderr)
+        print("It will download the correct version from the platform.", file=sys.stderr)
+        exit(1)
+
+# Make sure the asset we point to, has the correct version
+def validate_asset_version(version_id, asset_id):
     record = dxpy.DXRecord(asset_id)
     desc = record.describe(incl_properties=True)
     props = desc["properties"]
-    pkg_version_id = props["version"]
-    if version_id is not None:
-        validate_version_id(version_id, pkg_version_id)
-    compile_workflow(args.wdl_file, destination, asset_id, classpath, args.verbose)
-
-def validate_version_id(version_id, pkg_version_id):
-    version_id = version_id.strip()
-    pkg_version_id = pkg_version_id.strip()
+    pkg_version_id = props["version"].strip()
     if version_id == pkg_version_id:
         print("version={}".format(version_id), file=sys.stderr)
     else:
-        print("Version number mismatch, local={}, platform={}".format(version_id, pkg_version_id))
+        print("Asset version number mismatch, local={}, platform={}".format(version_id, pkg_version_id))
         exit(1)
 
 # Build a workflow.
@@ -101,6 +115,7 @@ def compile_workflow(wf_file, destination, asset_id, classpath, verbose):
         print("Compilation error, aborting", file=sys.stderr)
         exit(1)
     return wf
+
 
 # Search for the jars locally. If not found, download
 # from the platform.

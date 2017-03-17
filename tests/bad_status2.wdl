@@ -1,4 +1,4 @@
-# The docker image doesn't exist, this should case an error
+# The docker image doesn't exist, this should cause an error
 task BadCommand {
       command {
           ls /tmp
