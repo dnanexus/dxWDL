@@ -1,3 +1,20 @@
+/** Compile a WDL document into a DNAnexus workflow
+  *
+  * Notes: One of the problems is that there is no context for
+  * calculating expressions in the workflow. Therefore, we push
+  * expression calculation into the called applet. We do this
+  * by passing the closure for a call, and generating an applet that
+  * can take this closure and run the task. This results in an applet per
+  * workflow stage.
+  *
+  * A scatter block is compiled into a workflow stage. The inputs for
+  * it are the closure. The outputs are the union of all calls. The AppletRunner
+  * is called with the scatter name, and it needs to
+  *
+  * REFERENCES:
+  *    wdl4s/src/main/scala/wdl4s/expression/ValueEvaluator.scala
+  */
+
 package dxWDL
 
 // DX bindings
@@ -21,23 +38,6 @@ import WdlVarLinks._
 // Json stuff
 import spray.json._
 import DefaultJsonProtocol._
-
-/** Compile a WDL document into a DNAnexus workflow
-  *
-  * Notes: One of the problems is that there is no context for
-  * calculating expressions in the workflow. Therefore, we push
-  * expression calculation into the called applet. We do this
-  * by passing the closure for a call, and generating an applet that
-  * can take this closure and run the task. This results in an applet per
-  * workflow stage.
-  *
-  * A scatter block is compiled into a workflow stage. The inputs for
-  * it are the closure. The outputs are the union of all calls. The AppletRunner
-  * is called with the scatter name, and it needs to
-  *
-  * REFERENCES:
-  *    wdl4s/src/main/scala/wdl4s/expression/ValueEvaluator.scala
-  */
 
 // There are several kinds of applets
 //   Common:    beginning of a workflow

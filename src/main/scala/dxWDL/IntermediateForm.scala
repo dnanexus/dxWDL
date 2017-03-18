@@ -1,0 +1,57 @@
+// Representation for the output of the compiler front end. The compiler
+// back end uses it to generate a dx:workflow.
+//
+// A more detailed description can be found at [IntermediateForm.md].
+package dxWDL
+
+import wdl4s.parser.WdlParser.{Ast, AstNode, Terminal}
+import wdl4s.types._
+import wdl4s.values._
+
+object IntermediateForm {
+
+    // Argument of an applet
+    case class AppletArg(name: String,
+                         wdlType: WdlType,
+                         dxType: String,
+                         optional: Boolean,
+                         ast: Ast)
+
+    /** @param name          Name of applet
+      * @param input         list of platform input arguments
+      * @param output        list of platform output arguments
+      * @param instaceType   a platform instance name
+      * @param docker        docker image name
+      * @param destination   folder path on the platform
+      * @param language      language in which the script is written, could be bash or WDL
+      * @entrypoint          starting point of execution in the code. For WDL, this could be a scatter.
+      *                      For bash, normally `main`.
+      * @param code          bash or WDL snippet to exeute
+      */
+    case class Applet(name: String,
+                      input: List[AppletArg],
+                      output: List[AppletArg],
+                      instanceType: Option[String],
+                      docker: Option[String],
+                      destination : String,
+                      language: String,
+                      entrypoint: String,
+                      code: String)
+
+    /** An input to a stage. Could be empty, a wdl constant, or
+      * a link to an output variable from another stage.
+      */
+    sealed trait StageArg
+    class Empty extends StageArg
+    case class Constant(cVal: WdlValue) extends StageArg
+    case class Link(stageName: String, argName: String) extends StageArg
+
+    // Note: we figure out the outputs from a stage by looking up the
+    // applet outputs.
+    case class Stage(name: String,
+                     appletName: String,
+                     inputs: List[StageArg])
+
+    case class Workflow(stages: List[Stage],
+                        applets: List[Applet])
+}
