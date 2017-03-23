@@ -1,4 +1,4 @@
-# Intermediate Form
+# Intermediate Representation (IR)
 
 The compiler is modularly split into two components, front-end and
 back-end. The front-end takes a WDL workflow, and generates a

@@ -1,21 +1,22 @@
-// Representation for the output of the compiler front end. The compiler
-// back end uses it to generate a dx:workflow.
+// Intermediate Representation (IR)
 //
-// A more detailed description can be found at [IntermediateForm.md].
+// Representation the compiler front end generates from a WDL
+// workflow. The compiler back end uses it to generate a
+// dx:workflow. A more detailed description can be found at
+// ToplevelDir/[IntermediateForm.md].
 package dxWDL
 
 import wdl4s.parser.WdlParser.{Ast, AstNode, Terminal}
 import wdl4s.types._
 import wdl4s.values._
 
-object IntermediateForm {
+object IR {
 
-    // Argument of an applet
-    case class AppletArg(name: String,
-                         wdlType: WdlType,
-                         dxType: String,
-                         optional: Boolean,
-                         ast: Ast)
+    // Compile time representation of a variable. Used also as
+    // an applet argument.
+    // At compile time, we need to keep track of the syntax-tree, for error
+    // reporting purposes.
+    case class CVar(name: String, wdlType: WdlType, ast: Ast)
 
     /** @param name          Name of applet
       * @param input         list of platform input arguments
@@ -29,8 +30,8 @@ object IntermediateForm {
       * @param code          bash or WDL snippet to exeute
       */
     case class Applet(name: String,
-                      input: List[AppletArg],
-                      output: List[AppletArg],
+                      input: List[CVar],
+                      output: List[CVar],
                       instanceType: Option[String],
                       docker: Option[String],
                       destination : String,
@@ -42,9 +43,9 @@ object IntermediateForm {
       * a link to an output variable from another stage.
       */
     sealed trait StageArg
-    class Empty extends StageArg
-    case class Constant(cVal: WdlValue) extends StageArg
-    case class Link(stageName: String, argName: String) extends StageArg
+    class StageArgEmpty extends StageArg
+    case class StageArgConstant(cVal: WdlValue) extends StageArg
+    case class StageArgLink(stageName: String, argName: String) extends StageArg
 
     // Note: we figure out the outputs from a stage by looking up the
     // applet outputs.

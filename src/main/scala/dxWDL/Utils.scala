@@ -22,7 +22,6 @@ import wdl4s.{Call, Declaration, Scatter, Scope, Task, WdlExpression, WdlNamespa
 import wdl4s.parser.WdlParser.{Ast, AstNode, Terminal}
 import wdl4s.types._
 import wdl4s.values._
-import wdl4s.expression.WdlStandardLibraryFunctionsType
 
 // Exception used for AppInternError
 class AppInternalException private(ex: RuntimeException) extends RuntimeException(ex) {
@@ -231,36 +230,6 @@ object Utils {
             // Path exists, make sure it is a directory, and not a file
             if (!Files.isDirectory(path))
                 throw new Exception(s"Path ${path} exists, but is not a directory")
-        }
-    }
-
-    // Figure out the expression type for a collection we loop over in a scatter
-    //
-    // Expressions like A.B.C are converted to A___B___C, in order to avoid
-    // the wdl4s library from interpreting these as member accesses. The environment
-    // passed into the method [env] has types for all these variables, as fully qualified names.
-    def calcIterWdlType(scatter : Scatter, env : Map[String,WdlType]) : WdlType = {
-        def lookup(varName : String) : WdlType = {
-            val v = varName.replaceAll("___", "\\.")
-            env.get(v) match {
-                case Some(x) => x
-                case None => throw new Exception(s"No type found for variable ${varName}")
-            }
-        }
-
-        // convert all sub-expressions of the form A.B.C to A___B___C
-        val s : String = scatter.collection.toWdlString.replaceAll("\\.", "___")
-        val collection : WdlExpression = WdlExpression.fromString(s)
-
-        val collectionType : WdlType = collection.evaluateType(lookup, new WdlStandardLibraryFunctionsType) match {
-            case Success(wdlType) => wdlType
-            case _ => throw new Exception(s"Could not evaluate the WdlType for ${collection.toWdlString}")
-        }
-
-        // remove the array qualifier
-        collectionType match {
-            case WdlArrayType(x) => x
-            case _ => throw new Exception(s"type ${collectionType} is not an array")
         }
     }
 
