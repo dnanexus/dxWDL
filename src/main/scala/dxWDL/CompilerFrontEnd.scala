@@ -19,23 +19,23 @@ import wdl4s.values._
 import wdl4s.WdlExpression.AstForExpressions
 import wdl4s.expression.WdlStandardLibraryFunctionsType
 
-// There are several kinds of applets
-//   Common:    beginning of a workflow
-//   Scatter:   utility block for scatter/gather
-//   Command:   call a task, execute a shell command (usually)
-object AppletKind extends Enumeration {
-    val Common, Scatter, Command = Value
-}
-
-class DynamicInstanceTypesException private(ex: Exception) extends RuntimeException(ex) {
-    def this() = this(new RuntimeException(
-                          "Only runtime constants are supported, currently, instance types should be known at compile time."))
-}
-
 object CompilerFrontEnd {
+    // There are several kinds of applets
+    //   Common:    beginning of a workflow
+    //   Scatter:   utility block for scatter/gather
+    //   Command:   call a task, execute a shell command (usually)
+    object AppletKind extends Enumeration {
+        val Common, Scatter, Command = Value
+    }
+
+    class DynamicInstanceTypesException private(ex: Exception) extends RuntimeException(ex) {
+        def this() = this(new RuntimeException(
+                              "Only runtime constants are supported, currently, instance types should be known at compile time."))
+    }
+
     // Linking between a variable, and which stage we got
     // it from.
-    case clase LinkedVar(cVar: IR.CVar, sArg: IR.StageArg)
+    case class LinkedVar(cVar: IR.CVar, sArg: IR.StageArg)
 
     // Environment (scope) where a call is made
     type CallEnv = Map[String, LinkedVar]
@@ -45,9 +45,9 @@ object CompilerFrontEnd {
 
     // Compiler state.
     // Packs common arguments passed between methods.
-    case class State(ns : WdlNamespace,
+    case class State(wf : Workflow,
                      wdlSourceFile : Path,
-                     destination: Class,
+                     destination: String,
                      cef: CompilerErrorFormatter,
                      verbose: Boolean)
 
@@ -95,11 +95,11 @@ object CompilerFrontEnd {
         }
         Utils.reservedAppletPrefixes.foreach{ prefix =>
             if (nm.startsWith(prefix))
-                throw new Exception(cState.errFmt.illegalCallName(call))
+                throw new Exception(cState.cef.illegalCallName(call))
         }
         Utils.reservedSubstrings.foreach{ sb =>
             if (nm contains sb)
-                throw new Exception(cState.errFmt.illegalCallName(call))
+                throw new Exception(cState.cef.illegalCallName(call))
         }
         nm
     }
@@ -179,11 +179,11 @@ object CompilerFrontEnd {
     // that, in the general case, could be calculated only at runtime.
     // Currently, we support only constants. If a runtime expression is used,
     // we convert it to a moderatly high constant.
-    def calcInstanceType(task: Option[Task]) : String = {
+    def calcInstanceType(taskOpt: Option[Task]) : String = {
         def lookup(varName : String) : WdlValue = {
             throw new DynamicInstanceTypesException()
         }
-        def evalAttr(attrName: String, defaultValue: WdlValue) : Option[WdlValue] = {
+        def evalAttr(task: Task, attrName: String, defaultValue: WdlValue) : Option[WdlValue] = {
             task.runtimeAttributes.attrs.get(attrName) match {
                 case None => None
                 case Some(expr) =>
@@ -203,7 +203,7 @@ object CompilerFrontEnd {
             }
         }
 
-        task match {
+        taskOpt match {
             case None =>
                 // A utility calculation, that requires minimal computing resources.
                 // For example, the top level of a scatter block. We use
@@ -211,9 +211,9 @@ object CompilerFrontEnd {
                 // and it will probably be inexpensive.
                 InstanceTypes.getMinimalInstanceType()
             case Some(task) =>
-                val memory = evalAttr("memory", WdlString("60 GB"))
-                val diskSpace = evalAttr("disks", WdlString("local-disk 400 HDD"))
-                val cores = evalAttr("cpu", WdlInteger(8))
+                val memory = evalAttr(task, "memory", WdlString("60 GB"))
+                val diskSpace = evalAttr(task, "disks", WdlString("local-disk 400 HDD"))
+                val cores = evalAttr(task, "cpu", WdlInteger(8))
                 InstanceTypes.apply(memory, diskSpace, cores)
         }
     }
@@ -236,7 +236,7 @@ object CompilerFrontEnd {
                     case "identifier" =>
                         val lVar = env.get(srcStr) match {
                             case Some(x) => x
-                            case None => throw new Exception(cState.errFmt.missingVarRefException(t))
+                            case None => throw new Exception(cState.cef.missingVarRefException(t))
                         }
                         val fqn = WdlExpression.toString(t)
                         closure + (fqn -> lVar)
@@ -248,7 +248,7 @@ object CompilerFrontEnd {
                 // The RHS is C, and the LHS is A.B
                 val rhs : Terminal = a.getAttribute("rhs") match {
                     case rhs:Terminal if rhs.getTerminalStr == "identifier" => rhs
-                    case _ => throw new Exception(cState.errFmt.rightSideMustBeIdentifer(a))
+                    case _ => throw new Exception(cState.cef.rightSideMustBeIdentifer(a))
                 }
 
                 // The FQN is "A.B.C"
@@ -258,7 +258,7 @@ object CompilerFrontEnd {
                         closure + (fqn -> lVar)
                     case None =>
                         if (strict)
-                            throw new Exception(cState.errFmt.missingVarRefException(a))
+                            throw new Exception(cState.cef.missingVarRefException(a))
                         closure
                 }
             case a: Ast if a.isFunctionCall || a.isUnaryOperator || a.isBinaryOperator
@@ -286,17 +286,10 @@ object CompilerFrontEnd {
                 closure ++ allDeps
 
             case a: Ast =>
-                throw new Exception(cState.errFmt.notCurrentlySupported(
+                throw new Exception(cState.cef.notCurrentlySupported(
                                         a,
                                         s"The expression ${expr.toString} is currently not handled"))
         }
-    }
-
-    // Calculate the applet input specification from the call closure
-    def closureToAppletInputSpec(closure : Closure, cState: State) : Seq[JsValue] = {
-        closure.map {
-            case (varName, cVar) => wdlVarToSpec(varName, cVar.wvl.wdlType, cVar.ast, cState)
-        }.toList.flatten
     }
 
     // Create a preliminary stage to handle workflow inputs, top-level
@@ -334,21 +327,21 @@ object CompilerFrontEnd {
         //
         // x - must be provided as an applet input
         // y, pi -- calculated, non inputs
-        val inputSpec : Seq[IR.CVar] =  topDeclarations.map{ decl =>
+        val inputSpec : List[IR.CVar] =  topDeclarations.map{ decl =>
             decl.expression match {
                 case None => Some(IR.CVar(decl.unqualifiedName, decl.wdlType, decl.ast))
                 case Some(_) => None
             }
-        }.flatten
-        val outputSpec : Seq[IR.CVar] = topDeclarations.map{ decl =>
+        }.flatten.toList
+        val outputSpec : List[IR.CVar] = topDeclarations.map{ decl =>
             IR.CVar(decl.unqualifiedName, decl.wdlType, decl.ast)
-        }
+        }.toList
 
         // We need minimal compute resources, use the default instance type
         val applet = IR.Applet(appletFqn,
                                inputSpec,
                                outputSpec,
-                               calcInstanceType(None),
+                               None,
                                None,
                                cState.destination,
                                "bash",
@@ -455,7 +448,7 @@ object CompilerFrontEnd {
         val task = Utils.taskOfCall(call)
         val outputs : List[IR.CVar] = task.outputs.map( tso =>
             IR.CVar(tso.unqualifiedName, tso.wdlType, tso.ast)
-        )
+        ).toList
         var closure = Map.empty[String, LinkedVar]
         call.inputMappings.foreach { case (_, expr) =>
             closure = updateClosure(closure, env, expr, true, cState)
@@ -477,7 +470,7 @@ object CompilerFrontEnd {
         val applet = IR.Applet(appletFqn,
                                inputSpec ++ unboundOrOptionalSpec,
                                outputs,
-                               calcInstanceType(Some(task)),
+                               Some(calcInstanceType(Some(task))),
                                docker,
                                cState.destination,
                                "bash",
@@ -492,7 +485,7 @@ object CompilerFrontEnd {
                        env : CallEnv,
                        cState: State) : (IR.Applet, Closure, String, List[IR.CVar]) = {
         def unsupported(ast: Ast, msg: String) : String = {
-            cState.errFmt.notCurrentlySupported(ast, msg)
+            cState.cef.notCurrentlySupported(ast, msg)
         }
         val (topDecls, rest) = Utils.splitBlockDeclarations(scatter.children.toList)
         val calls : Seq[Call] = rest.map {
@@ -516,13 +509,13 @@ object CompilerFrontEnd {
         // Construct the block output by unifying individual call outputs.
         // Each applet output becomes an array of that type. For example,
         // an Int becomes an Array[Int].
-        val outputDecls : Seq[IR.CVar] = calls.map { call =>
+        val outputDecls : List[IR.CVar] = calls.map { call =>
             val task = Utils.taskOfCall(call)
             task.outputs.map { tso =>
                 IR.CVar(callUniqueName(call, cState) ++ "." ++ tso.unqualifiedName,
                         WdlArrayType(tso.wdlType), tso.ast)
             }
-        }.flatten
+        }.flatten.toList
 
         // Figure out the closure, we need the expression being looped over.
         var closure = Map.empty[String, LinkedVar]
@@ -535,13 +528,13 @@ object CompilerFrontEnd {
         }.toMap
         val iterVarType : WdlType = calcIterWdlType(scatter, typeEnv)
         val cVar = IR.CVar(scatter.item, iterVarType, scatter.ast)
-        var innerEnv : CallEnv = env + (scatter.item -> LinkedVar(cVar, IR.StageArgEmpty))
+        var innerEnv : CallEnv = env + (scatter.item -> LinkedVar(cVar, None))
 
         // Add the declarations at the top of the block
-        val localDecls = topDecls.map( decl =>
+        val localDecls = topDecls.map{ decl =>
             val cVar = IR.CVar(decl.unqualifiedName, decl.wdlType, decl.ast)
-            decl.unqualifiedName -> LinkedVar(cVar, IR.StageArgEmpty)
-        ).toMap
+            decl.unqualifiedName -> LinkedVar(cVar, None)
+        }.toMap
         innerEnv = innerEnv ++ localDecls
 
         // Get closure dependencies from the top declarations
@@ -566,15 +559,14 @@ object CompilerFrontEnd {
         )
         trace(cState.verbose, s"scatter closure=${closure}")
 
-        val inputSpec : Seq[JsValue] = closureToAppletInputSpec(closure, cState)
-        val outputSpec : Seq[JsValue] = outputDecls.map(tso =>
-            wdlVarToSpec(tso.unqualifiedName, tso.wdlType, tso.ast, cState)
-        ).flatten
+        val inputs : List[IR.CVar] = closure.map {
+            case (varName, LinkedVar(cVar, _)) => cVar
+        }.toList
         val scatterFqn = wf.unqualifiedName ++ "." ++ stageName
         val applet = IR.Applet(scatterFqn,
-                               inputSpec,
-                               outputSpec,
-                               calcInstanceType(None),
+                               inputs,
+                               outputDecls,
+                               None,
                                None,
                                cState.destination,
                                "bash",
@@ -584,16 +576,16 @@ object CompilerFrontEnd {
         // Compile each of the calls in the scatter block into an applet.
         // These will be called from the scatter stage at runtime.
         calls.foreach { call =>
-            val (_, _, _, outputs) =
-                compileCall(wf, call, innerEnv, cState)
+            val (_, _, _, outputs) = compileCall(wf, call, innerEnv, cState)
+
             // Add bindings for all call output variables. This allows later calls to refer
             // to these results. Links to their values are unknown at compile time, which
             // is why they are set to None.
-            for (tso <- outputs) {
-                val fqVarName = callUniqueName(call, cState) ++ "." ++ tso.unqualifiedName
+            for (cVar <- outputs) {
+                val fqVarName = callUniqueName(call, cState) ++ "." ++ cVar.name
                 innerEnv = innerEnv + (fqVarName ->
-                                           CompileVar(WdlVarLinks(fqVarName, tso.wdlType, None),
-                                                      call.ast))
+                                           LinkedVar(IR.CVar(fqVarName, cVar.wdlType, cVar.ast),
+                                                     None))
             }
         }
 
@@ -606,8 +598,13 @@ object CompilerFrontEnd {
               wdlSourceFile : Path,
               destination: String,
               cef: CompilerErrorFormatter,
-              verbose: Boolean) : IR.Workflow {
-        val cState = new State(ns, wdlSourceFile, destination, cef, verbose)
+              verbose: Boolean) : IR.Workflow = {
+        // extract the workflow
+        val wf = ns match {
+            case nswf : WdlNamespaceWithWorkflow => nswf.workflow
+            case _ => throw new Exception("WDL does not have a workflow")
+        }
+        val cState = new State(wf, wdlSourceFile, destination, cef, verbose)
 
         // An environment where variables are defined
         var env : CallEnv = Map.empty[String, LinkedVar]
@@ -622,13 +619,13 @@ object CompilerFrontEnd {
         val calls : Seq[Scope] = wfCore.map {
             case call: Call => call
             case decl: Declaration =>
-                throw new Exception(cState.errFmt.notCurrentlySupported(
+                throw new Exception(cState.cef.notCurrentlySupported(
                                         decl.ast,
                                         "Declaration in the middle of workflow could not be lifted"))
             case ssc: Scatter => ssc
             case swf: Workflow =>
-                throw new Exception(cState.errFmt.notCurrentlySupported(
-                                        decl.ast,
+                throw new Exception(cState.cef.notCurrentlySupported(
+                                        swf.ast,
                                         "Nested workflow inside scatter"))
         }
 
@@ -645,25 +642,25 @@ object CompilerFrontEnd {
                     compileScatter(wf, scatter, env, cState)
             }
 
-            val inputs = closure.map { case (varName, (cVar, sArg)) => sArg }
-            val stageIr = IR.Stage(applet, stageName, inputs)
+            val inputs = closure.map { case (varName, LinkedVar(cVar, sArg)) => sArg }.toList
+            val stageIr = IR.Stage(stageName, appletIr.name, inputs)
 
             // Add bindings for all call output variables. This allows later calls to refer
             // to these results. In case of scatters, there is no block name to reference.
-            for (tso <- outputs) {
+            for (cVar <- outputs) {
                 val fqVarName : String = child match {
-                    case call : Call => stageName ++ "." ++ tso.unqualifiedName
-                    case scatter : Scatter => tso.unqualifiedName
-                    case _ : Workflow => tso.unqualifiedName
+                    case call : Call => stageName ++ "." ++ cVar.name
+                    case scatter : Scatter => cVar.name
+                    case _ : Workflow => cVar.name
                     case _ => throw new Exception("Sanity")
                 }
                 env = env + (fqVarName ->
-                                 LinkedVar(IR.CVar(tso.unqualifiedName, tso.wdlType, tso.ast),
-                                           IR.StageArgLink(stageName, tso.unqualifiedName)))
+                                 LinkedVar(IR.CVar(cVar.name, cVar.wdlType, cVar.ast),
+                                           Some(IR.SArgLink(stageName, cVar.name))))
             }
             (stageIr, appletIr)
         }
-        val (stages, applets) = stgAplPairs.unzip2
+        val (stages, applets) = stgAplPairs.unzip
         IR.Workflow(stages, applets)
     }
 }

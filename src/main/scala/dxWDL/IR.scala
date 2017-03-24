@@ -42,10 +42,10 @@ object IR {
     /** An input to a stage. Could be empty, a wdl constant, or
       * a link to an output variable from another stage.
       */
-    sealed trait StageArg
-    class StageArgEmpty extends StageArg
-    case class StageArgConstant(cVal: WdlValue) extends StageArg
-    case class StageArgLink(stageName: String, argName: String) extends StageArg
+    sealed trait SArg
+    case class SArgConst(cVal: WdlValue) extends SArg
+    case class SArgLink(stageName: String, argName: String) extends SArg
+    type StageArg = Option[SArg]
 
     // Note: we figure out the outputs from a stage by looking up the
     // applet outputs.
