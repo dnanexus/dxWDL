@@ -46,16 +46,9 @@ object CompilerFrontEnd {
     // Compiler state.
     // Packs common arguments passed between methods.
     case class State(wf : Workflow,
-                     wdlSourceFile : Path,
                      destination: String,
                      cef: CompilerErrorFormatter,
                      verbose: Boolean)
-
-    def trace(verbose: Boolean, msg: String) : Unit = {
-        if (!verbose)
-            return
-        System.err.println(msg)
-    }
 
     // Figure out the expression type for a collection we loop over in a scatter
     //
@@ -314,7 +307,7 @@ object CompilerFrontEnd {
                       topDeclarations: Seq[Declaration],
                       env : CallEnv,
                       cState: State) : (IR.Applet, Closure, String, List[IR.CVar]) = {
-        trace(cState.verbose, s"Compiling workflow initialization sequence")
+        Utils.trace(cState.verbose, s"Compiling workflow initialization sequence")
         val appletFqn : String = wf.unqualifiedName ++ "." ++ Utils.COMMON
 
         // Only workflow declarations that do not have an expression,
@@ -341,7 +334,7 @@ object CompilerFrontEnd {
         val applet = IR.Applet(appletFqn,
                                inputSpec,
                                outputSpec,
-                               None,
+                               calcInstanceType(None),
                                None,
                                cState.destination,
                                "bash",
@@ -444,7 +437,7 @@ object CompilerFrontEnd {
                     env : CallEnv,
                     cState: State) : (IR.Applet, Closure, String, List[IR.CVar]) = {
         val callUName = callUniqueName(call, cState)
-        trace(cState.verbose, s"Compiling call ${callUName}")
+        Utils.trace(cState.verbose, s"Compiling call ${callUName}")
         val task = Utils.taskOfCall(call)
         val outputs : List[IR.CVar] = task.outputs.map( tso =>
             IR.CVar(tso.unqualifiedName, tso.wdlType, tso.ast)
@@ -470,7 +463,7 @@ object CompilerFrontEnd {
         val applet = IR.Applet(appletFqn,
                                inputSpec ++ unboundOrOptionalSpec,
                                outputs,
-                               Some(calcInstanceType(Some(task))),
+                               calcInstanceType(Some(task)),
                                docker,
                                cState.destination,
                                "bash",
@@ -504,7 +497,7 @@ object CompilerFrontEnd {
         // first call name. This is guaranteed to be unique within a
         // workflow, because call names must be unique (or aliased)
         val stageName = Utils.SCATTER ++ "___" ++ callUniqueName(calls(0), cState)
-        trace(cState.verbose, "compiling scatter ${stageName}")
+        Utils.trace(cState.verbose, "compiling scatter ${stageName}")
 
         // Construct the block output by unifying individual call outputs.
         // Each applet output becomes an array of that type. For example,
@@ -557,7 +550,7 @@ object CompilerFrontEnd {
         topDecls.foreach( decl =>
             closure -= decl.unqualifiedName
         )
-        trace(cState.verbose, s"scatter closure=${closure}")
+        Utils.trace(cState.verbose, s"scatter closure=${closure}")
 
         val inputs : List[IR.CVar] = closure.map {
             case (varName, LinkedVar(cVar, _)) => cVar
@@ -566,7 +559,7 @@ object CompilerFrontEnd {
         val applet = IR.Applet(scatterFqn,
                                inputs,
                                outputDecls,
-                               None,
+                               calcInstanceType(None),
                                None,
                                cState.destination,
                                "bash",
@@ -595,7 +588,6 @@ object CompilerFrontEnd {
 
     // compile the WDL source code into intermediate representation
     def apply(ns : WdlNamespace,
-              wdlSourceFile : Path,
               destination: String,
               cef: CompilerErrorFormatter,
               verbose: Boolean) : IR.Workflow = {
@@ -604,7 +596,7 @@ object CompilerFrontEnd {
             case nswf : WdlNamespaceWithWorkflow => nswf.workflow
             case _ => throw new Exception("WDL does not have a workflow")
         }
-        val cState = new State(wf, wdlSourceFile, destination, cef, verbose)
+        val cState = new State(wf, destination, cef, verbose)
 
         // An environment where variables are defined
         var env : CallEnv = Map.empty[String, LinkedVar]

@@ -32,7 +32,7 @@ object IR {
     case class Applet(name: String,
                       input: List[CVar],
                       output: List[CVar],
-                      instanceType: Option[String],
+                      instanceType: String,
                       docker: Option[String],
                       destination : String,
                       language: String,

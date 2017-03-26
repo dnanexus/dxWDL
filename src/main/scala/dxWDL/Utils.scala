@@ -530,4 +530,10 @@ object Utils {
         }.mkString("\n")
     }
 
+    // Used by the compiler to provide more information to the user
+    def trace(verbose: Boolean, msg: String) : Unit = {
+        if (!verbose)
+            return
+        System.err.println(msg)
+    }
 }
