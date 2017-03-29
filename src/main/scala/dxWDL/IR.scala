@@ -30,8 +30,8 @@ object IR {
       * @param code          bash or WDL snippet to exeute
       */
     case class Applet(name: String,
-                      input: List[CVar],
-                      output: List[CVar],
+                      inputs: List[CVar],
+                      outputs: List[CVar],
                       instanceType: String,
                       docker: Option[String],
                       destination : String,
@@ -46,15 +46,11 @@ object IR {
     case class SArgConst(cVal: WdlValue) extends SArg
     case class SArgLink(stageName: String, argName: String) extends SArg
 
-    // Linking between a variable, and which stage we got
-    // it from.
-    case class LinkedVar(cVar: CVar, sArg: SArg)
-
     // Note: we figure out the outputs from a stage by looking up the
     // applet outputs.
     case class Stage(name: String,
                      appletName: String,
-                     inputs: List[LinkedVar])
+                     inputs: List[SArg])
 
     case class Workflow(name: String,
                         stages: List[Stage],

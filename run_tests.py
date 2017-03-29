@@ -43,7 +43,7 @@ def main():
     argparser.add_argument("--no-wait", help="Exit immediately after launching tests", action="store_true", default=False)
     argparser.add_argument("--compile-only", help="Only compile the workflows, don't run them", action="store_true", default=False)
     argparser.add_argument("--lazy", help="Only compile workflows that are unbuilt", action="store_true", default=False)
-    argparser.add_argument("--test", help="Run a test, or a subgroup of tests", default="M")
+    argparser.add_argument("--test", help="Run a test, or a subgroup of tests. Print list, to get available tests.", default="M")
     argparser.add_argument("--folder", help="Use an existing folder, instead of building dxWDL")
     args = argparser.parse_args()
 

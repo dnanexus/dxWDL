@@ -33,8 +33,12 @@ object CompilerFrontEnd {
                               "Only runtime constants are supported, currently, instance types should be known at compile time."))
     }
 
+    // Linking between a variable, and which stage we got
+    // it from.
+    case class LinkedVar(cVar: IR.CVar, sArg: IR.SArg)
+
     // Environment (scope) where a call is made
-    type CallEnv = Map[String, IR.LinkedVar]
+    type CallEnv = Map[String, LinkedVar]
 
     // The minimal environment needed to execute a call
     type Closure =  CallEnv
@@ -336,7 +340,7 @@ object CompilerFrontEnd {
                                genBashScript(AppletKind.Common, None),
                                wf.ast)
 
-        val closure = Map.empty[String, IR.LinkedVar]
+        val closure = Map.empty[String, LinkedVar]
         (applet, closure, Utils.COMMON, outputSpec)
     }
 
@@ -437,12 +441,12 @@ object CompilerFrontEnd {
         val outputs : List[IR.CVar] = task.outputs.map( tso =>
             IR.CVar(tso.unqualifiedName, tso.wdlType, tso.ast)
         ).toList
-        var closure = Map.empty[String, IR.LinkedVar]
+        var closure = Map.empty[String, LinkedVar]
         call.inputMappings.foreach { case (_, expr) =>
             closure = updateClosure(closure, env, expr, true, cState)
         }
         val inputSpec : List[IR.CVar] = closure.map {
-            case (varName, IR.LinkedVar(cVar,sArg)) => IR.CVar(varName,cVar.wdlType, cVar.ast)
+            case (varName, LinkedVar(cVar,_)) => IR.CVar(varName,cVar.wdlType, cVar.ast)
         }.toList
         val unboundOrOptionalSpec : Seq[IR.CVar] = unboundOrOptionalInputsSpec(call, cState)
         val appletFqn : String = wf.unqualifiedName ++ "." ++ callUName
@@ -505,22 +509,22 @@ object CompilerFrontEnd {
         }.flatten.toList
 
         // Figure out the closure, we need the expression being looped over.
-        var closure = Map.empty[String, IR.LinkedVar]
+        var closure = Map.empty[String, LinkedVar]
         closure = updateClosure(closure, env, scatter.collection, true, cState)
 
         // Figure out the type of the iteration variable,
         // and ignore it for closure purposes
-        val typeEnv : Map[String, WdlType] = env.map { case (x, IR.LinkedVar(cVar,_)) =>
+        val typeEnv : Map[String, WdlType] = env.map { case (x, LinkedVar(cVar,_)) =>
             x -> cVar.wdlType
         }.toMap
         val iterVarType : WdlType = calcIterWdlType(scatter, typeEnv)
         val cVar = IR.CVar(scatter.item, iterVarType, scatter.ast)
-        var innerEnv : CallEnv = env + (scatter.item -> IR.LinkedVar(cVar, IR.SArgEmpty))
+        var innerEnv : CallEnv = env + (scatter.item -> LinkedVar(cVar, IR.SArgEmpty))
 
         // Add the declarations at the top of the block
         val localDecls = topDecls.map{ decl =>
             val cVar = IR.CVar(decl.unqualifiedName, decl.wdlType, decl.ast)
-            decl.unqualifiedName -> IR.LinkedVar(cVar, IR.SArgEmpty)
+            decl.unqualifiedName -> LinkedVar(cVar, IR.SArgEmpty)
         }.toMap
         innerEnv = innerEnv ++ localDecls
 
@@ -547,7 +551,7 @@ object CompilerFrontEnd {
         Utils.trace(cState.verbose, s"scatter closure=${closure}")
 
         val inputs : List[IR.CVar] = closure.map {
-            case (varName, IR.LinkedVar(cVar, _)) => cVar
+            case (varName, LinkedVar(cVar, _)) => cVar
         }.toList
         val scatterFqn = wf.unqualifiedName ++ "." ++ stageName
         val applet = IR.Applet(scatterFqn,
@@ -570,7 +574,7 @@ object CompilerFrontEnd {
             for (cVar <- outputs) {
                 val fqVarName = callUniqueName(call, cState) ++ "." ++ cVar.name
                 innerEnv = innerEnv + (fqVarName ->
-                                           IR.LinkedVar(IR.CVar(fqVarName, cVar.wdlType, cVar.ast),
+                                           LinkedVar(IR.CVar(fqVarName, cVar.wdlType, cVar.ast),
                                                         IR.SArgEmpty))
             }
         }
@@ -592,7 +596,7 @@ object CompilerFrontEnd {
         val cState = new State(wf, destination, cef, verbose)
 
         // An environment where variables are defined
-        var env : CallEnv = Map.empty[String, IR.LinkedVar]
+        var env : CallEnv = Map.empty[String, LinkedVar]
 
         // Deal with the toplevel declarations, and leave only
         // children we can deal with. Lift all declarations that can
@@ -627,7 +631,7 @@ object CompilerFrontEnd {
                     compileScatter(wf, scatter, env, cState)
             }
 
-            val inputs = closure.map { case (varName, lVar) => lVar }.toList
+            val inputs = closure.map { case (varName, LinkedVar(cVar,sArg)) => sArg }.toList
             val stageIr = IR.Stage(stageName, appletIr.name, inputs)
 
             // Add bindings for all call output variables. This allows later calls to refer
@@ -640,7 +644,7 @@ object CompilerFrontEnd {
                     case _ => throw new Exception("Sanity")
                 }
                 env = env + (fqVarName ->
-                                 IR.LinkedVar(cVar, IR.SArgLink(stageName, cVar.name)))
+                                 LinkedVar(cVar, IR.SArgLink(stageName, cVar.name)))
             }
             (stageIr, appletIr)
         }

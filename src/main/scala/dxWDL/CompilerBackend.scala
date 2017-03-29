@@ -18,7 +18,7 @@ import WdlVarLinks._
 import spray.json._
 import DefaultJsonProtocol._
 
-object CompilerBackEnd {
+object CompilerBackend {
     // Compiler state.
     // Packs common arguments passed between methods.
     case class State(dxWDLrtId: String,
@@ -213,10 +213,10 @@ object CompilerBackEnd {
     //
     def buildApplet(applet: IR.Applet, cState: State) : (DXApplet, List[IR.CVar]) = {
         Utils.trace(cState.verbose, s"Compiling call ${applet.name}")
-        val inputSpec : Seq[JsValue] = applet.output.map(cVar =>
+        val inputSpec : Seq[JsValue] = applet.inputs.map(cVar =>
             wdlVarToSpec(cVar.name, cVar.wdlType, cVar.ast, cState)
         ).flatten
-        val outputDecls : Seq[JsValue] = applet.output.map(cVar =>
+        val outputDecls : Seq[JsValue] = applet.outputs.map(cVar =>
             wdlVarToSpec(cVar.name, cVar.wdlType, cVar.ast, cState)
         ).flatten
         val runSpec : JsValue = calcRunSpec(applet.instanceType, cState.dxWDLrtId)
@@ -238,18 +238,18 @@ object CompilerBackEnd {
         val appletDir = createAppletDirStruct(applet.name, cState.wdlSourceFile, json,
                                               applet.code)
         val dxapp = dxBuildApp(appletDir, applet.name, cState.destination, cState.verbose)
-        (dxapp, applet.output)
+        (dxapp, applet.outputs)
     }
 
     // Calculate the stage inputs from the call closure
     //
     // It comprises mappings from variable name to WdlType.
-    def genStageInputs(inputs: List[IR.LinkedVar],
+    def genStageInputs(inputs: List[(IR.CVar, IR.SArg)],
                        irApplet: IR.Applet,
                        stageDict: Map[String, DXWorkflow.Stage],
                        cState: State) : JsonNode = {
         val dxBuilder = inputs.foldLeft(DXJSON.getObjectBuilder()) {
-            case (dxBuilder, IR.LinkedVar(cVar, sArg)) =>
+            case (dxBuilder, (cVar, sArg)) =>
                 sArg match {
                     case IR.SArgEmpty =>
                         // We do not have a value for this input at compile time.
@@ -294,7 +294,8 @@ object CompilerBackEnd {
         wf.stages.foldLeft((0,stageDictInit)) {
             case ((version,stageDict), stg) =>
                 val (irApplet,dxApplet,outputs) = appDict(stg.name)
-                val inputs = genStageInputs(stg.inputs, irApplet, stageDict, cState)
+                val linkedInputs : List[(IR.CVar, IR.SArg)] = irApplet.inputs.zip(stg.inputs)
+                val inputs = genStageInputs(linkedInputs, irApplet, stageDict, cState)
                 val modif : DXWorkflow.Modification[DXWorkflow.Stage] =
                     dxwfl.addStage(dxApplet, stg.name, inputs, version)
                 val nextVersion = modif.getEditVersion()

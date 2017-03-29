@@ -123,9 +123,9 @@ object Main extends App {
         // 1) Compile the WDL workflow into an Intermediate Representation (IR)
         // 2) Generate dx:applets and dx:workflow from the IR
         val cef = new CompilerErrorFormatter(wf.wdlSyntaxErrorFormatter.terminalMap)
-        val irWf = CompilerFrontEnd.apply(ns, destination, cef, verbose)
-        val dxwfl = CompilerBackEnd.apply(irWf, dxProject, dxWDLrtId, wdlSourceFile,
-                                          destination, cef, verbose)
+        val irWf = CompilerFrontEnd.apply(ns, folder, cef, verbose)
+        val dxwfl = CompilerBackend.apply(irWf, dxProject, dxWDLrtId, wdlSourceFile,
+                                          folder, cef, verbose)
         dxwfl.getId()
     }
 
