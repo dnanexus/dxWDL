@@ -43,7 +43,6 @@ object IR {
       */
     sealed trait SArg
     case object SArgEmpty extends SArg
-    case class SArgConst(cVal: WdlValue) extends SArg
     case class SArgLink(stageName: String, argName: String) extends SArg
 
     // Note: we figure out the outputs from a stage by looking up the

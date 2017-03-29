@@ -255,8 +255,6 @@ object CompilerBackend {
                         // We do not have a value for this input at compile time.
                         // Currently, we throw an exception. But is this actually legal?
                         throw new Exception(cState.cef.missingVarRefException(irApplet.ast))
-                    case IR.SArgConst(cVal) =>
-                        throw new Exception("TODO")
                     case IR.SArgLink(stageName, argName) =>
                         val dxStage = stageDict(stageName)
                         val wvl = WdlVarLinks(argName, cVar.wdlType,
@@ -279,10 +277,11 @@ object CompilerBackend {
               verbose: Boolean) : DXWorkflow = {
         val cState = State(dxWDLrtId, wdlSourceFile, destination, cef, verbose)
         // build the individual applets
-        val appDict : Map[ String, (IR.Applet, DXApplet, List[IR.CVar]) ] =
+        val appDict : Map[String, (IR.Applet, DXApplet)] =
             wf.applets.map{ a =>
-                val (dxApplet, outputs) = buildApplet(a, cState)
-                a.name -> (a, dxApplet, outputs)
+                val (dxApplet, _) = buildApplet(a, cState)
+                Utils.trace(cState.verbose, s"Applet ${a.name} = ${dxApplet.getId()}")
+                a.name -> (a, dxApplet)
             }.toMap
 
         // create workflow
@@ -293,13 +292,14 @@ object CompilerBackend {
         val stageDictInit = Map.empty[String, DXWorkflow.Stage]
         wf.stages.foldLeft((0,stageDictInit)) {
             case ((version,stageDict), stg) =>
-                val (irApplet,dxApplet,outputs) = appDict(stg.name)
+                val (irApplet,dxApplet) = appDict(stg.appletName)
                 val linkedInputs : List[(IR.CVar, IR.SArg)] = irApplet.inputs.zip(stg.inputs)
                 val inputs = genStageInputs(linkedInputs, irApplet, stageDict, cState)
                 val modif : DXWorkflow.Modification[DXWorkflow.Stage] =
                     dxwfl.addStage(dxApplet, stg.name, inputs, version)
                 val nextVersion = modif.getEditVersion()
                 val dxStage : DXWorkflow.Stage = modif.getValue()
+                Utils.trace(cState.verbose, s"Stage ${stg.name} = ${dxStage.getId()}")
                 (nextVersion,
                  stageDict ++ Map(stg.name -> dxStage))
         }
