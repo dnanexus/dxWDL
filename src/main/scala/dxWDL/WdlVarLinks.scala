@@ -145,7 +145,6 @@ object WdlVarLinks {
         }
     }
 
-
     // Convert an input field to a dx-links structure. This allows
     // passing it to other jobs.
     def ofInputField(fieldName: String,

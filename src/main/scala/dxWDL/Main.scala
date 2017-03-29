@@ -1,6 +1,6 @@
 package dxWDL
 
-import com.dnanexus.{DXApplet, DXDataObject, DXProject, DXUtil, DXContainer, DXSearch, DXWorkflow}
+import com.dnanexus.{DXApplet, DXProject, DXUtil, DXContainer, DXSearch, DXWorkflow}
 import java.nio.file.{Path, Paths, Files}
 import scala.util.{Failure, Success, Try}
 import spray.json._
@@ -123,8 +123,9 @@ object Main extends App {
         // 1) Compile the WDL workflow into an Intermediate Representation (IR)
         // 2) Generate dx:applets and dx:workflow from the IR
         val cef = new CompilerErrorFormatter(wf.wdlSyntaxErrorFormatter.terminalMap)
-        val irWf : IR.Workflow = CompilerFrontEnd.apply(ns, destination, cef, verbose)
-        val dxwfl : DXWorkflow = CompilerBackEnd.apply(irWf, dxWDLrtId, wdlSourceFile, destination, cef, verbose)
+        val irWf = CompilerFrontEnd.apply(ns, destination, cef, verbose)
+        val dxwfl = CompilerBackEnd.apply(irWf, dxProject, dxWDLrtId, wdlSourceFile,
+                                          destination, cef, verbose)
         dxwfl.getId()
     }
 

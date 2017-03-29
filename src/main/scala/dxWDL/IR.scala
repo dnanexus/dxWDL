@@ -35,24 +35,28 @@ object IR {
                       instanceType: String,
                       docker: Option[String],
                       destination : String,
-                      language: String,
-                      entrypoint: String,
-                      code: String)
+                      code: String,
+                      ast: Ast)
 
     /** An input to a stage. Could be empty, a wdl constant, or
       * a link to an output variable from another stage.
       */
     sealed trait SArg
+    case object SArgEmpty extends SArg
     case class SArgConst(cVal: WdlValue) extends SArg
     case class SArgLink(stageName: String, argName: String) extends SArg
-    type StageArg = Option[SArg]
+
+    // Linking between a variable, and which stage we got
+    // it from.
+    case class LinkedVar(cVar: CVar, sArg: SArg)
 
     // Note: we figure out the outputs from a stage by looking up the
     // applet outputs.
     case class Stage(name: String,
                      appletName: String,
-                     inputs: List[StageArg])
+                     inputs: List[LinkedVar])
 
-    case class Workflow(stages: List[Stage],
+    case class Workflow(name: String,
+                        stages: List[Stage],
                         applets: List[Applet])
 }

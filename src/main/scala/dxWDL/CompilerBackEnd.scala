@@ -4,21 +4,17 @@ package dxWDL
 
 // DX bindings
 import com.fasterxml.jackson.databind.JsonNode
-import com.dnanexus.{DXWorkflow, DXApplet, DXProject, DXJSON, DXUtil, DXContainer, DXSearch, DXDataObject}
+import com.dnanexus.{DXWorkflow, DXApplet, DXProject, DXJSON, DXUtil}
 import java.nio.file.{Files, Paths, Path}
-//import scala.collection.JavaConverters._
 import scala.util.{Failure, Success, Try}
-//import wdl4s.AstTools
-//import wdl4s.AstTools.EnhancedAstNode
-//import wdl4s.{Call, Declaration, Scatter, Scope, Task, TaskOutput, WdlExpression,
-//    WdlNamespace, WdlNamespaceWithWorkflow, WdlSource, Workflow}
 import wdl4s.expression.{NoFunctions, WdlStandardLibraryFunctionsType}
 import wdl4s.parser.WdlParser.{Ast, AstNode, Terminal}
 import wdl4s.types._
 import wdl4s.values._
 import wdl4s.WdlExpression.AstForExpressions
+import WdlVarLinks._
 
-// Json stuff
+// Json support
 import spray.json._
 import DefaultJsonProtocol._
 
@@ -245,7 +241,37 @@ object CompilerBackEnd {
         (dxapp, applet.output)
     }
 
+    // Calculate the stage inputs from the call closure
+    //
+    // It comprises mappings from variable name to WdlType.
+    def genStageInputs(inputs: List[IR.LinkedVar],
+                       irApplet: IR.Applet,
+                       stageDict: Map[String, DXWorkflow.Stage],
+                       cState: State) : JsonNode = {
+        val dxBuilder = inputs.foldLeft(DXJSON.getObjectBuilder()) {
+            case (dxBuilder, IR.LinkedVar(cVar, sArg)) =>
+                sArg match {
+                    case IR.SArgEmpty =>
+                        // We do not have a value for this input at compile time.
+                        // Currently, we throw an exception. But is this actually legal?
+                        throw new Exception(cState.cef.missingVarRefException(irApplet.ast))
+                    case IR.SArgConst(cVal) =>
+                        throw new Exception("TODO")
+                    case IR.SArgLink(stageName, argName) =>
+                        val dxStage = stageDict(stageName)
+                        val wvl = WdlVarLinks(argName, cVar.wdlType,
+                                              Some(IORef.Output, DxlStage(dxStage)))
+                        val fields = WdlVarLinks.genFields(wvl, cVar.name)
+                        fields.foldLeft(dxBuilder) { case (b, (fieldName, jsonNode)) =>
+                            b.put(fieldName, jsonNode)
+                        }
+                }
+        }
+        dxBuilder.build()
+    }
+
     def apply(wf: IR.Workflow,
+              dxProject: DXProject,
               dxWDLrtId: String,
               wdlSourceFile: Path,
               destination: String,
@@ -253,12 +279,30 @@ object CompilerBackEnd {
               verbose: Boolean) : DXWorkflow = {
         val cState = State(dxWDLrtId, wdlSourceFile, destination, cef, verbose)
         // build the individual applets
-        val dxapplets = wf.applets.map(x => buildApplet(x, cState))
+        val appDict : Map[ String, (IR.Applet, DXApplet, List[IR.CVar]) ] =
+            wf.applets.map{ a =>
+                val (dxApplet, outputs) = buildApplet(a, cState)
+                a.name -> (a, dxApplet, outputs)
+            }.toMap
 
-        // wire them together into a workflow
-        //dxwfl = wireWorkflow(wf.stages, dxapplets)
-        //dxwfl.close()
-        //dxwdl
-        throw new Exception("Not done yet")
+        // create workflow
+        val dxwfl = DXWorkflow.newWorkflow().setProject(dxProject).setFolder(destination)
+            .setName(wf.name).build()
+
+        // Create a dx:workflow stage for each stage in the IR.
+        val stageDictInit = Map.empty[String, DXWorkflow.Stage]
+        wf.stages.foldLeft((0,stageDictInit)) {
+            case ((version,stageDict), stg) =>
+                val (irApplet,dxApplet,outputs) = appDict(stg.name)
+                val inputs = genStageInputs(stg.inputs, irApplet, stageDict, cState)
+                val modif : DXWorkflow.Modification[DXWorkflow.Stage] =
+                    dxwfl.addStage(dxApplet, stg.name, inputs, version)
+                val nextVersion = modif.getEditVersion()
+                val dxStage : DXWorkflow.Stage = modif.getValue()
+                (nextVersion,
+                 stageDict ++ Map(stg.name -> dxStage))
+        }
+        dxwfl.close()
+        dxwfl
     }
 }
