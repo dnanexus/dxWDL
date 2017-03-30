@@ -54,6 +54,7 @@ def main():
     register_gatk_pipeline(project)
     if args.test_list:
         print_test_list()
+        cleanup(project)
         exit(0)
     test_names = choose_tests(args.test)
 
