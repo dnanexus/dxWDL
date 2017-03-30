@@ -552,7 +552,7 @@ object CompilerFrontEnd {
         //Utils.trace(cState.verbose, s"scatter closure=${closure}")
 
         val inputs : List[IR.CVar] = closure.map {
-            case (varName, LinkedVar(cVar, _)) => cVar
+            case (varName, LinkedVar(cVar, _)) => IR.CVar(varName, cVar.wdlType, cVar.ast)
         }.toList
         val scatterFqn = wf.unqualifiedName ++ "." ++ stageName
         val applet = IR.Applet(scatterFqn,
