@@ -43,13 +43,18 @@ def main():
     argparser.add_argument("--no-wait", help="Exit immediately after launching tests", action="store_true", default=False)
     argparser.add_argument("--compile-only", help="Only compile the workflows, don't run them", action="store_true", default=False)
     argparser.add_argument("--lazy", help="Only compile workflows that are unbuilt", action="store_true", default=False)
-    argparser.add_argument("--test", help="Run a test, or a subgroup of tests. Print list, to get available tests.", default="M")
+    argparser.add_argument("--test", help="Run a test, or a subgroup of tests", default="M")
+    argparser.add_argument("--test-list", help="Print a list of available tests", action="store_true", default=False)
+    argparser.add_argument("--verbose", help="Verbose compilation", action="store_true", default=False)
     argparser.add_argument("--folder", help="Use an existing folder, instead of building dxWDL")
     args = argparser.parse_args()
 
     project = dxpy.DXProject(args.project)
     register_all_tests(project)
     register_gatk_pipeline(project)
+    if args.test_list:
+        print_test_list()
+        exit(0)
     test_names = choose_tests(args.test)
 
     if args.folder is None:
@@ -61,6 +66,10 @@ def main():
     test_folder = base_folder + "/test"
     print("project: {} ({})".format(project.name, args.project))
     print("folder: {}".format(base_folder))
+
+    compiler_flags=[]
+    if args.verbose:
+        compiler_flags.append("--verbose")
 
     # Move the record to the applet_folder, so the compilation process will find it
     # Output: asset_bundle = record-F13V3BQ05gjppZPy1QyKxXzq
@@ -81,7 +90,7 @@ def main():
             if args.lazy:
                 wfid = lookup_workflow(wf_name, project, applet_folder)
             if wfid is None:
-                wfid = build_workflow(wf_name, project, applet_folder, asset)
+                wfid = build_workflow(wf_name, project, applet_folder, asset, compiler_flags)
             workflows[wf_name] = wfid
             print("workflow({}) = {}".format(wf_name, wfid))
         if not args.compile_only:
@@ -183,21 +192,22 @@ def build_prerequisits(project, args):
 # wf             workflow name
 # classpath      java classpath needed for running compilation
 # folder         destination folder on the platform
-def build_workflow(wf_name, project, folder, asset):
+def build_workflow(wf_name, project, folder, asset, compiler_flags):
     print("build workflow {}".format(wf_name))
     test_dir = "tests"
     print("Compiling {}.wdl to a workflow".format(wf_name))
-    subprocess.check_output([
-        (top_dir + "/dxWDL"),
-        "compile",
-        os.path.join(top_dir, test_dir, wf_name + ".wdl"),
-        "--destination", (project.get_id() + ":" + folder),
-        "--asset", asset.get_id()
-    ])
+    cmdline = [ (top_dir + "/dxWDL"),
+                "compile",
+                os.path.join(top_dir, test_dir, wf_name + ".wdl"),
+                "--destination", (project.get_id() + ":" + folder),
+                "--asset", asset.get_id() ]
+    if (compiler_flags is not None and
+        len(compiler_flags) > 0):
+        cmdline += compiler_flags
+    subprocess.check_output(cmdline)
     return lookup_workflow(wf_name, project, folder)
 
 def lookup_workflow(wf_name, project, folder):
-    print("lookup workflow {}".format(wf_name))
     wfgen = dxpy.bindings.search.find_data_objects(classname="workflow",
                                                    name=wf_name,
                                                    folder=folder,
@@ -249,12 +259,12 @@ def run_workflow(project, test_folder, wf_name, wfId, inputs):
     return job
 
 
+def print_test_list():
+    l = [key for key in test_input.keys()]
+    print("List of tests:{}".format(l))
+
 # Choose set set of tests to run
 def choose_tests(test_name):
-    if test_name == 'list':
-        l = [key for key in test_input.keys()]
-        print("List of tests:{}".format(l))
-        exit(0)
     if test_name == 'M':
         return default_test_list
     if test_name == 'All':
@@ -306,15 +316,15 @@ Tests are run via sbt test. Note that the tests do require Docker to be running.
     except:
         pass
     dxfile = dxpy.upload_string(buf, project=project.get_id(), name="fileA",
-                                folder="/test_data", wait_on_close=True)
+                                folder="/test_data")
     dxfile2 = dxpy.upload_string(buf2, project=project.get_id(), name="fileB",
-                                 folder="/test_data", wait_on_close=True)
+                                 folder="/test_data")
     dxfile3 = dxpy.upload_string(buf3, project=project.get_id(), name="fileC",
-                                 folder="/test_data", wait_on_close=True)
+                                 folder="/test_data")
 
     # Another version of [dxfile]
     dxfile_v2 = dxpy.upload_string("ABCD 1234", project=project.get_id(), name="fileA",
-                                   folder="/test_data", wait_on_close=True)
+                                   folder="/test_data")
 
 
     register_test("math",

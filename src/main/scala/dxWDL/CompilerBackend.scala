@@ -275,7 +275,9 @@ object CompilerBackend {
               destination: String,
               cef: CompilerErrorFormatter,
               verbose: Boolean) : DXWorkflow = {
+        Utils.trace(verbose, "Backend phase")
         val cState = State(dxWDLrtId, wdlSourceFile, destination, cef, verbose)
+
         // build the individual applets
         val appDict : Map[String, (IR.Applet, DXApplet)] =
             wf.applets.map{ a =>

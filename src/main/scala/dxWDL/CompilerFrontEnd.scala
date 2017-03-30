@@ -474,7 +474,8 @@ object CompilerFrontEnd {
     def compileScatter(wf : Workflow,
                        scatter: Scatter,
                        env : CallEnv,
-                       cState: State) : (IR.Applet, Closure, String, List[IR.CVar]) = {
+                       cState: State) : ((IR.Applet, Closure, String, List[IR.CVar]),
+                                         List[IR.Applet]) = {
         def unsupported(ast: Ast, msg: String) : String = {
             cState.cef.notCurrentlySupported(ast, msg)
         }
@@ -495,7 +496,7 @@ object CompilerFrontEnd {
         // first call name. This is guaranteed to be unique within a
         // workflow, because call names must be unique (or aliased)
         val stageName = Utils.SCATTER ++ "___" ++ callUniqueName(calls(0), cState)
-        Utils.trace(cState.verbose, "compiling scatter ${stageName}")
+        Utils.trace(cState.verbose, s"compiling scatter ${stageName}")
 
         // Construct the block output by unifying individual call outputs.
         // Each applet output becomes an array of that type. For example,
@@ -548,7 +549,7 @@ object CompilerFrontEnd {
         topDecls.foreach( decl =>
             closure -= decl.unqualifiedName
         )
-        Utils.trace(cState.verbose, s"scatter closure=${closure}")
+        //Utils.trace(cState.verbose, s"scatter closure=${closure}")
 
         val inputs : List[IR.CVar] = closure.map {
             case (varName, LinkedVar(cVar, _)) => cVar
@@ -565,8 +566,8 @@ object CompilerFrontEnd {
 
         // Compile each of the calls in the scatter block into an applet.
         // These will be called from the scatter stage at runtime.
-        calls.foreach { call =>
-            val (_, _, _, outputs) = compileCall(wf, call, innerEnv, cState)
+        val subCalls = calls.map { call =>
+            val (subApplet, _, _, outputs)  = compileCall(wf, call, innerEnv, cState)
 
             // Add bindings for all call output variables. This allows later calls to refer
             // to these results. Links to their values are unknown at compile time, which
@@ -577,9 +578,10 @@ object CompilerFrontEnd {
                                            LinkedVar(IR.CVar(fqVarName, cVar.wdlType, cVar.ast),
                                                         IR.SArgEmpty))
             }
-        }
+            subApplet
+        }.toList
 
-        (applet, closure, stageName, outputDecls)
+        ((applet, closure, stageName, outputDecls), subCalls)
     }
 
 
@@ -621,6 +623,7 @@ object CompilerFrontEnd {
         // - Create a preliminary stage to handle workflow inputs, and top-level
         //   declarations.
         // - Create a stage per call/scatter-block
+        var extras : List[IR.Applet] = Nil
         val stgAplPairs = (wf :: calls.toList).map { child =>
             val (appletIr, closure, stageName, outputs) = child match {
                 case _ : Workflow =>
@@ -628,7 +631,9 @@ object CompilerFrontEnd {
                 case call: Call =>
                     compileCall(wf, call, env, cState)
                 case scatter : Scatter =>
-                    compileScatter(wf, scatter, env, cState)
+                    val (x, subCalls) = compileScatter(wf, scatter, env, cState)
+                    extras = extras ++ subCalls
+                    x
             }
 
             val inputs = closure.map { case (varName, LinkedVar(cVar,sArg)) => sArg }.toList
@@ -649,6 +654,6 @@ object CompilerFrontEnd {
             (stageIr, appletIr)
         }
         val (stages, applets) = stgAplPairs.unzip
-        IR.Workflow(wf.unqualifiedName, stages, applets)
+        IR.Workflow(wf.unqualifiedName, stages, extras ++ applets)
     }
 }

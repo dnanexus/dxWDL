@@ -271,7 +271,7 @@ object ScatterRunner {
         // at the top of the block.
         val collElements = outScopeEnv.get(scatter.collection.toWdlString) match {
             case None => throw new AppInternalException(
-                s"Could not find the collection array ${scatter.collection} in the job inputs")
+                s"Could not find the collection array ${scatter.collection.toWdlString} in the job inputs")
             case Some(wvl) => wvl
         }
 
