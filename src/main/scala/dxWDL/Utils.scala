@@ -389,8 +389,11 @@ object Utils {
         // to the parent
         val p : Process = Process(cmds).run(logger, false)
         val retcode = p.exitValue()
-        if (retcode != 0)
+        if (retcode != 0) {
+            System.err.println(s"STDOUT: ${outStream.toString()}")
+            System.err.println(s"STDERR: ${errStream.toString()}")
             throw new Exception(s"Error running command ${cmdLine}")
+        }
         (outStream.toString(), errStream.toString())
     }
 
