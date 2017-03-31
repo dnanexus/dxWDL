@@ -45,24 +45,16 @@ case object DxFunctions extends WdlStandardLibraryFunctions {
 
     override def stdout(params: Seq[Try[WdlValue]]): Try[WdlFile] = {
         val stdoutPath = getMetaDir().resolve("stdout")
-        try {
-            Success(WdlFile(stdoutPath.toString))
-        } catch {
-            case e : Throwable =>
-                Utils.writeFileContent(stdoutPath, "")
-                Success(WdlFile(stdoutPath.toString))
-        }
+        if (!Files.exists(stdoutPath))
+            Utils.writeFileContent(stdoutPath, "")
+        Success(WdlFile(stdoutPath.toString))
     }
 
     override def stderr(params: Seq[Try[WdlValue]]): Try[WdlFile] = {
         val stderrPath = getMetaDir().resolve("stderr")
-        try {
-            Success(WdlFile(stderrPath.toString))
-        } catch {
-            case e : Throwable =>
-                Utils.writeFileContent(stderrPath, "")
-                Success(WdlFile(stderrPath.toString))
-        }
+        if (!Files.exists(stderrPath))
+            Utils.writeFileContent(stderrPath, "")
+        Success(WdlFile(stderrPath.toString))
     }
 
     override def read_json(params: Seq[Try[WdlValue]]): Try[WdlValue] =

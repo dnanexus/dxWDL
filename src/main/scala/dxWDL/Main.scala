@@ -1,5 +1,6 @@
 package dxWDL
 
+import com.dnanexus.{DXApplet, DXProject, DXUtil, DXContainer, DXSearch, DXWorkflow}
 import java.nio.file.{Path, Paths, Files}
 import scala.util.{Failure, Success, Try}
 import spray.json._
@@ -52,6 +53,82 @@ object Main extends App {
         System.err.println(Utils.exceptionToString(e))
     }
 
+    def compileBody(ns : WdlNamespace,
+                    wdlSourceFile : Path,
+                    options: Map[String, String]) : String = {
+        // extract the workflow
+        val wf = ns match {
+            case nswf : WdlNamespaceWithWorkflow => nswf.workflow
+            case _ => throw new Exception("WDL does not have a workflow")
+        }
+
+        // verify version ID
+        options.get("expectedVersion") match {
+            case Some(vid) if vid != Utils.VERSION =>
+                throw new Exception(s"""|Version mismatch, library is ${Utils.VERSION},
+                                        |expected version is ${vid}"""
+                                        .stripMargin.replaceAll("\n", " "))
+            case _ => ()
+        }
+
+        val verbose = options.get("verbose") match {
+            case None => false
+            case Some(_) => true
+        }
+
+        // deal with the various options
+        val destination : String = options.get("destination") match {
+            case None => ""
+            case Some(d) => d
+        }
+
+        // There are three possible syntaxes:
+        //    project-id:/folder
+        //    project-id:
+        //    /folder
+        val vec = destination.split(":")
+        val (project, folder) = vec.length match {
+            case 0 => (None, "/")
+            case 1 =>
+                if (destination.endsWith(":"))
+                    (Some(vec(0)), "/")
+                else
+                    (None, vec(0))
+            case 2 => (Some(vec(0)), vec(1))
+            case _ => throw new Exception(s"Invalid path syntex ${destination}")
+        }
+
+        val dxProject : DXProject = project match {
+            case None =>
+                // get the default project
+                val dxEnv = com.dnanexus.DXEnvironment.create()
+                dxEnv.getProjectContext()
+            case Some(p) => DXProject.getInstance(p)
+        }
+
+        // remove old workflow and applets
+        val oldWf = DXSearch.findDataObjects().nameMatchesExactly(wf.unqualifiedName)
+            .inFolder(dxProject, folder).withClassWorkflow().execute().asList()
+        dxProject.removeObjects(oldWf)
+        val oldApplets = DXSearch.findDataObjects().nameMatchesGlob(wf.unqualifiedName + ".*")
+            .inFolder(dxProject, folder).withClassWorkflow().execute().asList()
+        dxProject.removeObjects(oldApplets)
+
+        val dxWDLrtId: String = options.get("dxWDLrtId") match {
+            case None => throw new Exception("dxWDLrt asset ID not specified")
+            case Some(id) => id
+        }
+
+        // Backbone of compilation process.
+        // 1) Compile the WDL workflow into an Intermediate Representation (IR)
+        // 2) Generate dx:applets and dx:workflow from the IR
+        val cef = new CompilerErrorFormatter(wf.wdlSyntaxErrorFormatter.terminalMap)
+        val irWf = CompilerFrontEnd.apply(ns, folder, cef, verbose)
+        val dxwfl = CompilerBackend.apply(irWf, dxProject, dxWDLrtId, wdlSourceFile,
+                                          folder, cef, verbose)
+        dxwfl.getId()
+    }
+
     def compile(args: Seq[String]): Termination = {
         try {
             val wdlSrcFile = args.head
@@ -79,7 +156,7 @@ object Main extends App {
             val options = nextOption(Map(),arglist)
 
             loadWdl(wdlSrcFile) { ns =>
-                val dxc = Compile.apply(ns, Paths.get(wdlSrcFile), options)
+                val dxc = compileBody(ns, Paths.get(wdlSrcFile), options)
                 SuccessfulTermination(dxc)
             }
         } catch {

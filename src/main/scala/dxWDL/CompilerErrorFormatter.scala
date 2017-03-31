@@ -5,7 +5,7 @@ import wdl4s.parser.WdlParser.{Ast, Terminal}
 import wdl4s.{Call, Declaration, Scatter, Scope, Task, TaskOutput, WdlExpression,
     WdlNamespace, WdlNamespaceWithWorkflow, WdlSource, Workflow}
 
-case class CompileErrorFormatter(terminalMap: Map[Terminal, WdlSource]) {
+case class CompilerErrorFormatter(terminalMap: Map[Terminal, WdlSource]) {
     private def pointToSource(t: Terminal): String = s"${line(t)}\n${" " * (t.getColumn - 1)}^"
     private def line(t:Terminal): String = terminalMap.get(t).get.split("\n")(t.getLine - 1)
 

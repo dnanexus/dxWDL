@@ -1,6 +1,9 @@
+# SBT artifacts
 project/project
 project/target
 target/
+
+# Cromwell runtime
 execution/
 
 # compiled java classes
@@ -9,3 +12,6 @@ execution/
 # jar files
 dxWDL*.jar
 dnanexus-api-*.jar
+
+# misc
+applet_resources/dxasset.json

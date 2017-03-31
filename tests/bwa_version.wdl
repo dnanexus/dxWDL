@@ -17,10 +17,7 @@ task GetBwaVersion {
 }
 
 workflow bwa_version {
-    # Get the version of BWA to include in the PG record in the header of the BAM produced
-    # by MergeBamAlignment.
     call GetBwaVersion
-
     output {
         GetBwaVersion.version
     }

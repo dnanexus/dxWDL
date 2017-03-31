@@ -60,9 +60,9 @@ to the compiler, or building it on their own.
 
 Download the Broad Institute tools, get the latest versions of
 cromwell and wdl4s. Currently, we are working with wdl4s version
-[0.9](http://broadinstitute.github.io/wdl4s/0.9/#package), and
+[0.10](http://broadinstitute.github.io/wdl4s/0.10/#package), and
 cromwell version
-[24](https://github.com/broadinstitute/cromwell/releases/tag/24).
+[25](https://github.com/broadinstitute/cromwell/releases/tag/25).
 
 The instructions here assume an Ubuntu 16.04 system (Xenial).
 
