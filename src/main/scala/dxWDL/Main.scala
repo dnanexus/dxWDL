@@ -104,7 +104,7 @@ object Main extends App {
             case Some(id) => id
         }
 
-        // Simplify the workflow
+        // Simplify the source file
         val simplWdlPath = CompilerPreprocess.apply(wdlSourceFile, verbose)
 
         // extract the workflow
