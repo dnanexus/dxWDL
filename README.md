@@ -1,12 +1,7 @@
 # dxWDL
 
-dxWDL takes a bioinformatics pipeline written in [Workflow Definition Language](https://github.com/broadinstitute/wdl) and "compiles" it to an equivalent workflow on the DNAnexus platform.
+dxWDL takes a bioinformatics pipeline written in [Workflow Definition Language](https://software.broadinstitute.org/wdl) and compiles it to an equivalent workflow on the DNAnexus platform.
 
-To learn more on WDL, please check out these links:
-* [tutorial WDLs](https://github.com/broadinstitute/wdl/tree/develop/scripts/tutorials/wdl)
-* [GATK production WDLs](https://github.com/broadinstitute/wdl/tree/develop/scripts/broad_pipelines)
-* [WDL spec](https://github.com/broadinstitute/wdl/blob/develop/SPEC.md)
-* [wdl4s scaladoc](http://broadinstitute.github.io/wdl4s/0.9/#package) - the compiler uses this library to parse WDL input
 
 ## Release status
 This project is in alpha testing, and does not yet support all WDL features. Initially, we have focused on enabling the [GATK best

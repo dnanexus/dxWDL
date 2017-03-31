@@ -19,25 +19,17 @@ automatic testing, and debugging.
 ## Applet definition
 
 - name: applet name
-- dx input: list of platform input arguments
-- dx output: list of platform output arguments
-- instace type: a platform instance name (optional)
+- inputs: list of WDL input arguments
+- outputs: list of WDL output arguments
+- instace type: a platform instance name
 - docker: docker image name (optional)
 - destination : folder path on the platform
-- language: computer language in which the script is written, could be
-bash or WDL.
-- entrypoint: starting point of execution in the code. For WDL, this
-could be a scatter. For bash, normally `main`.
-- code: bash or WDL snippet to exeute
+- code: bash snippet to exeute
 
 ## Workflow definition
 List of stages, where a stage has the following fields:
 
 - name: stage name
 - applet: one of the pre-defined applets to execute
-- inputs: list of arguments. They could be specified in several
-different ways:
-  * Constant
-  * Name of an output/input from a previous stage
-  * Empty. The user may specify a value at run time, alternatively,
-    it may be an optional applet input.
+- inputs: list of arguments. These could be either empty,
+  or point to an output from a previous stage.

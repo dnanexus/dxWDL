@@ -275,7 +275,7 @@ object CompilerBackend {
               destination: String,
               cef: CompilerErrorFormatter,
               verbose: Boolean) : DXWorkflow = {
-        Utils.trace(verbose, "Backend phase")
+        Utils.trace(verbose, "Backend, converting intermediate representation to DNAx primitives")
         val cState = State(dxWDLrtId, wdlSourceFile, destination, cef, verbose)
 
         // build the individual applets
@@ -291,6 +291,11 @@ object CompilerBackend {
             .setName(wf.name).build()
 
         // Create a dx:workflow stage for each stage in the IR.
+        //
+        // The accumulator state holds:
+        // - the workflow version, which gets incremented per stage
+        // - a dictionary of stages, mapping name to stage. This is used
+        //   to locate variable references.
         val stageDictInit = Map.empty[String, DXWorkflow.Stage]
         wf.stages.foldLeft((0,stageDictInit)) {
             case ((version,stageDict), stg) =>

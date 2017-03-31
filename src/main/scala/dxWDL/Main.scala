@@ -53,15 +53,8 @@ object Main extends App {
         System.err.println(Utils.exceptionToString(e))
     }
 
-    def compileBody(ns : WdlNamespace,
-                    wdlSourceFile : Path,
+    def compileBody(wdlSourceFile : Path,
                     options: Map[String, String]) : String = {
-        // extract the workflow
-        val wf = ns match {
-            case nswf : WdlNamespaceWithWorkflow => nswf.workflow
-            case _ => throw new Exception("WDL does not have a workflow")
-        }
-
         // verify version ID
         options.get("expectedVersion") match {
             case Some(vid) if vid != Utils.VERSION =>
@@ -106,6 +99,22 @@ object Main extends App {
             case Some(p) => DXProject.getInstance(p)
         }
 
+        val dxWDLrtId: String = options.get("dxWDLrtId") match {
+            case None => throw new Exception("dxWDLrt asset ID not specified")
+            case Some(id) => id
+        }
+
+        // Simplify the workflow
+        val simplWdlPath = CompilerPreprocess.apply(wdlSourceFile, verbose)
+
+        // extract the workflow
+        val ns = WdlNamespaceWithWorkflow.load(Utils.readFileContent(simplWdlPath),
+                                               Seq.empty).get
+        val wf = ns match {
+            case nswf : WdlNamespaceWithWorkflow => nswf.workflow
+            case _ => throw new Exception("WDL does not have a workflow")
+        }
+
         // remove old workflow and applets
         val oldWf = DXSearch.findDataObjects().nameMatchesExactly(wf.unqualifiedName)
             .inFolder(dxProject, folder).withClassWorkflow().execute().asList()
@@ -114,17 +123,12 @@ object Main extends App {
             .inFolder(dxProject, folder).withClassWorkflow().execute().asList()
         dxProject.removeObjects(oldApplets)
 
-        val dxWDLrtId: String = options.get("dxWDLrtId") match {
-            case None => throw new Exception("dxWDLrt asset ID not specified")
-            case Some(id) => id
-        }
-
         // Backbone of compilation process.
         // 1) Compile the WDL workflow into an Intermediate Representation (IR)
         // 2) Generate dx:applets and dx:workflow from the IR
         val cef = new CompilerErrorFormatter(wf.wdlSyntaxErrorFormatter.terminalMap)
         val irWf = CompilerFrontEnd.apply(ns, folder, cef, verbose)
-        val dxwfl = CompilerBackend.apply(irWf, dxProject, dxWDLrtId, wdlSourceFile,
+        val dxwfl = CompilerBackend.apply(irWf, dxProject, dxWDLrtId, simplWdlPath,
                                           folder, cef, verbose)
         dxwfl.getId()
     }
@@ -154,11 +158,8 @@ object Main extends App {
                 }
             }
             val options = nextOption(Map(),arglist)
-
-            loadWdl(wdlSrcFile) { ns =>
-                val dxc = compileBody(ns, Paths.get(wdlSrcFile), options)
-                SuccessfulTermination(dxc)
-            }
+            val dxc = compileBody(Paths.get(wdlSrcFile), options)
+            SuccessfulTermination(dxc)
         } catch {
             case e : Throwable =>
 

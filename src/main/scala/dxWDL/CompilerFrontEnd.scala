@@ -5,7 +5,6 @@
   */
 package dxWDL
 
-// DX bindings
 import java.nio.file.{Files, Paths, Path}
 import scala.util.{Failure, Success, Try}
 import wdl4s.AstTools
