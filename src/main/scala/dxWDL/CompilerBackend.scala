@@ -22,8 +22,9 @@ object CompilerBackend {
     // Compiler state.
     // Packs common arguments passed between methods.
     case class State(dxWDLrtId: String,
+                     dxProject: DXProject,
                      wdlSourceFile: Path,
-                     destination: String,
+                     folder: String,
                      cef: CompilerErrorFormatter,
                      verbose: Boolean)
 
@@ -161,12 +162,16 @@ object CompilerBackend {
     //
     def dxBuildApp(appletDir : Path,
                    appletFqn : String,
-                   destination : String,
-                   verbose: Boolean) : DXApplet = {
-        Utils.trace(verbose, s"Building applet ${appletFqn}")
+                   folder : String,
+                   cState: State) : DXApplet = {
+        Utils.trace(cState.verbose, s"Building applet ${appletFqn}")
+        val path =
+            if (folder.endsWith("/")) (folder ++ appletFqn)
+            else (folder ++ "/" ++ appletFqn)
+        val pId = cState.dxProject.getId()
         val dest =
-            if (destination.endsWith("/")) (destination ++ appletFqn)
-            else (destination ++ "/" ++ appletFqn)
+            if (path.startsWith("/")) pId ++ ":" ++ path
+            else pId ++ ":/" ++ path
         val buildCmd = List("dx", "build", "-f", appletDir.toString(), "--destination", dest)
         def build() : Option[DXApplet] = {
             try {
@@ -237,7 +242,7 @@ object CompilerBackend {
         // create a directory structure for this applet
         val appletDir = createAppletDirStruct(applet.name, cState.wdlSourceFile, json,
                                               applet.code)
-        val dxapp = dxBuildApp(appletDir, applet.name, cState.destination, cState.verbose)
+        val dxapp = dxBuildApp(appletDir, applet.name, cState.folder, cState)
         (dxapp, applet.outputs)
     }
 
@@ -272,11 +277,11 @@ object CompilerBackend {
               dxProject: DXProject,
               dxWDLrtId: String,
               wdlSourceFile: Path,
-              destination: String,
+              folder: String,
               cef: CompilerErrorFormatter,
               verbose: Boolean) : DXWorkflow = {
-        Utils.trace(verbose, "Backend, converting intermediate representation to DNAx primitives")
-        val cState = State(dxWDLrtId, wdlSourceFile, destination, cef, verbose)
+        Utils.trace(verbose, "Backend phase")
+        val cState = State(dxWDLrtId, dxProject, wdlSourceFile, folder, cef, verbose)
 
         // build the individual applets
         val appDict : Map[String, (IR.Applet, DXApplet)] =
@@ -287,7 +292,7 @@ object CompilerBackend {
             }.toMap
 
         // create workflow
-        val dxwfl = DXWorkflow.newWorkflow().setProject(dxProject).setFolder(destination)
+        val dxwfl = DXWorkflow.newWorkflow().setProject(dxProject).setFolder(folder)
             .setName(wf.name).build()
 
         // Create a dx:workflow stage for each stage in the IR.

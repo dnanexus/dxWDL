@@ -58,6 +58,7 @@ script:
   - pwd
   - source dx-toolkit/environment
   - dx login --token ${DX_AUTH_TOKEN} --noprojects
+  - dx select dxWDL_playground
   - java -version
   - cd dxWDL && ./run_tests.py
 env:
