@@ -100,8 +100,13 @@ object CompilerPreprocess {
 //            case wfc: WorkflowCall => wf.calledWorkflow.unqualifiedName
 //        }
         val spaces = s"${" " * indent}"
+        val callUniqueName = call.alias match {
+            case Some(x) => x
+            case None => call.unqualifiedName
+        }
+
         var varNum = 1
-        var tmpDecls = Queue[(String, WdlExpression)]()
+        val tmpDecls = scala.collection.mutable.Map.empty[String, (WdlType, WdlExpression)]
         val inputs : Seq[String] = call.inputMappings.map { case (key, expr) =>
             val rhs = expr.ast match {
                 case t: Terminal => t.getSourceString
@@ -111,9 +116,12 @@ object CompilerPreprocess {
                 case a: Ast if a.isFunctionCall || a.isUnaryOperator || a.isBinaryOperator
                       || a.isTupleLiteral || a.isArrayOrMapLookup =>
                     // replace an expression with a temporary variable
-                    val tmpName: String = s"xtmp_${call.alias}_${varNum}"
+                    val tmpName: String = s"xtmp_${callUniqueName}_${varNum}"
+                    val calleeDecl: Declaration =
+                        call.declarations.find(decl => decl.unqualifiedName == key).get
+                    val wdlType = calleeDecl.wdlType
                     varNum = varNum + 1
-                    tmpDecls += (tmpName -> expr)
+                    tmpDecls(tmpName) = (wdlType, expr)
                     tmpName
             }
             s"${spaces}${key} = ${rhs}"
@@ -126,23 +134,24 @@ object CompilerPreprocess {
         }
         val topLine =
             if (!call.inputMappings.isEmpty)
-                s"call ${call.unqualifiedName} ${aliasStr} {  inputs:"
+                s"call ${call.unqualifiedName} ${aliasStr} {  input:"
             else
                 s"call ${call.unqualifiedName} ${aliasStr} {"
+        val inputLines = inputs.mkString(", ")
+        val tmpVarLines = tmpDecls.map{ case (key,(wType,expr)) =>
+            s"${wType.toWdlString} ${key} = ${expr.toWdlString}"
+        }
 
-        // temporary variables
-        val tmpVarLines = tmpDecls.map{ case (key,expr) => s"${expr.wdlType} ${key} = ${expr.toWdlString}" }
-
-        val lines = tmpVarLines ++ List(topLine) ++ inputs ++ List("}")
+        val lines = tmpVarLines ++ List(topLine, inputLines, "}")
         lines.map(x => spaces ++ x).mkString("\n")
     }
 
-    def simplifyWorkflow(wf: Workflow, cState: State) : String = {
-        val children :List[Scope] = wf.children.toList
-        val snippets : List[String] = children.map {
-            case call: Call => simplifyCall(call, 4, cState) + "\n"
-            case decl: Declaration => getAstSourceLines(decl.ast, cState) + "\n"
-            case ssc: Scatter => getAstSourceLines(ssc.ast, cState) + "\n"
+    def simplifyWorkflow(wf: Workflow, indent: Int, cState: State) : String = {
+        val spaces = s"${" " * indent}"
+        val snippets : Seq[String] = wf.children.map {
+            case call: Call => simplifyCall(call, 4, cState) ++ "\n"
+            case decl: Declaration => spaces ++ getAstSourceLines(decl.ast, cState) ++ "\n"
+            case ssc: Scatter => spaces ++ getAstSourceLines(ssc.ast, cState) ++ "\n"
             case x =>
                 throw new Exception(cState.cef.notCurrentlySupported(x.ast,
                                                                      "workflow element"))
@@ -183,7 +192,7 @@ object CompilerPreprocess {
         }
         ns match {
             case nswf : WdlNamespaceWithWorkflow =>
-                val rewritten: String = simplifyWorkflow(nswf.workflow, cState)
+                val rewritten: String = simplifyWorkflow(nswf.workflow, 4, cState)
                 pw.println(rewritten)
             case _ => ()
         }
