@@ -5,7 +5,6 @@ import com.dnanexus.{DXFile, DXProject, DXEnvironment, DXApplet}
 
 import java.nio.file.{Path, Paths, Files}
 import scala.collection.JavaConverters._
-import scala.collection.mutable.ListBuffer
 import scala.util.{Try, Success, Failure}
 import spray.json._
 import spray.json.DefaultJsonProtocol

@@ -4,7 +4,6 @@ package dxWDL
 import com.dnanexus.{DXApplet, DXFile, DXJob, DXProject, DXWorkflow}
 import com.fasterxml.jackson.databind.JsonNode
 import java.nio.file.{Files, Path, Paths}
-import scala.collection.mutable.ListBuffer
 import spray.json._
 import spray.json.DefaultJsonProtocol
 import spray.json.JsString

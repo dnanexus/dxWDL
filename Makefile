@@ -1,7 +1,5 @@
 SHELL=/bin/bash -e
 
-# In order to disable running unit tests, use this:
-#	sbt "set test in assembly := {}" assembly
 all:
 	sbt assembly
 	mkdir -p applet_resources/resources

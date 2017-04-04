@@ -5,7 +5,6 @@ import com.dnanexus.{DXApplet, DXEnvironment, DXFile, DXJob, InputParameter, Out
 import com.fasterxml.jackson.databind.JsonNode
 import java.nio.file.{Path, Paths, Files}
 import scala.collection.JavaConverters._
-import scala.collection.mutable.ListBuffer
 import spray.json._
 import spray.json.DefaultJsonProtocol
 import spray.json.JsString

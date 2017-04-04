@@ -9,7 +9,6 @@ import java.nio.file.{Path, Paths, Files}
 import java.util.Base64
 import org.apache.commons.io.IOUtils
 import scala.collection.JavaConverters._
-import scala.collection.mutable.ListBuffer
 import scala.sys.process._
 import scala.util.{Failure, Success, Try}
 import spray.json._
