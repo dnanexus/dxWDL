@@ -20,11 +20,17 @@ import wdl4s.values._
 import wdl4s.WdlExpression.AstForExpressions
 
 object CompilerPreprocess {
+    val MAX_NUM_COLLECT_ITER = 10
+
     // Compiler state.
     // Packs common arguments passed between methods.
     case class State(cef: CompilerErrorFormatter,
                      terminalMap: Map[Terminal, WdlSource],
                      verbose: Boolean)
+
+    case class DeclReorgState(definedVars: Set[String],
+                              top: Vector[Scope],
+                              bottom: Vector[Scope])
 
     // Add a suffix to a filename, before the regular suffix. For example:
     //  xxx.wdl -> xxx.simplified.wdl
@@ -106,13 +112,13 @@ object CompilerPreprocess {
                 case a: Ast if a.isFunctionCall || a.isUnaryOperator || a.isBinaryOperator
                       || a.isTupleLiteral || a.isArrayOrMapLookup =>
                     // replace an expression with a temporary variable
-                    val tmpName: String = s"xtmp${varNum}"
+                    val tmpVarName: String = s"xtmp${varNum}"
                     val calleeDecl: Declaration =
                         call.declarations.find(decl => decl.unqualifiedName == key).get
                     val wdlType = calleeDecl.wdlType
                     varNum = varNum + 1
-                    tmpDecls += Declaration(wdlType, key, Some(expr), call.parent, a)
-                    WdlExpression.fromString(tmpName)
+                    tmpDecls += Declaration(wdlType, tmpVarName, Some(expr), call.parent, a)
+                    WdlExpression.fromString(tmpVarName)
             }
             (key -> rhs)
         }
@@ -124,6 +130,101 @@ object CompilerPreprocess {
         tmpDecls += callModifiedInputs
         (varNum, tmpDecls.toList)
     }
+
+    // Start from a split of the workflow elements into top and bottom blocks.
+    // Move any declaration, whose dependencies are satisfied, to the top.
+    //
+    def declMoveUp(drs: DeclReorgState, cState: State) : DeclReorgState = {
+        var definedVars : Set[String] = drs.definedVars
+        var moved = Vector.empty[Scope]
+
+        // Move up declarations
+        var bottom : Vector[Scope] = drs.bottom.map {
+            case decl: Declaration =>
+                decl.expression match {
+                    case None =>
+                        // An input parameter, move to top
+                        definedVars = definedVars + decl.unqualifiedName
+                        moved = moved :+ decl
+                        None
+                    case Some(expr) =>
+                        val (possible, deps) = Utils.findToplevelVarDeps(expr)
+                        if (!possible) {
+                            Some(decl)
+                        } else if (!deps.forall(x => definedVars(x))) {
+                            // some dependency is missing, can't move up
+                            Some(decl)
+                        } else {
+                            // Move the declaration to the top
+                            definedVars = definedVars + decl.unqualifiedName
+                            moved = moved :+ decl
+                            None
+                        }
+                }
+            case x => Some(x)
+        }.flatten
+
+        // If the next element is a declaration, move it up; it is "stuck"
+        bottom = bottom match {
+            case (Declaration(_,_,_,_,_)) +: tl =>
+                moved = moved :+ bottom.head
+                tl
+            case _ => bottom
+        }
+        // Skip all consecutive non-declarations
+        def skipNonDecl(t: Vector[Scope], b: Vector[Scope]) :
+                (Vector[Scope], Vector[Scope]) = {
+            if (b.isEmpty) {
+                (t,b)
+            }
+            else b.head match {
+                case decl: Declaration =>
+                    System.err.println(s"skipNonDecl, reached declaration ${prettyPrint(decl, 4, cState)}")
+                    (t,b)
+                case x => skipNonDecl(t :+ x, b.tail)
+            }
+        }
+        val (nonDeclBlock, remaining) = skipNonDecl(Vector.empty, bottom)
+        System.err.println(s"len(nonDecls)=${nonDeclBlock.length} len(rest)=${remaining.length}")
+        DeclReorgState(definedVars, drs.top ++ moved ++ nonDeclBlock, remaining)
+    }
+
+    // Attempt to collect declarations, to reduce the number of extra jobs
+    // required for calculations. This is an N^2 algorithm, so we bound the
+    // number of iterations.
+    //
+    // workflow math {
+    //     Int ai
+    //     call Add  { input:  a=ai, b=3 }
+    //     Int scratch = 3
+    //     Int xtmp2 = Add.result + 10
+    //     call Multiply  { input: a=xtmp2, b=2 }
+    // }
+    //
+    // workflow math {
+    //     Int ai
+    //->   Int scratch = 3
+    //     call Add  { input:  a=ai, b=3 }
+    //     Int xtmp2 = Add.result + 10
+    //     call Multiply  { input: a=xtmp2, b=2 }
+    // }
+    def collectDeclarations(elems: Seq[Scope], cState: State) : Seq[Scope] = {
+        var numIter = 0
+        var drs = DeclReorgState(Set.empty[String],
+                                 Vector.empty[Scope],
+                                 elems.toVector)
+        while (!drs.bottom.isEmpty && numIter < MAX_NUM_COLLECT_ITER) {
+            System.err.println(
+                s"""|collectDeclaration ${numIter}
+                    |size(defs)=${drs.definedVars.size} len(top)=${drs.top.length}
+                    |len(bottom)=${drs.bottom.length}""".stripMargin.replaceAll("\n", " ")
+            )
+            drs = declMoveUp(drs, cState)
+            numIter += 1
+        }
+        drs.top ++ drs.bottom
+    }
+
 
     // Create an indentation of [n] spaces
     def genNSpaces(n: Int) = {
@@ -145,9 +246,10 @@ object CompilerPreprocess {
         }.toList
         val inputsConcat = inputs.mkString(", ")
         val spaces = genNSpaces(indent)
-        s"""|call ${call.unqualifiedName} ${aliasStr} { input:
-            |    ${inputsConcat}
-            |}""".stripMargin.replaceAll("\n", spaces)
+        s"""|${spaces}call ${call.unqualifiedName} ${aliasStr} {
+            |${spaces}  input:
+            |${spaces}${spaces}${inputsConcat}
+            |${spaces}}""".stripMargin
     }
 
     def prettyPrint(decl: Declaration, indent: Int, cState: State) : String = {
@@ -157,17 +259,17 @@ object CompilerPreprocess {
         }
         s"""|${genNSpaces(indent)}
             |${decl.wdlType.toWdlString} ${decl.unqualifiedName}
-            |${exprStr}""".stripMargin.trim
+            |${exprStr}""".stripMargin.replaceAll("\n","")
     }
 
     def prettyPrint(ssc: Scatter, indent: Int, cState: State) : String = {
-        genNSpaces(indent) ++ getAstSourceLines(ssc.ast, cState)
+        getAstSourceLines(ssc.ast, cState)
     }
 
     def simplifyWorkflow(wf: Workflow, indent: Int, cState: State) : String = {
         // simplification step
         var tmpVarCnt = 0
-        val elems : Seq[Scope] = wf.children.map {
+        var elems : Seq[Scope] = wf.children.map {
             case call: Call =>
                 val (nCnt, callElems) = simplifyCall(call, tmpVarCnt, cState)
                 tmpVarCnt = nCnt
@@ -177,23 +279,21 @@ object CompilerPreprocess {
 
         // Attempt to collect declarations, to reduce the number of extra jobs
         // required for calculations.
-        //val elemsColl = collectDeclarations(elems)
-        val elemsColl = elems
+        elems = collectDeclarations(elems, cState)
 
         // pretty print the workflow to a file. The output
         // must be readable by the standard WDL compiler.
-        val snippets : Seq[String] = elemsColl.map {
-            case call: Call => prettyPrint(call, 4, cState) ++ "\n"
-            case decl: Declaration => prettyPrint(decl, 4, cState) ++ "\n"
-            case ssc: Scatter => prettyPrint(ssc, 4, cState) ++ "\n"
+        val elemsStr : Seq[String] = elems.map {
+            case call: Call => prettyPrint(call, 4, cState)
+            case decl: Declaration => prettyPrint(decl, 4, cState)
+            case ssc: Scatter => prettyPrint(ssc, 4, cState)
             case x =>
                 throw new Exception(cState.cef.notCurrentlySupported(x.ast,
                                                                      "workflow element"))
         }
-
         val topLine = s"workflow ${wf.unqualifiedName} {"
         val endLine = "}"
-        val wfLines = List(topLine) ++ snippets ++ List(endLine)
+        val wfLines = List(topLine) ++ elemsStr ++ List(endLine)
         wfLines.mkString("\n")
     }
 
