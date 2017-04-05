@@ -151,7 +151,13 @@ object CompilerPreprocess {
     }
 
     def prettyPrint(decl: Declaration, indent: Int, cState: State) : String = {
-        genNSpaces(indent) ++ getAstSourceLines(decl.ast, cState)
+        val exprStr = decl.expression match {
+            case None => ""
+            case Some(x) => " = " ++ x.toWdlString
+        }
+        s"""|${genNSpaces(indent)}
+            |${decl.wdlType.toWdlString} ${decl.unqualifiedName}
+            |${exprStr}""".stripMargin.trim
     }
 
     def prettyPrint(ssc: Scatter, indent: Int, cState: State) : String = {
