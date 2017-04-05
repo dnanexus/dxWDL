@@ -12,8 +12,8 @@ import java.nio.file.{Path, Paths}
 import scala.collection.mutable.Queue
 import wdl4s.AstTools
 import wdl4s.AstTools.EnhancedAstNode
-import wdl4s.{Call, Declaration, Scatter, Scope, Task, WdlExpression, WdlNamespace,
-    WdlNamespaceWithWorkflow, Workflow, WdlSource}
+import wdl4s.{Call, Declaration, Scatter, Scope, Task, TaskCall, WdlExpression, WdlNamespace,
+    WdlNamespaceWithWorkflow, Workflow, WorkflowCall, WdlSource}
 import wdl4s.parser.WdlParser.{Ast, AstNode, Terminal}
 import wdl4s.types._
 import wdl4s.values._
@@ -94,64 +94,92 @@ object CompilerPreprocess {
     //     input: a = xtmp_1, b = 2
     //  }
     //
-    def simplifyCall(call: Call, indent:Int, cState: State) : String = {
-        //val clName = call match {
-//            case tc: TaskCall => tc.task.name
-//            case wfc: WorkflowCall => wf.calledWorkflow.unqualifiedName
-//        }
-        val spaces = s"${" " * indent}"
-        val callUniqueName = call.alias match {
-            case Some(x) => x
-            case None => call.unqualifiedName
-        }
-
-        var varNum = 1
-        val tmpDecls = scala.collection.mutable.Map.empty[String, (WdlType, WdlExpression)]
-        val inputs : Seq[String] = call.inputMappings.map { case (key, expr) =>
+    def simplifyCall(call: Call, tmpVarCnt: Int, cState: State) : (Int, Seq[Scope]) = {
+        var varNum = tmpVarCnt + 1
+        val tmpDecls = Queue[Scope]()
+        val inputs: Map[String, WdlExpression]  = call.inputMappings.map { case (key, expr) =>
             val rhs = expr.ast match {
-                case t: Terminal => t.getSourceString
+                case t: Terminal => expr
                 case a: Ast if a.isMemberAccess =>
                     // Accessing something like A.B.C
-                    WdlExpression.toString(a)
+                    expr
                 case a: Ast if a.isFunctionCall || a.isUnaryOperator || a.isBinaryOperator
                       || a.isTupleLiteral || a.isArrayOrMapLookup =>
                     // replace an expression with a temporary variable
-                    val tmpName: String = s"xtmp_${callUniqueName}_${varNum}"
+                    val tmpName: String = s"xtmp${varNum}"
                     val calleeDecl: Declaration =
                         call.declarations.find(decl => decl.unqualifiedName == key).get
                     val wdlType = calleeDecl.wdlType
                     varNum = varNum + 1
-                    tmpDecls(tmpName) = (wdlType, expr)
-                    tmpName
+                    tmpDecls += Declaration(wdlType, key, Some(expr), call.parent, a)
+                    WdlExpression.fromString(tmpName)
             }
-            s"${spaces}${key} = ${rhs}"
-        }.toList
+            (key -> rhs)
+        }
 
-        // convert everything to valid textual WDL
+        val callModifiedInputs = call match {
+            case tc: TaskCall => TaskCall(tc.alias, tc.task, inputs, tc.ast)
+            case wfc: WorkflowCall => WorkflowCall(wfc.alias, wfc.calledWorkflow, inputs, wfc.ast)
+        }
+        tmpDecls += callModifiedInputs
+        (varNum, tmpDecls.toList)
+    }
+
+    // Create an indentation of [n] spaces
+    def genNSpaces(n: Int) = {
+        s"${" " * n}"
+    }
+
+    // convert everything to valid textual WDL
+    def prettyPrint(call: Call, indent: Int, cState: State) : String = {
         val aliasStr = call.alias match {
             case None => ""
             case Some(nm) => " as " ++ nm
         }
-        val topLine =
-            if (!call.inputMappings.isEmpty)
-                s"call ${call.unqualifiedName} ${aliasStr} {  input:"
-            else
-                s"call ${call.unqualifiedName} ${aliasStr} {"
-        val inputLines = inputs.mkString(", ")
-        val tmpVarLines = tmpDecls.map{ case (key,(wType,expr)) =>
-            s"${wType.toWdlString} ${key} = ${expr.toWdlString}"
-        }
+        val inputs: Seq[String] = call.inputMappings.map { case (key, expr) =>
+            val rhs = expr.ast match {
+                case t: Terminal => t.getSourceString
+                case a: Ast => WdlExpression.toString(a)
+            }
+            s"${key}=${rhs}"
+        }.toList
+        val inputsConcat = inputs.mkString(", ")
+        val spaces = genNSpaces(indent)
+        s"""|call ${call.unqualifiedName} ${aliasStr} { input:
+            |    ${inputsConcat}
+            |}""".stripMargin.replaceAll("\n", spaces)
+    }
 
-        val lines = tmpVarLines ++ List(topLine, inputLines, "}")
-        lines.map(x => spaces ++ x).mkString("\n")
+    def prettyPrint(decl: Declaration, indent: Int, cState: State) : String = {
+        genNSpaces(indent) ++ getAstSourceLines(decl.ast, cState)
+    }
+
+    def prettyPrint(ssc: Scatter, indent: Int, cState: State) : String = {
+        genNSpaces(indent) ++ getAstSourceLines(ssc.ast, cState)
     }
 
     def simplifyWorkflow(wf: Workflow, indent: Int, cState: State) : String = {
-        val spaces = s"${" " * indent}"
-        val snippets : Seq[String] = wf.children.map {
-            case call: Call => simplifyCall(call, 4, cState) ++ "\n"
-            case decl: Declaration => spaces ++ getAstSourceLines(decl.ast, cState) ++ "\n"
-            case ssc: Scatter => spaces ++ getAstSourceLines(ssc.ast, cState) ++ "\n"
+        // simplification step
+        var tmpVarCnt = 0
+        val elems : Seq[Scope] = wf.children.map {
+            case call: Call =>
+                val (nCnt, callElems) = simplifyCall(call, tmpVarCnt, cState)
+                tmpVarCnt = nCnt
+                callElems
+            case x => List(x)
+        }.flatten
+
+        // Attempt to collect declarations, to reduce the number of extra jobs
+        // required for calculations.
+        //val elemsColl = collectDeclarations(elems)
+        val elemsColl = elems
+
+        // pretty print the workflow to a file. The output
+        // must be readable by the standard WDL compiler.
+        val snippets : Seq[String] = elemsColl.map {
+            case call: Call => prettyPrint(call, 4, cState) ++ "\n"
+            case decl: Declaration => prettyPrint(decl, 4, cState) ++ "\n"
+            case ssc: Scatter => prettyPrint(ssc, 4, cState) ++ "\n"
             case x =>
                 throw new Exception(cState.cef.notCurrentlySupported(x.ast,
                                                                      "workflow element"))
