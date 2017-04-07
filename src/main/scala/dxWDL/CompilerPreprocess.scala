@@ -12,8 +12,11 @@ import java.nio.file.{Path, Paths}
 import scala.collection.mutable.Queue
 import wdl4s.AstTools
 import wdl4s.AstTools.EnhancedAstNode
-import wdl4s.{Call, Declaration, Scatter, Scope, Task, TaskCall, WdlExpression, WdlNamespace,
-    WdlNamespaceWithWorkflow, Workflow, WorkflowCall, WdlSource}
+import wdl4s.{Call, Declaration, Scatter, Scope,
+    Task, TaskCall, TaskOutput,
+    WdlExpression, WdlNamespace, WdlNamespaceWithWorkflow,
+    Workflow, WorkflowCall, WdlSource}
+import wdl4s.command.{ParameterCommandPart, StringCommandPart}
 import wdl4s.parser.WdlParser.{Ast, AstNode, Terminal}
 import wdl4s.types._
 import wdl4s.values._
@@ -46,45 +49,6 @@ object CompilerPreprocess {
             val suffix = fName.substring(index)
             prefix + secondSuffix + suffix
         }
-    }
-
-    // Get the source lines of an AST structure.
-    //
-    // This is done by find all the terminals in the task AST, and
-    // mapping to the source WDL lines. It is somewhat of a hack,
-    // because the first and last lines source lines could,
-    // potentially, contain additional code beyond the AST we want.
-    def getAstSourceLines(ast: Ast, cState: State) : String = {
-        val allTerminals : Seq[Terminal] = AstTools.findTerminals(ast)
-        // This doesn't work, because the all the brackets have been removed from
-        // the terminal list
-        //val buf = allTerminals.map(x => x.getSourceString()).mkString(" ")
-
-        val firstLine = allTerminals.head.getLine -1
-        val lastLine = allTerminals.last.getLine
-
-        val lines : Array[String] = cState.terminalMap.get(allTerminals.head).get.split("\n")
-        val (_, startPlus) = lines.splitAt(firstLine)
-        val (middle,_) = startPlus.splitAt(lastLine - firstLine)
-        middle.mkString("\n").trim
-    }
-
-    // Print a task, without modification, to the output. This is
-    // done by find all the terminals in the task AST, and mapping
-    // to the source WDL lines. It is somewhat of a hack, because
-    // the first and last lines source lines could, potentially, contain additional
-    // code beyond the task itself.
-    def getTaskLines(task: Task, cState: State) : String = {
-        val buf = getAstSourceLines(task.ast, cState)
-
-        // Add a closing bracket(s) at the end, if needed.
-        //
-        // We are normally missing the closing bracket for the output section and the task.
-        // TODO: It would be great to find a better way around this!
-        if (buf.endsWith("}"))
-            buf ++ "\n" ++ "}"
-        else
-            buf ++ "\n" ++ "}}"
     }
 
     // Transform a call by lifting its non trivial expressions,
@@ -179,7 +143,7 @@ object CompilerPreprocess {
             }
             else b.head match {
                 case decl: Declaration =>
-                    System.err.println(s"skipNonDecl, reached declaration ${prettyPrint(decl, 4, cState)}")
+                    // end of skip section
                     (t,b)
                 case x => skipNonDecl(t :+ x, b.tail)
             }
@@ -213,60 +177,21 @@ object CompilerPreprocess {
         var drs = DeclReorgState(Set.empty[String],
                                  Vector.empty[Scope],
                                  elems.toVector)
+        val totNumElems = elems.length
         while (!drs.bottom.isEmpty && numIter < MAX_NUM_COLLECT_ITER) {
-            System.err.println(
+/*            System.err.println(
                 s"""|collectDeclaration ${numIter}
                     |size(defs)=${drs.definedVars.size} len(top)=${drs.top.length}
                     |len(bottom)=${drs.bottom.length}""".stripMargin.replaceAll("\n", " ")
-            )
+            )*/
             drs = declMoveUp(drs, cState)
+            assert(totNumElems == drs.top.length + drs.bottom.length)
             numIter += 1
         }
         drs.top ++ drs.bottom
     }
 
-
-    // Create an indentation of [n] spaces
-    def genNSpaces(n: Int) = {
-        s"${" " * n}"
-    }
-
-    // convert everything to valid textual WDL
-    def prettyPrint(call: Call, indent: Int, cState: State) : String = {
-        val aliasStr = call.alias match {
-            case None => ""
-            case Some(nm) => " as " ++ nm
-        }
-        val inputs: Seq[String] = call.inputMappings.map { case (key, expr) =>
-            val rhs = expr.ast match {
-                case t: Terminal => t.getSourceString
-                case a: Ast => WdlExpression.toString(a)
-            }
-            s"${key}=${rhs}"
-        }.toList
-        val inputsConcat = inputs.mkString(", ")
-        val spaces = genNSpaces(indent)
-        s"""|${spaces}call ${call.unqualifiedName} ${aliasStr} {
-            |${spaces}  input:
-            |${spaces}${spaces}${inputsConcat}
-            |${spaces}}""".stripMargin
-    }
-
-    def prettyPrint(decl: Declaration, indent: Int, cState: State) : String = {
-        val exprStr = decl.expression match {
-            case None => ""
-            case Some(x) => " = " ++ x.toWdlString
-        }
-        s"""|${genNSpaces(indent)}
-            |${decl.wdlType.toWdlString} ${decl.unqualifiedName}
-            |${exprStr}""".stripMargin.replaceAll("\n","")
-    }
-
-    def prettyPrint(ssc: Scatter, indent: Int, cState: State) : String = {
-        getAstSourceLines(ssc.ast, cState)
-    }
-
-    def simplifyWorkflow(wf: Workflow, indent: Int, cState: State) : String = {
+    def simplifyWorkflow(wf: Workflow, cState: State) : String = {
         // simplification step
         var tmpVarCnt = 0
         var elems : Seq[Scope] = wf.children.map {
@@ -283,18 +208,15 @@ object CompilerPreprocess {
 
         // pretty print the workflow to a file. The output
         // must be readable by the standard WDL compiler.
-        val elemsStr : Seq[String] = elems.map {
-            case call: Call => prettyPrint(call, 4, cState)
-            case decl: Declaration => prettyPrint(decl, 4, cState)
-            case ssc: Scatter => prettyPrint(ssc, 4, cState)
+        val elemsPp : Vector[String] = elems.map {
+            case call: Call => WdlPrettyPrinter.apply(call, 0)
+            case decl: Declaration => WdlPrettyPrinter.apply(decl, 0)
+            case ssc: Scatter => WdlPrettyPrinter.apply(ssc, 0)
             case x =>
                 throw new Exception(cState.cef.notCurrentlySupported(x.ast,
                                                                      "workflow element"))
-        }
-        val topLine = s"workflow ${wf.unqualifiedName} {"
-        val endLine = "}"
-        val wfLines = List(topLine) ++ elemsStr ++ List(endLine)
-        wfLines.mkString("\n")
+        }.flatten.toVector
+        WdlPrettyPrinter.buildBlock(s"workflow ${wf.unqualifiedName}", elemsPp, 0).mkString("\n")
     }
 
     def apply(wdlSourceFile : Path,
@@ -321,12 +243,12 @@ object CompilerPreprocess {
         // xxx.simplified.wdl
         // Do not modify the tasks
         ns.tasks.foreach{ task =>
-            val taskLines = getTaskLines(task, cState)
+            val taskLines = WdlPrettyPrinter.apply(task, 0).mkString("\n")
             pw.println(taskLines + "\n")
         }
         ns match {
             case nswf : WdlNamespaceWithWorkflow =>
-                val rewritten: String = simplifyWorkflow(nswf.workflow, 4, cState)
+                val rewritten: String = simplifyWorkflow(nswf.workflow, cState)
                 pw.println(rewritten)
             case _ => ()
         }
@@ -334,6 +256,5 @@ object CompilerPreprocess {
         pw.flush()
         pw.close()
         simplWdl.toPath
-        //wdlSourceFile
     }
 }
