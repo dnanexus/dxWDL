@@ -1,6 +1,7 @@
 package dxWDL
 
 import com.dnanexus.{DXApplet, DXProject, DXUtil, DXContainer, DXSearch, DXWorkflow}
+import java.io.{File, FileWriter, PrintWriter}
 import java.nio.file.{Path, Paths, Files}
 import scala.util.{Failure, Success, Try}
 import spray.json._
@@ -53,6 +54,33 @@ object Main extends App {
         System.err.println(Utils.exceptionToString(e))
     }
 
+    // Add a suffix to a filename, before the regular suffix. For example:
+    //  xxx.wdl -> xxx.simplified.wdl
+    def replaceFileSuffix(src: Path, suffix: String) : String = {
+        val fName = src.toFile().getName()
+        val index = fName.lastIndexOf('.')
+        if (index == -1) {
+            fName + suffix
+        }
+        else {
+            val prefix = fName.substring(0, index)
+            prefix + suffix
+        }
+    }
+
+    def prettyPrintIr(wdlSourceFile : Path,
+                      irWf: IR.Workflow) : Unit = {
+        val trgName: String = replaceFileSuffix(wdlSourceFile, ".ir")
+        val trgPath = Utils.appCompileDirPath.resolve(trgName).toFile
+
+        val humanReadable: String = IR.yaml(irWf).print()
+        val fos = new FileWriter(trgPath)
+        val pw = new PrintWriter(fos)
+        pw.print(humanReadable)
+        pw.flush()
+        pw.close()
+    }
+
     def compileBody(wdlSourceFile : Path,
                     options: Map[String, String]) : String = {
         // verify version ID
@@ -90,7 +118,6 @@ object Main extends App {
             case 2 => (Some(vec(0)), vec(1))
             case _ => throw new Exception(s"Invalid path syntex ${destination}")
         }
-
         val dxProject : DXProject = project match {
             case None =>
                 // get the default project
@@ -98,13 +125,17 @@ object Main extends App {
                 dxEnv.getProjectContext()
             case Some(p) => DXProject.getInstance(p)
         }
-
         val dxWDLrtId: String = options.get("dxWDLrtId") match {
             case None => throw new Exception("dxWDLrt asset ID not specified")
             case Some(id) => id
         }
+        val mode: Option[String] = options.get("mode")
 
         // Simplify the source file
+        // Create a new file to hold the result.
+        //
+        // Assuming the source file is xxx.wdl, the new name will
+        // be xxx.simplified.wdl.
         val simplWdlPath = CompilerPreprocess.apply(wdlSourceFile, verbose)
 
         // extract the workflow
@@ -128,9 +159,21 @@ object Main extends App {
         // 2) Generate dx:applets and dx:workflow from the IR
         val cef = new CompilerErrorFormatter(wf.wdlSyntaxErrorFormatter.terminalMap)
         val irWf = CompilerFrontEnd.apply(ns, folder, cef, verbose)
-        val dxwfl = CompilerBackend.apply(irWf, dxProject, dxWDLrtId, simplWdlPath,
-                                          folder, cef, verbose)
-        dxwfl.getId()
+
+        // Write out the intermediate representation
+        prettyPrintIr(wdlSourceFile, irWf)
+
+        mode match {
+            case None =>
+                val dxwfl = CompilerBackend.apply(irWf, dxProject, dxWDLrtId, simplWdlPath,
+                                                  folder, cef, verbose)
+                dxwfl.getId()
+            case Some(x) =>
+                x.toLowerCase match {
+                    case "ir" | "fe" => "workflow-xxxx"
+                    case _ => throw new Exception(s"Unknown mode ${mode}")
+                }
+        }
     }
 
     def compile(args: Seq[String]): Termination = {
@@ -150,6 +193,8 @@ object Main extends App {
                         nextOption(map ++ Map("dxWDLrtId" -> value.toString), tail)
                     case "-expected_version" :: value :: tail =>
                         nextOption(map ++ Map("expectedVersion" -> value.toString), tail)
+                    case "-mode" :: value :: tail =>
+                        nextOption(map ++ Map("mode" -> value.toString), tail)
                     case "-verbose" :: tail =>
                         nextOption(map ++ Map("verbose" -> ""), tail)
                     case option :: tail =>
@@ -244,6 +289,7 @@ object Main extends App {
            |  syntax tree.
            |
            |compile <WDL file> <-asset dxId> [-o targetPath] [-expected_version vid] [-verbose]
+           |       [-mode debug_flag]
            |
            |  Compile a wdl file into a dnanexus workflow. An asset
            |  ID for the dxWDL runtime is required. Optionally, specify a

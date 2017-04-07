@@ -37,8 +37,7 @@ object CompilerPreprocess {
 
     // Add a suffix to a filename, before the regular suffix. For example:
     //  xxx.wdl -> xxx.simplified.wdl
-    def createTargetFileName(src: Path) : String = {
-        val secondSuffix = ".simplified"
+    def addFilenameSuffix(src: Path, secondSuffix: String) : String = {
         val fName = src.toFile().getName()
         val index = fName.lastIndexOf('.')
         if (index == -1) {
@@ -234,7 +233,7 @@ object CompilerPreprocess {
         //
         // Assuming the source file is xxx.wdl, the new name will
         // be xxx.simplified.wdl.
-        val trgName: String = createTargetFileName(wdlSourceFile)
+        val trgName: String = addFilenameSuffix(wdlSourceFile, ".simplified")
         val simplWdl = Utils.appCompileDirPath.resolve(trgName).toFile
         val fos = new FileWriter(simplWdl)
         val pw = new PrintWriter(fos)

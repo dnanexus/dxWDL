@@ -40,12 +40,19 @@ default_test_list = [
 def main():
     argparser = argparse.ArgumentParser(description="Run WDL compiler tests on the platform")
     argparser.add_argument("--project", help="DNAnexus project ID", default="project-F07pBj80ZvgfzQK28j35Gj54")
-    argparser.add_argument("--no-wait", help="Exit immediately after launching tests", action="store_true", default=False)
-    argparser.add_argument("--compile-only", help="Only compile the workflows, don't run them", action="store_true", default=False)
-    argparser.add_argument("--lazy", help="Only compile workflows that are unbuilt", action="store_true", default=False)
-    argparser.add_argument("--test", help="Run a test, or a subgroup of tests", default="M")
-    argparser.add_argument("--test-list", help="Print a list of available tests", action="store_true", default=False)
-    argparser.add_argument("--verbose", help="Verbose compilation", action="store_true", default=False)
+    argparser.add_argument("--no-wait", help="Exit immediately after launching tests",
+                           action="store_true", default=False)
+    argparser.add_argument("--compile-only", help="Only compile the workflows, don't run them",
+                           action="store_true", default=False)
+    argparser.add_argument("--compile-mode", help="Compilation mode")
+    argparser.add_argument("--lazy", help="Only compile workflows that are unbuilt",
+                           action="store_true", default=False)
+    argparser.add_argument("--test", help="Run a test, or a subgroup of tests",
+                           default="M")
+    argparser.add_argument("--test-list", help="Print a list of available tests",
+                           action="store_true", default=False)
+    argparser.add_argument("--verbose", help="Verbose compilation",
+                           action="store_true", default=False)
     argparser.add_argument("--folder", help="Use an existing folder, instead of building dxWDL")
     args = argparser.parse_args()
 
@@ -71,6 +78,8 @@ def main():
     compiler_flags=[]
     if args.verbose:
         compiler_flags.append("--verbose")
+    if args.compile_mode:
+        compiler_flags += ["--mode", args.compile_mode]
 
     # Move the record to the applet_folder, so the compilation process will find it
     # Output: asset_bundle = record-F13V3BQ05gjppZPy1QyKxXzq
@@ -202,9 +211,7 @@ def build_workflow(wf_name, project, folder, asset, compiler_flags):
                 os.path.join(top_dir, test_dir, wf_name + ".wdl"),
                 "--destination", (project.get_id() + ":" + folder),
                 "--asset", asset.get_id() ]
-    if (compiler_flags is not None and
-        len(compiler_flags) > 0):
-        cmdline += compiler_flags
+    cmdline += compiler_flags
     subprocess.check_output(cmdline)
     return lookup_workflow(wf_name, project, folder)
 

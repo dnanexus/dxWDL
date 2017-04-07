@@ -6,6 +6,8 @@
 // ToplevelDir/[IntermediateForm.md].
 package dxWDL
 
+import net.jcazevedo.moultingyaml._
+import net.jcazevedo.moultingyaml.DefaultYamlProtocol._
 import wdl4s.parser.WdlParser.{Ast, AstNode, Terminal}
 import wdl4s.types._
 import wdl4s.values._
@@ -19,15 +21,13 @@ object IR {
     case class CVar(name: String, wdlType: WdlType, ast: Ast)
 
     /** @param name          Name of applet
-      * @param input         list of platform input arguments
-      * @param output        list of platform output arguments
+      * @param input         list of WDL input arguments
+      * @param output        list of WDL output arguments
       * @param instaceType   a platform instance name
       * @param docker        docker image name
       * @param destination   folder path on the platform
-      * @param language      language in which the script is written, could be bash or WDL
-      * @entrypoint          starting point of execution in the code. For WDL, this could be a scatter.
-      *                      For bash, normally `main`.
-      * @param code          bash or WDL snippet to exeute
+      * @param code          bash script
+      * @param wdlCode       WDL source code to run
       */
     case class Applet(name: String,
                       inputs: List[CVar],
@@ -36,6 +36,7 @@ object IR {
                       docker: Option[String],
                       destination : String,
                       code: String,
+//                      wdlCode: String,
                       ast: Ast)
 
     /** An input to a stage. Could be empty, a wdl constant, or
@@ -54,4 +55,53 @@ object IR {
     case class Workflow(name: String,
                         stages: List[Stage],
                         applets: List[Applet])
+
+    // Human readable representation of the IR, with YAML
+    def yaml(cVar: CVar) : YamlString = {
+        YamlString(cVar.wdlType.toWdlString + ":" + cVar.name)
+    }
+
+    def yaml(applet: Applet) : YamlObject = {
+        val inputs = applet.inputs.map(yaml)
+        val outputs = applet.outputs.map(yaml)
+        val docker = applet.docker match {
+            case None => "-"
+            case Some(x) => x
+        }
+        YamlObject(
+            YamlString("name") -> YamlString(applet.name),
+            YamlString("inputs") -> YamlArray(inputs.toVector),
+            YamlString("outputs") -> YamlArray(outputs.toVector),
+            YamlString("instanceType") -> YamlString(applet.instanceType),
+            YamlString("docker") -> YamlString(docker),
+            YamlString("destination") -> YamlString(applet.destination),
+            YamlString("code") -> YamlString(applet.code)
+        )
+    }
+
+    def yaml(sArg: SArg) : YamlValue = {
+        sArg match {
+            case SArgEmpty => YamlString("empty")
+            case SArgLink(stageName, argName) => YamlString(stageName + ":" + argName)
+        }
+    }
+
+    def yaml(stage: Stage) : YamlObject = {
+        val inputs = stage.inputs.map(yaml)
+        YamlObject(
+            YamlString("name") -> YamlString(stage.name),
+            YamlString("appletName") -> YamlString(stage.appletName),
+            YamlString("inputs") -> YamlArray(inputs.toVector)
+        )
+    }
+
+    def yaml(wf: Workflow) : YamlObject = {
+        val stages = wf.stages.map(yaml)
+        val applets = wf.applets.map(yaml)
+        YamlObject(
+            YamlString("name") -> YamlString(wf.name),
+            YamlString("stages") -> YamlArray(stages.toVector),
+            YamlString("applets") -> YamlArray(applets.toVector)
+        )
+    }
 }
