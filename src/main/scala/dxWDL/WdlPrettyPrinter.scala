@@ -110,4 +110,20 @@ object WdlPrettyPrinter {
 
         buildBlock( s"task ${task.name}", taskBody, indent)
     }
+
+    def apply(wf: Workflow, indent: Int) : Vector[String] = {
+        val decls = task.declarations.map(x => apply(x, indent)).flatten
+        val children = wf.children.map {
+            case call: Call => apply(call, indent)
+            case sc: Scatter => apply(sc, indent)
+            case decl: Declaration => apply(decl, indent)
+            case x => throw new Exception(s"Unimplemented workflow element ${x.toString}")
+        }.flatten
+        val outputs = task.outputs.map(x => apply(x, indent)).flatten
+
+        val lines = decls.toVector ++
+            children.toVector ++
+            buildBlock("outputs", outputs.toVector, indent)
+        buildBlock( s"workflow ${wf.unqualifiedName}", lines, indent)
+    }
 }

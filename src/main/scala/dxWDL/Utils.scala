@@ -335,39 +335,6 @@ object Utils {
         (true, variables.toList)
     }
 
-    // Lift declarations that can be evaluated at the top of the block
-    //
-    // 1) build an environment from [topDecls]
-    // 2) for each prospective declaration, check if depends only on the available
-    //    variables. Pull up all such statements.
-    def liftDeclarations(topDeclarations: List[Declaration], body: List[Scope])
-            : (List[Declaration], List[Scope]) = {
-        // build an environment from [topDecls]
-        var env : Set[String] = topDeclarations.map{ decl => decl.unqualifiedName }.toSet
-        var lifted : List[Declaration] = Nil
-
-        val calls : Seq[Option[Scope]] = body.map {
-            case call: Call => Some(call)
-            case decl: Declaration =>
-                val (possible, deps) = Utils.findToplevelVarDeps(decl.expression.get)
-                if (!possible) {
-                    Some(decl)
-                } else if (!deps.forall(x => env(x))) {
-                    // some dependency is missing, can't lift to top level
-                    Some(decl)
-                } else {
-                    env = env + decl.unqualifiedName
-                    lifted = decl :: lifted
-                    None
-                }
-            case ssc: Scatter => Some(ssc)
-            case swf: Workflow => Some(swf)
-        }
-
-        (lifted.reverse, calls.flatten.toList)
-    }
-
-
     // Run a child process and collect stdout and stderr into strings
     def execCommand(cmdLine : String) : (String, String) = {
         val processBuilder = new java.lang.ProcessBuilder()

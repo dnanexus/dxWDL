@@ -20,13 +20,21 @@ object IR {
     // reporting purposes.
     case class CVar(name: String, wdlType: WdlType, ast: Ast)
 
+    // There are several kinds of applets
+    //   Eval:      evaluate WDL expressions, pure calculation
+    //   Scatter:   utility block for scatter/gather
+    //   Task:      call a task, execute a shell command (usually)
+    object AppletKind extends Enumeration {
+        val Eval, Scatter, Task = Value
+    }
+
     /** @param name          Name of applet
       * @param input         list of WDL input arguments
       * @param output        list of WDL output arguments
       * @param instaceType   a platform instance name
       * @param docker        docker image name
       * @param destination   folder path on the platform
-      * @param code          bash script
+      * @param kind          Kind of applet: task, scatter, ...
       * @param wdlCode       WDL source code to run
       */
     case class Applet(name: String,
@@ -35,8 +43,8 @@ object IR {
                       instanceType: String,
                       docker: Option[String],
                       destination : String,
-                      code: String,
-//                      wdlCode: String,
+                      kind: AppletKind,
+                      wdlCode: String,
                       ast: Ast)
 
     /** An input to a stage. Could be empty, a wdl constant, or
@@ -58,14 +66,14 @@ object IR {
 
     // Human readable representation of the IR, with YAML
     def yaml(cVar: CVar) : YamlString = {
-        YamlString(cVar.wdlType.toWdlString + ":" + cVar.name)
+        YamlString(cVar.wdlType.toWdlString + " " + cVar.name)
     }
 
     def yaml(applet: Applet) : YamlObject = {
         val inputs = applet.inputs.map(yaml)
         val outputs = applet.outputs.map(yaml)
         val docker = applet.docker match {
-            case None => "-"
+            case None => "none"
             case Some(x) => x
         }
         YamlObject(
@@ -75,7 +83,8 @@ object IR {
             YamlString("instanceType") -> YamlString(applet.instanceType),
             YamlString("docker") -> YamlString(docker),
             YamlString("destination") -> YamlString(applet.destination),
-            YamlString("code") -> YamlString(applet.code)
+            YamlString("kind") -> YamlString(applet.kind.toString),
+            YamlString("wdlCode") -> YamlString(applet.wdlCode)
         )
     }
 
