@@ -282,8 +282,7 @@ object CompilerFrontEnd {
     }
 
     // Compile a WDL task into an applet
-    def compileTask(task : Task,
-                    cState: State) : (IR.Applet, Closure, String, List[IR.CVar]) = {
+    def compileTask(task : Task, cState: State) : (IR.Applet, List[IR.CVar]) = {
         Utils.trace(cState.verbose, s"Compiling task ${task.name}")
         val appletFqn : String = wf.unqualifiedName ++ "." ++ task.name
 
@@ -317,6 +316,35 @@ object CompilerFrontEnd {
                                code,
                                task.ast)
         (applet, Map.empty[String, LinkedVar], task.name, outputSpec)
+    }
+
+    def compileCall(call: Call,
+                    appletDict: Map[String, (IR.Applet, List[IR.CVar])],
+                    env : CallEnv,
+                    cState: State) : (IR.Applet, Closure, String, List[IR.CVar]) = {
+        // Find the right applet
+        val name = call match {
+            case x:TaskCall => x.task.name
+            case x:WorkflowCall =>
+                throw new Exception(cState.cef.notCurrentlySupported(call.ast, s"calling a workflow"))
+        }
+        val (callee, outputs) = taskApplets(name)
+        val inputs : List[IR.CVar] = call.inputMappings.foreach { case (varName, expr) =>
+            // TODO: handle optional and missing arguments.
+        }
+        val inputs  = closure.map {
+            case (varName, LinkedVar(cVar, _)) => IR.CVar(varName, cVar.wdlType, cVar.ast)
+        }.toList
+        val scatterFqn = wf.unqualifiedName ++ "." ++ stageName
+        val applet = IR.Applet(scatterFqn,
+                               inputs,
+                               outputDecls,
+                               calcInstanceType(None),
+                               None,
+                               cState.destination,
+                               IR.AppletKind.Scatter,
+                               genScatterWorklow(scatter),
+                               scatter.ast)
     }
 
     def genScatterWorklow(name: String,
@@ -439,10 +467,10 @@ object CompilerFrontEnd {
               cef: CompilerErrorFormatter,
               verbose: Boolean) : IR.Workflow = {
         // compile all the tasks into applets
-        val taskApplets = ns.tasks.map{ task =>
-            val (applet, _, _, outputs) = compileTask(task)
-            applet
-        }
+        val appletDict: Map[String, (IR.Applet, List[IR.CVar])] = ns.tasks.map{ task =>
+            val (applet, outputs) = compileTask(task)
+            task.name -> (applet, outputs)
+        }.toMap
 
         // extract the workflow
         val wf = ns match {
@@ -480,7 +508,7 @@ object CompilerFrontEnd {
                 case _ : Workflow =>
                     compileCommon(wf, topDecls, env, cState)
                 case call: Call =>
-                    compileCall(wf, call, env, cState)
+                    compileCall(call, appletDict, env, cState)
                 case scatter : Scatter =>
                     compileScatter(wf, scatter, env, cState)
             }
@@ -503,6 +531,6 @@ object CompilerFrontEnd {
             (stageIr, appletIr)
         }
         val (stages, applets) = stgAplPairs.unzip
-        IR.Workflow(wf.unqualifiedName, stages, applets)
+        IR.Workflow(wf.unqualifiedName, stages, applets ++ taskApplets.toVector)
     }
 }
