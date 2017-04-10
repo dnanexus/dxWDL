@@ -282,20 +282,20 @@ object CompilerFrontEnd {
     }
 
     // Compile a WDL task into an applet
-    def compileTask(task : Task, cState: State) : (IR.Applet, List[IR.CVar]) = {
+    def compileTask(task : Task, cState: State) : (IR.Applet, Vector[IR.CVar]) = {
         Utils.trace(cState.verbose, s"Compiling task ${task.name}")
         val appletFqn : String = wf.unqualifiedName ++ "." ++ task.name
 
         // The task inputs are those that do not have expressions
-        val inputSpec : List[IR.CVar] =  task.declarations.map{ decl =>
+        val inputSpec : Vector[IR.CVar] =  task.declarations.map{ decl =>
             decl.expression match {
                 case None => Some(IR.CVar(decl.unqualifiedName, decl.wdlType, decl.ast))
                 case Some(_) => None
             }
-        }.flatten.toList
-        val outputSpec : List[IR.CVar] = desk.outputs.map{ tso =>
+        }.flatten.toVector
+        val outputSpec : Vector[IR.CVar] = desk.outputs.map{ tso =>
             IR.CVar(tso.unqualifiedName, tso.wdlType, tso.ast)
-        }.toList
+        }.toVector
 
         // Figure out if we need to use docker
         val docker = task.runtimeAttributes.attrs.get("docker") match {
@@ -319,9 +319,9 @@ object CompilerFrontEnd {
     }
 
     def compileCall(call: Call,
-                    appletDict: Map[String, (IR.Applet, List[IR.CVar])],
+                    taskApplets: Map[String, (IR.Applet, Vector[IR.CVar])],
                     env : CallEnv,
-                    cState: State) : (IR.Applet, Closure, String, List[IR.CVar]) = {
+                    cState: State) : IR.Stage = {
         // Find the right applet
         val name = call match {
             case x:TaskCall => x.task.name
@@ -329,22 +329,46 @@ object CompilerFrontEnd {
                 throw new Exception(cState.cef.notCurrentlySupported(call.ast, s"calling a workflow"))
         }
         val (callee, outputs) = taskApplets(name)
-        val inputs : List[IR.CVar] = call.inputMappings.foreach { case (varName, expr) =>
-            // TODO: handle optional and missing arguments.
+
+        // Extract the input values/links from the environment
+        val inputs: Vector[SArg] = callee.inputs.map{ cVar =>
+            val expr: Option[WdlExpression] = call.inputMappings.find((k,v) => k == cVar.varName)
+            val sArg = expr match {
+                case None =>
+                    // input is unbound; the workflow does not provide it.
+                    if (Utils.isOptional(cVar.wdlType)) {
+                        // This is an applet optional input, we don't have to supply it
+                        IR.SArgEmpty
+                    } else {
+                        // A compulsory input. Print a warning, the user may wish to supply
+                        // it at runtime.
+                        System.err.println(s"""|Note: workflow doesn't supply required input
+                                               |${cVar.name} to call ${call.name};
+                                               |leaving corresponding DNAnexus workflow input unbound"""
+                                               .stripMargin.replaceAll("\n", " "))
+                        IR.SArgEmpty
+                    }
+                case Some(e) => e.ast match {
+                    case t: Terminal if t.getTerminalStr == "identifer" =>
+                        val lVar = env.get(srcStr) match {
+                            case Some(x) => x
+                            case None => throw new Exception(cState.cef.missingVarRefException(t))
+                        }
+                        lVar.sArg
+                    case t: Terminal =>
+                        def lookup(x:String) : WdlValue = {
+                            throw new Exception("No variables should be used in this context")
+                        }
+                        val ve = ValueEvaluator(lookup, wdl4s.expression.WdlStandardLibraryFunctions)
+                        wValue : WdlValue = ve.evalulate(e.ast)
+                        IR.SArgConst(wValue)
+                    case x => throw new Exception(cState.cef.expressionMustBeConstOrVar(x))
+                }
+            }
         }
-        val inputs  = closure.map {
-            case (varName, LinkedVar(cVar, _)) => IR.CVar(varName, cVar.wdlType, cVar.ast)
-        }.toList
-        val scatterFqn = wf.unqualifiedName ++ "." ++ stageName
-        val applet = IR.Applet(scatterFqn,
-                               inputs,
-                               outputDecls,
-                               calcInstanceType(None),
-                               None,
-                               cState.destination,
-                               IR.AppletKind.Scatter,
-                               genScatterWorklow(scatter),
-                               scatter.ast)
+
+        val stageName = callUniqueName(call, cState)
+        IR.Stage(stageName, applet.name, inputs, callee.outputs)
     }
 
     def genScatterWorklow(name: String,
@@ -356,8 +380,8 @@ object CompilerFrontEnd {
     def compileScatter(wf : Workflow,
                        scatter: Scatter,
                        env : CallEnv,
-                       cState: State) : (IR.Applet, Closure, String, List[IR.CVar]) = {
-        val (topDecls, rest) = Utils.splitBlockDeclarations(scatter.children.toList)
+                       cState: State) : (IR.Applet, Closure, String, Vector[IR.CVar]) = {
+        val (topDecls, rest) = Utils.splitBlockDeclarations(scatter.children.toVector)
         val calls : Seq[Call] = rest.map {
             case call: Call => call
             case x =>
@@ -375,13 +399,13 @@ object CompilerFrontEnd {
         // Construct the block output by unifying individual call outputs.
         // Each applet output becomes an array of that type. For example,
         // an Int becomes an Array[Int].
-        val outputDecls : List[IR.CVar] = calls.map { call =>
+        val outputDecls : Vector[IR.CVar] = calls.map { call =>
             val task = Utils.taskOfCall(call)
             task.outputs.map { tso =>
                 IR.CVar(callUniqueName(call, cState) ++ "." ++ tso.unqualifiedName,
                         WdlArrayType(tso.wdlType), tso.ast)
             }
-        }.flatten.toList
+        }.flatten.toVector
 
         // Figure out the closure, we need the expression being looped over.
         var closure = Map.empty[String, LinkedVar]
@@ -425,9 +449,9 @@ object CompilerFrontEnd {
         )
         //Utils.trace(cState.verbose, s"scatter closure=${closure}")
 
-        val inputs : List[IR.CVar] = closure.map {
+        val inputs : Vector[IR.CVar] = closure.map {
             case (varName, LinkedVar(cVar, _)) => IR.CVar(varName, cVar.wdlType, cVar.ast)
-        }.toList
+        }.toVector
         val scatterFqn = wf.unqualifiedName ++ "." ++ stageName
         val applet = IR.Applet(scatterFqn,
                                inputs,
@@ -467,7 +491,7 @@ object CompilerFrontEnd {
               cef: CompilerErrorFormatter,
               verbose: Boolean) : IR.Workflow = {
         // compile all the tasks into applets
-        val appletDict: Map[String, (IR.Applet, List[IR.CVar])] = ns.tasks.map{ task =>
+        val taskApplets: Map[String, (IR.Applet, Vector[IR.CVar])] = ns.tasks.map{ task =>
             val (applet, outputs) = compileTask(task)
             task.name -> (applet, outputs)
         }.toMap
@@ -482,45 +506,37 @@ object CompilerFrontEnd {
         // An environment where variables are defined
         var env : CallEnv = Map.empty[String, LinkedVar]
 
-        // Deal with the toplevel declarations, and leave only
-        // children we can deal with. Lift all declarations that can
-        // be evaluated at the top of the block. Nested calls to
-        // workflows are not supported, neither are any remaining
-        // declarations in the middle of the workflow.
-        val (topDecls, wfBody) = Utils.splitBlockDeclarations(wf.children.toList)
-        val calls : Seq[Scope] = wfCore.map {
-            case call: Call => call
-            case ssc: Scatter => ssc
-            case decl: Declaration =>
-                throw new Exception(cState.cef.notCurrentlySupported(
-                                        decl.ast,
-                                        "Declaration in the middle of workflow could not be lifted"))
-            case swf: Workflow =>
-                throw new Exception(cState.cef.notCurrentlySupported(
-                                        swf.ast, "Nested workflow"))
-        }
+        // Lift all declarations that can be evaluated at the top of
+        // the block.
+        val (topDecls, wfBody) = Utils.splitBlockDeclarations(wf.children.toVector)
 
-        // - Create a preliminary stage to handle workflow inputs, and top-level
-        //   declarations.
-        // - Create a stage per call/scatter-block
-        val stgAplPairs = (wf :: calls.toList).map { child =>
-            val (appletIr, closure, stageName, outputs) = child match {
-                case _ : Workflow =>
-                    compileCommon(wf, topDecls, env, cState)
-                case call: Call =>
-                    compileCall(call, appletDict, env, cState)
+        // Create a preliminary stage to handle workflow inputs, and top-level
+        // declarations.
+        val common: IR.Stage = compileCommon(wf, topDecls, env, cState)
+
+        // Create a stage per call/scatter-block
+        var extraApplets = Vector[IR.Applet]()
+        val allWfStages = wfBody.foldLeft(Vector(common)) { (accu, child) =>
+            val stage = child match {
+                case call: Call => compileCall(call, taskApplets, env, cState)
                 case scatter : Scatter =>
-                    compileScatter(wf, scatter, env, cState)
+                    val (sctStage, sctApplet) = compileScatter(wf, scatter, env, cState)
+                    extraApplets = extraApplets :+ sctApplet
+                    sctStage
+                case decl: Declaration =>
+                    throw new Exception(cState.cef.notCurrentlySupported(
+                                            decl.ast,
+                                            "Declaration in the middle of workflow could not be lifted"))
+                case swf: Workflow =>
+                    throw new Exception(cState.cef.notCurrentlySupported(
+                                            swf.ast, "Nested workflow"))
             }
 
-            val inputs = closure.map { case (varName, LinkedVar(cVar,sArg)) => sArg }.toList
-            val stageIr = IR.Stage(stageName, appletIr.name, inputs)
-
-            // Add bindings for all call output variables. This allows later calls to refer
+            // Add bindings for the output variables. This allows later calls to refer
             // to these results. In case of scatters, there is no block name to reference.
-            for (cVar <- outputs) {
+            for (cVar <- stage.outputs) {
                 val fqVarName : String = child match {
-                    case call : Call => stageName ++ "." ++ cVar.name
+                    case call : Call => stage.name ++ "." ++ cVar.name
                     case scatter : Scatter => cVar.name
                     case _ : Workflow => cVar.name
                     case _ => throw new Exception("Sanity")
@@ -528,9 +544,9 @@ object CompilerFrontEnd {
                 env = env + (fqVarName ->
                                  LinkedVar(cVar, IR.SArgLink(stageName, cVar.name)))
             }
-            (stageIr, appletIr)
+            accu :+ stage
         }
-        val (stages, applets) = stgAplPairs.unzip
-        IR.Workflow(wf.unqualifiedName, stages, applets ++ taskApplets.toVector)
+
+        IR.Workflow(wf.unqualifiedName, stages, extraApplets ++ taskApplets.toVector)
     }
 }

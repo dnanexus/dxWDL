@@ -29,8 +29,8 @@ object IR {
     }
 
     /** @param name          Name of applet
-      * @param input         list of WDL input arguments
-      * @param output        list of WDL output arguments
+      * @param input         WDL input arguments
+      * @param output        WDL output arguments
       * @param instaceType   a platform instance name
       * @param docker        docker image name
       * @param destination   folder path on the platform
@@ -38,8 +38,8 @@ object IR {
       * @param wdlCode       WDL source code to run
       */
     case class Applet(name: String,
-                      inputs: List[CVar],
-                      outputs: List[CVar],
+                      inputs: Vector[CVar],
+                      outputs: Vector[CVar],
                       instanceType: String,
                       docker: Option[String],
                       destination : String,
@@ -52,17 +52,17 @@ object IR {
       */
     sealed trait SArg
     case object SArgEmpty extends SArg
+    case class SArgConst(wdlValue: WdlValue) extends SArg
     case class SArgLink(stageName: String, argName: String) extends SArg
 
-    // Note: we figure out the outputs from a stage by looking up the
-    // applet outputs.
     case class Stage(name: String,
                      appletName: String,
-                     inputs: List[SArg])
+                     inputs: Vector[SArg],
+                     outupts: Vector[CVar])
 
     case class Workflow(name: String,
-                        stages: List[Stage],
-                        applets: List[Applet])
+                        stages: Vector[Stage],
+                        applets: Vector[Applet])
 
     // Human readable representation of the IR, with YAML
     def yaml(cVar: CVar) : YamlString = {

@@ -47,4 +47,12 @@ case class CompilerErrorFormatter(terminalMap: Map[Terminal, WdlSource]) {
             |${pointToSource(t)}
             |""".stripMargin
     }
+
+    def expressionMustBeConstOrVar(ast: Ast) : String = {
+        val t: Terminal = ast.getAttribute("name").asInstanceOf[Terminal]
+        s"""|Expression must be const or variable
+            |
+            |${pointToSource(t)}
+            |""".stripMargin
+    }
 }
