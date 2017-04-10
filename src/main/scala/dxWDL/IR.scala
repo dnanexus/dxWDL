@@ -65,18 +65,21 @@ object IR {
                         applets: Vector[Applet])
 
     // Human readable representation of the IR, with YAML
-    def yaml(cVar: CVar) : YamlString = {
-        YamlString(cVar.wdlType.toWdlString + " " + cVar.name)
+    def yaml(cVar: CVar) : YamlObject = {
+        YamlObject(
+            YamlString("type") -> YamlString(cVar.wdlType.toWdlString),
+            YamlString("name") -> YamlArray(cVar.name)
+        )
     }
 
     def yaml(applet: Applet) : YamlObject = {
         val inputs = applet.inputs.map(yaml)
         val outputs = applet.outputs.map(yaml)
         val docker = applet.docker match {
-            case None => "none"
-            case Some(x) => x
+            case None => Map()
+            case Some(x) => Map(YamlString("docker") -> YamlString(x))
         }
-        YamlObject(
+        val m: Map[YamlValue, YamlValue] = Map(
             YamlString("name") -> YamlString(applet.name),
             YamlString("inputs") -> YamlArray(inputs.toVector),
             YamlString("outputs") -> YamlArray(outputs.toVector),
@@ -86,6 +89,7 @@ object IR {
             YamlString("kind") -> YamlString(applet.kind.toString),
             YamlString("wdlCode") -> YamlString(applet.wdlCode)
         )
+        YamlObject(m ++ docker)
     }
 
     def yaml(sArg: SArg) : YamlValue = {
@@ -101,6 +105,7 @@ object IR {
             YamlString("name") -> YamlString(stage.name),
             YamlString("appletName") -> YamlString(stage.appletName),
             YamlString("inputs") -> YamlArray(inputs.toVector)
+            YamlString("outputs") -> YamlArray(outputs.toVector)
         )
     }
 

@@ -13,7 +13,7 @@ The back-end takes a blueprint, generates a dx:applet from each applet definitio
 generates a dx:workflow that uses the applets in its stages.
 
 The blueprint can be written to a file in human readable syntax,
-privisionally YAML. The serialized form is intended for diagnostics,
+provisionally YAML. The serialized form is intended for diagnostics,
 automatic testing, and debugging.
 
 ## Applet definition
@@ -24,7 +24,7 @@ automatic testing, and debugging.
 - instace type: a platform instance name
 - docker: docker image name (optional)
 - destination : folder path on the platform
-- code: bash snippet to exeute
+- wdlCode: WDL snippet to exeute
 
 ## Workflow definition
 List of stages, where a stage has the following fields:

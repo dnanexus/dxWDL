@@ -16,8 +16,8 @@ object Main extends App {
     case class BadUsageTermination(info: String) extends Termination
 
     object Actions extends Enumeration {
-        val AppletEpilog, AppletProlog, Compile, LaunchScatter,
-            Version, WorkflowCommon, Yaml  = Value
+        val Compile, Eval, LaunchScatter, TaskEpilog, TaskProlog,
+            Version, Yaml  = Value
     }
 
     def yaml(args: Seq[String]): Termination = {
@@ -165,7 +165,7 @@ object Main extends App {
 
         mode match {
             case None =>
-                val dxwfl = CompilerBackend.apply(irWf, dxProject, dxWDLrtId, simplWdlPath,
+                val dxwfl = CompilerBackend.apply(irWf, dxProject, dxWDLrtId,
                                                   folder, cef, verbose)
                 dxwfl.getId()
             case Some(x) =>
@@ -212,29 +212,39 @@ object Main extends App {
         }
     }
 
+    // Extract the only task from a namespace
+    val taskOfNamespace(ns: WdlNamespace) : Task = {
+        val numTasks = ns.tasks.length
+        if (numTasks != 1)
+            throw new Exception(s"WDL file contains ${numTasks} tasks, instead of 1")
+        ns.tasks.head
+    }
+
     def appletAction(action: Actions.Value, args : Seq[String]): Termination = {
         if (args.length != 2) {
             BadUsageTermination("All applet actions take a WDL file, and a home directory")
         } else {
             val wdlDefPath = args(0)
             val homeDir = Paths.get(args(1))
-            val (jobInputPath, jobOutputPath, jobErrorPath, jobInfoPath) = Utils.jobFilesOfHomeDir(homeDir)
-
+            val (jobInputPath, jobOutputPath, jobErrorPath, jobInfoPath) =
+                Utils.jobFilesOfHomeDir(homeDir)
             val wdlSource : String = Utils.readFileContent(Paths.get(wdlDefPath))
-            val nswf : WdlNamespaceWithWorkflow =
-                WdlNamespaceWithWorkflow.load(wdlSource, Seq.empty).get
-            val wf : Workflow = nswf.workflow
+            val ns : WdlNamespace.loadUsingPath(wdlSource, None, None)
 
             try {
                 action match {
-                    case Actions.AppletProlog =>
-                        AppletRunner.prolog(wf, jobInputPath, jobOutputPath, jobInfoPath)
-                    case Actions.AppletEpilog =>
-                        AppletRunner.epilog(wf, jobInputPath, jobOutputPath, jobInfoPath)
+                    case Actions.Eval =>
+                        RunnerEval.apply(taskOfNamespace(ns), jobInputPath, jobOutputPath, jobInfoPath)
                     case Actions.LaunchScatter =>
-                        ScatterRunner.apply(wf, jobInputPath, jobOutputPath, jobInfoPath)
-                    case Actions.WorkflowCommon =>
-                        WorkflowCommonRunner.apply(wf, jobInputPath, jobOutputPath, jobInfoPath)
+                        val wf = ns match {
+                            case nswf: WdlNamespaceWithWorkflow => nswf.workflow
+                            case _ => throw new Exception("WDL file contains no workflow")
+                        }
+                        RunnerScatter.apply(wf, jobInputPath, jobOutputPath, jobInfoPath)
+                    case Actions.TaskProlog =>
+                        RunnerTask.prolog(taskOfNamespace(ns), jobInputPath, jobOutputPath, jobInfoPath)
+                    case Actions.TaskEpilog =>
+                        RunnerTask.epilog(taskOfNamespace(ns), jobInputPath, jobOutputPath, jobInfoPath)
                 }
                 SuccessfulTermination(s"success ${action}")
             } catch {
@@ -267,11 +277,11 @@ object Main extends App {
 
     def dispatchCommand(args: Seq[String]): Termination = {
         getAction(args) match {
-            case Some(x) if x == Actions.AppletProlog => appletAction(x, args.tail)
-            case Some(x) if x == Actions.AppletEpilog => appletAction(x, args.tail)
             case Some(x) if x == Actions.Compile => compile(args.tail)
+            case Some(x) if x == Actions.Eval => appletAction(x, args.tail)
             case Some(x) if x == Actions.LaunchScatter => appletAction(x, args.tail)
-            case Some(x) if x == Actions.WorkflowCommon => appletAction(x, args.tail)
+            case Some(x) if x == Actions.TaskProlog => appletAction(x, args.tail)
+            case Some(x) if x == Actions.TaskEpilog => appletAction(x, args.tail)
             case Some(x) if x == Actions.Version => SuccessfulTermination(Utils.VERSION)
             case Some(x) if x == Actions.Yaml => yaml(args.tail)
             case _ => BadUsageTermination("")

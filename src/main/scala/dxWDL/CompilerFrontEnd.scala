@@ -243,7 +243,7 @@ object CompilerFrontEnd {
     def compileCommon(wf : Workflow,
                       topDeclarations: Seq[Declaration],
                       env : CallEnv,
-                      cState: State) : (IR.Applet, Closure, String, List[IR.CVar]) = {
+                      cState: State) : (IR.Stage, IR.Applet) = {
         Utils.trace(cState.verbose, s"Compiling workflow initialization sequence")
         val appletFqn : String = wf.unqualifiedName ++ "." ++ Utils.COMMON
         val code = genEvalTaskFromDeclarations(appletFqn, topDeclarations)
@@ -514,17 +514,18 @@ object CompilerFrontEnd {
 
         // Create a preliminary stage to handle workflow inputs, and top-level
         // declarations.
-        val common: IR.Stage = compileCommon(wf, topDecls, env, cState)
+        val (commonStage, commonApplet) = compileCommon(wf, topDecls, env, cState)
 
         // Create a stage per call/scatter-block
-        var extraApplets = Vector[IR.Applet]()
-        val allWfStages = wfBody.foldLeft(Vector(common)) { (accu, child) =>
-            val stage = child match {
-                case call: Call => compileCall(call, taskApplets, env, cState)
+        val initAccu : Vector[(IR.Stage, Option[IR.Applet])] = Vector((commonStage, commonApplet))
+        val allStageInfo = wfBody.foldLeft(initAccu) { (accu, child) =>
+            val (stage, appletOpt) = child match {
+                case call: Call =>
+                    val stage = compileCall(call, taskApplets, env, cState)
+                    (stage, None)
                 case scatter : Scatter =>
-                    val (sctStage, sctApplet) = compileScatter(wf, scatter, env, cState)
-                    extraApplets = extraApplets :+ sctApplet
-                    sctStage
+                    val (stage, applet) = compileScatter(wf, scatter, env, cState)
+                    (stage, Some(applet))
                 case decl: Declaration =>
                     throw new Exception(cState.cef.notCurrentlySupported(
                                             decl.ast,
@@ -546,10 +547,12 @@ object CompilerFrontEnd {
                 env = env + (fqVarName ->
                                  LinkedVar(cVar, IR.SArgLink(stageName, cVar.name)))
             }
-            accu :+ stage
+            accu :+ (stage,appletOpt)
         }
 
-        IR.Workflow(wf.unqualifiedName, stages,
-                    taskApplets.map{ case (k,(applet,_) => applet) } ++ extraApplets)
+        val stages = allStageInfo.map((x,y) => x).toVector
+        val auxApplets = allStageInfo.map((x,y) => y).flatten.toVector
+        val tApplets = taskApplets.map{ case (k,(applet,_) => applet) }
+        IR.Workflow(wf.unqualifiedName, stages, tApplets ++ auxApplets)
     }
 }

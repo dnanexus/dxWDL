@@ -1,3 +1,22 @@
+/** Evaluate a list of expressions. For example, a workflow could start like:
+
+   workflow PairedEndSingleSampleWorkflow {
+     String tag = "v1.56"
+     String gvcf_suffix
+     File ref_fasta
+     String cmdline="perf mem -K 100000000 -p -v 3 $tag"
+
+     ...
+   }
+
+   This mini-applet will perform the toplevel computations. In the above example,
+   it will calculate the [cmdline] variable, and provide four outputs:
+       tag:         String
+       gvcf_suffix: String
+       ref_fasta:   File
+       cmdline      String
+
+  */
 package dxWDL
 
 // DX bindings
@@ -15,25 +34,7 @@ import wdl4s.{Call, Declaration, WdlNamespaceWithWorkflow, WdlExpression, Workfl
 import wdl4s.WdlExpression.AstForExpressions
 import WdlVarLinks._
 
-// For example, a workflow could start like:
-//
-// workflow PairedEndSingleSampleWorkflow {
-//   String tag = "v1.56"
-//   String gvcf_suffix
-//   File ref_fasta
-//   String cmdline="perf mem -K 100000000 -p -v 3 $tag"
-//
-//   ...
-// }
-//
-// This mini-applet will perform the toplevel computations. In the above example,
-// it will calculate the [cmdline] variable, and provide four outputs:
-//     tag:         String
-//     gvcf_suffix: String
-//     ref_fasta:   File
-//     cmdline      String
-//
-object WorkflowCommonRunner {
+object RunnerEval {
     lazy val dxEnv = DXEnvironment.create()
 
     def evalDeclarations(declarations: Seq[Declaration],
@@ -85,29 +86,29 @@ object WorkflowCommonRunner {
         env.toList
     }
 
-    def apply(wf: Workflow,
+    def apply(task: Task,
               jobInputPath : Path,
               jobOutputPath : Path,
               jobInfoPath: Path) : Unit = {
-        val dxapp : DXApplet = dxEnv.getJob().describe().getApplet()
-        val desc : DXApplet.Describe = dxapp.describe()
-
-        // Extract types for closure inputs
-        val closureTypes = Utils.loadExecInfo(Utils.readFileContent(jobInfoPath))
+        // Figure out input types
+        val inputTypes = Utils.loadExecInfo(Utils.readFileContent(jobInfoPath))
         System.err.println(s"WdlType mapping =${closureTypes}")
 
         // Parse the inputs, do not download files from the platform.
         // They will be passed as links to the tasks.
         val inputLines : String = Utils.readFileContent(jobInputPath)
         val inputs: Map[String, WdlVarLinks] = WdlVarLinks.loadJobInputsAsLinks(inputLines,
-                                                                                 closureTypes)
+                                                                                inputTypes)
         System.err.println(s"Initial inputs=${inputs}")
 
-        // Figure out if there are any additional declarations that have been lifted
-        // TODO: Can we do this just once at compile time?
-        val (topDecls, wfBody) = Utils.splitBlockDeclarations(wf.children.toList)
-        val (liftedDecls, _) = Utils.liftDeclarations(topDecls, wfBody)
-        val outputs : Seq[(String, WdlVarLinks)] = evalDeclarations(topDecls ++ liftedDecls, inputs)
+        // make sure all the workflow elements are all declarations
+        val decls: Seq[Declaration] = wf.childern.map{ x =>
+            x match {
+                case decl: Declaration => decl
+                case _ => throw new Exception("WDL Task contains a non declaration")
+            }
+        }
+        val outputs : Seq[(String, WdlVarLinks)] = evalDeclarations(decls, inputs)
         val outputFields: Map[String, JsonNode] = outputs.map {
             case (varName, wvl) => WdlVarLinks.genFields(wvl, varName)
         }.flatten.toMap
