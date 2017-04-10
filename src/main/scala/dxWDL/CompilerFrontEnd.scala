@@ -380,7 +380,7 @@ object CompilerFrontEnd {
     def compileScatter(wf : Workflow,
                        scatter: Scatter,
                        env : CallEnv,
-                       cState: State) : (IR.Applet, Closure, String, Vector[IR.CVar]) = {
+                       cState: State) : (IR.Stage, IR.Applet) = {
         val (topDecls, rest) = Utils.splitBlockDeclarations(scatter.children.toVector)
         val calls : Seq[Call] = rest.map {
             case call: Call => call
@@ -449,12 +449,12 @@ object CompilerFrontEnd {
         )
         //Utils.trace(cState.verbose, s"scatter closure=${closure}")
 
-        val inputs : Vector[IR.CVar] = closure.map {
+        val inputSpec : Vector[IR.CVar] = closure.map {
             case (varName, LinkedVar(cVar, _)) => IR.CVar(varName, cVar.wdlType, cVar.ast)
         }.toVector
         val scatterFqn = wf.unqualifiedName ++ "." ++ stageName
         val applet = IR.Applet(scatterFqn,
-                               inputs,
+                               inputSpec,
                                outputDecls,
                                calcInstanceType(None),
                                None,
@@ -464,6 +464,7 @@ object CompilerFrontEnd {
                                scatter.ast)
 
         // The calls will be made from the scatter stage at runtime.
+        // Collect all the outputs in arrays.
         calls.foreach { call =>
             val task = Utils.taskOfCall(call)
             val outputs = task.outputs.map { tso =>
@@ -481,7 +482,8 @@ object CompilerFrontEnd {
             }
         }
 
-        (applet, closure, stageName, outputDecls)
+        (IR.Stage(stageName, applet.name, closure.toVector, outputDecls),
+         applet)
     }
 
 
@@ -547,6 +549,7 @@ object CompilerFrontEnd {
             accu :+ stage
         }
 
-        IR.Workflow(wf.unqualifiedName, stages, extraApplets ++ taskApplets.toVector)
+        IR.Workflow(wf.unqualifiedName, stages,
+                    taskApplets.map{ case (k,(applet,_) => applet) } ++ extraApplets)
     }
 }
