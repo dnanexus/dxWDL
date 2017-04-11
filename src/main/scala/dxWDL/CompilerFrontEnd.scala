@@ -258,27 +258,27 @@ object CompilerFrontEnd {
         //
         // x - must be provided as an applet input
         // y, pi -- calculated, non inputs
-        val inputSpec : List[IR.CVar] =  topDeclarations.map{ decl =>
+        val inputVars : List[IR.CVar] =  topDeclarations.map{ decl =>
             decl.expression match {
                 case None => Some(IR.CVar(decl.unqualifiedName, decl.wdlType, decl.ast))
                 case Some(_) => None
             }
         }.flatten.toList
-        val outputSpec : List[IR.CVar] = topDeclarations.map{ decl =>
+        val outputVars : List[IR.CVar] = topDeclarations.map{ decl =>
             IR.CVar(decl.unqualifiedName, decl.wdlType, decl.ast)
         }.toList
 
         // We need minimal compute resources, use the default instance type
         val applet = IR.Applet(appletFqn,
-                               inputSpec,
-                               outputSpec,
+                               inputVars,
+                               outputVars,
                                calcInstanceType(None),
                                None,
                                cState.destination,
                                IR.AppletKind.Eval,
                                code,
                                wf.ast)
-        (applet, Map.empty[String, LinkedVar], Utils.COMMON, outputSpec)
+        (applet, Map.empty[String, LinkedVar], Utils.COMMON, outputVars)
     }
 
     // Compile a WDL task into an applet
@@ -287,13 +287,13 @@ object CompilerFrontEnd {
         val appletFqn : String = wf.unqualifiedName ++ "." ++ task.name
 
         // The task inputs are those that do not have expressions
-        val inputSpec : Vector[IR.CVar] =  task.declarations.map{ decl =>
+        val inputVars : Vector[IR.CVar] =  task.declarations.map{ decl =>
             decl.expression match {
                 case None => Some(IR.CVar(decl.unqualifiedName, decl.wdlType, decl.ast))
                 case Some(_) => None
             }
         }.flatten.toVector
-        val outputSpec : Vector[IR.CVar] = desk.outputs.map{ tso =>
+        val outputVars : Vector[IR.CVar] = desk.outputs.map{ tso =>
             IR.CVar(tso.unqualifiedName, tso.wdlType, tso.ast)
         }.toVector
 
@@ -307,15 +307,15 @@ object CompilerFrontEnd {
         }
         val code = WdlPrettyPrinter.apply(task, 0).mkString("\n")
         val applet = IR.Applet(appletFqn,
-                               inputSpec,
-                               outputSpec,
+                               inputVars,
+                               outputVars,
                                calcInstanceType(Some(task)),
                                docker,
                                cState.destination,
                                IR.AppletKind.Task,
                                code,
                                task.ast)
-        (applet, Map.empty[String, LinkedVar], task.name, outputSpec)
+        (applet, Map.empty[String, LinkedVar], task.name, outputVars)
     }
 
     def compileCall(call: Call,
@@ -371,9 +371,26 @@ object CompilerFrontEnd {
         IR.Stage(stageName, applet.name, inputs, callee.outputs)
     }
 
-    def genScatterWorklow(name: String,
-                          scatter: Scatter) : String = {
-        throw new Exception("Unimplemented")
+    // Create a valid WDL workflow that runs the scatter, with the modifications
+    // that we are making.
+    def genScatterWorklow(scatter: Scatter,
+                          inputVars: Vector[IR.CVar],
+                          outputVars: Vector[IR.CVar]) : String = {
+        val decls  = inputVars.map(cVar =>
+            s"${cVar.wdlType} Utils.encodeAppletVarName(${cVar.name})"
+        )
+        val outputs = outputVars(cVar =>
+            s"${cVar.wdlType} Utils.encodeAppletVarName(${cVar.name}) = "
+        )
+
+        // rename the variables we got from the input,
+        val tranSctr: Scatter = scatter.map(
+        )
+
+        buildBlock("workflow TransformedScatter",
+                   decls.mkString("\n") ++
+                       WdlPrettyPrinter(tranSctr, 0) ++
+                       WdlPrettyPrinter.buildBlock("output", 0))
     }
 
     // Compile a scatter block
@@ -399,7 +416,7 @@ object CompilerFrontEnd {
         // Construct the block output by unifying individual call outputs.
         // Each applet output becomes an array of that type. For example,
         // an Int becomes an Array[Int].
-        val outputDecls : Vector[IR.CVar] = calls.map { call =>
+        val outputVars : Vector[IR.CVar] = calls.map { call =>
             val task = Utils.taskOfCall(call)
             task.outputs.map { tso =>
                 IR.CVar(callUniqueName(call, cState) ++ "." ++ tso.unqualifiedName,
@@ -420,7 +437,7 @@ object CompilerFrontEnd {
         val cVar = IR.CVar(scatter.item, iterVarType, scatter.ast)
         var innerEnv : CallEnv = env + (scatter.item -> LinkedVar(cVar, IR.SArgEmpty))
 
-        // Add the declarations at the top of the block
+        // Add the declarations at the top of the block to the environment
         val localDecls = topDecls.map{ decl =>
             val cVar = IR.CVar(decl.unqualifiedName, decl.wdlType, decl.ast)
             decl.unqualifiedName -> LinkedVar(cVar, IR.SArgEmpty)
@@ -449,21 +466,20 @@ object CompilerFrontEnd {
         )
         //Utils.trace(cState.verbose, s"scatter closure=${closure}")
 
-        val inputSpec : Vector[IR.CVar] = closure.map {
+        val inputVars : Vector[IR.CVar] = closure.map {
             case (varName, LinkedVar(cVar, _)) => IR.CVar(varName, cVar.wdlType, cVar.ast)
         }.toVector
-        val scatterFqn = wf.unqualifiedName ++ "." ++ stageName
-        val applet = IR.Applet(scatterFqn,
-                               inputSpec,
-                               outputDecls,
+        val applet = IR.Applet(wf.unqualifiedName ++ "." ++ stageName,
+                               inputVars,
+                               outputVars,
                                calcInstanceType(None),
                                None,
                                cState.destination,
                                IR.AppletKind.Scatter,
-                               genScatterWorklow(scatter),
+                               genScatterWorklow(scatter, inputVars, outputVars),
                                scatter.ast)
 
-        // The calls will be made from the scatter stage at runtime.
+        // The calls will be made from the scatter applet at runtime.
         // Collect all the outputs in arrays.
         calls.foreach { call =>
             val task = Utils.taskOfCall(call)
@@ -482,7 +498,7 @@ object CompilerFrontEnd {
             }
         }
 
-        (IR.Stage(stageName, applet.name, closure.toVector, outputDecls),
+        (IR.Stage(stageName, applet.name, closure.toVector, outputVars),
          applet)
     }
 

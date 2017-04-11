@@ -35,8 +35,6 @@ import wdl4s.WdlExpression.AstForExpressions
 import WdlVarLinks._
 
 object RunnerEval {
-    lazy val dxEnv = DXEnvironment.create()
-
     def evalDeclarations(declarations: Seq[Declaration],
                          inputs : Map[String, WdlVarLinks]) : Seq[(String, WdlVarLinks)] = {
         var env = inputs
@@ -105,7 +103,7 @@ object RunnerEval {
         val decls: Seq[Declaration] = wf.childern.map{ x =>
             x match {
                 case decl: Declaration => decl
-                case _ => throw new Exception("WDL Task contains a non declaration")
+                case _ => throw new Exception("Eval task contains a non declaration")
             }
         }
         val outputs : Seq[(String, WdlVarLinks)] = evalDeclarations(decls, inputs)

@@ -1,14 +1,124 @@
 # Intermediate Representation (IR)
 
-The compiler is modularly split into two components, front-end and
-back-end. The front-end takes a WDL workflow, and generates a
-blueprint for a dnanexus workflow (*dx:workflow*). It works locally,
+The compiler is split into three passes
+- Preprocess: simplify the original WDL code
+- FrontEnd: take simplified WDL, and generate IR
+- Backend: start with IR and generate platform applets and workflow
+
+To explain these, we will walk through the compilation process of a simple WDL file.
+
+```
+task Add {
+    Int a
+    Int b
+    command {
+        echo $((a + b))
+    }
+    output {
+        Int result = a + b
+    }
+}
+
+workflow math {
+    Int i
+    Int k
+
+    call Add {
+         input: a = i*2, b = k+4
+    }
+    call Add as Add2 {
+         input: a = Add.result + 10, b = (k*2) + 5
+    }
+    output {
+        Add2.result
+    }
+```
+
+## Preprocessor
+The preprocessor starts with the original WDL, and simplifies it,
+writing out a new WDL source file. A call that has subexpressions is
+rewritten into separate declarations and a call with variables and
+constants only. Declarations are collects to reduce the number of
+jobs needed for evaluation.
+
+The output of the preprocessor for our example is:
+```
+workflow math {
+    Int i
+    Int k
+    Int xtmp1 = k+4
+    Int xtmp2 = (k*2) + 5
+
+    call Add {
+         input: a = i*2, b = xtmp1
+    }
+
+    Int xtmp3 = Add.result + 10
+    call Add as Add2 {
+         input: a = xtmp3, b = xtmp2
+    }
+
+    output {
+        Add2.result
+    }
+```
+
+In this case, the top four declarations will be calculated with one
+job, and xtmp3 will require an additional job. This pass allows
+mapping calls to platform workflow stages, which do not support subexpressions.
+
+## Front end
+The front-end takes the simplified WDL workflow, and generates a
+blueprint for a dnanexus workflows and applets (*dx:workflow*, *dx:applet*). It works locally,
 without making platform calls, and without using dnanexus data
 structures. The blueprint has the format:
-
 - List of *applet* definitions
 - Serial list of stages, each using an applet
 
+For the `math` workflow, we get the following abbreviated intermediate code:
+```yaml
+name: math
+stages:
+- name: Common
+  applet:
+  inputs:
+- name: Add
+  applet: Add
+  inputs: Common:i, Common:k
+- name: Eval1
+  applet: Eval1
+  inputs:
+- name: Add2
+  applet: Add
+  inputs:
+
+applets:
+- name: Add
+  inputs:
+    - Int a
+    - Int b
+  outputs:
+    - Int result
+  wdlCode: |
+task Add {
+    Int a
+    Int b
+    command {
+        echo $((a + b))
+    }
+    output {
+        Int result = a + b
+    }
+}
+
+- name: Common
+
+- name: Eval1
+
+```
+
+
+## Backend
 The back-end takes a blueprint, generates a dx:applet from each applet definition, and then
 generates a dx:workflow that uses the applets in its stages.
 
@@ -16,7 +126,8 @@ The blueprint can be written to a file in human readable syntax,
 provisionally YAML. The serialized form is intended for diagnostics,
 automatic testing, and debugging.
 
-## Applet definition
+## IR definition
+### IR Applet
 
 - name: applet name
 - inputs: list of WDL input arguments
@@ -26,7 +137,7 @@ automatic testing, and debugging.
 - destination : folder path on the platform
 - wdlCode: WDL snippet to exeute
 
-## Workflow definition
+### IR Workflow
 List of stages, where a stage has the following fields:
 
 - name: stage name

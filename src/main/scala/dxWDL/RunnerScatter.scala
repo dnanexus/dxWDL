@@ -1,3 +1,24 @@
+/** Execute a scatter block on the platform
+
+The canonical example for what is happening here, is the workflow below.
+The scatter block has two calls, and it iterates over the "integers"
+array.
+
+workflow scatter {
+    Array[Int] integers
+
+    scatter (i in integers) {
+        call inc as inc1 {input: i=i}
+        call inc as inc2 {input: i=inc1.incremented}
+    }
+
+  output {
+    inc1.*
+    inc2.*
+  }
+}
+  */
+
 package dxWDL
 
 // DX bindings
@@ -18,46 +39,7 @@ import wdl4s.{Call, Scatter, Workflow, WdlNamespaceWithWorkflow}
 import wdl4s.WdlExpression.AstForExpressions
 import WdlVarLinks._
 
-/** Execute a scatter block on the platform
-
-The canonical example for what is happening here, is the workflow below.
-The scatter block has a single call, and it iterates over the "integers"
-array.
-
-task inc {
-    Int i
-
-    command <<<
-        python -c "print(${i} + 1)"
-    >>>
-    output {
-        Int incremented = read_int(stdout())
-    }
-}
-
-task sum {
-    Array[Int] ints
-
-    command <<<
-        python -c "print(${sep="+" ints})"
-    >>>
-    output {
-        Int sum = read_int(stdout())
-    }
-}
-
-workflow sg_sum {
-    Array[Int] integers
-
-    scatter (i in integers) {
-        call inc as inc1 {input: i=i}
-        call inc as inc2 {input: i=inc1.incremented}
-    }
-    call sum {input: ints = inc2.incremented}
-}
-  */
-
-object ScatterRunner {
+object RunnerScatter {
     // Environment where a scatter is executed
     type ScatterEnv = Map[String, WdlVarLinks]
 

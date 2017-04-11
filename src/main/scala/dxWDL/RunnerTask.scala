@@ -1,3 +1,21 @@
+/** Run a wdl task.
+
+In the example below, we want to run the Add task in a dx:applet.
+
+task Add {
+    Int a
+    Int b
+
+    command {
+        echo $((a + b))
+    }
+    output {
+        Int sum = read_int(stdout())
+    }
+}
+
+  */
+
 package dxWDL
 
 // DX bindings
@@ -16,76 +34,13 @@ import wdl4s.values._
 import wdl4s.{Call, Declaration, WdlNamespaceWithWorkflow, Task, WdlExpression, WdlNamespace, Workflow}
 import wdl4s.WdlExpression.AstForExpressions
 
-/** Run a dx applet previously compiled from a WDL workflow.
-
-The canonical example for what is happening here, is the workflow below.
-The Add2 call is compiled into an applet. The call inputs are {Add.sum},
-implemented as a stage-dependency. The Task inputs are {a, b}.
-
-task Add {
-    Int a
-    Int b
-
-    command {
-    }
-    output {
-        Int sum = a + b
-    }
-}
-
-workflow call_expr_deps {
-    call Add {
-         input: a = 3, b = 2
-    }
-    call Add as Add2 {
-         input: a = 2 * Add.sum, b = 3
-    }
-    output {
-        Add2.sum
-    }
-}
-  */
-
-object AppletRunner {
+object RunnerTask {
     lazy val dxEnv = DXEnvironment.create()
 
     def getMetaDir() = {
         val metaDir = Utils.getMetaDirPath()
         Utils.safeMkdir(metaDir)
         metaDir
-    }
-
-    // evaluate the call inputs, return inputs for the task.
-    //
-    // call Add as Add2 {
-    //    input: a = 2 * Add.sum, b = 3
-    // }
-    // Start with a wdlValue for {Add.sum}, and get wdlValues for {a,b}
-    def evalCallInputs(call : Call, callInputs : Map[String, WdlValue]) = {
-        System.err.print(s"callInputs=\n${Utils.inputsToString(callInputs)}\n")
-        def lookup(varName : String) : WdlValue =
-            callInputs.get(varName) match {
-                case Some(x) => x
-                case None => throw new UnboundVariableException(varName)
-            }
-
-        val providedInputs = call.inputMappings.map { case (varName,expr) =>
-            System.err.println(s"evalCallInputs ${varName} ${expr.toWdlString}")
-            val v : WdlValue = expr.evaluate(lookup, DxFunctions).get
-            varName -> v
-        }.toMap
-
-        // Pass inputs passed not listed in the inputMappings. This allows
-        // the user to pass inputs directly to the task.
-        val extraInputs = callInputs.map{ case (varName, wdlValue) =>
-            if (call.inputMappings.contains(varName)) {
-                None
-            } else {
-                Some(varName -> wdlValue)
-            }
-        }.flatten.toMap
-
-        providedInputs ++ extraInputs
     }
 
     def evalTaskInputs(task : Task, taskInputs : Map[String, WdlValue])
@@ -106,7 +61,7 @@ object AppletRunner {
                         case Some(x) => Some(x)
                     }
 
-                    // compulstory input.
+                    // compulsory input.
                     // Here, we fail if an input has not been provided. This
                     // is not the Cromwell behavior, which allows unbound variables,
                     // as long as they are not accessed.
@@ -154,7 +109,7 @@ object AppletRunner {
     }
 
     // serialize the task inputs to json, and then write to a file.
-    def writeTaskInputsToDisk(taskInputs : Map[String, WdlValue]) : Unit = {
+    def writeTaskDeclarationsToDisk(taskInputs : Map[String, WdlValue]) : Unit = {
         val m : Map[String, JsValue] = taskInputs.map{ case(varName, wdlValue) =>
             (varName, JsString(Utils.marshal(wdlValue)))
         }.toMap
@@ -163,7 +118,7 @@ object AppletRunner {
         Utils.writeFileContent(inputVarsPath, buf)
     }
 
-    def readTaskInputsFromDisk() : Map[String, WdlValue] = {
+    def readTaskDeclarationsFromDisk() : Map[String, WdlValue] = {
         val inputVarsPath = getMetaDir().resolve("inputVars.json")
         val buf = Utils.readFileContent(inputVarsPath)
         val json : JsValue = buf.parseJson
@@ -304,64 +259,47 @@ object AppletRunner {
         call
     }
 
-    def prologCore(call: Call, callInputs: Map[String, WdlValue]) : Unit = {
-        // make the inputs conform to nested scopes
-        val scopedCallInputs = addScopeToInputs(callInputs)
-
-        // evaluate the inputs to the call
-        val taskInputs : Map[String, WdlValue] = evalCallInputs(call, scopedCallInputs)
-
-        val task : Task = Utils.taskOfCall(call)
-        val inputs = evalTaskInputs(task, taskInputs)
+    def prologCore(task: Task, inputs: Map[String, WdlValue]) : Unit = {
+        val shCommandInputs = evalTaskInputs(task, inputs)
 
         // Write shell script to a file. It will be executed by the dx-applet code
-        writeBashScript(task, inputs)
+        writeBashScript(task, shCommandInputs)
 
         // serialize the environment, so we don't have to calculate it again in
         // the epilog
         val m = inputs.map{ case (decl, wdlValue) =>
             decl.unqualifiedName -> wdlValue
         }.toMap
-        writeTaskInputsToDisk(m)
+        writeTaskDeclarationsToDisk(m)
     }
 
     // Calculate the input variables for the task, download the input files,
     // and build a shell script to run the command.
-    def prolog(wf: Workflow,
+    def prolog(task: Task,
                jobInputPath : Path,
                jobOutputPath : Path,
                jobInfoPath: Path) : Unit = {
-        val dxapp : DXApplet = dxEnv.getJob().describe().getApplet()
-        val desc : DXApplet.Describe = dxapp.describe()
-        val call: Call = getCall(wf, desc)
-
-        // Extract types for closure inputs
-        val closureTypes = Utils.loadExecInfo(Utils.readFileContent(jobInfoPath))
-        System.err.println(s"WdlType mapping =${closureTypes}")
+        // Extract types for the inputs
+        val inputTypes = Utils.loadExecInfo(Utils.readFileContent(jobInfoPath))
+        System.err.println(s"WdlType mapping =${inputTypes}")
 
         // Read the job input file
         val inputLines : String = Utils.readFileContent(jobInputPath)
-        val callInputs = WdlVarLinks.loadJobInputs(inputLines, closureTypes)
-        prologCore(call, callInputs)
+        val inputs = WdlVarLinks.loadJobInputs(inputLines, inputTypes)
+        prologCore(task, inputs)
     }
 
-    def epilogCore(call: Call) : Seq[(String, WdlType, WdlValue)]  = {
-        // read serialized inputs
-        val task : Task = Utils.taskOfCall(call)
-        val taskInputs : Map[String, WdlValue] = readTaskInputsFromDisk()
-
+    def epilogCore(task: Task) : Seq[(String, WdlType, WdlValue)]  = {
+        val taskInputs : Map[String, WdlValue] = readTaskDeclarationsFromDisk()
         // evaluate outputs
         evalTaskOutputs(task, taskInputs)
     }
 
-    def epilog(wf: Workflow,
+    def epilog(task: Task,
                jobInputPath : Path,
                jobOutputPath : Path,
                jobInfoPath: Path) : Unit = {
-        val dxapp : DXApplet = dxEnv.getJob().describe().getApplet()
-        val desc : DXApplet.Describe = dxapp.describe()
-        val call: Call = getCall(wf, desc)
-        val outputs : Seq[(String, WdlType, WdlValue)] = epilogCore(call)
+        val outputs : Seq[(String, WdlType, WdlValue)] = epilogCore(task)
         writeJobOutputs(jobOutputPath, outputs)
     }
 }
