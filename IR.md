@@ -47,15 +47,16 @@ workflow math {
     Int i
     Int k
     Int xtmp1 = k+4
-    Int xtmp2 = (k*2) + 5
+    Int xtmp2 = i*2
+    Int xtmp3 = (k*2) + 5
 
     call Add {
-         input: a = i*2, b = xtmp1
+         input: a = xtmp2, b = xtmp1
     }
 
-    Int xtmp3 = Add.result + 10
+    Int xtmp4 = Add.result + 10
     call Add as Add2 {
-         input: a = xtmp3, b = xtmp2
+         input: a = xtmp4, b = xtmp3
     }
 
     output {
