@@ -376,6 +376,7 @@ object CompilerFrontEnd {
     def genScatterWorklow(scatter: Scatter,
                           inputVars: Vector[IR.CVar],
                           outputVars: Vector[IR.CVar]) : String = {
+        def formatVarName(x) = x.replaceAll("\\.", "_")
         val decls  = inputVars.map(cVar =>
             s"${cVar.wdlType} Utils.encodeAppletVarName(${cVar.name})"
         )

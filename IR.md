@@ -86,6 +86,7 @@ stages:
 - name: Add
   applet: Add
   inputs: Common:i, Common:k
+  outputs: Int result
 - name: Eval1
   applet: Eval1
   inputs:
@@ -113,9 +114,40 @@ task Add {
 }
 
 - name: Common
+  inputs:
+    - Int i
+    - Int k
+  outputs:
+    - Int i
+    - Int k
+    - Int xtmp1
+    - Int xtmp2
+    - Int xtmp3
+  wdlCode: |
+workflow w {
+    Int i
+    Int k
+    output {
+        Int xtmp1 = k+4
+        Int xtmp2 = i*2
+        Int xtmp3 = (k*2) + 5
+    }
+}
 
 - name: Eval1
-
+  inputs:
+     - Int x
+  outputs:
+     - Int result
+  wdlCode: |
+task Eval1 {
+    Int x
+    command {
+    }
+    output {
+        Int result = x + 10
+    }
+}
 ```
 
 
@@ -145,3 +177,4 @@ List of stages, where a stage has the following fields:
 - applet: one of the pre-defined applets to execute
 - inputs: list of arguments. These could be either empty, constants,
   or point to an output from a previous stage.
+- outputs: argument names and types
