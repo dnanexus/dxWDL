@@ -38,10 +38,10 @@ workflow math {
 The preprocessor starts with the original WDL, and simplifies it,
 writing out a new WDL source file. A call that has subexpressions is
 rewritten into separate declarations and a call with variables and
-constants only. Declarations are collects to reduce the number of
+constants only. Declarations are collected to reduce the number of
 jobs needed for evaluation.
 
-The output of the preprocessor for our example is:
+The output of the preprocessor for the `math` workflow is:
 ```
 workflow math {
     Int i
@@ -72,7 +72,7 @@ The front-end takes the simplified WDL workflow, and generates a
 blueprint for a dnanexus workflows and applets (*dx:workflow*, *dx:applet*). It works locally,
 without making platform calls, and without using dnanexus data
 structures. The blueprint has the format:
-- List of *applet* definitions
+- List of *dx:applet* definitions
 - Serial list of stages, each using an applet
 
 For the `math` workflow, we get the following abbreviated intermediate code:
@@ -119,8 +119,8 @@ task Add {
 
 
 ## Backend
-The back-end takes a blueprint, generates a dx:applet from each applet definition, and then
-generates a dx:workflow that uses the applets in its stages.
+The back-end takes a blueprint, generates a *dx:applet* from each applet definition, and then
+generates a *dx:workflow* that uses the applets in its stages.
 
 The blueprint can be written to a file in human readable syntax,
 provisionally YAML. The serialized form is intended for diagnostics,
@@ -142,5 +142,5 @@ List of stages, where a stage has the following fields:
 
 - name: stage name
 - applet: one of the pre-defined applets to execute
-- inputs: list of arguments. These could be either empty,
+- inputs: list of arguments. These could be either empty, constants,
   or point to an output from a previous stage.
