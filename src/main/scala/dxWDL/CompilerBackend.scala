@@ -313,6 +313,12 @@ object CompilerBackend {
                         // For compulsory applet inputs, the user will have to fill
                         // in a value at runtime.
                         dxBuilder
+                    case IR.SArgConst(wValue) =>
+                        val wvl = WdlVarLinks.outputFieldOfWdlValue(cVar.name, wValue.wdlType, wValue)
+                        val fields = WdlVarLinks.genFields(wvl, cVar.name)
+                        fields.foldLeft(dxBuilder) { case (b, (fieldName, jsonNode)) =>
+                            b.put(fieldName, jsonNode)
+                        }
                     case IR.SArgLink(stageName, argName) =>
                         val dxStage = stageDict(stageName)
                         val wvl = WdlVarLinks(argName, cVar.wdlType,

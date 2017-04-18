@@ -27,11 +27,9 @@ import scala.collection.JavaConverters._
 import spray.json._
 import spray.json.DefaultJsonProtocol
 import spray.json.JsString
-import wdl4s.expression.{NoFunctions, WdlStandardLibraryFunctionsType}
+import wdl4s.{Call, Declaration, Task, WdlNamespaceWithWorkflow, WdlExpression, Workflow}
 import wdl4s.types._
 import wdl4s.values._
-import wdl4s.{Call, Declaration, WdlNamespaceWithWorkflow, WdlExpression, Workflow}
-import wdl4s.WdlExpression.AstForExpressions
 import WdlVarLinks._
 
 object RunnerEval {
@@ -84,23 +82,22 @@ object RunnerEval {
         env.toList
     }
 
-    def apply(task: Task,
+    def apply(wf: Workflow,
               jobInputPath : Path,
               jobOutputPath : Path,
               jobInfoPath: Path) : Unit = {
         // Figure out input types
         val inputTypes = Utils.loadExecInfo(Utils.readFileContent(jobInfoPath))
-        System.err.println(s"WdlType mapping =${closureTypes}")
 
-        // Parse the inputs, do not download files from the platform.
-        // They will be passed as links to the tasks.
+        // Parse the inputs, do not download files from the platform,
+        // they will be passed as links.
         val inputLines : String = Utils.readFileContent(jobInputPath)
         val inputs: Map[String, WdlVarLinks] = WdlVarLinks.loadJobInputsAsLinks(inputLines,
                                                                                 inputTypes)
         System.err.println(s"Initial inputs=${inputs}")
 
-        // make sure all the workflow elements are all declarations
-        val decls: Seq[Declaration] = wf.childern.map{ x =>
+        // make sure the workflow elements are all declarations
+        val decls: Seq[Declaration] = wf.children.map{ x =>
             x match {
                 case decl: Declaration => decl
                 case _ => throw new Exception("Eval task contains a non declaration")

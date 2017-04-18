@@ -4,10 +4,7 @@
   */
 package dxWDL
 
-import wdl4s.{Call, Declaration, Scatter, Scope,
-    Task, TaskCall, TaskOutput,
-    WdlExpression, WdlNamespace, WdlNamespaceWithWorkflow,
-    Workflow, WorkflowCall, WdlSource}
+import wdl4s._
 import wdl4s.command.{ParameterCommandPart, StringCommandPart}
 import wdl4s.parser.WdlParser.{Ast, AstNode, Terminal}
 
@@ -87,20 +84,19 @@ object WdlPrettyPrinter {
                        indent: Int,
                        transform: WdlExpression => WdlExpression) : Vector[String] = {
         def transformChild(scope: Scope): Scope = {
-            case x:TaskCall =>
-                val inputs = x.inputMappings.map((k,expr) => (k, transform(expr))).toMap
-                TaskCall(x.alias, x.task, inputs, x.ast)
-            case x:WorkflowCall =>
-                val inputs = x.inputMappings.map((k,expr) => (k, transform(expr))).toMap
-                WorkflowCall(x.alias, x.task, inputs, x.ast)
-            case x:Declaration =>
-                x.expression match {
-                    case None => x
-                    case Some(expr) => Declaration(x.wdlType, x.unqualifiedName,
-                                                   transform(expr), x.parent, x.ast)
-                }
-            case x:Scatter => throw new Exception("Unimplemented nested scatter renaming")
-            case _ => throw new Exception("Unimplemented scatter element")
+            scope match {
+                case x:TaskCall =>
+                    val inputs = x.inputMappings.map{ case (k,expr) => (k, transform(expr)) }.toMap
+                    TaskCall(x.alias, x.task, inputs, x.ast)
+                case x:WorkflowCall =>
+                    val inputs = x.inputMappings.map{ case (k,expr) => (k, transform(expr)) }.toMap
+                    WorkflowCall(x.alias, x.calledWorkflow, inputs, x.ast)
+                case x:Declaration =>
+                    Declaration(x.wdlType, x.unqualifiedName,
+                                x.expression.map(transform), x.parent, x.ast)
+                case x:Scatter => throw new Exception("Unimplemented nested scatter renaming")
+                case _ => throw new Exception("Unimplemented scatter element")
+            }
         }
         val tChildren = ssc.children.map(x => transformChild(x))
 
@@ -143,18 +139,24 @@ object WdlPrettyPrinter {
         buildBlock( s"task ${task.name}", taskBody, indent)
     }
 
+    def apply(wfo: WorkflowOutput, indent: Int) : Vector[String] = {
+        val spaces = genNSpaces(indent)
+        val line = s"${spaces}${wfo.wdlType.toWdlString} ${wfo.unqualifiedName} = ${wfo.requiredExpression.toWdlString}"
+        Vector(line)
+    }
+
     def apply(wf: Workflow, indent: Int) : Vector[String] = {
-        val decls = task.declarations.map(x => apply(x, indent)).flatten
+//        val decls = task.declarations.map(x => apply(x, indent)).flatten
         val children = wf.children.map {
             case call: Call => apply(call, indent)
             case sc: Scatter => apply(sc, indent)
             case decl: Declaration => apply(decl, indent)
             case x => throw new Exception(s"Unimplemented workflow element ${x.toString}")
         }.flatten
-        val outputs = task.outputs.map(x => apply(x, indent)).flatten
+        val outputs = wf.outputs.map(x => apply(x, indent)).flatten
 
-        val lines = decls.toVector ++
-            children.toVector ++
+//        val lines = decls.toVector ++
+        val lines = children.toVector ++
             buildBlock("outputs", outputs.toVector, indent)
         buildBlock( s"workflow ${wf.unqualifiedName}", lines, indent)
     }

@@ -220,6 +220,13 @@ object Main extends App {
         ns.tasks.head
     }
 
+    def workflowOfNamespace(ns: WdlNamespace): Workflow = {
+        ns match {
+            case nswf: WdlNamespaceWithWorkflow => nswf.workflow
+            case _ => throw new Exception("WDL file contains no workflow")
+        }
+    }
+
     def appletAction(action: Actions.Value, args : Seq[String]): Termination = {
         if (args.length != 2) {
             BadUsageTermination("All applet actions take a WDL file, and a home directory")
@@ -228,19 +235,14 @@ object Main extends App {
             val homeDir = Paths.get(args(1))
             val (jobInputPath, jobOutputPath, jobErrorPath, jobInfoPath) =
                 Utils.jobFilesOfHomeDir(homeDir)
-            //val wdlSource : String = Utils.readFileContent(Paths.get(wdlDefPath))
-            val ns = WdlNamespace.loadUsingPath(Paths.get(wdlDefPath), None, None)
+            val ns = WdlNamespace.loadUsingPath(Paths.get(wdlDefPath), None, None).get
 
             try {
                 action match {
                     case Actions.Eval =>
-                        RunnerEval.apply(taskOfNamespace(ns), jobInputPath, jobOutputPath, jobInfoPath)
+                        RunnerEval.apply(workflowOfNamespace(ns), jobInputPath, jobOutputPath, jobInfoPath)
                     case Actions.LaunchScatter =>
-                        val wf = ns match {
-                            case nswf: WdlNamespaceWithWorkflow => nswf.workflow
-                            case _ => throw new Exception("WDL file contains no workflow")
-                        }
-                        RunnerScatter.apply(wf, jobInputPath, jobOutputPath, jobInfoPath)
+                        RunnerScatter.apply(workflowOfNamespace(ns), jobInputPath, jobOutputPath, jobInfoPath)
                     case Actions.TaskProlog =>
                         RunnerTask.prolog(taskOfNamespace(ns), jobInputPath, jobOutputPath, jobInfoPath)
                     case Actions.TaskEpilog =>

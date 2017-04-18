@@ -25,18 +25,15 @@ package dxWDL
 import com.dnanexus.{DXApplet, DXEnvironment, DXJob, DXJSON, DXProject, DXSearch, InputParameter, OutputParameter}
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.node.ObjectNode
-import java.nio.charset.StandardCharsets
 import java.nio.file.{Path, Paths, Files}
 import scala.collection.JavaConverters._
 import scala.collection.mutable.HashMap
-import scala.util.{Try, Success, Failure}
 import spray.json._
 import spray.json.DefaultJsonProtocol
 import spray.json.JsString
+import wdl4s.{Call, Scatter, TaskCall, Workflow, WorkflowCall, WdlNamespaceWithWorkflow}
 import wdl4s.types._
 import wdl4s.values._
-import wdl4s.{Call, Scatter, Workflow, WdlNamespaceWithWorkflow}
-import wdl4s.WdlExpression.AstForExpressions
 import WdlVarLinks._
 
 object RunnerScatter {
@@ -72,11 +69,6 @@ object RunnerScatter {
             case call: WorkflowCall => throw new Exception("Calling workflows not supported")
             case _ => None
         }.flatten
-
-        val name2App : Map[String, DXApplet] = applets.map { x =>
-            val appName = x.describe().getName()
-            appName -> x
-        }.toMap
 
         // Match each call with its dx:applet
         children.map { call =>
@@ -172,7 +164,7 @@ object RunnerScatter {
         // add the top declarations in the scatter block to the
         // environment
         val (topDecls,_) = Utils.splitBlockDeclarations(scatter.children.toList)
-        val env: ScatterEnv = WorkflowCommonRunner.evalDeclarations(topDecls, outerScopeEnv).toMap
+        val env: ScatterEnv = RunnerEval.evalDeclarations(topDecls, outerScopeEnv).toMap
 
         // Figure out the input/output specs for each applet.
         // Do this once per applet in the loop.

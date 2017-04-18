@@ -211,7 +211,7 @@ object CompilerFrontEnd {
 
     // Print a WDL task that evaluates expressions, and outputs
     // all of them
-    def genEvalTaskFromDeclarations(name: String,
+    def genEvalWorkflowFromDeclarations(name: String,
                                     declarations: Seq[Declaration]) : String = {
         val inputs: Vector[String] =
             declarations.map(x => WdlPrettyPrinter.apply(x, 0)).flatten.toVector
@@ -219,9 +219,8 @@ object CompilerFrontEnd {
             s"${decl.wdlType.toWdlString} ${decl.unqualifiedName}"
         ).toVector
         val lines: Vector[String] = inputs ++
-            WdlPrettyPrinter.buildBlock("command", Vector(""), 0) ++
             WdlPrettyPrinter.buildBlock("output", outputs, 0)
-        WdlPrettyPrinter.buildBlock(s"task ${name}", lines, 0).mkString("\n")
+        WdlPrettyPrinter.buildBlock(s"workflow w", lines, 0).mkString("\n")
     }
 
     // Create a preliminary applet to handle workflow inputs, top-level
@@ -248,7 +247,7 @@ object CompilerFrontEnd {
                       cState: State) : (IR.Stage, IR.Applet) = {
         Utils.trace(cState.verbose, s"Compiling workflow initialization sequence")
         val appletFqn : String = wf.unqualifiedName ++ "." ++ Utils.COMMON
-        val code = genEvalTaskFromDeclarations(appletFqn, topDeclarations)
+        val code = genEvalWorkflowFromDeclarations(appletFqn, topDeclarations)
 
         // Only workflow declarations that do not have an expression,
         // needs to be provide by the user.

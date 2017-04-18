@@ -267,10 +267,7 @@ object RunnerTask {
 
         // serialize the environment, so we don't have to calculate it again in
         // the epilog
-        val m = inputs.map{ case (decl, wdlValue) =>
-            decl.unqualifiedName -> wdlValue
-        }.toMap
-        writeTaskDeclarationsToDisk(m)
+        writeTaskDeclarationsToDisk(inputs)
     }
 
     // Calculate the input variables for the task, download the input files,
