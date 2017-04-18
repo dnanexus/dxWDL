@@ -13,8 +13,8 @@ workflow scatter {
     }
 
   output {
-    inc1.*
-    inc2.*
+    Array[Int] inc1_result = inc1.result
+    Array[Int] inc2_result = inc2.result
   }
 }
   */
@@ -44,26 +44,11 @@ object RunnerScatter {
     type ScatterEnv = Map[String, WdlVarLinks]
 
     // Find the scatter block.
-    // In the example, scatter___inc is the scatter block name.
-    def findScatter(wf : Workflow, appName : String) : Scatter = {
-        // Find the scatter block with the first call name in the block, which
-        // must be unique.
-        val components : Array[String] = appName.split("___")
-        assert(components(0) == "scatter")
-        val firstCallName = components(1)
-        val call : Call = wf.findCallByName(firstCallName) match {
-            case None => throw new AppInternalException(s"Call ${appName} not found in WDL file")
-            case Some(call) => call
-        }
-
-        // The parent block of the call must be a scatter
-        call.parent match {
-            case (Some(scatter : Scatter)) => scatter
-            case (Some(_)) =>
-                throw new AppInternalException(s"Parent scope of call ${firstCallName} is not a scatter block")
-            case None =>
-                throw new AppInternalException(s"No parent scope found for call ${firstCallName}")
-        }
+    def findScatter(wf : Workflow) : Scatter = {
+        val scatters: Set[Scatter] = wf.scatters
+        if (scatters.size != 1)
+            throw new Exception("Workflow has more than one scatter block")
+        scatters.head
     }
 
     def callUniqueName(call : Call) : String = {
@@ -78,34 +63,31 @@ object RunnerScatter {
     }
 
     // find the sequence of applets inside the scatter block. In this example,
-    // these are: [sg_sum.inc, sg_sum.inc2]
+    // these are: [inc]
     def findAppletsInScatterBlock(wf : Workflow,
                                   scatter : Scatter,
                                   project : DXProject) : Seq[(Call, DXApplet)] = {
-        val children : Seq[Call] = scatter.children.map {
-            case call: Call => Some(call)
+        val children : Seq[TaskCall] = scatter.children.map {
+            case call: TaskCall => Some(call)
+            case call: WorkflowCall => throw new Exception("Calling workflows not supported")
             case _ => None
         }.flatten
 
-        // Find all the applets for the workflow. Performs a single database
-        // query on the backend, and should be efficient.
-        val pattern = wf.unqualifiedName ++ ".*"
-        val applets : List[DXApplet] = DXSearch.findDataObjects().inProject(project).
-            nameMatchesGlob(pattern).withClassApplet().execute().asList().asScala.toList
         val name2App : Map[String, DXApplet] = applets.map { x =>
             val appName = x.describe().getName()
             appName -> x
         }.toMap
 
-        // Match each call with its dx-applet
+        // Match each call with its dx:applet
         children.map { call =>
-            // find the dxapplet
-            val nm = callUniqueNameInWorkflow(wf, call)
-            val applet = name2App.get(nm) match {
-                case Some(x) => x
-                case None => throw new AppInternalException(s"Could not find applet ${nm}")
-            }
-            (call, applet)
+            val dxAppletName = call.task.name
+            val applets : List[DXApplet] = DXSearch.findDataObjects().inProject(project).
+                nameMatchesExactly(dxAppletName).withClassApplet().execute().asList().asScala.toList
+            if (applets.size == 0)
+                throw new Exception(s"Could not find applet ${dxAppletName}")
+            if (applets.size > 1)
+                throw new Exception(s"More than one applet called ${dxAppletName} in project ${project.getId()}")
+            (call, applets.head)
         }
     }
 
@@ -227,14 +209,6 @@ object RunnerScatter {
               jobInputPath : Path,
               jobOutputPath : Path,
               jobInfoPath: Path) : Unit = {
-        // Query the platform, and get the applet name.
-        // It has a fully qualified name A.B, extract the last component (B)
-        val dxEnv = DXEnvironment.create()
-        val dxapp : DXApplet = dxEnv.getJob().describe().getApplet()
-        val desc : DXApplet.Describe = dxapp.describe()
-        val appFQName : String = desc.getName()
-        val appName = appFQName.split("\\.").last
-
         // Extract types for closure inputs
         val closureTypes = Utils.loadExecInfo(Utils.readFileContent(jobInfoPath))
         System.err.println(s"WdlType mapping =${closureTypes}")
@@ -243,7 +217,7 @@ object RunnerScatter {
         // They will be passed as links to the tasks.
         val inputLines : String = Utils.readFileContent(jobInputPath)
         val outScopeEnv : ScatterEnv = WdlVarLinks.loadJobInputsAsLinks(inputLines, closureTypes)
-        val scatter : Scatter = findScatter(wf, appName)
+        val scatter : Scatter = findScatter(wf)
 
         // We need only the array we are looping on. Note that
         // we *do not* want to download the files, if we are looping on
@@ -257,6 +231,7 @@ object RunnerScatter {
             case Some(wvl) => wvl
         }
 
+        val dxEnv = DXEnvironment.create()
         val project = dxEnv.getProjectContext()
         val applets : Seq[(Call, DXApplet)] = findAppletsInScatterBlock(wf, scatter, project)
         val outputs : Map[String, JsValue] = evalScatter(scatter, collElements, applets, outScopeEnv)

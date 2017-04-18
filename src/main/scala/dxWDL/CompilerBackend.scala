@@ -19,6 +19,8 @@ import spray.json._
 import DefaultJsonProtocol._
 
 object CompilerBackend {
+    val WDL_SNIPPET_FILENAME = Utils.WDL_SNIPPET_FILENAME
+
     // Compiler state.
     // Packs common arguments passed between methods.
     case class State(dxWDLrtId: String,
@@ -39,25 +41,25 @@ object CompilerBackend {
     def wdlVarToSpec(varName: String,
                      wdlType : WdlType,
                      ast: Ast,
-                     cState: State) : List[JsValue] = {
+                     cState: State) : Vector[JsValue] = {
         val name = Utils.encodeAppletVarName(varName)
-        def mkPrimitive(dxType: String) : List[Map[String, JsValue]] = {
-            List(Map("name" -> JsString(name),
+        def mkPrimitive(dxType: String) : Vector[Map[String, JsValue]] = {
+            Vector(Map("name" -> JsString(name),
                      "help" -> JsString(wdlType.toWdlString),
                      "class" -> JsString(dxType)))
         }
-        def mkPrimitiveArray(dxType: String) : List[Map[String, JsValue]] = {
-            List(Map("name" -> JsString(name),
+        def mkPrimitiveArray(dxType: String) : Vector[Map[String, JsValue]] = {
+            Vector(Map("name" -> JsString(name),
                      "help" -> JsString(wdlType.toWdlString),
                      "class" -> JsString("array:" ++ dxType)))
         }
-        def mkRaggedArray() : List[Map[String,JsValue]] = {
-            List(Map("name" -> JsString(name),
+        def mkRaggedArray() : Vector[Map[String,JsValue]] = {
+            Vector(Map("name" -> JsString(name),
                      "help" -> JsString(wdlType.toWdlString),
                      "class" -> JsString("file")))
         }
-        def mkRaggedFileArray() : List[Map[String, JsValue]] = {
-            List(Map("name" -> JsString(name),
+        def mkRaggedFileArray() : Vector[Map[String, JsValue]] = {
+            Vector(Map("name" -> JsString(name),
                      "help" -> JsString(wdlType.toWdlString),
                      "class" -> JsString("file")),
                  Map("name" -> JsString( name ++ Utils.FLAT_FILE_ARRAY_SUFFIX),
@@ -92,17 +94,17 @@ object CompilerBackend {
         wdlType match {
             case WdlOptionalType(t) =>
                 // An optional variable, make it an optional dx input/output
-                val l : List[Map[String,JsValue]] = nonOptional(t)
+                val l : Vector[Map[String,JsValue]] = nonOptional(t)
                 l.map{ m => JsObject(m + ("optional" -> JsBoolean(true))) }
             case t =>
-                val l : List[Map[String,JsValue]] = nonOptional(t)
+                val l : Vector[Map[String,JsValue]] = nonOptional(t)
                 l.map{ m => JsObject(m)}
         }
     }
 
-    def genBashScript(appKind: AppletKind.Value, docker: Option[String]) : String = {
+    def genBashScript(appKind: IR.AppletKind.Value, docker: Option[String]) : String = {
         appKind match {
-            case AppletKind.Eval =>
+            case IR.AppletKind.Eval =>
                 s"""|#!/bin/bash -ex
                     |main() {
                     |    echo "working directory =$${PWD}"
@@ -111,7 +113,7 @@ object CompilerBackend {
                     |    java -cp $${DX_FS_ROOT}/dxWDL.jar:$${CLASSPATH} dxWDL.Main eval $${DX_FS_ROOT}/${WDL_SNIPPET_FILENAME} $${HOME}
                     |}""".stripMargin.trim
 
-            case AppletKind.Scatter =>
+            case IR.AppletKind.Scatter =>
                 s"""|#!/bin/bash -ex
                     |main() {
                     |    echo "working directory =$${PWD}"
@@ -120,7 +122,7 @@ object CompilerBackend {
                     |    java -cp $${DX_FS_ROOT}/dxWDL.jar:$${CLASSPATH} dxWDL.Main launchScatter $${DX_FS_ROOT}/${WDL_SNIPPET_FILENAME} $${HOME}
                     |}""".stripMargin.trim
 
-            case AppletKind.Task =>
+            case IR.AppletKind.Task =>
                 val submitShellCommand = docker match {
                     case None =>
                         "/bin/bash"
@@ -267,7 +269,7 @@ object CompilerBackend {
     //
     // Write the WDL code to a file, and generate a bash applet to
     // run it on the platform.
-    def buildApplet(applet: IR.Applet, cState: State) : (DXApplet, List[IR.CVar]) = {
+    def buildApplet(applet: IR.Applet, cState: State) : (DXApplet, Vector[IR.CVar]) = {
         Utils.trace(cState.verbose, s"Compiling applet ${applet.name}")
         val inputSpec : Seq[JsValue] = applet.inputs.map(cVar =>
             wdlVarToSpec(cVar.name, cVar.wdlType, cVar.ast, cState)
@@ -299,7 +301,7 @@ object CompilerBackend {
     // Calculate the stage inputs from the call closure
     //
     // It comprises mappings from variable name to WdlType.
-    def genStageInputs(inputs: List[(IR.CVar, IR.SArg)],
+    def genStageInputs(inputs: Vector[(IR.CVar, IR.SArg)],
                        irApplet: IR.Applet,
                        stageDict: Map[String, DXWorkflow.Stage],
                        cState: State) : JsonNode = {
@@ -355,7 +357,7 @@ object CompilerBackend {
         wf.stages.foldLeft((0,stageDictInit)) {
             case ((version,stageDict), stg) =>
                 val (irApplet,dxApplet) = appletDict(stg.appletName)
-                val linkedInputs : List[(IR.CVar, IR.SArg)] = irApplet.inputs zip stg.inputs
+                val linkedInputs : Vector[(IR.CVar, IR.SArg)] = irApplet.inputs zip stg.inputs
                 val inputs: JsonNode = genStageInputs(linkedInputs, irApplet, stageDict, cState)
                 val modif: DXWorkflow.Modification[DXWorkflow.Stage] =
                     dxwfl.addStage(dxApplet, stg.name, inputs, version)

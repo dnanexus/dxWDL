@@ -82,6 +82,38 @@ object WdlPrettyPrinter {
         buildBlock(top, children.toVector, indent)
     }
 
+    // transform the expressions in a scatter, and then pretty print
+    def scatterRewrite(ssc: Scatter,
+                       indent: Int,
+                       transform: WdlExpression => WdlExpression) : Vector[String] = {
+        def transformChild(scope: Scope): Scope = {
+            case x:TaskCall =>
+                val inputs = x.inputMappings.map((k,expr) => (k, transform(expr))).toMap
+                TaskCall(x.alias, x.task, inputs, x.ast)
+            case x:WorkflowCall =>
+                val inputs = x.inputMappings.map((k,expr) => (k, transform(expr))).toMap
+                WorkflowCall(x.alias, x.task, inputs, x.ast)
+            case x:Declaration =>
+                x.expression match {
+                    case None => x
+                    case Some(expr) => Declaration(x.wdlType, x.unqualifiedName,
+                                                   transform(expr), x.parent, x.ast)
+                }
+            case x:Scatter => throw new Exception("Unimplemented nested scatter renaming")
+            case _ => throw new Exception("Unimplemented scatter element")
+        }
+        val tChildren = ssc.children.map(x => transformChild(x))
+
+        val top: String = s"scatter (${ssc.item} in ${ssc.collection.toWdlString})"
+        val children = tChildren.map{
+            case x:Call => apply(x, indent)
+            case x:Declaration => apply(x, indent)
+            case x:Scatter => apply(x, indent)
+            case _ => throw new Exception("Unimplemented scatter element")
+        }.flatten.toVector
+        buildBlock(top, children.toVector, indent)
+    }
+
     def apply(tso: TaskOutput, indent: Int): Vector[String] = {
         val spaces = genNSpaces(indent)
         val line = s"${spaces}${tso.wdlType.toWdlString} ${tso.unqualifiedName} = ${tso.requiredExpression.toWdlString}"

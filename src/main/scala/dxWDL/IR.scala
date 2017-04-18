@@ -43,7 +43,7 @@ object IR {
                       instanceType: String,
                       docker: Option[String],
                       destination : String,
-                      kind: AppletKind,
+                      kind: AppletKind.Value,
                       wdlCode: String,
                       ast: Ast)
 
@@ -58,7 +58,7 @@ object IR {
     case class Stage(name: String,
                      appletName: String,
                      inputs: Vector[SArg],
-                     outupts: Vector[CVar])
+                     outputs: Vector[CVar])
 
     case class Workflow(name: String,
                         stages: Vector[Stage],
@@ -68,7 +68,7 @@ object IR {
     def yaml(cVar: CVar) : YamlObject = {
         YamlObject(
             YamlString("type") -> YamlString(cVar.wdlType.toWdlString),
-            YamlString("name") -> YamlArray(cVar.name)
+            YamlString("name") -> YamlString(cVar.name)
         )
     }
 
@@ -84,7 +84,6 @@ object IR {
             YamlString("inputs") -> YamlArray(inputs.toVector),
             YamlString("outputs") -> YamlArray(outputs.toVector),
             YamlString("instanceType") -> YamlString(applet.instanceType),
-            YamlString("docker") -> YamlString(docker),
             YamlString("destination") -> YamlString(applet.destination),
             YamlString("kind") -> YamlString(applet.kind.toString),
             YamlString("wdlCode") -> YamlString(applet.wdlCode)
@@ -95,16 +94,18 @@ object IR {
     def yaml(sArg: SArg) : YamlValue = {
         sArg match {
             case SArgEmpty => YamlString("empty")
+            case SArgConst(wVal) => YamlString(wVal.toWdlString)
             case SArgLink(stageName, argName) => YamlString(stageName + ":" + argName)
         }
     }
 
     def yaml(stage: Stage) : YamlObject = {
         val inputs = stage.inputs.map(yaml)
+        val outputs = stage.outputs.map(yaml)
         YamlObject(
             YamlString("name") -> YamlString(stage.name),
             YamlString("appletName") -> YamlString(stage.appletName),
-            YamlString("inputs") -> YamlArray(inputs.toVector)
+            YamlString("inputs") -> YamlArray(inputs.toVector),
             YamlString("outputs") -> YamlArray(outputs.toVector)
         )
     }

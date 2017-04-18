@@ -229,7 +229,7 @@ object Main extends App {
             val (jobInputPath, jobOutputPath, jobErrorPath, jobInfoPath) =
                 Utils.jobFilesOfHomeDir(homeDir)
             val wdlSource : String = Utils.readFileContent(Paths.get(wdlDefPath))
-            val ns : WdlNamespace.loadUsingPath(wdlSource, None, None)
+            val ns = WdlNamespace.loadUsingPath(wdlSource, None, None)
 
             try {
                 action match {
