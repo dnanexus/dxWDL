@@ -70,10 +70,9 @@ object Main extends App {
 
     def prettyPrintIr(wdlSourceFile : Path,
                       irWf: IR.Workflow) : Unit = {
-        val trgName: String = replaceFileSuffix(wdlSourceFile, ".ir")
+        val trgName: String = replaceFileSuffix(wdlSourceFile, ".ir.yaml")
         val trgPath = Utils.appCompileDirPath.resolve(trgName).toFile
-
-        val humanReadable: String = IR.yaml(irWf).print()
+        val humanReadable = IR.yaml(irWf).prettyPrint
         val fos = new FileWriter(trgPath)
         val pw = new PrintWriter(fos)
         pw.print(humanReadable)

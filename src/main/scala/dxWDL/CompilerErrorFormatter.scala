@@ -55,4 +55,12 @@ case class CompilerErrorFormatter(terminalMap: Map[Terminal, WdlSource]) {
             |${pointToSource(t)}
             |""".stripMargin
     }
+
+    def evaluatingTerminal(t: Terminal, x: String) = {
+        s"""|Looking up string ${x}, while evaluating terminal
+            |
+            |${pointToSource(t)}
+            |""".stripMargin
+
+    }
 }

@@ -31,7 +31,8 @@ object WdlPrettyPrinter {
                 } else {
                     (top + " {", "}")
                 }
-            firstLine +: (middle.map(x => spaces + x)).toVector :+ endLine
+            val body = middle.map{ x => (spaces + x) }
+            firstLine +: body :+ endLine
         }
     }
 

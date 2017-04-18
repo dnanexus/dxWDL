@@ -9,12 +9,8 @@ import java.nio.file.{Files, Paths, Path}
 import scala.util.{Failure, Success, Try}
 import wdl4s.AstTools
 import wdl4s.AstTools.EnhancedAstNode
-import wdl4s.{Call, Declaration, Scatter, Scope, Task,
-    TaskCall, TaskOutput, WdlExpression,
-    WdlNamespace, WdlNamespaceWithWorkflow, WdlSource,
-    Workflow, WorkflowCall}
-import wdl4s.expression.{NoFunctions, PureStandardLibraryFunctions,
-    ValueEvaluator, WdlStandardLibraryFunctions, WdlStandardLibraryFunctionsType}
+import wdl4s._
+import wdl4s.expression._
 import wdl4s.parser.WdlParser.{Ast, AstNode, Terminal}
 import wdl4s.types._
 import wdl4s.values._
@@ -135,6 +131,46 @@ object CompilerFrontEnd {
         }
     }
 
+    // split a block of statements into sub-blocks with continguous declarations.
+    // Example:
+    //
+    //   call x
+    //   Int a
+    //   Int b
+    //   call y
+    //   call z
+    //   String s
+    //   call w
+    //  =>
+    //   Singleton(call x),
+    //   DeclsBlock(Int a, Int b),
+    //   Singleton(call y)
+    //   Singleton(call z)
+    //   DeclsBlock(String s)
+    //   Singleton(call w)
+    sealed trait Block
+    case class DeclBlock(decls: Vector[Declaration]) extends Block
+    case class Singleton(scope: Scope) extends Block
+    def splitBlock(children: Seq[Scope]) : Vector[Block] = {
+        val initAccu = (Vector[Block](), Vector[Declaration]())
+        val (subBlocks, decls) = children.foldLeft(initAccu) { (accu, child) =>
+            val (subBlocks, decls) = accu
+            child match {
+                case decl: Declaration =>
+                    (subBlocks, decls :+ decl)
+                case scope =>
+                    if (decls.isEmpty)
+                        (subBlocks :+ Singleton(scope),  Vector[Declaration]())
+                    else
+                        (subBlocks :+ DeclBlock(decls) :+ Singleton(scope), Vector[Declaration]())
+            }
+        }
+        if (decls.isEmpty)
+            subBlocks
+        else
+            subBlocks :+ DeclBlock(decls)
+    }
+
     // Update a closure with all the variables required
     // for an expression.
     //
@@ -241,13 +277,11 @@ object CompilerFrontEnd {
     //  must be defined on the command line. [cmdline] is a calculation that
     //  uses constants and variables.
     //
-    def compileCommon(wf : Workflow,
-                      topDeclarations: Seq[Declaration],
-                      env : CallEnv,
-                      cState: State) : (IR.Stage, IR.Applet) = {
-        Utils.trace(cState.verbose, s"Compiling workflow initialization sequence")
-        val appletFqn : String = wf.unqualifiedName ++ "." ++ Utils.COMMON
-        val code = genEvalWorkflowFromDeclarations(appletFqn, topDeclarations)
+    def compileEval(appletName: String,
+                    declarations: Seq[Declaration],
+                    cState: State) : (IR.Stage, IR.Applet) = {
+        Utils.trace(cState.verbose, s"Compiling declaration evaluation applet {}".format(appletName))
+        val code = genEvalWorkflowFromDeclarations(appletName, declarations)
 
         // Only workflow declarations that do not have an expression,
         // needs to be provide by the user.
@@ -259,27 +293,26 @@ object CompilerFrontEnd {
         //
         // x - must be provided as an applet input
         // y, pi -- calculated, non inputs
-        val inputVars : Vector[IR.CVar] =  topDeclarations.map{ decl =>
+        val inputVars : Vector[IR.CVar] =  declarations.map{ decl =>
             decl.expression match {
                 case None => Some(IR.CVar(decl.unqualifiedName, decl.wdlType, decl.ast))
                 case Some(_) => None
             }
         }.flatten.toVector
-        val outputVars : Vector[IR.CVar] = topDeclarations.map{ decl =>
+        val outputVars : Vector[IR.CVar] = declarations.map{ decl =>
             IR.CVar(decl.unqualifiedName, decl.wdlType, decl.ast)
         }.toVector
 
         // We need minimal compute resources, use the default instance type
-        val applet = IR.Applet(appletFqn,
+        val applet = IR.Applet(appletName,
                                inputVars,
                                outputVars,
                                calcInstanceType(None),
                                None,
                                cState.destination,
                                IR.AppletKind.Eval,
-                               code,
-                               wf.ast)
-        (IR.Stage(Utils.COMMON, appletFqn, Vector[IR.SArg](), outputVars),
+                               code)
+        (IR.Stage(appletName, appletName, Vector[IR.SArg](), outputVars),
          applet)
     }
 
@@ -315,8 +348,7 @@ object CompilerFrontEnd {
                                docker,
                                cState.destination,
                                IR.AppletKind.Task,
-                               wdlCode,
-                               task.ast)
+                               wdlCode)
         (applet, outputVars)
     }
 
@@ -351,7 +383,7 @@ object CompilerFrontEnd {
                         IR.SArgEmpty
                     }
                 case Some((_,e)) => e.ast match {
-                    case t: Terminal if t.getTerminalStr == "identifer" =>
+                    case t: Terminal if t.getTerminalStr == "identifier" =>
                         val lVar = env.get(t.getSourceString) match {
                             case Some(x) => x
                             case None => throw new Exception(cState.cef.missingVarRefException(t))
@@ -359,7 +391,7 @@ object CompilerFrontEnd {
                         lVar.sArg
                     case t: Terminal =>
                         def lookup(x:String) : WdlValue = {
-                            throw new Exception("No variables should be used in this context")
+                            throw new Exception(cState.cef.evaluatingTerminal(t, x))
                         }
                         val ve = ValueEvaluator(lookup, PureStandardLibraryFunctions)
                         val wValue: WdlValue = ve.evaluate(e.ast).get
@@ -498,8 +530,7 @@ object CompilerFrontEnd {
                                None,
                                cState.destination,
                                IR.AppletKind.Scatter,
-                               wdlCode,
-                               scatter.ast)
+                               wdlCode)
 
         // The calls will be made from the scatter applet at runtime.
         // Collect all the outputs in arrays.
@@ -546,43 +577,52 @@ object CompilerFrontEnd {
             case _ => throw new Exception("WDL does not have a workflow")
         }
 
-        // An environment where variables are defined
-        var env : CallEnv = Map.empty[String, LinkedVar]
-
         // Lift all declarations that can be evaluated at the top of
         // the block.
         val (topDecls, wfBody) = Utils.splitBlockDeclarations(wf.children.toList)
 
         // Create a preliminary stage to handle workflow inputs, and top-level
         // declarations.
-        val (commonStage, commonApplet) = compileCommon(wf, topDecls, env, cState)
+        Utils.trace(cState.verbose, s"Compiling workflow initialization sequence")
+        val (commonStage, commonApplet) = compileEval(wf.unqualifiedName ++ "." ++ Utils.COMMON,
+                                                      topDecls, cState)
 
-        // Create a stage per call/scatter-block
+        // An environment where variables are defined
+        var env : CallEnv = commonStage.outputs.map { cVar =>
+            cVar.name -> LinkedVar(cVar, IR.SArgLink(commonStage.name, cVar.name))
+        }.toMap
+        var evalAppletNum = 0
+
+        // Create a stage per call/scatter-block/declaration-block
+        val subBlocks = splitBlock(wfBody)
         val initAccu : Vector[(IR.Stage, Option[IR.Applet])] = Vector((commonStage, Some(commonApplet)))
-        val allStageInfo = wfBody.foldLeft(initAccu) { (accu, child) =>
+        val allStageInfo = subBlocks.foldLeft(initAccu) { (accu, child) =>
             val (stage, appletOpt) = child match {
-                case call: Call =>
+                case DeclBlock(decls) =>
+                    evalAppletNum = evalAppletNum + 1
+                    val appletName = wf.unqualifiedName ++ ".eval" ++ evalAppletNum.toString
+                    val (stage, applet) = compileEval(appletName, decls, cState)
+                    (stage, Some(applet))
+                case Singleton(call: Call) =>
                     val stage = compileCall(call, taskApplets, env, cState)
                     (stage, None)
-                case scatter : Scatter =>
+                case Singleton(scatter : Scatter) =>
                     val (stage, applet) = compileScatter(wf, scatter, env, cState)
                     (stage, Some(applet))
-                case decl: Declaration =>
-                    throw new Exception(cState.cef.notCurrentlySupported(
-                                            decl.ast,
-                                            "Declaration in the middle of workflow could not be lifted"))
-                case swf: Workflow =>
+                case Singleton(swf: Workflow) =>
                     throw new Exception(cState.cef.notCurrentlySupported(
                                             swf.ast, "Nested workflow"))
+                case Singleton(x) =>
+                    throw new Exception(cState.cef.notCurrentlySupported(
+                                            x.ast, "Workflow element"))
             }
-
             // Add bindings for the output variables. This allows later calls to refer
             // to these results. In case of scatters, there is no block name to reference.
             for (cVar <- stage.outputs) {
                 val fqVarName : String = child match {
-                    case call : Call => stage.name ++ "." ++ cVar.name
-                    case scatter : Scatter => cVar.name
-                    case _ : Workflow => cVar.name
+                    case DeclBlock(decls) => cVar.name
+                    case Singleton(call : Call) => stage.name ++ "." ++ cVar.name
+                    case Singleton(scatter : Scatter) => cVar.name
                     case _ => throw new Exception("Sanity")
                 }
                 env = env + (fqVarName ->

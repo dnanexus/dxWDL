@@ -44,8 +44,7 @@ object IR {
                       docker: Option[String],
                       destination : String,
                       kind: AppletKind.Value,
-                      wdlCode: String,
-                      ast: Ast)
+                      wdlCode: String)
 
     /** An input to a stage. Could be empty, a wdl constant, or
       * a link to an output variable from another stage.
@@ -118,5 +117,11 @@ object IR {
             YamlString("stages") -> YamlArray(stages.toVector),
             YamlString("applets") -> YamlArray(applets.toVector)
         )
+    }
+
+    def prettyPrint(ir: Workflow) : String = {
+        val yo: YamlObject = yaml(ir)
+        //yaml.print(Block)
+        yo.print()
     }
 }
