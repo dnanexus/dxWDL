@@ -7,7 +7,7 @@ import scala.util.{Failure, Success, Try}
 import spray.json._
 import spray.json.DefaultJsonProtocol
 import spray.json.JsString
-import wdl4s.{WdlNamespace, WdlNamespaceWithWorkflow, Workflow}
+import wdl4s.{Task, WdlNamespace, WdlNamespaceWithWorkflow, Workflow}
 
 object Main extends App {
     sealed trait Termination
@@ -213,7 +213,7 @@ object Main extends App {
     }
 
     // Extract the only task from a namespace
-    val taskOfNamespace(ns: WdlNamespace) : Task = {
+    def taskOfNamespace(ns: WdlNamespace) : Task = {
         val numTasks = ns.tasks.length
         if (numTasks != 1)
             throw new Exception(s"WDL file contains ${numTasks} tasks, instead of 1")
@@ -228,8 +228,8 @@ object Main extends App {
             val homeDir = Paths.get(args(1))
             val (jobInputPath, jobOutputPath, jobErrorPath, jobInfoPath) =
                 Utils.jobFilesOfHomeDir(homeDir)
-            val wdlSource : String = Utils.readFileContent(Paths.get(wdlDefPath))
-            val ns = WdlNamespace.loadUsingPath(wdlSource, None, None)
+            //val wdlSource : String = Utils.readFileContent(Paths.get(wdlDefPath))
+            val ns = WdlNamespace.loadUsingPath(Paths.get(wdlDefPath), None, None)
 
             try {
                 action match {
