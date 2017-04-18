@@ -37,6 +37,12 @@ default_test_list = [
     # Error codes
     "bad_status", "bad_status2" ]
 
+tmp_files=[]
+dxfile = None
+dxfile2 = None
+dxfile3 = None
+dxfile_v2 = None
+
 def main():
     argparser = argparse.ArgumentParser(description="Run WDL compiler tests on the platform")
     argparser.add_argument("--project", help="DNAnexus project ID", default="project-F07pBj80ZvgfzQK28j35Gj54")
@@ -110,12 +116,15 @@ def main():
 
 
 def run_workflow_subset(project, workflows, test_folder, no_wait):
+    create_tmp_files(project)
+
     # Run the workflows
     test_analyses=[]
     for wf_name, dxid in workflows.iteritems():
+        print("Generating inputs for {}".format(wf_name))
+        inputs = test_input[wf_name]()
         print("Running workflow {}".format(wf_name))
-        test_job = run_workflow(project, test_folder, wf_name, dxid,
-                                test_input[wf_name])
+        test_job = run_workflow(project, test_folder, wf_name, dxid, inputs)
         test_analyses.append(test_job)
     print("test analyses: " + ", ".join([a.get_id() for a in test_analyses]))
 
@@ -170,8 +179,8 @@ def validate_result(wf_name, desc, key, expected_val):
         return False
 
 def cleanup(project):
-    project.remove_folder("/test_data", recurse=True, force=True)
-
+    if len(tmp_files) > 0:
+        project.remove_folder("/test_data", recurse=True, force=True)
 
 def build_prerequisits(project, args):
     base_folder = time.strftime("/builds/%Y-%m-%d/%H%M%S-") + git_revision
@@ -291,6 +300,151 @@ def choose_tests(test_name):
 # Register inputs and outputs for all the tests.
 # Return the list of temporary files on the platform
 def register_all_tests(project):
+    register_test("math",
+                  (lambda x: {'0.ai' : 7}),
+                  {'2.result': 20})
+    register_test("system_calls",
+                  lambda x: {'0.data' : dxpy.dxlink(dxfile.get_id(), project.get_id()),
+                             '0.pattern' : "WDL"},
+                  {'1.count' : 5,
+                   '2.count' : 14})
+    register_test("four_step",
+                  lambda x: { '0.ai' : 1, '0.bi' : 1},
+                  {'4.sum' : 16})
+    register_test("add3",
+                  lambda x: { '0.ai' : 1, '0.bi' : 2, '0.ci' : 5 },
+                  {'2.sum' : 8})
+    register_test("concat",
+                  lambda x: { "0.s1": "Yellow", "0.s2": "Submarine" },
+                  {'1.result' : "Yellow_Submarine"})
+
+    # There is a bug in marshaling floats. Hopefully,
+    # it will get fixed in future wdl4s releases.
+    register_test("var_types",
+                  lambda x: {"0.b": True, "0.i": 3, "0.x": 4.2, "0.s": "zoology"},
+                  {})
+#                  {'0.result' : "true_3_4.2_zoology"})
+
+    register_test("fs",
+                  lambda x: {'0.data' : dxpy.dxlink(dxfile.get_id(), project.get_id())},
+                  {})
+    register_test("system_calls2",
+                  lambda x: {'0.pattern' : "java"},
+                  {})
+    register_test("math_expr",
+                  lambda x: {'0.ai' : 2, '0.bi' : 3},
+                  {'1.mul' : 6,
+                   '1.sum' : 5,
+                   '1.sub' : -1,
+                   '1.div' : 0,
+                   '2.mul' : 36,
+                   '2.div' : 1,
+                   '3.sum' : 14,
+                   '3.mul' : 40})
+    register_test("string_expr",
+                  lambda x: {},
+                  {'1.result' : "delicate.aligned__number.duplicate_metrics__xRIPx_toads_salamander"})
+    register_test("call_expressions",
+                  lambda x: {'0.i1' : 1, '0.i2' : 2},
+                   {'2.result': 25})
+    register_test("call_expressions2",
+                  lambda x: {'0.i' : 3, '0.s' : "frogs"},
+                   {'1.result' : "frogs.aligned__frogs.duplicate_metrics__xRIPx",
+                    '2.result': 37,
+                    '3.result': 7031})
+
+    register_test("files",
+                  lambda x: {'0.f' : dxpy.dxlink(dxfile.get_id(), project.get_id()) },
+                  {})
+    register_test("string_array",
+                  lambda x: { '0.sa' : ["A", "B", "C"]},
+                  { '1.result' : "A INPUT=B INPUT=C"})
+
+    register_test("file_array",
+                  lambda x: { '0.fs' : [dxpy.dxlink(dxfile.get_id(), project.get_id()),
+                                        dxpy.dxlink(dxfile2.get_id(), project.get_id()),
+                                        dxpy.dxlink(dxfile3.get_id(), project.get_id()) ]},
+                  { '3.result' : "True"})
+    register_test("output_array",
+                  lambda x: {},
+                  {'1.array' : [u'one', u'two', u'three', u'four']})
+    register_test("file_disambiguation",
+                  lambda x: { '0.f1' : dxpy.dxlink(dxfile.get_id(), project.get_id()),
+                              '0.f2' : dxpy.dxlink(dxfile_v2.get_id(), project.get_id()) },
+                  { '1.result' : "False"})
+
+    # Scatter/gather
+    register_test("sg_sum",
+                  lambda x: {'0.integers' :    [1,2,3,4,5] },
+                  {'1.incremented' : [2,3,4,5,6],
+                   '2.sum' : 20 })
+    register_test("sg1",
+                  lambda x: {},
+                  {'3.str': "_one_ _two_ _three_ _four_"})
+    register_test("sg_sum2",
+                  lambda x: {'0.integers' : [1,8,11] },
+                  {'2.sum' : 11 })
+    register_test("sg_sum3",
+                  lambda x: {'0.integers' : [2,3,5] },
+                  {'3.sum' : 15 })
+    register_test("sg_files",
+                  lambda x: {},
+                  {})
+
+    # ragged arrays
+    register_test("ragged_array",
+                  lambda x: {},
+                  {'2.result' : "1\n2\n3\t4\n5\n6\t7\t8"})
+    register_test("ragged_array2",
+                  lambda x: {},
+                  {'4.result':  ["1", "2", "3 INPUT=4", "5", "6 INPUT=7 INPUT=8"]})
+
+    # optionals
+    register_test("optionals",
+                  lambda x: { "0.arg1": 10, "mul2.i": 5, "add.a" : 1, "add.b" : 3},
+                  { "1.result" : 10,
+                    "4.result" : 4 })
+
+    # docker
+    register_test("bwa_version",
+                  lambda x: {},
+                  {'1.version' : "0.7.13-r1126"})
+    register_test_fail("bad_status", {}, {})
+    register_test_fail("bad_status2", {}, {})
+
+    # Output error
+    register_test_fail("missing_output", {}, {})
+
+    # combination of featuers
+    register_test("advanced",
+                  lambda x: { '0.pattern' : "github",
+                              '0.file' : dxpy.dxlink(dxfile.get_id(), project.get_id()),
+                              '0.species' : "Arctic fox" },
+                  { '1.result' : "Arctic fox --K -S --flags --contamination 0 --s foobar",
+                    '1.family' : "Family Arctic fox",
+                    '2.cgrep___count': [6, 0, 6] })
+    register_test("a1",
+                  lambda x: {},
+                  {})
+    register_test("decl_mid_wf",
+                  lambda x: {'0.s': "Yellow", '0.i': 4},
+                  {"1.sum": 15,
+                   "2.result": "Yellow.aligned_Yellow.wgs",
+                   "3.sum": 24})
+
+    register_test("viral-ngs-assembly",
+                  lambda x: {},
+                  {})
+
+def create_tmp_files(project):
+    global tmp_files
+    global dxfile
+    global dxfile2
+    global dxfile3
+    global dxfile_v2
+    if len(tmp_files) > 0:
+        return tmp_files
+
     buf = """
 Right now this is just a stripped-down version of
 [wdltool](https://github.com/broadinstitute/wdltool) which we're using
@@ -329,157 +483,11 @@ Tests are run via sbt test. Note that the tests do require Docker to be running.
                                  folder="/test_data")
     dxfile3 = dxpy.upload_string(buf3, project=project.get_id(), name="fileC",
                                  folder="/test_data")
-
-    # Another version of [dxfile]
     dxfile_v2 = dxpy.upload_string("ABCD 1234", project=project.get_id(), name="fileA",
                                    folder="/test_data")
+    tmp_files = [dxfile, dxfile2, dxfile3, dxfile_v2]
+    return tmp_files
 
-
-    register_test("math",
-                   {'0.ai' : 7},
-                   {'2.result': 20})
-    register_test("system_calls",
-                  {'0.data' : dxpy.dxlink(dxfile.get_id(), project.get_id()),
-                   '0.pattern' : "WDL"},
-                  {'1.count' : 5,
-                   '2.count' : 14})
-    register_test("four_step",
-                  { '0.ai' : 1,
-                    '0.bi' : 1},
-                  {'4.sum' : 16})
-    register_test("add3",
-                  { '0.ai' : 1,
-                    '0.bi' : 2,
-                    '0.ci' : 5 },
-                  {'2.sum' : 8})
-    register_test("concat",
-                  { "0.s1": "Yellow",
-                    "0.s2": "Submarine" },
-                  {'1.result' : "Yellow_Submarine"})
-
-    # There is a bug in marshaling floats. Hopefully,
-    # it will get fixed in future wdl4s releases.
-    register_test("var_types",
-                  {"0.b": True,
-                   "0.i": 3,
-                   "0.x": 4.2,
-                   "0.s": "zoology"},
-                  {})
-#                  {'0.result' : "true_3_4.2_zoology"})
-
-    register_test("fs",
-                  {'0.data' : dxpy.dxlink(dxfile.get_id(), project.get_id())},
-                  {})
-    register_test("system_calls2",
-                  {'0.pattern' : "java"},
-                  {})
-    register_test("math_expr",
-                  {'0.ai' : 2,
-                   '0.bi' : 3},
-                  {'1.mul' : 6,
-                   '1.sum' : 5,
-                   '1.sub' : -1,
-                   '1.div' : 0,
-                   '2.mul' : 36,
-                   '2.div' : 1,
-                   '3.sum' : 14,
-                   '3.mul' : 40})
-    register_test("string_expr",
-                  {},
-                  {'1.result' : "delicate.aligned__number.duplicate_metrics__xRIPx_toads_salamander"})
-    register_test("call_expressions",
-                  {'0.i1' : 1,
-                   '0.i2' : 2},
-                   {'2.result': 25})
-    register_test("call_expressions2",
-                  {'0.i' : 3,
-                   '0.s' : "frogs"},
-                   {'1.result' : "frogs.aligned__frogs.duplicate_metrics__xRIPx",
-                    '2.result': 37,
-                    '3.result': 7031})
-
-    register_test("files",
-                  {'0.f' : dxpy.dxlink(dxfile.get_id(), project.get_id()) },
-                  {})
-    register_test("string_array",
-                  { '0.sa' : ["A", "B", "C"]},
-                  { '1.result' : "A INPUT=B INPUT=C"})
-
-    register_test("file_array",
-                  { '0.fs' : [dxpy.dxlink(dxfile.get_id(), project.get_id()),
-                              dxpy.dxlink(dxfile2.get_id(), project.get_id()),
-                              dxpy.dxlink(dxfile3.get_id(), project.get_id()) ]},
-                  { '3.result' : "True"})
-    register_test("output_array",
-                  {},
-                  {'1.array' : [u'one', u'two', u'three', u'four']})
-    register_test("file_disambiguation",
-                  { '0.f1' : dxpy.dxlink(dxfile.get_id(), project.get_id()),
-                    '0.f2' : dxpy.dxlink(dxfile_v2.get_id(), project.get_id()) },
-                  { '1.result' : "False"})
-
-    # Scatter/gather
-    register_test("sg_sum",
-                  {'0.integers' :    [1,2,3,4,5] },
-                  {'1.incremented' : [2,3,4,5,6],
-                   '2.sum' : 20 })
-    register_test("sg1",
-                  {},
-                  {'3.str': "_one_ _two_ _three_ _four_"})
-    register_test("sg_sum2",
-                  {'0.integers' : [1,8,11] },
-                  {'2.sum' : 11 })
-    register_test("sg_sum3",
-                  {'0.integers' : [2,3,5] },
-                  {'3.sum' : 15 })
-    register_test("sg_files", {}, {})
-
-    # ragged arrays
-    register_test("ragged_array",
-                  {},
-                  {'2.result' : "1\n2\n3\t4\n5\n6\t7\t8"})
-    register_test("ragged_array2",
-                  {},
-                  {'4.result':  ["1", "2", "3 INPUT=4", "5", "6 INPUT=7 INPUT=8"]})
-
-    # optionals
-    register_test("optionals",
-                  { "0.arg1": 10,
-                    "mul2.i": 5,
-                    "add.a" : 1,
-                    "add.b" : 3},
-                  { "1.result" : 10,
-                    "4.result" : 4 })
-
-    # docker
-    register_test("bwa_version",
-                  {},
-                  {'1.version' : "0.7.13-r1126"})
-    register_test_fail("bad_status", {}, {})
-    register_test_fail("bad_status2", {}, {})
-
-    # Output error
-    register_test_fail("missing_output", {}, {})
-
-    # combination of featuers
-    register_test("advanced",
-                  { '0.pattern' : "github",
-                    '0.file' : dxpy.dxlink(dxfile.get_id(), project.get_id()),
-                    '0.species' : "Arctic fox" },
-                  { '1.result' : "Arctic fox --K -S --flags --contamination 0 --s foobar",
-                    '1.family' : "Family Arctic fox",
-                    '2.cgrep___count': [6, 0, 6] })
-    register_test("a1", {}, {})
-    register_test("decl_mid_wf",
-                  {'0.s': "Yellow",
-                   '0.i': 4},
-                  {"1.sum": 15,
-                   "2.result": "Yellow.aligned_Yellow.wgs",
-                   "3.sum": 24})
-
-    register_test("viral-ngs-assembly",
-                  {},
-                  {})
 
 # The GATK pipeline takes many parameters, it is easier
 # to treat it is a script.
@@ -607,10 +615,10 @@ def register_gatk_pipeline(project):
     }
     register_test("gatk_160927", gatk_input_args, {})
 
-def register_test(wf_name, inputs, outputs):
+def register_test(wf_name, gen_inputs, outputs):
     if wf_name in reserved_test_names:
         raise Exception("Test name {} is reserved".format(wf_name))
-    test_input[wf_name] = inputs
+    test_input[wf_name] = gen_inputs
     test_output[wf_name] = outputs
 
 def register_test_fail(wf_name, inputs, outputs):
