@@ -61,7 +61,6 @@ class MainSpec extends FlatSpec with Matchers with BeforeAndAfterAll {
           |  runtime: {}
           |workflow:
           |  name: three_step
-          |  declarations: []
           |  children:
           |  - call:
           |      name: ps

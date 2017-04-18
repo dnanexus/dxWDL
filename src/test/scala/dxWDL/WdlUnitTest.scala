@@ -123,7 +123,8 @@ class WdlUnitTest extends FlatSpec with BeforeAndAfterEach with OneInstancePerTe
 
         val ns = WdlNamespaceWithWorkflow.load(wdl, Seq.empty).get
         val call : Call = getCallFromNamespace(ns, "Add2")
-        val inputs = Map("Add.sum" -> WdlInteger(1))
+        val inputs = Map("a" -> WdlInteger(2),
+                         "b" -> WdlInteger(3))
         val outputs : Seq[(String, WdlType, WdlValue)] = evalCall(call, inputs)
         assert(outputs.length == 1);
         val result = outputs.head
@@ -156,7 +157,7 @@ class WdlUnitTest extends FlatSpec with BeforeAndAfterEach with OneInstancePerTe
         val ns = WdlNamespaceWithWorkflow.load(wdl, Seq.empty).get
         val call : Call = getCallFromNamespace(ns, "Concat")
         val inputs : Map[String,WdlValue] =
-            Map("str_array" ->
+            Map("words" ->
                     WdlArray(WdlArrayType(WdlStringType),
                              List(WdlString("a"), WdlString("b"), WdlString("c"))))
 
@@ -192,7 +193,7 @@ class WdlUnitTest extends FlatSpec with BeforeAndAfterEach with OneInstancePerTe
         val ns = WdlNamespaceWithWorkflow.load(wdl, Seq.empty).get
         val call : Call = getCallFromNamespace(ns, "Concat")
         val inputs : Map[String,WdlValue] =
-            Map("int_array" ->
+            Map("words" ->
                     WdlArray(WdlArrayType(WdlIntegerType),
                              List(WdlInteger(1), WdlInteger(2), WdlInteger(3))))
         val outputs : Seq[(String, WdlType, WdlValue)] = evalCall(call, inputs)
@@ -240,7 +241,7 @@ class WdlUnitTest extends FlatSpec with BeforeAndAfterEach with OneInstancePerTe
         }
 
         val inputs : Map[String,WdlValue] =
-            Map("fs" -> WdlArray(WdlArrayType(WdlFileType),
+            Map("files" -> WdlArray(WdlArrayType(WdlFileType),
                                  List(WdlSingleFile("/tmp/X.txt"),
                                       WdlSingleFile("/tmp/Y.txt"),
                                       WdlSingleFile("/tmp/Z.txt"))))
@@ -286,16 +287,16 @@ class WdlUnitTest extends FlatSpec with BeforeAndAfterEach with OneInstancePerTe
         val call : Call = getCallFromNamespace(ns, "Concat")
 
         val inputs : Map[String,WdlValue] =
-            Map("x_ia" ->
+            Map("ia" ->
                     WdlArray(WdlArrayType(WdlIntegerType),
                              List(WdlInteger(1), WdlInteger(2), WdlInteger(3))),
-                "x_fa" ->
+                "fa" ->
                     WdlArray(WdlArrayType(WdlFloatType),
                              List(WdlFloat(1.4), WdlFloat(3.14), WdlFloat(1.618))),
-                "x_ba" ->
+                "ba" ->
                     WdlArray(WdlArrayType(WdlBooleanType),
                              List(WdlBoolean(false), WdlBoolean(true), WdlBoolean(true))),
-                "x_sa" ->
+                "sa" ->
                     WdlArray(WdlArrayType(WdlStringType),
                              List(WdlString("hello"), WdlString("Mrs"), WdlString("Robinson"))))
 
