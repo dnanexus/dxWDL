@@ -38,6 +38,47 @@ object CompilerFrontEnd {
                      cef: CompilerErrorFormatter,
                      verbose: Boolean)
 
+    // Create a declaration.
+    //
+    // The difficulty here is in generating an AST. We just
+    def declarationGen(wdlType: WdlType,
+                       name: String,
+                       expr: Option[WdlExpression]) : Declaration = {
+        val textualRepr = expr match {
+            case None => s"${wdlType.toWdlString} ${name}"
+            case Some(e) => s"${wdlType.toWdlString} ${name} = ${e.toWdlString}"
+        }
+        val ast: Ast = AstTools.getAst(textualRepr, "")
+        Declaration(wdlType, name, expr, None, ast)
+    }
+
+
+    // Transform a variable name such as A.x to A_x. Dots are illegal
+    // in dx:applet specifications.
+    def transformVarName(x: String) : String = {
+        x.replaceAll("\\.", "_")
+    }
+    def revTransformVarName(x: String) : String = {
+        x.replaceAll("_", "\\.")
+    }
+
+    // Rename member accesses inside an expression, from
+    // the form A.x to A_x.
+    //
+    // Here, we take a shortcut, and just replace strings, instead of
+    // doing a recursive syntax analysis (see ValueEvaluator wdl4s
+    // module).
+    def exprRenameVars(expr: WdlExpression,
+                       allVars: Vector[IR.CVar]) : WdlExpression = {
+        var sExpr: String = expr.toWdlString
+        for (cVar <- allVars) {
+            // A.x => A_x
+            val orgMembAccess = revTransformVarName(cVar.name)
+            sExpr = sExpr.replaceAll(orgMembAccess, cVar.name)
+        }
+        WdlExpression.fromString(sExpr)
+    }
+
     // Figure out the expression type for a collection we loop over in a scatter
     //
     // Expressions like A.B.C are converted to A___B___C, in order to avoid
@@ -317,36 +358,59 @@ object CompilerFrontEnd {
     }
 
     /**
-      A declaration in the middle of a workflow such as xtmp2 below requires
+      Create an applet+stage to evaluate expressions in the middle of
+      a workflow.  Sometimes, we need to pass arguments to the
+      applet. For example, the declaration xtmp2 below requires
       passing in the result of the Add call.
 
+workflow w {
+    Int ai
     call Add  {
-        input:
-          a=ai, b=3
+        input: a=ai, b=3
     }
     Int xtmp2 = Add.result + 10
     call Multiply  {
-        input:
-          a=xtmp2, b=2
+        input: a=xtmp2, b=2
     }
+}
       */
-
     def compileEvalAndPassClosure(appletName: String,
                                   declarations: Seq[Declaration],
                                   env: CallEnv,
                                   cState: State) : (IR.Stage, IR.Applet) = {
         // Figure out the closure
+        var closure = Map.empty[String, LinkedVar]
+        declarations.foreach { decl =>
+            decl.expression match {
+                case Some(expr) =>
+                    closure = updateClosure(closure, env, expr, false, cState)
+                case None => ()
+            }
+        }
 
         // rename the variables X.y --> X_y
+        val allVars: Vector[IR.CVar] = closure.map{ case (_, lVar) => lVar.cVar }.toVector
+        val tDeclarations = declarations.map{ decl =>
+            decl.expression match {
+                case Some(expr) =>
+                    declarationGen(decl.wdlType, decl.unqualifiedName,
+                                   Some(exprRenameVars(expr, allVars)))
+                case None => decl
+            }
+        }.toVector
 
         // Add input declarations
+        val inputDecls: Vector[Declaration] = closure.map{ case (_, lVar) =>
+            declarationGen(lVar.cVar.wdlType, lVar.cVar.name, None)
+        }.toVector
 
         // compile the applet
-        val (stage, applet) = compileEval(appletName, inputDecls ++ declarations, cState)
+        val (stage, applet) = compileEval(appletName, inputDecls ++ tDeclarations, cState)
 
         // Link to the X.y original variables
-        val inputs: Vector[IR.SArg] = ...
-        (IR.Stage(appletName, appletName, inputs, stage.outputVars),
+        val inputs: Vector[IR.SArg] = closure.map{ case (_, lVar) => lVar.sArg }.toVector
+
+        (IR.Stage(appletName, appletName, inputs, stage.outputs),
          applet)
     }
 
@@ -400,7 +464,8 @@ object CompilerFrontEnd {
 
         // Extract the input values/links from the environment
         val inputs: Vector[IR.SArg] = callee.inputs.map{ cVar =>
-            val expr: Option[(String,WdlExpression)] = call.inputMappings.find{ case (k,v) => k == cVar.name }
+            val expr: Option[(String,WdlExpression)] =
+                call.inputMappings.find{ case (k,v) => k == cVar.name }
             expr match {
                 case None =>
                     // input is unbound; the workflow does not provide it.
@@ -439,15 +504,6 @@ object CompilerFrontEnd {
         IR.Stage(stageName, name, inputs, callee.outputs)
     }
 
-    // Transform a variable name such as A.x to A_x. Dots are illegal
-    // in dx:applet specifications.
-    def scTransform(x: String) : String = {
-        x.replaceAll("\\.", "_")
-    }
-    def scRevTransform(x: String) : String = {
-        x.replaceAll("_", "\\.")
-    }
-
     // Create a valid WDL workflow that runs a scatter. The main modification
     // required here is renaming variables of the form A.x to A_x.
     def scGenWorklow(scatter: Scatter,
@@ -457,25 +513,17 @@ object CompilerFrontEnd {
             s"${cVar.wdlType} ${cVar.name})"
         )
 
-        // Rename the variables we got from the input. Here,
-        // we take a shortcut, and just replace strings, instead of
-        // doing a recursive syntax analysis (see ValueEvaluator wdl4s module).
-        def exprRenameVars(expr: WdlExpression) : WdlExpression = {
-            var sExpr: String = expr.toWdlString
-            for (cVar <- inputVars) {
-                // A.x => A_x
-                val orgMembAccess = scRevTransform(cVar.name)
-                sExpr = sExpr.replaceAll(orgMembAccess, cVar.name)
-            }
-            WdlExpression.fromString(sExpr)
+        // Rename the variables we got from the input.
+        def exprTransform(expr: WdlExpression) : WdlExpression = {
+            exprRenameVars(expr, inputVars)
         }
 
         val outputs: Vector[String] = outputVars.map(cVar =>
-            s"${cVar.wdlType} ${cVar.name} = ${scRevTransform(cVar.name)}"
+            s"${cVar.wdlType} ${cVar.name} = ${revTransformVarName(cVar.name)}"
         )
 
         val lines: Vector[String] = decls ++
-            WdlPrettyPrinter.scatterRewrite(scatter, 0, exprRenameVars) ++
+            WdlPrettyPrinter.scatterRewrite(scatter, 0, exprTransform) ++
             WdlPrettyPrinter.buildBlock("output", outputs, 0)
         WdlPrettyPrinter.buildBlock("workflow w", lines, 0)
     }
@@ -507,7 +555,7 @@ object CompilerFrontEnd {
             val task = Utils.taskOfCall(call)
             task.outputs.map { tso =>
                 val varName = callUniqueName(call, cState) ++ "." ++ tso.unqualifiedName
-                IR.CVar(scTransform(varName), WdlArrayType(tso.wdlType), tso.ast)
+                IR.CVar(transformVarName(varName), WdlArrayType(tso.wdlType), tso.ast)
             }
         }.flatten.toVector
 
@@ -554,7 +602,8 @@ object CompilerFrontEnd {
         //Utils.trace(cState.verbose, s"scatter closure=${closure}")
 
         val inputVars : Vector[IR.CVar] = closure.map {
-            case (varName, LinkedVar(cVar, _)) => IR.CVar(scTransform(varName), cVar.wdlType, cVar.ast)
+            case (varName, LinkedVar(cVar, _)) => IR.CVar(transformVarName(varName),
+                                                          cVar.wdlType, cVar.ast)
         }.toVector
         val wdlCode = scGenWorklow(scatter, inputVars, outputVars).mkString("\n")
         val applet = IR.Applet(wf.unqualifiedName ++ "." ++ stageName,
