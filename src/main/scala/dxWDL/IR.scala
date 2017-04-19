@@ -71,6 +71,13 @@ object IR {
         )
     }
 
+    // remove empty lines from a long string
+    private def stripEmptyLines(s: String) : String = {
+        val lines = s.split("\n")
+        val nonEmptyLines = lines.filter(l => !l.trim().isEmpty)
+        nonEmptyLines.mkString("\n")
+    }
+
     def yaml(applet: Applet) : YamlObject = {
         val inputs = applet.inputs.map(yaml)
         val outputs = applet.outputs.map(yaml)
@@ -85,7 +92,7 @@ object IR {
             YamlString("instanceType") -> YamlString(applet.instanceType),
             YamlString("destination") -> YamlString(applet.destination),
             YamlString("kind") -> YamlString(applet.kind.toString),
-            YamlString("wdlCode") -> YamlString(applet.wdlCode)
+            YamlString("wdlCode") -> YamlString(stripEmptyLines(applet.wdlCode))
         )
         YamlObject(m ++ docker)
     }
@@ -94,7 +101,7 @@ object IR {
         sArg match {
             case SArgEmpty => YamlString("empty")
             case SArgConst(wVal) => YamlString(wVal.toWdlString)
-            case SArgLink(stageName, argName) => YamlString(stageName + ":" + argName)
+            case SArgLink(stageName, argName) => YamlString(stageName + "->" + argName)
         }
     }
 

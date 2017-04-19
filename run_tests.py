@@ -122,7 +122,7 @@ def run_workflow_subset(project, workflows, test_folder, no_wait):
     test_analyses=[]
     for wf_name, dxid in workflows.iteritems():
         print("Generating inputs for {}".format(wf_name))
-        inputs = test_input[wf_name]()
+        inputs = test_input[wf_name](3)
         print("Running workflow {}".format(wf_name))
         test_job = run_workflow(project, test_folder, wf_name, dxid, inputs)
         test_analyses.append(test_job)

@@ -286,18 +286,14 @@ object CompilerFrontEnd {
         }
     }
 
-    // Print a WDL task that evaluates expressions, and outputs
-    // all of them
+    // Print a WDL workflow that evaluates expressions
+    //
+    // Note: we do not generate outputs, the applet deals with this issue.
     def genEvalWorkflowFromDeclarations(name: String,
-                                    declarations: Seq[Declaration]) : String = {
-        val inputs: Vector[String] =
+                                        declarations: Seq[Declaration]) : String = {
+        val inputLines: Vector[String] =
             declarations.map(x => WdlPrettyPrinter.apply(x, 0)).flatten.toVector
-        val outputs: Vector[String]  = declarations.map(decl =>
-            s"${decl.wdlType.toWdlString} ${decl.unqualifiedName}"
-        ).toVector
-        val lines: Vector[String] = inputs ++
-            WdlPrettyPrinter.buildBlock("output", outputs, 0)
-        WdlPrettyPrinter.buildBlock(s"workflow w", lines, 0).mkString("\n")
+        WdlPrettyPrinter.buildBlock(s"workflow w", inputLines, 0).mkString("\n")
     }
 
     // Create a preliminary applet to handle workflow inputs, top-level
@@ -340,9 +336,20 @@ object CompilerFrontEnd {
                 case Some(_) => None
             }
         }.flatten.toVector
-        val outputVars : Vector[IR.CVar] = declarations.map{ decl =>
-            IR.CVar(decl.unqualifiedName, decl.wdlType, decl.ast)
-        }.toVector
+        val outputVars : Vector[IR.CVar] =
+            if (outputOnlyCalculations) {
+                declarations.map{ decl =>
+                    decl.expression match {
+                        case None => None
+                        case Some(_) =>
+                            IR.CVar(decl.unqualifiedName, decl.wdlType, decl.ast)
+                    }
+                }.flatten.toVector
+            } else {
+                declarations.map{ decl =>
+                    IR.CVar(decl.unqualifiedName, decl.wdlType, decl.ast)
+                }.toVector
+            }
 
         // We need minimal compute resources, use the default instance type
         val applet = IR.Applet(appletName,
@@ -389,8 +396,14 @@ workflow w {
         }
 
         // rename the variables X.y --> X_y
+        closure = closure.map{ case (key,lVar) =>
+            val trKey = transformVarName(key)
+            val cVar = IR.CVar(trKey, lVar.cVar.wdlType, lVar.cVar.ast)
+            trKey -> LinkedVar(cVar, lVar.sArg)
+        }.toMap
+        //System.err.println(s"closure=${closure}")
         val allVars: Vector[IR.CVar] = closure.map{ case (_, lVar) => lVar.cVar }.toVector
-        val tDeclarations = declarations.map{ decl =>
+        val trDeclarations = declarations.map{ decl =>
             decl.expression match {
                 case Some(expr) =>
                     declarationGen(decl.wdlType, decl.unqualifiedName,
@@ -405,7 +418,7 @@ workflow w {
         }.toVector
 
         // compile the applet
-        val (stage, applet) = compileEval(appletName, inputDecls ++ tDeclarations, cState)
+        val (stage, applet) = compileEval(appletName, inputDecls ++ trDeclarations, cState)
 
         // Link to the X.y original variables
         val inputs: Vector[IR.SArg] = closure.map{ case (_, lVar) => lVar.sArg }.toVector
