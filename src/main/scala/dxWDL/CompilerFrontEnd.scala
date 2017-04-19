@@ -316,8 +316,9 @@ object CompilerFrontEnd {
     //
     def compileEval(appletName: String,
                     declarations: Seq[Declaration],
+                    outputOnlyCalculations: Boolean,
                     cState: State) : (IR.Stage, IR.Applet) = {
-        Utils.trace(cState.verbose, s"Compiling declaration evaluation applet {}".format(appletName))
+        Utils.trace(cState.verbose, s"Compiling evaluation applet ${appletName}".format(appletName))
         val code = genEvalWorkflowFromDeclarations(appletName, declarations)
 
         // Only workflow declarations that do not have an expression,
@@ -336,20 +337,17 @@ object CompilerFrontEnd {
                 case Some(_) => None
             }
         }.flatten.toVector
-        val outputVars : Vector[IR.CVar] =
+
+        // Output a subset of the variables
+        val declarationsOut =
             if (outputOnlyCalculations) {
-                declarations.map{ decl =>
-                    decl.expression match {
-                        case None => None
-                        case Some(_) =>
-                            IR.CVar(decl.unqualifiedName, decl.wdlType, decl.ast)
-                    }
-                }.flatten.toVector
+                declarations.filter{ decl => decl.expression != None }
             } else {
-                declarations.map{ decl =>
-                    IR.CVar(decl.unqualifiedName, decl.wdlType, decl.ast)
-                }.toVector
+                declarations
             }
+        val outputVars: Vector[IR.CVar] = declarationsOut.map{ decl =>
+            IR.CVar(decl.unqualifiedName, decl.wdlType, decl.ast)
+        }.toVector
 
         // We need minimal compute resources, use the default instance type
         val applet = IR.Applet(appletName,
@@ -418,7 +416,7 @@ workflow w {
         }.toVector
 
         // compile the applet
-        val (stage, applet) = compileEval(appletName, inputDecls ++ trDeclarations, cState)
+        val (stage, applet) = compileEval(appletName, inputDecls ++ trDeclarations, true, cState)
 
         // Link to the X.y original variables
         val inputs: Vector[IR.SArg] = closure.map{ case (_, lVar) => lVar.sArg }.toVector
@@ -679,9 +677,8 @@ workflow w {
 
         // Create a preliminary stage to handle workflow inputs, and top-level
         // declarations.
-        Utils.trace(cState.verbose, s"Compiling workflow initialization sequence")
         val (commonStage, commonApplet) = compileEval(wf.unqualifiedName ++ "." ++ Utils.COMMON,
-                                                      topDecls, cState)
+                                                      topDecls, false, cState)
 
         // An environment where variables are defined
         var env : CallEnv = commonStage.outputs.map { cVar =>

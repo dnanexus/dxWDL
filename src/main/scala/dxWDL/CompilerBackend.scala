@@ -147,7 +147,7 @@ object CompilerBackend {
                     |    echo "user= $${USER}"
                     |
                     |    # evaluate input arguments, and download input files
-                    |    java -cp $${DX_FS_ROOT}/dxWDL.jar:$${CLASSPATH} dxWDL.Main appletProlog $${DX_FS_ROOT}/${Utils.WDL_SNIPPET_FILENAME} $${HOME}
+                    |    java -cp $${DX_FS_ROOT}/dxWDL.jar:$${CLASSPATH} dxWDL.Main taskProlog $${DX_FS_ROOT}/${Utils.WDL_SNIPPET_FILENAME} $${HOME}
                     |    # Debugging outputs
                     |    ls -lR
                     |    cat $${HOME}/execution/meta/script
@@ -163,7 +163,7 @@ object CompilerBackend {
                     |    fi
                     |
                     |    # evaluate applet outputs, and upload result files
-                    |    java -cp $${DX_FS_ROOT}/dxWDL.jar:$${CLASSPATH} dxWDL.Main appletEpilog $${DX_FS_ROOT}/${Utils.WDL_SNIPPET_FILENAME} $${HOME}
+                    |    java -cp $${DX_FS_ROOT}/dxWDL.jar:$${CLASSPATH} dxWDL.Main taskEpilog $${DX_FS_ROOT}/${Utils.WDL_SNIPPET_FILENAME} $${HOME}
                     |}""".stripMargin.trim
         }
     }
