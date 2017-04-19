@@ -316,6 +316,40 @@ object CompilerFrontEnd {
          applet)
     }
 
+    /**
+      A declaration in the middle of a workflow such as xtmp2 below requires
+      passing in the result of the Add call.
+
+    call Add  {
+        input:
+          a=ai, b=3
+    }
+    Int xtmp2 = Add.result + 10
+    call Multiply  {
+        input:
+          a=xtmp2, b=2
+    }
+      */
+
+    def compileEvalAndPassClosure(appletName: String,
+                                  declarations: Seq[Declaration],
+                                  env: CallEnv,
+                                  cState: State) : (IR.Stage, IR.Applet) = {
+        // Figure out the closure
+
+        // rename the variables X.y --> X_y
+
+        // Add input declarations
+
+        // compile the applet
+        val (stage, applet) = compileEval(appletName, inputDecls ++ declarations, cState)
+
+        // Link to the X.y original variables
+        val inputs: Vector[IR.SArg] = ...
+        (IR.Stage(appletName, appletName, inputs, stage.outputVars),
+         applet)
+    }
+
     // Compile a WDL task into an applet
     def compileTask(task : Task, cState: State) : (IR.Applet, Vector[IR.CVar]) = {
         Utils.trace(cState.verbose, s"Compiling task ${task.name}")
@@ -601,7 +635,7 @@ object CompilerFrontEnd {
                 case DeclBlock(decls) =>
                     evalAppletNum = evalAppletNum + 1
                     val appletName = wf.unqualifiedName ++ ".eval" ++ evalAppletNum.toString
-                    val (stage, applet) = compileEval(appletName, decls, cState)
+                    val (stage, applet) = compileEvalAndPassClosure(appletName, decls, env, cState)
                     (stage, Some(applet))
                 case Singleton(call: Call) =>
                     val stage = compileCall(call, taskApplets, env, cState)
