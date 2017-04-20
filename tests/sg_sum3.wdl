@@ -45,13 +45,13 @@ task sum {
 workflow sg_sum3 {
     Array[Int] integers
 
-    scatter (i in integers) {
-        call inc {input: i=i}
+    scatter (k in integers) {
+        call inc {input: i=k}
         call twice {input: i=inc.result}
         call mod7 {input: i=twice.result}
     }
-    scatter (i in mod7.result) {
-        call inc as inc2 {input: i=i}
+    scatter (k in mod7.result) {
+        call inc as inc2 {input: i=k}
     }
     call sum {input: ints = inc2.result}
 }

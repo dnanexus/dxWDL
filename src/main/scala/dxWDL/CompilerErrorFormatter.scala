@@ -16,11 +16,12 @@ case class CompilerErrorFormatter(terminalMap: Map[Terminal, WdlSource]) {
             |""".stripMargin
     }
 
-    def missingVarRefException(ast: Ast) : String = {
-        val name: Terminal = ast.getAttribute("name").asInstanceOf[Terminal]
-        s"""|Reference to missing variable
+    def undefinedMemberAccess(ast: Ast): String = {
+        val lhsAst = ast.getAttribute("lhs").asInstanceOf[Terminal]
+        val fqn = WdlExpression.toString(ast)
+        s"""|Undefined member access (${fqn})
             |
-            |${pointToSource(name)}
+            |${pointToSource(lhsAst)}
             |""".stripMargin
     }
 

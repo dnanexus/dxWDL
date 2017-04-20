@@ -175,9 +175,9 @@ def validate_result(wf_name, desc, key, expected_val):
             expected_val.sort()
         if result != expected_val:
             print("Analysis {} gave unexpected results".format(wf_name))
-            print("stage={}".format(snum))
+            print("stage={}".format(stage_name))
             print("stage_results={}".format(stage_results))
-            print("Should be stage[{}].{} = {} != {}".format(snum, field_name, result, expected_val))
+            print("Should be stage[{}].{} = {} != {}".format(stage_name, field_name, result, expected_val))
             return False
         return True
     except Exception, e:
@@ -311,7 +311,7 @@ def choose_tests(test_name):
 def register_all_tests(project):
     register_test("math",
                   lambda x: {'0.ai' : 7},
-                  lambda x: {'Multiply.result': 20})
+                  lambda x: {'Multiply.result': 40})
     register_test("system_calls",
                   lambda x: {'0.data' : dxpy.dxlink(dxfile.get_id(), project.get_id()),
                              '0.pattern' : "WDL"},

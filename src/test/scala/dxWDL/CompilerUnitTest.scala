@@ -109,8 +109,6 @@ class CompilerUnitTest extends FlatSpec with BeforeAndAfterEach {
         assert (scatters.size == 1)
         val scatter = scatters.toList.head
 
-        //val prepareCall = wf.findCallByName("prepare").get
-        //val env : Map[String, WdlType] = Map("prepare" -> WdlCallOutputsObjectType(prepareCall))
         val env : Map[String, WdlType] = Map("prepare.array" -> WdlArrayType(WdlStringType))
         val wdlType : WdlType = CompilerFrontEnd.calcIterWdlType(scatter, env)
         assert(wdlType == WdlStringType)

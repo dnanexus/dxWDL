@@ -6,6 +6,8 @@
 package dxWDL
 
 import java.nio.file.{Files, Paths, Path}
+import net.jcazevedo.moultingyaml._
+import net.jcazevedo.moultingyaml.DefaultYamlProtocol._
 import scala.util.{Failure, Success, Try}
 import wdl4s.AstTools
 import wdl4s.AstTools.EnhancedAstNode
@@ -24,7 +26,14 @@ object CompilerFrontEnd {
 
     // Linking between a variable, and which stage we got
     // it from.
-    case class LinkedVar(cVar: IR.CVar, sArg: IR.SArg)
+    case class LinkedVar(cVar: IR.CVar, sArg: IR.SArg) {
+        def yaml : YamlObject = {
+            YamlObject(
+                YamlString("cVar") -> IR.yaml(cVar),
+                YamlString("sArg") -> IR.yaml(sArg)
+            )
+        }
+    }
 
     // Environment (scope) where a call is made
     type CallEnv = Map[String, LinkedVar]
@@ -37,6 +46,15 @@ object CompilerFrontEnd {
     case class State(destination: String,
                      cef: CompilerErrorFormatter,
                      verbose: Boolean)
+
+    // Convert the environment to yaml, and then pretty
+    // print it.
+    def prettyPrint(env: CallEnv) : String = {
+        val m : Map[YamlValue, YamlValue] = env.map{ case (key, lVar) =>
+            YamlString(key) -> lVar.yaml
+        }.toMap
+        YamlObject(m).print()
+    }
 
     // Create a declaration.
     //
@@ -53,17 +71,8 @@ object CompilerFrontEnd {
     }
 
 
-    // Transform a variable name such as A.x to A_x. Dots are illegal
-    // in dx:applet specifications.
-    def transformVarName(x: String) : String = {
-        x.replaceAll("\\.", "_")
-    }
-    def revTransformVarName(x: String) : String = {
-        x.replaceAll("_", "\\.")
-    }
-
     // Rename member accesses inside an expression, from
-    // the form A.x to A_x.
+    // the form A.x to A_x. This is used inside an applet WDL generated code.
     //
     // Here, we take a shortcut, and just replace strings, instead of
     // doing a recursive syntax analysis (see ValueEvaluator wdl4s
@@ -73,30 +82,31 @@ object CompilerFrontEnd {
         var sExpr: String = expr.toWdlString
         for (cVar <- allVars) {
             // A.x => A_x
-            val orgMembAccess = revTransformVarName(cVar.name)
-            sExpr = sExpr.replaceAll(orgMembAccess, cVar.name)
+            sExpr = sExpr.replaceAll(cVar.name, cVar.dxVarName)
         }
         WdlExpression.fromString(sExpr)
     }
 
     // Figure out the expression type for a collection we loop over in a scatter
     //
-    // Expressions like A.B.C are converted to A___B___C, in order to avoid
-    // the wdl4s library from interpreting these as member accesses. The environment
-    // passed into the method [env] has types for all these variables, as fully qualified names.
+    // Expressions like A.B.C are converted to A_B_C, in order to avoid
+    // the wdl4s library from interpreting these as member accesses.
     def calcIterWdlType(scatter : Scatter, env : Map[String,WdlType]) : WdlType = {
+        def transformVarName(x: String) : String = { x.replaceAll("\\.", "_") }
+        def revTransformVarName(x: String) : String = {  x.replaceAll("_", "\\.") }
+
         def lookup(varName : String) : WdlType = {
-            val v = varName.replaceAll("___", "\\.")
-            env.get(v) match {
+            val orgMembAccess = revTransformVarName(varName)
+            env.get(orgMembAccess) match {
                 case Some(x) => x
                 case None => throw new Exception(s"No type found for variable ${varName}")
             }
         }
 
-        // convert all sub-expressions of the form A.B.C to A___B___C
-        val s : String = scatter.collection.toWdlString.replaceAll("\\.", "___")
-        val collection : WdlExpression = WdlExpression.fromString(s)
-
+        // convert all sub-expressions of the form A.B.C to A_B_C
+        // Note: this will work only for simple expressions.
+        val collection : WdlExpression = WdlExpression.fromString(
+            transformVarName(scatter.collection.toWdlString))
         val collectionType : WdlType =
             collection.evaluateType(lookup, new WdlStandardLibraryFunctionsType) match {
                 case Success(wdlType) => wdlType
@@ -251,8 +261,10 @@ object CompilerFrontEnd {
                     case Some(lVar) =>
                         closure + (fqn -> lVar)
                     case None =>
-                        if (strict)
-                            throw new Exception(cState.cef.missingVarRefException(a))
+                        if (strict) {
+                            System.err.println(s"Cannot find ${fqn} in env=\n${prettyPrint(env)}")
+                            throw new Exception(cState.cef.undefinedMemberAccess(a))
+                        }
                         closure
                 }
             case a: Ast if a.isFunctionCall || a.isUnaryOperator || a.isBinaryOperator
@@ -314,11 +326,10 @@ object CompilerFrontEnd {
     //  must be defined on the command line. [cmdline] is a calculation that
     //  uses constants and variables.
     //
-    def compileEval(appletName: String,
-                    declarations: Seq[Declaration],
-                    outputOnlyCalculations: Boolean,
-                    cState: State) : (IR.Stage, IR.Applet) = {
-        Utils.trace(cState.verbose, s"Compiling evaluation applet ${appletName}".format(appletName))
+    def compileCommon(appletName: String,
+                      declarations: Seq[Declaration],
+                      cState: State) : (IR.Stage, IR.Applet) = {
+        Utils.trace(cState.verbose, s"Compiling common applet ${appletName}".format(appletName))
         val code = genEvalWorkflowFromDeclarations(appletName, declarations)
 
         // Only workflow declarations that do not have an expression,
@@ -338,14 +349,7 @@ object CompilerFrontEnd {
             }
         }.flatten.toVector
 
-        // Output a subset of the variables
-        val declarationsOut =
-            if (outputOnlyCalculations) {
-                declarations.filter{ decl => decl.expression != None }
-            } else {
-                declarations
-            }
-        val outputVars: Vector[IR.CVar] = declarationsOut.map{ decl =>
+        val outputVars: Vector[IR.CVar] = declarations.map{ decl =>
             IR.CVar(decl.unqualifiedName, decl.wdlType, decl.ast)
         }.toVector
 
@@ -383,6 +387,8 @@ workflow w {
                                   declarations: Seq[Declaration],
                                   env: CallEnv,
                                   cState: State) : (IR.Stage, IR.Applet) = {
+        Utils.trace(cState.verbose, s"Compiling evaluation applet ${appletName}".format(appletName))
+
         // Figure out the closure
         var closure = Map.empty[String, LinkedVar]
         declarations.foreach { decl =>
@@ -393,34 +399,44 @@ workflow w {
             }
         }
 
-        // rename the variables X.y --> X_y
+        // figure out the inputs
         closure = closure.map{ case (key,lVar) =>
-            val trKey = transformVarName(key)
-            val cVar = IR.CVar(trKey, lVar.cVar.wdlType, lVar.cVar.ast)
-            trKey -> LinkedVar(cVar, lVar.sArg)
+            val cVar = IR.CVar(key, lVar.cVar.wdlType, lVar.cVar.ast)
+            key -> LinkedVar(cVar, lVar.sArg)
         }.toMap
-        val allVars: Vector[IR.CVar] = closure.map{ case (_, lVar) => lVar.cVar }.toVector
-        val trDeclarations = declarations.map{ decl =>
+        val inputVars: Vector[IR.CVar] = closure.map{ case (_, lVar) => lVar.cVar }.toVector
+        val inputDecls: Vector[Declaration] = closure.map{ case(_, lVar) =>
+            declarationGen(lVar.cVar.wdlType, lVar.cVar.dxVarName, None)
+        }.toVector
+
+        // figure out the outputs
+        val outputVars: Vector[IR.CVar] = declarations.map{ decl =>
+            IR.CVar(decl.unqualifiedName, decl.wdlType, decl.ast)
+        }.toVector
+        val outputDeclarations = declarations.map{ decl =>
             decl.expression match {
                 case Some(expr) =>
                     declarationGen(decl.wdlType, decl.unqualifiedName,
-                                   Some(exprRenameVars(expr, allVars)))
+                                   Some(exprRenameVars(expr, inputVars)))
                 case None => decl
             }
         }.toVector
 
-        // Add input declarations
-        val inputDecls: Vector[Declaration] = closure.map{ case (_, lVar) =>
-            declarationGen(lVar.cVar.wdlType, lVar.cVar.name, None)
-        }.toVector
-
-        // compile the applet
-        val (stage, applet) = compileEval(appletName, inputDecls ++ trDeclarations, true, cState)
+        // We need minimal compute resources, use the default instance type
+        val code = genEvalWorkflowFromDeclarations(appletName, inputDecls ++ outputDeclarations)
+        val applet = IR.Applet(appletName,
+                               inputVars,
+                               outputVars,
+                               calcInstanceType(None),
+                               None,
+                               cState.destination,
+                               IR.AppletKind.Eval,
+                               code)
 
         // Link to the X.y original variables
         val inputs: Vector[IR.SArg] = closure.map{ case (_, lVar) => lVar.sArg }.toVector
 
-        (IR.Stage(appletName, appletName, inputs, stage.outputs),
+        (IR.Stage(appletName, appletName, inputs, outputVars),
          applet)
     }
 
@@ -528,13 +544,8 @@ workflow w {
             exprRenameVars(expr, inputVars)
         }
 
-        val outputs: Vector[String] = outputVars.map(cVar =>
-            s"${cVar.wdlType} ${cVar.name} = ${revTransformVarName(cVar.name)}"
-        )
-
         val lines: Vector[String] = decls ++
-            WdlPrettyPrinter.scatterRewrite(scatter, 0, exprTransform) ++
-            WdlPrettyPrinter.buildBlock("output", outputs, 0)
+            WdlPrettyPrinter.scatterRewrite(scatter, 0, exprTransform)
         WdlPrettyPrinter.buildBlock("workflow w", lines, 0)
     }
 
@@ -555,7 +566,7 @@ workflow w {
         // Construct a unique stage name by adding "scatter" to the
         // first call name. This is guaranteed to be unique within a
         // workflow, because call names must be unique (or aliased)
-        val stageName = Utils.SCATTER ++ "___" ++ callUniqueName(calls(0), cState)
+        val stageName = Utils.SCATTER ++ "_" ++ callUniqueName(calls(0), cState)
         Utils.trace(cState.verbose, s"compiling scatter ${stageName}")
 
         // Construct the block output by unifying individual call outputs.
@@ -565,11 +576,11 @@ workflow w {
             val task = Utils.taskOfCall(call)
             task.outputs.map { tso =>
                 val varName = callUniqueName(call, cState) ++ "." ++ tso.unqualifiedName
-                IR.CVar(transformVarName(varName), WdlArrayType(tso.wdlType), tso.ast)
+                IR.CVar(varName, WdlArrayType(tso.wdlType), tso.ast)
             }
         }.flatten.toVector
 
-        // Figure out the closure, we need the expression being looped over.
+        // Figure out the closure required to evaluate the expression being looped over.
         var closure = Map.empty[String, LinkedVar]
         closure = updateClosure(closure, env, scatter.collection, true, cState)
 
@@ -612,8 +623,7 @@ workflow w {
         //Utils.trace(cState.verbose, s"scatter closure=${closure}")
 
         val inputVars : Vector[IR.CVar] = closure.map {
-            case (varName, LinkedVar(cVar, _)) => IR.CVar(transformVarName(varName),
-                                                          cVar.wdlType, cVar.ast)
+            case (varName, LinkedVar(cVar, _)) => IR.CVar(varName, cVar.wdlType, cVar.ast)
         }.toVector
         val wdlCode = scGenWorklow(scatter, inputVars, outputVars).mkString("\n")
         val applet = IR.Applet(wf.unqualifiedName ++ "." ++ stageName,
@@ -676,8 +686,8 @@ workflow w {
 
         // Create a preliminary stage to handle workflow inputs, and top-level
         // declarations.
-        val (commonStage, commonApplet) = compileEval(wf.unqualifiedName ++ "." ++ Utils.COMMON,
-                                                      topDecls, false, cState)
+        val (commonStage, commonApplet) = compileCommon(wf.unqualifiedName ++ "_" ++ Utils.COMMON,
+                                                        topDecls, cState)
 
         // An environment where variables are defined
         var env : CallEnv = commonStage.outputs.map { cVar =>
@@ -692,7 +702,7 @@ workflow w {
             val (stage, appletOpt) = child match {
                 case DeclBlock(decls) =>
                     evalAppletNum = evalAppletNum + 1
-                    val appletName = wf.unqualifiedName ++ ".eval" ++ evalAppletNum.toString
+                    val appletName = wf.unqualifiedName ++ "_eval" ++ evalAppletNum.toString
                     val (stage, applet) = compileEvalAndPassClosure(appletName, decls, env, cState)
                     (stage, Some(applet))
                 case Singleton(call: Call) =>
@@ -701,9 +711,6 @@ workflow w {
                 case Singleton(scatter : Scatter) =>
                     val (stage, applet) = compileScatter(wf, scatter, env, cState)
                     (stage, Some(applet))
-                case Singleton(swf: Workflow) =>
-                    throw new Exception(cState.cef.notCurrentlySupported(
-                                            swf.ast, "Nested workflow"))
                 case Singleton(x) =>
                     throw new Exception(cState.cef.notCurrentlySupported(
                                             x.ast, "Workflow element"))

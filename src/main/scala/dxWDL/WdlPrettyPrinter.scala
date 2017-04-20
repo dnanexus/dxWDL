@@ -73,8 +73,6 @@ object WdlPrettyPrinter {
         }.toList
         val inputsConcat = "input:  " + inputs.mkString(", ")
 
-        System.err.println(s"indenting call ${name} by ${level}")
-
         buildBlock(s"call ${name} ${aliasStr}",
                    Vector(indentLine(inputsConcat, level+1)),
                    level)
@@ -160,7 +158,6 @@ object WdlPrettyPrinter {
     }
 
     def apply(wf: Workflow, level: Int) : Vector[String] = {
-        System.err.println(s"Workflow ${wf.unqualifiedName} indent by ${level}")
         val children = wf.children.map {
             case call: Call => apply(call, level + 1)
             case sc: Scatter => apply(sc, level + 1)

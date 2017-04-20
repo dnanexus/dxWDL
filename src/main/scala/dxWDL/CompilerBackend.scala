@@ -272,10 +272,10 @@ object CompilerBackend {
     def buildApplet(applet: IR.Applet, cState: State) : (DXApplet, Vector[IR.CVar]) = {
         Utils.trace(cState.verbose, s"Compiling applet ${applet.name}")
         val inputSpec : Seq[JsValue] = applet.inputs.map(cVar =>
-            wdlVarToSpec(cVar.name, cVar.wdlType, cVar.ast, cState)
+            wdlVarToSpec(cVar.dxVarName, cVar.wdlType, cVar.ast, cState)
         ).flatten
         val outputDecls : Seq[JsValue] = applet.outputs.map(cVar =>
-            wdlVarToSpec(cVar.name, cVar.wdlType, cVar.ast, cState)
+            wdlVarToSpec(cVar.dxVarName, cVar.wdlType, cVar.ast, cState)
         ).flatten
         val runSpec : JsValue = calcRunSpec(applet.instanceType, cState.dxWDLrtId)
         val attrs = Map(
@@ -314,8 +314,8 @@ object CompilerBackend {
                         // in a value at runtime.
                         dxBuilder
                     case IR.SArgConst(wValue) =>
-                        val wvl = WdlVarLinks.outputFieldOfWdlValue(cVar.name, wValue.wdlType, wValue)
-                        val fields = WdlVarLinks.genFields(wvl, cVar.name)
+                        val wvl = WdlVarLinks.outputFieldOfWdlValue(cVar.dxVarName, wValue.wdlType, wValue)
+                        val fields = WdlVarLinks.genFields(wvl, cVar.dxVarName)
                         fields.foldLeft(dxBuilder) { case (b, (fieldName, jsonNode)) =>
                             b.put(fieldName, jsonNode)
                         }
@@ -323,7 +323,7 @@ object CompilerBackend {
                         val dxStage = stageDict(stageName)
                         val wvl = WdlVarLinks(argName, cVar.wdlType,
                                               Some(IORef.Output, DxlStage(dxStage)))
-                        val fields = WdlVarLinks.genFields(wvl, cVar.name)
+                        val fields = WdlVarLinks.genFields(wvl, cVar.dxVarName)
                         fields.foldLeft(dxBuilder) { case (b, (fieldName, jsonNode)) =>
                             b.put(fieldName, jsonNode)
                         }

@@ -18,7 +18,13 @@ object IR {
     // an applet argument.
     // At compile time, we need to keep track of the syntax-tree, for error
     // reporting purposes.
-    case class CVar(name: String, wdlType: WdlType, ast: Ast)
+    case class CVar(name: String, wdlType: WdlType, ast: Ast) {
+        // dx does not allow dots in variable names, so we
+        // convert them to underscores.
+        //
+        // TODO: check for collisions that are created this way.
+        def dxVarName : String = name.replaceAll("\\.", "_")
+    }
 
     // There are several kinds of applets
     //   Eval:      evaluate WDL expressions, pure calculation
@@ -67,7 +73,8 @@ object IR {
     def yaml(cVar: CVar) : YamlObject = {
         YamlObject(
             YamlString("type") -> YamlString(cVar.wdlType.toWdlString),
-            YamlString("name") -> YamlString(cVar.name)
+            YamlString("name") -> YamlString(cVar.name),
+            YamlString("dxName") -> YamlString(cVar.dxVarName)
         )
     }
 
