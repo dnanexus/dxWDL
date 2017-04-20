@@ -122,7 +122,7 @@ def run_workflow_subset(project, workflows, test_folder, no_wait):
     test_analyses=[]
     for wf_name, dxid in workflows.iteritems():
         print("Generating inputs for {}".format(wf_name))
-        inputs = test_input[wf_name](3)
+        inputs = test_input[wf_name]("dummy")
         print("Running workflow {}".format(wf_name))
         test_job = run_workflow(project, test_folder, wf_name, dxid, inputs)
         test_analyses.append(test_job)
@@ -140,7 +140,7 @@ def run_workflow_subset(project, workflows, test_folder, no_wait):
         desc = analysis.describe()
         wf_name = desc["name"].split(' ')[0]
         output = desc["output"]
-        shouldbe = test_output[wf_name]
+        shouldbe = test_output[wf_name]("dummy")
         correct = True
         print("Checking results for workflow {}".format(wf_name))
 
@@ -150,16 +150,24 @@ def run_workflow_subset(project, workflows, test_folder, no_wait):
             print("Analysis {} passed".format(wf_name))
 
 
+def find_stage_outputs_by_name(wf_name, desc, stage_name):
+    stages = desc['stages']
+    for snum in range(len(stages)):
+        crnt = stages[snum]['execution']['name']
+        if crnt == stage_name:
+            return stages[snum]['execution']['output']
+    raise Exception("Analysis {} does not have stage {}".format(wf_name, stage_name))
+
 # Check that a workflow returned the expected result for
 # a [key]
 def validate_result(wf_name, desc, key, expected_val):
     # Split key into stage-number and name. For example:
     #  '0.count' -> 0, count
-    snum = int(key.split('.')[0])
+    stage_name = key.split('.')[0]
     field_name = key.split('.')[1]
     try:
         # get the actual results
-        stage_results = desc['stages'][snum]['execution']['output']
+        stage_results = find_stage_outputs_by_name(wf_name, desc, stage_name)
         if field_name not in stage_results:
             print("field {} missing from stage results {}".format(field_name, stage_results))
             return False
@@ -174,8 +182,9 @@ def validate_result(wf_name, desc, key, expected_val):
             print("Should be stage[{}].{} = {} != {}".format(snum, field_name, result, expected_val))
             return False
         return True
-    except:
-        print("no stage {} in results".format(snum))
+    except Exception, e:
+        #print("no stage {} in results {}".format(stage_name, desc['stages']))
+        print("exception message={}".format(e))
         return False
 
 def cleanup(project):
@@ -301,103 +310,102 @@ def choose_tests(test_name):
 # Return the list of temporary files on the platform
 def register_all_tests(project):
     register_test("math",
-                  (lambda x: {'0.ai' : 7}),
-                  {'2.result': 20})
+                  lambda x: {'0.ai' : 7},
+                  lambda x: {'Multiply.result': 20})
     register_test("system_calls",
                   lambda x: {'0.data' : dxpy.dxlink(dxfile.get_id(), project.get_id()),
                              '0.pattern' : "WDL"},
-                  {'1.count' : 5,
-                   '2.count' : 14})
+                  lambda x: {'cgrep.count' : 5, 'wc.count' : 14})
     register_test("four_step",
                   lambda x: { '0.ai' : 1, '0.bi' : 1},
-                  {'4.sum' : 16})
+                  lambda x: {'Add4.sum' : 16})
     register_test("add3",
                   lambda x: { '0.ai' : 1, '0.bi' : 2, '0.ci' : 5 },
-                  {'2.sum' : 8})
+                  lambda x: {'Add3.sum' : 8})
     register_test("concat",
                   lambda x: { "0.s1": "Yellow", "0.s2": "Submarine" },
-                  {'1.result' : "Yellow_Submarine"})
+                  lambda x: {'join2.result' : "Yellow_Submarine"})
 
     # There is a bug in marshaling floats. Hopefully,
     # it will get fixed in future wdl4s releases.
     register_test("var_types",
                   lambda x: {"0.b": True, "0.i": 3, "0.x": 4.2, "0.s": "zoology"},
-                  {})
+                  lambda x: {})
 #                  {'0.result' : "true_3_4.2_zoology"})
 
     register_test("fs",
                   lambda x: {'0.data' : dxpy.dxlink(dxfile.get_id(), project.get_id())},
-                  {})
+                  lambda x: {})
     register_test("system_calls2",
                   lambda x: {'0.pattern' : "java"},
-                  {})
+                  lambda x: {})
     register_test("math_expr",
                   lambda x: {'0.ai' : 2, '0.bi' : 3},
-                  {'1.mul' : 6,
-                   '1.sum' : 5,
-                   '1.sub' : -1,
-                   '1.div' : 0,
-                   '2.mul' : 36,
-                   '2.div' : 1,
-                   '3.sum' : 14,
-                   '3.mul' : 40})
+                  lambda x: {'int_ops.mul' : 6,
+                             'int_ops.sum' : 5,
+                             'int_ops.sub' : -1,
+                             'int_ops.div' : 0,
+                             'int_ops2.mul' : 36,
+                             'int_ops2.div' : 1,
+                             'int_ops3.sum' : 14,
+                             'int_ops3.mul' : 40})
     register_test("string_expr",
                   lambda x: {},
-                  {'1.result' : "delicate.aligned__number.duplicate_metrics__xRIPx_toads_salamander"})
+                  lambda x: {'string_ops.result' :
+                             "delicate.aligned__number.duplicate_metrics__xRIPx_toads_salamander"})
     register_test("call_expressions",
                   lambda x: {'0.i1' : 1, '0.i2' : 2},
-                   {'2.result': 25})
+                  lambda x: {'int_ops.result': 25})
     register_test("call_expressions2",
                   lambda x: {'0.i' : 3, '0.s' : "frogs"},
-                   {'1.result' : "frogs.aligned__frogs.duplicate_metrics__xRIPx",
-                    '2.result': 37,
-                    '3.result': 7031})
+                  lambda x: {'string_ops.result' : "frogs.aligned__frogs.duplicate_metrics__xRIPx",
+                             'int_ops.result': 37,
+                             'int_ops2.result': 7031})
 
     register_test("files",
                   lambda x: {'0.f' : dxpy.dxlink(dxfile.get_id(), project.get_id()) },
-                  {})
+                  lambda x: {})
     register_test("string_array",
                   lambda x: { '0.sa' : ["A", "B", "C"]},
-                  { '1.result' : "A INPUT=B INPUT=C"})
+                  lambda x: { 'Concat.result' : "A INPUT=B INPUT=C"})
 
     register_test("file_array",
                   lambda x: { '0.fs' : [dxpy.dxlink(dxfile.get_id(), project.get_id()),
                                         dxpy.dxlink(dxfile2.get_id(), project.get_id()),
                                         dxpy.dxlink(dxfile3.get_id(), project.get_id()) ]},
-                  { '3.result' : "True"})
+                  lambda: { 'colocation.result' : "True"})
     register_test("output_array",
                   lambda x: {},
-                  {'1.array' : [u'one', u'two', u'three', u'four']})
+                  lambda x: {'prepare.array' : [u'one', u'two', u'three', u'four']})
     register_test("file_disambiguation",
                   lambda x: { '0.f1' : dxpy.dxlink(dxfile.get_id(), project.get_id()),
                               '0.f2' : dxpy.dxlink(dxfile_v2.get_id(), project.get_id()) },
-                  { '1.result' : "False"})
+                  lambda x: { 'colocation.result' : "False"})
 
     # Scatter/gather
     register_test("sg_sum",
                   lambda x: {'0.integers' :    [1,2,3,4,5] },
-                  {'1.incremented' : [2,3,4,5,6],
-                   '2.sum' : 20 })
+                  lambda x: { 'sum.sum' : 20 })
     register_test("sg1",
                   lambda x: {},
-                  {'3.str': "_one_ _two_ _three_ _four_"})
+                  lambda x: {'gather.str': "_one_ _two_ _three_ _four_"})
     register_test("sg_sum2",
                   lambda x: {'0.integers' : [1,8,11] },
-                  {'2.sum' : 11 })
+                  lambda x: {'sum.sum' : 11 })
     register_test("sg_sum3",
                   lambda x: {'0.integers' : [2,3,5] },
-                  {'3.sum' : 15 })
+                  lambda x: {'sum.sum' : 15 })
     register_test("sg_files",
                   lambda x: {},
-                  {})
+                  lambda x: {})
 
     # ragged arrays
     register_test("ragged_array",
                   lambda x: {},
-                  {'2.result' : "1\n2\n3\t4\n5\n6\t7\t8"})
+                  lambda x: {'processTsv.result' : "1\n2\n3\t4\n5\n6\t7\t8"})
     register_test("ragged_array2",
                   lambda x: {},
-                  {'4.result':  ["1", "2", "3 INPUT=4", "5", "6 INPUT=7 INPUT=8"]})
+                  lambda x: {'collect.result':  ["1", "2", "3 INPUT=4", "5", "6 INPUT=7 INPUT=8"]})
 
     # optionals
     register_test("optionals",
@@ -615,11 +623,11 @@ def register_gatk_pipeline(project):
     }
     register_test("gatk_160927", gatk_input_args, {})
 
-def register_test(wf_name, gen_inputs, outputs):
+def register_test(wf_name, gen_inputs, gen_outputs):
     if wf_name in reserved_test_names:
         raise Exception("Test name {} is reserved".format(wf_name))
     test_input[wf_name] = gen_inputs
-    test_output[wf_name] = outputs
+    test_output[wf_name] = gen_outputs
 
 def register_test_fail(wf_name, inputs, outputs):
     register_test(wf_name, inputs, outputs)

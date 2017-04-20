@@ -399,7 +399,6 @@ workflow w {
             val cVar = IR.CVar(trKey, lVar.cVar.wdlType, lVar.cVar.ast)
             trKey -> LinkedVar(cVar, lVar.sArg)
         }.toMap
-        //System.err.println(s"closure=${closure}")
         val allVars: Vector[IR.CVar] = closure.map{ case (_, lVar) => lVar.cVar }.toVector
         val trDeclarations = declarations.map{ decl =>
             decl.expression match {

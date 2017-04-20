@@ -202,7 +202,7 @@ object RunnerScatter {
               jobOutputPath : Path,
               jobInfoPath: Path) : Unit = {
         // Extract types for closure inputs
-        val closureTypes = Utils.loadExecInfo(Utils.readFileContent(jobInfoPath))
+        val (closureTypes,_) = Utils.loadExecInfo(Utils.readFileContent(jobInfoPath))
         System.err.println(s"WdlType mapping =${closureTypes}")
 
         // Parse the inputs, do not download files from the platform.

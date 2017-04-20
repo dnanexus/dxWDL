@@ -48,12 +48,13 @@ class UtilsTest extends FlatSpec with BeforeAndAfterEach with OneInstancePerTest
     }
 
     it should "parse job executable info, and extract help strings" in {
-        val jobInfo = """{"links": ["file-F11jP2Q0ZvgYvPv77JBXgyB0"], "inputSpec": [{"help": "Int", "name": "ai", "class": "int"}, {"help": "Int", "name": "bi", "class": "int"}, {"optional": true, "name": "dbg_sleep", "class": "int"}], "dxapi": "1.0.0", "id": "applet-F11jP700ZvgvzxJ3Jq7p6jJZ", "title": "", "runSpec": {"execDepends": [{"name": "dx-java-bindings"}, {"name": "openjdk-8-jre-headless"}, {"package_manager": "apt", "name": "dx-toolkit"}], "bundledDependsByRegion": {"aws:us-east-1": [{"name": "resources.tar.gz", "id": {"$dnanexus_link": "file-F11jP2Q0ZvgYvPv77JBXgyB0"}}]}, "bundledDepends": [{"name": "resources.tar.gz", "id": {"$dnanexus_link": "file-F11jP2Q0ZvgYvPv77JBXgyB0"}}], "systemRequirements": {"main": {"instanceType": "mem1_ssd1_x2"}}, "executionPolicy": {}, "release": "14.04", "interpreter": "bash", "distribution": "Ubuntu"}, "access": {"network": []}, "state": "closed", "folder": "/", "description": "", "tags": [], "outputSpec": [{"name": "sum", "class": "int"}], "sponsored": false, "createdBy": {"user": "user-orodeh"}, "class": "applet", "types": [], "hidden": false, "name": "add3.Add", "created": 1480820636000, "modified": 1480871955198, "summary": "", "project": "container-F12504j0188Bgk6pFXZY6PP3", "developerNotes": ""}"""
+        val jobInfo = """{"links": ["file-F11jP2Q0ZvgYvPv77JBXgyB0"], "inputSpec": [{"help": "Int", "name": "ai", "class": "int"}, {"help": "Int", "name": "bi", "class": "int"}, {"optional": true, "name": "dbg_sleep", "class": "int"}], "dxapi": "1.0.0", "id": "applet-F11jP700ZvgvzxJ3Jq7p6jJZ", "title": "", "runSpec": {"execDepends": [{"name": "dx-java-bindings"}, {"name": "openjdk-8-jre-headless"}, {"package_manager": "apt", "name": "dx-toolkit"}], "bundledDependsByRegion": {"aws:us-east-1": [{"name": "resources.tar.gz", "id": {"$dnanexus_link": "file-F11jP2Q0ZvgYvPv77JBXgyB0"}}]}, "bundledDepends": [{"name": "resources.tar.gz", "id": {"$dnanexus_link": "file-F11jP2Q0ZvgYvPv77JBXgyB0"}}], "systemRequirements": {"main": {"instanceType": "mem1_ssd1_x2"}}, "executionPolicy": {}, "release": "14.04", "interpreter": "bash", "distribution": "Ubuntu"}, "access": {"network": []}, "state": "closed", "folder": "/", "description": "", "tags": [], "outputSpec": [{"help": "Int", "name": "sum", "class": "int"}], "sponsored": false, "createdBy": {"user": "user-orodeh"}, "class": "applet", "types": [], "hidden": false, "name": "add3.Add", "created": 1480820636000, "modified": 1480871955198, "summary": "", "project": "container-F12504j0188Bgk6pFXZY6PP3", "developerNotes": ""}"""
 
-        val info = Utils.loadExecInfo(jobInfo)
-        assert(info("ai") == Some(WdlIntegerType))
-        assert(info("bi") == Some(WdlIntegerType))
-        assert(info("dbg_sleep") == None)
+        val (infoIn,infoOut) = Utils.loadExecInfo(jobInfo)
+        assert(infoIn("ai") == Some(WdlIntegerType))
+        assert(infoIn("bi") == Some(WdlIntegerType))
+        assert(infoIn("dbg_sleep") == None)
+        assert(infoOut("sum") == Some(WdlIntegerType))
     }
 
     it should "parse job executable info (II)" in {
@@ -85,7 +86,7 @@ class UtilsTest extends FlatSpec with BeforeAndAfterEach with OneInstancePerTest
         "types": []
     }"""
 
-        var info = Utils.loadExecInfo(jobInfo)
+        var (info,_) = Utils.loadExecInfo(jobInfo)
         assert(info("ai") == Some(WdlIntegerType))
     }
 

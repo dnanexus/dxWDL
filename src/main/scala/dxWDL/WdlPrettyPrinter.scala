@@ -5,7 +5,7 @@
 package dxWDL
 
 import wdl4s._
-import wdl4s.command.{ParameterCommandPart, StringCommandPart}
+import wdl4s.command.{CommandPart, ParameterCommandPart, StringCommandPart}
 import wdl4s.parser.WdlParser.{Ast, AstNode, Terminal}
 
 object WdlPrettyPrinter {
@@ -17,25 +17,43 @@ object WdlPrettyPrinter {
         s"${" " * n}"
     }
 
+    // indent lines
+    def indentLines(lines: Vector[String], indent: Int) = {
+        val spaces = genNSpaces(indent)
+        lines.map{ x => (spaces + x) }
+    }
+
+    // All blocks except for task command.
+    //
+    // Indent the block body by a set number of spaces.
     def buildBlock(top: String,
                    middle: Vector[String],
                    indent: Int) : Vector[String] = {
         if (middle.isEmpty) {
             Vector.empty
         } else {
-            val spaces = genNSpaces(indent + I_STEP)
-            val (firstLine, endLine) =
-                if (top == "command" && middle.length > 1) {
-                    // Special symbols for a multi-line shell command
-                    (top + " <<<", ">>>")
-                } else {
-                    (top + " {", "}")
-                }
-            val body = middle.map{ x => (spaces + x) }
+            val firstLine = top + " {"
+            val body = indentLines(middle, indent + I_STEP)
+            val endLine = "}"
             firstLine +: body :+ endLine
         }
     }
 
+    // The command block is special because spaces and tabs must be
+    // faithfully preserved. There are shell commands that are
+    // sensitive to white space and tabs.
+    //
+    def buildCommandBlock(commandTemplate: Seq[CommandPart]) : String = {
+        val commandLines: String = commandTemplate.map {part =>
+            part match  {
+                case x:ParameterCommandPart => x.toString()
+                case x:StringCommandPart => x.toString()
+            }
+        }.mkString("")
+        val firstLine = "command <<<\n"
+        val endLine = ">>>\n"
+        firstLine ++ commandLines ++ endLine
+    }
 
     def apply(call: Call, indent: Int) : Vector[String] = {
         val name = call match {
@@ -117,27 +135,25 @@ object WdlPrettyPrinter {
         Vector(line)
     }
 
+    // We need to be careful here to preserve white spaces in the command
+    // section.
+    //
     // TODO: support meta and parameterMeta
     def apply(task: Task, indent:Int) : Vector[String] = {
-        val decls = task.declarations.map(x => apply(x, indent)).flatten.toVector
-
-        // This section must remain exactly the same as in the original source. There
-        // are shell commands that are sensitive to white space and tabs.
-        val command = task.commandTemplate.map{
-            case x: ParameterCommandPart => x.toString()
-            case x: StringCommandPart => x.toString()
-        }.toVector
+        val decls = task.declarations.map(x => apply(x, I_STEP)).flatten.toVector
         val runtime = task.runtimeAttributes.attrs.map{ case (key, expr) =>
             s"${key}: ${expr.toWdlString}"
         }.toVector
         val outputs = task.outputs.map(x => apply(x, indent)).flatten.toVector
 
-        val taskBody = decls ++
-            (buildBlock("command", command, indent)) ++
-            (buildBlock("runtime", runtime, indent)) ++
-            (buildBlock("output", outputs, indent))
-
-        buildBlock( s"task ${task.name}", taskBody, indent)
+        val firstLine = Vector(s"task ${task.name} {")
+        val endLine = Vector("}\n")
+        firstLine ++
+            decls ++
+            Vector(buildCommandBlock(task.commandTemplate)) ++
+            indentLines(buildBlock("runtime", runtime, indent), I_STEP) ++
+            indentLines(buildBlock("output", outputs, indent), I_STEP) ++
+            endLine
     }
 
     def apply(wfo: WorkflowOutput, indent: Int) : Vector[String] = {
@@ -147,7 +163,6 @@ object WdlPrettyPrinter {
     }
 
     def apply(wf: Workflow, indent: Int) : Vector[String] = {
-//        val decls = task.declarations.map(x => apply(x, indent)).flatten
         val children = wf.children.map {
             case call: Call => apply(call, indent)
             case sc: Scatter => apply(sc, indent)
@@ -156,7 +171,6 @@ object WdlPrettyPrinter {
         }.flatten
         val outputs = wf.outputs.map(x => apply(x, indent)).flatten
 
-//        val lines = decls.toVector ++
         val lines = children.toVector ++
             buildBlock("outputs", outputs.toVector, indent)
         buildBlock( s"workflow ${wf.unqualifiedName}", lines, indent)

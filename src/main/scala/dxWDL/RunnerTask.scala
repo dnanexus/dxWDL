@@ -277,7 +277,7 @@ object RunnerTask {
                jobOutputPath : Path,
                jobInfoPath: Path) : Unit = {
         // Extract types for the inputs
-        val inputTypes = Utils.loadExecInfo(Utils.readFileContent(jobInfoPath))
+        val (inputTypes,_) = Utils.loadExecInfo(Utils.readFileContent(jobInfoPath))
         System.err.println(s"WdlType mapping =${inputTypes}")
 
         // Read the job input file

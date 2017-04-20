@@ -22,12 +22,13 @@ package dxWDL
 // DX bindings
 import com.dnanexus.{DXApplet, DXEnvironment, DXFile, DXJob, InputParameter, OutputParameter}
 import com.fasterxml.jackson.databind.JsonNode
-import java.nio.file.{Path, Paths, Files}
+//import java.nio.file.{Path, Paths, Files}
+import java.nio.file.Path
 import scala.collection.JavaConverters._
 import spray.json._
 import spray.json.DefaultJsonProtocol
 import spray.json.JsString
-import wdl4s.{Call, Declaration, Task, WdlNamespaceWithWorkflow, WdlExpression, Workflow}
+import wdl4s.{Declaration, WdlNamespaceWithWorkflow, WdlExpression, Workflow}
 import wdl4s.types._
 import wdl4s.values._
 import WdlVarLinks._
@@ -86,8 +87,8 @@ object RunnerEval {
               jobInputPath : Path,
               jobOutputPath : Path,
               jobInfoPath: Path) : Unit = {
-        // Figure out input types
-        val inputTypes = Utils.loadExecInfo(Utils.readFileContent(jobInfoPath))
+        // Figure out input/output types
+        val (inputTypes, outputTypes) = Utils.loadExecInfo(Utils.readFileContent(jobInfoPath))
 
         // Parse the inputs, do not download files from the platform,
         // they will be passed as links.
@@ -104,7 +105,10 @@ object RunnerEval {
             }
         }
         val outputs : Seq[(String, WdlVarLinks)] = evalDeclarations(decls, inputs)
-        val outputFields: Map[String, JsonNode] = outputs.map {
+
+        // Remove variables that are not exported
+        val exported = outputs.filter{ case (varName, _) => outputTypes contains varName }
+        val outputFields: Map[String, JsonNode] = exported.map {
             case (varName, wvl) => WdlVarLinks.genFields(wvl, varName)
         }.flatten.toMap
         val m = outputFields.map{ case (varName,jsNode) =>
@@ -113,7 +117,7 @@ object RunnerEval {
 
         val json = JsObject(m)
         val ast_pp = json.prettyPrint
-        System.err.println(s"outputs = ${ast_pp}")
+        System.err.println(s"exported = ${ast_pp}")
         Utils.writeFileContent(jobOutputPath, ast_pp)
     }
 }

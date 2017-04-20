@@ -99,9 +99,14 @@ object Utils {
     // [
     //   {"help": "Int", "name": "bi", "class": "int"}, ...
     // ]
-    def loadExecInfo(jobInfo: String) : Map[String, Option[WdlType]] = {
+    def loadExecInfo(jobInfo: String) : (Map[String, Option[WdlType]], Map[String, Option[WdlType]]) = {
         val info: JsValue = jobInfo.parseJson
         val inputSpec: Vector[JsValue] = info.asJsObject.fields.get("inputSpec") match {
+            case None => Vector()
+            case Some(JsArray(x)) => x
+            case Some(_) => throw new AppInternalException("Bad format for exec information")
+        }
+        val outputSpec: Vector[JsValue] = info.asJsObject.fields.get("outputSpec") match {
             case None => Vector()
             case Some(JsArray(x)) => x
             case Some(_) => throw new AppInternalException("Bad format for exec information")
@@ -112,7 +117,7 @@ object Utils {
                 case _ => throw new AppInternalException("Bad format for exec information: getJsString")
             }
         }
-        inputSpec.map{ case varDef =>
+        def wdlTypeOfVar(varDef: JsValue) : (String, Option[WdlType]) = {
             val v = varDef.asJsObject
             val name = getJsString(v.fields("name"))
             v.fields.get("help") match {
@@ -122,7 +127,10 @@ object Utils {
                     val wType : WdlType = WdlType.fromWdlString(helpStr)
                     name -> Some(wType)
             }
-        }.toMap
+        }
+
+        (inputSpec.map(wdlTypeOfVar).toMap,
+         outputSpec.map(wdlTypeOfVar).toMap)
     }
 
     // Create a file from a string
@@ -332,7 +340,7 @@ object Utils {
         val variables = AstTools.findVariableReferences(expr.ast).map{ case t:Terminal =>
             WdlExpression.toString(t)
         }
-        System.err.println(s"findToplevelVarDeps  ${expr.toWdlString}  => ${variables}")
+        //System.err.println(s"findToplevelVarDeps  ${expr.toWdlString}  => ${variables}")
         (true, variables.toList)
     }
 

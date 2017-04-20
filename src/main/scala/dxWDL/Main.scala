@@ -21,10 +21,14 @@ object Main extends App {
     }
 
     def yaml(args: Seq[String]): Termination = {
-        continueIf(args.length == 1) {
-            loadWdl(args.head) { ns =>
-                SuccessfulTermination(WdlYamlTree(ns).print())
-            }
+        if (args.length == 1) {
+            val path = args.head
+            val wdlSource : String = Utils.readFileContent(Paths.get(path))
+            val ns : WdlNamespaceWithWorkflow =
+                WdlNamespaceWithWorkflow.load(wdlSource, Seq.empty).get
+            SuccessfulTermination(WdlYamlTree(ns).print())
+        } else {
+            BadUsageTermination("")
         }
     }
 
@@ -253,20 +257,6 @@ object Main extends App {
                     writeJobError(jobErrorPath, e)
                     UnsuccessfulTermination(s"failure running ${action}")
             }
-        }
-    }
-
-    private[this] def continueIf(valid: => Boolean)(block: => Termination): Termination = if (valid) block else BadUsageTermination("")
-
-    private[this] def loadWdl(path: String)(f: WdlNamespace => Termination): Termination = {
-        try {
-            val wdlSource : String = Utils.readFileContent(Paths.get(path))
-            val nswf : WdlNamespaceWithWorkflow =
-                WdlNamespaceWithWorkflow.load(wdlSource, Seq.empty).get
-            f(nswf)
-        } catch {
-            case e : Throwable =>
-                UnsuccessfulTermination(Utils.exceptionToString(e))
         }
     }
 
