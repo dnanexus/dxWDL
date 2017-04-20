@@ -64,10 +64,8 @@ def main():
 
     project = dxpy.DXProject(args.project)
     register_all_tests(project)
-    register_gatk_pipeline(project)
     if args.test_list:
         print_test_list()
-        cleanup(project)
         exit(0)
     test_names = choose_tests(args.test)
 
@@ -287,7 +285,9 @@ def run_workflow(project, test_folder, wf_name, wfId, inputs):
 
 def print_test_list():
     l = [key for key in test_input.keys()]
-    print("List of tests:{}".format(l))
+    l.sort()
+    ls = "\n  ".join(l)
+    print("List of tests:\n  {}".format(ls))
 
 # Choose set set of tests to run
 def choose_tests(test_name):
@@ -410,39 +410,47 @@ def register_all_tests(project):
     # optionals
     register_test("optionals",
                   lambda x: { "0.arg1": 10, "mul2.i": 5, "add.a" : 1, "add.b" : 3},
-                  { "1.result" : 10,
-                    "4.result" : 4 })
+                  lambda x: { "mul2.result" : 10, "add.result" : 4 })
 
     # docker
     register_test("bwa_version",
                   lambda x: {},
-                  {'1.version' : "0.7.13-r1126"})
-    register_test_fail("bad_status", {}, {})
-    register_test_fail("bad_status2", {}, {})
+                  lambda x: {'GetBwaVersion.version' : "0.7.13-r1126"})
+    register_test_fail("bad_status",
+                       lambda x: {},
+                       lambda x: {})
+    register_test_fail("bad_status2",
+                       lambda x: {},
+                       lambda x: {})
 
     # Output error
-    register_test_fail("missing_output", {}, {})
+    register_test_fail("missing_output",
+                       lambda x: {},
+                       lambda x: {})
 
     # combination of featuers
     register_test("advanced",
                   lambda x: { '0.pattern' : "github",
                               '0.file' : dxpy.dxlink(dxfile.get_id(), project.get_id()),
                               '0.species' : "Arctic fox" },
-                  { '1.result' : "Arctic fox --K -S --flags --contamination 0 --s foobar",
-                    '1.family' : "Family Arctic fox",
-                    '2.cgrep___count': [6, 0, 6] })
+                  lambda x: { 'str_animals.result' : "Arctic fox --K -S --flags --contamination 0 --s foobar",
+                              'str_animals.family' : "Family Arctic fox",
+                              #                    '2.cgrep___count': [6, 0, 6] }
+                              })
     register_test("a1",
                   lambda x: {},
-                  {})
+                  lambda x: {})
     register_test("decl_mid_wf",
                   lambda x: {'0.s': "Yellow", '0.i': 4},
-                  {"1.sum": 15,
-                   "2.result": "Yellow.aligned_Yellow.wgs",
-                   "3.sum": 24})
+                  lambda x: {"add.sum": 15,
+                             "concat.result": "Yellow.aligned_Yellow.wgs",
+                             "add2.sum": 24})
 
-    register_test("viral-ngs-assembly",
-                  lambda x: {},
-                  {})
+    # Massive tests
+    register_test("gatk_160927",
+                  lambda x: gatk_gen_inputs,
+                  lambda x: {})
+
 
 def create_tmp_files(project):
     global tmp_files
@@ -503,7 +511,7 @@ Tests are run via sbt test. Note that the tests do require Docker to be running.
 # Adapted from:
 # https://github.com/broadinstitute/wdl/blob/develop/scripts/broad_pipelines/PublicPairedSingleSampleWf_160927.inputs.json
 #
-def register_gatk_pipeline(project):
+def gatk_gen_inputs(project):
     def find_file(name, folder):
         dxfile = dxpy.find_one_data_object(
             classname="file", name=name,
@@ -520,7 +528,7 @@ def register_gatk_pipeline(project):
         return find_file(name,
                          "/genomics-public-data/resources/broad/hg38/v0/")
 
-    gatk_input_args = {
+    input_args = {
         ## COMMENT1: SAMPLE NAME AND UNMAPPED BAMS
         "0.sample_name": "NA12878",
         "0.flowcell_unmapped_bams": [
@@ -621,7 +629,7 @@ def register_gatk_pipeline(project):
         "0.flowcell_medium_disk": 300,
         "0.preemptible_tries": 3
     }
-    register_test("gatk_160927", gatk_input_args, {})
+    return input_args
 
 def register_test(wf_name, gen_inputs, gen_outputs):
     if wf_name in reserved_test_names:

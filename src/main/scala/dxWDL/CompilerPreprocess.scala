@@ -148,7 +148,7 @@ object CompilerPreprocess {
             }
         }
         val (nonDeclBlock, remaining) = skipNonDecl(Vector.empty, bottom)
-        System.err.println(s"len(nonDecls)=${nonDeclBlock.length} len(rest)=${remaining.length}")
+        Utils.trace(cState.verbose, s"len(nonDecls)=${nonDeclBlock.length} len(rest)=${remaining.length}")
         DeclReorgState(definedVars, drs.top ++ moved ++ nonDeclBlock, remaining)
     }
 
@@ -208,9 +208,9 @@ object CompilerPreprocess {
         // pretty print the workflow to a file. The output
         // must be readable by the standard WDL compiler.
         val elemsPp : Vector[String] = elems.map {
-            case call: Call => WdlPrettyPrinter.apply(call, 0)
-            case decl: Declaration => WdlPrettyPrinter.apply(decl, 0)
-            case ssc: Scatter => WdlPrettyPrinter.apply(ssc, 0)
+            case call: Call => WdlPrettyPrinter.apply(call, 1)
+            case decl: Declaration => WdlPrettyPrinter.apply(decl, 1)
+            case ssc: Scatter => WdlPrettyPrinter.apply(ssc, 1)
             case x =>
                 throw new Exception(cState.cef.notCurrentlySupported(x.ast,
                                                                      "workflow element"))

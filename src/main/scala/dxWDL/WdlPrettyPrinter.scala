@@ -17,25 +17,25 @@ object WdlPrettyPrinter {
         s"${" " * n}"
     }
 
-    // indent lines
-    def indentLines(lines: Vector[String], indent: Int) = {
-        val spaces = genNSpaces(indent)
-        lines.map{ x => (spaces + x) }
+    // indent a line by [level] steps
+    private def indentLine(line: String, indentLevel: Int) = {
+        val spaces = genNSpaces(indentLevel * I_STEP)
+        spaces + line
     }
 
     // All blocks except for task command.
     //
-    // Indent the block body by a set number of spaces.
+    // The top and bottom lines are indented, the middle lines must
+    // already have the correct indentation.
     def buildBlock(top: String,
                    middle: Vector[String],
-                   indent: Int) : Vector[String] = {
+                   level: Int) : Vector[String] = {
         if (middle.isEmpty) {
             Vector.empty
         } else {
-            val firstLine = top + " {"
-            val body = indentLines(middle, indent + I_STEP)
-            val endLine = "}"
-            firstLine +: body :+ endLine
+            val firstLine = indentLine(s"${top} {", level)
+            val endLine = indentLine("}", level)
+            firstLine +: middle :+ endLine
         }
     }
 
@@ -43,19 +43,19 @@ object WdlPrettyPrinter {
     // faithfully preserved. There are shell commands that are
     // sensitive to white space and tabs.
     //
-    def buildCommandBlock(commandTemplate: Seq[CommandPart]) : String = {
+    def buildCommandBlock(commandTemplate: Seq[CommandPart], level: Int) : Vector[String] = {
         val commandLines: String = commandTemplate.map {part =>
             part match  {
                 case x:ParameterCommandPart => x.toString()
                 case x:StringCommandPart => x.toString()
             }
         }.mkString("")
-        val firstLine = "command <<<\n"
-        val endLine = ">>>\n"
-        firstLine ++ commandLines ++ endLine
+        val firstLine = indentLine("command <<<", level)
+        val endLine = indentLine(">>>", level)
+        Vector(firstLine, commandLines, endLine)
     }
 
-    def apply(call: Call, indent: Int) : Vector[String] = {
+    def apply(call: Call, level: Int) : Vector[String] = {
         val name = call match {
             case x:TaskCall => x.task.name
             case x:WorkflowCall => x.calledWorkflow.unqualifiedName
@@ -71,36 +71,38 @@ object WdlPrettyPrinter {
             }
             s"${key}=${rhs}"
         }.toList
-        val inputsConcat = "  " + inputs.mkString(", ")
+        val inputsConcat = "input:  " + inputs.mkString(", ")
 
-        buildBlock(s"call ${name} ${aliasStr}", Vector("input:", inputsConcat), indent)
+        System.err.println(s"indenting call ${name} by ${level}")
+
+        buildBlock(s"call ${name} ${aliasStr}",
+                   Vector(indentLine(inputsConcat, level+1)),
+                   level)
     }
 
-    def apply(decl: Declaration, indent: Int) : Vector[String] = {
+    def apply(decl: Declaration, level: Int) : Vector[String] = {
         val exprStr = decl.expression match {
             case None => ""
             case Some(x) => " = " ++ x.toWdlString
         }
-        val line = s"""|${genNSpaces(indent)}
-                       |${decl.wdlType.toWdlString} ${decl.unqualifiedName}
-                       |${exprStr}""".stripMargin.replaceAll("\n","")
-        Vector(line)
+        val ln = s"${decl.wdlType.toWdlString} ${decl.unqualifiedName} ${exprStr}"
+        Vector(indentLine(ln, level))
     }
 
-    def apply(ssc: Scatter, indent: Int) : Vector[String] = {
+    def apply(ssc: Scatter, level: Int) : Vector[String] = {
         val top: String = s"scatter (${ssc.item} in ${ssc.collection.toWdlString})"
         val children = ssc.children.map{
-            case x:Call => apply(x, indent)
-            case x:Declaration => apply(x, indent)
-            case x:Scatter => apply(x, indent)
+            case x:Call => apply(x, level + 1)
+            case x:Declaration => apply(x, level + 1)
+            case x:Scatter => apply(x, level + 1)
             case _ => throw new Exception("Unimplemented scatter element")
         }.flatten.toVector
-        buildBlock(top, children.toVector, indent)
+        buildBlock(top, children.toVector, level)
     }
 
     // transform the expressions in a scatter, and then pretty print
     def scatterRewrite(ssc: Scatter,
-                       indent: Int,
+                       level: Int,
                        transform: WdlExpression => WdlExpression) : Vector[String] = {
         def transformChild(scope: Scope): Scope = {
             scope match {
@@ -113,7 +115,6 @@ object WdlPrettyPrinter {
                 case x:Declaration =>
                     Declaration(x.wdlType, x.unqualifiedName,
                                 x.expression.map(transform), x.parent, x.ast)
-                case x:Scatter => throw new Exception("Unimplemented nested scatter renaming")
                 case _ => throw new Exception("Unimplemented scatter element")
             }
         }
@@ -121,58 +122,55 @@ object WdlPrettyPrinter {
 
         val top: String = s"scatter (${ssc.item} in ${ssc.collection.toWdlString})"
         val children = tChildren.map{
-            case x:Call => apply(x, indent)
-            case x:Declaration => apply(x, indent)
-            case x:Scatter => apply(x, indent)
+            case x:Call => apply(x, level + 1)
+            case x:Declaration => apply(x, level + 1)
+            case x:Scatter => apply(x, level + 1)
             case _ => throw new Exception("Unimplemented scatter element")
         }.flatten.toVector
-        buildBlock(top, children.toVector, indent)
+        buildBlock(top, children.toVector, level)
     }
 
-    def apply(tso: TaskOutput, indent: Int): Vector[String] = {
-        val spaces = genNSpaces(indent)
-        val line = s"${spaces}${tso.wdlType.toWdlString} ${tso.unqualifiedName} = ${tso.requiredExpression.toWdlString}"
-        Vector(line)
+    def apply(tso: TaskOutput, level: Int): Vector[String] = {
+        val ln = s"${tso.wdlType.toWdlString} ${tso.unqualifiedName} = ${tso.requiredExpression.toWdlString}"
+        Vector(indentLine(ln, level))
     }
 
     // We need to be careful here to preserve white spaces in the command
     // section.
     //
     // TODO: support meta and parameterMeta
-    def apply(task: Task, indent:Int) : Vector[String] = {
-        val decls = task.declarations.map(x => apply(x, I_STEP)).flatten.toVector
+    def apply(task: Task, level:Int) : Vector[String] = {
+        val decls = task.declarations.map(x => apply(x, level + 1)).flatten.toVector
         val runtime = task.runtimeAttributes.attrs.map{ case (key, expr) =>
-            s"${key}: ${expr.toWdlString}"
+            indentLine(s"${key}: ${expr.toWdlString}", level + 2)
         }.toVector
-        val outputs = task.outputs.map(x => apply(x, indent)).flatten.toVector
+        val outputs = task.outputs.map(x => apply(x, level + 2)).flatten.toVector
 
-        val firstLine = Vector(s"task ${task.name} {")
-        val endLine = Vector("}\n")
-        firstLine ++
-            decls ++
-            Vector(buildCommandBlock(task.commandTemplate)) ++
-            indentLines(buildBlock("runtime", runtime, indent), I_STEP) ++
-            indentLines(buildBlock("output", outputs, indent), I_STEP) ++
-            endLine
+        val body = decls ++
+            buildCommandBlock(task.commandTemplate, level + 1) ++
+            buildBlock("runtime", runtime, level + 1) ++
+            buildBlock("output", outputs, level + 1)
+
+        buildBlock(s"task ${task.name}", body, level)
     }
 
-    def apply(wfo: WorkflowOutput, indent: Int) : Vector[String] = {
-        val spaces = genNSpaces(indent)
-        val line = s"${spaces}${wfo.wdlType.toWdlString} ${wfo.unqualifiedName} = ${wfo.requiredExpression.toWdlString}"
-        Vector(line)
+    def apply(wfo: WorkflowOutput, level: Int) : Vector[String] = {
+        val ln = s"${wfo.wdlType.toWdlString} ${wfo.unqualifiedName} = ${wfo.requiredExpression.toWdlString}"
+        Vector(indentLine(ln, level))
     }
 
-    def apply(wf: Workflow, indent: Int) : Vector[String] = {
+    def apply(wf: Workflow, level: Int) : Vector[String] = {
+        System.err.println(s"Workflow ${wf.unqualifiedName} indent by ${level}")
         val children = wf.children.map {
-            case call: Call => apply(call, indent)
-            case sc: Scatter => apply(sc, indent)
-            case decl: Declaration => apply(decl, indent)
+            case call: Call => apply(call, level + 1)
+            case sc: Scatter => apply(sc, level + 1)
+            case decl: Declaration => apply(decl, level + 1)
             case x => throw new Exception(s"Unimplemented workflow element ${x.toString}")
         }.flatten
-        val outputs = wf.outputs.map(x => apply(x, indent)).flatten
+        val outputs = wf.outputs.map(x => apply(x, level + 2)).flatten
 
         val lines = children.toVector ++
-            buildBlock("outputs", outputs.toVector, indent)
-        buildBlock( s"workflow ${wf.unqualifiedName}", lines, indent)
+            buildBlock("outputs", outputs.toVector, level + 1)
+        buildBlock( s"workflow ${wf.unqualifiedName}", lines, level)
     }
 }
