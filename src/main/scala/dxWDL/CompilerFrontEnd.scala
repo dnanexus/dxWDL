@@ -729,7 +729,7 @@ workflow w {
 
         // An environment where variables are defined
         var env : CallEnv = commonStage.outputs.map { cVar =>
-            cVar.name -> LinkedVar(cVar, IR.SArgLink(commonStage.name, cVar.name))
+            cVar.name -> LinkedVar(cVar, IR.SArgLink(commonStage.name, cVar))
         }.toMap
         var evalAppletNum = 0
 
@@ -763,7 +763,7 @@ workflow w {
                     case _ => throw new Exception("Sanity")
                 }
                 env = env + (fqVarName ->
-                                 LinkedVar(cVar, IR.SArgLink(stage.name, cVar.name)))
+                                 LinkedVar(cVar, IR.SArgLink(stage.name, cVar)))
             }
             accu :+ (stage,appletOpt)
         }

@@ -321,7 +321,7 @@ object CompilerBackend {
                         }
                     case IR.SArgLink(stageName, argName) =>
                         val dxStage = stageDict(stageName)
-                        val wvl = WdlVarLinks(Utils.transformVarName(argName),
+                        val wvl = WdlVarLinks(argName.dxVarName,
                                               cVar.wdlType,
                                               Some(IORef.Output, DxlStage(dxStage)))
                         val fields = WdlVarLinks.genFields(wvl, cVar.dxVarName)

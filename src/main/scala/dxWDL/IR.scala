@@ -58,7 +58,7 @@ object IR {
     sealed trait SArg
     case object SArgEmpty extends SArg
     case class SArgConst(wdlValue: WdlValue) extends SArg
-    case class SArgLink(stageName: String, argName: String) extends SArg
+    case class SArgLink(stageName: String, argName: CVar) extends SArg
 
     case class Stage(name: String,
                      appletName: String,
@@ -108,7 +108,7 @@ object IR {
         sArg match {
             case SArgEmpty => YamlString("empty")
             case SArgConst(wVal) => YamlString(wVal.toWdlString)
-            case SArgLink(stageName, argName) => YamlString(stageName + "->" + argName)
+            case SArgLink(stageName, cVar) => YamlString(stageName + "->" + cVar.name)
         }
     }
 
