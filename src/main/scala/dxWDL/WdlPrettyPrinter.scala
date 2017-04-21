@@ -18,7 +18,7 @@ object WdlPrettyPrinter {
     }
 
     // indent a line by [level] steps
-    private def indentLine(line: String, indentLevel: Int) = {
+    def indentLine(line: String, indentLevel: Int) = {
         val spaces = genNSpaces(indentLevel * I_STEP)
         spaces + line
     }

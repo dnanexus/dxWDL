@@ -41,4 +41,4 @@ libraryDependencies ++= Seq(
 
 // If an exception is thrown during tests, show the full
 // stack trace
-testOptions in Test += Tests.Argument("-oF")
+//testOptions in Test += Tests.Argument("-oF")
