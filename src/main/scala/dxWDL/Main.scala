@@ -3,6 +3,7 @@ package dxWDL
 import com.dnanexus.{DXApplet, DXProject, DXUtil, DXContainer, DXSearch, DXWorkflow}
 import java.io.{File, FileWriter, PrintWriter}
 import java.nio.file.{Path, Paths, Files}
+import net.jcazevedo.moultingyaml._
 import scala.util.{Failure, Success, Try}
 import spray.json._
 import spray.json.DefaultJsonProtocol
@@ -76,7 +77,8 @@ object Main extends App {
                       irWf: IR.Workflow) : Unit = {
         val trgName: String = replaceFileSuffix(wdlSourceFile, ".ir.yaml")
         val trgPath = Utils.appCompileDirPath.resolve(trgName).toFile
-        val humanReadable = IR.yaml(irWf).prettyPrint
+        val yo = IR.yaml(irWf)
+        val humanReadable = yo.prettyPrint
         val fos = new FileWriter(trgPath)
         val pw = new PrintWriter(fos)
         pw.print(humanReadable)

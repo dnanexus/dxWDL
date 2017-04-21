@@ -22,7 +22,7 @@ workflow scatter {
 package dxWDL
 
 // DX bindings
-import com.dnanexus.{DXApplet, DXEnvironment, DXJob, DXJSON, DXProject, DXSearch, InputParameter, OutputParameter}
+import com.dnanexus._
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.node.ObjectNode
 import java.nio.file.{Path, Paths, Files}
@@ -31,7 +31,7 @@ import scala.collection.mutable.HashMap
 import spray.json._
 import spray.json.DefaultJsonProtocol
 import spray.json.JsString
-import wdl4s.{Call, Scatter, TaskCall, Workflow, WorkflowCall, WdlNamespaceWithWorkflow}
+import wdl4s._
 import wdl4s.types._
 import wdl4s.values._
 import WdlVarLinks._
@@ -83,7 +83,26 @@ object RunnerScatter {
         }
     }
 
-    def buildAppletInputs(inputSpec : List[InputParameter],
+    // evaluate Task output expressions
+    def evalExpression(expr: WdlExpression, env: ScatterEnv) : WdlValue= {
+        def lookup(varName : String) : WdlValue =
+            env.get(varName) match {
+                case Some(wvl) => wdlValueOfInputField(wvl)
+                case None => throw new AppInternalException(s"No value found for variable ${varName}")
+            }
+        expr.evaluate(lookup, DxFunctions).get
+    }
+
+    /**
+      In the workflow below, we want to correctly pass the [k] value
+      to each [inc] Task invocation.
+
+    scatter (k in integers) {
+        call inc as inc {input: i=k}
+    }
+      */
+    def buildAppletInputs(call: Call,
+                          inputSpec : List[InputParameter],
                           env : ScatterEnv) : ObjectNode = {
         // Figure out which wdl fields this applet needs
         val appInputVars = inputSpec.map{ spec =>
@@ -93,15 +112,24 @@ object RunnerScatter {
             else
                 Some((Utils.appletVarNameStripSuffix(name), spec))
         }.flatten
+
         var builder : DXJSON.ObjectBuilder = DXJSON.getObjectBuilder()
         appInputVars.foreach{ case (varName, spec) =>
-            env.get(varName) match {
+            // The lhs is [k], the varName is [i]
+            val lhs: Option[(String,WdlExpression)] =
+                call.inputMappings.find{ case(key, expr) => key == varName}
+            val callerVar = lhs match {
                 case None =>
+                    // A value for [i] is not provided
                     if (!spec.isOptional()) {
-                        throw new AppInternalException(s"""|Could not find required variable ${varName}
-                                                           |in environment ${env}""".stripMargin.trim)
+                        val provided = call.inputMappings.map{ case (key, expr) => key}.toVector
+                        throw new AppInternalException(
+                            s"""|Could not find binding for required variable ${varName}.
+                                |The call bindings are ${provided}""".stripMargin.trim)
                     }
-                case Some(wvl) =>
+                case Some((_, expr)) =>
+                    val wValue = evalExpression(expr, env)
+                    val wvl = WdlVarLinks.outputFieldOfWdlValue(varName, wValue.wdlType, wValue)
                     WdlVarLinks.genFields(wvl, varName).foreach{ case (fieldName, jsNode) =>
                         builder = builder.put(fieldName, jsNode)
                     }
@@ -180,7 +208,7 @@ object RunnerScatter {
             var innerEnv = env + (scatter.item -> elem)
 
             phases.foreach { case (call,dxApplet,inputSpec) =>
-                val inputs : ObjectNode = buildAppletInputs(inputSpec, innerEnv)
+                val inputs : ObjectNode = buildAppletInputs(call, inputSpec, innerEnv)
                 System.err.println(s"call=${callUniqueName(call)} inputs=${inputs}")
                 val dxJob : DXJob = dxApplet.newRun().setRawInput(inputs).run()
                 val jobOutputs : ScatterEnv = jobOutputEnv(call, dxJob)

@@ -44,15 +44,25 @@ object WdlPrettyPrinter {
     // sensitive to white space and tabs.
     //
     def buildCommandBlock(commandTemplate: Seq[CommandPart], level: Int) : Vector[String] = {
-        val commandLines: String = commandTemplate.map {part =>
+        val command: String = commandTemplate.map {part =>
             part match  {
                 case x:ParameterCommandPart => x.toString()
                 case x:StringCommandPart => x.toString()
             }
         }.mkString("")
-        val firstLine = indentLine("command <<<", level)
-        val endLine = indentLine(">>>", level)
-        Vector(firstLine, commandLines, endLine)
+
+        // remove empty lines; we are not sure how they are generated, but they mess
+        // up pretty printing downstream.
+        val nonEmptyLines: Vector[String] = command.split("\n").filter(l => !l.trim().isEmpty).toVector
+
+        // special syntex for short commands
+        val (bgnSym,endSym) =
+            if (nonEmptyLines.size <= 1) ("{", "}")
+            else ("<<<", ">>>")
+
+        val firstLine = indentLine(s"command ${bgnSym}", level)
+        val endLine = indentLine(endSym, level)
+        firstLine +: nonEmptyLines :+ endLine
     }
 
     def apply(call: Call, level: Int) : Vector[String] = {

@@ -2,12 +2,11 @@ package dxWDL
 
 import java.nio.charset.StandardCharsets
 import java.nio.file.{Path, Paths, Files}
+import net.jcazevedo.moultingyaml._
+import net.jcazevedo.moultingyaml.DefaultYamlProtocol._
 import org.scalatest.{BeforeAndAfterEach, FlatSpec, OneInstancePerTest}
 import spray.json._
 import spray.json.DefaultJsonProtocol
-//import spray.json.JsString
-//import wdl4s.{AstTools, Call, Task, WdlExpression, WdlNamespace, WdlNamespaceWithWorkflow, Workflow}
-//import wdl4s.AstTools.EnhancedAstNode
 import wdl4s.types._
 import wdl4s.values._
 
@@ -114,4 +113,31 @@ class UtilsTest extends FlatSpec with BeforeAndAfterEach with OneInstancePerTest
         println("--------------------------------------")
     }
 
+    it should "pretty print strings in IR with newlines" in {
+        val yaml1 = YamlString(
+            """\//||\/||
+          |// ||  ||__
+          |""".stripMargin)
+
+        val buf = """||
+                     |  \//||\/||
+                     |  // ||  ||__
+                     |""".stripMargin
+        assert(yaml1.prettyPrint == buf)
+        print(buf)
+
+/*        {
+
+            val yaml2:  = YamlString(
+                """hello
+                   |world
+                   |it is nice outside""".stripMargin)
+
+            assert(yaml2.prettyPrint(Block) ==
+                       """||
+                          | hello
+                          | world
+                          | it is nice outside""".stripMargin)
+        } */
+    }
 }

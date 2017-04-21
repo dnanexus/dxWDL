@@ -78,13 +78,6 @@ object IR {
         )
     }
 
-    // remove empty lines from a long string
-    private def stripEmptyLines(s: String) : String = {
-        val lines = s.split("\n")
-        val nonEmptyLines = lines.filter(l => !l.trim().isEmpty)
-        nonEmptyLines.mkString("\n")
-    }
-
     def yaml(applet: Applet) : YamlObject = {
         val inputs = applet.inputs.map(yaml)
         val outputs = applet.outputs.map(yaml)
@@ -99,7 +92,7 @@ object IR {
             YamlString("instanceType") -> YamlString(applet.instanceType),
             YamlString("destination") -> YamlString(applet.destination),
             YamlString("kind") -> YamlString(applet.kind.toString),
-            YamlString("wdlCode") -> YamlString(stripEmptyLines(applet.wdlCode))
+            YamlString("wdlCode") -> YamlString(applet.wdlCode)
         )
         YamlObject(m ++ docker)
     }
@@ -132,11 +125,4 @@ object IR {
             YamlString("applets") -> YamlArray(applets.toVector)
         )
     }
-
-    def prettyPrint(ir: Workflow) : String = {
-        val yo: YamlObject = yaml(ir)
-        //yaml.print(Block)
-        yo.print()
-    }
-
 }
