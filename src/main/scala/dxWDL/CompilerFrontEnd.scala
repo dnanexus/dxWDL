@@ -56,7 +56,8 @@ object CompilerFrontEnd {
         YamlObject(m).print()
     }
 
-    // Lookup for variables like A.x, A.B.x, or unscoped x.
+    // Lookup for variables like x, A.x, A.B.x. The difficulty
+    // is that A.x is interpreted in WDL as member access.
     def lookupInEnv(env: CallEnv, expr: WdlExpression, cState: State) : LinkedVar = {
         val fqn: String = expr.toWdlString
         env.get(fqn) match {
@@ -309,6 +310,18 @@ object CompilerFrontEnd {
         }
     }
 
+    // Make sure that the WDL code we generate is actually legal.
+    def verifyWdlCodeIsLegal(wdlCode: String) : Unit = {
+        val ns = WdlNamespace.loadUsingSource(wdlCode, None, None)
+        ns match {
+            case Success(_) => ()
+            case Failure(f) =>
+                System.err.println("Error verifying generated WDL code")
+                System.err.println(wdlCode)
+                throw f
+        }
+    }
+
     // Print a WDL workflow that evaluates expressions
     //
     // Note: we do not generate outputs, the applet deals with this issue.
@@ -316,7 +329,9 @@ object CompilerFrontEnd {
                                         declarations: Seq[Declaration]) : String = {
         val inputLines: Vector[String] =
             declarations.map(x => WdlPrettyPrinter.apply(x, 0)).flatten.toVector
-        WdlPrettyPrinter.buildBlock(s"workflow w", inputLines, 0).mkString("\n")
+        val wdlCode = WdlPrettyPrinter.buildBlock(s"workflow w", inputLines, 0).mkString("\n")
+        verifyWdlCodeIsLegal(wdlCode)
+        wdlCode
     }
 
     // Create a preliminary applet to handle workflow inputs, top-level
@@ -476,6 +491,7 @@ workflow w {
                 Some(buf)
         }
         val wdlCode = WdlPrettyPrinter.apply(task, 0).mkString("\n")
+        verifyWdlCodeIsLegal(wdlCode)
         val applet = IR.Applet(appletFqn,
                                inputVars,
                                outputVars,
@@ -550,7 +566,7 @@ workflow w {
     // required here is renaming variables of the form A.x to A_x.
     def scGenWorklow(scatter: Scatter,
                      inputVars: Vector[IR.CVar],
-                     outputVars: Vector[IR.CVar]) : Vector[String] = {
+                     outputVars: Vector[IR.CVar]) : String = {
         val decls: Vector[String]  = inputVars.map(cVar =>
             s"${cVar.wdlType} ${cVar.name})"
         )
@@ -562,7 +578,9 @@ workflow w {
 
         val lines: Vector[String] = decls ++
             WdlPrettyPrinter.scatterRewrite(scatter, 0, exprTransform)
-        WdlPrettyPrinter.buildBlock("workflow w", lines, 0)
+        val wdlCode = WdlPrettyPrinter.buildBlock("workflow w", lines, 0).mkString("\n")
+        verifyWdlCodeIsLegal(wdlCode)
+        wdlCode
     }
 
     // Compile a scatter block
@@ -641,7 +659,7 @@ workflow w {
         val inputVars : Vector[IR.CVar] = closure.map {
             case (varName, LinkedVar(cVar, _)) => IR.CVar(varName, cVar.wdlType, cVar.ast)
         }.toVector
-        val wdlCode = scGenWorklow(scatter, inputVars, outputVars).mkString("\n")
+        val wdlCode = scGenWorklow(scatter, inputVars, outputVars)
         val applet = IR.Applet(wf.unqualifiedName ++ "." ++ stageName,
                                inputVars,
                                outputVars,
