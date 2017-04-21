@@ -174,6 +174,12 @@ object Utils {
         oNode.toString().parseJson
     }
 
+    // dx does not allow dots in variable names, so we
+    // convert them to underscores.
+    def transformVarName(varName: String) : String = {
+        varName.replaceAll("\\.", "_")
+    }
+
     // Dots are illegal in applet variable names. For example,
     // "Add.sum" must be encoded. As a TEMPORARY hack, we convert
     // dots into "___".
@@ -188,7 +194,10 @@ object Utils {
             if (varName.endsWith(s))
                 throw new Exception(s"Variable ${varName} ends with reserved suffix ${s}")
         }
-        varName.replaceAll("\\.", "___")
+        //varName.replaceAll("\\.", "___")
+        if (varName contains ".")
+            throw new Exception(s"Variable ${varName} includes the illegal symbol \\.")
+        varName
     }
 
     // Dots are illegal in applet variable names, so they
@@ -196,9 +205,11 @@ object Utils {
     // these occurrences back into dots.
     def decodeAppletVarName(varName : String) : String = {
         if (varName contains "\\.")
-
             throw new Exception(s"Variable ${varName} includes the illegal symbol \\.")
-        varName.replaceAll("___", "\\.")
+        //varName.replaceAll("___", "\\.")
+        if (varName contains "___")
+            throw new Exception(s"Variable ${varName} includes the illegal symbol ___")
+        varName
     }
 
     def appletVarNameSplit(varName : String) : (String,String) = {

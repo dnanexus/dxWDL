@@ -56,6 +56,17 @@ object CompilerFrontEnd {
         YamlObject(m).print()
     }
 
+    // Lookup for variables like A.x, A.B.x, or unscoped x.
+    def lookupInEnv(env: CallEnv, expr: WdlExpression, cState: State) : LinkedVar = {
+        val fqn: String = expr.toWdlString
+        env.get(fqn) match {
+            case Some(x) => x
+            case None =>
+                val t: Terminal = AstTools.findTerminals(expr.ast).head
+                throw new Exception(cState.cef.missingVarRefException(t))
+        }
+    }
+
     // Create a declaration.
     //
     // The difficulty here is in generating an AST. We just
@@ -521,7 +532,12 @@ workflow w {
                         val ve = ValueEvaluator(lookup, PureStandardLibraryFunctions)
                         val wValue: WdlValue = ve.evaluate(e.ast).get
                         IR.SArgConst(wValue)
-                    case x:Ast => throw new Exception(cState.cef.expressionMustBeConstOrVar(x))
+                    case a: Ast if a.isMemberAccess =>
+                        // An expression like A.B.C, or A.x
+                        val lVar = lookupInEnv(env, e, cState)
+                        lVar.sArg
+                    case _:Ast =>
+                        throw new Exception(cState.cef.expressionMustBeConstOrVar(e))
                 }
             }
         }
@@ -667,14 +683,18 @@ workflow w {
               destination: String,
               cef: CompilerErrorFormatter,
               verbose: Boolean) : IR.Workflow = {
-        // compile all the tasks into applets
         val cState = new State(destination, cef, verbose)
+        Utils.trace(cState.verbose, "FrontEnd phase")
+
+        // compile all the tasks into applets
+        Utils.trace(cState.verbose, "FrontEnd: compiling applets")
         val taskApplets: Map[String, (IR.Applet, Vector[IR.CVar])] = ns.tasks.map{ task =>
             val (applet, outputs) = compileTask(task, cState)
             task.name -> (applet, outputs)
         }.toMap
 
         // extract the workflow
+        Utils.trace(cState.verbose, "FrontEnd: compiling workflow")
         val wf = ns match {
             case nswf : WdlNamespaceWithWorkflow => nswf.workflow
             case _ => throw new Exception("WDL does not have a workflow")

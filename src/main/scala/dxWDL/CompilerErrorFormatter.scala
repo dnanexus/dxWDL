@@ -1,9 +1,9 @@
 package dxWDL
 
-import wdl4s.WdlSource
-import wdl4s.parser.WdlParser.{Ast, Terminal}
-import wdl4s.{Call, Declaration, Scatter, Scope, Task, TaskOutput, WdlExpression,
-    WdlNamespace, WdlNamespaceWithWorkflow, WdlSource, Workflow}
+import wdl4s.AstTools
+//import wdl4s.AstTools.EnhancedAstNode
+import wdl4s.parser.WdlParser.{Ast, AstNode, Terminal}
+import wdl4s._
 
 case class CompilerErrorFormatter(terminalMap: Map[Terminal, WdlSource]) {
     private def pointToSource(t: Terminal): String = s"${line(t)}\n${" " * (t.getColumn - 1)}^"
@@ -49,9 +49,9 @@ case class CompilerErrorFormatter(terminalMap: Map[Terminal, WdlSource]) {
             |""".stripMargin
     }
 
-    def expressionMustBeConstOrVar(ast: Ast) : String = {
-        val t: Terminal = ast.getAttribute("name").asInstanceOf[Terminal]
-        s"""|Expression must be const or variable
+    def expressionMustBeConstOrVar(expr: WdlExpression) : String = {
+        val t: Terminal = AstTools.findTerminals(expr.ast).head
+        s"""|Expression ${expr.toWdlString} must be const or variable
             |
             |${pointToSource(t)}
             |""".stripMargin

@@ -321,7 +321,8 @@ object CompilerBackend {
                         }
                     case IR.SArgLink(stageName, argName) =>
                         val dxStage = stageDict(stageName)
-                        val wvl = WdlVarLinks(argName, cVar.wdlType,
+                        val wvl = WdlVarLinks(Utils.transformVarName(argName),
+                                              cVar.wdlType,
                                               Some(IORef.Output, DxlStage(dxStage)))
                         val fields = WdlVarLinks.genFields(wvl, cVar.dxVarName)
                         fields.foldLeft(dxBuilder) { case (b, (fieldName, jsonNode)) =>

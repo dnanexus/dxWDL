@@ -23,7 +23,7 @@ object IR {
         // convert them to underscores.
         //
         // TODO: check for collisions that are created this way.
-        def dxVarName : String = name.replaceAll("\\.", "_")
+        def dxVarName : String = Utils.transformVarName(name)
     }
 
     // There are several kinds of applets
