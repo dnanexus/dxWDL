@@ -3,7 +3,7 @@
 # Copied from the Broad Institute tutorial
 #     https://github.com/broadinstitute/wdl
 
-task prepare {
+task vv_prepare {
     command <<<
        python -c "print('one\ntwo\nthree\nfour')"
     >>>
@@ -12,7 +12,7 @@ task prepare {
     }
 }
 
-task analysis {
+task vv_analysis {
     String str
     command <<<
        python -c "print('_${str}_')"
@@ -22,7 +22,7 @@ task analysis {
     }
 }
 
-task gather {
+task vv_gather {
     Array[String] array
     command <<<
         echo ${sep=' ' array}
@@ -33,9 +33,9 @@ task gather {
 }
 
 workflow sg1 {
-    call prepare
+    call vv_prepare as prepare
     scatter (x in prepare.array) {
-        call analysis {input: str=x}
+        call vv_analysis as analysis {input: str=x}
     }
-    call gather {input: array=analysis.out}
+    call vv_gather as gather {input: array=analysis.out}
 }

@@ -1,4 +1,4 @@
-task wc {
+task aa_wc {
     Array[File] files
 
     command {
@@ -10,7 +10,7 @@ task wc {
     }
 }
 
-task diff {
+task aa_diff {
     File A
     File B
 
@@ -31,7 +31,7 @@ task diff {
 #     xxx/yyy/{A.fasta, A.fasta.fai}
 #     xxx/yyy/{A.vcf, A.vcf.idx}
 #
-task colocation {
+task aa_colocation {
     File A
     File B
 
@@ -51,14 +51,14 @@ CODE
 workflow file_array {
     Array[File] fs
 
-    call wc {
+    call aa_wc as wc {
         input : files=fs
     }
-    call diff {
+    call aa_diff as diff {
         input : A=wc.result_files[0],
                 B=wc.result_files[1]
     }
-    call colocation {
+    call aa_colocation as colocation {
         input : A=fs[0], B=fs[1]
     }
     output {

@@ -1,6 +1,6 @@
 # A task "forgets" to create a file output. This should
 # cause an OutputError.
-task CreateFile {
+task iii_CreateFile {
     String basename = "XYZ"
 
     command {
@@ -11,7 +11,7 @@ task CreateFile {
 }
 
 workflow missing_output {
-    call CreateFile
+    call iii_CreateFile as CreateFile
 
     output {
        CreateFile.result

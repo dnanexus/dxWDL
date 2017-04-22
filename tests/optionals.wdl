@@ -1,4 +1,4 @@
-task mul2 {
+task ppp_mul2 {
     Int i
 
     command {
@@ -9,7 +9,7 @@ task mul2 {
     }
 }
 
-task add {
+task ppp_add {
      Int a
      Int b
 
@@ -21,7 +21,7 @@ task add {
     }
 }
 
-task set_def {
+task ppp_set_def {
     Int? i
 
     command {
@@ -33,7 +33,7 @@ task set_def {
 }
 
 # A task that does not use its input arguments.
-task unused_args {
+task ppp_unused_args {
 #    Int a
 #    Int b
     Int? c
@@ -52,14 +52,14 @@ workflow optionals {
     Array[Int] integers = [1,2]
 
     # A call missing a compulsory argument
-    call mul2
-    call mul2 as mul2b { input: i=arg1 }
-    call set_def
-    call add
-    call unused_args
+    call ppp_mul2 as mul2
+    call ppp_mul2 as mul2b { input: i=arg1 }
+    call ppp_set_def as set_def
+    call ppp_add as add
+    call ppp_unused_args as unused_args
 
     scatter (x in integers) {
-        call unused_args as unused_args_b
+        call ppp_unused_args as unused_args_b
     }
     output {
         mul2.result

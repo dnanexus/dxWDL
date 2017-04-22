@@ -1,5 +1,5 @@
 # Trying out file copy operations
-task Copy {
+task z_Copy {
     File src
     String basename
 
@@ -16,8 +16,8 @@ task Copy {
 workflow files {
     File f
 
-    call Copy { input : src=f, basename="tearFrog" }
-    call Copy as Copy2 { input : src=Copy.outf, basename="mixing" }
+    call z_Copy as Copy { input : src=f, basename="tearFrog" }
+    call z_Copy as Copy2 { input : src=Copy.outf, basename="mixing" }
 
     output {
        Copy2.outf_sorted

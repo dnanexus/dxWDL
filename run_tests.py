@@ -341,10 +341,10 @@ def register_all_tests(project):
                   lambda x: {})
     register_test("math_expr",
                   lambda x: {'0.ai' : 2, '0.bi' : 3},
-                  lambda x: {'int_ops.mul' : 6,
-                             'int_ops.sum' : 5,
-                             'int_ops.sub' : -1,
-                             'int_ops.div' : 0,
+                  lambda x: {'int_ops1.mul' : 6,
+                             'int_ops1.sum' : 5,
+                             'int_ops1.sub' : -1,
+                             'int_ops1.div' : 0,
                              'int_ops2.mul' : 36,
                              'int_ops2.div' : 1,
                              'int_ops3.sum' : 14,
@@ -437,9 +437,6 @@ def register_all_tests(project):
                               'str_animals.family' : "Family Arctic fox",
                               #                    '2.cgrep___count': [6, 0, 6] }
                               })
-    register_test("a1",
-                  lambda x: {},
-                  lambda x: {})
     register_test("decl_mid_wf",
                   lambda x: {'0.s': "Yellow", '0.i': 4},
                   lambda x: {"add.sum": 15,

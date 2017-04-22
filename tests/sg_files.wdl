@@ -3,7 +3,7 @@
 # Copied from the Broad Institute tutorial
 #     https://github.com/broadinstitute/wdl
 
-task prepare {
+task mm_prepare {
     command <<<
        python -c "print('one\ntwo\nthree\nfour')"
     >>>
@@ -12,7 +12,7 @@ task prepare {
     }
 }
 
-task analysis {
+task mm_analysis {
     String str
     command <<<
        echo "xyz12345" >> ${str}.txt
@@ -22,7 +22,7 @@ task analysis {
     }
 }
 
-task gather {
+task mm_gather {
     Array[File] files
     command <<<
         wc ${sep=' ' files}
@@ -33,9 +33,9 @@ task gather {
 }
 
 workflow sg_files {
-    call prepare
+    call mm_prepare as prepare
     scatter (x in prepare.array) {
-        call analysis {input: str=x}
+        call mm_analysis as analysis {input: str=x}
     }
-    call gather {input: files=analysis.out}
+    call mm_gather as gather {input: files=analysis.out}
 }

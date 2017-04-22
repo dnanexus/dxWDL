@@ -1,4 +1,4 @@
-task cgrep {
+task ccc_cgrep {
     File in_file
     String pattern
 
@@ -10,7 +10,7 @@ task cgrep {
     }
 }
 
-task wc {
+task ccc_wc {
     File in_file
     command {
         cat ${in_file} | wc -l
@@ -24,10 +24,10 @@ workflow system_calls {
     File data
     String pattern
 
-    call cgrep {
+    call ccc_cgrep as cgrep {
         input: in_file = data, pattern = pattern
     }
-    call wc {
+    call ccc_wc as wc {
         input: in_file = data
     }
     output {

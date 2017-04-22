@@ -1,5 +1,5 @@
 # Generate sets of intervals for scatter-gathering over chromosomes
-task createTsv {
+task ooo_createTsv {
     # Use python to create a string parsed into a wdl Array[Array[String]]
     command<<<
     python <<CODE
@@ -17,7 +17,7 @@ task createTsv {
     }
 }
 
-task processTsv {
+task ooo_processTsv {
     Array[Array[String]] words
     command {
         cat ${write_tsv(words)}
@@ -28,8 +28,8 @@ task processTsv {
 }
 
 workflow ragged_array {
-    call createTsv
-    call processTsv {
+    call ooo_createTsv as createTsv
+    call ooo_processTsv as processTsv {
         input : words=createTsv.result
     }
     output {

@@ -47,7 +47,7 @@ workflow a1 {
     Array[Array[Array[Int]]] aaai
 
     scatter (i in integers) {
-        call a1_inc {input: i=i}
+        call a1_inc as inc {input: i=i}
 
         # declaration in the middle of a scatter should cause an exception
         String s = "abc"

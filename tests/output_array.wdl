@@ -1,4 +1,4 @@
-task prepare {
+task bb_prepare {
     command <<<
     python -c "print('one\ntwo\nthree\nfour')"
     >>>
@@ -8,7 +8,7 @@ task prepare {
 }
 
 workflow output_array {
-    call prepare
+    call bb_prepare as prepare
     output {
         prepare.array
     }
