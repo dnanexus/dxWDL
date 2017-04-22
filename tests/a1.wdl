@@ -1,4 +1,4 @@
-task inc {
+task a1_inc {
     Int i
 
     command <<<
@@ -9,7 +9,7 @@ task inc {
     }
 }
 
-task twice {
+task a1_twice {
     Int i
 
     command <<<
@@ -20,7 +20,7 @@ task twice {
     }
 }
 
-task mod7 {
+task a1_mod7 {
     Int i
 
     command <<<
@@ -31,7 +31,7 @@ task mod7 {
     }
 }
 
-task sum {
+task a1_sum {
     Array[Int] ints
 
     command <<<
@@ -47,10 +47,10 @@ workflow a1 {
     Array[Array[Array[Int]]] aaai
 
     scatter (i in integers) {
-        call inc {input: i=i}
+        call a1_inc {input: i=i}
 
         # declaration in the middle of a scatter should cause an exception
         String s = "abc"
-        call inc as inc2 {input: i=i}
+        call a1_inc as inc2 {input: i=i}
     }
 }

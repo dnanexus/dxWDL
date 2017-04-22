@@ -355,7 +355,7 @@ def register_all_tests(project):
                              "delicate.aligned__number.duplicate_metrics__xRIPx_toads_salamander"})
     register_test("call_expressions",
                   lambda x: {'0.i1' : 1, '0.i2' : 2},
-                  lambda x: {'int_ops.result': 25})
+                  lambda x: {'int_ops2.result': 25})
     register_test("call_expressions2",
                   lambda x: {'0.i' : 3, '0.s' : "frogs"},
                   lambda x: {'string_ops.result' : "frogs.aligned__frogs.duplicate_metrics__xRIPx",

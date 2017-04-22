@@ -1,5 +1,5 @@
 # The docker image doesn't exist, this should cause an error
-task BadCommand {
+task BadCommand2 {
       command {
           ls /tmp
       }
@@ -12,8 +12,8 @@ task BadCommand {
 }
 
 workflow bad_status2 {
-    call BadCommand
+    call BadCommand2
     output {
-        BadCommand.rc
+        BadCommand2.rc
     }
 }
