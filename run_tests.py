@@ -373,7 +373,7 @@ def register_all_tests(project):
                   lambda x: { '0.fs' : [dxpy.dxlink(dxfile.get_id(), project.get_id()),
                                         dxpy.dxlink(dxfile2.get_id(), project.get_id()),
                                         dxpy.dxlink(dxfile3.get_id(), project.get_id()) ]},
-                  lambda: { 'colocation.result' : "True"})
+                  lambda x: { 'colocation.result' : "True"})
     register_test("output_array",
                   lambda x: {},
                   lambda x: {'prepare.array' : [u'one', u'two', u'three', u'four']})
