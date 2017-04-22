@@ -43,7 +43,7 @@ object RunnerTask {
         metaDir
     }
 
-    def evalTaskInputs(task : Task, taskInputs : Map[String, WdlValue])
+    def evalDeclarations(task : Task, taskInputs : Map[String, WdlValue])
             : Map[Declaration, WdlValue] = {
         var env = taskInputs
         def lookup(varName : String) : WdlValue =
@@ -109,8 +109,8 @@ object RunnerTask {
     }
 
     // serialize the task inputs to json, and then write to a file.
-    def writeTaskDeclarationsToDisk(taskInputs : Map[String, WdlValue]) : Unit = {
-        val m : Map[String, JsValue] = taskInputs.map{ case(varName, wdlValue) =>
+    def writeEnvToDisk(env : Map[String, WdlValue]) : Unit = {
+        val m : Map[String, JsValue] = env.map{ case(varName, wdlValue) =>
             (varName, JsString(Utils.marshal(wdlValue)))
         }.toMap
         val buf = (JsObject(m)).prettyPrint
@@ -211,14 +211,15 @@ object RunnerTask {
     }
 
     def prologCore(task: Task, inputs: Map[String, WdlValue]) : Unit = {
-        val shCommandInputs = evalTaskInputs(task, inputs)
+        val topDecls = evalDeclarations(task, inputs)
 
         // Write shell script to a file. It will be executed by the dx-applet code
-        writeBashScript(task, shCommandInputs)
+        writeBashScript(task, topDecls)
 
         // serialize the environment, so we don't have to calculate it again in
         // the epilog
-        writeTaskDeclarationsToDisk(inputs)
+        val env = topDecls.map{ case (decl, wdlValue) => decl.unqualifiedName -> wdlValue}.toMap
+        writeEnvToDisk(env)
     }
 
     // Calculate the input variables for the task, download the input files,

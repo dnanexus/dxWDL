@@ -3,7 +3,7 @@ task jjj_str_animals {
     Int num_cores
     Int? num
     String? foo
-    String family_i = "Family ${s}"
+    String family_i = "Family"
 
     command {
         echo "${s} --K -S --flags --contamination ${default=0 num} --s ${default="foobar" foo}"
