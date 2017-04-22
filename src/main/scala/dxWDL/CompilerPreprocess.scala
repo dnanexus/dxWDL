@@ -220,7 +220,7 @@ object CompilerPreprocess {
 
     def apply(wdlSourceFile : Path,
               verbose: Boolean) : Path = {
-        Utils.trace(verbose, "Preprocessing")
+        Utils.trace(verbose, "Preprocessing pass")
 
         val ns = WdlNamespaceWithWorkflow.load(
             Utils.readFileContent(wdlSourceFile),

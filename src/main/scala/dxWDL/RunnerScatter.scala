@@ -32,13 +32,21 @@ import spray.json._
 import spray.json.DefaultJsonProtocol
 import spray.json.JsString
 import wdl4s._
+import wdl4s.expression._
+import wdl4s.parser.WdlParser.{Ast, AstNode, Terminal}
 import wdl4s.types._
 import wdl4s.values._
+import wdl4s.WdlExpression.AstForExpressions
 import WdlVarLinks._
 
 object RunnerScatter {
     // Environment where a scatter is executed
     type ScatterEnv = Map[String, WdlVarLinks]
+
+    // Runtime state.
+    // Packs common arguments passed between methods.
+    case class State(cef: CompilerErrorFormatter,
+                     verbose: Boolean)
 
     // Find the scatter block.
     def findScatter(wf : Workflow) : Scatter = {
@@ -79,17 +87,44 @@ object RunnerScatter {
         }
     }
 
-    // evaluate call input expressions
-    def evalExpression(expr: WdlExpression,
-                       scopedEnv : Map[String, WdlValue]) : WdlValue= {
-        def lookup(varName : String) : WdlValue =
-            scopedEnv.get(varName) match {
-                case Some(x) => x
-                case None =>
-                    System.err.println(s"Could not find variable ${varName} in environment ${scopedEnv}")
-                    throw new AppInternalException(s"Evaluating ${expr.toWdlString}, variable ${varName} unbound")
-            }
-        expr.evaluate(lookup, DxFunctions).get
+    // Evaluate a call input expression, and return a WdlVarLink structure. It
+    // is passed on to another dx:job.
+    //
+    // The front end pass makes sure that the range of expressions is
+    // limited: constants, variables, and member accesses.
+    def wvlEvalExpression(expr: WdlExpression,
+                          env : ScatterEnv,
+                          rState: State) : WdlVarLinks = {
+        expr.ast match {
+            case t: Terminal =>
+                val srcStr = t.getSourceString
+                t.getTerminalStr match {
+                    case "identifier" =>
+                        env.get(srcStr) match {
+                            case Some(x) => x
+                            case None => throw new Exception(rState.cef.missingVarRefException(t))
+                        }
+                    case _ =>
+                        // a constant
+                        def nullLookup(varName : String) : WdlValue = {
+                            throw new Exception(rState.cef.expressionMustBeConstOrVar(expr))
+                        }
+                        val wdlValue = expr.evaluate(nullLookup, NoFunctions).get
+                        WdlVarLinks.outputFieldOfWdlValue("xxdummy", wdlValue.wdlType, wdlValue)
+                }
+
+            case a: Ast if a.isMemberAccess =>
+                // Accessing something like A.B.C
+                val fqn = WdlExpression.toString(a)
+                env.get(fqn) match {
+                    case Some(x)=> x
+                    case None =>
+                        System.err.println(s"Cannot find ${fqn} in env=${env}")
+                        throw new Exception(rState.cef.undefinedMemberAccess(a))
+                }
+            case _:Ast =>
+                throw new Exception(rState.cef.expressionMustBeConstOrVar(expr))
+        }
     }
 
     /**
@@ -102,7 +137,8 @@ object RunnerScatter {
       */
     def buildAppletInputs(call: Call,
                           inputSpec : List[InputParameter],
-                          scopedEnv : Map[String, WdlValue]) : ObjectNode = {
+                          env : ScatterEnv,
+                          rState: State) : ObjectNode = {
         // Figure out which wdl fields this applet needs
         val appInputVars = inputSpec.map{ spec =>
             val name = spec.getName()
@@ -127,8 +163,7 @@ object RunnerScatter {
                                 |The call bindings are ${provided}""".stripMargin.trim)
                     }
                 case Some((_, expr)) =>
-                    val wValue = evalExpression(expr, scopedEnv)
-                    val wvl = WdlVarLinks.outputFieldOfWdlValue(varName, wValue.wdlType, wValue)
+                    val wvl = wvlEvalExpression(expr, env, rState)
                     WdlVarLinks.genFields(wvl, varName).foreach{ case (fieldName, jsNode) =>
                         builder = builder.put(fieldName, jsNode)
                     }
@@ -187,7 +222,8 @@ object RunnerScatter {
     def evalScatter(scatter : Scatter,
                     collection : WdlVarLinks,
                     calls : Seq[(Call, DXApplet)],
-                    outerScopeEnv : ScatterEnv) : Map[String, JsValue] = {
+                    outerScopeEnv : ScatterEnv,
+                    rState: State) : Map[String, JsValue] = {
         // add the top declarations in the scatter block to the
         // environment
         val (topDecls,_) = Utils.splitBlockDeclarations(scatter.children.toList)
@@ -207,20 +243,7 @@ object RunnerScatter {
             var innerEnv = env + (scatter.item -> elem)
 
             phases.foreach { case (call,dxApplet,inputSpec) =>
-                // Member accesses require caution. For example [inc1.incremented] needs
-                // to be replaced with [inc1_incremented]
-                val scopedEnv = Utils.addScopeToInputs(
-                    innerEnv.map{ case (key, wvl) =>
-                        try {
-                            Some(key -> wdlValueOfInputField(wvl))
-                        } catch {
-                            // Filter out cases where we are waiting for promises,
-                            // we only need the values available now.
-                            case e: Throwable => None
-                        }
-                    }.flatten.toMap
-                )
-                val inputs : ObjectNode = buildAppletInputs(call, inputSpec, scopedEnv)
+                val inputs : ObjectNode = buildAppletInputs(call, inputSpec, innerEnv, rState)
                 System.err.println(s"call=${callUniqueName(call)} inputs=${inputs}")
                 val dxJob : DXJob = dxApplet.newRun().setRawInput(inputs).run()
                 val jobOutputs : ScatterEnv = jobOutputEnv(call, dxJob)
@@ -241,6 +264,9 @@ object RunnerScatter {
               jobInputPath : Path,
               jobOutputPath : Path,
               jobInfoPath: Path) : Unit = {
+        val cef = new CompilerErrorFormatter(wf.wdlSyntaxErrorFormatter.terminalMap)
+        val rState = new State(cef, false)
+
         // Extract types for closure inputs
         val (closureTypes,_) = Utils.loadExecInfo(Utils.readFileContent(jobInfoPath))
         System.err.println(s"WdlType mapping =${closureTypes}")
@@ -266,7 +292,7 @@ object RunnerScatter {
         val dxEnv = DXEnvironment.create()
         val project = dxEnv.getProjectContext()
         val applets : Seq[(Call, DXApplet)] = findAppletsInScatterBlock(wf, scatter, project)
-        val outputs : Map[String, JsValue] = evalScatter(scatter, collElements, applets, outScopeEnv)
+        val outputs : Map[String, JsValue] = evalScatter(scatter, collElements, applets, outScopeEnv, rState)
 
         // write the outputs to the job_output.json file
         val json = JsObject(outputs)

@@ -339,7 +339,7 @@ object CompilerBackend {
               folder: String,
               cef: CompilerErrorFormatter,
               verbose: Boolean) : DXWorkflow = {
-        Utils.trace(verbose, "Backend phase")
+        Utils.trace(verbose, "Backend pass")
         val cState = State(dxWDLrtId, dxProject, folder, cef, verbose)
 
         // build the individual applets

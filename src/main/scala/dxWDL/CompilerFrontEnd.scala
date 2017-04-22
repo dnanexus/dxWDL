@@ -800,7 +800,7 @@ workflow w {
               cef: CompilerErrorFormatter,
               verbose: Boolean) : IR.Workflow = {
         val cState = new State(destination, cef, verbose)
-        Utils.trace(cState.verbose, "FrontEnd phase")
+        Utils.trace(cState.verbose, "FrontEnd pass")
 
         // compile all the tasks into applets
         Utils.trace(cState.verbose, "FrontEnd: compiling applets")
