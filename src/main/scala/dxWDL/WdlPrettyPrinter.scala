@@ -29,13 +29,14 @@ object WdlPrettyPrinter {
     // already have the correct indentation.
     def buildBlock(top: String,
                    middle: Vector[String],
-                   level: Int) : Vector[String] = {
-        if (middle.isEmpty) {
-            Vector.empty
-        } else {
+                   level: Int,
+                   force: Boolean = false) : Vector[String] = {
+        if (force || !middle.isEmpty) {
             val firstLine = indentLine(s"${top} {", level)
             val endLine = indentLine("}", level)
             firstLine +: middle :+ endLine
+        } else {
+            Vector.empty
         }
     }
 
@@ -81,11 +82,15 @@ object WdlPrettyPrinter {
             }
             s"${key}=${rhs}"
         }.toList
-        val inputsConcat = "input:  " + inputs.mkString(", ")
+        val inputsVec: Vector[String] =
+            if (inputs.isEmpty) {
+                Vector.empty
+            } else {
+                val line = "input:  " + inputs.mkString(", ")
+                Vector(indentLine(line, level+1))
+            }
 
-        buildBlock(s"call ${name} ${aliasStr}",
-                   Vector(indentLine(inputsConcat, level+1)),
-                   level)
+        buildBlock(s"call ${name} ${aliasStr}", inputsVec, level, true)
     }
 
     def apply(decl: Declaration, level: Int) : Vector[String] = {
@@ -128,7 +133,7 @@ object WdlPrettyPrinter {
         }
         val tChildren = ssc.children.map(x => transformChild(x))
 
-        val top: String = s"scatter (${ssc.item} in ${ssc.collection.toWdlString})"
+        val top: String = s"scatter (${ssc.item} in ${transform(ssc.collection).toWdlString})"
         val children = tChildren.map{
             case x:Call => apply(x, level + 1)
             case x:Declaration => apply(x, level + 1)

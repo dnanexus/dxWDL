@@ -395,7 +395,14 @@ task Add {
     def genEvalWorkflowFromDeclarations(name: String,
                                         declarations: Seq[Declaration]) : String = {
         val inputLines: Vector[String] =
-            declarations.map(x => WdlPrettyPrinter.apply(x, 1)).flatten.toVector
+            if (declarations.isEmpty) {
+                // Corner case: there are no inputs and no
+                // expressions to calculate. Generated a valid
+                // workflow that does nothing.
+                Vector("Int xxxx = 0")
+            } else {
+                declarations.map(x => WdlPrettyPrinter.apply(x, 1)).flatten.toVector
+            }
         val wdlCode = WdlPrettyPrinter.buildBlock(s"workflow w", inputLines, 0).mkString("\n")
         verifyWdlCodeIsLegal(wdlCode)
         wdlCode
@@ -662,6 +669,7 @@ workflow w {
 
         // Rename the variables we got from the input.
         def exprTransform(expr: WdlExpression) : WdlExpression = {
+            //System.err.println(s"exprRenameVars ${expr.toWdlString} allVars=${inputVars.map(x => IR.yaml(x).print())}")
             exprRenameVars(expr, inputVars)
         }
 
