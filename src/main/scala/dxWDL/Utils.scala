@@ -1,6 +1,6 @@
 package dxWDL
 
-import com.dnanexus._
+import com.dnanexus.{DXWorkflow, DXApplet, DXFile, DXProject, DXJSON, DXUtil, DXContainer, DXSearch, DXDataObject, InputParameter}
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.node.ObjectNode
@@ -16,7 +16,8 @@ import spray.json.DefaultJsonProtocol
 import spray.json.JsString
 import wdl4s.AstTools
 import wdl4s.AstTools.EnhancedAstNode
-import wdl4s._
+import wdl4s.{Call, Declaration, Scatter, Scope, Task, WdlExpression, WdlNamespaceWithWorkflow,
+    WdlNamespace, WdlSource, Workflow}
 import wdl4s.parser.WdlParser.{Ast, AstNode, Terminal}
 import wdl4s.types._
 import wdl4s.values._
@@ -173,8 +174,8 @@ object Utils {
         oNode.toString().parseJson
     }
 
-    // dx does not allow dots in variable names, so we
-    // convert them to underscores.
+        // dx does not allow dots in variable names, so we
+        // convert them to underscores.
     def transformVarName(varName: String) : String = {
         varName.replaceAll("\\.", "_")
     }
@@ -525,17 +526,52 @@ object Utils {
         System.err.println(msg)
     }
 
-    // Create a declaration.
+    // Convert flat inputs to legal scoped WDL structures. For example:
+    //  Map (
+    //     Add.sum -> 1
+    //     Mul.result -> 8
+    //  )
     //
-    // The difficulty here is in generating an AST.
-    def declarationGen(wdlType: WdlType,
-                       name: String,
-                       expr: Option[WdlExpression]) : Declaration = {
-        val textualRepr = expr match {
-            case None => s"${wdlType.toWdlString} ${name}"
-            case Some(e) => s"${wdlType.toWdlString} ${name} = ${e.toWdlString}"
+    // convert it into:
+    //   Map (
+    //    "Add" -> WdlObject(Map("sum" -> 1))
+    //    "Mul" -> WdlObject(Map("result" -> 8))
+    //   )
+    def addScopeToInputs(callInputs : Map[String, WdlValue]) : Map[String, WdlValue] = {
+        def recursiveBuild(rootMap : Map[String, WdlValue],
+                           components : Seq[String],
+                           wdlValue : WdlValue) : Map[String, WdlValue] = {
+            if (components.length == 1) {
+                // bottom of recursion
+                rootMap + (components.head -> wdlValue)
+            }
+            else {
+                if (rootMap contains components.head) {
+                    // already have a sub-scope by this name, we need to update it, but not
+                    // in place
+                    val o : WdlObject = rootMap(components.head) match {
+                        case o: WdlObject => o
+                        case _ =>  throw new Exception("Scope should be a WdlObject")
+                    }
+                    val subTree = recursiveBuild(o.value, components.tail, wdlValue)
+                    rootMap + (components.head -> new WdlObject(subTree))
+                } else {
+                    // new sub-scope
+                    val subTree = recursiveBuild(Map.empty, components.tail, wdlValue)
+                    rootMap + (components.head -> new WdlObject(subTree))
+                }
+            }
         }
-        val ast: Ast = AstTools.getAst(textualRepr, "")
-        Declaration(wdlType, name, expr, None, ast)
+
+        // A tree of nested scopes, that we update for each variable
+        var tree = Map.empty[String, WdlValue]
+        callInputs.map { case (varName, wdlValue) =>
+            // "A.B.C"
+            //    baseName = "C"
+            //    fqPath = List("A", "B")
+            val components = varName.split("\\.")
+            tree = recursiveBuild(tree, components, wdlValue)
+        }
+        tree
     }
 }

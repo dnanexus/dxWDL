@@ -80,12 +80,13 @@ object RunnerScatter {
     }
 
     // evaluate call input expressions
-    def evalExpression(expr: WdlExpression, env: ScatterEnv) : WdlValue= {
+    def evalExpression(expr: WdlExpression,
+                       scopedEnv : Map[String, WdlValue]) : WdlValue= {
         def lookup(varName : String) : WdlValue =
-            env.get(varName) match {
-                case Some(wvl) => wdlValueOfInputField(wvl)
+            scopedEnv.get(varName) match {
+                case Some(x) => x
                 case None =>
-                    System.err.println(s"Could not find variable ${varName} in environment ${env}")
+                    System.err.println(s"Could not find variable ${varName} in environment ${scopedEnv}")
                     throw new AppInternalException(s"Evaluating ${expr.toWdlString}, variable ${varName} unbound")
             }
         expr.evaluate(lookup, DxFunctions).get
@@ -101,7 +102,7 @@ object RunnerScatter {
       */
     def buildAppletInputs(call: Call,
                           inputSpec : List[InputParameter],
-                          env : ScatterEnv) : ObjectNode = {
+                          scopedEnv : Map[String, WdlValue]) : ObjectNode = {
         // Figure out which wdl fields this applet needs
         val appInputVars = inputSpec.map{ spec =>
             val name = spec.getName()
@@ -110,11 +111,6 @@ object RunnerScatter {
             else
                 Some((Utils.appletVarNameStripSuffix(name), spec))
         }.flatten
-
-        val allEnvVars: Vector[IR.CVar] = env.map{ case (varName, wvl) =>
-            val wvl2 = WdlVarLinks(varName, wvl.wdlType, wvl.dxlink)
-            wvl2.cVar
-        }.toVector
 
         var builder : DXJSON.ObjectBuilder = DXJSON.getObjectBuilder()
         appInputVars.foreach{ case (varName, spec) =>
@@ -131,10 +127,7 @@ object RunnerScatter {
                                 |The call bindings are ${provided}""".stripMargin.trim)
                     }
                 case Some((_, expr)) =>
-                    // Member accesses require caution. For example [inc1.incremented] needs
-                    // to be replaced with [inc1_incremented]
-                    val rExpr = IR.exprRenameVars(expr, allEnvVars)
-                    val wValue = evalExpression(rExpr, env)
+                    val wValue = evalExpression(expr, scopedEnv)
                     val wvl = WdlVarLinks.outputFieldOfWdlValue(varName, wValue.wdlType, wValue)
                     WdlVarLinks.genFields(wvl, varName).foreach{ case (fieldName, jsNode) =>
                         builder = builder.put(fieldName, jsNode)
@@ -214,7 +207,12 @@ object RunnerScatter {
             var innerEnv = env + (scatter.item -> elem)
 
             phases.foreach { case (call,dxApplet,inputSpec) =>
-                val inputs : ObjectNode = buildAppletInputs(call, inputSpec, innerEnv)
+                // Member accesses require caution. For example [inc1.incremented] needs
+                // to be replaced with [inc1_incremented]
+                val scopedEnv = Utils.addScopeToInputs(
+                    innerEnv.map{ case (key, wvl) => key -> wdlValueOfInputField(wvl) }.toMap
+                )
+                val inputs : ObjectNode = buildAppletInputs(call, inputSpec, scopedEnv)
                 System.err.println(s"call=${callUniqueName(call)} inputs=${inputs}")
                 val dxJob : DXJob = dxApplet.newRun().setRawInput(inputs).run()
                 val jobOutputs : ScatterEnv = jobOutputEnv(call, dxJob)

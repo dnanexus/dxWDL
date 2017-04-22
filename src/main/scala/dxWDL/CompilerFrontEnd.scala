@@ -68,6 +68,20 @@ object CompilerFrontEnd {
         }
     }
 
+    // Create a declaration.
+    //
+    // The difficulty here is in generating an AST.
+    def declarationGen(wdlType: WdlType,
+                       name: String,
+                       expr: Option[WdlExpression]) : Declaration = {
+        val textualRepr = expr match {
+            case None => s"${wdlType.toWdlString} ${name}"
+            case Some(e) => s"${wdlType.toWdlString} ${name} = ${e.toWdlString}"
+        }
+        val ast: Ast = AstTools.getAst(textualRepr, "")
+        Declaration(wdlType, name, expr, None, ast)
+    }
+
     def genDefaultValueOfType(wdlType: WdlType) : WdlValue = {
         /*def primitive(t: WdlType) : WdlValue = {
             case WdlBooleanType => WdlBoolean(true)
@@ -134,6 +148,22 @@ task Add {
                 throw f
         }
         ns.tasks.head
+    }
+
+    // Rename member accesses inside an expression, from
+    // the form A.x to A_x. This is used inside an applet WDL generated code.
+    //
+    // Here, we take a shortcut, and just replace strings, instead of
+    // doing a recursive syntax analysis (see ValueEvaluator wdl4s
+    // module).
+    def exprRenameVars(expr: WdlExpression,
+                       allVars: Vector[IR.CVar]) : WdlExpression = {
+        var sExpr: String = expr.toWdlString
+        for (cVar <- allVars) {
+            // A.x => A_x
+            sExpr = sExpr.replaceAll(cVar.name, cVar.dxVarName)
+        }
+        WdlExpression.fromString(sExpr)
     }
 
     // Figure out the expression type for a collection we loop over in a scatter
@@ -476,7 +506,7 @@ workflow w {
         }.toMap
         val inputVars: Vector[IR.CVar] = closure.map{ case (_, lVar) => lVar.cVar }.toVector
         val inputDecls: Vector[Declaration] = closure.map{ case(_, lVar) =>
-            Utils.declarationGen(lVar.cVar.wdlType, lVar.cVar.dxVarName, None)
+            declarationGen(lVar.cVar.wdlType, lVar.cVar.dxVarName, None)
         }.toVector
 
         // figure out the outputs
@@ -486,8 +516,8 @@ workflow w {
         val outputDeclarations = declarations.map{ decl =>
             decl.expression match {
                 case Some(expr) =>
-                    Utils.declarationGen(decl.wdlType, decl.unqualifiedName,
-                                         Some(IR.exprRenameVars(expr, inputVars)))
+                    declarationGen(decl.wdlType, decl.unqualifiedName,
+                                   Some(exprRenameVars(expr, inputVars)))
                 case None => decl
             }
         }.toVector
@@ -633,14 +663,13 @@ workflow w {
         }
 
         val decls: Vector[String]  = inputVars.map{ cVar =>
-            val d = Utils.declarationGen(cVar.wdlType, cVar.dxVarName, None)
+            val d = declarationGen(cVar.wdlType, cVar.dxVarName, None)
             WdlPrettyPrinter.apply(d, 1)
         }.flatten
 
         // Rename the variables we got from the input.
         def exprTransform(expr: WdlExpression) : WdlExpression = {
-            //System.err.println(s"exprRenameVars ${expr.toWdlString} allVars=${inputVars.map(x => IR.yaml(x).print())}")
-            IR.exprRenameVars(expr, inputVars)
+            exprRenameVars(expr, inputVars)
         }
 
         val lines: Vector[String] = decls ++
