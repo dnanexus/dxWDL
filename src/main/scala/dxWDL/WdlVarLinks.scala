@@ -26,7 +26,13 @@ case class DxlJob(dxJob : DXJob) extends DxLink
 
 case class WdlVarLinks(varName: String,
                        wdlType: WdlType,
-                       dxlink: Option[(IORef.Value, DxLink)])
+                       dxlink: Option[(IORef.Value, DxLink)]) {
+    def cVar: IR.CVar = {
+        //val decl = Utils.declarationGen(wdlType, varName, None)
+        val ns = wdl4s.WdlNamespace.loadUsingSource("Int x = 0", None, None).get
+        IR.CVar(varName, wdlType, ns.ast)
+    }
+}
 
 object WdlVarLinks {
     // Parse a dnanexus file descriptor. Examples:

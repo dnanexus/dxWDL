@@ -1,6 +1,6 @@
 package dxWDL
 
-import com.dnanexus.{DXWorkflow, DXApplet, DXFile, DXProject, DXJSON, DXUtil, DXContainer, DXSearch, DXDataObject, InputParameter}
+import com.dnanexus._
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.node.ObjectNode
@@ -16,8 +16,7 @@ import spray.json.DefaultJsonProtocol
 import spray.json.JsString
 import wdl4s.AstTools
 import wdl4s.AstTools.EnhancedAstNode
-import wdl4s.{Call, Declaration, Scatter, Scope, Task, WdlExpression, WdlNamespaceWithWorkflow,
-    WdlNamespace, WdlSource, Workflow}
+import wdl4s._
 import wdl4s.parser.WdlParser.{Ast, AstNode, Terminal}
 import wdl4s.types._
 import wdl4s.values._
@@ -524,5 +523,19 @@ object Utils {
         if (!verbose)
             return
         System.err.println(msg)
+    }
+
+    // Create a declaration.
+    //
+    // The difficulty here is in generating an AST.
+    def declarationGen(wdlType: WdlType,
+                       name: String,
+                       expr: Option[WdlExpression]) : Declaration = {
+        val textualRepr = expr match {
+            case None => s"${wdlType.toWdlString} ${name}"
+            case Some(e) => s"${wdlType.toWdlString} ${name} = ${e.toWdlString}"
+        }
+        val ast: Ast = AstTools.getAst(textualRepr, "")
+        Declaration(wdlType, name, expr, None, ast)
     }
 }

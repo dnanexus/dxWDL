@@ -9,6 +9,7 @@ package dxWDL
 import net.jcazevedo.moultingyaml._
 import net.jcazevedo.moultingyaml.DefaultYamlProtocol._
 import wdl4s.parser.WdlParser.{Ast, AstNode, Terminal}
+import wdl4s.WdlExpression
 import wdl4s.types._
 import wdl4s.values._
 
@@ -124,5 +125,21 @@ object IR {
             YamlString("stages") -> YamlArray(stages.toVector),
             YamlString("applets") -> YamlArray(applets.toVector)
         )
+    }
+
+    // Rename member accesses inside an expression, from
+    // the form A.x to A_x. This is used inside an applet WDL generated code.
+    //
+    // Here, we take a shortcut, and just replace strings, instead of
+    // doing a recursive syntax analysis (see ValueEvaluator wdl4s
+    // module).
+    def exprRenameVars(expr: WdlExpression,
+                       allVars: Vector[IR.CVar]) : WdlExpression = {
+        var sExpr: String = expr.toWdlString
+        for (cVar <- allVars) {
+            // A.x => A_x
+            sExpr = sExpr.replaceAll(cVar.name, cVar.dxVarName)
+        }
+        WdlExpression.fromString(sExpr)
     }
 }

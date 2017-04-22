@@ -55,10 +55,6 @@ object RunnerScatter {
         }
     }
 
-    def callUniqueNameInWorkflow(wf : Workflow, call : Call) : String = {
-        wf.unqualifiedName ++ "." + callUniqueName(call)
-    }
-
     // find the sequence of applets inside the scatter block. In this example,
     // these are: [inc]
     def findAppletsInScatterBlock(wf : Workflow,
@@ -83,12 +79,14 @@ object RunnerScatter {
         }
     }
 
-    // evaluate Task output expressions
+    // evaluate call input expressions
     def evalExpression(expr: WdlExpression, env: ScatterEnv) : WdlValue= {
         def lookup(varName : String) : WdlValue =
             env.get(varName) match {
                 case Some(wvl) => wdlValueOfInputField(wvl)
-                case None => throw new AppInternalException(s"No value found for variable ${varName}")
+                case None =>
+                    System.err.println(s"Could not find variable ${varName} in environment ${env}")
+                    throw new AppInternalException(s"Evaluating ${expr.toWdlString}, variable ${varName} unbound")
             }
         expr.evaluate(lookup, DxFunctions).get
     }
@@ -113,6 +111,11 @@ object RunnerScatter {
                 Some((Utils.appletVarNameStripSuffix(name), spec))
         }.flatten
 
+        val allEnvVars: Vector[IR.CVar] = env.map{ case (varName, wvl) =>
+            val wvl2 = WdlVarLinks(varName, wvl.wdlType, wvl.dxlink)
+            wvl2.cVar
+        }.toVector
+
         var builder : DXJSON.ObjectBuilder = DXJSON.getObjectBuilder()
         appInputVars.foreach{ case (varName, spec) =>
             // The lhs is [k], the varName is [i]
@@ -128,7 +131,10 @@ object RunnerScatter {
                                 |The call bindings are ${provided}""".stripMargin.trim)
                     }
                 case Some((_, expr)) =>
-                    val wValue = evalExpression(expr, env)
+                    // Member accesses require caution. For example [inc1.incremented] needs
+                    // to be replaced with [inc1_incremented]
+                    val rExpr = IR.exprRenameVars(expr, allEnvVars)
+                    val wValue = evalExpression(rExpr, env)
                     val wvl = WdlVarLinks.outputFieldOfWdlValue(varName, wValue.wdlType, wValue)
                     WdlVarLinks.genFields(wvl, varName).foreach{ case (fieldName, jsNode) =>
                         builder = builder.put(fieldName, jsNode)
