@@ -210,7 +210,15 @@ object RunnerScatter {
                 // Member accesses require caution. For example [inc1.incremented] needs
                 // to be replaced with [inc1_incremented]
                 val scopedEnv = Utils.addScopeToInputs(
-                    innerEnv.map{ case (key, wvl) => key -> wdlValueOfInputField(wvl) }.toMap
+                    innerEnv.map{ case (key, wvl) =>
+                        try {
+                            Some(key -> wdlValueOfInputField(wvl))
+                        } catch {
+                            // Filter out cases where we are waiting for promises,
+                            // we only need the values available now.
+                            case e: Throwable => None
+                        }
+                    }.flatten.toMap
                 )
                 val inputs : ObjectNode = buildAppletInputs(call, inputSpec, scopedEnv)
                 System.err.println(s"call=${callUniqueName(call)} inputs=${inputs}")
