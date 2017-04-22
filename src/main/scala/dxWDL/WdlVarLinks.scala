@@ -82,7 +82,7 @@ object WdlVarLinks {
             case Some((x,ioRef)) => (x,ioRef)
         }
         val varEncName = Utils.encodeAppletVarName(wvl.varName)
-        val bindEncName = Utils.encodeAppletVarName(bindName)
+        val bindEncName = Utils.encodeAppletVarName(Utils.transformVarName(bindName))
 
         def mkPrimitive() : (String, JsonNode) = {
             val jsNode : JsonNode = dxVal match {
