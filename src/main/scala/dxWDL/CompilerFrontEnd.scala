@@ -171,8 +171,8 @@ task Add {
     // Expressions like A.B.C are converted to A_B_C, in order to avoid
     // the wdl4s library from interpreting these as member accesses.
     def calcIterWdlType(scatter : Scatter, env : Map[String,WdlType]) : WdlType = {
-        def transformVarName(x: String) : String = { x.replaceAll("\\.", "_") }
-        def revTransformVarName(x: String) : String = {  x.replaceAll("_", "\\.") }
+        def transformVarName(x: String) : String = { x.replaceAll("\\.", "___") }
+        def revTransformVarName(x: String) : String = {  x.replaceAll("___", "\\.") }
 
         def lookup(varName : String) : WdlType = {
             val orgMembAccess = revTransformVarName(varName)

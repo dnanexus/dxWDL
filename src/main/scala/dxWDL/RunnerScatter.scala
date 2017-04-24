@@ -227,7 +227,6 @@ object RunnerScatter {
         // add the top declarations in the scatter block to the
         // environment
         val (topDecls,_) = Utils.splitBlockDeclarations(scatter.children.toList)
-        val env: ScatterEnv = RunnerEval.evalDeclarations(topDecls, outerScopeEnv).toMap
 
         // Figure out the input/output specs for each applet.
         // Do this once per applet in the loop.
@@ -240,7 +239,10 @@ object RunnerScatter {
         var scOutputs : List[ScatterEnv] = List()
         collElements.foreach { case elem =>
             // Bind the iteration variable inside the loop
-            var innerEnv = env + (scatter.item -> elem)
+            val envWithIterItem = outerScopeEnv + (scatter.item -> elem)
+
+            // calculate declarations at the top of the block
+            var innerEnv = RunnerEval.evalDeclarations(topDecls, envWithIterItem).toMap
 
             phases.foreach { case (call,dxApplet,inputSpec) =>
                 val inputs : ObjectNode = buildAppletInputs(call, inputSpec, innerEnv, rState)

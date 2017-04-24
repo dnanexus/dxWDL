@@ -1,9 +1,14 @@
 /**
-  *  Preprocessing pass, simplifies the original WDL.
+  *  Preprocessing pass, simplify the original WDL.
   *
   *  Instead of handling expressions in calls directly,
   *  we lift the expressions, generate auxiliary variables, and
   *  call the task with values or variables (no expressions).
+  *
+  *  A difficulty we face here, is avoiding using internal
+  *  representations used by wdl4s. For example, we want to reorganize
+  *  scatter blocks, however, we cannot create valid new wdl4s scatter
+  *  blocks. Instead, we pretty print a new workflow and then load it.
   */
 package dxWDL
 
@@ -24,6 +29,7 @@ import wdl4s.WdlExpression.AstForExpressions
 
 object CompilerPreprocess {
     val MAX_NUM_COLLECT_ITER = 10
+    var tmpVarCnt = 0
 
     // Compiler state.
     // Packs common arguments passed between methods.
@@ -34,6 +40,12 @@ object CompilerPreprocess {
     case class DeclReorgState(definedVars: Set[String],
                               top: Vector[Scope],
                               bottom: Vector[Scope])
+
+    def genTmpVarName() : String = {
+        val tmpVarName: String = s"xtmp${tmpVarCnt}"
+        tmpVarCnt = tmpVarCnt + 1
+        tmpVarName
+    }
 
     // Add a suffix to a filename, before the regular suffix. For example:
     //  xxx.wdl -> xxx.simplified.wdl
@@ -63,8 +75,7 @@ object CompilerPreprocess {
     //     input: a = xtmp_1, b = 2
     //  }
     //
-    def simplifyCall(call: Call, tmpVarCnt: Int, cState: State) : (Int, Seq[Scope]) = {
-        var varNum = tmpVarCnt + 1
+    def simplifyCall(call: Call, cState: State) : Vector[Scope] = {
         val tmpDecls = Queue[Scope]()
         val inputs: Map[String, WdlExpression]  = call.inputMappings.map { case (key, expr) =>
             val rhs = expr.ast match {
@@ -75,11 +86,10 @@ object CompilerPreprocess {
                 case a: Ast if a.isFunctionCall || a.isUnaryOperator || a.isBinaryOperator
                       || a.isTupleLiteral || a.isArrayOrMapLookup =>
                     // replace an expression with a temporary variable
-                    val tmpVarName: String = s"xtmp${varNum}"
+                    val tmpVarName = genTmpVarName()
                     val calleeDecl: Declaration =
                         call.declarations.find(decl => decl.unqualifiedName == key).get
                     val wdlType = calleeDecl.wdlType
-                    varNum = varNum + 1
                     tmpDecls += Declaration(wdlType, tmpVarName, Some(expr), call.parent, a)
                     WdlExpression.fromString(tmpVarName)
             }
@@ -91,7 +101,7 @@ object CompilerPreprocess {
             case wfc: WorkflowCall => WorkflowCall(wfc.alias, wfc.calledWorkflow, inputs, wfc.ast)
         }
         tmpDecls += callModifiedInputs
-        (varNum, tmpDecls.toList)
+        tmpDecls.toVector
     }
 
     // Start from a split of the workflow elements into top and bottom blocks.
@@ -171,12 +181,11 @@ object CompilerPreprocess {
     //     Int xtmp2 = Add.result + 10
     //     call Multiply  { input: a=xtmp2, b=2 }
     // }
-    def collectDeclarations(elems: Seq[Scope], cState: State) : Seq[Scope] = {
+    def collectDeclarations(drsInit:DeclReorgState,
+                            cState: State) : Seq[Scope] = {
+        var drs = drsInit
         var numIter = 0
-        var drs = DeclReorgState(Set.empty[String],
-                                 Vector.empty[Scope],
-                                 elems.toVector)
-        val totNumElems = elems.length
+        val totNumElems = drs.bottom.length
         while (!drs.bottom.isEmpty && numIter < MAX_NUM_COLLECT_ITER) {
 /*            System.err.println(
                 s"""|collectDeclaration ${numIter}
@@ -190,24 +199,84 @@ object CompilerPreprocess {
         drs.top ++ drs.bottom
     }
 
-    def simplifyWorkflow(wf: Workflow, cState: State) : String = {
+    // 1. Move sub-expressions in a scatter block into separate declarations.
+    // 2. Collect the sub-expressions, as much as possible.
+    //
+    // Bonus: simplify the collection expression
+    def simplifyScatter(ssc: Scatter, definedVars: Set[String], cState: State) : Vector[String] = {
+        // extract expressions from calls
+        val children : Vector[Scope] = ssc.children.map {
+            case call: Call => simplifyCall(call, cState)
+            case x => Vector(x)
+        }.flatten.toVector
+
+        // Try to pull as declarations to the top of the block, this allows calculating
+        // them with the scatter job we need to run anyway.
+        val drs = DeclReorgState(definedVars, Vector.empty[Scope], children)
+        val reorgChildren = collectDeclarations(drs, cState)
+
+        val top: String = s"scatter (${ssc.item} in ${ssc.collection.toWdlString})"
+        val lines: Vector[String] = reorgChildren.map{
+            case x:Call => WdlPrettyPrinter.apply(x, 2)
+            case x:Scatter => WdlPrettyPrinter.apply(x, 2)
+            case x:Declaration => WdlPrettyPrinter.apply(x, 2)
+            case x => throw new Exception(s"Unimplemented scatter element ${x.toString}")
+        }.flatten.toVector
+        WdlPrettyPrinter.buildBlock(top, lines, 1)
+    }
+
+    // Simplify scatter blocks inside the workflow. Return a valid new
+    // WDL workflow.
+    //
+    // Note: we keep track of the defined variables, because this is required for
+    // moving declarations inside the scatter sub blocks.
+    def simplifyAllScatters(wf:Workflow, taskLines:Vector[String], cState:State): Workflow = {
+        Utils.trace(cState.verbose, "simplifying scatters")
+        var definedVars:Set[String] = Set.empty
+        val childLines: Vector[String] = wf.children.map {
+            case ssc:Scatter =>
+                // Be careful to add the indexing variable to the environment
+                val sscDefVars = definedVars + ssc.item
+                simplifyScatter(ssc, sscDefVars, cState)
+            case call:Call => WdlPrettyPrinter.apply(call, 1)
+            case decl:Declaration =>
+                definedVars = definedVars + decl.unqualifiedName
+                WdlPrettyPrinter.apply(decl, 1)
+            case x => throw new Exception(s"Unimplemented workflow element ${x.toString}")
+        }.flatten.toVector
+
+        // add the tasks to the workflow, to keep it valid.
+        val wfLines = WdlPrettyPrinter.buildBlock(
+            s"workflow ${wf.unqualifiedName}", childLines, 0
+        )
+        val allLines = (taskLines ++ wfLines).mkString("\n")
+        val ns = WdlNamespace.loadUsingSource(allLines, None, None).get
+        ns match {
+            case nswf: WdlNamespaceWithWorkflow => nswf.workflow
+            case _ =>
+                System.err.println(s"Badly rewritten workflow ${allLines}")
+                throw new Exception("WDL string contains no workflow")
+        }
+    }
+
+    // Simplify the declarations at the top level of the workflow
+    def simplifyTopLevel(wf: Workflow, taskLines:Vector[String], cState: State) : Vector[String] = {
+        Utils.trace(cState.verbose, "simplifying workflow top level")
+
         // simplification step
-        var tmpVarCnt = 0
-        var elems : Seq[Scope] = wf.children.map {
-            case call: Call =>
-                val (nCnt, callElems) = simplifyCall(call, tmpVarCnt, cState)
-                tmpVarCnt = nCnt
-                callElems
+        val elems : Seq[Scope] = wf.children.map {
+            case call: Call => simplifyCall(call, cState)
             case x => List(x)
         }.flatten
 
-        // Attempt to collect declarations, to reduce the number of extra jobs
+        // Attempt to collect declarations at the top level, to reduce the number of extra jobs
         // required for calculations.
-        elems = collectDeclarations(elems, cState)
+        val drs = DeclReorgState(Set.empty[String], Vector.empty[Scope], elems.toVector)
+        val reorgElems = collectDeclarations(drs, cState)
 
-        // pretty print the workflow to a file. The output
+        // pretty print the workflow. The output
         // must be readable by the standard WDL compiler.
-        val elemsPp : Vector[String] = elems.map {
+        val elemsPp : Vector[String] = reorgElems.map {
             case call: Call => WdlPrettyPrinter.apply(call, 1)
             case decl: Declaration => WdlPrettyPrinter.apply(decl, 1)
             case ssc: Scatter => WdlPrettyPrinter.apply(ssc, 1)
@@ -215,7 +284,13 @@ object CompilerPreprocess {
                 throw new Exception(cState.cef.notCurrentlySupported(x.ast,
                                                                      "workflow element"))
         }.flatten.toVector
-        WdlPrettyPrinter.buildBlock(s"workflow ${wf.unqualifiedName}", elemsPp, 0).mkString("\n")
+        val wfLines = WdlPrettyPrinter.buildBlock(s"workflow ${wf.unqualifiedName}", elemsPp, 0)
+        taskLines ++ wfLines
+    }
+
+    def simplifyWorkflow(wf: Workflow, taskLines: Vector[String], cState:State) : Vector[String] = {
+        val wf1 = simplifyAllScatters(wf, taskLines, cState)
+        simplifyTopLevel(wf1, taskLines, cState)
     }
 
     def apply(wdlSourceFile : Path,
@@ -234,26 +309,27 @@ object CompilerPreprocess {
         // Assuming the source file is xxx.wdl, the new name will
         // be xxx.simplified.wdl.
         val trgName: String = addFilenameSuffix(wdlSourceFile, ".simplified")
-        val simplWdl = Utils.appCompileDirPath.resolve(trgName).toFile
-        val fos = new FileWriter(simplWdl)
+        val simpleWdl = Utils.appCompileDirPath.resolve(trgName).toFile
+        val fos = new FileWriter(simpleWdl)
         val pw = new PrintWriter(fos)
 
-        // Process the original WDL file, write the output to
-        // xxx.simplified.wdl
+        // Process the original WDL file,
         // Do not modify the tasks
-        ns.tasks.foreach{ task =>
-            val taskLines = WdlPrettyPrinter.apply(task, 0).mkString("\n")
-            pw.println(taskLines + "\n")
-        }
-        ns match {
+        val taskLines: Vector[String] = ns.tasks.map{ task =>
+            WdlPrettyPrinter.apply(task, 0) :+ "\n"
+        }.flatten.toVector
+        val rewrittenNs = ns match {
             case nswf : WdlNamespaceWithWorkflow =>
-                val rewritten: String = simplifyWorkflow(nswf.workflow, cState)
-                pw.println(rewritten)
-            case _ => ()
+                simplifyWorkflow(nswf.workflow, taskLines, cState)
+            case _ => taskLines
         }
+
+        // write the output to xxx.simplified.wdl
+        pw.println(rewrittenNs.mkString("\n"))
 
         pw.flush()
         pw.close()
-        simplWdl.toPath
+        Utils.trace(verbose, s"Wrote simplified WDL to ${simpleWdl.toString}")
+        simpleWdl.toPath
     }
 }

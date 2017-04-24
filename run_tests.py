@@ -445,7 +445,7 @@ def register_all_tests(project):
 
     # Massive tests
     register_test("gatk_160927",
-                  lambda x: gatk_gen_inputs,
+                  lambda x: gatk_gen_inputs(project),
                   lambda x: {})
 
 

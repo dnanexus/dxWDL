@@ -74,7 +74,8 @@ object Main extends App {
     }
 
     def prettyPrintIr(wdlSourceFile : Path,
-                      irWf: IR.Workflow) : Unit = {
+                      irWf: IR.Workflow,
+                      verbose: Boolean) : Unit = {
         val trgName: String = replaceFileSuffix(wdlSourceFile, ".ir.yaml")
         val trgPath = Utils.appCompileDirPath.resolve(trgName).toFile
         val yo = IR.yaml(irWf)
@@ -84,6 +85,7 @@ object Main extends App {
         pw.print(humanReadable)
         pw.flush()
         pw.close()
+        Utils.trace(verbose, s"Wrote intermediate representation to ${trgPath.toString}")
     }
 
     def compileBody(wdlSourceFile : Path,
@@ -166,7 +168,7 @@ object Main extends App {
         val irWf = CompilerFrontEnd.apply(ns, folder, cef, verbose)
 
         // Write out the intermediate representation
-        prettyPrintIr(wdlSourceFile, irWf)
+        prettyPrintIr(wdlSourceFile, irWf, verbose)
 
         mode match {
             case None =>
