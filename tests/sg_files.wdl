@@ -34,6 +34,7 @@ task mm_gather {
 
 task mm_file_ident {
     File fileA
+    File fileB
 
     command {
     }
@@ -53,10 +54,13 @@ workflow sg_files {
 
     scatter (filename in analysis.out) {
         String prefix = ".txt"
+        String prefix2 = ".cpp"
         String suffix = wf_suffix
 
         call mm_file_ident as ident {
-          input: fileA = sub(filename, prefix, "") + suffix
+          input:
+             fileA = sub(filename, prefix, "") + suffix,
+             fileB = sub(sub(filename, prefix, ""), prefix2, "") + suffix
         }
     }
 

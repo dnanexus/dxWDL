@@ -58,13 +58,6 @@ object CompilerBackend {
                      "help" -> JsString(wdlType.toWdlString),
                      "class" -> JsString("file")))
         }
-        def mkRaggedFileArray() : Vector[Map[String, JsValue]] = {
-            Vector(Map("name" -> JsString(name),
-                     "help" -> JsString(wdlType.toWdlString),
-                     "class" -> JsString("file")),
-                 Map("name" -> JsString( name ++ Utils.FLAT_FILE_ARRAY_SUFFIX),
-                     "class" -> JsString("array:file")))
-        }
 
         def nonOptional(t : WdlType) = t  match {
             // primitive types

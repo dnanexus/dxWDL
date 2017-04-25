@@ -19,11 +19,12 @@ task jjj_str_animals {
 
 task jjj_ident {
     String s
+    String r
 
     command {
     }
     output {
-      String dummy_result = ""
+      String result = "${s} ${r}"
     }
 }
 
@@ -58,7 +59,8 @@ workflow advanced {
     scatter (name in names) {
         call jjj_ident {
           input:
-             s = sub(name, ".XX", "") + " XY"
+             s = sub(name, ".XX", "") + ".XY",
+             r = sub(sub(name, ".XX", ""), ".UU", "") + ".unmerged"
         }
     }
 

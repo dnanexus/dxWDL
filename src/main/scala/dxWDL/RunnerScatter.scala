@@ -142,11 +142,8 @@ object RunnerScatter {
         // Figure out which wdl fields this applet needs
         val appInputVars = inputSpec.map{ spec =>
             val name = spec.getName()
-            if (name.endsWith(Utils.FLAT_FILE_ARRAY_SUFFIX))
-                None
-            else
-                Some((Utils.appletVarNameStripSuffix(name), spec))
-        }.flatten
+            (Utils.decodeAppletVarName(name), spec)
+        }
 
         var builder : DXJSON.ObjectBuilder = DXJSON.getObjectBuilder()
         appInputVars.foreach{ case (varName, spec) =>
@@ -258,6 +255,11 @@ object RunnerScatter {
                 innerEnv = innerEnv ++ jobOutputs
                 scOutputs = scOutputs :+ jobOutputs
             }
+
+            // Cleanup the index variable; it could be a file holding persistent resources.
+            // In particular, the file name is an important resource, if it is not removed,
+            // the name cannot be reused in the next loop iteration.
+            elem.cleanup()
         }
 
         // Gather phase. Collect call outputs in arrays, do not wait

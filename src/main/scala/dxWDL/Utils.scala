@@ -41,7 +41,6 @@ object Utils {
 
     // Long strings cause problems with bash and the UI
     val MAX_STRING_LEN = 8 * 1024
-    val FLAT_FILE_ARRAY_SUFFIX = "_ffa"
     val DX_HOME = "/home/dnanexus"
     val DOWNLOAD_RETRY_LIMIT = 3
     val UPLOAD_RETRY_LIMIT = DOWNLOAD_RETRY_LIMIT
@@ -49,7 +48,6 @@ object Utils {
     val WDL_SNIPPET_FILENAME = "source.wdl"
 
     // Substrings used by the compiler for encoding purposes
-    val reservedSuffixes = List(FLAT_FILE_ARRAY_SUFFIX)
     val reservedSubstrings = List("___")
 
     // Prefixes used for generated applets
@@ -190,10 +188,6 @@ object Utils {
             if (varName contains s)
                 throw new Exception(s"Variable ${varName} includes the reserved substring ${s}")
         }
-        reservedSuffixes.foreach{ s =>
-            if (varName.endsWith(s))
-                throw new Exception(s"Variable ${varName} ends with reserved suffix ${s}")
-        }
         //varName.replaceAll("\\.", "___")
         if (varName contains ".")
             throw new Exception(s"Variable ${varName} includes the illegal symbol \\.")
@@ -211,27 +205,6 @@ object Utils {
             throw new Exception(s"Variable ${varName} includes the illegal symbol ___")
         varName
     }
-
-    def appletVarNameSplit(varName : String) : (String,String) = {
-        reservedSuffixes.foreach(suff =>
-            if (varName.endsWith(suff)) {
-                val prefix = varName.substring(0, varName.indexOf(suff))
-                return (decodeAppletVarName(prefix), suff)
-            }
-        )
-        (decodeAppletVarName(varName), "")
-    }
-
-    def appletVarNameStripSuffix(varName : String) : String = {
-        val (prefix,_) = appletVarNameSplit(varName)
-        prefix
-    }
-
-    def appletVarNameGetSuffix(varName : String) : String= {
-        val (_,suffix) = appletVarNameSplit(varName)
-        suffix
-    }
-
 
     // recursive directory delete
     //    http://stackoverflow.com/questions/25999255/delete-directory-recursively-in-scala
@@ -573,5 +546,50 @@ object Utils {
             tree = recursiveBuild(tree, components, wdlValue)
         }
         tree
+    }
+
+    // Parse a dnanexus file descriptor. Examples:
+    //
+    // "$dnanexus_link": {
+    //    "project": "project-BKJfY1j0b06Z4y8PX8bQ094f",
+    //    "id": "file-BKQGkgQ0b06xG5560GGQ001B"
+    //   }
+    //
+    //  {"$dnanexus_link": "file-F0J6JbQ0ZvgVz1J9q5qKfkqP"}
+    //
+    def dxFileOfJsValue(jsValue : JsValue) : DXFile = {
+        val innerObj = jsValue match {
+            case JsObject(fields) =>
+                fields.get("$dnanexus_link") match {
+                    case None => throw new AppInternalException(s"Bad json of dnanexus link $jsValue")
+                    case Some(x) => x
+                }
+            case  _ =>
+                throw new AppInternalException(s"Bad json of dnanexus link $jsValue")
+        }
+
+        val (fid, projId) : (String, Option[String]) = innerObj match {
+            case JsString(fid) =>
+                // We just have a file-id
+                (fid, None)
+            case JsObject(linkFields) =>
+                // file-id and project-id
+                val fid =
+                    linkFields.get("id") match {
+                        case Some(JsString(s)) => s
+                        case _ => throw new AppInternalException(s"No file ID found in dnanexus link $jsValue")
+                    }
+                linkFields.get("project") match {
+                    case Some(JsString(pid : String)) => (fid, Some(pid))
+                    case _ => (fid, None)
+                }
+            case _ =>
+                throw new AppInternalException(s"Could not parse a dxlink from $innerObj")
+        }
+
+        projId match {
+            case None => DXFile.getInstance(fid)
+            case Some(pid) => DXFile.getInstance(fid, DXProject.getInstance(pid))
+        }
     }
 }
