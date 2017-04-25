@@ -43,8 +43,6 @@ task mm_file_ident {
 }
 
 workflow sg_files {
-    String wf_suffix = ".txt"
-
     call mm_prepare as prepare
     scatter (x in prepare.array) {
         call mm_analysis as analysis {input: str=x}
@@ -52,11 +50,8 @@ workflow sg_files {
     call mm_gather as gather {input: files=analysis.out}
 
     scatter (filename in analysis.out) {
-        String prefix = ".txt"
-        String suffix = wf_suffix
-
         call mm_file_ident as ident {
-          input: fileA = sub(filename, prefix, "") + suffix
+          input: fileA = sub(filename, ".txt", "") + ".txt"
         }
     }
 

@@ -224,6 +224,8 @@ object RunnerScatter {
                     calls : Seq[(Call, DXApplet)],
                     outerScopeEnv : ScatterEnv,
                     rState: State) : Map[String, JsValue] = {
+        System.err.println(s"evalScatter")
+
         // add the top declarations in the scatter block to the
         // environment
         val (topDecls,_) = Utils.splitBlockDeclarations(scatter.children.toList)
@@ -240,6 +242,7 @@ object RunnerScatter {
         collElements.foreach { case elem =>
             // Bind the iteration variable inside the loop
             val envWithIterItem = outerScopeEnv + (scatter.item -> elem)
+            System.err.println(s"envWithIterItem= ${envWithIterItem}")
 
             // calculate declarations at the top of the block
             var innerEnv = RunnerEval.evalDeclarations(topDecls, envWithIterItem).toMap

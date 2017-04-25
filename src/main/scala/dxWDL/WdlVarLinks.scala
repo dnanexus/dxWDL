@@ -220,7 +220,8 @@ object WdlVarLinks {
             case (_, WdlArray(WdlArrayType(WdlStringType), stAr)) =>
                 JsArray(stAr.map {case x : WdlString => jsStringLimited(x.value)}.toVector)
 
-            case _ => throw new AppInternalException(s"Unsupport type ${wdlValue.wdlType}")
+            case _ => throw new AppInternalException(
+                s"Unsupported type combination (${wdlType}, ${wdlValue.wdlType})")
         }
     }
 
