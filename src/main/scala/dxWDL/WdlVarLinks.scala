@@ -195,6 +195,7 @@ object WdlVarLinks {
             // primitive types
             case (WdlFileType, WdlString(path)) => Utils.uploadFile(Paths.get(path))
             case (WdlFileType, WdlSingleFile(path)) => Utils.uploadFile(Paths.get(path))
+            case (WdlStringType, WdlSingleFile(path)) => JsString(path)
             case (_,WdlBoolean(b)) => JsBoolean(b)
             case (_,WdlInteger(n)) => JsNumber(n)
             case (_,WdlFloat(x)) => JsNumber(x)
