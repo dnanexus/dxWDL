@@ -62,7 +62,7 @@ object RunnerEval {
                 // declaration to evaluate, not an input
                 case (t, Some(expr)) =>
                     val v : WdlValue = expr.evaluate(lookup, DxFunctions).get
-                    val wvl = WdlVarLinks.outputFieldOfWdlValue(decl.unqualifiedName, t, v)
+                    val wvl = WdlVarLinks.outputFieldOfWdlValue(t, v)
                     Some(wvl)
             }
         }

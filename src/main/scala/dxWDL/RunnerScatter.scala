@@ -110,7 +110,7 @@ object RunnerScatter {
                             throw new Exception(rState.cef.expressionMustBeConstOrVar(expr))
                         }
                         val wdlValue = expr.evaluate(nullLookup, NoFunctions).get
-                        WdlVarLinks.outputFieldOfWdlValue("xxdummy", wdlValue.wdlType, wdlValue)
+                        WdlVarLinks.outputFieldOfWdlValue(wdlValue.wdlType, wdlValue)
                 }
 
             case a: Ast if a.isMemberAccess =>
@@ -176,7 +176,7 @@ object RunnerScatter {
         val task = Utils.taskOfCall(call)
         task.outputs.map { tso =>
             val fqn = prefix ++ "." ++ tso.unqualifiedName
-            fqn -> WdlVarLinks(tso.unqualifiedName, tso.wdlType, Some(IORef.Output, DxlJob(dxJob)))
+            fqn -> WdlVarLinks(tso.wdlType, DxlJob(dxJob, IORef.Output, tso.unqualifiedName))
         }.toMap
     }
 

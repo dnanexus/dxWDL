@@ -20,40 +20,47 @@ object IORef extends Enumeration {
 // from JSON passed by the platform
 sealed trait DxLink
 case class DxlJsonNode(jsn: JsonNode) extends DxLink
-case class DxlJsValue(jsn : JsValue) extends DxLink
-case class DxlStage(dxStage : DXWorkflow.Stage) extends DxLink
-case class DxlJob(dxJob : DXJob) extends DxLink
+case class DxlJsValue(jsn: JsValue) extends DxLink
+case class DxlStage(dxStage: DXWorkflow.Stage, ioRef: IORef.Value, varName: String) extends DxLink
+case class DxlJob(dxJob: DXJob, ioRef: IORef.Value, varName: String) extends DxLink
 
-case class WdlVarLinks(varName: String,
-                       wdlType: WdlType,
-                       dxlink: Option[(IORef.Value, DxLink)]) {
+// Bridge between WDL values and DNAx values.
+case class WdlVarLinks(wdlType: WdlType, dxlink: DxLink) {
+    // This is a temporary hack. It will work only for
+    // single files.
     var wdlValue: Option[WdlValue] = None
 
     def wdlFileOfDxLink(jsValue : JsValue) : WdlValue = {
-        // Download the file, and
-        // place it in a local file, with the same name as the
-        // platform. All files have to be downloaded into the same
-        // directory; the only exception we make is for disambiguatio
-        // purposes.
-        val dxfile = Utils.dxFileOfJsValue(jsValue)
-        val fName = dxfile.describe().getName()
-        val shortPath = Utils.inputFilesDirPath.resolve(fName)
-        val path : Path =
-            if (Files.exists(shortPath)) {
-                // Short path already exists. Note: this check is brittle in the case
-                // of concurrent downloads.
-                val fid = dxfile.getId()
-                System.err.println(s"Disambiguating file ${fid} with name ${fName}")
-                val dir:Path = Utils.inputFilesDirPath.resolve(fid)
-                Utils.safeMkdir(dir)
-                Utils.inputFilesDirPath.resolve(fid).resolve(fName)
-            } else {
-                shortPath
-            }
-        Utils.downloadFile(path, dxfile)
-        val retval = WdlSingleFile(path.toString)
-        wdlValue = Some(retval)
-        retval
+        // check if we have already done this conversion.
+        wdlValue match {
+            case Some(WdlSingleFile(x)) => WdlSingleFile(x)
+            case None =>
+                // Download the file, and
+                // place it in a local file, with the same name as the
+                // platform. All files have to be downloaded into the same
+                // directory; the only exception we make is for disambiguatio
+                // purposes.
+                val dxfile = Utils.dxFileOfJsValue(jsValue)
+                val fName = dxfile.describe().getName()
+                val shortPath = Utils.inputFilesDirPath.resolve(fName)
+                val path : Path =
+                    if (Files.exists(shortPath)) {
+                        // Short path already exists. Note: this check is brittle in the case
+                        // of concurrent downloads.
+                        val fid = dxfile.getId()
+                        System.err.println(s"Disambiguating file ${fid} with name ${fName}")
+                        val dir:Path = Utils.inputFilesDirPath.resolve(fid)
+                        Utils.safeMkdir(dir)
+                        Utils.inputFilesDirPath.resolve(fid).resolve(fName)
+                    } else {
+                        shortPath
+                    }
+                Utils.downloadFile(path, dxfile)
+                val retval = WdlSingleFile(path.toString)
+                wdlValue = Some(retval)
+                retval
+            case _ => throw new Exception("Sanity")
+        }
     }
 
     def basicWdlValueOfJsValue(wdlType: WdlType, jsValue: JsValue) : WdlValue = {
@@ -115,21 +122,16 @@ object WdlVarLinks {
     // create input/output fields that bind the variable name [bindName] to
     // this WdlVar
     def genFields(wvl : WdlVarLinks, bindName: String) : List[(String, JsonNode)] = {
-        val (ioRef,dxVal) = wvl.dxlink match {
-            case None => throw new AppInternalException("Empty links WdlVarLinks")
-            case Some((x,ioRef)) => (x,ioRef)
-        }
-        val varEncName = Utils.encodeAppletVarName(wvl.varName)
         val bindEncName = Utils.encodeAppletVarName(Utils.transformVarName(bindName))
 
         def mkPrimitive() : (String, JsonNode) = {
-            val jsNode : JsonNode = dxVal match {
-                case DxlStage(dxStage) =>
+            val jsNode : JsonNode = wvl.dxlink match {
+                case DxlStage(dxStage, ioRef, varEncName) =>
                     ioRef match {
                         case IORef.Input => dxStage.getInputReference(varEncName)
                         case IORef.Output => dxStage.getOutputReference(varEncName)
                     }
-                case DxlJob(dxJob) =>
+                case DxlJob(dxJob, ioRef, varEncName) =>
                     val jobId : String = dxJob.getId()
                     Utils.jsonNodeOfJsValue(Utils.makeJBOR(jobId, varEncName))
                 case DxlJsonNode(jsn) => jsn
@@ -139,15 +141,15 @@ object WdlVarLinks {
             (bindEncName, jsNode)
         }
         def mkRaggedArray() : (String, JsonNode) = {
-            val jsNode : JsonNode = dxVal match {
-                case DxlStage(dxStage) =>
+            val jsNode : JsonNode = wvl.dxlink match {
+                case DxlStage(dxStage, ioRef, varEncName) =>
                     ioRef match {
                         case IORef.Input =>
                             dxStage.getInputReference(varEncName)
                         case IORef.Output =>
                             dxStage.getOutputReference(varEncName)
                     }
-                case DxlJob(dxJob) =>
+                case DxlJob(dxJob, ioRef, varEncName) =>
                     val jobId : String = dxJob.getId()
                     Utils.jsonNodeOfJsValue(Utils.makeJBOR(jobId, varEncName))
                 case DxlJsonNode(jsn) => jsn
@@ -184,10 +186,7 @@ object WdlVarLinks {
 
     // Convert an input field to a dx-links structure. This allows
     // passing it to other jobs.
-    def apply(fieldName: String,
-              wdlType: WdlType,
-              jsValue: JsValue) : WdlVarLinks = {
-        val varName = Utils.decodeAppletVarName(fieldName)
+    def apply(wdlType: WdlType, jsValue: JsValue) : WdlVarLinks = {
         wdlType match {
             case WdlBooleanType | WdlIntegerType | WdlFloatType | WdlStringType | WdlFileType
                    | WdlArrayType(WdlBooleanType)
@@ -197,7 +196,7 @@ object WdlVarLinks {
                    | WdlArrayType(WdlFileType) =>
                 // This is primitive value, or a single dimensional
                 // array of primitive values.
-                WdlVarLinks(varName, wdlType, Some(IORef.Input, DxlJsValue(jsValue)))
+                WdlVarLinks(wdlType, DxlJsValue(jsValue))
 
             case WdlArrayType(WdlArrayType(WdlBooleanType))
                    | WdlArrayType(WdlArrayType(WdlIntegerType))
@@ -208,7 +207,7 @@ object WdlVarLinks {
                 val dxfile = Utils.dxFileOfJsValue(jsValue)
                 val buf = Utils.downloadString(dxfile)
                 val raggedAr: JsValue = buf.parseJson
-                WdlVarLinks(varName, wdlType, Some(IORef.Input, DxlJsValue(raggedAr)))
+                WdlVarLinks(wdlType, DxlJsValue(raggedAr))
 
             case _ =>
                 throw new Exception(s"Unsupported wdlType ${wdlType}")
@@ -259,7 +258,7 @@ object WdlVarLinks {
     }
 
     // import a WDL value
-    def outputFieldOfWdlValue(varName: String, wdlType: WdlType, wdlValue: WdlValue) : WdlVarLinks = {
+    def outputFieldOfWdlValue(wdlType: WdlType, wdlValue: WdlValue) : WdlVarLinks = {
         val jsValue: JsValue = wdlType match {
             case WdlBooleanType | WdlIntegerType | WdlFloatType | WdlStringType
                    | WdlFileType
@@ -289,7 +288,7 @@ object WdlVarLinks {
                 throw new AppInternalException(s"Type ${wdlType} unsupported")
          }
 
-        WdlVarLinks(varName, wdlType, Some(IORef.Output, DxlJsValue(jsValue)))
+        WdlVarLinks(wdlType, DxlJsValue(jsValue))
     }
 
 
@@ -300,16 +299,12 @@ object WdlVarLinks {
     //
     // Note: the Wdl value must be an array.
     def unpackWdlArray(wvl: WdlVarLinks) : Seq[WdlVarLinks] = {
-        val (ioRef,dxl) = wvl.dxlink match {
-            case Some((ioRef,dxl)) => (ioRef,dxl)
-            case None => throw new AppInternalException ("Empty dxlink field")
-        }
         val elemType : WdlType = wvl.wdlType match  {
             case WdlArrayType(x) => x
             case t => throw new AppInternalException (s"${t} is not a wdl array type")
         }
 
-        val l : List[JsValue] = dxl match {
+        val l : List[JsValue] = wvl.dxlink match {
             case DxlJsonNode(jsn) =>
                 Utils.jsValueOfJsonNode(jsn) match {
                     case JsArray(l) => l.toList
@@ -320,26 +315,22 @@ object WdlVarLinks {
                     case JsArray(l) => l.toList
                     case t => throw new AppInternalException(s"Wrong type ${t} for json array")
                 }
-            case DxlStage(dxStage) =>
+            case DxlStage(dxStage, _, _) =>
                 throw new AppInternalException(s"Values must be unpacked, not dxStage ${dxStage}")
-            case DxlJob(dxJob) =>
+            case DxlJob(dxJob, _, _) =>
                 throw new AppInternalException(s"Values must be unpacked, not dxJob ${dxJob}")
         }
 
-        l.map(elem => WdlVarLinks(wvl.varName, elemType, Some(ioRef, DxlJsValue(elem))))
+        l.map(elem => WdlVarLinks(elemType, DxlJsValue(elem)))
     }
 
     // Create a WdlValue from the dx-links structure.
     def wdlValueOfInputField(wvl: WdlVarLinks) : WdlValue = {
-        val dxl = wvl.dxlink match {
-            case Some((_,dxl)) => dxl
-            case None => throw new AppInternalException ("Empty dxlink field")
-        }
-        val jsValue: JsValue = dxl match {
+        val jsValue: JsValue = wvl.dxlink match {
             case DxlJsonNode(jsn) => Utils.jsValueOfJsonNode(jsn)
             case DxlJsValue(jsn) => jsn
             case _ =>
-                throw new AppInternalException(s"Unsupported conversion from ${dxl} to WdlValue")
+                throw new AppInternalException(s"Unsupported conversion from ${wvl.dxlink} to WdlValue")
         }
 
         wvl.wdlType match {
@@ -396,13 +387,13 @@ object WdlVarLinks {
                     fields.get(key) match {
                         case None => None
                         case Some(jsValue) =>
-                            val wvl = apply(key, wType, jsValue)
-                            Some(wvl.varName -> wvl)
+                            val wvl = apply(wType, jsValue)
+                            Some(key -> wvl)
                     }
                 case Some(wType) =>
                     val jsValue = fields(key)
-                    val wvl = apply(key, wType, jsValue)
-                    Some(wvl.varName -> wvl)
+                    val wvl = apply(wType, jsValue)
+                    Some(key -> wvl)
             }
         }.flatten.toMap
     }

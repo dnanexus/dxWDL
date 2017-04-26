@@ -141,7 +141,7 @@ object RunnerTask {
         // convert the WDL values to JSON
         val jsOutputs : Seq[(String, JsValue)] = outputs.map {
             case (key,wdlType,wdlValue) =>
-                val wvl = WdlVarLinks.outputFieldOfWdlValue(key, wdlType, wdlValue)
+                val wvl = WdlVarLinks.outputFieldOfWdlValue(wdlType, wdlValue)
                 val l = WdlVarLinks.genFields(wvl, key)
                 l.map{ case (x,y) => (x, Utils.jsValueOfJsonNode(y)) }
         }.flatten
