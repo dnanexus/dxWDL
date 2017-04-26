@@ -129,10 +129,17 @@ object RunnerScatter {
 
 
     // remove persistent resources used by this variable
-    def cleanup(wdlValue: WdlValue) : Unit = {
+    private def cleanup(wdlValue: WdlValue) : Unit = {
         wdlValue match {
             case WdlSingleFile(path) =>
                 Files.delete(Paths.get(path))
+            case WdlArray(WdlArrayType(WdlFileType), files) =>
+                files.map{ case x : WdlSingleFile =>
+                    val path = x.value
+                    Files.delete(Paths.get(path))
+                }
+            // TODO: there may be other structures that have files as
+            // members, we need to delete those files as well.
             case _ => ()
         }
     }
@@ -254,6 +261,7 @@ object RunnerScatter {
             // calculate declarations at the top of the block
             val bValues = RunnerEval.evalDeclarations(topDecls, envWithIterItem).toMap
             var innerEnv = bValues.map{ case(key, bVal) => key -> bVal.wvl }.toMap
+            innerEnv = innerEnv ++ envWithIterItem
 
             phases.foreach { case (call,dxApplet,inputSpec) =>
                 val inputs : ObjectNode = buildAppletInputs(call, inputSpec, innerEnv, rState)
@@ -270,8 +278,11 @@ object RunnerScatter {
             // Cleanup the index variable; it could be a file holding persistent resources.
             // In particular, the file name is an important resource, if it is not removed,
             // the name cannot be reused in the next loop iteration.
-            val iterElem: BValue = bValues(scatter.item)
-            cleanup(iterElem.wdlValue)
+            bValues.get(scatter.item) match {
+                case Some(iterElem: BValue) =>
+                    cleanup(iterElem.wdlValue)
+                case None => ()
+            }
         }
 
         // Gather phase. Collect call outputs in arrays, do not wait

@@ -38,7 +38,7 @@ object RunnerEval {
         // already been evaluated.  It is more efficient to make the
         // conversion once, however, that is not the main point
         // here. There are types that require special care, for
-        // example files. We need to make sure we download them
+        // example files. We need to make sure we download files
         // exactly once, and later, we want to be able to delete them.
         var env: Map[String, (WdlVarLinks, Option[WdlValue])] =
             inputs.map{ case (key, wvl) => key -> (wvl, None) }.toMap
