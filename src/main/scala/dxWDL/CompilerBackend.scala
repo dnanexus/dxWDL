@@ -307,7 +307,7 @@ object CompilerBackend {
                         // in a value at runtime.
                         dxBuilder
                     case IR.SArgConst(wValue) =>
-                        val wvl = WdlVarLinks.outputFieldOfWdlValue(wValue.wdlType, wValue)
+                        val wvl = WdlVarLinks.apply(wValue.wdlType, wValue)
                         val fields = WdlVarLinks.genFields(wvl, cVar.dxVarName)
                         fields.foldLeft(dxBuilder) { case (b, (fieldName, jsonNode)) =>
                             b.put(fieldName, jsonNode)

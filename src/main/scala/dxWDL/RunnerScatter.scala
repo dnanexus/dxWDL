@@ -110,7 +110,7 @@ object RunnerScatter {
                             throw new Exception(rState.cef.expressionMustBeConstOrVar(expr))
                         }
                         val wdlValue = expr.evaluate(nullLookup, NoFunctions).get
-                        WdlVarLinks.outputFieldOfWdlValue(wdlValue.wdlType, wdlValue)
+                        WdlVarLinks.apply(wdlValue.wdlType, wdlValue)
                 }
 
             case a: Ast if a.isMemberAccess =>
@@ -124,6 +124,16 @@ object RunnerScatter {
                 }
             case _:Ast =>
                 throw new Exception(rState.cef.expressionMustBeConstOrVar(expr))
+        }
+    }
+
+
+    // remove persistent resources used by this variable
+    def cleanup(wdlValue: WdlValue) : Unit = {
+        wdlValue match {
+            case WdlSingleFile(path) =>
+                Files.delete(Paths.get(path))
+            case _ => ()
         }
     }
 
@@ -242,7 +252,8 @@ object RunnerScatter {
             System.err.println(s"envWithIterItem= ${envWithIterItem}")
 
             // calculate declarations at the top of the block
-            var innerEnv = RunnerEval.evalDeclarations(topDecls, envWithIterItem).toMap
+            val bValues = RunnerEval.evalDeclarations(topDecls, envWithIterItem).toMap
+            var innerEnv = bValues.map{ case(key, bVal) => key -> bVal.wvl }.toMap
 
             phases.foreach { case (call,dxApplet,inputSpec) =>
                 val inputs : ObjectNode = buildAppletInputs(call, inputSpec, innerEnv, rState)
@@ -259,7 +270,8 @@ object RunnerScatter {
             // Cleanup the index variable; it could be a file holding persistent resources.
             // In particular, the file name is an important resource, if it is not removed,
             // the name cannot be reused in the next loop iteration.
-            elem.cleanup()
+            val iterElem: BValue = bValues(scatter.item)
+            cleanup(iterElem.wdlValue)
         }
 
         // Gather phase. Collect call outputs in arrays, do not wait
