@@ -29,9 +29,9 @@ before_install:
   - cd /tmp/ci_tests
 
 install:
-  # Install scala 2.11.8
-  - wget www.scala-lang.org/files/archive/scala-2.11.8.deb
-  - sudo dpkg -i scala-2.11.8.deb
+  # Install scala 2.12.1
+  - wget www.scala-lang.org/files/archive/scala-2.12.1.deb
+  - sudo dpkg -i scala-2.12.1.deb
 
   # Install sbt
   - echo "deb https://dl.bintray.com/sbt/debian /" | sudo tee -a /etc/apt/sources.list.d/sbt.list
