@@ -88,6 +88,22 @@ object Main extends App {
         Utils.trace(verbose, s"Wrote intermediate representation to ${trgPath.toString}")
     }
 
+    def prettyPrintAppletsIR(wdlSourceFile : Path,
+                             irApplets: Vector[IR.Applet],
+                             verbose: Boolean) : Unit = {
+        val trgName: String = replaceFileSuffix(wdlSourceFile, ".ir.yaml")
+        val trgPath = Utils.appCompileDirPath.resolve(trgName).toFile
+        val humanReadable = irApplets.map(irTs =>
+            IR.yaml(irTs).prettyPrint
+        ).mkString("\n\n")
+        val fos = new FileWriter(trgPath)
+        val pw = new PrintWriter(fos)
+        pw.print(humanReadable)
+        pw.flush()
+        pw.close()
+        Utils.trace(verbose, s"Wrote intermediate representation to ${trgPath.toString}")
+    }
+
     // remove old workflow and auxiliary applets from DNAx
     def removeOldWorkflow(wfName: String, dxProject: DXProject, folder: String) = {
         val oldWf = DXSearch.findDataObjects().nameMatchesExactly(wfName)
@@ -168,6 +184,10 @@ object Main extends App {
         irWf match {
             case None =>
                 // We have only tasks
+
+                // Write out the intermediate representation
+                prettyPrintAppletsIR(wdlSourceFile, irApplets, verbose)
+
                 mode match {
                     case None =>
                         val dxApplets = irApplets.map(x =>

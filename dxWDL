@@ -112,12 +112,8 @@ def compile_workflow(wf_file, destination, asset_id, classpath, verbose, mode):
 
     # Call java/scala dxWDL compiler, and pipe stdout/stderr
     outstr = subprocess.check_output(cmd_line)
-    wf = outstr.rstrip().split('\n')[-1]
-    print("wf={}".format(wf))
-    if "workflow-" not in wf:
-        print("Compilation error, aborting", file=sys.stderr)
-        exit(1)
-    return wf
+    retval = outstr.rstrip().split('\n')[-1]
+    return retval
 
 
 # Search for the jars locally. If not found, download

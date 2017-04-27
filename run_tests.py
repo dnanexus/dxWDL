@@ -35,8 +35,7 @@ default_test_list = [
     "decl_mid_wf",
 
     # Error codes
-    #"bad_status", "bad_status2" ]
-    ]
+    "bad_status", "bad_status2" ]
 
 tmp_files=[]
 dxfile = None
