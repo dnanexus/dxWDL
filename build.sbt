@@ -2,7 +2,7 @@
 import sbt.Keys._
 enablePlugins(GitVersioning)
 
-scalaVersion := "2.11.8"
+scalaVersion := "2.12.1"
 name := "dxWDL"
 organization := "com.dnanexus"
 
@@ -29,10 +29,10 @@ assemblyExcludedJars in assembly := {
 }
 
 libraryDependencies ++= Seq(
-    "org.broadinstitute" %% "wdl4s" % "0.10",
+    "org.broadinstitute" %% "wdl4s" % "0.11",
     "com.google.code.findbugs" % "jsr305" % "1.3.+",
     "io.spray" %% "spray-json" % "1.3.2",
-    "net.jcazevedo" %% "moultingyaml" % "0.3.0",
+    "net.jcazevedo" %% "moultingyaml" % "0.4.0",
 
     //---------- Test libraries -------------------//
     "org.scalactic" %% "scalactic" % "3.0.1",
