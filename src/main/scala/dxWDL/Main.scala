@@ -249,7 +249,6 @@ object Main extends App {
             SuccessfulTermination(dxc)
         } catch {
             case e : Throwable =>
-
                 BadUsageTermination(Utils.exceptionToString(e))
         }
     }

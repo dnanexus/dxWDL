@@ -1,5 +1,12 @@
 # Release Notes
 
+## 0.20
+- Separate compilation of workflows and tasks. A task is compiled to
+single dx:applet, and a workflow is compiled to auxiliary applets and
+a dx:workflow.
+- WDL files containing only tasks, and no workflow, are supported
+- Many improvements all around
+
 ## 0.13
 - Upgrade to wdl4s v0.10
 - Improving version number handling
