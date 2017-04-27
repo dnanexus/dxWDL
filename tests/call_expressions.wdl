@@ -1,4 +1,4 @@
-task int_ops {
+task xx_int_ops {
     Int ai
     Int bi
 
@@ -13,14 +13,14 @@ workflow call_expressions {
     Int i1
     Int i2
 
-    call int_ops {
+    call xx_int_ops as int_ops1 {
         input: ai=i1, bi=i2
     }
-    call int_ops as int_ops2 {
-        input: ai = (int_ops.result * 2), bi = (int_ops.result + 1)
+    call xx_int_ops as int_ops2 {
+        input: ai = (int_ops1.result * 2), bi = (int_ops1.result + 1)
     }
 
     output {
-        int_ops.result
+        int_ops2.result
     }
 }

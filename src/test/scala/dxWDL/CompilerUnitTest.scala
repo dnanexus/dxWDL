@@ -109,8 +109,6 @@ class CompilerUnitTest extends FlatSpec with BeforeAndAfterEach {
         assert (scatters.size == 1)
         val scatter = scatters.toList.head
 
-        //val prepareCall = wf.findCallByName("prepare").get
-        //val env : Map[String, WdlType] = Map("prepare" -> WdlCallOutputsObjectType(prepareCall))
         val env : Map[String, WdlType] = Map("prepare.array" -> WdlArrayType(WdlStringType))
         val wdlType : WdlType = CompilerFrontEnd.calcIterWdlType(scatter, env)
         assert(wdlType == WdlStringType)
@@ -177,5 +175,54 @@ class CompilerUnitTest extends FlatSpec with BeforeAndAfterEach {
                      |    String s = "abc"
                      |    call inc as inc2 {input: i=i}
                      |}"""
+    }
+
+    def compareIgnoreWhitespace(a: String, b:String): Boolean = {
+        val retval = (a.replaceAll("\\s+", "") == b.replaceAll("\\s+", ""))
+        if (!retval) {
+            System.err.println("--- String comparison failed ---")
+            System.err.println(s"${a}")
+            System.err.println("---")
+            System.err.println(s"${b}")
+            System.err.println("---")
+        }
+        retval
+    }
+
+    it should "Pretty print declaration" in {
+        val wdl = "Array[Int] integers"
+        val ns = WdlNamespace.loadUsingSource(wdl, None, None).get
+        val decl = ns.declarations.head
+        val strWdlCode = WdlPrettyPrinter.apply(decl, 0).mkString("\n")
+        assert(compareIgnoreWhitespace(strWdlCode, wdl))
+    }
+
+    it should "Pretty print workflow" in {
+        val wdl = """|task inc {
+                     |  Int i
+                     |
+                     |  command <<<
+                     |     python -c "print(${i} + 1)"
+                     |  >>>
+                     |  output {
+                     |    Int result = read_int(stdout())
+                     |  }
+                     |}
+                     |
+                     |workflow sg_sum3 {
+                     |  Array[Int] integers
+                     |
+                     |  scatter (k in integers) {
+                     |    call inc {input: i=k}
+                     |  }
+                     |}""".stripMargin.trim
+
+        val ns = WdlNamespace.loadUsingSource(wdl, None, None).get
+        val wf = ns match {
+            case nswf: WdlNamespaceWithWorkflow => nswf.workflow
+            case _ => throw new Exception("WDL file contains no workflow")
+        }
+        val strWdlCode = WdlPrettyPrinter.apply(wf, 0).mkString("\n")
+        //assert(compareIgnoreWhitespace(strWdlCode, wdl))
     }
 }

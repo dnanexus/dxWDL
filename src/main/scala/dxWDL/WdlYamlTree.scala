@@ -96,20 +96,18 @@ object WdlYamlTree {
             YamlString("scatter") -> YamlObject(
                 YamlString("item") -> YamlString(sc.item),
                 YamlString("collection") -> apply(sc.collection),
-                //YamlString("declarations") -> YamlArray(decls.toVector),
                 YamlString("children") -> YamlArray(children.toVector)
             )
         )
     }
 
     def apply(wf: Workflow): YamlObject = {
-        val decls = wf.declarations.map(apply)
         val children = wf.children.map {
-            case call: Call => Some(apply(call))
-            case sc: Scatter => Some(apply(sc))
-            case swf: Workflow => Some(apply(swf))
-            case decl: Declaration => None
-        }.flatten
+            case call: Call => apply(call)
+            case sc: Scatter => apply(sc)
+            case swf: Workflow => apply(swf)
+            case decl: Declaration => apply(decl)
+        }
         val outputs = wf.outputs.map { wod =>
             // TODO: figure out how to check for wildcards
 /*            if (wod.wildcard) {
@@ -121,7 +119,6 @@ object WdlYamlTree {
         YamlObject(
             YamlString("workflow") -> YamlObject(
                 YamlString("name") -> YamlString(wf.unqualifiedName),
-                YamlString("declarations") -> YamlArray(decls.toVector),
                 YamlString("children") -> YamlArray(children.toVector),
                 YamlString("output") -> YamlArray(outputs.toVector)
             )

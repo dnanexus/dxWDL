@@ -1,9 +1,9 @@
 package dxWDL
 
-import wdl4s.WdlSource
-import wdl4s.parser.WdlParser.{Ast, Terminal}
-import wdl4s.{Call, Declaration, Scatter, Scope, Task, TaskOutput, WdlExpression,
-    WdlNamespace, WdlNamespaceWithWorkflow, WdlSource, Workflow}
+import wdl4s.AstTools
+//import wdl4s.AstTools.EnhancedAstNode
+import wdl4s.parser.WdlParser.{Ast, AstNode, Terminal}
+import wdl4s._
 
 case class CompilerErrorFormatter(terminalMap: Map[Terminal, WdlSource]) {
     private def pointToSource(t: Terminal): String = s"${line(t)}\n${" " * (t.getColumn - 1)}^"
@@ -16,11 +16,12 @@ case class CompilerErrorFormatter(terminalMap: Map[Terminal, WdlSource]) {
             |""".stripMargin
     }
 
-    def missingVarRefException(ast: Ast) : String = {
-        val name: Terminal = ast.getAttribute("name").asInstanceOf[Terminal]
-        s"""|Reference to missing variable
+    def undefinedMemberAccess(ast: Ast): String = {
+        val lhsAst = ast.getAttribute("lhs").asInstanceOf[Terminal]
+        val fqn = WdlExpression.toString(ast)
+        s"""|Undefined member access (${fqn})
             |
-            |${pointToSource(name)}
+            |${pointToSource(lhsAst)}
             |""".stripMargin
     }
 
@@ -46,5 +47,21 @@ case class CompilerErrorFormatter(terminalMap: Map[Terminal, WdlSource]) {
             |
             |${pointToSource(t)}
             |""".stripMargin
+    }
+
+    def expressionMustBeConstOrVar(expr: WdlExpression) : String = {
+        val t: Terminal = AstTools.findTerminals(expr.ast).head
+        s"""|Expression ${expr.toWdlString} must be const or variable
+            |
+            |${pointToSource(t)}
+            |""".stripMargin
+    }
+
+    def evaluatingTerminal(t: Terminal, x: String) = {
+        s"""|Looking up string ${x}, while evaluating terminal
+            |
+            |${pointToSource(t)}
+            |""".stripMargin
+
     }
 }

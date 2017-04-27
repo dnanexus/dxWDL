@@ -6,7 +6,7 @@
 #     xxx/yyy/{A.fasta, A.fasta.fai}
 #     xxx/yyy/{A.vcf, A.vcf.idx}
 #
-task colocation {
+task zz_colocation {
     File A
     File B
 
@@ -27,7 +27,7 @@ workflow file_disambiguation {
     File f1
     File f2
 
-    call colocation {
+    call zz_colocation as colocation {
         input : A=f1, B=f2
     }
     output {

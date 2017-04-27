@@ -1,4 +1,4 @@
-task ident {
+task eee_ident {
     String s1
     Int i1
 
@@ -10,7 +10,7 @@ task ident {
     }
 }
 
-task string_ops {
+task eee_string_ops {
     String p1
     String p2
     String p3
@@ -22,7 +22,7 @@ task string_ops {
     }
 }
 
-task int_ops {
+task eee_int_ops {
     Int ai
     Int bi
 
@@ -37,16 +37,16 @@ workflow call_expressions2 {
     String s
     Int i
 
-    call string_ops {
+    call eee_string_ops as string_ops {
         input:
             p1 = s + ".aligned",
             p2 = s + ".duplicate_metrics",
             p3 = sub(s, "frogs", "xRIPx")
     }
-    call int_ops {
+    call eee_int_ops as int_ops {
         input: ai = (i * 2), bi = (i+3)
     }
-    call int_ops as int_ops2 {
+    call eee_int_ops as int_ops2 {
         input: ai = (int_ops.result * 5), bi = (int_ops.result + 1)
     }
 

@@ -9,7 +9,6 @@ import java.nio.file.{Path, Paths, Files}
 import java.util.Base64
 import org.apache.commons.io.IOUtils
 import scala.collection.JavaConverters._
-import scala.collection.mutable.ListBuffer
 import scala.sys.process._
 import scala.util.{Failure, Success, Try}
 import spray.json._
@@ -38,18 +37,17 @@ class UnboundVariableException private(ex: RuntimeException) extends RuntimeExce
 }
 
 object Utils {
-    val VERSION = "0.13"
+    val VERSION = "0.20"
 
     // Long strings cause problems with bash and the UI
     val MAX_STRING_LEN = 8 * 1024
-    val FLAT_FILE_ARRAY_SUFFIX = "_ffa"
     val DX_HOME = "/home/dnanexus"
     val DOWNLOAD_RETRY_LIMIT = 3
     val UPLOAD_RETRY_LIMIT = DOWNLOAD_RETRY_LIMIT
     val DXPY_FILE_TRANSFER = true
+    val WDL_SNIPPET_FILENAME = "source.wdl"
 
     // Substrings used by the compiler for encoding purposes
-    val reservedSuffixes = List(FLAT_FILE_ARRAY_SUFFIX)
     val reservedSubstrings = List("___")
 
     // Prefixes used for generated applets
@@ -99,9 +97,14 @@ object Utils {
     // [
     //   {"help": "Int", "name": "bi", "class": "int"}, ...
     // ]
-    def loadExecInfo(jobInfo: String) : Map[String, Option[WdlType]] = {
+    def loadExecInfo(jobInfo: String) : (Map[String, Option[WdlType]], Map[String, Option[WdlType]]) = {
         val info: JsValue = jobInfo.parseJson
         val inputSpec: Vector[JsValue] = info.asJsObject.fields.get("inputSpec") match {
+            case None => Vector()
+            case Some(JsArray(x)) => x
+            case Some(_) => throw new AppInternalException("Bad format for exec information")
+        }
+        val outputSpec: Vector[JsValue] = info.asJsObject.fields.get("outputSpec") match {
             case None => Vector()
             case Some(JsArray(x)) => x
             case Some(_) => throw new AppInternalException("Bad format for exec information")
@@ -112,7 +115,7 @@ object Utils {
                 case _ => throw new AppInternalException("Bad format for exec information: getJsString")
             }
         }
-        inputSpec.map{ case varDef =>
+        def wdlTypeOfVar(varDef: JsValue) : (String, Option[WdlType]) = {
             val v = varDef.asJsObject
             val name = getJsString(v.fields("name"))
             v.fields.get("help") match {
@@ -122,7 +125,10 @@ object Utils {
                     val wType : WdlType = WdlType.fromWdlString(helpStr)
                     name -> Some(wType)
             }
-        }.toMap
+        }
+
+        (inputSpec.map(wdlTypeOfVar).toMap,
+         outputSpec.map(wdlTypeOfVar).toMap)
     }
 
     // Create a file from a string
@@ -166,6 +172,12 @@ object Utils {
         oNode.toString().parseJson
     }
 
+        // dx does not allow dots in variable names, so we
+        // convert them to underscores.
+    def transformVarName(varName: String) : String = {
+        varName.replaceAll("\\.", "_")
+    }
+
     // Dots are illegal in applet variable names. For example,
     // "Add.sum" must be encoded. As a TEMPORARY hack, we convert
     // dots into "___".
@@ -176,11 +188,10 @@ object Utils {
             if (varName contains s)
                 throw new Exception(s"Variable ${varName} includes the reserved substring ${s}")
         }
-        reservedSuffixes.foreach{ s =>
-            if (varName.endsWith(s))
-                throw new Exception(s"Variable ${varName} ends with reserved suffix ${s}")
-        }
-        varName.replaceAll("\\.", "___")
+        //varName.replaceAll("\\.", "___")
+        if (varName contains ".")
+            throw new Exception(s"Variable ${varName} includes the illegal symbol \\.")
+        varName
     }
 
     // Dots are illegal in applet variable names, so they
@@ -188,31 +199,12 @@ object Utils {
     // these occurrences back into dots.
     def decodeAppletVarName(varName : String) : String = {
         if (varName contains "\\.")
-
             throw new Exception(s"Variable ${varName} includes the illegal symbol \\.")
-        varName.replaceAll("___", "\\.")
+        //varName.replaceAll("___", "\\.")
+        if (varName contains "___")
+            throw new Exception(s"Variable ${varName} includes the illegal symbol ___")
+        varName
     }
-
-    def appletVarNameSplit(varName : String) : (String,String) = {
-        reservedSuffixes.foreach(suff =>
-            if (varName.endsWith(suff)) {
-                val prefix = varName.substring(0, varName.indexOf(suff))
-                return (decodeAppletVarName(prefix), suff)
-            }
-        )
-        (decodeAppletVarName(varName), "")
-    }
-
-    def appletVarNameStripSuffix(varName : String) : String = {
-        val (prefix,_) = appletVarNameSplit(varName)
-        prefix
-    }
-
-    def appletVarNameGetSuffix(varName : String) : String= {
-        val (_,suffix) = appletVarNameSplit(varName)
-        suffix
-    }
-
 
     // recursive directory delete
     //    http://stackoverflow.com/questions/25999255/delete-directory-recursively-in-scala
@@ -332,42 +324,9 @@ object Utils {
         val variables = AstTools.findVariableReferences(expr.ast).map{ case t:Terminal =>
             WdlExpression.toString(t)
         }
-        System.err.println(s"findToplevelVarDeps  ${expr.toWdlString}  => ${variables}")
+        //System.err.println(s"findToplevelVarDeps  ${expr.toWdlString}  => ${variables}")
         (true, variables.toList)
     }
-
-    // Lift declarations that can be evaluated at the top of the block
-    //
-    // 1) build an environment from [topDecls]
-    // 2) for each prospective declaration, check if depends only on the available
-    //    variables. Pull up all such statements.
-    def liftDeclarations(topDeclarations: List[Declaration], body: List[Scope])
-            : (List[Declaration], List[Scope]) = {
-        // build an environment from [topDecls]
-        var env : Set[String] = topDeclarations.map{ decl => decl.unqualifiedName }.toSet
-        var lifted : List[Declaration] = Nil
-
-        val calls : Seq[Option[Scope]] = body.map {
-            case call: Call => Some(call)
-            case decl: Declaration =>
-                val (possible, deps) = Utils.findToplevelVarDeps(decl.expression.get)
-                if (!possible) {
-                    Some(decl)
-                } else if (!deps.forall(x => env(x))) {
-                    // some dependency is missing, can't lift to top level
-                    Some(decl)
-                } else {
-                    env = env + decl.unqualifiedName
-                    lifted = decl :: lifted
-                    None
-                }
-            case ssc: Scatter => Some(ssc)
-            case swf: Workflow => Some(swf)
-        }
-
-        (lifted.reverse, calls.flatten.toList)
-    }
-
 
     // Run a child process and collect stdout and stderr into strings
     def execCommand(cmdLine : String) : (String, String) = {
@@ -538,5 +497,54 @@ object Utils {
         if (!verbose)
             return
         System.err.println(msg)
+    }
+
+    // Convert flat inputs to legal scoped WDL structures. For example:
+    //  Map (
+    //     Add.sum -> 1
+    //     Mul.result -> 8
+    //  )
+    //
+    // convert it into:
+    //   Map (
+    //    "Add" -> WdlObject(Map("sum" -> 1))
+    //    "Mul" -> WdlObject(Map("result" -> 8))
+    //   )
+    def addScopeToInputs(callInputs : Map[String, WdlValue]) : Map[String, WdlValue] = {
+        def recursiveBuild(rootMap : Map[String, WdlValue],
+                           components : Seq[String],
+                           wdlValue : WdlValue) : Map[String, WdlValue] = {
+            if (components.length == 1) {
+                // bottom of recursion
+                rootMap + (components.head -> wdlValue)
+            }
+            else {
+                if (rootMap contains components.head) {
+                    // already have a sub-scope by this name, we need to update it, but not
+                    // in place
+                    val o : WdlObject = rootMap(components.head) match {
+                        case o: WdlObject => o
+                        case _ =>  throw new Exception("Scope should be a WdlObject")
+                    }
+                    val subTree = recursiveBuild(o.value, components.tail, wdlValue)
+                    rootMap + (components.head -> new WdlObject(subTree))
+                } else {
+                    // new sub-scope
+                    val subTree = recursiveBuild(Map.empty, components.tail, wdlValue)
+                    rootMap + (components.head -> new WdlObject(subTree))
+                }
+            }
+        }
+
+        // A tree of nested scopes, that we update for each variable
+        var tree = Map.empty[String, WdlValue]
+        callInputs.map { case (varName, wdlValue) =>
+            // "A.B.C"
+            //    baseName = "C"
+            //    fqPath = List("A", "B")
+            val components = varName.split("\\.")
+            tree = recursiveBuild(tree, components, wdlValue)
+        }
+        tree
     }
 }

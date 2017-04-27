@@ -19,11 +19,12 @@ import spray.json._
 import DefaultJsonProtocol._
 
 object CompilerBackend {
+    val WDL_SNIPPET_FILENAME = Utils.WDL_SNIPPET_FILENAME
+
     // Compiler state.
     // Packs common arguments passed between methods.
     case class State(dxWDLrtId: String,
                      dxProject: DXProject,
-                     wdlSourceFile: Path,
                      folder: String,
                      cef: CompilerErrorFormatter,
                      verbose: Boolean)
@@ -40,29 +41,22 @@ object CompilerBackend {
     def wdlVarToSpec(varName: String,
                      wdlType : WdlType,
                      ast: Ast,
-                     cState: State) : List[JsValue] = {
+                     cState: State) : Vector[JsValue] = {
         val name = Utils.encodeAppletVarName(varName)
-        def mkPrimitive(dxType: String) : List[Map[String, JsValue]] = {
-            List(Map("name" -> JsString(name),
+        def mkPrimitive(dxType: String) : Vector[Map[String, JsValue]] = {
+            Vector(Map("name" -> JsString(name),
                      "help" -> JsString(wdlType.toWdlString),
                      "class" -> JsString(dxType)))
         }
-        def mkPrimitiveArray(dxType: String) : List[Map[String, JsValue]] = {
-            List(Map("name" -> JsString(name),
+        def mkPrimitiveArray(dxType: String) : Vector[Map[String, JsValue]] = {
+            Vector(Map("name" -> JsString(name),
                      "help" -> JsString(wdlType.toWdlString),
                      "class" -> JsString("array:" ++ dxType)))
         }
-        def mkRaggedArray() : List[Map[String,JsValue]] = {
-            List(Map("name" -> JsString(name),
+        def mkRaggedArray() : Vector[Map[String,JsValue]] = {
+            Vector(Map("name" -> JsString(name),
                      "help" -> JsString(wdlType.toWdlString),
                      "class" -> JsString("file")))
-        }
-        def mkRaggedFileArray() : List[Map[String, JsValue]] = {
-            List(Map("name" -> JsString(name),
-                     "help" -> JsString(wdlType.toWdlString),
-                     "class" -> JsString("file")),
-                 Map("name" -> JsString( name ++ Utils.FLAT_FILE_ARRAY_SUFFIX),
-                     "class" -> JsString("array:file")))
         }
 
         def nonOptional(t : WdlType) = t  match {
@@ -93,11 +87,77 @@ object CompilerBackend {
         wdlType match {
             case WdlOptionalType(t) =>
                 // An optional variable, make it an optional dx input/output
-                val l : List[Map[String,JsValue]] = nonOptional(t)
+                val l : Vector[Map[String,JsValue]] = nonOptional(t)
                 l.map{ m => JsObject(m + ("optional" -> JsBoolean(true))) }
             case t =>
-                val l : List[Map[String,JsValue]] = nonOptional(t)
+                val l : Vector[Map[String,JsValue]] = nonOptional(t)
                 l.map{ m => JsObject(m)}
+        }
+    }
+
+    def genBashScript(appKind: IR.AppletKind.Value, docker: Option[String]) : String = {
+        appKind match {
+            case IR.AppletKind.Eval =>
+                s"""|#!/bin/bash -ex
+                    |main() {
+                    |    echo "working directory =$${PWD}"
+                    |    echo "home dir =$${HOME}"
+                    |    echo "user= $${USER}"
+                    |    java -cp $${DX_FS_ROOT}/dxWDL.jar:$${CLASSPATH} dxWDL.Main eval $${DX_FS_ROOT}/${WDL_SNIPPET_FILENAME} $${HOME}
+                    |}""".stripMargin.trim
+
+            case IR.AppletKind.Scatter =>
+                s"""|#!/bin/bash -ex
+                    |main() {
+                    |    echo "working directory =$${PWD}"
+                    |    echo "home dir =$${HOME}"
+                    |    echo "user= $${USER}"
+                    |    java -cp $${DX_FS_ROOT}/dxWDL.jar:$${CLASSPATH} dxWDL.Main launchScatter $${DX_FS_ROOT}/${WDL_SNIPPET_FILENAME} $${HOME}
+                    |}""".stripMargin.trim
+
+            case IR.AppletKind.Task =>
+                val submitShellCommand = docker match {
+                    case None =>
+                        "/bin/bash"
+                    case Some(imgName) =>
+                        // The user wants to use a docker container with the
+                        // image [imgName]. We implement this with dx-docker.
+                        // There may be corner cases where the image will run
+                        // into permission limitations due to security.
+                        //
+                        // Map the home directory into the container, so that
+                        // we can reach the result files, and upload them to
+                        // the platform.
+                        val DX_HOME = Utils.DX_HOME
+                        s"""dx-docker run -v ${DX_HOME}:${DX_HOME} ${imgName} /bin/bash"""
+                }
+
+                s"""|#!/bin/bash
+                    |main() {
+                    |    set -ex
+                    |    echo "working directory =$${PWD}"
+                    |    echo "home dir =$${HOME}"
+                    |    echo "user= $${USER}"
+                    |
+                    |    # evaluate input arguments, and download input files
+                    |    java -cp $${DX_FS_ROOT}/dxWDL.jar:$${CLASSPATH} dxWDL.Main taskProlog $${DX_FS_ROOT}/${Utils.WDL_SNIPPET_FILENAME} $${HOME}
+                    |    # Debugging outputs
+                    |    ls -lR
+                    |    cat $${HOME}/execution/meta/script
+                    |
+                    |    # Run the shell script generated by the prolog.
+                    |    # Capture the stderr/stdout in files
+                    |    ${submitShellCommand} $${HOME}/execution/meta/script
+                    |
+                    |    #  check return code of the script
+                    |    rc=`cat $${HOME}/execution/meta/rc`
+                    |    if [[ $$rc != 0 ]]; then
+                    |        exit $$rc
+                    |    fi
+                    |
+                    |    # evaluate applet outputs, and upload result files
+                    |    java -cp $${DX_FS_ROOT}/dxWDL.jar:$${CLASSPATH} dxWDL.Main taskEpilog $${DX_FS_ROOT}/${Utils.WDL_SNIPPET_FILENAME} $${HOME}
+                    |}""".stripMargin.trim
         }
     }
 
@@ -107,12 +167,9 @@ object CompilerBackend {
     //                  dxapp.json
     //                  resources/
     //                      workflowFile.wdl
-    def createAppletDirStruct(appletFqnName : String,
-                              wdlSourceFile : Path,
-                              appJson : JsObject,
-                              bashScript: String) : Path = {
+    def createAppletDirStruct(applet: IR.Applet, appJson : JsObject) : Path = {
         // create temporary directory
-        val appletDir : Path = Utils.appCompileDirPath.resolve(appletFqnName)
+        val appletDir : Path = Utils.appCompileDirPath.resolve(applet.name)
         Utils.safeMkdir(appletDir)
 
         // Clean up the task subdirectory, if it it exists
@@ -123,15 +180,14 @@ object CompilerBackend {
         val resourcesDir = Files.createDirectory(Paths.get(appletDir.toString(), "resources"))
 
         // write the bash script
+        val bashScript = genBashScript(applet.kind, applet.docker)
         Utils.writeFileContent(srcDir.resolve("code.sh"), bashScript)
 
         // Copy the WDL file.
         //
         // The runner figures out which applet to run, by querying the
         // platform.
-        val wdlFileBaseName : String = wdlSourceFile.getFileName().toString()
-        Files.copy(wdlSourceFile,
-                   Paths.get(resourcesDir.toString(), wdlFileBaseName))
+        Utils.writeFileContent(resourcesDir.resolve(Utils.WDL_SNIPPET_FILENAME), applet.wdlCode)
 
         // write the dxapp.json
         Utils.writeFileContent(appletDir.resolve("dxapp.json"), appJson.prettyPrint)
@@ -202,27 +258,17 @@ object CompilerBackend {
         throw new Exception(s"Failed to build applet ${appletFqn}")
     }
 
-    // Compile a WDL call into an applet.
+    // Compile a WDL snippet into an applet.
     //
-    // We need to support calculations done in the workflow, inside a
-    // call. For example:
-    //
-    //  call Add {
-    //       input: a = 3, b = 4, c = Read.sum+8
-    //  }
-    //
-    // There is no context to run such a calculation in the workflow, and we need
-    // to push it to the applet. Therefore, we figure out the closure needed, and
-    // pass that as applet inputs. The applet opens the WDL file, finds the call,
-    // and executes with the provided closure.
-    //
-    def buildApplet(applet: IR.Applet, cState: State) : (DXApplet, List[IR.CVar]) = {
-        Utils.trace(cState.verbose, s"Compiling call ${applet.name}")
+    // Write the WDL code to a file, and generate a bash applet to
+    // run it on the platform.
+    def buildApplet(applet: IR.Applet, cState: State) : (DXApplet, Vector[IR.CVar]) = {
+        Utils.trace(cState.verbose, s"Compiling applet ${applet.name}")
         val inputSpec : Seq[JsValue] = applet.inputs.map(cVar =>
-            wdlVarToSpec(cVar.name, cVar.wdlType, cVar.ast, cState)
+            wdlVarToSpec(cVar.dxVarName, cVar.wdlType, cVar.ast, cState)
         ).flatten
         val outputDecls : Seq[JsValue] = applet.outputs.map(cVar =>
-            wdlVarToSpec(cVar.name, cVar.wdlType, cVar.ast, cState)
+            wdlVarToSpec(cVar.dxVarName, cVar.wdlType, cVar.ast, cState)
         ).flatten
         val runSpec : JsValue = calcRunSpec(applet.instanceType, cState.dxWDLrtId)
         val attrs = Map(
@@ -240,8 +286,7 @@ object CompilerBackend {
         val json = JsObject(attrs ++ networkAccess)
 
         // create a directory structure for this applet
-        val appletDir = createAppletDirStruct(applet.name, cState.wdlSourceFile, json,
-                                              applet.code)
+        val appletDir = createAppletDirStruct(applet, json)
         val dxapp = dxBuildApp(appletDir, applet.name, cState.folder, cState)
         (dxapp, applet.outputs)
     }
@@ -249,7 +294,7 @@ object CompilerBackend {
     // Calculate the stage inputs from the call closure
     //
     // It comprises mappings from variable name to WdlType.
-    def genStageInputs(inputs: List[(IR.CVar, IR.SArg)],
+    def genStageInputs(inputs: Vector[(IR.CVar, IR.SArg)],
                        irApplet: IR.Applet,
                        stageDict: Map[String, DXWorkflow.Stage],
                        cState: State) : JsonNode = {
@@ -258,13 +303,19 @@ object CompilerBackend {
                 sArg match {
                     case IR.SArgEmpty =>
                         // We do not have a value for this input at compile time.
-                        // Currently, we throw an exception. But is this actually legal?
-                        throw new Exception(cState.cef.missingVarRefException(irApplet.ast))
+                        // For compulsory applet inputs, the user will have to fill
+                        // in a value at runtime.
+                        dxBuilder
+                    case IR.SArgConst(wValue) =>
+                        val wvl = WdlVarLinks.apply(wValue.wdlType, wValue)
+                        val fields = WdlVarLinks.genFields(wvl, cVar.dxVarName)
+                        fields.foldLeft(dxBuilder) { case (b, (fieldName, jsonNode)) =>
+                            b.put(fieldName, jsonNode)
+                        }
                     case IR.SArgLink(stageName, argName) =>
                         val dxStage = stageDict(stageName)
-                        val wvl = WdlVarLinks(argName, cVar.wdlType,
-                                              Some(IORef.Output, DxlStage(dxStage)))
-                        val fields = WdlVarLinks.genFields(wvl, cVar.name)
+                        val wvl = WdlVarLinks(cVar.wdlType, DxlStage(dxStage, IORef.Output, argName.dxVarName))
+                        val fields = WdlVarLinks.genFields(wvl, cVar.dxVarName)
                         fields.foldLeft(dxBuilder) { case (b, (fieldName, jsonNode)) =>
                             b.put(fieldName, jsonNode)
                         }
@@ -273,18 +324,31 @@ object CompilerBackend {
         dxBuilder.build()
     }
 
+    // Compile a single applet
+    def apply(applet: IR.Applet,
+              dxProject: DXProject,
+              dxWDLrtId: String,
+              folder: String,
+              cef: CompilerErrorFormatter,
+              verbose: Boolean) : DXApplet = {
+        Utils.trace(verbose, "Backend pass, single applet")
+        val cState = State(dxWDLrtId, dxProject, folder, cef, verbose)
+        val (dxApplet, _) = buildApplet(applet, cState)
+        dxApplet
+    }
+
+    // Compile an entire workflow
     def apply(wf: IR.Workflow,
               dxProject: DXProject,
               dxWDLrtId: String,
-              wdlSourceFile: Path,
               folder: String,
               cef: CompilerErrorFormatter,
               verbose: Boolean) : DXWorkflow = {
-        Utils.trace(verbose, "Backend phase")
-        val cState = State(dxWDLrtId, dxProject, wdlSourceFile, folder, cef, verbose)
+        Utils.trace(verbose, "Backend pass")
+        val cState = State(dxWDLrtId, dxProject, folder, cef, verbose)
 
         // build the individual applets
-        val appDict : Map[String, (IR.Applet, DXApplet)] =
+        val appletDict : Map[String, (IR.Applet, DXApplet)] =
             wf.applets.map{ a =>
                 val (dxApplet, _) = buildApplet(a, cState)
                 Utils.trace(cState.verbose, s"Applet ${a.name} = ${dxApplet.getId()}")
@@ -296,13 +360,18 @@ object CompilerBackend {
             .setName(wf.name).build()
 
         // Create a dx:workflow stage for each stage in the IR.
+        //
+        // The accumulator state holds:
+        // - the workflow version, which gets incremented per stage
+        // - a dictionary of stages, mapping name to stage. This is used
+        //   to locate variable references.
         val stageDictInit = Map.empty[String, DXWorkflow.Stage]
         wf.stages.foldLeft((0,stageDictInit)) {
             case ((version,stageDict), stg) =>
-                val (irApplet,dxApplet) = appDict(stg.appletName)
-                val linkedInputs : List[(IR.CVar, IR.SArg)] = irApplet.inputs.zip(stg.inputs)
-                val inputs = genStageInputs(linkedInputs, irApplet, stageDict, cState)
-                val modif : DXWorkflow.Modification[DXWorkflow.Stage] =
+                val (irApplet,dxApplet) = appletDict(stg.appletName)
+                val linkedInputs : Vector[(IR.CVar, IR.SArg)] = irApplet.inputs zip stg.inputs
+                val inputs: JsonNode = genStageInputs(linkedInputs, irApplet, stageDict, cState)
+                val modif: DXWorkflow.Modification[DXWorkflow.Stage] =
                     dxwfl.addStage(dxApplet, stg.name, inputs, version)
                 val nextVersion = modif.getEditVersion()
                 val dxStage : DXWorkflow.Stage = modif.getValue()

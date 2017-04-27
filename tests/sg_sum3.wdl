@@ -1,4 +1,4 @@
-task inc {
+task ss_inc {
     Int i
 
     command <<<
@@ -9,7 +9,7 @@ task inc {
     }
 }
 
-task twice {
+task ss_twice {
     Int i
 
     command <<<
@@ -20,7 +20,7 @@ task twice {
     }
 }
 
-task mod7 {
+task ss_mod7 {
     Int i
 
     command <<<
@@ -31,7 +31,7 @@ task mod7 {
     }
 }
 
-task sum {
+task ss_sum {
     Array[Int] ints
 
     command <<<
@@ -45,13 +45,13 @@ task sum {
 workflow sg_sum3 {
     Array[Int] integers
 
-    scatter (i in integers) {
-        call inc {input: i=i}
-        call twice {input: i=inc.result}
-        call mod7 {input: i=twice.result}
+    scatter (k in integers) {
+        call ss_inc as inc {input: i=k}
+        call ss_twice as twice {input: i=inc.result}
+        call ss_mod7 as mod7 {input: i=twice.result}
     }
-    scatter (i in mod7.result) {
-        call inc as inc2 {input: i=i}
+    scatter (k in mod7.result) {
+        call ss_inc as inc2 {input: i=k}
     }
-    call sum {input: ints = inc2.result}
+    call ss_sum as sum {input: ints = inc2.result}
 }

@@ -42,8 +42,8 @@ class WdlUnitTest extends FlatSpec with BeforeAndAfterEach with OneInstancePerTe
             : Seq[(String, WdlType, WdlValue)] = {
         // Clean up the task subdirectory
         val metaDir = Utils.getMetaDirPath()
-
-        AppletRunner.prologCore(call, callInputs)
+        val task = Utils.taskOfCall(call)
+        RunnerTask.prologCore(task, callInputs)
         val scriptPath = metaDir.resolve("script")
         execBashScript(scriptPath)
 
@@ -54,60 +54,9 @@ class WdlUnitTest extends FlatSpec with BeforeAndAfterEach with OneInstancePerTe
             assert(rc == 0)
         else
             assert(rc != 0)
-        AppletRunner.epilogCore(call)
+        RunnerTask.epilogCore(task)
     }
 
-    it should "Add scope to flat inputs" in {
-        {
-            val inputs1 = Map("Add.sum" -> WdlInteger(1))
-            val scoped1 = AppletRunner.addScopeToInputs(inputs1)
-            scoped1("Add") match {
-                case WdlObject(o) => assert(o.get("sum") == Some(WdlInteger(1)))
-                case _ => assert(false)
-            }
-        }
-
-        {
-            val inputs2 = Map("Add.sum" -> WdlInteger(1),
-                              "Leaf.xxx" -> WdlString("tal"))
-            val scoped2 = AppletRunner.addScopeToInputs(inputs2)
-            scoped2("Add") match {
-                case WdlObject(o) => assert(o.get("sum") == Some(WdlInteger(1)))
-                case _ => assert(false)
-            }
-            scoped2("Leaf") match {
-                case WdlObject(o) => assert(o.get("xxx") == Some(WdlString("tal")))
-                case _ => assert(false)
-            }
-        }
-
-        {
-            val inputs3 = Map("ai" -> WdlInteger(1), "bi" -> WdlInteger(2))
-            val scoped3 = AppletRunner.addScopeToInputs(inputs3)
-            assert(scoped3.get("bi") == Some(WdlInteger(2)))
-            assert(scoped3.get("ai") == Some(WdlInteger(1)))
-        }
-
-        {
-            val inputs4 = Map("Alpha.dog" -> WdlInteger(1),
-                              "Alpha.rabbit" -> WdlInteger(2),
-                              "Beta.crow" -> WdlString("yellow"),
-                              "Beta.bear" -> WdlString("black"))
-            val scoped4 = AppletRunner.addScopeToInputs(inputs4)
-            val alpha : Map[String, WdlValue] = scoped4("Alpha") match {
-                case WdlObject(o) => o
-                case _ => throw new IllegalArgumentException()
-            }
-            val beta : Map[String, WdlValue] = scoped4("Beta") match {
-                case WdlObject(o) => o
-                case _ => throw new IllegalArgumentException()
-            }
-            assert(alpha.get("dog") == Some(WdlInteger(1)))
-            assert(alpha.get("rabbit") == Some(WdlInteger(2)))
-            assert(beta.get("crow") == Some(WdlString("yellow")))
-            assert(beta.get("bear") == Some(WdlString("black")))
-        }
-    }
 
     // Fails with wdl4s v0.6, because
     //   '5 * (1 + 1)'  is converted into '5 * 1 + 1'
@@ -174,7 +123,8 @@ class WdlUnitTest extends FlatSpec with BeforeAndAfterEach with OneInstancePerTe
 
         val ns = WdlNamespaceWithWorkflow.load(wdl, Seq.empty).get
         val call : Call = getCallFromNamespace(ns, "Add2")
-        val inputs = Map("Add.sum" -> WdlInteger(1))
+        val inputs = Map("a" -> WdlInteger(2),
+                         "b" -> WdlInteger(3))
         val outputs : Seq[(String, WdlType, WdlValue)] = evalCall(call, inputs)
         assert(outputs.length == 1);
         val result = outputs.head
@@ -207,7 +157,7 @@ class WdlUnitTest extends FlatSpec with BeforeAndAfterEach with OneInstancePerTe
         val ns = WdlNamespaceWithWorkflow.load(wdl, Seq.empty).get
         val call : Call = getCallFromNamespace(ns, "Concat")
         val inputs : Map[String,WdlValue] =
-            Map("str_array" ->
+            Map("words" ->
                     WdlArray(WdlArrayType(WdlStringType),
                              List(WdlString("a"), WdlString("b"), WdlString("c"))))
 
@@ -243,7 +193,7 @@ class WdlUnitTest extends FlatSpec with BeforeAndAfterEach with OneInstancePerTe
         val ns = WdlNamespaceWithWorkflow.load(wdl, Seq.empty).get
         val call : Call = getCallFromNamespace(ns, "Concat")
         val inputs : Map[String,WdlValue] =
-            Map("int_array" ->
+            Map("words" ->
                     WdlArray(WdlArrayType(WdlIntegerType),
                              List(WdlInteger(1), WdlInteger(2), WdlInteger(3))))
         val outputs : Seq[(String, WdlType, WdlValue)] = evalCall(call, inputs)
@@ -291,7 +241,7 @@ class WdlUnitTest extends FlatSpec with BeforeAndAfterEach with OneInstancePerTe
         }
 
         val inputs : Map[String,WdlValue] =
-            Map("fs" -> WdlArray(WdlArrayType(WdlFileType),
+            Map("files" -> WdlArray(WdlArrayType(WdlFileType),
                                  List(WdlSingleFile("/tmp/X.txt"),
                                       WdlSingleFile("/tmp/Y.txt"),
                                       WdlSingleFile("/tmp/Z.txt"))))
@@ -337,16 +287,16 @@ class WdlUnitTest extends FlatSpec with BeforeAndAfterEach with OneInstancePerTe
         val call : Call = getCallFromNamespace(ns, "Concat")
 
         val inputs : Map[String,WdlValue] =
-            Map("x_ia" ->
+            Map("ia" ->
                     WdlArray(WdlArrayType(WdlIntegerType),
                              List(WdlInteger(1), WdlInteger(2), WdlInteger(3))),
-                "x_fa" ->
+                "fa" ->
                     WdlArray(WdlArrayType(WdlFloatType),
                              List(WdlFloat(1.4), WdlFloat(3.14), WdlFloat(1.618))),
-                "x_ba" ->
+                "ba" ->
                     WdlArray(WdlArrayType(WdlBooleanType),
                              List(WdlBoolean(false), WdlBoolean(true), WdlBoolean(true))),
-                "x_sa" ->
+                "sa" ->
                     WdlArray(WdlArrayType(WdlStringType),
                              List(WdlString("hello"), WdlString("Mrs"), WdlString("Robinson"))))
 

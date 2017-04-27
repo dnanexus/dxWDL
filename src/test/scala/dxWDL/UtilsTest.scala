@@ -2,12 +2,11 @@ package dxWDL
 
 import java.nio.charset.StandardCharsets
 import java.nio.file.{Path, Paths, Files}
+import net.jcazevedo.moultingyaml._
+import net.jcazevedo.moultingyaml.DefaultYamlProtocol._
 import org.scalatest.{BeforeAndAfterEach, FlatSpec, OneInstancePerTest}
 import spray.json._
 import spray.json.DefaultJsonProtocol
-//import spray.json.JsString
-//import wdl4s.{AstTools, Call, Task, WdlExpression, WdlNamespace, WdlNamespaceWithWorkflow, Workflow}
-//import wdl4s.AstTools.EnhancedAstNode
 import wdl4s.types._
 import wdl4s.values._
 
@@ -48,12 +47,13 @@ class UtilsTest extends FlatSpec with BeforeAndAfterEach with OneInstancePerTest
     }
 
     it should "parse job executable info, and extract help strings" in {
-        val jobInfo = """{"links": ["file-F11jP2Q0ZvgYvPv77JBXgyB0"], "inputSpec": [{"help": "Int", "name": "ai", "class": "int"}, {"help": "Int", "name": "bi", "class": "int"}, {"optional": true, "name": "dbg_sleep", "class": "int"}], "dxapi": "1.0.0", "id": "applet-F11jP700ZvgvzxJ3Jq7p6jJZ", "title": "", "runSpec": {"execDepends": [{"name": "dx-java-bindings"}, {"name": "openjdk-8-jre-headless"}, {"package_manager": "apt", "name": "dx-toolkit"}], "bundledDependsByRegion": {"aws:us-east-1": [{"name": "resources.tar.gz", "id": {"$dnanexus_link": "file-F11jP2Q0ZvgYvPv77JBXgyB0"}}]}, "bundledDepends": [{"name": "resources.tar.gz", "id": {"$dnanexus_link": "file-F11jP2Q0ZvgYvPv77JBXgyB0"}}], "systemRequirements": {"main": {"instanceType": "mem1_ssd1_x2"}}, "executionPolicy": {}, "release": "14.04", "interpreter": "bash", "distribution": "Ubuntu"}, "access": {"network": []}, "state": "closed", "folder": "/", "description": "", "tags": [], "outputSpec": [{"name": "sum", "class": "int"}], "sponsored": false, "createdBy": {"user": "user-orodeh"}, "class": "applet", "types": [], "hidden": false, "name": "add3.Add", "created": 1480820636000, "modified": 1480871955198, "summary": "", "project": "container-F12504j0188Bgk6pFXZY6PP3", "developerNotes": ""}"""
+        val jobInfo = """{"links": ["file-F11jP2Q0ZvgYvPv77JBXgyB0"], "inputSpec": [{"help": "Int", "name": "ai", "class": "int"}, {"help": "Int", "name": "bi", "class": "int"}, {"optional": true, "name": "dbg_sleep", "class": "int"}], "dxapi": "1.0.0", "id": "applet-F11jP700ZvgvzxJ3Jq7p6jJZ", "title": "", "runSpec": {"execDepends": [{"name": "dx-java-bindings"}, {"name": "openjdk-8-jre-headless"}, {"package_manager": "apt", "name": "dx-toolkit"}], "bundledDependsByRegion": {"aws:us-east-1": [{"name": "resources.tar.gz", "id": {"$dnanexus_link": "file-F11jP2Q0ZvgYvPv77JBXgyB0"}}]}, "bundledDepends": [{"name": "resources.tar.gz", "id": {"$dnanexus_link": "file-F11jP2Q0ZvgYvPv77JBXgyB0"}}], "systemRequirements": {"main": {"instanceType": "mem1_ssd1_x2"}}, "executionPolicy": {}, "release": "14.04", "interpreter": "bash", "distribution": "Ubuntu"}, "access": {"network": []}, "state": "closed", "folder": "/", "description": "", "tags": [], "outputSpec": [{"help": "Int", "name": "sum", "class": "int"}], "sponsored": false, "createdBy": {"user": "user-orodeh"}, "class": "applet", "types": [], "hidden": false, "name": "add3.Add", "created": 1480820636000, "modified": 1480871955198, "summary": "", "project": "container-F12504j0188Bgk6pFXZY6PP3", "developerNotes": ""}"""
 
-        val info = Utils.loadExecInfo(jobInfo)
-        assert(info("ai") == Some(WdlIntegerType))
-        assert(info("bi") == Some(WdlIntegerType))
-        assert(info("dbg_sleep") == None)
+        val (infoIn,infoOut) = Utils.loadExecInfo(jobInfo)
+        assert(infoIn("ai") == Some(WdlIntegerType))
+        assert(infoIn("bi") == Some(WdlIntegerType))
+        assert(infoIn("dbg_sleep") == None)
+        assert(infoOut("sum") == Some(WdlIntegerType))
     }
 
     it should "parse job executable info (II)" in {
@@ -85,7 +85,7 @@ class UtilsTest extends FlatSpec with BeforeAndAfterEach with OneInstancePerTest
         "types": []
     }"""
 
-        var info = Utils.loadExecInfo(jobInfo)
+        var (info,_) = Utils.loadExecInfo(jobInfo)
         assert(info("ai") == Some(WdlIntegerType))
     }
 
@@ -113,4 +113,83 @@ class UtilsTest extends FlatSpec with BeforeAndAfterEach with OneInstancePerTest
         println("--------------------------------------")
     }
 
+    it should "pretty print strings in IR with newlines" in {
+        val yaml1 = YamlString(
+            """\//||\/||
+          |// ||  ||__
+          |""".stripMargin)
+
+        val buf = """||
+                     |  \//||\/||
+                     |  // ||  ||__
+                     |""".stripMargin
+        assert(yaml1.prettyPrint == buf)
+        print(buf)
+
+/*        {
+
+            val yaml2:  = YamlString(
+                """hello
+                   |world
+                   |it is nice outside""".stripMargin)
+
+            assert(yaml2.prettyPrint(Block) ==
+                       """||
+                          | hello
+                          | world
+                          | it is nice outside""".stripMargin)
+        } */
+    }
+
+    it should "Add scope to flat inputs" in {
+        {
+            val inputs1 = Map("Add.sum" -> WdlInteger(1))
+            val scoped1 = Utils.addScopeToInputs(inputs1)
+            scoped1("Add") match {
+                case WdlObject(o) => assert(o.get("sum") == Some(WdlInteger(1)))
+                case _ => assert(false)
+            }
+        }
+
+        {
+            val inputs2 = Map("Add.sum" -> WdlInteger(1),
+                              "Leaf.xxx" -> WdlString("tal"))
+            val scoped2 = Utils.addScopeToInputs(inputs2)
+            scoped2("Add") match {
+                case WdlObject(o) => assert(o.get("sum") == Some(WdlInteger(1)))
+                case _ => assert(false)
+            }
+            scoped2("Leaf") match {
+                case WdlObject(o) => assert(o.get("xxx") == Some(WdlString("tal")))
+                case _ => assert(false)
+            }
+        }
+
+        {
+            val inputs3 = Map("ai" -> WdlInteger(1), "bi" -> WdlInteger(2))
+            val scoped3 = Utils.addScopeToInputs(inputs3)
+            assert(scoped3.get("bi") == Some(WdlInteger(2)))
+            assert(scoped3.get("ai") == Some(WdlInteger(1)))
+        }
+
+        {
+            val inputs4 = Map("Alpha.dog" -> WdlInteger(1),
+                              "Alpha.rabbit" -> WdlInteger(2),
+                              "Beta.crow" -> WdlString("yellow"),
+                              "Beta.bear" -> WdlString("black"))
+            val scoped4 = Utils.addScopeToInputs(inputs4)
+            val alpha : Map[String, WdlValue] = scoped4("Alpha") match {
+                case WdlObject(o) => o
+                case _ => throw new IllegalArgumentException()
+            }
+            val beta : Map[String, WdlValue] = scoped4("Beta") match {
+                case WdlObject(o) => o
+                case _ => throw new IllegalArgumentException()
+            }
+            assert(alpha.get("dog") == Some(WdlInteger(1)))
+            assert(alpha.get("rabbit") == Some(WdlInteger(2)))
+            assert(beta.get("crow") == Some(WdlString("yellow")))
+            assert(beta.get("bear") == Some(WdlString("black")))
+        }
+    }
 }

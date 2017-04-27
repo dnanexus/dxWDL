@@ -1,12 +1,14 @@
 package dxWDL
 
 import com.dnanexus.{DXApplet, DXProject, DXUtil, DXContainer, DXSearch, DXWorkflow}
+import java.io.{File, FileWriter, PrintWriter}
 import java.nio.file.{Path, Paths, Files}
+import net.jcazevedo.moultingyaml._
 import scala.util.{Failure, Success, Try}
 import spray.json._
 import spray.json.DefaultJsonProtocol
 import spray.json.JsString
-import wdl4s.{WdlNamespace, WdlNamespaceWithWorkflow, Workflow}
+import wdl4s.{Task, WdlNamespace, WdlNamespaceWithWorkflow, Workflow}
 
 object Main extends App {
     sealed trait Termination
@@ -15,15 +17,19 @@ object Main extends App {
     case class BadUsageTermination(info: String) extends Termination
 
     object Actions extends Enumeration {
-        val AppletEpilog, AppletProlog, Compile, LaunchScatter,
-            Version, WorkflowCommon, Yaml  = Value
+        val Compile, Eval, LaunchScatter, TaskEpilog, TaskProlog,
+            Version, Yaml  = Value
     }
 
     def yaml(args: Seq[String]): Termination = {
-        continueIf(args.length == 1) {
-            loadWdl(args.head) { ns =>
-                SuccessfulTermination(WdlYamlTree(ns).print())
-            }
+        if (args.length == 1) {
+            val path = args.head
+            val wdlSource : String = Utils.readFileContent(Paths.get(path))
+            val ns : WdlNamespaceWithWorkflow =
+                WdlNamespaceWithWorkflow.load(wdlSource, Seq.empty).get
+            SuccessfulTermination(WdlYamlTree(ns).print())
+        } else {
+            BadUsageTermination("")
         }
     }
 
@@ -53,15 +59,64 @@ object Main extends App {
         System.err.println(Utils.exceptionToString(e))
     }
 
-    def compileBody(ns : WdlNamespace,
-                    wdlSourceFile : Path,
-                    options: Map[String, String]) : String = {
-        // extract the workflow
-        val wf = ns match {
-            case nswf : WdlNamespaceWithWorkflow => nswf.workflow
-            case _ => throw new Exception("WDL does not have a workflow")
+    // Add a suffix to a filename, before the regular suffix. For example:
+    //  xxx.wdl -> xxx.simplified.wdl
+    def replaceFileSuffix(src: Path, suffix: String) : String = {
+        val fName = src.toFile().getName()
+        val index = fName.lastIndexOf('.')
+        if (index == -1) {
+            fName + suffix
         }
+        else {
+            val prefix = fName.substring(0, index)
+            prefix + suffix
+        }
+    }
 
+    def prettyPrintWorkflowIR(wdlSourceFile : Path,
+                              irWf: IR.Workflow,
+                              verbose: Boolean) : Unit = {
+        val trgName: String = replaceFileSuffix(wdlSourceFile, ".ir.yaml")
+        val trgPath = Utils.appCompileDirPath.resolve(trgName).toFile
+        val yo = IR.yaml(irWf)
+        val humanReadable = yo.prettyPrint
+        val fos = new FileWriter(trgPath)
+        val pw = new PrintWriter(fos)
+        pw.print(humanReadable)
+        pw.flush()
+        pw.close()
+        Utils.trace(verbose, s"Wrote intermediate representation to ${trgPath.toString}")
+    }
+
+    def prettyPrintAppletsIR(wdlSourceFile : Path,
+                             irApplets: Vector[IR.Applet],
+                             verbose: Boolean) : Unit = {
+        val trgName: String = replaceFileSuffix(wdlSourceFile, ".ir.yaml")
+        val trgPath = Utils.appCompileDirPath.resolve(trgName).toFile
+        val humanReadable = irApplets.map(irTs =>
+            IR.yaml(irTs).prettyPrint
+        ).mkString("\n\n")
+        val fos = new FileWriter(trgPath)
+        val pw = new PrintWriter(fos)
+        pw.print(humanReadable)
+        pw.flush()
+        pw.close()
+        Utils.trace(verbose, s"Wrote intermediate representation to ${trgPath.toString}")
+    }
+
+    // remove old workflow and auxiliary applets from DNAx
+    def removeOldWorkflow(wfName: String, dxProject: DXProject, folder: String) = {
+        val oldWf = DXSearch.findDataObjects().nameMatchesExactly(wfName)
+            .inFolder(dxProject, folder).withClassWorkflow().execute().asList()
+        dxProject.removeObjects(oldWf)
+        val oldApplets = DXSearch.findDataObjects().nameMatchesGlob(wfName + ".*")
+            .inFolder(dxProject, folder).withClassApplet().execute().asList()
+        dxProject.removeObjects(oldApplets)
+    }
+
+
+    def compileBody(wdlSourceFile : Path,
+                    options: Map[String, String]) : String = {
         // verify version ID
         options.get("expectedVersion") match {
             case Some(vid) if vid != Utils.VERSION =>
@@ -97,7 +152,6 @@ object Main extends App {
             case 2 => (Some(vec(0)), vec(1))
             case _ => throw new Exception(s"Invalid path syntex ${destination}")
         }
-
         val dxProject : DXProject = project match {
             case None =>
                 // get the default project
@@ -105,28 +159,63 @@ object Main extends App {
                 dxEnv.getProjectContext()
             case Some(p) => DXProject.getInstance(p)
         }
-
-        // remove old workflow and applets
-        val oldWf = DXSearch.findDataObjects().nameMatchesExactly(wf.unqualifiedName)
-            .inFolder(dxProject, folder).withClassWorkflow().execute().asList()
-        dxProject.removeObjects(oldWf)
-        val oldApplets = DXSearch.findDataObjects().nameMatchesGlob(wf.unqualifiedName + ".*")
-            .inFolder(dxProject, folder).withClassWorkflow().execute().asList()
-        dxProject.removeObjects(oldApplets)
-
         val dxWDLrtId: String = options.get("dxWDLrtId") match {
             case None => throw new Exception("dxWDLrt asset ID not specified")
             case Some(id) => id
         }
+        val mode: Option[String] = options.get("mode")
+
+        // Simplify the source file
+        // Create a new file to hold the result.
+        //
+        // Assuming the source file is xxx.wdl, the new name will
+        // be xxx.simplified.wdl.
+        val simplWdlPath = CompilerPreprocess.apply(wdlSourceFile, verbose)
+
+        // extract the workflow
+        val ns = WdlNamespace.loadUsingPath(simplWdlPath, None, None).get
 
         // Backbone of compilation process.
         // 1) Compile the WDL workflow into an Intermediate Representation (IR)
         // 2) Generate dx:applets and dx:workflow from the IR
-        val cef = new CompilerErrorFormatter(wf.wdlSyntaxErrorFormatter.terminalMap)
-        val irWf = CompilerFrontEnd.apply(ns, folder, cef, verbose)
-        val dxwfl = CompilerBackend.apply(irWf, dxProject, dxWDLrtId, wdlSourceFile,
-                                          folder, cef, verbose)
-        dxwfl.getId()
+        val cef = new CompilerErrorFormatter(ns.terminalMap)
+        val (irWf, irApplets) = CompilerFrontEnd.apply(ns, folder, cef, verbose)
+
+        irWf match {
+            case None =>
+                // We have only tasks
+
+                // Write out the intermediate representation
+                prettyPrintAppletsIR(wdlSourceFile, irApplets, verbose)
+
+                mode match {
+                    case None =>
+                        val dxApplets = irApplets.map(x =>
+                            CompilerBackend.apply(x, dxProject, dxWDLrtId,
+                                                  folder, cef, verbose)
+                        )
+                        val ids: Seq[String] = dxApplets.map(x => x.getId())
+                        ids.mkString(", ")
+                    case Some(x) if x.toLowerCase == "fe" => "applet-xxxx"
+                    case _ => throw new Exception(s"Unknown mode ${mode}")
+                }
+
+            case Some(iRepWf) =>
+                // remove the old workflow artifacts before creating a new one on
+                // the platform.
+                removeOldWorkflow(iRepWf.name, dxProject, folder)
+
+                // Write out the intermediate representation
+                prettyPrintWorkflowIR(wdlSourceFile, iRepWf, verbose)
+                mode match {
+                    case None =>
+                        val dxwfl = CompilerBackend.apply(iRepWf, dxProject, dxWDLrtId,
+                                                          folder, cef, verbose)
+                        dxwfl.getId()
+                    case Some(x) if x.toLowerCase == "fe" => "workflow-xxxx"
+                    case _ => throw new Exception(s"Unknown mode ${mode}")
+                }
+        }
     }
 
     def compile(args: Seq[String]): Termination = {
@@ -146,6 +235,8 @@ object Main extends App {
                         nextOption(map ++ Map("dxWDLrtId" -> value.toString), tail)
                     case "-expected_version" :: value :: tail =>
                         nextOption(map ++ Map("expectedVersion" -> value.toString), tail)
+                    case "-mode" :: value :: tail =>
+                        nextOption(map ++ Map("mode" -> value.toString), tail)
                     case "-verbose" :: tail =>
                         nextOption(map ++ Map("verbose" -> ""), tail)
                     case option :: tail =>
@@ -154,15 +245,26 @@ object Main extends App {
                 }
             }
             val options = nextOption(Map(),arglist)
-
-            loadWdl(wdlSrcFile) { ns =>
-                val dxc = compileBody(ns, Paths.get(wdlSrcFile), options)
-                SuccessfulTermination(dxc)
-            }
+            val dxc = compileBody(Paths.get(wdlSrcFile), options)
+            SuccessfulTermination(dxc)
         } catch {
             case e : Throwable =>
-
                 BadUsageTermination(Utils.exceptionToString(e))
+        }
+    }
+
+    // Extract the only task from a namespace
+    def taskOfNamespace(ns: WdlNamespace) : Task = {
+        val numTasks = ns.tasks.length
+        if (numTasks != 1)
+            throw new Exception(s"WDL file contains ${numTasks} tasks, instead of 1")
+        ns.tasks.head
+    }
+
+    def workflowOfNamespace(ns: WdlNamespace): Workflow = {
+        ns match {
+            case nswf: WdlNamespaceWithWorkflow => nswf.workflow
+            case _ => throw new Exception("WDL file contains no workflow")
         }
     }
 
@@ -172,23 +274,20 @@ object Main extends App {
         } else {
             val wdlDefPath = args(0)
             val homeDir = Paths.get(args(1))
-            val (jobInputPath, jobOutputPath, jobErrorPath, jobInfoPath) = Utils.jobFilesOfHomeDir(homeDir)
-
-            val wdlSource : String = Utils.readFileContent(Paths.get(wdlDefPath))
-            val nswf : WdlNamespaceWithWorkflow =
-                WdlNamespaceWithWorkflow.load(wdlSource, Seq.empty).get
-            val wf : Workflow = nswf.workflow
+            val (jobInputPath, jobOutputPath, jobErrorPath, jobInfoPath) =
+                Utils.jobFilesOfHomeDir(homeDir)
+            val ns = WdlNamespace.loadUsingPath(Paths.get(wdlDefPath), None, None).get
 
             try {
                 action match {
-                    case Actions.AppletProlog =>
-                        AppletRunner.prolog(wf, jobInputPath, jobOutputPath, jobInfoPath)
-                    case Actions.AppletEpilog =>
-                        AppletRunner.epilog(wf, jobInputPath, jobOutputPath, jobInfoPath)
+                    case Actions.Eval =>
+                        RunnerEval.apply(workflowOfNamespace(ns), jobInputPath, jobOutputPath, jobInfoPath)
                     case Actions.LaunchScatter =>
-                        ScatterRunner.apply(wf, jobInputPath, jobOutputPath, jobInfoPath)
-                    case Actions.WorkflowCommon =>
-                        WorkflowCommonRunner.apply(wf, jobInputPath, jobOutputPath, jobInfoPath)
+                        RunnerScatter.apply(workflowOfNamespace(ns), jobInputPath, jobOutputPath, jobInfoPath)
+                    case Actions.TaskProlog =>
+                        RunnerTask.prolog(taskOfNamespace(ns), jobInputPath, jobOutputPath, jobInfoPath)
+                    case Actions.TaskEpilog =>
+                        RunnerTask.epilog(taskOfNamespace(ns), jobInputPath, jobOutputPath, jobInfoPath)
                 }
                 SuccessfulTermination(s"success ${action}")
             } catch {
@@ -196,20 +295,6 @@ object Main extends App {
                     writeJobError(jobErrorPath, e)
                     UnsuccessfulTermination(s"failure running ${action}")
             }
-        }
-    }
-
-    private[this] def continueIf(valid: => Boolean)(block: => Termination): Termination = if (valid) block else BadUsageTermination("")
-
-    private[this] def loadWdl(path: String)(f: WdlNamespace => Termination): Termination = {
-        try {
-            val wdlSource : String = Utils.readFileContent(Paths.get(path))
-            val nswf : WdlNamespaceWithWorkflow =
-                WdlNamespaceWithWorkflow.load(wdlSource, Seq.empty).get
-            f(nswf)
-        } catch {
-            case e : Throwable =>
-                UnsuccessfulTermination(Utils.exceptionToString(e))
         }
     }
 
@@ -221,11 +306,11 @@ object Main extends App {
 
     def dispatchCommand(args: Seq[String]): Termination = {
         getAction(args) match {
-            case Some(x) if x == Actions.AppletProlog => appletAction(x, args.tail)
-            case Some(x) if x == Actions.AppletEpilog => appletAction(x, args.tail)
             case Some(x) if x == Actions.Compile => compile(args.tail)
+            case Some(x) if x == Actions.Eval => appletAction(x, args.tail)
             case Some(x) if x == Actions.LaunchScatter => appletAction(x, args.tail)
-            case Some(x) if x == Actions.WorkflowCommon => appletAction(x, args.tail)
+            case Some(x) if x == Actions.TaskProlog => appletAction(x, args.tail)
+            case Some(x) if x == Actions.TaskEpilog => appletAction(x, args.tail)
             case Some(x) if x == Actions.Version => SuccessfulTermination(Utils.VERSION)
             case Some(x) if x == Actions.Yaml => yaml(args.tail)
             case _ => BadUsageTermination("")
@@ -243,18 +328,19 @@ object Main extends App {
            |  syntax tree.
            |
            |compile <WDL file> <-asset dxId> [-o targetPath] [-expected_version vid] [-verbose]
+           |       [-mode debug_flag]
            |
            |  Compile a wdl file into a dnanexus workflow. An asset
            |  ID for the dxWDL runtime is required. Optionally, specify a
            |  destination path on the platform.
            |
-           |appletProlog <WDL file> <home directory>
+           |taskProlog <WDL file> <home directory>
            |
            |  Run the initial part of a dx-applet
            |  originally compiled from a WDL workflow.
            |  Process the input arguments, and generate a bash script.
            |
-           |appletEpilog <WDL file> <home directory>
+           |taskEpilog <WDL file> <home directory>
            |
            |  After the bash script generated by the above command
            |  is done, collect the outputs and format them into
@@ -264,9 +350,9 @@ object Main extends App {
            |
            |  Launch a WDL scatter compiled into a dx-applet
            |
-           |workflowCommon <WDL file> <home directory>
+           |eval <WDL file> <home directory>
            |
-           |  Perform the toplevel declarations at the beginning of the workflow
+           |  Run an applet that calculates WDL expressions
            |
            |version
            |

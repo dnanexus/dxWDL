@@ -5,6 +5,7 @@ target/
 
 # Cromwell runtime
 execution/
+cromwell-executions
 
 # compiled java classes
 *.class

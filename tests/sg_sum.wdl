@@ -1,4 +1,4 @@
-task inc {
+task uu_inc {
     Int i
 
     command <<<
@@ -9,7 +9,7 @@ task inc {
     }
 }
 
-task sum {
+task uu_sum {
     Array[Int] ints
 
     command <<<
@@ -24,7 +24,7 @@ workflow sg_sum {
     Array[Int] integers
 
     scatter (i in integers) {
-        call inc {input: i=i}
+        call uu_inc as inc {input: i=i}
     }
-    call sum {input: ints = inc.incremented}
+    call uu_sum as sum {input: ints = inc.incremented}
 }

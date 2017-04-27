@@ -23,8 +23,9 @@ def main():
     argparser = argparse.ArgumentParser(description="compiler from WDL to dnanexus")
     argparser.add_argument("command", choices=["compile"], help="command to issue to dxWDL")
     argparser.add_argument("wdl_file", help="WDL workflow file")
-    argparser.add_argument("--destination", help="Output folder for workflow")
     argparser.add_argument("--asset", help="Override configuration file asset Id")
+    argparser.add_argument("--destination", help="Output folder for workflow")
+    argparser.add_argument("--mode", help="Compilation mode, a debugging flag")
     argparser.add_argument("--verbose", dest='verbose', action='store_true', default=False,
                            help="Print detailed progress reports")
     args = argparser.parse_args()
@@ -59,7 +60,7 @@ def cmd_compile(args):
         version_id = version_id.strip()
         validate_library_version(version_id, classpath)
         validate_asset_version(version_id, asset_id)
-    compile_workflow(args.wdl_file, destination, asset_id, classpath, args.verbose)
+    compile_workflow(args.wdl_file, destination, asset_id, classpath, args.verbose, args.mode)
 
 
 # Check if the local library has the correct version
@@ -93,7 +94,7 @@ def validate_asset_version(version_id, asset_id):
 # destination    output path on the platform
 #
 # return --      workflow ID
-def compile_workflow(wf_file, destination, asset_id, classpath, verbose):
+def compile_workflow(wf_file, destination, asset_id, classpath, verbose, mode):
     print("Compiling {}".format(wf_file), file=sys.stderr)
     cmd_line = [
         "java", "-cp", classpath, "dxWDL.Main", "compile", wf_file,
@@ -104,17 +105,15 @@ def compile_workflow(wf_file, destination, asset_id, classpath, verbose):
         cmd_line += ["-expected_version", version_id]
     if verbose:
         cmd_line += ["-verbose"]
+    if mode:
+        cmd_line += ["-mode", mode]
 
     print((" ".join(cmd_line)), file=sys.stderr)
 
     # Call java/scala dxWDL compiler, and pipe stdout/stderr
     outstr = subprocess.check_output(cmd_line)
-    wf = outstr.rstrip().split('\n')[-1]
-    print("wf={}".format(wf))
-    if "workflow-" not in wf:
-        print("Compilation error, aborting", file=sys.stderr)
-        exit(1)
-    return wf
+    retval = outstr.rstrip().split('\n')[-1]
+    return retval
 
 
 # Search for the jars locally. If not found, download

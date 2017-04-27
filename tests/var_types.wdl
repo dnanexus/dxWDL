@@ -1,5 +1,5 @@
 # A very simple WDL file, that includes a single task
-task join_many {
+task ddd_join_many {
     Boolean b
     Int i
     Float x
@@ -18,7 +18,7 @@ workflow var_types {
     Float x
     String s
 
-    call join_many {
+    call ddd_join_many as join_many {
         input : b=b, i=i, x=x, s=s
     }
     output {

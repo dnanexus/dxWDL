@@ -86,14 +86,19 @@ case object DxFunctions extends WdlStandardLibraryFunctions {
         }
     }
 
+    private def stringOf(p: Try[WdlValue]) : String = {
+        p match {
+            case Success(x) => x.toWdlString
+            case Failure(e) => s"Failure ${Utils.exceptionToString(e)}"
+        }
+    }
+
     override def sub(params: Seq[Try[WdlValue]]): Try[WdlString] =
         params.size match {
             case 3 => (params(0), params(1), params(2)) match {
                 case (Success(x), Success(y), Success(z)) =>
                     try {
-                        val str = stringOf(x)
-                        val pattern = stringOf(y)
-                        val replace = stringOf(z)
+                        val (str, pattern, replace) = (stringOf(x), stringOf(y), stringOf(z))
                         Success(WdlString(pattern.r.replaceAllIn(str, replace)))
                     } catch {
                         case e : Throwable =>
@@ -101,7 +106,8 @@ case object DxFunctions extends WdlStandardLibraryFunctions {
                             Failure(new Exception(s"sub requires three file/string arguments, ${msg}"))
                     }
                 case _ =>
-                    Failure(new Exception("sub requires three valid arguments"))
+                    val (p0,p1,p2) = (stringOf(params(0)), stringOf(params(1)), stringOf(params(2)))
+                    Failure(new Exception(s"sub requires three valid arguments, got (${p0}, ${p1}, ${p2})"))
             }
             case n => Failure(
                 new IllegalArgumentException(

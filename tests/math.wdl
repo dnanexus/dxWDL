@@ -31,7 +31,7 @@ workflow math {
          input: a = ai, b = 3
     }
     call Multiply {
-         input: a = Add.result, b = 2
+         input: a = Add.result + 10, b = 2
     }
     output {
         Multiply.result
