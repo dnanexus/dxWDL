@@ -547,49 +547,4 @@ object Utils {
         }
         tree
     }
-
-    // Parse a dnanexus file descriptor. Examples:
-    //
-    // "$dnanexus_link": {
-    //    "project": "project-BKJfY1j0b06Z4y8PX8bQ094f",
-    //    "id": "file-BKQGkgQ0b06xG5560GGQ001B"
-    //   }
-    //
-    //  {"$dnanexus_link": "file-F0J6JbQ0ZvgVz1J9q5qKfkqP"}
-    //
-    def dxFileOfJsValue(jsValue : JsValue) : DXFile = {
-        val innerObj = jsValue match {
-            case JsObject(fields) =>
-                fields.get("$dnanexus_link") match {
-                    case None => throw new AppInternalException(s"Bad json of dnanexus link $jsValue")
-                    case Some(x) => x
-                }
-            case  _ =>
-                throw new AppInternalException(s"Bad json of dnanexus link $jsValue")
-        }
-
-        val (fid, projId) : (String, Option[String]) = innerObj match {
-            case JsString(fid) =>
-                // We just have a file-id
-                (fid, None)
-            case JsObject(linkFields) =>
-                // file-id and project-id
-                val fid =
-                    linkFields.get("id") match {
-                        case Some(JsString(s)) => s
-                        case _ => throw new AppInternalException(s"No file ID found in dnanexus link $jsValue")
-                    }
-                linkFields.get("project") match {
-                    case Some(JsString(pid : String)) => (fid, Some(pid))
-                    case _ => (fid, None)
-                }
-            case _ =>
-                throw new AppInternalException(s"Could not parse a dxlink from $innerObj")
-        }
-
-        projId match {
-            case None => DXFile.getInstance(fid)
-            case Some(pid) => DXFile.getInstance(fid, DXProject.getInstance(pid))
-        }
-    }
 }

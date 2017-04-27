@@ -324,6 +324,20 @@ object CompilerBackend {
         dxBuilder.build()
     }
 
+    // Compile a single applet
+    def apply(applet: IR.Applet,
+              dxProject: DXProject,
+              dxWDLrtId: String,
+              folder: String,
+              cef: CompilerErrorFormatter,
+              verbose: Boolean) : DXApplet = {
+        Utils.trace(verbose, "Backend pass, single applet")
+        val cState = State(dxWDLrtId, dxProject, folder, cef, verbose)
+        val (dxApplet, _) = buildApplet(applet, cState)
+        dxApplet
+    }
+
+    // Compile an entire workflow
     def apply(wf: IR.Workflow,
               dxProject: DXProject,
               dxWDLrtId: String,

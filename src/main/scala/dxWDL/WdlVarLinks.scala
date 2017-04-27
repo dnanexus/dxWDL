@@ -29,12 +29,57 @@ case class WdlVarLinks(wdlType: WdlType, dxlink: DxLink)
 case class BValue(wvl: WdlVarLinks, wdlValue: WdlValue)
 
 object WdlVarLinks {
+    // Parse a dnanexus file descriptor. Examples:
+    //
+    // "$dnanexus_link": {
+    //    "project": "project-BKJfY1j0b06Z4y8PX8bQ094f",
+    //    "id": "file-BKQGkgQ0b06xG5560GGQ001B"
+    //   }
+    //
+    //  {"$dnanexus_link": "file-F0J6JbQ0ZvgVz1J9q5qKfkqP"}
+    //
+    private def dxFileOfJsValue(jsValue : JsValue) : DXFile = {
+        val innerObj = jsValue match {
+            case JsObject(fields) =>
+                fields.get("$dnanexus_link") match {
+                    case None => throw new AppInternalException(s"Bad json of dnanexus link $jsValue")
+                    case Some(x) => x
+                }
+            case  _ =>
+                throw new AppInternalException(s"Bad json of dnanexus link $jsValue")
+        }
+
+        val (fid, projId) : (String, Option[String]) = innerObj match {
+            case JsString(fid) =>
+                // We just have a file-id
+                (fid, None)
+            case JsObject(linkFields) =>
+                // file-id and project-id
+                val fid =
+                    linkFields.get("id") match {
+                        case Some(JsString(s)) => s
+                        case _ => throw new AppInternalException(s"No file ID found in dnanexus link $jsValue")
+                    }
+                linkFields.get("project") match {
+                    case Some(JsString(pid : String)) => (fid, Some(pid))
+                    case _ => (fid, None)
+                }
+            case _ =>
+                throw new AppInternalException(s"Could not parse a dxlink from $innerObj")
+        }
+
+        projId match {
+            case None => DXFile.getInstance(fid)
+            case Some(pid) => DXFile.getInstance(fid, DXProject.getInstance(pid))
+        }
+    }
+
     private def wdlFileOfDxLink(jsValue : JsValue) : WdlValue = {
         // Download the file, and place it in a local file, with the
         // same name as the platform. All files have to be downloaded
         // into the same directory; the only exception we make is for
         // disambiguation purposes.
-        val dxfile = Utils.dxFileOfJsValue(jsValue)
+        val dxfile = dxFileOfJsValue(jsValue)
         val fName = dxfile.describe().getName()
         val shortPath = Utils.inputFilesDirPath.resolve(fName)
         val path : Path =
@@ -230,7 +275,7 @@ object WdlVarLinks {
                    | WdlArrayType(WdlArrayType(WdlStringType)) =>
                 // ragged array. Download the file holding the data,
                 // and unmarshal it.
-                val dxfile = Utils.dxFileOfJsValue(jsValue)
+                val dxfile = dxFileOfJsValue(jsValue)
                 val buf = Utils.downloadString(dxfile)
                 val raggedAr: JsValue = buf.parseJson
                 WdlVarLinks(wdlType, DxlJsValue(raggedAr))

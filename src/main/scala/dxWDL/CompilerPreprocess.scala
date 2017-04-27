@@ -297,10 +297,8 @@ object CompilerPreprocess {
               verbose: Boolean) : Path = {
         Utils.trace(verbose, "Preprocessing pass")
 
-        val ns = WdlNamespaceWithWorkflow.load(
-            Utils.readFileContent(wdlSourceFile),
-            Seq.empty).get
-        val tm = ns.wdlSyntaxErrorFormatter.terminalMap
+        val ns = WdlNamespace.loadUsingPath(wdlSourceFile, None, None).get
+        val tm = ns.terminalMap
         val cef = new CompilerErrorFormatter(tm)
         val cState = State(cef, tm, verbose)
 

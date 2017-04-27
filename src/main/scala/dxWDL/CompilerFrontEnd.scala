@@ -793,29 +793,11 @@ workflow w {
          applet)
     }
 
-
-    // compile the WDL source code into intermediate representation
-    def apply(ns : WdlNamespace,
-              destination: String,
-              cef: CompilerErrorFormatter,
-              verbose: Boolean) : IR.Workflow = {
-        val cState = new State(destination, cef, verbose)
-        Utils.trace(cState.verbose, "FrontEnd pass")
-
-        // compile all the tasks into applets
-        Utils.trace(cState.verbose, "FrontEnd: compiling applets")
-        val taskApplets: Map[String, (IR.Applet, Vector[IR.CVar])] = ns.tasks.map{ task =>
-            val (applet, outputs) = compileTask(task, cState)
-            task.name -> (applet, outputs)
-        }.toMap
-
-        // extract the workflow
+    // Compile a workflow, having compiled the independent tasks.
+    def compileWorkflow(wf: Workflow,
+                        taskApplets: Map[String, (IR.Applet, Vector[IR.CVar])],
+                        cState: State) : IR.Workflow = {
         Utils.trace(cState.verbose, "FrontEnd: compiling workflow")
-        val wf = ns match {
-            case nswf : WdlNamespaceWithWorkflow => nswf.workflow
-            case _ => throw new Exception("WDL does not have a workflow")
-        }
-
         // Lift all declarations that can be evaluated at the top of
         // the block.
         val (topDecls, wfBody) = Utils.splitBlockDeclarations(wf.children.toList)
@@ -869,5 +851,35 @@ workflow w {
         val (stages, auxApplets) = allStageInfo.unzip
         val tApplets: Vector[IR.Applet] = taskApplets.map{ case (k,(applet,_)) => applet }.toVector
         IR.Workflow(wf.unqualifiedName, stages, tApplets ++ auxApplets.flatten.toVector)
+    }
+
+    // compile the WDL source code into intermediate representation
+    def apply(ns : WdlNamespace,
+              destination: String,
+              cef: CompilerErrorFormatter,
+              verbose: Boolean) : (Option[IR.Workflow], Vector[IR.Applet]) = {
+        val cState = new State(destination, cef, verbose)
+        Utils.trace(cState.verbose, "FrontEnd pass")
+
+        // compile all the tasks into applets
+        Utils.trace(cState.verbose, "FrontEnd: compiling applets")
+        val taskApplets: Map[String, (IR.Applet, Vector[IR.CVar])] = ns.tasks.map{ task =>
+            val (applet, outputs) = compileTask(task, cState)
+            task.name -> (applet, outputs)
+        }.toMap
+        val irApplets: Vector[IR.Applet] = taskApplets.map{
+            case (key, (irApplet,_)) => irApplet
+        }.toVector
+
+        ns match {
+            case nswf : WdlNamespaceWithWorkflow =>
+                val wf = nswf.workflow
+                val irWf = compileWorkflow(wf, taskApplets, cState)
+                (Some(irWf), irApplets)
+            case _ =>
+                // The namespace contains only applets, there
+                // is no workflow to compile.
+                (None, irApplets)
+        }
     }
 }

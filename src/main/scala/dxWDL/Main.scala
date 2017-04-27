@@ -73,9 +73,9 @@ object Main extends App {
         }
     }
 
-    def prettyPrintIr(wdlSourceFile : Path,
-                      irWf: IR.Workflow,
-                      verbose: Boolean) : Unit = {
+    def prettyPrintWorkflowIR(wdlSourceFile : Path,
+                              irWf: IR.Workflow,
+                              verbose: Boolean) : Unit = {
         val trgName: String = replaceFileSuffix(wdlSourceFile, ".ir.yaml")
         val trgPath = Utils.appCompileDirPath.resolve(trgName).toFile
         val yo = IR.yaml(irWf)
@@ -87,6 +87,17 @@ object Main extends App {
         pw.close()
         Utils.trace(verbose, s"Wrote intermediate representation to ${trgPath.toString}")
     }
+
+    // remove old workflow and auxiliary applets from DNAx
+    def removeOldWorkflow(wfName: String, dxProject: DXProject, folder: String) = {
+        val oldWf = DXSearch.findDataObjects().nameMatchesExactly(wfName)
+            .inFolder(dxProject, folder).withClassWorkflow().execute().asList()
+        dxProject.removeObjects(oldWf)
+        val oldApplets = DXSearch.findDataObjects().nameMatchesGlob(wfName + ".*")
+            .inFolder(dxProject, folder).withClassApplet().execute().asList()
+        dxProject.removeObjects(oldApplets)
+    }
+
 
     def compileBody(wdlSourceFile : Path,
                     options: Map[String, String]) : String = {
@@ -146,38 +157,42 @@ object Main extends App {
         val simplWdlPath = CompilerPreprocess.apply(wdlSourceFile, verbose)
 
         // extract the workflow
-        val ns = WdlNamespaceWithWorkflow.load(Utils.readFileContent(simplWdlPath),
-                                               Seq.empty).get
-        val wf = ns match {
-            case nswf : WdlNamespaceWithWorkflow => nswf.workflow
-            case _ => throw new Exception("WDL does not have a workflow")
-        }
-
-        // remove old workflow and applets
-        val oldWf = DXSearch.findDataObjects().nameMatchesExactly(wf.unqualifiedName)
-            .inFolder(dxProject, folder).withClassWorkflow().execute().asList()
-        dxProject.removeObjects(oldWf)
-        val oldApplets = DXSearch.findDataObjects().nameMatchesGlob(wf.unqualifiedName + ".*")
-            .inFolder(dxProject, folder).withClassWorkflow().execute().asList()
-        dxProject.removeObjects(oldApplets)
+        val ns = WdlNamespace.loadUsingPath(simplWdlPath, None, None).get
 
         // Backbone of compilation process.
         // 1) Compile the WDL workflow into an Intermediate Representation (IR)
         // 2) Generate dx:applets and dx:workflow from the IR
-        val cef = new CompilerErrorFormatter(wf.wdlSyntaxErrorFormatter.terminalMap)
-        val irWf = CompilerFrontEnd.apply(ns, folder, cef, verbose)
+        val cef = new CompilerErrorFormatter(ns.terminalMap)
+        val (irWf, irApplets) = CompilerFrontEnd.apply(ns, folder, cef, verbose)
 
-        // Write out the intermediate representation
-        prettyPrintIr(wdlSourceFile, irWf, verbose)
-
-        mode match {
+        irWf match {
             case None =>
-                val dxwfl = CompilerBackend.apply(irWf, dxProject, dxWDLrtId,
+                // We have only tasks
+                mode match {
+                    case None =>
+                        val dxApplets = irApplets.map(x =>
+                            CompilerBackend.apply(x, dxProject, dxWDLrtId,
                                                   folder, cef, verbose)
-                dxwfl.getId()
-            case Some(x) =>
-                x.toLowerCase match {
-                    case "ir" | "fe" => "workflow-xxxx"
+                        )
+                        val ids: Seq[String] = dxApplets.map(x => x.getId())
+                        ids.mkString(", ")
+                    case Some(x) if x.toLowerCase == "fe" => "applet-xxxx"
+                    case _ => throw new Exception(s"Unknown mode ${mode}")
+                }
+
+            case Some(iRepWf) =>
+                // remove the old workflow artifacts before creating a new one on
+                // the platform.
+                removeOldWorkflow(iRepWf.name, dxProject, folder)
+
+                // Write out the intermediate representation
+                prettyPrintWorkflowIR(wdlSourceFile, iRepWf, verbose)
+                mode match {
+                    case None =>
+                        val dxwfl = CompilerBackend.apply(iRepWf, dxProject, dxWDLrtId,
+                                                          folder, cef, verbose)
+                        dxwfl.getId()
+                    case Some(x) if x.toLowerCase == "fe" => "workflow-xxxx"
                     case _ => throw new Exception(s"Unknown mode ${mode}")
                 }
         }
