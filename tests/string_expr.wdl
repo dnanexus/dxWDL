@@ -2,6 +2,7 @@ task string_ops {
     String p1
     String p2
     String p3
+    String p4
 
     command {
     }
@@ -15,7 +16,8 @@ workflow string_expr {
         input:
             p1 = "delicate" + ".aligned",
             p2 = "number" + ".duplicate_metrics",
-            p3 = sub("frogs_toads_salamander", "frogs", "xRIPx")
+            p3 = sub("frogs_toads_salamander", "frogs", "xRIPx"),
+            p4 = "ignored variable"
     }
 
     output {

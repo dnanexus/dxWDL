@@ -4,22 +4,18 @@ package dxWDL
 
 // DX bindings
 import com.fasterxml.jackson.databind.JsonNode
-import com.dnanexus.{DXWorkflow, DXApplet, DXProject, DXJSON, DXUtil}
+import com.dnanexus.{DXWorkflow, DXApplet, DXProject, DXJSON, DXSearch, DXUtil}
 import java.nio.file.{Files, Paths, Path}
-import scala.util.{Failure, Success, Try}
+import spray.json._
+import spray.json.DefaultJsonProtocol
+import Utils.WDL_SNIPPET_FILENAME
 import wdl4s.expression.{NoFunctions, WdlStandardLibraryFunctionsType}
-import wdl4s.parser.WdlParser.{Ast, AstNode, Terminal}
+import wdl4s.parser.WdlParser.Ast
 import wdl4s.types._
 import wdl4s.values._
-import wdl4s.WdlExpression.AstForExpressions
 import WdlVarLinks._
 
-// Json support
-import spray.json._
-import DefaultJsonProtocol._
-
 object CompilerBackend {
-    val WDL_SNIPPET_FILENAME = Utils.WDL_SNIPPET_FILENAME
 
     // Compiler state.
     // Packs common arguments passed between methods.
@@ -161,13 +157,29 @@ object CompilerBackend {
         }
     }
 
+    // remove old workflow and auxiliary applets from DNAx
+    def removeOldWorkflow(wfName: String, dxProject: DXProject, folder: String) = {
+        val oldWf = DXSearch.findDataObjects().nameMatchesExactly(wfName)
+            .inFolder(dxProject, folder).withClassWorkflow().execute().asList()
+        dxProject.removeObjects(oldWf)
+        val oldApplets = DXSearch.findDataObjects().nameMatchesGlob(wfName + "_*")
+            .inFolder(dxProject, folder).withClassApplet().execute().asList()
+        dxProject.removeObjects(oldApplets)
+    }
+
     // create a directory structure for this applet
     // applets/
     //        task-name/
     //                  dxapp.json
     //                  resources/
     //                      workflowFile.wdl
-    def createAppletDirStruct(applet: IR.Applet, appJson : JsObject) : Path = {
+    //
+    // For applets that call other applets, we pass a directory
+    // of the callees, so they could be found a runtime. This is
+    // equivalent to linking, in a standard C compiler.
+    def createAppletDirStruct(applet: IR.Applet,
+                              aplLinks: Map[String, DXApplet],
+                              appJson : JsObject) : Path = {
         // create temporary directory
         val appletDir : Path = Utils.appCompileDirPath.resolve(applet.name)
         Utils.safeMkdir(appletDir)
@@ -185,12 +197,22 @@ object CompilerBackend {
 
         // Copy the WDL file.
         //
-        // The runner figures out which applet to run, by querying the
-        // platform.
         Utils.writeFileContent(resourcesDir.resolve(Utils.WDL_SNIPPET_FILENAME), applet.wdlCode)
+
+        // write linking information
+        if (!aplLinks.isEmpty) {
+            val linkInfo = JsObject(
+                aplLinks.map{ case (key, dxApplet) =>
+                    key -> JsString(dxApplet.getId())
+                }.toMap
+            )
+            Utils.writeFileContent(resourcesDir.resolve(Utils.LINK_INFO_FILENAME),
+                                   linkInfo.prettyPrint)
+        }
 
         // write the dxapp.json
         Utils.writeFileContent(appletDir.resolve("dxapp.json"), appJson.prettyPrint)
+
         appletDir
     }
 
@@ -232,7 +254,9 @@ object CompilerBackend {
         def build() : Option[DXApplet] = {
             try {
                 // Run the dx-build command
-                val (outstr, _) = Utils.execCommand(buildCmd.mkString(" "))
+                val commandStr = buildCmd.mkString(" ")
+                Utils.trace(cState.verbose, commandStr)
+                val (outstr, _) = Utils.execCommand(commandStr)
 
                 // extract the appID from the output
                 val app : JsObject = outstr.parseJson.asJsObject
@@ -262,7 +286,9 @@ object CompilerBackend {
     //
     // Write the WDL code to a file, and generate a bash applet to
     // run it on the platform.
-    def buildApplet(applet: IR.Applet, cState: State) : (DXApplet, Vector[IR.CVar]) = {
+    def buildApplet(applet: IR.Applet,
+                    appletDict: Map[String, DXApplet],
+                    cState: State) : (DXApplet, Vector[IR.CVar]) = {
         Utils.trace(cState.verbose, s"Compiling applet ${applet.name}")
         val inputSpec : Seq[JsValue] = applet.inputs.map(cVar =>
             wdlVarToSpec(cVar.dxVarName, cVar.wdlType, cVar.ast, cState)
@@ -285,8 +311,12 @@ object CompilerBackend {
             Map("access" -> JsObject(Map("network" -> JsArray(JsString("*")))))
         val json = JsObject(attrs ++ networkAccess)
 
+        val aplLinks = applet.kind match {
+            case IR.AppletKind.Scatter => appletDict
+            case _ => Map.empty[String, DXApplet]
+        }
         // create a directory structure for this applet
-        val appletDir = createAppletDirStruct(applet, json)
+        val appletDir = createAppletDirStruct(applet, aplLinks, json)
         val dxapp = dxBuildApp(appletDir, applet.name, cState.folder, cState)
         (dxapp, applet.outputs)
     }
@@ -333,7 +363,7 @@ object CompilerBackend {
               verbose: Boolean) : DXApplet = {
         Utils.trace(verbose, "Backend pass, single applet")
         val cState = State(dxWDLrtId, dxProject, folder, cef, verbose)
-        val (dxApplet, _) = buildApplet(applet, cState)
+        val (dxApplet, _) = buildApplet(applet, Map.empty, cState)
         dxApplet
     }
 
@@ -347,17 +377,23 @@ object CompilerBackend {
         Utils.trace(verbose, "Backend pass")
         val cState = State(dxWDLrtId, dxProject, folder, cef, verbose)
 
-        // build the individual applets
-        val appletDict : Map[String, (IR.Applet, DXApplet)] =
-            wf.applets.map{ a =>
-                val (dxApplet, _) = buildApplet(a, cState)
-                Utils.trace(cState.verbose, s"Applet ${a.name} = ${dxApplet.getId()}")
-                a.name -> (a, dxApplet)
-            }.toMap
-
-        // create workflow
+        // create fresh workflow
+        removeOldWorkflow(wf.name, dxProject, folder)
         val dxwfl = DXWorkflow.newWorkflow().setProject(dxProject).setFolder(folder)
             .setName(wf.name).build()
+
+        // Build the individual applets. We need to keep track of
+        // the applets created, to be able to link calls. For example,
+        // a scatter calls other applets; we need to pass the applet IDs
+        // to the launcher at runtime.
+        val initAppletDict = Map.empty[String, (IR.Applet, DXApplet)]
+        val appletDict = wf.applets.foldLeft(initAppletDict) {
+            case (appletDict, a) =>
+                val aplDir = appletDict.map{ case (key, (irApl, apl)) => (key, apl) }
+                val (dxApplet, _) = buildApplet(a, aplDir, cState)
+                Utils.trace(cState.verbose, s"Applet ${a.name} = ${dxApplet.getId()}")
+                appletDict + (a.name -> (a, dxApplet))
+        }.toMap
 
         // Create a dx:workflow stage for each stage in the IR.
         //

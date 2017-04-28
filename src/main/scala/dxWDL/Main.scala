@@ -1,6 +1,6 @@
 package dxWDL
 
-import com.dnanexus.{DXApplet, DXProject, DXUtil, DXContainer, DXSearch, DXWorkflow}
+import com.dnanexus.{DXApplet, DXProject, DXUtil, DXContainer, DXWorkflow}
 import java.io.{File, FileWriter, PrintWriter}
 import java.nio.file.{Path, Paths, Files}
 import net.jcazevedo.moultingyaml._
@@ -104,17 +104,6 @@ object Main extends App {
         Utils.trace(verbose, s"Wrote intermediate representation to ${trgPath.toString}")
     }
 
-    // remove old workflow and auxiliary applets from DNAx
-    def removeOldWorkflow(wfName: String, dxProject: DXProject, folder: String) = {
-        val oldWf = DXSearch.findDataObjects().nameMatchesExactly(wfName)
-            .inFolder(dxProject, folder).withClassWorkflow().execute().asList()
-        dxProject.removeObjects(oldWf)
-        val oldApplets = DXSearch.findDataObjects().nameMatchesGlob(wfName + ".*")
-            .inFolder(dxProject, folder).withClassApplet().execute().asList()
-        dxProject.removeObjects(oldApplets)
-    }
-
-
     def compileBody(wdlSourceFile : Path,
                     options: Map[String, String]) : String = {
         // verify version ID
@@ -184,10 +173,8 @@ object Main extends App {
         irWf match {
             case None =>
                 // We have only tasks
-
                 // Write out the intermediate representation
                 prettyPrintAppletsIR(wdlSourceFile, irApplets, verbose)
-
                 mode match {
                     case None =>
                         val dxApplets = irApplets.map(x =>
@@ -201,10 +188,6 @@ object Main extends App {
                 }
 
             case Some(iRepWf) =>
-                // remove the old workflow artifacts before creating a new one on
-                // the platform.
-                removeOldWorkflow(iRepWf.name, dxProject, folder)
-
                 // Write out the intermediate representation
                 prettyPrintWorkflowIR(wdlSourceFile, iRepWf, verbose)
                 mode match {
