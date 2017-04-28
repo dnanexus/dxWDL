@@ -1,15 +1,25 @@
 package dxWDL
 
+import com.dnanexus.DXFile
 import java.nio.charset.StandardCharsets
 import java.nio.file.{Path, Paths, Files}
 import scala.util.{Try, Success, Failure}
+import scala.collection.mutable.HashMap
 import wdl4s.expression.{WdlStandardLibraryFunctionsType, WdlStandardLibraryFunctions}
 import wdl4s.TsvSerializable
 import wdl4s.types._
 import wdl4s.values._
 
-case object DxFunctions extends WdlStandardLibraryFunctions {
-    def getMetaDir() = {
+object DxFunctions extends WdlStandardLibraryFunctions {
+    // Files that have to be downloaded before read.
+    // We download them once, and then remove them from the hashtable.
+    var remoteFiles = HashMap.empty[String, DXFile]
+
+    def registerRemoteFile(path: String, dxfile: DXFile) {
+        remoteFiles(path) = dxfile
+    }
+
+    private def getMetaDir() = {
         val metaDir = Utils.getMetaDirPath()
         Utils.safeMkdir(metaDir)
         metaDir
@@ -34,8 +44,20 @@ case object DxFunctions extends WdlStandardLibraryFunctions {
     override def glob(path: String, pattern: String): Seq[String] =
         throw new NotImplementedError()
 
-    override def readFile(path: String): String =
+    override def readFile(path: String): String = {
+        remoteFiles.get(path) match {
+            case Some(dxFile) =>
+                // File has not been downloaded yet.
+                // Transfer it through the network, and store
+                // locally.
+                Utils.downloadFile(Paths.get(path), dxFile)
+                remoteFiles.remove(path)
+            case None => ()
+        }
+
+        // The file is on the local disk, we can read it with regular IO
         Utils.readFileContent(Paths.get(path))
+    }
 
     override def writeTempFile(path: String,
                                prefix: String,

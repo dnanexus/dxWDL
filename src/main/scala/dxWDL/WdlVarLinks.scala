@@ -74,19 +74,19 @@ object WdlVarLinks {
         }
     }
 
-    private def wdlFileOfDxLink(jsValue : JsValue) : WdlValue = {
+    private def wdlFileOfDxLink(jsValue: JsValue, force: Boolean) : WdlValue = {
         // Download the file, and place it in a local file, with the
         // same name as the platform. All files have to be downloaded
         // into the same directory; the only exception we make is for
         // disambiguation purposes.
-        val dxfile = dxFileOfJsValue(jsValue)
-        val fName = dxfile.describe().getName()
+        val dxFile = dxFileOfJsValue(jsValue)
+        val fName = dxFile.describe().getName()
         val shortPath = Utils.inputFilesDirPath.resolve(fName)
         val path : Path =
             if (Files.exists(shortPath)) {
                 // Short path already exists. Note: this check is brittle in the case
                 // of concurrent downloads.
-                val fid = dxfile.getId()
+                val fid = dxFile.getId()
                 System.err.println(s"Disambiguating file ${fid} with name ${fName}")
                 val dir:Path = Utils.inputFilesDirPath.resolve(fid)
                 Utils.safeMkdir(dir)
@@ -94,17 +94,27 @@ object WdlVarLinks {
             } else {
                 shortPath
             }
-        Utils.downloadFile(path, dxfile)
+        if (force) {
+            // Download right now
+            Utils.downloadFile(path, dxFile)
+        } else {
+            // Create an empty file, to mark the fact that the path and
+            // file name are in use. We may not end up downloading the
+            // file, and accessing the data, however, we need to keep
+            // the path in the WdlFile value unique.
+            Files.createFile(path)
+            DxFunctions.registerRemoteFile(path.toString, dxFile)
+        }
         WdlSingleFile(path.toString)
     }
 
-    private def evalPrimitive(wdlType: WdlType, jsValue: JsValue) : WdlValue = {
+    private def evalPrimitive(wdlType: WdlType, jsValue: JsValue, force: Boolean) : WdlValue = {
         (wdlType, jsValue)  match {
             case (WdlBooleanType, JsBoolean(b)) => WdlBoolean(b.booleanValue)
             case (WdlIntegerType, JsNumber(bnm)) => WdlInteger(bnm.intValue)
             case (WdlFloatType, JsNumber(bnm)) => WdlFloat(bnm.doubleValue)
             case (WdlStringType, JsString(s)) => WdlString(s)
-            case (WdlFileType, _) => wdlFileOfDxLink(jsValue)
+            case (WdlFileType, _) => wdlFileOfDxLink(jsValue, force)
 
             // One dimensional arrays
             case (WdlArrayType(WdlBooleanType), JsArray(ba)) =>
@@ -133,15 +143,15 @@ object WdlVarLinks {
                          })
             case (WdlArrayType(WdlFileType), JsArray(fa)) =>
                 WdlArray(WdlArrayType(WdlFileType),
-                         fa.map(x => wdlFileOfDxLink(x)))
+                         fa.map(x => wdlFileOfDxLink(x, force)))
 
             case _ => throw new AppInternalException("Unsupported type ${wdlType}")
         }
     }
 
-    // Calculate a WdlValue from the dx-links structure. This will
-    // download any files included in this structure.
-    def eval(wvl: WdlVarLinks) : WdlValue = {
+    // Calculate a WdlValue from the dx-links structure. If [force] is true,
+    // any files included in the structure will be downloaded.
+    def eval(wvl: WdlVarLinks, force: Boolean) : WdlValue = {
         val jsValue: JsValue = wvl.dxlink match {
             case DxlJsValue(jsn) => jsn
             case _ =>
@@ -155,7 +165,7 @@ object WdlVarLinks {
                    | WdlArrayType(WdlIntegerType)
                    | WdlArrayType(WdlFloatType)
                    | WdlArrayType(WdlStringType)
-                   | WdlArrayType(WdlFileType) => evalPrimitive(wvl.wdlType, jsValue)
+                   | WdlArrayType(WdlFileType) => evalPrimitive(wvl.wdlType, jsValue, force)
 
             // ragged arrays, we already downloaded the file, now we need
             // to make sense of the JSON data
@@ -167,7 +177,9 @@ object WdlVarLinks {
                             case _ => throw new AppInternalException(
                                 "WDL ragged array not encoded as json array")
                         }
-                        val wl: List[WdlValue] = l.map(jsElem => evalPrimitive(WdlArrayType(t), jsElem))
+                        val wl: List[WdlValue] = l.map(jsElem =>
+                            evalPrimitive(WdlArrayType(t), jsElem, force)
+                        )
                         WdlArray(WdlArrayType(WdlArrayType(t)), wl)
 
                     case _ => throw new AppInternalException(s"unsupported type ${wvl.wdlType}")
@@ -402,18 +414,5 @@ object WdlVarLinks {
                     Some(key -> wvl)
             }
         }.flatten.toMap
-    }
-
-    // Read the job-inputs JSON file, and convert the variables
-    // to WDL values.
-    def loadJobInputs(inputLines : String, closureTypes : Map[String, Option[WdlType]]) :
-            Map[String, WdlValue] = {
-        // Load in a lazy fashion, without downloading files
-        val m: Map[String, WdlVarLinks] = loadJobInputsAsLinks(inputLines, closureTypes)
-
-        // convert to WDL values
-        m.map{ case (key, wvl) =>
-            key -> eval(wvl)
-        }.toMap
     }
 }

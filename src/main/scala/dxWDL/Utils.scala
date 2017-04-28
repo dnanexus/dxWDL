@@ -37,7 +37,7 @@ class UnboundVariableException private(ex: RuntimeException) extends RuntimeExce
 }
 
 object Utils {
-    val VERSION = "0.21"
+    val VERSION = "0.22"
 
     // Long strings cause problems with bash and the UI
     val MAX_STRING_LEN = 8 * 1024
@@ -374,7 +374,7 @@ object Utils {
                 if (DXPY_FILE_TRANSFER) {
                     // Use dx download
                     val dxDownloadCmd = s"dx download ${fid} -o ${path.toString()}"
-                    println(s"--  ${dxDownloadCmd}")
+                    System.err.println(s"--  ${dxDownloadCmd}")
                     val (outmsg, errmsg) = execCommand(dxDownloadCmd)
                 } else {
                     // downloading with java
@@ -397,7 +397,7 @@ object Utils {
         var rc = false
         var counter = 0
         while (!rc && counter < DOWNLOAD_RETRY_LIMIT) {
-            println(s"downloading file ${path.toString} (try=${counter})")
+            System.err.println(s"downloading file ${path.toString} (try=${counter})")
             rc = downloadOneFile(path, dxfile, counter)
             counter = counter + 1
         }
@@ -425,7 +425,7 @@ object Utils {
                 if (DXPY_FILE_TRANSFER) {
                     // shell out to dx upload
                     val dxUploadCmd = s"dx upload ${path.toString} --brief"
-                    println(s"--  ${dxUploadCmd}")
+                    System.err.println(s"--  ${dxUploadCmd}")
                     val (outmsg, errmsg) = execCommand(dxUploadCmd)
                     if (!outmsg.startsWith("file-"))
                         return None
@@ -450,7 +450,7 @@ object Utils {
 
         var counter = 0
         while (counter < UPLOAD_RETRY_LIMIT) {
-            println(s"upload file ${path.toString} (try=${counter})")
+            System.err.println(s"upload file ${path.toString} (try=${counter})")
             uploadOneFile(path, counter) match {
                 case Some(fid) =>
                     val v = s"""{ "$$dnanexus_link": "${fid}" }"""

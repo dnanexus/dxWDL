@@ -44,7 +44,7 @@ object RunnerEval {
             inputs.map{ case (key, wvl) => key -> (wvl, None) }.toMap
 
         def evalAndCache(key: String, wvl: WdlVarLinks) : WdlValue = {
-            val v: WdlValue = WdlVarLinks.eval(wvl)
+            val v: WdlValue = WdlVarLinks.eval(wvl, false)
             env = env + (key -> (wvl, Some(v)))
             v
         }
