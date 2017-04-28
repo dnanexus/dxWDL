@@ -234,7 +234,12 @@ object RunnerTask {
 
         // Read the job input file
         val inputLines : String = Utils.readFileContent(jobInputPath)
-        val inputs = WdlVarLinks.loadJobInputs(inputLines, inputTypes)
+        var inputWvls = WdlVarLinks.loadJobInputsAsLinks(inputLines, inputTypes)
+
+        // convert to WDL values
+        val inputs = inputWvls.map{ case (key, wvl) =>
+            key -> WdlVarLinks.eval(wvl)
+        }.toMap
         prologCore(task, inputs)
     }
 

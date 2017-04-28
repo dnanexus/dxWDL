@@ -79,14 +79,14 @@ object WdlVarLinks {
         // same name as the platform. All files have to be downloaded
         // into the same directory; the only exception we make is for
         // disambiguation purposes.
-        val dxfile = dxFileOfJsValue(jsValue)
-        val fName = dxfile.describe().getName()
+        val dxFile = dxFileOfJsValue(jsValue)
+        val fName = dxFile.describe().getName()
         val shortPath = Utils.inputFilesDirPath.resolve(fName)
         val path : Path =
             if (Files.exists(shortPath)) {
                 // Short path already exists. Note: this check is brittle in the case
                 // of concurrent downloads.
-                val fid = dxfile.getId()
+                val fid = dxFile.getId()
                 System.err.println(s"Disambiguating file ${fid} with name ${fName}")
                 val dir:Path = Utils.inputFilesDirPath.resolve(fid)
                 Utils.safeMkdir(dir)
@@ -94,7 +94,12 @@ object WdlVarLinks {
             } else {
                 shortPath
             }
-        Utils.downloadFile(path, dxfile)
+        // Create an empty file, to mark the fact that the path and
+        // file name are in use. We may not end up downloading the
+        // file, and accessing the data, however, we need to keep
+        // the path in the WdlFile value unique.
+        Files.createFile(path)
+        DxFunctions.registerRemoteFile(path.toString, dxFile)
         WdlSingleFile(path.toString)
     }
 
@@ -402,18 +407,5 @@ object WdlVarLinks {
                     Some(key -> wvl)
             }
         }.flatten.toMap
-    }
-
-    // Read the job-inputs JSON file, and convert the variables
-    // to WDL values.
-    def loadJobInputs(inputLines : String, closureTypes : Map[String, Option[WdlType]]) :
-            Map[String, WdlValue] = {
-        // Load in a lazy fashion, without downloading files
-        val m: Map[String, WdlVarLinks] = loadJobInputsAsLinks(inputLines, closureTypes)
-
-        // convert to WDL values
-        m.map{ case (key, wvl) =>
-            key -> eval(wvl)
-        }.toMap
     }
 }
