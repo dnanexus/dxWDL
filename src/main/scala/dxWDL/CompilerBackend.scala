@@ -4,11 +4,13 @@ package dxWDL
 
 // DX bindings
 import com.fasterxml.jackson.databind.JsonNode
-import com.dnanexus.{DXWorkflow, DXApplet, DXProject, DXJSON, DXSearch, DXUtil}
+import com.dnanexus.{DXApplet, DXDataObject, DXJSON, DXProject, DXSearch, DXUtil, DXWorkflow}
 import java.nio.file.{Files, Paths, Path}
+import java.security.MessageDigest
+import scala.collection.JavaConverters._
 import spray.json._
 import spray.json.DefaultJsonProtocol
-import Utils.WDL_SNIPPET_FILENAME
+import Utils.{WDL_CODE_CHECKSUM_PROP, WDL_SNIPPET_FILENAME}
 import wdl4s.expression.{NoFunctions, WdlStandardLibraryFunctionsType}
 import wdl4s.parser.WdlParser.Ast
 import wdl4s.types._
@@ -23,6 +25,7 @@ object CompilerBackend {
                      dxProject: DXProject,
                      folder: String,
                      cef: CompilerErrorFormatter,
+                     force: Boolean,
                      verbose: Boolean)
 
     // For primitive types, and arrays of such types, we can map directly
@@ -282,10 +285,25 @@ object CompilerBackend {
         throw new Exception(s"Failed to build applet ${appletFqn}")
     }
 
+
+    // Calculate the MD5 checksum of a string
+    def chksum(s: String) : String = {
+        val digest = MessageDigest.getInstance("MD5").digest(s.getBytes)
+        digest.map("%02X" format _).mkString
+    }
+
+    // Add a checksum for the WDL code as a property of the applet.
+    // This allows to quickly check if the WDL code has changed, and a
+    // rebuild is required.
+    def checksumApplet(dxApl: DXApplet, applet: IR.Applet) : Unit = {
+        val wdlCodeChksum = chksum(applet.wdlCode)
+        dxApl.putProperty(WDL_CODE_CHECKSUM_PROP, wdlCodeChksum)
+    }
+
     // Compile a WDL snippet into an applet.
     //
-    // Write the WDL code to a file, and generate a bash applet to
-    // run it on the platform.
+    // Write the WDL code to a file, and generate a bash applet to run
+    // it on the platform.
     def buildApplet(applet: IR.Applet,
                     appletDict: Map[String, DXApplet],
                     cState: State) : (DXApplet, Vector[IR.CVar]) = {
@@ -317,8 +335,61 @@ object CompilerBackend {
         }
         // create a directory structure for this applet
         val appletDir = createAppletDirStruct(applet, aplLinks, json)
-        val dxapp = dxBuildApp(appletDir, applet.name, cState.folder, cState)
-        (dxapp, applet.outputs)
+        val dxApl = dxBuildApp(appletDir, applet.name, cState.folder, cState)
+        checksumApplet(dxApl, applet)
+        (dxApl, applet.outputs)
+    }
+
+    // Rebuild the applet if needed.
+    //
+    // When [force] is true, always rebuild. Otherwise, rebuild only
+    // if the WDL code has changed.
+    def buildAppletIfNeeded(applet: IR.Applet,
+                            appletDict: Map[String, DXApplet],
+                            cState: State) : (DXApplet, Vector[IR.CVar]) = {
+        // Search for existing applets on the platform, in the same path
+        var existingApl: List[DXApplet] = DXSearch.findDataObjects().nameMatchesExactly(applet.name)
+            .inFolder(cState.dxProject, cState.folder).withClassApplet().execute().asList()
+            .asScala.toList
+        if (cState.force) {
+            // Remove old applet(s), if it exists
+            cState.dxProject.removeObjects(existingApl.asJava)
+            existingApl = List.empty[DXApplet]
+        }
+
+        val buildRequired =
+            if (existingApl.size == 0) {
+                true
+            } else if (existingApl.size == 1) {
+                // Check if the WDL code has changed
+                //
+                // TODO, check that other things have not changed either.
+                val dxApl = existingApl.head
+                val props: Map[String, String] = dxApl.describe().getProperties().asScala.toMap
+                props.get(WDL_CODE_CHECKSUM_PROP) match {
+                    case None =>
+                        System.err.println(s"No checksum found for applet ${applet.name} ${dxApl.getId()}, rebuilding")
+                        true
+                    case Some(dxAplChksum) =>
+                        val wdlCodeChksum = chksum(applet.wdlCode)
+                        Utils.trace(cState.verbose,
+                                    s"""|Applet ${applet.name} platform
+                                        |checksum=${dxAplChksum}, local=${wdlCodeChksum}""".stripMargin)
+                        wdlCodeChksum != dxAplChksum
+                }
+            } else {
+                throw new Exception(s"""|More than one applet ${applet.name} found in
+                                        | path ${cState.dxProject.getId()}:${cState.folder}""")
+            }
+
+        if (buildRequired) {
+            // Build the current applet code.
+            buildApplet(applet, appletDict, cState)
+        } else {
+            // Old applet exists, and it has not changed. Return the
+            // applet-id.
+            (existingApl.head, applet.outputs)
+        }
     }
 
     // Calculate the stage inputs from the call closure
@@ -360,10 +431,11 @@ object CompilerBackend {
               dxWDLrtId: String,
               folder: String,
               cef: CompilerErrorFormatter,
+              force: Boolean,
               verbose: Boolean) : DXApplet = {
         Utils.trace(verbose, "Backend pass, single applet")
-        val cState = State(dxWDLrtId, dxProject, folder, cef, verbose)
-        val (dxApplet, _) = buildApplet(applet, Map.empty, cState)
+        val cState = State(dxWDLrtId, dxProject, folder, cef, force, verbose)
+        val (dxApplet, _) = buildAppletIfNeeded(applet, Map.empty, cState)
         dxApplet
     }
 
@@ -373,9 +445,10 @@ object CompilerBackend {
               dxWDLrtId: String,
               folder: String,
               cef: CompilerErrorFormatter,
+              force: Boolean,
               verbose: Boolean) : DXWorkflow = {
         Utils.trace(verbose, "Backend pass")
-        val cState = State(dxWDLrtId, dxProject, folder, cef, verbose)
+        val cState = State(dxWDLrtId, dxProject, folder, cef, force, verbose)
 
         // create fresh workflow
         removeOldWorkflow(wf.name, dxProject, folder)
