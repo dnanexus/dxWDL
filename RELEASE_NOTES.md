@@ -1,5 +1,11 @@
 # Release Notes
 
+## 0.21
+- Adding linking information to applets that call other applets. This
+ensures the correct applet-ids are invoked. No lookup by name
+is performed at runtime.
+- Minor bug fixes
+
 ## 0.20
 - Separate compilation of workflows and tasks. A task is compiled to
 single dx:applet, and a workflow is compiled to auxiliary applets and
