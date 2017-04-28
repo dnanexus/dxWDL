@@ -30,7 +30,6 @@ import scala.collection.JavaConverters._
 import scala.collection.mutable.HashMap
 import spray.json._
 import spray.json.DefaultJsonProtocol
-import spray.json.JsString
 import wdl4s._
 import wdl4s.expression._
 import wdl4s.parser.WdlParser.{Ast, AstNode, Terminal}
@@ -65,26 +64,21 @@ object RunnerScatter {
 
     // find the sequence of applets inside the scatter block. In this example,
     // these are: [inc]
-    def findAppletsInScatterBlock(wf : Workflow,
-                                  scatter : Scatter,
-                                  project : DXProject) : Seq[(Call, DXApplet)] = {
-        val children : Seq[TaskCall] = scatter.children.map {
-            case call: TaskCall => Some(call)
+    def findAppletsInScatterBlock(scatter : Scatter,
+                                  linkInfo: Map[String, DXApplet]) : Seq[(Call, DXApplet)] = {
+        // Match each call with its dx:applet
+        scatter.children.map {
+            case call: TaskCall =>
+                val dxAppletName = call.task.name
+                linkInfo.get(dxAppletName) match {
+                    case Some(dxApplet) => Some((call, dxApplet))
+                    case None =>
+                        throw new AppInternalException(
+                            s"Could not find linking information for ${dxAppletName}")
+                }
             case call: WorkflowCall => throw new Exception("Calling workflows not supported")
             case _ => None
         }.flatten
-
-        // Match each call with its dx:applet
-        children.map { call =>
-            val dxAppletName = call.task.name
-            val applets : List[DXApplet] = DXSearch.findDataObjects().inProject(project).
-                nameMatchesExactly(dxAppletName).withClassApplet().execute().asList().asScala.toList
-            if (applets.size == 0)
-                throw new Exception(s"Could not find applet ${dxAppletName}")
-            if (applets.size > 1)
-                throw new Exception(s"More than one applet called ${dxAppletName} in project ${project.getId()}")
-            (call, applets.head)
-        }
     }
 
     // Evaluate a call input expression, and return a WdlVarLink structure. It
@@ -290,6 +284,42 @@ object RunnerScatter {
         gatherOutputs(scOutputs)
     }
 
+    // Load from disk a mapping of applet name to id. We
+    // need this in order to call the right version of other
+    // applets.
+    def loadLinkInfo(dxProject: DXProject) : Map[String, DXApplet]= {
+        System.err.println(s"Loading link information")
+        val linkSourceFile: Path = Paths.get("/" + Utils.LINK_INFO_FILENAME)
+
+        val linkInfo : Map[String, DXApplet] =
+            if (Files.exists(linkSourceFile)) {
+                val info: String = Utils.readFileContent(linkSourceFile)
+                try {
+                    info.parseJson match {
+                        case JsObject(m) => m.map{
+                            case (key, JsString(appletId)) =>
+                                val dxApplet = DXApplet.getInstance(appletId, dxProject)
+                                key -> dxApplet
+                            case (key, _) =>
+                                throw new AppInternalException(s"Link information contains bad mapping ${info}")
+                        }
+                        case _ =>
+                        throw new AppInternalException(s"Link information is not a JSON object ${info}")
+                    }
+                } catch {
+                    case e : Throwable =>
+                        throw new AppInternalException(s"Link JSON information is badly formatted ${info}")
+                }
+            } else {
+                Map.empty
+            }
+
+        val infoStr: Map[String, String] = linkInfo.map{ case (k,apl) => (k, apl.getId()) }
+        System.err.println(s"load info=${infoStr}")
+        linkInfo
+    }
+
+
     def apply(wf: Workflow,
               jobInputPath : Path,
               jobOutputPath : Path,
@@ -320,8 +350,9 @@ object RunnerScatter {
         }
 
         val dxEnv = DXEnvironment.create()
-        val project = dxEnv.getProjectContext()
-        val applets : Seq[(Call, DXApplet)] = findAppletsInScatterBlock(wf, scatter, project)
+        val dxProject = dxEnv.getProjectContext()
+        val linkInfo = loadLinkInfo(dxProject)
+        val applets : Seq[(Call, DXApplet)] = findAppletsInScatterBlock(scatter, linkInfo)
         val outputs : Map[String, JsValue] = evalScatter(scatter, collElements, applets, outScopeEnv, rState)
 
         // write the outputs to the job_output.json file

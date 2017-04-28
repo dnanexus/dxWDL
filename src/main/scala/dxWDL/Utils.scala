@@ -1,6 +1,6 @@
 package dxWDL
 
-import com.dnanexus.{DXWorkflow, DXApplet, DXFile, DXProject, DXJSON, DXUtil, DXContainer, DXSearch, DXDataObject, InputParameter}
+import com.dnanexus.{DXWorkflow, DXApplet, DXFile, DXProject, DXJSON, DXUtil, DXContainer, DXDataObject, InputParameter}
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.node.ObjectNode
@@ -46,6 +46,7 @@ object Utils {
     val UPLOAD_RETRY_LIMIT = DOWNLOAD_RETRY_LIMIT
     val DXPY_FILE_TRANSFER = true
     val WDL_SNIPPET_FILENAME = "source.wdl"
+    val LINK_INFO_FILENAME = "linking.json"
 
     // Substrings used by the compiler for encoding purposes
     val reservedSubstrings = List("___")

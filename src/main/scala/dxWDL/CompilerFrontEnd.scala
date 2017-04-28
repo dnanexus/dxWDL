@@ -543,7 +543,6 @@ workflow w {
     // Compile a WDL task into an applet
     def compileTask(task : Task, cState: State) : (IR.Applet, Vector[IR.CVar]) = {
         Utils.trace(cState.verbose, s"Compiling task ${task.name}")
-        val appletFqn : String = task.name
 
         // The task inputs are those that do not have expressions
         val inputVars : Vector[IR.CVar] =  task.declarations.map{ decl =>
@@ -566,7 +565,7 @@ workflow w {
         }
         val wdlCode = WdlPrettyPrinter.apply(task, 0).mkString("\n")
         verifyWdlCodeIsLegal(wdlCode)
-        val applet = IR.Applet(appletFqn,
+        val applet = IR.Applet(task.name,
                                inputVars,
                                outputVars,
                                calcInstanceType(Some(task)),
@@ -758,7 +757,7 @@ workflow w {
             case (varName, LinkedVar(cVar, _)) => IR.CVar(varName, cVar.wdlType, cVar.ast)
         }.toVector
         val wdlCode = scGenWorklow(scatter, taskApplets, inputVars, outputVars, cState)
-        val applet = IR.Applet(wf.unqualifiedName ++ "." ++ stageName,
+        val applet = IR.Applet(wf.unqualifiedName ++ "_" ++ stageName,
                                inputVars,
                                outputVars,
                                calcInstanceType(None),
