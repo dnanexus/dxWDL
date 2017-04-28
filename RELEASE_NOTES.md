@@ -1,5 +1,9 @@
 # Release Notes
 
+## 0.22
+- Files are lazily downloaded in auxiliary applets, such as scatters. In
+  tasks/applets, they are always downloaded.
+
 ## 0.21
 - Adding linking information to applets that call other applets. This
 ensures the correct applet-ids are invoked. No lookup by name
