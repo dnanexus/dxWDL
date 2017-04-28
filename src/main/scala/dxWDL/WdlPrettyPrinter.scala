@@ -76,10 +76,7 @@ object WdlPrettyPrinter {
             case Some(nm) => " as " ++ nm
         }
         val inputs: Seq[String] = call.inputMappings.map { case (key, expr) =>
-            val rhs = expr.ast match {
-                case t: Terminal => t.getSourceString
-                case a: Ast => WdlExpression.toString(a)
-            }
+            val rhs = WdlExpression.toString(expr.ast)
             s"${key}=${rhs}"
         }.toList
         val inputsVec: Vector[String] =
