@@ -444,7 +444,7 @@ def register_all_tests(project):
                              "add2.sum": 24})
 
     # Massive tests
-    register_test("gatk_160927",
+    register_test("gatk_170412",
                   lambda x: gatk_gen_inputs(project),
                   lambda x: {})
 
