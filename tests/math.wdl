@@ -9,6 +9,7 @@ task Add {
     }
     output {
         Int result = a + b
+        Int result2 = a - b
     }
 }
 

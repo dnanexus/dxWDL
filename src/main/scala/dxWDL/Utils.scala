@@ -45,6 +45,7 @@ object Utils {
     val DOWNLOAD_RETRY_LIMIT = 3
     val UPLOAD_RETRY_LIMIT = DOWNLOAD_RETRY_LIMIT
     val DXPY_FILE_TRANSFER = true
+    val CHECKSUM_PROP = "dxWDL_checksum"
     val WDL_SNIPPET_FILENAME = "source.wdl"
     val LINK_INFO_FILENAME = "linking.json"
 

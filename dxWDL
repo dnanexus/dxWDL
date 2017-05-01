@@ -28,6 +28,8 @@ def main():
     argparser.add_argument("--mode", help="Compilation mode, a debugging flag")
     argparser.add_argument("--verbose", dest='verbose', action='store_true', default=False,
                            help="Print detailed progress reports")
+    argparser.add_argument("--force", dest='force', action='store_true', default=False,
+                           help="Always rebuild applets")
     args = argparser.parse_args()
 
     if args.command == "compile":
@@ -60,7 +62,7 @@ def cmd_compile(args):
         version_id = version_id.strip()
         validate_library_version(version_id, classpath)
         validate_asset_version(version_id, asset_id)
-    compile_workflow(args.wdl_file, destination, asset_id, classpath, args.verbose, args.mode)
+    compile_workflow(args.wdl_file, destination, asset_id, classpath, args.force, args.verbose, args.mode)
 
 
 # Check if the local library has the correct version
@@ -94,7 +96,7 @@ def validate_asset_version(version_id, asset_id):
 # destination    output path on the platform
 #
 # return --      workflow ID
-def compile_workflow(wf_file, destination, asset_id, classpath, verbose, mode):
+def compile_workflow(wf_file, destination, asset_id, classpath, force, verbose, mode):
     print("Compiling {}".format(wf_file), file=sys.stderr)
     cmd_line = [
         "java", "-cp", classpath, "dxWDL.Main", "compile", wf_file,
@@ -103,6 +105,8 @@ def compile_workflow(wf_file, destination, asset_id, classpath, verbose, mode):
     ]
     if version_id is not None:
         cmd_line += ["-expected_version", version_id]
+    if force:
+        cmd_line += ["-force"]
     if verbose:
         cmd_line += ["-verbose"]
     if mode:

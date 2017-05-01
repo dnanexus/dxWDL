@@ -120,6 +120,11 @@ object Main extends App {
             case Some(_) => true
         }
 
+        val force = options.get("force") match {
+            case None => false
+            case Some(_) => true
+        }
+
         // deal with the various options
         val destination : String = options.get("destination") match {
             case None => ""
@@ -179,7 +184,7 @@ object Main extends App {
                     case None =>
                         val dxApplets = irApplets.map(x =>
                             CompilerBackend.apply(x, dxProject, dxWDLrtId,
-                                                  folder, cef, verbose)
+                                                  folder, cef, force, verbose)
                         )
                         val ids: Seq[String] = dxApplets.map(x => x.getId())
                         ids.mkString(", ")
@@ -193,7 +198,7 @@ object Main extends App {
                 mode match {
                     case None =>
                         val dxwfl = CompilerBackend.apply(iRepWf, dxProject, dxWDLrtId,
-                                                          folder, cef, verbose)
+                                                          folder, cef, force, verbose)
                         dxwfl.getId()
                     case Some(x) if x.toLowerCase == "fe" => "workflow-xxxx"
                     case _ => throw new Exception(s"Unknown mode ${mode}")
@@ -222,6 +227,8 @@ object Main extends App {
                         nextOption(map ++ Map("mode" -> value.toString), tail)
                     case "-verbose" :: tail =>
                         nextOption(map ++ Map("verbose" -> ""), tail)
+                    case "-force" :: tail =>
+                        nextOption(map ++ Map("force" -> ""), tail)
                     case option :: tail =>
                         throw new IllegalArgumentException(s"Unknown option ${option}")
 
@@ -311,7 +318,7 @@ object Main extends App {
            |  syntax tree.
            |
            |compile <WDL file> <-asset dxId> [-o targetPath] [-expected_version vid] [-verbose]
-           |       [-mode debug_flag]
+           |       [-force] [-mode debug_flag]
            |
            |  Compile a wdl file into a dnanexus workflow. An asset
            |  ID for the dxWDL runtime is required. Optionally, specify a
