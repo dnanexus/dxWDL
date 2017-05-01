@@ -10,7 +10,7 @@ import java.security.MessageDigest
 import scala.collection.JavaConverters._
 import spray.json._
 import spray.json.DefaultJsonProtocol
-import Utils.{WDL_CODE_CHECKSUM_PROP, WDL_SNIPPET_FILENAME}
+import Utils.{CHECKSUM_PROP, WDL_SNIPPET_FILENAME}
 import wdl4s.expression.{NoFunctions, WdlStandardLibraryFunctionsType}
 import wdl4s.parser.WdlParser.Ast
 import wdl4s.types._
@@ -18,6 +18,8 @@ import wdl4s.values._
 import WdlVarLinks._
 
 object CompilerBackend {
+    val MAX_NUM_RETRIES = 5
+    val MAX_SLEEP_SEC = 30
 
     // Compiler state.
     // Packs common arguments passed between methods.
@@ -165,9 +167,9 @@ object CompilerBackend {
         val oldWf = DXSearch.findDataObjects().nameMatchesExactly(wfName)
             .inFolder(dxProject, folder).withClassWorkflow().execute().asList()
         dxProject.removeObjects(oldWf)
-        val oldApplets = DXSearch.findDataObjects().nameMatchesGlob(wfName + "_*")
-            .inFolder(dxProject, folder).withClassApplet().execute().asList()
-        dxProject.removeObjects(oldApplets)
+//        val oldApplets = DXSearch.findDataObjects().nameMatchesGlob(wfName + "_*")
+//            .inFolder(dxProject, folder).withClassApplet().execute().asList()
+//        dxProject.removeObjects(oldApplets)
     }
 
     // create a directory structure for this applet
@@ -180,6 +182,9 @@ object CompilerBackend {
     // For applets that call other applets, we pass a directory
     // of the callees, so they could be found a runtime. This is
     // equivalent to linking, in a standard C compiler.
+    //
+    // Calculate a checksum of the inputs that went into the making of the applet.
+    // This helps
     def createAppletDirStruct(applet: IR.Applet,
                               aplLinks: Map[String, DXApplet],
                               appJson : JsObject) : Path = {
@@ -215,7 +220,6 @@ object CompilerBackend {
 
         // write the dxapp.json
         Utils.writeFileContent(appletDir.resolve("dxapp.json"), appJson.prettyPrint)
-
         appletDir
     }
 
@@ -242,13 +246,13 @@ object CompilerBackend {
     // Perform a "dx build" on a local directory representing an applet
     //
     def dxBuildApp(appletDir : Path,
-                   appletFqn : String,
+                   appletName : String,
                    folder : String,
                    cState: State) : DXApplet = {
-        Utils.trace(cState.verbose, s"Building applet ${appletFqn}")
+        Utils.trace(cState.verbose, s"Building applet ${appletName}")
         val path =
-            if (folder.endsWith("/")) (folder ++ appletFqn)
-            else (folder ++ "/" ++ appletFqn)
+            if (folder.endsWith("/")) (folder ++ appletName)
+            else (folder ++ "/" ++ appletName)
         val pId = cState.dxProject.getId()
         val dest =
             if (path.startsWith("/")) pId ++ ":" ++ path
@@ -264,7 +268,7 @@ object CompilerBackend {
                 // extract the appID from the output
                 val app : JsObject = outstr.parseJson.asJsObject
                 app.fields("id") match {
-                    case JsString(appId) => Some(DXApplet.getInstance(appId))
+                    case JsString(appId) => Some(DXApplet.getInstance(appId, cState.dxProject))
                     case _ => None
                 }
             } catch {
@@ -272,17 +276,21 @@ object CompilerBackend {
             }
         }
 
-        // Try several times to do the build
-        for (i <- 1 to 5) {
+        // Retry the build operation with exponential backoff
+        var retrySleepSec = 2
+        for (i <- 1 to MAX_NUM_RETRIES) {
             build() match {
                 case None => ()
                 case Some(dxApp) => return dxApp
             }
             System.err.println(s"Build attempt ${i} failed")
-            System.err.println(s"Sleeping for 10 seconds")
-            Thread.sleep(10000)
+            if (i < MAX_NUM_RETRIES) {
+                System.err.println(s"Sleeping for ${retrySleepSec} seconds")
+                Thread.sleep(retrySleepSec * 1000)
+                retrySleepSec = Math.min(MAX_SLEEP_SEC, retrySleepSec*2)
+            }
         }
-        throw new Exception(s"Failed to build applet ${appletFqn}")
+        throw new Exception(s"Failed to build applet ${appletName}")
     }
 
 
@@ -292,21 +300,27 @@ object CompilerBackend {
         digest.map("%02X" format _).mkString
     }
 
-    // Add a checksum for the WDL code as a property of the applet.
-    // This allows to quickly check if the WDL code has changed, and a
-    // rebuild is required.
-    def checksumApplet(dxApl: DXApplet, applet: IR.Applet) : Unit = {
-        val wdlCodeChksum = chksum(applet.wdlCode)
-        dxApl.putProperty(WDL_CODE_CHECKSUM_PROP, wdlCodeChksum)
+    // Concatenate all the files in the directory into a string, and
+    // checksum the string. We assume the files are small enough to
+    // fit in memory, and that the directory structure does not
+    // matter, only file content. This is sufficient for our purposes.
+    def checksumDirectory(path: Path, cState: State) : String = {
+        val dir = path.toFile
+        val content = dir.listFiles.map{ file =>
+            if (file.isFile)
+                Utils.readFileContent(file.toPath)
+            else
+                ""
+        }
+        chksum(content.mkString(""))
     }
 
-    // Compile a WDL snippet into an applet.
-    //
+
     // Write the WDL code to a file, and generate a bash applet to run
     // it on the platform.
-    def buildApplet(applet: IR.Applet,
-                    appletDict: Map[String, DXApplet],
-                    cState: State) : (DXApplet, Vector[IR.CVar]) = {
+    def localBuildApplet(applet: IR.Applet,
+                         appletDict: Map[String, DXApplet],
+                         cState: State) : Path = {
         Utils.trace(cState.verbose, s"Compiling applet ${applet.name}")
         val inputSpec : Seq[JsValue] = applet.inputs.map(cVar =>
             wdlVarToSpec(cVar.dxVarName, cVar.wdlType, cVar.ast, cState)
@@ -334,10 +348,7 @@ object CompilerBackend {
             case _ => Map.empty[String, DXApplet]
         }
         // create a directory structure for this applet
-        val appletDir = createAppletDirStruct(applet, aplLinks, json)
-        val dxApl = dxBuildApp(appletDir, applet.name, cState.folder, cState)
-        checksumApplet(dxApl, applet)
-        (dxApl, applet.outputs)
+        createAppletDirStruct(applet, aplLinks, json)
     }
 
     // Rebuild the applet if needed.
@@ -351,31 +362,43 @@ object CompilerBackend {
         var existingApl: List[DXApplet] = DXSearch.findDataObjects().nameMatchesExactly(applet.name)
             .inFolder(cState.dxProject, cState.folder).withClassApplet().execute().asList()
             .asScala.toList
-        if (cState.force) {
-            // Remove old applet(s), if it exists
+        if (cState.force && existingApl.size > 0) {
+            // Remove old applet
+            Utils.trace(cState.verbose,
+                        s"[Force] Removing old applet ${applet.name} ${existingApl}")
             cState.dxProject.removeObjects(existingApl.asJava)
             existingApl = List.empty[DXApplet]
         }
 
+        // Build an applet structure locally
+        val appletDir = localBuildApplet(applet, appletDict, cState)
+        val digest = checksumDirectory(appletDir, cState)
+
         val buildRequired =
             if (existingApl.size == 0) {
+                if (!cState.force) {
+                    Utils.trace(cState.verbose,
+                                s"No previous version of applet ${applet.name} exists")
+                }
                 true
             } else if (existingApl.size == 1) {
-                // Check if the WDL code has changed
-                //
-                // TODO, check that other things have not changed either.
+                // Check if applet code has changed
                 val dxApl = existingApl.head
-                val props: Map[String, String] = dxApl.describe().getProperties().asScala.toMap
-                props.get(WDL_CODE_CHECKSUM_PROP) match {
+                val desc: DXApplet.Describe = dxApl.describe(
+                    DXDataObject.DescribeOptions.get().withProperties())
+                val props: Map[String, String] = desc.getProperties().asScala.toMap
+                props.get(CHECKSUM_PROP) match {
                     case None =>
                         System.err.println(s"No checksum found for applet ${applet.name} ${dxApl.getId()}, rebuilding")
                         true
                     case Some(dxAplChksum) =>
-                        val wdlCodeChksum = chksum(applet.wdlCode)
-                        Utils.trace(cState.verbose,
-                                    s"""|Applet ${applet.name} platform
-                                        |checksum=${dxAplChksum}, local=${wdlCodeChksum}""".stripMargin)
-                        wdlCodeChksum != dxAplChksum
+                        if (digest != dxAplChksum) {
+                            Utils.trace(cState.verbose, "Applet has changed, rebuild required")
+                            true
+                        } else {
+                            Utils.trace(cState.verbose, "Applet has not changed")
+                            false
+                        }
                 }
             } else {
                 throw new Exception(s"""|More than one applet ${applet.name} found in
@@ -383,8 +406,14 @@ object CompilerBackend {
             }
 
         if (buildRequired) {
-            // Build the current applet code.
-            buildApplet(applet, appletDict, cState)
+            // Compile a WDL snippet into an applet.
+            val dxApplet = dxBuildApp(appletDir, applet.name, cState.folder, cState)
+
+            // Add a checksum for the WDL code as a property of the applet.
+            // This allows to quickly check if anything has changed, saving
+            // unnecessary builds.
+            dxApplet.putProperty(CHECKSUM_PROP, digest)
+            (dxApplet, applet.outputs)
         } else {
             // Old applet exists, and it has not changed. Return the
             // applet-id.
@@ -463,7 +492,7 @@ object CompilerBackend {
         val appletDict = wf.applets.foldLeft(initAppletDict) {
             case (appletDict, a) =>
                 val aplDir = appletDict.map{ case (key, (irApl, apl)) => (key, apl) }
-                val (dxApplet, _) = buildApplet(a, aplDir, cState)
+                val (dxApplet, _) = buildAppletIfNeeded(a, aplDir, cState)
                 Utils.trace(cState.verbose, s"Applet ${a.name} = ${dxApplet.getId()}")
                 appletDict + (a.name -> (a, dxApplet))
         }.toMap
