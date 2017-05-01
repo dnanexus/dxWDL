@@ -1,5 +1,9 @@
 # Release Notes
 
+## 0.23
+- Rebuild an applet, only if the source code has changed. For example,
+if an applet's WDL code changed, it will be rebuilt in the next compilation.
+
 ## 0.22
 - Files are lazily downloaded in auxiliary applets, such as scatters. In
   tasks/applets, they are always downloaded.
