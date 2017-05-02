@@ -19,7 +19,7 @@ task Add {
 package dxWDL
 
 // DX bindings
-import com.dnanexus.{DXFile, DXProject, DXEnvironment, DXApplet}
+import com.dnanexus.{DXFile, DXProject, DXApplet}
 
 import java.nio.file.{Path, Paths, Files}
 import scala.collection.JavaConverters._
@@ -35,8 +35,6 @@ import wdl4s.{Call, Declaration, WdlNamespaceWithWorkflow, Task, WdlExpression, 
 import wdl4s.WdlExpression.AstForExpressions
 
 object RunnerTask {
-    lazy val dxEnv = DXEnvironment.create()
-
     def getMetaDir() = {
         val metaDir = Utils.getMetaDirPath()
         Utils.safeMkdir(metaDir)
@@ -195,19 +193,6 @@ object RunnerTask {
             }
         System.err.println(s"writing bash script to ${scriptPath}")
         Utils.writeFileContent(scriptPath, script)
-    }
-
-    def getCall(wf: Workflow, desc: DXApplet.Describe) : Call = {
-        // Query the platform the the applet name
-        val appFQName : String = desc.getName()
-        // It has a fully qualified name A.B, extract the last component (B)
-        val appName = appFQName.split("\\.").last
-
-        val call : Call = wf.findCallByName(appName) match {
-            case None => throw new AppInternalException(s"Call ${appName} not found in WDL file")
-            case Some(call) => call
-        }
-        call
     }
 
     def prologCore(task: Task, inputs: Map[String, WdlValue]) : Unit = {

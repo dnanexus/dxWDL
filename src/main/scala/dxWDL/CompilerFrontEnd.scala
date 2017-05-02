@@ -20,8 +20,7 @@ import wdl4s.WdlExpression.AstForExpressions
 
 object CompilerFrontEnd {
     class DynamicInstanceTypesException private(ex: Exception) extends RuntimeException(ex) {
-        def this() = this(new RuntimeException(
-                              "Only runtime constants are supported, currently, instance types should be known at compile time."))
+        def this() = this(new RuntimeException("Runtime instance type calculation required"))
     }
 
     // Linking between a variable, and which stage we got
@@ -83,14 +82,6 @@ object CompilerFrontEnd {
     }
 
     def genDefaultValueOfType(wdlType: WdlType) : WdlValue = {
-        /*def primitive(t: WdlType) : WdlValue = {
-            case WdlBooleanType => WdlBoolean(true)
-            case WdlIntegerType => WdlInteger(0)
-            case WdlFloatType => WdlFloat(0.0)
-            case WdlStringType => WdlString("")
-            case WdlFileType => WdlFile("/tmp/X.txt")
-            case _ => throw new Exception(s"Non primitive value ${t.toWdlString}")
-        }*/
         wdlType match {
             case WdlArrayType(x) => WdlArray(WdlArrayType(x), List())  // an empty array
             case WdlBooleanType => WdlBoolean(true)
@@ -222,42 +213,36 @@ task Add {
     // that, in the general case, could be calculated only at runtime.
     // Currently, we support only constants. If a runtime expression is used,
     // we convert it to a moderatly high constant.
-    def calcInstanceType(taskOpt: Option[Task]) : String = {
+    def calcInstanceType(taskOpt: Option[Task]) : IR.InstanceTypeSpec = {
         def lookup(varName : String) : WdlValue = {
             throw new DynamicInstanceTypesException()
         }
-        def evalAttr(task: Task, attrName: String, defaultValue: WdlValue) : Option[WdlValue] = {
+        def evalAttr(task: Task, attrName: String) : Option[WdlValue] = {
             task.runtimeAttributes.attrs.get(attrName) match {
                 case None => None
                 case Some(expr) =>
-                    try {
-                        Some(expr.evaluate(lookup, NoFunctions).get)
-                    } catch {
-                        case e : DynamicInstanceTypesException =>
-                            val v = Some(defaultValue)
-                            System.err.println(
-                                s"""|Warning: runtime expressions are used in
-                                    |task ${task.name}, but are currently not supported.
-                                    |Default ${defaultValue} substituted for
-                                    |attribute ${attrName}."""
-                                    .stripMargin.trim)
-                            Some(defaultValue)
-                    }
+                    Some(expr.evaluate(lookup, NoFunctions).get)
             }
         }
 
-        taskOpt match {
-            case None =>
-                // A utility calculation, that requires minimal computing resources.
-                // For example, the top level of a scatter block. We use
-                // the default instance type, because one will probably be available,
-                // and it will probably be inexpensive.
-                InstanceTypes.getMinimalInstanceType()
-            case Some(task) =>
-                val memory = evalAttr(task, "memory", WdlString("60 GB"))
-                val diskSpace = evalAttr(task, "disks", WdlString("local-disk 400 HDD"))
-                val cores = evalAttr(task, "cpu", WdlInteger(8))
-                InstanceTypes.apply(memory, diskSpace, cores)
+        try {
+            taskOpt match {
+                case None =>
+                    // A utility calculation, that requires minimal computing resources.
+                    // For example, the top level of a scatter block. We use
+                    // the default instance type, because one will probably be available,
+                    // and it will probably be inexpensive.
+                    IR.InstTypeDefault
+                case Some(task) =>
+                    val memory = evalAttr(task, "memory")
+                    val diskSpace = evalAttr(task, "disks")
+                    val cores = evalAttr(task, "cpu")
+                    IR.InstTypeConst(InstanceTypes.apply(memory, diskSpace, cores))
+            }
+        } catch {
+            case e : DynamicInstanceTypesException =>
+                // The generated code will need to calculate the instance type at runtime
+                IR.InstTypeRuntime
         }
     }
 

@@ -225,7 +225,7 @@ object CompilerBackend {
 
     // Set the run spec.
     //
-    def calcRunSpec(iType : String, dxWDLrtId: String) : JsValue = {
+    def calcRunSpec(iType: IR.InstanceTypeSpec, dxWDLrtId: String) : JsValue = {
         // find the dxWDL asset
         val runSpec: Map[String, JsValue] = Map(
             "interpreter" -> JsString("bash"),
@@ -236,10 +236,15 @@ object CompilerBackend {
                 JsObject("id" -> JsString(dxWDLrtId))
             )
         )
-        val instanceType: Map[String, JsValue] =
-            Map("systemRequirements" ->
-                    JsObject("main" ->
-                                 JsObject("instanceType" -> JsString(iType))))
+
+        val instanceType: Map[String, JsValue] = iType match {
+            case IR.InstTypeDefault => Map()
+            case IR.InstTypeConst(x) =>
+                Map("systemRequirements" ->
+                        JsObject("main" ->
+                                     JsObject("instanceType" -> JsString(x))))
+            case IR.InstTypeRuntime => Map()
+        }
         JsObject(runSpec ++ instanceType)
     }
 

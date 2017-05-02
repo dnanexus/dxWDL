@@ -440,7 +440,7 @@ class WdlUnitTest extends FlatSpec with BeforeAndAfterEach with OneInstancePerTe
         assert(InstanceTypes.choose(None, None, None) == "mem1_ssd1_x2")
 
         // parameters are:          RAM,     disk,     cores
-        assert(InstanceTypes.choose(Some(3), Some(100), Some(4)) == "mem1_ssd2_x4")
+        assert(InstanceTypes.choose(Some(3), Some(100), Some(4)) == "mem1_ssd1_x8")
         assert(InstanceTypes.choose(Some(2), Some(20), None) == "mem1_ssd1_x2")
         assert(InstanceTypes.choose(Some(30), Some(128), Some(8)) == "mem3_ssd1_x8")
 
