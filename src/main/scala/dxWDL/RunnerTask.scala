@@ -18,7 +18,7 @@ task Add {
 
 package dxWDL
 
-import com.dnanexus.{DXApplet, DXEnvironment, DXFile, DXJob, DXJSON, DXProject}
+import com.dnanexus.{DXAPI, DXApplet, DXEnvironment, DXFile, DXJob, DXJSON, DXProject}
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.node.ObjectNode
 import java.nio.file.{Path, Paths, Files}
@@ -289,6 +289,24 @@ object RunnerTask {
         builder.build()
     }
 
+    //val dxSubJob : DXJob = dxJob.runSubJob("body", instanceType, inputs)
+    def runSubJob(entryPoint:String, instanceType:String, inputs:ObjectNode) : DXJob = {
+        val processJobInputHash: ObjectNode = DXJSON.getObjectBuilder()
+            .put("function", entryPoint)
+            .put("input", inputs)
+            .put("instanceType", DXJSON.getObjectBuilder()
+                      .put(entryPoint, instanceType)
+                      .build())
+            .build()
+        val retval: JsonNode = DXAPI.jobNew(processJobInputHash, classOf[JsonNode])
+        val info: JsValue =  Utils.jsValueOfJsonNode(retval)
+        val id:String = info.asJsObject.fields.get("id") match {
+            case Some(JsString(x)) => x
+            case _ => throw new AppInternalException(s"Bad format returned from jobNew ${info}")
+        }
+        DXJob.getInstance(id)
+    }
+
     /** The runtime attributes need to be calculated at runtime. Evaluate them,
       *  determine the instance type [xxxx], and relaunch the job on [xxxx]
       */
@@ -314,7 +332,7 @@ object RunnerTask {
         val dxJob = dxEnv.getJob()
 
         // Run a sub-job with the "body" entry point, and the required instance type
-        val dxSubJob : DXJob = dxJob.runSubJob("body", instanceType, inputs)
+        val dxSubJob : DXJob = runSubJob("body", instanceType, inputs)
 
         // Return promises (JBORs) for all the outputs. Since the signature of the sub-job
         // is exactly the same as the parent, we can immediately exit the parent job.
