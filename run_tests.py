@@ -524,10 +524,14 @@ def gatk_gen_inputs(project):
     def find_ref_file(name):
         return find_file(name,
                          "/genomics-public-data/resources/broad/hg38/v0/")
+    def find_qc_file(name):
+        return find_file(name,
+                         "/genomics-public-data/test-data/qc")
 
     input_args = {
-        ## COMMENT1: SAMPLE NAME AND UNMAPPED BAMS
+        ##_COMMENT1: SAMPLE NAME AND UNMAPPED BAMS
         "0.sample_name": "NA12878",
+        "0.base_file_name": "NA12878_20k",
         "0.flowcell_unmapped_bams": [
             find_bam_file("H06HDADXX130110.1.ATCACGAT.20k_reads.bam"),
             find_bam_file("H06HDADXX130110.2.ATCACGAT.20k_reads.bam"),
@@ -591,10 +595,7 @@ def gatk_gen_inputs(project):
         ],
         "0.wgs_calling_interval_list": find_ref_file("wgs_calling_regions.hg38.interval_list"),
 
-        ## COMMENT2: OPTIONAL ARGUMENTS
-        #"0.HaplotypeCaller.contamination": 0,
-
-        ## COMMENT3: REFERENCE FILES
+        ## COMMENT2: REFERENCE FILES
         "0.ref_dict": find_ref_file("Homo_sapiens_assembly38.dict"),
         "0.ref_fasta": find_ref_file("Homo_sapiens_assembly38.fasta"),
         "0.ref_fasta_index": find_ref_file("Homo_sapiens_assembly38.fasta.fai"),
@@ -605,7 +606,7 @@ def gatk_gen_inputs(project):
         "0.ref_ann": find_ref_file("Homo_sapiens_assembly38.fasta.64.ann"),
         "0.ref_pac": find_ref_file("Homo_sapiens_assembly38.fasta.64.pac"),
 
-        ## COMMENT4: KNOWN SITES RESOURCES
+        ## COMMENT3: KNOWN SITES RESOURCES
         "0.dbSNP_vcf": find_ref_file("Homo_sapiens_assembly38.dbsnp138.vcf"),
         "0.dbSNP_vcf_index": find_ref_file("Homo_sapiens_assembly38.dbsnp138.vcf.idx"),
         "0.known_indels_sites_VCFs": [
@@ -617,13 +618,27 @@ def gatk_gen_inputs(project):
             find_ref_file("Homo_sapiens_assembly38.known_indels.vcf.gz.tbi")
         ],
 
+        ##_COMMENT4: "QUALITY CONTROL RESOURCES
+        "0.contamination_sites_vcf": find_qc_file("WholeGenomeShotgunContam.vcf"),
+        "0.contamination_sites_vcf_index": find_qc_file("WholeGenomeShotgunContam.vcf.idx"),
+        "0.haplotype_database_file": find_qc_file("empty.haplotype_map.txt"),
+        "0.fingerprint_genotypes_file": find_qc_file("empty.fingerprint.vcf"),
+        "0.wgs_coverage_interval_list": find_qc_file("wgs_coverage_regions.hg38.interval_list"),
+        "0.wgs_evaluation_interval_list": find_qc_file("wgs_evaluation_regions.hg38.interval_list"),
+
+        ## COMMENT5: QUALITY CONTROL SETTINGS (to override defaults)
+        "0.ValidateReadGroupSamFile.ignore": ["null"],
+        "0.ValidateReadGroupSamFile.max_output": 1000000000,
+        "0.ValidateAggregatedSamFile.ignore": ["null"],
+        "0.ValidateAggregatedSamFile.max_output": 1000000000,
+
         ## COMMENT5: DISK SIZES + PREEMPTIBLES
         "0.agg_small_disk": 200,
         "0.agg_medium_disk": 300,
         "0.agg_large_disk": 400,
         "0.agg_preemptible_tries": 3,
-        "0.flowcell_small_disk": 200,
-        "0.flowcell_medium_disk": 300,
+        "0.flowcell_small_disk": 100,
+        "0.flowcell_medium_disk": 200,
         "0.preemptible_tries": 3
     }
     return input_args

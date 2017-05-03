@@ -289,7 +289,6 @@ object RunnerTask {
         builder.build()
     }
 
-    //val dxSubJob : DXJob = dxJob.runSubJob("body", instanceType, inputs)
     def runSubJob(entryPoint:String, instanceType:String, inputs:ObjectNode) : DXJob = {
         val processJobInputHash: ObjectNode = DXJSON.getObjectBuilder()
             .put("function", entryPoint)
