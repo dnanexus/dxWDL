@@ -1,7 +1,7 @@
 ## Copyright Broad Institute, 2017
-## 
-## This WDL pipeline implements data pre-processing and initial variant calling (GVCF 
-## generation) according to the GATK Best Practices (June 2016) for germline SNP and 
+##
+## This WDL pipeline implements data pre-processing and initial variant calling (GVCF
+## generation) according to the GATK Best Practices (June 2016) for germline SNP and
 ## Indel discovery in human whole-genome sequencing (WGS) data.
 ##
 ## Requirements/expectations :
@@ -9,20 +9,20 @@
 ## - One or more read groups, one per uBAM file, all belonging to a single sample (SM)
 ## - Input uBAM files must additionally comply with the following requirements:
 ## - - filenames all have the same suffix (we use ".unmapped.bam")
-## - - files must pass validation by ValidateSamFile 
+## - - files must pass validation by ValidateSamFile
 ## - - reads are provided in query-sorted order
 ## - - all reads must have an RG tag
 ## - GVCF output names must end in ".g.vcf.gz"
 ## - Reference genome must be Hg38 with ALT contigs
 ##
-## Runtime parameters are optimized for Broad's Google Cloud Platform implementation. 
-## For program versions, see docker containers. 
+## Runtime parameters are optimized for Broad's Google Cloud Platform implementation.
+## For program versions, see docker containers.
 ##
-## LICENSING : 
-## This script is released under the WDL source code license (BSD-3) (see LICENSE in 
-## https://github.com/broadinstitute/wdl). Note however that the programs it calls may 
+## LICENSING :
+## This script is released under the WDL source code license (BSD-3) (see LICENSE in
+## https://github.com/broadinstitute/wdl). Note however that the programs it calls may
 ## be subject to different licenses. Users are responsible for checking that they are
-## authorized to run all programs before running this script. Please see the docker 
+## authorized to run all programs before running this script. Please see the docker
 ## page at https://hub.docker.com/r/broadinstitute/genomes-in-the-cloud/ for detailed
 ## licensing information pertaining to the included programs.
 
@@ -53,7 +53,7 @@ task CollectQualityYieldMetrics {
   }
 }
 
-## Check the assumption that the final GVCF filename that is going to be used ends with .g.vcf.gz 
+## Check the assumption that the final GVCF filename that is going to be used ends with .g.vcf.gz
 task CheckFinalVcfExtension {
   String vcf_filename
 
@@ -64,7 +64,7 @@ task CheckFinalVcfExtension {
     filename="${vcf_filename}"
     if not filename.endswith(".g.vcf.gz"):
       raise Exception("input","output GVCF filename must end with '.g.vcf.gz', found %s"%(filename))
-      sys.exit(1) 
+      sys.exit(1)
     CODE
   >>>
   runtime {
@@ -79,7 +79,7 @@ task CheckFinalVcfExtension {
 # Get version of BWA
 task GetBwaVersion {
   command {
-    # Not setting "set -o pipefail" here because /bwa has a rc=1 and we don't want to allow rc=1 to succeed 
+    # Not setting "set -o pipefail" here because /bwa has a rc=1 and we don't want to allow rc=1 to succeed
     # because the sed may also fail with that error and that is something we actually want to fail on.
     /usr/gitc/bwa 2>&1 | \
     grep -e '^Version' | \
@@ -103,8 +103,8 @@ task SamToFastqAndBwaMem {
   File ref_fasta_index
   File ref_dict
 
-  # This is the .alt file from bwa-kit (https://github.com/lh3/bwa/tree/master/bwakit), 
-  # listing the reference contigs that are "alternative". 
+  # This is the .alt file from bwa-kit (https://github.com/lh3/bwa/tree/master/bwakit),
+  # listing the reference contigs that are "alternative".
   File ref_alt
 
   File ref_amb
@@ -436,7 +436,7 @@ task CheckFingerprint {
     IGNORE_READ_GROUPS=true
   else
     echo "No fingerprint found. Skipping Fingerprint check."
-    # We touch the outputs here in order to create 0 length files.  
+    # We touch the outputs here in order to create 0 length files.
     # Otherwise the task will fail since the expected outputs are not to be found.
     touch ${output_basename}.fingerprinting_summary_metrics
     touch ${output_basename}.fingerprinting_detail_metrics
@@ -491,7 +491,7 @@ task CreateSequenceGroupingTSV {
   File ref_dict
   Int preemptible_tries
 
-  # Use python to create the Sequencing Groupings used for BQSR and PrintReads Scatter. 
+  # Use python to create the Sequencing Groupings used for BQSR and PrintReads Scatter.
   # It outputs to stdout where it is parsed into a wdl Array[Array[String]]
   # e.g. [["1"], ["2"], ["3", "4"], ["5"], ["6", "7", "8"]]
   command <<<
@@ -505,7 +505,7 @@ task CreateSequenceGroupingTSV {
                 # (Sequence_Name, Sequence_Length)
                 sequence_tuple_list.append((line_split[1].split("SN:")[1], int(line_split[2].split("LN:")[1])))
         longest_sequence = sorted(sequence_tuple_list, key=lambda x: x[1], reverse=True)[0][1]
-    # We are adding this to the intervals because hg38 has contigs named with embedded colons (:) and a bug in 
+    # We are adding this to the intervals because hg38 has contigs named with embedded colons (:) and a bug in
     # some versions of GATK strips off the last element after a colon, so we add this as a sacrificial element.
     hg38_protection_tag = ":1+"
     # initialize the tsv string with the first sequence
@@ -842,8 +842,8 @@ task CheckContamination {
       i = 0
       for row in reader:
         if float(row["FREELK0"])==0 and float(row["FREELK1"])==0:
-    # A zero value for the likelihoods implies no data. This usually indicates a problem rather than a real event. 
-    # If the bam isn't really empty, this is probably due to the use of a incompatible reference build between 
+    # A zero value for the likelihoods implies no data. This usually indicates a problem rather than a real event.
+    # If the bam isn't really empty, this is probably due to the use of a incompatible reference build between
     # vcf and bam.
           sys.stderr.write("Found zero likelihoods. Bam is either very-very shallow, or aligned to the wrong reference (relative to the vcf).")
           sys.exit(1)
@@ -1070,7 +1070,7 @@ command <<<
   samtools view -h -T ${ref_fasta} ${cram_file} |
   samtools view -b -o ${output_basename}.bam -
   samtools index -b ${output_basename}.bam
-  mv ${output_basename}.bam.bai ${output_basename}.bai 
+  mv ${output_basename}.bam.bai ${output_basename}.bai
   >>>
   runtime {
     docker: "broadinstitute/genomes-in-the-cloud:2.2.5-1486412288"
@@ -1084,24 +1084,24 @@ command <<<
 }
 
 # WORKFLOW DEFINITION
-workflow PairedEndSingleSampleWorkflow {
+workflow gatk_170412 {
 
   File contamination_sites_vcf
   File contamination_sites_vcf_index
   File fingerprint_genotypes_file # if this file is empty (0-length) the workflow should not do fingerprint comparison (as there are no fingerprints for the sample)
-  File haplotype_database_file  
+  File haplotype_database_file
   File wgs_evaluation_interval_list
   File wgs_coverage_interval_list
-  
+
   String sample_name
   String base_file_name
   String final_gvcf_name
   Array[File] flowcell_unmapped_bams
   String unmapped_bam_suffix
-  
+
   Array[File] scattered_calling_intervals
   File wgs_calling_interval_list
-  
+
   File ref_fasta
   File ref_fasta_index
   File ref_dict
@@ -1111,12 +1111,12 @@ workflow PairedEndSingleSampleWorkflow {
   File ref_amb
   File ref_ann
   File ref_pac
-  
+
   File dbSNP_vcf
   File dbSNP_vcf_index
   Array[File] known_indels_sites_VCFs
   Array[File] known_indels_sites_indices
-  
+
   Int flowcell_small_disk
   Int flowcell_medium_disk
   Int agg_small_disk
@@ -1129,8 +1129,8 @@ workflow PairedEndSingleSampleWorkflow {
 
   String recalibrated_bam_basename = base_file_name + ".aligned.duplicates_marked.recalibrated"
 
-  # Get the version of BWA to include in the PG record in the header of the BAM produced 
-  # by MergeBamAlignment. 
+  # Get the version of BWA to include in the PG record in the header of the BAM produced
+  # by MergeBamAlignment.
   call GetBwaVersion
 
   # Check that the GVCF output name follows convention
@@ -1138,17 +1138,17 @@ workflow PairedEndSingleSampleWorkflow {
      input:
         vcf_filename = final_gvcf_name
    }
- 
+
   # Align flowcell-level unmapped input bams in parallel
   scatter (unmapped_bam in flowcell_unmapped_bams) {
-  
+
     # Because of a wdl/cromwell bug this is not currently valid so we have to sub(sub()) in each task
     # String base_name = sub(sub(unmapped_bam, "gs://.*/", ""), unmapped_bam_suffix + "$", "")
 
     String sub_strip_path = "gs://.*/"
     String sub_strip_unmapped = unmapped_bam_suffix + "$"
 
-    # QC the unmapped BAM 
+    # QC the unmapped BAM
     call CollectQualityYieldMetrics {
       input:
         input_bam = unmapped_bam,
@@ -1176,7 +1176,7 @@ workflow PairedEndSingleSampleWorkflow {
         preemptible_tries = preemptible_tries
      }
 
-    # Merge original uBAM and BWA-aligned BAM 
+    # Merge original uBAM and BWA-aligned BAM
     call MergeBamAlignment {
       input:
         unmapped_bam = unmapped_bam,
@@ -1211,7 +1211,7 @@ workflow PairedEndSingleSampleWorkflow {
       disk_size = flowcell_medium_disk,
       preemptible_tries = preemptible_tries
     }
-    
+
     # Validate the aligned and sorted readgroup BAM
     # This is called to help in finding problems early.
     # If considered too time consuming and not helpful, can be removed.
@@ -1263,13 +1263,13 @@ workflow PairedEndSingleSampleWorkflow {
       preemptible_tries = agg_preemptible_tries
   }
 
-  # Create list of sequences for scatter-gather parallelization 
+  # Create list of sequences for scatter-gather parallelization
   call CreateSequenceGroupingTSV {
     input:
       ref_dict = ref_dict,
       preemptible_tries = preemptible_tries
   }
-  
+
   # Estimate level of cross-sample contamination
   call CheckContamination {
     input:
@@ -1281,7 +1281,7 @@ workflow PairedEndSingleSampleWorkflow {
       disk_size = agg_small_disk,
       preemptible_tries = agg_preemptible_tries
   }
-  
+
   # Perform Base Quality Score Recalibration (BQSR) on the sorted BAM in parallel
   scatter (subgroup in CreateSequenceGroupingTSV.sequence_grouping) {
     # Generate the recalibration model by interval
@@ -1300,9 +1300,9 @@ workflow PairedEndSingleSampleWorkflow {
         ref_fasta_index = ref_fasta_index,
         disk_size = agg_small_disk,
         preemptible_tries = agg_preemptible_tries
-    }  
-  }  
-  
+    }
+  }
+
   # Merge the recalibration reports resulting from by-interval recalibration
   call GatherBqsrReports {
     input:
@@ -1328,7 +1328,7 @@ workflow PairedEndSingleSampleWorkflow {
         disk_size = agg_small_disk,
         preemptible_tries = agg_preemptible_tries
     }
-  } 
+  }
 
   # Merge the recalibrated BAM files resulting from by-interval recalibration
   call GatherBamFiles {
@@ -1338,7 +1338,7 @@ workflow PairedEndSingleSampleWorkflow {
       disk_size = agg_large_disk,
       preemptible_tries = agg_preemptible_tries
   }
-  
+
   # QC the final BAM (consolidated after scattered BQSR)
   call CollectReadgroupBamQualityMetrics {
     input:
@@ -1351,7 +1351,7 @@ workflow PairedEndSingleSampleWorkflow {
       disk_size = agg_small_disk
   }
 
-  # Validate the final BAM 
+  # Validate the final BAM
   call ValidateSamFile as ValidateAggregatedSamFile {
     input:
       input_bam = GatherBamFiles.output_bam,
@@ -1363,7 +1363,7 @@ workflow PairedEndSingleSampleWorkflow {
       disk_size = agg_small_disk,
       preemptible_tries = agg_preemptible_tries
   }
-  
+
   # QC the final BAM some more (no such thing as too much QC)
   call CollectAggregationMetrics {
     input:
@@ -1375,8 +1375,8 @@ workflow PairedEndSingleSampleWorkflow {
       ref_fasta_index = ref_fasta_index,
       disk_size = agg_small_disk
   }
-  
-  # Check the sample BAM fingerprint against the sample array 
+
+  # Check the sample BAM fingerprint against the sample array
   call CheckFingerprint {
     input:
       input_bam = GatherBamFiles.output_bam,
@@ -1388,7 +1388,7 @@ workflow PairedEndSingleSampleWorkflow {
       disk_size = agg_small_disk,
       preemptible_tries = agg_preemptible_tries
   }
-  
+
   # QC the sample WGS metrics (stringent thresholds)
   call CollectWgsMetrics {
     input:
@@ -1400,7 +1400,7 @@ workflow PairedEndSingleSampleWorkflow {
       wgs_coverage_interval_list = wgs_coverage_interval_list,
       disk_size = agg_small_disk
   }
-  
+
   # QC the sample raw WGS metrics (common thresholds)
   call CollectRawWgsMetrics {
     input:
@@ -1412,7 +1412,7 @@ workflow PairedEndSingleSampleWorkflow {
       wgs_coverage_interval_list = wgs_coverage_interval_list,
       disk_size = agg_small_disk
   }
-  
+
   # Generate a checksum per readgroup in the final BAM
   call CalculateReadGroupChecksum {
     input:
@@ -1422,7 +1422,7 @@ workflow PairedEndSingleSampleWorkflow {
       disk_size = agg_small_disk,
       preemptible_tries = agg_preemptible_tries
   }
-  
+
   # Convert the final merged recalibrated BAM file to CRAM format
   call ConvertToCram {
     input:
@@ -1459,10 +1459,10 @@ workflow PairedEndSingleSampleWorkflow {
       ignore = ["null"],
       preemptible_tries = agg_preemptible_tries
   }
-  
+
   # Call variants in parallel over WGS calling intervals
   scatter (subInterval in scattered_calling_intervals) {
-  
+
     # Generate GVCF by interval
     call HaplotypeCaller {
       input:
@@ -1478,7 +1478,7 @@ workflow PairedEndSingleSampleWorkflow {
         preemptible_tries = agg_preemptible_tries
      }
   }
-  
+
   # Combine by-interval GVCFs into a single sample GVCF file
   call MergeVCFs {
     input:
@@ -1488,7 +1488,7 @@ workflow PairedEndSingleSampleWorkflow {
       disk_size = agg_small_disk,
       preemptible_tries = agg_preemptible_tries
   }
-  
+
   # Validate the GVCF output of HaplotypeCaller
   call ValidateGVCF {
     input:
@@ -1503,7 +1503,7 @@ workflow PairedEndSingleSampleWorkflow {
       disk_size = agg_small_disk,
       preemptible_tries = agg_preemptible_tries
   }
-  
+
   # QC the GVCF
   call CollectGvcfCallingMetrics {
     input:
@@ -1518,7 +1518,7 @@ workflow PairedEndSingleSampleWorkflow {
       preemptible_tries = agg_preemptible_tries
   }
 
-  # Outputs that will be retained when execution is complete  
+  # Outputs that will be retained when execution is complete
   output {
     CollectQualityYieldMetrics.*
     ValidateReadGroupSamFile.*
@@ -1538,5 +1538,5 @@ workflow PairedEndSingleSampleWorkflow {
     GatherBqsrReports.*
     ConvertToCram.*
     MergeVCFs.*
-    } 
+    }
 }

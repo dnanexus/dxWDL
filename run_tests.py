@@ -527,6 +527,9 @@ def gatk_gen_inputs(project):
     def find_qc_file(name):
         return find_file(name,
                          "/genomics-public-data/test-data/qc")
+    def find_intervals_file(name):
+        return find_file(name,
+                         "/genomics-public-data/test-data/intervals")
 
     input_args = {
         ##_COMMENT1: SAMPLE NAME AND UNMAPPED BAMS
@@ -623,8 +626,8 @@ def gatk_gen_inputs(project):
         "0.contamination_sites_vcf_index": find_qc_file("WholeGenomeShotgunContam.vcf.idx"),
         "0.haplotype_database_file": find_qc_file("empty.haplotype_map.txt"),
         "0.fingerprint_genotypes_file": find_qc_file("empty.fingerprint.vcf"),
-        "0.wgs_coverage_interval_list": find_qc_file("wgs_coverage_regions.hg38.interval_list"),
-        "0.wgs_evaluation_interval_list": find_qc_file("wgs_evaluation_regions.hg38.interval_list"),
+        "0.wgs_coverage_interval_list": find_intervals_file("wgs_coverage_regions.hg38.interval_list"),
+        "0.wgs_evaluation_interval_list": find_intervals_file("wgs_evaluation_regions.hg38.interval_list"),
 
         ## COMMENT5: QUALITY CONTROL SETTINGS (to override defaults)
         "0.ValidateReadGroupSamFile.ignore": ["null"],

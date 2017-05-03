@@ -240,7 +240,7 @@ object Main extends App {
             SuccessfulTermination(dxc)
         } catch {
             case e : Throwable =>
-                BadUsageTermination(Utils.exceptionToString(e))
+                UnsuccessfulTermination(Utils.exceptionToString(e))
         }
     }
 
@@ -357,8 +357,12 @@ object Main extends App {
 
     termination match {
         case SuccessfulTermination(s) => println(s)
-        case BadUsageTermination(s) if (s == "") => Console.err.println(UsageMessage)
-        case BadUsageTermination(s) => Console.err.println(s)
+        case BadUsageTermination(s) if (s == "") =>
+            Console.err.println(UsageMessage)
+            System.exit(1)
+        case BadUsageTermination(s) =>
+            Console.err.println(s)
+            System.exit(1)
         case UnsuccessfulTermination(s) =>
             Console.err.println(s)
             System.exit(1)

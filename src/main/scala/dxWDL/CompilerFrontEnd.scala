@@ -331,8 +331,7 @@ task Add {
                         }
                         closure
                 }
-            case a: Ast if a.isFunctionCall || a.isUnaryOperator || a.isBinaryOperator
-                  || a.isTupleLiteral || a.isArrayOrMapLookup =>
+            case a: Ast =>
                 // Figure out which variables are needed to calculate this expression,
                 // and add bindings for them
                 val memberAccesses = a.findTopLevelMemberAccesses().map(
@@ -354,11 +353,6 @@ task Add {
                     }
                 }.flatten
                 closure ++ allDeps
-
-            case a: Ast =>
-                throw new Exception(cState.cef.notCurrentlySupported(
-                                        a,
-                                        s"The expression ${expr.toString} is currently not handled"))
         }
     }
 
@@ -632,19 +626,26 @@ workflow w {
         // the WDL file we generate. To ameliorate this, we add stubs
         // for called tasks.
         val calls: Vector[Call] = scatter.calls.toVector
-        val taskStubs: Vector[String] = calls.map{ call =>
-            val name = call match {
-                case x:TaskCall => x.task.name
-                case x:WorkflowCall =>
-                    throw new Exception(cState.cef.notCurrentlySupported(x.ast, "calling workflows"))
+        val taskStubs: Map[String, String] =
+            calls.foldLeft(Map.empty[String,String]) { case (accu, call) =>
+                val name = call match {
+                    case x:TaskCall => x.task.name
+                    case x:WorkflowCall =>
+                        throw new Exception(cState.cef.notCurrentlySupported(x.ast, "calling workflows"))
+                }
+                val (irApplet,_) = taskApplets.get(name) match {
+                    case None => throw new Exception(s"Calling undefined task ${name}")
+                    case Some(x) => x
+                }
+                if (accu contains irApplet.name) {
+                    // we have already created a stub for this call
+                    accu
+                } else {
+                    // no existing stub, create it
+                    val task = genAppletStub(irApplet)
+                    accu + (name -> WdlPrettyPrinter.apply(task, 0).mkString("\n"))
+                }
             }
-            val (irApplet,_) = taskApplets.get(name) match {
-                case None => throw new Exception(s"Calling undefined task ${name}")
-                case Some(x) => x
-            }
-            val task = genAppletStub(irApplet)
-            WdlPrettyPrinter.apply(task, 0).mkString("\n") ++ "\n"
-        }
 
         val decls: Vector[String]  = inputVars.map{ cVar =>
             val d = declarationGen(cVar.wdlType, cVar.dxVarName, None)
@@ -659,7 +660,8 @@ workflow w {
         val lines: Vector[String] = decls ++
             WdlPrettyPrinter.scatterRewrite(scatter, 1, exprTransform)
         val wfCode = WdlPrettyPrinter.buildBlock("workflow w", lines, 0).mkString("\n")
-        val wdlCode = taskStubs.mkString("\n") ++ "\n" ++ wfCode
+        val stubs = taskStubs.map{ case (_,x) => x}.toVector
+        val wdlCode = stubs.mkString("\n") ++ "\n" ++ wfCode
         verifyWdlCodeIsLegal(wdlCode)
         wdlCode
     }
