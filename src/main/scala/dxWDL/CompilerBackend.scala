@@ -442,6 +442,27 @@ object CompilerBackend {
         }
     }
 
+    // Link source values to targets. This is the same as
+    // WdlVarLinks.genFields, but overcomes certain cases where the
+    // source and target WDL types do not match. For example, if the
+    // source is a File, and the target is an Array[File], we can
+    // modify the JSON to get around this.
+    def genFieldsCastIfRequired(wvl: WdlVarLinks,
+                                srcType: WdlType,
+                                bindName: String,
+                                cState: State) : List[(String, JsonNode)] = {
+        if (srcType == wvl.wdlType) {
+            WdlVarLinks.genFields(wvl, bindName)
+        } else if (wvl.wdlType == WdlArrayType(srcType)) {
+            WdlVarLinks.genFields(wvl, bindName).map{ case(key, jsonNode) =>
+                val jsonArr = DXJSON.getArrayBuilder().add(jsonNode).build()
+                (key, jsonArr)
+            }.toList
+        } else {
+            throw new Exception(s"Linking error: source type=${srcType} target type=${wvl.wdlType}, bindName=${bindName}")
+        }
+    }
+
     // Calculate the stage inputs from the call closure
     //
     // It comprises mappings from variable name to WdlType.
@@ -459,14 +480,14 @@ object CompilerBackend {
                         dxBuilder
                     case IR.SArgConst(wValue) =>
                         val wvl = WdlVarLinks.apply(wValue.wdlType, wValue)
-                        val fields = WdlVarLinks.genFields(wvl, cVar.dxVarName)
+                        val fields = genFieldsCastIfRequired(wvl, wValue.wdlType, cVar.dxVarName, cState)
                         fields.foldLeft(dxBuilder) { case (b, (fieldName, jsonNode)) =>
                             b.put(fieldName, jsonNode)
                         }
                     case IR.SArgLink(stageName, argName) =>
                         val dxStage = stageDict(stageName)
                         val wvl = WdlVarLinks(cVar.wdlType, DxlStage(dxStage, IORef.Output, argName.dxVarName))
-                        val fields = WdlVarLinks.genFields(wvl, cVar.dxVarName)
+                        val fields = genFieldsCastIfRequired(wvl, argName.wdlType, cVar.dxVarName, cState)
                         fields.foldLeft(dxBuilder) { case (b, (fieldName, jsonNode)) =>
                             b.put(fieldName, jsonNode)
                         }

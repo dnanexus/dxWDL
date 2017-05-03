@@ -35,7 +35,11 @@ default_test_list = [
     "decl_mid_wf",
 
     # Error codes
-    "bad_status", "bad_status2" ]
+    "bad_status", "bad_status2",
+
+    # Casting
+    "cast"
+]
 
 tmp_files=[]
 dxfile = None
@@ -443,6 +447,13 @@ def register_all_tests(project):
                              "concat.result": "Yellow.aligned_Yellow.wgs",
                              "add2.sum": 24})
 
+    # casting types
+    register_test_fail("cast",
+                       lambda x: {'0.i': 7,
+                                  '0.s': "French horn",
+                                  '0.foo' : dxpy.dxlink(dxfile.get_id(), project.get_id())},
+                       lambda x: {'Add.result': 14, 'SumArray.result': 7})
+
     # Massive tests
     register_test("gatk_170412",
                   lambda x: gatk_gen_inputs(project),
@@ -630,10 +641,10 @@ def gatk_gen_inputs(project):
         "0.wgs_evaluation_interval_list": find_intervals_file("wgs_evaluation_regions.hg38.interval_list"),
 
         ## COMMENT5: QUALITY CONTROL SETTINGS (to override defaults)
-        "0.ValidateReadGroupSamFile.ignore": ["null"],
-        "0.ValidateReadGroupSamFile.max_output": 1000000000,
-        "0.ValidateAggregatedSamFile.ignore": ["null"],
-        "0.ValidateAggregatedSamFile.max_output": 1000000000,
+#        "0.ValidateReadGroupSamFile.ignore": ["null"],
+#        "0.ValidateReadGroupSamFile.max_output": 1000000000,
+#        "0.ValidateAggregatedSamFile.ignore": ["null"],
+#        "0.ValidateAggregatedSamFile.max_output": 1000000000,
 
         ## COMMENT5: DISK SIZES + PREEMPTIBLES
         "0.agg_small_disk": 200,
