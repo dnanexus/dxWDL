@@ -17,7 +17,8 @@ object Main extends App {
     case class BadUsageTermination(info: String) extends Termination
 
     object Actions extends Enumeration {
-        val Compile, Eval, LaunchScatter, TaskEpilog, TaskProlog,
+        val Compile, Eval, LaunchScatter,
+            TaskEpilog, TaskProlog, TaskRelaunch,
             Version, Yaml  = Value
     }
 
@@ -274,10 +275,12 @@ object Main extends App {
                         RunnerEval.apply(workflowOfNamespace(ns), jobInputPath, jobOutputPath, jobInfoPath)
                     case Actions.LaunchScatter =>
                         RunnerScatter.apply(workflowOfNamespace(ns), jobInputPath, jobOutputPath, jobInfoPath)
-                    case Actions.TaskProlog =>
-                        RunnerTask.prolog(taskOfNamespace(ns), jobInputPath, jobOutputPath, jobInfoPath)
                     case Actions.TaskEpilog =>
                         RunnerTask.epilog(taskOfNamespace(ns), jobInputPath, jobOutputPath, jobInfoPath)
+                    case Actions.TaskProlog =>
+                        RunnerTask.prolog(taskOfNamespace(ns), jobInputPath, jobOutputPath, jobInfoPath)
+                    case Actions.TaskRelaunch =>
+                        RunnerTask.relaunch(taskOfNamespace(ns), jobInputPath, jobOutputPath, jobInfoPath)
                 }
                 SuccessfulTermination(s"success ${action}")
             } catch {
@@ -301,6 +304,7 @@ object Main extends App {
             case Some(x) if x == Actions.LaunchScatter => appletAction(x, args.tail)
             case Some(x) if x == Actions.TaskProlog => appletAction(x, args.tail)
             case Some(x) if x == Actions.TaskEpilog => appletAction(x, args.tail)
+            case Some(x) if x == Actions.TaskRelaunch => appletAction(x, args.tail)
             case Some(x) if x == Actions.Version => SuccessfulTermination(Utils.VERSION)
             case Some(x) if x == Actions.Yaml => yaml(args.tail)
             case _ => BadUsageTermination("")

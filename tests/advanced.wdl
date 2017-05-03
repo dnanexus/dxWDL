@@ -56,16 +56,15 @@ workflow advanced {
     String unmapped_bam_suffix = "bam"
     Array[String] names = ["Jack.XX", "Gil.XX", "Jane.UU"]
 
+    call jjj_str_animals as str_animals {
+        input: s=species, num_cores=3
+    }
     scatter (name in names) {
         call jjj_ident {
           input:
              s = sub(name, ".XX", "") + ".XY",
              r = sub(sub(name, ".XX", ""), ".UU", "") + ".unmerged"
         }
-    }
-
-    call jjj_str_animals as str_animals {
-        input: s=species, num_cores=3
     }
     scatter (pt in patterns) {
         String s = "Salamander"

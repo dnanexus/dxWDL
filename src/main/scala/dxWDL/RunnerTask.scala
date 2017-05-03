@@ -18,15 +18,14 @@ task Add {
 
 package dxWDL
 
-// DX bindings
-import com.dnanexus.{DXFile, DXProject, DXApplet}
-
+import com.dnanexus.{DXApplet, DXEnvironment, DXFile, DXJob, DXJSON, DXProject}
+import com.fasterxml.jackson.databind.JsonNode
+import com.fasterxml.jackson.databind.node.ObjectNode
 import java.nio.file.{Path, Paths, Files}
+import scala.collection.mutable.HashMap
 import scala.collection.JavaConverters._
-import scala.util.{Try, Success, Failure}
 import spray.json._
 import spray.json.DefaultJsonProtocol
-import spray.json.JsString
 import wdl4s.AstTools._
 import wdl4s.expression.{WdlStandardLibraryFunctionsType, WdlStandardLibraryFunctions}
 import wdl4s.types._
@@ -69,7 +68,7 @@ object RunnerTask {
                         case Some(x) => Some(x)
                     }
 
-                // declaration to evalute, not an input
+                // declaration to evaluate, not an input
                 case (_, Some(expr)) =>
                     val v : WdlValue = expr.evaluate(lookup, DxFunctions).get
                     Some(v)
@@ -244,5 +243,93 @@ object RunnerTask {
                jobInfoPath: Path) : Unit = {
         val outputs : Seq[(String, WdlType, WdlValue)] = epilogCore(task)
         writeJobOutputs(jobOutputPath, outputs)
+    }
+
+
+
+    // Evaluate the runtime expressions, and figure out which instance type
+    // this task requires.
+    def calcInstanceType(task: Task, taskInputs: Map[String, WdlVarLinks]) : String = {
+        // input variables that were already calculated
+        val env = HashMap.empty[String, WdlValue]
+        def lookup(varName : String) : WdlValue = {
+            env.get(varName) match {
+                case Some(x) => x
+                case None =>
+                    // value not evaluated yet, calculate and keep in cache
+                    taskInputs.get(varName) match {
+                        case Some(wvl) =>
+                            env(varName) = WdlVarLinks.eval(wvl, true)
+                            env(varName)
+                        case None => throw new UnboundVariableException(varName)
+                    }
+            }
+        }
+        def evalAttr(attrName: String) : Option[WdlValue] = {
+            task.runtimeAttributes.attrs.get(attrName) match {
+                case None => None
+                case Some(expr) =>
+                    Some(expr.evaluate(lookup, DxFunctions).get)
+            }
+        }
+
+        val memory = evalAttr("memory")
+        val diskSpace = evalAttr("disks")
+        val cores = evalAttr("cpu")
+        InstanceTypes.apply(memory, diskSpace, cores)
+    }
+
+    def relaunchBuildInputs(inputWvls: Map[String, WdlVarLinks]) : ObjectNode = {
+        var builder : DXJSON.ObjectBuilder = DXJSON.getObjectBuilder()
+        inputWvls.foreach{ case (varName, wvl) =>
+            WdlVarLinks.genFields(wvl, varName).foreach{ case (fieldName, jsNode) =>
+                builder = builder.put(fieldName, jsNode)
+            }
+        }
+        builder.build()
+    }
+
+    /** The runtime attributes need to be calculated at runtime. Evaluate them,
+      *  determine the instance type [xxxx], and relaunch the job on [xxxx]
+      */
+    def relaunch(task: Task,
+                 jobInputPath : Path,
+                 jobOutputPath : Path,
+                 jobInfoPath: Path) : Unit = {
+        // Extract types for the inputs
+        val (inputTypes,_) = Utils.loadExecInfo(Utils.readFileContent(jobInfoPath))
+        System.err.println(s"WdlType mapping =${inputTypes}")
+
+        // Read the job input file, and load the inputs without downloading
+        val inputLines : String = Utils.readFileContent(jobInputPath)
+        val inputWvls = WdlVarLinks.loadJobInputsAsLinks(inputLines, inputTypes)
+
+        // evaluate the runtime attributes
+        // determine the instance type
+        val instanceType:String = calcInstanceType(task, inputWvls)
+
+        // relaunch the applet on the correct instance type
+        val inputs = relaunchBuildInputs(inputWvls)
+        val dxEnv: DXEnvironment = DXEnvironment.create()
+        val dxJob = dxEnv.getJob()
+
+        // Run a sub-job with the "body" entry point, and the required instance type
+        val dxSubJob : DXJob = dxJob.runSubJob("body", instanceType, inputs)
+
+        // Return promises (JBORs) for all the outputs. Since the signature of the sub-job
+        // is exactly the same as the parent, we can immediately exit the parent job.
+        val outputs: Map[String, JsonNode] = task.outputs.map { tso =>
+            val wvl = WdlVarLinks(tso.wdlType, DxlJob(dxSubJob, IORef.Output, tso.unqualifiedName))
+            WdlVarLinks.genFields(wvl, tso.unqualifiedName)
+        }.flatten.toMap
+
+
+        // write the outputs to the job_output.json file
+        val json = JsObject(
+            outputs.map{ case (key, json) => key -> Utils.jsValueOfJsonNode(json) }.toMap
+        )
+        val ast_pp = json.prettyPrint
+        System.err.println(s"outputs = ${ast_pp}")
+        Utils.writeFileContent(jobOutputPath, ast_pp)
     }
 }
