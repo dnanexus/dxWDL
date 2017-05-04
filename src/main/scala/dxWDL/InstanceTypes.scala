@@ -254,6 +254,32 @@ object InstanceTypes {
         }.toMap
     }
 
+    // Construct a list based on static instance type information
+    def initFromStaticList() : InstanceTypes = {
+        def intOfJs(jsVal : JsValue) : Int = {
+            jsVal match {
+                case JsNumber(x) => x.toInt
+                case _ => throw new Exception("sanity")
+            }
+        }
+        val allInstances : Map[String, JsValue] = instanceList.parseJson.asJsObject.fields
+        val db = allInstances.map{ case(name, v) =>
+            val fields : Map[String, JsValue] = v.asJsObject.fields
+            val internalName = fields("internalName") match {
+                case JsString(s) => s
+                case _ => throw new Exception("sanity")
+            }
+            val price: Float = awsOnDemandHourlyPriceTable(internalName)
+
+            val traits = fields("traits").asJsObject.fields
+            val memory = intOfJs(traits("totalMemoryMB")) / 1024
+            val disk = intOfJs(traits("ephemeralStorageGB"))
+            val cpu = intOfJs(traits("numCores"))
+            DxInstance(name, memory, disk, cpu, price)
+        }.toList
+        InstanceTypes(db)
+    }
+
     // Query the platform for the available instance types in
     // this project.
     def queryAvailableInstanceTypes(dxProject: DXProject) : JsValue = {
@@ -269,30 +295,4 @@ object InstanceTypes {
     // Figure out the pricing model, by doing a user.describe, or a project.describe
     def queryPricingModel(dxProject: DXProject) : JsValue = {
     }
-
-    // List of available instances.
-    lazy val instanceDB : List[DxInstance]= {
-        def intOfJs(jsVal : JsValue) : Int = {
-            jsVal match {
-                case JsNumber(x) => x.toInt
-                case _ => throw new Exception("sanity")
-            }
-        }
-        val allInstances : Map[String, JsValue] = instanceList.parseJson.asJsObject.fields
-        allInstances.map{ case(name, v) =>
-            val fields : Map[String, JsValue] = v.asJsObject.fields
-            val internalName = fields("internalName") match {
-                case JsString(s) => s
-                case _ => throw new Exception("sanity")
-            }
-            val price: Float = awsOnDemandHourlyPriceTable(internalName)
-
-            val traits = fields("traits").asJsObject.fields
-            val memory = intOfJs(traits("totalMemoryMB")) / 1024
-            val disk = intOfJs(traits("ephemeralStorageGB"))
-            val cpu = intOfJs(traits("numCores"))
-            DxInstance(name, memory, disk, cpu, price)
-        }.toList
-    }
-
 }
