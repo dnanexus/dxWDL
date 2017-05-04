@@ -1,3 +1,30 @@
+/**
+Match the runtime WDL requirements to an machine instance supported by the platform.
+
+There there may be requirements for memory, disk-space, and number of
+cores. We interpret these as minimal requirements and try to choose a
+good and inexpensive instance from the available list.
+
+For example, a WDL task could have a runtime section like the following:
+runtime {
+    memory: "14 GB"
+    cpu: "16"
+    disks: "local-disk " + disk_size + " HDD"
+}
+
+
+Representation of a platform instance, how much resources it has, and
+how much it costs to run.
+
+resource    measurement units
+--------    -----------------
+memory      GB of RAM
+disk        GB of disk space, hard drive or flash drive
+cpu         1 per core
+price       comparative price
+
+  */
+
 package dxWDL
 
 import com.dnanexus.{DXAPI, DXJSON, DXProject}
@@ -8,31 +35,6 @@ import spray.json.DefaultJsonProtocol
 import wdl4s.types._
 import wdl4s.values._
 
-// Match the runtime WDL requirements to an machine instance supported
-// by the platform.
-//
-// There there may be requirements for memory, disk-space, and number
-// of cores. We interpret these as minimal requirements and try to
-// choose a good and inexpensive instance from the available list.
-//
-// For example, a WDL task could have a runtime section like the following:
-// runtime {
-//    memory: "14 GB"
-//    cpu: "16"
-//    disks: "local-disk " + disk_size + " HDD"
-// }
-//
-
-// Representation of a platform instance, how much resources
-// it has, and how much it costs to run.
-//
-// resource    measurement units
-// --------    -----------------
-// memory      GB of RAM
-// disk        GB of disk space, hard drive or flash drive
-// cpu         1 per core
-// price       comparative price
-//
 case class DxInstance(name: String, memory: Int, disk: Int, cpu: Int, price: Float) {
 
     // Does this instance satisfy the requirements?
@@ -55,7 +57,7 @@ case class DxInstance(name: String, memory: Int, disk: Int, cpu: Int, price: Flo
     }
 }
 
-case class InstanceTypes {
+case class InstanceTypes(instanceDB: List[DxInstance]) {
     // Calculate the dx instance type that fits best, based on
     // runtime specifications.
     //
