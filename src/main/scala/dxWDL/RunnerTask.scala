@@ -249,7 +249,9 @@ object RunnerTask {
 
     // Evaluate the runtime expressions, and figure out which instance type
     // this task requires.
-    def calcInstanceType(task: Task, taskInputs: Map[String, WdlVarLinks]) : String = {
+    def calcInstanceType(task: Task,
+                         taskInputs: Map[String, WdlVarLinks],
+                         instanceTypesDB: InstanceTypesDB) : String = {
         // input variables that were already calculated
         val env = HashMap.empty[String, WdlValue]
         def lookup(varName : String) : WdlValue = {
@@ -276,7 +278,7 @@ object RunnerTask {
         val memory = evalAttr("memory")
         val diskSpace = evalAttr("disks")
         val cores = evalAttr("cpu")
-        val instanceType = InstanceTypes.apply(memory, diskSpace, cores)
+        val instanceType = instanceTypesDB.apply(memory, diskSpace, cores)
         System.err.println(s"""|calcInstaceType memory=${memory} disk=${diskSpace}
                                |cores=${cores} instancetype=${instanceType}"""
                                .stripMargin.replaceAll("\n", " "))
@@ -324,18 +326,23 @@ object RunnerTask {
         val (inputTypes,_) = Utils.loadExecInfo(Utils.readFileContent(jobInfoPath))
         System.err.println(s"WdlType mapping =${inputTypes}")
 
+        val dxEnv: DXEnvironment = DXEnvironment.create()
+        val dxJob = dxEnv.getJob()
+        val dxProject = dxEnv.getProjectContext()
+
         // Read the job input file, and load the inputs without downloading
         val inputLines : String = Utils.readFileContent(jobInputPath)
         val inputWvls = WdlVarLinks.loadJobInputsAsLinks(inputLines, inputTypes)
 
+        // Figure out the available instance types
+        val instanceTypesDB = InstanceTypesDB.query(dxProject)
+
         // evaluate the runtime attributes
         // determine the instance type
-        val instanceType:String = calcInstanceType(task, inputWvls)
+        val instanceType:String = calcInstanceType(task, inputWvls, instanceTypesDB)
 
         // relaunch the applet on the correct instance type
         val inputs = relaunchBuildInputs(inputWvls)
-        val dxEnv: DXEnvironment = DXEnvironment.create()
-        val dxJob = dxEnv.getJob()
 
         // Run a sub-job with the "body" entry point, and the required instance type
         val dxSubJob : DXJob = runSubJob("body", instanceType, inputs)

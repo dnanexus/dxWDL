@@ -43,6 +43,7 @@ object CompilerFrontEnd {
     // Compiler state.
     // Packs common arguments passed between methods.
     case class State(destination: String,
+                     instanceTypesDB: InstanceTypesDB,
                      cef: CompilerErrorFormatter,
                      verbose: Boolean)
 
@@ -213,7 +214,7 @@ task Add {
     // that, in the general case, could be calculated only at runtime.
     // Currently, we support only constants. If a runtime expression is used,
     // we convert it to a moderatly high constant.
-    def calcInstanceType(taskOpt: Option[Task]) : IR.InstanceTypeSpec = {
+    def calcInstanceType(taskOpt: Option[Task], cState: State) : IR.InstanceTypeSpec = {
         def lookup(varName : String) : WdlValue = {
             throw new DynamicInstanceTypesException()
         }
@@ -237,7 +238,7 @@ task Add {
                     val memory = evalAttr(task, "memory")
                     val diskSpace = evalAttr(task, "disks")
                     val cores = evalAttr(task, "cpu")
-                    IR.InstTypeConst(InstanceTypes.apply(memory, diskSpace, cores))
+                    IR.InstTypeConst(cState.instanceTypesDB.apply(memory, diskSpace, cores))
             }
         } catch {
             case e : DynamicInstanceTypesException =>
@@ -436,7 +437,7 @@ task Add {
         val applet = IR.Applet(appletName,
                                inputVars,
                                outputVars,
-                               calcInstanceType(None),
+                               calcInstanceType(None, cState),
                                None,
                                cState.destination,
                                IR.AppletKind.Eval,
@@ -506,7 +507,7 @@ workflow w {
         val applet = IR.Applet(appletName,
                                inputVars,
                                outputVars,
-                               calcInstanceType(None),
+                               calcInstanceType(None, cState),
                                None,
                                cState.destination,
                                IR.AppletKind.Eval,
@@ -547,7 +548,7 @@ workflow w {
         val applet = IR.Applet(task.name,
                                inputVars,
                                outputVars,
-                               calcInstanceType(Some(task)),
+                               calcInstanceType(Some(task), cState),
                                docker,
                                cState.destination,
                                IR.AppletKind.Task,
@@ -747,7 +748,7 @@ workflow w {
         val applet = IR.Applet(wf.unqualifiedName ++ "_" ++ stageName,
                                inputVars,
                                outputVars,
-                               calcInstanceType(None),
+                               calcInstanceType(None, cState),
                                None,
                                cState.destination,
                                IR.AppletKind.Scatter,
@@ -841,10 +842,11 @@ workflow w {
 
     // compile the WDL source code into intermediate representation
     def apply(ns : WdlNamespace,
+              instanceTypesDB: InstanceTypesDB,
               destination: String,
               cef: CompilerErrorFormatter,
               verbose: Boolean) : (Option[IR.Workflow], Vector[IR.Applet]) = {
-        val cState = new State(destination, cef, verbose)
+        val cState = new State(destination, instanceTypesDB, cef, verbose)
         Utils.trace(cState.verbose, "FrontEnd pass")
 
         // compile all the tasks into applets
