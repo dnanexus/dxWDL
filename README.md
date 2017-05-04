@@ -55,7 +55,7 @@ to the compiler, or building it on their own.
 Download the Broad Institute tools, get the latest versions of
 cromwell and wdl4s. Currently, we are working with wdl4s version
 [0.11](http://broadinstitute.github.io/wdl4s/latest/wdl4s/index.html), and
-cromwell version [25](https://github.com/broadinstitute/cromwell/releases/tag/25).
+cromwell version [26](https://github.com/broadinstitute/cromwell/releases/tag/26).
 
 The instructions here assume an Ubuntu 16.04 system (Xenial).
 
@@ -66,8 +66,8 @@ sudo apt install openjdk-8-jre-headless
 
 Install Scala
 ```
-wget www.scala-lang.org/files/archive/scala-2.11.8.deb
-sudo dpkg -i scala-2.11.8.deb
+wget www.scala-lang.org/files/archive/scala-2.12.1.deb
+sudo dpkg -i scala-2.12.1.deb
 ```
 
 Get ```sbt```, this is a make like utility that works with the ```scala``` language.

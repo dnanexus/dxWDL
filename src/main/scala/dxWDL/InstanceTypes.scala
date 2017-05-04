@@ -61,6 +61,8 @@ object InstanceTypes {
     // instances have been removed, because they work only on Ubuntu
     // 12.04.
     //
+    // Removed the ssd2 instances, because they actually use EBS storage. A better
+    // solution would be asking the platform for the available instances.
     val instanceList : String = """{
         "mem2_ssd1_x2":       {"internalName": "m3.large",                          "traits": {"numCores":   2, "totalMemoryMB":    7225, "ephemeralStorageGB":   27}},
         "mem2_ssd1_x4":       {"internalName": "m3.xlarge",                         "traits": {"numCores":   4, "totalMemoryMB":   14785, "ephemeralStorageGB":   72}},
@@ -70,11 +72,6 @@ object InstanceTypes {
         "mem1_ssd1_x8":       {"internalName": "c3.2xlarge",                        "traits": {"numCores":   8, "totalMemoryMB":   14785, "ephemeralStorageGB":  157}},
         "mem1_ssd1_x16":      {"internalName": "c3.4xlarge",                        "traits": {"numCores":  16, "totalMemoryMB":   29900, "ephemeralStorageGB":  302}},
         "mem1_ssd1_x32":      {"internalName": "c3.8xlarge",                        "traits": {"numCores":  32, "totalMemoryMB":   60139, "ephemeralStorageGB":  637}},
-        "mem1_ssd2_x2":       {"internalName": "c4.large",                          "traits": {"numCores":   2, "totalMemoryMB":    3766, "ephemeralStorageGB":  159}},
-        "mem1_ssd2_x4":       {"internalName": "c4.xlarge",                         "traits": {"numCores":   4, "totalMemoryMB":    7225, "ephemeralStorageGB":  318}},
-        "mem1_ssd2_x8":       {"internalName": "c4.2xlarge",                        "traits": {"numCores":   8, "totalMemoryMB":   14785, "ephemeralStorageGB":  639}},
-        "mem1_ssd2_x16":      {"internalName": "c4.4xlarge",                        "traits": {"numCores":  16, "totalMemoryMB":   29900, "ephemeralStorageGB": 1278}},
-        "mem1_ssd2_x36":      {"internalName": "c4.8xlarge",                        "traits": {"numCores":  36, "totalMemoryMB":   60139, "ephemeralStorageGB": 2877}},
         "mem3_ssd1_x32_gen1": {"internalName": "cr1.8xlarge",                       "traits": {"numCores":  32, "totalMemoryMB":  245751, "ephemeralStorageGB":  237}},
         "mem3_ssd1_x2":       {"internalName": "r3.large",                          "traits": {"numCores":   2, "totalMemoryMB":   15044, "ephemeralStorageGB":   27}},
         "mem3_ssd1_x4":       {"internalName": "r3.xlarge",                         "traits": {"numCores":   4, "totalMemoryMB":   30425, "ephemeralStorageGB":   72}},

@@ -234,7 +234,12 @@ object WdlVarLinks {
     }
 
     // import a WDL value
-    def apply(wdlType: WdlType, wdlValue: WdlValue) : WdlVarLinks = {
+    def apply(wdlTypeOrg: WdlType, wdlValue: WdlValue) : WdlVarLinks = {
+        // Strip optional types
+        val wdlType = wdlTypeOrg match {
+            case WdlOptionalType(t) => t
+            case t => t
+        }
         val jsValue: JsValue = wdlType match {
             case WdlBooleanType | WdlIntegerType | WdlFloatType | WdlStringType
                    | WdlFileType
@@ -262,9 +267,8 @@ object WdlVarLinks {
 
             case _ =>
                 throw new AppInternalException(s"Type ${wdlType} unsupported")
-         }
-
-        WdlVarLinks(wdlType, DxlJsValue(jsValue))
+        }
+        WdlVarLinks(wdlTypeOrg, DxlJsValue(jsValue))
     }
 
     // Convert an input field to a dx-links structure. This allows
@@ -386,6 +390,7 @@ object WdlVarLinks {
                 throw new AppInternalException(s"Unsupported wdlType ${t.toWdlString}")
         }
     }
+
 
     // Read the job-inputs JSON file, and convert the variables
     // to links that can be passed to other applets.

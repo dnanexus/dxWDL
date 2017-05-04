@@ -6,14 +6,13 @@ import org.scalatest.{BeforeAndAfterEach, FlatSpec, OneInstancePerTest}
 import scala.sys.process._
 import spray.json._
 import spray.json.DefaultJsonProtocol
-//import spray.json.JsString
 import wdl4s.{AstTools, Call, Task, WdlExpression, WdlNamespace, WdlNamespaceWithWorkflow, Workflow}
 import wdl4s.AstTools.EnhancedAstNode
 import wdl4s.types._
 import wdl4s.values._
 
 
-class WdlUnitTest extends FlatSpec with BeforeAndAfterEach with OneInstancePerTest {
+class Wdl4sTest extends FlatSpec with BeforeAndAfterEach with OneInstancePerTest {
 
     override def beforeEach() = {
         val metaDir = Utils.getMetaDirPath()
@@ -433,23 +432,6 @@ class WdlUnitTest extends FlatSpec with BeforeAndAfterEach with OneInstancePerTe
         val call : Call = getCallFromNamespace(ns, "mul2")
         val inputs : Map[String,WdlValue] = Map("i" -> WdlInteger(3))
         val outputs : Seq[(String, WdlType, WdlValue)] = evalCall(call, inputs)
-    }
-
-
-    "InstanceTypes" should "Choose reasonable platform instance types" in {
-        assert(InstanceTypes.choose(None, None, None) == "mem1_ssd1_x2")
-
-        // parameters are:          RAM,     disk,     cores
-        assert(InstanceTypes.choose(Some(3), Some(100), Some(4)) == "mem1_ssd2_x4")
-        assert(InstanceTypes.choose(Some(2), Some(20), None) == "mem1_ssd1_x2")
-        assert(InstanceTypes.choose(Some(30), Some(128), Some(8)) == "mem3_ssd1_x8")
-
-        assert(InstanceTypes.apply(Some(WdlString("3 GB")),
-                                   Some(WdlString("local-disk 10 HDD")),
-                                   Some(WdlString("1"))) == "mem1_ssd1_x2")
-        assert(InstanceTypes.apply(Some(WdlString("37 GB")),
-                                   Some(WdlString("local-disk 10 HDD")),
-                                   Some(WdlString("6"))) == "mem3_ssd1_x8")
     }
 
     "SprayJs" should "marshal optionals" in {

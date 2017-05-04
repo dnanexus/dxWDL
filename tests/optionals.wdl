@@ -34,10 +34,9 @@ task ppp_set_def {
 
 # A task that does not use its input arguments.
 task ppp_unused_args {
-#    Int a
-#    Int b
-    Int? c
-    Int? d
+    Int a
+    Int? b
+    Array[String]? ignore
 
     command {
         echo "A task that does not access its input arguments"
@@ -56,10 +55,12 @@ workflow optionals {
     call ppp_mul2 as mul2b { input: i=arg1 }
     call ppp_set_def as set_def
     call ppp_add as add
-    call ppp_unused_args as unused_args
+    call ppp_unused_args as unused_args { input: a=1}
+    call ppp_unused_args as unused_args_a { input: a=1, ignore="null"}
 
     scatter (x in integers) {
-        call ppp_unused_args as unused_args_b
+        call ppp_unused_args as unused_args_b { input: a=x }
+        call ppp_unused_args as unused_args_c { input: a=x*2, ignore=["null"] }
     }
     output {
         mul2.result

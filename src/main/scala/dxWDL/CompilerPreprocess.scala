@@ -83,8 +83,7 @@ object CompilerPreprocess {
                 case a: Ast if a.isMemberAccess =>
                     // Accessing something like A.B.C
                     expr
-                case a: Ast if a.isFunctionCall || a.isUnaryOperator || a.isBinaryOperator
-                      || a.isTupleLiteral || a.isArrayOrMapLookup =>
+                case a: Ast =>
                     // replace an expression with a temporary variable
                     val tmpVarName = genTmpVarName()
                     val calleeDecl: Declaration =
