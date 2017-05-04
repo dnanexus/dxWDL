@@ -1,7 +1,10 @@
 package dxWDL
 
+import com.dnanexus.{DXAPI, DXJSON, DXProject}
+import com.fasterxml.jackson.databind.JsonNode
+import com.fasterxml.jackson.databind.node.ObjectNode
 import spray.json._
-import DefaultJsonProtocol._
+import spray.json.DefaultJsonProtocol
 import wdl4s.types._
 import wdl4s.values._
 
@@ -49,6 +52,97 @@ case class DxInstance(name: String, memory: Int, disk: Int, cpu: Int, price: Flo
             case None => ()
         }
         return true
+    }
+}
+
+case class InstanceTypes {
+    // Calculate the dx instance type that fits best, based on
+    // runtime specifications.
+    //
+    // memory:    minimal amount of RAM, specified in GB
+    // diskSpace: minimal amount of disk space, specified in GB
+    // numCores:  minimal number of cores
+    //
+    // Solving this in an optimal way is a hard problem. The approximation
+    // we use here is:
+    // 1) discard all instances that do not have enough resources
+    // 2) choose the cheapest instance
+    def choose(memory: Option[Int], disk: Option[Int], cpu: Option[Int]) : String = {
+        // step one: discard all instances that are too weak
+        val sufficient: List[DxInstance] = instanceDB.filter(x => x.satisfies(memory, disk, cpu))
+        if (sufficient.length == 0)
+            throw new Exception(s"No instances found that match the requirements (memory=$memory, disk=$disk, cpu=$cpu")
+
+        // step two: choose the cheapest instance
+        val initialGuess = sufficient.head
+        val bestInstance = sufficient.tail.foldLeft(initialGuess){ case (bestSoFar,x) =>
+            if (x.price < bestSoFar.price) x else bestSoFar
+        }
+        bestInstance.name
+    }
+
+    def getMinimalInstanceType() : String = {
+        "mem1_ssd1_x2"
+    }
+
+    // Currently, we support only constants.
+    def apply(wdlMemory: Option[WdlValue],
+               wdlDisk: Option[WdlValue],
+               wdlCpu: Option[WdlValue]) : String = {
+        // Examples for memory specification: "4000 MB", "1 GB"
+        val memory: Option[Int] = wdlMemory match {
+            case None => None
+            case Some(WdlString(buf)) =>
+                val components = buf.split("\\s+")
+                if (components.length != 2)
+                    throw new Exception(s"Can not parse memory specification ${buf}")
+                val i = try { components(0).toInt } catch {
+                    case e: Throwable =>
+                        throw new Exception(s"Parse error for memory specification ${buf}")
+                }
+                val mem: Int = components(1) match {
+                    case "MB" | "M" => Math.ceil(i / 1024).toInt
+                    case "GB" | "G" => i
+                    case "TB" | "T" => i * 1024
+                }
+                Some(mem)
+            case Some(x) =>
+                throw new Exception(s"Memory has to evaluate to a WdlString type ${x.toWdlString}")
+        }
+
+        // Examples: "local-disk 1024 HDD"
+        val disk: Option[Int] = wdlDisk match {
+            case None => None
+            case Some(WdlString(buf)) =>
+                val components = buf.split("\\s+")
+                val ignoreWords = Set("local-disk", "hdd", "sdd")
+                val l = components.filter(x => !(ignoreWords contains x.toLowerCase))
+                if (l.length != 1)
+                    throw new Exception(s"Can't parse disk space specification ${buf}")
+                val i = try { l(0).toInt } catch {
+                    case e: Throwable =>
+                        throw new Exception(s"Parse error for diskSpace attribute ${buf}")
+                }
+                Some(i)
+            case Some(x) =>
+                throw new Exception(s"Disk space has to evaluate to a WdlString type ${x.toWdlString}")
+        }
+
+        // Examples: "1", "12"
+        val cpu: Option[Int] = wdlCpu match {
+            case None => None
+            case Some(WdlString(buf)) =>
+                val i:Int = try { buf.toInt } catch {
+                    case e: Throwable =>
+                        throw new Exception(s"Parse error for cpu specification ${buf}")
+                }
+                Some(i)
+            case Some(WdlInteger(i)) => Some(i)
+            case Some(WdlFloat(x)) => Some(x.toInt)
+            case Some(x) => throw new Exception(s"Cpu has to evaluate to a numeric value ${x}")
+        }
+
+        choose(memory, disk, cpu)
     }
 }
 
@@ -158,6 +252,22 @@ object InstanceTypes {
         }.toMap
     }
 
+    // Query the platform for the available instance types in
+    // this project.
+    def queryAvailableInstanceTypes(dxProject: DXProject) : JsValue = {
+        val req: ObjectNode = DXJSON.getObjectBuilder()
+            .put("fields",
+                 DXJSON.getObjectBuilder().put("availableInstanceTypes", true)
+                     .build())
+            .build()
+        val rep = DXAPI.projectDescribe(dxProject.getId(), req, classOf[JsonNode])
+        Utils.jsValueOfJsonNode(rep)
+    }
+
+    // Figure out the pricing model, by doing a user.describe, or a project.describe
+    def queryPricingModel(dxProject: DXProject) : JsValue = {
+    }
+
     // List of available instances.
     lazy val instanceDB : List[DxInstance]= {
         def intOfJs(jsVal : JsValue) : Int = {
@@ -183,92 +293,4 @@ object InstanceTypes {
         }.toList
     }
 
-    // Calculate the dx instance type that fits best, based on
-    // runtime specifications.
-    //
-    // memory:    minimal amount of RAM, specified in GB
-    // diskSpace: minimal amount of disk space, specified in GB
-    // numCores:  minimal number of cores
-    //
-    // Solving this in an optimal way is a hard problem. The approximation
-    // we use here is:
-    // 1) discard all instances that do not have enough resources
-    // 2) choose the cheapest instance
-    def choose(memory: Option[Int], disk: Option[Int], cpu: Option[Int]) : String = {
-        // step one: discard all instances that are too weak
-        val sufficient: List[DxInstance] = instanceDB.filter(x => x.satisfies(memory, disk, cpu))
-        if (sufficient.length == 0)
-            throw new Exception(s"No instances found that match the requirements (memory=$memory, disk=$disk, cpu=$cpu")
-
-        // step two: choose the cheapest instance
-        val initialGuess = sufficient.head
-        val bestInstance = sufficient.tail.foldLeft(initialGuess){ case (bestSoFar,x) =>
-            if (x.price < bestSoFar.price) x else bestSoFar
-        }
-        bestInstance.name
-    }
-
-    // Currently, we support only constants.
-    def apply(wdlMemory: Option[WdlValue],
-               wdlDisk: Option[WdlValue],
-               wdlCpu: Option[WdlValue]) : String = {
-        // Examples for memory specification: "4000 MB", "1 GB"
-        val memory: Option[Int] = wdlMemory match {
-            case None => None
-            case Some(WdlString(buf)) =>
-                val components = buf.split("\\s+")
-                if (components.length != 2)
-                    throw new Exception(s"Can not parse memory specification ${buf}")
-                val i = try { components(0).toInt } catch {
-                    case e: Throwable =>
-                        throw new Exception(s"Parse error for memory specification ${buf}")
-                }
-                val mem: Int = components(1) match {
-                    case "MB" | "M" => Math.ceil(i / 1024).toInt
-                    case "GB" | "G" => i
-                    case "TB" | "T" => i * 1024
-                }
-                Some(mem)
-            case Some(x) =>
-                throw new Exception(s"Memory has to evaluate to a WdlString type ${x.toWdlString}")
-        }
-
-        // Examples: "local-disk 1024 HDD"
-        val disk: Option[Int] = wdlDisk match {
-            case None => None
-            case Some(WdlString(buf)) =>
-                val components = buf.split("\\s+")
-                val ignoreWords = Set("local-disk", "hdd", "sdd")
-                val l = components.filter(x => !(ignoreWords contains x.toLowerCase))
-                if (l.length != 1)
-                    throw new Exception(s"Can't parse disk space specification ${buf}")
-                val i = try { l(0).toInt } catch {
-                    case e: Throwable =>
-                        throw new Exception(s"Parse error for diskSpace attribute ${buf}")
-                }
-                Some(i)
-            case Some(x) =>
-                throw new Exception(s"Disk space has to evaluate to a WdlString type ${x.toWdlString}")
-        }
-
-        // Examples: "1", "12"
-        val cpu: Option[Int] = wdlCpu match {
-            case None => None
-            case Some(WdlString(buf)) =>
-                val i:Int = try { buf.toInt } catch {
-                    case e: Throwable =>
-                        throw new Exception(s"Parse error for cpu specification ${buf}")
-                }
-                Some(i)
-            case Some(WdlInteger(i)) => Some(i)
-            case Some(WdlFloat(x)) => Some(x.toInt)
-            case Some(x) => throw new Exception(s"Cpu has to evaluate to a numeric value ${x}")
-        }
-
-        choose(memory, disk, cpu)
-    }
-
-    def getMinimalInstanceType() : String = {
-        "mem1_ssd1_x2"
-    }
 }

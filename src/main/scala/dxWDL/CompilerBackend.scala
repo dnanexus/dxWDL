@@ -521,6 +521,10 @@ object CompilerBackend {
         Utils.trace(verbose, "Backend pass")
         val cState = State(dxWDLrtId, dxProject, folder, cef, force, verbose)
 
+        // Figure out what instance types are available for this project
+        val availbleInstanceTypes = InstanceTypes.queryAvailableInstanceTypes(dxProject)
+        Utils.trace(cState.verbose, s"${availbleInstanceTypes}")
+
         // create fresh workflow
         removeOldWorkflow(wf.name, dxProject, folder)
         val dxwfl = DXWorkflow.newWorkflow().setProject(dxProject).setFolder(folder)

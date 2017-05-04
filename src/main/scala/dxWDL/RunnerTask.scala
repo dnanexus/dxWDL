@@ -294,7 +294,6 @@ object RunnerTask {
     }
 
     def runSubJob(entryPoint:String, instanceType:String, inputs:ObjectNode) : DXJob = {
-        // req_input["systemRequirements"] = {fn_name: {"instanceType": instance_type}}
         val req: ObjectNode = DXJSON.getObjectBuilder()
             .put("function", entryPoint)
             .put("input", inputs)
@@ -305,7 +304,6 @@ object RunnerTask {
                                                    .build())
                      .build())
             .build()
-        System.err.println(s"runSubJob req=${Utils.jsValueOfJsonNode(req)}")
         val retval: JsonNode = DXAPI.jobNew(req, classOf[JsonNode])
         val info: JsValue =  Utils.jsValueOfJsonNode(retval)
         val id:String = info.asJsObject.fields.get("id") match {
