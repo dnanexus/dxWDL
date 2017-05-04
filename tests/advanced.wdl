@@ -1,6 +1,7 @@
 task jjj_str_animals {
     String s
     Int num_cores
+    Int disk_size
     Int? num
     String? foo
     String family_i = "Family ${s}"
@@ -9,7 +10,9 @@ task jjj_str_animals {
         echo "${s} --K -S --flags --contamination ${default=0 num} --s ${default="foobar" foo}"
     }
     runtime {
-        cpu: num_cores
+       disks: "local-disk " + disk_size + " HDD"
+       cpu: num_cores
+       memory: "2 GB"
     }
     output {
         String result = read_string(stdout())
@@ -57,7 +60,7 @@ workflow advanced {
     Array[String] names = ["Jack.XX", "Gil.XX", "Jane.UU"]
 
     call jjj_str_animals as str_animals {
-        input: s=species, num_cores=3
+        input: s=species, num_cores=3, disk_size=100
     }
     scatter (name in names) {
         call jjj_ident {

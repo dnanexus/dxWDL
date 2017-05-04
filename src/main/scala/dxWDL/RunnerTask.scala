@@ -276,7 +276,11 @@ object RunnerTask {
         val memory = evalAttr("memory")
         val diskSpace = evalAttr("disks")
         val cores = evalAttr("cpu")
-        InstanceTypes.apply(memory, diskSpace, cores)
+        val instanceType = InstanceTypes.apply(memory, diskSpace, cores)
+        System.err.println(s"""|calcInstaceType memory=${memory} disk=${diskSpace}
+                               |cores=${cores} instancetype=${instanceType}"""
+                               .stripMargin.replaceAll("\n", " "))
+        instanceType
     }
 
     def relaunchBuildInputs(inputWvls: Map[String, WdlVarLinks]) : ObjectNode = {
@@ -290,14 +294,19 @@ object RunnerTask {
     }
 
     def runSubJob(entryPoint:String, instanceType:String, inputs:ObjectNode) : DXJob = {
-        val processJobInputHash: ObjectNode = DXJSON.getObjectBuilder()
+        // req_input["systemRequirements"] = {fn_name: {"instanceType": instance_type}}
+        val req: ObjectNode = DXJSON.getObjectBuilder()
             .put("function", entryPoint)
             .put("input", inputs)
-            .put("instanceType", DXJSON.getObjectBuilder()
-                      .put(entryPoint, instanceType)
-                      .build())
+            .put("systemRequirements",
+                 DXJSON.getObjectBuilder().put(entryPoint,
+                                               DXJSON.getObjectBuilder()
+                                                   .put("instanceType", instanceType)
+                                                   .build())
+                     .build())
             .build()
-        val retval: JsonNode = DXAPI.jobNew(processJobInputHash, classOf[JsonNode])
+        System.err.println(s"runSubJob req=${Utils.jsValueOfJsonNode(req)}")
+        val retval: JsonNode = DXAPI.jobNew(req, classOf[JsonNode])
         val info: JsValue =  Utils.jsValueOfJsonNode(retval)
         val id:String = info.asJsObject.fields.get("id") match {
             case Some(JsString(x)) => x

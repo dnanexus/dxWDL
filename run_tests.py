@@ -271,20 +271,30 @@ def wait_for_completion(test_analyses):
     print("done")
 
 
-# Run [workflow] on several inputs. Return a tuple with three elements:
-#  - job-ids of running analysis
-#  - names of result folders
-#  - expected results
+
+# Run [workflow] on several inputs, return the analysis ID.
 def run_workflow(project, test_folder, wf_name, wfId, inputs):
-    workflow = dxpy.DXWorkflow(project=project.get_id(), dxid=wfId)
-    test_folder = os.path.join(test_folder, wf_name)
-    project.new_folder(test_folder, parents=True)
-    job = workflow.run(inputs,
-                       project=project.get_id(),
-                       folder=test_folder,
-                       name="{} {}".format(wf_name, git_revision),
-                       instance_type="mem1_ssd1_x2")
-    return job
+    def once(project, test_folder, wf_name, wfId, inputs):
+        try:
+            workflow = dxpy.DXWorkflow(project=project.get_id(), dxid=wfId)
+            test_folder = os.path.join(test_folder, wf_name)
+            project.new_folder(test_folder, parents=True)
+            job = workflow.run(inputs,
+                               project=project.get_id(),
+                               folder=test_folder,
+                               name="{} {}".format(wf_name, git_revision),
+                               instance_type="mem1_ssd1_x2")
+            return job
+        except:
+            return None
+
+    for i in range(1,5):
+        retval = once(project, test_folder, wf_name, wfId, inputs)
+        if retval is not None:
+            return retval
+        print("Sleeping for 5 seconds before trying again")
+        time.sleep(5)
+    raise ("Error running workflow")
 
 
 def print_test_list():

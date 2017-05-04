@@ -19,6 +19,7 @@ import WdlVarLinks._
 
 object CompilerBackend {
     val MAX_NUM_RETRIES = 5
+    val MIN_SLEEP_SEC = 5
     val MAX_SLEEP_SEC = 30
 
     // Compiler state.
@@ -243,6 +244,11 @@ object CompilerBackend {
     //
     def calcRunSpec(iType: IR.InstanceTypeSpec, dxWDLrtId: String) : JsValue = {
         // find the dxWDL asset
+        val instanceType:String = iType match {
+            case IR.InstTypeConst(x) => x
+            case IR.InstTypeDefault | IR.InstTypeRuntime =>
+                InstanceTypes.getMinimalInstanceType()
+        }
         val runSpec: Map[String, JsValue] = Map(
             "interpreter" -> JsString("bash"),
             "file" -> JsString("src/code.sh"),
@@ -250,18 +256,12 @@ object CompilerBackend {
             "release" -> JsString("14.04"),
             "assetDepends" -> JsArray(
                 JsObject("id" -> JsString(dxWDLrtId))
-            )
+            ),
+            "systemRequirements" ->
+                JsObject("main" ->
+                             JsObject("instanceType" -> JsString(instanceType)))
         )
-
-        val instanceType: Map[String, JsValue] = iType match {
-            case IR.InstTypeDefault => Map()
-            case IR.InstTypeConst(x) =>
-                Map("systemRequirements" ->
-                        JsObject("main" ->
-                                     JsObject("instanceType" -> JsString(x))))
-            case IR.InstTypeRuntime => Map()
-        }
-        JsObject(runSpec ++ instanceType)
+        JsObject(runSpec)
     }
 
     // Perform a "dx build" on a local directory representing an applet
@@ -298,7 +298,7 @@ object CompilerBackend {
         }
 
         // Retry the build operation with exponential backoff
-        var retrySleepSec = 2
+        var retrySleepSec = MIN_SLEEP_SEC
         for (i <- 1 to MAX_NUM_RETRIES) {
             build() match {
                 case None => ()
