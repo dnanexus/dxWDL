@@ -471,6 +471,14 @@ object Utils {
         }
     }
 
+    def stripOptional(t: WdlType) : WdlType = {
+        t match {
+            case WdlOptionalType(x) => x
+            case x => x
+        }
+    }
+
+
     // Replace all special json characters from with a white space.
     def sanitize(s : String) : String = {
         def sanitizeChar(ch: Char) : String = ch match {

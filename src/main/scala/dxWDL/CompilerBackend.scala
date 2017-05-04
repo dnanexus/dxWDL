@@ -448,18 +448,25 @@ object CompilerBackend {
     // source is a File, and the target is an Array[File], we can
     // modify the JSON to get around this.
     def genFieldsCastIfRequired(wvl: WdlVarLinks,
-                                srcType: WdlType,
+                                rawSrcType: WdlType,
                                 bindName: String,
                                 cState: State) : List[(String, JsonNode)] = {
-        if (srcType == wvl.wdlType) {
+//        System.err.println(s"genFieldsCastIfRequired(${bindName})  trgType=${wvl.wdlType.toWdlString} srcType=${srcType.toWdlString}")
+        val srcType = Utils.stripOptional(rawSrcType)
+        val trgType = Utils.stripOptional(wvl.wdlType)
+
+        if (trgType == srcType) {
             WdlVarLinks.genFields(wvl, bindName)
-        } else if (wvl.wdlType == WdlArrayType(srcType)) {
+        } else if (trgType == WdlArrayType(srcType)) {
+            // Cast from T to Array[T]
             WdlVarLinks.genFields(wvl, bindName).map{ case(key, jsonNode) =>
                 val jsonArr = DXJSON.getArrayBuilder().add(jsonNode).build()
                 (key, jsonArr)
             }.toList
         } else {
-            throw new Exception(s"Linking error: source type=${srcType} target type=${wvl.wdlType}, bindName=${bindName}")
+            throw new Exception(s"""|Linking error: source type=${rawSrcType.toWdlString}
+                                    |target type=${wvl.wdlType.toWdlString}, bindName=${bindName}"""
+                                    .stripMargin.replaceAll("\n", " "))
         }
     }
 
@@ -479,7 +486,7 @@ object CompilerBackend {
                         // in a value at runtime.
                         dxBuilder
                     case IR.SArgConst(wValue) =>
-                        val wvl = WdlVarLinks.apply(wValue.wdlType, wValue)
+                        val wvl = WdlVarLinks.apply(cVar.wdlType, wValue)
                         val fields = genFieldsCastIfRequired(wvl, wValue.wdlType, cVar.dxVarName, cState)
                         fields.foldLeft(dxBuilder) { case (b, (fieldName, jsonNode)) =>
                             b.put(fieldName, jsonNode)
