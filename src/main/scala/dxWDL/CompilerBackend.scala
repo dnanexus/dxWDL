@@ -26,7 +26,7 @@ object CompilerBackend {
     // Packs common arguments passed between methods.
     case class State(dxWDLrtId: String,
                      dxProject: DXProject,
-                     instanceTypesDB: InstanceTypesDB,
+                     instanceTypeDB: InstanceTypeDB,
                      folder: String,
                      cef: CompilerErrorFormatter,
                      force: Boolean,
@@ -248,7 +248,7 @@ object CompilerBackend {
         val instanceType:String = iType match {
             case IR.InstTypeConst(x) => x
             case IR.InstTypeDefault | IR.InstTypeRuntime =>
-                cState.instanceTypesDB.getMinimalInstanceType()
+                cState.instanceTypeDB.getMinimalInstanceType()
         }
         val runSpec: Map[String, JsValue] = Map(
             "interpreter" -> JsString("bash"),
@@ -507,14 +507,14 @@ object CompilerBackend {
     // Compile a single applet
     def apply(applet: IR.Applet,
               dxProject: DXProject,
-              instanceTypesDB: InstanceTypesDB,
+              instanceTypeDB: InstanceTypeDB,
               dxWDLrtId: String,
               folder: String,
               cef: CompilerErrorFormatter,
               force: Boolean,
               verbose: Boolean) : DXApplet = {
         Utils.trace(verbose, "Backend pass, single applet")
-        val cState = State(dxWDLrtId, dxProject, instanceTypesDB, folder, cef, force, verbose)
+        val cState = State(dxWDLrtId, dxProject, instanceTypeDB, folder, cef, force, verbose)
         val (dxApplet, _) = buildAppletIfNeeded(applet, Map.empty, cState)
         dxApplet
     }
@@ -522,14 +522,14 @@ object CompilerBackend {
     // Compile an entire workflow
     def apply(wf: IR.Workflow,
               dxProject: DXProject,
-              instanceTypesDB: InstanceTypesDB,
+              instanceTypeDB: InstanceTypeDB,
               dxWDLrtId: String,
               folder: String,
               cef: CompilerErrorFormatter,
               force: Boolean,
               verbose: Boolean) : DXWorkflow = {
         Utils.trace(verbose, "Backend pass")
-        val cState = State(dxWDLrtId, dxProject, instanceTypesDB, folder, cef, force, verbose)
+        val cState = State(dxWDLrtId, dxProject, instanceTypeDB, folder, cef, force, verbose)
 
         // create fresh workflow
         removeOldWorkflow(wf.name, dxProject, folder)

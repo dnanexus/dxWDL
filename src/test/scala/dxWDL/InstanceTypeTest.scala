@@ -4,10 +4,10 @@ import org.scalatest.{BeforeAndAfterEach, FlatSpec, OneInstancePerTest}
 import wdl4s.types._
 import wdl4s.values._
 
-class InstaceTypesTest extends FlatSpec with BeforeAndAfterEach with OneInstancePerTest {
+class InstaceTypeTest extends FlatSpec with BeforeAndAfterEach with OneInstancePerTest {
 
-    "InstanceTypes" should "Choose reasonable platform instance types" in {
-        val db = InstanceTypesDB.genHardcoded()
+    "InstanceTypeDB" should "Choose reasonable platform instance types" in {
+        val db = InstanceTypeDB.genHardcoded()
 
         assert(db.choose(None, None, None) == "mem1_ssd1_x2")
 

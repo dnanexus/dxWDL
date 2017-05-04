@@ -43,7 +43,7 @@ object CompilerFrontEnd {
     // Compiler state.
     // Packs common arguments passed between methods.
     case class State(destination: String,
-                     instanceTypesDB: InstanceTypesDB,
+                     instanceTypeDB: InstanceTypeDB,
                      cef: CompilerErrorFormatter,
                      verbose: Boolean)
 
@@ -238,7 +238,7 @@ task Add {
                     val memory = evalAttr(task, "memory")
                     val diskSpace = evalAttr(task, "disks")
                     val cores = evalAttr(task, "cpu")
-                    IR.InstTypeConst(cState.instanceTypesDB.apply(memory, diskSpace, cores))
+                    IR.InstTypeConst(cState.instanceTypeDB.apply(memory, diskSpace, cores))
             }
         } catch {
             case e : DynamicInstanceTypesException =>
@@ -842,11 +842,11 @@ workflow w {
 
     // compile the WDL source code into intermediate representation
     def apply(ns : WdlNamespace,
-              instanceTypesDB: InstanceTypesDB,
+              instanceTypeDB: InstanceTypeDB,
               destination: String,
               cef: CompilerErrorFormatter,
               verbose: Boolean) : (Option[IR.Workflow], Vector[IR.Applet]) = {
-        val cState = new State(destination, instanceTypesDB, cef, verbose)
+        val cState = new State(destination, instanceTypeDB, cef, verbose)
         Utils.trace(cState.verbose, "FrontEnd pass")
 
         // compile all the tasks into applets

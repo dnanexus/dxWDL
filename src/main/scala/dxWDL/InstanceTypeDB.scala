@@ -57,7 +57,7 @@ case class DxInstance(name: String, memory: Int, disk: Int, cpu: Int, price: Flo
     }
 }
 
-case class InstanceTypesDB(instanceDB: List[DxInstance]) {
+case class InstanceTypeDB(instanceDB: List[DxInstance]) {
     // Calculate the dx instance type that fits best, based on
     // runtime specifications.
     //
@@ -148,7 +148,7 @@ case class InstanceTypesDB(instanceDB: List[DxInstance]) {
     }
 }
 
-object InstanceTypesDB {
+object InstanceTypeDB {
     // The original list is at:
     // https://github.com/dnanexus/nucleus/blob/master/node_modules/instance_types/aws_instance_types.json
     //
@@ -244,7 +244,7 @@ object InstanceTypesDB {
 
 
     // Create an availble instance list based on a hard coded list
-    def genHardcoded() : InstanceTypesDB = {
+    def genHardcoded() : InstanceTypeDB = {
         def intOfJs(jsVal : JsValue) : Int = {
             jsVal match {
                 case JsNumber(x) => x.toInt
@@ -277,7 +277,7 @@ object InstanceTypesDB {
             val cpu = intOfJs(traits("numCores"))
             DxInstance(name, memory, disk, cpu, price)
         }.toList
-        InstanceTypesDB(db)
+        InstanceTypeDB(db)
     }
 
     // Query the platform for the available instance types in
@@ -285,7 +285,7 @@ object InstanceTypesDB {
     def queryAvailableInstanceTypes(dxProject: DXProject) : JsValue = {
         val req: ObjectNode = DXJSON.getObjectBuilder()
             .put("fields",
-                 DXJSON.getObjectBuilder().put("availableInstanceTypes", true)
+                 DXJSON.getObjectBuilder().put("availableInstanceType", true)
                      .build())
             .build()
         val rep = DXAPI.projectDescribe(dxProject.getId(), req, classOf[JsonNode])
@@ -296,7 +296,7 @@ object InstanceTypesDB {
     //def queryPricingModel(dxProject: DXProject) : JsValue = {
     //}
 
-    def query(dxProject: DXProject) : InstanceTypesDB = {
+    def query(dxProject: DXProject) : InstanceTypeDB = {
         val js = queryAvailableInstanceTypes(dxProject)
         genHardcoded()
     }

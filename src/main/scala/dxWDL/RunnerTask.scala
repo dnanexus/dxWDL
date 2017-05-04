@@ -251,7 +251,7 @@ object RunnerTask {
     // this task requires.
     def calcInstanceType(task: Task,
                          taskInputs: Map[String, WdlVarLinks],
-                         instanceTypesDB: InstanceTypesDB) : String = {
+                         instanceTypeDB: InstanceTypeDB) : String = {
         // input variables that were already calculated
         val env = HashMap.empty[String, WdlValue]
         def lookup(varName : String) : WdlValue = {
@@ -278,7 +278,7 @@ object RunnerTask {
         val memory = evalAttr("memory")
         val diskSpace = evalAttr("disks")
         val cores = evalAttr("cpu")
-        val instanceType = instanceTypesDB.apply(memory, diskSpace, cores)
+        val instanceType = instanceTypeDB.apply(memory, diskSpace, cores)
         System.err.println(s"""|calcInstaceType memory=${memory} disk=${diskSpace}
                                |cores=${cores} instancetype=${instanceType}"""
                                .stripMargin.replaceAll("\n", " "))
@@ -335,11 +335,11 @@ object RunnerTask {
         val inputWvls = WdlVarLinks.loadJobInputsAsLinks(inputLines, inputTypes)
 
         // Figure out the available instance types
-        val instanceTypesDB = InstanceTypesDB.query(dxProject)
+        val instanceTypeDB = InstanceTypeDB.query(dxProject)
 
         // evaluate the runtime attributes
         // determine the instance type
-        val instanceType:String = calcInstanceType(task, inputWvls, instanceTypesDB)
+        val instanceType:String = calcInstanceType(task, inputWvls, instanceTypeDB)
 
         // relaunch the applet on the correct instance type
         val inputs = relaunchBuildInputs(inputWvls)

@@ -171,13 +171,13 @@ object Main extends App {
         val ns = WdlNamespace.loadUsingPath(simplWdlPath, None, None).get
 
         // get available list of instance types
-        val instanceTypesDB = InstanceTypesDB.query(dxProject)
+        val instanceTypeDB = InstanceTypeDB.query(dxProject)
 
         // Backbone of compilation process.
         // 1) Compile the WDL workflow into an Intermediate Representation (IR)
         // 2) Generate dx:applets and dx:workflow from the IR
         val cef = new CompilerErrorFormatter(ns.terminalMap)
-        val (irWf, irApplets) = CompilerFrontEnd.apply(ns, instanceTypesDB, folder, cef, verbose)
+        val (irWf, irApplets) = CompilerFrontEnd.apply(ns, instanceTypeDB, folder, cef, verbose)
 
         irWf match {
             case None =>
@@ -187,7 +187,7 @@ object Main extends App {
                 mode match {
                     case None =>
                         val dxApplets = irApplets.map(x =>
-                            CompilerBackend.apply(x, dxProject, instanceTypesDB, dxWDLrtId,
+                            CompilerBackend.apply(x, dxProject, instanceTypeDB, dxWDLrtId,
                                                   folder, cef, force, verbose)
                         )
                         val ids: Seq[String] = dxApplets.map(x => x.getId())
@@ -201,7 +201,7 @@ object Main extends App {
                 prettyPrintWorkflowIR(wdlSourceFile, iRepWf, verbose)
                 mode match {
                     case None =>
-                        val dxwfl = CompilerBackend.apply(iRepWf, dxProject, instanceTypesDB,
+                        val dxwfl = CompilerBackend.apply(iRepWf, dxProject, instanceTypeDB,
                                                           dxWDLrtId,
                                                           folder, cef, force, verbose)
                         dxwfl.getId()
