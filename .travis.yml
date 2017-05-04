@@ -1,6 +1,6 @@
 language: scala
 sudo: true
-dist: xenial
+dist: trusty
 
 # We do not want to start a travis build
 # for modifications to any branch.
