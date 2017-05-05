@@ -285,19 +285,21 @@ object InstanceTypeDB {
     def queryAvailableInstanceTypes(dxProject: DXProject) : JsValue = {
         val req: ObjectNode = DXJSON.getObjectBuilder()
             .put("fields",
-                 DXJSON.getObjectBuilder().put("availableInstanceType", true)
+                 DXJSON.getObjectBuilder().put("availableInstanceTypes", true)
                      .build())
             .build()
         val rep = DXAPI.projectDescribe(dxProject.getId(), req, classOf[JsonNode])
         Utils.jsValueOfJsonNode(rep)
     }
 
-    // Figure out the pricing model, by doing a user.describe, or a project.describe
-    //def queryPricingModel(dxProject: DXProject) : JsValue = {
-    //}
-
+    // Figure out the pricing model, by doing a project.describe
     def query(dxProject: DXProject) : InstanceTypeDB = {
-        val js = queryAvailableInstanceTypes(dxProject)
-        genHardcoded()
+        val available: JsValue = queryAvailableInstanceTypes(dxProject)
+        System.err.println(s"${available.prettyPrint}")
+
+        // get billTo from project
+        // describe the billTo, and get the billing model
+
+        throw new RuntimeException("query not fully implemented yet")
     }
 }

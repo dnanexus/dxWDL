@@ -160,6 +160,9 @@ object Main extends App {
         }
         val mode: Option[String] = options.get("mode")
 
+        // get available list of instance types
+        val instanceTypeDB = InstanceTypeDB.query(dxProject)
+
         // Simplify the source file
         // Create a new file to hold the result.
         //
@@ -169,9 +172,6 @@ object Main extends App {
 
         // extract the workflow
         val ns = WdlNamespace.loadUsingPath(simplWdlPath, None, None).get
-
-        // get available list of instance types
-        val instanceTypeDB = InstanceTypeDB.query(dxProject)
 
         // Backbone of compilation process.
         // 1) Compile the WDL workflow into an Intermediate Representation (IR)
