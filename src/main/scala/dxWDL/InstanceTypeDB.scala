@@ -18,7 +18,7 @@ how much it costs to run.
 
 resource    measurement units
 --------    -----------------
-memory      GB of RAM
+memory      MB of RAM
 disk        GB of disk space, hard drive or flash drive
 cpu         1 per core
 price       comparative price
@@ -30,23 +30,35 @@ package dxWDL
 import com.dnanexus.{DXAPI, DXJSON, DXProject}
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.node.ObjectNode
+import java.nio.file.Path
 import spray.json._
 import spray.json.DefaultJsonProtocol
 import wdl4s.types._
 import wdl4s.values._
 
-case class DxInstance(name: String, memory: Int, disk: Int, cpu: Int, price: Float) {
+// Instance Type on the platform. For example:
+// name:   mem1_ssd1_x4
+// memory: 4096 MB
+// disk:   80 GB
+// price:  0.5 dollar per hour
+// os:     [(Ubuntu, 12.04), (Ubuntu, 14.04)}
+case class DxInstanceType(name: String,
+                          memoryMB: Int,
+                          diskGB: Int,
+                          cpu: Int,
+                          price: Float,
+                          os: Vector[(String, String)]) {
 
     // Does this instance satisfy the requirements?
     def satisfies(memReq: Option[Int],
                   diskReq: Option[Int],
                   cpuReq: Option[Int]) : Boolean = {
         memReq match {
-            case Some(x) => if (memory < x) return false
+            case Some(x) => if (memoryMB < x) return false
             case None => ()
         }
         diskReq match {
-            case Some(x) => if (disk < x) return false
+            case Some(x) => if (diskGB < x) return false
             case None => ()
         }
         cpuReq match {
@@ -57,11 +69,16 @@ case class DxInstance(name: String, memory: Int, disk: Int, cpu: Int, price: Flo
     }
 }
 
-case class InstanceTypeDB(instanceDB: List[DxInstance]) {
+// support automatic conversion to/from JsValue
+object DxInstanceType extends DefaultJsonProtocol {
+    implicit val dxInstanceTypeFormat = jsonFormat6(DxInstanceType.apply)
+}
+
+case class InstanceTypeDB(instances: Vector[DxInstanceType]) {
     // Calculate the dx instance type that fits best, based on
     // runtime specifications.
     //
-    // memory:    minimal amount of RAM, specified in GB
+    // memory:    minimal amount of RAM, specified in MB
     // diskSpace: minimal amount of disk space, specified in GB
     // numCores:  minimal number of cores
     //
@@ -69,11 +86,12 @@ case class InstanceTypeDB(instanceDB: List[DxInstance]) {
     // we use here is:
     // 1) discard all instances that do not have enough resources
     // 2) choose the cheapest instance
-    def choose(memory: Option[Int], disk: Option[Int], cpu: Option[Int]) : String = {
+    def choose(memoryMB: Option[Int], diskGB: Option[Int], cpu: Option[Int]) : String = {
         // step one: discard all instances that are too weak
-        val sufficient: List[DxInstance] = instanceDB.filter(x => x.satisfies(memory, disk, cpu))
+        val sufficient: Vector[DxInstanceType] =
+            instances.filter(x => x.satisfies(memoryMB, diskGB, cpu))
         if (sufficient.length == 0)
-            throw new Exception(s"No instances found that match the requirements (memory=$memory, disk=$disk, cpu=$cpu")
+            throw new Exception(s"No instances found that match the requirements (memory=$memoryMB, diskGB=$diskGB, cpu=$cpu")
 
         // step two: choose the cheapest instance
         val initialGuess = sufficient.head
@@ -88,11 +106,11 @@ case class InstanceTypeDB(instanceDB: List[DxInstance]) {
     }
 
     // Currently, we support only constants.
-    def apply(wdlMemory: Option[WdlValue],
-               wdlDisk: Option[WdlValue],
-               wdlCpu: Option[WdlValue]) : String = {
+    def apply(wdlMemoryMB: Option[WdlValue],
+              wdlDiskGB: Option[WdlValue],
+              wdlCpu: Option[WdlValue]) : String = {
         // Examples for memory specification: "4000 MB", "1 GB"
-        val memory: Option[Int] = wdlMemory match {
+        val memoryMB: Option[Int] = wdlMemoryMB match {
             case None => None
             case Some(WdlString(buf)) =>
                 val components = buf.split("\\s+")
@@ -103,9 +121,9 @@ case class InstanceTypeDB(instanceDB: List[DxInstance]) {
                         throw new Exception(s"Parse error for memory specification ${buf}")
                 }
                 val mem: Int = components(1) match {
-                    case "MB" | "M" => Math.ceil(i / 1024).toInt
-                    case "GB" | "G" => i
-                    case "TB" | "T" => i * 1024
+                    case "MB" | "M" => i
+                    case "GB" | "G" => i * 1024
+                    case "TB" | "T" => i * 1024 * 1024
                 }
                 Some(mem)
             case Some(x) =>
@@ -113,7 +131,7 @@ case class InstanceTypeDB(instanceDB: List[DxInstance]) {
         }
 
         // Examples: "local-disk 1024 HDD"
-        val disk: Option[Int] = wdlDisk match {
+        val diskGB: Option[Int] = wdlDiskGB match {
             case None => None
             case Some(WdlString(buf)) =>
                 val components = buf.split("\\s+")
@@ -144,11 +162,16 @@ case class InstanceTypeDB(instanceDB: List[DxInstance]) {
             case Some(x) => throw new Exception(s"Cpu has to evaluate to a numeric value ${x}")
         }
 
-        choose(memory, disk, cpu)
+        choose(memoryMB, diskGB, cpu)
     }
+
 }
 
-object InstanceTypeDB {
+
+object InstanceTypeDB extends DefaultJsonProtocol {
+    // support automatic conversion to/from JsValue
+    implicit val instanceTypeDBFormat = jsonFormat1(InstanceTypeDB.apply)
+
     // The original list is at:
     // https://github.com/dnanexus/nucleus/blob/master/node_modules/instance_types/aws_instance_types.json
     //
@@ -272,34 +295,176 @@ object InstanceTypeDB {
             val price: Float = awsOnDemandHourlyPriceTable(internalName)
 
             val traits = fields("traits").asJsObject.fields
-            val memory = intOfJs(traits("totalMemoryMB")) / 1024
-            val disk = intOfJs(traits("ephemeralStorageGB"))
+            val memoryMB = intOfJs(traits("totalMemoryMB"))
+            val diskGB = intOfJs(traits("ephemeralStorageGB"))
             val cpu = intOfJs(traits("numCores"))
-            DxInstance(name, memory, disk, cpu, price)
-        }.toList
+            DxInstanceType(name, memoryMB, diskGB, cpu, price, Vector.empty)
+        }.toVector
         InstanceTypeDB(db)
+    }
+
+    // Extract an integer fields from a JsObject
+    private def getJsIntField(js: JsValue, fieldName:String) : Int = {
+        js.asJsObject.fields.get(fieldName) match {
+            case Some(JsNumber(x)) => x.toInt
+            case Some(JsString(x)) => x.toInt
+            case _ => throw new Exception(s"Missing field ${fieldName} in JSON ${js.prettyPrint}}")
+        }
+    }
+
+    private def getJsStringField(js: JsValue, fieldName:String) : String = {
+        js.asJsObject.fields.get(fieldName) match {
+            case Some(JsNumber(x)) => x.toString
+            case Some(JsString(x)) => x
+            case _ => throw new Exception(s"Missing field ${fieldName} in JSON ${js.prettyPrint}}")
+        }
     }
 
     // Query the platform for the available instance types in
     // this project.
-    def queryAvailableInstanceTypes(dxProject: DXProject) : JsValue = {
+    def queryAvailableInstanceTypes(dxProject: DXProject) : Map[String, DxInstanceType] = {
+
+        // get List of supported OSes
+        def getSupportedOSes(js: JsValue) : Vector[(String, String)]= {
+            val osSupported:Vector[JsValue] = js.asJsObject.fields.get("os") match {
+                case Some(JsArray(x)) => x
+                case _ => throw new Exception(s"Missing field os in JSON ${js.prettyPrint}")
+            }
+            osSupported.map{ elem =>
+                val distribution = getJsStringField(elem, "distribution")
+                val release = getJsStringField(elem, "release")
+                distribution -> release
+            }.toVector
+        }
+
+        val availableField = "availableInstanceTypes"
         val req: ObjectNode = DXJSON.getObjectBuilder()
             .put("fields",
-                 DXJSON.getObjectBuilder().put("availableInstanceTypes", true)
+                 DXJSON.getObjectBuilder().put(availableField, true)
                      .build())
             .build()
         val rep = DXAPI.projectDescribe(dxProject.getId(), req, classOf[JsonNode])
-        Utils.jsValueOfJsonNode(rep)
+        val repJs:JsValue = Utils.jsValueOfJsonNode(rep)
+        val availableInstanceTypes:JsValue =
+            repJs.asJsObject.fields.get(availableField) match {
+                case Some(x) => x
+                case None => throw new Exception(
+                    s"Field ${availableField} is missing ${repJs.prettyPrint}")
+            }
+
+        // convert to a list of DxInstanceTypes, with prices set to zero
+        availableInstanceTypes.asJsObject.fields.map{ case (iName, jsValue) =>
+            val numCores = getJsIntField(jsValue, "numCores")
+            val memoryMB = getJsIntField(jsValue, "totalMemoryMB")
+            val diskSpaceGB = getJsIntField(jsValue, "ephemeralStorageGB")
+            val os = getSupportedOSes(jsValue)
+            val dxInstanceType = DxInstanceType(iName, memoryMB, diskSpaceGB, numCores, 0, os)
+            iName -> dxInstanceType
+        }.toMap
     }
 
-    // Figure out the pricing model, by doing a project.describe
+    // describe a project, and extract fields that not currently available
+    // through dxjava.
+    def getProjectExtraInfo(dxProject: DXProject) : (String,String) = {
+        val rep = DXAPI.projectDescribe(dxProject.getId(), classOf[JsonNode])
+        val jso:JsObject = Utils.jsValueOfJsonNode(rep).asJsObject
+
+        val billTo = jso.fields.get("billTo") match {
+            case Some(JsString(x)) => x
+            case _ => throw new Exception(s"Failed to get billTo from project ${dxProject.getId()}")
+        }
+        val region = jso.fields.get("region") match {
+            case Some(JsString(x)) => x
+            case _ => throw new Exception(s"Failed to get region from project ${dxProject.getId()}")
+        }
+        (billTo,region)
+    }
+
+    // Get the mapping from instance type to price, limited to the project
+    // we are in.
+    def getPricingModel(billTo:String, region:String) : Map[String, Float] = {
+        val req: ObjectNode = DXJSON.getObjectBuilder()
+            .put("fields",
+                 DXJSON.getObjectBuilder().put("pricingModelsByRegion", true)
+                     .build())
+            .build()
+        val rep = DXAPI.userDescribe(billTo, req, classOf[JsonNode])
+        val jso: JsObject = Utils.jsValueOfJsonNode(rep).asJsObject
+        val pricingModelsByRegion = jso.fields.get("pricingModelsByRegion") match {
+            case Some(x) => x
+            case None => throw new Exception("Bad JSON returned from API call userDescribe")
+        }
+        val pricingModel = pricingModelsByRegion.asJsObject.fields.get(region) match {
+            case Some(x) => x
+            case None => throw new Exception("Bad JSON returned from API call userDescribe")
+        }
+        val computeRatesPerHour = pricingModel.asJsObject.fields.get("computeRatesPerHour") match {
+            case Some(x) => x
+            case None => throw new Exception("Bad JSON returned from API call userDescribe")
+        }
+
+        // convert from JsValue to a Map
+        computeRatesPerHour.asJsObject.fields.map{ case (key, jsValue) =>
+            val hourlyRate:Float = jsValue match {
+                case JsNumber(x) => x.toFloat
+                case JsString(x) => x.toFloat
+                case _ => throw new Exception(s"compute rate is not a number ${jsValue.prettyPrint}")
+            }
+            key -> hourlyRate
+        }.toMap
+    }
+
+    def crossTables(availableIT: Map[String, DxInstanceType],
+                    pm: Map[String, Float]): Vector[DxInstanceType] = {
+        pm.map{ case (iName, hourlyRate) =>
+            availableIT.get(iName) match {
+                case None => None
+                case Some(iType) =>
+                    Some(DxInstanceType(iName, iType.memoryMB, iType.diskGB,
+                                        iType.cpu, hourlyRate, iType.os))
+            }
+        }.flatten.toVector
+    }
+
+    // Check if an instance type passes some basic criteria:
+    // - Instance must support Ubuntu 14.04.
+    // - Instance is not a GPU instance.
+    // - Instance is not overly expensive. Currently, the
+    //   threshold is set to the arbitrary number 10$ an hour.
+    //
+    def instanceCriteria(iType: DxInstanceType) : Boolean = {
+        val osSupported = iType.os.foldLeft(false) {
+            case (accu, (distribution, release)) =>
+                if (release == "14.04")
+                    true
+                else
+                    accu
+        }
+        if (!osSupported)
+            return false
+        if (iType.name contains "gpu")
+            return false
+        if (iType.price > Utils.MAX_HOURLY_RATE)
+            return false
+        return true
+    }
+
     def query(dxProject: DXProject) : InstanceTypeDB = {
-        val available: JsValue = queryAvailableInstanceTypes(dxProject)
-        System.err.println(s"${available.prettyPrint}")
+        // Figure out the available instances by describing the project
+        val allAvailableIT = queryAvailableInstanceTypes(dxProject)
 
-        // get billTo from project
-        // describe the billTo, and get the billing model
+        // get billTo and region from the project
+        val (billTo, region) = getProjectExtraInfo(dxProject)
 
-        throw new RuntimeException("query not fully implemented yet")
+        // get the pricing model
+        val pm = getPricingModel(billTo, region)
+
+        // Create fully formed instance types by crossing the tables
+        val availableInstanceTypes: Vector[DxInstanceType] = crossTables(allAvailableIT, pm)
+
+        // filter out instances that we do not want to use
+        InstanceTypeDB(
+            availableInstanceTypes.filter(instanceCriteria)
+        )
     }
 }

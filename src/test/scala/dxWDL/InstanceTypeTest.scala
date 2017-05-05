@@ -12,9 +12,9 @@ class InstaceTypeTest extends FlatSpec with BeforeAndAfterEach with OneInstanceP
         assert(db.choose(None, None, None) == "mem1_ssd1_x2")
 
         // parameters are:          RAM,     disk,     cores
-        assert(db.choose(Some(3), Some(100), Some(4)) == "mem1_ssd1_x8")
-        assert(db.choose(Some(2), Some(20), None) == "mem1_ssd1_x2")
-        assert(db.choose(Some(30), Some(128), Some(8)) == "mem3_ssd1_x8")
+        assert(db.choose(Some(3*1024), Some(100), Some(4)) == "mem1_ssd1_x8")
+        assert(db.choose(Some(2*1024), Some(20), None) == "mem1_ssd1_x2")
+        assert(db.choose(Some(30*1024), Some(128), Some(8)) == "mem3_ssd1_x8")
 
         assert(db.apply(Some(WdlString("3 GB")),
                                    Some(WdlString("local-disk 10 HDD")),

@@ -310,7 +310,8 @@ object RunnerTask {
         val info: JsValue =  Utils.jsValueOfJsonNode(retval)
         val id:String = info.asJsObject.fields.get("id") match {
             case Some(JsString(x)) => x
-            case _ => throw new AppInternalException(s"Bad format returned from jobNew ${info}")
+            case _ => throw new AppInternalException(
+                s"Bad format returned from jobNew ${info.prettyPrint}")
         }
         DXJob.getInstance(id)
     }
@@ -334,8 +335,10 @@ object RunnerTask {
         val inputLines : String = Utils.readFileContent(jobInputPath)
         val inputWvls = WdlVarLinks.loadJobInputsAsLinks(inputLines, inputTypes)
 
-        // Figure out the available instance types
-        val instanceTypeDB = InstanceTypeDB.query(dxProject)
+        // Figure out the available instance types, and their prices,
+        // by reading the file
+        val dbRaw = Utils.readFileContent(Paths.get("/" + Utils.INSTANCE_TYPE_DB_FILENAME))
+        val instanceTypeDB = dbRaw.parseJson.convertTo[InstanceTypeDB]
 
         // evaluate the runtime attributes
         // determine the instance type

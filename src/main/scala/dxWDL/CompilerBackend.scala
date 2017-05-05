@@ -205,7 +205,8 @@ object CompilerBackend {
     // This helps
     def createAppletDirStruct(applet: IR.Applet,
                               aplLinks: Map[String, DXApplet],
-                              appJson : JsObject) : Path = {
+                              appJson : JsObject,
+                              cState: State) : Path = {
         // create temporary directory
         val appletDir : Path = Utils.appCompileDirPath.resolve(applet.name)
         Utils.safeMkdir(appletDir)
@@ -234,6 +235,12 @@ object CompilerBackend {
             )
             Utils.writeFileContent(resourcesDir.resolve(Utils.LINK_INFO_FILENAME),
                                    linkInfo.prettyPrint)
+        }
+
+        // Add the pricing model, if this will be needed
+        if (applet.instanceType == IR.InstTypeRuntime) {
+            Utils.writeFileContent(resourcesDir.resolve(Utils.INSTANCE_TYPE_DB_FILENAME),
+                                   cState.instanceTypeDB.toJson.prettyPrint)
         }
 
         // write the dxapp.json
@@ -370,7 +377,7 @@ object CompilerBackend {
             case _ => Map.empty[String, DXApplet]
         }
         // create a directory structure for this applet
-        createAppletDirStruct(applet, aplLinks, json)
+        createAppletDirStruct(applet, aplLinks, json, cState)
     }
 
     // Rebuild the applet if needed.
