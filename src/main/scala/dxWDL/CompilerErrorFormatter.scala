@@ -1,7 +1,6 @@
 package dxWDL
 
 import wdl4s.AstTools
-//import wdl4s.AstTools.EnhancedAstNode
 import wdl4s.parser.WdlParser.{Ast, AstNode, Terminal}
 import wdl4s._
 

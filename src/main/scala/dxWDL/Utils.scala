@@ -48,6 +48,8 @@ object Utils {
     val CHECKSUM_PROP = "dxWDL_checksum"
     val WDL_SNIPPET_FILENAME = "source.wdl"
     val LINK_INFO_FILENAME = "linking.json"
+    val MAX_HOURLY_RATE = 10.0
+    val INSTANCE_TYPE_DB_FILENAME = "instanceTypeDB.json"
 
     // Substrings used by the compiler for encoding purposes
     val reservedSubstrings = List("___")
