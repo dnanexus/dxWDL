@@ -7,7 +7,7 @@ import wdl4s.values._
 class InstaceTypeTest extends FlatSpec with BeforeAndAfterEach with OneInstancePerTest {
 
     "InstanceTypeDB" should "Choose reasonable platform instance types" in {
-        val db = InstanceTypeDB.genHardcoded()
+        val db = InstanceTypeDB.genHardcoded
 
         assert(db.choose(None, None, None) == "mem1_ssd1_x2")
 

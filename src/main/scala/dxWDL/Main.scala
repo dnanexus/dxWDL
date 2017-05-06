@@ -161,7 +161,7 @@ object Main extends App {
         val mode: Option[String] = options.get("mode")
 
         // get list of available instance types
-        val instanceTypeDB = InstanceTypeDB.query(dxProject)
+        val instanceTypeDB = InstanceTypeDB.queryWithBackup(dxProject)
 
         // Simplify the source file
         // Create a new file to hold the result.

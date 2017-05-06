@@ -267,7 +267,7 @@ object InstanceTypeDB extends DefaultJsonProtocol {
 
 
     // Create an availble instance list based on a hard coded list
-    def genHardcoded() : InstanceTypeDB = {
+    def genHardcoded : InstanceTypeDB = {
         def intOfJs(jsVal : JsValue) : Int = {
             jsVal match {
                 case JsNumber(x) => x.toInt
@@ -320,10 +320,16 @@ object InstanceTypeDB extends DefaultJsonProtocol {
         }
     }
 
+    private def getJsField(js: JsValue, fieldName: String) : JsValue = {
+        js.asJsObject.fields.get(fieldName) match {
+            case Some(x:JsValue) => x
+            case None => throw new Exception(s"Missing field ${fieldName} in ${js.prettyPrint}")
+        }
+    }
+
     // Query the platform for the available instance types in
     // this project.
-    def queryAvailableInstanceTypes(dxProject: DXProject) : Map[String, DxInstanceType] = {
-
+    private def queryAvailableInstanceTypes(dxProject: DXProject) : Map[String, DxInstanceType] = {
         // get List of supported OSes
         def getSupportedOSes(js: JsValue) : Vector[(String, String)]= {
             val osSupported:Vector[JsValue] = js.asJsObject.fields.get("os") match {
@@ -365,7 +371,7 @@ object InstanceTypeDB extends DefaultJsonProtocol {
 
     // describe a project, and extract fields that not currently available
     // through dxjava.
-    def getProjectExtraInfo(dxProject: DXProject) : (String,String) = {
+    private def getProjectExtraInfo(dxProject: DXProject) : (String,String) = {
         val rep = DXAPI.projectDescribe(dxProject.getId(), classOf[JsonNode])
         val jso:JsObject = Utils.jsValueOfJsonNode(rep).asJsObject
 
@@ -382,26 +388,18 @@ object InstanceTypeDB extends DefaultJsonProtocol {
 
     // Get the mapping from instance type to price, limited to the project
     // we are in.
-    def getPricingModel(billTo:String, region:String) : Map[String, Float] = {
+    private def getPricingModel(billTo:String,
+                                region:String) : Map[String, Float] = {
         val req: ObjectNode = DXJSON.getObjectBuilder()
             .put("fields",
                  DXJSON.getObjectBuilder().put("pricingModelsByRegion", true)
                      .build())
             .build()
         val rep = DXAPI.userDescribe(billTo, req, classOf[JsonNode])
-        val jso: JsObject = Utils.jsValueOfJsonNode(rep).asJsObject
-        val pricingModelsByRegion = jso.fields.get("pricingModelsByRegion") match {
-            case Some(x) => x
-            case None => throw new Exception("Bad JSON returned from API call userDescribe")
-        }
-        val pricingModel = pricingModelsByRegion.asJsObject.fields.get(region) match {
-            case Some(x) => x
-            case None => throw new Exception("Bad JSON returned from API call userDescribe")
-        }
-        val computeRatesPerHour = pricingModel.asJsObject.fields.get("computeRatesPerHour") match {
-            case Some(x) => x
-            case None => throw new Exception("Bad JSON returned from API call userDescribe")
-        }
+        val js: JsValue = Utils.jsValueOfJsonNode(rep)
+        val pricingModelsByRegion = getJsField(js, "pricingModelsByRegion")
+        val pricingModel = getJsField(pricingModelsByRegion, region)
+        val computeRatesPerHour = getJsField(pricingModel, "computeRatesPerHour")
 
         // convert from JsValue to a Map
         computeRatesPerHour.asJsObject.fields.map{ case (key, jsValue) =>
@@ -414,8 +412,8 @@ object InstanceTypeDB extends DefaultJsonProtocol {
         }.toMap
     }
 
-    def crossTables(availableIT: Map[String, DxInstanceType],
-                    pm: Map[String, Float]): Vector[DxInstanceType] = {
+    private def crossTables(availableIT: Map[String, DxInstanceType],
+                            pm: Map[String, Float]): Vector[DxInstanceType] = {
         pm.map{ case (iName, hourlyRate) =>
             availableIT.get(iName) match {
                 case None => None
@@ -432,7 +430,7 @@ object InstanceTypeDB extends DefaultJsonProtocol {
     // - Instance is not overly expensive. Currently, the
     //   threshold is set to the arbitrary number 10$ an hour.
     //
-    def instanceCriteria(iType: DxInstanceType) : Boolean = {
+    private def instanceCriteria(iType: DxInstanceType) : Boolean = {
         val osSupported = iType.os.foldLeft(false) {
             case (accu, (distribution, release)) =>
                 if (release == "14.04")
@@ -449,7 +447,7 @@ object InstanceTypeDB extends DefaultJsonProtocol {
         return true
     }
 
-    def query(dxProject: DXProject) : InstanceTypeDB = {
+    private def query(dxProject: DXProject) : InstanceTypeDB = {
         // Figure out the available instances by describing the project
         val allAvailableIT = queryAvailableInstanceTypes(dxProject)
 
@@ -466,5 +464,20 @@ object InstanceTypeDB extends DefaultJsonProtocol {
         InstanceTypeDB(
             availableInstanceTypes.filter(instanceCriteria)
         )
+    }
+
+    def queryWithBackup(dxProject: DXProject) : InstanceTypeDB = {
+        try {
+            query(dxProject)
+        } catch {
+            case e: Throwable =>
+                System.err.println(
+                    """|Error querying the platform for
+                       |available instances and their prices.
+                       |Failing back to hardcoded list."""
+                        .stripMargin.replaceAll("\n", " "))
+                System.err.println(Utils.exceptionToString(e))
+                genHardcoded
+        }
     }
 }
