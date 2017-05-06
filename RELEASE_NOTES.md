@@ -1,5 +1,8 @@
 # Release Notes
 
+## 0.24
+- Support resource requirements (memory/disk) calculated from runtime variables.
+
 ## 0.23
 - Rebuild an applet, only if the source code has changed. For example,
 if an applet's WDL code changed, it will be rebuilt in the next compilation.
