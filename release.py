@@ -15,6 +15,7 @@ from shutil import copyfile
 top_dir = os.path.dirname(sys.argv[0])
 required_libs = ["dnanexus-api-0.1.0-SNAPSHOT-jar-with-dependencies.jar",
                  "dxWDL.jar"]
+max_num_retries = 5
 
 def main():
     argparser = argparse.ArgumentParser(description="Create a release for dxWDL")
@@ -79,6 +80,18 @@ def main():
         fd.write(script)
     upload_script(project, folder)
 
+    # Create an asset from the dxWDL jar file and its dependencies,
+    # this speeds up applet creation.
+def build_runtime_asset(project, folder):
+    try:
+        print("Creating a runtime asset from dxWDL")
+        destination = project.get_id() + ":" + folder + "/dxWDLrt"
+        subprocess.check_call(["dx", "build_asset", "applet_resources",
+                               "--destination", destination])
+        return True
+    except:
+        return False
+
 def make_prerequisits(project, folder):
     # Run make, to ensure that we have an up-to-date jar file
     #
@@ -92,13 +105,13 @@ def make_prerequisits(project, folder):
     version_id = release_version()
     make_asset_file(version_id)
 
-    # Create an asset from the dxWDL jar file and its dependencies,
-    # this speeds up applet creation.
-    print("Creating a runtime asset from dxWDL")
-    destination = project.get_id() + ":" + folder + "/dxWDLrt"
-    subprocess.check_call(["dx", "build_asset", "applet_resources",
-                           "--destination", destination])
-    print("")
+    for i in range(0, max_num_retries):
+        retval = build_runtime_asset(project, folder)
+        if retval:
+            return
+        print("Sleeping for 5 seconds before trying again")
+        time.sleep(5)
+    raise Exception("Failed to build the dxWDL runtime asset")
 
 def release_version():
     classpath= [
