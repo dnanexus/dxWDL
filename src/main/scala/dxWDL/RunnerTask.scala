@@ -279,7 +279,7 @@ object RunnerTask {
         val diskSpace = evalAttr("disks")
         val cores = evalAttr("cpu")
         val instanceType = instanceTypeDB.apply(memory, diskSpace, cores)
-        System.err.println(s"""|calcInstaceType memory=${memory} disk=${diskSpace}
+        System.err.println(s"""|calcInstanceType memory=${memory} disk=${diskSpace}
                                |cores=${cores} instancetype=${instanceType}"""
                                .stripMargin.replaceAll("\n", " "))
         instanceType

@@ -255,7 +255,7 @@ object CompilerBackend {
         val instanceType:String = iType match {
             case IR.InstTypeConst(x) => x
             case IR.InstTypeDefault | IR.InstTypeRuntime =>
-                cState.instanceTypeDB.getMinimalInstanceType()
+                cState.instanceTypeDB.getMinimalInstanceType
         }
         val runSpec: Map[String, JsValue] = Map(
             "interpreter" -> JsString("bash"),

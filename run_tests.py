@@ -19,7 +19,7 @@ test_input={}
 test_output={}
 test_failing=set([])
 reserved_test_names=['S', 'M', 'All', 'list']
-default_test_list = [
+small_test_list = [
     "system_calls", "var_types", "math_expr",
     "call_expressions2", "string_array", "sg_sum3", "sg_files",
     "ragged_array2", "advanced",
@@ -35,11 +35,16 @@ default_test_list = [
     "decl_mid_wf",
 
     # Error codes
-    "bad_status", "bad_status2",
-
-    # Casting
-    "cast"
+    "bad_status", "bad_status2"
 ]
+
+medium_test_list = [
+    # Casting
+    "cast",
+
+    # Variable instance types
+    "instance_types"
+] + small_test_list
 
 tmp_files=[]
 dxfile = None
@@ -49,21 +54,23 @@ dxfile_v2 = None
 
 def main():
     argparser = argparse.ArgumentParser(description="Run WDL compiler tests on the platform")
-    argparser.add_argument("--project", help="DNAnexus project ID", default="project-F07pBj80ZvgfzQK28j35Gj54")
-    argparser.add_argument("--no-wait", help="Exit immediately after launching tests",
-                           action="store_true", default=False)
     argparser.add_argument("--compile-only", help="Only compile the workflows, don't run them",
                            action="store_true", default=False)
     argparser.add_argument("--compile-mode", help="Compilation mode")
+    argparser.add_argument("--force", help="Rebuild all the applets and workflows",
+                           action="store_true", default=False)
+    argparser.add_argument("--folder", help="Use an existing folder, instead of building dxWDL")
     argparser.add_argument("--lazy", help="Only compile workflows that are unbuilt",
                            action="store_true", default=False)
+    argparser.add_argument("--no-wait", help="Exit immediately after launching tests",
+                           action="store_true", default=False)
+    argparser.add_argument("--project", help="DNAnexus project ID", default="project-F07pBj80ZvgfzQK28j35Gj54")
     argparser.add_argument("--test", help="Run a test, or a subgroup of tests",
-                           default="M")
+                           default="S")
     argparser.add_argument("--test-list", help="Print a list of available tests",
                            action="store_true", default=False)
     argparser.add_argument("--verbose", help="Verbose compilation",
                            action="store_true", default=False)
-    argparser.add_argument("--folder", help="Use an existing folder, instead of building dxWDL")
     args = argparser.parse_args()
 
     project = dxpy.DXProject(args.project)
@@ -88,6 +95,8 @@ def main():
         compiler_flags.append("--verbose")
     if args.compile_mode:
         compiler_flags += ["--mode", args.compile_mode]
+    if args.force:
+        compiler_flags.append("--force")
 
     # Move the record to the applet_folder, so the compilation process will find it
     # Output: asset_bundle = record-F13V3BQ05gjppZPy1QyKxXzq
@@ -305,8 +314,10 @@ def print_test_list():
 
 # Choose set set of tests to run
 def choose_tests(test_name):
+    if test_name == 'S':
+        return small_test_list
     if test_name == 'M':
-        return default_test_list
+        return medium_test_list
     if test_name == 'All':
         return test_input.keys()
     if test_name in test_input.keys():
@@ -458,11 +469,18 @@ def register_all_tests(project):
                              "add2.sum": 24})
 
     # casting types
-    register_test_fail("cast",
-                       lambda x: {'0.i': 7,
-                                  '0.s': "French horn",
-                                  '0.foo' : dxpy.dxlink(dxfile.get_id(), project.get_id())},
-                       lambda x: {'Add.result': 14, 'SumArray.result': 7})
+    register_test("cast",
+                  lambda x: {'0.i': 7,
+                             '0.s': "French horn",
+                             '0.foo' : dxpy.dxlink(dxfile.get_id(), project.get_id())},
+                  lambda x: {'Add.result': 14, 'SumArray.result': 7})
+
+    # variable instance types
+    register_test("instance_types",
+                  lambda x: {},
+                  lambda x: {"DiskSpaceSpec.retval" : "true",
+                             "MemorySpec.retval" : "true",
+                             "NumCoresSpec.retval" : "true" })
 
     # Massive tests
     register_test("gatk_170412",

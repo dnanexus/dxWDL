@@ -101,8 +101,18 @@ case class InstanceTypeDB(instances: Vector[DxInstanceType]) {
         bestInstance.name
     }
 
+    // The cheapest available instance, this is normally also the smallest.
     def getMinimalInstanceType() : String = {
-        "mem1_ssd1_x2"
+        if (instances.isEmpty)
+            throw new Exception("instance type database is empty")
+        val cheapest = instances.tail.foldLeft(instances.head){
+            case (cheapest, elem) =>
+                if (elem.price < cheapest.price)
+                    elem
+                else
+                    cheapest
+        }
+        cheapest.name
     }
 
     // Currently, we support only constants.
