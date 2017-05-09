@@ -53,9 +53,10 @@ script:
   - dx login --token ${DX_AUTH_TOKEN} --noprojects
   - dx select dxWDL_playground
   - java -version
+  - export SBT_PATH=/tmp/ci_tests/sbt/bin/sbt
   - cd dxWDL && ./run_tests.py
+
 env:
   global:
-  - SBT_PATH=/tmp/ci_tests/sbt/bin/sbt
     # DX_AUTH_TOKEN (orodeh)
   - secure: ayL5N9x8vgNzZ8aTg5z8BvngN8ojY2psoLJjmUCLnRLb+atoSCHX7fbMqzAm3jv+xRyRGKQ73mU26vQsWnuA+uVFTUFQmjLbwcwbeOz5pXrK6pSOFuNWKNE2UiDtvB27GepXCzOMNAwRJ4YFafup7AaG/XBRICuAdnVUyc2FQjrYX3+FdDCZ/sqVvKfge+MciE4pycZCPuIbSm9sKdcpPjFPhhz9ME3zzqbaR6NQE11pJXz0k7C2YDI79OK9w5VmUdVOmETV+7UEwAJWNMPwnutyEWqzRrJeW8+s79z6/xkLplu3vNGZMs/oQIBUk8nLTwp3nJJiTrK/Pltud4m92GByKN02bh/r0/S6GrUPZ8g0UTotM+73LBLlDyNSKFVXhA5dA/qHU/md548QWamXFoDOj8oQeXMdtd7B8aVaSiLmZrXDuJdUs3ilq8TNSoTU2pLz8knkrLgzkf5LO2S1wpPAa4+H23CrBWOzgbX39pe39/bGSaZb3csSZAIASR8J5ywIQJ2N0bi5D2KB3mx+vr8uJ3YOj9vOpgj98gSSFaR1vsDO3fmpk83QpWXszAwYGHfnLf9q1+OLheTvu0MUIovLiEpgUzp5QUyc2QkxjVvDGcSWzU1a6ibsIzKAAE5Bgbkh192JSU12mQKghzHB1JET9LdaEMGf19BZQdCnaIE=
