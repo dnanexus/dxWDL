@@ -15,8 +15,22 @@ object DxFunctions extends WdlStandardLibraryFunctions {
     // We download them once, and then remove them from the hashtable.
     var remoteFiles = HashMap.empty[String, DXFile]
 
-    def registerRemoteFile(path: String, dxfile: DXFile) {
+    def registerRemoteFile(path: String, dxfile: DXFile) = {
         remoteFiles(path) = dxfile
+    }
+
+    // Make sure a file is on local disk. Download it if
+    // necessary.
+    private def handleRemoteFile(path: String) = {
+        remoteFiles.get(path) match {
+            case Some(dxFile) =>
+                // File has not been downloaded yet.
+                // Transfer it through the network, and store
+                // locally.
+                Utils.downloadFile(Paths.get(path), dxFile)
+                remoteFiles.remove(path)
+            case None => ()
+        }
     }
 
     private def getMetaDir() = {
@@ -45,15 +59,7 @@ object DxFunctions extends WdlStandardLibraryFunctions {
         throw new NotImplementedError()
 
     override def readFile(path: String): String = {
-        remoteFiles.get(path) match {
-            case Some(dxFile) =>
-                // File has not been downloaded yet.
-                // Transfer it through the network, and store
-                // locally.
-                Utils.downloadFile(Paths.get(path), dxFile)
-                remoteFiles.remove(path)
-            case None => ()
-        }
+        handleRemoteFile(path)
 
         // The file is on the local disk, we can read it with regular IO
         Utils.readFileContent(Paths.get(path))
@@ -95,10 +101,21 @@ object DxFunctions extends WdlStandardLibraryFunctions {
     override def write_tsv(params: Seq[Try[WdlValue]]): Try[WdlFile] =
         writeToTsv(params, classOf[WdlArray])
     override def write_json(params: Seq[Try[WdlValue]]): Try[WdlFile] =
-        Failure(new NotImplementedError(s"write_json() not implemented yet"))
+        Failure(new NotImplementedError(s"write_json()"))
 
-    override def size(params: Seq[Try[WdlValue]]): Try[WdlFloat] =
-        Failure(new NotImplementedError())
+    override def size(params: Seq[Try[WdlValue]]): Try[WdlFloat] = {
+/*        val fileName = params match {
+            case _ if params.length == 1 => params.head
+            case _ =>
+                new IllegalArgumentException(
+                    s"""|Invalid number of parameters for engine function size: ${params.length}.
+                        |size takes one parameter.""".stripMargin.trim)
+        }
+        val p = Paths.get(fileName.valueString)
+        p.size()*/
+        Failure(new NotImplementedError(s"size function"))
+    }
+
 
     private def stringOf(x: WdlValue) : String = {
         x match {

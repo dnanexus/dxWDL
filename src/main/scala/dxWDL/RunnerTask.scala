@@ -149,6 +149,48 @@ object RunnerTask {
         Utils.writeFileContent(jobOutputPath, ast_pp)
     }
 
+    def writeSubmitBashScript(task: Task,
+                              env: Map[String, WdlValue]) : Unit = {
+        // Figure out if docker is used. If so, it is specifed by an
+        // expression that requires evaluation.
+        val docker: Option[String] =
+            task.runtimeAttributes.attrs.get("docker") match {
+                case None => None
+                case Some(expr) =>
+                    def lookup(varName : String) : WdlValue =
+                        env.get(varName) match {
+                            case Some(x) => x
+                            case None => throw new AppInternalException(s"No value found for variable ${varName}")
+                        }
+                    val v : WdlValue = expr.evaluate(lookup, DxFunctions).get
+                    v match {
+                        case WdlString(s) => Some(s)
+                        case _ => throw new AppInternalException(
+                            "docker is not a string expression ${v.toWdlString}")
+                    }
+            }
+
+        docker match {
+            case None => ()
+            case Some(imgName) =>
+                // The user wants to use a docker container with the
+                // image [imgName]. We implement this with dx-docker.
+                // There may be corner cases where the image will run
+                // into permission limitations due to security.
+                //
+                // Map the home directory into the container, so that
+                // we can reach the result files, and upload them to
+                // the platform.
+                val DX_HOME = Utils.DX_HOME
+                val dockerRunPath = getMetaDir().resolve("script.submit")
+                val dockerRunScript = s"""|#!/bin/bash -ex
+                                          |dx-docker run -v ${DX_HOME}:${DX_HOME} ${imgName} /bin/bash $${HOME}/execution/meta/script""".stripMargin.trim
+                System.err.println(s"writing docker run script to ${dockerRunPath}")
+                Utils.writeFileContent(dockerRunPath, dockerRunScript)
+                dockerRunPath.toFile.setExecutable(true)
+        }
+    }
+
     def writeBashScript(task: Task,
                         inputs: Map[Declaration, WdlValue]) {
         val metaDir = getMetaDir()
@@ -174,11 +216,11 @@ object RunnerTask {
         //
         val script =
             if (shellCmd.isEmpty) {
-                s"""|#!/bin/sh
+                s"""|#!/bin/bash
                     |echo 0 > ${rcPath}
                     |""".stripMargin.trim + "\n"
             } else {
-                s"""|#!/bin/sh
+                s"""|#!/bin/bash
                     |(
                     |if [ -d ${Utils.DX_HOME} ]; then
                     |  cd ${Utils.DX_HOME}
@@ -199,6 +241,10 @@ object RunnerTask {
 
         // Write shell script to a file. It will be executed by the dx-applet code
         writeBashScript(task, topDecls)
+
+        // write the script that launches the shell script. It could be a docker
+        // image.
+        writeSubmitBashScript(task, inputs)
 
         // serialize the environment, so we don't have to calculate it again in
         // the epilog
@@ -279,7 +325,7 @@ object RunnerTask {
         val diskSpace = evalAttr("disks")
         val cores = evalAttr("cpu")
         val instanceType = instanceTypeDB.apply(memory, diskSpace, cores)
-        System.err.println(s"""|calcInstaceType memory=${memory} disk=${diskSpace}
+        System.err.println(s"""|calcInstanceType memory=${memory} disk=${diskSpace}
                                |cores=${cores} instancetype=${instanceType}"""
                                .stripMargin.replaceAll("\n", " "))
         instanceType
