@@ -1,5 +1,4 @@
 language: scala
-sudo: true
 dist: trusty
 
 # We do not want to start a travis build
