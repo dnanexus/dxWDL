@@ -162,9 +162,7 @@ def upload_local_file(local_path, project, destFolder):
 def upload_libs(project, folder):
     for fname in ["applet_resources/resources/dxWDL.jar",
                   "lib/dnanexus-api-0.1.0-SNAPSHOT-jar-with-dependencies.jar"]:
-        upload_local_file(filename = os.path.join(top_dir, fname),
-                          project = project.get_id(),
-                          folder = folder)
+        upload_local_file(os.path.join(top_dir, fname), project, folder)
 
 def upload_script(project, folder):
     upload_local_file("/tmp/dxWDL", project, folder)

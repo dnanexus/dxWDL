@@ -1,6 +1,6 @@
 {
   "name": "cromwell_cloud_workstation",
-  "summary": "A could instance that runs the Broad's Cromwell WDL runner",
+  "summary": "An instance that can run Broad's Cromwell",
   "dxapi": "1.0.0",
   "version": "0.0.1",
   "inputSpec": [],
@@ -11,7 +11,7 @@
     "file": "src/code.sh",
     "interpreter": "bash",
     "systemRequirements": {
-      "main": {"instanceType": "mem2_ssd1_x8"}
+      "main": {"instanceType": "mem3_ssd1_x16"}
     }
   }
   "access": {

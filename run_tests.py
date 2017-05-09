@@ -294,7 +294,8 @@ def run_workflow(project, test_folder, wf_name, wfId, inputs):
                                name="{} {}".format(wf_name, git_revision),
                                instance_type="mem1_ssd1_x2")
             return job
-        except:
+        except Exception, e:
+            print("exception message={}".format(e))
             return None
 
     for i in range(1,5):
@@ -670,10 +671,10 @@ def gatk_gen_inputs(project):
         "0.wgs_evaluation_interval_list": find_intervals_file("wgs_evaluation_regions.hg38.interval_list"),
 
         ## COMMENT5: QUALITY CONTROL SETTINGS (to override defaults)
-#        "0.ValidateReadGroupSamFile.ignore": ["null"],
-#        "0.ValidateReadGroupSamFile.max_output": 1000000000,
-#        "0.ValidateAggregatedSamFile.ignore": ["null"],
-#        "0.ValidateAggregatedSamFile.max_output": 1000000000,
+        "ValidateReadGroupSamFile.ignore": ["null"],
+        "ValidateReadGroupSamFile.max_output": 1000000000,
+        "ValidateAggregatedSamFile.ignore": ["null"],
+        "ValidateAggregatedSamFile.max_output": 1000000000,
 
         ## COMMENT5: DISK SIZES + PREEMPTIBLES
         "0.agg_small_disk": 200,
