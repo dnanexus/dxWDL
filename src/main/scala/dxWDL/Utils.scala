@@ -37,7 +37,7 @@ class UnboundVariableException private(ex: RuntimeException) extends RuntimeExce
 }
 
 object Utils {
-    val VERSION = "0.24"
+    val VERSION = "0.25"
 
     // Long strings cause problems with bash and the UI
     val MAX_STRING_LEN = 8 * 1024
