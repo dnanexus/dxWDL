@@ -55,7 +55,7 @@ object IR {
       * @param input         WDL input arguments
       * @param output        WDL output arguments
       * @param instaceType   a platform instance name
-      * @param docker        docker image name
+      * @param docker        is docker used?
       * @param destination   folder path on the platform
       * @param kind          Kind of applet: task, scatter, ...
       * @param wdlCode       WDL source code to run
@@ -64,7 +64,7 @@ object IR {
                       inputs: Vector[CVar],
                       outputs: Vector[CVar],
                       instanceType: InstanceTypeSpec,
-                      docker: Option[String],
+                      docker: Boolean,
                       destination : String,
                       kind: AppletKind.Value,
                       wdlCode: String)
@@ -99,8 +99,8 @@ object IR {
         val inputs = applet.inputs.map(yaml)
         val outputs = applet.outputs.map(yaml)
         val docker: Map[YamlValue, YamlValue] = applet.docker match {
-            case None => Map()
-            case Some(x) => Map(YamlString("docker") -> YamlString(x))
+            case false => Map()
+            case true => Map(YamlString("docker") -> YamlBoolean(true))
         }
         val instanceType: Map[YamlValue, YamlValue] = applet.instanceType match {
             case InstTypeDefault => Map()

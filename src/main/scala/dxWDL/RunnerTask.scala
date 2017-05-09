@@ -149,6 +149,47 @@ object RunnerTask {
         Utils.writeFileContent(jobOutputPath, ast_pp)
     }
 
+    def writeSubmitBashScript(task: Task,
+                              env: Map[String, WdlValue]) : Unit = {
+        // Figure out if docker is used. If so, it is specifed by an
+        // expression that requires evaluation.
+        val docker: Option[String] =
+            task.runtimeAttributes.attrs.get("docker") match {
+                case None => None
+                case Some(expr) =>
+                    def lookup(varName : String) : WdlValue =
+                        env.get(varName) match {
+                            case Some(x) => x
+                            case None => throw new AppInternalException(s"No value found for variable ${varName}")
+                        }
+                    val v : WdlValue = expr.evaluate(lookup, DxFunctions).get
+                    v match {
+                        case WdlString(s) => Some(s)
+                        case _ => throw new AppInternalException(
+                            "docker is not a string expression ${v.toWdlString}")
+                    }
+            }
+
+        docker match {
+            case None => ()
+            case Some(imgName) =>
+                // The user wants to use a docker container with the
+                // image [imgName]. We implement this with dx-docker.
+                // There may be corner cases where the image will run
+                // into permission limitations due to security.
+                //
+                // Map the home directory into the container, so that
+                // we can reach the result files, and upload them to
+                // the platform.
+                val DX_HOME = Utils.DX_HOME
+                val script = s"""dx-docker run -v ${DX_HOME}:${DX_HOME} ${imgName} /bin/bash"""
+                val metaDir = getMetaDir()
+                val dockerSubmitPath = metaDir.resolve("script.submit")
+                System.err.println(s"writing docker submit script to ${dockerSubmitPath}")
+                Utils.writeFileContent(dockerSubmitPath, script)
+        }
+    }
+
     def writeBashScript(task: Task,
                         inputs: Map[Declaration, WdlValue]) {
         val metaDir = getMetaDir()
@@ -199,6 +240,10 @@ object RunnerTask {
 
         // Write shell script to a file. It will be executed by the dx-applet code
         writeBashScript(task, topDecls)
+
+        // write the script that launches the shell script. It could be a docker
+        // image.
+        writeSubmitBashScript(task, inputs)
 
         // serialize the environment, so we don't have to calculate it again in
         // the epilog

@@ -438,7 +438,7 @@ task Add {
                                inputVars,
                                outputVars,
                                calcInstanceType(None, cState),
-                               None,
+                               false,
                                cState.destination,
                                IR.AppletKind.Eval,
                                code)
@@ -508,7 +508,7 @@ workflow w {
                                inputVars,
                                outputVars,
                                calcInstanceType(None, cState),
-                               None,
+                               false,
                                cState.destination,
                                IR.AppletKind.Eval,
                                code)
@@ -536,12 +536,9 @@ workflow w {
         }.toVector
 
         // Figure out if we need to use docker
-        val docker = task.runtimeAttributes.attrs.get("docker") match {
-            case None => None
-            case Some(wdlExpression) =>
-                var buf = wdlExpression.toWdlString
-                buf = buf.replaceAll("\"","")
-                Some(buf)
+        val useDocker = task.runtimeAttributes.attrs.get("docker") match {
+            case None => false
+            case Some(_) => true
         }
         val wdlCode = WdlPrettyPrinter.apply(task, 0).mkString("\n")
         verifyWdlCodeIsLegal(wdlCode)
@@ -549,7 +546,7 @@ workflow w {
                                inputVars,
                                outputVars,
                                calcInstanceType(Some(task), cState),
-                               docker,
+                               useDocker,
                                cState.destination,
                                IR.AppletKind.Task,
                                wdlCode)
@@ -749,7 +746,7 @@ workflow w {
                                inputVars,
                                outputVars,
                                calcInstanceType(None, cState),
-                               None,
+                               false,
                                cState.destination,
                                IR.AppletKind.Scatter,
                                wdlCode)
