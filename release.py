@@ -139,22 +139,35 @@ def make_asset_file(version_id):
         fd.write(json.dumps(asset_spec, indent=4))
 
 
+def upload_local_file(local_path, project, destFolder):
+    def once():
+        try:
+            dxpy.upload_local_file(filename = local_path,
+                                   project = project.get_id(),
+                                   folder = destFolder,
+                                   wait_on_close=True)
+            return True
+        except:
+            return False
+
+    for i in range(1,5):
+        retval = once()
+        if retval is True:
+            return
+        print("Sleeping for 5 seconds before trying again")
+        time.sleep(5)
+    raise Exception("Error uploading file {}".format(local_path))
+
+
 def upload_libs(project, folder):
     for fname in ["applet_resources/resources/dxWDL.jar",
                   "lib/dnanexus-api-0.1.0-SNAPSHOT-jar-with-dependencies.jar"]:
-        dxpy.upload_local_file(filename = os.path.join(top_dir, fname),
-                               project = project.get_id(),
-                               folder = folder,
-                               wait_on_close=True)
+        upload_local_file(filename = os.path.join(top_dir, fname),
+                          project = project.get_id(),
+                          folder = folder)
 
 def upload_script(project, folder):
-    def upload_one_file(local_path, destFolder):
-        dxpy.upload_local_file(filename = local_path,
-                               project = project.get_id(),
-                               folder = destFolder,
-                               wait_on_close=True)
-
-    upload_one_file("/tmp/dxWDL", folder)
+    upload_local_file("/tmp/dxWDL", project, folder)
 
     # Remove the old script
     old_objs = list(dxpy.search.find_data_objects(
@@ -168,7 +181,7 @@ def upload_script(project, folder):
 
     # Update the latest release script
     copyfile("/tmp/dxWDL", "/tmp/dxWDL_latest")
-    upload_one_file("/tmp/dxWDL_latest", "/")
+    upload_local_file("/tmp/dxWDL_latest", project, "/")
 
 # Remove a file, and do not throw any exceptions
 def rm_silent(path):
