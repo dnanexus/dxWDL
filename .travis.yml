@@ -30,14 +30,17 @@ before_install:
 
 install:
   # Install scala 2.12.1
-  - wget www.scala-lang.org/files/archive/scala-2.12.1.deb
-  - sudo dpkg -i scala-2.12.1.deb
+#  - wget www.scala-lang.org/files/archive/scala-2.12.1.deb
+#  - sudo dpkg -i scala-2.12.1.deb
 
   # Install sbt
-  - echo "deb https://dl.bintray.com/sbt/debian /" | sudo tee -a /etc/apt/sources.list.d/sbt.list
-  - sudo apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv 2EE0EA64E40A89B84B2DF73499E82A75642AC823
-  - sudo apt-get update
-  - sudo apt-get install --force-yes sbt
+#  - echo "deb https://dl.bintray.com/sbt/debian /" | sudo tee -a /etc/apt/sources.list.d/sbt.list
+#  - sudo apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv 2EE0EA64E40A89B84B2DF73499E82A75642AC823
+#  - sudo apt-get update
+#  - sudo apt-get install --force-yes sbt
+   - wget https://github.com/sbt/sbt/releases/download/v0.13.15/sbt-0.13.15.tgz
+   - tar xvfz sbt-0.13.15.tgz
+   - export PATH="${PATH}:${PWD}/sbt/bin"
 
   # Clone and make the python and java dxpy version
   - pwd
