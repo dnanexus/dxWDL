@@ -24,25 +24,14 @@ addons:
     - python-pip
     - maven
 
-env:
-  - SBT_PATH=/tmp/ci_tests/sbt/bin/sbt
-
 before_install:
   - mkdir -p /tmp/ci_tests
   - cd /tmp/ci_tests
 
 install:
-  # Install scala 2.12.1
-#  - wget www.scala-lang.org/files/archive/scala-2.12.1.deb
-#  - sudo dpkg -i scala-2.12.1.deb
-
   # Install sbt
-#  - echo "deb https://dl.bintray.com/sbt/debian /" | sudo tee -a /etc/apt/sources.list.d/sbt.list
-#  - sudo apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv 2EE0EA64E40A89B84B2DF73499E82A75642AC823
-#  - sudo apt-get update
-#  - sudo apt-get install --force-yes sbt
-   - wget https://github.com/sbt/sbt/releases/download/v0.13.15/sbt-0.13.15.tgz
-   - tar xvfz sbt-0.13.15.tgz
+  - wget https://github.com/sbt/sbt/releases/download/v0.13.15/sbt-0.13.15.tgz
+  - tar xvfz sbt-0.13.15.tgz
 
   # Clone and make the python and java dxpy version
   - pwd
@@ -68,5 +57,6 @@ script:
   - cd dxWDL && ./run_tests.py
 env:
   global:
+  - SBT_PATH=/tmp/ci_tests/sbt/bin/sbt
     # DX_AUTH_TOKEN (orodeh)
   - secure: ayL5N9x8vgNzZ8aTg5z8BvngN8ojY2psoLJjmUCLnRLb+atoSCHX7fbMqzAm3jv+xRyRGKQ73mU26vQsWnuA+uVFTUFQmjLbwcwbeOz5pXrK6pSOFuNWKNE2UiDtvB27GepXCzOMNAwRJ4YFafup7AaG/XBRICuAdnVUyc2FQjrYX3+FdDCZ/sqVvKfge+MciE4pycZCPuIbSm9sKdcpPjFPhhz9ME3zzqbaR6NQE11pJXz0k7C2YDI79OK9w5VmUdVOmETV+7UEwAJWNMPwnutyEWqzRrJeW8+s79z6/xkLplu3vNGZMs/oQIBUk8nLTwp3nJJiTrK/Pltud4m92GByKN02bh/r0/S6GrUPZ8g0UTotM+73LBLlDyNSKFVXhA5dA/qHU/md548QWamXFoDOj8oQeXMdtd7B8aVaSiLmZrXDuJdUs3ilq8TNSoTU2pLz8knkrLgzkf5LO2S1wpPAa4+H23CrBWOzgbX39pe39/bGSaZb3csSZAIASR8J5ywIQJ2N0bi5D2KB3mx+vr8uJ3YOj9vOpgj98gSSFaR1vsDO3fmpk83QpWXszAwYGHfnLf9q1+OLheTvu0MUIovLiEpgUzp5QUyc2QkxjVvDGcSWzU1a6ibsIzKAAE5Bgbkh192JSU12mQKghzHB1JET9LdaEMGf19BZQdCnaIE=
