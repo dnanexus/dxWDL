@@ -24,6 +24,9 @@ addons:
     - python-pip
     - maven
 
+env:
+  - SBT_PATH=/tmp/ci_tests/sbt/bin/sbt
+
 before_install:
   - mkdir -p /tmp/ci_tests
   - cd /tmp/ci_tests
@@ -40,7 +43,6 @@ install:
 #  - sudo apt-get install --force-yes sbt
    - wget https://github.com/sbt/sbt/releases/download/v0.13.15/sbt-0.13.15.tgz
    - tar xvfz sbt-0.13.15.tgz
-   - export PATH="${PATH}:${PWD}/sbt/bin"
 
   # Clone and make the python and java dxpy version
   - pwd
