@@ -480,7 +480,8 @@ def register_all_tests(project):
                   lambda x: {},
                   lambda x: {"DiskSpaceSpec.retval" : "true",
                              "MemorySpec.retval" : "true",
-                             "NumCoresSpec.retval" : "true" })
+                             "NumCoresSpec.retval" : "true",
+                             "RuntimeDockerChoice.retval": "We are inside a python docker image"})
 
     # Massive tests
     register_test("gatk_170412",

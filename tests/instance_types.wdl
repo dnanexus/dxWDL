@@ -61,13 +61,34 @@ task NumCoresSpec {
   }
 }
 
+task RuntimeDockerChoice {
+  String imageName
+
+  command {
+    python <<CODE
+    import os
+    import sys
+    print("We are inside a python docker image")
+    CODE
+  }
+  runtime {
+    docker: imageName
+    memory: "2 GB"
+  }
+  output {
+    String retval = read_string(stdout())
+  }
+}
+
 workflow instance_types {
   call DiskSpaceSpec { input: disk_req_gb=90 }
   call MemorySpec { input: memory_req_gb=12 }
   call NumCoresSpec { input: num_cores_req=5 }
+  call RuntimeDockerChoice { input: imageName="python:2.7" }
   output {
     MemorySpec.retval
     DiskSpaceSpec.retval
     NumCoresSpec.retval
+    RuntimeDockerChoice.retval
   }
 }

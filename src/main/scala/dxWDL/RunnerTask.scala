@@ -182,11 +182,12 @@ object RunnerTask {
                 // we can reach the result files, and upload them to
                 // the platform.
                 val DX_HOME = Utils.DX_HOME
-                val script = s"""dx-docker run -v ${DX_HOME}:${DX_HOME} ${imgName} /bin/bash"""
-                val metaDir = getMetaDir()
-                val dockerSubmitPath = metaDir.resolve("script.submit")
-                System.err.println(s"writing docker submit script to ${dockerSubmitPath}")
-                Utils.writeFileContent(dockerSubmitPath, script)
+                val dockerRunPath = getMetaDir().resolve("script.submit")
+                val dockerRunScript = s"""|#!/bin/bash -ex
+                                          |dx-docker run -v ${DX_HOME}:${DX_HOME} ${imgName} /bin/bash $${HOME}/execution/meta/script""".stripMargin.trim
+                System.err.println(s"writing docker run script to ${dockerRunPath}")
+                Utils.writeFileContent(dockerRunPath, dockerRunScript)
+                dockerRunPath.toFile.setExecutable(true)
         }
     }
 
@@ -215,11 +216,11 @@ object RunnerTask {
         //
         val script =
             if (shellCmd.isEmpty) {
-                s"""|#!/bin/sh
+                s"""|#!/bin/bash
                     |echo 0 > ${rcPath}
                     |""".stripMargin.trim + "\n"
             } else {
-                s"""|#!/bin/sh
+                s"""|#!/bin/bash
                     |(
                     |if [ -d ${Utils.DX_HOME} ]; then
                     |  cd ${Utils.DX_HOME}

@@ -114,7 +114,7 @@ object CompilerBackend {
             |    if [[ -e $${HOME}/execution/meta/script.submit ]]; then
             |        echo "docker submit script"
             |        cat $${HOME}/execution/meta/script.submit
-            |        $${HOME}/execution/meta/script.submit $${HOME}/execution/meta/script
+            |        $${HOME}/execution/meta/script.submit
             |    else
             |        /bin/bash $${HOME}/execution/meta/script
             |    fi
