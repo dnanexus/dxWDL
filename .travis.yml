@@ -1,4 +1,5 @@
 language: scala
+sudo: false
 dist: trusty
 
 # We do not want to start a travis build
@@ -28,9 +29,9 @@ before_install:
   - cd /tmp/ci_tests
 
 install:
-  # Install sbt
-  - wget https://github.com/sbt/sbt/releases/download/v0.13.15/sbt-0.13.15.tgz
-  - tar xvfz sbt-0.13.15.tgz
+  # Make sure sbt is intalled
+#  - wget https://github.com/sbt/sbt/releases/download/v0.13.15/sbt-0.13.15.tgz
+#  - tar xvfz sbt-0.13.15.tgz
 
   # Clone and make the python and java dxpy version
   - pwd
@@ -53,7 +54,7 @@ script:
   - dx login --token ${DX_AUTH_TOKEN} --noprojects
   - dx select dxWDL_playground
   - java -version
-  - export SBT_PATH=/tmp/ci_tests/sbt/bin/sbt
+  - sbt version
   - cd dxWDL && ./run_tests.py
 
 env:
