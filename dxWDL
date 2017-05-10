@@ -21,10 +21,11 @@ required_libs = ["dnanexus-api-0.1.0-SNAPSHOT-jar-with-dependencies.jar",
 
 def main():
     argparser = argparse.ArgumentParser(description="compiler from WDL to dnanexus")
-    argparser.add_argument("command", choices=["compile"], help="command to issue to dxWDL")
+    argparser.add_argument("command", choices=["compile", "dx_input"], help="command")
     argparser.add_argument("wdl_file", help="WDL workflow file")
     argparser.add_argument("--asset", help="Override configuration file asset Id")
     argparser.add_argument("--destination", help="Output folder for workflow")
+    argparser.add_argument("--input", help="WDL input file")
     argparser.add_argument("--mode", help="Compilation mode, a debugging flag")
     argparser.add_argument("--verbose", dest='verbose', action='store_true', default=False,
                            help="Print detailed progress reports")
@@ -34,19 +35,28 @@ def main():
 
     if args.command == "compile":
         cmd_compile(args)
+    elif args.command == "dx_input":
+        cmd_dx_input(args)
     else:
         print("Unknown command {}".format(args.command), file=sys.stderr)
         exit(1)
 
-def cmd_compile(args):
-    global asset_id
-    global version_id
+def cmd_dx_input(args):
+    [asset_id, classpath] = prolog(args)
+    gen_dx_input_file(args.wdl_file, args.wdl_input_file, classpath, args.verbose)
 
+def cmd_compile(args):
     # Where should we write the result?
     if args.destination is None:
         destination = dxpy.config.get('DX_CLI_WD', u'/')
     else:
         destination = args.destination
+    [asset_id, classpath] = prolog(args)
+    compile_workflow(args.wdl_file, destination, asset_id, classpath, args.force, args.verbose, args.mode)
+
+def prolog(args):
+    global asset_id
+    global version_id
 
     # Figure out the asset ID
     if args.asset is not None:
@@ -62,7 +72,7 @@ def cmd_compile(args):
         version_id = version_id.strip()
         validate_library_version(version_id, classpath)
         validate_asset_version(version_id, asset_id)
-    compile_workflow(args.wdl_file, destination, asset_id, classpath, args.force, args.verbose, args.mode)
+    return [asset_id, classpath]
 
 
 # Check if the local library has the correct version
@@ -111,13 +121,7 @@ def compile_workflow(wf_file, destination, asset_id, classpath, force, verbose, 
         cmd_line += ["-verbose"]
     if mode:
         cmd_line += ["-mode", mode]
-
-    print((" ".join(cmd_line)), file=sys.stderr)
-
-    # Call java/scala dxWDL compiler, and pipe stdout/stderr
-    outstr = subprocess.check_output(cmd_line)
-    retval = outstr.rstrip().split('\n')[-1]
-    return retval
+    return call_compiler(cmd_line)
 
 
 # Search for the jars locally. If not found, download
@@ -171,6 +175,28 @@ def find(pattern, path):
                 names.append(name)
                 paths.append(os.path.join(root, name))
     return [names, paths]
+
+def gen_dx_input_file(wdl_file, wdl_input_file, classpath, verbose):
+    print("Generating dx input file from {}".format(wdl_input_file), file=sys.stderr)
+    cmd_line = [
+        "java", "-cp", classpath, "dxWDL.Main", "dx_input", wf_file,
+        "--input", wdl_input_file
+    ]
+    if version_id is not None:
+        cmd_line += ["-expected_version", version_id]
+    if verbose:
+        cmd_line += ["-verbose"]
+    return call_compiler(cmd_line)
+
+# Run the compiler in a different process, and wait for completion
+def call_compiler(cmd_line):
+    print((" ".join(cmd_line)), file=sys.stderr)
+
+    # Call java/scala dxWDL compiler, and pipe stdout/stderr
+    outstr = subprocess.check_output(cmd_line)
+    retval = outstr.rstrip().split('\n')[-1]
+    return retval
+
 
 if __name__ == '__main__':
     main()

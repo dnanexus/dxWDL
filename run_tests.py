@@ -485,8 +485,13 @@ def register_all_tests(project):
                              "RuntimeDockerChoice.retval": "We are inside a python docker image"})
 
     # Massive tests
+#    register_test("gatk_170412",
+#                  lambda x: gatk_gen_inputs(project),
+#                  lambda x: {})
+
+    # Massive tests
     register_test("gatk_170412",
-                  lambda x: gatk_gen_inputs(project),
+                  lambda x: gatk_gen_inputs_nist(project),
                   lambda x: {})
 
 
@@ -675,6 +680,149 @@ def gatk_gen_inputs(project):
         "ValidateReadGroupSamFile.max_output": 1000000000,
         "ValidateAggregatedSamFile.ignore": ["null"],
         "ValidateAggregatedSamFile.max_output": 1000000000,
+
+        ## COMMENT5: DISK SIZES + PREEMPTIBLES
+        "0.agg_small_disk": 200,
+        "0.agg_medium_disk": 300,
+        "0.agg_large_disk": 400,
+        "0.agg_preemptible_tries": 3,
+        "0.flowcell_small_disk": 100,
+        "0.flowcell_medium_disk": 200,
+        "0.preemptible_tries": 3
+    }
+    return input_args
+
+# The GATK pipeline takes many parameters, it is easier
+# to treat it is a script.
+#
+# Adapted from:
+# https://github.com/broadinstitute/wdl/blob/develop/scripts/broad_pipelines/PublicPairedSingleSampleWf_160927.inputs.json
+#
+def gatk_gen_inputs_nist(project):
+    def find_file(name, folder):
+        dxfile = dxpy.find_one_data_object(
+            classname="file", name=name,
+            project=project.get_id(), folder=folder,
+            zero_ok=False, more_ok=False, return_handler=True)
+        return dxpy.dxlink(dxfile.get_id(), project.get_id())
+    def find_bam_file(name):
+        return find_file(name, "/")
+    def find_interval_file(name, subfolder):
+        return find_file(name,
+                         "/genomics-public-data/resources/broad/hg38/v0/scattered_calling_intervals/" + subfolder + "/")
+    def find_ref_file(name):
+        return find_file(name,
+                         "/genomics-public-data/resources/broad/hg38/v0/")
+    def find_qc_file(name):
+        return find_file(name,
+                         "/genomics-public-data/test-data/qc")
+    def find_intervals_file(name):
+        return find_file(name,
+                         "/genomics-public-data/test-data/intervals")
+
+    input_args = {
+        ##_COMMENT1: SAMPLE NAME AND UNMAPPED BAMS
+        "0.sample_name": "NIST-hg001-7001",
+        "0.base_file_name": "NIST-hg001-7001-ready",
+        "0.flowcell_unmapped_bams": [
+            find_bam_file("NIST-hg001-7001-ready.1.unmapped.bam"),
+            find_bam_file("NIST-hg001-7001-ready.2.unmapped.bam")
+        ],
+        "0.final_gvcf_name": "NIST-hg001-7001.g.vcf.gz",
+        "0.unmapped_bam_suffix": ".bam",
+
+        ## COMMENT2: INTERVALS
+        ## COMMENT2: INTERVALS
+        "0.scattered_calling_intervals": [
+            find_interval_file("scattered.interval_list", "temp_0001_of_50"),
+            find_interval_file("scattered.interval_list", "temp_0002_of_50"),
+            find_interval_file("scattered.interval_list", "temp_0003_of_50"),
+            find_interval_file("scattered.interval_list", "temp_0004_of_50"),
+            find_interval_file("scattered.interval_list", "temp_0005_of_50"),
+            find_interval_file("scattered.interval_list", "temp_0006_of_50"),
+            find_interval_file("scattered.interval_list", "temp_0007_of_50"),
+            find_interval_file("scattered.interval_list", "temp_0008_of_50"),
+            find_interval_file("scattered.interval_list", "temp_0009_of_50"),
+            find_interval_file("scattered.interval_list", "temp_0010_of_50"),
+            find_interval_file("scattered.interval_list", "temp_0011_of_50"),
+            find_interval_file("scattered.interval_list", "temp_0012_of_50"),
+            find_interval_file("scattered.interval_list", "temp_0013_of_50"),
+            find_interval_file("scattered.interval_list", "temp_0014_of_50"),
+            find_interval_file("scattered.interval_list", "temp_0015_of_50"),
+            find_interval_file("scattered.interval_list", "temp_0016_of_50"),
+            find_interval_file("scattered.interval_list", "temp_0017_of_50"),
+            find_interval_file("scattered.interval_list", "temp_0018_of_50"),
+            find_interval_file("scattered.interval_list", "temp_0019_of_50"),
+            find_interval_file("scattered.interval_list", "temp_0020_of_50"),
+            find_interval_file("scattered.interval_list", "temp_0021_of_50"),
+            find_interval_file("scattered.interval_list", "temp_0022_of_50"),
+            find_interval_file("scattered.interval_list", "temp_0023_of_50"),
+            find_interval_file("scattered.interval_list", "temp_0024_of_50"),
+            find_interval_file("scattered.interval_list", "temp_0025_of_50"),
+            find_interval_file("scattered.interval_list", "temp_0026_of_50"),
+            find_interval_file("scattered.interval_list", "temp_0027_of_50"),
+            find_interval_file("scattered.interval_list", "temp_0028_of_50"),
+            find_interval_file("scattered.interval_list", "temp_0029_of_50"),
+            find_interval_file("scattered.interval_list", "temp_0030_of_50"),
+            find_interval_file("scattered.interval_list", "temp_0031_of_50"),
+            find_interval_file("scattered.interval_list", "temp_0032_of_50"),
+            find_interval_file("scattered.interval_list", "temp_0033_of_50"),
+            find_interval_file("scattered.interval_list", "temp_0034_of_50"),
+            find_interval_file("scattered.interval_list", "temp_0035_of_50"),
+            find_interval_file("scattered.interval_list", "temp_0036_of_50"),
+            find_interval_file("scattered.interval_list", "temp_0037_of_50"),
+            find_interval_file("scattered.interval_list", "temp_0038_of_50"),
+            find_interval_file("scattered.interval_list", "temp_0039_of_50"),
+            find_interval_file("scattered.interval_list", "temp_0040_of_50"),
+            find_interval_file("scattered.interval_list", "temp_0041_of_50"),
+            find_interval_file("scattered.interval_list", "temp_0042_of_50"),
+            find_interval_file("scattered.interval_list", "temp_0043_of_50"),
+            find_interval_file("scattered.interval_list", "temp_0044_of_50"),
+            find_interval_file("scattered.interval_list", "temp_0045_of_50"),
+            find_interval_file("scattered.interval_list", "temp_0046_of_50"),
+            find_interval_file("scattered.interval_list", "temp_0047_of_50"),
+            find_interval_file("scattered.interval_list", "temp_0048_of_50"),
+            find_interval_file("scattered.interval_list", "temp_0049_of_50"),
+            find_interval_file("scattered.interval_list", "temp_0050_of_50")
+        ],
+        "0.wgs_calling_interval_list": find_ref_file("wgs_calling_regions.hg38.interval_list"),
+
+        ## COMMENT2: REFERENCE FILES
+        "0.ref_dict": find_ref_file("Homo_sapiens_assembly38.dict"),
+        "0.ref_fasta": find_ref_file("Homo_sapiens_assembly38.fasta"),
+        "0.ref_fasta_index": find_ref_file("Homo_sapiens_assembly38.fasta.fai"),
+        "0.ref_alt": find_ref_file("Homo_sapiens_assembly38.fasta.64.alt"),
+        "0.ref_sa": find_ref_file("Homo_sapiens_assembly38.fasta.64.sa"),
+        "0.ref_amb": find_ref_file("Homo_sapiens_assembly38.fasta.64.amb"),
+        "0.ref_bwt": find_ref_file("Homo_sapiens_assembly38.fasta.64.bwt"),
+        "0.ref_ann": find_ref_file("Homo_sapiens_assembly38.fasta.64.ann"),
+        "0.ref_pac": find_ref_file("Homo_sapiens_assembly38.fasta.64.pac"),
+
+        ## COMMENT3: KNOWN SITES RESOURCES
+        "0.dbSNP_vcf": find_ref_file("Homo_sapiens_assembly38.dbsnp138.vcf"),
+        "0.dbSNP_vcf_index": find_ref_file("Homo_sapiens_assembly38.dbsnp138.vcf.idx"),
+        "0.known_indels_sites_VCFs": [
+            find_ref_file("Mills_and_1000G_gold_standard.indels.hg38.vcf.gz"),
+            find_ref_file("Homo_sapiens_assembly38.known_indels.vcf.gz")
+        ],
+        "0.known_indels_sites_indices": [
+            find_ref_file("Mills_and_1000G_gold_standard.indels.hg38.vcf.gz.tbi"),
+            find_ref_file("Homo_sapiens_assembly38.known_indels.vcf.gz.tbi")
+        ],
+
+        ##_COMMENT4: "QUALITY CONTROL RESOURCES
+        "0.contamination_sites_vcf": find_qc_file("WholeGenomeShotgunContam.vcf"),
+        "0.contamination_sites_vcf_index": find_qc_file("WholeGenomeShotgunContam.vcf.idx"),
+        "0.haplotype_database_file": find_qc_file("empty.haplotype_map.txt"),
+        "0.fingerprint_genotypes_file": find_qc_file("empty.fingerprint.vcf"),
+        "0.wgs_coverage_interval_list": find_intervals_file("wgs_coverage_regions.hg38.interval_list"),
+        "0.wgs_evaluation_interval_list": find_intervals_file("wgs_evaluation_regions.hg38.interval_list"),
+
+        ## COMMENT5: QUALITY CONTROL SETTINGS (to override defaults)
+#        "ValidateReadGroupSamFile.ignore": ["null"],
+#        "ValidateReadGroupSamFile.max_output": 1000000000,
+#        "ValidateAggregatedSamFile.ignore": ["null"],
+#        "ValidateAggregatedSamFile.max_output": 1000000000,
 
         ## COMMENT5: DISK SIZES + PREEMPTIBLES
         "0.agg_small_disk": 200,
