@@ -706,7 +706,7 @@ def gatk_gen_inputs_nist(project):
             zero_ok=False, more_ok=False, return_handler=True)
         return dxpy.dxlink(dxfile.get_id(), project.get_id())
     def find_bam_file(name):
-        return find_file(name, "/")
+        return find_file(name, "/GATK_Compare")
     def find_interval_file(name, subfolder):
         return find_file(name,
                          "/genomics-public-data/resources/broad/hg38/v0/scattered_calling_intervals/" + subfolder + "/")
@@ -725,8 +725,7 @@ def gatk_gen_inputs_nist(project):
         "0.sample_name": "NIST-hg001-7001",
         "0.base_file_name": "NIST-hg001-7001-ready",
         "0.flowcell_unmapped_bams": [
-            find_bam_file("NIST-hg001-7001-ready.1.unmapped.bam"),
-            find_bam_file("NIST-hg001-7001-ready.2.unmapped.bam")
+            find_bam_file("NIST7035_TAAGGCGA_L001.bam")
         ],
         "0.final_gvcf_name": "NIST-hg001-7001.g.vcf.gz",
         "0.unmapped_bam_suffix": ".bam",

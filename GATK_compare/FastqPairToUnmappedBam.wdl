@@ -18,6 +18,6 @@ task FastqPairToUnmappedBam {
     disks: "local-disk 100 HDD"
   }
   output {
-    File unmapped_bam = "${sample_name}.unmapped.bam"
+    File unmapped_bam = "${sample_name}.bam"
   }
 }

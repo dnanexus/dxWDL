@@ -25,7 +25,7 @@ def main():
     argparser.add_argument("wdl_file", help="WDL workflow file")
     argparser.add_argument("--asset", help="Override configuration file asset Id")
     argparser.add_argument("--destination", help="Output folder for workflow")
-    argparser.add_argument("--input", help="WDL input file")
+    argparser.add_argument("--inputFile", help="WDL input file")
     argparser.add_argument("--mode", help="Compilation mode, a debugging flag")
     argparser.add_argument("--verbose", dest='verbose', action='store_true', default=False,
                            help="Print detailed progress reports")
@@ -179,8 +179,8 @@ def find(pattern, path):
 def gen_dx_input_file(wdl_file, wdl_input_file, classpath, verbose):
     print("Generating dx input file from {}".format(wdl_input_file), file=sys.stderr)
     cmd_line = [
-        "java", "-cp", classpath, "dxWDL.Main", "dx_input", wf_file,
-        "--input", wdl_input_file
+        "java", "-cp", classpath, "dxWDL.Main", "dx_input", wdf_file,
+        "-inputFile", wdl_input_file
     ]
     if version_id is not None:
         cmd_line += ["-expected_version", version_id]

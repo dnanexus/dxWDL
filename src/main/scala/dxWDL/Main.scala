@@ -16,10 +16,48 @@ object Main extends App {
     case class UnsuccessfulTermination(output: String) extends Termination
     case class BadUsageTermination(info: String) extends Termination
 
+    type OptionsMap = Map[String, String]
+
     object Actions extends Enumeration {
-        val Compile, Eval, LaunchScatter,
+        val Compile, DxInput, Eval, LaunchScatter,
             TaskEpilog, TaskProlog, TaskRelaunch,
             Version, Yaml  = Value
+    }
+
+    // parse extra command line arguments
+    def parseCmdlineOptions(arglist: List[String]) : OptionsMap = {
+        // verify version ID
+        def verifyVersion(options: OptionsMap) = {
+            options.get("expectedVersion") match {
+                case Some(vid) if vid != Utils.VERSION =>
+                    throw new Exception(s"""|Version mismatch, library is ${Utils.VERSION},
+                                            |expected version is ${vid}"""
+                                            .stripMargin.replaceAll("\n", " "))
+                case _ => ()
+            }
+        }
+        def nextOption(map : OptionsMap, list: List[String]) : OptionsMap = {
+            list match {
+                case Nil => map
+                case "-expected_version" :: value :: tail =>
+                    nextOption(map ++ Map("expectedVersion" -> value.toString), tail)
+                case "-force" :: tail =>
+                    nextOption(map ++ Map("force" -> ""), tail)
+                case "-inputFile" :: value :: tail =>
+                    nextOption(map ++ Map("inputFile" -> value.toString), tail)
+                case "-o" :: value :: tail =>
+                    nextOption(map ++ Map("destination" -> value.toString), tail)
+                case "-verbose" :: tail =>
+                    nextOption(map ++ Map("verbose" -> ""), tail)
+                case option :: tail =>
+                    throw new IllegalArgumentException(s"Unknown option ${option}")
+
+            }
+        }
+
+        val options = nextOption(Map(),arglist)
+        verifyVersion(options)
+        options
     }
 
     def yaml(args: Seq[String]): Termination = {
@@ -105,26 +143,9 @@ object Main extends App {
         Utils.trace(verbose, s"Wrote intermediate representation to ${trgPath.toString}")
     }
 
-    def compileBody(wdlSourceFile : Path,
-                    options: Map[String, String]) : String = {
-        // verify version ID
-        options.get("expectedVersion") match {
-            case Some(vid) if vid != Utils.VERSION =>
-                throw new Exception(s"""|Version mismatch, library is ${Utils.VERSION},
-                                        |expected version is ${vid}"""
-                                        .stripMargin.replaceAll("\n", " "))
-            case _ => ()
-        }
-
-        val verbose = options.get("verbose") match {
-            case None => false
-            case Some(_) => true
-        }
-
-        val force = options.get("force") match {
-            case None => false
-            case Some(_) => true
-        }
+    def compileBody(wdlSourceFile : Path, options: OptionsMap) : String = {
+        val verbose = options contains "verbose"
+        val force = options contains "force"
 
         // deal with the various options
         val destination : String = options.get("destination") match {
@@ -214,34 +235,28 @@ object Main extends App {
     def compile(args: Seq[String]): Termination = {
         try {
             val wdlSrcFile = args.head
-
-            // parse extra command line arguments
-            val arglist = args.tail.toList
-            type OptionMap = Map[String, String]
-
-            def nextOption(map : OptionMap, list: List[String]) : OptionMap = {
-                list match {
-                    case Nil => map
-                    case "-o" :: value :: tail =>
-                        nextOption(map ++ Map("destination" -> value.toString), tail)
-                    case "-asset" :: value :: tail =>
-                        nextOption(map ++ Map("dxWDLrtId" -> value.toString), tail)
-                    case "-expected_version" :: value :: tail =>
-                        nextOption(map ++ Map("expectedVersion" -> value.toString), tail)
-                    case "-mode" :: value :: tail =>
-                        nextOption(map ++ Map("mode" -> value.toString), tail)
-                    case "-verbose" :: tail =>
-                        nextOption(map ++ Map("verbose" -> ""), tail)
-                    case "-force" :: tail =>
-                        nextOption(map ++ Map("force" -> ""), tail)
-                    case option :: tail =>
-                        throw new IllegalArgumentException(s"Unknown option ${option}")
-
-                }
-            }
-            val options = nextOption(Map(),arglist)
+            val options = parseCmdlineOptions(args.tail.toList)
             val dxc = compileBody(Paths.get(wdlSrcFile), options)
             SuccessfulTermination(dxc)
+        } catch {
+            case e : Throwable =>
+                UnsuccessfulTermination(Utils.exceptionToString(e))
+        }
+    }
+
+    def genDxInputFile(args: Seq[String]): Termination = {
+        try {
+            val wdlSrcFile = args.head
+            val options = parseCmdlineOptions(args.tail.toList)
+            val verbose = options contains "verbose"
+            val wdlInputFile : String = options.get("inputFile") match {
+                case None => throw new Exception("")
+                case Some(d) => d
+            }
+            val dxInputFile = InputFile.apply(Paths.get(wdlSrcFile),
+                                              Paths.get(wdlInputFile),
+                                              verbose)
+            SuccessfulTermination(s"Built a dx input file ${dxInputFile.toString}")
         } catch {
             case e : Throwable =>
                 UnsuccessfulTermination(Utils.exceptionToString(e))
@@ -298,12 +313,13 @@ object Main extends App {
     private def getAction(args: Seq[String]): Option[Actions.Value] = for {
         arg <- args.headOption
         argCapitalized = arg.capitalize
-        action <- Actions.values find (_.toString == argCapitalized)
+        action <- Actions.values find (_.toString.replaceAll("_", "") == argCapitalized)
     } yield action
 
     def dispatchCommand(args: Seq[String]): Termination = {
         getAction(args) match {
             case Some(x) if x == Actions.Compile => compile(args.tail)
+            case Some(x) if x == Actions.DxInput => genDxInputFile(args.tail)
             case Some(x) if x == Actions.Eval => appletAction(x, args.tail)
             case Some(x) if x == Actions.LaunchScatter => appletAction(x, args.tail)
             case Some(x) if x == Actions.TaskProlog => appletAction(x, args.tail)
@@ -325,12 +341,18 @@ object Main extends App {
            |  Perform full validation and print a YAML version of the
            |  syntax tree.
            |
-           |compile <WDL file> <-asset dxId> [-o targetPath] [-expected_version vid] [-verbose]
-           |       [-force] [-mode debug_flag]
+           |compile <WDL file> <-asset dxId> [-o targetPath] [-expected_version vid]
+           |  [-verbose] [-force] [-mode debug_flag]
            |
            |  Compile a wdl file into a dnanexus workflow. An asset
            |  ID for the dxWDL runtime is required. Optionally, specify a
            |  destination path on the platform.
+           |
+           |dx_input <WDL file> <--inputFile wdl json input file> [-o targetPath]
+           |   [-expected_version vid] [-verbose]
+           |
+           |  Generate a DNAx input file from a WDL style input file. Recognizes
+           |  file paths available on the platform.
            |
            |taskProlog <WDL file> <home directory>
            |
