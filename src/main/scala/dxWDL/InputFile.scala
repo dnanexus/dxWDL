@@ -9,10 +9,21 @@ import spray.json.DefaultJsonProtocol
 
 object InputFile {
 
+    private def convert(wdlInputs: JsObject) = {
+        throw new Exception("TODO")
+    }
+
     // Build a dx input file, based on the wdl input file and the workflow
-    def apply(wdlSrcFile: Path,
+    def apply(wf: IR.Workflow,
               wdlInputFile: Path,
-              verbose: Boolean) : Path = {
-        throw new Exception("Not implemented yet")
+              dxInputFile: Path,
+              verbose: Boolean) : Unit = {
+        // read the input file
+        val wdlInputs: JsObject = Utils.readFileContent(wdlInputFile).parseJson.asJsObject
+        wdlInputs.fields.foreach{ case (key, v) =>
+            System.err.println(s"${key} -> ${v}")
+        }
+        val dxInputs: JsObject = convert(wdlInputs)
+        Utils.writeFileContent(dxInputFile, dxInputs.prettyPrint)
     }
 }

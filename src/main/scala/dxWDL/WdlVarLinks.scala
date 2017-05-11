@@ -263,7 +263,7 @@ object WdlVarLinks {
                     case _ => throw new AppInternalException("Sanity")
                 }
                 val buf = raggedAr.prettyPrint
-                Utils.uploadString(buf)
+                Utils.uploadString(buf, Utils.sanitize(wdlType.toWdlString))
 
             case _ =>
                 throw new AppInternalException(s"Type ${wdlType} unsupported")

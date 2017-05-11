@@ -46,12 +46,6 @@ medium_test_list = [
     "instance_types"
 ] + small_test_list
 
-tmp_files=[]
-dxfile = None
-dxfile2 = None
-dxfile3 = None
-dxfile_v2 = None
-
 def main():
     argparser = argparse.ArgumentParser(description="Run WDL compiler tests on the platform")
     argparser.add_argument("--compile-only", help="Only compile the workflows, don't run them",
@@ -123,12 +117,10 @@ def main():
         if not args.compile_only:
             run_workflow_subset(project, workflows, test_folder, args.no_wait)
     finally:
-        cleanup(project)
+        print("Test complete")
 
 
 def run_workflow_subset(project, workflows, test_folder, no_wait):
-    create_tmp_files(project)
-
     # Run the workflows
     test_analyses=[]
     for wf_name, dxid in workflows.iteritems():
@@ -190,17 +182,13 @@ def validate_result(wf_name, desc, key, expected_val):
             print("Analysis {} gave unexpected results".format(wf_name))
             print("stage={}".format(stage_name))
             print("stage_results={}".format(stage_results))
-            print("Should be stage[{}].{} = {} != {}".format(stage_name, field_name, result, expected_val))
+            print("Should be stage[{}].{} = {} , actual = {}".format(stage_name, field_name, expected_val, result))
             return False
         return True
     except Exception, e:
         #print("no stage {} in results {}".format(stage_name, desc['stages']))
         print("exception message={}".format(e))
         return False
-
-def cleanup(project):
-    if len(tmp_files) > 0:
-        project.remove_folder("/test_data", recurse=True, force=True)
 
 def build_prerequisits(project, args):
     base_folder = time.strftime("/builds/%Y-%m-%d/%H%M%S-") + git_revision
@@ -288,12 +276,12 @@ def run_workflow(project, test_folder, wf_name, wfId, inputs):
             workflow = dxpy.DXWorkflow(project=project.get_id(), dxid=wfId)
             test_folder = os.path.join(test_folder, wf_name)
             project.new_folder(test_folder, parents=True)
-            job = workflow.run(inputs,
-                               project=project.get_id(),
-                               folder=test_folder,
-                               name="{} {}".format(wf_name, git_revision),
-                               instance_type="mem1_ssd1_x2")
-            return job
+            analysis = workflow.run(inputs,
+                                    project=project.get_id(),
+                                    folder=test_folder,
+                                    name="{} {}".format(wf_name, git_revision),
+                                    delay_workspace_destruction=True)
+            return analysis
         except Exception, e:
             print("exception message={}".format(e))
             return None
@@ -335,11 +323,18 @@ def choose_tests(test_name):
 # Register inputs and outputs for all the tests.
 # Return the list of temporary files on the platform
 def register_all_tests(project):
+    dxfile_versions = find_all_file_versions("fileA", "/test_data", project)
+    print(dxfile_versions)
+    dxfile = dxfile_versions[1]
+    dxfile_v2 = dxfile_versions[0]
+    dxfile2 = find_file("fileB", "/test_data", project)
+    dxfile3 = find_file("fileC", "/test_data", project)
+
     register_test("math",
                   lambda x: {'0.ai' : 7},
                   lambda x: {'Multiply.result': 40})
     register_test("system_calls",
-                  lambda x: {'0.data' : dxpy.dxlink(dxfile.get_id(), project.get_id()),
+                  lambda x: {'0.data' : dxpy.dxlink(dxfile),
                              '0.pattern' : "WDL"},
                   lambda x: {'cgrep.count' : 5, 'wc.count' : 14})
     register_test("four_step",
@@ -360,7 +355,7 @@ def register_all_tests(project):
 #                  {'0.result' : "true_3_4.2_zoology"})
 
     register_test("fs",
-                  lambda x: {'0.data' : dxpy.dxlink(dxfile.get_id(), project.get_id())},
+                  lambda x: {'0.data' : dxpy.dxlink(dxfile)},
                   lambda x: {})
     register_test("system_calls2",
                   lambda x: {'0.pattern' : "java"},
@@ -389,23 +384,23 @@ def register_all_tests(project):
                              'int_ops2.result': 7031})
 
     register_test("files",
-                  lambda x: {'0.f' : dxpy.dxlink(dxfile.get_id(), project.get_id()) },
+                  lambda x: {'0.f' : dxpy.dxlink(dxfile) },
                   lambda x: {})
     register_test("string_array",
                   lambda x: { '0.sa' : ["A", "B", "C"]},
                   lambda x: { 'Concat.result' : "A INPUT=B INPUT=C"})
 
     register_test("file_array",
-                  lambda x: { '0.fs' : [dxpy.dxlink(dxfile.get_id(), project.get_id()),
-                                        dxpy.dxlink(dxfile2.get_id(), project.get_id()),
-                                        dxpy.dxlink(dxfile3.get_id(), project.get_id()) ]},
+                  lambda x: { '0.fs' : [dxpy.dxlink(dxfile),
+                                        dxpy.dxlink(dxfile2),
+                                        dxpy.dxlink(dxfile3) ]},
                   lambda x: { 'colocation.result' : "True"})
     register_test("output_array",
                   lambda x: {},
                   lambda x: {'prepare.array' : [u'one', u'two', u'three', u'four']})
     register_test("file_disambiguation",
-                  lambda x: { '0.f1' : dxpy.dxlink(dxfile.get_id(), project.get_id()),
-                              '0.f2' : dxpy.dxlink(dxfile_v2.get_id(), project.get_id()) },
+                  lambda x: { '0.f1' : dxpy.dxlink(dxfile),
+                              '0.f2' : dxpy.dxlink(dxfile_v2) },
                   lambda x: { 'colocation.result' : "False"})
 
     # Scatter/gather
@@ -457,7 +452,7 @@ def register_all_tests(project):
     # combination of featuers
     register_test("advanced",
                   lambda x: { '0.pattern' : "github",
-                              '0.file' : dxpy.dxlink(dxfile.get_id(), project.get_id()),
+                              '0.file' : dxpy.dxlink(dxfile),
                               '0.species' : "Arctic fox" },
                   lambda x: { 'str_animals.result' : "Arctic fox --K -S --flags --contamination 0 --s foobar",
                               'str_animals.family' : "Family Arctic fox",
@@ -473,7 +468,7 @@ def register_all_tests(project):
     register_test("cast",
                   lambda x: {'0.i': 7,
                              '0.s': "French horn",
-                             '0.foo' : dxpy.dxlink(dxfile.get_id(), project.get_id())},
+                             '0.foo' : dxpy.dxlink(dxfile.get_id())},
                   lambda x: {'Add.result': 14, 'SumArray.result': 7})
 
     # variable instance types
@@ -495,59 +490,6 @@ def register_all_tests(project):
                   lambda x: {})
 
 
-def create_tmp_files(project):
-    global tmp_files
-    global dxfile
-    global dxfile2
-    global dxfile3
-    global dxfile_v2
-    if len(tmp_files) > 0:
-        return tmp_files
-
-    buf = """
-Right now this is just a stripped-down version of
-[wdltool](https://github.com/broadinstitute/wdltool) which we're using
-as a playground to learn the ways of
-[wdl4s](https://github.com/broadinstitute/wdl4s). It contains one new
-subcommand to parse a WDL file and transcode the resulting AST into
-YAML. That's just an exercise to familiarize ourselves with the WDL
-syntax and wdl4s object hierarchy.
-
-Useful links:
-* [tutorial WDLs](https://github.com/broadinstitute/wdl/tree/develop/scripts/tutorials/wdl)
-* [GATK production WDLs](https://github.com/broadinstitute/wdl/tree/develop/scripts/broad_pipelines)
-* [WDL spec](https://github.com/broadinstitute/wdl/blob/develop/SPEC.md)
-* [wdl4s scaladoc](http://broadinstitute.github.io/wdl4s/0.6/#package)
-    """
-
-    buf2 = """
-Website and User Guide
-The WDL website is the best place to go for more information on both WDL and Cromwell. In particular new users should check out the user guide which has many tutorials, examples and other bits to get you started.
-"""
-
-    buf3 = """
-Building
-sbt assembly will build a runnable JAR in target/scala-2.11/
-
-Tests are run via sbt test. Note that the tests do require Docker to be running. To test this out while downloading the Ubuntu image that is required for tests, run docker pull ubuntu:latest prior to running sbt test
-"""
-
-    try:
-        project.new_folder("/test_data")
-    except:
-        pass
-    dxfile = dxpy.upload_string(buf, project=project.get_id(), name="fileA",
-                                folder="/test_data")
-    dxfile2 = dxpy.upload_string(buf2, project=project.get_id(), name="fileB",
-                                 folder="/test_data")
-    dxfile3 = dxpy.upload_string(buf3, project=project.get_id(), name="fileC",
-                                 folder="/test_data")
-    dxfile_v2 = dxpy.upload_string("ABCD 1234", project=project.get_id(), name="fileA",
-                                   folder="/test_data")
-    tmp_files = [dxfile, dxfile2, dxfile3, dxfile_v2]
-    return tmp_files
-
-
 # The GATK pipeline takes many parameters, it is easier
 # to treat it is a script.
 #
@@ -555,27 +497,17 @@ Tests are run via sbt test. Note that the tests do require Docker to be running.
 # https://github.com/broadinstitute/wdl/blob/develop/scripts/broad_pipelines/PublicPairedSingleSampleWf_160927.inputs.json
 #
 def gatk_gen_inputs(project):
-    def find_file(name, folder):
-        dxfile = dxpy.find_one_data_object(
-            classname="file", name=name,
-            project=project.get_id(), folder=folder,
-            zero_ok=False, more_ok=False, return_handler=True)
-        return dxpy.dxlink(dxfile.get_id(), project.get_id())
     def find_bam_file(name):
-        return find_file(name,
-                         "/genomics-public-data/test-data/dna/wgs/hiseq2500/NA12878/")
+        return find_file(name, "/GATK_Compare", project)
     def find_interval_file(name, subfolder):
         return find_file(name,
-                         "/genomics-public-data/resources/broad/hg38/v0/scattered_calling_intervals/" + subfolder + "/")
+                         "/genomics-public-data/resources/broad/hg38/v0/scattered_calling_intervals/" + subfolder + "/", project)
     def find_ref_file(name):
-        return find_file(name,
-                         "/genomics-public-data/resources/broad/hg38/v0/")
+        return find_file(name, "/genomics-public-data/resources/broad/hg38/v0/", project)
     def find_qc_file(name):
-        return find_file(name,
-                         "/genomics-public-data/test-data/qc")
+        return find_file(name, "/genomics-public-data/test-data/qc", project)
     def find_intervals_file(name):
-        return find_file(name,
-                         "/genomics-public-data/test-data/intervals")
+        return find_file(name, "/genomics-public-data/test-data/intervals", project)
 
     input_args = {
         ##_COMMENT1: SAMPLE NAME AND UNMAPPED BAMS
@@ -699,26 +631,17 @@ def gatk_gen_inputs(project):
 # https://github.com/broadinstitute/wdl/blob/develop/scripts/broad_pipelines/PublicPairedSingleSampleWf_160927.inputs.json
 #
 def gatk_gen_inputs_nist(project):
-    def find_file(name, folder):
-        dxfile = dxpy.find_one_data_object(
-            classname="file", name=name,
-            project=project.get_id(), folder=folder,
-            zero_ok=False, more_ok=False, return_handler=True)
-        return dxpy.dxlink(dxfile.get_id(), project.get_id())
     def find_bam_file(name):
-        return find_file(name, "/GATK_Compare")
+        return find_file(name, "/GATK_Compare", project)
     def find_interval_file(name, subfolder):
         return find_file(name,
-                         "/genomics-public-data/resources/broad/hg38/v0/scattered_calling_intervals/" + subfolder + "/")
+                         "/genomics-public-data/resources/broad/hg38/v0/scattered_calling_intervals/" + subfolder + "/", project)
     def find_ref_file(name):
-        return find_file(name,
-                         "/genomics-public-data/resources/broad/hg38/v0/")
+        return find_file(name, "/genomics-public-data/resources/broad/hg38/v0/", project)
     def find_qc_file(name):
-        return find_file(name,
-                         "/genomics-public-data/test-data/qc")
+        return find_file(name, "/genomics-public-data/test-data/qc", project)
     def find_intervals_file(name):
-        return find_file(name,
-                         "/genomics-public-data/test-data/intervals")
+        return find_file(name, "/genomics-public-data/test-data/intervals", project)
 
     input_args = {
         ##_COMMENT1: SAMPLE NAME AND UNMAPPED BAMS
@@ -730,7 +653,6 @@ def gatk_gen_inputs_nist(project):
         "0.final_gvcf_name": "NIST-hg001-7001.g.vcf.gz",
         "0.unmapped_bam_suffix": ".bam",
 
-        ## COMMENT2: INTERVALS
         ## COMMENT2: INTERVALS
         "0.scattered_calling_intervals": [
             find_interval_file("scattered.interval_list", "temp_0001_of_50"),
@@ -833,6 +755,21 @@ def gatk_gen_inputs_nist(project):
         "0.preemptible_tries": 3
     }
     return input_args
+
+def find_file(name, folder, project):
+    dxfile = dxpy.find_one_data_object(
+        classname="file", name=name,
+        project=project.get_id(), folder=folder,
+        zero_ok=False, more_ok=False, return_handler=True)
+    return dxpy.dxlink(dxfile.get_id(), project.get_id())
+
+
+def find_all_file_versions(name, folder, project):
+    filegen = dxpy.bindings.search.find_data_objects(
+        classname="file",  name=name,
+        project=project.get_id(), folder=folder,
+        limit=10)
+    return [item for item in filegen]
 
 def register_test(wf_name, gen_inputs, gen_outputs):
     if wf_name in reserved_test_names:

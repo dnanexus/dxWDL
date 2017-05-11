@@ -21,11 +21,11 @@ required_libs = ["dnanexus-api-0.1.0-SNAPSHOT-jar-with-dependencies.jar",
 
 def main():
     argparser = argparse.ArgumentParser(description="compiler from WDL to dnanexus")
-    argparser.add_argument("command", choices=["compile", "dx_input"], help="command")
+    argparser.add_argument("command", choices=["compile"], help="command")
     argparser.add_argument("wdl_file", help="WDL workflow file")
     argparser.add_argument("--asset", help="Override configuration file asset Id")
     argparser.add_argument("--destination", help="Output folder for workflow")
-    argparser.add_argument("--inputFile", help="WDL input file")
+    argparser.add_argument("--wdl_input_file", help="WDL input file")
     argparser.add_argument("--mode", help="Compilation mode, a debugging flag")
     argparser.add_argument("--verbose", dest='verbose', action='store_true', default=False,
                            help="Print detailed progress reports")
@@ -35,15 +35,9 @@ def main():
 
     if args.command == "compile":
         cmd_compile(args)
-    elif args.command == "dx_input":
-        cmd_dx_input(args)
     else:
         print("Unknown command {}".format(args.command), file=sys.stderr)
         exit(1)
-
-def cmd_dx_input(args):
-    [asset_id, classpath] = prolog(args)
-    gen_dx_input_file(args.wdl_file, args.wdl_input_file, classpath, args.verbose)
 
 def cmd_compile(args):
     # Where should we write the result?
@@ -52,7 +46,9 @@ def cmd_compile(args):
     else:
         destination = args.destination
     [asset_id, classpath] = prolog(args)
-    compile_workflow(args.wdl_file, destination, asset_id, classpath, args.force, args.verbose, args.mode)
+    compile_workflow(args.wdl_file, args.wdl_input_file,
+                     destination, asset_id, classpath,
+                     args.force, args.verbose, args.mode)
 
 def prolog(args):
     global asset_id
@@ -106,13 +102,15 @@ def validate_asset_version(version_id, asset_id):
 # destination    output path on the platform
 #
 # return --      workflow ID
-def compile_workflow(wf_file, destination, asset_id, classpath, force, verbose, mode):
+def compile_workflow(wf_file, wdl_input_file, destination, asset_id, classpath, force, verbose, mode):
     print("Compiling {}".format(wf_file), file=sys.stderr)
     cmd_line = [
         "java", "-cp", classpath, "dxWDL.Main", "compile", wf_file,
         "-o", destination,
         "-asset", asset_id
     ]
+    if wdl_input_file is not None:
+        cmd_line += ["-inputFile", wdl_input_file]
     if version_id is not None:
         cmd_line += ["-expected_version", version_id]
     if force:
@@ -175,18 +173,6 @@ def find(pattern, path):
                 names.append(name)
                 paths.append(os.path.join(root, name))
     return [names, paths]
-
-def gen_dx_input_file(wdl_file, wdl_input_file, classpath, verbose):
-    print("Generating dx input file from {}".format(wdl_input_file), file=sys.stderr)
-    cmd_line = [
-        "java", "-cp", classpath, "dxWDL.Main", "dx_input", wdf_file,
-        "-inputFile", wdl_input_file
-    ]
-    if version_id is not None:
-        cmd_line += ["-expected_version", version_id]
-    if verbose:
-        cmd_line += ["-verbose"]
-    return call_compiler(cmd_line)
 
 # Run the compiler in a different process, and wait for completion
 def call_compiler(cmd_line):

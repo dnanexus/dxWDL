@@ -19,7 +19,7 @@ object Main extends App {
     type OptionsMap = Map[String, String]
 
     object Actions extends Enumeration {
-        val Compile, DxInput, Eval, LaunchScatter,
+        val Compile, Eval, LaunchScatter,
             TaskEpilog, TaskProlog, TaskRelaunch,
             Version, Yaml  = Value
     }
@@ -39,12 +39,16 @@ object Main extends App {
         def nextOption(map : OptionsMap, list: List[String]) : OptionsMap = {
             list match {
                 case Nil => map
+                case "-asset" :: value :: tail =>
+                    nextOption(map ++ Map("dxWDLrtId" -> value.toString), tail)
                 case "-expected_version" :: value :: tail =>
                     nextOption(map ++ Map("expectedVersion" -> value.toString), tail)
                 case "-force" :: tail =>
                     nextOption(map ++ Map("force" -> ""), tail)
                 case "-inputFile" :: value :: tail =>
                     nextOption(map ++ Map("inputFile" -> value.toString), tail)
+                case "-mode" :: value :: tail =>
+                    nextOption(map ++ Map("mode" -> value.toString), tail)
                 case "-o" :: value :: tail =>
                     nextOption(map ++ Map("destination" -> value.toString), tail)
                 case "-verbose" :: tail =>
@@ -111,6 +115,7 @@ object Main extends App {
             prefix + suffix
         }
     }
+
 
     def prettyPrintWorkflowIR(wdlSourceFile : Path,
                               irWf: IR.Workflow,
@@ -200,6 +205,7 @@ object Main extends App {
         val cef = new CompilerErrorFormatter(ns.terminalMap)
         val (irWf, irApplets) = CompilerFrontEnd.apply(ns, instanceTypeDB, folder, cef, verbose)
 
+        // Backend compiler pass
         irWf match {
             case None =>
                 // We have only tasks
@@ -220,6 +226,15 @@ object Main extends App {
             case Some(iRepWf) =>
                 // Write out the intermediate representation
                 prettyPrintWorkflowIR(wdlSourceFile, iRepWf, verbose)
+
+                // generate a dx inputs file, if requested
+                options.get("inputFile") match {
+                    case None => ()
+                    case Some(wdlInputFile) =>
+                        val dxInputFile: String = replaceFileSuffix(Paths.get(wdlInputFile), ".dx.json")
+                        InputFile.apply(iRepWf, Paths.get(wdlInputFile), Paths.get(dxInputFile), verbose)
+                }
+
                 mode match {
                     case None =>
                         val dxwfl = CompilerBackend.apply(iRepWf, dxProject, instanceTypeDB,
@@ -234,29 +249,10 @@ object Main extends App {
 
     def compile(args: Seq[String]): Termination = {
         try {
-            val wdlSrcFile = args.head
+            val wdlSourceFile = args.head
             val options = parseCmdlineOptions(args.tail.toList)
-            val dxc = compileBody(Paths.get(wdlSrcFile), options)
+            val dxc = compileBody(Paths.get(wdlSourceFile), options)
             SuccessfulTermination(dxc)
-        } catch {
-            case e : Throwable =>
-                UnsuccessfulTermination(Utils.exceptionToString(e))
-        }
-    }
-
-    def genDxInputFile(args: Seq[String]): Termination = {
-        try {
-            val wdlSrcFile = args.head
-            val options = parseCmdlineOptions(args.tail.toList)
-            val verbose = options contains "verbose"
-            val wdlInputFile : String = options.get("inputFile") match {
-                case None => throw new Exception("")
-                case Some(d) => d
-            }
-            val dxInputFile = InputFile.apply(Paths.get(wdlSrcFile),
-                                              Paths.get(wdlInputFile),
-                                              verbose)
-            SuccessfulTermination(s"Built a dx input file ${dxInputFile.toString}")
         } catch {
             case e : Throwable =>
                 UnsuccessfulTermination(Utils.exceptionToString(e))
@@ -310,16 +306,18 @@ object Main extends App {
         }
     }
 
-    private def getAction(args: Seq[String]): Option[Actions.Value] = for {
-        arg <- args.headOption
-        argCapitalized = arg.capitalize
-        action <- Actions.values find (_.toString.replaceAll("_", "") == argCapitalized)
-    } yield action
+    private def getAction(req: String): Option[Actions.Value] = {
+        def normalize(s: String) : String= {
+            s.replaceAll("_", "").toUpperCase
+        }
+        Actions.values find (x => normalize(x.toString) == normalize(req))
+    }
 
     def dispatchCommand(args: Seq[String]): Termination = {
-        getAction(args) match {
+        if (args.isEmpty)
+            BadUsageTermination("")
+        else getAction(args.head) match {
             case Some(x) if x == Actions.Compile => compile(args.tail)
-            case Some(x) if x == Actions.DxInput => genDxInputFile(args.tail)
             case Some(x) if x == Actions.Eval => appletAction(x, args.tail)
             case Some(x) if x == Actions.LaunchScatter => appletAction(x, args.tail)
             case Some(x) if x == Actions.TaskProlog => appletAction(x, args.tail)
@@ -342,17 +340,12 @@ object Main extends App {
            |  syntax tree.
            |
            |compile <WDL file> <-asset dxId> [-o targetPath] [-expected_version vid]
-           |  [-verbose] [-force] [-mode debug_flag]
+           |  [-inputFile wdlInputFile] [-verbose] [-force] [-mode debug_flag]
            |
            |  Compile a wdl file into a dnanexus workflow. An asset
            |  ID for the dxWDL runtime is required. Optionally, specify a
-           |  destination path on the platform.
-           |
-           |dx_input <WDL file> <--inputFile wdl json input file> [-o targetPath]
-           |   [-expected_version vid] [-verbose]
-           |
-           |  Generate a DNAx input file from a WDL style input file. Recognizes
-           |  file paths available on the platform.
+           |  destination path on the platform. A dx JSON inputs file is generated
+           |  from the WDL inputs file, if specified.
            |
            |taskProlog <WDL file> <home directory>
            |

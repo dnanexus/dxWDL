@@ -407,8 +407,8 @@ object Utils {
             throw new Exception(s"Failure to download file ${path}")
     }
 
-    def uploadString(buf: String) : JsValue = {
-        val dxfile = DXFile.newFile().build()
+    def uploadString(buf: String, fileNameDbg: String) : JsValue = {
+        val dxfile = DXFile.newFile().setName(fileNameDbg).build()
         dxfile.upload(buf.getBytes())
         dxfile.close()
 
@@ -434,6 +434,7 @@ object Utils {
                     Some(outmsg.trim())
                 } else {
                     // upload with java
+                    System.err.println(s"--  java upload file ${path.toString}")
                     val fname = path.getFileName().toString()
                     val dxfile = DXFile.newFile().setName(fname).build()
                     val fis = new java.io.FileInputStream(path.toString())
