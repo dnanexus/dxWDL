@@ -19,6 +19,60 @@ lib_object_ids = None
 required_libs = ["dnanexus-api-0.1.0-SNAPSHOT-jar-with-dependencies.jar",
                  "dxWDL.jar"]
 
+
+# Download libraries from the platform
+def download_libs():
+    if (lib_object_ids is None or
+        len(lib_object_ids) == 0):
+        print("Can't download libraries, download objects are not set", file=sys.stderr)
+        exit(1)
+
+    # We don't have all jars locally. Download them from the platform.
+    for fid in lib_object_ids:
+        dxfile = dxpy.DXFile(fid, project=project_id)
+        name = dxfile.describe()["name"]
+        print("downloading {}".format(name), file=sys.stderr)
+        dxpy.download_dxfile(fid, os.path.join(top_dir, name))
+
+def lookup_local_jars():
+    [jar_names, jar_paths] = find('*.jar', top_dir)
+    print("found {}".format(jar_names), file=sys.stderr)
+    classpath = []
+    for lib in required_libs:
+        if lib in jar_names:
+            index = jar_names.index(lib)
+            classpath.append(jar_paths[index])
+        else:
+            print("Not found {}".format(lib), file=sys.stderr)
+            return None
+    return classpath
+
+# Find all files that match regular expression [pattern]
+# starting from [path]
+def find(pattern, path):
+    names = []
+    paths = []
+    for root, dirs, files in os.walk(path):
+        for name in files:
+            if fnmatch.fnmatch(name, pattern):
+                names.append(name)
+                paths.append(os.path.join(root, name))
+    return [names, paths]
+
+# Search for the jars locally. If not found, download
+# from the platform.
+def construct_java_classpath():
+    classpath = lookup_local_jars()
+    if classpath is not None:
+        return classpath
+    download_libs()
+    classpath = lookup_local_jars()
+    if classpath is None:
+        print("Error, could not find jars, after download", file=sys.stderr)
+        exit(1)
+    return classpath
+
+
 def prolog(args):
     global asset_id
     global version_id
@@ -38,6 +92,15 @@ def prolog(args):
         validate_library_version(version_id, classpath)
         validate_asset_version(version_id, asset_id)
     return [asset_id, classpath]
+
+# Run the compiler in a different process, and wait for completion
+def call_scala_tools(cmd_line):
+    print((" ".join(cmd_line)), file=sys.stderr)
+
+    # Call java/scala dxWDL compiler, and pipe stdout/stderr
+    outstr = subprocess.check_output(cmd_line)
+    retval = outstr.rstrip().split('\n')[-1]
+    return retval
 
 
 # Check if the local library has the correct version
@@ -88,69 +151,7 @@ def compile_workflow(wf_file, wdl_input_file, destination, asset_id, classpath, 
         cmd_line += ["-verbose"]
     if mode:
         cmd_line += ["-mode", mode]
-    return call_compiler(cmd_line)
-
-
-# Search for the jars locally. If not found, download
-# from the platform.
-def construct_java_classpath():
-    classpath = lookup_local_jars()
-    if classpath is not None:
-        return classpath
-    download_libs()
-    classpath = lookup_local_jars()
-    if classpath is None:
-        print("Error, could not find jars, after download", file=sys.stderr)
-        exit(1)
-    return classpath
-
-# Download libraries from the platform
-def download_libs():
-    if (lib_object_ids is None or
-        len(lib_object_ids) == 0):
-        print("Can't download libraries, download objects are not set", file=sys.stderr)
-        exit(1)
-
-    # We don't have all jars locally. Download them from the platform.
-    for fid in lib_object_ids:
-        dxfile = dxpy.DXFile(fid, project=project_id)
-        name = dxfile.describe()["name"]
-        print("downloading {}".format(name), file=sys.stderr)
-        dxpy.download_dxfile(fid, os.path.join(top_dir, name))
-
-def lookup_local_jars():
-    [jar_names, jar_paths] = find('*.jar', top_dir)
-    print("found {}".format(jar_names), file=sys.stderr)
-    classpath = []
-    for lib in required_libs:
-        if lib in jar_names:
-            index = jar_names.index(lib)
-            classpath.append(jar_paths[index])
-        else:
-            print("Not found {}".format(lib), file=sys.stderr)
-            return None
-    return classpath
-
-# Find all files that match regular expression [pattern]
-# starting from [path]
-def find(pattern, path):
-    names = []
-    paths = []
-    for root, dirs, files in os.walk(path):
-        for name in files:
-            if fnmatch.fnmatch(name, pattern):
-                names.append(name)
-                paths.append(os.path.join(root, name))
-    return [names, paths]
-
-# Run the compiler in a different process, and wait for completion
-def call_compiler(cmd_line):
-    print((" ".join(cmd_line)), file=sys.stderr)
-
-    # Call java/scala dxWDL compiler, and pipe stdout/stderr
-    outstr = subprocess.check_output(cmd_line)
-    retval = outstr.rstrip().split('\n')[-1]
-    return retval
+    return call_scala_tools(cmd_line)
 
 
 def cmd_compile(args):
@@ -164,6 +165,56 @@ def cmd_compile(args):
                      destination, asset_id, classpath,
                      args.force, args.verbose, args.mode)
 
+######################################################################
+# Run a WDL workflow
+
+def lookup_workflow(wf_name, project, folder):
+    wfgen = dxpy.bindings.search.find_data_objects(classname="workflow",
+                                                   name=wf_name,
+                                                   folder=folder,
+                                                   project=project.get_id(),
+                                                   limit=1)
+    wf = [item for item in wfgen]
+    if len(wf) > 0:
+        return wf[0]['id']
+    raise Exception("Workflow {} not found in path {}/{}".
+                    format(wf_name, project.getId(), folder))
+
+def get_workflow_name(wdl_file):
+    jars = construct_java_classpath()
+    classpath = ":".join(jars)
+    print("Extracting workflow name from file {}".format(wdl_file), file=sys.stderr)
+    cmd_line = [
+        "java", "-cp", classpath, "dxWDL.Main", "workflowName", wdl_file
+    ]
+    return call_scala_tools(cmd_line)
+
+
+def cmd_run(args):
+    # Figure out the project
+    if dxpy.JOB_ID is None:
+        project_id = dxpy.config.get("DX_PROJECT_CONTEXT_ID")
+    else:
+        project_id = dxpy.config.get("DX_WORKSPACE_ID")
+    project = dxpy.DXProject(project_id)
+
+    # Locate the workflow on dx
+    if args.folder is None:
+        folder = dxpy.config.get('DX_CLI_WD', u'/')
+    else:
+        folder = args.folder
+    wf_name = get_workflow_name(args.wdl_file)
+    wfId = lookup_workflow(wf_name, project, folder)
+
+    # Read the JSON inputs file
+    with open(args.input_file, 'r') as fd:
+        data = fd.read()
+        inputs = json.loads(data)
+        print(inputs)
+
+    # Run the workflow
+    workflow = dxpy.DXWorkflow(project=project.get_id(), dxid=wfId)
+    workflow.run(inputs, project=project.get_id())
 
 ######################################################################
 # Command line parsing
@@ -189,7 +240,14 @@ compile_parser.add_argument("--force", dest='force', action='store_true', defaul
 compile_parser.set_defaults(func=cmd_compile)
 
 # Parser for the run command
-# TODO
+compile_parser = subparsers.add_parser('run',
+                                       help="run a WDL workflow on the platform",
+                                       description="run a WDL workflow on the platform")
+compile_parser.add_argument("wdl_file", help="WDL workflow file")
+compile_parser.add_argument("input_file", help="dx:workflow input file in JSON format")
+compile_parser.add_argument("--folder", help="Folder where dx:workflow is located")
+
+compile_parser.set_defaults(func=cmd_run)
 ######################################################################
 
 # Program entry point

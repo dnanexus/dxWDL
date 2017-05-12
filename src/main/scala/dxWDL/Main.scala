@@ -21,7 +21,7 @@ object Main extends App {
     object Actions extends Enumeration {
         val Compile, Eval, LaunchScatter,
             TaskEpilog, TaskProlog, TaskRelaunch,
-            Version, Yaml  = Value
+            Version, WorkflowName, Yaml  = Value
     }
 
     // parse extra command line arguments
@@ -274,7 +274,7 @@ object Main extends App {
         }
     }
 
-    def appletAction(action: Actions.Value, args : Seq[String]): Termination = {
+    private def appletAction(action: Actions.Value, args : Seq[String]): Termination = {
         if (args.length != 2) {
             BadUsageTermination("All applet actions take a WDL file, and a home directory")
         } else {
@@ -306,6 +306,21 @@ object Main extends App {
         }
     }
 
+    // Parse a WDL file, and get the workflow name, if it exists
+    private def getWorkflowName(args : Seq[String]): Termination = {
+        if (args.length != 1) {
+            BadUsageTermination("WorkflowName requires a single argument")
+        } else {
+            val wdlDefPath = args(0)
+            val ns = WdlNamespace.loadUsingPath(Paths.get(wdlDefPath), None, None).get
+            val wfName = ns match {
+                case nswf : WdlNamespaceWithWorkflow => nswf.workflow.unqualifiedName
+                case _ => throw new Exception("WDL file contains no workflow")
+            }
+            SuccessfulTermination(wfName)
+        }
+    }
+
     private def getAction(req: String): Option[Actions.Value] = {
         def normalize(s: String) : String= {
             s.replaceAll("_", "").toUpperCase
@@ -317,15 +332,18 @@ object Main extends App {
         if (args.isEmpty)
             BadUsageTermination("")
         else getAction(args.head) match {
-            case Some(x) if x == Actions.Compile => compile(args.tail)
-            case Some(x) if x == Actions.Eval => appletAction(x, args.tail)
-            case Some(x) if x == Actions.LaunchScatter => appletAction(x, args.tail)
-            case Some(x) if x == Actions.TaskProlog => appletAction(x, args.tail)
-            case Some(x) if x == Actions.TaskEpilog => appletAction(x, args.tail)
-            case Some(x) if x == Actions.TaskRelaunch => appletAction(x, args.tail)
-            case Some(x) if x == Actions.Version => SuccessfulTermination(Utils.VERSION)
-            case Some(x) if x == Actions.Yaml => yaml(args.tail)
-            case _ => BadUsageTermination("")
+            case None => BadUsageTermination("")
+            case Some(x) => x match {
+                case Actions.Compile => compile(args.tail)
+                case Actions.Eval => appletAction(x, args.tail)
+                case Actions.LaunchScatter => appletAction(x, args.tail)
+                case Actions.TaskProlog => appletAction(x, args.tail)
+                case Actions.TaskEpilog => appletAction(x, args.tail)
+                case Actions.TaskRelaunch => appletAction(x, args.tail)
+                case Actions.Version => SuccessfulTermination(Utils.VERSION)
+                case Actions.WorkflowName => getWorkflowName(args.tail)
+                case Actions.Yaml => yaml(args.tail)
+            }
         }
     }
 
@@ -346,6 +364,10 @@ object Main extends App {
            |  ID for the dxWDL runtime is required. Optionally, specify a
            |  destination path on the platform. A dx JSON inputs file is generated
            |  from the WDL inputs file, if specified.
+           |
+           |workflowName <WDL file>
+           |
+           |  Parse and extract the workflow name from a WDL file
            |
            |taskProlog <WDL file> <home directory>
            |
