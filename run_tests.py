@@ -51,6 +51,8 @@ def main():
     argparser.add_argument("--compile-only", help="Only compile the workflows, don't run them",
                            action="store_true", default=False)
     argparser.add_argument("--compile-mode", help="Compilation mode")
+    argparser.add_argument("--delay-workspace-destruction", help="Flag passed to workflow run",
+                           action="store_true", default=False)
     argparser.add_argument("--force", help="Rebuild all the applets and workflows",
                            action="store_true", default=False)
     argparser.add_argument("--folder", help="Use an existing folder, instead of building dxWDL")
@@ -115,19 +117,19 @@ def main():
             workflows[wf_name] = wfid
             print("workflow({}) = {}".format(wf_name, wfid))
         if not args.compile_only:
-            run_workflow_subset(project, workflows, test_folder, args.no_wait)
+            run_workflow_subset(project, workflows, test_folder, args.delay_workspace_destruction, args.no_wait)
     finally:
         print("Test complete")
 
 
-def run_workflow_subset(project, workflows, test_folder, no_wait):
+def run_workflow_subset(project, workflows, test_folder, delay_workspace_destruction, no_wait):
     # Run the workflows
     test_analyses=[]
     for wf_name, dxid in workflows.iteritems():
         print("Generating inputs for {}".format(wf_name))
         inputs = test_input[wf_name]("dummy")
         print("Running workflow {}".format(wf_name))
-        test_job = run_workflow(project, test_folder, wf_name, dxid, inputs)
+        test_job = run_workflow(project, test_folder, wf_name, dxid, delay_workspace_destruction, inputs)
         test_analyses.append(test_job)
     print("test analyses: " + ", ".join([a.get_id() for a in test_analyses]))
 
@@ -270,7 +272,7 @@ def wait_for_completion(test_analyses):
 
 
 # Run [workflow] on several inputs, return the analysis ID.
-def run_workflow(project, test_folder, wf_name, wfId, inputs):
+def run_workflow(project, test_folder, wf_name, wfId, delay_workspace_destruction, inputs):
     def once(project, test_folder, wf_name, wfId, inputs):
         try:
             workflow = dxpy.DXWorkflow(project=project.get_id(), dxid=wfId)
@@ -280,7 +282,7 @@ def run_workflow(project, test_folder, wf_name, wfId, inputs):
                                     project=project.get_id(),
                                     folder=test_folder,
                                     name="{} {}".format(wf_name, git_revision),
-                                    delay_workspace_destruction=True)
+                                    delay_workspace_destruction=delay_workspace_destruction)
             return analysis
         except Exception, e:
             print("exception message={}".format(e))
