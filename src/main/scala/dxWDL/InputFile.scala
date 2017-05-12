@@ -11,8 +11,9 @@ import spray.json.DefaultJsonProtocol
 
 object InputFile {
 
-    // 1. Convert fields of the form myWorkflow.xxxx to common.xxxx, or, 0.xxxx
-    //
+    // 1. Convert fields of the form myWorkflow.xxxx to 0.xxxx. 'common' should
+    //    also work, but does not.
+    // 2.
     private def dxTranslate(wf: IR.Workflow, wdlInputs: JsObject) : JsObject= {
         val m: Map[String, JsValue] = wdlInputs.fields.map{ case (key, v) =>
             val components = key.split("\\.")
