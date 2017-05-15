@@ -13,7 +13,6 @@ import scala.sys.process._
 import scala.util.{Failure, Success, Try}
 import spray.json._
 import spray.json.DefaultJsonProtocol
-import spray.json.JsString
 import wdl4s.AstTools
 import wdl4s.AstTools.EnhancedAstNode
 import wdl4s.{Call, Declaration, Scatter, Scope, Task, WdlExpression, WdlNamespaceWithWorkflow,
@@ -37,7 +36,7 @@ class UnboundVariableException private(ex: RuntimeException) extends RuntimeExce
 }
 
 object Utils {
-    val VERSION = "0.24"
+    val VERSION = "0.25"
 
     // Long strings cause problems with bash and the UI
     val MAX_STRING_LEN = 8 * 1024
@@ -408,8 +407,8 @@ object Utils {
             throw new Exception(s"Failure to download file ${path}")
     }
 
-    def uploadString(buf: String) : JsValue = {
-        val dxfile = DXFile.newFile().build()
+    def uploadString(buf: String, fileNameDbg: String) : JsValue = {
+        val dxfile = DXFile.newFile().setName(fileNameDbg).build()
         dxfile.upload(buf.getBytes())
         dxfile.close()
 
@@ -435,6 +434,7 @@ object Utils {
                     Some(outmsg.trim())
                 } else {
                     // upload with java
+                    System.err.println(s"--  java upload file ${path.toString}")
                     val fname = path.getFileName().toString()
                     val dxfile = DXFile.newFile().setName(fname).build()
                     val fis = new java.io.FileInputStream(path.toString())

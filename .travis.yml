@@ -1,5 +1,5 @@
 language: scala
-sudo: true
+sudo: false
 dist: trusty
 
 # We do not want to start a travis build
@@ -29,16 +29,6 @@ before_install:
   - cd /tmp/ci_tests
 
 install:
-  # Install scala 2.12.1
-  - wget www.scala-lang.org/files/archive/scala-2.12.1.deb
-  - sudo dpkg -i scala-2.12.1.deb
-
-  # Install sbt
-  - echo "deb https://dl.bintray.com/sbt/debian /" | sudo tee -a /etc/apt/sources.list.d/sbt.list
-  - sudo apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv 2EE0EA64E40A89B84B2DF73499E82A75642AC823
-  - sudo apt-get update
-  - sudo apt-get install --force-yes sbt
-
   # Clone and make the python and java dxpy version
   - pwd
   - git clone https://github.com/dnanexus/dx-toolkit.git
@@ -60,7 +50,8 @@ script:
   - dx login --token ${DX_AUTH_TOKEN} --noprojects
   - dx select dxWDL_playground
   - java -version
-  - cd dxWDL && ./run_tests.py
+  - cd dxWDL && sbt version && ./run_tests.py
+
 env:
   global:
     # DX_AUTH_TOKEN (orodeh)

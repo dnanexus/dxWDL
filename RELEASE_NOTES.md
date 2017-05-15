@@ -1,5 +1,10 @@
 # Release Notes
 
+## 0.25
+- Allow a docker image to be specified as a parameter
+- Use Travis containers for continuous integration
+- Adding tests for instance type choice at runtime
+
 ## 0.24
 - Support resource requirements (memory/disk) calculated from runtime variables.
 
