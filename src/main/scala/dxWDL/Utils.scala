@@ -36,26 +36,26 @@ class UnboundVariableException private(ex: RuntimeException) extends RuntimeExce
 }
 
 object Utils {
-    val VERSION = "0.25"
-
     // Long strings cause problems with bash and the UI
-    val MAX_STRING_LEN = 8 * 1024
-    val DX_HOME = "/home/dnanexus"
-    val DOWNLOAD_RETRY_LIMIT = 3
-    val UPLOAD_RETRY_LIMIT = DOWNLOAD_RETRY_LIMIT
-    val DXPY_FILE_TRANSFER = true
     val CHECKSUM_PROP = "dxWDL_checksum"
-    val WDL_SNIPPET_FILENAME = "source.wdl"
+    val COMMON = "common"
+    val DOWNLOAD_RETRY_LIMIT = 3
+    val DXPY_FILE_TRANSFER = true
+    val DX_HOME = "/home/dnanexus"
+    val INSTANCE_TYPE_DB_FILENAME = "instanceTypeDB.json"
     val LINK_INFO_FILENAME = "linking.json"
     val MAX_HOURLY_RATE = 10.0
-    val INSTANCE_TYPE_DB_FILENAME = "instanceTypeDB.json"
+    val MAX_STRING_LEN = 8 * 1024
+    val SCATTER = "scatter"
+    val UPLOAD_RETRY_LIMIT = DOWNLOAD_RETRY_LIMIT
+    val UNIVERSAL_FILE_PREFIX = "dx://"
+    val VERSION = "0.25"
+    val WDL_SNIPPET_FILENAME = "source.wdl"
 
     // Substrings used by the compiler for encoding purposes
     val reservedSubstrings = List("___")
 
     // Prefixes used for generated applets
-    val COMMON = "common"
-    val SCATTER = "scatter"
     val reservedAppletPrefixes = List(SCATTER, COMMON)
 
     lazy val execDirPath : Path = {

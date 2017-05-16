@@ -1,4 +1,4 @@
 {
-  "system_calls.data": "README.md",
-  "system_calls.pattern": "parse"
+  "system_calls.data": "dx://dxWDL_playground:/test_data/fileA",
+  "system_calls.pattern": "WDL"
 }

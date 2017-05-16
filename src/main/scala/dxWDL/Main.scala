@@ -231,8 +231,13 @@ object Main extends App {
                 options.get("inputFile") match {
                     case None => ()
                     case Some(wdlInputFile) =>
-                        val dxInputFile: String = replaceFileSuffix(Paths.get(wdlInputFile), ".dx.json")
-                        InputFile.apply(iRepWf, Paths.get(wdlInputFile), Paths.get(dxInputFile), verbose)
+                        val inputPath = Paths.get(wdlInputFile)
+                        val filename = replaceFileSuffix(inputPath, ".dx.json")
+                        InputFile.apply(iRepWf,
+                                        dxProject,
+                                        Paths.get(wdlInputFile),
+                                        inputPath.getParent().resolve(filename),
+                                        verbose)
                 }
 
                 mode match {

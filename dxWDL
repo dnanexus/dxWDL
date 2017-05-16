@@ -34,6 +34,18 @@ def download_libs():
         print("downloading {}".format(name), file=sys.stderr)
         dxpy.download_dxfile(fid, os.path.join(top_dir, name))
 
+# Find all files that match regular expression [pattern]
+# starting from [path]
+def find(pattern, path):
+    names = []
+    paths = []
+    for root, dirs, files in os.walk(path):
+        for name in files:
+            if fnmatch.fnmatch(name, pattern):
+                names.append(name)
+                paths.append(os.path.join(root, name))
+    return [names, paths]
+
 def lookup_local_jars():
     [jar_names, jar_paths] = find('*.jar', top_dir)
     print("found {}".format(jar_names), file=sys.stderr)
@@ -46,18 +58,6 @@ def lookup_local_jars():
             print("Not found {}".format(lib), file=sys.stderr)
             return None
     return classpath
-
-# Find all files that match regular expression [pattern]
-# starting from [path]
-def find(pattern, path):
-    names = []
-    paths = []
-    for root, dirs, files in os.walk(path):
-        for name in files:
-            if fnmatch.fnmatch(name, pattern):
-                names.append(name)
-                paths.append(os.path.join(root, name))
-    return [names, paths]
 
 # Search for the jars locally. If not found, download
 # from the platform.
@@ -204,6 +204,7 @@ def cmd_run(args):
     else:
         folder = args.folder
     wf_name = get_workflow_name(args.wdl_file)
+    print("Looking up workflow {}".format(wf_name))
     wfId = lookup_workflow(wf_name, project, folder)
 
     # Read the JSON inputs file
@@ -213,14 +214,16 @@ def cmd_run(args):
         print(inputs)
 
     # Run the workflow
+    print("Running")
     workflow = dxpy.DXWorkflow(project=project.get_id(), dxid=wfId)
-    workflow.run(inputs, project=project.get_id())
+    analysis = workflow.run(inputs, project=project.get_id())
+    analysis.wait_on_done()
 
 ######################################################################
 # Command line parsing
 
 # Top level parser
-parser = argparse.ArgumentParser(description="Tool for compiling and running WDL source files on the platform")
+parser = argparse.ArgumentParser(description="Tool for compiling and running WDL source files on the platform. The available commands are {compile, run}.")
 subparsers = parser.add_subparsers(help=argparse.SUPPRESS, dest='command')
 subparsers.metavar = 'command'
 
@@ -257,7 +260,6 @@ def main():
         args = parser.parse_args(args_list)
         args.func(args)
     else:
-        parser.print_help()
         sys.exit(1)
 
 if __name__ == '__main__':
