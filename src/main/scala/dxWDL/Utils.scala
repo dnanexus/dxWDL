@@ -228,6 +228,20 @@ object Utils {
         }
     }
 
+    // Add a suffix to a filename, before the regular suffix. For example:
+    //  xxx.wdl -> xxx.simplified.wdl
+    def replaceFileSuffix(src: Path, suffix: String) : String = {
+        val fName = src.toFile().getName()
+        val index = fName.lastIndexOf('.')
+        if (index == -1) {
+            fName + suffix
+        }
+        else {
+            val prefix = fName.substring(0, index)
+            prefix + suffix
+        }
+    }
+
     def taskOfCall(call : Call) : Task = {
         call.callable match {
             case task: Task => task

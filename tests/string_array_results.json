@@ -1,1 +1,3 @@
-{ "Concat.result" : "A INPUT=B INPUT=C"})
+{
+  "Concat.result" : "A INPUT=B INPUT=C"
+}

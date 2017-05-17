@@ -1,13 +1,29 @@
 /** Generate an input file for a dx:workflow based on the
-  * WDL input file.
-  *
-  * In the documentation, we assume the workflow name is "myWorkflow"
+  WDL input file.
+
+  In the documentation, we assume the workflow name is "myWorkflow"
+
+For example, this is a Cromwell input file for workflow optionals:
+{
+  "optionals.arg1": 10,
+  "optionals.mul2.i": 5,
+  "optionals.add.a" : 1,
+  "optionals.add.b" : 3
+}
+
+This is the dx JSON input:
+{
+  "0.arg1": 10,
+  "stage-xxxx.i": 5,
+  "stage-yyyy.a": 1,
+  "stage-yyyy.b": 3
+}
   */
 package dxWDL
 
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.node.ObjectNode
-import com.dnanexus.{DXAPI, DXDataObject, DXJSON, DXFile, DXProject, DXSearch}
+import com.dnanexus.{DXAPI, DXDataObject, DXJSON, DXFile, DXProject, DXSearch, DXWorkflow}
 import java.nio.file.{Path, Paths, Files}
 import scala.collection.JavaConverters._
 import spray.json._
@@ -71,69 +87,107 @@ object InputFile {
         }
     }
 
-    private def lookupDxPath(dxPath: String, crntDxProject: DXProject) : JsValue = {
+    private def lookupDxPath(dxPath: String) : DXFile = {
         val components = dxPath.split(":/")
-        val dxFile: DXFile =
-            if (components.length > 2) {
-                throw new Exception(s"Path ${dxPath} cannot more than two components")
-            } else if (components.length == 2) {
-                val projName = components(0)
-                val fileName = components(1)
-                val dxProject = lookupProject(projName)
-                lookupFile(Some(dxProject), fileName)
-            } else if (components.length == 1) {
-                val fileName = components(0)
-                lookupFile(None, fileName)
-            } else {
-                throw new Exception(s"Path ${dxPath} is invalid")
-            }
-        Utils.jsValueOfJsonNode(dxFile.getLinkAsJson)
+        if (components.length > 2) {
+            throw new Exception(s"Path ${dxPath} cannot more than two components")
+        } else if (components.length == 2) {
+            val projName = components(0)
+            val fileName = components(1)
+            val dxProject = lookupProject(projName)
+            lookupFile(Some(dxProject), fileName)
+        } else if (components.length == 1) {
+            val fileName = components(0)
+            lookupFile(None, fileName)
+        } else {
+            throw new Exception(s"Path ${dxPath} is invalid")
+        }
     }
 
-    // 1. Convert fields of the form myWorkflow.xxxx to 0.xxxx. 'common' should
-    //    also work, but does not.
-    // 2.
-    private def dxTranslate(wf: IR.Workflow, dxProject: DXProject, wdlInputs: JsObject) : JsObject= {
+    private def translateValue(v: JsValue) : JsValue= {
+        v match {
+            case JsString(s) if s.startsWith(UNIVERSAL_FILE_PREFIX) =>
+                // Identify platform file paths by their prefix,
+                // do a lookup, and create a dxlink
+                val dxFile: DXFile = lookupDxPath(s.substring(UNIVERSAL_FILE_PREFIX.length))
+                Utils.jsValueOfJsonNode(dxFile.getLinkAsJson)
+            case JsArray(a) =>
+                JsArray(a.map(x => translateValue(x)))
+            case _ => v
+        }
+    }
+
+    private def lookupStage(name: String,
+                            wf: IR.Workflow,
+                            stageDict: Map[String, DXWorkflow.Stage]) : String= {
+        stageDict.get(name) match {
+            case None =>
+                System.err.println(s"stage dictionary: ${stageDict}")
+                throw new Exception(s"Stage ${name} not found for workflow ${wf.name}")
+            case Some(x) => x.getId()
+        }
+    }
+
+    // Translate entries in the Cromwell input file, into a valid JSON
+    // dx input file
+    private def dxTranslate(wf: IR.Workflow,
+                            wdlInputs: JsObject,
+                            stageDict: Map[String, DXWorkflow.Stage]) : JsObject= {
         val m: Map[String, JsValue] = wdlInputs.fields.map{ case (key, v) =>
             val components = key.split("\\.")
-            val dxKey =
-                if (components.length == 0) {
-                    throw new Exception(s"String ${key} cannot be a JSON field key")
-                } else if (components.length == 1) {
-                    key
-                } else {
-                    val call = components.head
-                    val suffix = components.tail.mkString(".")
-                    val stageName =
-                        if (call == wf.name) "0"
-                        else call
-                    stageName + "." + suffix
+            val dxKey: Option[String] =
+                components.length match {
+                    case 0|1 =>
+                        System.err.println(s"Assuming ${key} is a comment, skipping")
+                        None
+                    case 2|3 if (components(0).startsWith("##")) =>
+                        // Comments
+                        None
+                    case 2 =>
+                        // workflow inputs are passed to the initial
+                        // stage (common).
+                        assert(components(0) == wf.name)
+                        val varName = components(1)
+                        val stageName = lookupStage(wf.name + "_" + Utils.COMMON, wf, stageDict)
+                        Some(stageName + "." + varName)
+                    case 3 =>
+                        // parameters for call
+                        // TODO: support calls inside scatters
+                        assert(components(0) == wf.name)
+                        val stageName = lookupStage(components(1), wf, stageDict)
+                        val varName = components(2)
+                        Some(stageName + "." + varName)
+                    case _ =>
+                        throw new Exception(s"String ${key} has too many components")
                 }
-            val dxVal =
-                v match {
-                    case JsString(s) if s.startsWith(UNIVERSAL_FILE_PREFIX) =>
-                        // Identify platform file paths by their prefix,
-                        // do a lookup, and create a dxlink
-                        lookupDxPath(s.substring(UNIVERSAL_FILE_PREFIX.length), dxProject)
-                    case _ => v
-                }
-            dxKey -> dxVal
-        }.toMap
+            val dxVal = translateValue(v)
+            dxKey match {
+                case None => None
+                case Some(x) => Some(x -> dxVal)
+            }
+        }.flatten.toMap
         JsObject(m)
     }
 
     // Build a dx input file, based on the wdl input file and the workflow
     def apply(wf: IR.Workflow,
-              dxProject: DXProject,
-              wdlInputFile: Path,
-              dxInputFile: Path,
+              stageDict: Map[String, DXWorkflow.Stage],
+              inputPath: Path,
               verbose: Boolean) : Unit = {
-        // read the input file
-        val wdlInputs: JsObject = Utils.readFileContent(wdlInputFile).parseJson.asJsObject
-        wdlInputs.fields.foreach{ case (key, v) =>
-            Utils.trace(verbose, s"${key} -> ${v}")
+        // read the input file xxxx.json
+        val wdlInputs: JsObject = Utils.readFileContent(inputPath).parseJson.asJsObject
+        if (verbose) {
+            wdlInputs.fields.foreach{ case (key, v) =>
+                System.err.println(s"${key} -> ${v}")
+            }
         }
-        val dxInputs: JsObject = dxTranslate(wf, dxProject, wdlInputs)
+
+        // translate the key-value entries
+        val dxInputs: JsObject = dxTranslate(wf, wdlInputs, stageDict)
+
+        // write back out as xxxx.dx.json
+        val filename = Utils.replaceFileSuffix(inputPath, ".dx.json")
+        val dxInputFile = inputPath.getParent().resolve(filename)
         Utils.writeFileContent(dxInputFile, dxInputs.prettyPrint)
     }
 }

@@ -18,8 +18,6 @@ test_dir = os.path.join(top_dir, "tests")
 git_revision = subprocess.check_output(["git", "describe", "--always", "--dirty", "--tags"]).strip()
 git_revision_in_jar= subprocess.check_output(["git", "describe", "--always", "--tags"]).strip()
 test_files={}
-test_input={}
-test_output={}
 test_failing=set([])
 reserved_test_names=['S', 'M', 'All', 'list']
 small_test_list = [
@@ -51,8 +49,20 @@ medium_test_list = [
 
 TestDesc = namedtuple('TestDesc', 'wdl_source wdl_input dx_input results')
 
-# New interface, register a test name, and find its
-# input file, and expected results file.
+# Read a JSON file
+def read_json_file(path):
+    with open(path, 'r') as fd:
+        data = fd.read()
+        d = json.loads(data)
+        return d
+
+def verify_json_file(path):
+    try:
+        read_json_file(path)
+    except:
+        raise Exception("Error verifying JSON file {}".format(path))
+
+# Register a test name, find its inputs and expected results files.
 def register_test(wf_name):
     if wf_name in reserved_test_names:
         raise Exception("Test name {} is reserved".format(wf_name))
@@ -63,6 +73,11 @@ def register_test(wf_name):
     for path in [desc.wdl_source, desc.wdl_input]:
         if not os.path.exists(path):
             raise Exception("Test file {} does not exist".format(path))
+
+    # Verify the validity of the JSON files
+    for path in [desc.wdl_input, desc.dx_input, desc.results]:
+        if os.path.exists(path):
+            verify_json_file(path)
     test_files[wf_name] = desc
     desc
 
@@ -71,14 +86,6 @@ def register_test_fail(wf_name):
     test_failing.add(wf_name)
 
 ######################################################################
-
-# Read a JSON file
-def read_json_file(path):
-    print("Reading JSON file {}".format(path))
-    with open(path, 'r') as fd:
-        data = fd.read()
-        d = json.loads(data)
-        return d
 
 # Same as above, however, if a file is empty, return an empty dictionary
 def read_json_file_maybe_empty(path):
@@ -210,7 +217,7 @@ def run_workflow(project, test_folder, wf_name, wfId, delay_workspace_destructio
         try:
             test_desc = test_files[wf_name]
             inputs = read_json_file_maybe_empty(test_desc.dx_input)
-            print("inputs={}".format(inputs))
+            #print("inputs={}".format(inputs))
             workflow = dxpy.DXWorkflow(project=project.get_id(), dxid=wfId)
             project.new_folder(test_folder, parents=True)
             analysis = workflow.run(inputs,
@@ -289,7 +296,7 @@ def choose_tests(test_name):
 
 # Register inputs and outputs for all the tests.
 # Return the list of temporary files on the platform
-def register_all_tests(project):
+def register_all_tests():
     register_test("math")
     register_test("system_calls")
     register_test("four_step")
@@ -344,165 +351,13 @@ def register_all_tests(project):
     register_test("instance_types")
 
     # Massive tests
-    #    register_test("gatk_170412",
-#                  lambda x: gatk_gen_inputs(project, "H06HDADXX130110.1.ATCACGAT.20k_reads.bam"
-#            find_bam_file("H06HDADXX130110.2.ATCACGAT.20k_reads.bam"),
-#            find_bam_file("H06JUADXX130110.1.ATCACGAT.20k_reads.bam")),
-#                  lambda x: {})
-#    register_test("gatk_170412",
-#                  lambda x: gatk_gen_inputs(project, [
-#                      "NIST7035_TAAGGCGA_L001.bam",
-#                      "NIST7035_TAAGGCGA_L002.bam",
-#                      "NIST7086_CGTACTAG_L001.bam",
-#                      "NIST7086_CGTACTAG_L002.bam"
-#                  ]),
-#                  lambda x: {})
+    register_test("gatk_170412")
 
-
-######################################################################
-### GATK testing
-
-def find_file(name, folder, project):
-    dxfile = dxpy.find_one_data_object(
-        classname="file", name=name,
-        project=project.get_id(), folder=folder,
-        zero_ok=False, more_ok=False, return_handler=True)
-    return dxpy.dxlink(dxfile.get_id(), project.get_id())
-
-
-# The GATK pipeline takes many parameters, it is easier
-# to treat it is a script.
-#
-# Adapted from:
-# https://github.com/broadinstitute/wdl/blob/develop/scripts/broad_pipelines/PublicPairedSingleSampleWf_160927.inputs.json
-#
-def gatk_gen_inputs(project, bam_files):
-    def find_bam_file(name):
-        return find_file(name, "/GATK_Compare", project)
-    def find_interval_file(name, subfolder):
-        return find_file(name,
-                         "/genomics-public-data/resources/broad/hg38/v0/scattered_calling_intervals/" + subfolder + "/", project)
-    def find_ref_file(name):
-        return find_file(name, "/genomics-public-data/resources/broad/hg38/v0/", project)
-    def find_qc_file(name):
-        return find_file(name, "/genomics-public-data/test-data/qc", project)
-    def find_intervals_file(name):
-        return find_file(name, "/genomics-public-data/test-data/intervals", project)
-
-    input_args = {
-        ##_COMMENT1: SAMPLE NAME AND UNMAPPED BAMS
-        "0.sample_name": "NIST-hg001-7001",
-        "0.base_file_name": "NIST-hg001-7001-ready",
-        "0.flowcell_unmapped_bams": [find_bam_file(bf) for bf in bam_files],
-        "0.final_gvcf_name": "NIST-hg001-7001.g.vcf.gz",
-        "0.unmapped_bam_suffix": ".bam",
-
-        ## COMMENT2: INTERVALS
-        "0.scattered_calling_intervals": [
-            find_interval_file("scattered.interval_list", "temp_0001_of_50"),
-            find_interval_file("scattered.interval_list", "temp_0002_of_50"),
-            find_interval_file("scattered.interval_list", "temp_0003_of_50"),
-            find_interval_file("scattered.interval_list", "temp_0004_of_50"),
-            find_interval_file("scattered.interval_list", "temp_0005_of_50"),
-            find_interval_file("scattered.interval_list", "temp_0006_of_50"),
-            find_interval_file("scattered.interval_list", "temp_0007_of_50"),
-            find_interval_file("scattered.interval_list", "temp_0008_of_50"),
-            find_interval_file("scattered.interval_list", "temp_0009_of_50"),
-            find_interval_file("scattered.interval_list", "temp_0010_of_50"),
-            find_interval_file("scattered.interval_list", "temp_0011_of_50"),
-            find_interval_file("scattered.interval_list", "temp_0012_of_50"),
-            find_interval_file("scattered.interval_list", "temp_0013_of_50"),
-            find_interval_file("scattered.interval_list", "temp_0014_of_50"),
-            find_interval_file("scattered.interval_list", "temp_0015_of_50"),
-            find_interval_file("scattered.interval_list", "temp_0016_of_50"),
-            find_interval_file("scattered.interval_list", "temp_0017_of_50"),
-            find_interval_file("scattered.interval_list", "temp_0018_of_50"),
-            find_interval_file("scattered.interval_list", "temp_0019_of_50"),
-            find_interval_file("scattered.interval_list", "temp_0020_of_50"),
-            find_interval_file("scattered.interval_list", "temp_0021_of_50"),
-            find_interval_file("scattered.interval_list", "temp_0022_of_50"),
-            find_interval_file("scattered.interval_list", "temp_0023_of_50"),
-            find_interval_file("scattered.interval_list", "temp_0024_of_50"),
-            find_interval_file("scattered.interval_list", "temp_0025_of_50"),
-            find_interval_file("scattered.interval_list", "temp_0026_of_50"),
-            find_interval_file("scattered.interval_list", "temp_0027_of_50"),
-            find_interval_file("scattered.interval_list", "temp_0028_of_50"),
-            find_interval_file("scattered.interval_list", "temp_0029_of_50"),
-            find_interval_file("scattered.interval_list", "temp_0030_of_50"),
-            find_interval_file("scattered.interval_list", "temp_0031_of_50"),
-            find_interval_file("scattered.interval_list", "temp_0032_of_50"),
-            find_interval_file("scattered.interval_list", "temp_0033_of_50"),
-            find_interval_file("scattered.interval_list", "temp_0034_of_50"),
-            find_interval_file("scattered.interval_list", "temp_0035_of_50"),
-            find_interval_file("scattered.interval_list", "temp_0036_of_50"),
-            find_interval_file("scattered.interval_list", "temp_0037_of_50"),
-            find_interval_file("scattered.interval_list", "temp_0038_of_50"),
-            find_interval_file("scattered.interval_list", "temp_0039_of_50"),
-            find_interval_file("scattered.interval_list", "temp_0040_of_50"),
-            find_interval_file("scattered.interval_list", "temp_0041_of_50"),
-            find_interval_file("scattered.interval_list", "temp_0042_of_50"),
-            find_interval_file("scattered.interval_list", "temp_0043_of_50"),
-            find_interval_file("scattered.interval_list", "temp_0044_of_50"),
-            find_interval_file("scattered.interval_list", "temp_0045_of_50"),
-            find_interval_file("scattered.interval_list", "temp_0046_of_50"),
-            find_interval_file("scattered.interval_list", "temp_0047_of_50"),
-            find_interval_file("scattered.interval_list", "temp_0048_of_50"),
-            find_interval_file("scattered.interval_list", "temp_0049_of_50"),
-            find_interval_file("scattered.interval_list", "temp_0050_of_50")
-        ],
-        "0.wgs_calling_interval_list": find_ref_file("wgs_calling_regions.hg38.interval_list"),
-
-        ## COMMENT2: REFERENCE FILES
-        "0.ref_dict": find_ref_file("Homo_sapiens_assembly38.dict"),
-        "0.ref_fasta": find_ref_file("Homo_sapiens_assembly38.fasta"),
-        "0.ref_fasta_index": find_ref_file("Homo_sapiens_assembly38.fasta.fai"),
-        "0.ref_alt": find_ref_file("Homo_sapiens_assembly38.fasta.64.alt"),
-        "0.ref_sa": find_ref_file("Homo_sapiens_assembly38.fasta.64.sa"),
-        "0.ref_amb": find_ref_file("Homo_sapiens_assembly38.fasta.64.amb"),
-        "0.ref_bwt": find_ref_file("Homo_sapiens_assembly38.fasta.64.bwt"),
-        "0.ref_ann": find_ref_file("Homo_sapiens_assembly38.fasta.64.ann"),
-        "0.ref_pac": find_ref_file("Homo_sapiens_assembly38.fasta.64.pac"),
-
-        ## COMMENT3: KNOWN SITES RESOURCES
-        "0.dbSNP_vcf": find_ref_file("Homo_sapiens_assembly38.dbsnp138.vcf"),
-        "0.dbSNP_vcf_index": find_ref_file("Homo_sapiens_assembly38.dbsnp138.vcf.idx"),
-        "0.known_indels_sites_VCFs": [
-            find_ref_file("Mills_and_1000G_gold_standard.indels.hg38.vcf.gz"),
-            find_ref_file("Homo_sapiens_assembly38.known_indels.vcf.gz")
-        ],
-        "0.known_indels_sites_indices": [
-            find_ref_file("Mills_and_1000G_gold_standard.indels.hg38.vcf.gz.tbi"),
-            find_ref_file("Homo_sapiens_assembly38.known_indels.vcf.gz.tbi")
-        ],
-
-        ##_COMMENT4: "QUALITY CONTROL RESOURCES
-        "0.contamination_sites_vcf": find_qc_file("WholeGenomeShotgunContam.vcf"),
-        "0.contamination_sites_vcf_index": find_qc_file("WholeGenomeShotgunContam.vcf.idx"),
-        "0.haplotype_database_file": find_qc_file("empty.haplotype_map.txt"),
-        "0.fingerprint_genotypes_file": find_qc_file("empty.fingerprint.vcf"),
-        "0.wgs_coverage_interval_list": find_intervals_file("wgs_coverage_regions.hg38.interval_list"),
-        "0.wgs_evaluation_interval_list": find_intervals_file("wgs_evaluation_regions.hg38.interval_list"),
-
-        ## COMMENT5: QUALITY CONTROL SETTINGS (to override defaults)
-#        "ValidateReadGroupSamFile.ignore": ["null"],
-#        "ValidateReadGroupSamFile.max_output": 1000000000,
-#        "ValidateAggregatedSamFile.ignore": ["null"],
-#        "ValidateAggregatedSamFile.max_output": 1000000000,
-
-        ## COMMENT5: DISK SIZES + PREEMPTIBLES
-        "0.agg_small_disk": 200,
-        "0.agg_medium_disk": 300,
-        "0.agg_large_disk": 400,
-        "0.agg_preemptible_tries": 3,
-        "0.flowcell_small_disk": 100,
-        "0.flowcell_medium_disk": 200,
-        "0.preemptible_tries": 3
-    }
-    return input_args
-
-######################################################################
+#####################################################################
 # Program entry point
 def main():
+    register_all_tests()
+
     argparser = argparse.ArgumentParser(description="Run WDL compiler tests on the platform")
     argparser.add_argument("--compile-only", help="Only compile the workflows, don't run them",
                            action="store_true", default=False)
@@ -525,8 +380,6 @@ def main():
                            action="store_true", default=False)
     args = argparser.parse_args()
 
-    project = dxpy.DXProject(args.project)
-    register_all_tests(project)
     if args.test_list:
         print_test_list()
         exit(0)
@@ -539,6 +392,7 @@ def main():
         base_folder = args.folder
     applet_folder = base_folder + "/applets"
     test_folder = base_folder + "/test"
+    project = dxpy.DXProject(args.project)
     print("project: {} ({})".format(project.name, args.project))
     print("folder: {}".format(base_folder))
 

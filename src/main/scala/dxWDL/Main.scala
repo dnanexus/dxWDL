@@ -102,25 +102,11 @@ object Main extends App {
         System.err.println(Utils.exceptionToString(e))
     }
 
-    // Add a suffix to a filename, before the regular suffix. For example:
-    //  xxx.wdl -> xxx.simplified.wdl
-    def replaceFileSuffix(src: Path, suffix: String) : String = {
-        val fName = src.toFile().getName()
-        val index = fName.lastIndexOf('.')
-        if (index == -1) {
-            fName + suffix
-        }
-        else {
-            val prefix = fName.substring(0, index)
-            prefix + suffix
-        }
-    }
-
 
     def prettyPrintWorkflowIR(wdlSourceFile : Path,
                               irWf: IR.Workflow,
                               verbose: Boolean) : Unit = {
-        val trgName: String = replaceFileSuffix(wdlSourceFile, ".ir.yaml")
+        val trgName: String = Utils.replaceFileSuffix(wdlSourceFile, ".ir.yaml")
         val trgPath = Utils.appCompileDirPath.resolve(trgName).toFile
         val yo = IR.yaml(irWf)
         val humanReadable = yo.prettyPrint
@@ -135,7 +121,7 @@ object Main extends App {
     def prettyPrintAppletsIR(wdlSourceFile : Path,
                              irApplets: Vector[IR.Applet],
                              verbose: Boolean) : Unit = {
-        val trgName: String = replaceFileSuffix(wdlSourceFile, ".ir.yaml")
+        val trgName: String = Utils.replaceFileSuffix(wdlSourceFile, ".ir.yaml")
         val trgPath = Utils.appCompileDirPath.resolve(trgName).toFile
         val humanReadable = irApplets.map(irTs =>
             IR.yaml(irTs).prettyPrint
@@ -149,17 +135,10 @@ object Main extends App {
     }
 
     // generate a dx inputs file, if requested
-    def genDxInputs(wdlInputFile: String,
-                    iRepWf: IR.Workflow,
-                    dxProject: DXProject,
+    def genDxInputs(iRepWf: IR.Workflow,
+                    stageDict: Map[String, DXWorkflow.Stage],
+                    wdlInputFile: String,
                     verbose: Boolean) : Unit = {
-        val inputPath = Paths.get(wdlInputFile)
-        val filename = replaceFileSuffix(inputPath, ".dx.json")
-        InputFile.apply(iRepWf,
-                        dxProject,
-                        inputPath,
-                        inputPath.getParent().resolve(filename),
-                        verbose)
     }
 
     def compileBody(wdlSourceFile : Path, options: OptionsMap) : String = {
@@ -243,12 +222,13 @@ object Main extends App {
 
                 mode match {
                     case None =>
-                        val (dxwfl,stageDist) = CompilerBackend.apply(iRepWf, dxProject, instanceTypeDB,
+                        val (dxwfl,stageDict) = CompilerBackend.apply(iRepWf, dxProject, instanceTypeDB,
                                                                       dxWDLrtId,
                                                                       folder, cef, force, verbose)
                         options.get("inputFile") match {
                             case None => ()
-                            case Some(wdlInputFile) => genDxInputs(wdlInputFile, iRepWf, dxProject, verbose)
+                            case Some(wdlInputFile) =>
+                                InputFile.apply(iRepWf, stageDict, Paths.get(wdlInputFile), verbose)
                         }
                         dxwfl.getId()
                     case Some(x) if x.toLowerCase == "fe" => "workflow-xxxx"
