@@ -148,6 +148,20 @@ object Main extends App {
         Utils.trace(verbose, s"Wrote intermediate representation to ${trgPath.toString}")
     }
 
+    // generate a dx inputs file, if requested
+    def genDxInputs(wdlInputFile: String,
+                    iRepWf: IR.Workflow,
+                    dxProject: DXProject,
+                    verbose: Boolean) : Unit = {
+        val inputPath = Paths.get(wdlInputFile)
+        val filename = replaceFileSuffix(inputPath, ".dx.json")
+        InputFile.apply(iRepWf,
+                        dxProject,
+                        inputPath,
+                        inputPath.getParent().resolve(filename),
+                        verbose)
+    }
+
     def compileBody(wdlSourceFile : Path, options: OptionsMap) : String = {
         val verbose = options contains "verbose"
         val force = options contains "force"
@@ -227,24 +241,15 @@ object Main extends App {
                 // Write out the intermediate representation
                 prettyPrintWorkflowIR(wdlSourceFile, iRepWf, verbose)
 
-                // generate a dx inputs file, if requested
-                options.get("inputFile") match {
-                    case None => ()
-                    case Some(wdlInputFile) =>
-                        val inputPath = Paths.get(wdlInputFile)
-                        val filename = replaceFileSuffix(inputPath, ".dx.json")
-                        InputFile.apply(iRepWf,
-                                        dxProject,
-                                        Paths.get(wdlInputFile),
-                                        inputPath.getParent().resolve(filename),
-                                        verbose)
-                }
-
                 mode match {
                     case None =>
-                        val dxwfl = CompilerBackend.apply(iRepWf, dxProject, instanceTypeDB,
-                                                          dxWDLrtId,
-                                                          folder, cef, force, verbose)
+                        val (dxwfl,stageDist) = CompilerBackend.apply(iRepWf, dxProject, instanceTypeDB,
+                                                                      dxWDLrtId,
+                                                                      folder, cef, force, verbose)
+                        options.get("inputFile") match {
+                            case None => ()
+                            case Some(wdlInputFile) => genDxInputs(wdlInputFile, iRepWf, dxProject, verbose)
+                        }
                         dxwfl.getId()
                     case Some(x) if x.toLowerCase == "fe" => "workflow-xxxx"
                     case _ => throw new Exception(s"Unknown mode ${mode}")

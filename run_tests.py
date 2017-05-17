@@ -60,7 +60,7 @@ def register_test(wf_name):
                     wdl_input= os.path.join(test_dir, wf_name + "_input.json"),
                     dx_input= os.path.join(test_dir, wf_name + "_input.dx.json"),
                     results= os.path.join(test_dir, wf_name + "_results.json"))
-    for path in [desc.wdl_source, desc.wdl_input, desc.results]:
+    for path in [desc.wdl_source, desc.wdl_input]:
         if not os.path.exists(path):
             raise Exception("Test file {} does not exist".format(path))
     test_files[wf_name] = desc
@@ -79,6 +79,13 @@ def read_json_file(path):
         data = fd.read()
         d = json.loads(data)
         return d
+
+# Same as above, however, if a file is empty, return an empty dictionary
+def read_json_file_maybe_empty(path):
+    if not os.path.exists(path):
+        return {}
+    else:
+        return read_json_file(path)
 
 def find_stage_outputs_by_name(wf_name, desc, stage_name):
     stages = desc['stages']
@@ -202,7 +209,7 @@ def run_workflow(project, test_folder, wf_name, wfId, delay_workspace_destructio
     def once():
         try:
             test_desc = test_files[wf_name]
-            inputs = read_json_file(test_desc.dx_input)
+            inputs = read_json_file_maybe_empty(test_desc.dx_input)
             print("inputs={}".format(inputs))
             workflow = dxpy.DXWorkflow(project=project.get_id(), dxid=wfId)
             project.new_folder(test_folder, parents=True)
@@ -246,7 +253,7 @@ def run_workflow_subset(project, workflows, test_folder, delay_workspace_destruc
         wf_name = desc["name"].split(' ')[0]
         test_desc = test_files[wf_name]
         output = desc["output"]
-        shouldbe = read_json_file(test_desc.results)
+        shouldbe = read_json_file_maybe_empty(test_desc.results)
         correct = True
         print("Checking results for workflow {}".format(wf_name))
 
@@ -285,148 +292,57 @@ def choose_tests(test_name):
 def register_all_tests(project):
     register_test("math")
     register_test("system_calls")
-#    register_test("four_step",
-#                  lambda x: { '0.ai' : 1, '0.bi' : 1},
-#                  lambda x: {'Add4.sum' : 16})
-#    register_test("add3",
-#                  lambda x: { '0.ai' : 1, '0.bi' : 2, '0.ci' : 5 },
-#                  lambda x: {'Add3.sum' : 8})
-#    register_test("concat",
-#                  lambda x: { "0.s1": "Yellow", "0.s2": "Submarine" },
-#                  lambda x: {'join2.result' : "Yellow_Submarine"})
-#
-#    # There is a bug in marshaling floats. Hopefully,
-#    # it will get fixed in future wdl4s releases.
-#    register_test("var_types",
-#                  lambda x: {"0.b": True, "0.i": 3, "0.x": 4.2, "0.s": "zoology"},
-#                  lambda x: {})
-##                  {'0.result' : "true_3_4.2_zoology"})
-#
-#    register_test("fs",
-#                  lambda x: {'0.data' : dxpy.dxlink(dxfile)},
-#                  lambda x: {})
-#    register_test("system_calls2",
-#                  lambda x: {'0.pattern' : "java"},
-#                  lambda x: {})
-#    register_test("math_expr",
-#                  lambda x: {'0.ai' : 2, '0.bi' : 3},
-#                  lambda x: {'int_ops1.mul' : 6,
-#                             'int_ops1.sum' : 5,
-#                             'int_ops1.sub' : -1,
-#                             'int_ops1.div' : 0,
-#                             'int_ops2.mul' : 36,
-#                             'int_ops2.div' : 1,
-#                             'int_ops3.sum' : 14,
-#                             'int_ops3.mul' : 40})
-#    register_test("string_expr",
-#                  lambda x: {},
-#                  lambda x: {'string_ops.result' :
-#                             "delicate.aligned__number.duplicate_metrics__xRIPx_toads_salamander"})
-#    register_test("call_expressions",
-#                  lambda x: {'0.i1' : 1, '0.i2' : 2},
-#                  lambda x: {'int_ops2.result': 25})
-#    register_test("call_expressions2",
-#                  lambda x: {'0.i' : 3, '0.s' : "frogs"},
-#                  lambda x: {'string_ops.result' : "frogs.aligned__frogs.duplicate_metrics__xRIPx",
-#                             'int_ops.result': 37,
-#                             'int_ops2.result': 7031})
-#
-#    register_test("files",
-#                  lambda x: {'0.f' : dxpy.dxlink(dxfile) },
-#                  lambda x: {})
-#    register_test("string_array",
-#                  lambda x: { '0.sa' : ["A", "B", "C"]},
-#                  lambda x: { 'Concat.result' : "A INPUT=B INPUT=C"})
-#
-#    register_test("file_array",
-#                  lambda x: { '0.fs' : [dxpy.dxlink(dxfile),
-#                                        dxpy.dxlink(dxfile2),
-#                                        dxpy.dxlink(dxfile3) ]},
-#                  lambda x: { 'colocation.result' : "True"})
-#    register_test("output_array",
-#                  lambda x: {},
-#                  lambda x: {'prepare.array' : [u'one', u'two', u'three', u'four']})
-#    register_test("file_disambiguation",
-#                  lambda x: { '0.f1' : dxpy.dxlink(dxfile),
-#                              '0.f2' : dxpy.dxlink(dxfile_v2) },
-#                  lambda x: { 'colocation.result' : "False"})
-#
-#    # Scatter/gather
-#    register_test("sg_sum",
-#                  lambda x: {'0.integers' :    [1,2,3,4,5] },
-#                  lambda x: { 'sum.sum' : 20 })
-#    register_test("sg1",
-#                  lambda x: {},
-#                  lambda x: {'gather.str': "_one_ _two_ _three_ _four_"})
-#    register_test("sg_sum2",
-#                  lambda x: {'0.integers' : [1,8,11] },
-#                  lambda x: {'sum.sum' : 11 })
-#    register_test("sg_sum3",
-#                  lambda x: {'0.integers' : [2,3,5] },
-#                  lambda x: {'sum.sum' : 15 })
-#    register_test("sg_files",
-#                  lambda x: {},
-#                  lambda x: {})
-#
-#    # ragged arrays
-#    register_test("ragged_array",
-#                  lambda x: {},
-#                  lambda x: {'processTsv.result' : "1\n2\n3\t4\n5\n6\t7\t8"})
-#    register_test("ragged_array2",
-#                  lambda x: {},
-#                  lambda x: {'collect.result':  ["1", "2", "3 INPUT=4", "5", "6 INPUT=7 INPUT=8"]})
-#
-#    # optionals
-#    register_test("optionals",
-#                  lambda x: { "0.arg1": 10, "mul2.i": 5, "add.a" : 1, "add.b" : 3},
-#                  lambda x: { "mul2.result" : 10, "add.result" : 4 })
-#
-#    # docker
-#    register_test("bwa_version",
-#                  lambda x: {},
-#                  lambda x: {'GetBwaVersion.version' : "0.7.13-r1126"})
-#    register_test_fail("bad_status",
-#                       lambda x: {},
-#                       lambda x: {})
-#    register_test_fail("bad_status2",
-#                       lambda x: {},
-#                       lambda x: {})
-#
-#    # Output error
-#    register_test_fail("missing_output",
-#                       lambda x: {},
-#                       lambda x: {})
-#
-#    # combination of featuers
-#    register_test("advanced",
-#                  lambda x: { '0.pattern' : "github",
-#                              '0.file' : dxpy.dxlink(dxfile),
-#                              '0.species' : "Arctic fox" },
-#                  lambda x: { 'str_animals.result' : "Arctic fox --K -S --flags --contamination 0 --s foobar",
-#                              'str_animals.family' : "Family Arctic fox",
-#                              #                    '2.cgrep___count': [6, 0, 6] }
-#                              })
-#    register_test("decl_mid_wf",
-#                  lambda x: {'0.s': "Yellow", '0.i': 4},
-#                  lambda x: {"add.sum": 15,
-#                             "concat.result": "Yellow.aligned_Yellow.wgs",
-#                             "add2.sum": 24})
-#
-#    # casting types
-#    register_test("cast",
-#                  lambda x: {'0.i': 7,
-#                             '0.s': "French horn",
-#                             '0.foo' : dxpy.dxlink(dxfile.get_id())},
-#                  lambda x: {'Add.result': 14, 'SumArray.result': 7})
-#
-#    # variable instance types
-#    register_test("instance_types",
-#                  lambda x: {},
-#                  lambda x: {"DiskSpaceSpec.retval" : "true",
-#                             "MemorySpec.retval" : "true",
-#                             "NumCoresSpec.retval" : "true",
-#                             "RuntimeDockerChoice.retval": "We are inside a python docker image"})
-#
+    register_test("four_step")
+    register_test("add3")
+    register_test("concat")
+
+    # There is a bug in marshaling floats. Hopefully,
+    # it will get fixed in future wdl4s releases.
+    register_test("var_types")
+    register_test("fs")
+    register_test("system_calls2")
+    register_test("math_expr")
+    register_test("string_expr")
+    register_test("call_expressions")
+    register_test("call_expressions2")
+    register_test("files")
+    register_test("string_array")
+    register_test("file_array")
+    register_test("output_array")
+    register_test("file_disambiguation")
+
+    # Scatter/gather
+    register_test("sg_sum")
+    register_test("sg1")
+    register_test("sg_sum2")
+    register_test("sg_sum3")
+    register_test("sg_files")
+
+    # ragged arrays
+    register_test("ragged_array")
+    register_test("ragged_array2")
+
+    # optionals
+    register_test("optionals")
+
+    # docker
+    register_test("bwa_version")
+    register_test_fail("bad_status")
+    register_test_fail("bad_status2")
+
+    # Output error
+    register_test_fail("missing_output")
+
+    # combination of featuers
+    register_test("advanced")
+    register_test("decl_mid_wf")
+
+    # casting types
+    register_test("cast")
+
+    # variable instance types
+    register_test("instance_types")
+
     # Massive tests
     #    register_test("gatk_170412",
 #                  lambda x: gatk_gen_inputs(project, "H06HDADXX130110.1.ATCACGAT.20k_reads.bam"

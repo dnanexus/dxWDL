@@ -131,7 +131,7 @@ object InputFile {
         // read the input file
         val wdlInputs: JsObject = Utils.readFileContent(wdlInputFile).parseJson.asJsObject
         wdlInputs.fields.foreach{ case (key, v) =>
-            System.err.println(s"${key} -> ${v}")
+            Utils.trace(verbose, s"${key} -> ${v}")
         }
         val dxInputs: JsObject = dxTranslate(wf, dxProject, wdlInputs)
         Utils.writeFileContent(dxInputFile, dxInputs.prettyPrint)
