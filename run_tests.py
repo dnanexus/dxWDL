@@ -8,6 +8,7 @@ import fnmatch
 import json
 import pprint
 import os
+import re
 import sys
 import subprocess
 import time
@@ -47,8 +48,9 @@ medium_test_list = [
     "instance_types"
 ] + small_test_list
 
-TestDesc = namedtuple('TestDesc', 'wdl_source wdl_input dx_input results')
+TestDesc = namedtuple('TestDesc', 'wf_name wdl_source wdl_input dx_input results')
 
+######################################################################
 # Read a JSON file
 def read_json_file(path):
     with open(path, 'r') as fd:
@@ -62,14 +64,36 @@ def verify_json_file(path):
     except:
         raise Exception("Error verifying JSON file {}".format(path))
 
+# Extract the workflow name from a WDL source file.
+# Shell out to scala.
+def get_workflow_name_slow(wdl_file):
+    print("Getting workflow name from {}".format(wdl_file))
+    cmdline = [ (top_dir + "/dxWDL"), "workflowName", wdl_file ]
+    outstr = subprocess.check_output(cmdline)
+    return outstr.rstrip().split('\n')[-1].strip()
+
+# Search a WDL file with a python regular expression.
+# This is much faster, but less accurate
+wf_pattern_re = re.compile(r"^(workflow)(\s+)(\w+)(\s+){")
+def get_workflow_name_fast(filename):
+    with open(filename, 'r') as fd:
+        for line in fd:
+            m = re.match(wf_pattern_re, line)
+            if m is not None:
+                return m.group(3)
+    raise Exception("Workflow name not found")
+
 # Register a test name, find its inputs and expected results files.
-def register_test(wf_name):
-    if wf_name in reserved_test_names:
-        raise Exception("Test name {} is reserved".format(wf_name))
-    desc = TestDesc(wdl_source= os.path.join(test_dir, wf_name + ".wdl"),
-                    wdl_input= os.path.join(test_dir, wf_name + "_input.json"),
-                    dx_input= os.path.join(test_dir, wf_name + "_input.dx.json"),
-                    results= os.path.join(test_dir, wf_name + "_results.json"))
+def register_test(tname):
+    if tname in reserved_test_names:
+        raise Exception("Test name {} is reserved".format(tname))
+    wdl_file = os.path.join(test_dir, tname + ".wdl")
+    wf_name = get_workflow_name_fast(wdl_file)
+    desc = TestDesc(wf_name = wf_name,
+                    wdl_source= wdl_file,
+                    wdl_input= os.path.join(test_dir, tname + "_input.json"),
+                    dx_input= os.path.join(test_dir, tname + "_input.dx.json"),
+                    results= os.path.join(test_dir, tname + "_results.json"))
     for path in [desc.wdl_source, desc.wdl_input]:
         if not os.path.exists(path):
             raise Exception("Test file {} does not exist".format(path))
@@ -78,12 +102,12 @@ def register_test(wf_name):
     for path in [desc.wdl_input, desc.dx_input, desc.results]:
         if os.path.exists(path):
             verify_json_file(path)
-    test_files[wf_name] = desc
+    test_files[tname] = desc
     desc
 
-def register_test_fail(wf_name):
-    register_test(wf_name)
-    test_failing.add(wf_name)
+def register_test_fail(tname):
+    register_test(tname)
+    test_failing.add(tname)
 
 ######################################################################
 
@@ -94,24 +118,32 @@ def read_json_file_maybe_empty(path):
     else:
         return read_json_file(path)
 
-def find_stage_outputs_by_name(wf_name, desc, stage_name):
+def find_stage_outputs_by_name(tname, desc, stage_name):
     stages = desc['stages']
     for snum in range(len(stages)):
         crnt = stages[snum]['execution']['name']
         if crnt == stage_name:
             return stages[snum]['execution']['output']
-    raise Exception("Analysis {} does not have stage {}".format(wf_name, stage_name))
+    raise Exception("Analysis for test {} does not have stage {}".format(tname, stage_name))
+
+def find_test_from_analysis(analysis):
+    anl_desc = analysis.describe()
+    wf_name = anl_desc["name"].split(' ')[0]
+    for tname, desc in test_files.iteritems():
+        if desc.wf_name == wf_name:
+            return tname
+    raise Exception("Test for workflow {} not found".format(wf_name))
 
 # Check that a workflow returned the expected result for
 # a [key]
-def validate_result(wf_name, desc, key, expected_val):
+def validate_result(tname, analysis_desc, key, expected_val):
     # Split key into stage-number and name. For example:
     #  '0.count' -> 0, count
     stage_name = key.split('.')[0]
     field_name = key.split('.')[1]
     try:
         # get the actual results
-        stage_results = find_stage_outputs_by_name(wf_name, desc, stage_name)
+        stage_results = find_stage_outputs_by_name(tname, analysis_desc, stage_name)
         if field_name not in stage_results:
             print("field {} missing from stage results {}".format(field_name, stage_results))
             return False
@@ -120,7 +152,7 @@ def validate_result(wf_name, desc, key, expected_val):
             result.sort()
             expected_val.sort()
         if result != expected_val:
-            print("Analysis {} gave unexpected results".format(wf_name))
+            print("Analysis {} gave unexpected results".format(tname))
             print("stage={}".format(stage_name))
             print("stage_results={}".format(stage_results))
             print("Should be stage[{}].{} = {} , actual = {}".format(stage_name, field_name, expected_val, result))
@@ -154,29 +186,10 @@ def build_prerequisits(project, args):
     print("")
     return base_folder
 
-
-# Build a workflow.
-#
-# wf             workflow name
-# classpath      java classpath needed for running compilation
-# folder         destination folder on the platform
-def build_workflow(wf_name, project, folder, asset, compiler_flags):
-    print("build workflow {}".format(wf_name))
-    test_desc = test_files[wf_name]
-    print("Compiling {} to a workflow".format(test_desc.wdl_source))
-    cmdline = [ (top_dir + "/dxWDL"),
-                "compile",
-                test_desc.wdl_source,
-                "--wdl_input_file", test_desc.wdl_input,
-                "--destination", (project.get_id() + ":" + folder),
-                "--asset", asset.get_id() ]
-    cmdline += compiler_flags
-    subprocess.check_output(cmdline)
-    return lookup_workflow(wf_name, project, folder)
-
-def lookup_workflow(wf_name, project, folder):
+def lookup_workflow(tname, project, folder):
+    desc = test_files[tname]
     wfgen = dxpy.bindings.search.find_data_objects(classname="workflow",
-                                                   name=wf_name,
+                                                   name=desc.wf_name,
                                                    folder=folder,
                                                    project=project.get_id(),
                                                    limit=1)
@@ -184,6 +197,25 @@ def lookup_workflow(wf_name, project, folder):
     if len(wf) > 0:
         return wf[0]['id']
     return None
+
+# Build a workflow.
+#
+# wf             workflow name
+# classpath      java classpath needed for running compilation
+# folder         destination folder on the platform
+def build_workflow(tname, project, folder, asset, compiler_flags):
+    desc = test_files[tname]
+    print("build workflow {}".format(desc.wf_name))
+    print("Compiling {} to a workflow".format(desc.wdl_source))
+    cmdline = [ (top_dir + "/dxWDL"),
+                "compile",
+                desc.wdl_source,
+                "--wdl_input_file", desc.wdl_input,
+                "--destination", (project.get_id() + ":" + folder),
+                "--asset", asset.get_id() ]
+    cmdline += compiler_flags
+    subprocess.check_output(cmdline)
+    return lookup_workflow(tname, project, folder)
 
 def ensure_dir(path):
     print("making sure that {} exists".format(path))
@@ -199,12 +231,12 @@ def wait_for_completion(test_analyses):
             try:
                 anls.wait_on_done()
             except DXJobFailureError:
-                desc = anls.describe()
-                wf_name = desc["name"].split(' ')[0]
-                if wf_name not in test_failing:
-                    raise Exception("Analysis {} failed".format(wf_name))
+                tname = find_test_from_analysis(anls)
+                desc = test_files[tname]
+                if tname not in test_failing:
+                    raise Exception("Analysis {} failed".format(desc.wf_name))
                 else:
-                    print("Analysis {} failed as expected".format(wf_name))
+                    print("Analysis {} failed as expected".format(desc.wf_name))
     finally:
         noise.kill()
     print("done")
@@ -212,18 +244,18 @@ def wait_for_completion(test_analyses):
 
 
 # Run [workflow] on several inputs, return the analysis ID.
-def run_workflow(project, test_folder, wf_name, wfId, delay_workspace_destruction):
+def run_workflow(project, test_folder, tname, wfId, delay_workspace_destruction):
     def once():
         try:
-            test_desc = test_files[wf_name]
-            inputs = read_json_file_maybe_empty(test_desc.dx_input)
+            desc = test_files[tname]
+            inputs = read_json_file_maybe_empty(desc.dx_input)
             #print("inputs={}".format(inputs))
             workflow = dxpy.DXWorkflow(project=project.get_id(), dxid=wfId)
             project.new_folder(test_folder, parents=True)
             analysis = workflow.run(inputs,
                                     project=project.get_id(),
                                     folder=test_folder,
-                                    name="{} {}".format(wf_name, git_revision),
+                                    name="{} {}".format(desc.wf_name, git_revision),
                                     delay_workspace_destruction=delay_workspace_destruction)
             return analysis
         except Exception, e:
@@ -241,10 +273,10 @@ def run_workflow(project, test_folder, wf_name, wfId, delay_workspace_destructio
 def run_workflow_subset(project, workflows, test_folder, delay_workspace_destruction, no_wait):
     # Run the workflows
     test_analyses=[]
-    for wf_name, wfid in workflows.iteritems():
-        test_desc = test_files[wf_name]
-        print("Running workflow {}".format(wf_name))
-        test_job = run_workflow(project, test_folder, wf_name, wfid, delay_workspace_destruction)
+    for tname, wfid in workflows.iteritems():
+        desc = test_files[tname]
+        print("Running workflow {}".format(desc.wf_name))
+        test_job = run_workflow(project, test_folder, tname, wfid, delay_workspace_destruction)
         test_analyses.append(test_job)
     print("test analyses: " + ", ".join([a.get_id() for a in test_analyses]))
 
@@ -256,18 +288,18 @@ def run_workflow_subset(project, workflows, test_folder, delay_workspace_destruc
 
     print("Verifying analysis results")
     for analysis in test_analyses:
-        desc = analysis.describe()
-        wf_name = desc["name"].split(' ')[0]
-        test_desc = test_files[wf_name]
-        output = desc["output"]
+        analysis_desc = analysis.describe()
+        tname = find_test_from_analysis(analysis)
+        test_desc = test_files[tname]
+        output = analysis_desc["output"]
         shouldbe = read_json_file_maybe_empty(test_desc.results)
         correct = True
-        print("Checking results for workflow {}".format(wf_name))
+        print("Checking results for workflow {}".format(test_desc.wf_name))
 
         for key, expected_val in shouldbe.iteritems():
-            correct = validate_result(wf_name, desc, key, expected_val)
+            correct = validate_result(tname, analysis_desc, key, expected_val)
         if correct:
-            print("Analysis {} passed".format(wf_name))
+            print("Analysis {} passed".format(tname))
 
 def print_test_list():
     l = [key for key in test_files.keys()]
@@ -353,11 +385,9 @@ def register_all_tests():
     # Massive tests
     register_test("gatk_170412")
 
-#####################################################################
-# Program entry point
+######################################################################
+## Program entry point
 def main():
-    register_all_tests()
-
     argparser = argparse.ArgumentParser(description="Run WDL compiler tests on the platform")
     argparser.add_argument("--compile-only", help="Only compile the workflows, don't run them",
                            action="store_true", default=False)
@@ -380,6 +410,7 @@ def main():
                            action="store_true", default=False)
     args = argparser.parse_args()
 
+    register_all_tests()
     if args.test_list:
         print_test_list()
         exit(0)
@@ -418,14 +449,14 @@ def main():
     try:
         # Compile the WDL workflows
         workflows = {}
-        for wf_name in test_names:
+        for tname in test_names:
             wfid = None
             if args.lazy:
-                wfid = lookup_workflow(wf_name, project, applet_folder)
+                wfid = lookup_workflow(tname, project, applet_folder)
             if wfid is None:
-                wfid = build_workflow(wf_name, project, applet_folder, asset, compiler_flags)
-            workflows[wf_name] = wfid
-            print("workflow({}) = {}".format(wf_name, wfid))
+                wfid = build_workflow(tname, project, applet_folder, asset, compiler_flags)
+            workflows[tname] = wfid
+            print("workflow({}) = {}".format(tname, wfid))
         if not args.compile_only:
             run_workflow_subset(project, workflows, test_folder, args.delay_workspace_destruction, args.no_wait)
     finally:

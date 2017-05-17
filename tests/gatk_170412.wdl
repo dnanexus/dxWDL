@@ -1084,8 +1084,7 @@ command <<<
 }
 
 # WORKFLOW DEFINITION
-workflow gatk_170412 {
-
+workflow PairedEndSingleSampleWorkflow {
   File contamination_sites_vcf
   File contamination_sites_vcf_index
   File fingerprint_genotypes_file # if this file is empty (0-length) the workflow should not do fingerprint comparison (as there are no fingerprints for the sample)
