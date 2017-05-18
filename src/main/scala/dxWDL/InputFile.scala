@@ -26,17 +26,25 @@ import com.fasterxml.jackson.databind.node.ObjectNode
 import com.dnanexus.{DXAPI, DXDataObject, DXJSON, DXFile, DXProject, DXSearch, DXWorkflow}
 import java.nio.file.{Path, Paths, Files}
 import scala.collection.JavaConverters._
+import scala.collection.mutable.HashMap
 import spray.json._
 import spray.json.DefaultJsonProtocol
 import Utils.UNIVERSAL_FILE_PREFIX
 
 object InputFile {
+    // Projects we have already looked up
+    val projectDict = HashMap.empty[String, DXProject]
 
     private def lookupProject(projName: String): DXProject = {
         if (projName.startsWith("project-")) {
             // A project ID
             DXProject.getInstance(projName)
         } else {
+            if (projectDict contains projName) {
+                //System.err.println(s"Cached project ${projName}")
+                return projectDict(projName)
+            }
+
             // A project name, resolve it
             val req: ObjectNode = DXJSON.getObjectBuilder()
                 .put("name", projName)
@@ -54,10 +62,12 @@ object InputFile {
                 throw new Exception(s"Found more than one project named ${projName}")
             if (results.length == 0)
                 throw new Exception(s"Project ${projName} not found")
-            results(0).asJsObject.fields.get("id") match {
+            val dxProject = results(0).asJsObject.fields.get("id") match {
                 case Some(JsString(id)) => DXProject.getInstance(id)
                 case _ => throw new Exception(s"Bad response from SystemFindProject API call ${repJs.prettyPrint}")
             }
+            projectDict(projName) = dxProject
+            dxProject
         }
     }
 
