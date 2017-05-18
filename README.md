@@ -12,6 +12,7 @@ The main WDL features not yet supported are:
 - Nested workflows (sub-workflows)
 - Definitions spread across multiple files (import)
 - Conditionals
+- Maps and objects
 
 ## Getting started
 

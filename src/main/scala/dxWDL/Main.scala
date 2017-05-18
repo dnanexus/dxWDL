@@ -16,10 +16,52 @@ object Main extends App {
     case class UnsuccessfulTermination(output: String) extends Termination
     case class BadUsageTermination(info: String) extends Termination
 
+    type OptionsMap = Map[String, String]
+
     object Actions extends Enumeration {
         val Compile, Eval, LaunchScatter,
             TaskEpilog, TaskProlog, TaskRelaunch,
-            Version, Yaml  = Value
+            Version, WorkflowName, Yaml  = Value
+    }
+
+    // parse extra command line arguments
+    def parseCmdlineOptions(arglist: List[String]) : OptionsMap = {
+        // verify version ID
+        def verifyVersion(options: OptionsMap) = {
+            options.get("expectedVersion") match {
+                case Some(vid) if vid != Utils.VERSION =>
+                    throw new Exception(s"""|Version mismatch, library is ${Utils.VERSION},
+                                            |expected version is ${vid}"""
+                                            .stripMargin.replaceAll("\n", " "))
+                case _ => ()
+            }
+        }
+        def nextOption(map : OptionsMap, list: List[String]) : OptionsMap = {
+            list match {
+                case Nil => map
+                case "-asset" :: value :: tail =>
+                    nextOption(map ++ Map("dxWDLrtId" -> value.toString), tail)
+                case "-expected_version" :: value :: tail =>
+                    nextOption(map ++ Map("expectedVersion" -> value.toString), tail)
+                case "-force" :: tail =>
+                    nextOption(map ++ Map("force" -> ""), tail)
+                case "-inputFile" :: value :: tail =>
+                    nextOption(map ++ Map("inputFile" -> value.toString), tail)
+                case "-mode" :: value :: tail =>
+                    nextOption(map ++ Map("mode" -> value.toString), tail)
+                case "-o" :: value :: tail =>
+                    nextOption(map ++ Map("destination" -> value.toString), tail)
+                case "-verbose" :: tail =>
+                    nextOption(map ++ Map("verbose" -> ""), tail)
+                case option :: tail =>
+                    throw new IllegalArgumentException(s"Unknown option ${option}")
+
+            }
+        }
+
+        val options = nextOption(Map(),arglist)
+        verifyVersion(options)
+        options
     }
 
     def yaml(args: Seq[String]): Termination = {
@@ -60,24 +102,11 @@ object Main extends App {
         System.err.println(Utils.exceptionToString(e))
     }
 
-    // Add a suffix to a filename, before the regular suffix. For example:
-    //  xxx.wdl -> xxx.simplified.wdl
-    def replaceFileSuffix(src: Path, suffix: String) : String = {
-        val fName = src.toFile().getName()
-        val index = fName.lastIndexOf('.')
-        if (index == -1) {
-            fName + suffix
-        }
-        else {
-            val prefix = fName.substring(0, index)
-            prefix + suffix
-        }
-    }
 
     def prettyPrintWorkflowIR(wdlSourceFile : Path,
                               irWf: IR.Workflow,
                               verbose: Boolean) : Unit = {
-        val trgName: String = replaceFileSuffix(wdlSourceFile, ".ir.yaml")
+        val trgName: String = Utils.replaceFileSuffix(wdlSourceFile, ".ir.yaml")
         val trgPath = Utils.appCompileDirPath.resolve(trgName).toFile
         val yo = IR.yaml(irWf)
         val humanReadable = yo.prettyPrint
@@ -92,7 +121,7 @@ object Main extends App {
     def prettyPrintAppletsIR(wdlSourceFile : Path,
                              irApplets: Vector[IR.Applet],
                              verbose: Boolean) : Unit = {
-        val trgName: String = replaceFileSuffix(wdlSourceFile, ".ir.yaml")
+        val trgName: String = Utils.replaceFileSuffix(wdlSourceFile, ".ir.yaml")
         val trgPath = Utils.appCompileDirPath.resolve(trgName).toFile
         val humanReadable = irApplets.map(irTs =>
             IR.yaml(irTs).prettyPrint
@@ -105,26 +134,16 @@ object Main extends App {
         Utils.trace(verbose, s"Wrote intermediate representation to ${trgPath.toString}")
     }
 
-    def compileBody(wdlSourceFile : Path,
-                    options: Map[String, String]) : String = {
-        // verify version ID
-        options.get("expectedVersion") match {
-            case Some(vid) if vid != Utils.VERSION =>
-                throw new Exception(s"""|Version mismatch, library is ${Utils.VERSION},
-                                        |expected version is ${vid}"""
-                                        .stripMargin.replaceAll("\n", " "))
-            case _ => ()
-        }
+    // generate a dx inputs file, if requested
+    def genDxInputs(iRepWf: IR.Workflow,
+                    stageDict: Map[String, DXWorkflow.Stage],
+                    wdlInputFile: String,
+                    verbose: Boolean) : Unit = {
+    }
 
-        val verbose = options.get("verbose") match {
-            case None => false
-            case Some(_) => true
-        }
-
-        val force = options.get("force") match {
-            case None => false
-            case Some(_) => true
-        }
+    def compileBody(wdlSourceFile : Path, options: OptionsMap) : String = {
+        val verbose = options contains "verbose"
+        val force = options contains "force"
 
         // deal with the various options
         val destination : String = options.get("destination") match {
@@ -179,6 +198,7 @@ object Main extends App {
         val cef = new CompilerErrorFormatter(ns.terminalMap)
         val (irWf, irApplets) = CompilerFrontEnd.apply(ns, instanceTypeDB, folder, cef, verbose)
 
+        // Backend compiler pass
         irWf match {
             case None =>
                 // We have only tasks
@@ -199,11 +219,17 @@ object Main extends App {
             case Some(iRepWf) =>
                 // Write out the intermediate representation
                 prettyPrintWorkflowIR(wdlSourceFile, iRepWf, verbose)
+
                 mode match {
                     case None =>
-                        val dxwfl = CompilerBackend.apply(iRepWf, dxProject, instanceTypeDB,
-                                                          dxWDLrtId,
-                                                          folder, cef, force, verbose)
+                        val (dxwfl,stageDict) = CompilerBackend.apply(iRepWf, dxProject, instanceTypeDB,
+                                                                      dxWDLrtId,
+                                                                      folder, cef, force, verbose)
+                        options.get("inputFile") match {
+                            case None => ()
+                            case Some(wdlInputFile) =>
+                                InputFile.apply(iRepWf, stageDict, Paths.get(wdlInputFile), verbose)
+                        }
                         dxwfl.getId()
                     case Some(x) if x.toLowerCase == "fe" => "workflow-xxxx"
                     case _ => throw new Exception(s"Unknown mode ${mode}")
@@ -213,34 +239,9 @@ object Main extends App {
 
     def compile(args: Seq[String]): Termination = {
         try {
-            val wdlSrcFile = args.head
-
-            // parse extra command line arguments
-            val arglist = args.tail.toList
-            type OptionMap = Map[String, String]
-
-            def nextOption(map : OptionMap, list: List[String]) : OptionMap = {
-                list match {
-                    case Nil => map
-                    case "-o" :: value :: tail =>
-                        nextOption(map ++ Map("destination" -> value.toString), tail)
-                    case "-asset" :: value :: tail =>
-                        nextOption(map ++ Map("dxWDLrtId" -> value.toString), tail)
-                    case "-expected_version" :: value :: tail =>
-                        nextOption(map ++ Map("expectedVersion" -> value.toString), tail)
-                    case "-mode" :: value :: tail =>
-                        nextOption(map ++ Map("mode" -> value.toString), tail)
-                    case "-verbose" :: tail =>
-                        nextOption(map ++ Map("verbose" -> ""), tail)
-                    case "-force" :: tail =>
-                        nextOption(map ++ Map("force" -> ""), tail)
-                    case option :: tail =>
-                        throw new IllegalArgumentException(s"Unknown option ${option}")
-
-                }
-            }
-            val options = nextOption(Map(),arglist)
-            val dxc = compileBody(Paths.get(wdlSrcFile), options)
+            val wdlSourceFile = args.head
+            val options = parseCmdlineOptions(args.tail.toList)
+            val dxc = compileBody(Paths.get(wdlSourceFile), options)
             SuccessfulTermination(dxc)
         } catch {
             case e : Throwable =>
@@ -263,7 +264,7 @@ object Main extends App {
         }
     }
 
-    def appletAction(action: Actions.Value, args : Seq[String]): Termination = {
+    private def appletAction(action: Actions.Value, args : Seq[String]): Termination = {
         if (args.length != 2) {
             BadUsageTermination("All applet actions take a WDL file, and a home directory")
         } else {
@@ -295,23 +296,44 @@ object Main extends App {
         }
     }
 
-    private def getAction(args: Seq[String]): Option[Actions.Value] = for {
-        arg <- args.headOption
-        argCapitalized = arg.capitalize
-        action <- Actions.values find (_.toString == argCapitalized)
-    } yield action
+    // Parse a WDL file, and get the workflow name, if it exists
+    private def getWorkflowName(args : Seq[String]): Termination = {
+        if (args.length != 1) {
+            BadUsageTermination("WorkflowName requires a single argument")
+        } else {
+            val wdlDefPath = args(0)
+            val ns = WdlNamespace.loadUsingPath(Paths.get(wdlDefPath), None, None).get
+            val wfName = ns match {
+                case nswf : WdlNamespaceWithWorkflow => nswf.workflow.unqualifiedName
+                case _ => throw new Exception("WDL file contains no workflow")
+            }
+            SuccessfulTermination(wfName)
+        }
+    }
+
+    private def getAction(req: String): Option[Actions.Value] = {
+        def normalize(s: String) : String= {
+            s.replaceAll("_", "").toUpperCase
+        }
+        Actions.values find (x => normalize(x.toString) == normalize(req))
+    }
 
     def dispatchCommand(args: Seq[String]): Termination = {
-        getAction(args) match {
-            case Some(x) if x == Actions.Compile => compile(args.tail)
-            case Some(x) if x == Actions.Eval => appletAction(x, args.tail)
-            case Some(x) if x == Actions.LaunchScatter => appletAction(x, args.tail)
-            case Some(x) if x == Actions.TaskProlog => appletAction(x, args.tail)
-            case Some(x) if x == Actions.TaskEpilog => appletAction(x, args.tail)
-            case Some(x) if x == Actions.TaskRelaunch => appletAction(x, args.tail)
-            case Some(x) if x == Actions.Version => SuccessfulTermination(Utils.VERSION)
-            case Some(x) if x == Actions.Yaml => yaml(args.tail)
-            case _ => BadUsageTermination("")
+        if (args.isEmpty)
+            BadUsageTermination("")
+        else getAction(args.head) match {
+            case None => BadUsageTermination("")
+            case Some(x) => x match {
+                case Actions.Compile => compile(args.tail)
+                case Actions.Eval => appletAction(x, args.tail)
+                case Actions.LaunchScatter => appletAction(x, args.tail)
+                case Actions.TaskProlog => appletAction(x, args.tail)
+                case Actions.TaskEpilog => appletAction(x, args.tail)
+                case Actions.TaskRelaunch => appletAction(x, args.tail)
+                case Actions.Version => SuccessfulTermination(Utils.VERSION)
+                case Actions.WorkflowName => getWorkflowName(args.tail)
+                case Actions.Yaml => yaml(args.tail)
+            }
         }
     }
 
@@ -325,12 +347,17 @@ object Main extends App {
            |  Perform full validation and print a YAML version of the
            |  syntax tree.
            |
-           |compile <WDL file> <-asset dxId> [-o targetPath] [-expected_version vid] [-verbose]
-           |       [-force] [-mode debug_flag]
+           |compile <WDL file> <-asset dxId> [-o targetPath] [-expected_version vid]
+           |  [-inputFile wdlInputFile] [-verbose] [-force] [-mode debug_flag]
            |
            |  Compile a wdl file into a dnanexus workflow. An asset
            |  ID for the dxWDL runtime is required. Optionally, specify a
-           |  destination path on the platform.
+           |  destination path on the platform. A dx JSON inputs file is generated
+           |  from the WDL inputs file, if specified.
+           |
+           |workflowName <WDL file>
+           |
+           |  Parse and extract the workflow name from a WDL file
            |
            |taskProlog <WDL file> <home directory>
            |

@@ -523,7 +523,7 @@ object CompilerBackend {
               folder: String,
               cef: CompilerErrorFormatter,
               force: Boolean,
-              verbose: Boolean) : DXWorkflow = {
+              verbose: Boolean) : (DXWorkflow, Map[String, DXWorkflow.Stage]) = {
         Utils.trace(verbose, "Backend pass")
         val cState = State(dxWDLrtId, dxProject, instanceTypeDB, folder, cef, force, verbose)
 
@@ -552,7 +552,7 @@ object CompilerBackend {
         // - a dictionary of stages, mapping name to stage. This is used
         //   to locate variable references.
         val stageDictInit = Map.empty[String, DXWorkflow.Stage]
-        wf.stages.foldLeft((0,stageDictInit)) {
+        val (_,stageDict) = wf.stages.foldLeft((0, stageDictInit)) {
             case ((version,stageDict), stg) =>
                 val (irApplet,dxApplet) = appletDict(stg.appletName)
                 val linkedInputs : Vector[(IR.CVar, IR.SArg)] = irApplet.inputs zip stg.inputs
@@ -566,6 +566,6 @@ object CompilerBackend {
                  stageDict ++ Map(stg.name -> dxStage))
         }
         dxwfl.close()
-        dxwfl
+        (dxwfl, stageDict)
     }
 }

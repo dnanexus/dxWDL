@@ -19,34 +19,63 @@ lib_object_ids = None
 required_libs = ["dnanexus-api-0.1.0-SNAPSHOT-jar-with-dependencies.jar",
                  "dxWDL.jar"]
 
-def main():
-    argparser = argparse.ArgumentParser(description="compiler from WDL to dnanexus")
-    argparser.add_argument("command", choices=["compile"], help="command to issue to dxWDL")
-    argparser.add_argument("wdl_file", help="WDL workflow file")
-    argparser.add_argument("--asset", help="Override configuration file asset Id")
-    argparser.add_argument("--destination", help="Output folder for workflow")
-    argparser.add_argument("--mode", help="Compilation mode, a debugging flag")
-    argparser.add_argument("--verbose", dest='verbose', action='store_true', default=False,
-                           help="Print detailed progress reports")
-    argparser.add_argument("--force", dest='force', action='store_true', default=False,
-                           help="Always rebuild applets")
-    args = argparser.parse_args()
 
-    if args.command == "compile":
-        cmd_compile(args)
-    else:
-        print("Unknown command {}".format(args.command), file=sys.stderr)
+# Download libraries from the platform
+def download_libs():
+    if (lib_object_ids is None or
+        len(lib_object_ids) == 0):
+        print("Can't download libraries, download objects are not set", file=sys.stderr)
         exit(1)
 
-def cmd_compile(args):
+    # We don't have all jars locally. Download them from the platform.
+    for fid in lib_object_ids:
+        dxfile = dxpy.DXFile(fid, project=project_id)
+        name = dxfile.describe()["name"]
+        print("downloading {}".format(name), file=sys.stderr)
+        dxpy.download_dxfile(fid, os.path.join(top_dir, name))
+
+# Find all files that match regular expression [pattern]
+# starting from [path]
+def find(pattern, path):
+    names = []
+    paths = []
+    for root, dirs, files in os.walk(path):
+        for name in files:
+            if fnmatch.fnmatch(name, pattern):
+                names.append(name)
+                paths.append(os.path.join(root, name))
+    return [names, paths]
+
+def lookup_local_jars():
+    [jar_names, jar_paths] = find('*.jar', top_dir)
+    print("found {}".format(jar_names), file=sys.stderr)
+    classpath = []
+    for lib in required_libs:
+        if lib in jar_names:
+            index = jar_names.index(lib)
+            classpath.append(jar_paths[index])
+        else:
+            print("Not found {}".format(lib), file=sys.stderr)
+            return None
+    return classpath
+
+# Search for the jars locally. If not found, download
+# from the platform.
+def construct_java_classpath():
+    classpath = lookup_local_jars()
+    if classpath is not None:
+        return classpath
+    download_libs()
+    classpath = lookup_local_jars()
+    if classpath is None:
+        print("Error, could not find jars, after download", file=sys.stderr)
+        exit(1)
+    return classpath
+
+
+def prolog(args):
     global asset_id
     global version_id
-
-    # Where should we write the result?
-    if args.destination is None:
-        destination = dxpy.config.get('DX_CLI_WD', u'/')
-    else:
-        destination = args.destination
 
     # Figure out the asset ID
     if args.asset is not None:
@@ -62,7 +91,16 @@ def cmd_compile(args):
         version_id = version_id.strip()
         validate_library_version(version_id, classpath)
         validate_asset_version(version_id, asset_id)
-    compile_workflow(args.wdl_file, destination, asset_id, classpath, args.force, args.verbose, args.mode)
+    return [asset_id, classpath]
+
+# Run the compiler in a different process, and wait for completion
+def call_scala_tools(cmd_line):
+    print((" ".join(cmd_line)), file=sys.stderr)
+
+    # Call java/scala dxWDL compiler, and pipe stdout/stderr
+    outstr = subprocess.check_output(cmd_line)
+    retval = outstr.rstrip().split('\n')[-1]
+    return retval
 
 
 # Check if the local library has the correct version
@@ -96,13 +134,15 @@ def validate_asset_version(version_id, asset_id):
 # destination    output path on the platform
 #
 # return --      workflow ID
-def compile_workflow(wf_file, destination, asset_id, classpath, force, verbose, mode):
+def compile_workflow(wf_file, wdl_input_file, destination, asset_id, classpath, force, verbose, mode):
     print("Compiling {}".format(wf_file), file=sys.stderr)
     cmd_line = [
         "java", "-cp", classpath, "dxWDL.Main", "compile", wf_file,
         "-o", destination,
         "-asset", asset_id
     ]
+    if wdl_input_file is not None:
+        cmd_line += ["-inputFile", wdl_input_file]
     if version_id is not None:
         cmd_line += ["-expected_version", version_id]
     if force:
@@ -111,66 +151,75 @@ def compile_workflow(wf_file, destination, asset_id, classpath, force, verbose, 
         cmd_line += ["-verbose"]
     if mode:
         cmd_line += ["-mode", mode]
-
-    print((" ".join(cmd_line)), file=sys.stderr)
-
-    # Call java/scala dxWDL compiler, and pipe stdout/stderr
-    outstr = subprocess.check_output(cmd_line)
-    retval = outstr.rstrip().split('\n')[-1]
-    return retval
+    return call_scala_tools(cmd_line)
 
 
-# Search for the jars locally. If not found, download
-# from the platform.
-def construct_java_classpath():
-    classpath = lookup_local_jars()
-    if classpath is not None:
-        return classpath
-    download_libs()
-    classpath = lookup_local_jars()
-    if classpath is None:
-        print("Error, could not find jars, after download", file=sys.stderr)
-        exit(1)
-    return classpath
+def cmd_compile(args):
+    # Where should we write the result?
+    if args.destination is None:
+        destination = dxpy.config.get('DX_CLI_WD', u'/')
+    else:
+        destination = args.destination
+    [asset_id, classpath] = prolog(args)
+    compile_workflow(args.wdl_file, args.wdl_input_file,
+                     destination, asset_id, classpath,
+                     args.force, args.verbose, args.mode)
 
-# Download libraries from the platform
-def download_libs():
-    if (lib_object_ids is None or
-        len(lib_object_ids) == 0):
-        print("Can't download libraries, download objects are not set", file=sys.stderr)
-        exit(1)
+######################################################################
+# Get workflow name from a source WDL file
+def get_workflow_name(wdl_file):
+    jars = construct_java_classpath()
+    classpath = ":".join(jars)
+    print("Extracting workflow name from file {}".format(wdl_file), file=sys.stderr)
+    cmd_line = [
+        "java", "-cp", classpath, "dxWDL.Main", "workflowName", wdl_file
+    ]
+    return call_scala_tools(cmd_line)
 
-    # We don't have all jars locally. Download them from the platform.
-    for fid in lib_object_ids:
-        dxfile = dxpy.DXFile(fid, project=project_id)
-        name = dxfile.describe()["name"]
-        print("downloading {}".format(name), file=sys.stderr)
-        dxpy.download_dxfile(fid, os.path.join(top_dir, name))
 
-def lookup_local_jars():
-    [jar_names, jar_paths] = find('*.jar', top_dir)
-    print("found {}".format(jar_names), file=sys.stderr)
-    classpath = []
-    for lib in required_libs:
-        if lib in jar_names:
-            index = jar_names.index(lib)
-            classpath.append(jar_paths[index])
-        else:
-            print("Not found {}".format(lib), file=sys.stderr)
-            return None
-    return classpath
+def cmd_workflow_name(args):
+    wf_name = get_workflow_name(args.wdl_file)
+    print(wf_name)
 
-# Find all files that match regular expression [pattern]
-# starting from [path]
-def find(pattern, path):
-    names = []
-    paths = []
-    for root, dirs, files in os.walk(path):
-        for name in files:
-            if fnmatch.fnmatch(name, pattern):
-                names.append(name)
-                paths.append(os.path.join(root, name))
-    return [names, paths]
+######################################################################
+# Command line parsing
+
+# Top level parser
+parser = argparse.ArgumentParser(description="Tool for compiling and running WDL source files on the platform. The available commands are {compile, workflowName}.")
+subparsers = parser.add_subparsers(help=argparse.SUPPRESS, dest='command')
+subparsers.metavar = 'command'
+
+# Parser for the compile command
+compile_parser = subparsers.add_parser('compile',
+                                       help="compile a WDL file to a platform applet/workflow",
+                                       description="compile a WDL file to a platform applet/workflow")
+compile_parser.add_argument("wdl_file", help="WDL workflow file")
+compile_parser.add_argument("--asset", help="Override configuration file asset Id")
+compile_parser.add_argument("--destination", help="Output folder for workflow")
+compile_parser.add_argument("--wdl_input_file", help="WDL input file")
+compile_parser.add_argument("--mode", help="Compilation mode, a debugging flag")
+compile_parser.add_argument("--verbose", dest='verbose', action='store_true', default=False,
+                            help="Print detailed progress reports")
+compile_parser.add_argument("--force", dest='force', action='store_true', default=False,
+                            help="Always rebuild applets")
+compile_parser.set_defaults(func=cmd_compile)
+
+# Parser for the run command
+compile_parser = subparsers.add_parser('workflowName',
+                                       help="Print the workflow name",
+                                       description="Print the workflow name")
+compile_parser.add_argument("wdl_file", help="WDL workflow file")
+compile_parser.set_defaults(func=cmd_workflow_name)
+######################################################################
+
+# Program entry point
+def main():
+    args_list = sys.argv[1:]
+    if len(args_list) > 0:
+        args = parser.parse_args(args_list)
+        args.func(args)
+    else:
+        sys.exit(1)
 
 if __name__ == '__main__':
     main()

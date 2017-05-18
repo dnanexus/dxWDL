@@ -13,7 +13,6 @@ import scala.sys.process._
 import scala.util.{Failure, Success, Try}
 import spray.json._
 import spray.json.DefaultJsonProtocol
-import spray.json.JsString
 import wdl4s.AstTools
 import wdl4s.AstTools.EnhancedAstNode
 import wdl4s.{Call, Declaration, Scatter, Scope, Task, WdlExpression, WdlNamespaceWithWorkflow,
@@ -37,26 +36,26 @@ class UnboundVariableException private(ex: RuntimeException) extends RuntimeExce
 }
 
 object Utils {
-    val VERSION = "0.25"
-
     // Long strings cause problems with bash and the UI
-    val MAX_STRING_LEN = 8 * 1024
-    val DX_HOME = "/home/dnanexus"
-    val DOWNLOAD_RETRY_LIMIT = 3
-    val UPLOAD_RETRY_LIMIT = DOWNLOAD_RETRY_LIMIT
-    val DXPY_FILE_TRANSFER = true
     val CHECKSUM_PROP = "dxWDL_checksum"
-    val WDL_SNIPPET_FILENAME = "source.wdl"
+    val COMMON = "common"
+    val DOWNLOAD_RETRY_LIMIT = 3
+    val DXPY_FILE_TRANSFER = true
+    val DX_HOME = "/home/dnanexus"
+    val INSTANCE_TYPE_DB_FILENAME = "instanceTypeDB.json"
     val LINK_INFO_FILENAME = "linking.json"
     val MAX_HOURLY_RATE = 10.0
-    val INSTANCE_TYPE_DB_FILENAME = "instanceTypeDB.json"
+    val MAX_STRING_LEN = 8 * 1024
+    val SCATTER = "scatter"
+    val UPLOAD_RETRY_LIMIT = DOWNLOAD_RETRY_LIMIT
+    val UNIVERSAL_FILE_PREFIX = "dx://"
+    val VERSION = "0.25"
+    val WDL_SNIPPET_FILENAME = "source.wdl"
 
     // Substrings used by the compiler for encoding purposes
     val reservedSubstrings = List("___")
 
     // Prefixes used for generated applets
-    val COMMON = "common"
-    val SCATTER = "scatter"
     val reservedAppletPrefixes = List(SCATTER, COMMON)
 
     lazy val execDirPath : Path = {
@@ -226,6 +225,20 @@ object Utils {
             // Path exists, make sure it is a directory, and not a file
             if (!Files.isDirectory(path))
                 throw new Exception(s"Path ${path} exists, but is not a directory")
+        }
+    }
+
+    // Add a suffix to a filename, before the regular suffix. For example:
+    //  xxx.wdl -> xxx.simplified.wdl
+    def replaceFileSuffix(src: Path, suffix: String) : String = {
+        val fName = src.toFile().getName()
+        val index = fName.lastIndexOf('.')
+        if (index == -1) {
+            fName + suffix
+        }
+        else {
+            val prefix = fName.substring(0, index)
+            prefix + suffix
         }
     }
 
@@ -408,8 +421,8 @@ object Utils {
             throw new Exception(s"Failure to download file ${path}")
     }
 
-    def uploadString(buf: String) : JsValue = {
-        val dxfile = DXFile.newFile().build()
+    def uploadString(buf: String, fileNameDbg: String) : JsValue = {
+        val dxfile = DXFile.newFile().setName(fileNameDbg).build()
         dxfile.upload(buf.getBytes())
         dxfile.close()
 
@@ -435,6 +448,7 @@ object Utils {
                     Some(outmsg.trim())
                 } else {
                     // upload with java
+                    System.err.println(s"--  java upload file ${path.toString}")
                     val fname = path.getFileName().toString()
                     val dxfile = DXFile.newFile().setName(fname).build()
                     val fis = new java.io.FileInputStream(path.toString())

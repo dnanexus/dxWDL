@@ -10,6 +10,9 @@ cromwell-executions
 # compiled java classes
 *.class
 
+# DNAx JSON input files generated from WDL
+*.dx.json
+
 # jar files
 dxWDL*.jar
 dnanexus-api-*.jar
