@@ -138,10 +138,12 @@ object InputFile {
             val dxKey: Option[String] =
                 components.length match {
                     case 0|1 =>
-                        System.err.println(s"Assuming ${key} is a comment, skipping")
+                        // Comments
+                        System.err.println(s"Skipping ${key}")
                         None
                     case 2|3 if (components(0).startsWith("##")) =>
                         // Comments
+                        System.err.println(s"Skipping ${key}")
                         None
                     case 2 =>
                         // workflow inputs are passed to the initial
@@ -174,13 +176,9 @@ object InputFile {
               stageDict: Map[String, DXWorkflow.Stage],
               inputPath: Path,
               verbose: Boolean) : Unit = {
+        Utils.trace(verbose, s"Translating WDL input file ${inputPath}")
         // read the input file xxxx.json
         val wdlInputs: JsObject = Utils.readFileContent(inputPath).parseJson.asJsObject
-        if (verbose) {
-            wdlInputs.fields.foreach{ case (key, v) =>
-                System.err.println(s"${key} -> ${v}")
-            }
-        }
 
         // translate the key-value entries
         val dxInputs: JsObject = dxTranslate(wf, wdlInputs, stageDict)
@@ -189,5 +187,6 @@ object InputFile {
         val filename = Utils.replaceFileSuffix(inputPath, ".dx.json")
         val dxInputFile = inputPath.getParent().resolve(filename)
         Utils.writeFileContent(dxInputFile, dxInputs.prettyPrint)
+        Utils.trace(verbose, s"Wrote dx JSON input file ${dxInputFile}")
     }
 }
