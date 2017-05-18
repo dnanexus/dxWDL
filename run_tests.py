@@ -416,6 +416,7 @@ def main():
         exit(0)
     test_names = choose_tests(args.test)
 
+    project = dxpy.DXProject(args.project)
     if args.folder is None:
         base_folder = build_prerequisits(project, args)
     else:
@@ -423,7 +424,6 @@ def main():
         base_folder = args.folder
     applet_folder = base_folder + "/applets"
     test_folder = base_folder + "/test"
-    project = dxpy.DXProject(args.project)
     print("project: {} ({})".format(project.name, args.project))
     print("folder: {}".format(base_folder))
 

@@ -25,7 +25,7 @@ task FastqPairToUnmappedBam {
   runtime {
     docker: "broadinstitute/genomes-in-the-cloud:2.2.5-1486412288"
     memory: "4 GB"
-    disks: "local-disk 100 HDD"
+    disks: "local-disk 300 HDD"
   }
   output {
     File unmapped_bam = "${sample_name}.bam"
