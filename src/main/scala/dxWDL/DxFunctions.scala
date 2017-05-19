@@ -2,8 +2,9 @@ package dxWDL
 
 import com.dnanexus.DXFile
 import java.nio.charset.StandardCharsets
-import java.nio.file.{Path, Paths, Files}
+import java.nio.file.{Path, Paths, PathMatcher, Files, FileSystems}
 import scala.util.{Try, Success, Failure}
+import scala.collection.JavaConverters._
 import scala.collection.mutable.HashMap
 import wdl4s.expression.{WdlStandardLibraryFunctionsType, WdlStandardLibraryFunctions}
 import wdl4s.TsvSerializable
@@ -11,9 +12,15 @@ import wdl4s.types._
 import wdl4s.values._
 
 object DxFunctions extends WdlStandardLibraryFunctions {
+    lazy val dxHomeDir:Path = {
+        //val d = System.getProperty("user.home")
+        Paths.get(Utils.DX_HOME)
+    }
+
     // Files that have to be downloaded before read.
     // We download them once, and then remove them from the hashtable.
     var remoteFiles = HashMap.empty[String, DXFile]
+
 
     def registerRemoteFile(path: String, dxfile: DXFile) = {
         remoteFiles(path) = dxfile
@@ -55,8 +62,18 @@ object DxFunctions extends WdlStandardLibraryFunctions {
         } yield file
     }
 
-    override def glob(path: String, pattern: String): Seq[String] =
-        throw new NotImplementedError()
+    // Search for the pattern in the home directory. Not clear
+    // yet what to do with the [path] argument.
+    //
+    // recursively go through the home directory, checking for matches
+    override def glob(path: String, pattern: String): Seq[String] = {
+        val matcher:PathMatcher = FileSystems.getDefault().getPathMatcher(s"glob:${pattern}")
+        Files.walk(dxHomeDir).iterator().asScala
+            .filter(Files.isRegularFile(_))
+            .filter(file => matcher.matches(file))
+            .map(file => file.toString)
+            .toSeq
+    }
 
     override def readFile(path: String): String = {
         handleRemoteFile(path)

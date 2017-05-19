@@ -119,6 +119,9 @@ object CompilerBackend {
             |        /bin/bash $${HOME}/execution/meta/script
             |    fi
             |
+            |    # See what the directory looks like after execution
+            |    ls -lR
+            |
             |    #  check return code of the script
             |    rc=`cat $${HOME}/execution/meta/rc`
             |    if [[ $$rc != 0 ]]; then

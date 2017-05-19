@@ -666,6 +666,7 @@ workflow w {
 
     // Compile a scatter block
     def compileScatter(wf : Workflow,
+                       stageName: String,
                        scatter: Scatter,
                        taskApplets: Map[String, (IR.Applet, Vector[IR.CVar])],
                        env : CallEnv,
@@ -679,10 +680,8 @@ workflow w {
         if (calls.isEmpty)
             throw new Exception(cState.cef.notCurrentlySupported(scatter.ast, "scatter with no calls"))
 
-        // Construct a unique stage name by adding "scatter" to the
         // first call name. This is guaranteed to be unique within a
         // workflow, because call names must be unique (or aliased)
-        val stageName = Utils.SCATTER ++ "_" ++ callUniqueName(calls(0), cState)
         Utils.trace(cState.verbose, s"compiling scatter ${stageName}")
 
         // Construct the block output by unifying individual call outputs.
@@ -796,6 +795,7 @@ workflow w {
             cVar.name -> LinkedVar(cVar, IR.SArgLink(commonStage.name, cVar))
         }.toMap
         var evalAppletNum = 0
+        var scatterNum = 0
 
         // Create a stage per call/scatter-block/declaration-block
         val subBlocks = splitBlock(wfBody)
@@ -811,7 +811,9 @@ workflow w {
                     val stage = compileCall(call, taskApplets, env, cState)
                     (stage, None)
                 case Singleton(scatter : Scatter) =>
-                    val (stage, applet) = compileScatter(wf, scatter, taskApplets, env, cState)
+                    scatterNum = scatterNum + 1
+                    val scatterName = Utils.SCATTER ++ "_" ++ scatterNum.toString
+                    val (stage, applet) = compileScatter(wf, scatterName, scatter, taskApplets, env, cState)
                     (stage, Some(applet))
                 case Singleton(x) =>
                     throw new Exception(cState.cef.notCurrentlySupported(
