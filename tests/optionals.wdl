@@ -61,11 +61,16 @@ workflow optionals {
     scatter (x in integers) {
         call ppp_unused_args as unused_args_b { input: a=x }
         call ppp_unused_args as unused_args_c { input: a=x*2, ignore=["null"] }
+
+        # verify that unbound compulsory arguments are provided as scatter
+        # inputs
+        call ppp_add as add2 { input: a=x }
     }
     output {
         mul2.result
         set_def.result
         add.result
         unused_args.result
+        add2.result
     }
 }

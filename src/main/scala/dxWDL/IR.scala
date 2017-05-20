@@ -31,9 +31,11 @@ object IR {
     //   Eval:      evaluate WDL expressions, pure calculation
     //   Scatter:   utility block for scatter/gather
     //   Task:      call a task, execute a shell command (usually)
-    object AppletKind extends Enumeration {
-        val Eval, Scatter, Task = Value
-    }
+    sealed trait AppletKind
+    case object Eval extends AppletKind
+    case class Scatter(sourceCalls: Vector[String]) extends AppletKind
+    case object Task extends AppletKind
+
 
     /** Secification of instance type.
       *
@@ -58,6 +60,9 @@ object IR {
       * @param docker        is docker used?
       * @param destination   folder path on the platform
       * @param kind          Kind of applet: task, scatter, ...
+      * @param sourceCalls   Calls in source WDL that are handled by this applet.
+      *                      In scatters, these are all the calls in the block. For a task,
+      *                      it is an empty list.
       * @param wdlCode       WDL source code to run
       */
     case class Applet(name: String,
@@ -66,7 +71,7 @@ object IR {
                       instanceType: InstanceTypeSpec,
                       docker: Boolean,
                       destination : String,
-                      kind: AppletKind.Value,
+                      kind: AppletKind,
                       wdlCode: String)
 
     /** An input to a stage. Could be empty, a wdl constant, or

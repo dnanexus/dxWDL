@@ -133,9 +133,9 @@ object CompilerBackend {
             |""".stripMargin.trim
     }
 
-    def genBashScript(appKind: IR.AppletKind.Value, instanceType: IR.InstanceTypeSpec) : String = {
+    def genBashScript(appKind: IR.AppletKind, instanceType: IR.InstanceTypeSpec) : String = {
         appKind match {
-            case IR.AppletKind.Eval =>
+            case IR.Eval =>
                 s"""|#!/bin/bash -ex
                     |main() {
                     |    echo "working directory =$${PWD}"
@@ -144,7 +144,7 @@ object CompilerBackend {
                     |    java -cp $${DX_FS_ROOT}/dnanexus-api-0.1.0-SNAPSHOT-jar-with-dependencies.jar:$${DX_FS_ROOT}/dxWDL.jar:$${CLASSPATH} dxWDL.Main eval $${DX_FS_ROOT}/${WDL_SNIPPET_FILENAME} $${HOME}
                     |}""".stripMargin.trim
 
-            case IR.AppletKind.Scatter =>
+            case IR.Scatter(_) =>
                 s"""|#!/bin/bash -ex
                     |main() {
                     |    echo "working directory =$${PWD}"
@@ -153,7 +153,7 @@ object CompilerBackend {
                     |    java -cp $${DX_FS_ROOT}/dnanexus-api-0.1.0-SNAPSHOT-jar-with-dependencies.jar:$${DX_FS_ROOT}/dxWDL.jar:$${CLASSPATH} dxWDL.Main launchScatter $${DX_FS_ROOT}/${WDL_SNIPPET_FILENAME} $${HOME}
                     |}""".stripMargin.trim
 
-            case IR.AppletKind.Task =>
+            case IR.Task =>
                 instanceType match {
                     case IR.InstTypeDefault | IR.InstTypeConst(_) =>
                         s"""|#!/bin/bash -ex
@@ -365,7 +365,7 @@ object CompilerBackend {
         val json = JsObject(attrs ++ networkAccess)
 
         val aplLinks = applet.kind match {
-            case IR.AppletKind.Scatter => appletDict
+            case IR.Scatter(_) => appletDict
             case _ => Map.empty[String, DXApplet]
         }
         // create a directory structure for this applet
@@ -526,7 +526,7 @@ object CompilerBackend {
               folder: String,
               cef: CompilerErrorFormatter,
               force: Boolean,
-              verbose: Boolean) : (DXWorkflow, Map[String, DXWorkflow.Stage]) = {
+              verbose: Boolean) : (DXWorkflow, Map[String, DXWorkflow.Stage], Map[String, String]) = {
         Utils.trace(verbose, "Backend pass")
         val cState = State(dxWDLrtId, dxProject, instanceTypeDB, folder, cef, force, verbose)
 
@@ -555,8 +555,9 @@ object CompilerBackend {
         // - a dictionary of stages, mapping name to stage. This is used
         //   to locate variable references.
         val stageDictInit = Map.empty[String, DXWorkflow.Stage]
-        val (_,stageDict) = wf.stages.foldLeft((0, stageDictInit)) {
-            case ((version,stageDict), stg) =>
+        val callDictInit = Map.empty[String, String]
+        val (_,stageDict, callDict) = wf.stages.foldLeft((0, stageDictInit, callDictInit)) {
+            case ((version, stageDict, callDict), stg) =>
                 val (irApplet,dxApplet) = appletDict(stg.appletName)
                 val linkedInputs : Vector[(IR.CVar, IR.SArg)] = irApplet.inputs zip stg.inputs
                 val inputs: JsonNode = genStageInputs(linkedInputs, irApplet, stageDict, cState)
@@ -565,10 +566,19 @@ object CompilerBackend {
                 val nextVersion = modif.getEditVersion()
                 val dxStage : DXWorkflow.Stage = modif.getValue()
                 Utils.trace(cState.verbose, s"Stage ${stg.name} = ${dxStage.getId()}")
+
+                // map source calls to the stage name. For example, this happens
+                // for scatters.
+                val call2Stage = irApplet.kind match {
+                    case IR.Scatter(sourceCalls) => sourceCalls.map(x => x -> stg.name).toMap
+                    case _ => Map.empty[String, String]
+                }
+
                 (nextVersion,
-                 stageDict ++ Map(stg.name -> dxStage))
+                 stageDict ++ Map(stg.name -> dxStage),
+                 callDict ++ call2Stage)
         }
         dxwfl.close()
-        (dxwfl, stageDict)
+        (dxwfl, stageDict, callDict)
     }
 }

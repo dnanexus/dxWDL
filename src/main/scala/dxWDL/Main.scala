@@ -134,13 +134,6 @@ object Main extends App {
         Utils.trace(verbose, s"Wrote intermediate representation to ${trgPath.toString}")
     }
 
-    // generate a dx inputs file, if requested
-    def genDxInputs(iRepWf: IR.Workflow,
-                    stageDict: Map[String, DXWorkflow.Stage],
-                    wdlInputFile: String,
-                    verbose: Boolean) : Unit = {
-    }
-
     def compileBody(wdlSourceFile : Path, options: OptionsMap) : String = {
         val verbose = options contains "verbose"
         val force = options contains "force"
@@ -222,13 +215,15 @@ object Main extends App {
 
                 mode match {
                     case None =>
-                        val (dxwfl,stageDict) = CompilerBackend.apply(iRepWf, dxProject, instanceTypeDB,
-                                                                      dxWDLrtId,
-                                                                      folder, cef, force, verbose)
+                        val (dxwfl,stageDict, callDict) =
+                            CompilerBackend.apply(iRepWf, dxProject, instanceTypeDB,
+                                                  dxWDLrtId,
+                                                  folder, cef, force, verbose)
                         options.get("inputFile") match {
                             case None => ()
                             case Some(wdlInputFile) =>
-                                InputFile.apply(iRepWf, stageDict, Paths.get(wdlInputFile), verbose)
+                                InputFile.apply(iRepWf, stageDict, callDict,
+                                                Paths.get(wdlInputFile), verbose)
                         }
                         dxwfl.getId()
                     case Some(x) if x.toLowerCase == "fe" => "workflow-xxxx"

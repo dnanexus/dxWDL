@@ -142,7 +142,8 @@ object InputFile {
     // dx input file
     private def dxTranslate(wf: IR.Workflow,
                             wdlInputs: JsObject,
-                            stageDict: Map[String, DXWorkflow.Stage]) : JsObject= {
+                            stageDict: Map[String, DXWorkflow.Stage],
+                            callDict: Map[String, String]) : JsObject= {
         val m: Map[String, JsValue] = wdlInputs.fields.map{ case (key, v) =>
             val components = key.split("\\.")
             val dxKey: Option[String] =
@@ -164,11 +165,22 @@ object InputFile {
                         Some(stageName + "." + varName)
                     case 3 =>
                         // parameters for call
-                        // TODO: support calls inside scatters
                         assert(components(0) == wf.name)
-                        val stageName = lookupStage(components(1), wf, stageDict)
+                        val callName = components(1)
                         val varName = components(2)
-                        Some(stageName + "." + varName)
+                        stageDict.get(callName) match {
+                            case Some(stage) =>
+                                // call is implemented as a stage
+                                Some(s"{stage.getId()}.${varName}")
+                            case None =>
+                                // call is an element in a scatter, or a larger applet
+                                val stageName = callDict.get(callName) match {
+                                    case Some(x) => x
+                                    case None =>
+                                        throw new Exception(s"Call ${callName} not found for workflow ${wf.name}")
+                                }
+                                Some(s"{stage.getId()}.${callName}_${varName}")
+                        }
                     case _ =>
                         throw new Exception(s"String ${key} has too many components")
                 }
@@ -184,6 +196,7 @@ object InputFile {
     // Build a dx input file, based on the wdl input file and the workflow
     def apply(wf: IR.Workflow,
               stageDict: Map[String, DXWorkflow.Stage],
+              callDict: Map[String, String],
               inputPath: Path,
               verbose: Boolean) : Unit = {
         Utils.trace(verbose, s"Translating WDL input file ${inputPath}")
@@ -191,7 +204,7 @@ object InputFile {
         val wdlInputs: JsObject = Utils.readFileContent(inputPath).parseJson.asJsObject
 
         // translate the key-value entries
-        val dxInputs: JsObject = dxTranslate(wf, wdlInputs, stageDict)
+        val dxInputs: JsObject = dxTranslate(wf, wdlInputs, stageDict, callDict)
 
         // write back out as xxxx.dx.json
         val filename = Utils.replaceFileSuffix(inputPath, ".dx.json")
