@@ -129,12 +129,12 @@ object InputFile {
 
     private def lookupStage(name: String,
                             wf: IR.Workflow,
-                            stageDict: Map[String, DXWorkflow.Stage]) : String= {
+                            stageDict: Map[String, DXWorkflow.Stage]) : DXWorkflow.Stage= {
         stageDict.get(name) match {
             case None =>
                 System.err.println(s"stage dictionary: ${stageDict}")
                 throw new Exception(s"Stage ${name} not found for workflow ${wf.name}")
-            case Some(x) => x.getId()
+            case Some(x) => x
         }
     }
 
@@ -161,8 +161,8 @@ object InputFile {
                         // stage (common).
                         assert(components(0) == wf.name)
                         val varName = components(1)
-                        val stageName = lookupStage(wf.name + "_" + Utils.COMMON, wf, stageDict)
-                        Some(stageName + "." + varName)
+                        val stage = lookupStage(wf.name + "_" + Utils.COMMON, wf, stageDict)
+                        Some(s"${stage.getId}.${varName}")
                     case 3 =>
                         // parameters for call
                         assert(components(0) == wf.name)
@@ -171,15 +171,15 @@ object InputFile {
                         stageDict.get(callName) match {
                             case Some(stage) =>
                                 // call is implemented as a stage
-                                Some(s"{stage.getId()}.${varName}")
+                                Some(s"${stage.getId()}.${varName}")
                             case None =>
                                 // call is an element in a scatter, or a larger applet
-                                val stageName = callDict.get(callName) match {
-                                    case Some(x) => x
+                                val stage = callDict.get(callName) match {
+                                    case Some(x) => lookupStage(x, wf, stageDict)
                                     case None =>
                                         throw new Exception(s"Call ${callName} not found for workflow ${wf.name}")
                                 }
-                                Some(s"{stage.getId()}.${callName}_${varName}")
+                                Some(s"${stage.getId}.${callName}_${varName}")
                         }
                     case _ =>
                         throw new Exception(s"String ${key} has too many components")
