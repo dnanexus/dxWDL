@@ -1,11 +1,13 @@
 {
   "##_COMMENT1": "SAMPLE NAME AND UNMAPPED BAMS",
   "PairedEndSingleSampleWorkflow.sample_name": "NA12878",
-  "PairedEndSingleSampleWorkflow.base_file_name": "HG001-NA12878",
+  "PairedEndSingleSampleWorkflow.base_file_name": "NA12878_20k",
   "PairedEndSingleSampleWorkflow.flowcell_unmapped_bams": [
-    "dx://dxWDL_playground:/GATK_Compare/PrecisionFDA_HG001/HG001-NA12878.bam"
+    "dx://dxWDL_playground:/genomics-public-data/test-data/dna/wgs/hiseq2500/NA12878/H06HDADXX130110.1.ATCACGAT.20k_reads.bam",
+    "dx://dxWDL_playground:/genomics-public-data/test-data/dna/wgs/hiseq2500/NA12878/H06HDADXX130110.2.ATCACGAT.20k_reads.bam",
+    "dx://dxWDL_playground:/genomics-public-data/test-data/dna/wgs/hiseq2500/NA12878/H06JUADXX130110.1.ATCACGAT.20k_reads.bam"
   ],
-  "PairedEndSingleSampleWorkflow.final_gvcf_name": "HG001-NA12878.g.vcf.gz",
+  "PairedEndSingleSampleWorkflow.final_gvcf_name": "NA12878.g.vcf.gz",
   "PairedEndSingleSampleWorkflow.unmapped_bam_suffix": ".bam",
 
   "##_COMMENT2": "INTERVALS",
@@ -95,10 +97,10 @@
   "PairedEndSingleSampleWorkflow.wgs_evaluation_interval_list": "dx://dxWDL_playground:/gatk-test-data/intervals/wgs_evaluation_regions.hg38.interval_list",
 
   "##_COMMENT5": "QUALITY CONTROL SETTINGS (to override defaults)",
-  "##PairedEndSingleSampleWorkflow.ValidateReadGroupSamFile.ignore": ["null"],
-  "##PairedEndSingleSampleWorkflow.ValidateReadGroupSamFile.max_output": 1000000000,
-  "##PairedEndSingleSampleWorkflow.ValidateAggregatedSamFile.ignore": ["null"],
-  "##PairedEndSingleSampleWorkflow.ValidateAggregatedSamFile.max_output": 1000000000,
+  "PairedEndSingleSampleWorkflow.ValidateReadGroupSamFile.ignore": ["null"],
+  "PairedEndSingleSampleWorkflow.ValidateReadGroupSamFile.max_output": 1000000000,
+  "PairedEndSingleSampleWorkflow.ValidateAggregatedSamFile.ignore": ["null"],
+  "PairedEndSingleSampleWorkflow.ValidateAggregatedSamFile.max_output": 1000000000,
 
   "##_COMMENT6": "DISK SIZES + PREEMPTIBLES",
   "PairedEndSingleSampleWorkflow.agg_small_disk": 200,

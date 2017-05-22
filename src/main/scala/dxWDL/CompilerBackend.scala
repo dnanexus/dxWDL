@@ -10,7 +10,7 @@ import java.security.MessageDigest
 import scala.collection.JavaConverters._
 import spray.json._
 import spray.json.DefaultJsonProtocol
-import Utils.{CHECKSUM_PROP, WDL_SNIPPET_FILENAME}
+import Utils.{AppletLinkInfo, CHECKSUM_PROP, WDL_SNIPPET_FILENAME}
 import wdl4s.expression.{NoFunctions, WdlStandardLibraryFunctionsType}
 import wdl4s.parser.WdlParser.Ast
 import wdl4s.types._
@@ -196,7 +196,7 @@ object CompilerBackend {
     // Calculate a checksum of the inputs that went into the making of the applet.
     // This helps
     def createAppletDirStruct(applet: IR.Applet,
-                              aplLinks: Map[String, DXApplet],
+                              aplLinks: Map[String, (IR.Applet, DXApplet)],
                               appJson : JsObject,
                               cState: State) : Path = {
         // create temporary directory
@@ -221,8 +221,13 @@ object CompilerBackend {
         // write linking information
         if (!aplLinks.isEmpty) {
             val linkInfo = JsObject(
-                aplLinks.map{ case (key, dxApplet) =>
-                    key -> JsString(dxApplet.getId())
+                aplLinks.map{ case (key, (irApplet, dxApplet)) =>
+                    // Reduce the information to what will be needed for runtime linking.
+                    val appInputDefs: Map[String, WdlType] = irApplet.inputs.map{
+                        case IR.CVar(name, wdlType, _) => (name -> wdlType)
+                    }.toMap
+                    val ali = AppletLinkInfo(appInputDefs, dxApplet)
+                    key -> AppletLinkInfo.writeJson(ali)
                 }.toMap
             )
             Utils.writeFileContent(resourcesDir.resolve(Utils.LINK_INFO_FILENAME),
@@ -340,7 +345,7 @@ object CompilerBackend {
     // Write the WDL code to a file, and generate a bash applet to run
     // it on the platform.
     def localBuildApplet(applet: IR.Applet,
-                         appletDict: Map[String, DXApplet],
+                         appletDict: Map[String, (IR.Applet, DXApplet)],
                          cState: State) : Path = {
         Utils.trace(cState.verbose, s"Compiling applet ${applet.name}")
         val inputSpec : Seq[JsValue] = applet.inputs.map(cVar =>
@@ -366,7 +371,7 @@ object CompilerBackend {
 
         val aplLinks = applet.kind match {
             case IR.Scatter(_) => appletDict
-            case _ => Map.empty[String, DXApplet]
+            case _ => Map.empty[String, (IR.Applet, DXApplet)]
         }
         // create a directory structure for this applet
         createAppletDirStruct(applet, aplLinks, json, cState)
@@ -377,7 +382,7 @@ object CompilerBackend {
     // When [force] is true, always rebuild. Otherwise, rebuild only
     // if the WDL code has changed.
     def buildAppletIfNeeded(applet: IR.Applet,
-                            appletDict: Map[String, DXApplet],
+                            appletDict: Map[String, (IR.Applet, DXApplet)],
                             cState: State) : (DXApplet, Vector[IR.CVar]) = {
         // Search for existing applets on the platform, in the same path
         var existingApl: List[DXApplet] = DXSearch.findDataObjects().nameMatchesExactly(applet.name)
@@ -542,8 +547,7 @@ object CompilerBackend {
         val initAppletDict = Map.empty[String, (IR.Applet, DXApplet)]
         val appletDict = wf.applets.foldLeft(initAppletDict) {
             case (appletDict, a) =>
-                val aplDir = appletDict.map{ case (key, (irApl, apl)) => (key, apl) }
-                val (dxApplet, _) = buildAppletIfNeeded(a, aplDir, cState)
+                val (dxApplet, _) = buildAppletIfNeeded(a, appletDict, cState)
                 Utils.trace(cState.verbose, s"Applet ${a.name} = ${dxApplet.getId()}")
                 appletDict + (a.name -> (a, dxApplet))
         }.toMap

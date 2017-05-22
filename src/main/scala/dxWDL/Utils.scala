@@ -36,6 +36,36 @@ class UnboundVariableException private(ex: RuntimeException) extends RuntimeExce
 }
 
 object Utils {
+    // Information used to link applets that call other applets. For example, a scatter
+    // applet calls applets that implement tasks.
+    case class AppletLinkInfo(inputs: Map[String, WdlType], dxApplet: DXApplet)
+
+    object AppletLinkInfo {
+        def writeJson(ali: AppletLinkInfo) : JsValue = {
+            // Serialize applet input definitions, so they could be used
+            // at runtime.
+            val appInputDefs: Map[String, JsString] = ali.inputs.map{
+                case (name, wdlType) => name -> JsString(wdlType.toWdlString)
+            }.toMap
+            JsObject(
+                "id" -> JsString(ali.dxApplet.getId()),
+                "inputs" -> JsObject(appInputDefs)
+            )
+        }
+
+        def readJson(aplInfo: JsValue, dxProject: DXProject) = {
+            val dxApplet = aplInfo.asJsObject.fields("id") match {
+                case JsString(appletId) => DXApplet.getInstance(appletId, dxProject)
+                case _ => throw new Exception("Bad JSON")
+            }
+            val inputDefs = aplInfo.asJsObject.fields("inputs").asJsObject.fields.map{
+                case (key, JsString(wdlTypeStr)) => key -> WdlType.fromWdlString(wdlTypeStr)
+                case _ => throw new Exception("Bad JSON")
+            }.toMap
+            AppletLinkInfo(inputDefs, dxApplet)
+        }
+    }
+
     // Long strings cause problems with bash and the UI
     val CHECKSUM_PROP = "dxWDL_checksum"
     val COMMON = "common"
