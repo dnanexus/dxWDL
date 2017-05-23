@@ -65,6 +65,9 @@ workflow optionals {
         # verify that unbound compulsory arguments are provided as scatter
         # inputs
         call ppp_add as add2 { input: a=x }
+
+        # we need to pass {a, b}
+        call ppp_add as add3
     }
     output {
         mul2.result
