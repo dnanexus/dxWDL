@@ -1,29 +1,6 @@
 # A simple workflow with two stages wired together.
 # It is supposed to sum three integers.
-task Add {
-    Int a
-    Int b
-
-    command {
-        echo $((a + b))
-    }
-    output {
-        Int result = a + b
-        Int result2 = a - b
-    }
-}
-
-task Multiply {
-    Int a
-    Int b
-
-    command {
-        echo $((a * b))
-    }
-    output {
-        Int result = a * b
-    }
-}
+import "library.wdl" as lib
 
 workflow math {
     Int ai
