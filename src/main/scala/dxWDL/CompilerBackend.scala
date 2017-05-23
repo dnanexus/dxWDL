@@ -94,9 +94,10 @@ object CompilerBackend {
                 true
 
             case WdlArrayType(x) if x != WdlArrayType =>
-                // A uni-dimentional, non optional array. We need to
-                // declare it optional, otherwise, we get a job-manager
-                // runtime error if it is empty.
+                // A uni-dimentional, non optional array. It need to
+                // be declared optional. Otherwise, at runtime, if the
+                // array is empty, the job-manager complains and errors out
+                // the job.
                 true
 
             case _ =>
