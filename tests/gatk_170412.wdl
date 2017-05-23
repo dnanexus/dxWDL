@@ -1223,9 +1223,7 @@ workflow PairedEndSingleSampleWorkflow {
         input_bam_index = SortAndFixReadGroupBam.output_bam_index,
         report_filename = sub(sub(unmapped_bam, sub_strip_path, ""), sub_strip_unmapped, "") + ".validation_report",
         disk_size = flowcell_medium_disk,
-        preemptible_tries = preemptible_tries,
-        ignore = ["null"],
-        max_output = 1000000000
+        preemptible_tries = preemptible_tries
     }
 
   }
@@ -1362,9 +1360,7 @@ workflow PairedEndSingleSampleWorkflow {
       ref_fasta = ref_fasta,
       ref_fasta_index = ref_fasta_index,
       disk_size = agg_small_disk,
-      preemptible_tries = agg_preemptible_tries,
-      ignore =  ["null"],
-      max_output = 1000000000
+      preemptible_tries = agg_preemptible_tries
   }
 
   # QC the final BAM some more (no such thing as too much QC)

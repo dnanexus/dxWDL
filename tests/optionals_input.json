@@ -2,5 +2,8 @@
   "optionals.arg1": 10,
   "optionals.mul2.i": 5,
   "optionals.add.a" : 1,
-  "optionals.add.b" : 3
+  "optionals.add.b" : 3,
+  "optionals.add2.b" : 8,
+  "optionals.add3.a" : 13,
+  "optionals.add3.b" : 21
 }

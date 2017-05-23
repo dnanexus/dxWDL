@@ -2,8 +2,9 @@ package dxWDL
 
 import com.dnanexus.DXFile
 import java.nio.charset.StandardCharsets
-import java.nio.file.{Path, Paths, Files}
+import java.nio.file.{Files, FileSystems, Path, Paths, PathMatcher}
 import scala.util.{Try, Success, Failure}
+import scala.collection.JavaConverters._
 import scala.collection.mutable.HashMap
 import wdl4s.expression.{WdlStandardLibraryFunctionsType, WdlStandardLibraryFunctions}
 import wdl4s.TsvSerializable
@@ -11,9 +12,15 @@ import wdl4s.types._
 import wdl4s.values._
 
 object DxFunctions extends WdlStandardLibraryFunctions {
+    lazy val dxHomeDir:Path = {
+        //val d = System.getProperty("user.home")
+        Paths.get(Utils.DX_HOME)
+    }
+
     // Files that have to be downloaded before read.
     // We download them once, and then remove them from the hashtable.
     var remoteFiles = HashMap.empty[String, DXFile]
+
 
     def registerRemoteFile(path: String, dxfile: DXFile) = {
         remoteFiles(path) = dxfile
@@ -55,8 +62,22 @@ object DxFunctions extends WdlStandardLibraryFunctions {
         } yield file
     }
 
-    override def glob(path: String, pattern: String): Seq[String] =
-        throw new NotImplementedError()
+    override def globPath(pattern: String) : String = {
+        pattern
+    }
+
+    // Search for the pattern in the home directory. Not clear
+    // yet what to do with the [path] argument.
+    override def glob(path: String, pattern: String): Seq[String] = {
+        val matcher:PathMatcher = FileSystems.getDefault()
+            .getPathMatcher(s"glob:${dxHomeDir.toString}/${pattern}")
+        dxHomeDir.toFile.listFiles
+            .filter(_.isFile)
+            .map(_.toPath)
+            .filter(matcher.matches(_))
+            .map(_.toString)
+            .toSeq
+    }
 
     override def readFile(path: String): String = {
         handleRemoteFile(path)
@@ -104,16 +125,40 @@ object DxFunctions extends WdlStandardLibraryFunctions {
         Failure(new NotImplementedError(s"write_json()"))
 
     override def size(params: Seq[Try[WdlValue]]): Try[WdlFloat] = {
-/*        val fileName = params match {
-            case _ if params.length == 1 => params.head
-            case _ =>
-                new IllegalArgumentException(
-                    s"""|Invalid number of parameters for engine function size: ${params.length}.
-                        |size takes one parameter.""".stripMargin.trim)
+        // Extract the filename/path argument
+        try {
+            val fileName:String = params match {
+                case _ if params.length == 1 =>
+                    params.head.get match {
+                        case WdlSingleFile(s) => s
+                        case WdlString(s) => s
+                        case x => throw new AppException(s"size operator cannot be applied to ${x.toWdlString}")
+                    }
+                case _ =>
+                    throw new IllegalArgumentException(
+                        s"""|Invalid number of parameters for engine function size: ${params.length}.
+                            |size takes one parameter.""".stripMargin.trim)
+            }
+
+            // If this is not an absolute path, we assume the file
+            // is located in the DX home directory
+            val path:String =
+                if (fileName.startsWith("/")) fileName
+                else dxHomeDir.resolve(fileName).toString
+            val fSize:Long = remoteFiles.get(path) match {
+                case Some(dxFile) =>
+                    // File has not been downloaded yet.
+                    // Query the platform how big it is; do not download it.
+                    dxFile.describe().getSize()
+                case None =>
+                    // File is local
+                    val p = Paths.get(fileName)
+                    p.toFile.length
+            }
+            Success(WdlFloat(fSize.toFloat))
+        } catch {
+            case e : Throwable => Failure(e)
         }
-        val p = Paths.get(fileName.valueString)
-        p.size()*/
-        Failure(new NotImplementedError(s"size function"))
     }
 
 

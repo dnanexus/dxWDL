@@ -1,11 +1,13 @@
 {
   "##_COMMENT1": "SAMPLE NAME AND UNMAPPED BAMS",
   "PairedEndSingleSampleWorkflow.sample_name": "NA12878",
-  "PairedEndSingleSampleWorkflow.base_file_name": "HG001-NA12878",
+  "PairedEndSingleSampleWorkflow.base_file_name": "NA12878_20k",
   "PairedEndSingleSampleWorkflow.flowcell_unmapped_bams": [
-    "dx://dxWDL_playground:/GATK_Compare/PrecisionFDA_HG001/HG001-NA12878.bam"
+    "dx://dxWDL_playground:/genomics-public-data/test-data/dna/wgs/hiseq2500/NA12878/H06HDADXX130110.1.ATCACGAT.20k_reads.bam",
+    "dx://dxWDL_playground:/genomics-public-data/test-data/dna/wgs/hiseq2500/NA12878/H06HDADXX130110.2.ATCACGAT.20k_reads.bam",
+    "dx://dxWDL_playground:/genomics-public-data/test-data/dna/wgs/hiseq2500/NA12878/H06JUADXX130110.1.ATCACGAT.20k_reads.bam"
   ],
-  "PairedEndSingleSampleWorkflow.final_gvcf_name": "HG001-NA12878.g.vcf.gz",
+  "PairedEndSingleSampleWorkflow.final_gvcf_name": "NA12878.g.vcf.gz",
   "PairedEndSingleSampleWorkflow.unmapped_bam_suffix": ".bam",
 
   "##_COMMENT2": "INTERVALS",
@@ -102,10 +104,10 @@
 
   "##_COMMENT6": "DISK SIZES + PREEMPTIBLES",
   "PairedEndSingleSampleWorkflow.agg_small_disk": 200,
-  "PairedEndSingleSampleWorkflow.agg_medium_disk": 500,
-  "PairedEndSingleSampleWorkflow.agg_large_disk": 700,
+  "PairedEndSingleSampleWorkflow.agg_medium_disk": 300,
+  "PairedEndSingleSampleWorkflow.agg_large_disk": 400,
   "PairedEndSingleSampleWorkflow.agg_preemptible_tries": 3,
   "PairedEndSingleSampleWorkflow.flowcell_small_disk": 100,
-  "PairedEndSingleSampleWorkflow.flowcell_medium_disk": 500,
+  "PairedEndSingleSampleWorkflow.flowcell_medium_disk": 200,
   "PairedEndSingleSampleWorkflow.preemptible_tries": 3
 }

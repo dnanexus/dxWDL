@@ -10,7 +10,7 @@ import java.security.MessageDigest
 import scala.collection.JavaConverters._
 import spray.json._
 import spray.json.DefaultJsonProtocol
-import Utils.{CHECKSUM_PROP, WDL_SNIPPET_FILENAME}
+import Utils.{AppletLinkInfo, CHECKSUM_PROP, WDL_SNIPPET_FILENAME}
 import wdl4s.expression.{NoFunctions, WdlStandardLibraryFunctionsType}
 import wdl4s.parser.WdlParser.Ast
 import wdl4s.types._
@@ -61,41 +61,54 @@ object CompilerBackend {
                      "help" -> JsString(wdlType.toWdlString),
                      "class" -> JsString("file")))
         }
-
-        def nonOptional(t : WdlType) = t  match {
-            // primitive types
-            case WdlBooleanType => mkPrimitive("boolean")
-            case WdlIntegerType => mkPrimitive("int")
-            case WdlFloatType => mkPrimitive("float")
-            case WdlStringType =>mkPrimitive("string")
-            case WdlFileType => mkPrimitive("file")
+        def nonOptional(t : WdlType) : Vector[Map[String, JsValue]] = {
+            t match {
+                // primitive types
+                case WdlBooleanType => mkPrimitive("boolean")
+                case WdlIntegerType => mkPrimitive("int")
+                case WdlFloatType => mkPrimitive("float")
+                case WdlStringType =>mkPrimitive("string")
+                case WdlFileType => mkPrimitive("file")
 
                 // single dimension arrays of primitive types
-            case WdlArrayType(WdlBooleanType) => mkPrimitiveArray("boolean")
-            case WdlArrayType(WdlIntegerType) => mkPrimitiveArray("int")
-            case WdlArrayType(WdlFloatType) => mkPrimitiveArray("float")
-            case WdlArrayType(WdlStringType) => mkPrimitiveArray("string")
-            case WdlArrayType(WdlFileType) => mkPrimitiveArray("file")
+                case WdlArrayType(WdlBooleanType) => mkPrimitiveArray("boolean")
+                case WdlArrayType(WdlIntegerType) => mkPrimitiveArray("int")
+                case WdlArrayType(WdlFloatType) => mkPrimitiveArray("float")
+                case WdlArrayType(WdlStringType) => mkPrimitiveArray("string")
+                case WdlArrayType(WdlFileType) => mkPrimitiveArray("file")
 
                 // ragged arrays
-            case WdlArrayType(WdlArrayType(WdlBooleanType)) => mkRaggedArray()
-            case WdlArrayType(WdlArrayType(WdlIntegerType)) => mkRaggedArray()
-            case WdlArrayType(WdlArrayType(WdlFloatType)) => mkRaggedArray()
-            case WdlArrayType(WdlArrayType(WdlStringType)) => mkRaggedArray()
+                case WdlArrayType(WdlArrayType(WdlBooleanType)) => mkRaggedArray()
+                case WdlArrayType(WdlArrayType(WdlIntegerType)) => mkRaggedArray()
+                case WdlArrayType(WdlArrayType(WdlFloatType)) => mkRaggedArray()
+                case WdlArrayType(WdlArrayType(WdlStringType)) => mkRaggedArray()
 
-            case _ =>
-                throw new Exception(cState.cef.notCurrentlySupported(ast, s"type ${wdlType}"))
+                case _ =>
+                    throw new Exception(cState.cef.notCurrentlySupported(ast, s"type ${wdlType}"))
+            }
         }
 
-        wdlType match {
+        val makeOptional = wdlType match {
             case WdlOptionalType(t) =>
                 // An optional variable, make it an optional dx input/output
-                val l : Vector[Map[String,JsValue]] = nonOptional(t)
-                l.map{ m => JsObject(m + ("optional" -> JsBoolean(true))) }
-            case t =>
-                val l : Vector[Map[String,JsValue]] = nonOptional(t)
-                l.map{ m => JsObject(m)}
+                true
+
+            case WdlArrayType(x) if x != WdlArrayType =>
+                // A uni-dimentional, non optional array. It need to
+                // be declared optional. Otherwise, at runtime, if the
+                // array is empty, the job-manager complains and errors out
+                // the job.
+                true
+
+            case _ =>
+                // all other cases
+                false
         }
+        val vec: Vector[Map[String,JsValue]] = nonOptional(Utils.stripOptional(wdlType))
+        if (makeOptional)
+            vec.map{ m => JsObject(m + ("optional" -> JsBoolean(true))) }
+        else
+            vec.map{ m => JsObject(m)}
     }
 
     def genBashScriptTaskBody(): String = {
@@ -119,6 +132,9 @@ object CompilerBackend {
             |        /bin/bash $${HOME}/execution/meta/script
             |    fi
             |
+            |    # See what the directory looks like after execution
+            |    ls -lR
+            |
             |    #  check return code of the script
             |    rc=`cat $${HOME}/execution/meta/rc`
             |    if [[ $$rc != 0 ]]; then
@@ -130,9 +146,9 @@ object CompilerBackend {
             |""".stripMargin.trim
     }
 
-    def genBashScript(appKind: IR.AppletKind.Value, instanceType: IR.InstanceTypeSpec) : String = {
+    def genBashScript(appKind: IR.AppletKind, instanceType: IR.InstanceTypeSpec) : String = {
         appKind match {
-            case IR.AppletKind.Eval =>
+            case IR.Eval =>
                 s"""|#!/bin/bash -ex
                     |main() {
                     |    echo "working directory =$${PWD}"
@@ -141,7 +157,7 @@ object CompilerBackend {
                     |    java -cp $${DX_FS_ROOT}/dnanexus-api-0.1.0-SNAPSHOT-jar-with-dependencies.jar:$${DX_FS_ROOT}/dxWDL.jar:$${CLASSPATH} dxWDL.Main eval $${DX_FS_ROOT}/${WDL_SNIPPET_FILENAME} $${HOME}
                     |}""".stripMargin.trim
 
-            case IR.AppletKind.Scatter =>
+            case IR.Scatter(_) =>
                 s"""|#!/bin/bash -ex
                     |main() {
                     |    echo "working directory =$${PWD}"
@@ -150,7 +166,7 @@ object CompilerBackend {
                     |    java -cp $${DX_FS_ROOT}/dnanexus-api-0.1.0-SNAPSHOT-jar-with-dependencies.jar:$${DX_FS_ROOT}/dxWDL.jar:$${CLASSPATH} dxWDL.Main launchScatter $${DX_FS_ROOT}/${WDL_SNIPPET_FILENAME} $${HOME}
                     |}""".stripMargin.trim
 
-            case IR.AppletKind.Task =>
+            case IR.Task =>
                 instanceType match {
                     case IR.InstTypeDefault | IR.InstTypeConst(_) =>
                         s"""|#!/bin/bash -ex
@@ -193,7 +209,7 @@ object CompilerBackend {
     // Calculate a checksum of the inputs that went into the making of the applet.
     // This helps
     def createAppletDirStruct(applet: IR.Applet,
-                              aplLinks: Map[String, DXApplet],
+                              aplLinks: Map[String, (IR.Applet, DXApplet)],
                               appJson : JsObject,
                               cState: State) : Path = {
         // create temporary directory
@@ -218,8 +234,13 @@ object CompilerBackend {
         // write linking information
         if (!aplLinks.isEmpty) {
             val linkInfo = JsObject(
-                aplLinks.map{ case (key, dxApplet) =>
-                    key -> JsString(dxApplet.getId())
+                aplLinks.map{ case (key, (irApplet, dxApplet)) =>
+                    // Reduce the information to what will be needed for runtime linking.
+                    val appInputDefs: Map[String, WdlType] = irApplet.inputs.map{
+                        case IR.CVar(name, wdlType, _) => (name -> wdlType)
+                    }.toMap
+                    val ali = AppletLinkInfo(appInputDefs, dxApplet)
+                    key -> AppletLinkInfo.writeJson(ali)
                 }.toMap
             )
             Utils.writeFileContent(resourcesDir.resolve(Utils.LINK_INFO_FILENAME),
@@ -337,7 +358,7 @@ object CompilerBackend {
     // Write the WDL code to a file, and generate a bash applet to run
     // it on the platform.
     def localBuildApplet(applet: IR.Applet,
-                         appletDict: Map[String, DXApplet],
+                         appletDict: Map[String, (IR.Applet, DXApplet)],
                          cState: State) : Path = {
         Utils.trace(cState.verbose, s"Compiling applet ${applet.name}")
         val inputSpec : Seq[JsValue] = applet.inputs.map(cVar =>
@@ -362,8 +383,8 @@ object CompilerBackend {
         val json = JsObject(attrs ++ networkAccess)
 
         val aplLinks = applet.kind match {
-            case IR.AppletKind.Scatter => appletDict
-            case _ => Map.empty[String, DXApplet]
+            case IR.Scatter(_) => appletDict
+            case _ => Map.empty[String, (IR.Applet, DXApplet)]
         }
         // create a directory structure for this applet
         createAppletDirStruct(applet, aplLinks, json, cState)
@@ -374,7 +395,7 @@ object CompilerBackend {
     // When [force] is true, always rebuild. Otherwise, rebuild only
     // if the WDL code has changed.
     def buildAppletIfNeeded(applet: IR.Applet,
-                            appletDict: Map[String, DXApplet],
+                            appletDict: Map[String, (IR.Applet, DXApplet)],
                             cState: State) : (DXApplet, Vector[IR.CVar]) = {
         // Search for existing applets on the platform, in the same path
         var existingApl: List[DXApplet] = DXSearch.findDataObjects().nameMatchesExactly(applet.name)
@@ -523,7 +544,7 @@ object CompilerBackend {
               folder: String,
               cef: CompilerErrorFormatter,
               force: Boolean,
-              verbose: Boolean) : (DXWorkflow, Map[String, DXWorkflow.Stage]) = {
+              verbose: Boolean) : (DXWorkflow, Map[String, DXWorkflow.Stage], Map[String, String]) = {
         Utils.trace(verbose, "Backend pass")
         val cState = State(dxWDLrtId, dxProject, instanceTypeDB, folder, cef, force, verbose)
 
@@ -539,8 +560,7 @@ object CompilerBackend {
         val initAppletDict = Map.empty[String, (IR.Applet, DXApplet)]
         val appletDict = wf.applets.foldLeft(initAppletDict) {
             case (appletDict, a) =>
-                val aplDir = appletDict.map{ case (key, (irApl, apl)) => (key, apl) }
-                val (dxApplet, _) = buildAppletIfNeeded(a, aplDir, cState)
+                val (dxApplet, _) = buildAppletIfNeeded(a, appletDict, cState)
                 Utils.trace(cState.verbose, s"Applet ${a.name} = ${dxApplet.getId()}")
                 appletDict + (a.name -> (a, dxApplet))
         }.toMap
@@ -552,8 +572,9 @@ object CompilerBackend {
         // - a dictionary of stages, mapping name to stage. This is used
         //   to locate variable references.
         val stageDictInit = Map.empty[String, DXWorkflow.Stage]
-        val (_,stageDict) = wf.stages.foldLeft((0, stageDictInit)) {
-            case ((version,stageDict), stg) =>
+        val callDictInit = Map.empty[String, String]
+        val (_,stageDict, callDict) = wf.stages.foldLeft((0, stageDictInit, callDictInit)) {
+            case ((version, stageDict, callDict), stg) =>
                 val (irApplet,dxApplet) = appletDict(stg.appletName)
                 val linkedInputs : Vector[(IR.CVar, IR.SArg)] = irApplet.inputs zip stg.inputs
                 val inputs: JsonNode = genStageInputs(linkedInputs, irApplet, stageDict, cState)
@@ -562,10 +583,19 @@ object CompilerBackend {
                 val nextVersion = modif.getEditVersion()
                 val dxStage : DXWorkflow.Stage = modif.getValue()
                 Utils.trace(cState.verbose, s"Stage ${stg.name} = ${dxStage.getId()}")
+
+                // map source calls to the stage name. For example, this happens
+                // for scatters.
+                val call2Stage = irApplet.kind match {
+                    case IR.Scatter(sourceCalls) => sourceCalls.map(x => x -> stg.name).toMap
+                    case _ => Map.empty[String, String]
+                }
+
                 (nextVersion,
-                 stageDict ++ Map(stg.name -> dxStage))
+                 stageDict ++ Map(stg.name -> dxStage),
+                 callDict ++ call2Stage)
         }
         dxwfl.close()
-        (dxwfl, stageDict)
+        (dxwfl, stageDict, callDict)
     }
 }

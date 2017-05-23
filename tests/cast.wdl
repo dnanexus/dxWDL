@@ -1,6 +1,17 @@
+task EmptyArray {
+     Array[Int] fooAr
+
+     command {
+     }
+     output {
+       Array[Int] result=fooAr
+     }
+}
+
+
 # A simple workflow with two stages wired together.
 # It is supposed to sum three integers.
-task Add {
+task cast_Add {
     Int a
     Int b
 
@@ -41,6 +52,9 @@ workflow cast {
     Array[String] sArr = [s]
     Array[File] fooArr = [foo]
 
+    # Handling of empty arrays as input/output
+    call EmptyArray { input: fooAr=[] }
+
     # WDL does not automatically cast from type T to Array[T]
     #Array[Int] iArr2 = i
     #Array[String] sArr2 = s
@@ -50,7 +64,7 @@ workflow cast {
     File foo2 = FileIdent.result
     Array[File] fArr2 = [foo2]
 
-    call Add { input: a=i, b=i }
+    call cast_Add as Add { input: a=i, b=i }
     call SumArray {input: ints=iArr }
 
     # WDL casts an Int to an Array[Int] automatically

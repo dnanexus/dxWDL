@@ -440,7 +440,7 @@ task Add {
                                calcInstanceType(None, cState),
                                false,
                                cState.destination,
-                               IR.AppletKind.Eval,
+                               IR.Eval,
                                code)
         (IR.Stage(appletName, appletName, Vector[IR.SArg](), outputVars),
          applet)
@@ -510,7 +510,7 @@ workflow w {
                                calcInstanceType(None, cState),
                                false,
                                cState.destination,
-                               IR.AppletKind.Eval,
+                               IR.Eval,
                                code)
 
         // Link to the X.y original variables
@@ -548,9 +548,21 @@ workflow w {
                                calcInstanceType(Some(task), cState),
                                useDocker,
                                cState.destination,
-                               IR.AppletKind.Task,
+                               IR.Task,
                                wdlCode)
         (applet, outputVars)
+    }
+
+    def taskOfCall(call:Call, cState: State): Task = {
+        call match {
+            case x:TaskCall => x.task
+            case x:WorkflowCall =>
+                throw new Exception(cState.cef.notCurrentlySupported(call.ast, s"calling a workflow"))
+        }
+    }
+
+    def findInputByName(call: Call, cVar: IR.CVar) : Option[(String,WdlExpression)] = {
+        call.inputMappings.find{ case (k,v) => k == cVar.name }
     }
 
     def compileCall(call: Call,
@@ -558,18 +570,12 @@ workflow w {
                     env : CallEnv,
                     cState: State) : IR.Stage = {
         // Find the right applet
-        val name = call match {
-            case x:TaskCall => x.task.name
-            case x:WorkflowCall =>
-                throw new Exception(cState.cef.notCurrentlySupported(call.ast, s"calling a workflow"))
-        }
-        val (callee, outputs) = taskApplets(name)
+        val task = taskOfCall(call, cState)
+        val (callee, outputs) = taskApplets(task.name)
 
         // Extract the input values/links from the environment
         val inputs: Vector[IR.SArg] = callee.inputs.map{ cVar =>
-            val expr: Option[(String,WdlExpression)] =
-                call.inputMappings.find{ case (k,v) => k == cVar.name }
-            expr match {
+            findInputByName(call, cVar) match {
                 case None =>
                     // input is unbound; the workflow does not provide it.
                     if (Utils.isOptional(cVar.wdlType)) {
@@ -609,7 +615,7 @@ workflow w {
         }
 
         val stageName = callUniqueName(call, cState)
-        IR.Stage(stageName, name, inputs, callee.outputs)
+        IR.Stage(stageName, task.name, inputs, callee.outputs)
     }
 
     // Create a valid WDL workflow that runs a scatter. The main modification
@@ -664,8 +670,40 @@ workflow w {
         wdlCode
     }
 
+
+    // Check for each task input, if it is unbound. Make a list, and
+    // prefix each variable with the call name. This makes it unique
+    // as a scatter input.
+    def scUnspecifiedInputs(call: Call,
+                          taskApplets: Map[String, (IR.Applet, Vector[IR.CVar])],
+                          cState: State) : Vector[IR.CVar] = {
+        val task = taskOfCall(call, cState)
+        val (callee, _) = taskApplets(task.name)
+        callee.inputs.map{ cVar =>
+            val input = findInputByName(call, cVar)
+            input match {
+                case None =>
+                    // unbound input; the workflow does not provide it.
+                    if (!Utils.isOptional(cVar.wdlType)) {
+                        // A compulsory input. Print a warning, the user may wish to supply
+                        // it at runtime.
+                        System.err.println(s"""|Note: workflow doesn't supply required required
+                                               |input ${cVar.name} to call ${call.unqualifiedName};
+                                               |which is in a scatter.
+                                               |Propagating input to applet."""
+                                               .stripMargin.replaceAll("\n", " "))
+                    }
+                    Some(IR.CVar(s"${call.unqualifiedName}_${cVar.name}", cVar.wdlType, cVar.ast))
+                case Some(_) =>
+                    // input is provided
+                    None
+            }
+        }.flatten
+    }
+
     // Compile a scatter block
     def compileScatter(wf : Workflow,
+                       stageName: String,
                        scatter: Scatter,
                        taskApplets: Map[String, (IR.Applet, Vector[IR.CVar])],
                        env : CallEnv,
@@ -679,17 +717,15 @@ workflow w {
         if (calls.isEmpty)
             throw new Exception(cState.cef.notCurrentlySupported(scatter.ast, "scatter with no calls"))
 
-        // Construct a unique stage name by adding "scatter" to the
         // first call name. This is guaranteed to be unique within a
         // workflow, because call names must be unique (or aliased)
-        val stageName = Utils.SCATTER ++ "_" ++ callUniqueName(calls(0), cState)
         Utils.trace(cState.verbose, s"compiling scatter ${stageName}")
 
         // Construct the block output by unifying individual call outputs.
         // Each applet output becomes an array of that type. For example,
         // an Int becomes an Array[Int].
         val outputVars : Vector[IR.CVar] = calls.map { call =>
-            val task = Utils.taskOfCall(call)
+            val task = taskOfCall(call, cState)
             task.outputs.map { tso =>
                 val varName = callUniqueName(call, cState) ++ "." ++ tso.unqualifiedName
                 IR.CVar(varName, WdlArrayType(tso.wdlType), tso.ast)
@@ -730,6 +766,13 @@ workflow w {
             }
         }
 
+        // Collect unbound inputs. We we want to allow
+        // the user to provide them on the command line.
+        val extraTaskInputVars: Vector[IR.CVar] =
+            calls.map { call =>
+                scUnspecifiedInputs(call, taskApplets, cState)
+            }.flatten.toVector
+
         // remove the iteration variable from the closure
         closure -= scatter.item
         // remove the local variables from the closure
@@ -743,18 +786,18 @@ workflow w {
         }.toVector
         val wdlCode = scGenWorklow(scatter, taskApplets, inputVars, outputVars, cState)
         val applet = IR.Applet(wf.unqualifiedName ++ "_" ++ stageName,
-                               inputVars,
+                               inputVars ++ extraTaskInputVars,
                                outputVars,
                                calcInstanceType(None, cState),
                                false,
                                cState.destination,
-                               IR.AppletKind.Scatter,
+                               IR.Scatter(calls.map(_.unqualifiedName).toVector),
                                wdlCode)
 
         // The calls will be made from the scatter applet at runtime.
         // Collect all the outputs in arrays.
         calls.foreach { call =>
-            val task = Utils.taskOfCall(call)
+            val task = taskOfCall(call, cState)
             val outputs = task.outputs.map { tso =>
                 IR.CVar(callUniqueName(call, cState) ++ "." ++ tso.unqualifiedName,
                         tso.wdlType, tso.ast)
@@ -796,6 +839,7 @@ workflow w {
             cVar.name -> LinkedVar(cVar, IR.SArgLink(commonStage.name, cVar))
         }.toMap
         var evalAppletNum = 0
+        var scatterNum = 0
 
         // Create a stage per call/scatter-block/declaration-block
         val subBlocks = splitBlock(wfBody)
@@ -811,7 +855,9 @@ workflow w {
                     val stage = compileCall(call, taskApplets, env, cState)
                     (stage, None)
                 case Singleton(scatter : Scatter) =>
-                    val (stage, applet) = compileScatter(wf, scatter, taskApplets, env, cState)
+                    scatterNum = scatterNum + 1
+                    val scatterName = Utils.SCATTER ++ "_" ++ scatterNum.toString
+                    val (stage, applet) = compileScatter(wf, scatterName, scatter, taskApplets, env, cState)
                     (stage, Some(applet))
                 case Singleton(x) =>
                     throw new Exception(cState.cef.notCurrentlySupported(

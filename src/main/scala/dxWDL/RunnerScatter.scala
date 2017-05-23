@@ -30,6 +30,7 @@ import scala.collection.JavaConverters._
 import scala.collection.mutable.HashMap
 import spray.json._
 import spray.json.DefaultJsonProtocol
+import Utils.AppletLinkInfo
 import wdl4s._
 import wdl4s.expression._
 import wdl4s.parser.WdlParser.{Ast, AstNode, Terminal}
@@ -62,16 +63,16 @@ object RunnerScatter {
         }
     }
 
-    // find the sequence of applets inside the scatter block. In this example,
-    // these are: [inc]
+    // find the sequence of applets inside the scatter block. In the example,
+    // these are: [inc1, inc2]
     def findAppletsInScatterBlock(scatter : Scatter,
-                                  linkInfo: Map[String, DXApplet]) : Seq[(Call, DXApplet)] = {
+                                  linkInfo: Map[String, AppletLinkInfo]) : Seq[(Call, AppletLinkInfo)] = {
         // Match each call with its dx:applet
         scatter.children.map {
             case call: TaskCall =>
                 val dxAppletName = call.task.name
                 linkInfo.get(dxAppletName) match {
-                    case Some(dxApplet) => Some((call, dxApplet))
+                    case Some(x) => Some((call, x))
                     case None =>
                         throw new AppInternalException(
                             s"Could not find linking information for ${dxAppletName}")
@@ -147,35 +148,43 @@ object RunnerScatter {
     }
       */
     def buildAppletInputs(call: Call,
-                          inputSpec : List[InputParameter],
+                          apLinkInfo: AppletLinkInfo,
                           env : ScatterEnv,
                           rState: State) : ObjectNode = {
-        // Figure out which wdl fields this applet needs
-        val appInputVars = inputSpec.map{ spec =>
-            val name = spec.getName()
-            (Utils.decodeAppletVarName(name), spec)
+        val callName = callUniqueName(call)
+        val appInputs: Map[String, Option[WdlVarLinks]] = apLinkInfo.inputs.map{ case (varName, wdlType) =>
+            // The lhs is [k], the varName is [i]
+            val lhs: Option[(String,WdlExpression)] =
+                call.inputMappings.find{ case(key, expr) => key == varName }
+            val wvl:Option[WdlVarLinks] = lhs match {
+                case None =>
+                    // A value for [i] is not provided in the call.
+                    // Check if it was passed in the environment
+                    env.get(s"${callName}_${varName}") match {
+                        case None =>
+                            if (Utils.isOptional(wdlType)) {
+                                None
+                            } else {
+                                val provided = call.inputMappings.map{ case (key, expr) => key}.toVector
+                                throw new AppInternalException(
+                                    s"""|Could not find binding for required variable ${varName}.
+                                        |The call bindings are ${provided}""".stripMargin.trim)
+                            }
+                        case Some(wvl) => Some(wvl)
+                    }
+                case Some((_, expr)) =>
+                    Some(wvlEvalExpression(expr, env, rState))
+            }
+            varName -> wvl
         }
 
         var builder : DXJSON.ObjectBuilder = DXJSON.getObjectBuilder()
-        appInputVars.foreach{ case (varName, spec) =>
-            // The lhs is [k], the varName is [i]
-            val lhs: Option[(String,WdlExpression)] =
-                call.inputMappings.find{ case(key, expr) => key == varName}
-            val callerVar = lhs match {
-                case None =>
-                    // A value for [i] is not provided
-                    if (!spec.isOptional()) {
-                        val provided = call.inputMappings.map{ case (key, expr) => key}.toVector
-                        throw new AppInternalException(
-                            s"""|Could not find binding for required variable ${varName}.
-                                |The call bindings are ${provided}""".stripMargin.trim)
-                    }
-                case Some((_, expr)) =>
-                    val wvl = wvlEvalExpression(expr, env, rState)
-                    WdlVarLinks.genFields(wvl, varName).foreach{ case (fieldName, jsNode) =>
-                        builder = builder.put(fieldName, jsNode)
-                    }
-            }
+        appInputs.foreach{
+            case (varName, Some(wvl)) =>
+                WdlVarLinks.genFields(wvl, varName).foreach{ case (fieldName, jsNode) =>
+                    builder = builder.put(fieldName, jsNode)
+                }
+            case _ => ()
         }
         builder.build()
     }
@@ -198,8 +207,7 @@ object RunnerScatter {
     // Note: in case the phase list is empty, we need to provide a sensible output
     def gatherOutputs(scOutputs : List[ScatterEnv]) : Map[String, JsValue] = {
         if (scOutputs.length == 0) {
-            // TODO deal with this better
-            throw new AppInternalException("gather list is empty")
+            return Map.empty[String, JsValue]
         }
 
         // Map each individual variable to a list of output fields
@@ -229,7 +237,7 @@ object RunnerScatter {
     // Return the variables calculated.
     def evalScatter(scatter : Scatter,
                     collection : WdlVarLinks,
-                    calls : Seq[(Call, DXApplet)],
+                    calls : Seq[(Call, AppletLinkInfo)],
                     outerScopeEnv : ScatterEnv,
                     rState: State) : Map[String, JsValue] = {
         System.err.println(s"evalScatter")
@@ -238,13 +246,6 @@ object RunnerScatter {
         // environment
         val (topDecls,_) = Utils.splitBlockDeclarations(scatter.children.toList)
 
-        // Figure out the input/output specs for each applet.
-        // Do this once per applet in the loop.
-        val phases = calls.map { case (call, dxApplet) =>
-            val d = dxApplet.describe()
-            val inputSpec : List[InputParameter] = d.getInputSpecification().asScala.toList
-            (call, dxApplet, inputSpec)
-        }
         val collElements : Seq[WdlVarLinks] = WdlVarLinks.unpackWdlArray(collection)
         var scOutputs : List[ScatterEnv] = List()
         collElements.foreach { case elem =>
@@ -257,10 +258,10 @@ object RunnerScatter {
             var innerEnv = bValues.map{ case(key, bVal) => key -> bVal.wvl }.toMap
             innerEnv = innerEnv ++ envWithIterItem
 
-            phases.foreach { case (call,dxApplet,inputSpec) =>
-                val inputs : ObjectNode = buildAppletInputs(call, inputSpec, innerEnv, rState)
+            calls.foreach { case (call,apLinkInfo) =>
+                val inputs : ObjectNode = buildAppletInputs(call, apLinkInfo, innerEnv, rState)
                 System.err.println(s"call=${callUniqueName(call)} inputs=${inputs}")
-                val dxJob : DXJob = dxApplet.newRun().setRawInput(inputs).run()
+                val dxJob : DXJob = apLinkInfo.dxApplet.newRun().setRawInput(inputs).run()
                 val jobOutputs : ScatterEnv = jobOutputEnv(call, dxJob)
 
                 // add the job outputs to the environment. This makes them available to the applets
@@ -287,38 +288,25 @@ object RunnerScatter {
     // Load from disk a mapping of applet name to id. We
     // need this in order to call the right version of other
     // applets.
-    def loadLinkInfo(dxProject: DXProject) : Map[String, DXApplet]= {
+    def loadLinkInfo(dxProject: DXProject) : Map[String, AppletLinkInfo]= {
         System.err.println(s"Loading link information")
         val linkSourceFile: Path = Paths.get("/" + Utils.LINK_INFO_FILENAME)
+        if (!Files.exists(linkSourceFile))
+            Map.empty
 
-        val linkInfo : Map[String, DXApplet] =
-            if (Files.exists(linkSourceFile)) {
-                val info: String = Utils.readFileContent(linkSourceFile)
-                try {
-                    info.parseJson match {
-                        case JsObject(m) => m.map{
-                            case (key, JsString(appletId)) =>
-                                val dxApplet = DXApplet.getInstance(appletId, dxProject)
-                                key -> dxApplet
-                            case (key, _) =>
-                                throw new AppInternalException(s"Link information contains bad mapping ${info}")
-                        }
-                        case _ =>
-                        throw new AppInternalException(s"Link information is not a JSON object ${info}")
-                    }
-                } catch {
-                    case e : Throwable =>
-                        throw new AppInternalException(s"Link JSON information is badly formatted ${info}")
-                }
-            } else {
-                Map.empty
-            }
-
-        val infoStr: Map[String, String] = linkInfo.map{ case (k,apl) => (k, apl.getId()) }
-        System.err.println(s"load info=${infoStr}")
-        linkInfo
+        val info: String = Utils.readFileContent(linkSourceFile)
+        try {
+            info.parseJson.asJsObject.fields.map {
+                case (key:String, jso) =>
+                    key -> AppletLinkInfo.readJson(jso, dxProject)
+                case _ =>
+                    throw new AppInternalException(s"Bad JSON")
+            }.toMap
+        } catch {
+            case e : Throwable =>
+                throw new AppInternalException(s"Link JSON information is badly formatted ${info}")
+        }
     }
-
 
     def apply(wf: Workflow,
               jobInputPath : Path,
@@ -352,7 +340,9 @@ object RunnerScatter {
         val dxEnv = DXEnvironment.create()
         val dxProject = dxEnv.getProjectContext()
         val linkInfo = loadLinkInfo(dxProject)
-        val applets : Seq[(Call, DXApplet)] = findAppletsInScatterBlock(scatter, linkInfo)
+        System.err.println(s"link info=${linkInfo}")
+
+        val applets : Seq[(Call, AppletLinkInfo)] = findAppletsInScatterBlock(scatter, linkInfo)
         val outputs : Map[String, JsValue] = evalScatter(scatter, collElements, applets, outScopeEnv, rState)
 
         // write the outputs to the job_output.json file

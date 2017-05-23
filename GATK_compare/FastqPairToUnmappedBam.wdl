@@ -13,6 +13,7 @@ task FastqPairToUnmappedBam {
       F2=${F2} \
       O=${sample_name}.X.bam \
       SAMPLE_NAME=${sample_name}
+    rm -f ${F1} ${F2}
     java -jar /usr/gitc/picard.jar AddOrReplaceReadGroups \
       INPUT=${sample_name}.X.bam \
       OUTPUT=${sample_name}.bam \
@@ -20,12 +21,12 @@ task FastqPairToUnmappedBam {
       RGPL="Illumina" \
       RGLB=${library_id} \
       RGPU=${platform_unit} \
-      RGSM={sample_name}
+      RGSM=${sample_name}
   >>>
   runtime {
     docker: "broadinstitute/genomes-in-the-cloud:2.2.5-1486412288"
     memory: "4 GB"
-    disks: "local-disk 300 HDD"
+    disks: "local-disk 500 HDD"
   }
   output {
     File unmapped_bam = "${sample_name}.bam"
