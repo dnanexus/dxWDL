@@ -1,5 +1,12 @@
 # Release Notes
 
+## 0.26
+- Implemented glob function for files
+- Correctly handling empty arrays in task input/output
+- Support passing unbound variables to calls inside scatters
+- Improved scatter linking, passing applet input type arguments in a json file. This
+  allows not accessing the dx:applet description at runtime.
+
 ## 0.25
 - Allow a docker image to be specified as a parameter
 - Use Travis containers for continuous integration
