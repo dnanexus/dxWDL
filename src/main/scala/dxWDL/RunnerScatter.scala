@@ -148,26 +148,21 @@ object RunnerScatter {
     }
       */
     def buildAppletInputs(call: Call,
-                          inputSpec : List[InputParameter],
+                          apLinkInfo: AppletLinkInfo,
                           env : ScatterEnv,
                           rState: State) : ObjectNode = {
-        // Figure out which wdl fields this applet needs
-        val appInputVars = inputSpec.map{ spec =>
-            val name = spec.getName()
-            (Utils.decodeAppletVarName(name), spec)
-        }
         val callName = callUniqueName(call)
-        val appInputs: Seq[(String, WdlVarLinks)] = appInputVars.map{ case (varName, spec) =>
+        val appInputs: Map[String, Option[WdlVarLinks]] = apLinkInfo.inputs.map{ case (varName, wdlType) =>
             // The lhs is [k], the varName is [i]
             val lhs: Option[(String,WdlExpression)] =
                 call.inputMappings.find{ case(key, expr) => key == varName }
-            lhs match {
+            val wvl:Option[WdlVarLinks] = lhs match {
                 case None =>
                     // A value for [i] is not provided in the call.
                     // Check if it was passed in the environment
                     env.get(s"${callName}_${varName}") match {
                         case None =>
-                            if (spec.isOptional()) {
+                            if (Utils.isOptional(wdlType)) {
                                 None
                             } else {
                                 val provided = call.inputMappings.map{ case (key, expr) => key}.toVector
@@ -175,20 +170,21 @@ object RunnerScatter {
                                     s"""|Could not find binding for required variable ${varName}.
                                         |The call bindings are ${provided}""".stripMargin.trim)
                             }
-                        case Some(wvl) =>
-                            Some(varName -> wvl)
+                        case Some(wvl) => Some(wvl)
                     }
                 case Some((_, expr)) =>
-                    val wvl = wvlEvalExpression(expr, env, rState)
-                    Some(varName -> wvl)
+                    Some(wvlEvalExpression(expr, env, rState))
             }
-        }.flatten
+            varName -> wvl
+        }
 
         var builder : DXJSON.ObjectBuilder = DXJSON.getObjectBuilder()
-        appInputs.foreach{ case (varName, wvl) =>
-            WdlVarLinks.genFields(wvl, varName).foreach{ case (fieldName, jsNode) =>
-                builder = builder.put(fieldName, jsNode)
-            }
+        appInputs.foreach{
+            case (varName, Some(wvl)) =>
+                WdlVarLinks.genFields(wvl, varName).foreach{ case (fieldName, jsNode) =>
+                    builder = builder.put(fieldName, jsNode)
+                }
+            case _ => ()
         }
         builder.build()
     }
@@ -250,13 +246,6 @@ object RunnerScatter {
         // environment
         val (topDecls,_) = Utils.splitBlockDeclarations(scatter.children.toList)
 
-        // Figure out the input/output specs for each applet.
-        // Do this once per applet in the loop.
-        val callLanuchPads = calls.map { case (call, appletLinkInfo) =>
-            val d = appletLinkInfo.dxApplet.describe()
-            val inputSpec : List[InputParameter] = d.getInputSpecification().asScala.toList
-            (call, appletLinkInfo.dxApplet, inputSpec)
-        }
         val collElements : Seq[WdlVarLinks] = WdlVarLinks.unpackWdlArray(collection)
         var scOutputs : List[ScatterEnv] = List()
         collElements.foreach { case elem =>
@@ -269,10 +258,10 @@ object RunnerScatter {
             var innerEnv = bValues.map{ case(key, bVal) => key -> bVal.wvl }.toMap
             innerEnv = innerEnv ++ envWithIterItem
 
-            callLanuchPads.foreach { case (call,dxApplet,inputSpec) =>
-                val inputs : ObjectNode = buildAppletInputs(call, inputSpec, innerEnv, rState)
+            calls.foreach { case (call,apLinkInfo) =>
+                val inputs : ObjectNode = buildAppletInputs(call, apLinkInfo, innerEnv, rState)
                 System.err.println(s"call=${callUniqueName(call)} inputs=${inputs}")
-                val dxJob : DXJob = dxApplet.newRun().setRawInput(inputs).run()
+                val dxJob : DXJob = apLinkInfo.dxApplet.newRun().setRawInput(inputs).run()
                 val jobOutputs : ScatterEnv = jobOutputEnv(call, dxJob)
 
                 // add the job outputs to the environment. This makes them available to the applets
