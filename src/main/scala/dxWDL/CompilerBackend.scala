@@ -61,41 +61,53 @@ object CompilerBackend {
                      "help" -> JsString(wdlType.toWdlString),
                      "class" -> JsString("file")))
         }
-
-        def nonOptional(t : WdlType) = t  match {
-            // primitive types
-            case WdlBooleanType => mkPrimitive("boolean")
-            case WdlIntegerType => mkPrimitive("int")
-            case WdlFloatType => mkPrimitive("float")
-            case WdlStringType =>mkPrimitive("string")
-            case WdlFileType => mkPrimitive("file")
+        def nonOptional(t : WdlType) : Vector[Map[String, JsValue]] = {
+            t match {
+                // primitive types
+                case WdlBooleanType => mkPrimitive("boolean")
+                case WdlIntegerType => mkPrimitive("int")
+                case WdlFloatType => mkPrimitive("float")
+                case WdlStringType =>mkPrimitive("string")
+                case WdlFileType => mkPrimitive("file")
 
                 // single dimension arrays of primitive types
-            case WdlArrayType(WdlBooleanType) => mkPrimitiveArray("boolean")
-            case WdlArrayType(WdlIntegerType) => mkPrimitiveArray("int")
-            case WdlArrayType(WdlFloatType) => mkPrimitiveArray("float")
-            case WdlArrayType(WdlStringType) => mkPrimitiveArray("string")
-            case WdlArrayType(WdlFileType) => mkPrimitiveArray("file")
+                case WdlArrayType(WdlBooleanType) => mkPrimitiveArray("boolean")
+                case WdlArrayType(WdlIntegerType) => mkPrimitiveArray("int")
+                case WdlArrayType(WdlFloatType) => mkPrimitiveArray("float")
+                case WdlArrayType(WdlStringType) => mkPrimitiveArray("string")
+                case WdlArrayType(WdlFileType) => mkPrimitiveArray("file")
 
                 // ragged arrays
-            case WdlArrayType(WdlArrayType(WdlBooleanType)) => mkRaggedArray()
-            case WdlArrayType(WdlArrayType(WdlIntegerType)) => mkRaggedArray()
-            case WdlArrayType(WdlArrayType(WdlFloatType)) => mkRaggedArray()
-            case WdlArrayType(WdlArrayType(WdlStringType)) => mkRaggedArray()
+                case WdlArrayType(WdlArrayType(WdlBooleanType)) => mkRaggedArray()
+                case WdlArrayType(WdlArrayType(WdlIntegerType)) => mkRaggedArray()
+                case WdlArrayType(WdlArrayType(WdlFloatType)) => mkRaggedArray()
+                case WdlArrayType(WdlArrayType(WdlStringType)) => mkRaggedArray()
 
-            case _ =>
-                throw new Exception(cState.cef.notCurrentlySupported(ast, s"type ${wdlType}"))
+                case _ =>
+                    throw new Exception(cState.cef.notCurrentlySupported(ast, s"type ${wdlType}"))
+            }
         }
 
-        wdlType match {
+        val makeOptional = wdlType match {
             case WdlOptionalType(t) =>
                 // An optional variable, make it an optional dx input/output
-                val l : Vector[Map[String,JsValue]] = nonOptional(t)
-                l.map{ m => JsObject(m + ("optional" -> JsBoolean(true))) }
-            case t =>
-                val l : Vector[Map[String,JsValue]] = nonOptional(t)
-                l.map{ m => JsObject(m)}
+                true
+
+            case WdlArrayType(x) if x != WdlArrayType =>
+                // A uni-dimentional, non optional array. We need to
+                // declare it optional, otherwise, we get a job-manager
+                // runtime error if it is empty.
+                true
+
+            case _ =>
+                // all other cases
+                false
         }
+        val vec: Vector[Map[String,JsValue]] = nonOptional(Utils.stripOptional(wdlType))
+        if (makeOptional)
+            vec.map{ m => JsObject(m + ("optional" -> JsBoolean(true))) }
+        else
+            vec.map{ m => JsObject(m)}
     }
 
     def genBashScriptTaskBody(): String = {

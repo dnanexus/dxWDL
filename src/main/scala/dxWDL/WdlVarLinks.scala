@@ -227,6 +227,9 @@ object WdlVarLinks {
                 JsArray(fAr.map {case x : WdlFloat => JsNumber(x.value)}.toVector)
             case (_, WdlArray(WdlArrayType(WdlStringType), stAr)) =>
                 JsArray(stAr.map {case x : WdlString => jsStringLimited(x.value)}.toVector)
+            case (_, WdlArray(_, ar)) if ar.length == 0 =>
+                // An empty array, the type doesn't matter here
+                JsArray(Vector.empty)
 
             case _ => throw new AppInternalException(
                 s"Unsupported type combination (${wdlType}, ${wdlValue.wdlType})")
