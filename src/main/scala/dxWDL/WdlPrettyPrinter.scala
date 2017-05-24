@@ -19,8 +19,12 @@ object WdlPrettyPrinter {
 
     // indent a line by [level] steps
     def indentLine(line: String, indentLevel: Int) = {
-        val spaces = genNSpaces(indentLevel * I_STEP)
-        spaces + line
+        if (line == "\n") {
+            line
+        } else {
+            val spaces = genNSpaces(indentLevel * I_STEP)
+            spaces + line
+        }
     }
 
     // All blocks except for task command.
@@ -66,11 +70,7 @@ object WdlPrettyPrinter {
         firstLine +: nonEmptyLines :+ endLine
     }
 
-    def apply(call: Call, level: Int) : Vector[String] = {
-        val name = call match {
-            case x:TaskCall => x.task.name
-            case x:WorkflowCall => x.calledWorkflow.unqualifiedName
-        }
+    def apply(call: TaskCall, level: Int) : Vector[String] = {
         val aliasStr = call.alias match {
             case None => ""
             case Some(nm) => " as " ++ nm
@@ -87,7 +87,7 @@ object WdlPrettyPrinter {
                 Vector(indentLine(line, level+1))
             }
 
-        buildBlock(s"call ${name} ${aliasStr}", inputsVec, level, true)
+        buildBlock(s"call ${call.task.fullyQualifiedName} ${aliasStr}", inputsVec, level, true)
     }
 
     def apply(decl: Declaration, level: Int) : Vector[String] = {
@@ -102,7 +102,7 @@ object WdlPrettyPrinter {
     def apply(ssc: Scatter, level: Int) : Vector[String] = {
         val top: String = s"scatter (${ssc.item} in ${ssc.collection.toWdlString})"
         val children = ssc.children.map{
-            case x:Call => apply(x, level + 1)
+            case x:TaskCall => apply(x, level + 1)
             case x:Declaration => apply(x, level + 1)
             case x:Scatter => apply(x, level + 1)
             case _ => throw new Exception("Unimplemented scatter element")
@@ -119,9 +119,6 @@ object WdlPrettyPrinter {
                 case x:TaskCall =>
                     val inputs = x.inputMappings.map{ case (k,expr) => (k, transform(expr)) }.toMap
                     TaskCall(x.alias, x.task, inputs, x.ast)
-                case x:WorkflowCall =>
-                    val inputs = x.inputMappings.map{ case (k,expr) => (k, transform(expr)) }.toMap
-                    WorkflowCall(x.alias, x.calledWorkflow, inputs, x.ast)
                 case x:Declaration =>
                     Declaration(x.wdlType, x.unqualifiedName,
                                 x.expression.map(transform), x.parent, x.ast)
@@ -132,7 +129,7 @@ object WdlPrettyPrinter {
 
         val top: String = s"scatter (${ssc.item} in ${transform(ssc.collection).toWdlString})"
         val children = tChildren.map{
-            case x:Call => apply(x, level + 1)
+            case x:TaskCall => apply(x, level + 1)
             case x:Declaration => apply(x, level + 1)
             case x:Scatter => apply(x, level + 1)
             case _ => throw new Exception("Unimplemented scatter element")
@@ -161,7 +158,7 @@ object WdlPrettyPrinter {
             buildBlock("runtime", runtime, level + 1) ++
             buildBlock("output", outputs, level + 1)
 
-        buildBlock(s"task ${task.name}", body, level)
+        buildBlock(s"task ${task.fullyQualifiedName}", body, level)
     }
 
     def apply(wfo: WorkflowOutput, level: Int) : Vector[String] = {
@@ -169,9 +166,14 @@ object WdlPrettyPrinter {
         Vector(indentLine(ln, level))
     }
 
+    // TODO
+    // Handle:
+    //   meta: Map[String, String]
+    //   parameterMeta: Map[String, String]
+    //
     def apply(wf: Workflow, level: Int) : Vector[String] = {
         val children = wf.children.map {
-            case call: Call => apply(call, level + 1)
+            case call: TaskCall => apply(call, level + 1)
             case sc: Scatter => apply(sc, level + 1)
             case decl: Declaration => apply(decl, level + 1)
             case x => throw new Exception(s"Unimplemented workflow element ${x.toString}")
@@ -180,6 +182,28 @@ object WdlPrettyPrinter {
 
         val lines = children.toVector ++
             buildBlock("outputs", outputs.toVector, level + 1)
-        buildBlock( s"workflow ${wf.unqualifiedName}", lines, level)
+        buildBlock( s"workflow ${wf.fullyQualifiedName}", lines, level)
+    }
+
+    def apply(ns: WdlNamespace, level: Int) : Vector[String] = {
+        // print the imports
+        val importLines: Vector[String] = ns.imports.map{
+            imp => s"import ${imp.uri} as ${imp.namespaceName}"
+        }.toVector
+
+        // tasks
+        val taskLines: Vector[String] = ns.tasks.map(
+            task => apply(task, level) :+ "\n"
+        ).toVector.flatten
+
+        // workflow, if it exists
+        val wfLines: Vector[String] = ns match {
+            case nswf : WdlNamespaceWithWorkflow => apply(nswf.workflow, level)
+            case _ => Vector()
+        }
+
+        val allLines = importLines ++ Vector("\n") ++
+            taskLines ++ Vector("\n") ++ wfLines
+        allLines.map(x => indentLine(x, level))
     }
 }

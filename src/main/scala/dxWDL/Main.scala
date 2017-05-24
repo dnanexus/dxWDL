@@ -65,15 +65,19 @@ object Main extends App {
     }
 
     def yaml(args: Seq[String]): Termination = {
-        if (args.length == 1) {
-            val path = args.head
-            val wdlSource : String = Utils.readFileContent(Paths.get(path))
-            val ns : WdlNamespaceWithWorkflow =
-                WdlNamespaceWithWorkflow.load(wdlSource, Seq.empty).get
-            SuccessfulTermination(WdlYamlTree(ns).print())
-        } else {
-            BadUsageTermination("")
+        if (args.length != 1)
+            return BadUsageTermination("")
+
+        val wdlSourceFile = Paths.get(args.head)
+
+        // Resolving imports. Look for referenced files in the
+        // source directory.
+        val sourceDir = wdlSourceFile.getParent()
+        def resolver(filename: String) : String = {
+            Utils.readFileContent(sourceDir.resolve(filename))
         }
+        val ns = WdlNamespace.loadUsingPath(wdlSourceFile, None, Some(List(resolver))).get
+        SuccessfulTermination(WdlYamlTree(ns).print())
     }
 
     // Report an error, since this is called from a bash script, we
