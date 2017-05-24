@@ -296,7 +296,12 @@ object CompilerPreprocess {
               verbose: Boolean) : Path = {
         Utils.trace(verbose, "Preprocessing pass")
 
-        val ns = WdlNamespace.loadUsingPath(wdlSourceFile, None, None).get
+        // Resolving imports
+        val sourceDir = wdlSourceFile.getParent()
+        def resolver(filename: String) : WdlSource = {
+            Utils.readFileContent(sourceDir.resolve(filename))
+        }
+        val ns = WdlNamespace.loadUsingPath(wdlSourceFile, None, Some(List(resolver))).get
         val tm = ns.terminalMap
         val cef = new CompilerErrorFormatter(tm)
         val cState = State(cef, tm, verbose)

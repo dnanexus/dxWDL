@@ -5,10 +5,10 @@ import "library.wdl" as lib
 workflow math {
     Int ai
 
-    call Add {
+    call lib.Add  as Add {
          input: a = ai, b = 3
     }
-    call Multiply {
+    call lib.Multiply as Multiply {
          input: a = Add.result + 10, b = 2
     }
     output {
