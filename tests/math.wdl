@@ -1,5 +1,5 @@
 # A simple workflow with two stages wired together.
-# It is supposed to sum three integers.
+# It calculates simple math operations.
 import "library.wdl" as lib
 
 workflow math {

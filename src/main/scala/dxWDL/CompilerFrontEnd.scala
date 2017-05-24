@@ -214,7 +214,7 @@ task Add {
     // that, in the general case, could be calculated only at runtime.
     // Currently, we support only constants. If a runtime expression is used,
     // we convert it to a moderatly high constant.
-    def calcInstanceType(taskOpt: Option[Task], cState: State) : IR.InstanceTypeSpec = {
+    def calcInstanceType(taskOpt: Option[Task], cState: State) : IR.InstanceType = {
         def lookup(varName : String) : WdlValue = {
             throw new DynamicInstanceTypesException()
         }
@@ -233,17 +233,17 @@ task Add {
                     // For example, the top level of a scatter block. We use
                     // the default instance type, because one will probably be available,
                     // and it will probably be inexpensive.
-                    IR.InstTypeDefault
+                    IR.InstanceTypeDefault
                 case Some(task) =>
                     val memory = evalAttr(task, "memory")
                     val diskSpace = evalAttr(task, "disks")
                     val cores = evalAttr(task, "cpu")
-                    IR.InstTypeConst(cState.instanceTypeDB.apply(memory, diskSpace, cores))
+                    IR.InstanceTypeConst(cState.instanceTypeDB.apply(memory, diskSpace, cores))
             }
         } catch {
             case e : DynamicInstanceTypesException =>
                 // The generated code will need to calculate the instance type at runtime
-                IR.InstTypeRuntime
+                IR.InstanceTypeRuntime
         }
     }
 
@@ -440,7 +440,7 @@ task Add {
                                calcInstanceType(None, cState),
                                false,
                                cState.destination,
-                               IR.Eval,
+                               IR.AppletKindEval,
                                code)
         (IR.Stage(appletName, appletName, Vector[IR.SArg](), outputVars),
          applet)
@@ -510,7 +510,7 @@ workflow w {
                                calcInstanceType(None, cState),
                                false,
                                cState.destination,
-                               IR.Eval,
+                               IR.AppletKindEval,
                                code)
 
         // Link to the X.y original variables
@@ -548,7 +548,7 @@ workflow w {
                                calcInstanceType(Some(task), cState),
                                useDocker,
                                cState.destination,
-                               IR.Task,
+                               IR.AppletKindTask,
                                wdlCode)
         (applet, outputVars)
     }
@@ -791,7 +791,7 @@ workflow w {
                                calcInstanceType(None, cState),
                                false,
                                cState.destination,
-                               IR.Scatter(calls.map(_.unqualifiedName).toVector),
+                               IR.AppletKindScatter(calls.map(_.unqualifiedName).toVector),
                                wdlCode)
 
         // The calls will be made from the scatter applet at runtime.
