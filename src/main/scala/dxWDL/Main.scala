@@ -175,12 +175,21 @@ object Main extends App {
         // get list of available instance types
         val instanceTypeDB = InstanceTypeDB.queryWithBackup(dxProject)
 
+        // Topologically sort the WDL file so no forward references exist in
+        // subsequent steps. Create new file to hold the result.
+
+        // Additionally perform check for cycles in the workflow
+        // Assuming the source file is xxx.wdl, the new name will
+        // be xxx.sorted.wdl.
+        val sortedWdlPath = CompilerTopologicalSort.apply(wdlSourceFile, verbose)
+        System.exit(0)
+
         // Simplify the source file
         // Create a new file to hold the result.
-        //
+
         // Assuming the source file is xxx.wdl, the new name will
         // be xxx.simplified.wdl.
-        val simplWdlPath = CompilerPreprocess.apply(wdlSourceFile, verbose)
+        val simplWdlPath = CompilerPreprocess.apply(sortedWdlPath, verbose)
 
         // extract the workflow
         val ns = WdlNamespace.loadUsingPath(simplWdlPath, None, None).get
