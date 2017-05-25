@@ -96,8 +96,16 @@ object CompilerPreprocess {
         }
 
         val callModifiedInputs = call match {
-            case tc: TaskCall => TaskCall(tc.alias, tc.task, inputs, tc.ast)
-            case wfc: WorkflowCall => WorkflowCall(wfc.alias, wfc.calledWorkflow, inputs, wfc.ast)
+            case tc: TaskCall =>
+                val tc1 = TaskCall(tc.alias, tc.task, inputs, tc.ast)
+                tc1.namespace = tc.namespace
+                tc1.children = tc.children
+                tc.parent match {
+                    case Some(x) => tc1.parent = x
+                    case None => ()
+                }
+                tc1
+            case wfc: WorkflowCall => throw new Exception(s"Unimplemented WorkflowCall")
         }
         tmpDecls += callModifiedInputs
         tmpDecls.toVector
@@ -272,8 +280,8 @@ object CompilerPreprocess {
 
     def simplifyWorkflow(wf: Workflow, cState:State) : Workflow = {
         val wf1 = simplifyAllScatters(wf, cState)
-        System.err.println(s"wf1.calls=${wf1.calls}")
-        simplifyTopLevel(wf1, cState)
+        val wf2 = simplifyTopLevel(wf, cState)
+        wf2
     }
 
     def apply(wdlSourceFile : Path,
