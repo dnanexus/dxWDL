@@ -20,7 +20,7 @@ import wdl4s.AstTools.EnhancedAstNode
 import wdl4s.{Call, Declaration, Scatter, Scope,
     Task, TaskCall, TaskOutput,
     WdlExpression, WdlNamespace, WdlNamespaceWithWorkflow,
-    Workflow, WorkflowCall, WdlSource}
+    Workflow, WorkflowCall, WdlSource, GraphNode}
 import wdl4s.command.{ParameterCommandPart, StringCommandPart}
 import wdl4s.parser.WdlParser.{Ast, AstNode, Terminal}
 import wdl4s.types._
@@ -71,54 +71,64 @@ object CompilerTopologicalSort {
         tsort(toPred, Seq())
     }
 
-    // Generate a list of edges corresponding to dependencies for this call
-    // e.g. suppose call x has dependencies a,b,c.  This procedure will generate:
-    // [(a,x), (b,x), (c,x)]
-    def processCall(call: Call, dummy: Scope, cState: State) : Vector[(Scope, Scope)] = {
-        if (dummy != call) {
-            call.upstream.map { parent =>
-               (parent.asInstanceOf[Scope], call.asInstanceOf[Scope])
-            }.toVector
-        } else {
-            Vector()
-        }
-    }
 
-    def processScatter(scatter: Scatter, dummy: Scope, cState: State) : Vector[(Scope, Scope)] = {
-        if (dummy != scatter) {
-            Vector((dummy, scatter))
-        } else {
-            Vector()
-        }
-    }
-
-    def processDeclaration(decl: Declaration, dummy: Scope, cState: State) : Vector[(Scope, Scope)] = {
-        if (dummy != decl) {
-            Vector((dummy, decl))
-        } else {
-            Vector()
-        }
-    }
-
-    // Generic topological sorting
+    // WDL-specific wrapper for topological sorting
     def sortWorkflow(wf: Workflow, taskLines: Vector[String], cState:State) : Vector[String] = {
         // Create workflow graph sequence of edges for topological sorting
         // Nodes in the graph (Scopes) can be a call, a scatter, or a declaration
-        val edges : Seq[(Scope, Scope)] = wf.children.map {
-            // TODO: handle scatter and declaration
-            case call: Call => processCall(call, wf.children.last, cState)
-            case scatter: Scatter => processScatter(scatter, wf.children.last, cState)
-            case decl : Declaration => processDeclaration(decl, wf.children.last, cState)
-            case x =>
-                throw new Exception(cState.cef.notCurrentlySupported(x.ast,
-                                                                     "workflow element"))
-            // NOTE FOR NOW:
-            // Treat any 'unhandled' node as dependent on the last task
-            // Note this does not mean that they are actually dependent
-            // on the task, but just guarantees that they will be placed
-            // at the end of the sorted list of 'handled' nodes. This comment
-            // should be removed after all nodes are handled properly
-        }.flatten
+
+        // Create a mapping from a child of a scatter node to the root level scatter
+        // node it belongs to. This allows for a root level scatter node to be placed
+        // after its last dependency.
+
+        val scatterRoot : Map[Scope, Scatter] = wf.children.map {
+            case scat: Scatter => scat.descendants.map { d => (d, scat) }
+            case _ => Set[(Scope, Scatter)]()
+        }.flatten.toMap
+
+        // Generate a list of edges corresponding to dependencies for this call
+        // e.g. suppose call x has dependencies a,b,c.  This procedure will generate:
+        // [(a,x), (b,x), (c,x)]
+        val edges : Set[(Scope, Scope)] = wf.children.map { node =>
+            val gnode = node.asInstanceOf[GraphNode]
+
+            val nodeParents : Vector[(Scope, Scope)] = gnode.upstream.map { parent =>
+               val parentActual : Scope =
+                   // If any node's parent is a descendant of a root
+                   // level scatter, use the scatter as the parent
+                   if (scatterRoot.contains(parent)) {
+                       scatterRoot(parent).asInstanceOf[Scope]
+                   }
+                   // Otherwise just use the actual parent
+                   else {
+                       parent.asInstanceOf[Scope]
+                   }
+               (parentActual, gnode.asInstanceOf[Scope])
+            }.toVector
+
+            val descendantParents : Vector[(Scope, Scope)] =
+                // If a scatter's descendants have parents outside the scatter context,
+                // map the scatter itself to them.
+                if (node.isInstanceOf[Scatter]) {
+                    val nodeDescendants = node.descendants.map { d => d.asInstanceOf[GraphNode] }
+                    val upstreamParents = nodeDescendants.map { d => d.upstream }.flatten.toSet
+                    ((upstreamParents -- nodeDescendants) - node.asInstanceOf[GraphNode]).map{ parent =>
+                        // If the parent outside the scatter is also a member of a scatter, use it instead.
+                        if ( scatterRoot.contains(parent) ) {
+                            (scatterRoot(parent), node)
+                        } else {
+                            (parent, node)
+                        }
+                    }.toVector
+                } else {
+                    Vector[(Scope, Scope)]()
+                }
+
+            nodeParents ++ descendantParents
+        }.flatten.toSet
+        edges.foreach {
+            case (v,w) => Utils.trace(true, v.asInstanceOf[GraphNode].fullyQualifiedName + "-->" + w.asInstanceOf[GraphNode].fullyQualifiedName)
+        }
 
         // Topologically sort graph or return error that workflow contains a cycle
         val sortedNodes = tsort(edges)
