@@ -239,9 +239,9 @@ object CompilerPreprocess {
             case x => throw new Exception(s"Unimplemented workflow element ${x.toString}")
         }.toVector
 
-        val smpWf = Workflow(wf.unqualifiedName, wf.workflowOutputWildcards,
-                             wf.wdlSyntaxErrorFormatter, wf.meta, wf.parameterMeta,
-                             wf.ast)
+        val smpWf = new Workflow(wf.unqualifiedName, wf.workflowOutputWildcards,
+                                 wf.wdlSyntaxErrorFormatter, wf.meta, wf.parameterMeta,
+                                 wf.ast)
         smpWf.children = children
         smpWf.namespace = wf.namespace
         smpWf
@@ -262,9 +262,9 @@ object CompilerPreprocess {
         val drs = DeclReorgState(Set.empty[String], Vector.empty[Scope], elems.toVector)
         val reorgElems = collectDeclarations(drs, cState)
 
-        var smpWf = Workflow(wf.unqualifiedName, wf.workflowOutputWildcards,
-                             wf.wdlSyntaxErrorFormatter, wf.meta, wf.parameterMeta,
-                             wf.ast)
+        val smpWf = new Workflow(wf.unqualifiedName, wf.workflowOutputWildcards,
+                                 wf.wdlSyntaxErrorFormatter, wf.meta, wf.parameterMeta,
+                                 wf.ast)
         smpWf.children = reorgElems
         smpWf.namespace = wf.namespace
         smpWf
@@ -272,10 +272,7 @@ object CompilerPreprocess {
 
     def simplifyWorkflow(wf: Workflow, cState:State) : Workflow = {
         val wf1 = simplifyAllScatters(wf, cState)
-
-        val buf = WdlPrettyPrinter.apply(wf1, 0).mkString("\n")
-        System.err.println(s"simplifyAllScatters=${buf}")
-
+        System.err.println(s"wf1.calls=${wf1.calls}")
         simplifyTopLevel(wf1, cState)
     }
 
@@ -308,14 +305,14 @@ object CompilerPreprocess {
         val rewrittenNs = ns match {
             case nswf : WdlNamespaceWithWorkflow =>
                 val wf1 = simplifyWorkflow(nswf.workflow, cState)
-                WdlNamespaceWithWorkflow(ns.importedAs,
-                                         wf1,
-                                         ns.imports,
-                                         ns.namespaces,
-                                         ns.tasks,
-                                         ns.terminalMap,
-                                         nswf.wdlSyntaxErrorFormatter,
-                                         ns.ast)
+                new WdlNamespaceWithWorkflow(ns.importedAs,
+                                             wf1,
+                                             ns.imports,
+                                             ns.namespaces,
+                                             ns.tasks,
+                                             ns.terminalMap,
+                                             nswf.wdlSyntaxErrorFormatter,
+                                             ns.ast)
             case _ => ns
         }
 

@@ -162,7 +162,8 @@ object WdlPrettyPrinter {
     }
 
     def apply(wfo: WorkflowOutput, level: Int) : Vector[String] = {
-        val ln = s"${wfo.wdlType.toWdlString} ${wfo.unqualifiedName} = ${wfo.requiredExpression.toWdlString}"
+//        val ln = s"${wfo.wdlType.toWdlString} ${wfo.unqualifiedName} = ${wfo.requiredExpression.toWdlString}"
+        val ln = s"${wfo.requiredExpression.toWdlString}"
         Vector(indentLine(ln, level))
     }
 
@@ -178,17 +179,20 @@ object WdlPrettyPrinter {
             case decl: Declaration => apply(decl, level + 1)
             case x => throw new Exception(s"Unimplemented workflow element ${x.toString}")
         }.flatten
+
+        // Figure what the problem is withoutputs
         val outputs = wf.outputs.map(x => apply(x, level + 2)).flatten
+        //val outputs = Vector.empty
 
         val lines = children.toVector ++
-            buildBlock("outputs", outputs.toVector, level + 1)
+            buildBlock("output", outputs.toVector, level + 1)
         buildBlock( s"workflow ${wf.fullyQualifiedName}", lines, level)
     }
 
     def apply(ns: WdlNamespace, level: Int) : Vector[String] = {
         // print the imports
         val importLines: Vector[String] = ns.imports.map{
-            imp => s"import ${imp.uri} as ${imp.namespaceName}"
+            imp => s"""import "${imp.uri}" as ${imp.namespaceName}"""
         }.toVector
 
         // tasks
