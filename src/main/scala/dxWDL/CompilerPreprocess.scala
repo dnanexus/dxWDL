@@ -284,8 +284,22 @@ object CompilerPreprocess {
         wf2
     }
 
+
+    // Assuming the source file is xxx.wdl, the new name will
+    // be xxx.simplified.wdl.
+    def writeToFile(wdlSourceFile : Path, lines: String) : Unit = {
+        val trgName: String = addFilenameSuffix(wdlSourceFile, ".simplified")
+        val simpleWdl = Utils.appCompileDirPath.resolve(trgName).toFile
+        val fos = new FileWriter(simpleWdl)
+        val pw = new PrintWriter(fos)
+        pw.println(lines)
+        pw.flush()
+        pw.close()
+        System.err.println(s"Wrote simplified WDL to ${simpleWdl.toString}")
+    }
+
     def apply(wdlSourceFile : Path,
-              verbose: Boolean) : Path = {
+              verbose: Boolean) : WdlNamespace = {
         Utils.trace(verbose, "Preprocessing pass")
 
         // Resolving imports. Look for referenced files in the
@@ -298,15 +312,6 @@ object CompilerPreprocess {
         val tm = ns.terminalMap
         val cef = new CompilerErrorFormatter(tm)
         val cState = State(cef, tm, verbose)
-
-        // Create a new file to hold the result.
-        //
-        // Assuming the source file is xxx.wdl, the new name will
-        // be xxx.simplified.wdl.
-        val trgName: String = addFilenameSuffix(wdlSourceFile, ".simplified")
-        val simpleWdl = Utils.appCompileDirPath.resolve(trgName).toFile
-        val fos = new FileWriter(simpleWdl)
-        val pw = new PrintWriter(fos)
 
         // Process the original WDL file,
         // Do not modify the tasks
@@ -324,13 +329,17 @@ object CompilerPreprocess {
             case _ => ns
         }
 
-        // write the output to xxx.simplified.wdl
-        val lines = WdlPrettyPrinter.apply(rewrittenNs, 0)
-        pw.println(lines.mkString("\n"))
+        // Convert to string representation and apply WDL parser again.
+        // This fixes the ASTs, as well as any other imperfections in our rewriting
+        // technology.
+        //
+        // Note: by keeping the namespace in memory, instead of writing to
+        // a temporary file on disk, we can keep resolver.
+        val lines: String = WdlPrettyPrinter.apply(rewrittenNs, 0).mkString("\n")
+        val cleanNs = WdlNamespace.loadUsingSource(lines, None, Some(List(resolver))).get
 
-        pw.flush()
-        pw.close()
-        Utils.trace(verbose, s"Wrote simplified WDL to ${simpleWdl.toString}")
-        simpleWdl.toPath
+        if (verbose)
+            writeToFile(wdlSourceFile, lines)
+        cleanNs
     }
 }

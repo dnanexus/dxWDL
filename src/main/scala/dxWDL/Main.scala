@@ -180,14 +180,7 @@ object Main extends App {
         val instanceTypeDB = InstanceTypeDB.queryWithBackup(dxProject)
 
         // Simplify the source file
-        // Create a new file to hold the result.
-        //
-        // Assuming the source file is xxx.wdl, the new name will
-        // be xxx.simplified.wdl.
-        val simplWdlPath = CompilerPreprocess.apply(wdlSourceFile, verbose)
-
-        // extract the workflow
-        val ns = WdlNamespace.loadUsingPath(simplWdlPath, None, None).get
+        val ns:WdlNamespace = CompilerPreprocess.apply(wdlSourceFile, verbose)
 
         // Backbone of compilation process.
         // 1) Compile the WDL workflow into an Intermediate Representation (IR)
