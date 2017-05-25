@@ -334,7 +334,7 @@ object CompilerPreprocess {
         // technology.
         //
         // Note: by keeping the namespace in memory, instead of writing to
-        // a temporary file on disk, we can keep resolver.
+        // a temporary file on disk, we keep the resolver valid.
         val lines: String = WdlPrettyPrinter.apply(rewrittenNs, 0).mkString("\n")
         val cleanNs = WdlNamespace.loadUsingSource(lines, None, Some(List(resolver))).get
 

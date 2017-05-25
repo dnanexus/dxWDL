@@ -1,3 +1,0 @@
-{
-  "optionals.species" : "Arctic Fox"
-}

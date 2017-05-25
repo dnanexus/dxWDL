@@ -571,7 +571,10 @@ workflow w {
                     cState: State) : IR.Stage = {
         // Find the right applet
         val task = taskOfCall(call, cState)
-        val (callee, outputs) = taskApplets(task.name)
+        val (callee, outputs) = taskApplets.get(task.name) match {
+            case Some(x) => x
+            case None => throw new Exception(s"Undefined task ${task.name}")
+        }
 
         // Extract the input values/links from the environment
         val inputs: Vector[IR.SArg] = callee.inputs.map{ cVar =>
@@ -883,6 +886,19 @@ workflow w {
         IR.Workflow(wf.unqualifiedName, stages, tApplets ++ auxApplets.flatten.toVector)
     }
 
+    // Load imported tasks
+    def loadImportedTasks(ns: WdlNamespace, cState: State) : Set[Task] = {
+        // Make a pass, and figure out what we access
+        //
+        ns.taskCalls.map{ call:TaskCall =>
+            val taskFqn = call.task.fullyQualifiedName
+            ns.resolve(taskFqn) match {
+                case Some(task:Task) => task
+                case x => throw new Exception(s"Resolved call to ${taskFqn} and got (${x})")
+            }
+        }.toSet
+    }
+
     // compile the WDL source code into intermediate representation
     def apply(ns : WdlNamespace,
               instanceTypeDB: InstanceTypeDB,
@@ -892,12 +908,24 @@ workflow w {
         val cState = new State(destination, instanceTypeDB, cef, verbose)
         Utils.trace(cState.verbose, "FrontEnd pass")
 
+        // Load all accessed applets, local or imported
+        val accessedTasks: Set[Task] = loadImportedTasks(ns, cState)
+        val accessedTaskNames = accessedTasks.map(task => task.name)
+        Utils.trace(cState.verbose, s"Accessed tasks = ${accessedTaskNames}")
+
+        // Make sure all local tasks are included; we want to compile
+        // them even if they are not accessed.
+        val allTasks:Set[Task] = accessedTasks ++ ns.tasks.toSet
+
         // compile all the tasks into applets
-        Utils.trace(cState.verbose, "FrontEnd: compiling applets")
-        val taskApplets: Map[String, (IR.Applet, Vector[IR.CVar])] = ns.tasks.map{ task =>
+        Utils.trace(cState.verbose, "FrontEnd: compiling tasks into dx:applets")
+
+        val taskApplets: Map[String, (IR.Applet, Vector[IR.CVar])] = allTasks.map{ task =>
             val (applet, outputs) = compileTask(task, cState)
             task.name -> (applet, outputs)
         }.toMap
+
+
         val irApplets: Vector[IR.Applet] = taskApplets.map{
             case (key, (irApplet,_)) => irApplet
         }.toVector

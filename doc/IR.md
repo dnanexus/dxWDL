@@ -32,6 +32,7 @@ workflow math {
     output {
         Add2.result
     }
+}
 ```
 
 ## Preprocessor
@@ -62,6 +63,7 @@ workflow math {
     output {
         Add2.result
     }
+}
 ```
 
 In this case, the top four declarations will be calculated with one
@@ -81,18 +83,21 @@ For the `math` workflow, we get the following abbreviated intermediate code:
 name: math
 stages:
 - name: Common
-  applet:
-  inputs:
+  applet: math_common
+  inputs: i, k
+  outputs: Int i, Int k, Int xtmp1, Int xtmp2, Int xtmp3
 - name: Add
   applet: Add
   inputs: Common:i, Common:k
   outputs: Int result
 - name: Eval1
   applet: Eval1
-  inputs:
+  inputs: Add:result
+  outputs: Int xtmp4
 - name: Add2
   applet: Add
-  inputs:
+  inputs: Eval1:xtmp4, Common:xtmp3
+  outputs: Int result
 
 applets:
 - name: Add

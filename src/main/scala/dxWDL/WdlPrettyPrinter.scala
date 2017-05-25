@@ -158,7 +158,7 @@ object WdlPrettyPrinter {
             buildBlock("runtime", runtime, level + 1) ++
             buildBlock("output", outputs, level + 1)
 
-        buildBlock(s"task ${task.fullyQualifiedName}", body, level)
+        buildBlock(s"task ${task.unqualifiedName}", body, level)
     }
 
     def apply(wfo: WorkflowOutput, level: Int) : Vector[String] = {
