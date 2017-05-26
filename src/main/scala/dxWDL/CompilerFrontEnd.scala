@@ -9,9 +9,9 @@ import java.nio.file.{Files, Paths, Path}
 import net.jcazevedo.moultingyaml._
 import net.jcazevedo.moultingyaml.DefaultYamlProtocol._
 import scala.util.{Failure, Success, Try}
+import wdl4s._
 import wdl4s.AstTools
 import wdl4s.AstTools.EnhancedAstNode
-import wdl4s._
 import wdl4s.expression._
 import wdl4s.parser.WdlParser.{Ast, AstNode, Terminal}
 import wdl4s.types._
@@ -66,20 +66,6 @@ object CompilerFrontEnd {
                 val t: Terminal = AstTools.findTerminals(expr.ast).head
                 throw new Exception(cState.cef.missingVarRefException(t))
         }
-    }
-
-    // Create a declaration.
-    //
-    // The difficulty here is in generating an AST.
-    def declarationGen(wdlType: WdlType,
-                       name: String,
-                       expr: Option[WdlExpression]) : Declaration = {
-        val textualRepr = expr match {
-            case None => s"${wdlType.toWdlString} ${name}"
-            case Some(e) => s"${wdlType.toWdlString} ${name} = ${e.toWdlString}"
-        }
-        val ast: Ast = AstTools.getAst(textualRepr, "")
-        Declaration(wdlType, name, expr, None, ast)
     }
 
     def genDefaultValueOfType(wdlType: WdlType) : WdlValue = {
@@ -486,7 +472,7 @@ workflow w {
         }.toMap
         val inputVars: Vector[IR.CVar] = closure.map{ case (_, lVar) => lVar.cVar }.toVector
         val inputDecls: Vector[Declaration] = closure.map{ case(_, lVar) =>
-            declarationGen(lVar.cVar.wdlType, lVar.cVar.dxVarName, None)
+            WdlRewrite.newDeclaration(lVar.cVar.wdlType, lVar.cVar.dxVarName, None)
         }.toVector
 
         // figure out the outputs
@@ -496,7 +482,7 @@ workflow w {
         val outputDeclarations = declarations.map{ decl =>
             decl.expression match {
                 case Some(expr) =>
-                    declarationGen(decl.wdlType, decl.unqualifiedName,
+                    WdlRewrite.newDeclaration(decl.wdlType, decl.unqualifiedName,
                                    Some(exprRenameVars(expr, inputVars)))
                 case None => decl
             }
@@ -621,18 +607,44 @@ workflow w {
         IR.Stage(stageName, task.name, inputs, callee.outputs)
     }
 
+    // Modify all the expressions used inside a scatter
+    def scTransform(ssc: Scatter,
+                    inputVars: Vector[IR.CVar],
+                    cState: State) = {
+        // Rename the variables we got from the input.
+        def transform(expr: WdlExpression) : WdlExpression = {
+            exprRenameVars(expr, inputVars)
+        }
+
+        // transform the expressions in a scatter
+        def transformChild(scope: Scope): Scope = {
+            scope match {
+                case tc:TaskCall =>
+                    val inputs = tc.inputMappings.map{ case (k,expr) => (k, transform(expr)) }.toMap
+                    WdlRewrite.taskCall(tc, inputs)
+                case d:Declaration =>
+                    new Declaration(d.wdlType, d.unqualifiedName,
+                                    d.expression.map(transform), d.parent, d.ast)
+                case _ => throw new Exception("Unimplemented scatter element")
+            }
+        }
+        val trSsc = new Scatter(ssc.index, ssc.item, ssc.collection, ssc.ast)
+        trSsc.children = ssc.children.map(x => transformChild(x))
+        trSsc
+    }
+
     // Create a valid WDL workflow that runs a scatter. The main modification
     // required here is renaming variables of the form A.x to A_x.
-    def scGenWorklow(scatter: Scatter,
+    def scGenWorklow(ssc: Scatter,
                      taskApplets: Map[String, (IR.Applet, Vector[IR.CVar])],
                      inputVars: Vector[IR.CVar],
                      outputVars: Vector[IR.CVar],
                      cState: State) : String = {
         // A workflow must have definitions for all the tasks it
-        // calls. However, a scatter calls tasks, which missing from
+        // calls. However, a scatter calls tasks, that are missing from
         // the WDL file we generate. To ameliorate this, we add stubs
         // for called tasks.
-        val calls: Vector[Call] = scatter.calls.toVector
+        val calls: Vector[Call] = ssc.calls.toVector
         val taskStubs: Map[String, String] =
             calls.foldLeft(Map.empty[String,String]) { case (accu, call) =>
                 val name = call match {
@@ -653,19 +665,15 @@ workflow w {
                     accu + (name -> WdlPrettyPrinter.apply(task, 0).mkString("\n"))
                 }
             }
+        val trScatter = scTransform(ssc, inputVars, cState)
 
         val decls: Vector[String]  = inputVars.map{ cVar =>
-            val d = declarationGen(cVar.wdlType, cVar.dxVarName, None)
+            val d = WdlRewrite.newDeclaration(cVar.wdlType, cVar.dxVarName, None)
             WdlPrettyPrinter.apply(d, 1)
         }.flatten
 
-        // Rename the variables we got from the input.
-        def exprTransform(expr: WdlExpression) : WdlExpression = {
-            exprRenameVars(expr, inputVars)
-        }
-
-        val lines: Vector[String] = decls ++
-            WdlPrettyPrinter.scatterRewrite(scatter, 1, exprTransform)
+        // Create new workflow that includes only this scatter
+        val lines: Vector[String] = decls ++  WdlPrettyPrinter.apply(trScatter, 1)
         val wfCode = WdlPrettyPrinter.buildBlock("workflow w", lines, 0).mkString("\n")
         val stubs = taskStubs.map{ case (_,x) => x}.toVector
         val wdlCode = stubs.mkString("\n") ++ "\n" ++ wfCode

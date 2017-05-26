@@ -96,15 +96,7 @@ object CompilerPreprocess {
         }
 
         val callModifiedInputs = call match {
-            case tc: TaskCall =>
-                val tc1 = TaskCall(tc.alias, tc.task, inputs, tc.ast)
-                tc1.namespace = tc.namespace
-                tc1.children = tc.children
-                tc.parent match {
-                    case Some(x) => tc1.parent = x
-                    case None => ()
-                }
-                tc1
+            case tc: TaskCall => WdlRewrite.taskCall(tc, inputs)
             case wfc: WorkflowCall => throw new Exception(s"Unimplemented WorkflowCall")
         }
         tmpDecls += callModifiedInputs
@@ -211,6 +203,9 @@ object CompilerPreprocess {
     def simplifyScatter(ssc: Scatter, definedVars: Set[String], cState: State) : Scatter = {
         // extract expressions from calls
         val children : Vector[Scope] = ssc.children.map {
+            // This works
+            //case call: Call => Vector(call)
+            // The problem is here
             case call: Call => simplifyCall(call, cState)
             case x => Vector(x)
         }.flatten.toVector
@@ -222,9 +217,10 @@ object CompilerPreprocess {
 
         // Build a new scatter structure. We are cheating on the AST; since we
         // don't know how to create a new one, we just keep the old AST.
-        val scatter = Scatter(ssc.index, ssc.item, ssc.collection, ssc.ast)
-        scatter.children = reorgChildren
-        scatter
+        WdlRewrite.scatter(ssc, reorgChildren)
+
+        // This works
+        //WdlRewrite.scatter(ssc, ssc.children)
     }
 
     // Simplify scatter blocks inside the workflow. Return a valid new
@@ -246,13 +242,7 @@ object CompilerPreprocess {
                 decl
             case x => throw new Exception(s"Unimplemented workflow element ${x.toString}")
         }.toVector
-
-        val smpWf = new Workflow(wf.unqualifiedName, wf.workflowOutputWildcards,
-                                 wf.wdlSyntaxErrorFormatter, wf.meta, wf.parameterMeta,
-                                 wf.ast)
-        smpWf.children = children
-        smpWf.namespace = wf.namespace
-        smpWf
+        WdlRewrite.workflow(wf, children)
     }
 
     // Simplify the declarations at the top level of the workflow
@@ -269,18 +259,22 @@ object CompilerPreprocess {
         // required for calculations.
         val drs = DeclReorgState(Set.empty[String], Vector.empty[Scope], elems.toVector)
         val reorgElems = collectDeclarations(drs, cState)
+        WdlRewrite.workflow(wf, reorgElems)
+    }
 
-        val smpWf = new Workflow(wf.unqualifiedName, wf.workflowOutputWildcards,
-                                 wf.wdlSyntaxErrorFormatter, wf.meta, wf.parameterMeta,
-                                 wf.ast)
-        smpWf.children = reorgElems
-        smpWf.namespace = wf.namespace
-        smpWf
+    def dbgWorkflow(wf: Workflow, msg: String) = {
+        System.err.println(s"--- ${msg} ----------------------")
+        val lines = WdlPrettyPrinter.apply(wf, 0).mkString("\n")
+        System.err.println(lines)
+        System.err.println("")
     }
 
     def simplifyWorkflow(wf: Workflow, cState:State) : Workflow = {
+        dbgWorkflow(wf, "ORG")
         val wf1 = simplifyAllScatters(wf, cState)
+        dbgWorkflow(wf1, "WF1")
         val wf2 = simplifyTopLevel(wf, cState)
+        dbgWorkflow(wf2, "WF2")
         wf2
     }
 
@@ -318,14 +312,21 @@ object CompilerPreprocess {
         val rewrittenNs = ns match {
             case nswf : WdlNamespaceWithWorkflow =>
                 val wf1 = simplifyWorkflow(nswf.workflow, cState)
-                new WdlNamespaceWithWorkflow(ns.importedAs,
-                                             wf1,
-                                             ns.imports,
-                                             ns.namespaces,
-                                             ns.tasks,
-                                             ns.terminalMap,
-                                             nswf.wdlSyntaxErrorFormatter,
-                                             ns.ast)
+                val nswf1 = new WdlNamespaceWithWorkflow(ns.importedAs,
+                                                         wf1,
+                                                         ns.imports,
+                                                         ns.namespaces,
+                                                         ns.tasks,
+                                                         ns.terminalMap,
+                                                         nswf.wdlSyntaxErrorFormatter,
+                                                         ns.ast)
+                nswf1.children = wf1.children
+                nswf1.namespace = nswf.namespace
+                nswf.parent match {
+                    case Some(x) => nswf1.parent = x
+                    case None => ()
+                }
+                nswf1
             case _ => ns
         }
 

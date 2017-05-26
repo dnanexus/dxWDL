@@ -110,33 +110,6 @@ object WdlPrettyPrinter {
         buildBlock(top, children.toVector, level)
     }
 
-    // transform the expressions in a scatter, and then pretty print
-    def scatterRewrite(ssc: Scatter,
-                       level: Int,
-                       transform: WdlExpression => WdlExpression) : Vector[String] = {
-        def transformChild(scope: Scope): Scope = {
-            scope match {
-                case x:TaskCall =>
-                    val inputs = x.inputMappings.map{ case (k,expr) => (k, transform(expr)) }.toMap
-                    TaskCall(x.alias, x.task, inputs, x.ast)
-                case x:Declaration =>
-                    Declaration(x.wdlType, x.unqualifiedName,
-                                x.expression.map(transform), x.parent, x.ast)
-                case _ => throw new Exception("Unimplemented scatter element")
-            }
-        }
-        val tChildren = ssc.children.map(x => transformChild(x))
-
-        val top: String = s"scatter (${ssc.item} in ${transform(ssc.collection).toWdlString})"
-        val children = tChildren.map{
-            case x:TaskCall => apply(x, level + 1)
-            case x:Declaration => apply(x, level + 1)
-            case x:Scatter => apply(x, level + 1)
-            case _ => throw new Exception("Unimplemented scatter element")
-        }.flatten.toVector
-        buildBlock(top, children.toVector, level)
-    }
-
     def apply(tso: TaskOutput, level: Int): Vector[String] = {
         val ln = s"${tso.wdlType.toWdlString} ${tso.unqualifiedName} = ${tso.requiredExpression.toWdlString}"
         Vector(indentLine(ln, level))
