@@ -1,4 +1,4 @@
-import "math_lib.wdl" as lib
+import "library_math.wdl" as lib
 
 task EmptyArray {
      Array[Int] fooAr

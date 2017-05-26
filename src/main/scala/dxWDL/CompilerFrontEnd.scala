@@ -70,18 +70,6 @@ object CompilerFrontEnd {
         }
     }
 
-    def genDefaultValueOfType(wdlType: WdlType) : WdlValue = {
-        wdlType match {
-            case WdlArrayType(x) => WdlArray(WdlArrayType(x), List())  // an empty array
-            case WdlBooleanType => WdlBoolean(true)
-            case WdlIntegerType => WdlInteger(0)
-            case WdlFloatType => WdlFloat(0.0)
-            case WdlStringType => WdlString("")
-            case WdlFileType => WdlFile("/tmp/X.txt")
-            case _ => throw new Exception(s"Unhandled type ${wdlType.toWdlString}")
-        }
-    }
-
     /** Create a stub for an applet. This is an empty task
       that includes the input and output definitions. It is used
       to allow linking to externally defined tasks and applets.
@@ -106,28 +94,16 @@ task Add {
         Int result
     }
 */
-    def genAppletStub(applet: IR.Applet) : Task = {
-        // write a Task as human readable text
-        val inputs = applet.inputs.map(cVar => s"${cVar.wdlType.toWdlString} ${cVar.name}")
+    def genAppletStub(applet: IR.Applet, scope: Scope) : Task = {
+        val task = WdlRewrite.taskGenEmpty(applet.name, scope)
+        val inputs = applet.inputs.map{ cVar =>
+            WdlRewrite.newDeclaration(cVar.wdlType, cVar.name, None)
+        }.toVector
         val outputs = applet.outputs.map{ cVar =>
-            val defaultVal: WdlValue = genDefaultValueOfType(cVar.wdlType)
-            s"${cVar.wdlType.toWdlString} ${cVar.name} = ${defaultVal.toWdlString}"
-        }
-
-        val body = inputs.map(line => wdlPP.indentLine(line, 1)) ++
-            wdlPP.buildBlock("command", Vector(""), 1) ++
-            wdlPP.buildBlock("output", outputs, 1)
-        val wdlCode = wdlPP.buildBlock(s"task ${applet.name}", body, 0).mkString("\n")
-
-        // Convert to a Task structure
-        val ns = WdlNamespace.loadUsingSource(wdlCode, None, None) match {
-            case Success(x) => x
-            case Failure(f) =>
-                System.err.println(s"Did not generate legal WDL code for applet ${applet.name}")
-                System.err.println(wdlCode)
-                throw f
-        }
-        ns.tasks.head
+            WdlRewrite.taskOutput(cVar.name, cVar.wdlType, task)
+        }.toVector
+        task.children = inputs ++ outputs
+        task
     }
 
     // Rename member accesses inside an expression, from
@@ -663,7 +639,7 @@ workflow w {
                     accu
                 } else {
                     // no existing stub, create it
-                    val task = genAppletStub(irApplet)
+                    val task = genAppletStub(irApplet, ssc)
                     accu + (name -> wdlPP.apply(task, 0).mkString("\n"))
                 }
             }

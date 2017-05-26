@@ -1,4 +1,4 @@
-import "sys_call_lib.wdl" as lib
+import "library_sys_call.wdl" as lib
 
 workflow system_calls {
     File data

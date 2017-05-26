@@ -1,6 +1,6 @@
 # A simple workflow with two stages wired together.
 # It calculates simple math operations.
-import "math_lib.wdl" as lib
+import "library_math.wdl" as lib
 
 workflow math {
     Int ai

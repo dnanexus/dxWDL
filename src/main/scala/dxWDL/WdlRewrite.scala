@@ -47,21 +47,41 @@ object WdlRewrite {
         tc1
     }
 
-    // create a stub, similar to a header in C/C++, for a task.
-    // This is a minimal task that has the correct name, inputs,
-    // and outputs, but does nothing.
-    def taskGenStub [Child <: Scope]  (name: String,
-                                       scope: Scope,
-                                       children: Seq[Child]) : Task = {
+    // Create an empty task.
+    def taskGenEmpty(name: String, scope: Scope) : Task = {
         val task = new Task(name,
                             Vector.empty,  // command Template
                             new RuntimeAttributes(Map.empty[String,WdlExpression]),
                             Map.empty[String, String], // meta
                             Map.empty[String, String], // parameter meta
                             scope.ast)
-        task.children = children
         updateScope(scope, task)
         task
+    }
+
+
+    private def genDefaultValueOfType(wdlType: WdlType) : WdlValue = {
+        wdlType match {
+            case WdlArrayType(x) => WdlArray(WdlArrayType(x), List())  // an empty array
+            case WdlBooleanType => WdlBoolean(true)
+            case WdlIntegerType => WdlInteger(0)
+            case WdlFloatType => WdlFloat(0.0)
+            case WdlStringType => WdlString("")
+            case WdlFileType => WdlFile("/tmp/X.txt")
+            case _ => throw new Exception(s"Unhandled type ${wdlType.toWdlString}")
+        }
+    }
+
+
+    def taskOutput(name: String, wdlType: WdlType, scope: Scope) = {
+        val invalidAst = AstTools.getAst("", "")
+
+        // We need to provide a default value, in the form of a Wdl
+        // expression
+        val defaultVal:WdlValue = genDefaultValueOfType(wdlType)
+        val defaultExpr:WdlExpression = WdlExpression.fromString(defaultVal.toWdlString)
+
+        new TaskOutput(name, wdlType, defaultExpr, invalidAst, Some(scope))
     }
 
     // modify the children in a workflow

@@ -1,25 +1,4 @@
-task ppp_mul2 {
-    Int i
-
-    command {
-        python -c "print(${i} + ${i})"
-    }
-    output {
-        Int result = read_int(stdout())
-    }
-}
-
-task ppp_add {
-     Int a
-     Int b
-
-    command {
-        python -c "print(${a} + ${b})"
-    }
-    output {
-        Int result = read_int(stdout())
-    }
-}
+import "library_math.wdl" as lib
 
 task ppp_set_def {
     Int? i
@@ -51,10 +30,10 @@ workflow optionals {
     Array[Int] integers = [1,2]
 
     # A call missing a compulsory argument
-    call ppp_mul2 as mul2
-    call ppp_mul2 as mul2b { input: i=arg1 }
+    call lib.Twice as mul2
+    call lib.Twice as mul2b { input: i=arg1 }
     call ppp_set_def as set_def
-    call ppp_add as add
+    call lib.Add as add
     call ppp_unused_args as unused_args { input: a=1}
     call ppp_unused_args as unused_args_a { input: a=1, ignore="null"}
 
@@ -64,10 +43,10 @@ workflow optionals {
 
         # verify that unbound compulsory arguments are provided as scatter
         # inputs
-        call ppp_add as add2 { input: a=x }
+        call lib.Add as add2 { input: a=x }
 
         # we need to pass {a, b}
-        call ppp_add as add3
+        call lib.Add as add3
     }
     output {
         mul2.result
