@@ -1,5 +1,11 @@
 # Release Notes
 
+## 0.27
+- Support the import directive. This allows spreading definitions
+  across multiple files.
+- Using native wdl4s data structures, instead of pretty printing, for
+  internal representation.
+
 ## 0.26
 - Support passing unbound variables to calls inside scatters
 - Implemented glob and size function for files

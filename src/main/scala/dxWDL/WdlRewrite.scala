@@ -47,23 +47,6 @@ object WdlRewrite {
         tc1
     }
 
-    // Modify a task call to the callee namespace. This is used
-    // when generating scatter code, because we virtually move
-    // the callees into the local namespace
-    //
-    // For example:
-    //    call lib.Inc as inc {input: i=i}
-    // =>
-    //    call Inc as inc {input: i=i}
-/*    def taskCallStripImports(tc: TaskCall,
-                             inputMappings: Map[String, WdlExpression]) : TaskCall = {
-        val localTask = taskGenStub(tc.task.name, tc, tc.task.children)
-        val tc1 = TaskCall(tc.alias, localTask, inputMappings, tc.ast)
-        tc1.children = tc.children
-        updateScope(tc, tc1)
-        tc1
-    }*/
-
     // create a stub, similar to a header in C/C++, for a task.
     // This is a minimal task that has the correct name, inputs,
     // and outputs, but does nothing.

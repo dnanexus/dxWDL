@@ -132,11 +132,15 @@ case class WdlPrettyPrinter(fqnFlag: Boolean) {
             indentLine(s"${key}: ${expr.toWdlString}", level + 2)
         }.toVector
         val outputs = task.outputs.map(x => apply(x, level + 2)).flatten.toVector
+        val paramMeta = task.parameterMeta.map{ case (x,y) =>  s"${x}: ${y}" }.toVector
+        val meta = task.meta.map{ case (x,y) =>  s"${x}: ${y}" }.toVector
 
         val body = decls ++
             buildCommandBlock(task.commandTemplate, level + 1) ++
             buildBlock("runtime", runtime, level + 1) ++
-            buildBlock("output", outputs, level + 1)
+            buildBlock("output", outputs, level + 1) ++
+            buildBlock("parameter_meta", paramMeta, level + 1) ++
+            buildBlock("meta", meta, level + 1)
 
         buildBlock(s"task ${task.unqualifiedName}", body, level)
     }
@@ -146,21 +150,21 @@ case class WdlPrettyPrinter(fqnFlag: Boolean) {
         Vector(indentLine(ln, level))
     }
 
-    // TODO
-    // Handle:
-    //   meta: Map[String, String]
-    //   parameterMeta: Map[String, String]
-    //
     def apply(wf: Workflow, level: Int) : Vector[String] = {
         val children = wf.children.map {
             case call: TaskCall => apply(call, level + 1)
             case sc: Scatter => apply(sc, level + 1)
             case decl: Declaration => apply(decl, level + 1)
             case x => throw new Exception(s"Unimplemented workflow element ${x.toString}")
-        }.flatten
-        val outputs = wf.outputs.map(x => apply(x, level + 2)).flatten
-        val lines = children.toVector ++
-            buildBlock("output", outputs.toVector, level + 1)
+        }.flatten.toVector
+        val outputs = wf.outputs.map(x => apply(x, level + 2)).flatten.toVector
+        val paramMeta = wf.parameterMeta.map{ case (x,y) =>  s"${x}: ${y}" }.toVector
+        val meta = wf.meta.map{ case (x,y) =>  s"${x}: ${y}" }.toVector
+
+        val lines = children ++
+            buildBlock("output", outputs, level + 1) ++
+            buildBlock("parameter_meta", paramMeta, level + 1) ++
+            buildBlock("meta", meta, level + 1)
         val wfName =
             if (fqnFlag) wf.fullyQualifiedName
             else wf.unqualifiedName
