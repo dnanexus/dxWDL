@@ -182,7 +182,6 @@ object Main extends App {
         // Assuming the source file is xxx.wdl, the new name will
         // be xxx.sorted.wdl.
         val sortedWdlPath = CompilerTopologicalSort.apply(wdlSourceFile, verbose)
-        System.exit(0)
 
         // Simplify the source file
         // Create a new file to hold the result.
