@@ -1,3 +1,5 @@
+import "library_math.wdl" as lib
+
 task eee_ident {
     String s1
     Int i1
@@ -22,17 +24,6 @@ task eee_string_ops {
     }
 }
 
-task eee_int_ops {
-    Int ai
-    Int bi
-
-    command {
-    }
-    output {
-        Int result = ai * bi + 1
-    }
-}
-
 workflow call_expressions2 {
     String s
     Int i
@@ -43,11 +34,11 @@ workflow call_expressions2 {
             p2 = s + ".duplicate_metrics",
             p3 = sub(s, "frogs", "xRIPx")
     }
-    call eee_int_ops as int_ops {
-        input: ai = (i * 2), bi = (i+3)
+    call lib.IntOps as int_ops {
+        input: a = (i * 2), b = (i+3)
     }
-    call eee_int_ops as int_ops2 {
-        input: ai = (int_ops.result * 5), bi = (int_ops.result + 1)
+    call lib.IntOps as int_ops2 {
+        input: a = (int_ops.result * 5), b = (int_ops.result + 1)
     }
 
     output {

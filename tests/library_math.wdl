@@ -68,3 +68,20 @@ task Mod7 {
         Int result = read_int(stdout())
     }
 }
+
+task IntOps {
+    Int a
+    Int b
+
+    command {
+    }
+    output {
+        Int mul = a * b
+        Int sum = a + b
+        Int sub = a - b
+        Int div = a / b
+        Int ai = a
+        Int bi = b
+        Int result = a * b + 1
+    }
+}

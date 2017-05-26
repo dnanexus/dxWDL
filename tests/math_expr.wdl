@@ -1,30 +1,16 @@
-task fff_int_ops {
-    Int a
-    Int b
-
-    command {
-    }
-    output {
-        Int mul = a * b
-        Int sum = a + b
-        Int sub = a - b
-        Int div = a / b
-        Int ai = a
-        Int bi = b
-    }
-}
+import "library_math.wdl" as lib
 
 workflow math_expr {
     Int ai
     Int bi
 
-    call fff_int_ops as int_ops1 {
+    call lib.IntOps as int_ops1 {
         input: a=ai, b=bi
     }
-    call fff_int_ops as int_ops2 {
+    call lib.IntOps as int_ops2 {
         input: a = (3 * 2), b = (5 + 1)
     }
-    call fff_int_ops as int_ops3 {
+    call lib.IntOps as int_ops3 {
         input: a = (3 + 2 - 1), b = 5 * 2
     }
 
