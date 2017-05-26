@@ -325,12 +325,8 @@ object RunnerScatter {
         val outScopeEnv : ScatterEnv = WdlVarLinks.loadJobInputsAsLinks(inputLines, closureTypes)
         val scatter : Scatter = findScatter(wf)
 
-        // We need only the array we are looping on. Note that
-        // we *do not* want to download the files, if we are looping on
-        // a file array.
-        //
-        // In the future, we will also need to calculate the expressions
-        // at the top of the block.
+        // Lookup the array we are looping on.
+        // Note: it could be an expression, which requires calculation
         val collElements = outScopeEnv.get(scatter.collection.toWdlString) match {
             case None => throw new AppInternalException(
                 s"Could not find the collection array ${scatter.collection.toWdlString} in the job inputs")

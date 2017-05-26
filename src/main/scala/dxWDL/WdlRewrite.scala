@@ -17,6 +17,15 @@ import wdl4s.values._
 
 object WdlRewrite {
 
+    // copy references from old scope to newly minted scope.
+    private def updateScope(old: Scope, fresh: Scope) : Unit = {
+        fresh.namespace = old.namespace
+        old.parent match {
+            case Some(x) => fresh.parent = x
+            case None => ()
+        }
+    }
+
     // Create a declaration.
     def newDeclaration(wdlType: WdlType,
                        name: String,
@@ -33,12 +42,8 @@ object WdlRewrite {
     def taskCall(tc: TaskCall,
                  inputMappings: Map[String, WdlExpression]) : TaskCall = {
         val tc1 = TaskCall(tc.alias, tc.task, inputMappings, tc.ast)
-        tc1.namespace = tc.namespace
         tc1.children = tc.children
-        tc.parent match {
-            case Some(x) => tc1.parent = x
-            case None => ()
-        }
+        updateScope(tc, tc1)
         tc1
     }
 
@@ -49,11 +54,7 @@ object WdlRewrite {
                                wf.wdlSyntaxErrorFormatter, wf.meta, wf.parameterMeta,
                                wf.ast)
         wf1.children = children
-        wf1.namespace = wf.namespace
-        wf.parent match {
-            case Some(x) => wf1.parent = x
-            case None => ()
-        }
+        updateScope(wf, wf1)
         wf1
     }
 
@@ -62,12 +63,12 @@ object WdlRewrite {
                                   children: Seq[Child]): Scatter = {
         val ssc1 = Scatter(ssc.index, ssc.item, ssc.collection, ssc.ast)
         ssc1.children = children
-        ssc1.namespace = ssc.namespace
-        ssc.parent match {
-            case Some(x) => ssc1.parent = x
-            case None => ()
-        }
+        updateScope(ssc, ssc1)
         ssc1
     }
 
+/*    def scatter [Child <: Scope] (ssc: Scatter,
+                                  collection: WdlExpression,
+                                  children: Seq[Child]): Scatter = {
+    }*/
 }

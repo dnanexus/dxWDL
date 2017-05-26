@@ -628,7 +628,7 @@ workflow w {
                 case _ => throw new Exception("Unimplemented scatter element")
             }
         }
-        val trSsc = new Scatter(ssc.index, ssc.item, ssc.collection, ssc.ast)
+        val trSsc = new Scatter(ssc.index, ssc.item, transform(ssc.collection), ssc.ast)
         trSsc.children = ssc.children.map(x => transformChild(x))
         trSsc
     }

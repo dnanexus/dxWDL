@@ -221,21 +221,8 @@ object Utils {
             if (varName contains s)
                 throw new Exception(s"Variable ${varName} includes the reserved substring ${s}")
         }
-        //varName.replaceAll("\\.", "___")
         if (varName contains ".")
             throw new Exception(s"Variable ${varName} includes the illegal symbol \\.")
-        varName
-    }
-
-    // Dots are illegal in applet variable names, so they
-    // are encoded as three underscores "___". Decode
-    // these occurrences back into dots.
-    def decodeAppletVarName(varName : String) : String = {
-        if (varName contains "\\.")
-            throw new Exception(s"Variable ${varName} includes the illegal symbol \\.")
-        //varName.replaceAll("___", "\\.")
-        if (varName contains "___")
-            throw new Exception(s"Variable ${varName} includes the illegal symbol ___")
         varName
     }
 
