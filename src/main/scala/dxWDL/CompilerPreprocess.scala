@@ -203,9 +203,6 @@ object CompilerPreprocess {
     def simplifyScatter(ssc: Scatter, definedVars: Set[String], cState: State) : Scatter = {
         // extract expressions from calls
         val children : Vector[Scope] = ssc.children.map {
-            // This works
-            //case call: Call => Vector(call)
-            // The problem is here
             case call: Call => simplifyCall(call, cState)
             case x => Vector(x)
         }.flatten.toVector
@@ -218,9 +215,6 @@ object CompilerPreprocess {
         // Build a new scatter structure. We are cheating on the AST; since we
         // don't know how to create a new one, we just keep the old AST.
         WdlRewrite.scatter(ssc, reorgChildren)
-
-        // This works
-        //WdlRewrite.scatter(ssc, ssc.children)
     }
 
     // Simplify scatter blocks inside the workflow. Return a valid new
@@ -264,17 +258,22 @@ object CompilerPreprocess {
 
     def dbgWorkflow(wf: Workflow, msg: String) = {
         System.err.println(s"--- ${msg} ----------------------")
+        System.err.println(s"${wf.unqualifiedName} ${wf.calls} ${wf.children}")
+        //val x = wf.namespace.resolveCallOrOutputOrDeclaration(outputFqn)
+        //System.err.println(s"${x}")
+
+        System.err.println(s"${wf.expandedWildcardOutputs}")
         val lines = WdlPrettyPrinter.apply(wf, 0).mkString("\n")
         System.err.println(lines)
         System.err.println("")
     }
 
     def simplifyWorkflow(wf: Workflow, cState:State) : Workflow = {
-        dbgWorkflow(wf, "ORG")
+        //dbgWorkflow(wf, "ORG")
         val wf1 = simplifyAllScatters(wf, cState)
-        dbgWorkflow(wf1, "WF1")
-        val wf2 = simplifyTopLevel(wf, cState)
-        dbgWorkflow(wf2, "WF2")
+        //dbgWorkflow(wf1, "WF1")
+        val wf2 = simplifyTopLevel(wf1, cState)
+        //dbgWorkflow(wf2, "WF2")
         wf2
     }
 

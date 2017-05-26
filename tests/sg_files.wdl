@@ -63,5 +63,8 @@ workflow sg_files {
              fileB = sub(sub(filename, prefix, ""), prefix2, "") + suffix
         }
     }
-
+   output {
+     gather.str
+     ident.result
+   }
 }
