@@ -74,20 +74,6 @@ object CompilerTopologicalSort {
     // Internal procedure to sort children nodes at a particular level in the AST
     def tsortASTnodes(nodes: Seq[Scope], cState:State, recursionDepth: Int) : Seq[Scope] = {
         val indent = " "*recursionDepth*4
-        /*
-        // Recursively sort nested scatters as they can have the same kind of
-        // structure as a workflow
-        val recursedNodes = nodes.map {
-            case scatter : Scatter => {
-                val newScatter = Scatter(scatter.index, scatter.item, scatter.collection, scatter.ast)
-                Utils.trace(cState.verbose, indent+"Recursively performing toological sort on scatter: " + scatter.fullyQualifiedName)
-                newScatter.children = tsortASTnodes(scatter.children, cState, recursionDepth + 1)
-                Utils.trace(cState.verbose, indent+"End recursion")
-                newScatter.asInstanceOf[GraphNode]
-            }
-            case anyOtherNode => anyOtherNode.asInstanceOf[GraphNode]
-        }
-        */
         val recursedNodes = nodes.map { x => x.asInstanceOf[GraphNode] }
 
         // Create workflow graph sequence of edges for topological sorting
@@ -102,17 +88,11 @@ object CompilerTopologicalSort {
             case _ => Set[(GraphNode, Scatter)]()
         }.flatten.toMap
 
-        val graphNodes = recursedNodes.head.parent.get match {
-            case node : GraphNode => node.descendants.map { x => x.asInstanceOf[GraphNode] } + node
-            case workflow : Workflow => workflow.descendants.map { x => x.asInstanceOf[GraphNode] }
-            case anyOtherNode => throw new Exception("Unexpected parent type")
-        }
-
         // Generate a list of edges corresponding to dependencies for this call
         // e.g. suppose call x has dependencies a,b,c.  This procedure will generate:
         // [(a,x), (b,x), (c,x)]
         val edges : Set[(Scope, Scope)] = recursedNodes.map { gnode =>
-            val nodeParents : Vector[(Scope, Scope)] = (gnode.upstream & graphNodes).map { parent =>
+            val nodeParents : Vector[(Scope, Scope)] = (gnode.upstream).map { parent =>
                val parentActual : Scope =
                    // If any node's parent is a descendant of a root
                    // level scatter, use the scatter as the parent
@@ -131,7 +111,7 @@ object CompilerTopologicalSort {
                     // If a scatter's descendants have parents outside the scatter context,
                     // map the scatter itself to them.
                     val nodeDescendants = scatter.descendants.map { d => d.asInstanceOf[GraphNode] }
-                    val upstreamParents = nodeDescendants.map { d => d.upstream }.flatten.toSet & graphNodes
+                    val upstreamParents = nodeDescendants.map { d => d.upstream }.flatten.toSet
                     ((upstreamParents -- nodeDescendants) - gnode).map{ parent =>
                         // If the parent outside the scatter is also a member of a scatter, use it instead.
                         if ( scatterRoot.contains(parent) && gnode != scatterRoot(parent)) {
@@ -183,6 +163,7 @@ object CompilerTopologicalSort {
 
         // pretty print the workflow. The output
         // must be readable by the standard WDL compiler.
+        // TODO: replace with better thing
         val elemsPp : Vector[String] = sortedNodes.map {
             case call: Call => WdlPrettyPrinter.apply(call, 1)
             case decl: Declaration => WdlPrettyPrinter.apply(decl, 1)
