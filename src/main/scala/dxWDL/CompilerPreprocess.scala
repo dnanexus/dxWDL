@@ -263,7 +263,7 @@ object CompilerPreprocess {
         //System.err.println(s"${x}")
 
         System.err.println(s"${wf.expandedWildcardOutputs}")
-        val lines = WdlPrettyPrinter.apply(wf, 0).mkString("\n")
+        val lines = WdlPrettyPrinter(true).apply(wf, 0).mkString("\n")
         System.err.println(lines)
         System.err.println("")
     }
@@ -335,7 +335,7 @@ object CompilerPreprocess {
         //
         // Note: by keeping the namespace in memory, instead of writing to
         // a temporary file on disk, we keep the resolver valid.
-        val lines: String = WdlPrettyPrinter.apply(rewrittenNs, 0).mkString("\n")
+        val lines: String = WdlPrettyPrinter(true).apply(rewrittenNs, 0).mkString("\n")
         val cleanNs = WdlNamespace.loadUsingSource(lines, None, Some(List(resolver))).get
 
         if (verbose)

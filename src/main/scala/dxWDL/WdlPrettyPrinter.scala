@@ -1,6 +1,11 @@
 /**
-  *  Print a WDL structure in internal representation, to a valid
-  *  textual WDL string.
+  *  Print a WDL class as a valid, human readable,
+  *  textual string. The output is then palatable to
+  *  the WDL parser. The printing process is configurable. For example:
+  *  to print fully qualified names use:
+  *
+  *  val pp = new WdlPrettyPrinter(true)
+  *  pp.apply(x)
   */
 package dxWDL
 
@@ -8,9 +13,9 @@ import wdl4s._
 import wdl4s.command.{CommandPart, ParameterCommandPart, StringCommandPart}
 import wdl4s.parser.WdlParser.{Ast, AstNode, Terminal}
 
-object WdlPrettyPrinter {
-    val I_STEP = 4
+case class WdlPrettyPrinter(fqnFlag: Boolean) {
 
+    private val I_STEP = 4
 
     // Create an indentation of [n] spaces
     private def genNSpaces(n: Int) = {
@@ -86,8 +91,10 @@ object WdlPrettyPrinter {
                 val line = "input:  " + inputs.mkString(", ")
                 Vector(indentLine(line, level+1))
             }
-
-        buildBlock(s"call ${call.task.fullyQualifiedName} ${aliasStr}", inputsVec, level, true)
+        val taskName =
+            if (fqnFlag) call.task.fullyQualifiedName
+            else call.task.name
+        buildBlock(s"call ${taskName} ${aliasStr}", inputsVec, level, true)
     }
 
     def apply(decl: Declaration, level: Int) : Vector[String] = {
@@ -154,7 +161,10 @@ object WdlPrettyPrinter {
         val outputs = wf.outputs.map(x => apply(x, level + 2)).flatten
         val lines = children.toVector ++
             buildBlock("output", outputs.toVector, level + 1)
-        buildBlock( s"workflow ${wf.fullyQualifiedName}", lines, level)
+        val wfName =
+            if (fqnFlag) wf.fullyQualifiedName
+            else wf.unqualifiedName
+        buildBlock( s"workflow ${wfName}", lines, level)
     }
 
     def apply(ns: WdlNamespace, level: Int) : Vector[String] = {

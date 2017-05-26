@@ -47,6 +47,8 @@ object CompilerFrontEnd {
                      cef: CompilerErrorFormatter,
                      verbose: Boolean)
 
+    val wdlPP = WdlPrettyPrinter(false)
+
     // Convert the environment to yaml, and then pretty
     // print it.
     def prettyPrint(env: CallEnv) : String = {
@@ -112,10 +114,10 @@ task Add {
             s"${cVar.wdlType.toWdlString} ${cVar.name} = ${defaultVal.toWdlString}"
         }
 
-        val body = inputs.map(line => WdlPrettyPrinter.indentLine(line, 1)) ++
-            WdlPrettyPrinter.buildBlock("command", Vector(""), 1) ++
-            WdlPrettyPrinter.buildBlock("output", outputs, 1)
-        val wdlCode = WdlPrettyPrinter.buildBlock(s"task ${applet.name}", body, 0).mkString("\n")
+        val body = inputs.map(line => wdlPP.indentLine(line, 1)) ++
+            wdlPP.buildBlock("command", Vector(""), 1) ++
+            wdlPP.buildBlock("output", outputs, 1)
+        val wdlCode = wdlPP.buildBlock(s"task ${applet.name}", body, 0).mkString("\n")
 
         // Convert to a Task structure
         val ns = WdlNamespace.loadUsingSource(wdlCode, None, None) match {
@@ -367,9 +369,9 @@ task Add {
                 // workflow that does nothing.
                 Vector("Int xxxx = 0")
             } else {
-                declarations.map(x => WdlPrettyPrinter.apply(x, 1)).flatten.toVector
+                declarations.map(x => wdlPP.apply(x, 1)).flatten.toVector
             }
-        val wdlCode = WdlPrettyPrinter.buildBlock(s"workflow w", inputLines, 0).mkString("\n")
+        val wdlCode = wdlPP.buildBlock(s"workflow w", inputLines, 0).mkString("\n")
         verifyWdlCodeIsLegal(wdlCode)
         wdlCode
     }
@@ -526,7 +528,7 @@ workflow w {
             case None => false
             case Some(_) => true
         }
-        val wdlCode = WdlPrettyPrinter.apply(task, 0).mkString("\n")
+        val wdlCode = wdlPP.apply(task, 0).mkString("\n")
         verifyWdlCodeIsLegal(wdlCode)
         val applet = IR.Applet(task.name,
                                inputVars,
@@ -662,19 +664,19 @@ workflow w {
                 } else {
                     // no existing stub, create it
                     val task = genAppletStub(irApplet)
-                    accu + (name -> WdlPrettyPrinter.apply(task, 0).mkString("\n"))
+                    accu + (name -> wdlPP.apply(task, 0).mkString("\n"))
                 }
             }
         val trScatter = scTransform(ssc, inputVars, cState)
 
         val decls: Vector[String]  = inputVars.map{ cVar =>
             val d = WdlRewrite.newDeclaration(cVar.wdlType, cVar.dxVarName, None)
-            WdlPrettyPrinter.apply(d, 1)
+            wdlPP.apply(d, 1)
         }.flatten
 
         // Create new workflow that includes only this scatter
-        val lines: Vector[String] = decls ++  WdlPrettyPrinter.apply(trScatter, 1)
-        val wfCode = WdlPrettyPrinter.buildBlock("workflow w", lines, 0).mkString("\n")
+        val lines: Vector[String] = decls ++  wdlPP.apply(trScatter, 1)
+        val wfCode = wdlPP.buildBlock("workflow w", lines, 0).mkString("\n")
         val stubs = taskStubs.map{ case (_,x) => x}.toVector
         val wdlCode = stubs.mkString("\n") ++ "\n" ++ wfCode
         verifyWdlCodeIsLegal(wdlCode)

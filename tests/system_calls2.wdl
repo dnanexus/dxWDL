@@ -1,42 +1,13 @@
-task ps {
-    command {
-        ps aux
-    }
-    output {
-        File procs = stdout()
-    }
-}
-
-task cgrep {
-    String pattern
-    File in_file
-
-    command {
-        grep '${pattern}' ${in_file} | wc -l
-    }
-    output {
-        Int count = read_int(stdout())
-    }
-}
-
-task wc {
-    File in_file
-    command {
-        cat ${in_file} | wc -l
-    }
-    output {
-        Int count = read_int(stdout())
-    }
-}
+import "sys_call_lib.wdl" as lib
 
 workflow system_calls2 {
     String pattern
 
     call ps
-    call cgrep {
+    call lib.cgrep as cgrep {
         input: in_file = ps.procs, pattern=pattern
     }
-    call wc {
+    call lib.wc as wc {
         input: in_file = ps.procs
     }
     output {
