@@ -64,8 +64,8 @@ object WdlYamlTree {
         )
     }
 
-    def apply(call: Call): YamlObject = {
-        val task = Utils.taskOfCall(call)
+    def apply(call: TaskCall): YamlObject = {
+        val task = call.task
         val nm = call.alias match {
             case Some(x) => x
             case None => task.name
@@ -76,7 +76,7 @@ object WdlYamlTree {
         YamlObject(
             YamlString("call") -> YamlObject(
                 YamlString("name") -> YamlString(nm),
-                YamlString("task") -> YamlString(task.name),
+                YamlString("task") -> YamlString(task.fullyQualifiedName),
                 YamlString("inputMappings") -> YamlObject(im)
             )
         )
@@ -88,7 +88,7 @@ object WdlYamlTree {
         // declarations into the containing Workflow.declarations.
         //val decls = sc.declarations.map(apply)
         val children = sc.children.map {
-            case call: Call => apply(call)
+            case call: TaskCall => apply(call)
             case ssc: Scatter => apply(ssc)
             case swf: Workflow => apply(swf)
         }
@@ -103,7 +103,7 @@ object WdlYamlTree {
 
     def apply(wf: Workflow): YamlObject = {
         val children = wf.children.map {
-            case call: Call => apply(call)
+            case call: TaskCall => apply(call)
             case sc: Scatter => apply(sc)
             case swf: Workflow => apply(swf)
             case decl: Declaration => apply(decl)
@@ -126,6 +126,15 @@ object WdlYamlTree {
     }
 
     def apply(ns : WdlNamespace): YamlObject = {
+        val importList: Map[YamlValue, YamlValue]=
+            ns.imports.map{
+                imp => YamlString(imp.namespaceName) -> YamlString(imp.uri)
+            }.toMap
+
+        val imports: Map[YamlValue, YamlValue] = Map(
+            YamlString("import") -> YamlObject(importList)
+        )
+
         val doc: Map[YamlValue, YamlValue] = Map(
             YamlString("tasks") -> YamlArray(ns.tasks.map(apply).toVector)
         )
@@ -133,6 +142,6 @@ object WdlYamlTree {
             case nswf : WdlNamespaceWithWorkflow => doc ++ apply(nswf.workflow).fields
             case _ => doc
         }
-        YamlObject(docwf)
+        YamlObject(imports ++ docwf)
     }
 }

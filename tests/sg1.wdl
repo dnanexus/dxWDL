@@ -2,15 +2,7 @@
 #
 # Copied from the Broad Institute tutorial
 #     https://github.com/broadinstitute/wdl
-
-task vv_prepare {
-    command <<<
-       python -c "print('one\ntwo\nthree\nfour')"
-    >>>
-    output {
-        Array[String] array = read_lines(stdout())
-    }
-}
+import "library_sg.wdl" as lib
 
 task vv_analysis {
     String str
@@ -22,20 +14,10 @@ task vv_analysis {
     }
 }
 
-task vv_gather {
-    Array[String] array
-    command <<<
-        echo ${sep=' ' array}
-    >>>
-    output {
-        String str = read_string(stdout())
-    }
-}
-
 workflow sg1 {
-    call vv_prepare as prepare
+    call lib.Prepare as prepare
     scatter (x in prepare.array) {
         call vv_analysis as analysis {input: str=x}
     }
-    call vv_gather as gather {input: array=analysis.out}
+    call lib.Gather as gather {input: array=analysis.out}
 }

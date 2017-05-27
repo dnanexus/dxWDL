@@ -2,15 +2,7 @@
 #
 # Copied from the Broad Institute tutorial
 #     https://github.com/broadinstitute/wdl
-
-task mm_prepare {
-    command <<<
-       python -c "print('one\ntwo\nthree\nfour')"
-    >>>
-    output {
-        Array[String] array = read_lines(stdout())
-    }
-}
+import "library_sg.wdl" as lib
 
 task mm_analysis {
     String str
@@ -19,16 +11,6 @@ task mm_analysis {
     >>>
     output {
         File out = "${str}.txt"
-    }
-}
-
-task mm_gather {
-    Array[File] files
-    command <<<
-        wc ${sep=' ' files}
-    >>>
-    output {
-        String str = read_string(stdout())
     }
 }
 
@@ -46,11 +28,11 @@ task mm_file_ident {
 workflow sg_files {
     String wf_suffix = ".txt"
 
-    call mm_prepare as prepare
+    call lib.Prepare as prepare
     scatter (x in prepare.array) {
         call mm_analysis as analysis {input: str=x}
     }
-    call mm_gather as gather {input: files=analysis.out}
+    call lib.Gather as gather {input: files=analysis.out}
 
     scatter (filename in analysis.out) {
         String prefix = ".txt"
@@ -63,5 +45,8 @@ workflow sg_files {
              fileB = sub(sub(filename, prefix, ""), prefix2, "") + suffix
         }
     }
-
+   output {
+     gather.str
+     ident.result
+   }
 }

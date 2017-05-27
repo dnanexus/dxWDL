@@ -1,3 +1,5 @@
+import "library_math.wdl" as lib
+
 task EmptyArray {
      Array[Int] fooAr
 
@@ -8,21 +10,6 @@ task EmptyArray {
      }
 }
 
-
-# A simple workflow with two stages wired together.
-# It is supposed to sum three integers.
-task cast_Add {
-    Int a
-    Int b
-
-    command {
-        echo $((a + b))
-    }
-    output {
-        Int result = a + b
-        Int result2 = a - b
-    }
-}
 
 task SumArray {
     Array[Int] ints
@@ -64,7 +51,7 @@ workflow cast {
     File foo2 = FileIdent.result
     Array[File] fArr2 = [foo2]
 
-    call cast_Add as Add { input: a=i, b=i }
+    call lib.Add as Add { input: a=i, b=i }
     call SumArray {input: ints=iArr }
 
     # WDL casts an Int to an Array[Int] automatically

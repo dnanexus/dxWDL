@@ -1,11 +1,16 @@
 # Release Notes
 
+## 0.27
+- Support the import directive. This allows spreading definitions
+  across multiple files.
+- Using native wdl4s data structures, instead of pretty printing, for
+  internal representation.
+
 ## 0.26
-- Implemented glob function for files
-- Correctly handling empty arrays in task input/output
 - Support passing unbound variables to calls inside scatters
-- Improved scatter linking, passing applet input type arguments in a json file. This
-  allows not accessing the dx:applet description at runtime.
+- Implemented glob and size function for files
+- Correctly handling empty arrays in task input/output
+- Improved scatter linking. Got rid of runtime calls to get dx:applet descriptions.
 
 ## 0.25
 - Allow a docker image to be specified as a parameter
@@ -42,13 +47,13 @@ a dx:workflow.
 - Minor improvements in debugging printout and error reporting
 
 ## 0.12
-1. The GATK pipeline compiles and runs (result not validated yet)
-2. Bug fixes:
+- The GATK pipeline compiles and runs (result not validated yet)
+- Bug fixes:
   * Correct order of scatter output arrays
   * Improved handling of optionals
 
 ## 0.11
-1. Better compilation error messages
-2. Version checking
-3. Compiler verbose mode
-4. Renamed initial workflow stage to Common
+- Better compilation error messages
+- Version checking
+- Compiler verbose mode
+- Renamed initial workflow stage to Common

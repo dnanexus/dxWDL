@@ -221,21 +221,8 @@ object Utils {
             if (varName contains s)
                 throw new Exception(s"Variable ${varName} includes the reserved substring ${s}")
         }
-        //varName.replaceAll("\\.", "___")
         if (varName contains ".")
             throw new Exception(s"Variable ${varName} includes the illegal symbol \\.")
-        varName
-    }
-
-    // Dots are illegal in applet variable names, so they
-    // are encoded as three underscores "___". Decode
-    // these occurrences back into dots.
-    def decodeAppletVarName(varName : String) : String = {
-        if (varName contains "\\.")
-            throw new Exception(s"Variable ${varName} includes the illegal symbol \\.")
-        //varName.replaceAll("___", "\\.")
-        if (varName contains "___")
-            throw new Exception(s"Variable ${varName} includes the illegal symbol ___")
         varName
     }
 
@@ -553,54 +540,5 @@ object Utils {
         if (!verbose)
             return
         System.err.println(msg)
-    }
-
-    // Convert flat inputs to legal scoped WDL structures. For example:
-    //  Map (
-    //     Add.sum -> 1
-    //     Mul.result -> 8
-    //  )
-    //
-    // convert it into:
-    //   Map (
-    //    "Add" -> WdlObject(Map("sum" -> 1))
-    //    "Mul" -> WdlObject(Map("result" -> 8))
-    //   )
-    def addScopeToInputs(callInputs : Map[String, WdlValue]) : Map[String, WdlValue] = {
-        def recursiveBuild(rootMap : Map[String, WdlValue],
-                           components : Seq[String],
-                           wdlValue : WdlValue) : Map[String, WdlValue] = {
-            if (components.length == 1) {
-                // bottom of recursion
-                rootMap + (components.head -> wdlValue)
-            }
-            else {
-                if (rootMap contains components.head) {
-                    // already have a sub-scope by this name, we need to update it, but not
-                    // in place
-                    val o : WdlObject = rootMap(components.head) match {
-                        case o: WdlObject => o
-                        case _ =>  throw new Exception("Scope should be a WdlObject")
-                    }
-                    val subTree = recursiveBuild(o.value, components.tail, wdlValue)
-                    rootMap + (components.head -> new WdlObject(subTree))
-                } else {
-                    // new sub-scope
-                    val subTree = recursiveBuild(Map.empty, components.tail, wdlValue)
-                    rootMap + (components.head -> new WdlObject(subTree))
-                }
-            }
-        }
-
-        // A tree of nested scopes, that we update for each variable
-        var tree = Map.empty[String, WdlValue]
-        callInputs.map { case (varName, wdlValue) =>
-            // "A.B.C"
-            //    baseName = "C"
-            //    fqPath = List("A", "B")
-            val components = varName.split("\\.")
-            tree = recursiveBuild(tree, components, wdlValue)
-        }
-        tree
     }
 }

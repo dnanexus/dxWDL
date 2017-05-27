@@ -1,5 +1,5 @@
 # Try using an array of strings in a task
-task y_Concat {
+task Concat {
     Array[String] words
 
     command {
@@ -13,7 +13,7 @@ task y_Concat {
 workflow string_array {
     Array[String] sa
 
-    call y_Concat as Concat {
+    call Concat {
         input : words=sa
     }
     output {

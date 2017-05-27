@@ -1,24 +1,19 @@
-task apply {
-    String s
+task ident {
     Int? num
-    String? foo
     command {
-        echo "${s} --K -S --flags --contamination ${default=0 num} --s ${default="foobar" foo}"
     }
     output {
-        String result = read_string(stdout())
+      Int? result = num
     }
 }
 
 workflow optionals {
-    String species
     Int? i
-    File? empty
 
-    call apply {
-        input: s=species, num=i
-    }
+    call ident as I1 { input: num=i }
+    call ident as I2 { input: num=I1.result }
+
     output {
-        apply.result
+        I2.result
     }
 }

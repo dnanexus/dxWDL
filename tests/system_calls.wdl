@@ -1,33 +1,13 @@
-task ccc_cgrep {
-    File in_file
-    String pattern
-
-    command {
-        grep '${pattern}' ${in_file} | wc -l
-    }
-    output {
-        Int count = read_int(stdout())
-    }
-}
-
-task ccc_wc {
-    File in_file
-    command {
-        cat ${in_file} | wc -l
-    }
-    output {
-        Int count = read_int(stdout())
-    }
-}
+import "library_sys_call.wdl" as lib
 
 workflow system_calls {
     File data
     String pattern
 
-    call ccc_cgrep as cgrep {
+    call lib.cgrep as cgrep {
         input: in_file = data, pattern = pattern
     }
-    call ccc_wc as wc {
+    call lib.wc as wc {
         input: in_file = data
     }
     output {
