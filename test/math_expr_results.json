@@ -1,0 +1,10 @@
+{
+  "int_ops1.mul" : 6,
+  "int_ops1.sum" : 5,
+  "int_ops1.sub" : -1,
+  "int_ops1.div" : 0,
+  "int_ops2.mul" : 36,
+  "int_ops2.div" : 1,
+  "int_ops3.sum" : 14,
+  "int_ops3.mul" : 40
+}

@@ -1,0 +1,5 @@
+{
+  "str_animals.result" : "Arctic fox --K -S --flags --contamination 0 --s foobar",
+  "str_animals.family" : "Family Arctic fox",
+  "scatter_2.cgrep_count": [6, 0, 6]
+}

@@ -1,0 +1,20 @@
+{
+  "name": "cromwell_cloud_workstation",
+  "summary": "An instance that can run Broad's Cromwell",
+  "dxapi": "1.0.0",
+  "version": "0.0.1",
+  "inputSpec": [],
+  "outputSpec": [],
+  "runSpec": {
+    "distribution": "Ubuntu",
+    "release": "14.04"
+    "file": "src/code.sh",
+    "interpreter": "bash",
+    "systemRequirements": {
+      "main": {"instanceType": "mem3_ssd1_x16"}
+    }
+  }
+  "access": {
+    "network": [ "*" ]
+  }
+}
