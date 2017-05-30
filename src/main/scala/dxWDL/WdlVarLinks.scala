@@ -402,7 +402,7 @@ object WdlVarLinks {
         // Read the job_inputs.json file. Convert it to a mapping from string to JSON
         // value.
         val jsonAst : JsValue = inputLines.parseJson
-        var fields : Map[String, JsValue] = jsonAst.asJsObject.fields
+        val fields : Map[String, JsValue] = jsonAst.asJsObject.fields
 
         // Create a mapping from each key to its WDL value,
         // ignore all untyped fields.

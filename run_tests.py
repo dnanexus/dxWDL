@@ -15,7 +15,7 @@ import time
 from dxpy.exceptions import DXJobFailureError
 
 top_dir = os.path.dirname(sys.argv[0])
-test_dir = os.path.join(top_dir, "tests")
+test_dir = os.path.join(top_dir, "test")
 git_revision = subprocess.check_output(["git", "describe", "--always", "--dirty", "--tags"]).strip()
 git_revision_in_jar= subprocess.check_output(["git", "describe", "--always", "--tags"]).strip()
 test_files={}
@@ -45,7 +45,10 @@ medium_test_list = [
     "cast",
 
     # Variable instance types
-    "instance_types"
+    "instance_types",
+
+    # Complex data types
+    "file_ragged_array"
 ] + small_test_list
 
 TestDesc = namedtuple('TestDesc', 'wf_name wdl_source wdl_input dx_input results')
@@ -384,6 +387,9 @@ def register_all_tests():
 
     # Massive tests
     register_test("gatk_170412")
+
+    # Complex data types
+    register_test("file_ragged_array")
 
 ######################################################################
 ## Program entry point

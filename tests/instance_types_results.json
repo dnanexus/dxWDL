@@ -1,6 +1,0 @@
-{
-  "DiskSpaceSpec.retval" : "true",
-  "MemorySpec.retval" : "true",
-  "NumCoresSpec.retval" : "true",
-  "RuntimeDockerChoice.retval": "We are inside a python docker image"
-}

@@ -1,6 +1,0 @@
-{
-  "mul2.result" : 10,
-  "add.result" : 4,
-  "scatter_1.add2_result": [9, 10],
-  "scatter_1.add3_result": [34, 34]
-}
