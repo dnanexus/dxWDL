@@ -79,7 +79,7 @@ object Utils {
     val SCATTER = "scatter"
     val UPLOAD_RETRY_LIMIT = DOWNLOAD_RETRY_LIMIT
     val UNIVERSAL_FILE_PREFIX = "dx://"
-    val VERSION = "0.26"
+    val VERSION = "0.27"
     val WDL_SNIPPET_FILENAME = "source.wdl"
 
     // Substrings used by the compiler for encoding purposes
