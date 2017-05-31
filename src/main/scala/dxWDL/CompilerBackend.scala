@@ -38,9 +38,8 @@ object CompilerBackend {
     //   Array[String] -> array:string
     //
     // Ragged arrays, maps, and objects, cannot be mapped in such a trivial way.
-    // Currently, we handle only ragged arrays. All cases aside from Array[Array[File]
-    // are encoded as a json string. Ragged file arrays are passed as two fields: a
-    // json string, and a flat file array.
+    // These are called "Complex Types", or "Complex". They are handled
+    // by passing a JSON structure and a vector of dx:files.
     def wdlVarToSpec(varName: String,
                      wdlType : WdlType,
                      ast: Ast,
@@ -48,18 +47,31 @@ object CompilerBackend {
         val name = Utils.encodeAppletVarName(varName)
         def mkPrimitive(dxType: String) : Vector[Map[String, JsValue]] = {
             Vector(Map("name" -> JsString(name),
-                     "help" -> JsString(wdlType.toWdlString),
-                     "class" -> JsString(dxType)))
+                       "help" -> JsString(wdlType.toWdlString),
+                       "class" -> JsString(dxType)))
         }
         def mkPrimitiveArray(dxType: String) : Vector[Map[String, JsValue]] = {
             Vector(Map("name" -> JsString(name),
-                     "help" -> JsString(wdlType.toWdlString),
-                     "class" -> JsString("array:" ++ dxType)))
+                       "help" -> JsString(wdlType.toWdlString),
+                       "class" -> JsString("array:" ++ dxType)))
         }
         def mkRaggedArray() : Vector[Map[String,JsValue]] = {
             Vector(Map("name" -> JsString(name),
-                     "help" -> JsString(wdlType.toWdlString),
-                     "class" -> JsString("file")))
+                       "help" -> JsString(wdlType.toWdlString),
+                       "class" -> JsString("file")))
+        }
+        def mkComplex() : Vector[Map[String,JsValue]] = {
+            // A JSON structure, passed as a file
+            // A vector of platform files.
+            //
+            // Note: the help field for the file vector is empty,
+            // so that the WdlVarLinks.loadJobInputsAsLinks method
+            // will not interpret it.
+            Vector(Map("name" -> JsString(name),
+                       "help" -> JsString(wdlType.toWdlString),
+                       "class" -> JsString("file")),
+                   Map("name" -> JsString(name + Utils.FLAT_FILES_SUFFIX),
+                       "class" -> JsString("array:file")))
         }
         def nonOptional(t : WdlType) : Vector[Map[String, JsValue]] = {
             t match {
@@ -83,8 +95,8 @@ object CompilerBackend {
                 case WdlArrayType(WdlArrayType(WdlFloatType)) => mkRaggedArray()
                 case WdlArrayType(WdlArrayType(WdlStringType)) => mkRaggedArray()
 
-                case _ =>
-                    throw new Exception(cState.cef.notCurrentlySupported(ast, s"type ${wdlType}"))
+                // complex types, that may contains files
+                case _ => mkComplex()
             }
         }
 

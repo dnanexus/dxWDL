@@ -66,16 +66,16 @@ object Utils {
         }
     }
 
-    // Long strings cause problems with bash and the UI
     val CHECKSUM_PROP = "dxWDL_checksum"
     val COMMON = "common"
     val DOWNLOAD_RETRY_LIMIT = 3
     val DXPY_FILE_TRANSFER = true
     val DX_HOME = "/home/dnanexus"
+    val FLAT_FILES_SUFFIX = "___dxfiles"
     val INSTANCE_TYPE_DB_FILENAME = "instanceTypeDB.json"
     val LINK_INFO_FILENAME = "linking.json"
     val MAX_HOURLY_RATE = 10.0
-    val MAX_STRING_LEN = 8 * 1024
+    val MAX_STRING_LEN = 8 * 1024     // Long strings cause problems with bash and the UI
     val SCATTER = "scatter"
     val UPLOAD_RETRY_LIMIT = DOWNLOAD_RETRY_LIMIT
     val UNIVERSAL_FILE_PREFIX = "dx://"
