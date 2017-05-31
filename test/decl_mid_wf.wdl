@@ -1,55 +1,33 @@
 # Workflow with declarations in the middle that can be lifted to the top level.
-task fff_add {
-    Int a
-    Int b
-
-    command {
-        python -c "print(${a} + ${b})"
-    }
-    output {
-        Int sum = read_int(stdout())
-    }
-}
-
-
-task fff_concat {
-    String s1
-    String s2
-
-    command {
-        echo "${s1}_${s2}"
-    }
-    output {
-        String result = read_string(stdout())
-    }
-}
+import "library_string.wdl" as lib
+import "library_math.wdl" as math_lib
 
 workflow decl_mid_wf {
     String s
     Int i
 
-    call fff_add as add {
+    call math_lib.Add as add {
         input: a = (i * 2), b = (i+3)
     }
 
     String q = sub(s, "frogs", "RIP")
     Int j = i + i
 
-    call fff_concat as concat {
+    call lib.Concat as concat {
         input:
-                s1 = s + ".aligned",
-                s2 = q + ".wgs"
+                x = s + ".aligned",
+                y = q + ".wgs"
     }
 
     Int k = 2 * j
 
-    call fff_add as add2 {
+    call math_lib.Add as add2 {
         input: a = j, b = k
     }
 
     output {
-        add.sum
-        add2.sum
+        add.result
+        add2.result
         concat.result
     }
 }

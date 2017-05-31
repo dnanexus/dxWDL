@@ -210,12 +210,12 @@ object WdlVarLinks {
     }
 
     // import a WDL value
-    def apply(wdlTypeOrg: WdlType, wdlValue: WdlValue) : WdlVarLinks = {
+    def apply(wdlTypeOrg: WdlType, wdlValue: WdlValue, dbg: String = "") : WdlVarLinks = {
         // Strip optional types
-        val wdlType = wdlTypeOrg match {
-            case WdlOptionalType(t) => t
-            case t => t
-        }
+        val wdlType = Utils.stripOptional(wdlTypeOrg)
+        def genDbgFileName(): String =
+            if (dbg == "") wdlType.toWdlString
+            else dbg + "_" + wdlType.toWdlString
         wdlType match {
             case WdlBooleanType | WdlIntegerType | WdlFloatType | WdlStringType | WdlFileType =>
                 val (js, _) = jsOfComplexWdlValue(wdlType, wdlValue)
@@ -244,14 +244,14 @@ object WdlVarLinks {
                         js
                     })
                 val buf = raggedAr.prettyPrint
-                val jsSrlFile = Utils.uploadString(buf, Utils.sanitize(wdlType.toWdlString))
+                val jsSrlFile = Utils.uploadString(buf, genDbgFileName())
                 WdlVarLinks(wdlTypeOrg, DxlJsValue(jsSrlFile))
 
             // Complex values, that may have files in them. For example, ragged file arrays.
             case _ =>
                 val (jsVal,dxFiles) = jsOfComplexWdlValue(wdlType, wdlValue)
                 val buf = jsVal.prettyPrint
-                val jsSrlFile = Utils.uploadString(buf, Utils.sanitize(wdlType.toWdlString))
+                val jsSrlFile = Utils.uploadString(buf, genDbgFileName())
                 WdlVarLinks(wdlTypeOrg, DxlComplexValue(jsSrlFile, dxFiles))
         }
     }

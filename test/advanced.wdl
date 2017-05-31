@@ -9,11 +9,11 @@ task jjj_str_animals {
     command {
         echo "${s} --K -S --flags --contamination ${default=0 num} --s ${default="foobar" foo}"
     }
-    runtime {
-       disks: "local-disk " + disk_size + " HDD"
-       cpu: num_cores
-       memory: "2 GB"
-    }
+#    runtime {
+#       disks: "local-disk " + disk_size + " HDD"
+#       cpu: num_cores
+#       memory: "2 GB"
+#    }
     output {
         String result = read_string(stdout())
         String family = family_i
