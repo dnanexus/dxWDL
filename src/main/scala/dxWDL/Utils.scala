@@ -511,6 +511,12 @@ object Utils {
         }
     }
 
+    def stripArray(t: WdlType) : WdlType = {
+        t match {
+            case WdlArrayType(x) => x
+            case _ => throw new Exception(s"WDL type $t is not an array")
+        }
+    }
 
     // Replace all special json characters from with a white space.
     def sanitize(s : String) : String = {

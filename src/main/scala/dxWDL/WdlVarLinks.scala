@@ -17,9 +17,16 @@ object IORef extends Enumeration {
 }
 
 // A union of all the different ways of building a value
-// from JSON passed by the platform
+// from JSON passed by the platform.
+//
+// Complex values are WDL values that have files embedded in them. For example:
+// - Ragged file array:  Array[Array[File]]
+// - Object with file elements
+// - Map of files:     Map[String, File]
+// A complex value is implemented as a json structure, and all the files it references.
 sealed trait DxLink
 case class DxlJsValue(jsn: JsValue) extends DxLink
+case class DxlComplexValue(jsn: JsValue, files: Vector[DXFile]) extends DxLink
 case class DxlStage(dxStage: DXWorkflow.Stage, ioRef: IORef.Value, varName: String) extends DxLink
 case class DxlJob(dxJob: DXJob, ioRef: IORef.Value, varName: String) extends DxLink
 
@@ -108,6 +115,15 @@ object WdlVarLinks {
         WdlSingleFile(path.toString)
     }
 
+
+    private def stripArrayVal(x : WdlValue) : Seq[WdlValue] = {
+        x match {
+            case WdlArray(_,l) => l
+            case _ => throw new AppInternalException(s"wdl value is not an array ${x.toWdlString}")
+        }
+    }
+
+
     private def evalPrimitive(wdlType: WdlType, jsValue: JsValue, force: Boolean) : WdlValue = {
         (wdlType, jsValue)  match {
             case (WdlBooleanType, JsBoolean(b)) => WdlBoolean(b.booleanValue)
@@ -190,14 +206,14 @@ object WdlVarLinks {
         }
     }
 
-    // convert a WDL value to json, for primitive values, and arrays of primitives
-    private def jsOfBasicWdlValue(wdlType: WdlType, wdlValue : WdlValue) : JsValue = {
-        def jsStringLimited(buf: String) : JsValue = {
-            if (buf.length > MAX_STRING_LEN)
-                throw new AppInternalException(s"string is longer than ${MAX_STRING_LEN}")
-            JsString(buf)
-        }
+    private def jsStringLimited(buf: String) : JsValue = {
+        if (buf.length > MAX_STRING_LEN)
+            throw new AppInternalException(s"string is longer than ${MAX_STRING_LEN}")
+        JsString(buf)
+    }
 
+    // convert a WDL value to json, for primitive values, and arrays of primitives
+    private def jsOfPrimitiveWdlValue(wdlType: WdlType, wdlValue : WdlValue) : JsValue = {
         (wdlType, wdlValue) match {
             // primitive types
             case (WdlFileType, WdlString(path)) => Utils.uploadFile(Paths.get(path))
@@ -207,7 +223,12 @@ object WdlVarLinks {
             case (_,WdlInteger(n)) => JsNumber(n)
             case (_,WdlFloat(x)) => JsNumber(x)
             case (_,WdlString(s)) => jsStringLimited(s)
+            case _ => throw new AppInternalException(s"Not a primitive type (${wdlType}, ${wdlValue.wdlType})")
+        }
+    }
 
+    private def jsOfUniArrayWdlValue(wdlType: WdlType, wdlValue: WdlValue) : JsValue = {
+        (wdlType, wdlValue) match {
             // uni-dimensional array types
             case (WdlArrayType(WdlFileType), WdlArray(WdlArrayType(WdlStringType), fileAr)) =>
                 JsArray(fileAr.map {case x : WdlString =>
@@ -236,6 +257,15 @@ object WdlVarLinks {
         }
     }
 
+    // Serialize a complex WDL value into a JSON value. The value could potentially point
+    // to many files. Serialization proceeds as follows:
+    // 1. Make a pass on the object, upload any files, and keep an in-memory JSON representation
+    // 2. In memory we have a, potentially very large, JSON value. Upload it to the platform
+    //    as a file, and return the JSON of that file.
+    private def jsOfComplexWdlValue(wdlType: WdlType, wdlValue: WdlValue) : (JsValue, Vector[DXFile]) = {
+        throw new Exception("TODO")
+    }
+
     // import a WDL value
     def apply(wdlTypeOrg: WdlType, wdlValue: WdlValue) : WdlVarLinks = {
         // Strip optional types
@@ -243,35 +273,41 @@ object WdlVarLinks {
             case WdlOptionalType(t) => t
             case t => t
         }
-        val jsValue: JsValue = wdlType match {
-            case WdlBooleanType | WdlIntegerType | WdlFloatType | WdlStringType
-                   | WdlFileType
-                   | WdlArrayType(WdlBooleanType)
+        wdlType match {
+            case WdlBooleanType | WdlIntegerType | WdlFloatType | WdlStringType | WdlFileType =>
+                val js = jsOfPrimitiveWdlValue(wdlType, wdlValue)
+                WdlVarLinks(wdlTypeOrg, DxlJsValue(js))
+
+            case WdlArrayType(WdlBooleanType)
                    | WdlArrayType(WdlIntegerType)
                    | WdlArrayType(WdlFloatType)
                    | WdlArrayType(WdlStringType)
-                   | WdlArrayType(WdlFileType) => jsOfBasicWdlValue(wdlType, wdlValue)
+                   | WdlArrayType(WdlFileType) =>
+                val js = jsOfUniArrayWdlValue(wdlType, wdlValue)
+                WdlVarLinks(wdlTypeOrg, DxlJsValue(js))
 
-            // ragged arrays
-            // convert to JSON, and marshal into a string, and
+            // ragged arrays of primitive types.
+            // convert to JSON, marshal into a string, and
             // upload as a file. Return a file ID.
-            case WdlArrayType(WdlArrayType(t)) =>
-                t match {
-                    case WdlBooleanType | WdlIntegerType | WdlFloatType | WdlStringType => ()
-                    case _ => throw new AppInternalException(s"unsupported type ${wdlType}")
-                }
-                val raggedAr: JsValue = wdlValue match {
-                    case WdlArray(_,l) => JsArray(l.toVector.map{ case x =>
-                                                      jsOfBasicWdlValue(WdlArrayType(t), x) })
-                    case _ => throw new AppInternalException("Sanity")
-                }
+            case WdlArrayType(WdlArrayType(WdlBooleanType))
+                   | WdlArrayType(WdlArrayType(WdlIntegerType))
+                   | WdlArrayType(WdlArrayType(WdlFloatType))
+                   | WdlArrayType(WdlArrayType(WdlStringType)) =>
+                val t:WdlType = Utils.stripArray(wdlType)
+                val l = stripArrayVal(wdlValue)
+                val raggedAr: JsValue = JsArray(l.toVector.map{ case x => jsOfUniArrayWdlValue(t, x) })
                 val buf = raggedAr.prettyPrint
-                Utils.uploadString(buf, Utils.sanitize(wdlType.toWdlString))
+                val jsSrlFile = Utils.uploadString(buf, Utils.sanitize(wdlType.toWdlString))
+                WdlVarLinks(wdlTypeOrg, DxlJsValue(jsSrlFile))
+
+            // ragged file array
+            case WdlArrayType(WdlArrayType(WdlFileType)) =>
+                val (jsSrlFile,dxFiles) = jsOfComplexWdlValue(wdlType, wdlValue)
+                WdlVarLinks(wdlTypeOrg, DxlComplexValue(jsSrlFile, dxFiles))
 
             case _ =>
                 throw new AppInternalException(s"Type ${wdlType} unsupported")
         }
-        WdlVarLinks(wdlTypeOrg, DxlJsValue(jsValue))
     }
 
     // Convert an input field to a dx-links structure. This allows
@@ -322,6 +358,8 @@ object WdlVarLinks {
                     case JsArray(l) => l.toList
                     case t => throw new AppInternalException(s"Wrong type ${t} for json array")
                 }
+            case DxlComplexValue(jsn, fa) =>
+                throw new Exception("Unsupported complex values")
             case DxlStage(dxStage, _, _) =>
                 throw new AppInternalException(s"Values must be unpacked, not dxStage ${dxStage}")
             case DxlJob(dxJob, _, _) =>
@@ -347,6 +385,7 @@ object WdlVarLinks {
                     val jobId : String = dxJob.getId()
                     Utils.jsonNodeOfJsValue(Utils.makeJBOR(jobId, varEncName))
                 case DxlJsValue(jsn) => Utils.jsonNodeOfJsValue(jsn)
+                case DxlComplexValue(jsn, fa) => throw new Exception("Unsupported complex values")
                 case t => throw new AppInternalException(s"Unsupported type ${t}")
             }
             (bindEncName, jsNode)
@@ -364,6 +403,7 @@ object WdlVarLinks {
                     val jobId : String = dxJob.getId()
                     Utils.jsonNodeOfJsValue(Utils.makeJBOR(jobId, varEncName))
                 case DxlJsValue(jsn) => Utils.jsonNodeOfJsValue(jsn)
+                case DxlComplexValue(jsn, fa) => throw new Exception("Unsupported complex values")
                 case t => throw new AppInternalException(s"Unsupported type ${t}")
             }
             (bindEncName, jsNode)
