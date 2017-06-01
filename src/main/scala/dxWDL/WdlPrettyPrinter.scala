@@ -122,10 +122,6 @@ case class WdlPrettyPrinter(fqnFlag: Boolean) {
         Vector(indentLine(ln, level))
     }
 
-    // We need to be careful here to preserve white spaces in the command
-    // section.
-    //
-    // TODO: support meta and parameterMeta
     def apply(task: Task, level:Int) : Vector[String] = {
         val decls = task.declarations.map(x => apply(x, level + 1)).flatten.toVector
         val runtime = task.runtimeAttributes.attrs.map{ case (key, expr) =>
@@ -159,11 +155,16 @@ case class WdlPrettyPrinter(fqnFlag: Boolean) {
         }.flatten.toVector
 
         // The outputs variable is lazily calculated in the Workflow class. It includes code
-        // If the output section is empty, the calculation is triggered, and it accesses
-        // uninitialized Workflow fields. This is why we check explicitly for this case.
+        // that accesses fields that we do not properly intialize. The try/catch
+        // is a workaround. It works because the output section is ignored; DNAx does
+        // not support outputs from workflows.
         val outputs =
-            if (wf.hasEmptyOutputSection) Vector.empty
-            else wf.outputs.map(x => apply(x, level + 2)).flatten.toVector
+            try {
+                wf.outputs.map(x => apply(x, level + 2)).flatten.toVector
+            } catch {
+                case e: Throwable =>
+                    Vector.empty
+            }
         val paramMeta = wf.parameterMeta.map{ case (x,y) =>  s"${x}: ${y}" }.toVector
         val meta = wf.meta.map{ case (x,y) =>  s"${x}: ${y}" }.toVector
 
