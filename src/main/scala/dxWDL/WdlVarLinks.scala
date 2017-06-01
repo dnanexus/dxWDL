@@ -4,6 +4,7 @@ package dxWDL
 import com.dnanexus.{DXApplet, DXFile, DXJob, DXProject, DXWorkflow}
 import com.fasterxml.jackson.databind.JsonNode
 import java.nio.file.{Files, Path, Paths}
+import scala.collection.mutable.HashMap
 import spray.json._
 import spray.json.DefaultJsonProtocol
 import spray.json.JsString
@@ -35,6 +36,10 @@ case class WdlVarLinks(wdlType: WdlType, dxlink: DxLink)
 case class BValue(wvl: WdlVarLinks, wdlValue: WdlValue)
 
 object WdlVarLinks {
+    // A dictionary of all WDL files that map to platform files,
+    // that exist on the current cloud instance.
+    var localDxFiles = HashMap.empty[Path, DXFile]
+
     // Parse a dnanexus file descriptor. Examples:
     //
     // "$dnanexus_link": {
@@ -100,16 +105,23 @@ object WdlVarLinks {
             } else {
                 shortPath
             }
-        if (force) {
-            // Download right now
-            Utils.downloadFile(path, dxFile)
-        } else {
-            // Create an empty file, to mark the fact that the path and
-            // file name are in use. We may not end up downloading the
-            // file, and accessing the data, however, we need to keep
-            // the path in the WdlFile value unique.
-            Files.createFile(path)
-            DxFunctions.registerRemoteFile(path.toString, dxFile)
+        localDxFiles.get(path) match {
+            case None =>
+                if (force) {
+                    // Download right now
+                    Utils.downloadFile(path, dxFile)
+                } else {
+                    // Create an empty file, to mark the fact that the path and
+                    // file name are in use. We may not end up downloading the
+                    // file, and accessing the data, however, we need to keep
+                    // the path in the WdlFile value unique.
+                    Files.createFile(path)
+                    DxFunctions.registerRemoteFile(path.toString, dxFile)
+                }
+                localDxFiles(path) = dxFile
+            case Some(dxFile) =>
+                // we have already downloaded the file
+                ()
         }
         WdlSingleFile(path.toString)
     }
@@ -166,16 +178,22 @@ object WdlVarLinks {
     // 2. In memory we have a, potentially very large, JSON value. Upload it to the platform
     //    as a file, and return the JSON of that file.
     private def jsOfComplexWdlValue(wdlType: WdlType, wdlValue: WdlValue) : (JsValue, Vector[DXFile]) = {
-        def uploadFile(path:String) : (JsValue, Vector[DXFile]) =  {
-            val dxlink = Utils.uploadFile(Paths.get(path))
-            val dxFile = dxFileOfJsValue(dxlink)
-            (dxlink, Vector(dxFile))
+        def uploadFile(path: Path) : (JsValue, Vector[DXFile]) =  {
+            localDxFiles.get(path) match {
+                case None =>
+                    val dxLink = Utils.uploadFile(path)
+                    val dxFile = dxFileOfJsValue(dxLink)
+                    (dxLink, Vector(dxFile))
+                case Some(dxFile) =>
+                    val dxLink = Utils.jsValueOfJsonNode(dxFile.getLinkAsJson)
+                    (dxLink, Vector(dxFile))
+            }
         }
 
         (wdlType, wdlValue) match {
             // Base case: primitive types
-            case (WdlFileType, WdlString(path)) => uploadFile(path)
-            case (WdlFileType, WdlSingleFile(path)) => uploadFile(path)
+            case (WdlFileType, WdlString(path)) => uploadFile(Paths.get(path))
+            case (WdlFileType, WdlSingleFile(path)) => uploadFile(Paths.get(path))
             case (WdlStringType, WdlSingleFile(path)) => (JsString(path), Vector.empty[DXFile])
             case (_,WdlBoolean(b)) => (JsBoolean(b), Vector.empty[DXFile])
             case (_,WdlInteger(n)) => (JsNumber(n), Vector.empty[DXFile])

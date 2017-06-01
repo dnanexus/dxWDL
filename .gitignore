@@ -18,5 +18,8 @@ cromwell-workflow-logs/
 dxWDL*.jar
 dnanexus-api-*.jar
 
+# Draft WDL files
+test/scratch
+
 # misc
 applet_resources/dxasset.json

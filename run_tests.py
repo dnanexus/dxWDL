@@ -108,10 +108,6 @@ def register_test(tname):
     test_files[tname] = desc
     desc
 
-def register_test_fail(tname):
-    register_test(tname)
-    test_failing.add(tname)
-
 ######################################################################
 
 # Same as above, however, if a file is empty, return an empty dictionary
@@ -329,67 +325,22 @@ def choose_tests(test_name):
         raise Exception("Test prefix {} is unknown".format(test_name))
     return matches
 
-# Register inputs and outputs for all the tests.
-# Return the list of temporary files on the platform
+# Find all the WDL test files, these are located in the 'test'
+# directory. A test file must have some support files.
 def register_all_tests():
-    register_test("math")
-    register_test("system_calls")
-    register_test("four_step")
-    register_test("add3")
-    register_test("concat")
+    for t_file in os.listdir(test_dir):
+        if t_file.endswith(".wdl"):
+            base = os.path.basename(t_file)
+            fname = os.path.splitext(base)[0]
+            try:
+                register_test(fname)
+            except Exception, e:
+                print("Skipping WDL file {}".format(fname))
 
-    # There is a bug in marshaling floats. Hopefully,
-    # it will get fixed in future wdl4s releases.
-    register_test("var_types")
-    register_test("fs")
-    register_test("system_calls2")
-    register_test("math_expr")
-    register_test("string_expr")
-    register_test("call_expressions")
-    register_test("call_expressions2")
-    register_test("files")
-    register_test("string_array")
-    register_test("file_array")
-    register_test("output_array")
-    register_test("file_disambiguation")
-
-    # Scatter/gather
-    register_test("sg_sum")
-    register_test("sg1")
-    register_test("sg_sum2")
-    register_test("sg_sum3")
-    register_test("sg_files")
-
-    # ragged arrays
-    register_test("ragged_array")
-    register_test("ragged_array2")
-
-    # optionals
-    register_test("optionals")
-
-    # docker
-    register_test("bwa_version")
-    register_test_fail("bad_status")
-    register_test_fail("bad_status2")
-
-    # Output error
-    register_test_fail("missing_output")
-
-    # combination of featuers
-    register_test("advanced")
-    register_test("decl_mid_wf")
-
-    # casting types
-    register_test("cast")
-
-    # variable instance types
-    register_test("instance_types")
-
-    # Massive tests
-    register_test("gatk_170412")
-
-    # Complex data types
-    register_test("file_ragged_array")
+    # failing tests
+    test_failing.add("bad_status")
+    test_failing.add("bad_status2")
+    test_failing.add("missing_output")
 
 ######################################################################
 ## Program entry point
