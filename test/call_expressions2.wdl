@@ -41,8 +41,5 @@ workflow call_expressions2 {
         input: a = (int_ops.result * 5), b = (int_ops.result + 1)
     }
 
-    output {
-        string_ops.result
-        int_ops.result
-    }
+    # A missing output section is interpreted as a global wildcard
 }

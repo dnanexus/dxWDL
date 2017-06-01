@@ -16,6 +16,8 @@ import wdl4s.types._
 import wdl4s.values._
 
 object WdlRewrite {
+    val INVALID_AST = AstTools.getAst("", "")
+    val INVALID_ERR_FORMATTER = WdlSyntaxErrorFormatter(Map.empty[Terminal, WdlSource])
 
     // copy references from old scope to newly minted scope.
     private def updateScope(old: Scope, fresh: Scope) : Unit = {
@@ -74,14 +76,12 @@ object WdlRewrite {
 
 
     def taskOutput(name: String, wdlType: WdlType, scope: Scope) = {
-        val invalidAst = AstTools.getAst("", "")
-
         // We need to provide a default value, in the form of a Wdl
         // expression
         val defaultVal:WdlValue = genDefaultValueOfType(wdlType)
         val defaultExpr:WdlExpression = WdlExpression.fromString(defaultVal.toWdlString)
 
-        new TaskOutput(name, wdlType, defaultExpr, invalidAst, Some(scope))
+        new TaskOutput(name, wdlType, defaultExpr, INVALID_AST, Some(scope))
     }
 
     // modify the children in a workflow
@@ -95,6 +95,15 @@ object WdlRewrite {
         wf1
     }
 
+    def workflowGenEmpty(wfName: String) : Workflow = {
+        new Workflow(wfName,
+                     List.empty,
+                     INVALID_ERR_FORMATTER,
+                     Map.empty[String, String],
+                     Map.empty[String, String],
+                     INVALID_AST)
+    }
+
     // modify the children in a scatter
     def scatter [Child <: Scope] (ssc: Scatter,
                                   children: Seq[Child]): Scatter = {
@@ -104,8 +113,12 @@ object WdlRewrite {
         ssc1
     }
 
-/*    def scatter [Child <: Scope] (ssc: Scatter,
-                                  collection: WdlExpression,
-                                  children: Seq[Child]): Scatter = {
-    }*/
+    def namespace(wf: Workflow, tasks: Seq[Task]) : WdlNamespaceWithWorkflow = {
+        new WdlNamespaceWithWorkflow(None, wf,
+                                     Vector.empty, Vector.empty,
+                                     tasks,
+                                     Map.empty,
+                                     WdlRewrite.INVALID_ERR_FORMATTER,
+                                     WdlRewrite.INVALID_AST)
+    }
 }

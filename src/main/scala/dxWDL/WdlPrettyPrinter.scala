@@ -157,12 +157,18 @@ case class WdlPrettyPrinter(fqnFlag: Boolean) {
             case decl: Declaration => apply(decl, level + 1)
             case x => throw new Exception(s"Unimplemented workflow element ${x.toString}")
         }.flatten.toVector
-        val outputs = wf.outputs.map(x => apply(x, level + 2)).flatten.toVector
+
+        // The outputs variable is lazily calculated in the Workflow class. It includes code
+        // If the output section is empty, the calculation is triggered, and it accesses
+        // uninitialized Workflow fields. This is why we check explicitly for this case.
+        val outputs =
+            if (wf.hasEmptyOutputSection) Vector.empty
+            else wf.outputs.map(x => apply(x, level + 2)).flatten.toVector
         val paramMeta = wf.parameterMeta.map{ case (x,y) =>  s"${x}: ${y}" }.toVector
         val meta = wf.meta.map{ case (x,y) =>  s"${x}: ${y}" }.toVector
 
         val lines = children ++
-            buildBlock("output", outputs, level + 1) ++
+            buildBlock("output", outputs, level + 1, force=true) ++
             buildBlock("parameter_meta", paramMeta, level + 1) ++
             buildBlock("meta", meta, level + 1)
         val wfName =

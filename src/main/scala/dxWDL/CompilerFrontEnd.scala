@@ -47,8 +47,6 @@ object CompilerFrontEnd {
                      cef: CompilerErrorFormatter,
                      verbose: Boolean)
 
-    val wdlPP = WdlPrettyPrinter(false)
-
     // Convert the environment to yaml, and then pretty
     // print it.
     def prettyPrint(env: CallEnv) : String = {
@@ -337,19 +335,27 @@ task Add {
     //
     // Note: we do not generate outputs, the applet deals with this issue.
     def genEvalWorkflowFromDeclarations(name: String,
-                                        declarations: Seq[Declaration]) : String = {
-        val inputLines: Vector[String] =
-            if (declarations.isEmpty) {
+                                        declarations_i: Seq[Declaration],
+                                        cState: State) : String = {
+        val declarations =
+            if (declarations_i.isEmpty) {
                 // Corner case: there are no inputs and no
                 // expressions to calculate. Generated a valid
                 // workflow that does nothing.
-                Vector("Int xxxx = 0")
+                val d = WdlRewrite.newDeclaration(WdlIntegerType,
+                                                  "xxxx",
+                                                  Some(WdlExpression.fromString("0")))
+                Vector(d)
             } else {
-                declarations.map(x => wdlPP.apply(x, 1)).flatten.toVector
+                declarations_i.toVector
             }
-        val wdlCode = wdlPP.buildBlock(s"workflow w", inputLines, 0).mkString("\n")
-        verifyWdlCodeIsLegal(wdlCode)
-        wdlCode
+        val wf = WdlRewrite.workflowGenEmpty("w")
+        wf.children = declarations
+
+        // convert to a string
+        val code = WdlPrettyPrinter(false).apply(wf, 0).mkString("\n")
+        verifyWdlCodeIsLegal(code)
+        code
     }
 
     // Create a preliminary applet to handle workflow inputs, top-level
@@ -374,7 +380,7 @@ task Add {
                       declarations: Seq[Declaration],
                       cState: State) : (IR.Stage, IR.Applet) = {
         Utils.trace(cState.verbose, s"Compiling common applet ${appletName}".format(appletName))
-        val code = genEvalWorkflowFromDeclarations(appletName, declarations)
+        val code = genEvalWorkflowFromDeclarations(appletName, declarations, cState)
 
         // Only workflow declarations that do not have an expression,
         // needs to be provide by the user.
@@ -467,7 +473,7 @@ workflow w {
         }.toVector
 
         // We need minimal compute resources, use the default instance type
-        val code = genEvalWorkflowFromDeclarations(appletName, inputDecls ++ outputDeclarations)
+        val code = genEvalWorkflowFromDeclarations(appletName, inputDecls ++ outputDeclarations, cState)
         val applet = IR.Applet(appletName,
                                inputVars,
                                outputVars,
@@ -504,7 +510,7 @@ workflow w {
             case None => false
             case Some(_) => true
         }
-        val wdlCode = wdlPP.apply(task, 0).mkString("\n")
+        val wdlCode = WdlPrettyPrinter(false).apply(task, 0).mkString("\n")
         verifyWdlCodeIsLegal(wdlCode)
         val applet = IR.Applet(task.name,
                                inputVars,
@@ -588,7 +594,7 @@ workflow w {
     // Modify all the expressions used inside a scatter
     def scTransform(ssc: Scatter,
                     inputVars: Vector[IR.CVar],
-                    cState: State) = {
+                    cState: State) : Scatter = {
         // Rename the variables we got from the input.
         def transform(expr: WdlExpression) : WdlExpression = {
             exprRenameVars(expr, inputVars)
@@ -623,8 +629,8 @@ workflow w {
         // the WDL file we generate. To ameliorate this, we add stubs
         // for called tasks.
         val calls: Vector[Call] = ssc.calls.toVector
-        val taskStubs: Map[String, String] =
-            calls.foldLeft(Map.empty[String,String]) { case (accu, call) =>
+        val taskStubs: Map[String, Task] =
+            calls.foldLeft(Map.empty[String,Task]) { case (accu, call) =>
                 val name = call match {
                     case x:TaskCall => x.task.name
                     case x:WorkflowCall =>
@@ -640,21 +646,22 @@ workflow w {
                 } else {
                     // no existing stub, create it
                     val task = genAppletStub(irApplet, ssc)
-                    accu + (name -> wdlPP.apply(task, 0).mkString("\n"))
+                    accu + (name -> task)
                 }
             }
         val trScatter = scTransform(ssc, inputVars, cState)
-
-        val decls: Vector[String]  = inputVars.map{ cVar =>
-            val d = WdlRewrite.newDeclaration(cVar.wdlType, cVar.dxVarName, None)
-            wdlPP.apply(d, 1)
-        }.flatten
+        val decls: Vector[Declaration]  = inputVars.map{ cVar =>
+            WdlRewrite.newDeclaration(cVar.wdlType, cVar.dxVarName, None)
+        }
 
         // Create new workflow that includes only this scatter
-        val lines: Vector[String] = decls ++  wdlPP.apply(trScatter, 1)
-        val wfCode = wdlPP.buildBlock("workflow w", lines, 0).mkString("\n")
-        val stubs = taskStubs.map{ case (_,x) => x}.toVector
-        val wdlCode = stubs.mkString("\n") ++ "\n" ++ wfCode
+        val wf = WdlRewrite.workflowGenEmpty("w")
+        wf.children = decls :+ trScatter
+        val tasks = taskStubs.map{ case (_,x) => x}.toVector
+        // namespace that includes the task stubs, and the workflow
+        val ns = WdlRewrite.namespace(wf, tasks)
+
+        val wdlCode = WdlPrettyPrinter(false).apply(ns, 0).mkString("\n")
         verifyWdlCodeIsLegal(wdlCode)
         wdlCode
     }

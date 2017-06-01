@@ -1,5 +1,11 @@
 # Release Notes
 
+## 0.28
+- Support for ragged file arrays
+- Correctly handle an empty workflow output section
+- Upgrade to wdl4s version 0.12
+- Improvements to regression tests
+
 ## 0.27
 - Support the import directive. This allows spreading definitions
   across multiple files.
