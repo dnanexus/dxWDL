@@ -122,10 +122,6 @@ case class WdlPrettyPrinter(fqnFlag: Boolean) {
         Vector(indentLine(ln, level))
     }
 
-    // We need to be careful here to preserve white spaces in the command
-    // section.
-    //
-    // TODO: support meta and parameterMeta
     def apply(task: Task, level:Int) : Vector[String] = {
         val decls = task.declarations.map(x => apply(x, level + 1)).flatten.toVector
         val runtime = task.runtimeAttributes.attrs.map{ case (key, expr) =>
@@ -157,12 +153,23 @@ case class WdlPrettyPrinter(fqnFlag: Boolean) {
             case decl: Declaration => apply(decl, level + 1)
             case x => throw new Exception(s"Unimplemented workflow element ${x.toString}")
         }.flatten.toVector
-        val outputs = wf.outputs.map(x => apply(x, level + 2)).flatten.toVector
+
+        // The outputs variable is lazily calculated in the Workflow class. It includes code
+        // that accesses fields that we do not properly intialize. The try/catch
+        // is a workaround. It works because the output section is ignored; DNAx does
+        // not support outputs from workflows.
+        val outputs =
+            try {
+                wf.outputs.map(x => apply(x, level + 2)).flatten.toVector
+            } catch {
+                case e: Throwable =>
+                    Vector.empty
+            }
         val paramMeta = wf.parameterMeta.map{ case (x,y) =>  s"${x}: ${y}" }.toVector
         val meta = wf.meta.map{ case (x,y) =>  s"${x}: ${y}" }.toVector
 
         val lines = children ++
-            buildBlock("output", outputs, level + 1) ++
+            buildBlock("output", outputs, level + 1, force=true) ++
             buildBlock("parameter_meta", paramMeta, level + 1) ++
             buildBlock("meta", meta, level + 1)
         val wfName =

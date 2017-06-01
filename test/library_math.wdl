@@ -9,7 +9,7 @@ task Add {
         echo $((a + b))
     }
     output {
-        Int result = a + b
+        Int result = read_int(stdout())
     }
 }
 

@@ -66,20 +66,20 @@ object Utils {
         }
     }
 
-    // Long strings cause problems with bash and the UI
     val CHECKSUM_PROP = "dxWDL_checksum"
     val COMMON = "common"
     val DOWNLOAD_RETRY_LIMIT = 3
     val DXPY_FILE_TRANSFER = true
     val DX_HOME = "/home/dnanexus"
+    val FLAT_FILES_SUFFIX = "___dxfiles"
     val INSTANCE_TYPE_DB_FILENAME = "instanceTypeDB.json"
     val LINK_INFO_FILENAME = "linking.json"
     val MAX_HOURLY_RATE = 10.0
-    val MAX_STRING_LEN = 8 * 1024
+    val MAX_STRING_LEN = 8 * 1024     // Long strings cause problems with bash and the UI
     val SCATTER = "scatter"
     val UPLOAD_RETRY_LIMIT = DOWNLOAD_RETRY_LIMIT
     val UNIVERSAL_FILE_PREFIX = "dx://"
-    val VERSION = "0.27"
+    val VERSION = "0.28"
     val WDL_SNIPPET_FILENAME = "source.wdl"
 
     // Substrings used by the compiler for encoding purposes
@@ -511,6 +511,12 @@ object Utils {
         }
     }
 
+    def stripArray(t: WdlType) : WdlType = {
+        t match {
+            case WdlArrayType(x) => x
+            case _ => throw new Exception(s"WDL type $t is not an array")
+        }
+    }
 
     // Replace all special json characters from with a white space.
     def sanitize(s : String) : String = {
