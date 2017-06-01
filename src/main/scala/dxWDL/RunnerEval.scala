@@ -135,7 +135,7 @@ object RunnerEval {
         }.flatten.toMap
         val m = outputFields.map{ case (varName,jsNode) =>
             (varName, Utils.jsValueOfJsonNode(jsNode))
-        } .toMap
+        }.toMap
 
         val json = JsObject(m)
         val ast_pp = json.prettyPrint
