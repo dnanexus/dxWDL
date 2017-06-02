@@ -52,9 +52,9 @@ to the compiler, or building it on their own.
 ## Installation of software prerequisits
 
 Download the Broad Institute tools, get the latest versions of
-cromwell and wdl4s. Currently, we are working with wdl4s version
-[0.11](http://broadinstitute.github.io/wdl4s/latest/wdl4s/index.html), and
-cromwell version [26](https://github.com/broadinstitute/cromwell/releases/tag/26).
+[Cromwell](https://github.com/broadinstitute/cromwell/releases)
+and
+[wdl4s](http://broadinstitute.github.io/wdl4s/latest/wdl4s/index.html).
 
 The instructions here assume an Ubuntu 16.04 system (Xenial).
 
