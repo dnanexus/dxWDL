@@ -9,9 +9,9 @@ import java.nio.file.{Files, Paths, Path}
 import net.jcazevedo.moultingyaml._
 import net.jcazevedo.moultingyaml.DefaultYamlProtocol._
 import scala.util.{Failure, Success, Try}
+import wdl4s._
 import wdl4s.AstTools
 import wdl4s.AstTools.EnhancedAstNode
-import wdl4s._
 import wdl4s.expression._
 import wdl4s.parser.WdlParser.{Ast, AstNode, Terminal}
 import wdl4s.types._
@@ -68,32 +68,6 @@ object CompilerFrontEnd {
         }
     }
 
-    // Create a declaration.
-    //
-    // The difficulty here is in generating an AST.
-    def declarationGen(wdlType: WdlType,
-                       name: String,
-                       expr: Option[WdlExpression]) : Declaration = {
-        val textualRepr = expr match {
-            case None => s"${wdlType.toWdlString} ${name}"
-            case Some(e) => s"${wdlType.toWdlString} ${name} = ${e.toWdlString}"
-        }
-        val ast: Ast = AstTools.getAst(textualRepr, "")
-        Declaration(wdlType, name, expr, None, ast)
-    }
-
-    def genDefaultValueOfType(wdlType: WdlType) : WdlValue = {
-        wdlType match {
-            case WdlArrayType(x) => WdlArray(WdlArrayType(x), List())  // an empty array
-            case WdlBooleanType => WdlBoolean(true)
-            case WdlIntegerType => WdlInteger(0)
-            case WdlFloatType => WdlFloat(0.0)
-            case WdlStringType => WdlString("")
-            case WdlFileType => WdlFile("/tmp/X.txt")
-            case _ => throw new Exception(s"Unhandled type ${wdlType.toWdlString}")
-        }
-    }
-
     /** Create a stub for an applet. This is an empty task
       that includes the input and output definitions. It is used
       to allow linking to externally defined tasks and applets.
@@ -118,28 +92,16 @@ task Add {
         Int result
     }
 */
-    def genAppletStub(applet: IR.Applet) : Task = {
-        // write a Task as human readable text
-        val inputs = applet.inputs.map(cVar => s"${cVar.wdlType.toWdlString} ${cVar.name}")
+    def genAppletStub(applet: IR.Applet, scope: Scope) : Task = {
+        val task = WdlRewrite.taskGenEmpty(applet.name, scope)
+        val inputs = applet.inputs.map{ cVar =>
+            WdlRewrite.newDeclaration(cVar.wdlType, cVar.name, None)
+        }.toVector
         val outputs = applet.outputs.map{ cVar =>
-            val defaultVal: WdlValue = genDefaultValueOfType(cVar.wdlType)
-            s"${cVar.wdlType.toWdlString} ${cVar.name} = ${defaultVal.toWdlString}"
-        }
-
-        val body = inputs.map(line => WdlPrettyPrinter.indentLine(line, 1)) ++
-            WdlPrettyPrinter.buildBlock("command", Vector(""), 1) ++
-            WdlPrettyPrinter.buildBlock("output", outputs, 1)
-        val wdlCode = WdlPrettyPrinter.buildBlock(s"task ${applet.name}", body, 0).mkString("\n")
-
-        // Convert to a Task structure
-        val ns = WdlNamespace.loadUsingSource(wdlCode, None, None) match {
-            case Success(x) => x
-            case Failure(f) =>
-                System.err.println(s"Did not generate legal WDL code for applet ${applet.name}")
-                System.err.println(wdlCode)
-                throw f
-        }
-        ns.tasks.head
+            WdlRewrite.taskOutput(cVar.name, cVar.wdlType, task)
+        }.toVector
+        task.children = inputs ++ outputs
+        task
     }
 
     // Rename member accesses inside an expression, from
@@ -214,7 +176,7 @@ task Add {
     // that, in the general case, could be calculated only at runtime.
     // Currently, we support only constants. If a runtime expression is used,
     // we convert it to a moderatly high constant.
-    def calcInstanceType(taskOpt: Option[Task], cState: State) : IR.InstanceTypeSpec = {
+    def calcInstanceType(taskOpt: Option[Task], cState: State) : IR.InstanceType = {
         def lookup(varName : String) : WdlValue = {
             throw new DynamicInstanceTypesException()
         }
@@ -233,17 +195,17 @@ task Add {
                     // For example, the top level of a scatter block. We use
                     // the default instance type, because one will probably be available,
                     // and it will probably be inexpensive.
-                    IR.InstTypeDefault
+                    IR.InstanceTypeDefault
                 case Some(task) =>
                     val memory = evalAttr(task, "memory")
                     val diskSpace = evalAttr(task, "disks")
                     val cores = evalAttr(task, "cpu")
-                    IR.InstTypeConst(cState.instanceTypeDB.apply(memory, diskSpace, cores))
+                    IR.InstanceTypeConst(cState.instanceTypeDB.apply(memory, diskSpace, cores))
             }
         } catch {
             case e : DynamicInstanceTypesException =>
                 // The generated code will need to calculate the instance type at runtime
-                IR.InstTypeRuntime
+                IR.InstanceTypeRuntime
         }
     }
 
@@ -373,19 +335,27 @@ task Add {
     //
     // Note: we do not generate outputs, the applet deals with this issue.
     def genEvalWorkflowFromDeclarations(name: String,
-                                        declarations: Seq[Declaration]) : String = {
-        val inputLines: Vector[String] =
-            if (declarations.isEmpty) {
+                                        declarations_i: Seq[Declaration],
+                                        cState: State) : String = {
+        val declarations =
+            if (declarations_i.isEmpty) {
                 // Corner case: there are no inputs and no
                 // expressions to calculate. Generated a valid
                 // workflow that does nothing.
-                Vector("Int xxxx = 0")
+                val d = WdlRewrite.newDeclaration(WdlIntegerType,
+                                                  "xxxx",
+                                                  Some(WdlExpression.fromString("0")))
+                Vector(d)
             } else {
-                declarations.map(x => WdlPrettyPrinter.apply(x, 1)).flatten.toVector
+                declarations_i.toVector
             }
-        val wdlCode = WdlPrettyPrinter.buildBlock(s"workflow w", inputLines, 0).mkString("\n")
-        verifyWdlCodeIsLegal(wdlCode)
-        wdlCode
+        val wf = WdlRewrite.workflowGenEmpty("w")
+        wf.children = declarations
+
+        // convert to a string
+        val code = WdlPrettyPrinter(false).apply(wf, 0).mkString("\n")
+        verifyWdlCodeIsLegal(code)
+        code
     }
 
     // Create a preliminary applet to handle workflow inputs, top-level
@@ -410,7 +380,7 @@ task Add {
                       declarations: Seq[Declaration],
                       cState: State) : (IR.Stage, IR.Applet) = {
         Utils.trace(cState.verbose, s"Compiling common applet ${appletName}".format(appletName))
-        val code = genEvalWorkflowFromDeclarations(appletName, declarations)
+        val code = genEvalWorkflowFromDeclarations(appletName, declarations, cState)
 
         // Only workflow declarations that do not have an expression,
         // needs to be provide by the user.
@@ -440,7 +410,7 @@ task Add {
                                calcInstanceType(None, cState),
                                false,
                                cState.destination,
-                               IR.Eval,
+                               IR.AppletKindEval,
                                code)
         (IR.Stage(appletName, appletName, Vector[IR.SArg](), outputVars),
          applet)
@@ -486,7 +456,7 @@ workflow w {
         }.toMap
         val inputVars: Vector[IR.CVar] = closure.map{ case (_, lVar) => lVar.cVar }.toVector
         val inputDecls: Vector[Declaration] = closure.map{ case(_, lVar) =>
-            declarationGen(lVar.cVar.wdlType, lVar.cVar.dxVarName, None)
+            WdlRewrite.newDeclaration(lVar.cVar.wdlType, lVar.cVar.dxVarName, None)
         }.toVector
 
         // figure out the outputs
@@ -496,21 +466,21 @@ workflow w {
         val outputDeclarations = declarations.map{ decl =>
             decl.expression match {
                 case Some(expr) =>
-                    declarationGen(decl.wdlType, decl.unqualifiedName,
+                    WdlRewrite.newDeclaration(decl.wdlType, decl.unqualifiedName,
                                    Some(exprRenameVars(expr, inputVars)))
                 case None => decl
             }
         }.toVector
 
         // We need minimal compute resources, use the default instance type
-        val code = genEvalWorkflowFromDeclarations(appletName, inputDecls ++ outputDeclarations)
+        val code = genEvalWorkflowFromDeclarations(appletName, inputDecls ++ outputDeclarations, cState)
         val applet = IR.Applet(appletName,
                                inputVars,
                                outputVars,
                                calcInstanceType(None, cState),
                                false,
                                cState.destination,
-                               IR.Eval,
+                               IR.AppletKindEval,
                                code)
 
         // Link to the X.y original variables
@@ -540,7 +510,7 @@ workflow w {
             case None => false
             case Some(_) => true
         }
-        val wdlCode = WdlPrettyPrinter.apply(task, 0).mkString("\n")
+        val wdlCode = WdlPrettyPrinter(false).apply(task, 0).mkString("\n")
         verifyWdlCodeIsLegal(wdlCode)
         val applet = IR.Applet(task.name,
                                inputVars,
@@ -548,7 +518,7 @@ workflow w {
                                calcInstanceType(Some(task), cState),
                                useDocker,
                                cState.destination,
-                               IR.Task,
+                               IR.AppletKindTask,
                                wdlCode)
         (applet, outputVars)
     }
@@ -571,7 +541,10 @@ workflow w {
                     cState: State) : IR.Stage = {
         // Find the right applet
         val task = taskOfCall(call, cState)
-        val (callee, outputs) = taskApplets(task.name)
+        val (callee, outputs) = taskApplets.get(task.name) match {
+            case Some(x) => x
+            case None => throw new Exception(s"Undefined task ${task.name}")
+        }
 
         // Extract the input values/links from the environment
         val inputs: Vector[IR.SArg] = callee.inputs.map{ cVar =>
@@ -618,20 +591,46 @@ workflow w {
         IR.Stage(stageName, task.name, inputs, callee.outputs)
     }
 
+    // Modify all the expressions used inside a scatter
+    def scTransform(ssc: Scatter,
+                    inputVars: Vector[IR.CVar],
+                    cState: State) : Scatter = {
+        // Rename the variables we got from the input.
+        def transform(expr: WdlExpression) : WdlExpression = {
+            exprRenameVars(expr, inputVars)
+        }
+
+        // transform the expressions in a scatter
+        def transformChild(scope: Scope): Scope = {
+            scope match {
+                case tc:TaskCall =>
+                    val inputs = tc.inputMappings.map{ case (k,expr) => (k, transform(expr)) }.toMap
+                    WdlRewrite.taskCall(tc, inputs)
+                case d:Declaration =>
+                    new Declaration(d.wdlType, d.unqualifiedName,
+                                    d.expression.map(transform), d.parent, d.ast)
+                case _ => throw new Exception("Unimplemented scatter element")
+            }
+        }
+        val trSsc = new Scatter(ssc.index, ssc.item, transform(ssc.collection), ssc.ast)
+        trSsc.children = ssc.children.map(x => transformChild(x))
+        trSsc
+    }
+
     // Create a valid WDL workflow that runs a scatter. The main modification
     // required here is renaming variables of the form A.x to A_x.
-    def scGenWorklow(scatter: Scatter,
+    def scGenWorklow(ssc: Scatter,
                      taskApplets: Map[String, (IR.Applet, Vector[IR.CVar])],
                      inputVars: Vector[IR.CVar],
                      outputVars: Vector[IR.CVar],
                      cState: State) : String = {
         // A workflow must have definitions for all the tasks it
-        // calls. However, a scatter calls tasks, which missing from
+        // calls. However, a scatter calls tasks, that are missing from
         // the WDL file we generate. To ameliorate this, we add stubs
         // for called tasks.
-        val calls: Vector[Call] = scatter.calls.toVector
-        val taskStubs: Map[String, String] =
-            calls.foldLeft(Map.empty[String,String]) { case (accu, call) =>
+        val calls: Vector[Call] = ssc.calls.toVector
+        val taskStubs: Map[String, Task] =
+            calls.foldLeft(Map.empty[String,Task]) { case (accu, call) =>
                 val name = call match {
                     case x:TaskCall => x.task.name
                     case x:WorkflowCall =>
@@ -646,26 +645,23 @@ workflow w {
                     accu
                 } else {
                     // no existing stub, create it
-                    val task = genAppletStub(irApplet)
-                    accu + (name -> WdlPrettyPrinter.apply(task, 0).mkString("\n"))
+                    val task = genAppletStub(irApplet, ssc)
+                    accu + (name -> task)
                 }
             }
-
-        val decls: Vector[String]  = inputVars.map{ cVar =>
-            val d = declarationGen(cVar.wdlType, cVar.dxVarName, None)
-            WdlPrettyPrinter.apply(d, 1)
-        }.flatten
-
-        // Rename the variables we got from the input.
-        def exprTransform(expr: WdlExpression) : WdlExpression = {
-            exprRenameVars(expr, inputVars)
+        val trScatter = scTransform(ssc, inputVars, cState)
+        val decls: Vector[Declaration]  = inputVars.map{ cVar =>
+            WdlRewrite.newDeclaration(cVar.wdlType, cVar.dxVarName, None)
         }
 
-        val lines: Vector[String] = decls ++
-            WdlPrettyPrinter.scatterRewrite(scatter, 1, exprTransform)
-        val wfCode = WdlPrettyPrinter.buildBlock("workflow w", lines, 0).mkString("\n")
-        val stubs = taskStubs.map{ case (_,x) => x}.toVector
-        val wdlCode = stubs.mkString("\n") ++ "\n" ++ wfCode
+        // Create new workflow that includes only this scatter
+        val wf = WdlRewrite.workflowGenEmpty("w")
+        wf.children = decls :+ trScatter
+        val tasks = taskStubs.map{ case (_,x) => x}.toVector
+        // namespace that includes the task stubs, and the workflow
+        val ns = WdlRewrite.namespace(wf, tasks)
+
+        val wdlCode = WdlPrettyPrinter(false).apply(ns, 0).mkString("\n")
         verifyWdlCodeIsLegal(wdlCode)
         wdlCode
     }
@@ -791,7 +787,7 @@ workflow w {
                                calcInstanceType(None, cState),
                                false,
                                cState.destination,
-                               IR.Scatter(calls.map(_.unqualifiedName).toVector),
+                               IR.AppletKindScatter(calls.map(_.unqualifiedName).toVector),
                                wdlCode)
 
         // The calls will be made from the scatter applet at runtime.
@@ -883,6 +879,19 @@ workflow w {
         IR.Workflow(wf.unqualifiedName, stages, tApplets ++ auxApplets.flatten.toVector)
     }
 
+    // Load imported tasks
+    def loadImportedTasks(ns: WdlNamespace, cState: State) : Set[Task] = {
+        // Make a pass, and figure out what we access
+        //
+        ns.taskCalls.map{ call:TaskCall =>
+            val taskFqn = call.task.fullyQualifiedName
+            ns.resolve(taskFqn) match {
+                case Some(task:Task) => task
+                case x => throw new Exception(s"Resolved call to ${taskFqn} and got (${x})")
+            }
+        }.toSet
+    }
+
     // compile the WDL source code into intermediate representation
     def apply(ns : WdlNamespace,
               instanceTypeDB: InstanceTypeDB,
@@ -892,12 +901,24 @@ workflow w {
         val cState = new State(destination, instanceTypeDB, cef, verbose)
         Utils.trace(cState.verbose, "FrontEnd pass")
 
+        // Load all accessed applets, local or imported
+        val accessedTasks: Set[Task] = loadImportedTasks(ns, cState)
+        val accessedTaskNames = accessedTasks.map(task => task.name)
+        Utils.trace(cState.verbose, s"Accessed tasks = ${accessedTaskNames}")
+
+        // Make sure all local tasks are included; we want to compile
+        // them even if they are not accessed.
+        val allTasks:Set[Task] = accessedTasks ++ ns.tasks.toSet
+
         // compile all the tasks into applets
-        Utils.trace(cState.verbose, "FrontEnd: compiling applets")
-        val taskApplets: Map[String, (IR.Applet, Vector[IR.CVar])] = ns.tasks.map{ task =>
+        Utils.trace(cState.verbose, "FrontEnd: compiling tasks into dx:applets")
+
+        val taskApplets: Map[String, (IR.Applet, Vector[IR.CVar])] = allTasks.map{ task =>
             val (applet, outputs) = compileTask(task, cState)
             task.name -> (applet, outputs)
         }.toMap
+
+
         val irApplets: Vector[IR.Applet] = taskApplets.map{
             case (key, (irApplet,_)) => irApplet
         }.toVector

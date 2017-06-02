@@ -38,9 +38,8 @@ object CompilerBackend {
     //   Array[String] -> array:string
     //
     // Ragged arrays, maps, and objects, cannot be mapped in such a trivial way.
-    // Currently, we handle only ragged arrays. All cases aside from Array[Array[File]
-    // are encoded as a json string. Ragged file arrays are passed as two fields: a
-    // json string, and a flat file array.
+    // These are called "Complex Types", or "Complex". They are handled
+    // by passing a JSON structure and a vector of dx:files.
     def wdlVarToSpec(varName: String,
                      wdlType : WdlType,
                      ast: Ast,
@@ -48,18 +47,31 @@ object CompilerBackend {
         val name = Utils.encodeAppletVarName(varName)
         def mkPrimitive(dxType: String) : Vector[Map[String, JsValue]] = {
             Vector(Map("name" -> JsString(name),
-                     "help" -> JsString(wdlType.toWdlString),
-                     "class" -> JsString(dxType)))
+                       "help" -> JsString(wdlType.toWdlString),
+                       "class" -> JsString(dxType)))
         }
         def mkPrimitiveArray(dxType: String) : Vector[Map[String, JsValue]] = {
             Vector(Map("name" -> JsString(name),
-                     "help" -> JsString(wdlType.toWdlString),
-                     "class" -> JsString("array:" ++ dxType)))
+                       "help" -> JsString(wdlType.toWdlString),
+                       "class" -> JsString("array:" ++ dxType)))
         }
         def mkRaggedArray() : Vector[Map[String,JsValue]] = {
             Vector(Map("name" -> JsString(name),
-                     "help" -> JsString(wdlType.toWdlString),
-                     "class" -> JsString("file")))
+                       "help" -> JsString(wdlType.toWdlString),
+                       "class" -> JsString("file")))
+        }
+        def mkComplex() : Vector[Map[String,JsValue]] = {
+            // A JSON structure, passed as a file
+            // A vector of platform files.
+            //
+            // Note: the help field for the file vector is empty,
+            // so that the WdlVarLinks.loadJobInputsAsLinks method
+            // will not interpret it.
+            Vector(Map("name" -> JsString(name),
+                       "help" -> JsString(wdlType.toWdlString),
+                       "class" -> JsString("file")),
+                   Map("name" -> JsString(name + Utils.FLAT_FILES_SUFFIX),
+                       "class" -> JsString("array:file")))
         }
         def nonOptional(t : WdlType) : Vector[Map[String, JsValue]] = {
             t match {
@@ -83,8 +95,8 @@ object CompilerBackend {
                 case WdlArrayType(WdlArrayType(WdlFloatType)) => mkRaggedArray()
                 case WdlArrayType(WdlArrayType(WdlStringType)) => mkRaggedArray()
 
-                case _ =>
-                    throw new Exception(cState.cef.notCurrentlySupported(ast, s"type ${wdlType}"))
+                // complex types, that may contains files
+                case _ => mkComplex()
             }
         }
 
@@ -146,9 +158,9 @@ object CompilerBackend {
             |""".stripMargin.trim
     }
 
-    def genBashScript(appKind: IR.AppletKind, instanceType: IR.InstanceTypeSpec) : String = {
+    def genBashScript(appKind: IR.AppletKind, instanceType: IR.InstanceType) : String = {
         appKind match {
-            case IR.Eval =>
+            case IR.AppletKindEval =>
                 s"""|#!/bin/bash -ex
                     |main() {
                     |    echo "working directory =$${PWD}"
@@ -157,7 +169,7 @@ object CompilerBackend {
                     |    java -cp $${DX_FS_ROOT}/dnanexus-api-0.1.0-SNAPSHOT-jar-with-dependencies.jar:$${DX_FS_ROOT}/dxWDL.jar:$${CLASSPATH} dxWDL.Main eval $${DX_FS_ROOT}/${WDL_SNIPPET_FILENAME} $${HOME}
                     |}""".stripMargin.trim
 
-            case IR.Scatter(_) =>
+            case IR.AppletKindScatter(_) =>
                 s"""|#!/bin/bash -ex
                     |main() {
                     |    echo "working directory =$${PWD}"
@@ -166,14 +178,14 @@ object CompilerBackend {
                     |    java -cp $${DX_FS_ROOT}/dnanexus-api-0.1.0-SNAPSHOT-jar-with-dependencies.jar:$${DX_FS_ROOT}/dxWDL.jar:$${CLASSPATH} dxWDL.Main launchScatter $${DX_FS_ROOT}/${WDL_SNIPPET_FILENAME} $${HOME}
                     |}""".stripMargin.trim
 
-            case IR.Task =>
+            case IR.AppletKindTask =>
                 instanceType match {
-                    case IR.InstTypeDefault | IR.InstTypeConst(_) =>
+                    case IR.InstanceTypeDefault | IR.InstanceTypeConst(_) =>
                         s"""|#!/bin/bash -ex
                             |main() {
                             |${genBashScriptTaskBody()}
                             |}""".stripMargin
-                    case IR.InstTypeRuntime =>
+                    case IR.InstanceTypeRuntime =>
                         s"""|#!/bin/bash -ex
                             |main() {
                             |    # evaluate the instance type, and launch a sub job on it
@@ -248,7 +260,7 @@ object CompilerBackend {
         }
 
         // Add the pricing model, if this will be needed
-        if (applet.instanceType == IR.InstTypeRuntime) {
+        if (applet.instanceType == IR.InstanceTypeRuntime) {
             Utils.writeFileContent(resourcesDir.resolve(Utils.INSTANCE_TYPE_DB_FILENAME),
                                    cState.instanceTypeDB.toJson.prettyPrint)
         }
@@ -260,11 +272,11 @@ object CompilerBackend {
 
     // Set the run spec.
     //
-    def calcRunSpec(iType: IR.InstanceTypeSpec, cState: State) : JsValue = {
+    def calcRunSpec(iType: IR.InstanceType, cState: State) : JsValue = {
         // find the dxWDL asset
         val instanceType:String = iType match {
-            case IR.InstTypeConst(x) => x
-            case IR.InstTypeDefault | IR.InstTypeRuntime =>
+            case IR.InstanceTypeConst(x) => x
+            case IR.InstanceTypeDefault | IR.InstanceTypeRuntime =>
                 cState.instanceTypeDB.getMinimalInstanceType
         }
         val runSpec: Map[String, JsValue] = Map(
@@ -383,7 +395,7 @@ object CompilerBackend {
         val json = JsObject(attrs ++ networkAccess)
 
         val aplLinks = applet.kind match {
-            case IR.Scatter(_) => appletDict
+            case IR.AppletKindScatter(_) => appletDict
             case _ => Map.empty[String, (IR.Applet, DXApplet)]
         }
         // create a directory structure for this applet
@@ -587,7 +599,7 @@ object CompilerBackend {
                 // map source calls to the stage name. For example, this happens
                 // for scatters.
                 val call2Stage = irApplet.kind match {
-                    case IR.Scatter(sourceCalls) => sourceCalls.map(x => x -> stg.name).toMap
+                    case IR.AppletKindScatter(sourceCalls) => sourceCalls.map(x => x -> stg.name).toMap
                     case _ => Map.empty[String, String]
                 }
 

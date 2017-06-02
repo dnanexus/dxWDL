@@ -5,7 +5,8 @@ target/
 
 # Cromwell runtime
 execution/
-cromwell-executions
+cromwell-executions/
+cromwell-workflow-logs/
 
 # compiled java classes
 *.class
@@ -16,6 +17,9 @@ cromwell-executions
 # jar files
 dxWDL*.jar
 dnanexus-api-*.jar
+
+# Draft WDL files
+test/scratch
 
 # misc
 applet_resources/dxasset.json

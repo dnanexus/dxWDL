@@ -15,7 +15,7 @@ import time
 from dxpy.exceptions import DXJobFailureError
 
 top_dir = os.path.dirname(sys.argv[0])
-test_dir = os.path.join(top_dir, "tests")
+test_dir = os.path.join(top_dir, "test")
 git_revision = subprocess.check_output(["git", "describe", "--always", "--dirty", "--tags"]).strip()
 git_revision_in_jar= subprocess.check_output(["git", "describe", "--always", "--tags"]).strip()
 test_files={}
@@ -45,7 +45,10 @@ medium_test_list = [
     "cast",
 
     # Variable instance types
-    "instance_types"
+    "instance_types",
+
+    # Complex data types
+    "file_ragged_array"
 ] + small_test_list
 
 TestDesc = namedtuple('TestDesc', 'wf_name wdl_source wdl_input dx_input results')
@@ -104,10 +107,6 @@ def register_test(tname):
             verify_json_file(path)
     test_files[tname] = desc
     desc
-
-def register_test_fail(tname):
-    register_test(tname)
-    test_failing.add(tname)
 
 ######################################################################
 
@@ -326,64 +325,22 @@ def choose_tests(test_name):
         raise Exception("Test prefix {} is unknown".format(test_name))
     return matches
 
-# Register inputs and outputs for all the tests.
-# Return the list of temporary files on the platform
+# Find all the WDL test files, these are located in the 'test'
+# directory. A test file must have some support files.
 def register_all_tests():
-    register_test("math")
-    register_test("system_calls")
-    register_test("four_step")
-    register_test("add3")
-    register_test("concat")
+    for t_file in os.listdir(test_dir):
+        if t_file.endswith(".wdl"):
+            base = os.path.basename(t_file)
+            fname = os.path.splitext(base)[0]
+            try:
+                register_test(fname)
+            except Exception, e:
+                print("Skipping WDL file {}".format(fname))
 
-    # There is a bug in marshaling floats. Hopefully,
-    # it will get fixed in future wdl4s releases.
-    register_test("var_types")
-    register_test("fs")
-    register_test("system_calls2")
-    register_test("math_expr")
-    register_test("string_expr")
-    register_test("call_expressions")
-    register_test("call_expressions2")
-    register_test("files")
-    register_test("string_array")
-    register_test("file_array")
-    register_test("output_array")
-    register_test("file_disambiguation")
-
-    # Scatter/gather
-    register_test("sg_sum")
-    register_test("sg1")
-    register_test("sg_sum2")
-    register_test("sg_sum3")
-    register_test("sg_files")
-
-    # ragged arrays
-    register_test("ragged_array")
-    register_test("ragged_array2")
-
-    # optionals
-    register_test("optionals")
-
-    # docker
-    register_test("bwa_version")
-    register_test_fail("bad_status")
-    register_test_fail("bad_status2")
-
-    # Output error
-    register_test_fail("missing_output")
-
-    # combination of featuers
-    register_test("advanced")
-    register_test("decl_mid_wf")
-
-    # casting types
-    register_test("cast")
-
-    # variable instance types
-    register_test("instance_types")
-
-    # Massive tests
-    register_test("gatk_170412")
+    # failing tests
+    test_failing.add("bad_status")
+    test_failing.add("bad_status2")
+    test_failing.add("missing_output")
 
 ######################################################################
 ## Program entry point
@@ -403,7 +360,7 @@ def main():
                            action="store_true", default=False)
     argparser.add_argument("--project", help="DNAnexus project ID", default="project-F07pBj80ZvgfzQK28j35Gj54")
     argparser.add_argument("--test", help="Run a test, or a subgroup of tests",
-                           default="S")
+                           default="M")
     argparser.add_argument("--test-list", help="Print a list of available tests",
                            action="store_true", default=False)
     argparser.add_argument("--verbose", help="Verbose compilation",

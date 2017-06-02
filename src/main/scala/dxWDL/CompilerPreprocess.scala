@@ -96,8 +96,8 @@ object CompilerPreprocess {
         }
 
         val callModifiedInputs = call match {
-            case tc: TaskCall => TaskCall(tc.alias, tc.task, inputs, tc.ast)
-            case wfc: WorkflowCall => WorkflowCall(wfc.alias, wfc.calledWorkflow, inputs, wfc.ast)
+            case tc: TaskCall => WdlRewrite.taskCall(tc, inputs)
+            case wfc: WorkflowCall => throw new Exception(s"Unimplemented WorkflowCall")
         }
         tmpDecls += callModifiedInputs
         tmpDecls.toVector
@@ -200,9 +200,7 @@ object CompilerPreprocess {
 
     // 1. Move sub-expressions in a scatter block into separate declarations.
     // 2. Collect the sub-expressions, as much as possible.
-    //
-    // Bonus: simplify the collection expression
-    def simplifyScatter(ssc: Scatter, definedVars: Set[String], cState: State) : Vector[String] = {
+    def simplifyScatter(ssc: Scatter, definedVars: Set[String], cState: State) : Scatter = {
         // extract expressions from calls
         val children : Vector[Scope] = ssc.children.map {
             case call: Call => simplifyCall(call, cState)
@@ -214,14 +212,9 @@ object CompilerPreprocess {
         val drs = DeclReorgState(definedVars, Vector.empty[Scope], children)
         val reorgChildren = collectDeclarations(drs, cState)
 
-        val top: String = s"scatter (${ssc.item} in ${ssc.collection.toWdlString})"
-        val lines: Vector[String] = reorgChildren.map{
-            case x:Call => WdlPrettyPrinter.apply(x, 2)
-            case x:Scatter => WdlPrettyPrinter.apply(x, 2)
-            case x:Declaration => WdlPrettyPrinter.apply(x, 2)
-            case x => throw new Exception(s"Unimplemented scatter element ${x.toString}")
-        }.flatten.toVector
-        WdlPrettyPrinter.buildBlock(top, lines, 1)
+        // Build a new scatter structure. We are cheating on the AST; since we
+        // don't know how to create a new one, we just keep the old AST.
+        WdlRewrite.scatter(ssc, reorgChildren)
     }
 
     // Simplify scatter blocks inside the workflow. Return a valid new
@@ -229,37 +222,25 @@ object CompilerPreprocess {
     //
     // Note: we keep track of the defined variables, because this is required for
     // moving declarations inside the scatter sub blocks.
-    def simplifyAllScatters(wf:Workflow, taskLines:Vector[String], cState:State): Workflow = {
+    def simplifyAllScatters(wf:Workflow, cState:State): Workflow = {
         Utils.trace(cState.verbose, "simplifying scatters")
         var definedVars:Set[String] = Set.empty
-        val childLines: Vector[String] = wf.children.map {
+        val children: Vector[Scope] = wf.children.map {
             case ssc:Scatter =>
                 // Be careful to add the indexing variable to the environment
                 val sscDefVars = definedVars + ssc.item
                 simplifyScatter(ssc, sscDefVars, cState)
-            case call:Call => WdlPrettyPrinter.apply(call, 1)
+            case call:Call => call
             case decl:Declaration =>
                 definedVars = definedVars + decl.unqualifiedName
-                WdlPrettyPrinter.apply(decl, 1)
+                decl
             case x => throw new Exception(s"Unimplemented workflow element ${x.toString}")
-        }.flatten.toVector
-
-        // add the tasks to the workflow, to keep it valid.
-        val wfLines = WdlPrettyPrinter.buildBlock(
-            s"workflow ${wf.unqualifiedName}", childLines, 0
-        )
-        val allLines = (taskLines ++ wfLines).mkString("\n")
-        val ns = WdlNamespace.loadUsingSource(allLines, None, None).get
-        ns match {
-            case nswf: WdlNamespaceWithWorkflow => nswf.workflow
-            case _ =>
-                System.err.println(s"Badly rewritten workflow ${allLines}")
-                throw new Exception("WDL string contains no workflow")
-        }
+        }.toVector
+        WdlRewrite.workflow(wf, children)
     }
 
     // Simplify the declarations at the top level of the workflow
-    def simplifyTopLevel(wf: Workflow, taskLines:Vector[String], cState: State) : Vector[String] = {
+    def simplifyTopLevel(wf: Workflow, cState: State) : Workflow = {
         Utils.trace(cState.verbose, "simplifying workflow top level")
 
         // simplification step
@@ -272,61 +253,93 @@ object CompilerPreprocess {
         // required for calculations.
         val drs = DeclReorgState(Set.empty[String], Vector.empty[Scope], elems.toVector)
         val reorgElems = collectDeclarations(drs, cState)
-
-        // pretty print the workflow. The output
-        // must be readable by the standard WDL compiler.
-        val elemsPp : Vector[String] = reorgElems.map {
-            case call: Call => WdlPrettyPrinter.apply(call, 1)
-            case decl: Declaration => WdlPrettyPrinter.apply(decl, 1)
-            case ssc: Scatter => WdlPrettyPrinter.apply(ssc, 1)
-            case x =>
-                throw new Exception(cState.cef.notCurrentlySupported(x.ast,
-                                                                     "workflow element"))
-        }.flatten.toVector
-        val wfLines = WdlPrettyPrinter.buildBlock(s"workflow ${wf.unqualifiedName}", elemsPp, 0)
-        taskLines ++ wfLines
+        WdlRewrite.workflow(wf, reorgElems)
     }
 
-    def simplifyWorkflow(wf: Workflow, taskLines: Vector[String], cState:State) : Vector[String] = {
-        val wf1 = simplifyAllScatters(wf, taskLines, cState)
-        simplifyTopLevel(wf1, taskLines, cState)
+    def dbgWorkflow(wf: Workflow, msg: String) = {
+        System.err.println(s"--- ${msg} ----------------------")
+        System.err.println(s"${wf.unqualifiedName} ${wf.calls} ${wf.children}")
+        //val x = wf.namespace.resolveCallOrOutputOrDeclaration(outputFqn)
+        //System.err.println(s"${x}")
+
+        System.err.println(s"${wf.expandedWildcardOutputs}")
+        val lines = WdlPrettyPrinter(true).apply(wf, 0).mkString("\n")
+        System.err.println(lines)
+        System.err.println("")
     }
 
-    def apply(wdlSourceFile : Path,
-              verbose: Boolean) : Path = {
-        Utils.trace(verbose, "Preprocessing pass")
+    def simplifyWorkflow(wf: Workflow, cState:State) : Workflow = {
+        //dbgWorkflow(wf, "ORG")
+        val wf1 = simplifyAllScatters(wf, cState)
+        //dbgWorkflow(wf1, "WF1")
+        val wf2 = simplifyTopLevel(wf1, cState)
+        //dbgWorkflow(wf2, "WF2")
+        wf2
+    }
 
-        val ns = WdlNamespace.loadUsingPath(wdlSourceFile, None, None).get
-        val tm = ns.terminalMap
-        val cef = new CompilerErrorFormatter(tm)
-        val cState = State(cef, tm, verbose)
 
-        // Create a new file to hold the result.
-        //
-        // Assuming the source file is xxx.wdl, the new name will
-        // be xxx.simplified.wdl.
+    // Assuming the source file is xxx.wdl, the new name will
+    // be xxx.simplified.wdl.
+    def writeToFile(wdlSourceFile : Path, lines: String) : Unit = {
         val trgName: String = addFilenameSuffix(wdlSourceFile, ".simplified")
         val simpleWdl = Utils.appCompileDirPath.resolve(trgName).toFile
         val fos = new FileWriter(simpleWdl)
         val pw = new PrintWriter(fos)
+        pw.println(lines)
+        pw.flush()
+        pw.close()
+        System.err.println(s"Wrote simplified WDL to ${simpleWdl.toString}")
+    }
+
+    def apply(wdlSourceFile : Path,
+              verbose: Boolean) : WdlNamespace = {
+        Utils.trace(verbose, "Preprocessing pass")
+
+        // Resolving imports. Look for referenced files in the
+        // source directory.
+        val sourceDir = wdlSourceFile.getParent()
+        def resolver(filename: String) : WdlSource = {
+            Utils.readFileContent(sourceDir.resolve(filename))
+        }
+        val ns = WdlNamespace.loadUsingPath(wdlSourceFile, None, Some(List(resolver))).get
+        val tm = ns.terminalMap
+        val cef = new CompilerErrorFormatter(tm)
+        val cState = State(cef, tm, verbose)
 
         // Process the original WDL file,
         // Do not modify the tasks
-        val taskLines: Vector[String] = ns.tasks.map{ task =>
-            WdlPrettyPrinter.apply(task, 0) :+ "\n"
-        }.flatten.toVector
         val rewrittenNs = ns match {
             case nswf : WdlNamespaceWithWorkflow =>
-                simplifyWorkflow(nswf.workflow, taskLines, cState)
-            case _ => taskLines
+                val wf1 = simplifyWorkflow(nswf.workflow, cState)
+                val nswf1 = new WdlNamespaceWithWorkflow(ns.importedAs,
+                                                         wf1,
+                                                         ns.imports,
+                                                         ns.namespaces,
+                                                         ns.tasks,
+                                                         ns.terminalMap,
+                                                         nswf.wdlSyntaxErrorFormatter,
+                                                         ns.ast)
+                nswf1.children = wf1.children
+                nswf1.namespace = nswf.namespace
+                nswf.parent match {
+                    case Some(x) => nswf1.parent = x
+                    case None => ()
+                }
+                nswf1
+            case _ => ns
         }
 
-        // write the output to xxx.simplified.wdl
-        pw.println(rewrittenNs.mkString("\n"))
+        // Convert to string representation and apply WDL parser again.
+        // This fixes the ASTs, as well as any other imperfections in our rewriting
+        // technology.
+        //
+        // Note: by keeping the namespace in memory, instead of writing to
+        // a temporary file on disk, we keep the resolver valid.
+        val lines: String = WdlPrettyPrinter(true).apply(rewrittenNs, 0).mkString("\n")
+        val cleanNs = WdlNamespace.loadUsingSource(lines, None, Some(List(resolver))).get
 
-        pw.flush()
-        pw.close()
-        Utils.trace(verbose, s"Wrote simplified WDL to ${simpleWdl.toString}")
-        simpleWdl.toPath
+        if (verbose)
+            writeToFile(wdlSourceFile, lines)
+        cleanNs
     }
 }

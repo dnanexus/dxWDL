@@ -34,9 +34,9 @@ object IR {
     //   Scatter:   utility block for scatter/gather
     //   Task:      call a task, execute a shell command (usually)
     sealed trait AppletKind
-    case object Eval extends AppletKind
-    case class Scatter(sourceCalls: Vector[String]) extends AppletKind
-    case object Task extends AppletKind
+    case object AppletKindEval extends AppletKind
+    case class AppletKindScatter(sourceCalls: Vector[String]) extends AppletKind
+    case object AppletKindTask extends AppletKind
 
 
     /** Secification of instance type.
@@ -50,10 +50,10 @@ object IR {
       *           will need to evalulate the expressions at runtime, and then
       *           start another job on the correct instance type.
       */
-    sealed trait InstanceTypeSpec
-    case object InstTypeDefault extends InstanceTypeSpec
-    case class InstTypeConst(name: String) extends InstanceTypeSpec
-    case object InstTypeRuntime extends InstanceTypeSpec
+    sealed trait InstanceType
+    case object InstanceTypeDefault extends InstanceType
+    case class InstanceTypeConst(name: String) extends InstanceType
+    case object InstanceTypeRuntime extends InstanceType
 
     /** @param name          Name of applet
       * @param input         WDL input arguments
@@ -70,7 +70,7 @@ object IR {
     case class Applet(name: String,
                       inputs: Vector[CVar],
                       outputs: Vector[CVar],
-                      instanceType: InstanceTypeSpec,
+                      instanceType: InstanceType,
                       docker: Boolean,
                       destination : String,
                       kind: AppletKind,
@@ -110,9 +110,9 @@ object IR {
             case true => Map(YamlString("docker") -> YamlBoolean(true))
         }
         val instanceType: Map[YamlValue, YamlValue] = applet.instanceType match {
-            case InstTypeDefault => Map()
-            case InstTypeConst(x) => Map(YamlString("instanceType") -> YamlString(x))
-            case InstTypeRuntime  => Map(YamlString("instanceType") -> YamlString("calculated at runtime"))
+            case InstanceTypeDefault => Map()
+            case InstanceTypeConst(x) => Map(YamlString("instanceType") -> YamlString(x))
+            case InstanceTypeRuntime  => Map(YamlString("instanceType") -> YamlString("calculated at runtime"))
         }
         val m: Map[YamlValue, YamlValue] = Map(
             YamlString("name") -> YamlString(applet.name),
