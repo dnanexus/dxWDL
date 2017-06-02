@@ -74,7 +74,18 @@ object CompilerTopologicalSort {
     // Internal procedure to sort children nodes at a particular level in the AST
     def tsortASTnodes(nodes: Seq[Scope], cState:State, recursionDepth: Int) : Seq[Scope] = {
         val indent = " "*recursionDepth*4
-        val recursedNodes = nodes.map { x => x.asInstanceOf[GraphNode] }
+        // val recursedNodes = nodes.map { x => x.asInstanceOf[GraphNode] }
+
+        val recursedNodes = nodes.map {
+             case scatter : Scatter => {
+                 val newScatter = Scatter(scatter.index, scatter.item, scatter.collection, scatter.ast)
+                 Utils.trace(cState.verbose, indent+"Recursively performing toological sort on scatter: " + scatter.fullyQualifiedName)
+                 newScatter.children = tsortASTnodes(scatter.children, cState, recursionDepth + 1)
+                 Utils.trace(cState.verbose, indent+"End recursion")
+                 newScatter.asInstanceOf[GraphNode]
+             }
+             case anyOtherNode => anyOtherNode.asInstanceOf[GraphNode]
+         }
 
         // Create workflow graph sequence of edges for topological sorting
         // Nodes in the graph (Scopes) can be a call, a scatter, or a declaration
@@ -141,21 +152,6 @@ object CompilerTopologicalSort {
         sortedNodes.filter(x=>nodes.contains(x))
     }
 
-    def tsortScatterPrint(ssc: Scatter, level: Int, cState: State) : Vector[String] = {
-        val top: String = s"scatter (${ssc.item} in ${ssc.collection.toWdlString})"
-        Utils.trace(true, "Children: " + ssc.children.map { node => node.asInstanceOf[GraphNode].fullyQualifiedName }.mkString(", "))
-        val sortedChildren = tsortASTnodes(ssc.children, cState, level + 1)
-        Utils.trace(true, "Sorted Children: " + sortedChildren.map { node => node.asInstanceOf[GraphNode].fullyQualifiedName }.mkString(", "))
-        val children = sortedChildren.map {
-        //val children = ssc.children.map{
-            case x:Call => WdlPrettyPrinter.apply(x, level + 1)
-            case x:Declaration => WdlPrettyPrinter.apply(x, level + 1)
-            case x:Scatter => tsortScatterPrint(x, level + 1, cState)
-            case _ => throw new Exception("Unimplemented scatter element")
-        }.flatten.toVector
-        WdlPrettyPrinter.buildBlock(top, children.toVector, level)
-    }
-
     // WDL-specific wrapper for topological sorting
     def sortWorkflow(wf: Workflow, taskLines: Vector[String], cState:State) : Vector[String] = {
         val sortedNodes = tsortASTnodes(wf.children, cState, 0)
@@ -167,7 +163,7 @@ object CompilerTopologicalSort {
         val elemsPp : Vector[String] = sortedNodes.map {
             case call: Call => WdlPrettyPrinter.apply(call, 1)
             case decl: Declaration => WdlPrettyPrinter.apply(decl, 1)
-            case ssc: Scatter => tsortScatterPrint(ssc, 1, cState)
+            case ssc: Scatter => WdlPrettyPrinter.apply(ssc, 1)
             case x =>
                 throw new Exception(cState.cef.notCurrentlySupported(x.ast,
                                                                      "workflow element"))
