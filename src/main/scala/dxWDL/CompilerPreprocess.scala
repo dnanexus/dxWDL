@@ -15,6 +15,7 @@ package dxWDL
 import java.io.{File, FileWriter, PrintWriter}
 import java.nio.file.{Path, Paths}
 import scala.collection.mutable.Queue
+import scala.util.{Failure, Success, Try}
 import wdl4s.AstTools
 import wdl4s.AstTools.EnhancedAstNode
 import wdl4s.{Call, Declaration, Scatter, Scope,
@@ -22,6 +23,7 @@ import wdl4s.{Call, Declaration, Scatter, Scope,
     WdlExpression, WdlNamespace, WdlNamespaceWithWorkflow,
     Workflow, WorkflowCall, WdlSource}
 import wdl4s.command.{ParameterCommandPart, StringCommandPart}
+import wdl4s.expression._
 import wdl4s.parser.WdlParser.{Ast, AstNode, Terminal}
 import wdl4s.types._
 import wdl4s.values._
@@ -161,6 +163,34 @@ object CompilerPreprocess {
         DeclReorgState(definedVars, drs.top ++ moved ++ nonDeclBlock, remaining)
     }
 
+    // Figure out the expression type for a collection we loop over in a scatter
+    //
+    // Expressions like A.B.C are converted to A_B_C, in order to avoid
+    // the wdl4s library from interpreting these as member accesses.
+    def collectionWdlType(scatter : Scatter, env : Map[String,WdlType]) : WdlType = {
+        def transformVarName(x: String) : String = { x.replaceAll("\\.", "___") }
+        def revTransformVarName(x: String) : String = {  x.replaceAll("___", "\\.") }
+
+        def lookup(varName : String) : WdlType = {
+            val orgMembAccess = revTransformVarName(varName)
+            env.get(orgMembAccess) match {
+                case Some(x) => x
+                case None => throw new Exception(s"No type found for variable ${varName}")
+            }
+        }
+
+        // convert all sub-expressions of the form A.B.C to A_B_C
+        // Note: this will work only for simple expressions.
+        val collection : WdlExpression = WdlExpression.fromString(
+            transformVarName(scatter.collection.toWdlString))
+        val collectionType : WdlType =
+            collection.evaluateType(lookup, new WdlStandardLibraryFunctionsType) match {
+                case Success(wdlType) => wdlType
+                case _ => throw new Exception(s"Could not evaluate the WdlType for ${collection.toWdlString}")
+            }
+        collectionType
+    }
+
     // Attempt to collect declarations, to reduce the number of extra jobs
     // required for calculations. This is an N^2 algorithm, so we bound the
     // number of iterations.
@@ -198,23 +228,71 @@ object CompilerPreprocess {
         drs.top ++ drs.bottom
     }
 
-    // 1. Move sub-expressions in a scatter block into separate declarations.
-    // 2. Collect the sub-expressions, as much as possible.
-    def simplifyScatter(ssc: Scatter, definedVars: Set[String], cState: State) : Scatter = {
+    def isSimpleExpression(expr: WdlExpression) : Boolean = {
+        expr.ast match {
+            case t: Terminal =>
+                val srcStr = t.getSourceString
+                t.getTerminalStr match {
+                    case "identifier" => true
+                    case _ => true  // a constant (I think)
+                }
+
+            case a: Ast if a.isMemberAccess =>
+                // This is a case of accessing something like A.B.C
+                // The RHS is C, and the LHS is A.B
+                true
+
+            case a: Ast =>
+                false
+        }
+    }
+
+    // - Move the collection expression to a separate declaration
+    // - Move expressions in calls into separate declarations.
+    // - As much as possible, move declarations to the the top of the block
+    //
+    // For example:
+    //
+    // scatter (i in [1,2,3]) {
+    //    call Add { input: a=i*2 }
+    // }
+    // ->
+    // Array[Int] xtmp5 = [1,2,3]
+    // scatter (i in xtmp5) {
+    //    Int xtmp6 = i*2
+    //    call Add { input: a=xtmp6 }
+    // }
+    //
+    def simplifyScatter(ssc: Scatter,
+                        definedVars: Set[String],
+                        typeEnv : Map[String, WdlType],
+                        cState: State) : Vector[Scope] = {
         // extract expressions from calls
         val children : Vector[Scope] = ssc.children.map {
             case call: Call => simplifyCall(call, cState)
             case x => Vector(x)
         }.flatten.toVector
 
-        // Try to pull as declarations to the top of the block, this allows calculating
+        // Try to pull declarations to the top of the block, this allows calculating
         // them with the scatter job we need to run anyway.
         val drs = DeclReorgState(definedVars, Vector.empty[Scope], children)
         val reorgChildren = collectDeclarations(drs, cState)
 
-        // Build a new scatter structure. We are cheating on the AST; since we
-        // don't know how to create a new one, we just keep the old AST.
-        WdlRewrite.scatter(ssc, reorgChildren)
+        if (isSimpleExpression(ssc.collection)) {
+            // The collection is a simple variable, there is no need
+            // to create an additional declaration
+            val ssc1 = WdlRewrite.scatter(ssc, reorgChildren)
+            Vector(ssc1)
+        } else {
+            // separate declaration for collection expression
+            val collType : WdlType = collectionWdlType(ssc, typeEnv)
+            val colDecl = WdlRewrite.newDeclaration(collType,
+                                                    genTmpVarName(),
+                                                    Some(ssc.collection))
+            val collVar = WdlExpression.fromString(colDecl.unqualifiedName)
+            val ssc1 = WdlRewrite.scatter(ssc, reorgChildren, collVar)
+            Vector(colDecl, ssc1)
+        }
     }
 
     // Simplify scatter blocks inside the workflow. Return a valid new
@@ -224,18 +302,20 @@ object CompilerPreprocess {
     // moving declarations inside the scatter sub blocks.
     def simplifyAllScatters(wf:Workflow, cState:State): Workflow = {
         Utils.trace(cState.verbose, "simplifying scatters")
-        var definedVars:Set[String] = Set.empty
+        var definedVars = Set.empty[String]
+        var typeEnv = Map.empty[String, WdlType]
         val children: Vector[Scope] = wf.children.map {
             case ssc:Scatter =>
                 // Be careful to add the indexing variable to the environment
                 val sscDefVars = definedVars + ssc.item
-                simplifyScatter(ssc, sscDefVars, cState)
-            case call:Call => call
+                simplifyScatter(ssc, sscDefVars, typeEnv, cState)
+            case call:Call => Vector(call)
             case decl:Declaration =>
                 definedVars = definedVars + decl.unqualifiedName
-                decl
+                typeEnv = typeEnv + (decl.unqualifiedName -> decl.wdlType)
+                Vector(decl)
             case x => throw new Exception(s"Unimplemented workflow element ${x.toString}")
-        }.toVector
+        }.flatten.toVector
         WdlRewrite.workflow(wf, children)
     }
 

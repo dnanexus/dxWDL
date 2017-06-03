@@ -120,39 +120,6 @@ task Add {
         WdlExpression.fromString(sExpr)
     }
 
-    // Figure out the expression type for a collection we loop over in a scatter
-    //
-    // Expressions like A.B.C are converted to A_B_C, in order to avoid
-    // the wdl4s library from interpreting these as member accesses.
-    def calcIterWdlType(scatter : Scatter, env : Map[String,WdlType]) : WdlType = {
-        def transformVarName(x: String) : String = { x.replaceAll("\\.", "___") }
-        def revTransformVarName(x: String) : String = {  x.replaceAll("___", "\\.") }
-
-        def lookup(varName : String) : WdlType = {
-            val orgMembAccess = revTransformVarName(varName)
-            env.get(orgMembAccess) match {
-                case Some(x) => x
-                case None => throw new Exception(s"No type found for variable ${varName}")
-            }
-        }
-
-        // convert all sub-expressions of the form A.B.C to A_B_C
-        // Note: this will work only for simple expressions.
-        val collection : WdlExpression = WdlExpression.fromString(
-            transformVarName(scatter.collection.toWdlString))
-        val collectionType : WdlType =
-            collection.evaluateType(lookup, new WdlStandardLibraryFunctionsType) match {
-                case Success(wdlType) => wdlType
-                case _ => throw new Exception(s"Could not evaluate the WdlType for ${collection.toWdlString}")
-            }
-
-        // remove the array qualifier
-        collectionType match {
-            case WdlArrayType(x) => x
-            case _ => throw new Exception(s"type ${collectionType} is not an array")
-        }
-    }
-
     def callUniqueName(call : Call, cState: State) = {
         val nm = call.alias match {
             case Some(x) => x
@@ -210,6 +177,8 @@ task Add {
     }
 
     // split a block of statements into sub-blocks with continguous declarations.
+    // Scatters are special, because they can also hold declarations that come
+    // before them
     // Example:
     //
     //   call x
@@ -217,36 +186,36 @@ task Add {
     //   Int b
     //   call y
     //   call z
-    //   String s
-    //   call w
+    //   String buf
+    //   scatter ssc
     //  =>
-    //   Singleton(call x),
-    //   DeclsBlock(Int a, Int b),
-    //   Singleton(call y)
-    //   Singleton(call z)
-    //   DeclsBlock(String s)
-    //   Singleton(call w)
+    //   [call x]
+    //   [Int a, Int b]
+    //   [call y]
+    //   [call z]
+    //   [String buf, scatter ssc]
+    //
     sealed trait Block
-    case class DeclBlock(decls: Vector[Declaration]) extends Block
-    case class Singleton(scope: Scope) extends Block
-    def splitBlock(children: Seq[Scope]) : Vector[Block] = {
+    case class BlockDecl(decls: Vector[Declaration]) extends Block
+    case class BlockScope(scope: Scope) extends Block
+    case class BlockScatter(preDecls: Vector[Declaration], scatter: Scatter) extends Block
+    def splitIntoBlocks(children: Seq[Scope]) : Vector[Block] = {
         val initAccu = (Vector[Block](), Vector[Declaration]())
-        val (subBlocks, decls) = children.foldLeft(initAccu) { (accu, child) =>
-            val (subBlocks, decls) = accu
-            child match {
-                case decl: Declaration =>
-                    (subBlocks, decls :+ decl)
-                case scope =>
-                    if (decls.isEmpty)
-                        (subBlocks :+ Singleton(scope),  Vector[Declaration]())
-                    else
-                        (subBlocks :+ DeclBlock(decls) :+ Singleton(scope), Vector[Declaration]())
-            }
+        val (subBlocks, decls) = children.foldLeft(initAccu) {
+            case ((subBlocks, decls), d:Declaration) =>
+                (subBlocks, decls :+ d)
+            case ((subBlocks, decls), ssc:Scatter) =>
+                (subBlocks :+ BlockScatter(decls, ssc), Vector.empty)
+            case ((subBlocks, decls), scope) =>
+                if (decls.isEmpty)
+                    (subBlocks :+ BlockScope(scope),  Vector.empty)
+                else
+                    (subBlocks :+ BlockDecl(decls) :+ BlockScope(scope), Vector.empty)
         }
         if (decls.isEmpty)
             subBlocks
         else
-            subBlocks :+ DeclBlock(decls)
+            subBlocks :+ BlockDecl(decls)
     }
 
     // Update a closure with all the variables required
@@ -697,14 +666,18 @@ workflow w {
         }.flatten
     }
 
-    // Compile a scatter block
+    // Compile a scatter block. This includes the block of declarations that
+    // come before it. Since we are creating a special applet for this, we might as
+    // well evaluate the expressions too.
     def compileScatter(wf : Workflow,
                        stageName: String,
+                       preambleDecls: Vector[Declaration],
                        scatter: Scatter,
                        taskApplets: Map[String, (IR.Applet, Vector[IR.CVar])],
                        env : CallEnv,
                        cState: State) : (IR.Stage, IR.Applet) = {
-        val (topDecls, rest) = Utils.splitBlockDeclarations(scatter.children.toList)
+        val (topBlockDecls, rest) = Utils.splitBlockDeclarations(scatter.children.toList)
+        val topDecls = preambleDecls ++ topBlockDecls
         val calls : Seq[Call] = rest.map {
             case call: Call => call
             case x =>
@@ -728,16 +701,14 @@ workflow w {
             }
         }.flatten.toVector
 
-        // Figure out the closure required to evaluate the expression being looped over.
+        // The front end pass ensures that the scatter collection is a variable.
+        // This variable must be in the closures.
         var closure = Map.empty[String, LinkedVar]
         closure = updateClosure(closure, env, scatter.collection, true, cState)
-
-        // Figure out the type of the iteration variable,
-        // and ignore it for closure purposes
-        val typeEnv : Map[String, WdlType] = env.map { case (x, LinkedVar(cVar,_)) =>
-            x -> cVar.wdlType
-        }.toMap
-        val iterVarType : WdlType = calcIterWdlType(scatter, typeEnv)
+        val collVar:IR.CVar = closure.head match {
+            case (_, LinkedVar(cVar,_)) => cVar
+        }
+        val iterVarType : WdlType = Utils.stripArray(collVar.wdlType)
         val cVar = IR.CVar(scatter.item, iterVarType, scatter.ast)
         var innerEnv : CallEnv = env + (scatter.item -> LinkedVar(cVar, IR.SArgEmpty))
 
@@ -838,24 +809,24 @@ workflow w {
         var scatterNum = 0
 
         // Create a stage per call/scatter-block/declaration-block
-        val subBlocks = splitBlock(wfBody)
+        val subBlocks = splitIntoBlocks(wfBody)
         val initAccu : Vector[(IR.Stage, Option[IR.Applet])] = Vector((commonStage, Some(commonApplet)))
         val allStageInfo = subBlocks.foldLeft(initAccu) { (accu, child) =>
             val (stage, appletOpt) = child match {
-                case DeclBlock(decls) =>
+                case BlockDecl(decls) =>
                     evalAppletNum = evalAppletNum + 1
                     val appletName = wf.unqualifiedName ++ "_eval" ++ evalAppletNum.toString
                     val (stage, applet) = compileEvalAndPassClosure(appletName, decls, env, cState)
                     (stage, Some(applet))
-                case Singleton(call: Call) =>
-                    val stage = compileCall(call, taskApplets, env, cState)
-                    (stage, None)
-                case Singleton(scatter : Scatter) =>
+                case BlockScatter(preDecls, scatter) =>
                     scatterNum = scatterNum + 1
                     val scatterName = Utils.SCATTER ++ "_" ++ scatterNum.toString
-                    val (stage, applet) = compileScatter(wf, scatterName, scatter, taskApplets, env, cState)
+                    val (stage, applet) = compileScatter(wf, scatterName, preDecls, scatter, taskApplets, env, cState)
                     (stage, Some(applet))
-                case Singleton(x) =>
+                case BlockScope(call: Call) =>
+                    val stage = compileCall(call, taskApplets, env, cState)
+                    (stage, None)
+                case BlockScope(x) =>
                     throw new Exception(cState.cef.notCurrentlySupported(
                                             x.ast, "Workflow element"))
             }
@@ -863,9 +834,9 @@ workflow w {
             // to these results. In case of scatters, there is no block name to reference.
             for (cVar <- stage.outputs) {
                 val fqVarName : String = child match {
-                    case DeclBlock(decls) => cVar.name
-                    case Singleton(call : Call) => stage.name ++ "." ++ cVar.name
-                    case Singleton(scatter : Scatter) => cVar.name
+                    case BlockDecl(decls) => cVar.name
+                    case BlockScope(call : Call) => stage.name ++ "." ++ cVar.name
+                    case BlockScatter(_, scatter) => cVar.name
                     case _ => throw new Exception("Sanity")
                 }
                 env = env + (fqVarName ->

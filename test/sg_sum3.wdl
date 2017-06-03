@@ -1,10 +1,13 @@
 import "library_math.wdl" as lib
 
 workflow sg_sum3 {
-    Array[Int] integers
+    Array[Int] numbers
 
-    scatter (k in integers) {
-        call lib.Inc as inc {input: i=k}
+    # - several calls in a scatter
+    # - expression in the collection
+    # - use of the range and length stdlib functions
+    scatter (k in range(length(numbers))) {
+        call lib.Inc as inc {input: i= numbers[k]}
         call lib.Twice as twice {input: i=inc.result}
         call lib.Mod7 as mod7 {input: i=twice.result}
     }

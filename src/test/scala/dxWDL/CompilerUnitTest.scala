@@ -76,7 +76,7 @@ class CompilerUnitTest extends FlatSpec with BeforeAndAfterEach {
                      |""".stripMargin.trim
     }
 
-    it should "figure out the type of scatter collection" in {
+/*    it should "figure out the type of scatter collection" in {
         val wdl = """|task prepare {
                      |  command <<<
                      |    python -c "print('one\ntwo\nthree\nfour')"
@@ -112,7 +112,7 @@ class CompilerUnitTest extends FlatSpec with BeforeAndAfterEach {
         val env : Map[String, WdlType] = Map("prepare.array" -> WdlArrayType(WdlStringType))
         val wdlType : WdlType = CompilerFrontEnd.calcIterWdlType(scatter, env)
         assert(wdlType == WdlStringType)
-    }
+    } */
 
     it should "Handle array access" in {
         val wdl = """|task diff {

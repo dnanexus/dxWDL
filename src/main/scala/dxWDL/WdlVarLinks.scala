@@ -36,8 +36,9 @@ case class WdlVarLinks(wdlType: WdlType, dxlink: DxLink)
 case class BValue(wvl: WdlVarLinks, wdlValue: WdlValue)
 
 object WdlVarLinks {
-    // A dictionary of all WDL files that map to platform files,
-    // that exist on the current cloud instance.
+    // A dictionary of all WDL files that are also
+    // platform files. This can happen if the file was downloaded
+    // from the platform, or if it was uploaded.
     var localDxFiles = HashMap.empty[Path, DXFile]
 
     // Parse a dnanexus file descriptor. Examples:
