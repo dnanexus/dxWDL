@@ -667,17 +667,16 @@ workflow w {
     }
 
     // Compile a scatter block. This includes the block of declarations that
-    // come before it. Since we are creating a special applet for this, we might as
-    // well evaluate the expressions too.
+    // come before it [preDecls]. Since we are creating a special applet for this, we might as
+    // well evaluate those expressions as well.
     def compileScatter(wf : Workflow,
                        stageName: String,
-                       preambleDecls: Vector[Declaration],
+                       preDecls: Vector[Declaration],
                        scatter: Scatter,
                        taskApplets: Map[String, (IR.Applet, Vector[IR.CVar])],
-                       env : CallEnv,
+                       outerEnv : CallEnv,
                        cState: State) : (IR.Stage, IR.Applet) = {
-        val (topBlockDecls, rest) = Utils.splitBlockDeclarations(scatter.children.toList)
-        val topDecls = preambleDecls ++ topBlockDecls
+        val (topDecls, rest) = Utils.splitBlockDeclarations(scatter.children.toList)
         val calls : Seq[Call] = rest.map {
             case call: Call => call
             case x =>
@@ -693,18 +692,39 @@ workflow w {
         // Construct the block output by unifying individual call outputs.
         // Each applet output becomes an array of that type. For example,
         // an Int becomes an Array[Int].
-        val outputVars : Vector[IR.CVar] = calls.map { call =>
+        // Add all the preamble variables, these could potentially be accessed
+        // outside the scatter block.
+        val preVars: Vector[IR.CVar] = preDecls.map { decl =>
+            IR.CVar(decl.unqualifiedName, decl.wdlType, decl.ast)
+        }.toVector
+        val callOutputVars : Vector[IR.CVar] = calls.map { call =>
             val task = taskOfCall(call, cState)
             task.outputs.map { tso =>
                 val varName = callUniqueName(call, cState) ++ "." ++ tso.unqualifiedName
                 IR.CVar(varName, WdlArrayType(tso.wdlType), tso.ast)
             }
         }.flatten.toVector
+        val outputVars = preVars ++ callOutputVars
+
+        // Add the preamble declarations to the environment, and update
+        // the closure
+        var closure = Map.empty[String, LinkedVar]
+        val preDeclAsEnv = preDecls.map { decl =>
+            val cVar = IR.CVar(decl.unqualifiedName, decl.wdlType, decl.ast)
+            decl.unqualifiedName -> LinkedVar(cVar, IR.SArgEmpty)
+        }
+        var env = outerEnv ++ preDeclAsEnv
+        preDecls.foreach { decl =>
+            decl.expression match {
+                case Some(expr) =>
+                    closure = updateClosure(closure, env, expr, false, cState)
+                case None => ()
+            }
+        }
 
         // The front end pass ensures that the scatter collection is a variable.
-        // This variable must be in the closures.
-        var closure = Map.empty[String, LinkedVar]
-        closure = updateClosure(closure, env, scatter.collection, true, cState)
+        // This variable must be in the closure.
+        closure = updateClosure(closure, env, scatter.collection, false, cState)
         val collVar:IR.CVar = closure.head match {
             case (_, LinkedVar(cVar,_)) => cVar
         }
@@ -836,7 +856,7 @@ workflow w {
                 val fqVarName : String = child match {
                     case BlockDecl(decls) => cVar.name
                     case BlockScope(call : Call) => stage.name ++ "." ++ cVar.name
-                    case BlockScatter(_, scatter) => cVar.name
+                    case BlockScatter(_, _) => cVar.name
                     case _ => throw new Exception("Sanity")
                 }
                 env = env + (fqVarName ->

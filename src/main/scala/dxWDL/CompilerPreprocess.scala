@@ -230,20 +230,8 @@ object CompilerPreprocess {
 
     def isSimpleExpression(expr: WdlExpression) : Boolean = {
         expr.ast match {
-            case t: Terminal =>
-                val srcStr = t.getSourceString
-                t.getTerminalStr match {
-                    case "identifier" => true
-                    case _ => true  // a constant (I think)
-                }
-
-            case a: Ast if a.isMemberAccess =>
-                // This is a case of accessing something like A.B.C
-                // The RHS is C, and the LHS is A.B
-                true
-
-            case a: Ast =>
-                false
+            case t: Terminal if t.getTerminalStr == "identifier" => true
+            case _ => false
         }
     }
 
@@ -284,14 +272,19 @@ object CompilerPreprocess {
             val ssc1 = WdlRewrite.scatter(ssc, reorgChildren)
             Vector(ssc1)
         } else {
-            // separate declaration for collection expression
-            val collType : WdlType = collectionWdlType(ssc, typeEnv)
-            val colDecl = WdlRewrite.newDeclaration(collType,
-                                                    genTmpVarName(),
-                                                    Some(ssc.collection))
-            val collVar = WdlExpression.fromString(colDecl.unqualifiedName)
-            val ssc1 = WdlRewrite.scatter(ssc, reorgChildren, collVar)
-            Vector(colDecl, ssc1)
+            try {
+                // separate declaration for collection expression
+                val collType : WdlType = collectionWdlType(ssc, typeEnv)
+                val colDecl = WdlRewrite.newDeclaration(collType,
+                                                        genTmpVarName(),
+                                                        Some(ssc.collection))
+                val collVar = WdlExpression.fromString(colDecl.unqualifiedName)
+                val ssc1 = WdlRewrite.scatter(ssc, reorgChildren, collVar)
+                Vector(colDecl, ssc1)
+            } catch {
+                case e: Throwable =>
+                    throw new Exception("Unable to calculate collection type. Please rewrite scatter collection as a separate variable.")
+            }
         }
     }
 
