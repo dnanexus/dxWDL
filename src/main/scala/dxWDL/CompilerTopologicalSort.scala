@@ -51,20 +51,44 @@ object CompilerTopologicalSort {
 
 
     // Generic topological sorting procedure
-    // Scala code from https://gist.github.com/ThiporKong/4399695
+    // Scala code only slightly modified from https://gist.github.com/ThiporKong/4399695
     def tsort[A](edges: Traversable[(A, A)]): Iterable[A] = {
         def tsort(toPreds: Map[A, Set[A]], done: Iterable[A]): Iterable[A] = {
-            val (noPreds, hasPreds) = toPreds.partition { _._2.isEmpty }
+            // Partition the set of nodes into those that have a predecessor and those that do not
+            // (Actually this will partition the map into two)
+            val (noPreds, hasPreds) = toPreds.partition { keyval =>
+                val predSet = keyval._2
+                predSet.isEmpty
+            }
+
+            // If there are no nodes left with no predecessors, either we are done recursing or there is a cycle
             if (noPreds.isEmpty) {
-                // Every DAG contains a vertex with no incoming edges, otherwise
+
+                // All nodes have been processed, we are done
+                if (hasPreds.isEmpty) {
+                    done
+                }
+
+                // There are no nodes with no predecessors, but we still have nodes to process.
+                // Since every DAG contains a vertex with no incoming edges,
                 // there exists at least one directed cycle in the DAG.
-                if (hasPreds.isEmpty) done else sys.error("ERROR: worfklow contains at least one directed cycle.")
-            } else {
-                val found = noPreds.map { _._1 }
-                tsort(hasPreds.mapValues { _ -- found }, done ++ found)
+                else {
+                    sys.error("ERROR: workflow contains at least one directed cycle.")
+                }
+            }
+
+            else {
+
+                // List of nodes with no predecessors
+                val noPredNodes = noPreds.map { keyval => keyval._1 }
+
+                // Build a new list of predecessors that do not contain the nodes above
+                val newToPreds = hasPreds.mapValues { predSet => predSet -- noPredNodes }
+                tsort(newToPreds, done ++ noPredNodes)
             }
         }
 
+        // Build the initial map of predecessors
         val toPred = edges.foldLeft(Map[A, Set[A]]()) { (acc, e) =>
             acc + (e._1 -> acc.getOrElse(e._1, Set())) + (e._2 -> (acc.getOrElse(e._2, Set()) + e._1))
         }
@@ -95,7 +119,7 @@ object CompilerTopologicalSort {
         // node it belongs to. This allows for a root level scatter node to be placed
         // after its last dependency.
 
-        val scatterRoot : Map[GraphNode, Scatter] = recursedNodes.map {
+        val scatterParent : Map[GraphNode, Scatter] = recursedNodes.map {
             case scat: Scatter => scat.descendants.map { d => (d.asInstanceOf[GraphNode], scat) }
             case _ => Set[(GraphNode, Scatter)]()
         }.flatten.toMap
@@ -104,18 +128,18 @@ object CompilerTopologicalSort {
         // e.g. suppose call x has dependencies a,b,c.  This procedure will generate:
         // [(a,x), (b,x), (c,x)]
         val edges : Set[(Scope, Scope)] = recursedNodes.map { gnode =>
-            val nodeParents : Vector[(Scope, Scope)] = (gnode.upstream).map { parent =>
-               val parentActual : Scope =
+            val nodeDependencies : Vector[(Scope, Scope)] = (gnode.upstream).map { dependency =>
+               val dependencyActual : Scope =
                    // If any node's parent is a descendant of a root
                    // level scatter, use the scatter as the parent
-                   if (scatterRoot.contains(parent)) {
-                       scatterRoot(parent).asInstanceOf[Scope]
+                   if (scatterParent.contains(dependency)) {
+                       scatterParent(dependency).asInstanceOf[Scope]
                    }
                    // Otherwise just use the actual parent
                    else {
-                       parent.asInstanceOf[Scope]
+                       dependency.asInstanceOf[Scope]
                    }
-               (parentActual, gnode.asInstanceOf[Scope])
+               (dependencyActual, gnode.asInstanceOf[Scope])
             }.toVector
 
             val descendantParents : Vector[(Scope, Scope)] = gnode match {
@@ -126,8 +150,8 @@ object CompilerTopologicalSort {
                     val upstreamParents = nodeDescendants.map { d => d.upstream }.flatten.toSet
                     ((upstreamParents -- nodeDescendants) - gnode).map{ parent =>
                         // If the parent outside the scatter is also a member of a scatter, use it instead.
-                        if ( scatterRoot.contains(parent) && gnode != scatterRoot(parent)) {
-                            (scatterRoot(parent), gnode)
+                        if ( scatterParent.contains(parent) && gnode != scatterParent(parent)) {
+                            (scatterParent(parent), gnode)
                         } else {
                             (parent, gnode)
                         }
@@ -136,7 +160,7 @@ object CompilerTopologicalSort {
                 case anyOtherNode => Vector[(Scope, Scope)]()
             }
 
-            nodeParents ++ descendantParents
+            nodeDependencies ++ descendantParents
         }.flatten.toSet
 
         // Print out edges of DAG for debugging purposes
@@ -161,9 +185,17 @@ object CompilerTopologicalSort {
         val newWorkflow = WdlRewrite.workflow(wf, sortedNodes)
         val newNamespace = WdlRewrite.namespace(newWorkflow, nswf.tasks)
         val newSource = WdlPrettyPrinter(true).apply(newNamespace, 1).mkString("\n")
+
         // val ns = WdlNamespace.loadUsingSource(newSource, None, None).get
         // write the output to xxx.sorted.wdl
-        // Placehodler: always print file
+        // TODO Placeholder: here we always print file, but could modify all of this to return namespace
+
+        // Create a new file to hold the result.
+        //
+        // Assuming the source file is xxx.wdl, the new name will
+        // be xxx.sorted.wdl.
+        // Process the original WDL file,
+        // Do not modify the tasks
         val trgName: String = addFilenameSuffix(wdlSourceFile, ".sorted")
         val sortedWdl = Utils.appCompileDirPath.resolve(trgName).toFile
         val fos = new FileWriter(sortedWdl)
@@ -184,12 +216,6 @@ object CompilerTopologicalSort {
         val cef = new CompilerErrorFormatter(tm)
         val cState = State(cef, tm, verbose)
 
-        // Create a new file to hold the result.
-        //
-        // Assuming the source file is xxx.wdl, the new name will
-        // be xxx.sorted.wdl.
-        // Process the original WDL file,
-        // Do not modify the tasks
         val newPath = ns match {
             case nswf : WdlNamespaceWithWorkflow =>
                 sortWorkflow(nswf, cState, wdlSourceFile)
