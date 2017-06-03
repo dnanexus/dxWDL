@@ -101,8 +101,8 @@ tsortASTNodes(nodes) {
               node
     ]
 
-      # Build dependency graph at this level
-      edges  = # ...
+    # Build dependency graph at this level
+    edges  = # ...
     tsort(edges)
 }
 ```
