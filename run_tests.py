@@ -360,7 +360,7 @@ def main():
                            action="store_true", default=False)
     argparser.add_argument("--project", help="DNAnexus project ID", default="project-F07pBj80ZvgfzQK28j35Gj54")
     argparser.add_argument("--test", help="Run a test, or a subgroup of tests",
-                           default="M")
+                           action="append", default=[])
     argparser.add_argument("--test-list", help="Print a list of available tests",
                            action="store_true", default=False)
     argparser.add_argument("--verbose", help="Verbose compilation",
@@ -371,7 +371,12 @@ def main():
     if args.test_list:
         print_test_list()
         exit(0)
-    test_names = choose_tests(args.test)
+    test_names = []
+    if len(args.test) == 0:
+        args.test = 'M'
+    for t in args.test:
+        test_names += choose_tests(t)
+    print("Running tests {}".format(test_names))
 
     project = dxpy.DXProject(args.project)
     if args.folder is None:

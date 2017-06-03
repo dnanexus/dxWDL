@@ -342,14 +342,18 @@ object RunnerScatter {
 
         // Evaluate the expressions prior to the scatter, and add them to the environment.
         // This is the environment outside the loop.
-        val outScopeEnv = evalTopDeclarations(wf.children, inputs)
+        val inputWvls = evalTopDeclarations(wf.children, inputs)
+        val outScopeEnv = inputs ++ inputWvls
         val scatter : Scatter = findScatter(wf)
 
         // Lookup the array we are looping on.
         // Note: it could be an expression, which requires calculation
         val collElements = outScopeEnv.get(scatter.collection.toWdlString) match {
-            case None => throw new AppInternalException(
-                s"Could not find the collection array ${scatter.collection.toWdlString} in the job inputs")
+            case None =>
+                System.err.println(s"inputs=${inputs}")
+                System.err.println(s"scope=${outScopeEnv}")
+                throw new AppInternalException(
+                    s"Collection array ${scatter.collection.toWdlString} not found in inputs")
             case Some(wvl) => wvl
         }
 
