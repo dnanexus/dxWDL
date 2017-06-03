@@ -11,7 +11,7 @@ In the case of a simple WDL file, this is fairly straightforward.  For example:
 ```scala
 task add {
     Int x
-      Int y
+    Int y
     output { r = x + y }
 }
 
