@@ -116,3 +116,5 @@ Let `descendants(scatter)` be the set of all AST nodes recursively within a part
 Case 2:
 
 If any node `v` in the current level of the AST has a parent within a scatter context at this level, make `v`’s parent the scatter itself.
+
+Conceptually there are two major ways this sorting could be implemented.  One is to define a separate graph with node types for a new 'scatter collapsed' graph and recursively build this graph.  This new graph type will eventually have to be converted back into nodes in the original WDL AST.   The other approach is rely solely on nodes in the WDL AST to build the graph (in other words, /any/ graph topologically sorted in the AST will consist of nodes in the AST itself.  We opted for the latter approach though both have their advantages and disadvantages.
