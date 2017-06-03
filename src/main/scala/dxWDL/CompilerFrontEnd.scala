@@ -219,7 +219,8 @@ task Add {
     }
 
     // Update a closure with all the variables required
-    // for an expression.
+    // for an expression. Ignore variable accesses outside the environment;
+    // it is assumed that these are accesses to local variables.
     //
     // @param  closure   call closure
     // @param  env       mapping from fully qualified WDL name to a dxlink
@@ -227,19 +228,18 @@ task Add {
     def updateClosure(closure : Closure,
                       env : CallEnv,
                       expr : WdlExpression,
-                      strict : Boolean,
                       cState: State) : Closure = {
         expr.ast match {
             case t: Terminal =>
                 val srcStr = t.getSourceString
                 t.getTerminalStr match {
                     case "identifier" =>
-                        val lVar = env.get(srcStr) match {
-                            case Some(x) => x
-                            case None => throw new Exception(cState.cef.missingVarRefException(t))
+                        env.get(srcStr) match {
+                            case Some(lVar) =>
+                                val fqn = WdlExpression.toString(t)
+                                closure + (fqn -> lVar)
+                            case None => closure
                         }
-                        val fqn = WdlExpression.toString(t)
-                        closure + (fqn -> lVar)
                     case _ => closure
                 }
 
@@ -257,10 +257,6 @@ task Add {
                     case Some(lVar) =>
                         closure + (fqn -> lVar)
                     case None =>
-                        if (strict) {
-                            System.err.println(s"Cannot find ${fqn} in env=\n${prettyPrint(env)}")
-                            throw new Exception(cState.cef.undefinedMemberAccess(a))
-                        }
                         closure
                 }
             case a: Ast =>
@@ -413,7 +409,7 @@ workflow w {
         declarations.foreach { decl =>
             decl.expression match {
                 case Some(expr) =>
-                    closure = updateClosure(closure, env, expr, false, cState)
+                    closure = updateClosure(closure, env, expr, cState)
                 case None => ()
             }
         }
@@ -561,12 +557,19 @@ workflow w {
     }
 
     // Modify all the expressions used inside a scatter
-    def scTransform(ssc: Scatter,
+    def scTransform(preDecls: Vector[Declaration],
+                    ssc: Scatter,
                     inputVars: Vector[IR.CVar],
-                    cState: State) : Scatter = {
+                    cState: State) : (Vector[Declaration], Scatter) = {
         // Rename the variables we got from the input.
         def transform(expr: WdlExpression) : WdlExpression = {
             exprRenameVars(expr, inputVars)
+        }
+
+        // transform preamble declarations
+        val trPreDecls: Vector[Declaration] = preDecls.map { decl =>
+            WdlRewrite.newDeclaration(decl.wdlType, decl.unqualifiedName,
+                                      decl.expression.map(transform))
         }
 
         // transform the expressions in a scatter
@@ -583,12 +586,13 @@ workflow w {
         }
         val trSsc = new Scatter(ssc.index, ssc.item, transform(ssc.collection), ssc.ast)
         trSsc.children = ssc.children.map(x => transformChild(x))
-        trSsc
+        (trPreDecls, trSsc)
     }
 
     // Create a valid WDL workflow that runs a scatter. The main modification
     // required here is renaming variables of the form A.x to A_x.
-    def scGenWorklow(ssc: Scatter,
+    def scGenWorklow(preDecls: Vector[Declaration],
+                     ssc: Scatter,
                      taskApplets: Map[String, (IR.Applet, Vector[IR.CVar])],
                      inputVars: Vector[IR.CVar],
                      outputVars: Vector[IR.CVar],
@@ -618,14 +622,14 @@ workflow w {
                     accu + (name -> task)
                 }
             }
-        val trScatter = scTransform(ssc, inputVars, cState)
+        val (trPreDecls, trScatter) = scTransform(preDecls, ssc, inputVars, cState)
         val decls: Vector[Declaration]  = inputVars.map{ cVar =>
             WdlRewrite.newDeclaration(cVar.wdlType, cVar.dxVarName, None)
         }
 
         // Create new workflow that includes only this scatter
         val wf = WdlRewrite.workflowGenEmpty("w")
-        wf.children = decls :+ trScatter
+        wf.children = decls ++ trPreDecls :+ trScatter
         val tasks = taskStubs.map{ case (_,x) => x}.toVector
         // namespace that includes the task stubs, and the workflow
         val ns = WdlRewrite.namespace(wf, tasks)
@@ -666,15 +670,39 @@ workflow w {
         }.flatten
     }
 
+    // Construct the scatter outputs, these are made up of two
+    // categories:
+    // 1. All the preamble variables, these could potentially be accessed
+    // outside the scatter block.
+    // 2. Individual call outputs. Each applet output becomes an array of
+    // that type. For example, an Int becomes an Array[Int].
+    def scGenOutputs(preDecls: Vector[Declaration],
+                     calls : Seq[Call],
+                     cState: State) : Vector[IR.CVar] = {
+        val preVars: Vector[IR.CVar] = preDecls.map { decl =>
+            IR.CVar(decl.unqualifiedName, decl.wdlType, decl.ast)
+        }.toVector
+        val callOutputVars : Vector[IR.CVar] = calls.map { call =>
+            val task = taskOfCall(call, cState)
+            task.outputs.map { tso =>
+                val varName = callUniqueName(call, cState) ++ "." ++ tso.unqualifiedName
+                IR.CVar(varName, WdlArrayType(tso.wdlType), tso.ast)
+            }
+        }.flatten.toVector
+        preVars ++ callOutputVars
+    }
+
     // Compile a scatter block. This includes the block of declarations that
     // come before it [preDecls]. Since we are creating a special applet for this, we might as
     // well evaluate those expressions as well.
+    //
+    // Note: the front end pass ensures that the scatter collection is a variable.
     def compileScatter(wf : Workflow,
                        stageName: String,
                        preDecls: Vector[Declaration],
                        scatter: Scatter,
                        taskApplets: Map[String, (IR.Applet, Vector[IR.CVar])],
-                       outerEnv : CallEnv,
+                       env : CallEnv,
                        cState: State) : (IR.Stage, IR.Applet) = {
         val (topDecls, rest) = Utils.splitBlockDeclarations(scatter.children.toList)
         val calls : Seq[Call] = rest.map {
@@ -689,67 +717,30 @@ workflow w {
         // workflow, because call names must be unique (or aliased)
         Utils.trace(cState.verbose, s"compiling scatter ${stageName}")
 
-        // Construct the block output by unifying individual call outputs.
-        // Each applet output becomes an array of that type. For example,
-        // an Int becomes an Array[Int].
-        // Add all the preamble variables, these could potentially be accessed
-        // outside the scatter block.
-        val preVars: Vector[IR.CVar] = preDecls.map { decl =>
-            IR.CVar(decl.unqualifiedName, decl.wdlType, decl.ast)
-        }.toVector
-        val callOutputVars : Vector[IR.CVar] = calls.map { call =>
-            val task = taskOfCall(call, cState)
-            task.outputs.map { tso =>
-                val varName = callUniqueName(call, cState) ++ "." ++ tso.unqualifiedName
-                IR.CVar(varName, WdlArrayType(tso.wdlType), tso.ast)
-            }
-        }.flatten.toVector
-        val outputVars = preVars ++ callOutputVars
-
-        // Add the preamble declarations to the environment, and update
-        // the closure
+        // Figure out the closure
         var closure = Map.empty[String, LinkedVar]
-        val preDeclAsEnv = preDecls.map { decl =>
-            val cVar = IR.CVar(decl.unqualifiedName, decl.wdlType, decl.ast)
-            decl.unqualifiedName -> LinkedVar(cVar, IR.SArgEmpty)
-        }
-        var env = outerEnv ++ preDeclAsEnv
         preDecls.foreach { decl =>
             decl.expression match {
                 case Some(expr) =>
-                    closure = updateClosure(closure, env, expr, false, cState)
+                    closure = updateClosure(closure, env, expr, cState)
                 case None => ()
             }
         }
-
-        // The front end pass ensures that the scatter collection is a variable.
-        // This variable must be in the closure.
-        closure = updateClosure(closure, env, scatter.collection, false, cState)
-        val collVar:IR.CVar = closure.head match {
-            case (_, LinkedVar(cVar,_)) => cVar
-        }
-        val iterVarType : WdlType = Utils.stripArray(collVar.wdlType)
-        val cVar = IR.CVar(scatter.item, iterVarType, scatter.ast)
-        var innerEnv : CallEnv = env + (scatter.item -> LinkedVar(cVar, IR.SArgEmpty))
-
-        // Add the declarations at the top of the block to the environment
-        val localDecls = topDecls.map{ decl =>
-            val cVar = IR.CVar(decl.unqualifiedName, decl.wdlType, decl.ast)
-            decl.unqualifiedName -> LinkedVar(cVar, IR.SArgEmpty)
-        }.toMap
-        innerEnv = innerEnv ++ localDecls
+        // Ensure the collection variable is in the closure.
+        closure = updateClosure(closure, env, scatter.collection, cState)
 
         // Get closure dependencies from the top declarations
         topDecls.foreach { decl =>
             decl.expression match {
                 case Some(expr) =>
-                    closure = updateClosure(closure, innerEnv, expr, false, cState)
+                    closure = updateClosure(closure, env, expr, cState)
                 case None => ()
             }
         }
+        // Make a pass on the calls inside the block
         calls.foreach { call =>
             call.inputMappings.foreach { case (_, expr) =>
-                closure = updateClosure(closure, innerEnv, expr, false, cState)
+                closure = updateClosure(closure, env, expr, cState)
             }
         }
 
@@ -760,18 +751,14 @@ workflow w {
                 scUnspecifiedInputs(call, taskApplets, cState)
             }.flatten.toVector
 
-        // remove the iteration variable from the closure
-        closure -= scatter.item
-        // remove the local variables from the closure
-        topDecls.foreach( decl =>
-            closure -= decl.unqualifiedName
-        )
-        //Utils.trace(cState.verbose, s"scatter closure=${closure}")
-
         val inputVars : Vector[IR.CVar] = closure.map {
-            case (varName, LinkedVar(cVar, _)) => IR.CVar(varName, cVar.wdlType, cVar.ast)
-        }.toVector
-        val wdlCode = scGenWorklow(scatter, taskApplets, inputVars, outputVars, cState)
+            case (varName, LinkedVar(cVar, _)) =>
+                // a variable that must be passed to the scatter applet
+                assert(env contains varName)
+                Some(IR.CVar(varName, cVar.wdlType, cVar.ast))
+        }.flatten.toVector
+        val outputVars = scGenOutputs(preDecls, calls, cState)
+        val wdlCode = scGenWorklow(preDecls, scatter, taskApplets, inputVars, outputVars, cState)
         val applet = IR.Applet(wf.unqualifiedName ++ "_" ++ stageName,
                                inputVars ++ extraTaskInputVars,
                                outputVars,
@@ -780,25 +767,6 @@ workflow w {
                                cState.destination,
                                IR.AppletKindScatter(calls.map(_.unqualifiedName).toVector),
                                wdlCode)
-
-        // The calls will be made from the scatter applet at runtime.
-        // Collect all the outputs in arrays.
-        calls.foreach { call =>
-            val task = taskOfCall(call, cState)
-            val outputs = task.outputs.map { tso =>
-                IR.CVar(callUniqueName(call, cState) ++ "." ++ tso.unqualifiedName,
-                        tso.wdlType, tso.ast)
-            }
-            // Add bindings for all call output variables. This allows later calls to refer
-            // to these results. Links to their values are unknown at compile time, which
-            // is why they are set to SArgEmpty.
-            for (cVar <- outputs) {
-                val fqVarName = callUniqueName(call, cState) ++ "." ++ cVar.name
-                innerEnv = innerEnv + (fqVarName ->
-                                           LinkedVar(IR.CVar(fqVarName, cVar.wdlType, cVar.ast),
-                                                        IR.SArgEmpty))
-            }
-        }
 
         val sargs : Vector[IR.SArg] = closure.map {
             case (_, LinkedVar(_, sArg)) => sArg
