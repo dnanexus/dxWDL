@@ -1,5 +1,4 @@
 # Topological Sort of WDL Workflow in dxWDL
-#work/wdl
 
 When compiling a WDL workflow to a DNAnexus workflow, an initial pass is performed to ensure that the workflow does not contain any directed cycles and that calls to tasks are sorted in order of their dependencies.  This is not a completely trivial task and there are some more complex topics to discuss.  We will begin with the basics and then go onto more advanced aspects of the sorting.
 
@@ -60,8 +59,8 @@ task gather {
 }
 
 workflow {
-      String a
-      String b
+    String a
+    String b
     Array[String] xs = ["1","2","3"]
     call concat as cat { input: a = a, b = b }
     scatter (x in xs) {
