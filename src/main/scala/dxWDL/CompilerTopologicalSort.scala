@@ -74,13 +74,14 @@ object CompilerTopologicalSort {
     // Internal procedure to sort children nodes at a particular level in the AST
     def tsortASTnodes(nodes: Seq[Scope], cState:State, recursionDepth: Int) : Seq[Scope] = {
         val indent = " "*recursionDepth*4
-        // val recursedNodes = nodes.map { x => x.asInstanceOf[GraphNode] }
 
         val recursedNodes = nodes.map {
              case scatter : Scatter => {
-                 val newScatter = Scatter(scatter.index, scatter.item, scatter.collection, scatter.ast)
+                 //val newScatter = Scatter(scatter.index, scatter.item, scatter.collection, scatter.ast)
                  Utils.trace(cState.verbose, indent+"Recursively performing toological sort on scatter: " + scatter.fullyQualifiedName)
-                 newScatter.children = tsortASTnodes(scatter.children, cState, recursionDepth + 1)
+                 //newScatter.children = tsortASTnodes(scatter.children, cState, recursionDepth + 1)
+                 val newScatter = WdlRewrite.scatter(scatter,
+                    tsortASTnodes(scatter.children, cState, recursionDepth + 1))
                  Utils.trace(cState.verbose, indent+"End recursion")
                  newScatter.asInstanceOf[GraphNode]
              }
@@ -153,23 +154,25 @@ object CompilerTopologicalSort {
     }
 
     // WDL-specific wrapper for topological sorting
-    def sortWorkflow(wf: Workflow, taskLines: Vector[String], cState:State) : Vector[String] = {
+    def sortWorkflow(nswf: WdlNamespaceWithWorkflow, cState: State, wdlSourceFile: Path) : Path = {
+        val wf = nswf.workflow
         val sortedNodes = tsortASTnodes(wf.children, cState, 0)
-        Utils.trace(true, "Sorted top level: " + sortedNodes.map { node => node.asInstanceOf[GraphNode].fullyQualifiedName }.mkString(", "))
 
-        // pretty print the workflow. The output
-        // must be readable by the standard WDL compiler.
-        // TODO: replace with better thing
-        val elemsPp : Vector[String] = sortedNodes.map {
-            case call: Call => WdlPrettyPrinter.apply(call, 1)
-            case decl: Declaration => WdlPrettyPrinter.apply(decl, 1)
-            case ssc: Scatter => WdlPrettyPrinter.apply(ssc, 1)
-            case x =>
-                throw new Exception(cState.cef.notCurrentlySupported(x.ast,
-                                                                     "workflow element"))
-        }.flatten.toVector
-        val wfLines = WdlPrettyPrinter.buildBlock(s"workflow ${wf.unqualifiedName}", elemsPp, 0)
-        taskLines ++ wfLines
+        val newWorkflow = WdlRewrite.workflow(wf, sortedNodes)
+        val newNamespace = WdlRewrite.namespace(newWorkflow, nswf.tasks)
+        val newSource = WdlPrettyPrinter(true).apply(newNamespace, 1).mkString("\n")
+        // val ns = WdlNamespace.loadUsingSource(newSource, None, None).get
+        // write the output to xxx.sorted.wdl
+        // Placehodler: always print file
+        val trgName: String = addFilenameSuffix(wdlSourceFile, ".sorted")
+        val sortedWdl = Utils.appCompileDirPath.resolve(trgName).toFile
+        val fos = new FileWriter(sortedWdl)
+        val pw = new PrintWriter(fos)
+        pw.println(newSource)
+        pw.flush()
+        pw.close()
+        Utils.trace(cState.verbose, s"Wrote sorted WDL to ${sortedWdl.toString}")
+        sortedWdl.toPath
     }
 
     def apply(wdlSourceFile : Path,
@@ -185,28 +188,13 @@ object CompilerTopologicalSort {
         //
         // Assuming the source file is xxx.wdl, the new name will
         // be xxx.sorted.wdl.
-        val trgName: String = addFilenameSuffix(wdlSourceFile, ".sorted")
-        val sortedWdl = Utils.appCompileDirPath.resolve(trgName).toFile
-        val fos = new FileWriter(sortedWdl)
-        val pw = new PrintWriter(fos)
-
         // Process the original WDL file,
         // Do not modify the tasks
-        val taskLines: Vector[String] = ns.tasks.map{ task =>
-            WdlPrettyPrinter.apply(task, 0) :+ "\n"
-        }.flatten.toVector
-        val rewrittenNs = ns match {
+        val newPath = ns match {
             case nswf : WdlNamespaceWithWorkflow =>
-                sortWorkflow(nswf.workflow, taskLines, cState)
-            case _ => taskLines
+                sortWorkflow(nswf, cState, wdlSourceFile)
+            case anyOtherType => wdlSourceFile
         }
-
-        // write the output to xxx.sorted.wdl
-        pw.println(rewrittenNs.mkString("\n"))
-
-        pw.flush()
-        pw.close()
-        Utils.trace(verbose, s"Wrote sorted WDL to ${sortedWdl.toString}")
-        sortedWdl.toPath
+        newPath
     }
 }
