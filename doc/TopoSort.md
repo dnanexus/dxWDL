@@ -78,7 +78,7 @@ The body of a `scatter` can contain what appears to be an arbitrary ‘sub workf
 
 With dxWDL, we conceptually build a DAG at every level of the AST hierarchy and perform a topological sort the nodes within that level.   This implies that we **require** that at every level of the AST the graph is a DAG and there is no cycle.
 
-For example, that any dependencies between descendants of two scatters will be dependencies of the parent scatter itself.  If this causes a cycle, compilation of the dxWDL workflow will error out.
+For example, that any dependencies between descendants of two scatters will be dependencies of the parent scatters.  If this causes a cycle, compilation of the dxWDL workflow will error out.
 
 The structure of this recursion looks like this at a high level (pseudocode):
 
@@ -111,10 +111,14 @@ Building the graph (list of edges) itself is somewhat complex because of the req
 
 Case 1:
 
-Let `descendants(scatter)` be the set of all AST nodes recursively within a particular scatter and let `dependants(descendants(scatter))` be the set nodes dependent on those descendants.   Any dependent node outside the  scatter context (`dependants(descendants(scatter))  - descendants(scatter) - {scatter}` should become a dependent of the scatter context itself.
+Let `descendants(scatter)` be the set of all AST nodes recursively within a particular scatter and let `dependants(descendants(scatter))` be the set nodes dependent on those descendants.   Any dependent node outside the  scatter context (`dependants(descendants(scatter))  - descendants(scatter) - {scatter}`) should become a dependent of the scatter context itself.
 
 Case 2:
 
 If any node `v` in the current level of the AST has a parent within a scatter context at this level, make `v`’s parent the scatter itself.
 
+## Some additional notes
+
 Conceptually there are two major ways this sorting could be implemented.  One is to define a separate graph with node types for a new 'scatter collapsed' graph and recursively build this graph.  This new graph type will eventually have to be converted back into nodes in the original WDL AST.   The other approach is rely solely on nodes in the WDL AST to build the graph (in other words, /any/ graph topologically sorted in the AST will consist of nodes in the AST itself.  We opted for the latter approach though both have their advantages and disadvantages.
+
+Also, related simple algorithm/optimization for this: first topologically sort the entire AST graph: all nodes at any depth. Then use this as the input to the recursion filtering for only the nodes at a particular depth. However this does not collapse scatters and thus allows the the types of dependencies between scatters, for example, that may make a workflow difficult to read.
