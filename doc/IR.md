@@ -256,7 +256,7 @@ Three applets are generated, `common`, `scatter_1`, and `scatter_2`.
     Array[Int] numbers
     Array[Int] xtmp0 = range(length(numbers))
 ```
-This applet accepts workflow input arguments, and calculates the
+Accept workflow input arguments (`numbers`), and calculate the
 `range(length(numbers))` expression.
 
 #### scatter_1
@@ -266,13 +266,13 @@ This applet accepts workflow input arguments, and calculates the
         call lib.Mod7 as mod7 {input: i=inc.result}
     }
 ```
-loop over the `xtmp0` array.
+Loop over the `xtmp0` array.
 
 #### scatter_2
 ```
     Array[Int] partial = inc.results
     Array[Int] xtmp1 = mod7.result
-    scatter (k in xmpt1) {
+    scatter (k in xtmp1) {
         call lib.Inc as inc2 {input: i=k}
    }
 ```
