@@ -251,21 +251,24 @@ workflow sg_sum3 {
 
 Three applets are generated, `common`, `scatter_1`, and `scatter_2`.
 
+#### common
 ```
-# common
     Array[Int] numbers
     Array[Int] xtmp0 = range(length(numbers))
 ```
+This applet accepts workflow input arguments, and calculates the
+`range(length(numbers))` expression.
 
-# scatter_1
+#### scatter_1
 ```
-    scatter (k in range(length(numbers))) {
+    scatter (k in xtmp0) {
         call lib.Inc as inc {input: i= numbers[k]}
         call lib.Mod7 as mod7 {input: i=inc.result}
     }
 ```
+loop over the `xtmp0` array.
 
-# scatter_2
+#### scatter_2
 ```
     Array[Int] partial = inc.results
     Array[Int] xtmp1 = mod7.result
@@ -273,7 +276,6 @@ Three applets are generated, `common`, `scatter_1`, and `scatter_2`.
         call lib.Inc as inc2 {input: i=k}
    }
 ```
-
-Applet `scatter_2` packs two declarations and a scatter. This avoids
+Execute two declarations and a scatter. This avoids
 creating a fourth applet to calculate the `partial` and `xtmp1`
 arrays.
