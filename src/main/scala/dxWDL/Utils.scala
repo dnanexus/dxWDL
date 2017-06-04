@@ -441,7 +441,7 @@ object Utils {
     def uploadString(buf: String, fileNameDbg: String) : JsValue = {
         val dxfile = DXFile.newFile().setName(fileNameDbg).build()
         dxfile.upload(buf.getBytes())
-        dxfile.close()
+        dxfile.closeAndWait()
 
         // return a dx-link
         val fid = dxfile.getId()
