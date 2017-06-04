@@ -50,7 +50,7 @@ script:
   - dx login --token ${DX_AUTH_TOKEN} --noprojects
   - dx select dxWDL_playground
   - java -version
-  - cd dxWDL && sbt version && ./run_tests.py --test M
+  - cd dxWDL && sbt version && ./run_tests.py --test S
 
 env:
   global:
