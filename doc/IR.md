@@ -189,10 +189,9 @@ List of stages, where a stage has the following fields:
 
 A scatter loops over a collection, which may be a complex
 expression. To implement scatters, we use an applet that launches
-sub-jobs, and leaves links to their results. The applet represents
-overhead, that we would like to reduce.
+sub-jobs, and leaves links to their results. Examine the workflow
+snippet below.
 
-Examine the workflow snippet below.
 ```
 scatter (k in [1,2,3]) {
     call lib.Inc as inc3 {input: i=k}
@@ -200,7 +199,7 @@ scatter (k in [1,2,3]) {
 ```
 
 Variable ```k``` is looping over an integer array. The Preprocessor
-extracts the colection expression into a separate declaration.
+extracts the collection expression into a separate declaration.
 ```
 Array[Int] xtmp0 = [1,2,3]
 scatter (k in xtmp0) {
@@ -211,7 +210,7 @@ scatter (k in xtmp0) {
 The FrontEnd packs the declaration and scatter into one applet,
 so we do not spawn a separate job to calculate `xtmp0`.
 
-Workflow `sg_sum3` presents a more complex example. It imports
+Workflow `sg_sum3` presents a more complex case. It imports
 tasks from the math library, and takes a `numbers` input array.
 
 ```
@@ -238,13 +237,13 @@ import "library_math.wdl" as lib
 workflow sg_sum3 {
     Array[Int] numbers
     Array[Int] xtmp0 = range(length(numbers))
-    scatter (k in range(length(numbers))) {
+    scatter (k in xtmp0) {
         call lib.Inc as inc {input: i= numbers[k]}
         call lib.Mod7 as mod7 {input: i=inc.result}
     }
     Array[Int] partial = inc.results
     Array[Int] xtmp1 = mod7.result
-    scatter (k in xmpt1) {
+    scatter (k in xtmp1) {
         call lib.Inc as inc2 {input: i=k}
     }
 }
@@ -256,14 +255,18 @@ Three applets are generated, `common`, `scatter_1`, and `scatter_2`.
 # common
     Array[Int] numbers
     Array[Int] xtmp0 = range(length(numbers))
+```
 
 # scatter_1
+```
     scatter (k in range(length(numbers))) {
         call lib.Inc as inc {input: i= numbers[k]}
         call lib.Mod7 as mod7 {input: i=inc.result}
     }
+```
 
 # scatter_2
+```
     Array[Int] partial = inc.results
     Array[Int] xtmp1 = mod7.result
     scatter (k in xmpt1) {
