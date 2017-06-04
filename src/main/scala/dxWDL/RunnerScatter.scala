@@ -234,22 +234,6 @@ object RunnerScatter {
         }.toMap
     }
 
-    // Open a WDL array into a sequence of elements. For example:
-    // WdlArray(1, 2, 3) =>
-    //     List(WdlInteger(1), WdlInteger(2), WdlInteger(3))
-    // Each of the WDL values is represented as a WdlVarLinks structure.
-    //
-    // Note: the Wdl value must be an array.
-    def unpackWdlArray(wvl: WdlVarLinks) : Seq[WdlVarLinks] = {
-        val v:WdlValue = WdlVarLinks.eval(wvl, false)
-        v match {
-            case WdlArray(WdlArrayType(eType), elems) =>
-                // import each array element into a WdlVarLinks structure
-                elems.map(elem => WdlVarLinks.apply(eType, elem))
-            case _ => throw new Exception(s"${wvl} does not unpack to a WDL array")
-        }
-    }
-
     // Launch a job for each call, and link them with JBORs. Do not
     // wait for the jobs to complete, because that would
     // require leaving auxiliary instance up for the duration of the subjob executions.
@@ -265,7 +249,7 @@ object RunnerScatter {
         // environment
         val (topDecls,_) = Utils.splitBlockDeclarations(scatter.children.toList)
 
-        val collElements : Seq[WdlVarLinks] = unpackWdlArray(collection)
+        val collElements : Seq[WdlVarLinks] = WdlVarLinks.unpackWdlArray(collection)
         var scOutputs : List[ScatterEnv] = List()
         collElements.foreach { case elem =>
             // Bind the iteration variable inside the loop

@@ -55,11 +55,6 @@ object CompilerBackend {
                        "help" -> JsString(wdlType.toWdlString),
                        "class" -> JsString("array:" ++ dxType)))
         }
-        def mkRaggedArray() : Vector[Map[String,JsValue]] = {
-            Vector(Map("name" -> JsString(name),
-                       "help" -> JsString(wdlType.toWdlString),
-                       "class" -> JsString("file")))
-        }
         def mkComplex() : Vector[Map[String,JsValue]] = {
             // A JSON structure, passed as a file
             // A vector of platform files.
@@ -88,12 +83,6 @@ object CompilerBackend {
                 case WdlArrayType(WdlFloatType) => mkPrimitiveArray("float")
                 case WdlArrayType(WdlStringType) => mkPrimitiveArray("string")
                 case WdlArrayType(WdlFileType) => mkPrimitiveArray("file")
-
-                // ragged arrays
-                case WdlArrayType(WdlArrayType(WdlBooleanType)) => mkRaggedArray()
-                case WdlArrayType(WdlArrayType(WdlIntegerType)) => mkRaggedArray()
-                case WdlArrayType(WdlArrayType(WdlFloatType)) => mkRaggedArray()
-                case WdlArrayType(WdlArrayType(WdlStringType)) => mkRaggedArray()
 
                 // complex types, that may contains files
                 case _ => mkComplex()
