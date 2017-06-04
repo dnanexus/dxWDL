@@ -185,7 +185,9 @@ object WdlVarLinks {
                         val dxfile = dxFileOfJsValue(jsRaw)
                         val buf = Utils.downloadString(dxfile)
                         buf.parseJson
-                    case _ => throw new AppInternalException(s"Non native DX type ${wvl.wdlType.toWdlString} json=${jsRaw}")
+                    case _ =>
+                        System.err.println(s"Non native DX type ${wvl.wdlType.toWdlString}  JSON=${jsRaw}")
+                        jsRaw
                 }
             } else {
                 jsRaw
