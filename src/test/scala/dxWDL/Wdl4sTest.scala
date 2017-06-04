@@ -68,6 +68,11 @@ class Wdl4sTest extends FlatSpec with BeforeAndAfterEach with OneInstancePerTest
 
     }
 
+    it should "generate expression variable ID" in {
+        val expr = WdlExpression.fromString("xxx")
+        System.out.println(s"expr=${expr.toWdlString}")
+    }
+
     it should "retrieve source code for task" in {
         val wdl = """|task a {
                      |  String prefix
@@ -446,5 +451,6 @@ class Wdl4sTest extends FlatSpec with BeforeAndAfterEach with OneInstancePerTest
         val x2 = JsObject(m2)
         System.err.println(s"json=${x2.prettyPrint}")
     }
+
 
 }

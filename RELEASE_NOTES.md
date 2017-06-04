@@ -1,5 +1,15 @@
 # Release Notes
 
+## 0.29
+Improved support for scatters
+  * Support an expression in a scatter collection.
+  * Compile declerations before a scatter into the scatter
+  applet. This optimization folds two applets into one.
+  * Use wdl4s native name resolution to calculate scatter
+  collection type.
+  * Added documentation to doc/IR.md describing how scatters
+  are compiled.
+
 ## 0.28
 - Support for ragged file arrays
 - Correctly handle an empty workflow output section

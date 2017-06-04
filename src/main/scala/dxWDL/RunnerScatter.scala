@@ -1,14 +1,17 @@
 /** Execute a scatter block on the platform
 
 The canonical example for what is happening here, is the workflow below.
-The scatter block has two calls, and it iterates over the "integers"
-array.
+The scatter block has two calls, and it iterates over the "numbers"
+array. It is legal to have declarations requiring evaluation at
+the top of the block, and, inside the scatter block.
 
 workflow scatter {
-    Array[Int] integers
+    String pattern
+    Array[Int] numbers = [1, 3, 7, 15]
+    Array[Int] index = range(length(numbers))
 
-    scatter (i in integers) {
-        call inc as inc1 {input: i=i}
+    scatter (i in index) {
+        call inc as inc1 {input: i=numbers[i]}
         call inc as inc2 {input: i=inc1.incremented}
     }
 
@@ -254,7 +257,7 @@ object RunnerScatter {
             System.err.println(s"envWithIterItem= ${envWithIterItem}")
 
             // calculate declarations at the top of the block
-            val bValues = RunnerEval.evalDeclarations(topDecls, envWithIterItem).toMap
+            val bValues = RunnerEval.evalDeclarations(topDecls, envWithIterItem)
             var innerEnv = bValues.map{ case(key, bVal) => key -> bVal.wvl }.toMap
             innerEnv = innerEnv ++ envWithIterItem
 
@@ -308,6 +311,19 @@ object RunnerScatter {
         }
     }
 
+    // Evaluate expressions at the beginning of the workflow
+    def evalTopDeclarations(children: Seq[Scope],
+                            inputs: ScatterEnv) : ScatterEnv = {
+        val (decls:List[Declaration], _) = Utils.splitBlockDeclarations(children.toList)
+
+        // keep only expressions to calculate (non inputs)
+        val exprDecls = decls.filter(decl => decl.expression != None)
+
+        // evaluate the expressions, given the workflow inputs
+        val env:Map[String, BValue] = RunnerEval.evalDeclarations(exprDecls, inputs)
+        env.map{ case (key, BValue(wvl,_)) => key -> wvl }.toMap
+    }
+
     def apply(wf: Workflow,
               jobInputPath : Path,
               jobOutputPath : Path,
@@ -322,14 +338,22 @@ object RunnerScatter {
         // Parse the inputs, do not download files from the platform.
         // They will be passed as links to the tasks.
         val inputLines : String = Utils.readFileContent(jobInputPath)
-        val outScopeEnv : ScatterEnv = WdlVarLinks.loadJobInputsAsLinks(inputLines, closureTypes)
+        val inputs : ScatterEnv = WdlVarLinks.loadJobInputsAsLinks(inputLines, closureTypes)
+
+        // Evaluate the expressions prior to the scatter, and add them to the environment.
+        // This is the environment outside the loop.
+        val inputWvls = evalTopDeclarations(wf.children, inputs)
+        val outScopeEnv = inputs ++ inputWvls
         val scatter : Scatter = findScatter(wf)
 
         // Lookup the array we are looping on.
         // Note: it could be an expression, which requires calculation
         val collElements = outScopeEnv.get(scatter.collection.toWdlString) match {
-            case None => throw new AppInternalException(
-                s"Could not find the collection array ${scatter.collection.toWdlString} in the job inputs")
+            case None =>
+                System.err.println(s"inputs=${inputs}")
+                System.err.println(s"scope=${outScopeEnv}")
+                throw new AppInternalException(
+                    s"Collection array ${scatter.collection.toWdlString} not found in inputs")
             case Some(wvl) => wvl
         }
 

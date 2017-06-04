@@ -32,8 +32,8 @@ workflow file_ragged_array {
     call FileArrayMake as mk1 {input: n=2}
     call FileArrayMake as mk2 {input: n=3}
 
-    Array[Array[File]] rfa = [mk1.result, mk2.result]
-    scatter (fa in rfa) {
+    Array[Array[File]] allFiles = [mk1.result, mk2.result]
+    scatter (fa in allFiles) {
         call FileArraySize {input: files=fa}
     }
     output {

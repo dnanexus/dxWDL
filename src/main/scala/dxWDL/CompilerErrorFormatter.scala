@@ -15,6 +15,13 @@ case class CompilerErrorFormatter(terminalMap: Map[Terminal, WdlSource]) {
             |""".stripMargin
     }
 
+    def missingScatterCollectionException(t: Terminal) : String = {
+        s"""|Scatter collection variable missing
+            |
+            |${pointToSource(t)}
+            |""".stripMargin
+    }
+
     def undefinedMemberAccess(ast: Ast): String = {
         val lhsAst = ast.getAttribute("lhs").asInstanceOf[Terminal]
         val fqn = WdlExpression.toString(ast)

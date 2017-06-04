@@ -1,6 +1,8 @@
 # dxWDL
 
-dxWDL takes a bioinformatics pipeline written in [Workflow Definition Language](https://software.broadinstitute.org/wdl) and compiles it to an equivalent workflow on the DNAnexus platform.
+dxWDL takes a bioinformatics pipeline written in
+[Workflow Definition Language](https://software.broadinstitute.org/wdl)
+and compiles it to an equivalent workflow on the DNAnexus platform.
 
 
 ## Release status
@@ -14,7 +16,6 @@ The main WDL features not yet supported are:
 - Maps and objects
 
 ## Getting started
-
 Prerequisites: DNAnexus platform account, dx-toolkit, java 8+, python 2.7.
 
 Make sure you've installed the dx-toolkit CLI, and initialized it with
@@ -51,10 +52,10 @@ to the compiler, or building it on their own.
 
 ## Installation of software prerequisits
 
-Download the Broad Institute tools, get the latest versions of
-cromwell and wdl4s. Currently, we are working with wdl4s version
-[0.11](http://broadinstitute.github.io/wdl4s/latest/wdl4s/index.html), and
-cromwell version [26](https://github.com/broadinstitute/cromwell/releases/tag/26).
+The main library we depend on is
+[wdl4s](http://broadinstitute.github.io/wdl4s/latest/wdl4s/index.html). This
+is a scala library for parsing and handling WDL programs, written at
+the [Broad institute](https://www.broadinstitute.org).
 
 The instructions here assume an Ubuntu 16.04 system (Xenial).
 

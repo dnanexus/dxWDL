@@ -113,6 +113,22 @@ object WdlRewrite {
         ssc1
     }
 
+    // modify the children in a scatter, and modify the collection
+    // expression. This is useful for a rewrite step like this:
+    //
+    // scatter (i in [1,2,3]) { ... }
+    // ->
+    // Array[Int] xtmp5 = [1,2,3]
+    // scatter (i in xtmp5) { ... }
+    def scatter [Child <: Scope] (ssc: Scatter,
+                                  children: Seq[Child],
+                                  expr: WdlExpression): Scatter = {
+        val ssc1 = Scatter(ssc.index, ssc.item, expr, INVALID_AST)
+        ssc1.children = children
+        updateScope(ssc, ssc1)
+        ssc1
+    }
+
     def namespace(wf: Workflow, tasks: Seq[Task]) : WdlNamespaceWithWorkflow = {
         new WdlNamespaceWithWorkflow(None, wf,
                                      Vector.empty, Vector.empty,

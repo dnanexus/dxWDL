@@ -33,7 +33,7 @@ import WdlVarLinks._
 
 object RunnerEval {
     def evalDeclarations(declarations: Seq[Declaration],
-                         inputs : Map[String, WdlVarLinks]) : Seq[(String, BValue)] = {
+                         inputs : Map[String, WdlVarLinks]) : Map[String, BValue] = {
         // Environment that includes a cache for values that have
         // already been evaluated.  It is more efficient to make the
         // conversion once, however, that is not the main point
@@ -102,7 +102,7 @@ object RunnerEval {
                     // optional input that was not provided
                     None
             }
-        }.flatten
+        }.flatten.toMap
     }
 
     def apply(wf: Workflow,
@@ -126,7 +126,7 @@ object RunnerEval {
                 case _ => throw new Exception("Eval task contains a non declaration")
             }
         }
-        val outputs : Seq[(String, BValue)] = evalDeclarations(decls, inputs)
+        val outputs : Map[String, BValue] = evalDeclarations(decls, inputs)
 
         // Keep only exported variables
         val exported = outputs.filter{ case (varName, _) => outputTypes contains varName }

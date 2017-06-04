@@ -79,7 +79,7 @@ object Utils {
     val SCATTER = "scatter"
     val UPLOAD_RETRY_LIMIT = DOWNLOAD_RETRY_LIMIT
     val UNIVERSAL_FILE_PREFIX = "dx://"
-    val VERSION = "0.28"
+    val VERSION = "0.29"
     val WDL_SNIPPET_FILENAME = "source.wdl"
 
     // Substrings used by the compiler for encoding purposes
@@ -441,7 +441,7 @@ object Utils {
     def uploadString(buf: String, fileNameDbg: String) : JsValue = {
         val dxfile = DXFile.newFile().setName(fileNameDbg).build()
         dxfile.upload(buf.getBytes())
-        dxfile.close()
+        dxfile.closeAndWait()
 
         // return a dx-link
         val fid = dxfile.getId()
