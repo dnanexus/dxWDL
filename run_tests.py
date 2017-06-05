@@ -22,10 +22,21 @@ test_files={}
 test_failing=set([])
 reserved_test_names=['S', 'M', 'All', 'list']
 small_test_list = [
-    "system_calls", "var_types", "math_expr",
-    "call_expressions2", "string_array", "sg_sum3", "sg_files",
-    "ragged_array2", "advanced",
-    "file_disambiguation", "file_array",
+    "system_calls",
+    "sg_sum3", "sg_files",
+    "ragged_array2",
+    "file_array"
+]
+
+medium_test_list = [
+    # basics
+    "var_types", "math_expr", "call_expressions2",
+
+    # File path handling, and files with the same name
+    "file_disambiguation", "files",
+
+    # various advanced features
+    "advanced",
 
     # optional arguments
     "optionals",
@@ -37,10 +48,8 @@ small_test_list = [
     "decl_mid_wf",
 
     # Error codes
-    "bad_status", "bad_status2"
-]
+    "bad_status", "bad_status2",
 
-medium_test_list = [
     # Casting
     "cast",
 

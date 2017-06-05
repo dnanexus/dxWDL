@@ -10,3 +10,15 @@ task Concat {
         String result = read_string(stdout())
     }
 }
+
+# Concatenate array of strings
+task ConcatArray {
+    Array[String] words
+
+    command {
+        echo ${sep='_' words}
+    }
+    output {
+      String result = read_string(stdout())
+    }
+}

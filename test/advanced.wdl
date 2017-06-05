@@ -1,4 +1,7 @@
-task jjj_str_animals {
+import "library_sys_call.wdl" as lib
+import "library_string.wdl" as lib_string
+
+task Animals {
     String s
     Int num_cores
     Int disk_size
@@ -9,41 +12,14 @@ task jjj_str_animals {
     command {
         echo "${s} --K -S --flags --contamination ${default=0 num} --s ${default="foobar" foo}"
     }
-#    runtime {
-#       disks: "local-disk " + disk_size + " HDD"
-#       cpu: num_cores
-#       memory: "2 GB"
-#    }
+    runtime {
+       disks: "local-disk " + disk_size + " HDD"
+       cpu: num_cores
+       memory: "2 GB"
+    }
     output {
         String result = read_string(stdout())
         String family = family_i
-    }
-}
-
-task jjj_ident {
-    String s
-    String r
-
-    command {
-    }
-    output {
-      String result = "${s} ${r}"
-    }
-}
-
-task jjj_cgrep {
-    File in_file
-    String pattern
-    Int num
-    String buf_i
-    String ignoredVar
-
-    command {
-        grep '${pattern}' ${in_file} | wc -l
-    }
-    output {
-        Int count = read_int(stdout())
-        String buf = buf_i
     }
 }
 
@@ -59,14 +35,14 @@ workflow advanced {
     String unmapped_bam_suffix = "bam"
     Array[String] names = ["Jack.XX", "Gil.XX", "Jane.UU"]
 
-    call jjj_str_animals as str_animals {
-        input: s=species, num_cores=3, disk_size=100
+    call Animals as str_animals {
+        input: s=species, num_cores=3, disk_size=40
     }
     scatter (name in names) {
-        call jjj_ident {
+        call lib_string.Concat as concat {
           input:
-             s = sub(name, ".XX", "") + ".XY",
-             r = sub(sub(name, ".XX", ""), ".UU", "") + ".unmerged"
+             x = sub(name, ".XX", "") + ".XY",
+             y = sub(sub(name, ".XX", ""), ".UU", "") + ".unmerged"
         }
     }
     scatter (pt in patterns) {
@@ -74,12 +50,8 @@ workflow advanced {
         String sub_strip_unmapped = unmapped_bam_suffix + "$"
         Int k = 5
 
-        call jjj_cgrep as cgrep {
-           input: in_file = file,
-             pattern = pt,
-             num=k,
-             buf_i=sub_strip_unmapped,
-             ignoredVar= sub(pt, ".edu", "")
+        call lib.cgrep as cgrep {
+           input: in_file = file, pattern = pt
         }
     }
     output {

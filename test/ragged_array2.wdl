@@ -1,5 +1,5 @@
 # Generate sets of intervals for scatter-gathering over chromosomes
-task nnn_createTsv {
+task createTsv {
     # Use python to create a string parsed into a wdl Array[Array[String]]
     command<<<
     python <<CODE
@@ -17,7 +17,7 @@ task nnn_createTsv {
     }
 }
 
-task nnn_processTsv {
+task processTsv {
     Array[Array[String]] words
     command {
         cat ${write_tsv(words)}
@@ -27,7 +27,7 @@ task nnn_processTsv {
     }
 }
 
-task nnn_processLine {
+task processLine {
     Array[String] line
     command {
         echo ${sep=' INPUT=' line}
@@ -37,7 +37,7 @@ task nnn_processLine {
     }
 }
 
-task nnn_collect {
+task collect {
     Array[String] line
     command {
     }
@@ -47,14 +47,14 @@ task nnn_collect {
 }
 
 workflow ragged_array2 {
-    call nnn_createTsv as createTsv
-    call nnn_processTsv as processTsv {
+    call createTsv
+    call processTsv {
         input : words=createTsv.result
     }
     scatter (x in createTsv.result) {
-        call nnn_processLine as processLine {input : line=x}
+        call processLine as processLine {input : line=x}
     }
-    call nnn_collect as collect {
+    call collect {
         input : line=processLine.result
     }
     output {
