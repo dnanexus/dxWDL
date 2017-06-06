@@ -1,5 +1,11 @@
 # Release Notes
 
+## 0.30
+Bug fix release.
+
+Corrected the checksum algorithm, to recurse through the directory
+tree.
+
 ## 0.29
 Improved support for scatters
   * Support an expression in a scatter collection.
