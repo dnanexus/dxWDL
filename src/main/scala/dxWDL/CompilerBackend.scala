@@ -344,15 +344,11 @@ object CompilerBackend {
     // checksum the string. We assume the files are small enough to
     // fit in memory, and that the directory structure does not
     // matter, only file content. This is sufficient for our purposes.
-    def checksumDirectory(path: Path, cState: State) : String = {
-        val dir = path.toFile
-        val content = dir.listFiles.map{ file =>
-            if (file.isFile)
-                Utils.readFileContent(file.toPath)
-            else
-                ""
-        }
-        chksum(content.mkString(""))
+    def checksumDirectory(dir: Path, cState: State) : String = {
+        val content = Files.walk(dir).iterator().asScala
+            .filter(Files.isRegularFile(_))
+            .map(path => Utils.readFileContent(path))
+        chksum(content.mkString("\n"))
     }
 
 
