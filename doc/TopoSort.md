@@ -159,14 +159,14 @@ workflow W {
     Array[Int] xs
 
     scatter (x in xs) {
-        call T as b { input: x = x, y = a.res }
+        call T as B { input: x = x, y = A.res }
     }
 
-    call T as a { input: x = 1, y = 2 }
+    call T as A { input: x = 1, y = 2 }
 }
 ```
 
-Here, `b` depends on `a.res`  However the scatter only depends on `xs`.  Therefore without the scatter collapsing there is no way at the top level that the sorting procedure knows to place `a` before the scatter.
+Here, `B` depends on `A.res`  However the scatter only depends on `xs`.  Therefore without the scatter collapsing there is no way at the top level that the sorting procedure knows to place `A` before the scatter.
 
 
 Psuedocode for the procedure:
