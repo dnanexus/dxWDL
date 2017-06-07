@@ -150,16 +150,16 @@ Conceptually there are two major ways sorting a WDL workflow can be implemented.
 ```scala
 
 task T {
-	Int x
-	Int y
-	output { res = x + y }
+    Int x
+    Int y
+    output { res = x + y }
 }
 
 workflow W {
     Array[Int] xs
 
     scatter (x in xs) {
-	      call T as b { input: x = x, y = a.res }
+        call T as b { input: x = x, y = a.res }
     }
 
     call T as a { input: x = 1, y = 2 }
