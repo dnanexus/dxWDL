@@ -76,11 +76,35 @@ workflow {
 
 The body of a `scatter` can contain what appears to be an arbitrary ‘sub workflow’.  However, this ‘sub workflow’ can be dependent on tasks anywhere outside the scatter context.  This makes the sorting problem a bit more difficult, and in particular can result in some hard-to-read workflows.
 
-With dxWDL, we conceptually build a DAG at every level of the AST hierarchy and perform a topological sort the nodes within that level.   This implies that we **require** that at every level of the AST the graph is a DAG and there is no cycle.
+## Default sorting procedure
 
-For example, that any dependencies between descendants of two scatters will be dependencies of the parent scatters.  If this causes a cycle, compilation of the dxWDL workflow will error out.
+By default, we conceptually build a DAG at every level of the AST hierarchy and perform a topological sort the nodes within that level.   This implies that we **require** that at every level of the AST the graph is a DAG and there is no cycle.
 
-The structure of this recursion looks like this at a high level (pseudocode):
+For example, any dependencies between descendants of two scatters will be dependencies of the parent scatters.  If this causes a cycle, compilation of the dxWDL workflow will error out:
+
+```scala
+task add {
+    Int x
+    Int y
+    output { r = x + y }
+}
+
+workflow W {
+    Array[Int] xs
+    scatter (x in xs) {
+        call add as A { input: x = C.r, y = 0 }
+        call add as B { input: x = 3, y = 0 }
+    }
+    scatter (x in xs) {
+        call add as C { input: x = 1, y = 2 }
+        call add as D { input: x = B.r, y = 0 }
+    }
+}
+```
+
+Here,  `A` depends on the result of `C` and `D` depends on the result of `B`.    This is not strictly a cycle, however in some senses, each scatter operation at the top level is dependent on one another.    More complex examples of this kind could cause difficulty in understanding the execution of a workflow.
+
+The structure of this 'scatter collapsing' recursion looks like this at a high level (pseudocode):
 
 ```
 # Returns a list of sorted nodes
@@ -89,7 +113,7 @@ tsort(edges)
 # Returns a sorted workflow
 sortWorkflow(workflow) {
     # Top level children of a workflow
-    topologicalSortAST(wf.children)
+    tsortASTNodes(wf.children)
 }
 
 # Sorts nodes at a particular level in the AST
@@ -117,8 +141,37 @@ Case 2:
 
 If any node `v` in the current level of the AST has a parent within a scatter context at this level, make `v`’s parent the scatter itself.
 
-## Some additional notes
+Regarding implementation of this type of algorithm, one approach is to define a separate graph with node types for a new 'scatter collapsed' graph and recursively build this graph.  This new graph type will eventually have to be converted back into nodes in the original WDL AST.   The other approach is rely solely on nodes in the WDL AST to build the graph (in other words, /any/ graph topologically sorted in the AST will consist of nodes in the AST itself.  We opted for the latter approach though both have their advantages and disadvantages.
 
-Conceptually there are two major ways this sorting could be implemented.  One is to define a separate graph with node types for a new 'scatter collapsed' graph and recursively build this graph.  This new graph type will eventually have to be converted back into nodes in the original WDL AST.   The other approach is rely solely on nodes in the WDL AST to build the graph (in other words, /any/ graph topologically sorted in the AST will consist of nodes in the AST itself.  We opted for the latter approach though both have their advantages and disadvantages.
+## Alternative 'relaxed' sorting procedure
 
-Also, related simple algorithm/optimization for this: first topologically sort the entire AST graph: all nodes at any depth. Then use this as the input to the recursion filtering for only the nodes at a particular depth. However this does not collapse scatters and thus allows the the types of dependencies between scatters, for example, that may make a workflow difficult to read.
+Conceptually there are two major ways sorting a WDL workflow can be implemented. The procedure above is fairly strict in the sense that dependencies within scatters are 'collapsed' and propoagated up to scatters at each level.  It may be the case that, in some cases, it is more succinct and desirable to allow more complex dependencies between scatters as displayed in the example earlier. In this case, one can first topologically sort the dependency graph overlayed over the AST (i.e. all nodes at any depth in the AST). This sorted list of AST graph nodes can be used as an input to a recursion filtering for only the nodes at a particular level in the AST. This does not collapse scatters and thus allows the the types of dependencies between scatters, for example, that may make a workflow difficult to read.   Psuedocode:
+
+```
+# Returns a list of sorted nodes
+tsort(edges)
+
+# Returns a sorted workflow
+sortWorkflowAlternative(workflow) {
+    edges = # directed graph built from ALL nodes in the AST
+    allNodesSorted = tsort(edges)
+    # Top level children of a workflow
+    tsortASTNodesAlternative(allNodesSorted, wf.children)
+}
+
+# Sorts nodes at a particular level in the AST
+tsortASTNodesAlternative(allNodesSorted, nodes) {
+    recursedNodes = nodes.map [
+        if node is scatter:
+              newScatter(tsortASTNodesAlternative(allNodesSorted, scatter.children))
+          else:
+              node
+    ]
+
+    filteredNodes = # Filter all sorted nodes by only those in the recursed nodes
+}
+```
+
+## Are cycles OK?
+
+Either sorting procedure above disallows cycles of dependencies between nodes in the AST.   In general this is because the workflow may not only be harder to read, but also introduce the possibility of deadlocks or an infinite loop:  e.g. the output of task A is dependent on the output of task B, but the output of task B is also dependent on the output of task A.   However, it could be the case, for example, that task A and B both participate in an iterative optimization that eventually converges.   TODO: am not clear yet to what extent these kinds of examples are desirable and supportable in WDL (e.g. an expectation-maximization algorithm represented in WDL).
