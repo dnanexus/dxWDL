@@ -145,7 +145,31 @@ Regarding implementation of this type of algorithm, one approach is to define a 
 
 ## Alternative 'relaxed' sorting procedure
 
-Conceptually there are two major ways sorting a WDL workflow can be implemented. The procedure above is fairly strict in the sense that dependencies within scatters are 'collapsed' and propoagated up to scatters at each level.  It may be the case that, in some cases, it is more succinct and desirable to allow more complex dependencies between scatters as displayed in the example earlier. In this case, one can first topologically sort the dependency graph overlayed over the AST (i.e. all nodes at any depth in the AST). This sorted list of AST graph nodes can be used as an input to a recursion filtering for only the nodes at a particular level in the AST. This does not collapse scatters and thus allows the the types of dependencies between scatters, for example, that may make a workflow difficult to read.   Psuedocode:
+Conceptually there are two major ways sorting a WDL workflow can be implemented. The procedure above is fairly strict in the sense that dependencies within scatters are 'collapsed' and propoagated up to scatters at each level.  It may be the case that, in some cases, it is more succinct and desirable to allow more complex dependencies between scatters as displayed in the example earlier. In this case, one can first topologically sort the dependency graph overlayed over the AST (i.e. all nodes at any depth in the AST). This sorted list of AST graph nodes can be used as an input to a recursion filtering for only the nodes at a particular level in the AST. This does not collapse scatters and thus allows the the types of dependencies between scatters, for example, that may make a workflow difficult to read.  Here is an example:
+
+```scala
+
+task T {
+	Int x
+	Int y
+	output { res = x + y }
+}
+
+workflow W {
+    Array[Int] xs
+
+    scatter (x in xs) {
+	      call T as b { input: x = x, y = a.res }
+    }
+
+    call T as a { input: x = 1, y = 2 }
+}
+```
+
+Here, `b` depends on `a.res`  However the scatter only depends on `xs`.  Therefore without the scatter collapsing there is no way at the top level that the sorting procedure knows to place `a` before the scatter.
+
+
+Psuedocode for the procedure:
 
 ```
 # Returns a list of sorted nodes
