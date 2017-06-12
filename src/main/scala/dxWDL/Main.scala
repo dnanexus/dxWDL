@@ -49,6 +49,8 @@ object Main extends App {
                     nextOption(map ++ Map("inputFile" -> value.toString), tail)
                 case "-mode" :: value :: tail =>
                     nextOption(map ++ Map("mode" -> value.toString), tail)
+                case "-sort" :: value :: tail =>
+                    nextOption(map ++ Map("sort" -> value.toString), tail)
                 case "-o" :: value :: tail =>
                     nextOption(map ++ Map("destination" -> value.toString), tail)
                 case "-verbose" :: tail =>
@@ -141,6 +143,7 @@ object Main extends App {
     def compileBody(wdlSourceFile : Path, options: OptionsMap) : String = {
         val verbose = options contains "verbose"
         val force = options contains "force"
+        val sort = options contains "sort"
 
         // deal with the various options
         val destination : String = options.get("destination") match {
@@ -179,13 +182,22 @@ object Main extends App {
         // get list of available instance types
         val instanceTypeDB = InstanceTypeDB.queryWithBackup(dxProject)
 
-        // Topologically sort the WDL file so no forward references exist in
-        // subsequent steps. Create new file to hold the result.
+        val sortedWdlPath = if (sort) {
+            // Topologically sort the WDL file so no forward references exist in
+            // subsequent steps. Create new file to hold the result.
 
-        // Additionally perform check for cycles in the workflow
-        // Assuming the source file is xxx.wdl, the new name will
-        // be xxx.sorted.wdl.
-        val sortedWdlPath = CompilerTopologicalSort.apply(wdlSourceFile, verbose)
+            // Additionally perform check for cycles in the workflow
+            // Assuming the source file is xxx.wdl, the new name will
+            // be xxx.sorted.wdl.
+            val alternativeSort = options.get("sort") match {
+                case Some(x) => x
+                case _ => false
+            }
+            CompilerTopologicalSort.apply(wdlSourceFile, verbose, alternativeSort == "relaxed")
+        } else {
+            wdlSourceFile
+        }
+
         val ns:WdlNamespace = CompilerPreprocess.apply(sortedWdlPath, verbose)
 
         // Backbone of compilation process.

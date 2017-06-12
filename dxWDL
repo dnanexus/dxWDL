@@ -134,7 +134,7 @@ def validate_asset_version(version_id, asset_id):
 # destination    output path on the platform
 #
 # return --      workflow ID
-def compile_workflow(wf_file, wdl_input_file, destination, asset_id, classpath, force, verbose, mode):
+def compile_workflow(wf_file, wdl_input_file, destination, asset_id, classpath, force, verbose, mode, sort_method):
     print("Compiling {}".format(wf_file), file=sys.stderr)
     cmd_line = [
         "java", "-cp", classpath, "dxWDL.Main", "compile", wf_file,
@@ -151,6 +151,9 @@ def compile_workflow(wf_file, wdl_input_file, destination, asset_id, classpath, 
         cmd_line += ["-verbose"]
     if mode:
         cmd_line += ["-mode", mode]
+    if sort_method != "none":
+        cmd_line += ["-sort", sort_method]
+
     return call_scala_tools(cmd_line)
 
 
@@ -163,7 +166,7 @@ def cmd_compile(args):
     [asset_id, classpath] = prolog(args)
     compile_workflow(args.wdl_file, args.wdl_input_file,
                      destination, asset_id, classpath,
-                     args.force, args.verbose, args.mode)
+                     args.force, args.verbose, args.mode, args.sort_method)
 
 ######################################################################
 # Get workflow name from a source WDL file
@@ -202,6 +205,7 @@ compile_parser.add_argument("--verbose", dest='verbose', action='store_true', de
                             help="Print detailed progress reports")
 compile_parser.add_argument("--force", dest='force', action='store_true', default=False,
                             help="Always rebuild applets")
+compile_parser.add_argument("--sort_method", default="scatter_collapse", choices=['scatter_collapse', 'relaxed', 'none'])
 compile_parser.set_defaults(func=cmd_compile)
 
 # Parser for the run command

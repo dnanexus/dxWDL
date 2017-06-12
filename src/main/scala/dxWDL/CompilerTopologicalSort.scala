@@ -211,10 +211,15 @@ object CompilerTopologicalSort {
     }
 
     // WDL-specific wrapper for topological sorting
-    def sortWorkflow(nswf: WdlNamespaceWithWorkflow, cState: State, wdlSourceFile: Path) : Path = {
+    def sortWorkflow(nswf: WdlNamespaceWithWorkflow, cState: State, wdlSourceFile: Path, alternativeSort: Boolean) : Path = {
         val wf = nswf.workflow
-        // val sortedNodes = tsortASTnodes(wf.children, cState, 0)
-        val sortedNodes = sortWorkflowAlternative(nswf, cState)
+        val sortedNodes = if (alternativeSort) {
+            Utils.trace(cState.verbose, "Performing alternative 'relaxed' topological sort")
+            sortWorkflowAlternative(nswf, cState)
+        } else {
+            Utils.trace(cState.verbose, "Performing 'scatter collapsed' topological sort")
+            tsortASTnodes(wf.children, cState, 0)
+        }
 
         val newWorkflow = WdlRewrite.workflow(wf, sortedNodes)
         val newNamespace = WdlRewrite.namespace(newWorkflow, nswf.tasks)
@@ -242,7 +247,7 @@ object CompilerTopologicalSort {
     }
 
     def apply(wdlSourceFile : Path,
-              verbose: Boolean) : Path = {
+              verbose: Boolean, alternativeSort: Boolean) : Path = {
         Utils.trace(verbose, "Topological sort pass")
 
         val ns = WdlNamespace.loadUsingPath(wdlSourceFile, None, None).get
@@ -252,7 +257,7 @@ object CompilerTopologicalSort {
 
         val newPath = ns match {
             case nswf : WdlNamespaceWithWorkflow =>
-                sortWorkflow(nswf, cState, wdlSourceFile)
+                sortWorkflow(nswf, cState, wdlSourceFile, alternativeSort)
             case anyOtherType => wdlSourceFile
         }
         newPath
