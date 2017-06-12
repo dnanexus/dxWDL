@@ -12,7 +12,8 @@ In the case of a simple WDL file, this is fairly straightforward.  For example:
 task add {
     Int x
     Int y
-    output { r = x + y }
+    command { }
+    output { Int r = x + y }
 }
 
 workflow w {
