@@ -87,7 +87,8 @@ For example, any dependencies between descendants of two scatters will be depend
 task add {
     Int x
     Int y
-    output { r = x + y }
+    command { }
+    output { Int r = x + y }
 }
 
 workflow W {
