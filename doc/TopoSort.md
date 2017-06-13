@@ -79,7 +79,7 @@ The body of a `scatter` can contain what appears to be an arbitrary ‘sub workf
 
 ## Default sorting procedure: `--sort_method=scatter_collapse`
 
-By default, we conceptually build a DAG at every level of the AST hierarchy and perform a topological sort the nodes within that level.   This implies that we **require** that at every level of the AST the graph is a DAG and there is no cycle at each level.
+By default, we conceptually build a DAG at every level of the AST hierarchy and perform a topological sort the nodes within that level.   This implies that we **require** that at every level of the AST the graph is a DAG and there is no cycle.
 
 For example, any dependencies between descendants of two scatters will be dependencies of the parent scatters.  If this causes a cycle, compilation of the dxWDL workflow will error out:
 
