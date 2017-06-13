@@ -217,7 +217,7 @@ object CompilerTopologicalSort {
             Utils.trace(cState.verbose, "Performing alternative 'relaxed' topological sort")
             sortWorkflowAlternative(nswf, cState)
         } else {
-            Utils.trace(cState.verbose, "Performing 'scatter collapsed' topological sort")
+            Utils.trace(cState.verbose, "Performing default 'scatter collapsed' topological sort")
             tsortASTnodes(wf.children, cState, 0)
         }
 
