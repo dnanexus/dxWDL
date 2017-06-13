@@ -143,7 +143,6 @@ class CompilerTopologicalSortTest extends FlatSpec with BeforeAndAfterEach {
         assert(sortedNames == Seq("W.xs", "W.$scatter_1", "W.$scatter_0"))
         assert(getNames(sortedNodes(1).children) == Seq("W.A", "W.B"))
         assert(getNames(sortedNodes(2).children) == Seq("W.C", "W.D"))
-        // TODO: instrument procedure to better allow tests on nested sorts
     }
 
 }
