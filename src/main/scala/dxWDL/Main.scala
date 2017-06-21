@@ -1,6 +1,7 @@
 package dxWDL
 
 import com.dnanexus.{DXApplet, DXProject, DXUtil, DXContainer, DXWorkflow}
+import com.typesafe.config._
 import java.io.{File, FileWriter, PrintWriter}
 import java.nio.file.{Path, Paths, Files}
 import net.jcazevedo.moultingyaml._
@@ -24,13 +25,23 @@ object Main extends App {
             Version, WorkflowName, Yaml  = Value
     }
 
+    // load configuration information
+    def getVersion() : String = {
+        val config = ConfigFactory.load()
+        val version = config.getString("dxWDL.version")
+        //System.err.println(s"version=${version}")
+        //config
+        version
+    }
+
     // parse extra command line arguments
     def parseCmdlineOptions(arglist: List[String]) : OptionsMap = {
         // verify version ID
         def verifyVersion(options: OptionsMap) = {
+            val version = getVersion()
             options.get("expectedVersion") match {
-                case Some(vid) if vid != Utils.VERSION =>
-                    throw new Exception(s"""|Version mismatch, library is ${Utils.VERSION},
+                case Some(vid) if vid != version =>
+                    throw new Exception(s"""|Version mismatch, library is ${version},
                                             |expected version is ${vid}"""
                                             .stripMargin.replaceAll("\n", " "))
                 case _ => ()
@@ -322,7 +333,7 @@ object Main extends App {
                 case Actions.TaskProlog => appletAction(x, args.tail)
                 case Actions.TaskEpilog => appletAction(x, args.tail)
                 case Actions.TaskRelaunch => appletAction(x, args.tail)
-                case Actions.Version => SuccessfulTermination(Utils.VERSION)
+                case Actions.Version => SuccessfulTermination(getVersion())
                 case Actions.WorkflowName => getWorkflowName(args.tail)
                 case Actions.Yaml => yaml(args.tail)
             }
