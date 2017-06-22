@@ -22,17 +22,6 @@ scalacOptions ++= Seq("-unchecked", "-deprecation")
 assemblyJarName in assembly := "dxWDL.jar"
 logLevel in assembly := Level.Info
 
-// Exclude the dnanexus java bindings in the assembled fat JAR file.
-// There are conflicts between the java libraries included from dx, and
-// from wdl4s.
-//
-// We have access to the dnanexus jar file at runtime on the cloud instance.
-assemblyExcludedJars in assembly := {
-    val cp = (fullClasspath in assembly).value
-    cp filter {_.data.getName contains "dnanexus-api"}
-}
-
-
 libraryDependencies ++= Seq(
     "org.broadinstitute" %% "wdl4s" % "0.12",
     "com.google.code.findbugs" % "jsr305" % "1.3.+",

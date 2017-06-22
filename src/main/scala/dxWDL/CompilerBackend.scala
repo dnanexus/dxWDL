@@ -118,7 +118,7 @@ object CompilerBackend {
             |    echo "user= $${USER}"
             |
             |    # evaluate input arguments, and download input files
-            |    java -cp $${DX_FS_ROOT}/dnanexus-api-0.1.0-SNAPSHOT-jar-with-dependencies.jar:$${DX_FS_ROOT}/dxWDL.jar:$${CLASSPATH} dxWDL.Main taskProlog $${DX_FS_ROOT}/${Utils.WDL_SNIPPET_FILENAME} $${HOME}
+            |    java -jar $${DX_FS_ROOT}/dxWDL.jar taskProlog $${DX_FS_ROOT}/${Utils.WDL_SNIPPET_FILENAME} $${HOME}
             |    # Debugging outputs
             |    ls -lR
             |    cat $${HOME}/execution/meta/script
@@ -143,7 +143,7 @@ object CompilerBackend {
             |    fi
             |
             |    # evaluate applet outputs, and upload result files
-            |    java -cp $${DX_FS_ROOT}/dnanexus-api-0.1.0-SNAPSHOT-jar-with-dependencies.jar:$${DX_FS_ROOT}/dxWDL.jar:$${CLASSPATH} dxWDL.Main taskEpilog $${DX_FS_ROOT}/${Utils.WDL_SNIPPET_FILENAME} $${HOME}
+            |    java -jar $${DX_FS_ROOT}/dxWDL.jar taskEpilog $${DX_FS_ROOT}/${Utils.WDL_SNIPPET_FILENAME} $${HOME}
             |""".stripMargin.trim
     }
 
@@ -155,7 +155,7 @@ object CompilerBackend {
                     |    echo "working directory =$${PWD}"
                     |    echo "home dir =$${HOME}"
                     |    echo "user= $${USER}"
-                    |    java -cp $${DX_FS_ROOT}/dnanexus-api-0.1.0-SNAPSHOT-jar-with-dependencies.jar:$${DX_FS_ROOT}/dxWDL.jar:$${CLASSPATH} dxWDL.Main eval $${DX_FS_ROOT}/${WDL_SNIPPET_FILENAME} $${HOME}
+                    |    java -jar $${DX_FS_ROOT}/dxWDL.jar eval $${DX_FS_ROOT}/${WDL_SNIPPET_FILENAME} $${HOME}
                     |}""".stripMargin.trim
 
             case IR.AppletKindScatter(_) =>
@@ -164,7 +164,7 @@ object CompilerBackend {
                     |    echo "working directory =$${PWD}"
                     |    echo "home dir =$${HOME}"
                     |    echo "user= $${USER}"
-                    |    java -cp $${DX_FS_ROOT}/dnanexus-api-0.1.0-SNAPSHOT-jar-with-dependencies.jar:$${DX_FS_ROOT}/dxWDL.jar:$${CLASSPATH} dxWDL.Main launchScatter $${DX_FS_ROOT}/${WDL_SNIPPET_FILENAME} $${HOME}
+                    |    java -jar $${DX_FS_ROOT}/dxWDL.jar launchScatter $${DX_FS_ROOT}/${WDL_SNIPPET_FILENAME} $${HOME}
                     |}""".stripMargin.trim
 
             case IR.AppletKindTask =>
@@ -178,7 +178,7 @@ object CompilerBackend {
                         s"""|#!/bin/bash -ex
                             |main() {
                             |    # evaluate the instance type, and launch a sub job on it
-                            |    java -cp $${DX_FS_ROOT}/dnanexus-api-0.1.0-SNAPSHOT-jar-with-dependencies.jar:$${DX_FS_ROOT}/dxWDL.jar:$${CLASSPATH} dxWDL.Main taskRelaunch $${DX_FS_ROOT}/${Utils.WDL_SNIPPET_FILENAME} $${HOME}
+                            |    java -jar $${DX_FS_ROOT}/dxWDL.jar taskRelaunch $${DX_FS_ROOT}/${Utils.WDL_SNIPPET_FILENAME} $${HOME}
                             |}
                             |
                             |# We are on the correct instance type, run the task
