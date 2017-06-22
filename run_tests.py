@@ -76,18 +76,10 @@ def verify_json_file(path):
     except:
         raise Exception("Error verifying JSON file {}".format(path))
 
-# Extract the workflow name from a WDL source file.
-# Shell out to scala.
-def get_workflow_name_slow(wdl_file):
-    print("Getting workflow name from {}".format(wdl_file))
-    cmdline = [ (top_dir + "/dxWDL"), "workflowName", wdl_file ]
-    outstr = subprocess.check_output(cmdline)
-    return outstr.rstrip().split('\n')[-1].strip()
-
 # Search a WDL file with a python regular expression.
-# This is much faster, but less accurate
+# Note this is not 100% accurate.
 wf_pattern_re = re.compile(r"^(workflow)(\s+)(\w+)(\s+){")
-def get_workflow_name_fast(filename):
+def get_workflow_name(filename):
     with open(filename, 'r') as fd:
         for line in fd:
             m = re.match(wf_pattern_re, line)
@@ -100,7 +92,7 @@ def register_test(tname):
     if tname in reserved_test_names:
         raise Exception("Test name {} is reserved".format(tname))
     wdl_file = os.path.join(test_dir, tname + ".wdl")
-    wf_name = get_workflow_name_fast(wdl_file)
+    wf_name = get_workflow_name(wdl_file)
     desc = TestDesc(wf_name = wf_name,
                     wdl_source= wdl_file,
                     wdl_input= os.path.join(test_dir, tname + "_input.json"),

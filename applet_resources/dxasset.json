@@ -6,9 +6,6 @@
     "distribution": "Ubuntu", 
     "execDepends": [
         {
-            "name": "dx-java-bindings"
-        }, 
-        {
             "name": "openjdk-8-jre-headless"
         }
     ], 

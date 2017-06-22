@@ -21,6 +21,7 @@ scalacOptions ++= Seq("-unchecked", "-deprecation")
 // Assembly settings
 assemblyJarName in assembly := "dxWDL.jar"
 logLevel in assembly := Level.Info
+assemblyOutputPath in assembly := file("applet_resources/resources/dxWDL.jar")
 
 libraryDependencies ++= Seq(
     "org.broadinstitute" %% "wdl4s" % "0.12",
