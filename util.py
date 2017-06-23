@@ -101,3 +101,16 @@ def get_version_id(top_dir):
             if m is not None:
                 return m.group(6).strip()
     raise Exception("version ID not found in {}".format(conf_file))
+
+def upload_local_file(local_path, project, destFolder):
+    for i in range(0,max_num_retries):
+        try:
+            dxpy.upload_local_file(filename = local_path,
+                                   project = project.get_id(),
+                                   folder = destFolder,
+                                   wait_on_close=True)
+            return
+        except:
+            print("Sleeping for 5 seconds before trying again")
+            time.sleep(5)
+    raise Exception("Error uploading file {}".format(local_path))

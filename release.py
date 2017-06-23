@@ -34,9 +34,10 @@ def main():
     version_id = util.get_version_id(top_dir)
     print("version: {}".format(version_id))
 
-    util.build(project, folder, version_id, top_dir)
+    compiler_jar_file = util.build(project, folder, version_id, top_dir)
 
-    # TODO: Upload jar file to git release structure
+    # Upload compiler jar file
+    util.upload_local_file(compiler_jar_file, project, folder)
 
 if __name__ == '__main__':
     main()
