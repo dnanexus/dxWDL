@@ -15,6 +15,7 @@ import time
 from dxpy.exceptions import DXJobFailureError
 
 top_dir = os.path.dirname(sys.argv[0])
+conf_file = top_dir + "/src/main/resources/reference.conf"
 test_dir = os.path.join(top_dir, "test")
 git_revision = subprocess.check_output(["git", "describe", "--always", "--dirty", "--tags"]).strip()
 git_revision_in_jar= subprocess.check_output(["git", "describe", "--always", "--tags"]).strip()
@@ -163,27 +164,23 @@ def validate_result(tname, analysis_desc, key, expected_val):
         print("exception message={}".format(e))
         return False
 
+# Extract version_id from configuration file
+def get_version_id():
+    pattern = re.compile(r"^(\s*)(version)(\s*)(=)(\s*)(\S+)(\s*)$")
+    with open(conf_file, 'r') as fd:
+        for line in fd:
+            line_clean = line.replace("\"", "").replace("'", "")
+            m = re.match(pattern, line_clean)
+            if m is not None:
+                return m.group(6).strip()
+    raise Exception("version ID not found in {}".format(conf_file))
+
 def build_prerequisits(project, args):
     base_folder = time.strftime("/builds/%Y-%m-%d/%H%M%S-") + git_revision
     applet_folder = base_folder + "/applets"
     test_folder = base_folder + "/test"
     project.new_folder(test_folder, parents=True)
     project.new_folder(applet_folder, parents=True)
-
-    # Run make, to ensure that we have an up-to-date jar file
-    #
-    # Be careful, so that the make invocation will work even if called from a different
-    # directory.
-    print("Calling make")
-    subprocess.check_call(["make", "-C", top_dir, "all"])
-    print("")
-
-    # Create an asset from the dxWDL jar file and its dependencies, this speeds up applet creation.
-    print("Creating an asset from dxWDL")
-    subprocess.check_call(["dx", "build_asset", "applet_resources",
-                           "--destination",
-                           project.get_id() + ":" + applet_folder + "/dxWDLrt"])
-    print("")
     return base_folder
 
 def lookup_workflow(tname, project, folder):
@@ -203,16 +200,16 @@ def lookup_workflow(tname, project, folder):
 # wf             workflow name
 # classpath      java classpath needed for running compilation
 # folder         destination folder on the platform
-def build_workflow(tname, project, folder, asset, compiler_flags):
+def build_workflow(tname, project, folder, version_id, compiler_flags):
     desc = test_files[tname]
     print("build workflow {}".format(desc.wf_name))
     print("Compiling {} to a workflow".format(desc.wdl_source))
-    cmdline = [ (top_dir + "/dxWDL"),
+    cmdline = [ "java", "-jar",
+                os.path.join(top_dir, "dxWDL-{}.jar".format(version_id)),
                 "compile",
                 desc.wdl_source,
-                "--wdl_input_file", desc.wdl_input,
-                "--destination", (project.get_id() + ":" + folder),
-                "--asset", asset.get_id() ]
+                "-wdl_input_file", desc.wdl_input,
+                "-destination", (project.get_id() + ":" + folder) ]
     cmdline += compiler_flags
     subprocess.check_output(cmdline)
     return lookup_workflow(tname, project, folder)
@@ -392,22 +389,13 @@ def main():
 
     compiler_flags=[]
     if args.verbose:
-        compiler_flags.append("--verbose")
+        compiler_flags.append("-verbose")
     if args.compile_mode:
-        compiler_flags += ["--mode", args.compile_mode]
+        compiler_flags += ["-mode", args.compile_mode]
     if args.force:
-        compiler_flags.append("--force")
+        compiler_flags.append("-force")
 
-    # Move the record to the applet_folder, so the compilation process will find it
-    # Output: asset_bundle = record-F13V3BQ05gjppZPy1QyKxXzq
-    # Find the asset
-    asset = dxpy.search.find_one_data_object(classname="record",
-                                             project=project.get_id(),
-                                             name="dxWDLrt",
-                                             folder=base_folder,
-                                             return_handler=True,
-                                             more_ok=False)
-    print("asset_id={}".format(asset.get_id()))
+    version_id = get_version_id()
 
     try:
         # Compile the WDL workflows
@@ -417,7 +405,7 @@ def main():
             if args.lazy:
                 wfid = lookup_workflow(tname, project, applet_folder)
             if wfid is None:
-                wfid = build_workflow(tname, project, applet_folder, asset, compiler_flags)
+                wfid = build_workflow(tname, project, applet_folder, version_id, compiler_flags)
             workflows[tname] = wfid
             print("workflow({}) = {}".format(tname, wfid))
         if not args.compile_only:

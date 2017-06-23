@@ -22,56 +22,46 @@ object Main extends App {
     object Actions extends Enumeration {
         val Compile, Eval, LaunchScatter,
             TaskEpilog, TaskProlog, TaskRelaunch,
-            Version, WorkflowName, Yaml  = Value
+            Version, Yaml  = Value
     }
 
     // load configuration information
     def getVersion() : String = {
         val config = ConfigFactory.load()
         val version = config.getString("dxWDL.version")
-        //System.err.println(s"version=${version}")
-        //config
+        val asset_id = config.getString("dxWDL.asset_id")
+        System.err.println(s"asset_id=${asset_id}")
         version
+    }
+
+    def getAssetId() : String = {
+        val config = ConfigFactory.load()
+        val asset_id = config.getString("dxWDL.asset_id")
+        assert(asset_id.startsWith("record"))
+        asset_id
     }
 
     // parse extra command line arguments
     def parseCmdlineOptions(arglist: List[String]) : OptionsMap = {
-        // verify version ID
-        def verifyVersion(options: OptionsMap) = {
-            val version = getVersion()
-            options.get("expectedVersion") match {
-                case Some(vid) if vid != version =>
-                    throw new Exception(s"""|Version mismatch, library is ${version},
-                                            |expected version is ${vid}"""
-                                            .stripMargin.replaceAll("\n", " "))
-                case _ => ()
-            }
-        }
         def nextOption(map : OptionsMap, list: List[String]) : OptionsMap = {
             list match {
                 case Nil => map
-                case "-asset" :: value :: tail =>
-                    nextOption(map ++ Map("dxWDLrtId" -> value.toString), tail)
-                case "-expected_version" :: value :: tail =>
-                    nextOption(map ++ Map("expectedVersion" -> value.toString), tail)
                 case "-force" :: tail =>
                     nextOption(map ++ Map("force" -> ""), tail)
-                case "-inputFile" :: value :: tail =>
+                case ("-inputFile"|"-wdl_input_file") :: value :: tail =>
                     nextOption(map ++ Map("inputFile" -> value.toString), tail)
                 case "-mode" :: value :: tail =>
                     nextOption(map ++ Map("mode" -> value.toString), tail)
-                case "-o" :: value :: tail =>
+                case ("-o"|"-destination") :: value :: tail =>
                     nextOption(map ++ Map("destination" -> value.toString), tail)
                 case "-verbose" :: tail =>
                     nextOption(map ++ Map("verbose" -> ""), tail)
                 case option :: tail =>
                     throw new IllegalArgumentException(s"Unknown option ${option}")
-
             }
         }
 
         val options = nextOption(Map(),arglist)
-        verifyVersion(options)
         options
     }
 
@@ -181,10 +171,7 @@ object Main extends App {
                 dxEnv.getProjectContext()
             case Some(p) => DXProject.getInstance(p)
         }
-        val dxWDLrtId: String = options.get("dxWDLrtId") match {
-            case None => throw new Exception("dxWDLrt asset ID not specified")
-            case Some(id) => id
-        }
+        val dxWDLrtId = getAssetId()
         val mode: Option[String] = options.get("mode")
 
         // get list of available instance types
@@ -299,21 +286,6 @@ object Main extends App {
         }
     }
 
-    // Parse a WDL file, and get the workflow name, if it exists
-    private def getWorkflowName(args : Seq[String]): Termination = {
-        if (args.length != 1) {
-            BadUsageTermination("WorkflowName requires a single argument")
-        } else {
-            val wdlDefPath = args(0)
-            val ns = WdlNamespace.loadUsingPath(Paths.get(wdlDefPath), None, None).get
-            val wfName = ns match {
-                case nswf : WdlNamespaceWithWorkflow => nswf.workflow.unqualifiedName
-                case _ => throw new Exception("WDL file contains no workflow")
-            }
-            SuccessfulTermination(wfName)
-        }
-    }
-
     private def getAction(req: String): Option[Actions.Value] = {
         def normalize(s: String) : String= {
             s.replaceAll("_", "").toUpperCase
@@ -334,7 +306,6 @@ object Main extends App {
                 case Actions.TaskEpilog => appletAction(x, args.tail)
                 case Actions.TaskRelaunch => appletAction(x, args.tail)
                 case Actions.Version => SuccessfulTermination(getVersion())
-                case Actions.WorkflowName => getWorkflowName(args.tail)
                 case Actions.Yaml => yaml(args.tail)
             }
         }
@@ -350,17 +321,17 @@ object Main extends App {
            |  Perform full validation and print a YAML version of the
            |  syntax tree.
            |
-           |compile <WDL file> <-asset dxId> [-o targetPath] [-expected_version vid]
-           |  [-inputFile wdlInputFile] [-verbose] [-force] [-mode debug_flag]
+           |compile <WDL file>
+           |  -o|-destination [path] : Output folder for workflow
+           |  -wdl_input_file [file] : Cromwell style input file
+           |  -mode [mode] :           Compilation mode, a debugging flag
+           |  -verbose :               Print detailed progress reports
+           |  -force :                 Always rebuild applets
            |
-           |  Compile a wdl file into a dnanexus workflow. An asset
-           |  ID for the dxWDL runtime is required. Optionally, specify a
-           |  destination path on the platform. A dx JSON inputs file is generated
-           |  from the WDL inputs file, if specified.
-           |
-           |workflowName <WDL file>
-           |
-           |  Parse and extract the workflow name from a WDL file
+           |  Compile a wdl file into a dnanexus workflow.
+           |  Optionally, specify a destination path on the
+           |  platform. A dx JSON inputs file is generated from the
+           |  WDL inputs file, if specified.
            |
            |taskProlog <WDL file> <home directory>
            |

@@ -138,7 +138,8 @@ def main():
     version_id = get_version_id()
     print("version: {}".format(version_id))
 
-    all_in_one_jar = build(project, folder, version_id)
+    build(project, folder, version_id)
+
 
 if __name__ == '__main__':
     main()
