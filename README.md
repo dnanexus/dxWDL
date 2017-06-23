@@ -19,24 +19,17 @@ The main WDL features not yet supported are:
 Prerequisites: DNAnexus platform account, dx-toolkit, java 8+, python 2.7.
 
 Make sure you've installed the dx-toolkit CLI, and initialized it with
-`dx login`. Fetch the dxWDL wrapper script to a local directory:
+`dx login`. Download the latest compiler jar file from the
+[releases](https://github.com/dnanexus-rnd/dxWDL/releases) page.
 
+To compile a workflow:
 ```
-$ mkdir dxWDL
-$ cd dxWDL
-$ dx download dxWDL:/dxWDL_latest -fo dxWDL
-$ chmod +x dxWDL
+$ java -jar dxWDL-xxx.jar compile /path/to/foo.wdl
 ```
-
-The wrapper script will automatically download a few JAR dependencies to the working directory the first time it runs. To compile a workflow:
-```
-$ ./dxWDL compile /path/to/foo.wdl
-```
-This compiles ```foo.wdl``` to platform workflow ```foo``` in dx's current project and folder. The generated workflow can then be run as usual using `dx run`. For example, if the workflow takes string argument
-```X```, then:
-```
-dx run foo -i0.X="hello world"
-```
+This compiles ```foo.wdl``` to platform workflow ```foo``` in dx's
+current project and folder. The generated workflow can then be run as
+usual using `dx run`. For example, if the workflow takes string
+argument ```X```, then: ``` dx run foo -i0.X="hello world" ```
 
 ## Usage tips
 
@@ -81,7 +74,6 @@ sudo apt-get install sbt
 Running sbt for the first time takes several minutes, because it
 downloads all required packages.
 
-
 Checkout the code, and build it.
 ```
 git clone https://github.com/dnanexus/dx-toolkit.git
@@ -93,20 +85,8 @@ cd dxWDL && make all
 
 The dxWDL/lib subdirectory contains the java bindings for dnanexus,
 the dxjava jar file. This allows the compilation process to find dx
-methods, without including them in the final (fat) jar file. In order
-to compile a WDL file into a dx-workflow, do:
-
-```
-make asset
-```
-
-This will create an asset that includes all the applet dependencies in the current
-dx project. Record the asset id, `record-xxxx`.
-
-Then:
-```
-./dxWDL compile yourWorkflow.wdl --asset record-xxxx
-```
+methods. Now execute `./build_jar.py`, this will create a compiler jar
+file and place it at the top level directory.
 
 ## SBT tips
 
@@ -143,7 +123,7 @@ is as follows:
 | Array[Float]   |   array:float |
 | Array[String]  |   array:string |
 | Array[File]    |   array:file |
-| Array[Array[*]] |   file |
+| Complex types  |   file + array:file |
 
 Ragged arrays of files (Array[Array[File]]), and other more complex
 WDL types, are mapped to two fields: a flat array of files, and a

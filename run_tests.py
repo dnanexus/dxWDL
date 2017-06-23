@@ -12,12 +12,12 @@ import re
 import sys
 import subprocess
 import time
+import util
 from dxpy.exceptions import DXJobFailureError
 
 top_dir = os.path.dirname(sys.argv[0])
 test_dir = os.path.join(top_dir, "test")
 git_revision = subprocess.check_output(["git", "describe", "--always", "--dirty", "--tags"]).strip()
-git_revision_in_jar= subprocess.check_output(["git", "describe", "--always", "--tags"]).strip()
 test_files={}
 test_failing=set([])
 reserved_test_names=['S', 'M', 'All', 'list']
@@ -76,18 +76,10 @@ def verify_json_file(path):
     except:
         raise Exception("Error verifying JSON file {}".format(path))
 
-# Extract the workflow name from a WDL source file.
-# Shell out to scala.
-def get_workflow_name_slow(wdl_file):
-    print("Getting workflow name from {}".format(wdl_file))
-    cmdline = [ (top_dir + "/dxWDL"), "workflowName", wdl_file ]
-    outstr = subprocess.check_output(cmdline)
-    return outstr.rstrip().split('\n')[-1].strip()
-
 # Search a WDL file with a python regular expression.
-# This is much faster, but less accurate
+# Note this is not 100% accurate.
 wf_pattern_re = re.compile(r"^(workflow)(\s+)(\w+)(\s+){")
-def get_workflow_name_fast(filename):
+def get_workflow_name(filename):
     with open(filename, 'r') as fd:
         for line in fd:
             m = re.match(wf_pattern_re, line)
@@ -100,7 +92,7 @@ def register_test(tname):
     if tname in reserved_test_names:
         raise Exception("Test name {} is reserved".format(tname))
     wdl_file = os.path.join(test_dir, tname + ".wdl")
-    wf_name = get_workflow_name_fast(wdl_file)
+    wf_name = get_workflow_name(wdl_file)
     desc = TestDesc(wf_name = wf_name,
                     wdl_source= wdl_file,
                     wdl_input= os.path.join(test_dir, tname + "_input.json"),
@@ -171,28 +163,6 @@ def validate_result(tname, analysis_desc, key, expected_val):
         print("exception message={}".format(e))
         return False
 
-def build_prerequisits(project, args):
-    base_folder = time.strftime("/builds/%Y-%m-%d/%H%M%S-") + git_revision
-    applet_folder = base_folder + "/applets"
-    test_folder = base_folder + "/test"
-    project.new_folder(test_folder, parents=True)
-    project.new_folder(applet_folder, parents=True)
-
-    # Run make, to ensure that we have an up-to-date jar file
-    #
-    # Be careful, so that the make invocation will work even if called from a different
-    # directory.
-    print("Calling make")
-    subprocess.check_call(["make", "-C", top_dir, "all"])
-    print("")
-
-    # Create an asset from the dxWDL jar file and its dependencies, this speeds up applet creation.
-    print("Creating an asset from dxWDL")
-    subprocess.check_call(["dx", "build_asset", "applet_resources",
-                           "--destination",
-                           project.get_id() + ":" + applet_folder + "/dxWDLrt"])
-    print("")
-    return base_folder
 
 def lookup_workflow(tname, project, folder):
     desc = test_files[tname]
@@ -211,16 +181,16 @@ def lookup_workflow(tname, project, folder):
 # wf             workflow name
 # classpath      java classpath needed for running compilation
 # folder         destination folder on the platform
-def build_workflow(tname, project, folder, asset, compiler_flags):
+def build_workflow(tname, project, folder, version_id, compiler_flags):
     desc = test_files[tname]
     print("build workflow {}".format(desc.wf_name))
     print("Compiling {} to a workflow".format(desc.wdl_source))
-    cmdline = [ (top_dir + "/dxWDL"),
+    cmdline = [ "java", "-jar",
+                os.path.join(top_dir, "dxWDL-{}.jar".format(version_id)),
                 "compile",
                 desc.wdl_source,
-                "--wdl_input_file", desc.wdl_input,
-                "--destination", (project.get_id() + ":" + folder),
-                "--asset", asset.get_id() ]
+                "-inputs", desc.wdl_input,
+                "-destination", (project.get_id() + ":" + folder) ]
     cmdline += compiler_flags
     subprocess.check_output(cmdline)
     return lookup_workflow(tname, project, folder)
@@ -248,7 +218,6 @@ def wait_for_completion(test_analyses):
     finally:
         noise.kill()
     print("done")
-
 
 
 # Run [workflow] on several inputs, return the analysis ID.
@@ -351,6 +320,15 @@ def register_all_tests():
     test_failing.add("bad_status2")
     test_failing.add("missing_output")
 
+
+def build_dirs(project):
+    base_folder = time.strftime("/builds/%Y-%m-%d/%H%M%S-") + git_revision
+    applet_folder = base_folder + "/applets"
+    test_folder = base_folder + "/test"
+    project.new_folder(test_folder, parents=True)
+    project.new_folder(applet_folder, parents=True)
+    return base_folder
+
 ######################################################################
 ## Program entry point
 def main():
@@ -389,7 +367,7 @@ def main():
 
     project = dxpy.DXProject(args.project)
     if args.folder is None:
-        base_folder = build_prerequisits(project, args)
+        base_folder = build_dirs(project)
     else:
         # Use existing prebuilt folder
         base_folder = args.folder
@@ -398,24 +376,17 @@ def main():
     print("project: {} ({})".format(project.name, args.project))
     print("folder: {}".format(base_folder))
 
+    # build the dxWDL jar file
+    version_id = util.get_version_id(top_dir)
+    util.build(project, applet_folder, version_id, top_dir)
+
     compiler_flags=[]
     if args.verbose:
-        compiler_flags.append("--verbose")
+        compiler_flags.append("-verbose")
     if args.compile_mode:
-        compiler_flags += ["--mode", args.compile_mode]
+        compiler_flags += ["-mode", args.compile_mode]
     if args.force:
-        compiler_flags.append("--force")
-
-    # Move the record to the applet_folder, so the compilation process will find it
-    # Output: asset_bundle = record-F13V3BQ05gjppZPy1QyKxXzq
-    # Find the asset
-    asset = dxpy.search.find_one_data_object(classname="record",
-                                             project=project.get_id(),
-                                             name="dxWDLrt",
-                                             folder=base_folder,
-                                             return_handler=True,
-                                             more_ok=False)
-    print("asset_id={}".format(asset.get_id()))
+        compiler_flags.append("-force")
 
     try:
         # Compile the WDL workflows
@@ -425,7 +396,7 @@ def main():
             if args.lazy:
                 wfid = lookup_workflow(tname, project, applet_folder)
             if wfid is None:
-                wfid = build_workflow(tname, project, applet_folder, asset, compiler_flags)
+                wfid = build_workflow(tname, project, applet_folder, version_id, compiler_flags)
             workflows[tname] = wfid
             print("workflow({}) = {}".format(tname, wfid))
         if not args.compile_only:

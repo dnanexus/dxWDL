@@ -9,9 +9,6 @@ organization := "com.dnanexus"
 // Shorten the git commit hash
 git.gitHeadCommit := git.gitHeadCommit.value map { _.take(8) }
 versionWithGit
-assemblyJarName in assembly := "dxWDL.jar"
-
-logLevel in assembly := Level.Info
 
 resolvers ++= Seq(
   "Broad Artifactory Releases" at "https://artifactory.broadinstitute.org/artifactory/libs-release/",
@@ -21,18 +18,17 @@ resolvers ++= Seq(
 // Show deprecation warnings
 scalacOptions ++= Seq("-unchecked", "-deprecation")
 
-// Exclude the dnanexus java bindings in the assembled fat JAR file.
-// We have access to the dnanexus jar file at runtime on the cloud instance.
-assemblyExcludedJars in assembly := {
-    val cp = (fullClasspath in assembly).value
-    cp filter {_.data.getName contains "dnanexus-api"}
-}
+// Assembly settings
+assemblyJarName in assembly := "dxWDL.jar"
+logLevel in assembly := Level.Info
+assemblyOutputPath in assembly := file("applet_resources/resources/dxWDL.jar")
 
 libraryDependencies ++= Seq(
     "org.broadinstitute" %% "wdl4s" % "0.12",
     "com.google.code.findbugs" % "jsr305" % "1.3.+",
     "io.spray" %% "spray-json" % "1.3.2",
     "net.jcazevedo" %% "moultingyaml" % "0.4.0",
+    "com.typesafe" % "config" % "1.3.1",
 
     //---------- Test libraries -------------------//
     "org.scalactic" %% "scalactic" % "3.0.1",
