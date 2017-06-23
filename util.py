@@ -15,9 +15,16 @@ import time
 
 max_num_retries = 5
 
-def get_conf_file(top_dir):
-    return (os.path.join(top_dir, "reference.conf"),
-            os.path.join(top_dir, "src/main/resources/reference.conf"))
+def get_top_conf_file(top_dir):
+    return os.path.join(top_dir, "reference.conf")
+
+def get_crnt_conf_file(top_dir):
+    try:
+        os.mkdir(os.path.join(top_dir, "src/main/resources"))
+    except:
+        pass
+    return os.path.join(top_dir, "src/main/resources/reference.conf")
+
 
 def make_asset_file(version_id, top_dir):
     asset_spec = {
@@ -71,9 +78,10 @@ def build(project, folder, version_id, top_dir):
     print("assetId={}".format(asset.get_id()))
 
     # update asset_id in configuration file
-    (top_conf_file, crnt_conf_file) = get_conf_file(top_dir)
+    top_conf_file = get_top_conf_file(top_dir)
+    crnt_conf_file = get_crnt_conf_file(top_dir)
     conf = None
-    with open(top_conf_file, 'r') as fd:
+    with open(get_top_conf_file(), 'r') as fd:
         conf = fd.read()
     conf = conf.replace('    asset_id = None\n',
                         '    asset_id = "{}"\n'.format(asset.get_id()))
@@ -93,7 +101,7 @@ def build(project, folder, version_id, top_dir):
 # Extract version_id from configuration file
 def get_version_id(top_dir):
     pattern = re.compile(r"^(\s*)(version)(\s*)(=)(\s*)(\S+)(\s*)$")
-    (top_conf_file, crnt_conf_file) = get_conf_file(top_dir)
+    top_conf_file = get_top_conf_file(top_dir)
     with open(top_conf_file, 'r') as fd:
         for line in fd:
             line_clean = line.replace("\"", "").replace("'", "")
