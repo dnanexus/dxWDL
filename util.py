@@ -16,7 +16,8 @@ import time
 max_num_retries = 5
 
 def get_conf_file(top_dir):
-    return top_dir + "/src/main/resources/reference.conf"
+    return ( os.path.join(top_dir, "reference.conf"),
+             os.path.join(top_dir, "/src/main/resources/reference.conf") )
 
 def make_asset_file(version_id, top_dir):
     asset_spec = {
@@ -61,20 +62,6 @@ def make_prerequisits(project, folder, version_id, top_dir):
             time.sleep(5)
     raise Exception("Failed to build the dxWDL runtime asset")
 
-# Replace a regex in a file. Be careful to create a new file, and then
-# move it to the original place.
-def replace_pattern_in_file(source_file_path, pattern, subline):
-    fh, target_file_path = mkstemp()
-    with open(target_file_path, 'w') as target_file:
-        with open(source_file_path, 'r') as source_file:
-            for line in source_file:
-                if re.match(pattern, line):
-                    target_file.write(subline)
-                else:
-                    target_file.write(line)
-    #os.remove(source_file_path)
-    shutil.move(target_file_path, source_file_path)
-
 
 def build(project, folder, version_id, top_dir):
     make_prerequisits(project, folder, version_id, top_dir)
@@ -89,10 +76,14 @@ def build(project, folder, version_id, top_dir):
     print("assetId={}".format(asset.get_id()))
 
     # update asset_id in configuration file
-    conf_file = get_conf_file(top_dir)
-    replace_pattern_in_file(conf_file,
-                            "^(\s*)(asset_id)(.*)",
-                            "    asset_id = \"{}\"\n".format(asset.get_id()))
+    (top_conf_file, crnt_conf_file) = get_conf_file(top_dir)
+    conf = None
+    with open(top_conf_file, 'r') as fd:
+        conf = fd.read()
+    conf = script.replace('    asset_id = None\n',
+                          '    asset_id = "{}"\n'.format(asset.get_id()))
+    with open(crnt_conf_file, 'w') as fd:
+        fd.write(conf)
 
     # sbt assembly
     subprocess.check_call(["make", "-C", top_dir, "all"])
@@ -107,8 +98,8 @@ def build(project, folder, version_id, top_dir):
 # Extract version_id from configuration file
 def get_version_id(top_dir):
     pattern = re.compile(r"^(\s*)(version)(\s*)(=)(\s*)(\S+)(\s*)$")
-    conf_file = get_conf_file(top_dir)
-    with open(conf_file, 'r') as fd:
+    (top_conf_file, crnt_conf_file) = get_conf_file(top_dir)
+    with open(top_conf_file, 'r') as fd:
         for line in fd:
             line_clean = line.replace("\"", "").replace("'", "")
             m = re.match(pattern, line_clean)

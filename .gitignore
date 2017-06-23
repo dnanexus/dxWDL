@@ -8,7 +8,7 @@ execution/
 cromwell-executions/
 cromwell-workflow-logs/
 
-# compiled java classes
+# compiled classes
 *.class
 *.pyc
 
@@ -24,3 +24,4 @@ test/scratch
 
 # misc
 applet_resources/dxasset.json
+src/main/resources/reference.conf
