@@ -10,6 +10,7 @@ cromwell-workflow-logs/
 
 # compiled java classes
 *.class
+*.pyc
 
 # DNAx JSON input files generated from WDL
 *.dx.json

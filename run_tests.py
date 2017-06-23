@@ -12,13 +12,12 @@ import re
 import sys
 import subprocess
 import time
+import util
 from dxpy.exceptions import DXJobFailureError
 
 top_dir = os.path.dirname(sys.argv[0])
-conf_file = top_dir + "/src/main/resources/reference.conf"
 test_dir = os.path.join(top_dir, "test")
 git_revision = subprocess.check_output(["git", "describe", "--always", "--dirty", "--tags"]).strip()
-git_revision_in_jar= subprocess.check_output(["git", "describe", "--always", "--tags"]).strip()
 test_files={}
 test_failing=set([])
 reserved_test_names=['S', 'M', 'All', 'list']
@@ -164,24 +163,6 @@ def validate_result(tname, analysis_desc, key, expected_val):
         print("exception message={}".format(e))
         return False
 
-# Extract version_id from configuration file
-def get_version_id():
-    pattern = re.compile(r"^(\s*)(version)(\s*)(=)(\s*)(\S+)(\s*)$")
-    with open(conf_file, 'r') as fd:
-        for line in fd:
-            line_clean = line.replace("\"", "").replace("'", "")
-            m = re.match(pattern, line_clean)
-            if m is not None:
-                return m.group(6).strip()
-    raise Exception("version ID not found in {}".format(conf_file))
-
-def build_prerequisits(project, args):
-    base_folder = time.strftime("/builds/%Y-%m-%d/%H%M%S-") + git_revision
-    applet_folder = base_folder + "/applets"
-    test_folder = base_folder + "/test"
-    project.new_folder(test_folder, parents=True)
-    project.new_folder(applet_folder, parents=True)
-    return base_folder
 
 def lookup_workflow(tname, project, folder):
     desc = test_files[tname]
@@ -208,7 +189,7 @@ def build_workflow(tname, project, folder, version_id, compiler_flags):
                 os.path.join(top_dir, "dxWDL-{}.jar".format(version_id)),
                 "compile",
                 desc.wdl_source,
-                "-wdl_input_file", desc.wdl_input,
+                "-inputs", desc.wdl_input,
                 "-destination", (project.get_id() + ":" + folder) ]
     cmdline += compiler_flags
     subprocess.check_output(cmdline)
@@ -237,7 +218,6 @@ def wait_for_completion(test_analyses):
     finally:
         noise.kill()
     print("done")
-
 
 
 # Run [workflow] on several inputs, return the analysis ID.
@@ -340,6 +320,15 @@ def register_all_tests():
     test_failing.add("bad_status2")
     test_failing.add("missing_output")
 
+
+def build_dirs(project):
+    base_folder = time.strftime("/builds/%Y-%m-%d/%H%M%S-") + git_revision
+    applet_folder = base_folder + "/applets"
+    test_folder = base_folder + "/test"
+    project.new_folder(test_folder, parents=True)
+    project.new_folder(applet_folder, parents=True)
+    return base_folder
+
 ######################################################################
 ## Program entry point
 def main():
@@ -378,7 +367,7 @@ def main():
 
     project = dxpy.DXProject(args.project)
     if args.folder is None:
-        base_folder = build_prerequisits(project, args)
+        base_folder = build_dirs(project)
     else:
         # Use existing prebuilt folder
         base_folder = args.folder
@@ -387,6 +376,10 @@ def main():
     print("project: {} ({})".format(project.name, args.project))
     print("folder: {}".format(base_folder))
 
+    # build the dxWDL jar file
+    version_id = util.get_version_id(top_dir)
+    util.build(project, applet_folder, version_id, top_dir)
+
     compiler_flags=[]
     if args.verbose:
         compiler_flags.append("-verbose")
@@ -394,8 +387,6 @@ def main():
         compiler_flags += ["-mode", args.compile_mode]
     if args.force:
         compiler_flags.append("-force")
-
-    version_id = get_version_id()
 
     try:
         # Compile the WDL workflows

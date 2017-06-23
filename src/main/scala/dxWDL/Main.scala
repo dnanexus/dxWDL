@@ -46,15 +46,15 @@ object Main extends App {
         def nextOption(map : OptionsMap, list: List[String]) : OptionsMap = {
             list match {
                 case Nil => map
-                case "-force" :: tail =>
+                case ("-force" | "--force") :: tail =>
                     nextOption(map ++ Map("force" -> ""), tail)
-                case ("-inputFile"|"-wdl_input_file") :: value :: tail =>
+                case ("-inputs" | "--inputs") :: value :: tail =>
                     nextOption(map ++ Map("inputFile" -> value.toString), tail)
-                case "-mode" :: value :: tail =>
+                case ("-mode" | "--mode") :: value :: tail =>
                     nextOption(map ++ Map("mode" -> value.toString), tail)
-                case ("-o"|"-destination") :: value :: tail =>
+                case ("-destination" | "--destination") :: value :: tail =>
                     nextOption(map ++ Map("destination" -> value.toString), tail)
-                case "-verbose" :: tail =>
+                case ("-verbose" | "--verbose") :: tail =>
                     nextOption(map ++ Map("verbose" -> ""), tail)
                 case option :: tail =>
                     throw new IllegalArgumentException(s"Unknown option ${option}")
@@ -322,8 +322,8 @@ object Main extends App {
            |  syntax tree.
            |
            |compile <WDL file>
-           |  -o|-destination [path] : Output folder for workflow
-           |  -wdl_input_file [file] : Cromwell style input file
+           |  -destination [path] : Output folder for workflow
+           |  -inputs [file] :         Cromwell style input file
            |  -mode [mode] :           Compilation mode, a debugging flag
            |  -verbose :               Print detailed progress reports
            |  -force :                 Always rebuild applets

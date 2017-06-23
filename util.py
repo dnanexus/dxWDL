@@ -13,11 +13,12 @@ import sys
 from tempfile import mkstemp
 import time
 
-top_dir = os.path.dirname(sys.argv[0])
-conf_file = top_dir + "/src/main/resources/reference.conf"
 max_num_retries = 5
 
-def make_asset_file(version_id):
+def get_conf_file(top_dir):
+    return top_dir + "/src/main/resources/reference.conf"
+
+def make_asset_file(version_id, top_dir):
     asset_spec = {
         "version": version_id,
         "name": "dxWDLrt",
@@ -34,7 +35,7 @@ def make_asset_file(version_id):
         fd.write(json.dumps(asset_spec, indent=4))
 
 
-def make_prerequisits(project, folder, version_id):
+def make_prerequisits(project, folder, version_id, top_dir):
     # Run make, to ensure that we have an up-to-date jar file
     #
     # Be careful, so that the make invocation will work even if called from a different
@@ -44,7 +45,7 @@ def make_prerequisits(project, folder, version_id):
     print("")
 
     # Create the asset description file
-    make_asset_file(version_id)
+    make_asset_file(version_id, top_dir)
 
     # Create an asset from the dxWDL jar file and its dependencies,
     # this speeds up applet creation.
@@ -75,8 +76,8 @@ def replace_pattern_in_file(source_file_path, pattern, subline):
     shutil.move(target_file_path, source_file_path)
 
 
-def build(project, folder, version_id):
-    make_prerequisits(project, folder, version_id)
+def build(project, folder, version_id, top_dir):
+    make_prerequisits(project, folder, version_id, top_dir)
 
     # get asset_id
     asset = dxpy.search.find_one_data_object(classname="record",
@@ -88,6 +89,7 @@ def build(project, folder, version_id):
     print("assetId={}".format(asset.get_id()))
 
     # update asset_id in configuration file
+    conf_file = get_conf_file(top_dir)
     replace_pattern_in_file(conf_file,
                             "^(\s*)(asset_id)(.*)",
                             "    asset_id = \"{}\"\n".format(asset.get_id()))
@@ -103,8 +105,9 @@ def build(project, folder, version_id):
 
 
 # Extract version_id from configuration file
-def get_version_id():
+def get_version_id(top_dir):
     pattern = re.compile(r"^(\s*)(version)(\s*)(=)(\s*)(\S+)(\s*)$")
+    conf_file = get_conf_file(top_dir)
     with open(conf_file, 'r') as fd:
         for line in fd:
             line_clean = line.replace("\"", "").replace("'", "")
@@ -112,34 +115,3 @@ def get_version_id():
             if m is not None:
                 return m.group(6).strip()
     raise Exception("version ID not found in {}".format(conf_file))
-
-def main():
-    argparser = argparse.ArgumentParser(description="Build dxWDL jar file")
-    argparser.add_argument("--folder", help="Destination folder")
-    argparser.add_argument("--project", help="Destination project")
-    args = argparser.parse_args()
-
-    # resolve project
-    if args.project is None:
-        project = dxpy.DXProject(os.environ['DX_PROJECT_CONTEXT_ID'])
-    else:
-        project = dxpy.find_one_project(name = args.project, more_ok=False, return_handler=True)
-    print("project: {} ({})".format(project.name, project.get_id()))
-
-    # Create release folder, if needed
-    if args.folder is None:
-        folder = time.strftime("/builds/%Y-%m-%d/%H%M%S")
-        project.new_folder(folder, parents=True)
-    else:
-        folder = args.folder
-    print("folder: {}".format(folder))
-
-    # Figure out what the current version is
-    version_id = get_version_id()
-    print("version: {}".format(version_id))
-
-    build(project, folder, version_id)
-
-
-if __name__ == '__main__':
-    main()
