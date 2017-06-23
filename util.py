@@ -42,10 +42,27 @@ def make_asset_file(version_id, top_dir):
     with open(os.path.join(top_dir, "applet_resources/dxasset.json"), 'w') as fd:
         fd.write(json.dumps(asset_spec, indent=4))
 
+# call sbt-assembly. The tricky part here, is to
+# change the working directory to the top of the project.
+def sbt_assembly(top_dir):
+    crnt_work_dir = os.getcwd()
+    os.chdir(os.path.abspath(top_dir))
+    subprocess.check_call(["sbt", "assembly"])
+    os.chdir(crnt_work_dir)
+
+# Build a dx-asset from the runtime library.
+# Go to the top level directory, before running "dx"
+def build_asset(top_dir, destination):
+    crnt_work_dir = os.getcwd()
+    os.chdir(os.path.abspath(top_dir))
+    subprocess.check_call(["dx", "build_asset", "applet_resources",
+                           "--destination", destination])
+    os.chdir(crnt_work_dir)
+
 
 def make_prerequisits(project, folder, version_id, top_dir):
     # build a fat jar file
-    subprocess.check_call(["sbt", "assembly"])
+    sbt_assembly(top_dir)
 
     # Create the asset description file
     make_asset_file(version_id, top_dir)
@@ -56,8 +73,7 @@ def make_prerequisits(project, folder, version_id, top_dir):
         try:
             print("Creating a runtime asset from dxWDL")
             destination = project.get_id() + ":" + folder + "/dxWDLrt"
-            subprocess.check_call(["dx", "build_asset", "applet_resources",
-                                   "--destination", destination])
+            build_asset(top_dir, destination)
             return
         except:
             print("Sleeping for 5 seconds before trying again")
@@ -81,7 +97,7 @@ def build(project, folder, version_id, top_dir):
     top_conf_file = get_top_conf_file(top_dir)
     crnt_conf_file = get_crnt_conf_file(top_dir)
     conf = None
-    with open(get_top_conf_file(), 'r') as fd:
+    with open(top_conf_file, 'r') as fd:
         conf = fd.read()
     conf = conf.replace('    asset_id = None\n',
                         '    asset_id = "{}"\n'.format(asset.get_id()))
@@ -89,7 +105,7 @@ def build(project, folder, version_id, top_dir):
         fd.write(conf)
 
     # build a fat jar file
-    subprocess.check_call(["sbt", "assembly"])
+    sbt_assembly(top_dir)
 
     # Move the file to the top level directory
     all_in_one_jar = os.path.join(top_dir, "dxWDL-{}.jar".format(version_id))
