@@ -16,8 +16,8 @@ import time
 max_num_retries = 5
 
 def get_conf_file(top_dir):
-    return ( os.path.join(top_dir, "reference.conf"),
-             os.path.join(top_dir, "/src/main/resources/reference.conf") )
+    return (os.path.join(top_dir, "reference.conf"),
+            os.path.join(top_dir, "src/main/resources/reference.conf"))
 
 def make_asset_file(version_id, top_dir):
     asset_spec = {
@@ -37,13 +37,8 @@ def make_asset_file(version_id, top_dir):
 
 
 def make_prerequisits(project, folder, version_id, top_dir):
-    # Run make, to ensure that we have an up-to-date jar file
-    #
-    # Be careful, so that the make invocation will work even if called from a different
-    # directory.
-    print("Calling make")
-    subprocess.check_call(["make", "-C", top_dir, "all"])
-    print("")
+    # build a fat jar file
+    subprocess.check_call(["sbt", "assembly"])
 
     # Create the asset description file
     make_asset_file(version_id, top_dir)
@@ -80,13 +75,13 @@ def build(project, folder, version_id, top_dir):
     conf = None
     with open(top_conf_file, 'r') as fd:
         conf = fd.read()
-    conf = script.replace('    asset_id = None\n',
-                          '    asset_id = "{}"\n'.format(asset.get_id()))
+    conf = conf.replace('    asset_id = None\n',
+                        '    asset_id = "{}"\n'.format(asset.get_id()))
     with open(crnt_conf_file, 'w') as fd:
         fd.write(conf)
 
-    # sbt assembly
-    subprocess.check_call(["make", "-C", top_dir, "all"])
+    # build a fat jar file
+    subprocess.check_call(["sbt", "assembly"])
 
     # Move the file to the top level directory
     all_in_one_jar = os.path.join(top_dir, "dxWDL-{}.jar".format(version_id))
