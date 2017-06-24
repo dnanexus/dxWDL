@@ -17,12 +17,13 @@ task z_FindFiles {
     command <<<
       echo "ABCD" > A.txt
       echo "XYZW" > Y.txt
-      echo "Marriot" > M.hotel
-      echo "Ritz" > R.hotel
+      mkdir -p H
+      echo "Marriot" > H/M.hotel
+      echo "Ritz" > H/R.hotel
     >>>
     output {
-        Array[File] texts = glob('*.txt')
-        Array[File] hotels = glob('*.hotel')
+        Array[File] texts = glob("*.txt")
+        Array[File] hotels = glob("H/*.hotel")
     }
 }
 

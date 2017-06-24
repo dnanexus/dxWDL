@@ -378,7 +378,8 @@ def main():
 
     # build the dxWDL jar file
     version_id = util.get_version_id(top_dir)
-    util.build(project, applet_folder, version_id, top_dir)
+    if args.folder is None:
+        util.build(project, applet_folder, version_id, top_dir)
 
     compiler_flags=[]
     if args.verbose:
