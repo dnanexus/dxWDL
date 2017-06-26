@@ -531,7 +531,10 @@ object Utils {
             case _ if (ch.isControl) =>  " "
             case _ => ch.toString
         }
-        s.flatMap(sanitizeChar)
+        if (s != null)
+            s.flatMap(sanitizeChar)
+        else
+            ""
     }
 
     def inputsToString(m: Map[String, WdlValue]) : String = {

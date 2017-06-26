@@ -62,24 +62,31 @@ object DxFunctions extends WdlStandardLibraryFunctions {
         } yield file
     }
 
+    // This creates the [path] argument used in the [glob] method below.
     override def globPath(pattern: String) : String = {
         pattern
     }
 
-    // Search for the pattern in the home directory. Not clear
-    // yet what to do with the [path] argument.
+    // Search for the pattern in the home directory. The
+    // [path] argument is unused, as in Cromwell (see
+    // cromwell/backend/src/main/scala/cromwell/backend/io/GlobFunctions.scala).
+    //
     override def glob(path: String, pattern: String): Seq[String] = {
-        val baseDir: Path =
-            if (path.isEmpty) dxHomeDir
-            else dxHomeDir.resolve(path)
+        System.err.println(s"DxFunctions.glob(${pattern})")
+        val baseDir: Path = dxHomeDir
         val matcher:PathMatcher = FileSystems.getDefault()
             .getPathMatcher(s"glob:${baseDir.toString}/${pattern}")
-        baseDir.toFile.listFiles
-            .filter(_.isFile)
-            .map(_.toPath)
-            .filter(matcher.matches(_))
-            .map(_.toString)
-            .toSeq
+        val retval =
+            if (!Files.exists(baseDir))
+                Seq[String]()
+            else
+                Files.walk(baseDir).iterator().asScala
+                    .filter(Files.isRegularFile(_))
+                    .filter(matcher.matches(_))
+                    .map(_.toString)
+                    .toSeq
+        System.err.println(s"${retval}")
+        retval
     }
 
     override def readFile(path: String): String = {
