@@ -189,10 +189,25 @@ object CompilerBackend {
         }
     }
 
-    // remove old workflow
-    def removeOldWorkflow(wfName: String, dxProject: DXProject, folder: String) = {
+    // A workflow with the same name could, potentially, exist. We support two options:
+    // 1) Default: throw `workflow already exists` exception
+    // 2) Force: remove old workflow, and build new one
+    def handleOldWorkflow(wfName: String,
+                          dxProject: DXProject,
+                          folder: String,
+                          cState: State) : Unit = {
         val oldWf = DXSearch.findDataObjects().nameMatchesExactly(wfName)
             .inFolder(dxProject, folder).withClassWorkflow().execute().asList()
+        if (oldWf.isEmpty) return
+
+        // workflow exists
+        if (!cState.force) {
+            val projName = dxProject.describe().getName()
+            throw new Exception(s"Workflow ${wfName} already exists in ${projName}:${folder}")
+        }
+
+        // force: remove old workflow
+        Utils.trace(cState.verbose, "[Force] Removing old workflow")
         dxProject.removeObjects(oldWf)
     }
 
@@ -398,13 +413,6 @@ object CompilerBackend {
         var existingApl: List[DXApplet] = DXSearch.findDataObjects().nameMatchesExactly(applet.name)
             .inFolder(cState.dxProject, cState.folder).withClassApplet().execute().asList()
             .asScala.toList
-        if (cState.force && existingApl.size > 0) {
-            // Remove old applet
-            Utils.trace(cState.verbose,
-                        s"[Force] Removing old applet ${applet.name} ${existingApl}")
-            cState.dxProject.removeObjects(existingApl.asJava)
-            existingApl = List.empty[DXApplet]
-        }
 
         // Build an applet structure locally
         val appletDir = localBuildApplet(applet, appletDict, cState)
@@ -412,10 +420,6 @@ object CompilerBackend {
 
         val buildRequired =
             if (existingApl.size == 0) {
-                if (!cState.force) {
-                    Utils.trace(cState.verbose,
-                                s"No previous version of applet ${applet.name} exists")
-                }
                 true
             } else if (existingApl.size == 1) {
                 // Check if applet code has changed
@@ -441,20 +445,35 @@ object CompilerBackend {
                                         | path ${cState.dxProject.getId()}:${cState.folder}""")
             }
 
-        if (buildRequired) {
-            // Compile a WDL snippet into an applet.
-            val dxApplet = dxBuildApp(appletDir, applet.name, cState.folder, cState)
-
-            // Add a checksum for the WDL code as a property of the applet.
-            // This allows to quickly check if anything has changed, saving
-            // unnecessary builds.
-            dxApplet.putProperty(CHECKSUM_PROP, digest)
-            (dxApplet, applet.outputs)
-        } else {
+        if (!buildRequired) {
             // Old applet exists, and it has not changed. Return the
             // applet-id.
-            (existingApl.head, applet.outputs)
+            assert(existingApl.size > 0)
+            return (existingApl.head, applet.outputs)
         }
+
+        if (existingApl.size > 0) {
+            // Old applet exists, and we need to rebuild it.
+            if (cState.force) {
+                // Remove old applet
+                Utils.trace(cState.verbose,
+                            s"[Force] Removing old applet ${applet.name} ${existingApl}")
+                cState.dxProject.removeObjects(existingApl.asJava)
+            } else {
+                // Error, we can't erase the old applet without direct user permission
+                val projName = cState.dxProject.describe().getName()
+                throw new Exception(s"Applet ${applet.name} already exists in ${projName}:${cState.folder}")
+            }
+        }
+
+        // Compile a WDL snippet into an applet.
+        val dxApplet = dxBuildApp(appletDir, applet.name, cState.folder, cState)
+
+        // Add a checksum for the WDL code as a property of the applet.
+        // This allows to quickly check if anything has changed, saving
+        // unnecessary builds.
+        dxApplet.putProperty(CHECKSUM_PROP, digest)
+        (dxApplet, applet.outputs)
     }
 
     // Link source values to targets. This is the same as
@@ -546,7 +565,7 @@ object CompilerBackend {
         val cState = State(dxWDLrtId, dxProject, instanceTypeDB, folder, cef, force, verbose)
 
         // create fresh workflow
-        removeOldWorkflow(wf.name, dxProject, folder)
+        handleOldWorkflow(wf.name, dxProject, folder, cState)
         val dxwfl = DXWorkflow.newWorkflow().setProject(dxProject).setFolder(folder)
             .setName(wf.name).build()
 
