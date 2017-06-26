@@ -15,10 +15,6 @@ The main WDL features not yet supported are:
 - Conditionals
 - Maps and objects
 
-`dxWDL` is implementeted as java jar file, and the latest version is
-available from the
-[release page](https://github.com/dnanexus-rnd/dxWDL/releases).
-
 ## Getting started
 Prerequisites: DNAnexus platform account, dx-toolkit, java 8+, python 2.7.
 

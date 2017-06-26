@@ -1,5 +1,9 @@
 # Release Notes
 
+## 0.31
+- The compiler is packed into a single jar file
+- Fixed glob bug
+
 ## 0.30
 Bug fix release.
 
