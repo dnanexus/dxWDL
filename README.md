@@ -6,7 +6,7 @@ and compiles it to an equivalent workflow on the DNAnexus platform.
 
 
 ## Release status
-This project is in alpha testing, and does not yet support all WDL features. Initially, we have focused on enabling the [GATK best
+This project is in beta testing, and does not yet support all WDL features. Initially, we have focused on enabling the [GATK best
 practices pipeline](https://github.com/broadinstitute/wdl/blob/develop/scripts/broad_pipelines/PublicPairedSingleSampleWf_160927.wdl). Other
 features will be added as the project matures and according to user interest.
 
@@ -14,6 +14,10 @@ The main WDL features not yet supported are:
 - Nested workflows (sub-workflows)
 - Conditionals
 - Maps and objects
+
+`dxWDL` is implementeted as java jar file, and the latest version is
+available from the
+[release page](https://github.com/dnanexus-rnd/dxWDL/releases).
 
 ## Getting started
 Prerequisites: DNAnexus platform account, dx-toolkit, java 8+, python 2.7.
