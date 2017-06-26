@@ -29,8 +29,8 @@ object Main extends App {
     def getVersion() : String = {
         val config = ConfigFactory.load()
         val version = config.getString("dxWDL.version")
-        val asset_id = config.getString("dxWDL.asset_id")
-        System.err.println(s"asset_id=${asset_id}")
+        //val asset_id = config.getString("dxWDL.asset_id")
+        //System.err.println(s"asset_id=${asset_id}")
         version
     }
 
