@@ -466,6 +466,7 @@ object InstanceTypeDB extends DefaultJsonProtocol {
 
         // get the pricing model
         val pm = getPricingModel(billTo, region)
+        //val pm = getProjectPricingModel()
 
         // Create fully formed instance types by crossing the tables
         val availableInstanceTypes: Vector[DxInstanceType] = crossTables(allAvailableIT, pm)

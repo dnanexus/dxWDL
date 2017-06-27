@@ -43,24 +43,37 @@ object Main extends App {
 
     // parse extra command line arguments
     def parseCmdlineOptions(arglist: List[String]) : OptionsMap = {
+        def keyword(word: String) : String = {
+            // normalize a keyword, remove leading dashes, and convert
+            // letters to lowercase.
+            //
+            // "--Archive" -> "archive"
+            word.replaceAll("-", "").toLowerCase
+        }
         def nextOption(map : OptionsMap, list: List[String]) : OptionsMap = {
             list match {
                 case Nil => map
-                case ("-force" | "--force") :: tail =>
-                    nextOption(map ++ Map("force" -> ""), tail)
-                case ("-inputs" | "--inputs") :: value :: tail =>
-                    nextOption(map ++ Map("inputFile" -> value.toString), tail)
-                case ("-mode" | "--mode") :: value :: tail =>
-                    nextOption(map ++ Map("mode" -> value.toString), tail)
-                case ("-destination" | "--destination") :: value :: tail =>
-                    nextOption(map ++ Map("destination" -> value.toString), tail)
-                case ("-verbose" | "--verbose") :: tail =>
-                    nextOption(map ++ Map("verbose" -> ""), tail)
-                case option :: tail =>
-                    throw new IllegalArgumentException(s"Unknown option ${option}")
+                case head :: tail =>
+                    (keyword(head) :: tail) match {
+                        case Nil =>
+                            throw new IllegalArgumentException(s"sanity")
+                        case "archive" :: tail =>
+                            nextOption(map ++ Map("archive" -> ""), tail)
+                        case "force" :: tail =>
+                            nextOption(map ++ Map("force" -> ""), tail)
+                        case "inputs" :: value :: tail =>
+                            nextOption(map ++ Map("inputFile" -> value.toString), tail)
+                        case "mode" :: value :: tail =>
+                            nextOption(map ++ Map("mode" -> value.toString), tail)
+                        case "destination" :: value :: tail =>
+                            nextOption(map ++ Map("destination" -> value.toString), tail)
+                        case "verbose" :: tail =>
+                            nextOption(map ++ Map("verbose" -> ""), tail)
+                        case option :: tail =>
+                            throw new IllegalArgumentException(s"Unknown option ${option}")
+                    }
             }
         }
-
         val options = nextOption(Map(),arglist)
         options
     }
@@ -142,6 +155,7 @@ object Main extends App {
     def compileBody(wdlSourceFile : Path, options: OptionsMap) : String = {
         val verbose = options contains "verbose"
         val force = options contains "force"
+        val archive = options contains "archive"
 
         // deal with the various options
         val destination : String = options.get("destination") match {
@@ -196,7 +210,7 @@ object Main extends App {
                     case None =>
                         val dxApplets = irApplets.map(x =>
                             CompilerBackend.apply(x, dxProject, instanceTypeDB, dxWDLrtId,
-                                                  folder, cef, force, verbose)
+                                                  folder, cef, force, archive, verbose)
                         )
                         val ids: Seq[String] = dxApplets.map(x => x.getId())
                         ids.mkString(", ")
@@ -213,7 +227,7 @@ object Main extends App {
                         val (dxwfl,stageDict, callDict) =
                             CompilerBackend.apply(iRepWf, dxProject, instanceTypeDB,
                                                   dxWDLrtId,
-                                                  folder, cef, force, verbose)
+                                                  folder, cef, force, archive, verbose)
                         options.get("inputFile") match {
                             case None => ()
                             case Some(wdlInputFile) =>
@@ -330,7 +344,8 @@ object Main extends App {
            |    -inputs <file> :      Cromwell style input file
            |    -mode <mode> :        Compilation mode, a debugging flag
            |    -verbose :            Print detailed progress reports
-           |    -force :              Delete existing applets/workflows and then build
+           |    -force :              Delete existing applets/workflows
+           |    -archive :            Archive older versions of applets
            |
            |version
            |  Report the current version

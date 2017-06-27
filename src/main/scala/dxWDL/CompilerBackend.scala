@@ -30,6 +30,7 @@ object CompilerBackend {
                      folder: String,
                      cef: CompilerErrorFormatter,
                      force: Boolean,
+                     archive: Boolean,
                      verbose: Boolean)
 
     // For primitive types, and arrays of such types, we can map directly
@@ -312,7 +313,11 @@ object CompilerBackend {
         val dest =
             if (path.startsWith("/")) pId ++ ":" ++ path
             else pId ++ ":/" ++ path
-        val buildCmd = List("dx", "build", "-f", appletDir.toString(), "--destination", dest)
+        var buildCmd = List("dx", "build", appletDir.toString(), "--destination", dest)
+        if (cState.force)
+            buildCmd = buildCmd :+ "--force"
+        if (cState.archive)
+            buildCmd = buildCmd :+ "--archive"
         def build() : Option[DXApplet] = {
             try {
                 // Run the dx-build command
@@ -445,35 +450,21 @@ object CompilerBackend {
                                         | path ${cState.dxProject.getId()}:${cState.folder}""")
             }
 
-        if (!buildRequired) {
+        if (buildRequired) {
+            // Compile a WDL snippet into an applet.
+            val dxApplet = dxBuildApp(appletDir, applet.name, cState.folder, cState)
+
+            // Add a checksum for the WDL code as a property of the applet.
+            // This allows to quickly check if anything has changed, saving
+            // unnecessary builds.
+            dxApplet.putProperty(CHECKSUM_PROP, digest)
+            (dxApplet, applet.outputs)
+        } else {
             // Old applet exists, and it has not changed. Return the
             // applet-id.
             assert(existingApl.size > 0)
-            return (existingApl.head, applet.outputs)
+            (existingApl.head, applet.outputs)
         }
-
-        if (existingApl.size > 0) {
-            // Old applet exists, and we need to rebuild it.
-            if (cState.force) {
-                // Remove old applet
-                Utils.trace(cState.verbose,
-                            s"[Force] Removing old applet ${applet.name} ${existingApl}")
-                cState.dxProject.removeObjects(existingApl.asJava)
-            } else {
-                // Error, we can't erase the old applet without direct user permission
-                val projName = cState.dxProject.describe().getName()
-                throw new Exception(s"Applet ${applet.name} already exists in ${projName}:${cState.folder}")
-            }
-        }
-
-        // Compile a WDL snippet into an applet.
-        val dxApplet = dxBuildApp(appletDir, applet.name, cState.folder, cState)
-
-        // Add a checksum for the WDL code as a property of the applet.
-        // This allows to quickly check if anything has changed, saving
-        // unnecessary builds.
-        dxApplet.putProperty(CHECKSUM_PROP, digest)
-        (dxApplet, applet.outputs)
     }
 
     // Link source values to targets. This is the same as
@@ -545,9 +536,10 @@ object CompilerBackend {
               folder: String,
               cef: CompilerErrorFormatter,
               force: Boolean,
+              archive: Boolean,
               verbose: Boolean) : DXApplet = {
         Utils.trace(verbose, "Backend pass, single applet")
-        val cState = State(dxWDLrtId, dxProject, instanceTypeDB, folder, cef, force, verbose)
+        val cState = State(dxWDLrtId, dxProject, instanceTypeDB, folder, cef, force, archive, verbose)
         val (dxApplet, _) = buildAppletIfNeeded(applet, Map.empty, cState)
         dxApplet
     }
@@ -560,9 +552,10 @@ object CompilerBackend {
               folder: String,
               cef: CompilerErrorFormatter,
               force: Boolean,
+              archive: Boolean,
               verbose: Boolean) : (DXWorkflow, Map[String, DXWorkflow.Stage], Map[String, String]) = {
         Utils.trace(verbose, "Backend pass")
-        val cState = State(dxWDLrtId, dxProject, instanceTypeDB, folder, cef, force, verbose)
+        val cState = State(dxWDLrtId, dxProject, instanceTypeDB, folder, cef, force, archive, verbose)
 
         // create fresh workflow
         handleOldWorkflow(wf.name, dxProject, folder, cState)
