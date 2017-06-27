@@ -81,17 +81,25 @@ def make_prerequisits(project, folder, version_id, top_dir):
     raise Exception("Failed to build the dxWDL runtime asset")
 
 
-def build(project, folder, version_id, top_dir):
-    make_prerequisits(project, folder, version_id, top_dir)
-
+def find_asset(project, folder):
     # get asset_id
-    asset = dxpy.search.find_one_data_object(classname="record",
-                                             project=project.get_id(),
-                                             name="dxWDLrt",
-                                             folder=folder,
-                                             return_handler=True,
-                                             more_ok=False)
-    print("assetId={}".format(asset.get_id()))
+    try:
+        asset = dxpy.search.find_one_data_object(classname="record",
+                                                 project=project.get_id(),
+                                                 name="dxWDLrt",
+                                                 folder=folder,
+                                                 return_handler=True,
+                                                 more_ok=False)
+        print("assetId={}".format(asset.get_id()))
+        return asset
+    except:
+        return None
+
+def build(project, folder, version_id, top_dir):
+    asset = find_asset(project, folder)
+    if asset is None:
+        make_prerequisits(project, folder, version_id, top_dir)
+        asset = find_asset(project, folder)
 
     # update asset_id in configuration file
     top_conf_file = get_top_conf_file(top_dir)

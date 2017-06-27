@@ -157,27 +157,27 @@ object Main extends App {
         val force = options contains "force"
         val archive = options contains "archive"
 
-        // deal with the various options
-        val destination : String = options.get("destination") match {
-            case None => ""
-            case Some(d) => d
-        }
-
         // There are three possible syntaxes:
         //    project-id:/folder
         //    project-id:
         //    /folder
-        val vec = destination.split(":")
-        val (project, folder) = vec.length match {
-            case 0 => (None, "/")
-            case 1 =>
-                if (destination.endsWith(":"))
-                    (Some(vec(0)), "/")
-                else
-                    (None, vec(0))
-            case 2 => (Some(vec(0)), vec(1))
-            case _ => throw new Exception(s"Invalid path syntex ${destination}")
+        val (project, folder) = options.get("destination") match {
+            case None => (None, "/")
+            case Some(d) if d contains ":" =>
+                val vec = d.split(":")
+                vec.length match {
+                    case 1 if (d.endsWith(":")) =>
+                        (Some(vec(0)), "/")
+                    case 2 => (Some(vec(0)), vec(1))
+                    case _ => throw new Exception(s"Invalid path syntex <${d}>")
+                }
+            case Some(d) if d.startsWith("/") =>
+                (None, d)
+            case Some(d) => throw new Exception(s"Invalid path syntex <${d}>")
         }
+        if (folder.isEmpty)
+            throw new Exception(s"destination cannot specify empty folder")
+
         val dxProject : DXProject = project match {
             case None =>
                 // get the default project
@@ -189,7 +189,7 @@ object Main extends App {
         val mode: Option[String] = options.get("mode")
 
         // get list of available instance types
-        val instanceTypeDB = InstanceTypeDB.queryWithBackup(dxProject)
+        val instanceTypeDB = InstanceTypeDB.query(dxProject)
 
         // Simplify the source file
         val ns:WdlNamespace = CompilerPreprocess.apply(wdlSourceFile, verbose)
