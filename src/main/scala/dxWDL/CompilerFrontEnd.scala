@@ -318,7 +318,7 @@ task Add {
         wf.children = declarations
 
         // convert to a string
-        val code = WdlPrettyPrinter(false).apply(wf, 0).mkString("\n")
+        val code = WdlPrettyPrinter(false, None).apply(wf, 0).mkString("\n")
         verifyWdlCodeIsLegal(code)
         code
     }
@@ -475,7 +475,7 @@ workflow w {
             case None => false
             case Some(_) => true
         }
-        val wdlCode = WdlPrettyPrinter(false).apply(task, 0).mkString("\n")
+        val wdlCode = WdlPrettyPrinter(false, None).apply(task, 0).mkString("\n")
         verifyWdlCodeIsLegal(wdlCode)
         val applet = IR.Applet(task.name,
                                inputVars,
@@ -634,7 +634,7 @@ workflow w {
         // namespace that includes the task stubs, and the workflow
         val ns = WdlRewrite.namespace(wf, tasks)
 
-        val wdlCode = WdlPrettyPrinter(false).apply(ns, 0).mkString("\n")
+        val wdlCode = WdlPrettyPrinter(false, None).apply(ns, 0).mkString("\n")
         verifyWdlCodeIsLegal(wdlCode)
         wdlCode
     }

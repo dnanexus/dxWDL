@@ -407,7 +407,8 @@ object InstanceTypeDB extends DefaultJsonProtocol {
             case e: Throwable =>
                 System.err.println("""|Warning: insufficient permissions to retrive the
                                       |instance price list. This will result in suboptimal machine choices,
-                                      |incurring higher costs when running workflows.""")
+                                      |incurring higher costs when running workflows."""
+                                       .stripMargin.replaceAll("\n", " "))
                 queryNoPrices(dxProject)
         }
     }

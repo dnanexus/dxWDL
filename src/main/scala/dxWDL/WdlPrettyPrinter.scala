@@ -13,7 +13,7 @@ import wdl4s._
 import wdl4s.command.{CommandPart, ParameterCommandPart, StringCommandPart}
 import wdl4s.parser.WdlParser.{Ast, AstNode, Terminal}
 
-case class WdlPrettyPrinter(fqnFlag: Boolean) {
+case class WdlPrettyPrinter(fqnFlag: Boolean, oldNS: Option[WdlNamespace]) {
 
     private val I_STEP = 4
 
@@ -158,13 +158,23 @@ case class WdlPrettyPrinter(fqnFlag: Boolean) {
         // that accesses fields that we do not properly intialize. The try/catch
         // is a workaround. It works because the output section is ignored; DNAx does
         // not support outputs from workflows.
+        //
+        // A second workaround can be used if this is a rewritten
+        // workflow. Assuming we have access to the original workflow,
+        // we use the old output section.
         val outputs =
             try {
                 wf.outputs.map(x => apply(x, level + 2)).flatten.toVector
             } catch {
                 case e: Throwable =>
-                    Vector.empty
+                    oldNS match {
+                        case Some(nswf : WdlNamespaceWithWorkflow) =>
+                            nswf.workflow.outputs.map(x => apply(x, level + 2)).flatten.toVector
+                        case _ =>
+                            Vector.empty
+                    }
             }
+
         val paramMeta = wf.parameterMeta.map{ case (x,y) =>  s"${x}: ${y}" }.toVector
         val meta = wf.meta.map{ case (x,y) =>  s"${x}: ${y}" }.toVector
 
