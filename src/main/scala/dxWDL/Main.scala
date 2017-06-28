@@ -43,24 +43,37 @@ object Main extends App {
 
     // parse extra command line arguments
     def parseCmdlineOptions(arglist: List[String]) : OptionsMap = {
+        def keyword(word: String) : String = {
+            // normalize a keyword, remove leading dashes, and convert
+            // letters to lowercase.
+            //
+            // "--Archive" -> "archive"
+            word.replaceAll("-", "").toLowerCase
+        }
         def nextOption(map : OptionsMap, list: List[String]) : OptionsMap = {
             list match {
                 case Nil => map
-                case ("-force" | "--force") :: tail =>
-                    nextOption(map ++ Map("force" -> ""), tail)
-                case ("-inputs" | "--inputs") :: value :: tail =>
-                    nextOption(map ++ Map("inputFile" -> value.toString), tail)
-                case ("-mode" | "--mode") :: value :: tail =>
-                    nextOption(map ++ Map("mode" -> value.toString), tail)
-                case ("-destination" | "--destination") :: value :: tail =>
-                    nextOption(map ++ Map("destination" -> value.toString), tail)
-                case ("-verbose" | "--verbose") :: tail =>
-                    nextOption(map ++ Map("verbose" -> ""), tail)
-                case option :: tail =>
-                    throw new IllegalArgumentException(s"Unknown option ${option}")
+                case head :: tail =>
+                    (keyword(head) :: tail) match {
+                        case Nil =>
+                            throw new IllegalArgumentException(s"sanity")
+                        case "archive" :: tail =>
+                            nextOption(map ++ Map("archive" -> ""), tail)
+                        case "force" :: tail =>
+                            nextOption(map ++ Map("force" -> ""), tail)
+                        case "inputs" :: value :: tail =>
+                            nextOption(map ++ Map("inputFile" -> value.toString), tail)
+                        case "mode" :: value :: tail =>
+                            nextOption(map ++ Map("mode" -> value.toString), tail)
+                        case "destination" :: value :: tail =>
+                            nextOption(map ++ Map("destination" -> value.toString), tail)
+                        case "verbose" :: tail =>
+                            nextOption(map ++ Map("verbose" -> ""), tail)
+                        case option :: tail =>
+                            throw new IllegalArgumentException(s"Unknown option ${option}")
+                    }
             }
         }
-
         val options = nextOption(Map(),arglist)
         options
     }
@@ -108,29 +121,13 @@ object Main extends App {
     }
 
 
-    def prettyPrintWorkflowIR(wdlSourceFile : Path,
-                              irWf: IR.Workflow,
-                              verbose: Boolean) : Unit = {
+    def prettyPrintIR(wdlSourceFile : Path,
+                      irNs: IR.Namespace,
+                      verbose: Boolean) : Unit = {
         val trgName: String = Utils.replaceFileSuffix(wdlSourceFile, ".ir.yaml")
         val trgPath = Utils.appCompileDirPath.resolve(trgName).toFile
-        val yo = IR.yaml(irWf)
+        val yo = IR.yaml(irNs)
         val humanReadable = yo.prettyPrint
-        val fos = new FileWriter(trgPath)
-        val pw = new PrintWriter(fos)
-        pw.print(humanReadable)
-        pw.flush()
-        pw.close()
-        Utils.trace(verbose, s"Wrote intermediate representation to ${trgPath.toString}")
-    }
-
-    def prettyPrintAppletsIR(wdlSourceFile : Path,
-                             irApplets: Vector[IR.Applet],
-                             verbose: Boolean) : Unit = {
-        val trgName: String = Utils.replaceFileSuffix(wdlSourceFile, ".ir.yaml")
-        val trgPath = Utils.appCompileDirPath.resolve(trgName).toFile
-        val humanReadable = irApplets.map(irTs =>
-            IR.yaml(irTs).prettyPrint
-        ).mkString("\n\n")
         val fos = new FileWriter(trgPath)
         val pw = new PrintWriter(fos)
         pw.print(humanReadable)
@@ -142,28 +139,29 @@ object Main extends App {
     def compileBody(wdlSourceFile : Path, options: OptionsMap) : String = {
         val verbose = options contains "verbose"
         val force = options contains "force"
-
-        // deal with the various options
-        val destination : String = options.get("destination") match {
-            case None => ""
-            case Some(d) => d
-        }
+        val archive = options contains "archive"
 
         // There are three possible syntaxes:
         //    project-id:/folder
         //    project-id:
         //    /folder
-        val vec = destination.split(":")
-        val (project, folder) = vec.length match {
-            case 0 => (None, "/")
-            case 1 =>
-                if (destination.endsWith(":"))
-                    (Some(vec(0)), "/")
-                else
-                    (None, vec(0))
-            case 2 => (Some(vec(0)), vec(1))
-            case _ => throw new Exception(s"Invalid path syntex ${destination}")
+        val (project, folder) = options.get("destination") match {
+            case None => (None, "/")
+            case Some(d) if d contains ":" =>
+                val vec = d.split(":")
+                vec.length match {
+                    case 1 if (d.endsWith(":")) =>
+                        (Some(vec(0)), "/")
+                    case 2 => (Some(vec(0)), vec(1))
+                    case _ => throw new Exception(s"Invalid path syntex <${d}>")
+                }
+            case Some(d) if d.startsWith("/") =>
+                (None, d)
+            case Some(d) => throw new Exception(s"Invalid path syntex <${d}>")
         }
+        if (folder.isEmpty)
+            throw new Exception(s"destination cannot specify empty folder")
+
         val dxProject : DXProject = project match {
             case None =>
                 // get the default project
@@ -175,55 +173,28 @@ object Main extends App {
         val mode: Option[String] = options.get("mode")
 
         // get list of available instance types
-        val instanceTypeDB = InstanceTypeDB.queryWithBackup(dxProject)
+        val instanceTypeDB = InstanceTypeDB.query(dxProject)
 
         // Simplify the source file
         val ns:WdlNamespace = CompilerPreprocess.apply(wdlSourceFile, verbose)
 
-        // Backbone of compilation process.
-        // 1) Compile the WDL workflow into an Intermediate Representation (IR)
-        // 2) Generate dx:applets and dx:workflow from the IR
+        // Compile the WDL workflow into an Intermediate Representation (IR)
         val cef = new CompilerErrorFormatter(ns.terminalMap)
-        val (irWf, irApplets) = CompilerFrontEnd.apply(ns, instanceTypeDB, folder, cef, verbose)
+        val irNs = CompilerFrontEnd.apply(ns, instanceTypeDB, folder, cef, verbose)
+
+        // Write out the intermediate representation
+        prettyPrintIR(wdlSourceFile, irNs, verbose)
 
         // Backend compiler pass
-        irWf match {
+        mode match {
             case None =>
-                // We have only tasks
-                // Write out the intermediate representation
-                prettyPrintAppletsIR(wdlSourceFile, irApplets, verbose)
-                mode match {
-                    case None =>
-                        val dxApplets = irApplets.map(x =>
-                            CompilerBackend.apply(x, dxProject, instanceTypeDB, dxWDLrtId,
-                                                  folder, cef, force, verbose)
-                        )
-                        val ids: Seq[String] = dxApplets.map(x => x.getId())
-                        ids.mkString(", ")
-                    case Some(x) if x.toLowerCase == "fe" => "applet-xxxx"
-                    case _ => throw new Exception(s"Unknown mode ${mode}")
-                }
-
-            case Some(iRepWf) =>
-                // Write out the intermediate representation
-                prettyPrintWorkflowIR(wdlSourceFile, iRepWf, verbose)
-
-                mode match {
-                    case None =>
-                        val (dxwfl,stageDict, callDict) =
-                            CompilerBackend.apply(iRepWf, dxProject, instanceTypeDB,
-                                                  dxWDLrtId,
-                                                  folder, cef, force, verbose)
-                        options.get("inputFile") match {
-                            case None => ()
-                            case Some(wdlInputFile) =>
-                                InputFile.apply(iRepWf, stageDict, callDict,
-                                                Paths.get(wdlInputFile), verbose)
-                        }
-                        dxwfl.getId()
-                    case Some(x) if x.toLowerCase == "fe" => "workflow-xxxx"
-                    case _ => throw new Exception(s"Unknown mode ${mode}")
-                }
+                // Generate dx:applets and dx:workflow from the IR
+                val wdlInputs = options.get("inputFile").map(Paths.get(_))
+                CompilerBackend.apply(irNs, wdlInputs, dxProject, instanceTypeDB,
+                                      dxWDLrtId,
+                                      folder, cef, force, archive, verbose)
+            case Some(x) if x.toLowerCase == "fe" => "applet-xxxx"
+            case _ => throw new Exception(s"Unknown mode ${mode}")
         }
     }
 
@@ -312,50 +283,45 @@ object Main extends App {
     }
 
     val UsageMessage =
-        """|java -jar dxWDL.jar <action> <parameters>
+        """|java -jar dxWDL.jar <action> <parameters> [options]
            |
            |Actions:
            |
            |yaml <WDL file>
-           |
            |  Perform full validation and print a YAML version of the
            |  syntax tree.
            |
            |compile <WDL file>
-           |  -destination [path] : Output folder for workflow
-           |  -inputs [file] :         Cromwell style input file
-           |  -mode [mode] :           Compilation mode, a debugging flag
-           |  -verbose :               Print detailed progress reports
-           |  -force :                 Always rebuild applets
-           |
            |  Compile a wdl file into a dnanexus workflow.
            |  Optionally, specify a destination path on the
            |  platform. A dx JSON inputs file is generated from the
            |  WDL inputs file, if specified.
+           |  options:
+           |    -destination <path> : Output folder for workflow
+           |    -inputs <file> :      Cromwell style input file
+           |    -mode <mode> :        Compilation mode, a debugging flag
+           |    -verbose :            Print detailed progress reports
+           |    -force :              Delete existing applets/workflows
+           |    -archive :            Archive older versions of applets
+           |
+           |version
+           |  Report the current version
            |
            |taskProlog <WDL file> <home directory>
-           |
            |  Run the initial part of a dx-applet
            |  originally compiled from a WDL workflow.
            |  Process the input arguments, and generate a bash script.
            |
            |taskEpilog <WDL file> <home directory>
-           |
            |  After the bash script generated by the above command
            |  is done, collect the outputs and format them into
            |  WDL and dx.
            |
            |launchScatter <WDL file> <home directory>
-           |
            |  Launch a WDL scatter compiled into a dx-applet
            |
            |eval <WDL file> <home directory>
-           |
            |  Run an applet that calculates WDL expressions
-           |
-           |version
-           |
-           |  Report the current version
            |""".stripMargin
 
     val termination = dispatchCommand(args)

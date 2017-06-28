@@ -305,24 +305,9 @@ object CompilerPreprocess {
         WdlRewrite.workflow(wf, reorgElems)
     }
 
-    def dbgWorkflow(wf: Workflow, msg: String) = {
-        System.err.println(s"--- ${msg} ----------------------")
-        System.err.println(s"${wf.unqualifiedName} ${wf.calls} ${wf.children}")
-        //val x = wf.namespace.resolveCallOrOutputOrDeclaration(outputFqn)
-        //System.err.println(s"${x}")
-
-        System.err.println(s"${wf.expandedWildcardOutputs}")
-        val lines = WdlPrettyPrinter(true).apply(wf, 0).mkString("\n")
-        System.err.println(lines)
-        System.err.println("")
-    }
-
     def simplifyWorkflow(wf: Workflow, cState:State) : Workflow = {
-        //dbgWorkflow(wf, "ORG")
         val wf1 = simplifyAllScatters(wf, cState)
-        //dbgWorkflow(wf1, "WF1")
         val wf2 = simplifyTopLevel(wf1, cState)
-        //dbgWorkflow(wf2, "WF2")
         wf2
     }
 
@@ -384,7 +369,7 @@ object CompilerPreprocess {
         //
         // Note: by keeping the namespace in memory, instead of writing to
         // a temporary file on disk, we keep the resolver valid.
-        val lines: String = WdlPrettyPrinter(true).apply(rewrittenNs, 0).mkString("\n")
+        val lines: String = WdlPrettyPrinter(true, Some(ns)).apply(rewrittenNs, 0).mkString("\n")
         val cleanNs = WdlNamespace.loadUsingSource(lines, None, Some(List(resolver))).get
 
         if (verbose)

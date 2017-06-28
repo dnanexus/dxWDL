@@ -30,6 +30,7 @@ object CompilerBackend {
                      folder: String,
                      cef: CompilerErrorFormatter,
                      force: Boolean,
+                     archive: Boolean,
                      verbose: Boolean)
 
     // For primitive types, and arrays of such types, we can map directly
@@ -189,10 +190,25 @@ object CompilerBackend {
         }
     }
 
-    // remove old workflow
-    def removeOldWorkflow(wfName: String, dxProject: DXProject, folder: String) = {
+    // A workflow with the same name could, potentially, exist. We support two options:
+    // 1) Default: throw `workflow already exists` exception
+    // 2) Force: remove old workflow, and build new one
+    def handleOldWorkflow(wfName: String,
+                          cState: State) : Unit = {
+        val dxProject = cState.dxProject
+        val folder = cState.folder
         val oldWf = DXSearch.findDataObjects().nameMatchesExactly(wfName)
             .inFolder(dxProject, folder).withClassWorkflow().execute().asList()
+        if (oldWf.isEmpty) return
+
+        // workflow exists
+        if (!cState.force) {
+            val projName = dxProject.describe().getName()
+            throw new Exception(s"Workflow ${wfName} already exists in ${projName}:${folder}")
+        }
+
+        // force: remove old workflow
+        Utils.trace(cState.verbose, "[Force] Removing old workflow")
         dxProject.removeObjects(oldWf)
     }
 
@@ -297,7 +313,11 @@ object CompilerBackend {
         val dest =
             if (path.startsWith("/")) pId ++ ":" ++ path
             else pId ++ ":/" ++ path
-        val buildCmd = List("dx", "build", "-f", appletDir.toString(), "--destination", dest)
+        var buildCmd = List("dx", "build", appletDir.toString(), "--destination", dest)
+        if (cState.force)
+            buildCmd = buildCmd :+ "-f"
+        if (cState.archive)
+            buildCmd = buildCmd :+ "-a"
         def build() : Option[DXApplet] = {
             try {
                 // Run the dx-build command
@@ -398,13 +418,6 @@ object CompilerBackend {
         var existingApl: List[DXApplet] = DXSearch.findDataObjects().nameMatchesExactly(applet.name)
             .inFolder(cState.dxProject, cState.folder).withClassApplet().execute().asList()
             .asScala.toList
-        if (cState.force && existingApl.size > 0) {
-            // Remove old applet
-            Utils.trace(cState.verbose,
-                        s"[Force] Removing old applet ${applet.name} ${existingApl}")
-            cState.dxProject.removeObjects(existingApl.asJava)
-            existingApl = List.empty[DXApplet]
-        }
 
         // Build an applet structure locally
         val appletDir = localBuildApplet(applet, appletDict, cState)
@@ -412,10 +425,6 @@ object CompilerBackend {
 
         val buildRequired =
             if (existingApl.size == 0) {
-                if (!cState.force) {
-                    Utils.trace(cState.verbose,
-                                s"No previous version of applet ${applet.name} exists")
-                }
                 true
             } else if (existingApl.size == 1) {
                 // Check if applet code has changed
@@ -453,6 +462,7 @@ object CompilerBackend {
         } else {
             // Old applet exists, and it has not changed. Return the
             // applet-id.
+            assert(existingApl.size > 0)
             (existingApl.head, applet.outputs)
         }
     }
@@ -518,36 +528,14 @@ object CompilerBackend {
         dxBuilder.build()
     }
 
-    // Compile a single applet
-    def apply(applet: IR.Applet,
-              dxProject: DXProject,
-              instanceTypeDB: InstanceTypeDB,
-              dxWDLrtId: String,
-              folder: String,
-              cef: CompilerErrorFormatter,
-              force: Boolean,
-              verbose: Boolean) : DXApplet = {
-        Utils.trace(verbose, "Backend pass, single applet")
-        val cState = State(dxWDLrtId, dxProject, instanceTypeDB, folder, cef, force, verbose)
-        val (dxApplet, _) = buildAppletIfNeeded(applet, Map.empty, cState)
-        dxApplet
-    }
-
     // Compile an entire workflow
-    def apply(wf: IR.Workflow,
-              dxProject: DXProject,
-              instanceTypeDB: InstanceTypeDB,
-              dxWDLrtId: String,
-              folder: String,
-              cef: CompilerErrorFormatter,
-              force: Boolean,
-              verbose: Boolean) : (DXWorkflow, Map[String, DXWorkflow.Stage], Map[String, String]) = {
-        Utils.trace(verbose, "Backend pass")
-        val cState = State(dxWDLrtId, dxProject, instanceTypeDB, folder, cef, force, verbose)
-
+    def compileWorkflow(wf: IR.Workflow,
+                        cState: State) : (DXWorkflow, Map[String, DXWorkflow.Stage], Map[String, String]) = {
         // create fresh workflow
-        removeOldWorkflow(wf.name, dxProject, folder)
-        val dxwfl = DXWorkflow.newWorkflow().setProject(dxProject).setFolder(folder)
+        handleOldWorkflow(wf.name, cState)
+        val dxwfl = DXWorkflow.newWorkflow()
+            .setProject(cState.dxProject)
+            .setFolder(cState.folder)
             .setName(wf.name).build()
 
         // Build the individual applets. We need to keep track of
@@ -594,5 +582,39 @@ object CompilerBackend {
         }
         dxwfl.close()
         (dxwfl, stageDict, callDict)
+    }
+
+    def apply(ns: IR.Namespace,
+              wdlInputFile: Option[Path],
+              dxProject: DXProject,
+              instanceTypeDB: InstanceTypeDB,
+              dxWDLrtId: String,
+              folder: String,
+              cef: CompilerErrorFormatter,
+              force: Boolean,
+              archive: Boolean,
+              verbose: Boolean) : String = {
+        Utils.trace(verbose, "Backend pass")
+        val cState = State(dxWDLrtId, dxProject, instanceTypeDB, folder, cef, force, archive, verbose)
+
+        ns.workflow match {
+            case None =>
+                val dxApplets = ns.applets.map{ applet =>
+                    val (dxApplet, _) = buildAppletIfNeeded(applet, Map.empty, cState)
+                    dxApplet
+                }
+                val ids: Seq[String] = dxApplets.map(x => x.getId())
+                ids.mkString(", ")
+
+            case Some(iRepWf) =>
+                val (dxwfl, stageDict, callDict) = compileWorkflow(iRepWf, cState)
+                wdlInputFile match {
+                    case None => ()
+                    case Some(path) =>
+                        InputFile.apply(iRepWf, stageDict, callDict,
+                                        path, verbose)
+                }
+                dxwfl.getId()
+        }
     }
 }

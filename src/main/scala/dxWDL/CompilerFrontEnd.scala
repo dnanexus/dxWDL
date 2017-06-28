@@ -318,7 +318,7 @@ task Add {
         wf.children = declarations
 
         // convert to a string
-        val code = WdlPrettyPrinter(false).apply(wf, 0).mkString("\n")
+        val code = WdlPrettyPrinter(false, None).apply(wf, 0).mkString("\n")
         verifyWdlCodeIsLegal(code)
         code
     }
@@ -475,7 +475,7 @@ workflow w {
             case None => false
             case Some(_) => true
         }
-        val wdlCode = WdlPrettyPrinter(false).apply(task, 0).mkString("\n")
+        val wdlCode = WdlPrettyPrinter(false, None).apply(task, 0).mkString("\n")
         verifyWdlCodeIsLegal(wdlCode)
         val applet = IR.Applet(task.name,
                                inputVars,
@@ -634,7 +634,7 @@ workflow w {
         // namespace that includes the task stubs, and the workflow
         val ns = WdlRewrite.namespace(wf, tasks)
 
-        val wdlCode = WdlPrettyPrinter(false).apply(ns, 0).mkString("\n")
+        val wdlCode = WdlPrettyPrinter(false, None).apply(ns, 0).mkString("\n")
         verifyWdlCodeIsLegal(wdlCode)
         wdlCode
     }
@@ -856,7 +856,7 @@ workflow w {
               instanceTypeDB: InstanceTypeDB,
               destination: String,
               cef: CompilerErrorFormatter,
-              verbose: Boolean) : (Option[IR.Workflow], Vector[IR.Applet]) = {
+              verbose: Boolean) : IR.Namespace = {
         val cState = new State(destination, instanceTypeDB, cef, verbose)
         Utils.trace(cState.verbose, "FrontEnd pass")
 
@@ -886,11 +886,11 @@ workflow w {
             case nswf : WdlNamespaceWithWorkflow =>
                 val wf = nswf.workflow
                 val irWf = compileWorkflow(wf, taskApplets, cState)
-                (Some(irWf), irApplets)
+                IR.Namespace(Some(irWf), irApplets)
             case _ =>
                 // The namespace contains only applets, there
                 // is no workflow to compile.
-                (None, irApplets)
+                IR.Namespace(None, irApplets)
         }
     }
 }

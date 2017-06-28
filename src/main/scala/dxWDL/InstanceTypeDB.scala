@@ -48,7 +48,6 @@ case class DxInstanceType(name: String,
                           cpu: Int,
                           price: Float,
                           os: Vector[(String, String)]) {
-
     // Does this instance satisfy the requirements?
     def satisfies(memReq: Option[Int],
                   diskReq: Option[Int],
@@ -66,6 +65,28 @@ case class DxInstanceType(name: String,
             case None => ()
         }
         return true
+    }
+
+    // Comparison function. Returns true iff [this] comes before
+    // [that] in the ordering.
+    //
+    // If the hourly price list per instance in available, we sort by
+    // price. If we do not have permissions for pricing information,
+    // we compare by resources sizes. For example, if A has more
+    // memory, disk space, and cores than B, then B < A. We round down
+    // memory and disk sizes, to make the comparison insensitive to
+    // minor differences.
+    def lteq(that: DxInstanceType) : Boolean = {
+        // compare by price
+        if (this.price < that.price)
+            return true
+        if (this.price > that.price)
+            return false
+
+        // Prices are the same, compare based on resource sizes.
+        return ((this.memoryMB / 1024) <= (that.memoryMB / 1024) &&
+                    (this.diskGB / 16) <= (that.diskGB / 16) &&
+                    this.cpu <= that.cpu)
     }
 }
 
@@ -87,32 +108,35 @@ case class InstanceTypeDB(instances: Vector[DxInstanceType]) {
     // 1) discard all instances that do not have enough resources
     // 2) choose the cheapest instance
     def choose(memoryMB: Option[Int], diskGB: Option[Int], cpu: Option[Int]) : String = {
-        // step one: discard all instances that are too weak
+        // discard all instances that are too weak
         val sufficient: Vector[DxInstanceType] =
             instances.filter(x => x.satisfies(memoryMB, diskGB, cpu))
         if (sufficient.length == 0)
             throw new Exception(s"No instances found that match the requirements (memory=$memoryMB, diskGB=$diskGB, cpu=$cpu")
 
-        // step two: choose the cheapest instance
+        // if prices ara available, choose the cheapest instance. Otherwise,
+        // choose one with minimal resources.
         val initialGuess = sufficient.head
         val bestInstance = sufficient.tail.foldLeft(initialGuess){ case (bestSoFar,x) =>
-            if (x.price < bestSoFar.price) x else bestSoFar
+            if (x.lteq(bestSoFar)) x
+            else bestSoFar
         }
         bestInstance.name
     }
 
+    private def calcMinimalInstanceType(iTypes: Set[DxInstanceType]) : DxInstanceType = {
+        if (iTypes.isEmpty)
+            throw new Exception("empty list")
+        iTypes.tail.foldLeft(iTypes.head) {
+            case (cheapest, elem) =>
+                if (elem.lteq(cheapest)) elem
+                else cheapest
+        }
+    }
+
     // The cheapest available instance, this is normally also the smallest.
     def getMinimalInstanceType() : String = {
-        if (instances.isEmpty)
-            throw new Exception("instance type database is empty")
-        val cheapest = instances.tail.foldLeft(instances.head){
-            case (cheapest, elem) =>
-                if (elem.price < cheapest.price)
-                    elem
-                else
-                    cheapest
-        }
-        cheapest.name
+        calcMinimalInstanceType(instances.toSet).name
     }
 
     // Currently, we support only constants.
@@ -175,143 +199,22 @@ case class InstanceTypeDB(instances: Vector[DxInstanceType]) {
         choose(memoryMB, diskGB, cpu)
     }
 
+    // sort the instances, and print them out
+    def prettyPrint() : String = {
+        var remain : Set[DxInstanceType] = instances.toSet
+        var sortediTypes : Vector[DxInstanceType] = Vector()
+        while (!remain.isEmpty) {
+            val smallest = calcMinimalInstanceType(remain)
+            sortediTypes = sortediTypes :+ smallest
+            remain = remain - smallest
+        }
+        sortediTypes.toJson.prettyPrint
+    }
 }
-
 
 object InstanceTypeDB extends DefaultJsonProtocol {
     // support automatic conversion to/from JsValue
     implicit val instanceTypeDBFormat = jsonFormat1(InstanceTypeDB.apply)
-
-    // The original list is at:
-    // https://github.com/dnanexus/nucleus/blob/master/node_modules/instance_types/aws_instance_types.json
-    //
-    // The g2,i2,x1 instances have been removed, because they are not
-    // enabled for customers by default.  In addition, the PV (Paravirtual)
-    // instances have been removed, because they work only on Ubuntu
-    // 12.04.
-    //
-    // Removed the ssd2 instances, because they actually use EBS storage. A better
-    // solution would be asking the platform for the available instances.
-    private val instanceList : String = """{
-        "mem2_ssd1_x2":       {"internalName": "m3.large",                          "traits": {"numCores":   2, "totalMemoryMB":    7225, "ephemeralStorageGB":   27}},
-        "mem2_ssd1_x4":       {"internalName": "m3.xlarge",                         "traits": {"numCores":   4, "totalMemoryMB":   14785, "ephemeralStorageGB":   72}},
-        "mem2_ssd1_x8":       {"internalName": "m3.2xlarge",                        "traits": {"numCores":   8, "totalMemoryMB":   29905, "ephemeralStorageGB":  147}},
-        "mem1_ssd1_x2":       {"internalName": "c3.large",                          "traits": {"numCores":   2, "totalMemoryMB":    3766, "ephemeralStorageGB":   28}},
-        "mem1_ssd1_x4":       {"internalName": "c3.xlarge",                         "traits": {"numCores":   4, "totalMemoryMB":    7225, "ephemeralStorageGB":   77}},
-        "mem1_ssd1_x8":       {"internalName": "c3.2xlarge",                        "traits": {"numCores":   8, "totalMemoryMB":   14785, "ephemeralStorageGB":  157}},
-        "mem1_ssd1_x16":      {"internalName": "c3.4xlarge",                        "traits": {"numCores":  16, "totalMemoryMB":   29900, "ephemeralStorageGB":  302}},
-        "mem1_ssd1_x32":      {"internalName": "c3.8xlarge",                        "traits": {"numCores":  32, "totalMemoryMB":   60139, "ephemeralStorageGB":  637}},
-        "mem3_ssd1_x32_gen1": {"internalName": "cr1.8xlarge",                       "traits": {"numCores":  32, "totalMemoryMB":  245751, "ephemeralStorageGB":  237}},
-        "mem3_ssd1_x2":       {"internalName": "r3.large",                          "traits": {"numCores":   2, "totalMemoryMB":   15044, "ephemeralStorageGB":   27}},
-        "mem3_ssd1_x4":       {"internalName": "r3.xlarge",                         "traits": {"numCores":   4, "totalMemoryMB":   30425, "ephemeralStorageGB":   72}},
-        "mem3_ssd1_x8":       {"internalName": "r3.2xlarge",                        "traits": {"numCores":   8, "totalMemoryMB":   61187, "ephemeralStorageGB":  147}},
-        "mem3_ssd1_x16":      {"internalName": "r3.4xlarge",                        "traits": {"numCores":  16, "totalMemoryMB":  122705, "ephemeralStorageGB":  297}},
-        "mem3_ssd1_x32":      {"internalName": "r3.8xlarge",                        "traits": {"numCores":  32, "totalMemoryMB":  245751, "ephemeralStorageGB":  597}}
-}"""
-
-    private val awsOnDemandHourlyPrice =
-        """|{
-           | "cc2.8xlarge": 2.000,
-           | "cg1.4xlarge": 2.100,
-           | "m4.large": 0.108,
-           | "m4.xlarge": 0.215,
-           | "m4.2xlarge": 0.431,
-           | "m4.4xlarge": 0.862,
-           | "m4.10xlarge": 2.155,
-           | "m4.16xlarge": 3.447,
-           | "c4.large": 0.100,
-           | "c4.xlarge": 0.199,
-           | "c4.2xlarge": 0.398,
-           | "c4.4xlarge": 0.796,
-           | "c4.8xlarge": 1.591,
-           | "p2.xlarge": 0.900,
-           | "p2.8xlarge": 7.200,
-           | "p2.16xlarge": 14.400,
-           | "g2.2xlarge": 0.650,
-           | "g2.8xlarge": 2.600,
-           | "x1.16xlarge": 6.669,
-           | "x1.32xlarge": 13.338,
-           | "r4.large": 0.133,
-           | "r4.xlarge": 0.266,
-           | "r4.2xlarge": 0.532,
-           | "r4.4xlarge": 1.064,
-           | "r4.8xlarge": 2.128,
-           | "r4.16xlarge": 4.256,
-           | "r3.large": 0.166,
-           | "r3.xlarge": 0.333,
-           | "r3.2xlarge": 0.665,
-           | "r3.4xlarge": 1.330,
-           | "r3.8xlarge": 2.660,
-           | "i2.xlarge": 0.853,
-           | "i2.2xlarge": 1.705,
-           | "i2.4xlarge": 3.410,
-           | "i2.8xlarge": 6.820,
-           | "d2.xlarge": 0.690,
-           | "d2.2xlarge": 1.380,
-           | "d2.4xlarge": 2.760,
-           | "d2.8xlarge": 5.520,
-           | "hi1.4xlarge": 3.100,
-           | "hs1.8xlarge": 4.600,
-           | "m3.medium": 0.067,
-           | "m3.large": 0.133,
-           | "m3.xlarge": 0.266,
-           | "m3.2xlarge": 0.532,
-           | "c3.large": 0.090,
-           | "c3.xlarge": 0.210,
-           | "c3.2xlarge": 0.420,
-           | "c3.4xlarge": 0.840,
-           | "c3.8xlarge": 1.680,
-           | "m1.small": 0.044,
-           | "m1.medium": 0.087,
-           | "m1.large": 0.175,
-           | "m1.xlarge": 0.350,
-           | "c1.medium": 0.130,
-           | "c1.xlarge": 0.520,
-           | "m2.xlarge": 0.245,
-           | "m2.2xlarge": 0.490,
-           | "m2.4xlarge": 0.980,
-           | "t1.micro": 0.020,
-           | "cr1.8xlarge": 3.500
-           |}
-           |""".stripMargin.trim
-
-
-    // Create an availble instance list based on a hard coded list
-    def genHardcoded : InstanceTypeDB = {
-        def intOfJs(jsVal : JsValue) : Int = {
-            jsVal match {
-                case JsNumber(x) => x.toInt
-                case _ => throw new Exception("sanity")
-            }
-        }
-        val awsOnDemandHourlyPriceTable: Map[String, Float] = {
-            val fields : Map[String, JsValue] = awsOnDemandHourlyPrice.parseJson.asJsObject.fields
-            fields.map{ case(name, v) =>
-                val price: Float = v match {
-                    case JsNumber(x) => x.toFloat
-                    case _ => throw new Exception("sanity")
-                }
-                name -> price
-            }.toMap
-        }
-
-        val allInstances : Map[String, JsValue] = instanceList.parseJson.asJsObject.fields
-        val db = allInstances.map{ case(name, v) =>
-            val fields : Map[String, JsValue] = v.asJsObject.fields
-            val internalName = fields("internalName") match {
-                case JsString(s) => s
-                case _ => throw new Exception("sanity")
-            }
-            val price: Float = awsOnDemandHourlyPriceTable(internalName)
-
-            val traits = fields("traits").asJsObject.fields
-            val memoryMB = intOfJs(traits("totalMemoryMB"))
-            val diskGB = intOfJs(traits("ephemeralStorageGB"))
-            val cpu = intOfJs(traits("numCores"))
-            DxInstanceType(name, memoryMB, diskGB, cpu, price, Vector.empty)
-        }.toVector
-        InstanceTypeDB(db)
-    }
 
     // Extract an integer fields from a JsObject
     private def getJsIntField(js: JsValue, fieldName:String) : Int = {
@@ -396,8 +299,10 @@ object InstanceTypeDB extends DefaultJsonProtocol {
         (billTo,region)
     }
 
-    // Get the mapping from instance type to price, limited to the project
-    // we are in.
+    // Get the mapping from instance type to price, limited to the
+    // project we are in. Describing a user requires permission to
+    // view the user account. The compiler may not have these
+    // permissions, causing this method to throw an exception.
     private def getPricingModel(billTo:String,
                                 region:String) : Map[String, Float] = {
         val req: ObjectNode = DXJSON.getObjectBuilder()
@@ -405,7 +310,14 @@ object InstanceTypeDB extends DefaultJsonProtocol {
                  DXJSON.getObjectBuilder().put("pricingModelsByRegion", true)
                      .build())
             .build()
-        val rep = DXAPI.userDescribe(billTo, req, classOf[JsonNode])
+
+        val rep = try {
+            DXAPI.userDescribe(billTo, req, classOf[JsonNode])
+        } catch {
+            case e: Throwable =>
+                throw new Exception("Insufficient permissions")
+        }
+
         val js: JsValue = Utils.jsValueOfJsonNode(rep)
         val pricingModelsByRegion = getJsField(js, "pricingModelsByRegion")
         val pricingModel = getJsField(pricingModelsByRegion, region)
@@ -437,9 +349,6 @@ object InstanceTypeDB extends DefaultJsonProtocol {
     // Check if an instance type passes some basic criteria:
     // - Instance must support Ubuntu 14.04.
     // - Instance is not a GPU instance.
-    // - Instance is not overly expensive. Currently, the
-    //   threshold is set to the arbitrary number 10$ an hour.
-    //
     private def instanceCriteria(iType: DxInstanceType) : Boolean = {
         val osSupported = iType.os.foldLeft(false) {
             case (accu, (distribution, release)) =>
@@ -452,12 +361,22 @@ object InstanceTypeDB extends DefaultJsonProtocol {
             return false
         if (iType.name contains "gpu")
             return false
-        if (iType.price > Utils.MAX_HOURLY_RATE)
-            return false
         return true
     }
 
-    private def query(dxProject: DXProject) : InstanceTypeDB = {
+    def queryNoPrices(dxProject: DXProject) : InstanceTypeDB = {
+        // Figure out the available instances by describing the project
+        val allAvailableIT = queryAvailableInstanceTypes(dxProject)
+
+        // filter out instances that we cannot use
+        val iTypes: Vector[DxInstanceType] = allAvailableIT
+            .filter{ case (iName,traits) => instanceCriteria(traits) }
+            .map{ case (_,traits) => traits}
+            .toVector
+        InstanceTypeDB(iTypes)
+    }
+
+    def queryWithPrices(dxProject: DXProject) : InstanceTypeDB = {
         // Figure out the available instances by describing the project
         val allAvailableIT = queryAvailableInstanceTypes(dxProject)
 
@@ -470,24 +389,27 @@ object InstanceTypeDB extends DefaultJsonProtocol {
         // Create fully formed instance types by crossing the tables
         val availableInstanceTypes: Vector[DxInstanceType] = crossTables(allAvailableIT, pm)
 
-        // filter out instances that we do not want to use
-        InstanceTypeDB(
-            availableInstanceTypes.filter(instanceCriteria)
-        )
+        // filter out instances that we cannot use
+        var iTypes = availableInstanceTypes.filter(instanceCriteria)
+
+        // Do not use overly expensive instances, this a temporary
+        // safe guard. We don't want the compiler to accidentally
+        // choose expensive instances, annoying the user.
+        iTypes = iTypes.filter(x => x.price <= Utils.MAX_HOURLY_RATE)
+        InstanceTypeDB(iTypes)
     }
 
-    def queryWithBackup(dxProject: DXProject) : InstanceTypeDB = {
+    def query(dxProject: DXProject) : InstanceTypeDB = {
         try {
-            query(dxProject)
+            queryWithPrices(dxProject)
         } catch {
+            // Insufficient permissions to describe the user, we cannot get the price list.
             case e: Throwable =>
-                System.err.println(
-                    """|Error querying the platform for
-                       |available instances and their prices.
-                       |Failing back to hardcoded list."""
-                        .stripMargin.replaceAll("\n", " "))
-                System.err.println(Utils.exceptionToString(e))
-                genHardcoded
+                System.err.println("""|Warning: insufficient permissions to retrive the
+                                      |instance price list. This will result in suboptimal machine choices,
+                                      |incurring higher costs when running workflows."""
+                                       .stripMargin.replaceAll("\n", " "))
+                queryNoPrices(dxProject)
         }
     }
 }

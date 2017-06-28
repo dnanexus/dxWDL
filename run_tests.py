@@ -338,7 +338,9 @@ def main():
     argparser.add_argument("--compile-mode", help="Compilation mode")
     argparser.add_argument("--delay-workspace-destruction", help="Flag passed to workflow run",
                            action="store_true", default=False)
-    argparser.add_argument("--force", help="Rebuild all the applets and workflows",
+    argparser.add_argument("--force", help="Remove old versions of applets and workflows",
+                           action="store_true", default=False)
+    argparser.add_argument("--archive", help="Archive old applets",
                            action="store_true", default=False)
     argparser.add_argument("--folder", help="Use an existing folder, instead of building dxWDL")
     argparser.add_argument("--lazy", help="Only compile workflows that are unbuilt",
@@ -388,6 +390,8 @@ def main():
         compiler_flags += ["-mode", args.compile_mode]
     if args.force:
         compiler_flags.append("-force")
+    if args.archive:
+        compiler_flags.append("-archive")
 
     try:
         # Compile the WDL workflows

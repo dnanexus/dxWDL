@@ -1,5 +1,13 @@
 # Release Notes
 
+## 0.32
+- Support archive and force flags a la `dx build`. Applets and workflows
+  are *not* deleted by default, the --force flag must be provided.
+- If there are insufficient permissions to get the instance price list, we
+  have a reasonable fallback option.
+- Added namespace concept to intermediate representation.
+- WDL pretty printer now retains output section.
+
 ## 0.31
 - The compiler is packed into a single jar file
 - Fixed glob bug
