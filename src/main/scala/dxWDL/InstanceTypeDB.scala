@@ -67,12 +67,15 @@ case class DxInstanceType(name: String,
         return true
     }
 
-    // Comparison function.
+    // Comparison function. Returns true iff [this] comes before
+    // [that] in the ordering.
     //
-    // Note: if pricing information in unavailable, we can only do a
-    // partial ordering.
-    //
-    // Returns true iff [this] comes before [that] in the ordering.
+    // If the hourly price list per instance in available, we sort by
+    // price. If we do not have permissions for pricing information,
+    // we compare by resources sizes. For example, if A has more
+    // memory, disk space, and cores than B, then B < A. We round down
+    // memory and disk sizes, to make the comparison insensitive to
+    // minor differences.
     def lteq(that: DxInstanceType) : Boolean = {
         // compare by price
         if (this.price < that.price)
@@ -80,14 +83,10 @@ case class DxInstanceType(name: String,
         if (this.price > that.price)
             return false
 
-        // Prices are the same, compare based on resource sizes. For
-        // example, if A has more memory, disk space, and cores than
-        // B, then B < A.
-        if (this.memoryMB <= that.memoryMB &&
-                this.diskGB <= that.diskGB &&
-                this.cpu <= that.cpu)
-            return true
-        return false
+        // Prices are the same, compare based on resource sizes.
+        return ((this.memoryMB / 1024) <= (that.memoryMB / 1024) &&
+                    (this.diskGB / 16) <= (that.diskGB / 16) &&
+                    this.cpu <= that.cpu)
     }
 }
 

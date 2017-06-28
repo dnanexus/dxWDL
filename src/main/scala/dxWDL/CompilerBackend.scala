@@ -315,9 +315,9 @@ object CompilerBackend {
             else pId ++ ":/" ++ path
         var buildCmd = List("dx", "build", appletDir.toString(), "--destination", dest)
         if (cState.force)
-            buildCmd = buildCmd :+ "--force"
+            buildCmd = buildCmd :+ "-f"
         if (cState.archive)
-            buildCmd = buildCmd :+ "--archive"
+            buildCmd = buildCmd :+ "-a"
         def build() : Option[DXApplet] = {
             try {
                 // Run the dx-build command
