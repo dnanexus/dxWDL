@@ -37,6 +37,7 @@ install:
   # Clone dxWDL into a new directory,
   - pwd
   - git clone https://github.com/dnanexus-rnd/dxWDL.git
+  - git checkout $TRAVIS_BRANCH
   - ls -R dxWDL
   - mkdir -p dxWDL/lib
   - cp dx-toolkit/lib/java/dnanexus-api-0.1.0-SNAPSHOT-jar-with-dependencies.jar dxWDL/lib/
