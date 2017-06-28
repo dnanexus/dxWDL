@@ -1,15 +1,3 @@
-/**
-  *  Preprocessing pass, simplify the original WDL.
-  *
-  *  Instead of handling expressions in calls directly,
-  *  we lift the expressions, generate auxiliary variables, and
-  *  call the task with values or variables (no expressions).
-  *
-  *  A difficulty we face here, is avoiding using internal
-  *  representations used by wdl4s. For example, we want to reorganize
-  *  scatter blocks, however, we cannot create valid new wdl4s scatter
-  *  blocks. Instead, we pretty print a new workflow and then load it.
-  */
 package dxWDL
 
 import java.io.{File, FileWriter, PrintWriter}
@@ -37,8 +25,7 @@ object CompilerTopologicalSort {
         val index = fName.lastIndexOf('.')
         if (index == -1) {
             fName + secondSuffix
-        }
-        else {
+        } else {
             val prefix = fName.substring(0, index)
             val suffix = fName.substring(index)
             prefix + secondSuffix + suffix
@@ -48,7 +35,6 @@ object CompilerTopologicalSort {
     case class State(cef: CompilerErrorFormatter,
                      terminalMap: Map[Terminal, WdlSource],
                      verbose: Boolean)
-
 
     // Generic topological sorting procedure
     // Scala code only slightly modified from https://gist.github.com/ThiporKong/4399695
@@ -60,34 +46,25 @@ object CompilerTopologicalSort {
                 val predSet = keyval._2
                 predSet.isEmpty
             }
-
             // If there are no nodes left with no predecessors, either we are done recursing or there is a cycle
             if (noPreds.isEmpty) {
-
-                // All nodes have been processed, we are done
                 if (hasPreds.isEmpty) {
+                    // All nodes have been processed, we are done
                     done
-                }
-
-                // There are no nodes with no predecessors, but we still have nodes to process.
-                // Since every DAG contains a vertex with no incoming edges,
-                // there exists at least one directed cycle in the DAG.
-                else {
+                } else {
+                    // There are no nodes with no predecessors, but we still have nodes to process.
+                    // Since every DAG contains a vertex with no incoming edges,
+                    // there exists at least one directed cycle in the DAG.
                     sys.error("ERROR: workflow contains at least one directed cycle.")
                 }
-            }
-
-            else {
-
+            } else {
                 // List of nodes with no predecessors
                 val noPredNodes = noPreds.map { keyval => keyval._1 }
-
                 // Build a new list of predecessors that do not contain the nodes above
                 val newToPreds = hasPreds.mapValues { predSet => predSet -- noPredNodes }
                 tsort(newToPreds, done ++ noPredNodes)
             }
         }
-
         // Build the initial map of predecessors
         val toPred = edges.foldLeft(Map[A, Set[A]]()) { (acc, e) =>
             acc + (e._1 -> acc.getOrElse(e._1, Set())) + (e._2 -> (acc.getOrElse(e._2, Set()) + e._1))
@@ -107,7 +84,7 @@ object CompilerTopologicalSort {
                  Utils.trace(cState.verbose, indent+"End recursion")
                  newScatter.asInstanceOf[GraphNode]
              }
-             case anyOtherNode => anyOtherNode.asInstanceOf[GraphNode]
+             case _ => _.asInstanceOf[GraphNode]
          }
 
         // Create workflow graph sequence of edges for topological sorting
@@ -116,7 +93,6 @@ object CompilerTopologicalSort {
         // Create a mapping from a child of a scatter node to the root level scatter
         // node it belongs to. This allows for a root level scatter node to be placed
         // after its last dependency.
-
         val scatterParent : Map[GraphNode, Scatter] = recursedNodes.map {
             case scat: Scatter => scat.descendants.map { d => (d.asInstanceOf[GraphNode], scat) }
             case _ => Set[(GraphNode, Scatter)]()
@@ -128,18 +104,18 @@ object CompilerTopologicalSort {
         val edges : Set[(Scope, Scope)] = recursedNodes.map { gnode =>
             val nodeDependencies : Vector[(Scope, Scope)] = (gnode.upstream).map { dependency =>
                val dependencyActual : Scope =
-                   // If any node's parent is a descendant of a root
-                   // level scatter, use the scatter as the parent
                    if (scatterParent.contains(dependency)) {
+                       // If any node's parent is a descendant of a root
+                       // level scatter, use the scatter as the parent
                        scatterParent(dependency).asInstanceOf[Scope]
-                   }
-                   // Otherwise just use the actual parent
-                   else {
+                   } else {
+                       // Otherwise just use the actual parent
                        dependency.asInstanceOf[Scope]
                    }
                (dependencyActual, gnode.asInstanceOf[Scope])
             }.toVector
 
+            // Please see Case 1 under 'Default sorting procedure' in doc/TopoSort.md for more info
             val descendantParents : Vector[(Scope, Scope)] = gnode match {
                 case scatter: Scatter => {
                     // If a scatter's descendants have parents outside the scatter context,
@@ -155,7 +131,7 @@ object CompilerTopologicalSort {
                         }
                     }.toVector
                 }
-                case anyOtherNode => Vector[(Scope, Scope)]()
+                case _ => Vector[(Scope, Scope)]()
             }
 
             nodeDependencies ++ descendantParents
@@ -179,7 +155,7 @@ object CompilerTopologicalSort {
     // Alternative method of sorting that does not collapse scatters
     def tsortASTNodesAlternative(allNodesSorted: Seq[GraphNode], nodes: Seq[GraphNode], cState: State, recursionDepth: Int) : Seq[GraphNode] = {
         val indent = " "*recursionDepth*4
-        val recursedNodes = nodes.map {
+        val recursedNodes : Seq[GraphNode] = nodes.map {
              case scatter : Scatter => {
                  Utils.trace(cState.verbose, indent+"Recursively sorting scatter: " + scatter.fullyQualifiedName)
                  val newScatter = WdlRewrite.scatter(scatter,
@@ -187,7 +163,7 @@ object CompilerTopologicalSort {
                  Utils.trace(cState.verbose, indent+"End recursion")
                  newScatter.asInstanceOf[GraphNode]
              }
-             case anyOtherNode => anyOtherNode.asInstanceOf[GraphNode]
+             case _ => _.asInstanceOf[GraphNode]
         }
         // TODO: bad big O here.  Better to filter allNodesSorted, however it needs to contain the new scatters
         val filteredNodes = recursedNodes.sortWith { (a,b) => allNodesSorted.indexOf(a) < allNodesSorted.indexOf(b) }
@@ -258,7 +234,7 @@ object CompilerTopologicalSort {
         val newPath = ns match {
             case nswf : WdlNamespaceWithWorkflow =>
                 sortWorkflow(nswf, cState, wdlSourceFile, alternativeSort)
-            case anyOtherType => wdlSourceFile
+            case _ => wdlSourceFile
         }
         newPath
     }
