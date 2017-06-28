@@ -364,7 +364,10 @@ object InstanceTypeDB extends DefaultJsonProtocol {
         return true
     }
 
-    private def buildNoPriceDB(allAvailableIT: Map[String, DxInstanceType]) : InstanceTypeDB = {
+    def queryNoPrices(dxProject: DXProject) : InstanceTypeDB = {
+        // Figure out the available instances by describing the project
+        val allAvailableIT = queryAvailableInstanceTypes(dxProject)
+
         // filter out instances that we cannot use
         val iTypes: Vector[DxInstanceType] = allAvailableIT
             .filter{ case (iName,traits) => instanceCriteria(traits) }
@@ -373,39 +376,39 @@ object InstanceTypeDB extends DefaultJsonProtocol {
         InstanceTypeDB(iTypes)
     }
 
-    def query(dxProject: DXProject) : InstanceTypeDB = {
+    def queryWithPrices(dxProject: DXProject) : InstanceTypeDB = {
         // Figure out the available instances by describing the project
         val allAvailableIT = queryAvailableInstanceTypes(dxProject)
 
         // get billTo and region from the project
         val (billTo, region) = getProjectExtraInfo(dxProject)
 
+        // get the pricing model
+        val pm = getPricingModel(billTo, region)
+
+        // Create fully formed instance types by crossing the tables
+        val availableInstanceTypes: Vector[DxInstanceType] = crossTables(allAvailableIT, pm)
+
+        // filter out instances that we cannot use
+        var iTypes = availableInstanceTypes.filter(instanceCriteria)
+
+        // Do not use overly expensive instances, this a temporary
+        // safe guard. We don't want the compiler to accidentally
+        // choose expensive instances, annoying the user.
+        iTypes = iTypes.filter(x => x.price <= Utils.MAX_HOURLY_RATE)
+        InstanceTypeDB(iTypes)
+    }
+
+    def query(dxProject: DXProject) : InstanceTypeDB = {
         try {
-            // get the pricing model
-            val pm = getPricingModel(billTo, region)
-
-            // Create fully formed instance types by crossing the tables
-            val availableInstanceTypes: Vector[DxInstanceType] = crossTables(allAvailableIT, pm)
-
-            // filter out instances that we cannot use
-            var iTypes = availableInstanceTypes.filter(instanceCriteria)
-
-            // Do not use overly expensive instances
-            iTypes = iTypes.filter(x => x.price <= Utils.MAX_HOURLY_RATE)
-            InstanceTypeDB(iTypes)
+            queryWithPrices(dxProject)
         } catch {
             // Insufficient permissions to describe the user, we cannot get the price list.
             case e: Throwable =>
                 System.err.println("""|Warning: insufficient permissions to retrive the
                                       |instance price list. This will result in suboptimal machine choices,
                                       |incurring higher costs when running workflows.""")
-                buildNoPriceDB(allAvailableIT)
+                queryNoPrices(dxProject)
         }
-    }
-
-    def queryNoPriceInfo(dxProject: DXProject) : InstanceTypeDB = {
-        // Figure out the available instances by describing the project
-        val allAvailableIT = queryAvailableInstanceTypes(dxProject)
-        buildNoPriceDB(allAvailableIT)
     }
 }
