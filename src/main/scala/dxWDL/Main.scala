@@ -121,29 +121,13 @@ object Main extends App {
     }
 
 
-    def prettyPrintWorkflowIR(wdlSourceFile : Path,
-                              irWf: IR.Workflow,
-                              verbose: Boolean) : Unit = {
+    def prettyPrintIR(wdlSourceFile : Path,
+                      irNs: IR.Namespace,
+                      verbose: Boolean) : Unit = {
         val trgName: String = Utils.replaceFileSuffix(wdlSourceFile, ".ir.yaml")
         val trgPath = Utils.appCompileDirPath.resolve(trgName).toFile
-        val yo = IR.yaml(irWf)
+        val yo = IR.yaml(irNs)
         val humanReadable = yo.prettyPrint
-        val fos = new FileWriter(trgPath)
-        val pw = new PrintWriter(fos)
-        pw.print(humanReadable)
-        pw.flush()
-        pw.close()
-        Utils.trace(verbose, s"Wrote intermediate representation to ${trgPath.toString}")
-    }
-
-    def prettyPrintAppletsIR(wdlSourceFile : Path,
-                             irApplets: Vector[IR.Applet],
-                             verbose: Boolean) : Unit = {
-        val trgName: String = Utils.replaceFileSuffix(wdlSourceFile, ".ir.yaml")
-        val trgPath = Utils.appCompileDirPath.resolve(trgName).toFile
-        val humanReadable = irApplets.map(irTs =>
-            IR.yaml(irTs).prettyPrint
-        ).mkString("\n\n")
         val fos = new FileWriter(trgPath)
         val pw = new PrintWriter(fos)
         pw.print(humanReadable)
@@ -194,50 +178,23 @@ object Main extends App {
         // Simplify the source file
         val ns:WdlNamespace = CompilerPreprocess.apply(wdlSourceFile, verbose)
 
-        // Backbone of compilation process.
-        // 1) Compile the WDL workflow into an Intermediate Representation (IR)
-        // 2) Generate dx:applets and dx:workflow from the IR
+        // Compile the WDL workflow into an Intermediate Representation (IR)
         val cef = new CompilerErrorFormatter(ns.terminalMap)
-        val (irWf, irApplets) = CompilerFrontEnd.apply(ns, instanceTypeDB, folder, cef, verbose)
+        val irNs = CompilerFrontEnd.apply(ns, instanceTypeDB, folder, cef, verbose)
+
+        // Write out the intermediate representation
+        prettyPrintIR(wdlSourceFile, irNs, verbose)
 
         // Backend compiler pass
-        irWf match {
+        mode match {
             case None =>
-                // We have only tasks
-                // Write out the intermediate representation
-                prettyPrintAppletsIR(wdlSourceFile, irApplets, verbose)
-                mode match {
-                    case None =>
-                        val dxApplets = irApplets.map(x =>
-                            CompilerBackend.apply(x, dxProject, instanceTypeDB, dxWDLrtId,
-                                                  folder, cef, force, archive, verbose)
-                        )
-                        val ids: Seq[String] = dxApplets.map(x => x.getId())
-                        ids.mkString(", ")
-                    case Some(x) if x.toLowerCase == "fe" => "applet-xxxx"
-                    case _ => throw new Exception(s"Unknown mode ${mode}")
-                }
-
-            case Some(iRepWf) =>
-                // Write out the intermediate representation
-                prettyPrintWorkflowIR(wdlSourceFile, iRepWf, verbose)
-
-                mode match {
-                    case None =>
-                        val (dxwfl,stageDict, callDict) =
-                            CompilerBackend.apply(iRepWf, dxProject, instanceTypeDB,
-                                                  dxWDLrtId,
-                                                  folder, cef, force, archive, verbose)
-                        options.get("inputFile") match {
-                            case None => ()
-                            case Some(wdlInputFile) =>
-                                InputFile.apply(iRepWf, stageDict, callDict,
-                                                Paths.get(wdlInputFile), verbose)
-                        }
-                        dxwfl.getId()
-                    case Some(x) if x.toLowerCase == "fe" => "workflow-xxxx"
-                    case _ => throw new Exception(s"Unknown mode ${mode}")
-                }
+                // Generate dx:applets and dx:workflow from the IR
+                val wdlInputs = options.get("inputFile").map(Paths.get(_))
+                CompilerBackend.apply(irNs, wdlInputs, dxProject, instanceTypeDB,
+                                      dxWDLrtId,
+                                      folder, cef, force, archive, verbose)
+            case Some(x) if x.toLowerCase == "fe" => "applet-xxxx"
+            case _ => throw new Exception(s"Unknown mode ${mode}")
         }
     }
 

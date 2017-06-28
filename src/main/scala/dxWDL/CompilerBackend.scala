@@ -194,9 +194,9 @@ object CompilerBackend {
     // 1) Default: throw `workflow already exists` exception
     // 2) Force: remove old workflow, and build new one
     def handleOldWorkflow(wfName: String,
-                          dxProject: DXProject,
-                          folder: String,
                           cState: State) : Unit = {
+        val dxProject = cState.dxProject
+        val folder = cState.folder
         val oldWf = DXSearch.findDataObjects().nameMatchesExactly(wfName)
             .inFolder(dxProject, folder).withClassWorkflow().execute().asList()
         if (oldWf.isEmpty) return
@@ -528,38 +528,14 @@ object CompilerBackend {
         dxBuilder.build()
     }
 
-    // Compile a single applet
-    def apply(applet: IR.Applet,
-              dxProject: DXProject,
-              instanceTypeDB: InstanceTypeDB,
-              dxWDLrtId: String,
-              folder: String,
-              cef: CompilerErrorFormatter,
-              force: Boolean,
-              archive: Boolean,
-              verbose: Boolean) : DXApplet = {
-        Utils.trace(verbose, "Backend pass, single applet")
-        val cState = State(dxWDLrtId, dxProject, instanceTypeDB, folder, cef, force, archive, verbose)
-        val (dxApplet, _) = buildAppletIfNeeded(applet, Map.empty, cState)
-        dxApplet
-    }
-
     // Compile an entire workflow
-    def apply(wf: IR.Workflow,
-              dxProject: DXProject,
-              instanceTypeDB: InstanceTypeDB,
-              dxWDLrtId: String,
-              folder: String,
-              cef: CompilerErrorFormatter,
-              force: Boolean,
-              archive: Boolean,
-              verbose: Boolean) : (DXWorkflow, Map[String, DXWorkflow.Stage], Map[String, String]) = {
-        Utils.trace(verbose, "Backend pass")
-        val cState = State(dxWDLrtId, dxProject, instanceTypeDB, folder, cef, force, archive, verbose)
-
+    def compileWorkflow(wf: IR.Workflow,
+                        cState: State) : (DXWorkflow, Map[String, DXWorkflow.Stage], Map[String, String]) = {
         // create fresh workflow
-        handleOldWorkflow(wf.name, dxProject, folder, cState)
-        val dxwfl = DXWorkflow.newWorkflow().setProject(dxProject).setFolder(folder)
+        handleOldWorkflow(wf.name, cState)
+        val dxwfl = DXWorkflow.newWorkflow()
+            .setProject(cState.dxProject)
+            .setFolder(cState.folder)
             .setName(wf.name).build()
 
         // Build the individual applets. We need to keep track of
@@ -606,5 +582,39 @@ object CompilerBackend {
         }
         dxwfl.close()
         (dxwfl, stageDict, callDict)
+    }
+
+    def apply(ns: IR.Namespace,
+              wdlInputFile: Option[Path],
+              dxProject: DXProject,
+              instanceTypeDB: InstanceTypeDB,
+              dxWDLrtId: String,
+              folder: String,
+              cef: CompilerErrorFormatter,
+              force: Boolean,
+              archive: Boolean,
+              verbose: Boolean) : String = {
+        Utils.trace(verbose, "Backend pass")
+        val cState = State(dxWDLrtId, dxProject, instanceTypeDB, folder, cef, force, archive, verbose)
+
+        ns.workflow match {
+            case None =>
+                val dxApplets = ns.applets.map{ applet =>
+                    val (dxApplet, _) = buildAppletIfNeeded(applet, Map.empty, cState)
+                    dxApplet
+                }
+                val ids: Seq[String] = dxApplets.map(x => x.getId())
+                ids.mkString(", ")
+
+            case Some(iRepWf) =>
+                val (dxwfl, stageDict, callDict) = compileWorkflow(iRepWf, cState)
+                wdlInputFile match {
+                    case None => ()
+                    case Some(path) =>
+                        InputFile.apply(iRepWf, stageDict, callDict,
+                                        path, verbose)
+                }
+                dxwfl.getId()
+        }
     }
 }

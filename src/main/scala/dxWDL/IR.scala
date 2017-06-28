@@ -93,6 +93,9 @@ object IR {
                         stages: Vector[Stage],
                         applets: Vector[Applet])
 
+    case class Namespace(workflow: Option[Workflow],
+                         applets: Vector[Applet])
+
     // Human readable representation of the IR, with YAML
     def yaml(cVar: CVar) : YamlObject = {
         YamlObject(
@@ -154,19 +157,17 @@ object IR {
         )
     }
 
-    // Rename member accesses inside an expression, from
-    // the form A.x to A_x. This is used inside an applet WDL generated code.
-    //
-    // Here, we take a shortcut, and just replace strings, instead of
-    // doing a recursive syntax analysis (see ValueEvaluator wdl4s
-    // module).
-    def exprRenameVars(expr: WdlExpression,
-                       allVars: Vector[IR.CVar]) : WdlExpression = {
-        var sExpr: String = expr.toWdlString
-        for (cVar <- allVars) {
-            // A.x => A_x
-            sExpr = sExpr.replaceAll(cVar.name, cVar.dxVarName)
+    def yaml(ns: Namespace) : YamlObject = {
+        ns.workflow match {
+            case None =>
+                YamlObject(
+                    YamlString("applets") -> YamlArray(ns.applets.map(yaml))
+                )
+            case Some(wf) =>
+                YamlObject(
+                    YamlString("workflow") -> yaml(wf),
+                    YamlString("applets") -> YamlArray(ns.applets.map(yaml))
+                )
         }
-        WdlExpression.fromString(sExpr)
     }
 }

@@ -83,17 +83,16 @@ def make_prerequisits(project, folder, version_id, top_dir):
 
 def find_asset(project, folder):
     # get asset_id
-    try:
-        asset = dxpy.search.find_one_data_object(classname="record",
-                                                 project=project.get_id(),
-                                                 name="dxWDLrt",
-                                                 folder=folder,
-                                                 return_handler=True,
-                                                 more_ok=False)
-        print("assetId={}".format(asset.get_id()))
-        return asset
-    except:
+    assets = list(dxpy.search.find_data_objects(classname="record",
+                                                project=project.get_id(),
+                                                name="dxWDLrt",
+                                                folder=folder,
+                                                return_handler=True))
+    if len(assets) == 0:
         return None
+    if len(assets) == 1:
+        return assets[0]
+    raise Exception("More than one asset found in folder {}".format(folder))
 
 def build(project, folder, version_id, top_dir):
     asset = find_asset(project, folder)

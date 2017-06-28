@@ -856,7 +856,7 @@ workflow w {
               instanceTypeDB: InstanceTypeDB,
               destination: String,
               cef: CompilerErrorFormatter,
-              verbose: Boolean) : (Option[IR.Workflow], Vector[IR.Applet]) = {
+              verbose: Boolean) : IR.Namespace = {
         val cState = new State(destination, instanceTypeDB, cef, verbose)
         Utils.trace(cState.verbose, "FrontEnd pass")
 
@@ -886,11 +886,11 @@ workflow w {
             case nswf : WdlNamespaceWithWorkflow =>
                 val wf = nswf.workflow
                 val irWf = compileWorkflow(wf, taskApplets, cState)
-                (Some(irWf), irApplets)
+                IR.Namespace(Some(irWf), irApplets)
             case _ =>
                 // The namespace contains only applets, there
                 // is no workflow to compile.
-                (None, irApplets)
+                IR.Namespace(None, irApplets)
         }
     }
 }
