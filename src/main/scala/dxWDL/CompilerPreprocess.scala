@@ -13,7 +13,7 @@
 package dxWDL
 
 import java.io.{File, FileWriter, PrintWriter}
-import java.nio.file.{Path, Paths}
+import java.nio.file.{Files, Path, Paths}
 import scala.collection.mutable.Queue
 import scala.util.{Failure, Success, Try}
 import wdl4s.AstTools
@@ -331,11 +331,24 @@ object CompilerPreprocess {
 
         // Resolving imports. Look for referenced files in the
         // source directory.
-        val sourceDir = wdlSourceFile.getParent()
         def resolver(filename: String) : WdlSource = {
-            Utils.readFileContent(sourceDir.resolve(filename))
+            val sourceDir:Path = wdlSourceFile.getParent()
+            val p:Path = sourceDir.resolve(filename)
+            Utils.readFileContent(p)
         }
-        val ns = WdlNamespace.loadUsingPath(wdlSourceFile, None, Some(List(resolver))).get
+        def resolverCurrentDir(filename: String) : WdlSource = {
+            // Try the current directory
+            val currentDir:Path = Paths.get(System.getProperty("user.dir"))
+            val p:Path = currentDir.resolve(filename)
+            Utils.readFileContent(p)
+        }
+        val ns =
+            WdlNamespace.loadUsingPath(wdlSourceFile, None, Some(List(resolver, resolverCurrentDir))) match {
+                case Success(ns) => ns
+                case Failure(f) =>
+                    System.err.println("Error loading WDL source code")
+                    throw f
+            }
         val tm = ns.terminalMap
         val cef = new CompilerErrorFormatter(tm)
         val cState = State(cef, tm, verbose)
