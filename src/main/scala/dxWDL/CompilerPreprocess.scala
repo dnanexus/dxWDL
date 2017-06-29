@@ -16,12 +16,9 @@ import java.io.{File, FileWriter, PrintWriter}
 import java.nio.file.{Files, Path, Paths}
 import scala.collection.mutable.Queue
 import scala.util.{Failure, Success, Try}
+import wdl4s._
 import wdl4s.AstTools
 import wdl4s.AstTools.EnhancedAstNode
-import wdl4s.{Call, Declaration, Scatter, Scope,
-    Task, TaskCall, TaskOutput,
-    WdlExpression, WdlNamespace, WdlNamespaceWithWorkflow,
-    Workflow, WorkflowCall, WdlSource}
 import wdl4s.command.{ParameterCommandPart, StringCommandPart}
 import wdl4s.expression._
 import wdl4s.parser.WdlParser.{Ast, AstNode, Terminal}
@@ -279,11 +276,15 @@ object CompilerPreprocess {
                 // Be careful to add the indexing variable to the environment
                 val sscDefVars = definedVars + ssc.item
                 simplifyScatter(ssc, sscDefVars, cState)
-            case call:Call => Vector(call)
             case decl:Declaration =>
                 definedVars = definedVars + decl.unqualifiedName
                 Vector(decl)
-            case x => throw new Exception(s"Unimplemented workflow element ${x.toString}")
+            case wfo:WorkflowOutput => Vector(wfo)
+            case call:Call => Vector(call)
+            case x =>
+                throw new Exception(cState.cef.notCurrentlySupported(
+                                        x.ast,
+                                        s"Unimplemented workflow element"))
         }.flatten.toVector
         WdlRewrite.workflow(wf, children)
     }
@@ -332,18 +333,17 @@ object CompilerPreprocess {
         // Resolving imports. Look for referenced files in the
         // source directory.
         def resolver(filename: String) : WdlSource = {
-            val sourceDir:Path = wdlSourceFile.getParent()
+            var sourceDir:Path = wdlSourceFile.getParent()
+            if (sourceDir == null) {
+                // source file has no parent directory, use the
+                // current directory instead
+                sourceDir = Paths.get(System.getProperty("user.dir"))
+            }
             val p:Path = sourceDir.resolve(filename)
             Utils.readFileContent(p)
         }
-        def resolverCurrentDir(filename: String) : WdlSource = {
-            // Try the current directory
-            val currentDir:Path = Paths.get(System.getProperty("user.dir"))
-            val p:Path = currentDir.resolve(filename)
-            Utils.readFileContent(p)
-        }
         val ns =
-            WdlNamespace.loadUsingPath(wdlSourceFile, None, Some(List(resolver, resolverCurrentDir))) match {
+            WdlNamespace.loadUsingPath(wdlSourceFile, None, Some(List(resolver))) match {
                 case Success(ns) => ns
                 case Failure(f) =>
                     System.err.println("Error loading WDL source code")

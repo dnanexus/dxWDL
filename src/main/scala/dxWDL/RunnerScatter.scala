@@ -346,8 +346,7 @@ object RunnerScatter {
         val outScopeEnv = inputs ++ inputWvls
         val scatter : Scatter = findScatter(wf)
 
-        // Lookup the array we are looping on.
-        // Note: it could be an expression, which requires calculation
+        // Lookup the array we are looping on, it is guarantied to be a variable.
         val collElements = outScopeEnv.get(scatter.collection.toWdlString) match {
             case None =>
                 System.err.println(s"inputs=${inputs}")

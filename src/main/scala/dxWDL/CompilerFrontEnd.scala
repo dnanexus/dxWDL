@@ -670,26 +670,34 @@ workflow w {
         }.flatten
     }
 
-    // Construct the scatter outputs, these are made up of two
+    // Construct the scatter outputs, these are made up of several
     // categories:
     // 1. All the preamble variables, these could potentially be accessed
     // outside the scatter block.
     // 2. Individual call outputs. Each applet output becomes an array of
     // that type. For example, an Int becomes an Array[Int].
+    // 3. Variables defined in the scatter block. These ara vailable
+    // outside as arrays.
     def scGenOutputs(preDecls: Vector[Declaration],
-                     calls : Seq[Call],
+                     children : Seq[Scope],
                      cState: State) : Vector[IR.CVar] = {
         val preVars: Vector[IR.CVar] = preDecls.map { decl =>
             IR.CVar(decl.unqualifiedName, decl.wdlType, decl.ast)
         }.toVector
-        val callOutputVars : Vector[IR.CVar] = calls.map { call =>
-            val task = taskOfCall(call, cState)
-            task.outputs.map { tso =>
-                val varName = callUniqueName(call, cState) ++ "." ++ tso.unqualifiedName
-                IR.CVar(varName, WdlArrayType(tso.wdlType), tso.ast)
-            }
+        val scOutputVars : Vector[IR.CVar] = children.map {
+            case call:TaskCall =>
+                val task = taskOfCall(call, cState)
+                task.outputs.map { tso =>
+                    val varName = callUniqueName(call, cState) ++ "." ++ tso.unqualifiedName
+                    IR.CVar(varName, WdlArrayType(tso.wdlType), tso.ast)
+                }
+            case decl:Declaration =>
+                Vector(IR.CVar(decl.unqualifiedName, WdlArrayType(decl.wdlType), decl.ast))
+            case x =>
+                throw new Exception(cState.cef.notCurrentlySupported(
+                                        x.ast, s"Unimplemented scatter element"))
         }.flatten.toVector
-        preVars ++ callOutputVars
+        preVars ++ scOutputVars
     }
 
     // Compile a scatter block. This includes the block of declarations that
@@ -704,18 +712,13 @@ workflow w {
                        taskApplets: Map[String, (IR.Applet, Vector[IR.CVar])],
                        env : CallEnv,
                        cState: State) : (IR.Stage, IR.Applet) = {
+        Utils.trace(cState.verbose, s"compiling scatter ${stageName}")
         val (topDecls, rest) = Utils.splitBlockDeclarations(scatter.children.toList)
         val calls : Seq[Call] = rest.map {
             case call: Call => call
             case x =>
                 throw new Exception(cState.cef.notCurrentlySupported(x.ast, "scatter element"))
         }
-        if (calls.isEmpty)
-            throw new Exception(cState.cef.notCurrentlySupported(scatter.ast, "scatter with no calls"))
-
-        // first call name. This is guaranteed to be unique within a
-        // workflow, because call names must be unique (or aliased)
-        Utils.trace(cState.verbose, s"compiling scatter ${stageName}")
 
         // Figure out the closure
         var closure = Map.empty[String, LinkedVar]
@@ -757,7 +760,7 @@ workflow w {
                 assert(env contains varName)
                 Some(IR.CVar(varName, cVar.wdlType, cVar.ast))
         }.flatten.toVector
-        val outputVars = scGenOutputs(preDecls, calls, cState)
+        val outputVars = scGenOutputs(preDecls, scatter.children, cState)
         val wdlCode = scGenWorklow(preDecls, scatter, taskApplets, inputVars, outputVars, cState)
         val applet = IR.Applet(wf.unqualifiedName ++ "_" ++ stageName,
                                inputVars ++ extraTaskInputVars,
