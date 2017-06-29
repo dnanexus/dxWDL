@@ -91,6 +91,7 @@ object WdlYamlTree {
             case call: TaskCall => apply(call)
             case ssc: Scatter => apply(ssc)
             case swf: Workflow => apply(swf)
+            case decl: Declaration => apply(decl)
         }
         YamlObject(
             YamlString("scatter") -> YamlObject(
