@@ -141,8 +141,19 @@ case class WdlPrettyPrinter(fqnFlag: Boolean, oldNS: Option[WdlNamespace]) {
         buildBlock(s"task ${task.unqualifiedName}", body, level)
     }
 
+    /* There are several legal formats
+
+    output {
+        Array[String] keys = value
+        bam_file
+        Add.sum
+     */
     def apply(wfo: WorkflowOutput, level: Int) : Vector[String] = {
-        val ln = s"${wfo.unqualifiedName}"
+        val ln =
+            if (wfo.unqualifiedName == wfo.requiredExpression.toWdlString)
+                wfo.unqualifiedName
+            else
+                wfo.toWdlString
         Vector(indentLine(ln, level))
     }
 

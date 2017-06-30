@@ -259,6 +259,7 @@ object RunnerScatter {
             // calculate declarations at the top of the block
             val bValues = RunnerEval.evalDeclarations(topDecls, envWithIterItem)
             var innerEnv = bValues.map{ case(key, bVal) => key -> bVal.wvl }.toMap
+            //scOutputs = scOutputs :+ innerEnv
             innerEnv = innerEnv ++ envWithIterItem
 
             calls.foreach { case (call,apLinkInfo) =>

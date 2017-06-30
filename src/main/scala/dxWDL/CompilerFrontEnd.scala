@@ -692,7 +692,10 @@ workflow w {
                     IR.CVar(varName, WdlArrayType(tso.wdlType), tso.ast)
                 }
             case decl:Declaration =>
-                Vector(IR.CVar(decl.unqualifiedName, WdlArrayType(decl.wdlType), decl.ast))
+                // TODO: need to add these to the output too. The problem is that,
+                // currently, workflow outputs do not work.
+                //Vector(IR.CVar(decl.unqualifiedName, WdlArrayType(decl.wdlType), decl.ast))
+                Vector.empty
             case x =>
                 throw new Exception(cState.cef.notCurrentlySupported(
                                         x.ast, s"Unimplemented scatter element"))
@@ -783,9 +786,13 @@ workflow w {
                         taskApplets: Map[String, (IR.Applet, Vector[IR.CVar])],
                         cState: State) : IR.Workflow = {
         Utils.trace(cState.verbose, "FrontEnd: compiling workflow")
+
+        // Get rid of workflow output declarations
+        val children = wf.children.filter(x => !x.isInstanceOf[WorkflowOutput])
+
         // Lift all declarations that can be evaluated at the top of
         // the block.
-        val (topDecls, wfBody) = Utils.splitBlockDeclarations(wf.children.toList)
+        val (topDecls, wfBody) = Utils.splitBlockDeclarations(children.toList)
 
         // Create a preliminary stage to handle workflow inputs, and top-level
         // declarations.
@@ -819,7 +826,7 @@ workflow w {
                     (stage, None)
                 case BlockScope(x) =>
                     throw new Exception(cState.cef.notCurrentlySupported(
-                                            x.ast, "Workflow element"))
+                                            x.ast, s"Workflow element type=${x}"))
             }
             // Add bindings for the output variables. This allows later calls to refer
             // to these results. In case of scatters, there is no block name to reference.
