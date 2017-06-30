@@ -364,7 +364,7 @@ object InstanceTypeDB extends DefaultJsonProtocol {
         return true
     }
 
-    def queryNoPrices(dxProject: DXProject) : InstanceTypeDB = {
+    private def queryNoPrices(dxProject: DXProject) : InstanceTypeDB = {
         // Figure out the available instances by describing the project
         val allAvailableIT = queryAvailableInstanceTypes(dxProject)
 
@@ -376,7 +376,7 @@ object InstanceTypeDB extends DefaultJsonProtocol {
         InstanceTypeDB(iTypes)
     }
 
-    def queryWithPrices(dxProject: DXProject) : InstanceTypeDB = {
+    private def queryWithPrices(dxProject: DXProject) : InstanceTypeDB = {
         // Figure out the available instances by describing the project
         val allAvailableIT = queryAvailableInstanceTypes(dxProject)
 
