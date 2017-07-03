@@ -330,6 +330,7 @@ object CompilerPreprocess {
     // are used.
     private def checkReservedWords(ns: WdlNamespace, cState: State) : Unit = {
         def checkVarName(varName: String, ast: Ast) : Unit = {
+            //Utils.trace(cState.verbose, s"Checking variable name ${varName}")
             if (Utils.isGeneratedVar(varName))
                 throw new Exception(cState.cef.notCurrentlySupported(
                                         ast,
@@ -346,10 +347,13 @@ object CompilerPreprocess {
             }
         }
         ns match {
-            case nswf: WdlNamespaceWithWorkflow => deepCheck(nswf.children)
+            case nswf: WdlNamespaceWithWorkflow => deepCheck(nswf.workflow.children)
             case _ => ()
         }
-        ns.tasks.map(task => deepCheck(task.outputs))
+        ns.tasks.map{ task =>
+            deepCheck(task.outputs)
+            deepCheck(task.declarations)
+        }
     }
 
     def apply(wdlSourceFile : Path,
