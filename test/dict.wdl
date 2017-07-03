@@ -12,7 +12,7 @@ workflow dict {
       String value = pair.left
     }
     output {
-      Array[String] keys = value
+#      Array[String] keys = value
 #      value
     }
 }

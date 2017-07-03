@@ -103,19 +103,15 @@ object WdlYamlTree {
     }
 
     def apply(wf: Workflow): YamlObject = {
-        val children = wf.children.map {
+        val wfChildren = wf.children.filter(x => !x.isInstanceOf[WorkflowOutput])
+        val children = wfChildren.map {
             case call: TaskCall => apply(call)
             case sc: Scatter => apply(sc)
             case swf: Workflow => apply(swf)
             case decl: Declaration => apply(decl)
         }
         val outputs = wf.outputs.map { wod =>
-            // TODO: figure out how to check for wildcards
-/*            if (wod.wildcard) {
-                YamlObject(YamlString("fqn") -> YamlString(wod.fullyQualifiedName), YamlString("wildcard") -> YamlBoolean(true))
-            } else {*/
-                YamlObject(YamlString("fqn") -> YamlString(wod.fullyQualifiedName))
-//            }
+            YamlObject(YamlString("fqn") -> YamlString(wod.fullyQualifiedName))
         }
         YamlObject(
             YamlString("workflow") -> YamlObject(

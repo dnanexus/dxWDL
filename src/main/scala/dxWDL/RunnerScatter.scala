@@ -33,7 +33,7 @@ import scala.collection.JavaConverters._
 import scala.collection.mutable.HashMap
 import spray.json._
 import spray.json.DefaultJsonProtocol
-import Utils.AppletLinkInfo
+import Utils.{AppletLinkInfo, isGeneratedVar}
 import wdl4s._
 import wdl4s.expression._
 import wdl4s.parser.WdlParser.{Ast, AstNode, Terminal}
@@ -213,7 +213,7 @@ object RunnerScatter {
             return Map.empty[String, JsValue]
         }
 
-        // Map each individual variable to a list of output fields
+        // Map each individual variable to a list of output fields.
         val outputs : List[(String, JsonNode)] =
             scOutputs.map{ scEnv =>
                 scEnv.map{ case (varName, wvl) =>
@@ -235,9 +235,9 @@ object RunnerScatter {
     }
 
     // Launch a job for each call, and link them with JBORs. Do not
-    // wait for the jobs to complete, because that would
-    // require leaving auxiliary instance up for the duration of the subjob executions.
-    // Return the variables calculated.
+    // wait for the jobs to complete, because that would require
+    // leaving an auxiliary instance up for the duration of the subjob
+    // executions.  Return the variables calculated.
     def evalScatter(scatter : Scatter,
                     collection : WdlVarLinks,
                     calls : Seq[(Call, AppletLinkInfo)],
@@ -259,7 +259,15 @@ object RunnerScatter {
             // calculate declarations at the top of the block
             val bValues = RunnerEval.evalDeclarations(topDecls, envWithIterItem)
             var innerEnv = bValues.map{ case(key, bVal) => key -> bVal.wvl }.toMap
-            //scOutputs = scOutputs :+ innerEnv
+            val topOutputs = innerEnv.filter{
+                case (varName, _) => !isGeneratedVar(varName)
+            }
+            val tmpVars =
+                bValues.filter{ case (varName, bVal) => isGeneratedVar(varName) }
+                    .map{ case (varName, bVal) => varName -> bVal.wdlValue }
+                    .toMap
+            // export top variables
+            scOutputs = scOutputs :+ topOutputs
             innerEnv = innerEnv ++ envWithIterItem
 
             calls.foreach { case (call,apLinkInfo) =>
@@ -282,6 +290,8 @@ object RunnerScatter {
                     cleanup(iterElem.wdlValue)
                 case None => ()
             }
+            // cleanup temporary variables
+            tmpVars.foreach{ case (varName, wvl ) => cleanup(wvl) }
         }
 
         // Gather phase. Collect call outputs in arrays, do not wait
@@ -343,8 +353,8 @@ object RunnerScatter {
 
         // Evaluate the expressions prior to the scatter, and add them to the environment.
         // This is the environment outside the loop.
-        val inputWvls = evalTopDeclarations(wf.children, inputs)
-        val outScopeEnv = inputs ++ inputWvls
+        val preDecls = evalTopDeclarations(wf.children, inputs)
+        val outScopeEnv = inputs ++ preDecls
         val scatter : Scatter = findScatter(wf)
 
         // Lookup the array we are looping on, it is guarantied to be a variable.
@@ -365,8 +375,16 @@ object RunnerScatter {
         val applets : Seq[(Call, AppletLinkInfo)] = findAppletsInScatterBlock(scatter, linkInfo)
         val outputs : Map[String, JsValue] = evalScatter(scatter, collElements, applets, outScopeEnv, rState)
 
+        // Add the expressions before the scatter to the outputs
+        val topDeclOutputs: Map[String, JsValue] = preDecls
+            .filter{ case (varName, _) => !isGeneratedVar(varName) }
+            .map{ case (varName, wvl) => WdlVarLinks.genFields(wvl, varName) }
+            .flatten
+            .map{ case (varName, js) => varName -> Utils.jsValueOfJsonNode(js) }
+            .toMap
+
         // write the outputs to the job_output.json file
-        val json = JsObject(outputs)
+        val json = JsObject(outputs ++ topDeclOutputs)
         val ast_pp = json.prettyPrint
         System.err.println(s"outputs = ${ast_pp}")
         Utils.writeFileContent(jobOutputPath, ast_pp)

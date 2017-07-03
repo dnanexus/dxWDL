@@ -41,7 +41,7 @@ object CompilerPreprocess {
                               bottom: Vector[Scope])
 
     def genTmpVarName() : String = {
-        val tmpVarName: String = s"xtmp${tmpVarCnt}"
+        val tmpVarName: String = s"${Utils.TMP_VAR_NAME_PREFIX}${tmpVarCnt}"
         tmpVarCnt = tmpVarCnt + 1
         tmpVarName
     }
@@ -326,6 +326,32 @@ object CompilerPreprocess {
         System.err.println(s"Wrote simplified WDL to ${simpleWdl.toString}")
     }
 
+    // Make a pass on all declarations, and make sure no reserved words or prefixes
+    // are used.
+    private def checkReservedWords(ns: WdlNamespace, cState: State) : Unit = {
+        def checkVarName(varName: String, ast: Ast) : Unit = {
+            if (Utils.isGeneratedVar(varName))
+                throw new Exception(cState.cef.notCurrentlySupported(
+                                        ast,
+                                        s"Reserved variable prefix"))
+        }
+        def deepCheck(children: Seq[Scope]) : Unit = {
+            children.foreach {
+                case ssc:Scatter =>
+                    checkVarName(ssc.item, ssc.ast)
+                    deepCheck(ssc.children)
+                case decl:DeclarationInterface =>
+                    checkVarName(decl.unqualifiedName, decl.ast)
+                case _ => ()
+            }
+        }
+        ns match {
+            case nswf: WdlNamespaceWithWorkflow => deepCheck(nswf.children)
+            case _ => ()
+        }
+        ns.tasks.map(task => deepCheck(task.outputs))
+    }
+
     def apply(wdlSourceFile : Path,
               verbose: Boolean) : WdlNamespace = {
         Utils.trace(verbose, "Preprocessing pass")
@@ -352,6 +378,7 @@ object CompilerPreprocess {
         val tm = ns.terminalMap
         val cef = new CompilerErrorFormatter(tm)
         val cState = State(cef, tm, verbose)
+        checkReservedWords(ns, cState)
 
         // Process the original WDL file,
         // Do not modify the tasks
