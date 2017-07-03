@@ -1,5 +1,8 @@
 # Release Notes
 
+## 0.33
+- Support WDL maps
+
 ## 0.32
 - Support archive and force flags a la `dx build`. Applets and workflows
   are *not* deleted by default, the --force flag must be provided.

@@ -13,7 +13,7 @@ features will be added as the project matures and according to user interest.
 The main WDL features not yet supported are:
 - Nested workflows (sub-workflows)
 - Conditionals
-- Maps and objects
+- Objects
 
 ## Getting started
 Prerequisites: DNAnexus platform account, dx-toolkit, java 8+, python 2.7.
