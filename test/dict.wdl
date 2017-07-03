@@ -12,6 +12,20 @@ task createFruit {
     }
 }
 
+# construct a map that uses an array of files
+task createMultiFruit {
+    command <<<
+      echo "Pear" > P.txt
+      echo "Tomato" > T.txt
+      echo "Cherry" > C.txt
+      echo "Carrots" > C2.txt
+    >>>
+    output {
+        Map[String, Array[File]] m = {"P": ["P.txt"], "T": ["T.txt"], "C": ["C.txt", "C2.txt"]}
+    }
+}
+
+
 workflow dict {
     Map[String, Int] mSI = {"a": 1, "b": 2}
     Map[Int, Int] mII = {1: 10, 2: 11}
@@ -19,6 +33,7 @@ workflow dict {
 #    Pair[Int, Float] p = {
 
     call createFruit
+    call createMultiFruit
 
     scatter(pair in mSI) {
         String valueSI = pair.left
