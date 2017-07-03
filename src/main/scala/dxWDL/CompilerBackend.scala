@@ -38,6 +38,10 @@ object CompilerBackend {
     //   Int  -> int
     //   Array[String] -> array:string
     //
+    // Arrays can be empty, which is why they are always marked "optional".
+    // This notifies the platform runtime system not to throw an exception
+    // for an empty input/output array.
+    //
     // Ragged arrays, maps, and objects, cannot be mapped in such a trivial way.
     // These are called "Complex Types", or "Complex". They are handled
     // by passing a JSON structure and a vector of dx:files.
@@ -54,7 +58,8 @@ object CompilerBackend {
         def mkPrimitiveArray(dxType: String) : Vector[Map[String, JsValue]] = {
             Vector(Map("name" -> JsString(name),
                        "help" -> JsString(wdlType.toWdlString),
-                       "class" -> JsString("array:" ++ dxType)))
+                       "class" -> JsString("array:" ++ dxType),
+                       "optional" -> JsBoolean(true)))
         }
         def mkComplex() : Vector[Map[String,JsValue]] = {
             // A JSON structure, passed as a file
@@ -67,7 +72,8 @@ object CompilerBackend {
                        "help" -> JsString(wdlType.toWdlString),
                        "class" -> JsString("file")),
                    Map("name" -> JsString(name + Utils.FLAT_FILES_SUFFIX),
-                       "class" -> JsString("array:file")))
+                       "class" -> JsString("array:file"),
+                       "optional" -> JsBoolean(true)))
         }
         def nonOptional(t : WdlType) : Vector[Map[String, JsValue]] = {
             t match {
@@ -90,27 +96,14 @@ object CompilerBackend {
             }
         }
 
-        val makeOptional = wdlType match {
+        val vec: Vector[Map[String,JsValue]] = nonOptional(Utils.stripOptional(wdlType))
+        wdlType match {
             case WdlOptionalType(t) =>
                 // An optional variable, make it an optional dx input/output
-                true
-
-            case WdlArrayType(x) if x != WdlArrayType =>
-                // A uni-dimentional, non optional array. It need to
-                // be declared optional. Otherwise, at runtime, if the
-                // array is empty, the job-manager complains and errors out
-                // the job.
-                true
-
+                vec.map{ m => JsObject(m + ("optional" -> JsBoolean(true))) }
             case _ =>
-                // all other cases
-                false
+                vec.map{ m => JsObject(m)}
         }
-        val vec: Vector[Map[String,JsValue]] = nonOptional(Utils.stripOptional(wdlType))
-        if (makeOptional)
-            vec.map{ m => JsObject(m + ("optional" -> JsBoolean(true))) }
-        else
-            vec.map{ m => JsObject(m)}
     }
 
     def genBashScriptTaskBody(): String = {

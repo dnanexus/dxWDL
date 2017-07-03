@@ -13,15 +13,12 @@
 package dxWDL
 
 import java.io.{File, FileWriter, PrintWriter}
-import java.nio.file.{Path, Paths}
+import java.nio.file.{Files, Path, Paths}
 import scala.collection.mutable.Queue
 import scala.util.{Failure, Success, Try}
+import wdl4s._
 import wdl4s.AstTools
 import wdl4s.AstTools.EnhancedAstNode
-import wdl4s.{Call, Declaration, Scatter, Scope,
-    Task, TaskCall, TaskOutput,
-    WdlExpression, WdlNamespace, WdlNamespaceWithWorkflow,
-    Workflow, WorkflowCall, WdlSource}
 import wdl4s.command.{ParameterCommandPart, StringCommandPart}
 import wdl4s.expression._
 import wdl4s.parser.WdlParser.{Ast, AstNode, Terminal}
@@ -44,7 +41,7 @@ object CompilerPreprocess {
                               bottom: Vector[Scope])
 
     def genTmpVarName() : String = {
-        val tmpVarName: String = s"xtmp${tmpVarCnt}"
+        val tmpVarName: String = s"${Utils.TMP_VAR_NAME_PREFIX}${tmpVarCnt}"
         tmpVarCnt = tmpVarCnt + 1
         tmpVarName
     }
@@ -82,9 +79,6 @@ object CompilerPreprocess {
         val inputs: Map[String, WdlExpression]  = call.inputMappings.map { case (key, expr) =>
             val rhs = expr.ast match {
                 case t: Terminal => expr
-                case a: Ast if a.isMemberAccess =>
-                    // Accessing something like A.B.C
-                    expr
                 case a: Ast =>
                     // replace an expression with a temporary variable
                     val tmpVarName = genTmpVarName()
@@ -279,11 +273,15 @@ object CompilerPreprocess {
                 // Be careful to add the indexing variable to the environment
                 val sscDefVars = definedVars + ssc.item
                 simplifyScatter(ssc, sscDefVars, cState)
-            case call:Call => Vector(call)
             case decl:Declaration =>
                 definedVars = definedVars + decl.unqualifiedName
                 Vector(decl)
-            case x => throw new Exception(s"Unimplemented workflow element ${x.toString}")
+            case wfo:WorkflowOutput => Vector(wfo)
+            case call:Call => Vector(call)
+            case x =>
+                throw new Exception(cState.cef.notCurrentlySupported(
+                                        x.ast,
+                                        s"Unimplemented workflow element"))
         }.flatten.toVector
         WdlRewrite.workflow(wf, children)
     }
@@ -325,20 +323,64 @@ object CompilerPreprocess {
         System.err.println(s"Wrote simplified WDL to ${simpleWdl.toString}")
     }
 
+    // Make a pass on all declarations, and make sure no reserved words or prefixes
+    // are used.
+    private def checkReservedWords(ns: WdlNamespace, cState: State) : Unit = {
+        def checkVarName(varName: String, ast: Ast) : Unit = {
+            //Utils.trace(cState.verbose, s"Checking variable name ${varName}")
+            if (Utils.isGeneratedVar(varName))
+                throw new Exception(cState.cef.notCurrentlySupported(
+                                        ast,
+                                        s"Reserved variable prefix"))
+        }
+        def deepCheck(children: Seq[Scope]) : Unit = {
+            children.foreach {
+                case ssc:Scatter =>
+                    checkVarName(ssc.item, ssc.ast)
+                    deepCheck(ssc.children)
+                case decl:DeclarationInterface =>
+                    checkVarName(decl.unqualifiedName, decl.ast)
+                case _ => ()
+            }
+        }
+        ns match {
+            case nswf: WdlNamespaceWithWorkflow => deepCheck(nswf.workflow.children)
+            case _ => ()
+        }
+        ns.tasks.map{ task =>
+            // check task inputs and outputs
+            deepCheck(task.outputs)
+            deepCheck(task.declarations)
+        }
+    }
+
     def apply(wdlSourceFile : Path,
               verbose: Boolean) : WdlNamespace = {
         Utils.trace(verbose, "Preprocessing pass")
 
         // Resolving imports. Look for referenced files in the
         // source directory.
-        val sourceDir = wdlSourceFile.getParent()
         def resolver(filename: String) : WdlSource = {
-            Utils.readFileContent(sourceDir.resolve(filename))
+            var sourceDir:Path = wdlSourceFile.getParent()
+            if (sourceDir == null) {
+                // source file has no parent directory, use the
+                // current directory instead
+                sourceDir = Paths.get(System.getProperty("user.dir"))
+            }
+            val p:Path = sourceDir.resolve(filename)
+            Utils.readFileContent(p)
         }
-        val ns = WdlNamespace.loadUsingPath(wdlSourceFile, None, Some(List(resolver))).get
+        val ns =
+            WdlNamespace.loadUsingPath(wdlSourceFile, None, Some(List(resolver))) match {
+                case Success(ns) => ns
+                case Failure(f) =>
+                    System.err.println("Error loading WDL source code")
+                    throw f
+            }
         val tm = ns.terminalMap
         val cef = new CompilerErrorFormatter(tm)
         val cState = State(cef, tm, verbose)
+        checkReservedWords(ns, cState)
 
         // Process the original WDL file,
         // Do not modify the tasks

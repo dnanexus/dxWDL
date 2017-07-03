@@ -77,6 +77,7 @@ object Utils {
     val MAX_HOURLY_RATE = 10.0
     val MAX_STRING_LEN = 8 * 1024     // Long strings cause problems with bash and the UI
     val SCATTER = "scatter"
+    val TMP_VAR_NAME_PREFIX = "xtmp"
     val UPLOAD_RETRY_LIMIT = DOWNLOAD_RETRY_LIMIT
     val UNIVERSAL_FILE_PREFIX = "dx://"
     val WDL_SNIPPET_FILENAME = "source.wdl"
@@ -86,6 +87,10 @@ object Utils {
 
     // Prefixes used for generated applets
     val reservedAppletPrefixes = List(SCATTER, COMMON)
+
+    def isGeneratedVar(varName: String) : Boolean = {
+        varName.startsWith(TMP_VAR_NAME_PREFIX)
+    }
 
     lazy val execDirPath : Path = {
         val currentDir = System.getProperty("user.dir")

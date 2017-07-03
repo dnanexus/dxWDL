@@ -141,17 +141,37 @@ case class WdlPrettyPrinter(fqnFlag: Boolean, oldNS: Option[WdlNamespace]) {
         buildBlock(s"task ${task.unqualifiedName}", body, level)
     }
 
+    /* There are several legal formats
+
+    output {
+        Array[String] keys = value
+        bam_file
+        Add.sum
+     */
     def apply(wfo: WorkflowOutput, level: Int) : Vector[String] = {
-        val ln = s"${wfo.unqualifiedName}"
+        val ln =
+            if (wfo.unqualifiedName == wfo.requiredExpression.toWdlString)
+                wfo.unqualifiedName
+            else
+                wfo.toWdlString
         Vector(indentLine(ln, level))
     }
 
     def apply(wf: Workflow, level: Int) : Vector[String] = {
-        val children = wf.children.map {
+        // split the workflow outputs from the other children, they
+        // are treated separately
+        //
+        // Currently, we are ignoring wfOutputs
+        val (wfChildren, wfOutputs) = wf.children.partition {
+            case _:WorkflowOutput => false
+            case _ => true
+        }
+
+        val children = wfChildren.map {
             case call: TaskCall => apply(call, level + 1)
             case sc: Scatter => apply(sc, level + 1)
             case decl: Declaration => apply(decl, level + 1)
-            case x => throw new Exception(s"Unimplemented workflow element ${x.toString}")
+            case x => throw new Exception(s"Unimplemented workflow element ${x.getClass.getName} ${x.toString}")
         }.flatten.toVector
 
         // The outputs variable is lazily calculated in the Workflow class. It includes code
