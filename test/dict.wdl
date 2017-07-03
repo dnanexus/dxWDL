@@ -1,11 +1,24 @@
 # Testing map functions
 import "library_math.wdl" as lib
 
+# create a map that has files as sub structures
+task createFruit {
+    command <<<
+      echo "Apple" > A.txt
+      echo "Mellon" > M.txt
+    >>>
+    output {
+        Map[String, File] m = {"Apple": "A.txt", "Mellon": "M.txt"}
+    }
+}
+
 workflow dict {
     Map[String, Int] mSI = {"a": 1, "b": 2}
     Map[Int, Int] mII = {1: 10, 2: 11}
     Map[Int, Float]  mIF = {1: 1.2, 10: 113.0}
-    Map[String, Boolean] mSB = {"x": true, "y": false, "z": true}
+#    Pair[Int, Float] p = {
+
+    call createFruit
 
     scatter(pair in mSI) {
         String valueSI = pair.left
@@ -16,9 +29,8 @@ workflow dict {
     }
 
     scatter(pair in mIF) {
-        Int x = pair.left
         call lib.Add as add {
-            input: a=x, b=5
+            input: a=pair.left, b=5
         }
     }
 
@@ -29,6 +41,7 @@ workflow dict {
       Array[String] keysSI = valueSI
       Array[Int] valuesII = valueII
       Array[Int] addition = add.result
+      Map[String, File] cfM = createFruit.m
 #      value
     }
 }

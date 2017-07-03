@@ -1,3 +1,4 @@
 {
-  "dict.keys" : ["a", "b"]
+  "scatter_1.valueSI" : ["a", "b"],
+  "scatter_2.valueII" : [10, 11]
 }
