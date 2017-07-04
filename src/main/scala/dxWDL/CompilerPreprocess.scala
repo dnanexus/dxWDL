@@ -79,6 +79,9 @@ object CompilerPreprocess {
         val inputs: Map[String, WdlExpression]  = call.inputMappings.map { case (key, expr) =>
             val rhs = expr.ast match {
                 case t: Terminal => expr
+                case a: Ast if a.isMemberAccess =>
+                    // Accessing something like A.B.C
+                    expr
                 case a: Ast =>
                     // replace an expression with a temporary variable
                     val tmpVarName = genTmpVarName()

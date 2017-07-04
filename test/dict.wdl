@@ -30,7 +30,7 @@ workflow dict {
     Map[String, Int] mSI = {"a": 1, "b": 2}
     Map[Int, Int] mII = {1: 10, 2: 11}
     Map[Int, Float]  mIF = {1: 1.2, 10: 113.0}
-#    Pair[Int, Float] p = {
+    Pair[Int, String] p = (3, "carrots and oranges")
 
     call createFruit
     call createMultiFruit
@@ -44,8 +44,9 @@ workflow dict {
     }
 
     scatter(pair in mIF) {
+        Int x = pair.left
         call lib.Add as add {
-            input: a=pair.left, b=5
+            input: a=x, b=5
         }
     }
 
