@@ -44,9 +44,9 @@ workflow dict {
     }
 
     scatter(pair in mIF) {
-        Int x = pair.left
+#        Int x = pair.left
         call lib.Add as add {
-            input: a=x, b=5
+            input: a=pair.left, b=5
         }
     }
 

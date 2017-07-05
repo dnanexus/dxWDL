@@ -229,32 +229,51 @@ object WdlVarLinks {
         }
     }
 
-    // Calculate a WdlValue from the dx-links structure. If [force] is true,
-    // any files included in the structure will be downloaded.
-    def eval(wvl: WdlVarLinks, force: Boolean) : WdlValue = {
+    private def getRawJsValue(wvl: WdlVarLinks) : JsValue = {
         val jsRaw: JsValue = wvl.dxlink match {
             case DxlJsValue(jsn) => jsn
             case DxlComplexValue(jsn,_) => jsn
             case _ =>
                 throw new AppInternalException(s"Unsupported conversion from ${wvl.dxlink} to WdlValue")
         }
-        val jsValue =
-            if (!hasNativeDxType(wvl.wdlType)) {
-                jsRaw match {
-                    case JsObject(_) if isDxFile(jsRaw) =>
-                        // The JSON points to a platform file, it needs
-                        // to be downloaded and parsed.
-                        val dxfile = dxFileOfJsValue(jsRaw)
-                        val buf = Utils.downloadString(dxfile)
-                        buf.parseJson
-                    case _ =>
-                        //System.err.println(s"Non native DX type ${wvl.wdlType.toWdlString}")
-                        jsRaw
-                }
-            } else {
-                jsRaw
+        if (!hasNativeDxType(wvl.wdlType)) {
+            jsRaw match {
+                case JsObject(_) if isDxFile(jsRaw) =>
+                    // The JSON points to a platform file, it needs
+                    // to be downloaded and parsed.
+                    val dxfile = dxFileOfJsValue(jsRaw)
+                    val buf = Utils.downloadString(dxfile)
+                    buf.parseJson
+                case _ =>
+                    //System.err.println(s"Non native DX type ${wvl.wdlType.toWdlString}")
+                    jsRaw
             }
+        } else {
+            jsRaw
+        }
+    }
+
+    // Calculate a WdlValue from the dx-links structure. If [force] is true,
+    // any files included in the structure will be downloaded.
+    def eval(wvl: WdlVarLinks, force: Boolean) : WdlValue = {
+        val jsValue = getRawJsValue(wvl)
         evalCore(wvl.wdlType, jsValue, force)
+    }
+
+    // Access a field in a complex WDL type, such as Pair, Map, Object.
+    def memberAccess(wvl: WdlVarLinks, field: String) : WdlVarLinks = {
+        val jsValue = getRawJsValue(wvl)
+
+        (wvl.wdlType, jsValue) match {
+            case (WdlPairType(lType, rType), JsArray(vec)) =>
+                field match {
+                    case "left" =>  WdlVarLinks(lType, DxlJsValue(vec(0)))
+                    case "right" =>  WdlVarLinks(rType, DxlJsValue(vec(1)))
+                    case _ => throw new Exception(s"Unknown field ${field} in pair ${wvl}")
+                }
+            case _ =>
+                throw new Exception(s"member access to field ${field} wvl=${wvl}")
+        }
     }
 
     private def jsStringLimited(buf: String) : JsValue = {

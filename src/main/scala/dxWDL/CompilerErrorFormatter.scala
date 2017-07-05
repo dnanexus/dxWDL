@@ -70,4 +70,13 @@ case class CompilerErrorFormatter(terminalMap: Map[Terminal, WdlSource]) {
             |""".stripMargin
 
     }
+
+    def cannotParseMemberAccess(ast: Ast) = {
+        val t: Terminal = AstTools.findTerminals(ast).head
+        s"""|Error parsing expression, which is supposed to be a member access
+            |
+            |${pointToSource(t)}
+            |""".stripMargin
+    }
+
 }
