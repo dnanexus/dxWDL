@@ -26,6 +26,11 @@ object DxFunctions extends WdlStandardLibraryFunctions {
         remoteFiles(path) = dxfile
     }
 
+    def unregisterRemoteFile(path: String) = {
+        if (remoteFiles contains path)
+            remoteFiles.remove(path)
+    }
+
     // Make sure a file is on local disk. Download it if
     // necessary.
     private def handleRemoteFile(path: String) = {

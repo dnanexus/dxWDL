@@ -78,8 +78,8 @@ object RunnerScatter {
 
     // find the sequence of applets inside the scatter block. In the example,
     // these are: [inc1, inc2]
-    def findAppletsInScatterBlock(scatter : Scatter,
-                                  linkInfo: Map[String, AppletLinkInfo]) : Seq[(Call, AppletLinkInfo)] = {
+    private def findAppletsInScatterBlock(scatter : Scatter,
+                                          linkInfo: Map[String, AppletLinkInfo]) : Seq[(Call, AppletLinkInfo)] = {
         // Match each call with its dx:applet
         scatter.children.map {
             case call: TaskCall =>
@@ -94,6 +94,7 @@ object RunnerScatter {
             case _ => None
         }.flatten
     }
+
 
     // Evaluate a call input expression, and return a WdlVarLink structure. It
     // is passed on to another dx:job.
@@ -122,49 +123,34 @@ object RunnerScatter {
                 }
 
             case a: Ast if a.isMemberAccess =>
-                // Accessing something like A.B.C
-                val rhs:String = a.getAttribute("rhs").sourceString
-                val lhs:String = a.getAttribute("lhs") match {
-                    case x:Terminal => x.sourceString
-                    case _ =>  throw new Exception(rState.cef.cannotParseMemberAccess(a))
-                }
-                env.get(lhs) match {
-                    case Some(ElemTop(wvl)) =>
-                        // We have a map, pair, or more complex data type, and we need
-                        // to do a lookup for member [rhs].
-                        WdlVarLinks.memberAccess(wvl, rhs)
-                    case Some(ElemCall(callOutputs)) =>
-                        callOutputs.get(rhs) match {
-                            case None =>
-                                System.err.println(s"Cannot find ${rhs} in call environment=${callOutputs}")
-                                throw new Exception(rState.cef.undefinedMemberAccess(a))
-                            case Some(wvl) => wvl
+                // An expression such as A.B.C.D. The components
+                // are (A,B,C,D), and there must be at least two of them.
+                val fqn = WdlExpression.toString(a)
+                val components = fqn.split("\\.").toList
+                components match {
+                    case eTop::eMid::tail if (env contains eTop) =>
+                        env(eTop) match {
+                            case ElemTop(wvl) =>
+                                // This is a map, pair, or object, and we need
+                                // to do a member lookup.
+                                WdlVarLinks.memberAccess(wvl, eMid::tail)
+                            case ElemCall(callOutputs) =>
+                                // Accessing a returned value from a call
+                                callOutputs.get(eMid) match {
+                                    case Some(wvl) if (!tail.isEmpty) => WdlVarLinks.memberAccess(wvl, tail)
+                                    case _ =>
+                                        throw new Exception(rState.cef.undefinedMemberAccess(a))
+                                }
                         }
-                    case None =>
-                        System.err.println(s"Cannot find ${lhs} in env=${env}")
+                    case _ =>
                         throw new Exception(rState.cef.undefinedMemberAccess(a))
                 }
+
             case _:Ast =>
                 throw new Exception(rState.cef.expressionMustBeConstOrVar(expr))
         }
     }
 
-
-    // remove persistent resources used by this variable
-    private def cleanup(wdlValue: WdlValue) : Unit = {
-        wdlValue match {
-            case WdlSingleFile(path) =>
-                Files.delete(Paths.get(path))
-            case WdlArray(WdlArrayType(WdlFileType), files) =>
-                files.map{ case x : WdlSingleFile =>
-                    val path = x.value
-                    Files.delete(Paths.get(path))
-                }
-            // TODO: there may be other structures that have files as
-            // members, we need to delete those files as well.
-            case _ => ()
-        }
-    }
 
     /**
       In the workflow below, we want to correctly pass the [k] value
@@ -312,16 +298,17 @@ object RunnerScatter {
                 scOutputs = scOutputs :+ jobOutputs
             }
 
-            // Cleanup the index variable; it could be a file holding persistent resources.
-            // In particular, the file name is an important resource, if it is not removed,
-            // the name cannot be reused in the next loop iteration.
+            // Cleanup the index variable, and the temporary
+            // variables. They may be holding persistent resources. In
+            // particular, a file name is an important resource, if
+            // it is not removed, the name cannot be reused in the
+            // next loop iteration.
             bValues.get(scatter.item) match {
                 case Some(iterElem: BValue) =>
-                    cleanup(iterElem.wdlValue)
+                    WdlVarLinks.deleteLocal(iterElem.wdlValue)
                 case None => ()
             }
-            // cleanup temporary variables
-            tmpVars.foreach{ case (varName, wvl ) => cleanup(wvl) }
+            tmpVars.foreach{ case (_, wdlValue ) => WdlVarLinks.deleteLocal(wdlValue) }
         }
 
         // Gather phase. Collect call outputs in arrays, do not wait
