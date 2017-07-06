@@ -32,5 +32,9 @@ class InstaceTypeDBTest extends FlatSpec with BeforeAndAfterEach with OneInstanc
         assert(db.apply(Some(WdlString("2 GB")),
                         Some(WdlString("local-disk 100 HDD")),
                         None) == "mem1_ssd1_x8")
+
+        assert(db.apply(Some(WdlString("2.1GB")),
+                        Some(WdlString("local-disk 100 HDD")),
+                        None) == "mem1_ssd1_x8")
     }
 }

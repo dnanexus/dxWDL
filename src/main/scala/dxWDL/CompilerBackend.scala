@@ -61,9 +61,15 @@ object CompilerBackend {
                        "class" -> JsString("array:" ++ dxType),
                        "optional" -> JsBoolean(true)))
         }
-        def mkComplex() : Vector[Map[String,JsValue]] = {
+        def mkComplexNoFiles() : Vector[Map[String,JsValue]] = {
             // A JSON structure, passed as a file
-            // A vector of platform files.
+            Vector(Map("name" -> JsString(name),
+                       "help" -> JsString(wdlType.toWdlString),
+                       "class" -> JsString("file")))
+        }
+        def mkComplex() : Vector[Map[String,JsValue]] = {
+            // A large JSON structure passed as a file, and a
+            // vector of platform files.
             //
             // Note: the help field for the file vector is empty,
             // so that the WdlVarLinks.loadJobInputsAsLinks method
@@ -92,6 +98,7 @@ object CompilerBackend {
                 case WdlArrayType(WdlFileType) => mkPrimitiveArray("file")
 
                 // complex types, that may contains files
+                case _  if !(WdlVarLinks.mayHaveFiles(t)) =>  mkComplexNoFiles()
                 case _ => mkComplex()
             }
         }

@@ -44,20 +44,32 @@ workflow dict {
     }
 
     scatter(pair in mIF) {
-#        Int x = pair.left
         call lib.Add as add {
             input: a=pair.left, b=5
         }
     }
 
+    # accessing a pair at the top level of the
+    # workflow
+#    Pair[Int, Int] p2 = (5,8)
+#    call lib.Add as add2 {
+#        input: a=p2.left, b=5
+#    }
+
+    # Accessing a pair inside a pair, wdl4s doesn't allow that yet
+#    Pair[Int, Pair[Int, String]] pp = (23,p)
+#    call lib.Add as add3 {
+#        input: a=pp.left, b=pp.right.left
+#    }
+
 # This should cause a compilation failure
 #    Int xtmp5=99
 
     output {
-      Array[String] keysSI = valueSI
-      Array[Int] valuesII = valueII
-      Array[Int] addition = add.result
-      Map[String, File] cfM = createFruit.m
-#      value
+        Array[String] keysSI = valueSI
+        Array[Int] valuesII = valueII
+        Array[Int] addition = add.result
+        Map[String, File] cfM = createFruit.m
+#        Int a2 = add2.result
     }
 }

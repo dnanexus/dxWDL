@@ -151,6 +151,30 @@ object WdlVarLinks {
         }
     }
 
+    // Could a structure of this type include Files? Some examples:
+    // Array[Int]        false
+    // Map[String,File]  true
+    // Object            true
+    //
+    // Objects may include files, because their types are only
+    // known at runtime
+    def mayHaveFiles(wdlType: WdlType) : Boolean = {
+        wdlType match {
+            // base cases
+            case WdlBooleanType | WdlIntegerType | WdlFloatType | WdlStringType => false
+            case WdlFileType => true
+            case WdlObjectType => true
+
+            // recursion
+            case WdlOptionalType(t) => mayHaveFiles(t)
+            case WdlArrayType(t) => mayHaveFiles(t)
+            case WdlPairType(lType, rType) =>
+                mayHaveFiles(lType) || mayHaveFiles(rType)
+            case WdlMapType(keyType, valueType) =>
+                mayHaveFiles(keyType) || mayHaveFiles(valueType)
+        }
+    }
+
     // Search through a JSON value for all the dx:file links inside it. Returns
     // those as a vector.
     private def findDxFiles(jsValue: JsValue) : Vector[DXFile] = {
@@ -489,8 +513,12 @@ object WdlVarLinks {
         if (hasNativeDxType(wdlType)) {
             // Types that are supported natively in DX
             List(mkSimple())
+        } else if (!mayHaveFiles(wdlType)) {
+            // Complex type that is guarantied to have no files. It can be mapped
+            // into a single JSON structure
+            List(mkSimple())
         } else {
-            // Complex types requiring two fields: a JSON structure, and a flat array of files.
+            // Most general complex type requiring two fields: a JSON structure, and a flat array of files.
             mkComplex().toList
         }
     }

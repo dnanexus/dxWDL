@@ -24,7 +24,7 @@ logLevel in assembly := Level.Info
 assemblyOutputPath in assembly := file("applet_resources/resources/dxWDL.jar")
 
 libraryDependencies ++= Seq(
-    "org.broadinstitute" %% "wdl4s" % "0.12",
+    "org.broadinstitute" %% "wdl4s" % "0.13",
     "com.google.code.findbugs" % "jsr305" % "1.3.+",
     "io.spray" %% "spray-json" % "1.3.2",
     "net.jcazevedo" %% "moultingyaml" % "0.4.0",
