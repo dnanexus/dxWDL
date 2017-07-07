@@ -25,12 +25,24 @@ task createMultiFruit {
     }
 }
 
+task makeSalad {
+    Pair[String, String] veggies
+    Pair[String, String] fruit
+    command <<<
+       echo ${veggies.left}
+       echo ${veggies.right}
+       echo ${fruit.left}
+       echo ${fruit.right}
+    >>>
+    output {
+       Array[String] ingredients = read_lines(stdout())
+    }
+}
 
 workflow dict {
     Map[String, Int] mSI = {"a": 1, "b": 2}
     Map[Int, Int] mII = {1: 10, 2: 11}
     Map[Int, Float]  mIF = {1: 1.2, 10: 113.0}
-    Pair[Int, String] p = (3, "carrots and oranges")
 
     call createFruit
     call createMultiFruit
@@ -49,12 +61,20 @@ workflow dict {
         }
     }
 
-    # accessing a pair at the top level of the
-    # workflow
-#    Pair[Int, Int] p2 = (5,8)
-#    call lib.Add as add2 {
-#        input: a=p2.left, b=5
-#    }
+    # accessing members of a pair structure
+    Pair[Int, Int] p2 = (5, 8)
+    call lib.Multiply as mul {
+        input: a=p2.left, b=p2.right
+    }
+    call lib.Inc as inc {
+        input: i=mul.result
+    }
+
+    Pair[String, String] v = ("carrots", "oranges")
+    Pair[String, String] f = ("pear", "coconut")
+    call makeSalad{
+        input: veggies=v, fruit=f
+    }
 
     # Accessing a pair inside a pair, wdl4s doesn't allow that yet
 #    Pair[Int, Pair[Int, String]] pp = (23,p)
@@ -70,6 +90,7 @@ workflow dict {
         Array[Int] valuesII = valueII
         Array[Int] addition = add.result
         Map[String, File] cfM = createFruit.m
-#        Int a2 = add2.result
+        Int mul_res = mul.result
+        Int inc_res = inc.result
     }
 }

@@ -32,15 +32,15 @@ object CompilerPreprocess {
 
     // Compiler state.
     // Packs common arguments passed between methods.
-    case class State(cef: CompilerErrorFormatter,
-                     terminalMap: Map[Terminal, WdlSource],
+    case class State(wf: Workflow,
+                     cef: CompilerErrorFormatter,
                      verbose: Boolean)
 
     case class DeclReorgState(definedVars: Set[String],
                               top: Vector[Scope],
                               bottom: Vector[Scope])
 
-    def genTmpVarName() : String = {
+    private def genTmpVarName() : String = {
         val tmpVarName: String = s"${Utils.TMP_VAR_NAME_PREFIX}${tmpVarCnt}"
         tmpVarCnt = tmpVarCnt + 1
         tmpVarName
@@ -48,7 +48,7 @@ object CompilerPreprocess {
 
     // Add a suffix to a filename, before the regular suffix. For example:
     //  xxx.wdl -> xxx.simplified.wdl
-    def addFilenameSuffix(src: Path, secondSuffix: String) : String = {
+    private def addFilenameSuffix(src: Path, secondSuffix: String) : String = {
         val fName = src.toFile().getName()
         val index = fName.lastIndexOf('.')
         if (index == -1) {
@@ -58,6 +58,18 @@ object CompilerPreprocess {
             val prefix = fName.substring(0, index)
             val suffix = fName.substring(index)
             prefix + secondSuffix + suffix
+        }
+    }
+
+    // A member access expression such as [A.x]. Check if
+    // A is a call.
+    private def isCallOutputAccess(expr: WdlExpression, ast: Ast, call: Call, cState: State) : Boolean = {
+        val lhs:String = WdlExpression.toString(ast.getAttribute("lhs"))
+        try {
+            val wdlType = WdlNamespace.lookupType(cState.wf)(lhs)
+            wdlType.isInstanceOf[WdlCallOutputsObjectType]
+        } catch {
+            case e:Throwable=> false
         }
     }
 
@@ -74,13 +86,19 @@ object CompilerPreprocess {
     //     input: a = xtmp_1, b = 2
     //  }
     //
-    def simplifyCall(call: Call, cState: State) : Vector[Scope] = {
+    // Inside a scatter we can deal with field accesses,
+    private def simplifyCall(call: Call, cState: State) : Vector[Scope] = {
         val tmpDecls = Queue[Scope]()
         val inputs: Map[String, WdlExpression]  = call.inputMappings.map { case (key, expr) =>
             val rhs = expr.ast match {
                 case t: Terminal => expr
-                case a: Ast if a.isMemberAccess =>
-                    // Accessing something like A.B.C
+                case a: Ast if (a.isMemberAccess && isCallOutputAccess(expr, a, call, cState)) =>
+                    // Accessing an expression like A.B.C
+                    // The expression could be:
+                    // 1) Result from a previous call
+                    // 2) Access to a field in a pair, or an object (pair.left, obj.name)
+                    // Only the first case can be handled inline, the other requires
+                    // a temporary variable
                     expr
                 case a: Ast =>
                     // replace an expression with a temporary variable
@@ -102,10 +120,21 @@ object CompilerPreprocess {
         tmpDecls.toVector
     }
 
+    // Check if the expression can be evaluated based on a set
+    // of variables.
+    private def dependsOnlyOnVars(expr: WdlExpression,
+                                  definedVars: Set[String],
+                                  cState: State) : Boolean = {
+        val refVars = AstTools.findVariableReferences(expr.ast).map{
+            case t:Terminal => WdlExpression.toString(t)
+        }
+        refVars.forall(x => definedVars contains x)
+    }
+
     // Start from a split of the workflow elements into top and bottom blocks.
     // Move any declaration, whose dependencies are satisfied, to the top.
     //
-    def declMoveUp(drs: DeclReorgState, cState: State) : DeclReorgState = {
+    private def declMoveUp(drs: DeclReorgState, cState: State) : DeclReorgState = {
         var definedVars : Set[String] = drs.definedVars
         var moved = Vector.empty[Scope]
 
@@ -118,19 +147,14 @@ object CompilerPreprocess {
                         definedVars = definedVars + decl.unqualifiedName
                         moved = moved :+ decl
                         None
-                    case Some(expr) =>
-                        val (possible, deps) = Utils.findToplevelVarDeps(expr)
-                        if (!possible) {
-                            Some(decl)
-                        } else if (!deps.forall(x => definedVars(x))) {
-                            // some dependency is missing, can't move up
-                            Some(decl)
-                        } else {
-                            // Move the declaration to the top
-                            definedVars = definedVars + decl.unqualifiedName
-                            moved = moved :+ decl
-                            None
-                        }
+                    case Some(expr) if dependsOnlyOnVars(expr, definedVars, cState)  =>
+                        // Move the declaration to the top
+                        definedVars = definedVars + decl.unqualifiedName
+                        moved = moved :+ decl
+                        None
+                    case _ =>
+                        // some dependency is missing, can't move up
+                        Some(decl)
                 }
             case x => Some(x)
         }.flatten
@@ -143,31 +167,43 @@ object CompilerPreprocess {
             case _ => bottom
         }
         // Skip all consecutive non-declarations
-        def skipNonDecl(t: Vector[Scope], b: Vector[Scope]) :
-                (Vector[Scope], Vector[Scope]) = {
+        def skipNonDecl(t: Vector[Scope], b: Vector[Scope], defs: Set[String]) :
+                (Vector[Scope], Vector[Scope], Set[String]) = {
             if (b.isEmpty) {
-                (t,b)
-            }
-            else b.head match {
-                case decl: Declaration =>
-                    // end of skip section
-                    (t,b)
-                case x => skipNonDecl(t :+ x, b.tail)
+                (t, b, defs)
+            } else {
+                b.head match {
+                    case decl: Declaration =>
+                        // end of skip section
+                        (t, b, defs)
+                    case x =>
+                        // Some statements define new variables, for example, calls
+                        //
+                        // TODO: what happens in case of scatters? Are we catching
+                        // all of defined variables?
+                        val crntDefs:Set[String] = x.taskCalls.map(_.unqualifiedName)
+                        skipNonDecl(t :+ x, b.tail, defs ++ crntDefs)
+                }
             }
         }
-        val (nonDeclBlock, remaining) = skipNonDecl(Vector.empty, bottom)
-        Utils.trace(cState.verbose, s"len(nonDecls)=${nonDeclBlock.length} len(rest)=${remaining.length}")
-        DeclReorgState(definedVars, drs.top ++ moved ++ nonDeclBlock, remaining)
+        val (nonDeclBlock, remaining, nonDeclVars) = skipNonDecl(Vector.empty, bottom, Set.empty)
+        if (!nonDeclVars.isEmpty)
+            Utils.trace(cState.verbose, s"Not moving definitions ${nonDeclVars}")
+        //Utils.trace(cState.verbose, s"len(nonDecls)=${nonDeclBlock.length} len(rest)=${remaining.length}")
+        DeclReorgState(definedVars ++ nonDeclVars,
+                       drs.top ++ moved ++ nonDeclBlock,
+                       remaining)
     }
 
     // Figure out the expression type for a collection we loop over in a scatter
-    def collectionWdlType(ssc : Scatter) : WdlType = {
+    def collectionWdlType(ssc : Scatter, cState: State) : WdlType = {
         val collectionType : WdlType =
             ssc.collection.evaluateType(WdlNamespace.lookupType(ssc),
                                         new WdlStandardLibraryFunctionsType,
                                         Some(ssc)) match {
                 case Success(wdlType) => wdlType
-                case _ => throw new Exception(s"Could not evaluate the WdlType for collection ${ssc.collection.toWdlString}")
+//                case _ => throw new Exception(cState.cef.couldNotEvaluateType(ssc.collection.ast))
+                case _ => throw new Exception(s"could not evaluate scatter type for ${ssc.collection.toWdlString}")
             }
         collectionType
     }
@@ -253,7 +289,7 @@ object CompilerPreprocess {
             Vector(ssc1)
         } else {
             // separate declaration for collection expression
-            val collType : WdlType = collectionWdlType(ssc)
+            val collType : WdlType = collectionWdlType(ssc, cState)
             val colDecl = WdlRewrite.newDeclaration(collType,
                                                     genTmpVarName(),
                                                     Some(ssc.collection))
@@ -306,7 +342,7 @@ object CompilerPreprocess {
         WdlRewrite.workflow(wf, reorgElems)
     }
 
-    def simplifyWorkflow(wf: Workflow, cState:State) : Workflow = {
+    def simplifyWorkflow(ns: WdlNamespace, wf: Workflow, cState: State) : Workflow = {
         val wf1 = simplifyAllScatters(wf, cState)
         val wf2 = simplifyTopLevel(wf1, cState)
         wf2
@@ -328,13 +364,10 @@ object CompilerPreprocess {
 
     // Make a pass on all declarations, and make sure no reserved words or prefixes
     // are used.
-    private def checkReservedWords(ns: WdlNamespace, cState: State) : Unit = {
+    private def checkReservedWords(ns: WdlNamespace, cef: CompilerErrorFormatter) : Unit = {
         def checkVarName(varName: String, ast: Ast) : Unit = {
-            //Utils.trace(cState.verbose, s"Checking variable name ${varName}")
             if (Utils.isGeneratedVar(varName))
-                throw new Exception(cState.cef.notCurrentlySupported(
-                                        ast,
-                                        s"Reserved variable prefix"))
+                throw new Exception(cef.illegalVariableName(ast))
         }
         def deepCheck(children: Seq[Scope]) : Unit = {
             children.foreach {
@@ -380,16 +413,15 @@ object CompilerPreprocess {
                     System.err.println("Error loading WDL source code")
                     throw f
             }
-        val tm = ns.terminalMap
-        val cef = new CompilerErrorFormatter(tm)
-        val cState = State(cef, tm, verbose)
-        checkReservedWords(ns, cState)
+        val cef = new CompilerErrorFormatter(ns.terminalMap)
+        checkReservedWords(ns, cef)
 
         // Process the original WDL file,
         // Do not modify the tasks
         val rewrittenNs = ns match {
             case nswf : WdlNamespaceWithWorkflow =>
-                val wf1 = simplifyWorkflow(nswf.workflow, cState)
+                val cState = State(nswf.workflow, cef, verbose)
+                val wf1 = simplifyWorkflow(ns, nswf.workflow, cState)
                 val nswf1 = new WdlNamespaceWithWorkflow(ns.importedAs,
                                                          wf1,
                                                          ns.imports,

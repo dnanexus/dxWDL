@@ -137,7 +137,7 @@ object RunnerScatter {
                             case ElemCall(callOutputs) =>
                                 // Accessing a returned value from a call
                                 callOutputs.get(eMid) match {
-                                    case Some(wvl) if (!tail.isEmpty) => WdlVarLinks.memberAccess(wvl, tail)
+                                    case Some(wvl) => WdlVarLinks.memberAccess(wvl, tail)
                                     case _ =>
                                         throw new Exception(rState.cef.undefinedMemberAccess(a))
                                 }

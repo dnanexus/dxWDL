@@ -141,4 +141,16 @@ class UtilsTest extends FlatSpec with BeforeAndAfterEach with OneInstancePerTest
         } */
     }
 
+    "SprayJs" should "marshal optionals" in {
+        def marshal(name: String, dxType: String) : JsValue =  {
+            s"""{ "name" : "${name}", "class" : "${dxType}" }""".parseJson
+        }
+        val x: JsValue = marshal("xxx", "array:file")
+        System.err.println(s"json=${x.prettyPrint}")
+
+        val m : Map[String, JsValue] = x.asJsObject.fields
+        val m2 = m + ("optional" -> JsBoolean(true))
+        val x2 = JsObject(m2)
+        System.err.println(s"json=${x2.prettyPrint}")
+    }
 }
