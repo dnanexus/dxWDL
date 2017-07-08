@@ -30,7 +30,7 @@ import wdl4s.AstTools._
 import wdl4s.expression.{WdlStandardLibraryFunctionsType, WdlStandardLibraryFunctions}
 import wdl4s.types._
 import wdl4s.values._
-import wdl4s.{Call, Declaration, WdlNamespaceWithWorkflow, Task, WdlExpression, WdlNamespace, Workflow}
+import wdl4s.{Call, Declaration, WdlNamespaceWithWorkflow, Task, TaskOutput, WdlExpression, WdlNamespace, Workflow}
 import wdl4s.WdlExpression.AstForExpressions
 
 object RunnerTask {
@@ -93,16 +93,26 @@ object RunnerTask {
                 case Some(x) => x
                 case None => throw new AppInternalException(s"No value found for variable ${varName}")
             }
-
+        def evalTaskOutput(tso: TaskOutput, expr: WdlExpression) : (String, WdlType, WdlValue) = {
+            val v : WdlValue = expr.evaluate(lookup, DxFunctions).get
+            (tso.unqualifiedName, tso.wdlType, v)
+        }
         task.outputs.map { case outdef =>
             outdef.expression match {
+                case Some(expr) if Utils.isOptional(outdef.wdlType) =>
+                    // An optional output, it could be missing
+                    try {
+                        Some(evalTaskOutput(outdef, expr))
+                    } catch {
+                        case e: Throwable => None
+                    }
                 case Some(expr) =>
-                    val v : WdlValue = expr.evaluate(lookup, DxFunctions).get
-                    (outdef.unqualifiedName, outdef.wdlType, v)
+                    // Compulsory output
+                    Some(evalTaskOutput(outdef, expr))
                 case None =>
                     throw new AppInternalException("Output has no evaluating expression")
             }
-        }
+        }.flatten
     }
 
     // serialize the task inputs to json, and then write to a file.

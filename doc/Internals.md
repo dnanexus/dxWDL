@@ -1,4 +1,4 @@
-# Intermediate Representation (IR)
+# Compiler internals
 
 The compiler is split into three passes
 - Preprocess: simplify the original WDL code
@@ -279,3 +279,8 @@ Loop over the `xtmp0` array.
 Execute two declarations and a scatter. This avoids
 creating a fourth applet to calculate the `partial` and `xtmp1`
 arrays.
+
+## Member accesses
+
+WDL supports tuples and objects. The syntax for accessing members in
+these structures uses dot, and superficially like
