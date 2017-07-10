@@ -21,6 +21,7 @@ package dxWDL
 import com.dnanexus.{DXAPI, DXApplet, DXEnvironment, DXFile, DXJob, DXJSON, DXProject}
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.node.ObjectNode
+import java.io.PrintStream
 import java.nio.file.{Path, Paths, Files}
 import scala.collection.mutable.HashMap
 import scala.collection.JavaConverters._
@@ -34,6 +35,14 @@ import wdl4s.{Call, Declaration, WdlNamespaceWithWorkflow, Task, TaskOutput, Wdl
 import wdl4s.WdlExpression.AstForExpressions
 
 object RunnerTask {
+    // Stream where to emit debugging information. By default,
+    // goes to stderr on the instance. Requires reconfiguration
+    // in unit test environments
+    var errStream: PrintStream = System.err
+    def setErrStream(err: PrintStream) = {
+        errStream = err
+    }
+
     def getMetaDir() = {
         val metaDir = Utils.getMetaDirPath()
         Utils.safeMkdir(metaDir)
@@ -154,7 +163,7 @@ object RunnerTask {
         }.flatten
         val json = JsObject(jsOutputs.toMap)
         val ast_pp = json.prettyPrint
-        System.err.println(s"writeJobOutputs ${ast_pp}")
+        errStream.println(s"writeJobOutputs ${ast_pp}")
         // write to the job outputs
         Utils.writeFileContent(jobOutputPath, ast_pp)
     }
@@ -195,7 +204,7 @@ object RunnerTask {
                 val dockerRunPath = getMetaDir().resolve("script.submit")
                 val dockerRunScript = s"""|#!/bin/bash -ex
                                           |dx-docker run -v ${DX_HOME}:${DX_HOME} ${imgName} /bin/bash $${HOME}/execution/meta/script""".stripMargin.trim
-                System.err.println(s"writing docker run script to ${dockerRunPath}")
+                errStream.println(s"writing docker run script to ${dockerRunPath}")
                 Utils.writeFileContent(dockerRunPath, dockerRunScript)
                 dockerRunPath.toFile.setExecutable(true)
         }
@@ -242,7 +251,7 @@ object RunnerTask {
                     |echo $$? > ${rcPath}
                     |""".stripMargin.trim + "\n"
             }
-        System.err.println(s"writing bash script to ${scriptPath}")
+        errStream.println(s"writing bash script to ${scriptPath}")
         Utils.writeFileContent(scriptPath, script)
     }
 
@@ -270,7 +279,7 @@ object RunnerTask {
                jobInfoPath: Path) : Unit = {
         // Extract types for the inputs
         val (inputTypes,_) = Utils.loadExecInfo(Utils.readFileContent(jobInfoPath))
-        System.err.println(s"WdlType mapping =${inputTypes}")
+        errStream.println(s"WdlType mapping =${inputTypes}")
 
         // Read the job input file
         val inputLines : String = Utils.readFileContent(jobInputPath)
@@ -335,7 +344,7 @@ object RunnerTask {
         val diskSpace = evalAttr("disks")
         val cores = evalAttr("cpu")
         val instanceType = instanceTypeDB.apply(memory, diskSpace, cores)
-        System.err.println(s"""|calcInstanceType memory=${memory} disk=${diskSpace}
+        errStream.println(s"""|calcInstanceType memory=${memory} disk=${diskSpace}
                                |cores=${cores} instancetype=${instanceType}"""
                                .stripMargin.replaceAll("\n", " "))
         instanceType
@@ -381,7 +390,7 @@ object RunnerTask {
                  jobInfoPath: Path) : Unit = {
         // Extract types for the inputs
         val (inputTypes,_) = Utils.loadExecInfo(Utils.readFileContent(jobInfoPath))
-        System.err.println(s"WdlType mapping =${inputTypes}")
+        errStream.println(s"WdlType mapping =${inputTypes}")
 
         val dxEnv: DXEnvironment = DXEnvironment.create()
         val dxJob = dxEnv.getJob()
@@ -419,7 +428,7 @@ object RunnerTask {
             outputs.map{ case (key, json) => key -> Utils.jsValueOfJsonNode(json) }.toMap
         )
         val ast_pp = json.prettyPrint
-        System.err.println(s"outputs = ${ast_pp}")
+        errStream.println(s"outputs = ${ast_pp}")
         Utils.writeFileContent(jobOutputPath, ast_pp)
     }
 }

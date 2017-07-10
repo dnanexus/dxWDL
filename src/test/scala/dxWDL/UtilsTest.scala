@@ -109,7 +109,7 @@ class UtilsTest extends FlatSpec with BeforeAndAfterEach with OneInstancePerTest
                     "C" -> WdlFloat(44.3),
                     "D" -> WdlString("ddd"),
                     "E" -> WdlFile("/tmp/xx"))
-        System.err.print(s"callInputs=\n${Utils.inputsToString(m)}\n")
+        //System.err.print(s"callInputs=\n${Utils.inputsToString(m)}\n")
         println("--------------------------------------")
     }
 
@@ -124,7 +124,7 @@ class UtilsTest extends FlatSpec with BeforeAndAfterEach with OneInstancePerTest
                      |  // ||  ||__
                      |""".stripMargin
         assert(yaml1.prettyPrint == buf)
-        print(buf)
+        //print(buf)
 
 /*        {
 
@@ -146,11 +146,11 @@ class UtilsTest extends FlatSpec with BeforeAndAfterEach with OneInstancePerTest
             s"""{ "name" : "${name}", "class" : "${dxType}" }""".parseJson
         }
         val x: JsValue = marshal("xxx", "array:file")
-        System.err.println(s"json=${x.prettyPrint}")
+        //System.err.println(s"json=${x.prettyPrint}")
 
         val m : Map[String, JsValue] = x.asJsObject.fields
         val m2 = m + ("optional" -> JsBoolean(true))
         val x2 = JsObject(m2)
-        System.err.println(s"json=${x2.prettyPrint}")
+        //System.err.println(s"json=${x2.prettyPrint}")
     }
 }

@@ -9,7 +9,7 @@ import scala.util.{Failure, Success, Try}
 import spray.json._
 import spray.json.DefaultJsonProtocol
 import spray.json.JsString
-import wdl4s.{Task, WdlNamespace, WdlNamespaceWithWorkflow, Workflow}
+import wdl4s.{ImportResolver, Task, WdlNamespace, WdlNamespaceWithWorkflow, WdlSource, Workflow}
 
 object Main extends App {
     sealed trait Termination
@@ -36,9 +36,9 @@ object Main extends App {
 
     def getAssetId() : String = {
         val config = ConfigFactory.load()
-        val asset_id = config.getString("dxWDL.asset_id")
-        assert(asset_id.startsWith("record"))
-        asset_id
+        val assetId = config.getString("dxWDL.asset_id")
+        assert(assetId.startsWith("record"))
+        assetId
     }
 
     // parse extra command line arguments
@@ -67,10 +67,12 @@ object Main extends App {
                             nextOption(map ++ Map("mode" -> value.toString), tail)
                         case "destination" :: value :: tail =>
                             nextOption(map ++ Map("destination" -> value.toString), tail)
+                        case "sort" :: value :: tail =>
+                            nextOption(map ++ Map("sort" -> value.toString), tail)
                         case "verbose" :: tail =>
                             nextOption(map ++ Map("verbose" -> ""), tail)
                         case option :: tail =>
-                            throw new IllegalArgumentException(s"Unknown option ${option}")
+                            throw new IllegalArgumentException(s"Bad option ${option}, or missing arguments")
                     }
             }
         }
@@ -136,6 +138,52 @@ object Main extends App {
         Utils.trace(verbose, s"Wrote intermediate representation to ${trgPath.toString}")
     }
 
+    // Add a suffix to a filename, before the regular suffix. For example:
+    //  xxx.wdl -> xxx.sorted.wdl
+    private def addFilenameSuffix(src: Path, secondSuffix: String) : String = {
+        val fName = src.toFile().getName()
+        val index = fName.lastIndexOf('.')
+        if (index == -1) {
+            fName + secondSuffix
+        } else {
+            val prefix = fName.substring(0, index)
+            val suffix = fName.substring(index)
+            prefix + secondSuffix + suffix
+        }
+    }
+
+    // Assuming the source file is xxx.wdl, the new name will
+    // be xxx.SUFFIX.wdl.
+    private def writeToFile(wdlSourceFile: Path, suffix: String, lines: String) : Unit = {
+        val trgName: String = addFilenameSuffix(wdlSourceFile, suffix)
+        val simpleWdl = Utils.appCompileDirPath.resolve(trgName).toFile
+        val fos = new FileWriter(simpleWdl)
+        val pw = new PrintWriter(fos)
+        pw.println(lines)
+        pw.flush()
+        pw.close()
+        System.err.println(s"Wrote WDL to ${simpleWdl.toString}")
+    }
+
+    // Convert a namespace to string representation and apply WDL
+    // parser again.  This fixes the ASTs, as well as any other
+    // imperfections in our WDL rewriting technology.
+    //
+    // Note: by keeping the namespace in memory, instead of writing to
+    // a temporary file on disk, we keep the resolver valid.
+    def washNamespace(oldNs: WdlNamespace,
+                      rewrittenNs: WdlNamespace,
+                      resolver: ImportResolver,
+                      wdlSourceFile: Path,
+                      suffix: String,
+                      verbose: Boolean) = {
+        val lines: String = WdlPrettyPrinter(true, Some(oldNs)).apply(rewrittenNs, 0).mkString("\n")
+        val cleanNs = WdlNamespace.loadUsingSource(lines, None, Some(List(resolver))).get
+        if (verbose)
+            writeToFile(wdlSourceFile, "." + suffix, lines)
+        cleanNs
+    }
+
     def compileBody(wdlSourceFile : Path, options: OptionsMap) : String = {
         val verbose = options contains "verbose"
         val force = options contains "force"
@@ -171,12 +219,45 @@ object Main extends App {
         }
         val dxWDLrtId = getAssetId()
         val mode: Option[String] = options.get("mode")
+        val sortMode = options.get("sort") match {
+            case None => CompilerTopologicalSort.Mode.Check
+            case Some("relaxed") => CompilerTopologicalSort.Mode.SortRelaxed
+            case Some(_) => CompilerTopologicalSort.Mode.Sort
+        }
 
         // get list of available instance types
         val instanceTypeDB = InstanceTypeDB.query(dxProject)
 
-        // Simplify the source file
-        val ns:WdlNamespace = CompilerPreprocess.apply(wdlSourceFile, verbose)
+        // Resolving imports. Look for referenced files in the
+        // source directory.
+        def resolver(filename: String) : WdlSource = {
+            var sourceDir:Path = wdlSourceFile.getParent()
+            if (sourceDir == null) {
+                // source file has no parent directory, use the
+                // current directory instead
+                sourceDir = Paths.get(System.getProperty("user.dir"))
+            }
+            val p:Path = sourceDir.resolve(filename)
+            Utils.readFileContent(p)
+        }
+        val orgNs =
+            WdlNamespace.loadUsingPath(wdlSourceFile, None, Some(List(resolver))) match {
+                case Success(ns) => ns
+                case Failure(f) =>
+                    System.err.println("Error loading WDL source code")
+                    throw f
+            }
+
+        // Topologically sort the WDL file so no forward references exist in
+        // subsequent steps. Create new file to hold the result.
+        //
+        // Additionally perform check for cycles in the workflow
+        // Assuming the source file is xxx.wdl, the new name will
+        // be xxx.sorted.wdl.
+        val sortedNs1 = CompilerTopologicalSort.apply(orgNs, sortMode, verbose)
+        val sortedNs = washNamespace(orgNs, sortedNs1, resolver, wdlSourceFile, "sorted", verbose)
+        val ns1 = CompilerPreprocess.apply(sortedNs, verbose)
+        val ns = washNamespace(sortedNs, ns1, resolver, wdlSourceFile, "simplified", verbose)
 
         // Compile the WDL workflow into an Intermediate Representation (IR)
         val cef = new CompilerErrorFormatter(ns.terminalMap)
@@ -297,12 +378,13 @@ object Main extends App {
            |  platform. A dx JSON inputs file is generated from the
            |  WDL inputs file, if specified.
            |  options:
+           |    -archive :            Archive older versions of applets
            |    -destination <path> : Output folder for workflow
+           |    -force :              Delete existing applets/workflows
            |    -inputs <file> :      Cromwell style input file
            |    -mode <mode> :        Compilation mode, a debugging flag
+           |    -sort <mode> :        Sort call graph, to avoid forward references
            |    -verbose :            Print detailed progress reports
-           |    -force :              Delete existing applets/workflows
-           |    -archive :            Archive older versions of applets
            |
            |version
            |  Report the current version

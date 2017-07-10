@@ -46,21 +46,6 @@ object CompilerPreprocess {
         tmpVarName
     }
 
-    // Add a suffix to a filename, before the regular suffix. For example:
-    //  xxx.wdl -> xxx.simplified.wdl
-    private def addFilenameSuffix(src: Path, secondSuffix: String) : String = {
-        val fName = src.toFile().getName()
-        val index = fName.lastIndexOf('.')
-        if (index == -1) {
-            fName + secondSuffix
-        }
-        else {
-            val prefix = fName.substring(0, index)
-            val suffix = fName.substring(index)
-            prefix + secondSuffix + suffix
-        }
-    }
-
     // A member access expression such as [A.x]. Check if
     // A is a call.
     private def isCallOutputAccess(expr: WdlExpression, ast: Ast, call: Call, cState: State) : Boolean = {
@@ -349,19 +334,6 @@ object CompilerPreprocess {
     }
 
 
-    // Assuming the source file is xxx.wdl, the new name will
-    // be xxx.simplified.wdl.
-    def writeToFile(wdlSourceFile : Path, lines: String) : Unit = {
-        val trgName: String = addFilenameSuffix(wdlSourceFile, ".simplified")
-        val simpleWdl = Utils.appCompileDirPath.resolve(trgName).toFile
-        val fos = new FileWriter(simpleWdl)
-        val pw = new PrintWriter(fos)
-        pw.println(lines)
-        pw.flush()
-        pw.close()
-        System.err.println(s"Wrote simplified WDL to ${simpleWdl.toString}")
-    }
-
     // Make a pass on all declarations, and make sure no reserved words or prefixes
     // are used.
     private def checkReservedWords(ns: WdlNamespace, cef: CompilerErrorFormatter) : Unit = {
@@ -390,35 +362,14 @@ object CompilerPreprocess {
         }
     }
 
-    def apply(wdlSourceFile : Path,
-              verbose: Boolean) : WdlNamespace = {
+    def apply(ns: WdlNamespace, verbose: Boolean) : WdlNamespace = {
         Utils.trace(verbose, "Preprocessing pass")
-
-        // Resolving imports. Look for referenced files in the
-        // source directory.
-        def resolver(filename: String) : WdlSource = {
-            var sourceDir:Path = wdlSourceFile.getParent()
-            if (sourceDir == null) {
-                // source file has no parent directory, use the
-                // current directory instead
-                sourceDir = Paths.get(System.getProperty("user.dir"))
-            }
-            val p:Path = sourceDir.resolve(filename)
-            Utils.readFileContent(p)
-        }
-        val ns =
-            WdlNamespace.loadUsingPath(wdlSourceFile, None, Some(List(resolver))) match {
-                case Success(ns) => ns
-                case Failure(f) =>
-                    System.err.println("Error loading WDL source code")
-                    throw f
-            }
         val cef = new CompilerErrorFormatter(ns.terminalMap)
         checkReservedWords(ns, cef)
 
         // Process the original WDL file,
         // Do not modify the tasks
-        val rewrittenNs = ns match {
+        ns match {
             case nswf : WdlNamespaceWithWorkflow =>
                 val cState = State(nswf.workflow, cef, verbose)
                 val wf1 = simplifyWorkflow(ns, nswf.workflow, cState)
@@ -439,18 +390,5 @@ object CompilerPreprocess {
                 nswf1
             case _ => ns
         }
-
-        // Convert to string representation and apply WDL parser again.
-        // This fixes the ASTs, as well as any other imperfections in our rewriting
-        // technology.
-        //
-        // Note: by keeping the namespace in memory, instead of writing to
-        // a temporary file on disk, we keep the resolver valid.
-        val lines: String = WdlPrettyPrinter(true, Some(ns)).apply(rewrittenNs, 0).mkString("\n")
-        val cleanNs = WdlNamespace.loadUsingSource(lines, None, Some(List(resolver))).get
-
-        if (verbose)
-            writeToFile(wdlSourceFile, lines)
-        cleanNs
     }
 }

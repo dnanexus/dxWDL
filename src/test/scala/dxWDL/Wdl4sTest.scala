@@ -1,5 +1,6 @@
 package dxWDL
 
+import java.io.PrintStream
 import java.nio.charset.StandardCharsets
 import java.nio.file.{Path, Paths, Files}
 import org.scalatest.{BeforeAndAfterEach, FlatSpec, OneInstancePerTest}
@@ -42,6 +43,11 @@ class Wdl4sTest extends FlatSpec with BeforeAndAfterEach with OneInstancePerTest
             : Seq[(String, WdlType, WdlValue)] = {
         // Clean up the task subdirectory
         val metaDir = Utils.getMetaDirPath()
+        Utils.safeMkdir(metaDir)
+        val dbgFile = metaDir.resolve("dbgInfo.txt").toFile
+        dbgFile.createNewFile()
+        RunnerTask.setErrStream(new PrintStream(dbgFile))
+
         val task = Utils.taskOfCall(call)
         RunnerTask.prologCore(task, callInputs)
         val scriptPath = metaDir.resolve("script")
@@ -71,7 +77,8 @@ class Wdl4sTest extends FlatSpec with BeforeAndAfterEach with OneInstancePerTest
 
     it should "generate expression variable ID" in {
         val expr = WdlExpression.fromString("xxx")
-        System.out.println(s"expr=${expr.toWdlString}")
+        //System.out.println(s"expr=${expr.toWdlString}")
+        assert(expr.toWdlString == "xxx")
     }
 
     it should "retrieve source code for task" in {
@@ -490,7 +497,7 @@ class Wdl4sTest extends FlatSpec with BeforeAndAfterEach with OneInstancePerTest
         // variable(s)
         val addCall:Call = ns.workflow.findCallByName("Add").get
         addCall.inputMappings.foreach{ case (key,expr) =>
-            System.err.println(s"key=${key} expr=${expr.toWdlString}")
+            //System.err.println(s"key=${key} expr=${expr.toWdlString}")
             //assert(expr.prerequisiteCallNames.isEmpty)
             /*expr.prerequisiteCallNames.map{ fqn =>
                 val wdlType = WdlNamespace.lookupType(ns.workflow)(fqn)
