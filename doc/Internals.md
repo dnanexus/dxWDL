@@ -321,7 +321,8 @@ workflow chef {
 ```
 
 The workflow is rewritten into `chef_simplified`, with temporary variables
-for the pair members.
+for the pair members. The downside is that the caculating the new variables may, in
+certain cases, require an additional sub-job.
 
 ```
 workflow chef_simplified {
