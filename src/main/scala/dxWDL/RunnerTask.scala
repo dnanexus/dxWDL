@@ -194,7 +194,7 @@ object RunnerTask {
                 val DX_HOME = Utils.DX_HOME
                 val dockerRunPath = getMetaDir().resolve("script.submit")
                 val dockerRunScript = s"""|#!/bin/bash -ex
-                                          |dx-docker run -v ${DX_HOME}:${DX_HOME} ${imgName} /bin/bash $${HOME}/execution/meta/script""".stripMargin.trim
+                                          |dx-docker run --entrypoint /bin/bash -v ${DX_HOME}:${DX_HOME} ${imgName} $${HOME}/execution/meta/script""".stripMargin.trim
                 System.err.println(s"writing docker run script to ${dockerRunPath}")
                 Utils.writeFileContent(dockerRunPath, dockerRunScript)
                 dockerRunPath.toFile.setExecutable(true)
