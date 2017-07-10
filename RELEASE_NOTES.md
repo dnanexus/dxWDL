@@ -1,7 +1,10 @@
 # Release Notes
 
 ## 0.33
-- Support WDL maps
+- Initial support for WDL pairs and maps
+- Upgrade to wdl4s version 0.13
+- Improve parsing for memory specifications
+- Optionals can be passed as inputs and outputs from tasks.
 
 ## 0.32
 - Support archive and force flags a la `dx build`. Applets and workflows

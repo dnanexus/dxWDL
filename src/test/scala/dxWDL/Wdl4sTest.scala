@@ -8,6 +8,7 @@ import spray.json._
 import spray.json.DefaultJsonProtocol
 import wdl4s.{AstTools, Call, Task, WdlExpression, WdlNamespace, WdlNamespaceWithWorkflow, Workflow}
 import wdl4s.AstTools.EnhancedAstNode
+import wdl4s.parser.WdlParser.{Ast, AstNode, Terminal}
 import wdl4s.types._
 import wdl4s.values._
 
@@ -439,18 +440,66 @@ class Wdl4sTest extends FlatSpec with BeforeAndAfterEach with OneInstancePerTest
         val outputs : Seq[(String, WdlType, WdlValue)] = evalCall(call, inputs)
     }
 
-    "SprayJs" should "marshal optionals" in {
-        def marshal(name: String, dxType: String) : JsValue =  {
-            s"""{ "name" : "${name}", "class" : "${dxType}" }""".parseJson
+    it should "Calculate call expression type" in {
+        val wdl = """|
+                     |task Add {
+                     |    Int a
+                     |    Int b
+                     |
+                     |    command {
+                     |        echo $((a + b))
+                     |    }
+                     |    output {
+                     |        Int result = read_int(stdout())
+                     |    }
+                     |}
+                     |
+                     |workflow w {
+                     |    Pair[Int, Int] p = (5, 8)
+                     |    call Add {
+                     |        input: a=p.left, b=p.right
+                     |    }
+                     |    call Add as Add2 {
+                     |        input: a=Add.result, b=p.right
+                     |    }
+                     |    call Add as Add3 {
+                     |        input: a=Add2.result, b=p.right
+                     |    }
+                     |    output {
+                     |        Add.result
+                     |        Add2.result
+                     |        Add3.result
+                     |    }
+                     |}""".stripMargin.trim
+
+        val ns = WdlNamespaceWithWorkflow.load(wdl, Seq.empty).get
+
+        // These should be call outputs
+        List("Add", "Add3").foreach{ elem =>
+            val wdlType = WdlNamespace.lookupType(ns.workflow)(elem)
+            assert(wdlType.isInstanceOf[WdlCallOutputsObjectType])
         }
-        val x: JsValue = marshal("xxx", "array:file")
-        System.err.println(s"json=${x.prettyPrint}")
 
-        val m : Map[String, JsValue] = x.asJsObject.fields
-        val m2 = m + ("optional" -> JsBoolean(true))
-        val x2 = JsObject(m2)
-        System.err.println(s"json=${x2.prettyPrint}")
+        // These should *not* be call outputs
+        List("p").foreach{ elem =>
+            val wdlType = WdlNamespace.lookupType(ns.workflow)(elem)
+            assert(!wdlType.isInstanceOf[WdlCallOutputsObjectType])
+        }
+
+        // Accesses to the pair [p] should depend only on the top level
+        // variable(s)
+        val addCall:Call = ns.workflow.findCallByName("Add").get
+        addCall.inputMappings.foreach{ case (key,expr) =>
+            System.err.println(s"key=${key} expr=${expr.toWdlString}")
+            //assert(expr.prerequisiteCallNames.isEmpty)
+            /*expr.prerequisiteCallNames.map{ fqn =>
+                val wdlType = WdlNamespace.lookupType(ns.workflow)(fqn)
+                System.err.println(s"fqn=${fqn} wdlType=${wdlType}")
+            }*/
+            val variables = AstTools.findVariableReferences(expr.ast).map{ case t:Terminal =>
+                WdlExpression.toString(t)
+            }
+            System.err.println(s"dep vars(${expr.toWdlString}) = ${variables}")
+        }
     }
-
-
 }

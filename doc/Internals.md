@@ -1,4 +1,4 @@
-# Intermediate Representation (IR)
+# Compiler internals
 
 The compiler is split into three passes
 - Preprocess: simplify the original WDL code
@@ -279,3 +279,55 @@ Loop over the `xtmp0` array.
 Execute two declarations and a scatter. This avoids
 creating a fourth applet to calculate the `partial` and `xtmp1`
 arrays.
+
+## Member accesses vs. Call member access
+
+WDL supports tuples and objects. The syntax for accessing members in
+these structures uses dot, and superficially looks like call member access.
+For example, in workflow `salad`, the `pair.left` syntax is similar to
+calling task `pair` and accessing member `left`.
+
+```
+workflow salad {
+    Map[String, Int] weight = {"apple": 100, "banana": 150}
+
+    scatter(pair in weight) {
+        String name = pair.left
+    }
+}
+```
+
+
+In workflow `chef` we want to call a task with the two members
+of the pair `sign`. This cannot be compiled directly into a dx:stage, because
+the arguments {`a`,`b`} need to be extracted first; the job manager does
+not know how to access members in a JSON hash.
+
+```
+task Concat {
+    String a
+    String b
+    command {
+        echo "${a}${b}"
+    }
+    output {
+        String result = stdout()
+    }
+}
+
+workflow chef {
+    Pair[String, String] sign = ("chef", "Julian Dremond")
+    call concat{ input: a=sign.left, b=sign.right }
+```
+
+The workflow is rewritten into `chef_simplified`, with temporary variables
+for the pair members. The downside is that the caculating the new variables may, in
+certain cases, require an additional sub-job.
+
+```
+workflow chef_simplified {
+    Pair[String, String] sign = ("chef", "Julian Dremond")
+    String xtmp1 = sign.left
+    String xtmp2 = sign.right
+    call concat{ input: a=xtmp1, b=xtmp2 }
+```

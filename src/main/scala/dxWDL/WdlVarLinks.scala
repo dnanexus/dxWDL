@@ -25,8 +25,7 @@ object IORef extends Enumeration {
 // - Map of files:     Map[String, File]
 // A complex value is implemented as a json structure, and all the files it references.
 sealed trait DxLink
-case class DxlJsValue(jsn: JsValue) extends DxLink
-case class DxlComplexValue(jsn: JsValue, files: Vector[DXFile]) extends DxLink
+case class DxlValue(jsn: JsValue) extends DxLink  // This may contain dx-files
 case class DxlStage(dxStage: DXWorkflow.Stage, ioRef: IORef.Value, varName: String) extends DxLink
 case class DxlJob(dxJob: DXJob, ioRef: IORef.Value, varName: String) extends DxLink
 
@@ -41,13 +40,38 @@ object WdlVarLinks {
     // from the platform, or if it was uploaded.
     var localDxFiles = HashMap.empty[Path, DXFile]
 
+    // remove persistent resources used by this variable
+    def deleteLocal(wdlValue: WdlValue) : Unit = {
+        wdlValue match {
+            case WdlBoolean(_) | WdlInteger(_) | WdlFloat(_) | WdlString(_) => ()
+            case WdlSingleFile(path) =>
+                val p = Paths.get(path)
+                Files.delete(p)
+                localDxFiles.remove(p)
+                DxFunctions.unregisterRemoteFile(path)
+
+            // recursion
+            case WdlOptionalValue(_, None) => ()
+            case WdlOptionalValue(_, Some(x)) =>
+                deleteLocal(x)
+            case WdlArray(_, a) =>
+                a.foreach(x => deleteLocal(x))
+            case WdlMap(_, m) =>
+                m.foreach{ case (k,v) =>
+                    deleteLocal(k)
+                    deleteLocal(v)
+                }
+            case WdlPair(left, right) =>
+                deleteLocal(left)
+                deleteLocal(right)
+            case _ =>
+                throw new Exception(s"Don't know how to delete a ${wdlValue} value")
+        }
+    }
+
     private def isDxFile(jsValue: JsValue): Boolean = {
         jsValue match {
-            case JsObject(fields) =>
-                fields.get("$dnanexus_link") match {
-                    case None => false
-                    case Some(_) => true
-                }
+            case JsObject(fields) if fields contains "$dnanexus_link" => true
             case  _ => false
         }
     }
@@ -151,6 +175,30 @@ object WdlVarLinks {
         }
     }
 
+    // Could a structure of this type include Files? Some examples:
+    // Array[Int]        false
+    // Map[String,File]  true
+    // Object            true
+    //
+    // Objects may include files, because their types are only
+    // known at runtime
+    def mayHaveFiles(wdlType: WdlType) : Boolean = {
+        wdlType match {
+            // base cases
+            case WdlBooleanType | WdlIntegerType | WdlFloatType | WdlStringType => false
+            case WdlFileType => true
+            case WdlObjectType => true
+
+            // recursion
+            case WdlOptionalType(t) => mayHaveFiles(t)
+            case WdlArrayType(t) => mayHaveFiles(t)
+            case WdlPairType(lType, rType) =>
+                mayHaveFiles(lType) || mayHaveFiles(rType)
+            case WdlMapType(keyType, valueType) =>
+                mayHaveFiles(keyType) || mayHaveFiles(valueType)
+        }
+    }
+
     // Search through a JSON value for all the dx:file links inside it. Returns
     // those as a vector.
     private def findDxFiles(jsValue: JsValue) : Vector[DXFile] = {
@@ -229,38 +277,89 @@ object WdlVarLinks {
         }
     }
 
-    // Calculate a WdlValue from the dx-links structure. If [force] is true,
-    // any files included in the structure will be downloaded.
-    def eval(wvl: WdlVarLinks, force: Boolean) : WdlValue = {
+    private def getRawJsValue(wvl: WdlVarLinks) : JsValue = {
         val jsRaw: JsValue = wvl.dxlink match {
-            case DxlJsValue(jsn) => jsn
-            case DxlComplexValue(jsn,_) => jsn
+            case DxlValue(jsn) => jsn
             case _ =>
                 throw new AppInternalException(s"Unsupported conversion from ${wvl.dxlink} to WdlValue")
         }
-        val jsValue =
-            if (!hasNativeDxType(wvl.wdlType)) {
-                jsRaw match {
-                    case JsObject(_) if isDxFile(jsRaw) =>
-                        // The JSON points to a platform file, it needs
-                        // to be downloaded and parsed.
-                        val dxfile = dxFileOfJsValue(jsRaw)
-                        val buf = Utils.downloadString(dxfile)
-                        buf.parseJson
-                    case _ =>
-                        //System.err.println(s"Non native DX type ${wvl.wdlType.toWdlString}")
-                        jsRaw
-                }
-            } else {
-                jsRaw
+        if (!hasNativeDxType(wvl.wdlType)) {
+            jsRaw match {
+                case JsObject(_) if isDxFile(jsRaw) =>
+                    // The JSON points to a platform file, it needs
+                    // to be downloaded and parsed.
+                    val dxfile = dxFileOfJsValue(jsRaw)
+                    val buf = Utils.downloadString(dxfile)
+                    buf.parseJson
+                case _ =>
+                    //System.err.println(s"Non native DX type ${wvl.wdlType.toWdlString}")
+                    jsRaw
             }
+        } else {
+            jsRaw
+        }
+    }
+
+    // Calculate a WdlValue from the dx-links structure. If [force] is true,
+    // any files included in the structure will be downloaded.
+    def eval(wvl: WdlVarLinks, force: Boolean) : WdlValue = {
+        val jsValue = getRawJsValue(wvl)
         evalCore(wvl.wdlType, jsValue, force)
     }
 
-    private def jsStringLimited(buf: String) : JsValue = {
-        if (buf.length > Utils.MAX_STRING_LEN)
-            throw new AppInternalException(s"string is longer than ${Utils.MAX_STRING_LEN}")
-        JsString(buf)
+    // The reason we need a special method for unpacking an array (or a map),
+    // is because we DO NOT want to evaluate the sub-structures. The trouble is
+    // files, that may all have the same paths, causing collisions.
+    def unpackWdlArray(wvl: WdlVarLinks) : Seq[WdlVarLinks] = {
+        val jsn = getRawJsValue(wvl)
+        (wvl.wdlType, jsn) match {
+            case (WdlArrayType(t), JsArray(l)) =>
+                // Array
+                l.map(elem => WdlVarLinks(t, DxlValue(elem)))
+
+            case (WdlMapType(keyType, valueType), _) =>
+                // Map. Convert into an array of WDL pairs.
+                val (kJs, vJs) = unmarshalJsMap(jsn)
+                val kv = kJs zip vJs
+                val wdlType = WdlPairType(keyType, valueType)
+                kv.map{ case (k, v) =>
+                    val js:JsValue = JsArray(Vector(k, v))
+                    WdlVarLinks(wdlType, DxlValue(js))
+                }
+
+            case (t,_) =>
+                // Error
+                throw new AppInternalException(s"Can't unpack ${wvl.wdlType.toWdlString} ${jsn}")
+            }
+    }
+
+    // Access a field in a complex WDL type, such as Pair, Map, Object.
+    private def memberAccessStep(wvl: WdlVarLinks, field: String) : WdlVarLinks = {
+        val jsValue = getRawJsValue(wvl)
+        (wvl.wdlType, jsValue) match {
+            case (WdlPairType(lType, rType), JsArray(vec)) =>
+                field match {
+                    case "left" =>  WdlVarLinks(lType, DxlValue(vec(0)))
+                    case "right" =>  WdlVarLinks(rType, DxlValue(vec(1)))
+                    case _ => throw new Exception(s"Unknown field ${field} in pair ${wvl}")
+                }
+            case _ =>
+                throw new Exception(s"member access to field ${field} wvl=${wvl}")
+        }
+    }
+
+    // Multi step member access, appropriate for nested structures. For example:
+    //
+    // Pair[Int, Pair[String, File]] p
+    // File veggies = p.left.right
+    //
+    def memberAccess(wvl: WdlVarLinks, components: List[String]) : WdlVarLinks = {
+        components match {
+            case Nil => wvl
+            case head::tail =>
+                val wvl1 = memberAccessStep(wvl, head)
+                memberAccess(wvl1, tail)
+        }
     }
 
     // Serialize a complex WDL value into a JSON value. The value could potentially point
@@ -268,17 +367,13 @@ object WdlVarLinks {
     // 1. Make a pass on the object, upload any files, and keep an in-memory JSON representation
     // 2. In memory we have a, potentially very large, JSON value. Upload it to the platform
     //    as a file, and return a JSON link to the file.
-    private def jsOfComplexWdlValue(wdlType: WdlType,
-                                    wdlValue: WdlValue) : (JsValue, Vector[DXFile]) = {
-        def uploadFile(path: Path) : (JsValue, Vector[DXFile]) =  {
+    private def jsOfComplexWdlValue(wdlType: WdlType, wdlValue: WdlValue) : JsValue = {
+        def uploadFile(path: Path) : JsValue =  {
             localDxFiles.get(path) match {
                 case None =>
-                    val dxLink = Utils.uploadFile(path)
-                    val dxFile = dxFileOfJsValue(dxLink)
-                    (dxLink, Vector(dxFile))
+                    Utils.uploadFile(path)
                 case Some(dxFile) =>
-                    val dxLink = Utils.jsValueOfJsonNode(dxFile.getLinkAsJson)
-                    (dxLink, Vector(dxFile))
+                    Utils.jsValueOfJsonNode(dxFile.getLinkAsJson)
             }
         }
 
@@ -286,20 +381,23 @@ object WdlVarLinks {
             // Base case: primitive types
             case (WdlFileType, WdlString(path)) => uploadFile(Paths.get(path))
             case (WdlFileType, WdlSingleFile(path)) => uploadFile(Paths.get(path))
-            case (WdlStringType, WdlSingleFile(path)) => (JsString(path), Vector.empty[DXFile])
-            case (_,WdlBoolean(b)) => (JsBoolean(b), Vector.empty[DXFile])
-            case (_,WdlInteger(n)) => (JsNumber(n), Vector.empty[DXFile])
-            case (_,WdlFloat(x)) => (JsNumber(x), Vector.empty[DXFile])
-            case (_,WdlString(s)) => (jsStringLimited(s), Vector.empty[DXFile])
+            case (WdlStringType, WdlSingleFile(path)) => JsString(path)
+            case (_,WdlBoolean(b)) => JsBoolean(b)
+            case (_,WdlInteger(n)) => JsNumber(n)
+            case (_,WdlFloat(x)) => JsNumber(x)
+            case (_,WdlString(buf)) =>
+                if (buf.length > Utils.MAX_STRING_LEN)
+                    throw new AppInternalException(s"string is longer than ${Utils.MAX_STRING_LEN}")
+                JsString(buf)
 
             // Base case: empty array
             case (_, WdlArray(_, ar)) if ar.length == 0 =>
-                (JsArray(Vector.empty), Vector.empty[DXFile])
+                JsArray(Vector.empty)
 
             // Non empty array
             case (WdlArrayType(t), WdlArray(_, elems)) =>
-                val (jsVals, dxFiles) = elems.map(e => jsOfComplexWdlValue(t, e)).unzip
-                (JsArray(jsVals.toVector), dxFiles.toVector.flatten)
+                val jsVals = elems.map(e => jsOfComplexWdlValue(t, e))
+                JsArray(jsVals.toVector)
 
             // Maps. These are projections from a key to value, where
             // the key and value types are statically known. We
@@ -307,16 +405,15 @@ object WdlVarLinks {
             // an array of values.
             case (WdlMapType(keyType, valueType), WdlMap(_, m)) =>
                 val keys:WdlValue = WdlArray(WdlArrayType(keyType), m.keys.toVector)
-                val (kJs, kFiles) = jsOfComplexWdlValue(keys.wdlType, keys)
+                val kJs = jsOfComplexWdlValue(keys.wdlType, keys)
                 val values:WdlValue = WdlArray(WdlArrayType(valueType), m.values.toVector)
-                val (vJs, vFiles) = jsOfComplexWdlValue(values.wdlType, values)
-                val jsm = JsObject("keys" -> kJs, "values" -> vJs)
-                (jsm, kFiles ++ vFiles)
+                val vJs = jsOfComplexWdlValue(values.wdlType, values)
+                JsObject("keys" -> kJs, "values" -> vJs)
 
             case (WdlPairType(lType, rType), WdlPair(l,r)) =>
-                val (lJs, lFiles) = jsOfComplexWdlValue(lType, l)
-                val (rJs, rFiles) = jsOfComplexWdlValue(rType, r)
-                (JsArray(lJs, rJs), lFiles ++ rFiles)
+                val lJs = jsOfComplexWdlValue(lType, l)
+                val rJs = jsOfComplexWdlValue(rType, r)
+                JsArray(lJs, rJs)
 
                 // TODO
                 //case (WdlObjectType, WdlObject())
@@ -331,16 +428,15 @@ object WdlVarLinks {
     def apply(wdlTypeOrg: WdlType, wdlValue: WdlValue) : WdlVarLinks = {
         // Strip optional types
         val wdlType = Utils.stripOptional(wdlTypeOrg)
+        val js = jsOfComplexWdlValue(wdlType, wdlValue)
         if (hasNativeDxType(wdlType)) {
-            val (js, _) = jsOfComplexWdlValue(wdlType, wdlValue)
-            WdlVarLinks(wdlTypeOrg, DxlJsValue(js))
+            WdlVarLinks(wdlTypeOrg, DxlValue(js))
         } else {
             // Complex values, that may have files in them. For example, ragged file arrays.
-            val (jsVal,dxFiles) = jsOfComplexWdlValue(wdlType, wdlValue)
-            val buf = jsVal.prettyPrint
+            val buf = js.prettyPrint
             val fileName = wdlType.toWdlString
-            val jsSrlFile = Utils.uploadString(buf, fileName)
-            WdlVarLinks(wdlTypeOrg, DxlComplexValue(jsSrlFile, dxFiles))
+            val jsSrlFileLink = Utils.uploadString(buf, fileName)
+            WdlVarLinks(wdlTypeOrg, DxlValue(jsSrlFileLink))
         }
     }
 
@@ -350,67 +446,13 @@ object WdlVarLinks {
         if (hasNativeDxType(wdlType)) {
             // This is primitive value, or a single dimensional
             // array of primitive values.
-            WdlVarLinks(wdlType, DxlJsValue(jsValue))
+            WdlVarLinks(wdlType, DxlValue(jsValue))
         } else {
             // complex types
             val dxfile = dxFileOfJsValue(jsValue)
             val buf = Utils.downloadString(dxfile)
             val jsSrlVal:JsValue = buf.parseJson
-            val dxFiles = findDxFiles(jsSrlVal)
-            WdlVarLinks(wdlType, DxlComplexValue(jsSrlVal, dxFiles))
-        }
-    }
-
-    // The reason we need a special method for unpacking an array (or a map),
-    // is because we DO NOT want to evaluate the sub-structures. The trouble is
-    // files, that may all have the same paths, causing collisions.
-    def unpackWdlArray(wvl: WdlVarLinks) : Seq[WdlVarLinks] = {
-        val jsRaw = wvl.dxlink match {
-            case DxlJsValue(jsn) => jsn
-            case DxlComplexValue(jsn, _) => jsn
-            case DxlStage(dxStage, _, _) =>
-                throw new AppInternalException(s"Values must be unpacked, not dxStage ${dxStage}")
-            case DxlJob(dxJob, _, _) =>
-                throw new AppInternalException(s"Values must be unpacked, not dxJob ${dxJob}")
-        }
-        // download and unmarshal file, if needed
-        val jsn =
-            if (isDxFile(jsRaw) && !hasNativeDxType(wvl.wdlType)) {
-                val dxfile = dxFileOfJsValue(jsRaw)
-                val buf = Utils.downloadString(dxfile)
-                buf.parseJson
-            } else {
-                jsRaw
-            }
-        (wvl.wdlType, jsn) match {
-            case (WdlArrayType(t), JsArray(l)) =>
-                // Array
-                l.map(elem => WdlVarLinks(t, DxlComplexValue(elem, findDxFiles(elem))))
-
-            case (WdlMapType(keyType, valueType), _) =>
-                // Map. Convert into an array of WDL pairs.
-                val (kJs, vJs) = unmarshalJsMap(jsn)
-                val kv = kJs zip vJs
-                val wdlType = WdlPairType(keyType, valueType)
-                kv.map{ case (k, v) =>
-                    val js:JsValue = JsArray(Vector(k, v))
-                    WdlVarLinks(wdlType, DxlComplexValue(js, Vector.empty[DXFile]))
-                }
-
-            case (t,_) =>
-                // Error
-                throw new AppInternalException(s"Can't unpack ${wvl.wdlType.toWdlString} ${jsn}")
-            }
-    }
-
-    // This needs more work, there are cases where it modifies file paths.
-    def unpackWdlArray_withEval(wvl: WdlVarLinks) : Seq[WdlVarLinks] = {
-        val v:WdlValue = eval(wvl, false)
-        v match {
-            case WdlArray(WdlArrayType(eType), elems) =>
-                // import each array element into a WdlVarLinks structure
-                elems.map(elem => apply(eType, elem))
-            case _ => throw new Exception(s"${wvl} does not unpack to a WDL array")
+            WdlVarLinks(wdlType, DxlValue(jsSrlVal))
         }
     }
 
@@ -429,8 +471,7 @@ object WdlVarLinks {
                 case DxlJob(dxJob, ioRef, varEncName) =>
                     val jobId : String = dxJob.getId()
                     Utils.jsonNodeOfJsValue(Utils.makeJBOR(jobId, varEncName))
-                case DxlJsValue(jsn) => Utils.jsonNodeOfJsValue(jsn)
-                case DxlComplexValue(jsn, _) => Utils.jsonNodeOfJsValue(jsn)
+                case DxlValue(jsn) => Utils.jsonNodeOfJsValue(jsn)
             }
             (bindEncName, jsNode)
         }
@@ -456,10 +497,8 @@ object WdlVarLinks {
                         bindEncName -> Utils.jsonNodeOfJsValue(Utils.makeJBOR(jobId, varEncName)),
                         bindEncName_F -> Utils.jsonNodeOfJsValue(Utils.makeJBOR(jobId, varEncName_F))
                     )
-                case DxlJsValue(jsn) =>
-                    Map(bindEncName -> Utils.jsonNodeOfJsValue(jsn),
-                        bindEncName_F -> Utils.jsonNodeOfJsValue(JsArray(Vector.empty[JsValue])))
-                case DxlComplexValue(jsn, dxFiles) =>
+                case DxlValue(jsn) =>
+                    val dxFiles = findDxFiles(jsn)
                     val jsFiles = dxFiles.map(x => Utils.jsValueOfJsonNode(x.getLinkAsJson))
                     Map(bindEncName -> Utils.jsonNodeOfJsValue(jsn),
                         bindEncName_F -> Utils.jsonNodeOfJsValue(JsArray(jsFiles.toVector)))
@@ -470,8 +509,12 @@ object WdlVarLinks {
         if (hasNativeDxType(wdlType)) {
             // Types that are supported natively in DX
             List(mkSimple())
+        } else if (!mayHaveFiles(wdlType)) {
+            // Complex type that is guarantied to have no files. It can be mapped
+            // into a single JSON structure
+            List(mkSimple())
         } else {
-            // Complex types requiring two fields: a JSON structure, and a flat array of files.
+            // Most general complex type requiring two fields: a JSON structure, and a flat array of files.
             mkComplex().toList
         }
     }

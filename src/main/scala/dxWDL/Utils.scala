@@ -351,21 +351,6 @@ object Utils {
     }
 
 
-    // Return true, only if the expression can be evaluated
-    // based on toplevel variables. If so,
-    // the variables this expression depends on.
-    def findToplevelVarDeps(expr: WdlExpression) : (Boolean, List[String]) = {
-        if (!expr.prerequisiteCallNames.isEmpty)
-            return (false, Nil)
-        if (!expr.ast.findTopLevelMemberAccesses().isEmpty)
-            return (false, Nil)
-        val variables = AstTools.findVariableReferences(expr.ast).map{ case t:Terminal =>
-            WdlExpression.toString(t)
-        }
-        //System.err.println(s"findToplevelVarDeps  ${expr.toWdlString}  => ${variables}")
-        (true, variables.toList)
-    }
-
     // Run a child process and collect stdout and stderr into strings
     def execCommand(cmdLine : String) : (String, String) = {
         val processBuilder = new java.lang.ProcessBuilder()

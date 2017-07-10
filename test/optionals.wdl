@@ -25,9 +25,22 @@ task ppp_unused_args {
     }
 }
 
+task MaybeInt {
+    Int? a
+    command {
+    }
+    output {
+        Int? result = a
+    }
+}
+
 workflow optionals {
     Int arg1
     Array[Int] integers = [1,2]
+    Int? rain
+
+    call MaybeInt as mi1 { input: a=rain }
+    call MaybeInt as mi2 { input: a=mi1.result}
 
     # A call missing a compulsory argument
     call lib.Twice as mul2
@@ -54,5 +67,6 @@ workflow optionals {
         add.result
         unused_args.result
         add2.result
+        mi2.result
     }
 }

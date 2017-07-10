@@ -147,19 +147,30 @@ case class InstanceTypeDB(instances: Vector[DxInstanceType]) {
         val memoryMB: Option[Int] = wdlMemoryMB match {
             case None => None
             case Some(WdlString(buf)) =>
-                val components = buf.split("\\s+")
-                if (components.length != 2)
+                // extract number
+                val numRex = """(\d+.?\d*)""".r
+                val numbers = numRex.findAllIn(buf).toList
+                if (numbers.length != 1)
                     throw new Exception(s"Can not parse memory specification ${buf}")
-                val i = try { components(0).toInt } catch {
+                val number:String = numbers(0)
+                val x:Float = try { number.toFloat } catch {
                     case e: Throwable =>
-                        throw new Exception(s"Parse error for memory specification ${buf}")
+                        throw new Exception(s"Unrecognized number ${number}")
                 }
-                val mem: Int = components(1) match {
-                    case "MB" | "M" => i
-                    case "GB" | "G" => i * 1024
-                    case "TB" | "T" => i * 1024 * 1024
+
+                // extract memory units
+                val memUnitRex = """([a-zA-Z]+)""".r
+                val memUnits = memUnitRex.findAllIn(buf).toList
+                if (memUnits.length != 1)
+                    throw new Exception(s"Can not parse memory specification ${buf}")
+                val memUnit:String = memUnits(0).toLowerCase
+                val mem: Float = memUnit match {
+                    case "mib" | "mb" | "m" => x
+                    case "gib" | "gb" | "g" => x * 1024
+                    case "tib" | "tb" | "t" => x * 1024 * 1024
+                    case _ => throw new Exception(s"Unknown memory unit ${memUnit}")
                 }
-                Some(mem)
+                Some(mem.ceil.round)
             case Some(x) =>
                 throw new Exception(s"Memory has to evaluate to a WdlString type ${x.toWdlString}")
         }
