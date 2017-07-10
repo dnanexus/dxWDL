@@ -1,5 +1,11 @@
 # Release Notes
 
+## 0.34
+- Topological sorting of workflow. By default, check for circular
+dependencies, and abort in case there are cycles. Optionally, sort the
+calls to avoid forward references. This is useful for WDL scripts
+there were generated, and not written by hand.
+
 ## 0.33
 - Initial support for WDL pairs and maps
 - Upgrade to wdl4s version 0.13
