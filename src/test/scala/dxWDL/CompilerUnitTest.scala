@@ -76,44 +76,6 @@ class CompilerUnitTest extends FlatSpec with BeforeAndAfterEach {
                      |""".stripMargin.trim
     }
 
-/*    it should "figure out the type of scatter collection" in {
-        val wdl = """|task prepare {
-                     |  command <<<
-                     |    python -c "print('one\ntwo\nthree\nfour')"
-                     |   >>>
-                     |   output {
-                     |     Array[String] array = read_lines(stdout())
-                     |   }
-                     |}
-                     |
-                     |task analysis {
-                     |   String str
-                     |     command <<<
-                     |       python -c "print('_${str}_')"
-                     |     >>>
-                     |   output {
-                     |     String out = read_string(stdout())
-                     |   }
-                     |}
-                     |
-                     |workflow sg1 {
-                     |   call prepare
-                     |   scatter (x in prepare.array) {
-                     |     call analysis {input: str=x}
-                     |   }
-                     |}""".stripMargin.trim
-
-        val ns = WdlNamespaceWithWorkflow.load(wdl, Seq.empty).get
-        val wf = ns.workflow
-        val scatters = wf.scatters
-        assert (scatters.size == 1)
-        val scatter = scatters.toList.head
-
-        val env : Map[String, WdlType] = Map("prepare.array" -> WdlArrayType(WdlStringType))
-        val wdlType : WdlType = CompilerFrontEnd.calcIterWdlType(scatter, env)
-        assert(wdlType == WdlStringType)
-    } */
-
     it should "Handle array access" in {
         val wdl = """|task diff {
                      |  File A

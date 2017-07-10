@@ -98,19 +98,17 @@ class UtilsTest extends FlatSpec with BeforeAndAfterEach with OneInstancePerTest
 
     it should "print WdlBoolean in a human readable fashion" in {
         val b = WdlBoolean(true)
-        //println(s"${b} ${b.toString} ${b.toWdlString}")
         assert(b.toWdlString == "true")
     }
 
     it should "print call inputs correctly" in {
-        println("--------------------------------------")
         val m = Map("A" -> WdlBoolean(true),
                     "B" -> WdlInteger(23),
                     "C" -> WdlFloat(44.3),
                     "D" -> WdlString("ddd"),
                     "E" -> WdlFile("/tmp/xx"))
-        System.err.print(s"callInputs=\n${Utils.inputsToString(m)}\n")
-        println("--------------------------------------")
+        val s = Utils.inputsToString(m)
+        //System.err.print(s"callInputs=\n${Utils.inputsToString(m)}\n")
     }
 
     it should "pretty print strings in IR with newlines" in {
@@ -124,7 +122,7 @@ class UtilsTest extends FlatSpec with BeforeAndAfterEach with OneInstancePerTest
                      |  // ||  ||__
                      |""".stripMargin
         assert(yaml1.prettyPrint == buf)
-        print(buf)
+        //print(buf)
 
 /*        {
 
@@ -146,11 +144,11 @@ class UtilsTest extends FlatSpec with BeforeAndAfterEach with OneInstancePerTest
             s"""{ "name" : "${name}", "class" : "${dxType}" }""".parseJson
         }
         val x: JsValue = marshal("xxx", "array:file")
-        System.err.println(s"json=${x.prettyPrint}")
+        //System.err.println(s"json=${x.prettyPrint}")
 
         val m : Map[String, JsValue] = x.asJsObject.fields
         val m2 = m + ("optional" -> JsBoolean(true))
         val x2 = JsObject(m2)
-        System.err.println(s"json=${x2.prettyPrint}")
+        //System.err.println(s"json=${x2.prettyPrint}")
     }
 }

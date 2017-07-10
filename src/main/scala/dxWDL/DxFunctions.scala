@@ -1,6 +1,7 @@
 package dxWDL
 
 import com.dnanexus.DXFile
+import java.io.PrintStream
 import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, FileSystems, Path, Paths, PathMatcher}
 import scala.util.{Try, Success, Failure}
@@ -12,6 +13,14 @@ import wdl4s.types._
 import wdl4s.values._
 
 object DxFunctions extends WdlStandardLibraryFunctions {
+    // Stream where to emit debugging information. By default,
+    // goes to stderr on the instance. Requires reconfiguration
+    // in unit test environments
+    var errStream: PrintStream = System.err
+    def setErrStream [T <: PrintStream] (err: T) = {
+        errStream = err
+    }
+
     lazy val dxHomeDir:Path = {
         //val d = System.getProperty("user.home")
         Paths.get(Utils.DX_HOME)
@@ -77,7 +86,7 @@ object DxFunctions extends WdlStandardLibraryFunctions {
     // cromwell/backend/src/main/scala/cromwell/backend/io/GlobFunctions.scala).
     //
     override def glob(path: String, pattern: String): Seq[String] = {
-        System.err.println(s"DxFunctions.glob(${pattern})")
+        errStream.println(s"DxFunctions.glob(${pattern})")
         val baseDir: Path = dxHomeDir
         val matcher:PathMatcher = FileSystems.getDefault()
             .getPathMatcher(s"glob:${baseDir.toString}/${pattern}")
@@ -90,7 +99,7 @@ object DxFunctions extends WdlStandardLibraryFunctions {
                     .filter(matcher.matches(_))
                     .map(_.toString)
                     .toSeq
-        System.err.println(s"${retval}")
+        errStream.println(s"${retval}")
         retval
     }
 
