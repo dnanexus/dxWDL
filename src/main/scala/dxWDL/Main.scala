@@ -59,7 +59,7 @@ object Main extends App {
                             throw new IllegalArgumentException(s"sanity")
                         case "archive" :: tail =>
                             nextOption(map ++ Map("archive" -> ""), tail)
-                        case "force" :: tail =>
+                        case ("force"|"f"|"overwrite") :: tail =>
                             nextOption(map ++ Map("force" -> ""), tail)
                         case "inputs" :: value :: tail =>
                             nextOption(map ++ Map("inputFile" -> value.toString), tail)

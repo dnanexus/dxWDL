@@ -98,19 +98,17 @@ class UtilsTest extends FlatSpec with BeforeAndAfterEach with OneInstancePerTest
 
     it should "print WdlBoolean in a human readable fashion" in {
         val b = WdlBoolean(true)
-        //println(s"${b} ${b.toString} ${b.toWdlString}")
         assert(b.toWdlString == "true")
     }
 
     it should "print call inputs correctly" in {
-        println("--------------------------------------")
         val m = Map("A" -> WdlBoolean(true),
                     "B" -> WdlInteger(23),
                     "C" -> WdlFloat(44.3),
                     "D" -> WdlString("ddd"),
                     "E" -> WdlFile("/tmp/xx"))
+        val s = Utils.inputsToString(m)
         //System.err.print(s"callInputs=\n${Utils.inputsToString(m)}\n")
-        println("--------------------------------------")
     }
 
     it should "pretty print strings in IR with newlines" in {

@@ -506,7 +506,9 @@ class Wdl4sTest extends FlatSpec with BeforeAndAfterEach with OneInstancePerTest
             val variables = AstTools.findVariableReferences(expr.ast).map{ case t:Terminal =>
                 WdlExpression.toString(t)
             }
-            System.err.println(s"dep vars(${expr.toWdlString}) = ${variables}")
+            //System.err.println(s"dep vars(${expr.toWdlString}) = ${variables}")
+            //assert(expr.toWdlString == variables)
+            assert(variables == List("p"))
         }
     }
 }
