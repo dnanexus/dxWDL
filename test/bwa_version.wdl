@@ -6,7 +6,8 @@ task GetBwaVersion {
     sed 's/Version: //'
   }
   runtime {
-    docker: "broadinstitute/genomes-in-the-cloud:2.2.4-1469632282"
+      docker: "broadinstitute/genomes-in-the-cloud:2.2.4-1469632282"
+      entrypoint: "/bin/bash"
       memory: "3 GB"
       cpu: "1"
       disks: "local-disk 10 HDD"

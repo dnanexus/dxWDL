@@ -49,8 +49,8 @@ object RunnerTask {
         metaDir
     }
 
-    def evalDeclarations(task : Task, taskInputs : Map[String, WdlValue])
-            : Map[Declaration, WdlValue] = {
+    def evalDeclarations(task : Task,
+                         taskInputs : Map[String, WdlValue]) : Map[Declaration, WdlValue] = {
         var env = taskInputs
         def lookup(varName : String) : WdlValue =
             env.get(varName) match {
@@ -97,11 +97,12 @@ object RunnerTask {
     // evaluate Task output expressions
     def evalTaskOutputs(task : Task,
                         inputs : Map[String, WdlValue]) : Seq[(String, WdlType, WdlValue)] = {
-        def lookup(varName : String) : WdlValue =
+        def lookup(varName : String) : WdlValue = {
             inputs.get(varName) match {
                 case Some(x) => x
                 case None => throw new AppInternalException(s"No value found for variable ${varName}")
             }
+        }
         def evalTaskOutput(tso: TaskOutput, expr: WdlExpression) : (String, WdlType, WdlValue) = {
             val v : WdlValue = expr.evaluate(lookup, DxFunctions).get
             (tso.unqualifiedName, tso.wdlType, v)
@@ -170,25 +171,32 @@ object RunnerTask {
 
     def writeSubmitBashScript(task: Task,
                               env: Map[String, WdlValue]) : Unit = {
+        def lookup(varName : String) : WdlValue = {
+            env.get(varName) match {
+                case Some(x) => x
+                case None => throw new AppInternalException(s"No value found for variable ${varName}")
+            }
+        }
+        def evalStringExpr(expr: WdlExpression) : String = {
+            val v : WdlValue = expr.evaluate(lookup, DxFunctions).get
+            v match {
+                case WdlString(s) => s
+                case _ => throw new AppInternalException(
+                    s"docker is not a string expression ${v.toWdlString}")
+            }
+        }
         // Figure out if docker is used. If so, it is specifed by an
         // expression that requires evaluation.
         val docker: Option[String] =
             task.runtimeAttributes.attrs.get("docker") match {
                 case None => None
-                case Some(expr) =>
-                    def lookup(varName : String) : WdlValue =
-                        env.get(varName) match {
-                            case Some(x) => x
-                            case None => throw new AppInternalException(s"No value found for variable ${varName}")
-                        }
-                    val v : WdlValue = expr.evaluate(lookup, DxFunctions).get
-                    v match {
-                        case WdlString(s) => Some(s)
-                        case _ => throw new AppInternalException(
-                            "docker is not a string expression ${v.toWdlString}")
-                    }
+                case Some(expr) => Some(evalStringExpr(expr))
             }
-
+        val entrypoint: String =
+            task.runtimeAttributes.attrs.get("entrypoint") match {
+                case None => "/bin/bash"
+                case Some(expr) => evalStringExpr(expr)
+            }
         docker match {
             case None => ()
             case Some(imgName) =>
@@ -202,8 +210,9 @@ object RunnerTask {
                 // the platform.
                 val DX_HOME = Utils.DX_HOME
                 val dockerRunPath = getMetaDir().resolve("script.submit")
-                val dockerRunScript = s"""|#!/bin/bash -ex
-                                          |dx-docker run -v ${DX_HOME}:${DX_HOME} ${imgName} /bin/bash $${HOME}/execution/meta/script""".stripMargin.trim
+                val dockerRunScript =
+                    s"""|#!/bin/bash -ex
+                        |dx-docker run --entrypoint ${entrypoint} -v ${DX_HOME}:${DX_HOME} ${imgName} $${HOME}/execution/meta/script""".stripMargin.trim
                 errStream.println(s"writing docker run script to ${dockerRunPath}")
                 Utils.writeFileContent(dockerRunPath, dockerRunScript)
                 dockerRunPath.toFile.setExecutable(true)

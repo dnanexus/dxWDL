@@ -20,21 +20,24 @@ object Main extends App {
     type OptionsMap = Map[String, String]
 
     object Actions extends Enumeration {
-        val Compile, Eval, LaunchScatter,
-            TaskEpilog, TaskProlog, TaskRelaunch,
-            Version, Yaml  = Value
+        val Compile, Config, Internal, Version, Yaml  = Value
+    }
+    object InternalOp extends Enumeration {
+        val Eval, LaunchScatter,
+            TaskEpilog, TaskProlog, TaskRelaunch = Value
+    }
+    private def normKey(s: String) : String= {
+        s.replaceAll("_", "").toUpperCase
     }
 
     // load configuration information
-    def getVersion() : String = {
+    private def getVersion() : String = {
         val config = ConfigFactory.load()
         val version = config.getString("dxWDL.version")
-        //val asset_id = config.getString("dxWDL.asset_id")
-        //System.err.println(s"asset_id=${asset_id}")
         version
     }
 
-    def getAssetId() : String = {
+    private def getAssetId() : String = {
         val config = ConfigFactory.load()
         val assetId = config.getString("dxWDL.asset_id")
         assert(assetId.startsWith("record"))
@@ -80,7 +83,7 @@ object Main extends App {
         options
     }
 
-    def yaml(args: Seq[String]): Termination = {
+    private def yaml(args: Seq[String]): Termination = {
         if (args.length != 1)
             return BadUsageTermination("")
 
@@ -306,57 +309,54 @@ object Main extends App {
         }
     }
 
-    private def appletAction(action: Actions.Value, args : Seq[String]): Termination = {
-        if (args.length != 2) {
-            BadUsageTermination("All applet actions take a WDL file, and a home directory")
-        } else {
-            val wdlDefPath = args(0)
-            val homeDir = Paths.get(args(1))
-            val (jobInputPath, jobOutputPath, jobErrorPath, jobInfoPath) =
-                Utils.jobFilesOfHomeDir(homeDir)
-            val ns = WdlNamespace.loadUsingPath(Paths.get(wdlDefPath), None, None).get
-
-            try {
-                action match {
-                    case Actions.Eval =>
-                        RunnerEval.apply(workflowOfNamespace(ns), jobInputPath, jobOutputPath, jobInfoPath)
-                    case Actions.LaunchScatter =>
-                        RunnerScatter.apply(workflowOfNamespace(ns), jobInputPath, jobOutputPath, jobInfoPath)
-                    case Actions.TaskEpilog =>
-                        RunnerTask.epilog(taskOfNamespace(ns), jobInputPath, jobOutputPath, jobInfoPath)
-                    case Actions.TaskProlog =>
-                        RunnerTask.prolog(taskOfNamespace(ns), jobInputPath, jobOutputPath, jobInfoPath)
-                    case Actions.TaskRelaunch =>
-                        RunnerTask.relaunch(taskOfNamespace(ns), jobInputPath, jobOutputPath, jobInfoPath)
-                }
-                SuccessfulTermination(s"success ${action}")
-            } catch {
-                case e : Throwable =>
-                    writeJobError(jobErrorPath, e)
-                    UnsuccessfulTermination(s"failure running ${action}")
+    private def appletAction(op: InternalOp.Value, args : Seq[String]): Termination = {
+        if (args.length != 2)
+            return BadUsageTermination("All applet actions take a WDL file, and a home directory")
+        val wdlDefPath = args(0)
+        val homeDir = Paths.get(args(1))
+        val (jobInputPath, jobOutputPath, jobErrorPath, jobInfoPath) =
+            Utils.jobFilesOfHomeDir(homeDir)
+        val ns = WdlNamespace.loadUsingPath(Paths.get(wdlDefPath), None, None).get
+        try {
+            op match {
+                case InternalOp.Eval =>
+                    RunnerEval.apply(workflowOfNamespace(ns), jobInputPath, jobOutputPath, jobInfoPath)
+                case InternalOp.LaunchScatter =>
+                    RunnerScatter.apply(workflowOfNamespace(ns), jobInputPath, jobOutputPath, jobInfoPath)
+                case InternalOp.TaskEpilog =>
+                    RunnerTask.epilog(taskOfNamespace(ns), jobInputPath, jobOutputPath, jobInfoPath)
+                case InternalOp.TaskProlog =>
+                    RunnerTask.prolog(taskOfNamespace(ns), jobInputPath, jobOutputPath, jobInfoPath)
+                case InternalOp.TaskRelaunch =>
+                    RunnerTask.relaunch(taskOfNamespace(ns), jobInputPath, jobOutputPath, jobInfoPath)
             }
+            SuccessfulTermination(s"success ${op}")
+        } catch {
+            case e : Throwable =>
+                writeJobError(jobErrorPath, e)
+                UnsuccessfulTermination(s"failure running ${op}")
         }
     }
 
-    private def getAction(req: String): Option[Actions.Value] = {
-        def normalize(s: String) : String= {
-            s.replaceAll("_", "").toUpperCase
+    def internalOp(args : Seq[String]) : Termination = {
+        val intOp = InternalOp.values find (x => normKey(x.toString) == normKey(args.head))
+        intOp match {
+            case None =>
+                UnsuccessfulTermination(s"unknown internal action ${args.head}")
+            case Some(x) =>  appletAction(x, args.tail)
         }
-        Actions.values find (x => normalize(x.toString) == normalize(req))
     }
 
     def dispatchCommand(args: Seq[String]): Termination = {
         if (args.isEmpty)
-            BadUsageTermination("")
-        else getAction(args.head) match {
+            return BadUsageTermination("")
+        val action = Actions.values find (x => normKey(x.toString) == normKey(args.head))
+        action match {
             case None => BadUsageTermination("")
             case Some(x) => x match {
                 case Actions.Compile => compile(args.tail)
-                case Actions.Eval => appletAction(x, args.tail)
-                case Actions.LaunchScatter => appletAction(x, args.tail)
-                case Actions.TaskProlog => appletAction(x, args.tail)
-                case Actions.TaskEpilog => appletAction(x, args.tail)
-                case Actions.TaskRelaunch => appletAction(x, args.tail)
+                case Actions.Config => SuccessfulTermination(ConfigFactory.load().toString)
+                case Actions.Internal => internalOp(args.tail)
                 case Actions.Version => SuccessfulTermination(getVersion())
                 case Actions.Yaml => yaml(args.tail)
             }
@@ -367,10 +367,6 @@ object Main extends App {
         """|java -jar dxWDL.jar <action> <parameters> [options]
            |
            |Actions:
-           |
-           |yaml <WDL file>
-           |  Perform full validation and print a YAML version of the
-           |  syntax tree.
            |
            |compile <WDL file>
            |  Compile a wdl file into a dnanexus workflow.
@@ -386,24 +382,18 @@ object Main extends App {
            |    -sort <mode> :        Sort call graph, to avoid forward references
            |    -verbose :            Print detailed progress reports
            |
+           |config
+           |  Print the configuration options
+           |
+           |internal <sub command>
+           |  Various internal commands
+           |
            |version
            |  Report the current version
            |
-           |taskProlog <WDL file> <home directory>
-           |  Run the initial part of a dx-applet
-           |  originally compiled from a WDL workflow.
-           |  Process the input arguments, and generate a bash script.
-           |
-           |taskEpilog <WDL file> <home directory>
-           |  After the bash script generated by the above command
-           |  is done, collect the outputs and format them into
-           |  WDL and dx.
-           |
-           |launchScatter <WDL file> <home directory>
-           |  Launch a WDL scatter compiled into a dx-applet
-           |
-           |eval <WDL file> <home directory>
-           |  Run an applet that calculates WDL expressions
+           |yaml <WDL file>
+           |  Perform full validation and print a YAML version of the
+           |  syntax tree.
            |""".stripMargin
 
     val termination = dispatchCommand(args)
