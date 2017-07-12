@@ -13,7 +13,7 @@ import wdl4s._
 import wdl4s.command.{CommandPart, ParameterCommandPart, StringCommandPart}
 import wdl4s.parser.WdlParser.{Ast, AstNode, Terminal}
 
-case class WdlPrettyPrinter(fqnFlag: Boolean, oldNS: Option[WdlNamespace]) {
+case class WdlPrettyPrinter(fqnFlag: Boolean) {
 
     private val I_STEP = 4
 
@@ -160,13 +160,11 @@ case class WdlPrettyPrinter(fqnFlag: Boolean, oldNS: Option[WdlNamespace]) {
     def apply(wf: Workflow, level: Int) : Vector[String] = {
         // split the workflow outputs from the other children, they
         // are treated separately
-        //
-        // Currently, we are ignoring wfOutputs
         val (wfChildren, wfOutputs) = wf.children.partition {
             case _:WorkflowOutput => false
             case _ => true
         }
-
+        System.err.println(s"PrettyPrint(wfOutputs=${wfOutputs.length})")
         val children = wfChildren.map {
             case call: TaskCall => apply(call, level + 1)
             case sc: Scatter => apply(sc, level + 1)
@@ -174,27 +172,12 @@ case class WdlPrettyPrinter(fqnFlag: Boolean, oldNS: Option[WdlNamespace]) {
             case x => throw new Exception(s"Unimplemented workflow element ${x.getClass.getName} ${x.toString}")
         }.flatten.toVector
 
-        // The outputs variable is lazily calculated in the Workflow class. It includes code
-        // that accesses fields that we do not properly intialize. The try/catch
-        // is a workaround. It works because the output section is ignored; DNAx does
-        // not support outputs from workflows.
-        //
-        // A second workaround can be used if this is a rewritten
-        // workflow. Assuming we have access to the original workflow,
-        // we use the old output section.
-        val outputs =
-            try {
-                wf.outputs.map(x => apply(x, level + 2)).flatten.toVector
-            } catch {
-                case e: Throwable =>
-                    oldNS match {
-                        case Some(nswf : WdlNamespaceWithWorkflow) =>
-                            nswf.workflow.outputs.map(x => apply(x, level + 2)).flatten.toVector
-                        case _ =>
-                            Vector.empty
-                    }
-            }
-
+        // An error occurs in wdl4s if we use the wf.outputs method,
+        // where there are no outputs.  We use the explicit output
+        // list instead.
+        val outputs = wfOutputs
+            .map(x => x.asInstanceOf[WorkflowOutput])
+            .map(x => apply(x, level + 2)).flatten.toVector
         val paramMeta = wf.parameterMeta.map{ case (x,y) =>  s"${x}: ${y}" }.toVector
         val meta = wf.meta.map{ case (x,y) =>  s"${x}: ${y}" }.toVector
 

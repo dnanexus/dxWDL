@@ -371,8 +371,13 @@ object CompilerPreprocess {
         // Do not modify the tasks
         ns match {
             case nswf : WdlNamespaceWithWorkflow =>
+                val orgOutputs : Seq[WorkflowOutput] = nswf.children.collect({ case o: WorkflowOutput => o })
+
                 val cState = State(nswf.workflow, cef, verbose)
                 val wf1 = simplifyWorkflow(ns, nswf.workflow, cState)
+                val wf1Outputs : Seq[WorkflowOutput] = wf1.children.collect({ case o: WorkflowOutput => o })
+                assert(orgOutputs.length == wf1Outputs.length)
+
                 val nswf1 = new WdlNamespaceWithWorkflow(ns.importedAs,
                                                          wf1,
                                                          ns.imports,

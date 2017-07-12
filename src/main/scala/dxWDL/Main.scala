@@ -9,7 +9,8 @@ import scala.util.{Failure, Success, Try}
 import spray.json._
 import spray.json.DefaultJsonProtocol
 import spray.json.JsString
-import wdl4s.{ImportResolver, Task, WdlNamespace, WdlNamespaceWithWorkflow, WdlSource, Workflow}
+import wdl4s.{ImportResolver, Task, WdlNamespace, WdlNamespaceWithWorkflow, WdlSource,
+    Workflow, WorkflowOutput}
 
 object Main extends App {
     sealed trait Termination
@@ -42,6 +43,18 @@ object Main extends App {
         val assetId = config.getString("dxWDL.asset_id")
         assert(assetId.startsWith("record"))
         assetId
+    }
+
+    def numberOutputs(ns: WdlNamespace) : Int = {
+        ns match {
+            case nswf: WdlNamespaceWithWorkflow =>
+                val wf = nswf.workflow
+                val orgNum = wf.outputs.length
+                System.err.println(s"numberOutputs for workflow (wf.outputs=${orgNum})")
+                val outputs = wf.children.collect({ case o: WorkflowOutput => o })
+                outputs.length
+            case _ => 0
+        }
     }
 
     // parse extra command line arguments
@@ -174,13 +187,12 @@ object Main extends App {
     //
     // Note: by keeping the namespace in memory, instead of writing to
     // a temporary file on disk, we keep the resolver valid.
-    def washNamespace(oldNs: WdlNamespace,
-                      rewrittenNs: WdlNamespace,
+    def washNamespace(rewrittenNs: WdlNamespace,
                       resolver: ImportResolver,
                       wdlSourceFile: Path,
                       suffix: String,
                       verbose: Boolean) = {
-        val lines: String = WdlPrettyPrinter(true, Some(oldNs)).apply(rewrittenNs, 0).mkString("\n")
+        val lines: String = WdlPrettyPrinter(true).apply(rewrittenNs, 0).mkString("\n")
         val cleanNs = WdlNamespace.loadUsingSource(lines, None, Some(List(resolver))).get
         if (verbose)
             writeToFile(wdlSourceFile, "." + suffix, lines)
@@ -243,13 +255,19 @@ object Main extends App {
             val p:Path = sourceDir.resolve(filename)
             Utils.readFileContent(p)
         }
-        val orgNs =
+        val orgNsRaw =
             WdlNamespace.loadUsingPath(wdlSourceFile, None, Some(List(resolver))) match {
                 case Success(ns) => ns
                 case Failure(f) =>
                     System.err.println("Error loading WDL source code")
                     throw f
             }
+        val nOutputs = numberOutputs(orgNsRaw)
+        System.err.println(s"#outputs=${nOutputs}")
+        val orgNsNoWildcards = WdlRewrite.namespaceRemoveWildcardOutputs(orgNsRaw)
+        val orgNs = washNamespace(orgNsNoWildcards, resolver, wdlSourceFile, "noWildcards", verbose)
+        val nOutputs2 = numberOutputs(orgNs)
+        System.err.println(s"#outputs=${nOutputs2}")
 
         // Topologically sort the WDL file so no forward references exist in
         // subsequent steps. Create new file to hold the result.
@@ -258,9 +276,9 @@ object Main extends App {
         // Assuming the source file is xxx.wdl, the new name will
         // be xxx.sorted.wdl.
         val sortedNs1 = CompilerTopologicalSort.apply(orgNs, sortMode, verbose)
-        val sortedNs = washNamespace(orgNs, sortedNs1, resolver, wdlSourceFile, "sorted", verbose)
+        val sortedNs = washNamespace(sortedNs1, resolver, wdlSourceFile, "sorted", verbose)
         val ns1 = CompilerPreprocess.apply(sortedNs, verbose)
-        val ns = washNamespace(sortedNs, ns1, resolver, wdlSourceFile, "simplified", verbose)
+        val ns = washNamespace(ns1, resolver, wdlSourceFile, "simplified", verbose)
 
         // Compile the WDL workflow into an Intermediate Representation (IR)
         val cef = new CompilerErrorFormatter(ns.terminalMap)

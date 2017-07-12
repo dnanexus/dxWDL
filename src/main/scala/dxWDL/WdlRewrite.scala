@@ -5,7 +5,7 @@
   * an existing one. Sometimes, it is quite tricky to create valid
   * classes.
   *
-  *  Caveat: the ASTs are incorrect for these resulting instances.
+  * Caveat: the ASTs are incorrect for the resulting instances.
   */
 package dxWDL
 
@@ -84,15 +84,35 @@ object WdlRewrite {
         new TaskOutput(name, wdlType, defaultExpr, INVALID_AST, Some(scope))
     }
 
-    // modify the children in a workflow
-    def workflow [Child <: Scope] (wf: Workflow,
-                                   children: Seq[Child]): Workflow = {
-        val wf1 = new Workflow(wf.unqualifiedName, wf.workflowOutputWildcards,
-                               wf.wdlSyntaxErrorFormatter, wf.meta, wf.parameterMeta,
-                               wf.ast)
-        wf1.children = children
-        updateScope(wf, wf1)
-        wf1
+    // Modify the children in a workflow.
+    def workflow[Child <: Scope] (wfOld: Workflow,
+                                  children: Seq[Child]): Workflow = {
+        val wf = new Workflow(wfOld.unqualifiedName,
+                              Seq.empty, // no output wildcards
+                              wfOld.wdlSyntaxErrorFormatter,
+                              wfOld.meta, wfOld.parameterMeta,
+                              wfOld.ast)
+        wf.children = children
+        updateScope(wfOld, wf)
+        wf
+    }
+
+    // Remove output wildcards
+    //
+    // The outputs variable is lazily calculated in the Workflow
+    // class. It includes code that accesses fields that we do not
+    // properly intialize. This requires special care, because this
+    // causes problems with our semi-valid wdl4s structures.
+    def workflowRemoveOutputWildcards(wfOld: Workflow) : Workflow = {
+        val wf = new Workflow(wfOld.unqualifiedName,
+                              Seq.empty, // no output wildcards
+                              wfOld.wdlSyntaxErrorFormatter,
+                              wfOld.meta,
+                              wfOld.parameterMeta,
+                              wfOld.ast)
+        wf.children = wfOld.children ++ wfOld.outputs
+        updateScope(wfOld, wf)
+        wf
     }
 
     def workflowGenEmpty(wfName: String) : Workflow = {
@@ -136,5 +156,22 @@ object WdlRewrite {
                                      Map.empty,
                                      WdlRewrite.INVALID_ERR_FORMATTER,
                                      WdlRewrite.INVALID_AST)
+    }
+
+    def namespaceRemoveWildcardOutputs(ns: WdlNamespace) : WdlNamespace = {
+        ns match {
+            case nswf: WdlNamespaceWithWorkflow =>
+                val wf = workflowRemoveOutputWildcards(nswf.workflow)
+                new WdlNamespaceWithWorkflow(ns.importedAs,
+                                             wf,
+                                             ns.imports,
+                                             ns.namespaces,
+                                             ns.tasks,
+                                             Map.empty,
+                                             WdlRewrite.INVALID_ERR_FORMATTER,
+                                             WdlRewrite.INVALID_AST)
+
+            case _:WdlNamespaceWithoutWorkflow => ns
+        }
     }
 }
