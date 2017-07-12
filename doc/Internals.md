@@ -1,9 +1,9 @@
 # Compiler internals
 
 The compiler is split into three passes
-- Preprocess: simplify the original WDL code
-- FrontEnd: take simplified WDL, and generate IR
-- Backend: start with IR and generate platform applets and workflow
+- Simplify: simplify the original WDL code
+- IR: take simplified WDL, and generate IR
+- Native: start with IR and generate platform applets and workflow
 
 To explain these, we will walk through the compilation process of a simple WDL file.
 
@@ -35,7 +35,7 @@ workflow math {
 }
 ```
 
-## Preprocessor
+## Simplification step
 The preprocessor starts with the original WDL, and simplifies it,
 writing out a new WDL source file. A call that has subexpressions is
 rewritten into separate declarations and a call with variables and
@@ -70,8 +70,8 @@ In this case, the top four declarations will be calculated with one
 job, and xtmp3 will require an additional job. This pass allows
 mapping calls to platform workflow stages, which do not support subexpressions.
 
-## Front end
-The front-end takes the simplified WDL workflow, and generates a
+## Generating intermediate representation
+The IR stage takes the simplified WDL workflow, and generates a
 blueprint for a dnanexus workflows and applets (*dx:workflow*, *dx:applet*). It works locally,
 without making platform calls, and without using dnanexus data
 structures. The blueprint has the format:
@@ -156,7 +156,7 @@ task Eval1 {
 ```
 
 
-## Backend
+## Native
 The back-end takes a blueprint, generates a *dx:applet* from each applet definition, and then
 generates a *dx:workflow* that uses the applets in its stages.
 

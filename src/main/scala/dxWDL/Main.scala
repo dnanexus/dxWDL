@@ -21,12 +21,21 @@ object Main extends App {
     type OptionsMap = Map[String, String]
 
     object Actions extends Enumeration {
-        val Compile, Config, Internal, Version, Yaml  = Value
+        val Compile, Config, Internal, Version  = Value
     }
     object InternalOp extends Enumeration {
         val Eval, LaunchScatter,
             TaskEpilog, TaskProlog, TaskRelaunch = Value
     }
+
+    // Compiler state.
+    // Packs common arguments passed between methods.
+    case class State(ns: WdlNamespace,
+                     outputs: Seq[WorkflowOutput],
+                     wdlSourceFile: Path,
+                     resolver: ImportResolver,
+                     verbose: Boolean)
+
     private def normKey(s: String) : String= {
         s.replaceAll("_", "").toUpperCase
     }
@@ -45,15 +54,12 @@ object Main extends App {
         assetId
     }
 
-    def numberOutputs(ns: WdlNamespace) : Int = {
+    def outputs(ns: WdlNamespace) : Seq[WorkflowOutput] = {
         ns match {
             case nswf: WdlNamespaceWithWorkflow =>
                 val wf = nswf.workflow
-                val orgNum = wf.outputs.length
-                System.err.println(s"numberOutputs for workflow (wf.outputs=${orgNum})")
-                val outputs = wf.children.collect({ case o: WorkflowOutput => o })
-                outputs.length
-            case _ => 0
+                wf.outputs
+            case _ => List.empty[WorkflowOutput]
         }
     }
 
@@ -94,22 +100,6 @@ object Main extends App {
         }
         val options = nextOption(Map(),arglist)
         options
-    }
-
-    private def yaml(args: Seq[String]): Termination = {
-        if (args.length != 1)
-            return BadUsageTermination("")
-
-        val wdlSourceFile = Paths.get(args.head)
-
-        // Resolving imports. Look for referenced files in the
-        // source directory.
-        val sourceDir = wdlSourceFile.getParent()
-        def resolver(filename: String) : String = {
-            Utils.readFileContent(sourceDir.resolve(filename))
-        }
-        val ns = WdlNamespace.loadUsingPath(wdlSourceFile, None, Some(List(resolver))).get
-        SuccessfulTermination(WdlYamlTree(ns).print())
     }
 
     // Report an error, since this is called from a bash script, we
@@ -188,14 +178,16 @@ object Main extends App {
     // Note: by keeping the namespace in memory, instead of writing to
     // a temporary file on disk, we keep the resolver valid.
     def washNamespace(rewrittenNs: WdlNamespace,
-                      resolver: ImportResolver,
-                      wdlSourceFile: Path,
                       suffix: String,
-                      verbose: Boolean) = {
-        val lines: String = WdlPrettyPrinter(true).apply(rewrittenNs, 0).mkString("\n")
-        val cleanNs = WdlNamespace.loadUsingSource(lines, None, Some(List(resolver))).get
-        if (verbose)
-            writeToFile(wdlSourceFile, "." + suffix, lines)
+                      cState: State) : WdlNamespace = {
+        val lines: String = WdlPrettyPrinter(true, Some(cState.outputs))
+            .apply(rewrittenNs, 0)
+            .mkString("\n")
+        val cleanNs = WdlNamespace.loadUsingSource(
+            lines, None, Some(List(cState.resolver))
+        ).get
+        if (cState.verbose)
+            writeToFile(cState.wdlSourceFile, "." + suffix, lines)
         cleanNs
     }
 
@@ -255,19 +247,14 @@ object Main extends App {
             val p:Path = sourceDir.resolve(filename)
             Utils.readFileContent(p)
         }
-        val orgNsRaw =
+        val orgNs =
             WdlNamespace.loadUsingPath(wdlSourceFile, None, Some(List(resolver))) match {
                 case Success(ns) => ns
                 case Failure(f) =>
                     System.err.println("Error loading WDL source code")
                     throw f
             }
-        val nOutputs = numberOutputs(orgNsRaw)
-        System.err.println(s"#outputs=${nOutputs}")
-        val orgNsNoWildcards = WdlRewrite.namespaceRemoveWildcardOutputs(orgNsRaw)
-        val orgNs = washNamespace(orgNsNoWildcards, resolver, wdlSourceFile, "noWildcards", verbose)
-        val nOutputs2 = numberOutputs(orgNs)
-        System.err.println(s"#outputs=${nOutputs2}")
+        val cState = State(orgNs, outputs(orgNs), wdlSourceFile, resolver, verbose)
 
         // Topologically sort the WDL file so no forward references exist in
         // subsequent steps. Create new file to hold the result.
@@ -276,13 +263,16 @@ object Main extends App {
         // Assuming the source file is xxx.wdl, the new name will
         // be xxx.sorted.wdl.
         val sortedNs1 = CompilerTopologicalSort.apply(orgNs, sortMode, verbose)
-        val sortedNs = washNamespace(sortedNs1, resolver, wdlSourceFile, "sorted", verbose)
-        val ns1 = CompilerPreprocess.apply(sortedNs, verbose)
-        val ns = washNamespace(ns1, resolver, wdlSourceFile, "simplified", verbose)
+        val sortedNs = washNamespace(sortedNs1, "sorted", cState)
+
+        // Simplify the original workflow, for example,
+        // convert call arguments from expressions to variables.
+        val ns1 = CompilerSimplify.apply(sortedNs, verbose)
+        val ns = washNamespace(ns1, "simplified", cState)
 
         // Compile the WDL workflow into an Intermediate Representation (IR)
         val cef = new CompilerErrorFormatter(ns.terminalMap)
-        val irNs = CompilerFrontEnd.apply(ns, instanceTypeDB, folder, cef, verbose)
+        val irNs = CompilerIR.apply(ns, instanceTypeDB, folder, cef, verbose)
 
         // Write out the intermediate representation
         prettyPrintIR(wdlSourceFile, irNs, verbose)
@@ -292,9 +282,9 @@ object Main extends App {
             case None =>
                 // Generate dx:applets and dx:workflow from the IR
                 val wdlInputs = options.get("inputFile").map(Paths.get(_))
-                CompilerBackend.apply(irNs, wdlInputs, dxProject, instanceTypeDB,
-                                      dxWDLrtId,
-                                      folder, cef, force, archive, verbose)
+                CompilerNative.apply(irNs, wdlInputs, dxProject, instanceTypeDB,
+                                     dxWDLrtId,
+                                     folder, cef, force, archive, verbose)
             case Some(x) if x.toLowerCase == "fe" => "applet-xxxx"
             case _ => throw new Exception(s"Unknown mode ${mode}")
         }
@@ -376,7 +366,6 @@ object Main extends App {
                 case Actions.Config => SuccessfulTermination(ConfigFactory.load().toString)
                 case Actions.Internal => internalOp(args.tail)
                 case Actions.Version => SuccessfulTermination(getVersion())
-                case Actions.Yaml => yaml(args.tail)
             }
         }
     }
@@ -408,10 +397,6 @@ object Main extends App {
            |
            |version
            |  Report the current version
-           |
-           |yaml <WDL file>
-           |  Perform full validation and print a YAML version of the
-           |  syntax tree.
            |""".stripMargin
 
     val termination = dispatchCommand(args)

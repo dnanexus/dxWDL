@@ -155,7 +155,7 @@ class CompilerUnitTest extends FlatSpec with BeforeAndAfterEach {
         val wdl = "Array[Int] integers"
         val ns = WdlNamespace.loadUsingSource(wdl, None, None).get
         val decl = ns.declarations.head
-        val strWdlCode = WdlPrettyPrinter(true).apply(decl, 0).mkString("\n")
+        val strWdlCode = WdlPrettyPrinter(true, None).apply(decl, 0).mkString("\n")
         assert(compareIgnoreWhitespace(strWdlCode, wdl))
     }
 
@@ -184,7 +184,7 @@ class CompilerUnitTest extends FlatSpec with BeforeAndAfterEach {
             case nswf: WdlNamespaceWithWorkflow => nswf.workflow
             case _ => throw new Exception("WDL file contains no workflow")
         }
-        val strWdlCode = WdlPrettyPrinter(true).apply(wf, 0).mkString("\n")
+        val strWdlCode = WdlPrettyPrinter(true, None).apply(wf, 0).mkString("\n")
         //assert(compareIgnoreWhitespace(strWdlCode, wdl))
     }
 }

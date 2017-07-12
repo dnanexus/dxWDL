@@ -24,68 +24,6 @@ class MainSpec extends FlatSpec with Matchers with BeforeAndAfterAll {
         Main.dispatchCommand(Seq.empty[String]) shouldBe BadUsageTermination("")
     }
 
-    it should "produce YAML tree" in {
-        testWdl(ThreeStep) { wdlAndInputs =>
-            val expectedYaml =
-                """
-          |tasks:
-          |- name: ps
-          |  outputs:
-          |  - type: File
-          |    name: procs
-          |    expression: stdout()
-          |  declarations: []
-          |  commandTemplate: ps
-          |  runtime: {}
-          |- name: cgrep
-          |  outputs:
-          |  - type: Int
-          |    name: count
-          |    expression: read_int(stdout())
-          |  declarations:
-          |  - type: String
-          |    name: pattern
-          |  - type: File
-          |    name: in_file
-          |  commandTemplate: grep '${pattern}' ${in_file} | wc -l
-          |  runtime: {}
-          |- name: wc
-          |  outputs:
-          |  - type: Int
-          |    name: count
-          |    expression: read_int(stdout())
-          |  declarations:
-          |  - type: File
-          |    name: in_file
-          |  commandTemplate: cat ${in_file} | wc -l
-          |  runtime: {}
-          |workflow:
-          |  name: three_step
-          |  children:
-          |  - call:
-          |      name: ps
-          |      task: ps
-          |      inputMappings: {}
-          |  - call:
-          |      name: cgrep
-          |      task: cgrep
-          |      inputMappings:
-          |        in_file: ps.procs
-          |  - call:
-          |      name: wc
-          |      task: wc
-          |      inputMappings:
-          |        in_file: ps.procs
-          """.stripMargin.trim
-            val res = Main.dispatchCommand(Seq("yaml", wdlAndInputs.wdl))
-            res match {
-                case SuccessfulTermination(buf) =>
-                    buf should include(expectedYaml)
-                case _ => throw new Exception("Bad termination status")
-            }
-        }
-    }
-
     // NOTE:
     // We do not run compilation tests inside the unit-test framework,
     // because they perform platform calls. These tests can be invoked
