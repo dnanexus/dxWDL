@@ -124,6 +124,16 @@ object WdlRewrite {
                      INVALID_AST)
     }
 
+    def workflowOutput(varName: String,
+                       wdlType: WdlType,
+                       scope: Scope) = {
+        new WorkflowOutput("out_" + varName,
+                           wdlType,
+                           WdlExpression.fromString(varName),
+                           INVALID_AST,
+                           Some(scope))
+    }
+
     // modify the children in a scatter
     def scatter [Child <: Scope] (ssc: Scatter,
                                   children: Seq[Child]): Scatter = {
@@ -158,20 +168,12 @@ object WdlRewrite {
                                      WdlRewrite.INVALID_AST)
     }
 
-    def namespaceRemoveWildcardOutputs(ns: WdlNamespace) : WdlNamespace = {
-        ns match {
-            case nswf: WdlNamespaceWithWorkflow =>
-                val wf = workflowRemoveOutputWildcards(nswf.workflow)
-                new WdlNamespaceWithWorkflow(ns.importedAs,
-                                             wf,
-                                             ns.imports,
-                                             ns.namespaces,
-                                             ns.tasks,
-                                             Map.empty,
-                                             WdlRewrite.INVALID_ERR_FORMATTER,
-                                             WdlRewrite.INVALID_AST)
-
-            case _:WdlNamespaceWithoutWorkflow => ns
-        }
+    def namespace(task:Task) : WdlNamespaceWithoutWorkflow = {
+        new WdlNamespaceWithoutWorkflow(None,
+                                        Vector.empty,
+                                        Vector.empty,
+                                        Vector(task),
+                                        Map.empty,
+                                        WdlRewrite.INVALID_AST)
     }
 }

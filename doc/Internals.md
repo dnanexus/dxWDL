@@ -173,7 +173,7 @@ automatic testing, and debugging.
 - instace type: a platform instance name
 - docker: docker image name (optional)
 - destination : folder path on the platform
-- wdlCode: WDL snippet to exeute
+- ns: WDL namespace to exeute, an applet or a workflow
 
 ### IR Workflow
 List of stages, where a stage has the following fields:

@@ -11,7 +11,7 @@ import net.jcazevedo.moultingyaml.DefaultYamlProtocol._
 import spray.json._
 import spray.json.DefaultJsonProtocol
 import wdl4s.parser.WdlParser.{Ast, AstNode, Terminal}
-import wdl4s.WdlExpression
+import wdl4s.{WdlExpression, WdlNamespace}
 import wdl4s.types._
 import wdl4s.values._
 
@@ -62,10 +62,7 @@ object IR {
       * @param docker        is docker used?
       * @param destination   folder path on the platform
       * @param kind          Kind of applet: task, scatter, ...
-      * @param sourceCalls   Calls in source WDL that are handled by this applet.
-      *                      In scatters, these are all the calls in the block. For a task,
-      *                      it is an empty list.
-      * @param wdlCode       WDL source code to run
+      * @param ns            WDL namespace
       */
     case class Applet(name: String,
                       inputs: Vector[CVar],
@@ -74,7 +71,7 @@ object IR {
                       docker: Boolean,
                       destination : String,
                       kind: AppletKind,
-                      wdlCode: String)
+                      ns: WdlNamespace)
 
     /** An input to a stage. Could be empty, a wdl constant, or
       * a link to an output variable from another stage.
@@ -117,13 +114,16 @@ object IR {
             case InstanceTypeConst(x) => Map(YamlString("instanceType") -> YamlString(x))
             case InstanceTypeRuntime  => Map(YamlString("instanceType") -> YamlString("calculated at runtime"))
         }
+        val wdlCode:String = WdlPrettyPrinter(false, None)
+            .apply(applet.ns, 0)
+            .mkString("\n")
         val m: Map[YamlValue, YamlValue] = Map(
             YamlString("name") -> YamlString(applet.name),
             YamlString("inputs") -> YamlArray(inputs.toVector),
             YamlString("outputs") -> YamlArray(outputs.toVector),
             YamlString("destination") -> YamlString(applet.destination),
             YamlString("kind") -> YamlString(applet.kind.toString),
-            YamlString("wdlCode") -> YamlString(applet.wdlCode)
+            YamlString("wdlCode") -> YamlString(wdlCode)
         )
         YamlObject(m ++ docker ++ instanceType)
     }

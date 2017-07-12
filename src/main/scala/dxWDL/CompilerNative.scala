@@ -246,7 +246,10 @@ object CompilerNative {
 
         // Copy the WDL file.
         //
-        Utils.writeFileContent(resourcesDir.resolve(Utils.WDL_SNIPPET_FILENAME), applet.wdlCode)
+        val wdlCode:String = WdlPrettyPrinter(false, None).apply(applet.ns, 0)
+            .mkString("\n")
+        Utils.writeFileContent(resourcesDir.resolve(Utils.WDL_SNIPPET_FILENAME),
+                               wdlCode)
 
         // write linking information
         if (!aplLinks.isEmpty) {
