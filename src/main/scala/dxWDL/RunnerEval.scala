@@ -26,7 +26,7 @@ import java.nio.file.Path
 import scala.collection.JavaConverters._
 import spray.json._
 import spray.json.DefaultJsonProtocol
-import wdl4s.{Declaration, WdlNamespaceWithWorkflow, WdlExpression, Workflow}
+import wdl4s.{Declaration, WdlNamespaceWithWorkflow, WdlExpression, Workflow, WorkflowOutput}
 import wdl4s.types._
 import wdl4s.values._
 import WdlVarLinks._
@@ -120,12 +120,11 @@ object RunnerEval {
         System.err.println(s"Initial inputs=${inputs}")
 
         // make sure the workflow elements are all declarations
-        val decls: Seq[Declaration] = wf.children.map{ x =>
-            x match {
-                case decl: Declaration => decl
-                case _ => throw new Exception("Eval task contains a non declaration")
-            }
-        }
+        val decls: Seq[Declaration] = wf.children.map {
+            case decl: Declaration => Some(decl)
+            case _:WorkflowOutput => None
+            case _ => throw new Exception("Eval task contains a non declaration")
+        }.flatten
         val outputs : Map[String, BValue] = evalDeclarations(decls, inputs)
 
         // Keep only exported variables
