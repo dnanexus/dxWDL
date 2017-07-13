@@ -34,9 +34,6 @@ object CompilerIR {
     // Environment (scope) where a call is made
     type CallEnv = Map[String, LinkedVar]
 
-    // The minimal environment needed to execute a call
-    type Closure =  CallEnv
-
     // Compiler state.
     // Packs common arguments passed between methods.
     case class State(destination: String,
@@ -222,10 +219,10 @@ task Add {
     // @param  closure   call closure
     // @param  env       mapping from fully qualified WDL name to a dxlink
     // @param  expr      expression as it appears in source WDL
-    def updateClosure(closure : Closure,
+    def updateClosure(closure : CallEnv,
                       env : CallEnv,
                       expr : WdlExpression,
-                      cState: State) : Closure = {
+                      cState: State) : CallEnv = {
         expr.ast match {
             case t: Terminal =>
                 val srcStr = t.getSourceString
@@ -400,7 +397,7 @@ workflow w {
                                   declarations: Seq[Declaration],
                                   env: CallEnv,
                                   cState: State) : (IR.Stage, IR.Applet) = {
-        Utils.trace(cState.verbose, s"Compiling evaluation applet ${appletName}".format(appletName))
+        Utils.trace(cState.verbose, s"Compiling evaluation applet ${appletName}")
 
         // Figure out the closure
         var closure = Map.empty[String, LinkedVar]
@@ -438,6 +435,60 @@ workflow w {
                                                             inputDecls ++ outputDeclarations,
                                                             outputVars,
                                                             cState)
+
+        // We need minimal compute resources, use the default instance type
+        val applet = IR.Applet(appletName,
+                               inputVars,
+                               outputVars,
+                               calcInstanceType(None, cState),
+                               false,
+                               cState.destination,
+                               IR.AppletKindEval,
+                               WdlRewrite.namespace(code, Seq.empty))
+        verifyWdlCodeIsLegal(applet.ns)
+
+        // Link to the X.y original variables
+        val inputs: Vector[IR.SArg] = closure.map{ case (_, lVar) => lVar.sArg }.toVector
+
+        (IR.Stage(appletName, appletName, inputs, outputVars),
+         applet)
+    }
+
+    /* 1. Calculate the expressions in the output section
+     * 2. Move all referenced files to the destination directory. All
+     *    other files are moved to an "intermediate" directory.
+     */
+    def compileOutputSection(appletName: String,
+                             env: CallEnv,
+                             wfOutputs: Seq[WorkflowOutput],
+                             cState: State) : (IR.Stage, IR.Applet) = {
+        Utils.trace(cState.verbose, s"Compiling output section applet ${appletName}")
+
+        // Figure out the closure
+        var closure = Map.empty[String, LinkedVar]
+        wfOutputs.foreach { wot =>
+            closure = updateClosure(closure, env, wot.requiredExpression, cState)
+        }
+
+        // figure out the inputs
+        closure = closure.map{ case (key,lVar) =>
+            val cVar = IR.CVar(key, lVar.cVar.wdlType, lVar.cVar.ast)
+            key -> LinkedVar(cVar, lVar.sArg)
+        }.toMap
+        val inputVars: Vector[IR.CVar] = closure.map{ case (_, lVar) => lVar.cVar }.toVector
+        val inputDecls: Vector[Declaration] = closure.map{ case(_, lVar) =>
+            WdlRewrite.newDeclaration(lVar.cVar.wdlType, lVar.cVar.dxVarName, None)
+        }.toVector
+
+        // The applet outputs are the workflow outputs
+        val outputVars: Vector[IR.CVar] = wfOutputs.map{ wot =>
+            IR.CVar(wot.unqualifiedName, wot.wdlType, wot.ast)
+        }.toVector
+
+        // create a workflow with no calls. This could
+        // have been implemented with a task instead of workflow.
+        val code:Workflow = WdlRewrite.workflowGenEmpty("w")
+        code.children = inputDecls ++ wfOutputs
 
         // We need minimal compute resources, use the default instance type
         val applet = IR.Applet(appletName,
@@ -781,6 +832,7 @@ workflow w {
 
     // Compile a workflow, having compiled the independent tasks.
     def compileWorkflow(wf: Workflow,
+                        wfOutputs: Option[Seq[WorkflowOutput]],
                         taskApplets: Map[String, (IR.Applet, Vector[IR.CVar])],
                         cState: State) : IR.Workflow = {
         Utils.trace(cState.verbose, "FrontEnd: compiling workflow")
@@ -817,7 +869,8 @@ workflow w {
                 case BlockScatter(preDecls, scatter) =>
                     scatterNum = scatterNum + 1
                     val scatterName = Utils.SCATTER ++ "_" ++ scatterNum.toString
-                    val (stage, applet) = compileScatter(wf, scatterName, preDecls, scatter, taskApplets, env, cState)
+                    val (stage, applet) = compileScatter(wf, scatterName, preDecls,
+                                                         scatter, taskApplets, env, cState)
                     (stage, Some(applet))
                 case BlockScope(call: Call) =>
                     val stage = compileCall(call, taskApplets, env, cState)
@@ -841,7 +894,20 @@ workflow w {
             accu :+ (stage,appletOpt)
         }
 
-        val (stages, auxApplets) = allStageInfo.unzip
+        // Possibly add workflow output processing
+        val allStageWithOutputInfo: Vector[(IR.Stage, Option[IR.Applet])] = wfOutputs match {
+            case None =>
+                // output section is empty, no need for an additional phase
+                allStageInfo
+            case Some(outputs) =>
+                // output section is non empty, keep only those files
+                // at the destination directory
+                val (outSecStg, outSecApl) = compileOutputSection(
+                    wf.unqualifiedName ++ "_" ++ Utils.OUTPUT_SECTION,
+                    env, outputs, cState)
+                allStageInfo :+ (outSecStg, Some(outSecApl))
+        }
+        val (stages, auxApplets) = allStageWithOutputInfo.unzip
         val tApplets: Vector[IR.Applet] = taskApplets.map{ case (k,(applet,_)) => applet }.toVector
         IR.Workflow(wf.unqualifiedName, stages, tApplets ++ auxApplets.flatten.toVector)
     }
@@ -861,6 +927,7 @@ workflow w {
 
     // compile the WDL source code into intermediate representation
     def apply(ns : WdlNamespace,
+              wfOutputs: Option[Seq[WorkflowOutput]],
               instanceTypeDB: InstanceTypeDB,
               destination: String,
               cef: CompilerErrorFormatter,
@@ -892,7 +959,7 @@ workflow w {
         ns match {
             case nswf : WdlNamespaceWithWorkflow =>
                 val wf = nswf.workflow
-                val irWf = compileWorkflow(wf, taskApplets, cState)
+                val irWf = compileWorkflow(wf, wfOutputs, taskApplets, cState)
                 IR.Namespace(Some(irWf), irApplets)
             case _ =>
                 // The namespace contains only applets, there

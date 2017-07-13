@@ -25,13 +25,14 @@ object Main extends App {
     }
     object InternalOp extends Enumeration {
         val Eval, LaunchScatter,
-            TaskEpilog, TaskProlog, TaskRelaunch = Value
+            TaskEpilog, TaskProlog, TaskRelaunch,
+            WorkflowOutputs = Value
     }
 
     // Compiler state.
     // Packs common arguments passed between methods.
     case class State(ns: WdlNamespace,
-                     outputs: Seq[WorkflowOutput],
+                     outputs: Option[Seq[WorkflowOutput]],
                      wdlSourceFile: Path,
                      resolver: ImportResolver,
                      verbose: Boolean)
@@ -54,12 +55,13 @@ object Main extends App {
         assetId
     }
 
-    def outputs(ns: WdlNamespace) : Seq[WorkflowOutput] = {
+    def outputs(ns: WdlNamespace) : Option[Seq[WorkflowOutput]] = {
         ns match {
             case nswf: WdlNamespaceWithWorkflow =>
                 val wf = nswf.workflow
-                wf.outputs
-            case _ => List.empty[WorkflowOutput]
+                if (wf.hasEmptyOutputSection) None
+                else Some(wf.outputs)
+            case _ => None
         }
     }
 
@@ -180,7 +182,7 @@ object Main extends App {
     def washNamespace(rewrittenNs: WdlNamespace,
                       suffix: String,
                       cState: State) : WdlNamespace = {
-        val lines: String = WdlPrettyPrinter(true, Some(cState.outputs))
+        val lines: String = WdlPrettyPrinter(true, cState.outputs)
             .apply(rewrittenNs, 0)
             .mkString("\n")
         val cleanNs = WdlNamespace.loadUsingSource(
@@ -270,9 +272,12 @@ object Main extends App {
         val ns1 = CompilerSimplify.apply(sortedNs, verbose)
         val ns = washNamespace(ns1, "simplified", cState)
 
-        // Compile the WDL workflow into an Intermediate Representation (IR)
+        // Compile the WDL workflow into an Intermediate
+        // Representation (IR) For some reason, the pretty printer
+        // mangles the outputs, which is why we pass the originals
+        // unmodified.
         val cef = new CompilerErrorFormatter(ns.terminalMap)
-        val irNs = CompilerIR.apply(ns, instanceTypeDB, folder, cef, verbose)
+        val irNs = CompilerIR.apply(ns, cState.outputs, instanceTypeDB, folder, cef, verbose)
 
         // Write out the intermediate representation
         prettyPrintIR(wdlSourceFile, irNs, verbose)
@@ -337,6 +342,9 @@ object Main extends App {
                     RunnerTask.prolog(taskOfNamespace(ns), jobInputPath, jobOutputPath, jobInfoPath)
                 case InternalOp.TaskRelaunch =>
                     RunnerTask.relaunch(taskOfNamespace(ns), jobInputPath, jobOutputPath, jobInfoPath)
+                case InternalOp.WorkflowOutputs =>
+                    RunnerWorkflowOutputs.apply(workflowOfNamespace(ns),
+                                                jobInputPath, jobOutputPath, jobInfoPath)
             }
             SuccessfulTermination(s"success ${op}")
         } catch {

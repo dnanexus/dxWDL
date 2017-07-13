@@ -187,6 +187,15 @@ object CompilerNative {
                             |${genBashScriptTaskBody()}
                             |}""".stripMargin.trim
                 }
+
+            case IR.AppletKindWorkflowOutputs =>
+                s"""|#!/bin/bash -ex
+                    |main() {
+                    |    echo "working directory =$${PWD}"
+                    |    echo "home dir =$${HOME}"
+                    |    echo "user= $${USER}"
+                    |    java -jar $${DX_FS_ROOT}/dxWDL.jar internal workflowOutputs $${DX_FS_ROOT}/${WDL_SNIPPET_FILENAME} $${HOME}
+                    |}""".stripMargin.trim
         }
     }
 

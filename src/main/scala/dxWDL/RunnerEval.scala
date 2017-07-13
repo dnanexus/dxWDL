@@ -123,7 +123,7 @@ object RunnerEval {
         val decls: Seq[Declaration] = wf.children.map {
             case decl: Declaration => Some(decl)
             case _:WorkflowOutput => None
-            case _ => throw new Exception("Eval task contains a non declaration")
+            case _ => throw new Exception("Eval workflow contains a non declaration")
         }.flatten
         val outputs : Map[String, BValue] = evalDeclarations(decls, inputs)
 

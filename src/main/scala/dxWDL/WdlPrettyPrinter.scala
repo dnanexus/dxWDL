@@ -6,6 +6,10 @@
   *
   *  val pp = new WdlPrettyPrinter(true)
   *  pp.apply(x)
+  *
+  * TODO: for an unknown reason, the pretty printer mangles workflow
+  * outputs. The work around is to pass the original workflow outputs
+  * unmodified. Fix this.
   */
 package dxWDL
 
