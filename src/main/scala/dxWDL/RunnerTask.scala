@@ -192,11 +192,6 @@ object RunnerTask {
                 case None => None
                 case Some(expr) => Some(evalStringExpr(expr))
             }
-        val entrypoint: String =
-            task.runtimeAttributes.attrs.get("entrypoint") match {
-                case None => "/bin/bash"
-                case Some(expr) => evalStringExpr(expr)
-            }
         docker match {
             case None => ()
             case Some(imgName) =>
@@ -212,7 +207,7 @@ object RunnerTask {
                 val dockerRunPath = getMetaDir().resolve("script.submit")
                 val dockerRunScript =
                     s"""|#!/bin/bash -ex
-                        |dx-docker run --entrypoint ${entrypoint} -v ${DX_HOME}:${DX_HOME} ${imgName} $${HOME}/execution/meta/script""".stripMargin.trim
+                        |dx-docker run --entrypoint /bin/bash -v ${DX_HOME}:${DX_HOME} ${imgName} $${HOME}/execution/meta/script""".stripMargin.trim
                 errStream.println(s"writing docker run script to ${dockerRunPath}")
                 Utils.writeFileContent(dockerRunPath, dockerRunScript)
                 dockerRunPath.toFile.setExecutable(true)

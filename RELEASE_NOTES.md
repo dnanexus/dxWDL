@@ -5,8 +5,6 @@
 dependencies, and abort in case there are cycles. Optionally, sort the
 calls to avoid forward references. This is useful for WDL scripts
 there were generated, and not written by hand.
-- Support overriding the docker default entrypoint, but setting
-the `entrypoint` variable in the runtime section.
 
 ## 0.33
 - Initial support for WDL pairs and maps
