@@ -72,6 +72,7 @@ object Utils {
     val DX_HOME = "/home/dnanexus"
     val FLAT_FILES_SUFFIX = "___dxfiles"
     val INSTANCE_TYPE_DB_FILENAME = "instanceTypeDB.json"
+    val INTERMEDIATE_RESULTS_FOLDER = "intermediate"
     val LINK_INFO_FILENAME = "linking.json"
     val MAX_HOURLY_RATE = 10.0
     val MAX_STRING_LEN = 8 * 1024     // Long strings cause problems with bash and the UI

@@ -4,7 +4,7 @@
 package dxWDL
 
 // DX bindings
-import com.dnanexus.{DXApplet, DXEnvironment, DXFile, DXJob, InputParameter, OutputParameter}
+import com.dnanexus.{DXApplet, DXDataObject, DXEnvironment, DXFile, DXProject}
 import com.fasterxml.jackson.databind.JsonNode
 import java.nio.file.Path
 import scala.collection.JavaConverters._
@@ -17,8 +17,49 @@ import WdlVarLinks._
 
 object RunnerWorkflowOutputs {
 
-    def createSubDir() : Unit = {
-        System.err.println(s"Create sub-directory for intermediate results")
+    // An ugly hack to get the dx working directory.
+    //
+    // Since we don't have a dxjava binding, we spawn a shell, and run
+    // `dx pwd`. I hope to improve on this down the road.
+    def getCurrentWorkingDir() : String = {
+        val (outstr, _) =
+            try {
+                Utils.execCommand("dx pwd")
+            } catch {
+                case e: Throwable =>
+                    throw new AppInternalException("Could not get the dx working directory")
+            }
+        // The result is PROJ_NAME:WDIR
+        val words = outstr.split(":")
+        assert(words.length == 2)
+        words(1)
+    }
+
+    // Move all intermediate results to a sub-folder
+    def moveIntermediateResultFiles(dxProject: DXProject,
+                                    outputFields: Map[String, JsonNode]) : Unit = {
+        val currentDir = getCurrentWorkingDir()
+        val iDir = currentDir + "/" + Utils.INTERMEDIATE_RESULTS_FOLDER
+        System.err.println(s"Create intermediate results sub-folder ${iDir}")
+        dxProject.newFolder(iDir)
+
+        // find all output files
+        val allFiles: List[DXDataObject] =
+            dxProject.listFolder(currentDir).getObjects.asScala.toList
+
+        // find all the object IDs that should be exported
+        val exportFiles: Vector[DXFile] = outputFields.map{ case (key, jsn) =>
+            val jsValue = Utils.jsValueOfJsonNode(jsn)
+            WdlVarLinks.findDxFiles(jsValue)
+        }.toVector.flatten
+        val exportIds:Set[String] = exportFiles.map(_.getId).toSet
+
+        // Figure out which of the files should be kept
+        val intermediateFiles = allFiles.filter(x => !(exportIds contains x.getId))
+
+        // Move all non exported results to the subdir. Do this in
+        // a single API call, to improve performance.
+        dxProject.moveObjects(intermediateFiles.asJava, iDir)
     }
 
     def apply(wf: Workflow,
@@ -52,10 +93,9 @@ object RunnerWorkflowOutputs {
             (varName, Utils.jsValueOfJsonNode(jsNode))
         }.toMap
 
-        // create directory for intermediate results
-        createSubDir()
-
-        // move all non exported results to the subdir
+        val dxEnv = DXEnvironment.create()
+        val dxProject = dxEnv.getProjectContext()
+        moveIntermediateResultFiles(dxProject, outputFields)
 
         val json = JsObject(m)
         val ast_pp = json.prettyPrint

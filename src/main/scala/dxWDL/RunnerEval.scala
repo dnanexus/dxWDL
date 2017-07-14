@@ -20,7 +20,7 @@
 package dxWDL
 
 // DX bindings
-import com.dnanexus.{DXApplet, DXEnvironment, DXFile, DXJob, InputParameter, OutputParameter}
+import com.dnanexus.{DXApplet, DXEnvironment, DXFile, DXJob}
 import com.fasterxml.jackson.databind.JsonNode
 import java.nio.file.Path
 import scala.collection.JavaConverters._

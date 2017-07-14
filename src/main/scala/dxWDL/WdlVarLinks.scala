@@ -201,7 +201,7 @@ object WdlVarLinks {
 
     // Search through a JSON value for all the dx:file links inside it. Returns
     // those as a vector.
-    private def findDxFiles(jsValue: JsValue) : Vector[DXFile] = {
+    def findDxFiles(jsValue: JsValue) : Vector[DXFile] = {
         jsValue match {
             case JsBoolean(_) | JsNull | JsNumber(_) | JsString(_) =>
                 Vector.empty[DXFile]
