@@ -164,7 +164,7 @@ object WdlVarLinks {
 
     // Is this a WDL type that maps to a native DX type?
     def isNativeDxType(wdlType: WdlType) : Boolean = {
-        wdlType match {
+        Utils.stripOptional(wdlType) match {
             case WdlBooleanType | WdlIntegerType | WdlFloatType | WdlStringType | WdlFileType
                    | WdlArrayType(WdlBooleanType)
                    | WdlArrayType(WdlIntegerType)

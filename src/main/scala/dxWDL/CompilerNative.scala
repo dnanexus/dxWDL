@@ -196,6 +196,14 @@ object CompilerNative {
                     |    echo "user= $${USER}"
                     |    java -jar $${DX_FS_ROOT}/dxWDL.jar internal workflowOutputs $${DX_FS_ROOT}/${WDL_SNIPPET_FILENAME} $${HOME}
                     |}""".stripMargin.trim
+            case IR.AppletKindWorkflowOutputsAndReorg =>
+                s"""|#!/bin/bash -ex
+                    |main() {
+                    |    echo "working directory =$${PWD}"
+                    |    echo "home dir =$${HOME}"
+                    |    echo "user= $${USER}"
+                    |    java -jar $${DX_FS_ROOT}/dxWDL.jar internal workflowOutputsAndReorg $${DX_FS_ROOT}/${WDL_SNIPPET_FILENAME} $${HOME}
+                    |}""".stripMargin.trim
         }
     }
 
@@ -412,7 +420,7 @@ object CompilerNative {
         // The WorkflowOutput applet requires higher permissions
         // to organize the output directory.
         val proj:Map[String, JsValue] = applet.kind match {
-            case IR.AppletKindWorkflowOutputs => Map("project" -> JsString("CONTRIBUTE"))
+            case IR.AppletKindWorkflowOutputsAndReorg => Map("project" -> JsString("CONTRIBUTE"))
             case _ => Map()
         }
         val access = Map("access" -> JsObject(network ++ proj))

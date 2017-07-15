@@ -58,7 +58,8 @@ object RunnerWorkflowOutputs {
     def apply(wf: Workflow,
               jobInputPath : Path,
               jobOutputPath : Path,
-              jobInfoPath: Path) : Unit = {
+              jobInfoPath: Path,
+              reorgFiles: Boolean) : Unit = {
         // Figure out input/output types
         val (inputTypes, outputTypes) = Utils.loadExecInfo(Utils.readFileContent(jobInfoPath))
 
@@ -78,7 +79,9 @@ object RunnerWorkflowOutputs {
         val outputs : Map[String, BValue] = RunnerEval.evalDeclarations(outputDecls, inputs)
 
         val outputFields: Map[String, JsonNode] = outputs.map {
-            case (varName, bValue) => WdlVarLinks.genFields(bValue.wvl, varName)
+            case (varName, bValue) =>
+                val varNameOrg = varName.stripPrefix("out_")
+                WdlVarLinks.genFields(bValue.wvl, varNameOrg)
         }.flatten.toMap
         val m = outputFields.map{ case (varName,jsNode) =>
             (varName, Utils.jsValueOfJsonNode(jsNode))
@@ -89,8 +92,10 @@ object RunnerWorkflowOutputs {
         System.err.println(s"exported = ${ast_pp}")
         Utils.writeFileContent(jobOutputPath, ast_pp)
 
-        // Reorganize directory structure
-        val dxEnv = DXEnvironment.create()
-        moveIntermediateResultFiles(dxEnv, outputFields)
+        if (reorgFiles) {
+            // Reorganize directory structure
+            val dxEnv = DXEnvironment.create()
+            moveIntermediateResultFiles(dxEnv, outputFields)
+        }
     }
 }

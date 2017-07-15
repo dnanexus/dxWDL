@@ -40,6 +40,7 @@ object IR {
     case class AppletKindScatter(sourceCalls: Vector[String]) extends AppletKind
     case object AppletKindTask extends AppletKind
     case object AppletKindWorkflowOutputs extends AppletKind
+    case object AppletKindWorkflowOutputsAndReorg extends AppletKind
 
     /** Secification of instance type.
       *

@@ -26,7 +26,7 @@ object Main extends App {
     object InternalOp extends Enumeration {
         val Eval, LaunchScatter,
             TaskEpilog, TaskProlog, TaskRelaunch,
-            WorkflowOutputs = Value
+            WorkflowOutputs, WorkflowOutputsAndReorg = Value
     }
 
     // Compiler state.
@@ -344,7 +344,10 @@ object Main extends App {
                     RunnerTask.relaunch(taskOfNamespace(ns), jobInputPath, jobOutputPath, jobInfoPath)
                 case InternalOp.WorkflowOutputs =>
                     RunnerWorkflowOutputs.apply(workflowOfNamespace(ns),
-                                                jobInputPath, jobOutputPath, jobInfoPath)
+                                                jobInputPath, jobOutputPath, jobInfoPath, false)
+                case InternalOp.WorkflowOutputsAndReorg =>
+                    RunnerWorkflowOutputs.apply(workflowOfNamespace(ns),
+                                                jobInputPath, jobOutputPath, jobInfoPath, true)
             }
             SuccessfulTermination(s"success ${op}")
         } catch {
