@@ -407,9 +407,16 @@ object CompilerNative {
         // Even scatters need network access, because
         // they spawn subjobs that (may) use dx-docker.
         // We end up allowing all applets to use the network
-        val networkAccess: Map[String, JsValue] =
-            Map("access" -> JsObject(Map("network" -> JsArray(JsString("*")))))
-        val json = JsObject(attrs ++ networkAccess)
+        val network:Map[String, JsValue] = Map("network" -> JsArray(JsString("*")))
+
+        // The WorkflowOutput applet requires higher permissions
+        // to organize the output directory.
+        val proj:Map[String, JsValue] = applet.kind match {
+            case IR.AppletKindWorkflowOutputs => Map("project" -> JsString("CONTRIBUTE"))
+            case _ => Map()
+        }
+        val access = Map("access" -> JsObject(network ++ proj))
+        val json = JsObject(attrs ++ access)
 
         val aplLinks = applet.kind match {
             case IR.AppletKindScatter(_) => appletDict
@@ -542,7 +549,8 @@ object CompilerNative {
 
     // Compile an entire workflow
     def compileWorkflow(wf: IR.Workflow,
-                        cState: State) : (DXWorkflow, Map[String, DXWorkflow.Stage], Map[String, String]) = {
+                        cState: State) :
+            (DXWorkflow, Map[String, DXWorkflow.Stage], Map[String, String]) = {
         // create fresh workflow
         handleOldWorkflow(wf.name, cState)
         val dxwfl = DXWorkflow.newWorkflow()

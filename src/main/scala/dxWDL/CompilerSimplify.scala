@@ -275,9 +275,9 @@ object CompilerSimplify {
         } else {
             // separate declaration for collection expression
             val collType : WdlType = collectionWdlType(ssc, cState)
-            val colDecl = WdlRewrite.newDeclaration(collType,
-                                                    genTmpVarName(),
-                                                    Some(ssc.collection))
+            val colDecl = WdlRewrite.declaration(collType,
+                                                 genTmpVarName(),
+                                                 Some(ssc.collection))
             val collVar = WdlExpression.fromString(colDecl.unqualifiedName)
             val ssc1 = WdlRewrite.scatter(ssc, reorgChildren, collVar)
             Vector(colDecl, ssc1)

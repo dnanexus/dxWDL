@@ -163,7 +163,7 @@ object WdlVarLinks {
     }
 
     // Is this a WDL type that maps to a native DX type?
-    private def hasNativeDxType(wdlType: WdlType) : Boolean = {
+    def isNativeDxType(wdlType: WdlType) : Boolean = {
         wdlType match {
             case WdlBooleanType | WdlIntegerType | WdlFloatType | WdlStringType | WdlFileType
                    | WdlArrayType(WdlBooleanType)
@@ -283,7 +283,7 @@ object WdlVarLinks {
             case _ =>
                 throw new AppInternalException(s"Unsupported conversion from ${wvl.dxlink} to WdlValue")
         }
-        if (!hasNativeDxType(wvl.wdlType)) {
+        if (!isNativeDxType(wvl.wdlType)) {
             jsRaw match {
                 case JsObject(_) if isDxFile(jsRaw) =>
                     // The JSON points to a platform file, it needs
@@ -429,7 +429,7 @@ object WdlVarLinks {
         // Strip optional types
         val wdlType = Utils.stripOptional(wdlTypeOrg)
         val js = jsOfComplexWdlValue(wdlType, wdlValue)
-        if (hasNativeDxType(wdlType)) {
+        if (isNativeDxType(wdlType)) {
             WdlVarLinks(wdlTypeOrg, DxlValue(js))
         } else {
             // Complex values, that may have files in them. For example, ragged file arrays.
@@ -443,7 +443,7 @@ object WdlVarLinks {
     // Convert an input field to a dx-links structure. This allows
     // passing it to other jobs.
     def apply(wdlType: WdlType, jsValue: JsValue) : WdlVarLinks = {
-        if (hasNativeDxType(wdlType)) {
+        if (isNativeDxType(wdlType)) {
             // This is primitive value, or a single dimensional
             // array of primitive values.
             WdlVarLinks(wdlType, DxlValue(jsValue))
@@ -506,7 +506,7 @@ object WdlVarLinks {
         }
 
         val wdlType = Utils.stripOptional(wvl.wdlType)
-        if (hasNativeDxType(wdlType)) {
+        if (isNativeDxType(wdlType)) {
             // Types that are supported natively in DX
             List(mkSimple())
         } else if (!mayHaveFiles(wdlType)) {

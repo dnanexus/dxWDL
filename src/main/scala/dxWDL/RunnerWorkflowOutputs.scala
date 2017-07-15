@@ -4,7 +4,7 @@
 package dxWDL
 
 // DX bindings
-import com.dnanexus.{DXApplet, DXDataObject, DXEnvironment, DXFile, DXProject}
+import com.dnanexus.{DXApplet, DXDataObject, DXEnvironment, DXJob, DXFile, DXProject}
 import com.fasterxml.jackson.databind.JsonNode
 import java.nio.file.Path
 import scala.collection.JavaConverters._
@@ -17,35 +17,24 @@ import WdlVarLinks._
 
 object RunnerWorkflowOutputs {
 
-    // An ugly hack to get the dx working directory.
-    //
-    // Since we don't have a dxjava binding, we spawn a shell, and run
-    // `dx pwd`. I hope to improve on this down the road.
-    def getCurrentWorkingDir() : String = {
-        val (outstr, _) =
-            try {
-                Utils.execCommand("dx pwd")
-            } catch {
-                case e: Throwable =>
-                    throw new AppInternalException("Could not get the dx working directory")
-            }
-        // The result is PROJ_NAME:WDIR
-        val words = outstr.split(":")
-        assert(words.length == 2)
-        words(1)
+    def getOutputFolder(dxEnv: DXEnvironment) : String = {
+        val dxEnv = com.dnanexus.DXEnvironment.create()
+        val dxJob:DXJob = dxEnv.getJob
+        dxJob.describe.getFolder
     }
 
     // Move all intermediate results to a sub-folder
-    def moveIntermediateResultFiles(dxProject: DXProject,
+    def moveIntermediateResultFiles(dxEnv: DXEnvironment,
                                     outputFields: Map[String, JsonNode]) : Unit = {
-        val currentDir = getCurrentWorkingDir()
-        val iDir = currentDir + "/" + Utils.INTERMEDIATE_RESULTS_FOLDER
-        System.err.println(s"Create intermediate results sub-folder ${iDir}")
-        dxProject.newFolder(iDir)
+        val dxProject = dxEnv.getProjectContext()
+        val outFolder = getOutputFolder(dxEnv)
+        val intermFolder = outFolder + "/" + Utils.INTERMEDIATE_RESULTS_FOLDER
 
         // find all output files
         val allFiles: List[DXDataObject] =
-            dxProject.listFolder(currentDir).getObjects.asScala.toList
+            dxProject.listFolder(outFolder).getObjects.asScala.toList
+        if (allFiles.isEmpty)
+            return
 
         // find all the object IDs that should be exported
         val exportFiles: Vector[DXFile] = outputFields.map{ case (key, jsn) =>
@@ -56,10 +45,14 @@ object RunnerWorkflowOutputs {
 
         // Figure out which of the files should be kept
         val intermediateFiles = allFiles.filter(x => !(exportIds contains x.getId))
+        if (intermediateFiles.isEmpty)
+            return
 
         // Move all non exported results to the subdir. Do this in
         // a single API call, to improve performance.
-        dxProject.moveObjects(intermediateFiles.asJava, iDir)
+        System.err.println(s"Creating intermediate results sub-folder ${intermFolder}")
+        dxProject.newFolder(intermFolder)
+        dxProject.moveObjects(intermediateFiles.asJava, intermFolder)
     }
 
     def apply(wf: Workflow,
@@ -77,29 +70,27 @@ object RunnerWorkflowOutputs {
         System.err.println(s"Initial inputs=${inputs}")
 
         // make sure the workflow elements are all declarations
-        val decls: Seq[Declaration] = wf.children.map {
-            case decl: Declaration => Some(decl)
-            case _:WorkflowOutput => None
+        val outputDecls: Seq[WorkflowOutput] = wf.children.map {
+            case _: Declaration => None
+            case wot:WorkflowOutput => Some(wot)
             case _ => throw new Exception("Workflow contains a non declaration")
         }.flatten
-        val outputs : Map[String, BValue] = RunnerEval.evalDeclarations(decls, inputs)
+        val outputs : Map[String, BValue] = RunnerEval.evalDeclarations(outputDecls, inputs)
 
-        // Keep only exported variables
-        val exported = outputs.filter{ case (varName, _) => outputTypes contains varName }
-        val outputFields: Map[String, JsonNode] = exported.map {
+        val outputFields: Map[String, JsonNode] = outputs.map {
             case (varName, bValue) => WdlVarLinks.genFields(bValue.wvl, varName)
         }.flatten.toMap
         val m = outputFields.map{ case (varName,jsNode) =>
             (varName, Utils.jsValueOfJsonNode(jsNode))
         }.toMap
 
-        val dxEnv = DXEnvironment.create()
-        val dxProject = dxEnv.getProjectContext()
-        moveIntermediateResultFiles(dxProject, outputFields)
-
         val json = JsObject(m)
         val ast_pp = json.prettyPrint
         System.err.println(s"exported = ${ast_pp}")
         Utils.writeFileContent(jobOutputPath, ast_pp)
+
+        // Reorganize directory structure
+        val dxEnv = DXEnvironment.create()
+        moveIntermediateResultFiles(dxEnv, outputFields)
     }
 }

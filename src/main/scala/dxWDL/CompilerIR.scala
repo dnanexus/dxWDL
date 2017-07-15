@@ -89,7 +89,7 @@ task Add {
     def genAppletStub(applet: IR.Applet, scope: Scope) : Task = {
         val task = WdlRewrite.taskGenEmpty(applet.name, scope)
         val inputs = applet.inputs.map{ cVar =>
-            WdlRewrite.newDeclaration(cVar.wdlType, cVar.name, None)
+            WdlRewrite.declaration(cVar.wdlType, cVar.name, None)
         }.toVector
         val outputs = applet.outputs.map{ cVar =>
             WdlRewrite.taskOutput(cVar.name, cVar.wdlType, task)
@@ -300,9 +300,9 @@ task Add {
                 // Corner case: there are no inputs and no
                 // expressions to calculate. Generated a valid
                 // workflow that does nothing.
-                val d = WdlRewrite.newDeclaration(WdlIntegerType,
-                                                  "xxxx",
-                                                  Some(WdlExpression.fromString("0")))
+                val d = WdlRewrite.declaration(WdlIntegerType,
+                                               "xxxx",
+                                               Some(WdlExpression.fromString("0")))
                 Vector(d)
             } else {
                 declarations_i.toVector
@@ -416,7 +416,7 @@ workflow w {
         }.toMap
         val inputVars: Vector[IR.CVar] = closure.map{ case (_, lVar) => lVar.cVar }.toVector
         val inputDecls: Vector[Declaration] = closure.map{ case(_, lVar) =>
-            WdlRewrite.newDeclaration(lVar.cVar.wdlType, lVar.cVar.dxVarName, None)
+            WdlRewrite.declaration(lVar.cVar.wdlType, lVar.cVar.dxVarName, None)
         }.toVector
 
         // figure out the outputs
@@ -426,8 +426,8 @@ workflow w {
         val outputDeclarations = declarations.map{ decl =>
             decl.expression match {
                 case Some(expr) =>
-                    WdlRewrite.newDeclaration(decl.wdlType, decl.unqualifiedName,
-                                   Some(exprRenameVars(expr, inputVars)))
+                    WdlRewrite.declaration(decl.wdlType, decl.unqualifiedName,
+                                           Some(exprRenameVars(expr, inputVars)))
                 case None => decl
             }
         }.toVector
@@ -454,15 +454,41 @@ workflow w {
          applet)
     }
 
-    /* 1. Calculate the expressions in the output section
-     * 2. Move all referenced files to the destination directory. All
-     *    other files are moved to an "intermediate" directory.
-     */
+
+    def outputSectionTypeCheck(outputs: Seq[WorkflowOutput],
+                               cState: State) {
+        // Make sure all workflow outputs have native dx types
+        outputs.foreach{ wot =>
+            if (!WdlVarLinks.isNativeDxType(wot.wdlType))
+                throw new Exception(cState.cef.workflowOutputShouldHaveDxType(wot.ast))
+        }
+    }
+
+    // 1. The output variable name must not have dots, these
+    //    are illegal in dx.
+    // 2. The expression requires variable renaming
+    //
+    // For example:
+    // workflow w {
+    //    Int mutex_count
+    //    File genome_ref
+    //    output {
+    //       Int count = mutec.count
+    //       File ref = genome.ref
+    //    }
+    // }
+    //
+    // Must be converted into:
+    // output {
+    //     Int count = mutec_count
+    //     File ref = genome_ref
+    // }
     def compileOutputSection(appletName: String,
                              env: CallEnv,
                              wfOutputs: Seq[WorkflowOutput],
                              cState: State) : (IR.Stage, IR.Applet) = {
         Utils.trace(cState.verbose, s"Compiling output section applet ${appletName}")
+        outputSectionTypeCheck(wfOutputs, cState)
 
         // Figure out the closure
         var closure = Map.empty[String, LinkedVar]
@@ -477,18 +503,29 @@ workflow w {
         }.toMap
         val inputVars: Vector[IR.CVar] = closure.map{ case (_, lVar) => lVar.cVar }.toVector
         val inputDecls: Vector[Declaration] = closure.map{ case(_, lVar) =>
-            WdlRewrite.newDeclaration(lVar.cVar.wdlType, lVar.cVar.dxVarName, None)
+            WdlRewrite.declaration(lVar.cVar.wdlType, lVar.cVar.dxVarName, None)
         }.toVector
 
-        // The applet outputs are the workflow outputs
-        val outputVars: Vector[IR.CVar] = wfOutputs.map{ wot =>
-            IR.CVar(wot.unqualifiedName, wot.wdlType, wot.ast)
-        }.toVector
+        // Rename the variables appearing in the output expressions.
+        // mutec.count  ---> mutec_count
+        def transform(expr: WdlExpression) : WdlExpression = {
+            exprRenameVars(expr, inputVars)
+        }
 
-        // create a workflow with no calls. This could
-        // have been implemented with a task instead of workflow.
+        // Workflow outputs
+        val outputPairs: Vector[(WorkflowOutput, IR.CVar)] = wfOutputs.map { wot =>
+            val cVar = IR.CVar(wot.unqualifiedName, wot.wdlType, wot.ast)
+            val dxVarName = Utils.transformVarName(wot.unqualifiedName)
+            val dxWot = WdlRewrite.workflowOutput(dxVarName,
+                                                  wot.wdlType,
+                                                  transform(wot.requiredExpression))
+            (dxWot, cVar)
+        }.toVector
+        val (outputs, outputVars) = outputPairs.unzip
+
+        // Create a workflow with no calls.
         val code:Workflow = WdlRewrite.workflowGenEmpty("w")
-        code.children = inputDecls ++ wfOutputs
+        code.children = inputDecls ++ outputs
 
         // We need minimal compute resources, use the default instance type
         val applet = IR.Applet(appletName,
@@ -497,7 +534,7 @@ workflow w {
                                calcInstanceType(None, cState),
                                false,
                                cState.destination,
-                               IR.AppletKindEval,
+                               IR.AppletKindWorkflowOutputs,
                                WdlRewrite.namespace(code, Seq.empty))
         verifyWdlCodeIsLegal(applet.ns)
 
@@ -620,8 +657,8 @@ workflow w {
 
         // transform preamble declarations
         val trPreDecls: Vector[Declaration] = preDecls.map { decl =>
-            WdlRewrite.newDeclaration(decl.wdlType, decl.unqualifiedName,
-                                      decl.expression.map(transform))
+            WdlRewrite.declaration(decl.wdlType, decl.unqualifiedName,
+                                   decl.expression.map(transform))
         }
 
         // transform the expressions in a scatter
@@ -676,7 +713,7 @@ workflow w {
             }
         val (trPreDecls, trScatter) = scTransform(preDecls, ssc, inputVars, cState)
         val decls: Vector[Declaration]  = inputVars.map{ cVar =>
-            WdlRewrite.newDeclaration(cVar.wdlType, cVar.dxVarName, None)
+            WdlRewrite.declaration(cVar.wdlType, cVar.dxVarName, None)
         }
 
         // Create new workflow that includes only this scatter

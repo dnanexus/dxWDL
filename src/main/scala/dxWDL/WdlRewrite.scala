@@ -29,9 +29,9 @@ object WdlRewrite {
     }
 
     // Create a declaration.
-    def newDeclaration(wdlType: WdlType,
-                       name: String,
-                       expr: Option[WdlExpression]) : Declaration = {
+    def declaration(wdlType: WdlType,
+                    name: String,
+                    expr: Option[WdlExpression]) : Declaration = {
         val textualRepr = expr match {
             case None => s"${wdlType.toWdlString} ${name}"
             case Some(e) => s"${wdlType.toWdlString} ${name} = ${e.toWdlString}"
@@ -97,24 +97,6 @@ object WdlRewrite {
         wf
     }
 
-    // Remove output wildcards
-    //
-    // The outputs variable is lazily calculated in the Workflow
-    // class. It includes code that accesses fields that we do not
-    // properly intialize. This requires special care, because this
-    // causes problems with our semi-valid wdl4s structures.
-    def workflowRemoveOutputWildcards(wfOld: Workflow) : Workflow = {
-        val wf = new Workflow(wfOld.unqualifiedName,
-                              Seq.empty, // no output wildcards
-                              wfOld.wdlSyntaxErrorFormatter,
-                              wfOld.meta,
-                              wfOld.parameterMeta,
-                              wfOld.ast)
-        wf.children = wfOld.children ++ wfOld.outputs
-        updateScope(wfOld, wf)
-        wf
-    }
-
     def workflowGenEmpty(wfName: String) : Workflow = {
         new Workflow(wfName,
                      List.empty,
@@ -132,6 +114,16 @@ object WdlRewrite {
                            WdlExpression.fromString(varName),
                            INVALID_AST,
                            Some(scope))
+    }
+
+    def workflowOutput(varName: String,
+                       wdlType: WdlType,
+                       expr: WdlExpression) = {
+        new WorkflowOutput("out_" + varName,
+                           wdlType,
+                           expr,
+                           INVALID_AST,
+                           None)
     }
 
     // modify the children in a scatter
