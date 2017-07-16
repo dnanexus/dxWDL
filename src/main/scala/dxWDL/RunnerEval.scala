@@ -85,6 +85,18 @@ object RunnerEval {
                     }
 
                 // declaration to evaluate, not an input
+                case (WdlOptionalType(t), Some(expr)) =>
+                    try {
+                        val v : WdlValue = expr.evaluate(lookup, DxFunctions).get
+                        val wvl = WdlVarLinks.apply(t, v)
+                        env = env + (decl.unqualifiedName -> (wvl, Some(v)))
+                        Some((wvl, v))
+                    } catch {
+                        // trying to access an unbound variable.
+                        // Since the result is optional.
+                        case e: AppInternalException => None
+                    }
+
                 case (t, Some(expr)) =>
                     val v : WdlValue = expr.evaluate(lookup, DxFunctions).get
                     val wvl = WdlVarLinks.apply(t, v)

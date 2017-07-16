@@ -61,7 +61,7 @@ workflow files {
     call z_Copy as Copy { input : src=f, basename="tearFrog" }
     call z_Copy as Copy2 { input : src=Copy.outf, basename="mixing" }
     call z_FindFiles as FindFiles
-#    call z_FindFiles2 as FindFiles2
+    call z_FindFiles2 as FindFiles2
     call z_FileSizes as FileSizes { input: car_desc=FindFiles.texts[0] }
 
     output {
