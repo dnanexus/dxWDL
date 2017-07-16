@@ -2,7 +2,7 @@
 
 The compiler is split into three passes
 - Simplify: simplify the original WDL code
-- IR: take simplified WDL, and generate IR
+- IR: take simplified WDL, and generate Intermediate Code (IR)
 - Native: start with IR and generate platform applets and workflow
 
 To explain these, we will walk through the compilation process of a simple WDL file.
@@ -173,7 +173,7 @@ automatic testing, and debugging.
 - instace type: a platform instance name
 - docker: docker image name (optional)
 - destination : folder path on the platform
-- ns: WDL namespace to exeute, an applet or a workflow
+- ns: WDL namespace to execute, an applet or a workflow
 
 ### IR Workflow
 List of stages, where a stage has the following fields:
@@ -283,7 +283,7 @@ arrays.
 ## Member accesses vs. Call member access
 
 WDL supports tuples and objects. The syntax for accessing members in
-these structures uses dot, and superficially looks like call member access.
+these structures uses dot, and syntactically is the same is call member access.
 For example, in workflow `salad`, the `pair.left` syntax is similar to
 calling task `pair` and accessing member `left`.
 
@@ -331,3 +331,73 @@ workflow chef_simplified {
     String xtmp2 = sign.right
     call concat{ input: a=xtmp1, b=xtmp2 }
 ```
+
+## Workflow outputs
+
+A workflow declares its outputs via an output section, which may define
+new variable names, access call results, and evaluate expressions. For example,
+see workflows `salad`, and `salad2`.
+
+```
+task fruit {
+    output {
+        Array[String] ingredients
+        Int num_veggies
+    }
+}
+
+workflow salad {
+    call fruit { input: }
+
+    output {
+       fruit.ingredients
+       fruit.num_veggies
+     }
+}
+
+workflow salad2 {
+    call fruit { input: }
+
+    output {
+       Int veg_to_buy = fruit.num_veggies * 2
+    }
+}
+```
+
+The output section is compiled into an applet called in the last stage
+of the *dx:workflow*. The applet has to evaluate the output expressions,
+correctly pass in the required closure, and rename variables when necesseray.
+For example, `fruit.ingredients` is not a valid dx output parameter,
+and it must be renamed. However, renaming can cause name collisions. An additional
+difficultly is that WDL does not allow an output variable to have the same
+name as an input variable.
+
+To handle these difficulties, we add an "out_" prefix to outputs,
+and replace dots with underscores. For example:
+
+```
+workflow salad_output {
+   Array[String] fruit_ingredients
+   Int fruit_num_veggies
+
+   output {
+       Array[String] out_fruit_ingredients = fruit_ingredients
+       Int out_fruit_num_veggies = fruit_num_veggies
+   }
+}
+
+workflow salad2_output {
+   Int fruit_num_veggies
+
+   output {
+       Int out_veg_to_buy = fruit_num_veggies * 2
+   }
+}
+```
+
+
+A workflow may create hundreds of result files, only a small subset of
+which is declared in the output section. The applet organizes the
+output directory structure, and moves all non-final result files into
+subdirectory `intermediate`. This requires `CONTRIBUTE` applet
+*dx:permissions*, and is optional.

@@ -89,7 +89,7 @@ workflow dict {
         Array[String] keysSI = valueSI
         Array[Int] valuesII = valueII
         Array[Int] addition = add.result
-        Map[String, File] cfM = createFruit.m
+#        Map[String, File] cfM = createFruit.m
         Int mul_res = mul.result
         Int inc_res = inc.result
     }
