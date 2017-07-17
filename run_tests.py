@@ -30,10 +30,10 @@ small_test_list = [
 
 medium_test_list = [
     # basics
-    "var_types", "math_expr", "call_expressions2",
+    "var_types", "math", "call_expressions2",
 
     # File path handling, and files with the same name
-    "file_disambiguation", "files",
+    "files",
 
     # various advanced features
     "advanced",

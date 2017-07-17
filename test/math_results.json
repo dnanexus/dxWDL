@@ -6,5 +6,9 @@
   "int_ops2.mul" : 36,
   "int_ops2.div" : 1,
   "int_ops3.sum" : 14,
-  "int_ops3.mul" : 40
+  "int_ops3.mul" : 40,
+  "math_outputs.b_final": 10,
+  "math_outputs.a_final": 4,
+  "math_outputs.c": 10,
+  "math_outputs.d": 4
 }

@@ -1,3 +1,5 @@
+import "library_sys_call.wdl" as lib
+
 # Trying out file copy operations
 task z_Copy {
     File src
@@ -57,6 +59,12 @@ task z_FileSizes {
 
 workflow files {
     File f
+    File f1
+    File f2
+
+    call lib.Colocation as colocation {
+        input : A=f1, B=f2
+    }
 
     call z_Copy as Copy { input : src=f, basename="tearFrog" }
     call z_Copy as Copy2 { input : src=Copy.outf, basename="mixing" }
@@ -70,5 +78,6 @@ workflow files {
        FindFiles.hotels
 #       FindFiles2.elements
 #       FindFiles2.emptyFiles
+        colocation.result
     }
 }

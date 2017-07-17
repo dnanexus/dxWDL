@@ -1,6 +1,6 @@
 import "library_math.wdl" as lib
 
-workflow math_expr {
+workflow math {
     Int ai
     Int bi
 
@@ -15,13 +15,11 @@ workflow math_expr {
     }
 
     output {
-        int_ops1.sum
-        int_ops1.sub
-        int_ops2.mul
-        int_ops2.div
-        int_ops3.sum
-        int_ops3.mul
-        int_ops3.ai
-        int_ops3.bi
+        Int a_final = int_ops3.ai
+        Int b_final = int_ops3.bi
+
+        # Check references between output variables
+        Int c = b_final
+        Int d = a_final
     }
 }
