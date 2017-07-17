@@ -23,14 +23,15 @@ test_failing=set([])
 reserved_test_names=['S', 'M', 'All', 'list']
 small_test_list = [
     "system_calls",
-    "sg_sum3", "sg_files",
-    "ragged_array2",
+    "sg_sum3",
+    "sg_files",
     "file_array"
+    "ragged_array2",
 ]
 
 medium_test_list = [
     # basics
-    "var_types", "math", "call_expressions2",
+    "var_types", "math", "strings", "cast",
 
     # File path handling, and files with the same name
     "files",
@@ -49,9 +50,6 @@ medium_test_list = [
 
     # Error codes
     "bad_status", "bad_status2",
-
-    # Casting
-    "cast",
 
     # Variable instance types
     "instance_types",

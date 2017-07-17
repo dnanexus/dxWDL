@@ -13,13 +13,17 @@ workflow math {
     call lib.IntOps as int_ops3 {
         input: a = (3 + 2 - 1), b = 5 * 2
     }
+    call lib.IntOps as int_ops4 {
+        input: a = (ai * 2), b = (bi+3)
+    }
+    call lib.IntOps as int_ops5 {
+        input: a = (int_ops4.result * 5), b = (int_ops4.result + 1)
+    }
 
     output {
-        Int a_final = int_ops3.ai
-        Int b_final = int_ops3.bi
-
-        # Check references between output variables
-        Int c = b_final
-        Int d = a_final
+        Int x = int_ops3.mul
+        Int y = int_ops3.sub
+        Int sum = int_ops5.sum
+        Int div = int_ops5.div
     }
 }
