@@ -1,9 +1,13 @@
+// Conversions from WDL types and data structures to
+// DNAx JSON representations.
 package dxWDL
 
 // DX bindings
 import com.dnanexus.{DXApplet, DXFile, DXJob, DXProject, DXWorkflow}
 import com.fasterxml.jackson.databind.JsonNode
 import java.nio.file.{Files, Path, Paths}
+import net.jcazevedo.moultingyaml._
+import net.jcazevedo.moultingyaml.DefaultYamlProtocol._
 import scala.collection.mutable.HashMap
 import spray.json._
 import spray.json.DefaultJsonProtocol
@@ -35,6 +39,21 @@ case class WdlVarLinks(wdlType: WdlType, dxlink: DxLink)
 case class BValue(wvl: WdlVarLinks, wdlValue: WdlValue)
 
 object WdlVarLinks {
+    // Human readable representation of a WdlVarLinks structure
+    def yaml(wvl: WdlVarLinks) : YamlObject = {
+        val (key, value) = wvl.dxlink match {
+            case DxlValue(jsn) =>
+                "JSON" -> jsn.prettyPrint
+            case DxlJob(dxJob, ioRef, varEncName) =>
+                "jobRef" -> varEncName
+            case DxlStage(dxStage, ioRef, varEncName) =>
+                "stageRef" -> varEncName
+        }
+        YamlObject(
+            YamlString("type") -> YamlString(wvl.wdlType.toWdlString),
+            YamlString(key) -> YamlString(value))
+    }
+
     // A dictionary of all WDL files that are also
     // platform files. This can happen if the file was downloaded
     // from the platform, or if it was uploaded.

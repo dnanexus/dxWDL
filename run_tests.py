@@ -252,7 +252,7 @@ def run_workflow_subset(project, workflows, test_folder, delay_workspace_destruc
     test_analyses=[]
     for tname, wfid in workflows.iteritems():
         desc = test_files[tname]
-        print("Running workflow {}".format(desc.wf_name))
+        print("Running workflow {} {}".format(desc.wf_name, wfid))
         test_job = run_workflow(project, test_folder, tname, wfid, delay_workspace_destruction)
         test_analyses.append(test_job)
     print("test analyses: " + ", ".join([a.get_id() for a in test_analyses]))
@@ -333,6 +333,8 @@ def build_dirs(project):
 ## Program entry point
 def main():
     argparser = argparse.ArgumentParser(description="Run WDL compiler tests on the platform")
+    argparser.add_argument("--archive", help="Archive old applets",
+                           action="store_true", default=False)
     argparser.add_argument("--compile-only", help="Only compile the workflows, don't run them",
                            action="store_true", default=False)
     argparser.add_argument("--compile-mode", help="Compilation mode")
@@ -340,14 +342,15 @@ def main():
                            action="store_true", default=False)
     argparser.add_argument("--force", help="Remove old versions of applets and workflows",
                            action="store_true", default=False)
-    argparser.add_argument("--archive", help="Archive old applets",
-                           action="store_true", default=False)
     argparser.add_argument("--folder", help="Use an existing folder, instead of building dxWDL")
     argparser.add_argument("--lazy", help="Only compile workflows that are unbuilt",
                            action="store_true", default=False)
     argparser.add_argument("--no-wait", help="Exit immediately after launching tests",
                            action="store_true", default=False)
-    argparser.add_argument("--project", help="DNAnexus project ID", default="project-F07pBj80ZvgfzQK28j35Gj54")
+    argparser.add_argument("--project", help="DNAnexus project ID",
+                           default="project-F07pBj80ZvgfzQK28j35Gj54")
+    argparser.add_argument("--reorg", help="Reorganize workflow outputs",
+                           action="store_true", default=False)
     argparser.add_argument("--test", help="Run a test, or a subgroup of tests",
                            action="append", default=[])
     argparser.add_argument("--test-list", help="Print a list of available tests",
@@ -384,14 +387,16 @@ def main():
         util.build(project, applet_folder, version_id, top_dir)
 
     compiler_flags=[]
-    if args.verbose:
-        compiler_flags.append("-verbose")
-    if args.compile_mode:
-        compiler_flags += ["-mode", args.compile_mode]
-    if args.force:
-        compiler_flags.append("-force")
     if args.archive:
         compiler_flags.append("-archive")
+    if args.compile_mode:
+        compiler_flags += ["-compileMode", args.compile_mode]
+    if args.force:
+        compiler_flags.append("-force")
+    if args.reorg:
+        compiler_flags.append("-reorg")
+    if args.verbose:
+        compiler_flags.append("-verbose")
 
     try:
         # Compile the WDL workflows

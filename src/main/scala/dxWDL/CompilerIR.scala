@@ -39,6 +39,7 @@ object CompilerIR {
     case class State(destination: String,
                      instanceTypeDB: InstanceTypeDB,
                      cef: CompilerErrorFormatter,
+                     reorg: Boolean,
                      verbose: Boolean)
 
     // Convert the environment to yaml, and then pretty
@@ -527,6 +528,11 @@ workflow w {
         val code:Workflow = WdlRewrite.workflowGenEmpty("w")
         code.children = inputDecls ++ outputs
 
+        // Should we reorganize the output folder?
+        val appletKind =
+            if (cState.reorg) IR.AppletKindWorkflowOutputsAndReorg
+            else IR.AppletKindWorkflowOutputs
+
         // We need minimal compute resources, use the default instance type
         val applet = IR.Applet(appletName,
                                inputVars,
@@ -534,7 +540,7 @@ workflow w {
                                calcInstanceType(None, cState),
                                false,
                                cState.destination,
-                               IR.AppletKindWorkflowOutputs,
+                               appletKind,
                                WdlRewrite.namespace(code, Seq.empty))
         verifyWdlCodeIsLegal(applet.ns)
 
@@ -968,8 +974,9 @@ workflow w {
               instanceTypeDB: InstanceTypeDB,
               destination: String,
               cef: CompilerErrorFormatter,
+              reorg: Boolean,
               verbose: Boolean) : IR.Namespace = {
-        val cState = new State(destination, instanceTypeDB, cef, verbose)
+        val cState = new State(destination, instanceTypeDB, cef, reorg, verbose)
         Utils.trace(cState.verbose, "FrontEnd pass")
 
         // Load all accessed applets, local or imported

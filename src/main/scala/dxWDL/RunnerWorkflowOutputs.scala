@@ -4,9 +4,11 @@
 package dxWDL
 
 // DX bindings
-import com.dnanexus.{DXApplet, DXDataObject, DXEnvironment, DXJob, DXFile, DXProject}
+import com.dnanexus.{DXApplet, DXContainer, DXDataObject, DXEnvironment, DXJob, DXFile, DXProject}
 import com.fasterxml.jackson.databind.JsonNode
 import java.nio.file.Path
+import net.jcazevedo.moultingyaml._
+import net.jcazevedo.moultingyaml.DefaultYamlProtocol._
 import scala.collection.JavaConverters._
 import spray.json._
 import spray.json.DefaultJsonProtocol
@@ -17,22 +19,20 @@ import WdlVarLinks._
 
 object RunnerWorkflowOutputs {
 
-    def getOutputFolder(dxEnv: DXEnvironment) : String = {
-        val dxEnv = com.dnanexus.DXEnvironment.create()
-        val dxJob:DXJob = dxEnv.getJob
-        dxJob.describe.getFolder
-    }
-
     // Move all intermediate results to a sub-folder
     def moveIntermediateResultFiles(dxEnv: DXEnvironment,
                                     outputFields: Map[String, JsonNode]) : Unit = {
         val dxProject = dxEnv.getProjectContext()
-        val outFolder = getOutputFolder(dxEnv)
+        val dxProjDesc = dxProject.describe
+        val dxJob:DXJob = dxEnv.getJob
+        val outFolder = dxJob.describe.getFolder
         val intermFolder = outFolder + "/" + Utils.INTERMEDIATE_RESULTS_FOLDER
+        System.err.println(s"proj=${dxProjDesc.getName} outFolder=${outFolder}")
 
         // find all output files
-        val allFiles: List[DXDataObject] =
-            dxProject.listFolder(outFolder).getObjects.asScala.toList
+        val folderContents:DXContainer.FolderContents = dxProject.listFolder(outFolder)
+        val allFiles: List[DXDataObject] = folderContents.getObjects.asScala.toList
+        System.err.println(s"output files=${allFiles}")
         if (allFiles.isEmpty)
             return
 
@@ -45,14 +45,27 @@ object RunnerWorkflowOutputs {
 
         // Figure out which of the files should be kept
         val intermediateFiles = allFiles.filter(x => !(exportIds contains x.getId))
+        System.err.println(s"intermediate files=${intermediateFiles}")
         if (intermediateFiles.isEmpty)
             return
 
         // Move all non exported results to the subdir. Do this in
         // a single API call, to improve performance.
-        System.err.println(s"Creating intermediate results sub-folder ${intermFolder}")
-        dxProject.newFolder(intermFolder)
+        val subFolders: List[String] = folderContents.getSubfolders().asScala.toList
+        if (!(subFolders contains intermFolder)) {
+            System.err.println(s"Creating intermediate results sub-folder ${intermFolder}")
+            dxProject.newFolder(intermFolder)
+        }
         dxProject.moveObjects(intermediateFiles.asJava, intermFolder)
+    }
+
+    // Convert the environment to yaml, and then pretty
+    // print it.
+    def prettyPrint(inputs: Map[String, WdlVarLinks]) : String = {
+        val m: Map[YamlValue, YamlValue] = inputs.map{
+            case (key, wvl) => YamlString(key) -> yaml(wvl)
+        }.toMap
+        YamlObject(m).print()
     }
 
     def apply(wf: Workflow,
@@ -68,9 +81,9 @@ object RunnerWorkflowOutputs {
         val inputLines : String = Utils.readFileContent(jobInputPath)
         val inputs: Map[String, WdlVarLinks] = WdlVarLinks.loadJobInputsAsLinks(inputLines,
                                                                                 inputTypes)
-        System.err.println(s"Initial inputs=${inputs}")
+        System.err.println(s"Initial inputs=\n${prettyPrint(inputs)}")
 
-        // make sure the workflow elements are all declarations
+        // Make sure the workflow elements are all declarations
         val outputDecls: Seq[WorkflowOutput] = wf.children.map {
             case _: Declaration => None
             case wot:WorkflowOutput => Some(wot)

@@ -5,6 +5,7 @@ import com.typesafe.config._
 import java.io.{File, FileWriter, PrintWriter}
 import java.nio.file.{Path, Paths, Files}
 import net.jcazevedo.moultingyaml._
+import scala.collection.mutable.HashMap
 import scala.util.{Failure, Success, Try}
 import spray.json._
 import spray.json.DefaultJsonProtocol
@@ -65,43 +66,68 @@ object Main extends App {
         }
     }
 
+    // Split arguments into sub-lists, one per each option.
+    // For example:
+    //    --sort relaxed --reorg --compile-mode IR
+    // =>
+    //    [[--sort, relaxed], [--reorg], [--compile-mode, IR]]
+    //
+    def splitCmdLine(arglist: List[String]) : List[List[String]] = {
+        def isKeyword(word: String) : Boolean = word.startsWith("-")
+
+        val keywordAndOptions: List[List[String]] = arglist.foldLeft(List.empty[List[String]]) {
+            case (head :: tail, word) if (isKeyword(word)) =>
+                List(word) :: head :: tail
+            case ((head :: tail), word) =>
+                (word :: head) :: tail
+            case (head, word) if (isKeyword(word)) =>
+                List(word) :: head
+            case (Nil, word) if (isKeyword(word)) => List(List(word))
+            case (Nil, word) if (!isKeyword(word)) =>
+                throw new Exception("Keyword must precede options")
+        }
+        keywordAndOptions.map(_.reverse).reverse
+    }
+
     // parse extra command line arguments
     def parseCmdlineOptions(arglist: List[String]) : OptionsMap = {
-        def keyword(word: String) : String = {
+        def normKeyword(word: String) : String = {
             // normalize a keyword, remove leading dashes, and convert
             // letters to lowercase.
             //
             // "--Archive" -> "archive"
             word.replaceAll("-", "").toLowerCase
         }
-        def nextOption(map : OptionsMap, list: List[String]) : OptionsMap = {
-            list match {
-                case Nil => map
-                case head :: tail =>
-                    (keyword(head) :: tail) match {
-                        case Nil =>
-                            throw new IllegalArgumentException(s"sanity")
-                        case "archive" :: tail =>
-                            nextOption(map ++ Map("archive" -> ""), tail)
-                        case ("force"|"f"|"overwrite") :: tail =>
-                            nextOption(map ++ Map("force" -> ""), tail)
-                        case "inputs" :: value :: tail =>
-                            nextOption(map ++ Map("inputFile" -> value.toString), tail)
-                        case "mode" :: value :: tail =>
-                            nextOption(map ++ Map("mode" -> value.toString), tail)
-                        case "destination" :: value :: tail =>
-                            nextOption(map ++ Map("destination" -> value.toString), tail)
-                        case "sort" :: value :: tail =>
-                            nextOption(map ++ Map("sort" -> value.toString), tail)
-                        case "verbose" :: tail =>
-                            nextOption(map ++ Map("verbose" -> ""), tail)
-                        case option :: tail =>
-                            throw new IllegalArgumentException(s"Bad option ${option}, or missing arguments")
-                    }
-            }
+        val cmdLineOpts = splitCmdLine(arglist)
+        val options = HashMap.empty[String, String]
+        cmdLineOpts.foreach {
+            case Nil => throw new Exception("sanity: empty command line option")
+            case keyOrg :: subargs =>
+                val keyword = normKeyword(keyOrg)
+                val value = keyword match {
+                    case "archive" => ""
+                    case "destination" =>
+                        assert(subargs.length == 1)
+                        subargs.head
+                    case ("force"|"f"|"overwrite") => ""
+                    case "inputs" =>
+                        assert(subargs.length == 1)
+                        subargs.head
+                    case "compilemode" =>
+                        assert(subargs.length == 1)
+                        subargs.head
+                    case "reorg" => ""
+                    case "sort" =>
+                        if (subargs.isEmpty) "normal"
+                        else if (subargs.head == "relaxed") "relaxed"
+                        else throw new Exception(s"Unknown sort option ${subargs.head}")
+                    case "verbose" => ""
+                    case _ =>
+                        throw new IllegalArgumentException(s"Unregonized keyword ${keyword}")
+                }
+                options(keyword) = value
         }
-        val options = nextOption(Map(),arglist)
-        options
+        options.toMap
     }
 
     // Report an error, since this is called from a bash script, we
@@ -194,9 +220,10 @@ object Main extends App {
     }
 
     def compileBody(wdlSourceFile : Path, options: OptionsMap) : String = {
-        val verbose = options contains "verbose"
-        val force = options contains "force"
         val archive = options contains "archive"
+        val force = options contains "force"
+        val verbose = options contains "verbose"
+        val reorg = options contains "reorg"
 
         // There are three possible syntaxes:
         //    project-id:/folder
@@ -227,11 +254,12 @@ object Main extends App {
             case Some(p) => DXProject.getInstance(p)
         }
         val dxWDLrtId = getAssetId()
-        val mode: Option[String] = options.get("mode")
+        val compileMode: Option[String] = options.get("compilemode")
         val sortMode = options.get("sort") match {
             case None => CompilerTopologicalSort.Mode.Check
+            case Some("normal") => CompilerTopologicalSort.Mode.Sort
             case Some("relaxed") => CompilerTopologicalSort.Mode.SortRelaxed
-            case Some(_) => CompilerTopologicalSort.Mode.Sort
+            case _ => throw new Exception("Sanity: bad sort mode")
         }
 
         // get list of available instance types
@@ -277,21 +305,21 @@ object Main extends App {
         // mangles the outputs, which is why we pass the originals
         // unmodified.
         val cef = new CompilerErrorFormatter(ns.terminalMap)
-        val irNs = CompilerIR.apply(ns, cState.outputs, instanceTypeDB, folder, cef, verbose)
+        val irNs = CompilerIR.apply(ns, cState.outputs, instanceTypeDB, folder, cef, reorg, verbose)
 
         // Write out the intermediate representation
         prettyPrintIR(wdlSourceFile, irNs, verbose)
 
         // Backend compiler pass
-        mode match {
+        compileMode match {
             case None =>
                 // Generate dx:applets and dx:workflow from the IR
-                val wdlInputs = options.get("inputFile").map(Paths.get(_))
+                val wdlInputs = options.get("inputs").map(Paths.get(_))
                 CompilerNative.apply(irNs, wdlInputs, dxProject, instanceTypeDB,
                                      dxWDLrtId,
                                      folder, cef, force, archive, verbose)
-            case Some(x) if x.toLowerCase == "fe" => "applet-xxxx"
-            case _ => throw new Exception(s"Unknown mode ${mode}")
+            case Some(x) if x.toLowerCase == "ir" => "IR-xxxx"
+            case Some(other) => throw new Exception(s"Unknown compilation mode ${other}")
         }
     }
 
@@ -389,19 +417,20 @@ object Main extends App {
            |compile <WDL file>
            |  Compile a wdl file into a dnanexus workflow.
            |  Optionally, specify a destination path on the
-           |  platform. A dx JSON inputs file is generated from the
-           |  WDL inputs file, if specified.
+           |  platform. If a WDL inputs files is specified, a dx JSON
+           |  inputs file is generated from it.
            |  options:
-           |    -archive :            Archive older versions of applets
-           |    -destination <path> : Output folder for workflow
-           |    -force :              Delete existing applets/workflows
-           |    -inputs <file> :      Cromwell style input file
-           |    -mode <mode> :        Compilation mode, a debugging flag
-           |    -sort <mode> :        Sort call graph, to avoid forward references
-           |    -verbose :            Print detailed progress reports
+           |    -archive              Archive older versions of applets
+           |    -compileMode <string> Compilation mode, a debugging flag
+           |    -destination <string> Output folder on the platform for workflow
+           |    -force                Delete existing applets/workflows
+           |    -inputs <string>      Path to cromwell style input file
+           |    -reorg                Reorganize workflow output files
+           |    -sort [string]        Sort call graph, to avoid forward references
+           |    -verbose              Print detailed progress reports
            |
            |config
-           |  Print the configuration options
+           |  Print the configuration parameters
            |
            |internal <sub command>
            |  Various internal commands
