@@ -22,19 +22,12 @@ test_files={}
 test_failing=set([])
 reserved_test_names=['S', 'M', 'All', 'list']
 small_test_list = [
-    "system_calls",
-    "sg_sum3",
-    "sg_files",
-    "file_array"
-    "ragged_array2",
+    "var_types", "math", "strings", "cast",
+    "files"
 ]
 
 medium_test_list = [
-    # basics
-    "var_types", "math", "strings", "cast",
-
-    # File path handling, and files with the same name
-    "files",
+    "ragged_array2",
 
     # various advanced features
     "advanced",
@@ -190,6 +183,7 @@ def build_workflow(tname, project, folder, version_id, compiler_flags):
                 "-inputs", desc.wdl_input,
                 "-destination", (project.get_id() + ":" + folder) ]
     cmdline += compiler_flags
+    print(" ".join(cmdline))
     subprocess.check_output(cmdline)
     return lookup_workflow(tname, project, folder)
 
@@ -327,6 +321,13 @@ def build_dirs(project):
     project.new_folder(applet_folder, parents=True)
     return base_folder
 
+def rand_compiler_flags():
+    from random import randint
+    flags=[]
+    if randint(0, 1) == 1:
+        flags.append("--reorg")
+    return flags
+
 ######################################################################
 ## Program entry point
 def main():
@@ -404,11 +405,13 @@ def main():
             if args.lazy:
                 wfid = lookup_workflow(tname, project, applet_folder)
             if wfid is None:
-                wfid = build_workflow(tname, project, applet_folder, version_id, compiler_flags)
+                c_flags = compiler_flags[:] + rand_compiler_flags()
+                wfid = build_workflow(tname, project, applet_folder, version_id, c_flags)
             workflows[tname] = wfid
             print("workflow({}) = {}".format(tname, wfid))
         if not args.compile_only:
-            run_workflow_subset(project, workflows, test_folder, args.delay_workspace_destruction, args.no_wait)
+            run_workflow_subset(project, workflows, test_folder, args.delay_workspace_destruction,
+                                args.no_wait)
     finally:
         print("Test complete")
 

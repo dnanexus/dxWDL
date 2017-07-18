@@ -4,8 +4,10 @@
 package dxWDL
 
 // DX bindings
-import com.dnanexus.{DXApplet, DXContainer, DXDataObject, DXEnvironment, DXJob, DXFile, DXProject}
+import com.dnanexus.{DXApplet, DXAnalysis, DXAPI, DXContainer, DXDataObject,
+    DXEnvironment, DXJob, DXJSON, DXFile, DXProject}
 import com.fasterxml.jackson.databind.JsonNode
+import com.fasterxml.jackson.databind.node.ObjectNode
 import java.nio.file.Path
 import net.jcazevedo.moultingyaml._
 import net.jcazevedo.moultingyaml.DefaultYamlProtocol._
@@ -19,21 +21,38 @@ import WdlVarLinks._
 
 object RunnerWorkflowOutputs {
 
+    // find all output files from the analysis
+    def analysisFileOutputs(dxAnalysis: DXAnalysis) : Vector[DXFile]= {
+        val req: ObjectNode = DXJSON.getObjectBuilder()
+            .put("fields",
+                 DXJSON.getObjectBuilder().put("output", true)
+                     .build()).build()
+        val rep = DXAPI.analysisDescribe(dxAnalysis.getId(), req, classOf[JsonNode])
+        val repJs:JsValue = Utils.jsValueOfJsonNode(rep)
+        val outputs = repJs.asJsObject.fields.get("output") match {
+            case None => throw new Exception("Failed to get analysis outputs")
+            case Some(x) => x
+        }
+        val fileOutputs : Vector[DXFile] = WdlVarLinks.findDxFiles(outputs)
+        val fileNames = fileOutputs.map(_.describe().getName())
+        System.err.println(s"analysis output files=${fileNames}")
+        fileOutputs
+    }
+
+
     // Move all intermediate results to a sub-folder
     def moveIntermediateResultFiles(dxEnv: DXEnvironment,
                                     outputFields: Map[String, JsonNode]) : Unit = {
         val dxProject = dxEnv.getProjectContext()
         val dxProjDesc = dxProject.describe
-        val dxJob:DXJob = dxEnv.getJob
-        val outFolder = dxJob.describe.getFolder
+        val dxAnalysis = dxEnv.getJob.describe.getAnalysis
+        val outFolder = dxAnalysis.describe.getFolder
         val intermFolder = outFolder + "/" + Utils.INTERMEDIATE_RESULTS_FOLDER
         System.err.println(s"proj=${dxProjDesc.getName} outFolder=${outFolder}")
 
-        // find all output files
-        val folderContents:DXContainer.FolderContents = dxProject.listFolder(outFolder)
-        val allFiles: List[DXDataObject] = folderContents.getObjects.asScala.toList
-        System.err.println(s"output files=${allFiles}")
-        if (allFiles.isEmpty)
+        // find all output files from the analysis
+        val analysisFiles: Vector[DXFile] = analysisFileOutputs(dxAnalysis)
+        if (analysisFiles.isEmpty)
             return
 
         // find all the object IDs that should be exported
@@ -42,19 +61,25 @@ object RunnerWorkflowOutputs {
             WdlVarLinks.findDxFiles(jsValue)
         }.toVector.flatten
         val exportIds:Set[String] = exportFiles.map(_.getId).toSet
+        val exportNames:Seq[String] = exportFiles.map(_.describe().getName())
+        System.err.println(s"exportFiles=${exportNames}")
 
         // Figure out which of the files should be kept
-        val intermediateFiles = allFiles.filter(x => !(exportIds contains x.getId))
-        System.err.println(s"intermediate files=${intermediateFiles}")
+        val intermediateFiles = analysisFiles.filter(x => !(exportIds contains x.getId))
+        val iNames:Seq[String] = intermediateFiles.map(_.describe().getName())
+        System.err.println(s"intermediate files=${iNames}")
         if (intermediateFiles.isEmpty)
             return
 
         // Move all non exported results to the subdir. Do this in
         // a single API call, to improve performance.
+        val folderContents:DXContainer.FolderContents = dxProject.listFolder(outFolder)
         val subFolders: List[String] = folderContents.getSubfolders().asScala.toList
         if (!(subFolders contains intermFolder)) {
             System.err.println(s"Creating intermediate results sub-folder ${intermFolder}")
             dxProject.newFolder(intermFolder)
+        } else {
+            System.err.println(s"Intermediate results sub-folder ${intermFolder} already exists")
         }
         dxProject.moveObjects(intermediateFiles.asJava, intermFolder)
     }

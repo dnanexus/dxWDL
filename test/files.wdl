@@ -1,4 +1,7 @@
+# File path handling, and files with the same name
+
 import "library_sys_call.wdl" as lib
+import "library_sg.wdl" as lib_sg
 
 # Trying out file copy operations
 task z_Copy {
@@ -57,6 +60,28 @@ task z_FileSizes {
     }
 }
 
+task z_analysis {
+    String str
+    command <<<
+       echo "xyz12345" >> ${str}.txt
+    >>>
+    output {
+        File out = "${str}.txt"
+    }
+}
+
+task z_file_ident {
+    File fileA
+    File fileB
+
+    command {
+    }
+    output {
+      String result = fileA
+    }
+}
+
+
 workflow files {
     File f
     File f1
@@ -72,12 +97,33 @@ workflow files {
     call z_FindFiles2 as FindFiles2
     call z_FileSizes as FileSizes { input: car_desc=FindFiles.texts[0] }
 
+    String wf_suffix = ".txt"
+
+    call lib_sg.Prepare as prepare
+    scatter (x in prepare.array) {
+        call z_analysis as analysis {input: str=x}
+    }
+    call lib_sg.Gather as gather {input: files=analysis.out}
+
+    scatter (filename in analysis.out) {
+        String prefix = ".txt"
+        String prefix2 = ".cpp"
+        String suffix = wf_suffix
+
+        call z_file_ident as ident {
+          input:
+             fileA = sub(filename, prefix, "") + suffix,
+             fileB = sub(sub(filename, prefix, ""), prefix2, "") + suffix
+        }
+    }
     output {
-       Copy2.outf_sorted
-       FindFiles.texts
-       FindFiles.hotels
+        Copy2.outf_sorted
+        FindFiles.texts
+        FindFiles.hotels
 #       FindFiles2.elements
 #       FindFiles2.emptyFiles
         colocation.result
+        gather.str
+        ident.result
     }
 }

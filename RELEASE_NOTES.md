@@ -8,7 +8,8 @@ that were not written by hand.
 - Create an `output_section` applet for a compiled workflow. If
 `--reorg` is specified on the command line, the applet also
 reorganizes the output folder; it moves all intermediate results to
-subfolder `intermediate`.
+subfolder `intermediate`. Reorganization requires `CONTRIBUTE` level access,
+which the user needs to have.
 
 ## 0.33
 - Initial support for WDL pairs and maps
