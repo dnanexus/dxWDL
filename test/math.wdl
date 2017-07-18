@@ -40,13 +40,13 @@ workflow math {
         call lib.Inc as inc3 {input: i=k}
     }
 
-    call lib.Sum as sum {input: ints = inc2.result}
+    call lib.Sum as inc_sum {input: ints = inc2.result}
 
     output {
         Int x = int_ops3.mul
         Int y = int_ops3.sub
         Int sum = int_ops5.sum
         Int div = int_ops5.div
-        Int sum2 = sum.result
+        Int sum2 = inc_sum.result
     }
 }
