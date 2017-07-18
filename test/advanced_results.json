@@ -1,5 +1,6 @@
 {
   "str_animals.result" : "Arctic fox --K -S --flags --contamination 0 --s foobar",
   "str_animals.family" : "Family Arctic fox",
-  "scatter_2.cgrep_count": [0, 1, 1]
+  "scatter_2.cgrep_count": [0, 1, 1],
+  "BroadGenomicsDocker.version" : "0.7.13-r1126"
 }
