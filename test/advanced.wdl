@@ -28,8 +28,8 @@ workflow advanced {
     String species
     File file
     String p_nowhere="wdl ${pattern}"
-    String p_tut = "tut"
-    Array[String] patterns = [pattern, p_nowhere, p_tut]
+    String p_test = "test"
+    Array[String] patterns = [pattern, p_nowhere, p_test]
     Int? i
     File? empty
     String unmapped_bam_suffix = "bam"
