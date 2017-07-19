@@ -22,10 +22,20 @@ import WdlVarLinks._
 object RunnerWorkflowOutputs {
 
     // find all output files from the analysis
+    //
+    // We want to find all inputs and outputs with little platform overhead.
+    // Here, we use a describe API call on the analysis.
+    //
+    // The output files could include some of the inputs, and we need
+    // to filter those out. One way, is to check file creation dates,
+    // however, that would require a describe API call per output
+    // file. Instead, we find all the output files that do not also
+    // appear in the input.
     def analysisFileOutputs(dxAnalysis: DXAnalysis) : Vector[DXFile]= {
         val req: ObjectNode = DXJSON.getObjectBuilder()
-            .put("fields",
-                 DXJSON.getObjectBuilder().put("output", true)
+            .put("fields", DXJSON.getObjectBuilder()
+                     .put("input", true)
+                     .put("output", true)
                      .build()).build()
         val rep = DXAPI.analysisDescribe(dxAnalysis.getId(), req, classOf[JsonNode])
         val repJs:JsValue = Utils.jsValueOfJsonNode(rep)
@@ -33,10 +43,21 @@ object RunnerWorkflowOutputs {
             case None => throw new Exception("Failed to get analysis outputs")
             case Some(x) => x
         }
-        val fileOutputs : Vector[DXFile] = WdlVarLinks.findDxFiles(outputs)
-        val fileNames = fileOutputs.map(_.describe().getName())
-        System.err.println(s"analysis output files=${fileNames}")
-        fileOutputs
+
+        val fileOutputs : Set[DXFile] = WdlVarLinks.findDxFiles(outputs).toSet
+        //val fileNames = fileOutputs.map(_.describe().getName())
+        System.err.println(s"analysis has ${fileOutputs.size} output files")
+
+        val inputs = repJs.asJsObject.fields.get("input") match {
+            case None => throw new Exception("Failed to get analysis inputs")
+            case Some(x) => x
+        }
+        val fileInputs: Set[DXFile] = WdlVarLinks.findDxFiles(inputs).toSet
+        System.err.println(s"analysis has ${fileInputs.size} input files")
+
+        val freshOutputs:Set[DXFile] = fileOutputs.toSet -- fileInputs.toSet
+        System.err.println(s"analysis has ${freshOutputs.size} newly generated outputs")
+        freshOutputs.toVector
     }
 
 
@@ -50,7 +71,7 @@ object RunnerWorkflowOutputs {
         val intermFolder = outFolder + "/" + Utils.INTERMEDIATE_RESULTS_FOLDER
         System.err.println(s"proj=${dxProjDesc.getName} outFolder=${outFolder}")
 
-        // find all output files from the analysis
+        // find all analysis output files
         val analysisFiles: Vector[DXFile] = analysisFileOutputs(dxAnalysis)
         if (analysisFiles.isEmpty)
             return

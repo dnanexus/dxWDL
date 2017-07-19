@@ -90,7 +90,16 @@ object WdlVarLinks {
 
     private def isDxFile(jsValue: JsValue): Boolean = {
         jsValue match {
-            case JsObject(fields) if fields contains "$dnanexus_link" => true
+            case JsObject(fields) =>
+                fields.get("$dnanexus_link") match {
+                    case Some(JsString(s)) if s.startsWith("file-") => true
+                    case Some(JsObject(linkFields)) =>
+                        linkFields.get("id") match {
+                            case Some(JsString(s)) if s.startsWith("file-") => true
+                            case _ => false
+                        }
+                    case _ => false
+                }
             case  _ => false
         }
     }
@@ -108,11 +117,11 @@ object WdlVarLinks {
         val innerObj = jsValue match {
             case JsObject(fields) =>
                 fields.get("$dnanexus_link") match {
-                    case None => throw new AppInternalException(s"Bad json of dnanexus link $jsValue")
+                    case None => throw new AppInternalException(s"Non-dxfile json $jsValue")
                     case Some(x) => x
                 }
             case  _ =>
-                throw new AppInternalException(s"Bad json of dnanexus link $jsValue")
+                throw new AppInternalException(s"Non-dxfile json $jsValue")
         }
 
         val (fid, projId) : (String, Option[String]) = innerObj match {
@@ -124,7 +133,7 @@ object WdlVarLinks {
                 val fid =
                     linkFields.get("id") match {
                         case Some(JsString(s)) => s
-                        case _ => throw new AppInternalException(s"No file ID found in dnanexus link $jsValue")
+                        case _ => throw new AppInternalException(s"No file ID found in $jsValue")
                     }
                 linkFields.get("project") match {
                     case Some(JsString(pid : String)) => (fid, Some(pid))
