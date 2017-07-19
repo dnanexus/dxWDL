@@ -7,8 +7,9 @@ import com.fasterxml.jackson.databind.node.ObjectNode
 import java.nio.charset.StandardCharsets
 import java.nio.file.{Path, Paths, Files}
 import java.util.Base64
-import org.apache.commons.io.IOUtils
 import scala.collection.JavaConverters._
+import scala.concurrent._
+import ExecutionContext.Implicits.global
 import scala.sys.process._
 import scala.util.{Failure, Success, Try}
 import spray.json._
@@ -353,29 +354,38 @@ object Utils {
 
 
     // Run a child process and collect stdout and stderr into strings
-    def execCommand(cmdLine : String) : (String, String) = {
+    def execCommand(cmdLine : String, timeout: Option[Int]) : (String, String) = {
         val processBuilder = new java.lang.ProcessBuilder()
         val cmds = Seq("/bin/sh", "-c", cmdLine)
 
         val outStream = new StringBuilder()
         val errStream = new StringBuilder()
         val logger = ProcessLogger(
-            (o: String) => {
-                outStream.append(o ++ "\n")
-            },
-            (e: String) => {
-                errStream.append(e ++ "\n")
-            }
+            (o: String) => { outStream.append(o ++ "\n") },
+            (e: String) => { errStream.append(e ++ "\n") }
         )
 
-        // blocks, and returns the exit code. Does NOT connect the standard in of the child job
-        // to the parent
         val p : Process = Process(cmds).run(logger, false)
-        val retcode = p.exitValue()
-        if (retcode != 0) {
-            System.err.println(s"STDOUT: ${outStream.toString()}")
-            System.err.println(s"STDERR: ${errStream.toString()}")
-            throw new Exception(s"Error running command ${cmdLine}")
+        val retcode = timeout match {
+            case None =>
+                // blocks, and returns the exit code. Does NOT connect
+                // the standard in of the child job to the parent
+                val retcode = p.exitValue()
+                if (retcode != 0) {
+                    System.err.println(s"STDOUT: ${outStream.toString()}")
+                    System.err.println(s"STDERR: ${errStream.toString()}")
+                    throw new Exception(s"Error running command ${cmdLine}")
+                }
+                retcode
+            case Some(nSec) =>
+                val f = Future(blocking(p.exitValue()))
+                try {
+                    Await.result(f, duration.Duration(nSec, "sec"))
+                } catch {
+                    case _: TimeoutException =>
+                        p.destroy()
+                        throw new Exception(s"Timeout exceeded (${nSec} seconds)")
+                }
         }
         (outStream.toString(), errStream.toString())
     }
@@ -397,7 +407,7 @@ object Utils {
                 // Use dx download
                 val dxDownloadCmd = s"dx download ${fid} -o ${path.toString()}"
                 System.err.println(s"--  ${dxDownloadCmd}")
-                val (outmsg, errmsg) = execCommand(dxDownloadCmd)
+                val (outmsg, errmsg) = execCommand(dxDownloadCmd, None)
 
                 true
             } catch {
@@ -443,7 +453,7 @@ object Utils {
                 // shell out to dx upload
                 val dxUploadCmd = s"dx upload ${path.toString} --brief"
                 System.err.println(s"--  ${dxUploadCmd}")
-                val (outmsg, errmsg) = execCommand(dxUploadCmd)
+                val (outmsg, errmsg) = execCommand(dxUploadCmd, None)
                 if (!outmsg.startsWith("file-"))
                     return None
                 Some(outmsg.trim())

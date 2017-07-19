@@ -54,6 +54,7 @@ workflow advanced {
     String unmapped_bam_suffix = "bam"
     Array[String] names = ["Jack.XX", "Gil.XX", "Jane.UU"]
 
+    call BroadGenomicsDocker
     call Animals as str_animals {
         input: s=species, num_cores=3, disk_size=40
     }

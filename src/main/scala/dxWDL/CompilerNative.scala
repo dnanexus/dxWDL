@@ -18,6 +18,7 @@ import wdl4s.values._
 import WdlVarLinks._
 
 object CompilerNative {
+    val DX_COMPILE_TIMEOUT = 30
     val MAX_NUM_RETRIES = 5
     val MIN_SLEEP_SEC = 5
     val MAX_SLEEP_SEC = 30
@@ -343,7 +344,7 @@ object CompilerNative {
                 // Run the dx-build command
                 val commandStr = buildCmd.mkString(" ")
                 Utils.trace(cState.verbose, commandStr)
-                val (outstr, _) = Utils.execCommand(commandStr)
+                val (outstr, _) = Utils.execCommand(commandStr, Some(DX_COMPILE_TIMEOUT))
 
                 // extract the appID from the output
                 val app : JsObject = outstr.parseJson.asJsObject
