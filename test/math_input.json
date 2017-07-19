@@ -1,3 +1,5 @@
 {
-  "math.ai" : 7
+  "math.ai": 2,
+  "math.bi": 3,
+  "math.numbers" : [2,3,5]
 }

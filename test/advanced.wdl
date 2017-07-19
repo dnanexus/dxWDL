@@ -1,6 +1,25 @@
 import "library_sys_call.wdl" as lib
 import "library_string.wdl" as lib_string
 
+# Get version of BWA
+task BroadGenomicsDocker {
+  command {
+    /usr/gitc/bwa 2>&1 | \
+    grep -e '^Version' | \
+    sed 's/Version: //'
+  }
+  runtime {
+      docker: "broadinstitute/genomes-in-the-cloud:2.2.4-1469632282"
+      memory: "3 GB"
+      cpu: "1"
+      disks: "local-disk 10 HDD"
+  }
+  output {
+    String version = read_string(stdout())
+  }
+}
+
+
 task Animals {
     String s
     Int num_cores
@@ -28,8 +47,8 @@ workflow advanced {
     String species
     File file
     String p_nowhere="wdl ${pattern}"
-    String p_tut = "tut"
-    Array[String] patterns = [pattern, p_nowhere, p_tut]
+    String p_test = "test"
+    Array[String] patterns = [pattern, p_nowhere, p_test]
     Int? i
     File? empty
     String unmapped_bam_suffix = "bam"
@@ -54,9 +73,11 @@ workflow advanced {
            input: in_file = file, pattern = pt
         }
     }
+
     output {
         cgrep.count
         str_animals.result
         str_animals.family
+        BroadGenomicsDocker.version
     }
 }

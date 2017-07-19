@@ -69,13 +69,14 @@ object Utils {
     val CHECKSUM_PROP = "dxWDL_checksum"
     val COMMON = "common"
     val DOWNLOAD_RETRY_LIMIT = 3
-    val DXPY_FILE_TRANSFER = true
     val DX_HOME = "/home/dnanexus"
     val FLAT_FILES_SUFFIX = "___dxfiles"
     val INSTANCE_TYPE_DB_FILENAME = "instanceTypeDB.json"
+    val INTERMEDIATE_RESULTS_FOLDER = "intermediate"
     val LINK_INFO_FILENAME = "linking.json"
     val MAX_HOURLY_RATE = 10.0
     val MAX_STRING_LEN = 8 * 1024     // Long strings cause problems with bash and the UI
+    val OUTPUT_SECTION = "outputs"
     val SCATTER = "scatter"
     val TMP_VAR_NAME_PREFIX = "xtmp"
     val UPLOAD_RETRY_LIMIT = DOWNLOAD_RETRY_LIMIT
@@ -393,16 +394,11 @@ object Utils {
         def downloadOneFile(path: Path, dxfile: DXFile, counter: Int) : Boolean = {
             val fid = dxfile.getId()
             try {
-                if (DXPY_FILE_TRANSFER) {
-                    // Use dx download
-                    val dxDownloadCmd = s"dx download ${fid} -o ${path.toString()}"
-                    System.err.println(s"--  ${dxDownloadCmd}")
-                    val (outmsg, errmsg) = execCommand(dxDownloadCmd)
-                } else {
-                    // downloading with java
-                    val fos = new java.io.FileOutputStream(path.toString())
-                    IOUtils.copy(dxfile.getDownloadStream(), fos)
-                }
+                // Use dx download
+                val dxDownloadCmd = s"dx download ${fid} -o ${path.toString()}"
+                System.err.println(s"--  ${dxDownloadCmd}")
+                val (outmsg, errmsg) = execCommand(dxDownloadCmd)
+
                 true
             } catch {
                 case e: Throwable =>
@@ -444,25 +440,13 @@ object Utils {
             throw new AppInternalException(s"Output file ${path.toString} is missing")
         def uploadOneFile(path: Path, counter: Int) : Option[String] = {
             try {
-                if (DXPY_FILE_TRANSFER) {
-                    // shell out to dx upload
-                    val dxUploadCmd = s"dx upload ${path.toString} --brief"
-                    System.err.println(s"--  ${dxUploadCmd}")
-                    val (outmsg, errmsg) = execCommand(dxUploadCmd)
-                    if (!outmsg.startsWith("file-"))
-                        return None
-                    Some(outmsg.trim())
-                } else {
-                    // upload with java
-                    System.err.println(s"--  java upload file ${path.toString}")
-                    val fname = path.getFileName().toString()
-                    val dxfile = DXFile.newFile().setName(fname).build()
-                    val fis = new java.io.FileInputStream(path.toString())
-                    dxfile.upload(fis)
-                    dxfile.close()
-                    fis.close()
-                    Some(dxfile.getId())
-                }
+                // shell out to dx upload
+                val dxUploadCmd = s"dx upload ${path.toString} --brief"
+                System.err.println(s"--  ${dxUploadCmd}")
+                val (outmsg, errmsg) = execCommand(dxUploadCmd)
+                if (!outmsg.startsWith("file-"))
+                    return None
+                Some(outmsg.trim())
             } catch {
                 case e: Throwable =>
                     if (counter < UPLOAD_RETRY_LIMIT)

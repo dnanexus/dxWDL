@@ -20,19 +20,20 @@
 package dxWDL
 
 // DX bindings
-import com.dnanexus.{DXApplet, DXEnvironment, DXFile, DXJob, InputParameter, OutputParameter}
+import com.dnanexus.{DXApplet, DXEnvironment, DXFile, DXJob}
 import com.fasterxml.jackson.databind.JsonNode
 import java.nio.file.Path
 import scala.collection.JavaConverters._
 import spray.json._
 import spray.json.DefaultJsonProtocol
-import wdl4s.{Declaration, WdlNamespaceWithWorkflow, WdlExpression, Workflow}
+import wdl4s.{Declaration, DeclarationInterface, WdlNamespaceWithWorkflow,
+    WdlExpression, Workflow, WorkflowOutput}
 import wdl4s.types._
 import wdl4s.values._
 import WdlVarLinks._
 
 object RunnerEval {
-    def evalDeclarations(declarations: Seq[Declaration],
+    def evalDeclarations(declarations: Seq[DeclarationInterface],
                          inputs : Map[String, WdlVarLinks]) : Map[String, BValue] = {
         // Environment that includes a cache for values that have
         // already been evaluated.  It is more efficient to make the
@@ -62,7 +63,7 @@ object RunnerEval {
                     throw new AppInternalException(s"Accessing unbound variable ${varName}")
             }
 
-        def evalDecl(decl : Declaration) : Option[(WdlVarLinks, WdlValue)] = {
+        def evalDecl(decl : DeclarationInterface) : Option[(WdlVarLinks, WdlValue)] = {
             (decl.wdlType, decl.expression) match {
                 // optional input
                 case (WdlOptionalType(_), None) =>
@@ -84,6 +85,18 @@ object RunnerEval {
                     }
 
                 // declaration to evaluate, not an input
+                case (WdlOptionalType(t), Some(expr)) =>
+                    try {
+                        val v : WdlValue = expr.evaluate(lookup, DxFunctions).get
+                        val wvl = WdlVarLinks.apply(t, v)
+                        env = env + (decl.unqualifiedName -> (wvl, Some(v)))
+                        Some((wvl, v))
+                    } catch {
+                        // trying to access an unbound variable.
+                        // Since the result is optional.
+                        case e: AppInternalException => None
+                    }
+
                 case (t, Some(expr)) =>
                     val v : WdlValue = expr.evaluate(lookup, DxFunctions).get
                     val wvl = WdlVarLinks.apply(t, v)
@@ -120,12 +133,11 @@ object RunnerEval {
         System.err.println(s"Initial inputs=${inputs}")
 
         // make sure the workflow elements are all declarations
-        val decls: Seq[Declaration] = wf.children.map{ x =>
-            x match {
-                case decl: Declaration => decl
-                case _ => throw new Exception("Eval task contains a non declaration")
-            }
-        }
+        val decls: Seq[Declaration] = wf.children.map {
+            case decl: Declaration => Some(decl)
+            case _:WorkflowOutput => None
+            case _ => throw new Exception("Eval workflow contains a non declaration")
+        }.flatten
         val outputs : Map[String, BValue] = evalDeclarations(decls, inputs)
 
         // Keep only exported variables

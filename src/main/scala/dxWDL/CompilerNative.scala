@@ -17,7 +17,7 @@ import wdl4s.types._
 import wdl4s.values._
 import WdlVarLinks._
 
-object CompilerBackend {
+object CompilerNative {
     val MAX_NUM_RETRIES = 5
     val MIN_SLEEP_SEC = 5
     val MAX_SLEEP_SEC = 30
@@ -187,6 +187,23 @@ object CompilerBackend {
                             |${genBashScriptTaskBody()}
                             |}""".stripMargin.trim
                 }
+
+            case IR.AppletKindWorkflowOutputs =>
+                s"""|#!/bin/bash -ex
+                    |main() {
+                    |    echo "working directory =$${PWD}"
+                    |    echo "home dir =$${HOME}"
+                    |    echo "user= $${USER}"
+                    |    java -jar $${DX_FS_ROOT}/dxWDL.jar internal workflowOutputs $${DX_FS_ROOT}/${WDL_SNIPPET_FILENAME} $${HOME}
+                    |}""".stripMargin.trim
+            case IR.AppletKindWorkflowOutputsAndReorg =>
+                s"""|#!/bin/bash -ex
+                    |main() {
+                    |    echo "working directory =$${PWD}"
+                    |    echo "home dir =$${HOME}"
+                    |    echo "user= $${USER}"
+                    |    java -jar $${DX_FS_ROOT}/dxWDL.jar internal workflowOutputsAndReorg $${DX_FS_ROOT}/${WDL_SNIPPET_FILENAME} $${HOME}
+                    |}""".stripMargin.trim
         }
     }
 
@@ -246,7 +263,10 @@ object CompilerBackend {
 
         // Copy the WDL file.
         //
-        Utils.writeFileContent(resourcesDir.resolve(Utils.WDL_SNIPPET_FILENAME), applet.wdlCode)
+        val wdlCode:String = WdlPrettyPrinter(false, None).apply(applet.ns, 0)
+            .mkString("\n")
+        Utils.writeFileContent(resourcesDir.resolve(Utils.WDL_SNIPPET_FILENAME),
+                               wdlCode)
 
         // write linking information
         if (!aplLinks.isEmpty) {
@@ -395,9 +415,16 @@ object CompilerBackend {
         // Even scatters need network access, because
         // they spawn subjobs that (may) use dx-docker.
         // We end up allowing all applets to use the network
-        val networkAccess: Map[String, JsValue] =
-            Map("access" -> JsObject(Map("network" -> JsArray(JsString("*")))))
-        val json = JsObject(attrs ++ networkAccess)
+        val network:Map[String, JsValue] = Map("network" -> JsArray(JsString("*")))
+
+        // The WorkflowOutput applet requires higher permissions
+        // to organize the output directory.
+        val proj:Map[String, JsValue] = applet.kind match {
+            case IR.AppletKindWorkflowOutputsAndReorg => Map("project" -> JsString("CONTRIBUTE"))
+            case _ => Map()
+        }
+        val access = Map("access" -> JsObject(network ++ proj))
+        val json = JsObject(attrs ++ access)
 
         val aplLinks = applet.kind match {
             case IR.AppletKindScatter(_) => appletDict
@@ -530,7 +557,8 @@ object CompilerBackend {
 
     // Compile an entire workflow
     def compileWorkflow(wf: IR.Workflow,
-                        cState: State) : (DXWorkflow, Map[String, DXWorkflow.Stage], Map[String, String]) = {
+                        cState: State) :
+            (DXWorkflow, Map[String, DXWorkflow.Stage], Map[String, String]) = {
         // create fresh workflow
         handleOldWorkflow(wf.name, cState)
         val dxwfl = DXWorkflow.newWorkflow()

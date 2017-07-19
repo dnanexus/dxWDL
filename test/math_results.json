@@ -1,3 +1,7 @@
 {
-  "Multiply.result": 40
+    "math_outputs.y": -6,
+    "math_outputs.x": 40,
+    "math_outputs.sum": 151,
+    "math_outputs.div": 4,
+    "math_outputs.sum_result" : 15
 }

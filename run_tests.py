@@ -8,6 +8,7 @@ import fnmatch
 import json
 import pprint
 import os
+from random import randint
 import re
 import sys
 import subprocess
@@ -22,18 +23,12 @@ test_files={}
 test_failing=set([])
 reserved_test_names=['S', 'M', 'All', 'list']
 small_test_list = [
-    "system_calls",
-    "sg_sum3", "sg_files",
-    "ragged_array2",
-    "file_array"
+    "var_types", "math", "strings", "cast",
+    "files"
 ]
 
 medium_test_list = [
-    # basics
-    "var_types", "math_expr", "call_expressions2",
-
-    # File path handling, and files with the same name
-    "file_disambiguation", "files",
+    "ragged_array2",
 
     # various advanced features
     "advanced",
@@ -41,17 +36,11 @@ medium_test_list = [
     # optional arguments
     "optionals",
 
-    # docker
-    "bwa_version",
-
     # lifting declarations
     "decl_mid_wf",
 
     # Error codes
     "bad_status", "bad_status2",
-
-    # Casting
-    "cast",
 
     # Variable instance types
     "instance_types",
@@ -192,6 +181,7 @@ def build_workflow(tname, project, folder, version_id, compiler_flags):
                 "-inputs", desc.wdl_input,
                 "-destination", (project.get_id() + ":" + folder) ]
     cmdline += compiler_flags
+    print(" ".join(cmdline))
     subprocess.check_output(cmdline)
     return lookup_workflow(tname, project, folder)
 
@@ -252,7 +242,7 @@ def run_workflow_subset(project, workflows, test_folder, delay_workspace_destruc
     test_analyses=[]
     for tname, wfid in workflows.iteritems():
         desc = test_files[tname]
-        print("Running workflow {}".format(desc.wf_name))
+        print("Running workflow {} {}".format(desc.wf_name, wfid))
         test_job = run_workflow(project, test_folder, tname, wfid, delay_workspace_destruction)
         test_analyses.append(test_job)
     print("test analyses: " + ", ".join([a.get_id() for a in test_analyses]))
@@ -329,10 +319,20 @@ def build_dirs(project):
     project.new_folder(applet_folder, parents=True)
     return base_folder
 
+def rand_compiler_flags(flag):
+    flags=[]
+    if (flag is not None and
+        flag is True):
+        if randint(0, 1) == 1:
+            flags.append("--reorg")
+    return flags
+
 ######################################################################
 ## Program entry point
 def main():
     argparser = argparse.ArgumentParser(description="Run WDL compiler tests on the platform")
+    argparser.add_argument("--archive", help="Archive old applets",
+                           action="store_true", default=False)
     argparser.add_argument("--compile-only", help="Only compile the workflows, don't run them",
                            action="store_true", default=False)
     argparser.add_argument("--compile-mode", help="Compilation mode")
@@ -340,14 +340,17 @@ def main():
                            action="store_true", default=False)
     argparser.add_argument("--force", help="Remove old versions of applets and workflows",
                            action="store_true", default=False)
-    argparser.add_argument("--archive", help="Archive old applets",
-                           action="store_true", default=False)
     argparser.add_argument("--folder", help="Use an existing folder, instead of building dxWDL")
     argparser.add_argument("--lazy", help="Only compile workflows that are unbuilt",
                            action="store_true", default=False)
     argparser.add_argument("--no-wait", help="Exit immediately after launching tests",
                            action="store_true", default=False)
-    argparser.add_argument("--project", help="DNAnexus project ID", default="project-F07pBj80ZvgfzQK28j35Gj54")
+    argparser.add_argument("--project", help="DNAnexus project ID",
+                           default="project-F07pBj80ZvgfzQK28j35Gj54")
+    argparser.add_argument("--reorg", help="Reorganize workflow outputs",
+                           action="store_true", default=False)
+    argparser.add_argument("--rand", help="Randomize some of the compiler flags, for better coverage",
+                           action="store_true", default=False)
     argparser.add_argument("--test", help="Run a test, or a subgroup of tests",
                            action="append", default=[])
     argparser.add_argument("--test-list", help="Print a list of available tests",
@@ -384,14 +387,16 @@ def main():
         util.build(project, applet_folder, version_id, top_dir)
 
     compiler_flags=[]
-    if args.verbose:
-        compiler_flags.append("-verbose")
-    if args.compile_mode:
-        compiler_flags += ["-mode", args.compile_mode]
-    if args.force:
-        compiler_flags.append("-force")
     if args.archive:
         compiler_flags.append("-archive")
+    if args.compile_mode:
+        compiler_flags += ["-compileMode", args.compile_mode]
+    if args.force:
+        compiler_flags.append("-force")
+    if args.reorg:
+        compiler_flags.append("-reorg")
+    if args.verbose:
+        compiler_flags.append("-verbose")
 
     try:
         # Compile the WDL workflows
@@ -401,11 +406,13 @@ def main():
             if args.lazy:
                 wfid = lookup_workflow(tname, project, applet_folder)
             if wfid is None:
-                wfid = build_workflow(tname, project, applet_folder, version_id, compiler_flags)
+                c_flags = compiler_flags[:] + rand_compiler_flags(args.rand)
+                wfid = build_workflow(tname, project, applet_folder, version_id, c_flags)
             workflows[tname] = wfid
             print("workflow({}) = {}".format(tname, wfid))
         if not args.compile_only:
-            run_workflow_subset(project, workflows, test_folder, args.delay_workspace_destruction, args.no_wait)
+            run_workflow_subset(project, workflows, test_folder, args.delay_workspace_destruction,
+                                args.no_wait)
     finally:
         print("Test complete")
 

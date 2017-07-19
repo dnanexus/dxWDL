@@ -5,7 +5,7 @@
   * an existing one. Sometimes, it is quite tricky to create valid
   * classes.
   *
-  *  Caveat: the ASTs are incorrect for these resulting instances.
+  * Caveat: the ASTs are incorrect for the resulting instances.
   */
 package dxWDL
 
@@ -29,9 +29,9 @@ object WdlRewrite {
     }
 
     // Create a declaration.
-    def newDeclaration(wdlType: WdlType,
-                       name: String,
-                       expr: Option[WdlExpression]) : Declaration = {
+    def declaration(wdlType: WdlType,
+                    name: String,
+                    expr: Option[WdlExpression]) : Declaration = {
         val textualRepr = expr match {
             case None => s"${wdlType.toWdlString} ${name}"
             case Some(e) => s"${wdlType.toWdlString} ${name} = ${e.toWdlString}"
@@ -84,15 +84,17 @@ object WdlRewrite {
         new TaskOutput(name, wdlType, defaultExpr, INVALID_AST, Some(scope))
     }
 
-    // modify the children in a workflow
-    def workflow [Child <: Scope] (wf: Workflow,
-                                   children: Seq[Child]): Workflow = {
-        val wf1 = new Workflow(wf.unqualifiedName, wf.workflowOutputWildcards,
-                               wf.wdlSyntaxErrorFormatter, wf.meta, wf.parameterMeta,
-                               wf.ast)
-        wf1.children = children
-        updateScope(wf, wf1)
-        wf1
+    // Modify the children in a workflow.
+    def workflow[Child <: Scope] (wfOld: Workflow,
+                                  children: Seq[Child]): Workflow = {
+        val wf = new Workflow(wfOld.unqualifiedName,
+                              Seq.empty, // no output wildcards
+                              wfOld.wdlSyntaxErrorFormatter,
+                              wfOld.meta, wfOld.parameterMeta,
+                              wfOld.ast)
+        wf.children = children
+        updateScope(wfOld, wf)
+        wf
     }
 
     def workflowGenEmpty(wfName: String) : Workflow = {
@@ -102,6 +104,26 @@ object WdlRewrite {
                      Map.empty[String, String],
                      Map.empty[String, String],
                      INVALID_AST)
+    }
+
+    def workflowOutput(varName: String,
+                       wdlType: WdlType,
+                       scope: Scope) = {
+        new WorkflowOutput("out_" + varName,
+                           wdlType,
+                           WdlExpression.fromString(varName),
+                           INVALID_AST,
+                           Some(scope))
+    }
+
+    def workflowOutput(varName: String,
+                       wdlType: WdlType,
+                       expr: WdlExpression) = {
+        new WorkflowOutput("out_" + varName,
+                           wdlType,
+                           expr,
+                           INVALID_AST,
+                           None)
     }
 
     // modify the children in a scatter
@@ -136,5 +158,14 @@ object WdlRewrite {
                                      Map.empty,
                                      WdlRewrite.INVALID_ERR_FORMATTER,
                                      WdlRewrite.INVALID_AST)
+    }
+
+    def namespace(task:Task) : WdlNamespaceWithoutWorkflow = {
+        new WdlNamespaceWithoutWorkflow(None,
+                                        Vector.empty,
+                                        Vector.empty,
+                                        Vector(task),
+                                        Map.empty,
+                                        WdlRewrite.INVALID_AST)
     }
 }

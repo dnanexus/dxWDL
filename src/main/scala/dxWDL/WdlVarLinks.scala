@@ -1,9 +1,13 @@
+// Conversions from WDL types and data structures to
+// DNAx JSON representations.
 package dxWDL
 
 // DX bindings
 import com.dnanexus.{DXApplet, DXFile, DXJob, DXProject, DXWorkflow}
 import com.fasterxml.jackson.databind.JsonNode
 import java.nio.file.{Files, Path, Paths}
+import net.jcazevedo.moultingyaml._
+import net.jcazevedo.moultingyaml.DefaultYamlProtocol._
 import scala.collection.mutable.HashMap
 import spray.json._
 import spray.json.DefaultJsonProtocol
@@ -35,6 +39,21 @@ case class WdlVarLinks(wdlType: WdlType, dxlink: DxLink)
 case class BValue(wvl: WdlVarLinks, wdlValue: WdlValue)
 
 object WdlVarLinks {
+    // Human readable representation of a WdlVarLinks structure
+    def yaml(wvl: WdlVarLinks) : YamlObject = {
+        val (key, value) = wvl.dxlink match {
+            case DxlValue(jsn) =>
+                "JSON" -> jsn.prettyPrint
+            case DxlJob(dxJob, ioRef, varEncName) =>
+                "jobRef" -> varEncName
+            case DxlStage(dxStage, ioRef, varEncName) =>
+                "stageRef" -> varEncName
+        }
+        YamlObject(
+            YamlString("type") -> YamlString(wvl.wdlType.toWdlString),
+            YamlString(key) -> YamlString(value))
+    }
+
     // A dictionary of all WDL files that are also
     // platform files. This can happen if the file was downloaded
     // from the platform, or if it was uploaded.
@@ -163,8 +182,8 @@ object WdlVarLinks {
     }
 
     // Is this a WDL type that maps to a native DX type?
-    private def hasNativeDxType(wdlType: WdlType) : Boolean = {
-        wdlType match {
+    def isNativeDxType(wdlType: WdlType) : Boolean = {
+        Utils.stripOptional(wdlType) match {
             case WdlBooleanType | WdlIntegerType | WdlFloatType | WdlStringType | WdlFileType
                    | WdlArrayType(WdlBooleanType)
                    | WdlArrayType(WdlIntegerType)
@@ -201,7 +220,7 @@ object WdlVarLinks {
 
     // Search through a JSON value for all the dx:file links inside it. Returns
     // those as a vector.
-    private def findDxFiles(jsValue: JsValue) : Vector[DXFile] = {
+    def findDxFiles(jsValue: JsValue) : Vector[DXFile] = {
         jsValue match {
             case JsBoolean(_) | JsNull | JsNumber(_) | JsString(_) =>
                 Vector.empty[DXFile]
@@ -283,7 +302,7 @@ object WdlVarLinks {
             case _ =>
                 throw new AppInternalException(s"Unsupported conversion from ${wvl.dxlink} to WdlValue")
         }
-        if (!hasNativeDxType(wvl.wdlType)) {
+        if (!isNativeDxType(wvl.wdlType)) {
             jsRaw match {
                 case JsObject(_) if isDxFile(jsRaw) =>
                     // The JSON points to a platform file, it needs
@@ -429,7 +448,7 @@ object WdlVarLinks {
         // Strip optional types
         val wdlType = Utils.stripOptional(wdlTypeOrg)
         val js = jsOfComplexWdlValue(wdlType, wdlValue)
-        if (hasNativeDxType(wdlType)) {
+        if (isNativeDxType(wdlType)) {
             WdlVarLinks(wdlTypeOrg, DxlValue(js))
         } else {
             // Complex values, that may have files in them. For example, ragged file arrays.
@@ -443,7 +462,7 @@ object WdlVarLinks {
     // Convert an input field to a dx-links structure. This allows
     // passing it to other jobs.
     def apply(wdlType: WdlType, jsValue: JsValue) : WdlVarLinks = {
-        if (hasNativeDxType(wdlType)) {
+        if (isNativeDxType(wdlType)) {
             // This is primitive value, or a single dimensional
             // array of primitive values.
             WdlVarLinks(wdlType, DxlValue(jsValue))
@@ -506,7 +525,7 @@ object WdlVarLinks {
         }
 
         val wdlType = Utils.stripOptional(wvl.wdlType)
-        if (hasNativeDxType(wdlType)) {
+        if (isNativeDxType(wdlType)) {
             // Types that are supported natively in DX
             List(mkSimple())
         } else if (!mayHaveFiles(wdlType)) {

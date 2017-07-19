@@ -416,7 +416,7 @@ object InstanceTypeDB extends DefaultJsonProtocol {
         } catch {
             // Insufficient permissions to describe the user, we cannot get the price list.
             case e: Throwable =>
-                System.err.println("""|Warning: insufficient permissions to retrive the
+                System.err.println("""|Warning: insufficient permissions to retrieve the
                                       |instance price list. This will result in suboptimal machine choices,
                                       |incurring higher costs when running workflows."""
                                        .stripMargin.replaceAll("\n", " "))
