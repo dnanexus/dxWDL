@@ -34,8 +34,8 @@ def main():
     version_id = util.get_version_id(top_dir)
     print("version: {}".format(version_id))
 
-    util.build(project, folder, version_id, top_dir)
-
+    asset_desc = util.build(project, folder)
+    util.construct_conf_file(version_id, top_dir, [asset_desc])
 
 if __name__ == '__main__':
     main()

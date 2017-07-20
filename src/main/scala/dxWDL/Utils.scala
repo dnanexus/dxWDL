@@ -1,6 +1,6 @@
 package dxWDL
 
-import com.dnanexus.{DXWorkflow, DXApplet, DXFile, DXProject, DXJSON, DXUtil, DXContainer, DXDataObject, InputParameter}
+import com.dnanexus.{DXApplet, DXAPI, DXFile, DXProject, DXJSON, DXUtil, DXDataObject}
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.node.ObjectNode
@@ -352,6 +352,25 @@ object Utils {
         (decls.reverse, rest)
     }
 
+
+    // describe a project, and extract fields that not currently available
+    // through dxjava.
+    def projectDescribeExtraInfo(dxProject: DXProject) : (String,String) = {
+        val rep = DXAPI.projectDescribe(dxProject.getId(), classOf[JsonNode])
+        val jso:JsObject = Utils.jsValueOfJsonNode(rep).asJsObject
+
+        val billTo = jso.fields.get("billTo") match {
+            case Some(JsString(x)) => x
+            case _ => throw new Exception(
+                s"Failed to get billTo from project ${dxProject.getId()}")
+        }
+        val region = jso.fields.get("region") match {
+            case Some(JsString(x)) => x
+            case _ => throw new Exception(
+                s"Failed to get region from project ${dxProject.getId()}")
+        }
+        (billTo,region)
+    }
 
     // Run a child process and collect stdout and stderr into strings
     def execCommand(cmdLine : String, timeout: Option[Int]) : (String, String) = {

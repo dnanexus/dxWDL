@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 from __future__ import print_function
 import argparse
+from collections import namedtuple
 import dxpy
 import fnmatch
 import json
@@ -12,6 +13,8 @@ import subprocess
 import sys
 from tempfile import mkstemp
 import time
+
+AssetDesc = namedtuple('AssetDesc', 'region asset_id')
 
 max_num_retries = 5
 
@@ -94,20 +97,35 @@ def find_asset(project, folder):
         return assets[0]
     raise Exception("More than one asset found in folder {}".format(folder))
 
-def build(project, folder, version_id, top_dir):
+def build(project, folder):
     asset = find_asset(project, folder)
     if asset is None:
         make_prerequisits(project, folder, version_id, top_dir)
         asset = find_asset(project, folder)
+    region = dxpy.describe(project.get_id())['region']
+    return AssetDesc(region, asset)
 
+def construct_conf_file(version_id, top_dir, asset_descs):
     # update asset_id in configuration file
     top_conf_file = get_top_conf_file(top_dir)
     crnt_conf_file = get_crnt_conf_file(top_dir)
     conf = None
     with open(top_conf_file, 'r') as fd:
         conf = fd.read()
-    conf = conf.replace('    asset_id = None\n',
-                        '    asset_id = "{}"\n'.format(asset.get_id()))
+
+    # convert the asset descriptors into Config HOCON records
+    region_asset_hocon = []
+    for ad in asset_descs:
+        region_asset = "\n".join(["  {",
+                                  '    region = "{}"'.format(ad.region),
+                                  '    asset = "{}"'.format(ad.asset_id.get_id()),
+                                  "  }"])
+        region_asset_hocon.append(region_asset)
+
+    buf = "\n".join(region_asset_hocon)
+    conf = conf.replace("    asset_ids = []\n",
+                        "    asset_ids = [\n{}\n]\n".format(buf))
+
     with open(crnt_conf_file, 'w') as fd:
         fd.write(conf)
 

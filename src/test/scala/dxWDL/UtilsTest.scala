@@ -1,5 +1,6 @@
 package dxWDL
 
+import com.typesafe.config._
 import java.nio.charset.StandardCharsets
 import java.nio.file.{Path, Paths, Files}
 import net.jcazevedo.moultingyaml._
@@ -150,5 +151,19 @@ class UtilsTest extends FlatSpec with BeforeAndAfterEach with OneInstancePerTest
         val m2 = m + ("optional" -> JsBoolean(true))
         val x2 = JsObject(m2)
         //System.err.println(s"json=${x2.prettyPrint}")
+    }
+
+    "ConfigFactory" should "understand our reference.conf file" in {
+        def confData =
+            """|
+               |dxWDL {
+               |    version = "0.34"
+               |    asset_ids = [{
+               |        region = "aws:us-east-1"
+               |        asset = "record-F5gyyXj0P26p9Jx12q3XY0qV"
+               |    }]
+               |}""".stripMargin.trim
+        val config = ConfigFactory.parseString(confData)
+        System.err.println(config)
     }
 }

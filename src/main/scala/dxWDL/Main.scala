@@ -5,6 +5,7 @@ import com.typesafe.config._
 import java.io.{File, FileWriter, PrintWriter}
 import java.nio.file.{Path, Paths, Files}
 import net.jcazevedo.moultingyaml._
+import scala.collection.JavaConverters._
 import scala.collection.mutable.HashMap
 import scala.util.{Failure, Success, Try}
 import spray.json._
@@ -38,6 +39,20 @@ object Main extends App {
                      resolver: ImportResolver,
                      verbose: Boolean)
 
+    // Packing of all compiler flags in an easy to digest
+    // format
+    case class CompileOptions(archive: Boolean,
+                              force: Boolean,
+                              verbose: Boolean,
+                              reorg: Boolean,
+                              billTo: String,
+                              region: String,
+                              dxProject: DXProject,
+                              folder: String,
+                              dxWDLrtId: String,
+                              compileMode: Option[String],
+                              sortMode: CompilerTopologicalSort.Mode.Value)
+
     private def normKey(s: String) : String= {
         s.replaceAll("_", "").toUpperCase
     }
@@ -49,11 +64,23 @@ object Main extends App {
         version
     }
 
-    private def getAssetId() : String = {
+    private def getAssetId(region: String) : String = {
         val config = ConfigFactory.load()
-        val assetId = config.getString("dxWDL.asset_id")
-        assert(assetId.startsWith("record"))
-        assetId
+
+        // The asset ids is list of (region, asset-id) pairs
+        val rawAssets: List[Config] = config.getConfigList("dxWDL.asset_ids").asScala.toList
+        val assets:Map[String, String] = rawAssets.map{ pair =>
+            val r = pair.getString("region")
+            val assetId = pair.getString("asset")
+            assert(assetId.startsWith("record"))
+            r -> assetId
+        }.toMap
+        System.err.println(s"allAssets = $assets")
+
+        assets.get(region) match {
+            case None => throw new Exception(s"Region ${region} is currently unsupported")
+            case Some(assetId) => assetId
+        }
     }
 
     def outputs(ns: WdlNamespace) : Option[Seq[WorkflowOutput]] = {
@@ -219,12 +246,9 @@ object Main extends App {
         cleanNs
     }
 
-    def compileBody(wdlSourceFile : Path, options: OptionsMap) : String = {
-        val archive = options contains "archive"
-        val force = options contains "force"
-        val verbose = options contains "verbose"
-        val reorg = options contains "reorg"
-
+    // Get basic information about the dx environment, and process
+    // the compiler flags
+    def compilerOptions(options: OptionsMap) : CompileOptions = {
         // There are three possible syntaxes:
         //    project-id:/folder
         //    project-id:
@@ -253,7 +277,10 @@ object Main extends App {
                 dxEnv.getProjectContext()
             case Some(p) => DXProject.getInstance(p)
         }
-        val dxWDLrtId = getAssetId()
+        // get billTo and region from the project
+        val (billTo, region) = Utils.projectDescribeExtraInfo(dxProject)
+
+        val dxWDLrtId = getAssetId(region)
         val compileMode: Option[String] = options.get("compilemode")
         val sortMode = options.get("sort") match {
             case None => CompilerTopologicalSort.Mode.Check
@@ -262,8 +289,24 @@ object Main extends App {
             case _ => throw new Exception("Sanity: bad sort mode")
         }
 
+        CompileOptions(options contains "archive",
+                       options contains "force",
+                       options contains "verbose",
+                       options contains "reorg",
+                       billTo,
+                       region,
+                       dxProject,
+                       folder,
+                       dxWDLrtId,
+                       compileMode,
+                       sortMode)
+    }
+
+    def compileBody(wdlSourceFile : Path, options: OptionsMap) : String = {
+        val cOpt:CompileOptions = compilerOptions(options)
+
         // get list of available instance types
-        val instanceTypeDB = InstanceTypeDB.query(dxProject)
+        val instanceTypeDB = InstanceTypeDB.query(cOpt.dxProject)
 
         // Resolving imports. Look for referenced files in the
         // source directory.
@@ -284,7 +327,7 @@ object Main extends App {
                     System.err.println("Error loading WDL source code")
                     throw f
             }
-        val cState = State(orgNs, outputs(orgNs), wdlSourceFile, resolver, verbose)
+        val cState = State(orgNs, outputs(orgNs), wdlSourceFile, resolver, cOpt.verbose)
 
         // Topologically sort the WDL file so no forward references exist in
         // subsequent steps. Create new file to hold the result.
@@ -292,12 +335,12 @@ object Main extends App {
         // Additionally perform check for cycles in the workflow
         // Assuming the source file is xxx.wdl, the new name will
         // be xxx.sorted.wdl.
-        val sortedNs1 = CompilerTopologicalSort.apply(orgNs, sortMode, verbose)
+        val sortedNs1 = CompilerTopologicalSort.apply(orgNs, cOpt.sortMode, cOpt.verbose)
         val sortedNs = washNamespace(sortedNs1, "sorted", cState)
 
         // Simplify the original workflow, for example,
         // convert call arguments from expressions to variables.
-        val ns1 = CompilerSimplify.apply(sortedNs, verbose)
+        val ns1 = CompilerSimplify.apply(sortedNs, cOpt.verbose)
         val ns = washNamespace(ns1, "simplified", cState)
 
         // Compile the WDL workflow into an Intermediate
@@ -305,19 +348,20 @@ object Main extends App {
         // mangles the outputs, which is why we pass the originals
         // unmodified.
         val cef = new CompilerErrorFormatter(ns.terminalMap)
-        val irNs = CompilerIR.apply(ns, cState.outputs, instanceTypeDB, folder, cef, reorg, verbose)
+        val irNs = CompilerIR.apply(ns, cState.outputs, instanceTypeDB,
+                                    cOpt.folder, cef, cOpt.reorg, cOpt.verbose)
 
         // Write out the intermediate representation
-        prettyPrintIR(wdlSourceFile, irNs, verbose)
+        prettyPrintIR(wdlSourceFile, irNs, cOpt.verbose)
 
         // Backend compiler pass
-        compileMode match {
+        cOpt.compileMode match {
             case None =>
                 // Generate dx:applets and dx:workflow from the IR
                 val wdlInputs = options.get("inputs").map(Paths.get(_))
-                CompilerNative.apply(irNs, wdlInputs, dxProject, instanceTypeDB,
-                                     dxWDLrtId,
-                                     folder, cef, force, archive, verbose)
+                CompilerNative.apply(irNs, wdlInputs, cOpt.dxProject, instanceTypeDB,
+                                     cOpt.dxWDLrtId,
+                                     cOpt.folder, cef, cOpt.force, cOpt.archive, cOpt.verbose)
             case Some(x) if x.toLowerCase == "ir" => "IR-xxxx"
             case Some(other) => throw new Exception(s"Unknown compilation mode ${other}")
         }

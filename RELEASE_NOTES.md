@@ -10,6 +10,7 @@ that were not written by hand.
 reorganizes the output folder; it moves all intermediate results to
 subfolder `intermediate`. Reorganization requires `CONTRIBUTE` level access,
 which the user needs to have.
+- Multi region support.
 
 ## 0.33
 - Initial support for WDL pairs and maps
