@@ -8,7 +8,6 @@ import fnmatch
 import json
 import pprint
 import os
-from random import randint
 import re
 import sys
 import subprocess
@@ -46,6 +45,9 @@ medium_test_list = [
     # Complex data types
     "dict"
 ] + small_test_list
+
+# Tests with the reorg flags
+test_reorg=["files"]
 
 TestDesc = namedtuple('TestDesc', 'wf_name wdl_source wdl_input dx_input results')
 
@@ -317,12 +319,11 @@ def build_dirs(project):
     project.new_folder(applet_folder, parents=True)
     return base_folder
 
-def rand_compiler_flags(flag):
-    flags=[]
-    if (flag is not None and
-        flag is True):
-        if randint(0, 1) == 1:
-            flags.append("--reorg")
+# Some compiler flags are test specific
+def compiler_per_test_flags(tname):
+    flags = []
+    if tname in test_reorg:
+        flags.append("-reorg")
     return flags
 
 ######################################################################
@@ -346,8 +347,6 @@ def main():
     argparser.add_argument("--project", help="DNAnexus project ID",
                            default="project-F07pBj80ZvgfzQK28j35Gj54")
     argparser.add_argument("--reorg", help="Reorganize workflow outputs",
-                           action="store_true", default=False)
-    argparser.add_argument("--rand", help="Randomize some of the compiler flags, for better coverage",
                            action="store_true", default=False)
     argparser.add_argument("--test", help="Run a test, or a subgroup of tests",
                            action="append", default=[])
@@ -405,7 +404,7 @@ def main():
             if args.lazy:
                 wfid = lookup_workflow(tname, project, applet_folder)
             if wfid is None:
-                c_flags = compiler_flags[:] + rand_compiler_flags(args.rand)
+                c_flags = compiler_flags[:] + compiler_per_test_flags(tname)
                 wfid = build_workflow(tname, project, applet_folder, version_id, c_flags)
             workflows[tname] = wfid
             print("workflow({}) = {}".format(tname, wfid))
