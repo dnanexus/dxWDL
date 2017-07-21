@@ -53,14 +53,15 @@ def get_project(project_name):
     return project
 
 
-def upload_local_file(local_path, project, destFolder):
+def upload_local_file(local_path, project, destFolder, **kwargs):
     for i in range(0,max_num_retries):
         try:
             return dxpy.upload_local_file(filename = local_path,
                                           project = project.get_id(),
                                           folder = destFolder,
                                           show_progress = True,
-                                          wait_on_close=True)
+                                          wait_on_close=True,
+                                          **kwargs)
         except:
             print("Sleeping for 5 seconds before trying again")
             time.sleep(5)
@@ -211,7 +212,8 @@ def copy_across_regions(local_path, record, dest_region, dest_proj, dest_folder)
     dest_proj.new_folder(dest_folder, parents=True)
     dxfile = upload_local_file(local_path,
                                dest_proj,
-                               dest_folder)
+                               dest_folder,
+                               hidden=True)
     fid = dxfile.get_id()
     dest_asset = dxpy.new_dxrecord(name=record.name,
                                    types=['AssetBundle'],
