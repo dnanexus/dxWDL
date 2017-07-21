@@ -9,8 +9,11 @@ import util
 
 top_dir = os.path.dirname(sys.argv[0])
 
-SUPPORTED_REGIONS = ["aws:us-east-1", "aws:ap-southeast-2"]
 HOME_REGION = "aws:us-east-1"
+
+# To add region R, create a project for it, dxWDL_R, and add
+# a mapping to the lists
+#    R : dxWDL_R
 TEST_DICT = {
     "aws:us-east-1" :  "dxWDL_playground" ,
     "aws:ap-southeast-2" : "dxWDL_Sydney"
@@ -29,7 +32,7 @@ def main():
                            action='store_true',
                            default=False)
     argparser.add_argument("--release",
-                           help="Create a dxWDL release",
+                           help="Create a dxWDL release, implies multi-region",
                            action='store_true',
                            default=False)
     args = argparser.parse_args()

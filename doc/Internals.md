@@ -401,3 +401,18 @@ which is declared in the output section. The applet organizes the
 output directory structure, and moves all non-final result files into
 subdirectory `intermediate`. This requires `CONTRIBUTE` applet
 *dx:permissions*, and is optional.
+
+
+## Multiple Regions
+
+The platform runs on several cloud regions, each of which is
+independent. Files cannot be cloned between regions, which presents a
+difficulty, because the dxWDL runtime library is such a file. In fact,
+it is a `dx:asset`, not a simple file.
+
+The compiler jar file includes a configuration file, with a list of
+regions, and their assets. When compiling in project *P*, in region
+*R*, compiled applets and workflows will be stored in *P*, and
+reference assets residing only in region *R*. When creating a new
+dxWDL release, the runtime library is copied to all supported regions,
+and an updated configuration file folded into the dxWDL jar file.

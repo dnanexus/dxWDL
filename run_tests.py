@@ -28,8 +28,6 @@ small_test_list = [
 ]
 
 medium_test_list = [
-    "ragged_array2",
-
     # various advanced features
     "advanced",
 
@@ -46,7 +44,7 @@ medium_test_list = [
     "instance_types",
 
     # Complex data types
-    "file_ragged_array", "dict"
+    "dict"
 ] + small_test_list
 
 TestDesc = namedtuple('TestDesc', 'wf_name wdl_source wdl_input dx_input results')

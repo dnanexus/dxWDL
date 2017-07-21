@@ -5,7 +5,7 @@ package dxWDL
 
 // DX bindings
 import com.dnanexus.{DXApplet, DXAnalysis, DXAPI, DXContainer, DXDataObject,
-    DXEnvironment, DXJob, DXJSON, DXFile, DXProject}
+    DXEnvironment, DXJob, DXJSON, DXFile, DXProject, DXSearch}
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.node.ObjectNode
 import java.nio.file.Path
@@ -43,21 +43,32 @@ object RunnerWorkflowOutputs {
             case None => throw new Exception("Failed to get analysis outputs")
             case Some(x) => x
         }
-
-        val fileOutputs : Set[DXFile] = WdlVarLinks.findDxFiles(outputs).toSet
-        //val fileNames = fileOutputs.map(_.describe().getName())
-        System.err.println(s"analysis has ${fileOutputs.size} output files")
-
         val inputs = repJs.asJsObject.fields.get("input") match {
             case None => throw new Exception("Failed to get analysis inputs")
             case Some(x) => x
         }
-        val fileInputs: Set[DXFile] = WdlVarLinks.findDxFiles(inputs).toSet
-        System.err.println(s"analysis has ${fileInputs.size} input files")
 
-        val freshOutputs:Set[DXFile] = fileOutputs.toSet -- fileInputs.toSet
-        System.err.println(s"analysis has ${freshOutputs.size} newly generated outputs")
-        freshOutputs.toVector
+        val fileOutputs : Set[DXFile] = WdlVarLinks.findDxFiles(outputs).toSet
+        val fileInputs: Set[DXFile] = WdlVarLinks.findDxFiles(inputs).toSet
+        val realOutputs:Set[DXFile] = fileOutputs.toSet -- fileInputs.toSet
+        System.err.println(s"analysis has ${fileOutputs.size} output files")
+        System.err.println(s"analysis has ${fileInputs.size} input files")
+        System.err.println(s"analysis has ${realOutputs.size} real outputs")
+
+        System.err.println("Checking timestamps")
+        if (realOutputs.size > 1000)
+            throw new Exception("Large number of outputs, need to break into multiple API calls")
+        val anlCreateTs:java.util.Date = dxAnalysis.describe.getCreationDate()
+        val realFreshOutputs:List[DXDataObject] = DXSearch.findDataObjects()
+            .withIdsIn(realOutputs.asJava)
+            .createdAfter(anlCreateTs)
+            .execute().asList().asScala.toList
+        val outputFiles: Vector[DXFile] = realFreshOutputs.map(
+            dxObj => DXFile.getInstance(dxObj.getId())
+        ).toVector
+        System.err.println(s"analysis has ${outputFiles.length} verified output files")
+
+        outputFiles
     }
 
 
