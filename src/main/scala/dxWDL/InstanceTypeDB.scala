@@ -293,23 +293,6 @@ object InstanceTypeDB extends DefaultJsonProtocol {
         }.toMap
     }
 
-    // describe a project, and extract fields that not currently available
-    // through dxjava.
-    private def getProjectExtraInfo(dxProject: DXProject) : (String,String) = {
-        val rep = DXAPI.projectDescribe(dxProject.getId(), classOf[JsonNode])
-        val jso:JsObject = Utils.jsValueOfJsonNode(rep).asJsObject
-
-        val billTo = jso.fields.get("billTo") match {
-            case Some(JsString(x)) => x
-            case _ => throw new Exception(s"Failed to get billTo from project ${dxProject.getId()}")
-        }
-        val region = jso.fields.get("region") match {
-            case Some(JsString(x)) => x
-            case _ => throw new Exception(s"Failed to get region from project ${dxProject.getId()}")
-        }
-        (billTo,region)
-    }
-
     // Get the mapping from instance type to price, limited to the
     // project we are in. Describing a user requires permission to
     // view the user account. The compiler may not have these
@@ -392,7 +375,7 @@ object InstanceTypeDB extends DefaultJsonProtocol {
         val allAvailableIT = queryAvailableInstanceTypes(dxProject)
 
         // get billTo and region from the project
-        val (billTo, region) = getProjectExtraInfo(dxProject)
+        val (billTo, region) = Utils.projectDescribeExtraInfo(dxProject)
 
         // get the pricing model
         val pm = getPricingModel(billTo, region)

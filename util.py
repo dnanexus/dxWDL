@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 from __future__ import print_function
 import argparse
+from collections import namedtuple
 import dxpy
 import fnmatch
 import json
@@ -13,10 +14,12 @@ import sys
 from tempfile import mkstemp
 import time
 
+AssetDesc = namedtuple('AssetDesc', 'region asset_id project')
+
 max_num_retries = 5
 
 def get_top_conf_file(top_dir):
-    return os.path.join(top_dir, "reference.conf")
+    return os.path.join(top_dir, "reference_stanza.conf")
 
 def get_crnt_conf_file(top_dir):
     try:
@@ -25,6 +28,43 @@ def get_crnt_conf_file(top_dir):
         pass
     return os.path.join(top_dir, "src/main/resources/reference.conf")
 
+
+def get_project(project_name):
+    '''Try to find the project with the given name or id.'''
+
+    # First, see if the project is a project-id.
+    try:
+        project = dxpy.DXProject(project_name)
+        return project
+    except dxpy.DXError:
+        pass
+
+    project = dxpy.find_projects(name=project_name, name_mode='glob', return_handler=True, level="VIEW")
+    project = [p for p in project]
+    if len(project) < 1:
+        print('Did not find project {0}.'.format(project_name), file=sys.stderr)
+        sys.exit(1)
+    elif len(project) > 1:
+        print('Found more than 1 project matching {0}.'.format(project_name), file=sys.stderr)
+        sys.exit(1)
+    else:
+        project = project[0]
+
+    return project
+
+
+def upload_local_file(local_path, project, destFolder):
+    for i in range(0,max_num_retries):
+        try:
+            return dxpy.upload_local_file(filename = local_path,
+                                          project = project.get_id(),
+                                          folder = destFolder,
+                                          show_progress = True,
+                                          wait_on_close=True)
+        except:
+            print("Sleeping for 5 seconds before trying again")
+            time.sleep(5)
+    raise Exception("Error uploading file {}".format(local_path))
 
 def make_asset_file(version_id, top_dir):
     asset_spec = {
@@ -99,15 +139,32 @@ def build(project, folder, version_id, top_dir):
     if asset is None:
         make_prerequisits(project, folder, version_id, top_dir)
         asset = find_asset(project, folder)
+    region = dxpy.describe(project.get_id())['region']
+    return AssetDesc(region, asset.get_id(), project)
 
+def build_final_jar(version_id, top_dir, asset_descs):
     # update asset_id in configuration file
     top_conf_file = get_top_conf_file(top_dir)
     crnt_conf_file = get_crnt_conf_file(top_dir)
     conf = None
     with open(top_conf_file, 'r') as fd:
         conf = fd.read()
-    conf = conf.replace('    asset_id = None\n',
-                        '    asset_id = "{}"\n'.format(asset.get_id()))
+
+    # Convert the asset descriptors into ConfigFactory HOCON records.
+    # We could use JSON instead, but that would make the file less
+    # readable.
+    region_asset_hocon = []
+    for ad in asset_descs:
+        region_asset = "\n".join(["  {",
+                                  '    region = "{}"'.format(ad.region),
+                                  '    asset = "{}"'.format(ad.asset_id),
+                                  "  }"])
+        region_asset_hocon.append(region_asset)
+
+    buf = "\n".join(region_asset_hocon)
+    conf = conf.replace("    asset_ids = []\n",
+                        "    asset_ids = [\n{}\n]\n".format(buf))
+
     with open(crnt_conf_file, 'w') as fd:
         fd.write(conf)
 
@@ -133,15 +190,34 @@ def get_version_id(top_dir):
                 return m.group(6).strip()
     raise Exception("version ID not found in {}".format(conf_file))
 
-def upload_local_file(local_path, project, destFolder):
-    for i in range(0,max_num_retries):
-        try:
-            dxpy.upload_local_file(filename = local_path,
-                                   project = project.get_id(),
-                                   folder = destFolder,
-                                   wait_on_close=True)
-            return
-        except:
-            print("Sleeping for 5 seconds before trying again")
-            time.sleep(5)
-    raise Exception("Error uploading file {}".format(local_path))
+# Copy an asset across regions
+#   path: path to local file
+#   dstProj: destination project to copy to. Should be in another region
+# return:
+#    asset descriptor
+def copy_across_regions(local_path, record, dest_region, dest_proj, dest_folder):
+    print("copy_across_regions {} {} {} {}:{}".format(local_path,
+                                                      record.get_id(),
+                                                      dest_region,
+                                                      dest_proj.get_id(),
+                                                      dest_folder))
+    # check if we haven't already created this record, and uploaded the file
+    dest_asset = find_asset(dest_proj, dest_folder)
+    if dest_asset is not None:
+        print("Already copied to region {}".format(dest_region))
+        return AssetDesc(dest_region, dest_asset.get_id(), dest_proj)
+
+    # upload
+    dest_proj.new_folder(dest_folder, parents=True)
+    dxfile = upload_local_file(local_path,
+                               dest_proj,
+                               dest_folder)
+    fid = dxfile.get_id()
+    dest_asset = dxpy.new_dxrecord(name=record.name,
+                                   types=['AssetBundle'],
+                                   details={'archiveFileId': dxpy.dxlink(fid)},
+                                   properties=record.get_properties(),
+                                   project=dest_proj.get_id(),
+                                   folder=dest_folder,
+                                   close=True)
+    return AssetDesc(dest_region, dest_asset.get_id(), dest_proj)

@@ -381,10 +381,11 @@ def main():
     print("project: {} ({})".format(project.name, args.project))
     print("folder: {}".format(base_folder))
 
-    # build the dxWDL jar file
+    # build the dxWDL jar file, only on us-east-1
     version_id = util.get_version_id(top_dir)
     if args.folder is None:
-        util.build(project, applet_folder, version_id, top_dir)
+        home_ad = util.build(project, applet_folder, version_id, top_dir)
+        jar_path = util.build_final_jar(version_id, top_dir, [home_ad])
 
     compiler_flags=[]
     if args.archive:

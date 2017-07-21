@@ -1,10 +1,12 @@
 package dxWDL
 
+import com.typesafe.config._
 import java.nio.charset.StandardCharsets
 import java.nio.file.{Path, Paths, Files}
 import net.jcazevedo.moultingyaml._
 import net.jcazevedo.moultingyaml.DefaultYamlProtocol._
 import org.scalatest.{BeforeAndAfterEach, FlatSpec, OneInstancePerTest}
+import scala.collection.JavaConverters._
 import spray.json._
 import spray.json.DefaultJsonProtocol
 import wdl4s.types._
@@ -150,5 +152,26 @@ class UtilsTest extends FlatSpec with BeforeAndAfterEach with OneInstancePerTest
         val m2 = m + ("optional" -> JsBoolean(true))
         val x2 = JsObject(m2)
         //System.err.println(s"json=${x2.prettyPrint}")
+    }
+
+    "ConfigFactory" should "understand our reference.conf file" in {
+        def confData =
+            """|
+               |dxWDL {
+               |    version = "0.34"
+               |    asset_ids = [{
+               |        region = "aws:us-east-1"
+               |        asset = "record-F5gyyXj0P26p9Jx12q3XY0qV"
+               |    }]
+               |}""".stripMargin.trim
+        val config = ConfigFactory.parseString(confData)
+        val rawAssets: List[Config] = config.getConfigList("dxWDL.asset_ids").asScala.toList
+        val assets:Map[String, String] = rawAssets.map{ pair =>
+            val r = pair.getString("region")
+            val assetId = pair.getString("asset")
+            assert(assetId.startsWith("record"))
+            r -> assetId
+        }.toMap
+        assert(assets("aws:us-east-1") == "record-F5gyyXj0P26p9Jx12q3XY0qV")
     }
 }
