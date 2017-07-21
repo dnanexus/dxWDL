@@ -5,6 +5,10 @@ workflow math {
     Int ai
     Int bi
 
+    if (ai < 10) {
+        call lib.Inc as cond_inc { input: i=ai}
+    }
+
     call lib.IntOps as int_ops1 {
         input: a=ai, b=bi
     }
@@ -48,5 +52,6 @@ workflow math {
         Int sum = int_ops5.sum
         Int div = int_ops5.div
         Int sum2 = inc_sum.result
+        Int? ai_inc_maybe = cond_inc.result
     }
 }
