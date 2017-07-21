@@ -1,5 +1,7 @@
 # Release Notes
 
+## 0.35
+
 ## 0.34
 - Topological sorting of workflow. By default, check for circular
 dependencies, and abort in case there are cycles. Optionally, sort the
