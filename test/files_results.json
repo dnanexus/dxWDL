@@ -1,3 +1,4 @@
 {
-  "colocation.result" : "False"
+  "files_outputs.colocation_result" : "False",
+  "files_outputs.FileArraySize_result" : [4, 6]
 }

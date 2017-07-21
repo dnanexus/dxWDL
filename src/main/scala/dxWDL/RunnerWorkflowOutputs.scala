@@ -5,7 +5,7 @@ package dxWDL
 
 // DX bindings
 import com.dnanexus.{DXApplet, DXAnalysis, DXAPI, DXContainer, DXDataObject,
-    DXEnvironment, DXJob, DXJSON, DXFile, DXProject}
+    DXEnvironment, DXJob, DXJSON, DXFile, DXProject, DXSearch}
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.node.ObjectNode
 import java.nio.file.Path
@@ -21,6 +21,21 @@ import WdlVarLinks._
 
 object RunnerWorkflowOutputs {
 
+    // Efficiently get the names of many files. We
+    // don't want to do a `describe` each one of them, instead,
+    // we do a bulk-describe.
+    //
+    // In other words, this code is an efficient replacement for:
+    // files.map(_.describe().getName())
+    def bulkGetFilenames(files: Seq[DXFile], dxProject: DXProject) : Vector[String] = {
+        val info:List[DXDataObject] = DXSearch.findDataObjects()
+            .withIdsIn(files.asJava)
+            .inProject(dxProject)
+            .includeDescribeOutput()
+            .execute().asList().asScala.toList
+        info.map(_.getCachedDescribe().getName()).toVector
+    }
+
     // find all output files from the analysis
     //
     // We want to find all inputs and outputs with little platform overhead.
@@ -31,7 +46,8 @@ object RunnerWorkflowOutputs {
     // however, that would require a describe API call per output
     // file. Instead, we find all the output files that do not also
     // appear in the input.
-    def analysisFileOutputs(dxAnalysis: DXAnalysis) : Vector[DXFile]= {
+    def analysisFileOutputs(dxProject: DXProject,
+                            dxAnalysis: DXAnalysis) : Vector[DXFile]= {
         val req: ObjectNode = DXJSON.getObjectBuilder()
             .put("fields", DXJSON.getObjectBuilder()
                      .put("input", true)
@@ -43,23 +59,36 @@ object RunnerWorkflowOutputs {
             case None => throw new Exception("Failed to get analysis outputs")
             case Some(x) => x
         }
-
-        val fileOutputs : Set[DXFile] = WdlVarLinks.findDxFiles(outputs).toSet
-        //val fileNames = fileOutputs.map(_.describe().getName())
-        System.err.println(s"analysis has ${fileOutputs.size} output files")
-
         val inputs = repJs.asJsObject.fields.get("input") match {
             case None => throw new Exception("Failed to get analysis inputs")
             case Some(x) => x
         }
+
+        val fileOutputs : Set[DXFile] = WdlVarLinks.findDxFiles(outputs).toSet
         val fileInputs: Set[DXFile] = WdlVarLinks.findDxFiles(inputs).toSet
+        val realOutputs:Set[DXFile] = fileOutputs.toSet -- fileInputs.toSet
+        System.err.println(s"analysis has ${fileOutputs.size} output files")
         System.err.println(s"analysis has ${fileInputs.size} input files")
+        System.err.println(s"analysis has ${realOutputs.size} real outputs")
 
-        val freshOutputs:Set[DXFile] = fileOutputs.toSet -- fileInputs.toSet
-        System.err.println(s"analysis has ${freshOutputs.size} newly generated outputs")
-        freshOutputs.toVector
+        System.err.println("Checking timestamps")
+        if (realOutputs.size > Utils.MAX_NUM_FILES_MOVE_LIMIT) {
+            System.err.println(s"WARNING: Large number of outputs (${realOutputs.size}), not moving objects")
+            return Vector.empty
+        }
+        val anlCreateTs:java.util.Date = dxAnalysis.describe.getCreationDate()
+        val realFreshOutputs:List[DXDataObject] = DXSearch.findDataObjects()
+            .withIdsIn(realOutputs.asJava)
+            .inProject(dxProject)
+            .createdAfter(anlCreateTs)
+            .execute().asList().asScala.toList
+        val outputFiles: Vector[DXFile] = realFreshOutputs.map(
+            dxObj => DXFile.getInstance(dxObj.getId())
+        ).toVector
+        System.err.println(s"analysis has ${outputFiles.length} verified output files")
+
+        outputFiles
     }
-
 
     // Move all intermediate results to a sub-folder
     def moveIntermediateResultFiles(dxEnv: DXEnvironment,
@@ -72,7 +101,7 @@ object RunnerWorkflowOutputs {
         System.err.println(s"proj=${dxProjDesc.getName} outFolder=${outFolder}")
 
         // find all analysis output files
-        val analysisFiles: Vector[DXFile] = analysisFileOutputs(dxAnalysis)
+        val analysisFiles: Vector[DXFile] = analysisFileOutputs(dxProject, dxAnalysis)
         if (analysisFiles.isEmpty)
             return
 
@@ -82,12 +111,12 @@ object RunnerWorkflowOutputs {
             WdlVarLinks.findDxFiles(jsValue)
         }.toVector.flatten
         val exportIds:Set[String] = exportFiles.map(_.getId).toSet
-        val exportNames:Seq[String] = exportFiles.map(_.describe().getName())
+        val exportNames:Seq[String] = bulkGetFilenames(exportFiles, dxProject)
         System.err.println(s"exportFiles=${exportNames}")
 
         // Figure out which of the files should be kept
         val intermediateFiles = analysisFiles.filter(x => !(exportIds contains x.getId))
-        val iNames:Seq[String] = intermediateFiles.map(_.describe().getName())
+        val iNames:Seq[String] = bulkGetFilenames(intermediateFiles, dxProject)
         System.err.println(s"intermediate files=${iNames}")
         if (intermediateFiles.isEmpty)
             return
