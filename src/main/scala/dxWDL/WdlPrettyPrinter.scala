@@ -110,19 +110,36 @@ case class WdlPrettyPrinter(fqnFlag: Boolean, workflowOutputs: Option[Seq[Workfl
         Vector(indentLine(ln, level))
     }
 
-    def apply(ssc: Scatter, level: Int) : Vector[String] = {
-        val top: String = s"scatter (${ssc.item} in ${ssc.collection.toWdlString})"
-        val children = ssc.children.map{
-            case x:TaskCall => apply(x, level + 1)
-            case x:Declaration => apply(x, level + 1)
-            case x:Scatter => apply(x, level + 1)
-            case _ => throw new Exception("Unimplemented scatter element")
-        }.flatten.toVector
+    def apply(cond: If, level: Int) : Vector[String] = {
+        val top: String = s"if (${cond.condition})"
+        val children = cond.children.map(x =>
+            apply(x, level + 1)
+        ).flatten.toVector
         buildBlock(top, children.toVector, level)
     }
 
+    def apply(ssc: Scatter, level: Int) : Vector[String] = {
+        val top: String = s"scatter (${ssc.item} in ${ssc.collection.toWdlString})"
+        val children = ssc.children.map(x =>
+            apply(x, level + 1)
+        ).flatten.toVector
+        buildBlock(top, children.toVector, level)
+    }
+
+    def apply(scope: Scope, level: Int) : Vector[String] = {
+        scope match {
+            case x:TaskCall => apply(x, level)
+            case x:Declaration => apply(x, level)
+            case x:Scatter => apply(x, level)
+            case x:If => apply(x, level)
+            case other =>
+                throw new Exception(s"Unimplemented scope element ${other.getClass.getName}")
+        }
+    }
+
     def apply(tso: TaskOutput, level: Int): Vector[String] = {
-        val ln = s"${tso.wdlType.toWdlString} ${tso.unqualifiedName} = ${tso.requiredExpression.toWdlString}"
+        val ln = s"""|${tso.wdlType.toWdlString} ${tso.unqualifiedName} =
+                     |${tso.requiredExpression.toWdlString}""".stripMargin.trim
         Vector(indentLine(ln, level))
     }
 
@@ -172,6 +189,7 @@ case class WdlPrettyPrinter(fqnFlag: Boolean, workflowOutputs: Option[Seq[Workfl
             case call: TaskCall => apply(call, level + 1)
             case sc: Scatter => apply(sc, level + 1)
             case decl: Declaration => apply(decl, level + 1)
+            case cond: If  => apply(cond, level + 1)
             case x => throw new Exception(
                 s"Unimplemented workflow element ${x.getClass.getName} ${x.toString}")
         }.flatten.toVector
