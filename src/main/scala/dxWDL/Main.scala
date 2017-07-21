@@ -75,7 +75,7 @@ object Main extends App {
             assert(assetId.startsWith("record"))
             r -> assetId
         }.toMap
-        System.err.println(s"allAssets = $assets")
+        //System.err.println(s"allAssets = $assets")
 
         assets.get(region) match {
             case None => throw new Exception(s"Region ${region} is currently unsupported")

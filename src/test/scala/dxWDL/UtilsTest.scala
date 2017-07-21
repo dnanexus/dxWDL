@@ -6,6 +6,7 @@ import java.nio.file.{Path, Paths, Files}
 import net.jcazevedo.moultingyaml._
 import net.jcazevedo.moultingyaml.DefaultYamlProtocol._
 import org.scalatest.{BeforeAndAfterEach, FlatSpec, OneInstancePerTest}
+import scala.collection.JavaConverters._
 import spray.json._
 import spray.json.DefaultJsonProtocol
 import wdl4s.types._
@@ -164,6 +165,13 @@ class UtilsTest extends FlatSpec with BeforeAndAfterEach with OneInstancePerTest
                |    }]
                |}""".stripMargin.trim
         val config = ConfigFactory.parseString(confData)
-        System.err.println(config)
+        val rawAssets: List[Config] = config.getConfigList("dxWDL.asset_ids").asScala.toList
+        val assets:Map[String, String] = rawAssets.map{ pair =>
+            val r = pair.getString("region")
+            val assetId = pair.getString("asset")
+            assert(assetId.startsWith("record"))
+            r -> assetId
+        }.toMap
+        assert(assets("aws:us-east-1") == "record-F5gyyXj0P26p9Jx12q3XY0qV")
     }
 }

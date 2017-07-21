@@ -19,7 +19,7 @@ AssetDesc = namedtuple('AssetDesc', 'region asset_id project')
 max_num_retries = 5
 
 def get_top_conf_file(top_dir):
-    return os.path.join(top_dir, "reference.conf")
+    return os.path.join(top_dir, "reference_stanza.conf")
 
 def get_crnt_conf_file(top_dir):
     try:
