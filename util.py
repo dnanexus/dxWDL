@@ -142,7 +142,7 @@ def build(project, folder, version_id, top_dir):
     region = dxpy.describe(project.get_id())['region']
     return AssetDesc(region, asset.get_id(), project)
 
-def construct_conf_file(version_id, top_dir, asset_descs):
+def build_final_jar(version_id, top_dir, asset_descs):
     # update asset_id in configuration file
     top_conf_file = get_top_conf_file(top_dir)
     crnt_conf_file = get_crnt_conf_file(top_dir)
@@ -201,14 +201,23 @@ def copy_across_regions(local_path, record, dest_region, dest_proj, dest_folder)
                                                       dest_region,
                                                       dest_proj.get_id(),
                                                       dest_folder))
+    # check if we haven't already created this record, and uploaded the file
+    dest_asset = find_asset(dest_proj, dest_folder)
+    if dest_asset is not None:
+        print("Already copied to region {}".format(dest_region))
+        return AssetDesc(dest_region, dest_asset.get_id(), dest_proj)
+
+    # upload
     dest_proj.new_folder(dest_folder, parents=True)
     dxfile = upload_local_file(local_path,
                                dest_proj,
                                dest_folder)
     fid = dxfile.get_id()
-    asset_bundle = dxpy.new_dxrecord(name=record.name,
-                                     types=['AssetBundle'],
-                                     details={'archiveFileId': dxpy.dxlink(fid)},
-                                     properties=record.get_properties(),
-                                     close=True)
-    return AssetDesc(dest_region, asset_bundle, dest_proj)
+    dest_asset = dxpy.new_dxrecord(name=record.name,
+                                   types=['AssetBundle'],
+                                   details={'archiveFileId': dxpy.dxlink(fid)},
+                                   properties=record.get_properties(),
+                                   project=dest_proj.get_id(),
+                                   folder=dest_folder,
+                                   close=True)
+    return AssetDesc(dest_region, dest_asset.get_id(), dest_proj)
