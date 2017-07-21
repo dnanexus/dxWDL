@@ -72,8 +72,10 @@ object RunnerWorkflowOutputs {
         System.err.println(s"analysis has ${realOutputs.size} real outputs")
 
         System.err.println("Checking timestamps")
-        if (realOutputs.size > 1000)
-            throw new Exception("Large number of outputs, need to break into multiple API calls")
+        if (realOutputs.size > Utils.MAX_NUM_FILES_MOVE_LIMIT) {
+            System.err.println(s"WARNING: Large number of outputs (${realOutputs.size}), not moving objects")
+            return Vector.empty
+        }
         val anlCreateTs:java.util.Date = dxAnalysis.describe.getCreationDate()
         val realFreshOutputs:List[DXDataObject] = DXSearch.findDataObjects()
             .withIdsIn(realOutputs.asJava)

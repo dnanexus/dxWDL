@@ -77,6 +77,7 @@ object Utils {
     val LINK_INFO_FILENAME = "linking.json"
     val MAX_HOURLY_RATE = 10.0
     val MAX_STRING_LEN = 8 * 1024     // Long strings cause problems with bash and the UI
+    val MAX_NUM_FILES_MOVE_LIMIT = 1000
     val OUTPUT_SECTION = "outputs"
     val SCATTER = "scatter"
     val TMP_VAR_NAME_PREFIX = "xtmp"
