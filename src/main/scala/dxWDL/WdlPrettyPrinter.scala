@@ -111,7 +111,7 @@ case class WdlPrettyPrinter(fqnFlag: Boolean, workflowOutputs: Option[Seq[Workfl
     }
 
     def apply(cond: If, level: Int) : Vector[String] = {
-        val top: String = s"if (${cond.condition})"
+        val top: String = s"if (${cond.condition.toWdlString})"
         val children = cond.children.map(x =>
             apply(x, level + 1)
         ).flatten.toVector

@@ -63,10 +63,10 @@ case class CompilerErrorFormatter(terminalMap: Map[Terminal, WdlSource]) {
     }
 
     def notCurrentlySupported(ast: Ast, featureName: String) : String = {
-        val name: Terminal = ast.getAttribute("name").asInstanceOf[Terminal]
+        val t: Terminal = AstTools.findTerminals(ast).head
         s"""|Not currently supported: ${featureName}
             |
-            |${pointToSource(name)}
+            |${pointToSource(t)}
             |""".stripMargin
     }
 
