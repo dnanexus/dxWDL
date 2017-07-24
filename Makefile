@@ -8,4 +8,6 @@ test:
 	sbt test
 
 clean:
+	find . -name "dxWDL*.jar" | xargs rm -f
+	rm -f src/main/resources/*.conf
 	sbt clean clean-files

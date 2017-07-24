@@ -17,16 +17,18 @@ import time
 AssetDesc = namedtuple('AssetDesc', 'region asset_id project')
 
 max_num_retries = 5
+dxWDL_jar_path = "applet_resources/resources/dxWDL.jar"
 
-def get_top_conf_file(top_dir):
+def get_top_conf_path(top_dir):
     return os.path.join(top_dir, "reference_stanza.conf")
 
-def get_crnt_conf_file(top_dir):
-    try:
-        os.mkdir(os.path.join(top_dir, "src/main/resources"))
-    except:
-        pass
-    return os.path.join(top_dir, "src/main/resources/reference.conf")
+def get_crnt_conf_path(top_dir):
+#    try:
+#        os.mkdir(os.path.join(top_dir, "src/main/resources"))
+#    except:
+#        pass
+#    return os.path.join(top_dir, "src/main/resources/reference.conf")
+    return os.path.join(top_dir, "reference.conf")
 
 
 def get_project(project_name):
@@ -83,6 +85,8 @@ def make_asset_file(version_id, top_dir):
     with open(os.path.join(top_dir, "applet_resources/dxasset.json"), 'w') as fd:
         fd.write(json.dumps(asset_spec, indent=4))
 
+# build a fat jar file
+#
 # call sbt-assembly. The tricky part here, is to
 # change the working directory to the top of the project.
 def sbt_assembly(top_dir):
@@ -102,9 +106,6 @@ def build_asset(top_dir, destination):
 
 
 def make_prerequisits(project, folder, version_id, top_dir):
-    # build a fat jar file
-    sbt_assembly(top_dir)
-
     # Create the asset description file
     make_asset_file(version_id, top_dir)
 
@@ -136,6 +137,7 @@ def find_asset(project, folder):
     raise Exception("More than one asset found in folder {}".format(folder))
 
 def build(project, folder, version_id, top_dir):
+    sbt_assembly(top_dir)
     asset = find_asset(project, folder)
     if asset is None:
         make_prerequisits(project, folder, version_id, top_dir)
@@ -145,36 +147,46 @@ def build(project, folder, version_id, top_dir):
 
 def build_final_jar(version_id, top_dir, asset_descs):
     # update asset_id in configuration file
-    top_conf_file = get_top_conf_file(top_dir)
-    crnt_conf_file = get_crnt_conf_file(top_dir)
+    top_conf_path = get_top_conf_path(top_dir)
+    crnt_conf_path = get_crnt_conf_path(top_dir)
     conf = None
-    with open(top_conf_file, 'r') as fd:
+    with open(top_conf_path, 'r') as fd:
         conf = fd.read()
 
     # Convert the asset descriptors into ConfigFactory HOCON records.
     # We could use JSON instead, but that would make the file less
     # readable.
     region_asset_hocon = []
+    all_regions = []
     for ad in asset_descs:
         region_asset = "\n".join(["  {",
                                   '    region = "{}"'.format(ad.region),
                                   '    asset = "{}"'.format(ad.asset_id),
                                   "  }"])
         region_asset_hocon.append(region_asset)
+        all_regions.append(ad.region)
 
     buf = "\n".join(region_asset_hocon)
     conf = conf.replace("    asset_ids = []\n",
                         "    asset_ids = [\n{}\n]\n".format(buf))
 
-    with open(crnt_conf_file, 'w') as fd:
+    if os.path.exists(crnt_conf_path):
+        os.remove(crnt_conf_path)
+    with open(crnt_conf_path, 'w') as fd:
         fd.write(conf)
 
-    # build a fat jar file
-    sbt_assembly(top_dir)
+    # Add the configuration file to the jar archive
+    subprocess.check_call(["jar", "uf", dxWDL_jar_path, crnt_conf_path])
+    all_regions_str = ", ".join(all_regions)
+    print("Added configuration for regions [{}] to jar file".format(all_regions_str))
+
+    # Hygiene, remove the new configuration file, we
+    # don't want it to leak into the next build cycle.
+    os.remove(crnt_conf_path)
 
     # Move the file to the top level directory
     all_in_one_jar = os.path.join(top_dir, "dxWDL-{}.jar".format(version_id))
-    shutil.move(os.path.join(top_dir, "applet_resources/resources/dxWDL.jar"),
+    shutil.move(os.path.join(top_dir, dxWDL_jar_path),
                 all_in_one_jar)
     return all_in_one_jar
 
@@ -182,8 +194,8 @@ def build_final_jar(version_id, top_dir, asset_descs):
 # Extract version_id from configuration file
 def get_version_id(top_dir):
     pattern = re.compile(r"^(\s*)(version)(\s*)(=)(\s*)(\S+)(\s*)$")
-    top_conf_file = get_top_conf_file(top_dir)
-    with open(top_conf_file, 'r') as fd:
+    top_conf_path = get_top_conf_path(top_dir)
+    with open(top_conf_path, 'r') as fd:
         for line in fd:
             line_clean = line.replace("\"", "").replace("'", "")
             m = re.match(pattern, line_clean)
