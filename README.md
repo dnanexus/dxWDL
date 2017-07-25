@@ -6,14 +6,20 @@ and compiles it to an equivalent workflow on the DNAnexus platform.
 
 
 ## Release status
-This project is in beta testing, and does not yet support all WDL features. Initially, we have focused on enabling the [GATK best
-practices pipeline](https://github.com/broadinstitute/wdl/blob/develop/scripts/broad_pipelines/PublicPairedSingleSampleWf_160927.wdl). Other
-features will be added as the project matures and according to user interest.
+<a href="https://travis-ci.org/dnanexus-rnd/dxWDL"><img src="https://travis-ci.org/dnanexus-rnd/dxWDL.svg?branch=master"/></a>
+
+This project is in beta testing, and does not yet support all WDL
+features. Initially, we have focused on enabling the
+[GATK best practices pipeline](https://github.com/broadinstitute/wdl/blob/develop/scripts/broad_pipelines/PublicPairedSingleSampleWf_160927.wdl). Other
+features will be added as the project matures and according to user
+interest.
 
 The main WDL features not yet supported are:
 - Nested workflows (sub-workflows)
 - Conditionals
 - Objects
+
+*Use at your own risk:* for the time being, dxWDL is an exploratory project not covered by DNAnexus service and support agreements. The developers welcome feedback, requests, and bug reports on a best-effort basis.
 
 ## Getting started
 Prerequisites: DNAnexus platform account, dx-toolkit, java 8+, python 2.7.
@@ -31,72 +37,38 @@ current project and folder. The generated workflow can then be run as
 usual using `dx run`. For example, if the workflow takes string
 argument ```X```, then: ``` dx run foo -i0.X="hello world" ```
 
-## Usage tips
+Compilation can be controled with several parameters.
+
+| Option  |  Description |
+| ------  | ------------ |
+| archive | Archive older versions of applets (*dx build -a*)|
+| destination | Set the output folder on the platform |
+| force   | Delete existing applets/workflows |
+| sort    | Sort call graph, to avoid forward references, used for CWL |
+| verbose | Print detailed progress information |
+
+
+## Extensions
+
+A task declaration has a runtime section where memory, cpu, and disk
+space can be specified. Based on these attributes, an instance type is chosen by
+the compiler. If you wish to choose an instance type from the
+[native](https://wiki.dnanexus.com/api-specification-v1.0.0/instance-types)
+list, this can be done by specifying the `dx_instance_type` key
+instead. For example:
+
+```
+runtime {
+   dx_instance_type: "mem1_ssd2_x4"
+}
+```
+
+## Debugging an applet
 
 If you build an applet on the platform with dxWDL, and want to
 inspect it, use: ```dx get --omit-resources  <applet path>```. This will refrain from
 downloading the large resource files that go into the applet.
 
-# Developer zone
-<a href="https://travis-ci.org/dnanexus-rnd/dxWDL"><img src="https://travis-ci.org/dnanexus-rnd/dxWDL.svg?branch=master"/></a>
-
-This section is intended for people interested in making modifications
-to the compiler, or building it on their own.
-
-## Installation of software prerequisits
-
-The main library we depend on is
-[wdl4s](http://broadinstitute.github.io/wdl4s/latest/wdl4s/index.html). This
-is a scala library for parsing and handling WDL programs, written at
-the [Broad institute](https://www.broadinstitute.org).
-
-The instructions here assume an Ubuntu 16.04 system (Xenial).
-
-Install java v1.8
-```
-sudo apt install openjdk-8-jre-headless
-```
-
-Install Scala
-```
-wget www.scala-lang.org/files/archive/scala-2.12.1.deb
-sudo dpkg -i scala-2.12.1.deb
-```
-
-Get ```sbt```, this is a make like utility that works with the ```scala``` language.
-```
-echo "deb https://dl.bintray.com/sbt/debian /" | sudo tee -a /etc/apt/sources.list.d/sbt.list
-sudo apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv 2EE0EA64E40A89B84B2DF73499E82A75642AC823
-sudo apt-get update
-sudo apt-get install sbt
-```
-
-Running sbt for the first time takes several minutes, because it
-downloads all required packages.
-
-Checkout the code, and build it.
-```
-git clone https://github.com/dnanexus/dx-toolkit.git
-git clone https://github.com/dnanexus-rnd/dxWDL.git
-make -C dx-toolkit java
-mkdir dxWDL/lib && cp dx-toolkit/lib/java/dnanexus-api-0.1.0-SNAPSHOT-jar-with-dependencies.jar dxWDL/lib
-cd dxWDL && make all
-```
-
-The dxWDL/lib subdirectory contains the java bindings for dnanexus,
-the dxjava jar file. This allows the compilation process to find dx
-methods. Now execute `./build_jar.py`, this will create a compiler jar
-file and place it at the top level directory.
-
-## SBT tips
-
-### cache
-
-sbt keeps the cache of downloaded jar files in
-```${HOME}/.ivy2/cache```. For example, the WDL jar files are under
-```${HOME}/.ivy2/cache/org.broadinstitute```. In case of problems with
-cached jars, you can remove this directory recursively. This will make
-WDL download all dependencies (again).
 
 # Design
 
