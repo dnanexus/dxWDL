@@ -1,5 +1,9 @@
 # Release Notes
 
+## 0.35
+- Support white space in destination argument
+- Allow providing the dx instance type directly in the runtime attributes.
+
 ## 0.34
 - Topological sorting of workflow. By default, check for circular
 dependencies, and abort in case there are cycles. Optionally, sort the
@@ -39,7 +43,7 @@ tree.
 ## 0.29
 Improved support for scatters
   * Support an expression in a scatter collection.
-  * Compile declerations before a scatter into the scatter
+  * Compile declarations before a scatter into the scatter
   applet. This optimization folds two applets into one.
   * Use wdl4s native name resolution to calculate scatter
   collection type.

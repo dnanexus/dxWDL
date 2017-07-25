@@ -80,15 +80,32 @@ task RuntimeDockerChoice {
   }
 }
 
+task Shortcut {
+    command {
+        line=$(cat /proc/meminfo | grep MemTotal)
+        size_kb=$(echo $line | cut -d ' ' -f 2)
+        size_gb=$(echo "$size_kb / (1024 * 1024)" | bc)
+        echo $size_gb
+    }
+    runtime {
+        dx_instance_type: "mem1_ssd2_x4"
+    }
+    output {
+        String retval = read_string(stdout())
+    }
+}
+
 workflow instance_types {
-  call DiskSpaceSpec { input: disk_req_gb=90 }
-  call MemorySpec { input: memory_req_gb=12 }
-  call NumCoresSpec { input: num_cores_req=5 }
-  call RuntimeDockerChoice { input: imageName="python:2.7" }
-  output {
-    MemorySpec.retval
-    DiskSpaceSpec.retval
-    NumCoresSpec.retval
-    RuntimeDockerChoice.retval
-  }
+    call DiskSpaceSpec { input: disk_req_gb=90 }
+    call MemorySpec { input: memory_req_gb=12 }
+    call NumCoresSpec { input: num_cores_req=5 }
+    call RuntimeDockerChoice { input: imageName="python:2.7" }
+    call Shortcut
+    output {
+        MemorySpec.retval
+        DiskSpaceSpec.retval
+        NumCoresSpec.retval
+        RuntimeDockerChoice.retval
+        Shortcut.retval
+    }
 }

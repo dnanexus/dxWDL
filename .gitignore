@@ -23,5 +23,5 @@ dnanexus-api-*.jar
 test/scratch
 
 # misc
-applet_resources/dxasset.json
+applet_resources/
 src/main/resources/reference.conf

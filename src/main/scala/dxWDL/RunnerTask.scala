@@ -344,14 +344,15 @@ object RunnerTask {
             }
         }
 
+        val dxInstaceType = evalAttr(Utils.DX_INSTANCE_TYPE_ATTR)
         val memory = evalAttr("memory")
         val diskSpace = evalAttr("disks")
         val cores = evalAttr("cpu")
-        val instanceType = instanceTypeDB.apply(memory, diskSpace, cores)
+        val iType = instanceTypeDB.apply(dxInstaceType, memory, diskSpace, cores)
         errStream.println(s"""|calcInstanceType memory=${memory} disk=${diskSpace}
-                               |cores=${cores} instancetype=${instanceType}"""
-                               .stripMargin.replaceAll("\n", " "))
-        instanceType
+                              |cores=${cores} instancetype=${iType}"""
+                              .stripMargin.replaceAll("\n", " "))
+        iType
     }
 
     def relaunchBuildInputs(inputWvls: Map[String, WdlVarLinks]) : ObjectNode = {
