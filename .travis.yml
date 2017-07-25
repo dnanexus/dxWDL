@@ -14,7 +14,6 @@ branches:
 addons:
   apt:
     packages:
-    - openjdk-8-jdk-headless
     - apt-transport-https
     - wget
     - git
@@ -50,16 +49,19 @@ script:
   - pwd
   - source dx-toolkit/environment
   - dx login --token ${DX_AUTH_TOKEN} --noprojects
-  - dx select dxWDL_playground
   - java -version
-  - cd dxWDL && sbt version && ./run_tests.py --test S
+  - cd dxWDL && sbt version && ./build_jar.py --multi-region
+  - pwd
+
+  # Test on US-east
+  - dx select dxWDL_playground
+  - java -jar dxWDL-*.jar compile test/trivial.wdl --destination /travis_ci --force
 
   # Test on Sydney region
   - dx select dxWDL_Sydney
-  - dxWDL_jar=`find . -name "dxWDL*.jar"`
-  - java -jar dxWDL-0.35.jar compile test/trivial.wdl --destination '/Swiss Cheese' --verbose
+  - java -jar dxWDL-*.jar compile test/trivial.wdl --destination '/Swiss Cheese/' --force
 
 env:
   global:
     # DX_AUTH_TOKEN (orodeh)
-  - secure: ayL5N9x8vgNzZ8aTg5z8BvngN8ojY2psoLJjmUCLnRLb+atoSCHX7fbMqzAm3jv+xRyRGKQ73mU26vQsWnuA+uVFTUFQmjLbwcwbeOz5pXrK6pSOFuNWKNE2UiDtvB27GepXCzOMNAwRJ4YFafup7AaG/XBRICuAdnVUyc2FQjrYX3+FdDCZ/sqVvKfge+MciE4pycZCPuIbSm9sKdcpPjFPhhz9ME3zzqbaR6NQE11pJXz0k7C2YDI79OK9w5VmUdVOmETV+7UEwAJWNMPwnutyEWqzRrJeW8+s79z6/xkLplu3vNGZMs/oQIBUk8nLTwp3nJJiTrK/Pltud4m92GByKN02bh/r0/S6GrUPZ8g0UTotM+73LBLlDyNSKFVXhA5dA/qHU/md548QWamXFoDOj8oQeXMdtd7B8aVaSiLmZrXDuJdUs3ilq8TNSoTU2pLz8knkrLgzkf5LO2S1wpPAa4+H23CrBWOzgbX39pe39/bGSaZb3csSZAIASR8J5ywIQJ2N0bi5D2KB3mx+vr8uJ3YOj9vOpgj98gSSFaR1vsDO3fmpk83QpWXszAwYGHfnLf9q1+OLheTvu0MUIovLiEpgUzp5QUyc2QkxjVvDGcSWzU1a6ibsIzKAAE5Bgbkh192JSU12mQKghzHB1JET9LdaEMGf19BZQdCnaIE=
+    secure: "aQJwV/YRv8RW5OtZ+9XVBahgRp5M4nEEZOJoxbCnaLfSIvj49/y+7XNgmo9FM0kmMKLU+PpLQ9VhQQy0BXRcZ563zSw9Wj1V2NDQYQ50TLb/qg0eQjkjj1M/aK7SuyxdX90Xn3sYNLE2zJasSrAW6R22TsYRnVN8xEbxu2P7J7Ryu1c00zRjsUszorFx9DOqzziv1jIWLbkRr3HYVc6t+F1Aoolpsl30Ymv59GMXaFFzivwoE+atfKuunknHdRd9SJH/rhNBw7GgZVld5dh7nwri6fq6JfwYN3x0j/PkSJt1HLh3yB0wsAzEFwAMjITy/1dJRM2SlnAJbOGmw/DJ+ewYLpwTJ6b0gWJd9yyTxRjvz5G1xB79iPUnZ6cCWnc103dVyyO/05ES04nM+L6e6MTHst+Mjb/f8vj2HCNXxq3p8JLBN3NoOCfAUJ9ZbE7KitR7wsZVeDHRBxohHecba8L6Wy5KJKQuoOAIib0AOj+QmxnKGNvIS9L3bqo5FqDUTNxucRlplNo+rl3rQ6ghuCbn5EESCSwWPsAORnHakVmPFpwVw5SW4tA+rNqpHk+TJRxSZH/SZ+cXSe9hhtcl8R4zYgWB7l1HW88cc2vVMTdNaTcxvgLWECCCTbDikWsNuWKTpuJA5Q6yyUn8JRkOlVy74dw6BYe6wdTsvGqKyFM="
