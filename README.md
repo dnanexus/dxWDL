@@ -37,11 +37,38 @@ current project and folder. The generated workflow can then be run as
 usual using `dx run`. For example, if the workflow takes string
 argument ```X```, then: ``` dx run foo -i0.X="hello world" ```
 
-## Usage tips
+Compilation can be controled with several parameters.
+
+| Option  |  Description |
+| ------  | ------------ |
+| archive | Archive older versions of applets (*dx build -a*)|
+| destination | Set the output folder on the platform |
+| force   | Delete existing applets/workflows |
+| sort    | Sort call graph, to avoid forward references, used for CWL |
+| verbose | Print detailed progress information |
+
+
+## Extensions
+
+A task declaration has a runtime section where memory, cpu, and disk
+space can be specified. Based on these attributes, an instance type is chosen by
+the compiler. If you wish to choose an instance type from the
+[native](https://wiki.dnanexus.com/api-specification-v1.0.0/instance-types)
+list, this can be done by specifying the `dx_instance_type` key
+instead. For example:
+
+```
+runtime {
+   dx_instance_type: "mem1_ssd2_x4"
+}
+```
+
+## Debugging an applet
 
 If you build an applet on the platform with dxWDL, and want to
 inspect it, use: ```dx get --omit-resources  <applet path>```. This will refrain from
 downloading the large resource files that go into the applet.
+
 
 # Design
 
