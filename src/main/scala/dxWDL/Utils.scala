@@ -71,6 +71,7 @@ object Utils {
     val COMMON = "common"
     val DOWNLOAD_RETRY_LIMIT = 3
     val DX_HOME = "/home/dnanexus"
+    val DX_INSTANCE_TYPE_ATTR = "dx_instance_type"
     val FLAT_FILES_SUFFIX = "___dxfiles"
     val INSTANCE_TYPE_DB_FILENAME = "instanceTypeDB.json"
     val INTERMEDIATE_RESULTS_FOLDER = "intermediate"

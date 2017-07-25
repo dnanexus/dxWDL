@@ -133,7 +133,7 @@ task Add {
 
     // Figure out which instance to use.
     //
-    //   Extract three fields from the task:
+    // Extract three fields from the task:
     // RAM, disk space, and number of cores. These are WDL expressions
     // that, in the general case, could be calculated only at runtime.
     // Currently, we support only constants. If a runtime expression is used,
@@ -159,10 +159,12 @@ task Add {
                     // and it will probably be inexpensive.
                     IR.InstanceTypeDefault
                 case Some(task) =>
+                    val dxInstaceType = evalAttr(task, Utils.DX_INSTANCE_TYPE_ATTR)
                     val memory = evalAttr(task, "memory")
                     val diskSpace = evalAttr(task, "disks")
                     val cores = evalAttr(task, "cpu")
-                    IR.InstanceTypeConst(cState.instanceTypeDB.apply(memory, diskSpace, cores))
+                    IR.InstanceTypeConst(
+                        cState.instanceTypeDB.apply(dxInstaceType, memory, diskSpace, cores))
             }
         } catch {
             case e : DynamicInstanceTypesException =>

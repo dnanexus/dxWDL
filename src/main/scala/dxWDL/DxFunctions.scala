@@ -99,7 +99,7 @@ object DxFunctions extends WdlStandardLibraryFunctions {
                     .filter(matcher.matches(_))
                     .map(_.toString)
                     .toSeq
-        errStream.println(s"${retval}")
+        //errStream.println(s"${retval}")
         retval
     }
 
