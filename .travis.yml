@@ -52,16 +52,14 @@ script:
   - java -version
   - cd dxWDL && sbt version && ./build_jar.py --multi-region
   - pwd
-  - ls dxWDL
-  - ls dxWDL/*.jar
 
   # Test on US-east
   - dx select dxWDL_playground
-  - java -jar `find . -name "dxWDL-*.jar"` compile test/trivial.wdl --destination /travis_ci --force
+  - java -jar dxWDL-*.jar compile test/trivial.wdl --destination /travis_ci --force
 
   # Test on Sydney region
   - dx select dxWDL_Sydney
-  - java -jar `find . -name "dxWDL-*.jar"` compile test/trivial.wdl --destination '/Swiss Cheese/' --force
+  - java -jar dxWDL-*.jar compile test/trivial.wdl --destination '/Swiss Cheese/' --force
 
 env:
   global:
