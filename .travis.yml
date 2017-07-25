@@ -14,7 +14,7 @@ branches:
 addons:
   apt:
     packages:
-    - openjdk-8-jdk-headless
+#    - openjdk-8-jdk-headless
     - apt-transport-https
     - wget
     - git
