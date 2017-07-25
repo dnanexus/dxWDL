@@ -14,7 +14,6 @@ branches:
 addons:
   apt:
     packages:
-#    - openjdk-8-jdk-headless
     - apt-transport-https
     - wget
     - git
@@ -51,9 +50,8 @@ script:
   - source dx-toolkit/environment
   - dx login --token ${DX_AUTH_TOKEN} --noprojects
   - java -version
-  - cd dxWDL && sbt version
-  - ./build_jar --multi-region
-  - dxWDL_jar=`find . -name "dxWDL*.jar"`
+  - cd dxWDL && sbt version && ./build_jar.py --multi-region
+  - dxWDL_jar=`find dxWDL -name "dxWDL*.jar"`
   - echo $dxWDL_jar
 
   # Test on US-east
