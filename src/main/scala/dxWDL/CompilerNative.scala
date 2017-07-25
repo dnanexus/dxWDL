@@ -322,7 +322,7 @@ object CompilerNative {
 
     // Sending a string to the command line shell may require quoting it.
     private def quoteIfNeeded(buf: String) : String = {
-        if (buf.matches("\\S+")) """'${buf}'"""
+        if (!buf.matches("\\S+")) s"""'${buf}'"""
         else buf
     }
 
