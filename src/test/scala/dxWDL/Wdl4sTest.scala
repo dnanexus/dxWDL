@@ -34,8 +34,20 @@ class Wdl4sTest extends FlatSpec with BeforeAndAfterEach with OneInstancePerTest
     // Run a child process and, wait for it to complete, and return the exit code
     private def execBashScript(scriptFile : Path) : Int = {
         val cmds = Seq("/bin/bash", scriptFile.toString())
-        val p : Process = Process(cmds).run()
-        p.exitValue()
+        val outStream = new StringBuilder()
+        val errStream = new StringBuilder()
+        val logger = ProcessLogger(
+            (o: String) => { outStream.append(o ++ "\n") },
+            (e: String) => { errStream.append(e ++ "\n") }
+        )
+        val p : Process = Process(cmds).run(logger, false)
+        val retcode = p.exitValue()
+        if (retcode != 0) {
+            System.err.println(s"STDOUT: ${outStream.toString()}")
+            System.err.println(s"STDERR: ${errStream.toString()}")
+            throw new Exception(s"Error executing bash script ${scriptFile}")
+        }
+        retcode
     }
 
     // Test the heart of the applet run methods

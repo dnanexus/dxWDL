@@ -320,6 +320,12 @@ object CompilerNative {
         JsObject(runSpec)
     }
 
+    // Sending a string to the command line shell may require quoting it.
+    private def quoteIfNeeded(buf: String) : String = {
+        if (buf.matches("\\S+")) """'${buf}'"""
+        else buf
+    }
+
     // Perform a "dx build" on a local directory representing an applet
     //
     def dxBuildApp(appletDir : Path,
@@ -334,7 +340,11 @@ object CompilerNative {
         val dest =
             if (path.startsWith("/")) pId ++ ":" ++ path
             else pId ++ ":/" ++ path
-        var buildCmd = List("dx", "build", appletDir.toString(), "--destination", dest)
+        var buildCmd = List("dx",
+                            "build",
+                            quoteIfNeeded(appletDir.toString()),
+                            "--destination",
+                            quoteIfNeeded(dest))
         if (cState.force)
             buildCmd = buildCmd :+ "-f"
         if (cState.archive)
