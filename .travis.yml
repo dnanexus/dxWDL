@@ -54,10 +54,13 @@ script:
   - java -version
   - cd dxWDL && sbt version && ./run_tests.py --test S
 
+
   # Test on Sydney region
-  - dx select dxWDL_Sydney
-  - dxWDL_jar=`find . -name "dxWDL*.jar"`
-  - java -jar dxWDL-0.35.jar compile test/trivial.wdl --destination '/Swiss Cheese' --verbose
+#  - dx logout
+#  - dx login --token ${DX_AUTH_TOKEN_SYDNEY} --noprojects
+#  - dx select dxWDL_Sydney
+#  - dxWDL_jar=`find . -name "dxWDL*.jar"`
+#  - java -jar $dxWDL_jar compile test/trivial.wdl --destination '/Swiss Cheese' --verbose --force
 
 env:
   global:
