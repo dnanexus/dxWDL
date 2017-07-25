@@ -17,10 +17,10 @@ case class CompilerErrorFormatter(terminalMap: Map[Terminal, WdlSource]) {
     }
 
     def couldNotEvaluateType(ast: Ast) : String = {
-        val name: Terminal = ast.getAttribute("name").asInstanceOf[Terminal]
+        val t: Terminal = AstTools.findTerminals(ast).head
         s"""|Could not evaluate the WDL type for this expression
             |
-            |${pointToSource(name)}
+            |${pointToSource(t)}
             |""".stripMargin
     }
 

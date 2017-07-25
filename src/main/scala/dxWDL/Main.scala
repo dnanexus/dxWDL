@@ -335,13 +335,18 @@ object Main extends App {
         // Additionally perform check for cycles in the workflow
         // Assuming the source file is xxx.wdl, the new name will
         // be xxx.sorted.wdl.
-        val sortedNs1 = CompilerTopologicalSort.apply(orgNs, cOpt.sortMode, cOpt.verbose)
-        val sortedNs = washNamespace(sortedNs1, "sorted", cState)
+        val nsSorted1 = CompilerTopologicalSort.apply(orgNs, cOpt.sortMode, cOpt.verbose)
+        val nsSorted = washNamespace(nsSorted1, "sorted", cState)
 
         // Simplify the original workflow, for example,
         // convert call arguments from expressions to variables.
-        val ns1 = CompilerSimplify.apply(sortedNs, cOpt.verbose)
-        val ns = washNamespace(ns1, "simplified", cState)
+        val nsExpr1 = CompilerSimplifyExpr.apply(nsSorted, cOpt.verbose)
+        val nsExpr = washNamespace(nsExpr1, "simplified", cState)
+
+        // Reorganize the declarations, to minimize the number of
+        // applets, stages, and jobs.
+        val ns1 = CompilerReorg.apply(nsExpr, cOpt.verbose)
+        val ns = washNamespace(ns1, "reorg", cState)
 
         // Compile the WDL workflow into an Intermediate
         // Representation (IR) For some reason, the pretty printer
