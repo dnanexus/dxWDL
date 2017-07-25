@@ -54,15 +54,13 @@ script:
   - java -version
   - cd dxWDL && sbt version && ./run_tests.py --test S
 
-
   # Test on Sydney region
-#  - dx logout
-#  - dx login --token ${DX_AUTH_TOKEN_SYDNEY} --noprojects
 #  - dx select dxWDL_Sydney
 #  - dxWDL_jar=`find . -name "dxWDL*.jar"`
-#  - java -jar $dxWDL_jar compile test/trivial.wdl --destination '/Swiss Cheese' --verbose --force
+#  - echo $dxWDL_jar
+#  - java -jar $dxWDL_jar compile test/trivial.wdl --destination '/Swiss Cheese' --force
 
 env:
   global:
     # DX_AUTH_TOKEN (orodeh)
-  - secure: ayL5N9x8vgNzZ8aTg5z8BvngN8ojY2psoLJjmUCLnRLb+atoSCHX7fbMqzAm3jv+xRyRGKQ73mU26vQsWnuA+uVFTUFQmjLbwcwbeOz5pXrK6pSOFuNWKNE2UiDtvB27GepXCzOMNAwRJ4YFafup7AaG/XBRICuAdnVUyc2FQjrYX3+FdDCZ/sqVvKfge+MciE4pycZCPuIbSm9sKdcpPjFPhhz9ME3zzqbaR6NQE11pJXz0k7C2YDI79OK9w5VmUdVOmETV+7UEwAJWNMPwnutyEWqzRrJeW8+s79z6/xkLplu3vNGZMs/oQIBUk8nLTwp3nJJiTrK/Pltud4m92GByKN02bh/r0/S6GrUPZ8g0UTotM+73LBLlDyNSKFVXhA5dA/qHU/md548QWamXFoDOj8oQeXMdtd7B8aVaSiLmZrXDuJdUs3ilq8TNSoTU2pLz8knkrLgzkf5LO2S1wpPAa4+H23CrBWOzgbX39pe39/bGSaZb3csSZAIASR8J5ywIQJ2N0bi5D2KB3mx+vr8uJ3YOj9vOpgj98gSSFaR1vsDO3fmpk83QpWXszAwYGHfnLf9q1+OLheTvu0MUIovLiEpgUzp5QUyc2QkxjVvDGcSWzU1a6ibsIzKAAE5Bgbkh192JSU12mQKghzHB1JET9LdaEMGf19BZQdCnaIE=
+    secure: urtnFBHKJdGWBiI73EVlsm0Gn5N0mHx5AQXtnCOLIQl2yZRHg+/3y+wH5ow0JM55f7pRtlUN4JYRxwXQjsris7jl8qJwYpe1ThJyeiUzNAAEZhPUPjK6o1b5CNae6D9ibdsJywpDw/EQ6cey+iiWn0dvyXfPL9e7DPcaERwESyuNOL3r+lM3l2YpuIT+lxG2mDoH/D324Le+44eYORZjkDk8aOnk6rGk8WEHc7BXhw2GMuk5PU/pxtOXstLRwOlv6LBlOu+TzDXhdo+vwxT6wDHUEnkM8/bewYlNr4IcT1UClSkgWco0fv5uzhGtOs7xqTYhNWMnHsrwrQXBpi9Q1bj5TD0FLgcVeGKgqNQIpsYYwECZoZSHbb9Uz69a5Zotw6BoK6V1lvE/0wGJctWkFZtRyUbvoDap9wQkMYakpw6Hs2uwNyXGGirLlE2yT2anoWe4QfstvqjhAgewzTGKNqYMjvFrT2Faq8agPXGQxKjMVCrzQXLqqXmsoTTKKbUmd69yqYU6geLwIoKezj7rvrwtzntgxLEvQBtfrjhzn5YWt4be+bWzOrRyfcOlKX9W3dZfiH92Kf+RpIwogZD9FHBeR77iUNY0w1QdZ6jO3JorsMqyxT3JWGsWjH1D0IPW4KYILfHWBmfg6WJVTu37qP7S6KPgZlsg4DhFu8oCAO0=
