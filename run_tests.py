@@ -22,11 +22,13 @@ test_files={}
 test_failing=set([])
 reserved_test_names=['S', 'M', 'All', 'list']
 small_test_list = [
-    "var_types", "math", "strings", "cast",
-    "files"
+    "math", "strings", "files"
 ]
 
 medium_test_list = [
+    # Basics
+    "var_types", "cast",
+
     # various advanced features
     "advanced",
 
