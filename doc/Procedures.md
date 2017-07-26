@@ -22,8 +22,7 @@ to mix the experimental release, with the old code.
 - Unit tests should assert, and not print to the console
 - WDL test files belong in the top directory `test`
 
-# Building
-## Installation of software prerequisits
+## Building
 
 The main library we depend on is
 [wdl4s](http://broadinstitute.github.io/wdl4s/latest/wdl4s/index.html). This
