@@ -32,6 +32,10 @@ object CompilerReorg {
                               top: Vector[Scope],
                               bottom: Vector[Scope])
 
+    // Representation of a block of statements (scatter, if, loop, etc.)
+    case class Block(children: Vector[Scope],
+                     definedVars: Set[String])
+
     // A member access expression such as [A.x]. Check if
     // A is a call.
     private def isCallOutputAccess(expr: WdlExpression,
@@ -141,8 +145,7 @@ object CompilerReorg {
     //     Int xtmp2 = Add.result + 10
     //     call Multiply  { input: a=xtmp2, b=2 }
     // }
-    def collectDeclarations(drsInit:DeclReorgState,
-                            cState: State) : Seq[Scope] = {
+    def collectDeclarations(drsInit:DeclReorgState, cState: State) : Block = {
         var drs = drsInit
         var numIter = 0
         val totNumElems = drs.bottom.length
@@ -156,29 +159,31 @@ object CompilerReorg {
             assert(totNumElems == drs.top.length + drs.bottom.length)
             numIter += 1
         }
-        drs.top ++ drs.bottom
+        Block(drs.top ++ drs.bottom, drs.definedVars)
     }
 
     // Attempt to collect declarations at the block level, to reduce
     // the number of extra jobs required for calculations.
-    def reorgBlock(elems: Seq[Scope], definedVars: Set[String], cState: State) : Seq[Scope] = {
+    def reorgBlock(elems: Seq[Scope], definedVars: Set[String], cState: State) : Block  = {
         //Utils.trace(cState.verbose, "simplifying workflow top level")
         val drs = DeclReorgState(definedVars, Vector.empty[Scope], elems.toVector)
         collectDeclarations(drs, cState)
     }
 
     // Convert complex expressions to independent declarations
-    def reorg(scope: Scope, definedVars: Set[String], cState:State): Vector[Scope] = {
+    def reorg(scope: Scope, definedVars: Set[String], cState:State): Block = {
         scope match {
             case ssc:Scatter =>
-                val children = reorgBlock(ssc.children, definedVars, cState)
-                Vector(WdlRewrite.scatter(ssc, children, ssc.collection))
+                val blk = reorgBlock(ssc.children, definedVars, cState)
+                val ssc2 = WdlRewrite.scater(ssc, blk.children, ssc.collection)
+                Block(Vector(ssc2), blk.definedVars)
             case cond:If =>
-                val children = reorgBlock(cond.children, definedVars, cState)
-                Vector(WdlRewrite.cond(cond, children, cond.condition))
-            case call:Call => Vector(call)
-            case decl:Declaration => Vector(decl)
-            case wfo:WorkflowOutput => Vector(wfo)
+                val blk = reorgBlock(cond.children, definedVars, cState)
+                val cond2 = WdlRewrite.cond(cond, blk.children, cond.condition)
+                Block(Vector(cond2), blk.definedVars)
+            case call:Call => Block(Vector(call), definedVars ++ call.fullyQualifiedName)
+            case decl:Declaration => Block(Vector(decl), definedVars ++ decl.fullyQualifiedName)
+            case wfo:WorkflowOutput => Block(Vector(wfo), definedVars)
             case x =>
                 throw new Exception(cState.cef.notCurrentlySupported(
                                         x.ast,
