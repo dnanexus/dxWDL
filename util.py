@@ -95,6 +95,15 @@ def sbt_assembly(top_dir):
     subprocess.check_call(["sbt", "assembly"])
     os.chdir(crnt_work_dir)
 
+# Run make, to ensure that we have an up-to-date jar file
+#
+# Be careful, so that the make invocation will work even if called from a different
+# directory.
+def call_make(top_dir, target):
+    print("Calling make")
+    subprocess.check_call(["make", "-C", top_dir, "target"])
+    print("")
+
 # Build a dx-asset from the runtime library.
 # Go to the top level directory, before running "dx"
 def build_asset(top_dir, destination):

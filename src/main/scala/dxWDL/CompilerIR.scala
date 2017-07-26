@@ -812,6 +812,8 @@ workflow w {
         val (topDecls, rest) = Utils.splitBlockDeclarations(scatter.children.toList)
         val calls : Seq[Call] = rest.map {
             case call: Call => call
+            case decl:Declaration =>
+                throw new Exception(cState.cef.notCurrentlySupported(decl.ast, "declaration in the middle of a scatter"))
             case x =>
                 throw new Exception(cState.cef.notCurrentlySupported(x.ast, "scatter element"))
         }

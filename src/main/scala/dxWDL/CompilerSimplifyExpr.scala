@@ -242,22 +242,8 @@ object CompilerSimplifyExpr {
         ns match {
             case nswf : WdlNamespaceWithWorkflow =>
                 val cState = State(nswf.workflow, cef, verbose)
-                val wf1 = simplifyWorkflow(nswf.workflow, cState)
-                val nswf1 = new WdlNamespaceWithWorkflow(ns.importedAs,
-                                                         wf1,
-                                                         ns.imports,
-                                                         ns.namespaces,
-                                                         ns.tasks,
-                                                         ns.terminalMap,
-                                                         nswf.wdlSyntaxErrorFormatter,
-                                                         ns.ast)
-                nswf1.children = wf1.children
-                nswf1.namespace = nswf.namespace
-                nswf.parent match {
-                    case Some(x) => nswf1.parent = x
-                    case None => ()
-                }
-                nswf1
+                val wf2 = simplifyWorkflow(nswf.workflow, cState)
+                WdlRewrite.namespace(nswf, wf2)
             case _ => ns
         }
     }

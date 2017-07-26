@@ -345,7 +345,7 @@ object Main extends App {
 
         // Reorganize the declarations, to minimize the number of
         // applets, stages, and jobs.
-        val ns1 = CompilerReorg.apply(nsExpr, cOpt.verbose)
+        val ns1 = CompilerReorg(nsExpr, cOpt.verbose).apply
         val ns = washNamespace(ns1, "reorg", cState)
 
         // Compile the WDL workflow into an Intermediate

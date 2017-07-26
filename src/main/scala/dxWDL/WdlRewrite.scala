@@ -151,12 +151,12 @@ object WdlRewrite {
         ssc1
     }
 
-    def cond [Child <: Scope] (org: If,
+    def cond [Child <: Scope] (old: If,
                                children: Seq[Child],
                                condition: WdlExpression): If = {
-        val fresh = wdl4s.If(org.index, org.condition, INVALID_AST)
+        val fresh = wdl4s.If(old.index, old.condition, INVALID_AST)
         fresh.children = children
-        updateScope(org, fresh)
+        updateScope(old, fresh)
         fresh
     }
 
@@ -167,6 +167,19 @@ object WdlRewrite {
                                      Map.empty,
                                      WdlRewrite.INVALID_ERR_FORMATTER,
                                      WdlRewrite.INVALID_AST)
+    }
+
+    def namespace(old: WdlNamespaceWithWorkflow, wf: Workflow) : WdlNamespaceWithWorkflow = {
+        val fresh = new WdlNamespaceWithWorkflow(old.importedAs,
+                                                 wf,
+                                                 old.imports,
+                                                 old.namespaces,
+                                                 old.tasks,
+                                                 Map.empty,
+                                                 WdlRewrite.INVALID_ERR_FORMATTER,
+                                                 WdlRewrite.INVALID_AST)
+        updateScope(old, fresh)
+        fresh
     }
 
     def namespace(task:Task) : WdlNamespaceWithoutWorkflow = {

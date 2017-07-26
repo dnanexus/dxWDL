@@ -18,15 +18,9 @@ import wdl4s.types._
 import wdl4s.values._
 import wdl4s.WdlExpression.AstForExpressions
 
-object CompilerReorg {
+case class CompilerReorg(ns: WdlNamespace, verbose: Boolean) {
     val MAX_NUM_COLLECT_ITER = 10
-    var tmpVarCnt = 0
-
-    // Compiler state.
-    // Packs common arguments passed between methods.
-    case class State(wf: Workflow,
-                     cef: CompilerErrorFormatter,
-                     verbose: Boolean)
+    val cef = new CompilerErrorFormatter(ns.terminalMap)
 
     case class DeclReorgState(definedVars: Set[String],
                               top: Vector[Scope],
@@ -36,36 +30,65 @@ object CompilerReorg {
     case class Block(children: Vector[Scope],
                      definedVars: Set[String])
 
-    // A member access expression such as [A.x]. Check if
-    // A is a call.
-    private def isCallOutputAccess(expr: WdlExpression,
-                                   ast: Ast,
-                                   call: Call,
-                                   cState: State) : Boolean = {
-        val lhs:String = WdlExpression.toString(ast.getAttribute("lhs"))
-        try {
-            val wdlType = WdlNamespace.lookupType(cState.wf)(lhs)
-            wdlType.isInstanceOf[WdlCallOutputsObjectType]
-        } catch {
-            case e:Throwable=> false
+    // Find all the variables defined in a statement
+    def definitions(scope: Scope) : Set[String] = {
+        scope match {
+            case ssc:Scatter =>
+                ssc.children.foldLeft(Set.empty[String]) {
+                    (accu,child) => accu ++ definitions(child)
+                }
+            case cond:If =>
+                cond.children.foldLeft(Set.empty[String]) {
+                    (accu,child) => accu ++ definitions(child)
+                }
+            case call:Call => Set(call.fullyQualifiedName)
+            case decl:Declaration => Set(decl.fullyQualifiedName)
+            case wfo:WorkflowOutput => Set(wfo.fullyQualifiedName)
+            case x =>
+                throw new Exception(cef.notCurrentlySupported(
+                                        x.ast,
+                                        s"Unimplemented workflow element"))
         }
     }
 
     // Check if the expression can be evaluated based on a set
     // of variables.
-    private def dependsOnlyOnVars(expr: WdlExpression,
-                                  definedVars: Set[String],
-                                  cState: State) : Boolean = {
-        val refVars = AstTools.findVariableReferences(expr.ast).map{
-            case t:Terminal => WdlExpression.toString(t)
+    private def dependsOnlyOnVars(decl: Declaration,
+                                  expr: WdlExpression,
+                                  definedVars: Set[String]) : Boolean = {
+        // Figure out everything that this expression depends on
+        val nodeRefs:Set[String] = decl.upstream
+            .collect{ case d:DeclarationInterface => d }
+            .map(_.fullyQualifiedName)
+            .toSet
+        val memberAccesses:Set[String] = expr.topLevelMemberAccesses
+            .map(ma => ma.lhs)
+            .toSet
+        val vars:Set[String] = expr.variableReferences
+            .map(WdlExpression.toString(_))
+            .toSet
+        val refs = nodeRefs ++ memberAccesses ++ vars
+
+        // The memeber accesses and variable-references may not be
+        // fully qualified, so try prefixing the FQN too.
+        val fqn = decl.ancestry.head.fullyQualifiedName
+        val retval = refs.forall{ x =>
+            (definedVars contains x) ||
+            (definedVars contains (fqn + "." + x))
         }
-        refVars.forall(x => definedVars contains x)
+        Utils.trace(verbose, s"""|dependsOnlyOnVars ${expr.toWdlString}
+                                 |  fqn = ${fqn}
+                                 |  nodeRefs=${nodeRefs}
+                                 |  upstream=${refs}
+                                 |  defs=${definedVars}
+                                 |  ${retval}""".stripMargin)
+        retval
     }
 
     // Start from a split of the workflow elements into top and bottom blocks.
     // Move any declaration, whose dependencies are satisfied, to the top.
     //
-    private def declMoveUp(drs: DeclReorgState, cState: State) : DeclReorgState = {
+    private def declMoveUp(drs: DeclReorgState) : DeclReorgState = {
         var definedVars : Set[String] = drs.definedVars
         var moved = Vector.empty[Scope]
 
@@ -75,12 +98,12 @@ object CompilerReorg {
                 decl.expression match {
                     case None =>
                         // An input parameter, move to top
-                        definedVars = definedVars + decl.unqualifiedName
+                        definedVars = definedVars ++ definitions(decl)
                         moved = moved :+ decl
                         None
-                    case Some(expr) if dependsOnlyOnVars(expr, definedVars, cState)  =>
+                    case Some(expr) if dependsOnlyOnVars(decl, expr, definedVars)  =>
                         // Move the declaration to the top
-                        definedVars = definedVars + decl.unqualifiedName
+                        definedVars = definedVars ++ definitions(decl)
                         moved = moved :+ decl
                         None
                     case _ =>
@@ -94,6 +117,7 @@ object CompilerReorg {
         bottom = bottom match {
             case (Declaration(_,_,_,_,_)) +: tl =>
                 moved = moved :+ bottom.head
+                definedVars = definedVars ++ definitions(bottom.head)
                 tl
             case _ => bottom
         }
@@ -108,19 +132,16 @@ object CompilerReorg {
                         // end of skip section
                         (t, b, defs)
                     case x =>
-                        // Some statements define new variables, for example, calls
-                        //
-                        // TODO: what happens in case of scatters? Are we catching
-                        // all of defined variables?
-                        val crntDefs:Set[String] = x.taskCalls.map(_.unqualifiedName)
-                        skipNonDecl(t :+ x, b.tail, defs ++ crntDefs)
+                        // dive in, and potentially reorganize the block
+                        val (x1, x1defs) = reorg(x, definedVars)
+                        skipNonDecl(t :+ x1, b.tail, defs ++ x1defs)
                 }
             }
         }
         val (nonDeclBlock, remaining, nonDeclVars) = skipNonDecl(Vector.empty, bottom, Set.empty)
         if (!nonDeclVars.isEmpty)
-            Utils.trace(cState.verbose, s"Not moving definitions ${nonDeclVars}")
-        //Utils.trace(cState.verbose, s"len(nonDecls)=${nonDeclBlock.length} len(rest)=${remaining.length}")
+            Utils.trace(verbose, s"Not moving definitions ${nonDeclVars}")
+        //Utils.trace(verbose, s"len(nonDecls)=${nonDeclBlock.length} len(rest)=${remaining.length}")
         DeclReorgState(definedVars ++ nonDeclVars,
                        drs.top ++ moved ++ nonDeclBlock,
                        remaining)
@@ -145,7 +166,7 @@ object CompilerReorg {
     //     Int xtmp2 = Add.result + 10
     //     call Multiply  { input: a=xtmp2, b=2 }
     // }
-    def collectDeclarations(drsInit:DeclReorgState, cState: State) : Block = {
+    def collectDeclarations(drsInit:DeclReorgState) : Block = {
         var drs = drsInit
         var numIter = 0
         val totNumElems = drs.bottom.length
@@ -155,7 +176,7 @@ object CompilerReorg {
                     |size(defs)=${drs.definedVars.size} len(top)=${drs.top.length}
                     |len(bottom)=${drs.bottom.length}""".stripMargin.replaceAll("\n", " ")
             )*/
-            drs = declMoveUp(drs, cState)
+            drs = declMoveUp(drs)
             assert(totNumElems == drs.top.length + drs.bottom.length)
             numIter += 1
         }
@@ -164,67 +185,45 @@ object CompilerReorg {
 
     // Attempt to collect declarations at the block level, to reduce
     // the number of extra jobs required for calculations.
-    def reorgBlock(elems: Seq[Scope], definedVars: Set[String], cState: State) : Block  = {
-        //Utils.trace(cState.verbose, "simplifying workflow top level")
+    def reorgBlock(elems: Seq[Scope], definedVars: Set[String]) : Block  = {
         val drs = DeclReorgState(definedVars, Vector.empty[Scope], elems.toVector)
-        collectDeclarations(drs, cState)
+        collectDeclarations(drs)
     }
 
-    // Convert complex expressions to independent declarations
-    def reorg(scope: Scope, definedVars: Set[String], cState:State): Block = {
+    def reorg(scope: Scope, definedVars: Set[String]): (Scope, Set[String]) = {
         scope match {
             case ssc:Scatter =>
-                val blk = reorgBlock(ssc.children, definedVars, cState)
-                val ssc2 = WdlRewrite.scater(ssc, blk.children, ssc.collection)
-                Block(Vector(ssc2), blk.definedVars)
+                val blk = reorgBlock(ssc.children, definedVars + ssc.item)
+                val ssc2 = WdlRewrite.scatter(ssc, blk.children, ssc.collection)
+                (ssc2, blk.definedVars)
             case cond:If =>
-                val blk = reorgBlock(cond.children, definedVars, cState)
+                val blk = reorgBlock(cond.children, definedVars)
                 val cond2 = WdlRewrite.cond(cond, blk.children, cond.condition)
-                Block(Vector(cond2), blk.definedVars)
-            case call:Call => Block(Vector(call), definedVars ++ call.fullyQualifiedName)
-            case decl:Declaration => Block(Vector(decl), definedVars ++ decl.fullyQualifiedName)
-            case wfo:WorkflowOutput => Block(Vector(wfo), definedVars)
+                (cond2, blk.definedVars)
+            case call:Call => (call, definedVars ++ definitions(call))
+            case decl:Declaration => (decl, definedVars ++ definitions(decl))
+            case wfo:WorkflowOutput => (wfo, definedVars ++ definitions(wfo))
             case x =>
-                throw new Exception(cState.cef.notCurrentlySupported(
+                throw new Exception(cef.notCurrentlySupported(
                                         x.ast,
                                         s"Unimplemented workflow element"))
         }
     }
 
-    def reorgWorkflow(wf: Workflow, cState: State) : Workflow = {
-        val children: Vector[Scope] = wf.children
-            .map(x => reorg(x, Set.empty, cState))
-            .toVector
-            .flatten
-        val reChildren = reorgBlock(children, Set.empty, cState)
-        WdlRewrite.workflow(wf, reChildren)
+    def reorgWorkflow(wf: Workflow) : Workflow = {
+        val blk = reorgBlock(wf.children, Set.empty)
+        WdlRewrite.workflow(wf, blk.children)
     }
 
-    def apply(ns: WdlNamespace, verbose: Boolean) : WdlNamespace = {
+    def apply : WdlNamespace = {
         Utils.trace(verbose, "Reorganizing declarations")
-        val cef = new CompilerErrorFormatter(ns.terminalMap)
 
         // Process the original WDL file,
         // Do not modify the tasks
         ns match {
             case nswf : WdlNamespaceWithWorkflow =>
-                val cState = State(nswf.workflow, cef, verbose)
-                val wf1 = reorgWorkflow(nswf.workflow, cState)
-                val nswf1 = new WdlNamespaceWithWorkflow(ns.importedAs,
-                                                         wf1,
-                                                         ns.imports,
-                                                         ns.namespaces,
-                                                         ns.tasks,
-                                                         ns.terminalMap,
-                                                         nswf.wdlSyntaxErrorFormatter,
-                                                         ns.ast)
-                nswf1.children = wf1.children
-                nswf1.namespace = nswf.namespace
-                nswf.parent match {
-                    case Some(x) => nswf1.parent = x
-                    case None => ()
-                }
-                nswf1
+                val wf2 = reorgWorkflow(nswf.workflow)
+                WdlRewrite.namespace(nswf, wf2)
             case _ => ns
         }
     }

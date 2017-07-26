@@ -139,7 +139,8 @@ case class WdlPrettyPrinter(fqnFlag: Boolean, workflowOutputs: Option[Seq[Workfl
 
     def apply(tso: TaskOutput, level: Int): Vector[String] = {
         val ln = s"""|${tso.wdlType.toWdlString} ${tso.unqualifiedName} =
-                     |${tso.requiredExpression.toWdlString}""".stripMargin.trim
+                     |${tso.requiredExpression.toWdlString}"""
+            .stripMargin.replaceAll("\n", " ").trim
         Vector(indentLine(ln, level))
     }
 
