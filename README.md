@@ -48,7 +48,7 @@ Compilation can be controled with several parameters.
 | verbose | Print detailed progress information |
 
 
-## Extensions
+## Extensions (experimental)
 
 A task declaration has a runtime section where memory, cpu, and disk
 space can be specified. Based on these attributes, an instance type is chosen by
