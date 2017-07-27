@@ -26,7 +26,7 @@ object Main extends App {
         val Compile, Config, Internal, Version  = Value
     }
     object InternalOp extends Enumeration {
-        val Eval, LaunchScatter,
+        val Eval, MiniWorkflow,
             TaskEpilog, TaskProlog, TaskRelaunch,
             WorkflowOutputs, WorkflowOutputsAndReorg = Value
     }
@@ -410,9 +410,11 @@ object Main extends App {
         try {
             op match {
                 case InternalOp.Eval =>
-                    RunnerEval.apply(workflowOfNamespace(ns), jobInputPath, jobOutputPath, jobInfoPath)
-                case InternalOp.LaunchScatter =>
-                    RunnerScatter.apply(workflowOfNamespace(ns), jobInputPath, jobOutputPath, jobInfoPath)
+                    RunnerEval.apply(workflowOfNamespace(ns),
+                                     jobInputPath, jobOutputPath, jobInfoPath)
+                case InternalOp.MiniWorkflow =>
+                    RunnerMiniWorkflow.apply(workflowOfNamespace(ns),
+                                             jobInputPath, jobOutputPath, jobInfoPath)
                 case InternalOp.TaskEpilog =>
                     RunnerTask.epilog(taskOfNamespace(ns), jobInputPath, jobOutputPath, jobInfoPath)
                 case InternalOp.TaskProlog =>

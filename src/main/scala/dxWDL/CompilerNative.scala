@@ -160,16 +160,13 @@ object CompilerNative {
                     |    java -jar $${DX_FS_ROOT}/dxWDL.jar internal eval $${DX_FS_ROOT}/${WDL_SNIPPET_FILENAME} $${HOME}
                     |}""".stripMargin.trim
 
-            case IR.AppletKindIf(_) =>
-                throw new Exception("If block not currently supported in native pass")
-
-            case IR.AppletKindScatter(_) =>
+            case (IR.AppletKindIf(_) | IR.AppletKindScatter(_)) =>
                 s"""|#!/bin/bash -ex
                     |main() {
                     |    echo "working directory =$${PWD}"
                     |    echo "home dir =$${HOME}"
                     |    echo "user= $${USER}"
-                    |    java -jar $${DX_FS_ROOT}/dxWDL.jar internal launchScatter $${DX_FS_ROOT}/${WDL_SNIPPET_FILENAME} $${HOME}
+                    |    java -jar $${DX_FS_ROOT}/dxWDL.jar internal miniWorkflow $${DX_FS_ROOT}/${WDL_SNIPPET_FILENAME} $${HOME}
                     |}""".stripMargin.trim
 
             case IR.AppletKindTask =>
@@ -352,12 +349,15 @@ object CompilerNative {
             buildCmd = buildCmd :+ "-f"
         if (cState.archive)
             buildCmd = buildCmd :+ "-a"
+        val commandStr = buildCmd.mkString(" ")
+        var outstr = ""
+        var errstr = ""
+
         def build() : Option[DXApplet] = {
             try {
                 // Run the dx-build command
-                val commandStr = buildCmd.mkString(" ")
                 Utils.trace(cState.verbose, commandStr)
-                val (outstr, _) = Utils.execCommand(commandStr, Some(DX_COMPILE_TIMEOUT))
+                val (outstr, errstr) = Utils.execCommand(commandStr, Some(DX_COMPILE_TIMEOUT))
 
                 // extract the appID from the output
                 val app : JsObject = outstr.parseJson.asJsObject
@@ -366,7 +366,17 @@ object CompilerNative {
                     case _ => None
                 }
             } catch {
-                case e : Throwable => None
+                case e : Throwable =>
+                    // Triage the error, according to the exception message.
+                    // Can this error be retried?
+                    val msg = e.getMessage
+                    if ((msg contains "ssh") || (msg contains "timeout")) {
+                        None
+                    } else {
+                        System.err.println(s"STDOUT:${outstr}")
+                        System.err.println(s"STDERR:${errstr}")
+                        throw new Exception(s"build command ${commandStr} failed")
+                    }
             }
         }
 
