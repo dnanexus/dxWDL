@@ -353,8 +353,8 @@ object Main extends App {
         // mangles the outputs, which is why we pass the originals
         // unmodified.
         val cef = new CompilerErrorFormatter(ns.terminalMap)
-        val irNs = CompilerIR.apply(ns, cState.outputs, instanceTypeDB,
-                                    cOpt.folder, cef, cOpt.reorg, cOpt.verbose)
+        val irNs = CompilerIR(cOpt.folder, instanceTypeDB, cef, cOpt.reorg, cOpt.verbose)
+            .apply(ns, cState.outputs)
 
         // Write out the intermediate representation
         prettyPrintIR(wdlSourceFile, irNs, cOpt.verbose)
