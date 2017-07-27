@@ -18,9 +18,10 @@ import wdl4s.types._
 import wdl4s.values._
 import wdl4s.WdlExpression.AstForExpressions
 
-case class CompilerReorgDecl(ns: WdlNamespace, verbose: Boolean) {
+case class CompilerReorgDecl(ns: WdlNamespace, verbose: Boolean, verboseKeys: Set[String]) {
     val MAX_NUM_COLLECT_ITER = 10
     val cef = new CompilerErrorFormatter(ns.terminalMap)
+    val verbose2:Boolean = verboseKeys contains "reorg"
 
     case class DeclReorgState(definedVars: Set[String],
                               top: Vector[Scope],
@@ -76,12 +77,12 @@ case class CompilerReorgDecl(ns: WdlNamespace, verbose: Boolean) {
             (definedVars contains x) ||
             (definedVars contains (fqn + "." + x))
         }
-        Utils.trace(verbose, s"""|dependsOnlyOnVars ${expr.toWdlString}
-                                 |  fqn = ${fqn}
-                                 |  nodeRefs=${nodeRefs}
-                                 |  upstream=${refs}
-                                 |  defs=${definedVars}
-                                 |  ${retval}""".stripMargin)
+        Utils.trace(verbose2, s"""|dependsOnlyOnVars ${expr.toWdlString}
+                                  |  fqn = ${fqn}
+                                  |  nodeRefs=${nodeRefs}
+                                  |  upstream=${refs}
+                                  |  defs=${definedVars}
+                                  |  ${retval}""".stripMargin)
         retval
     }
 
@@ -140,8 +141,7 @@ case class CompilerReorgDecl(ns: WdlNamespace, verbose: Boolean) {
         }
         val (nonDeclBlock, remaining, nonDeclVars) = skipNonDecl(Vector.empty, bottom, Set.empty)
         if (!nonDeclVars.isEmpty)
-            Utils.trace(verbose, s"Not moving definitions ${nonDeclVars}")
-        //Utils.trace(verbose, s"len(nonDecls)=${nonDeclBlock.length} len(rest)=${remaining.length}")
+            Utils.trace(verbose2, s"Not moving definitions ${nonDeclVars}")
         DeclReorgState(definedVars ++ nonDeclVars,
                        drs.top ++ moved ++ nonDeclBlock,
                        remaining)

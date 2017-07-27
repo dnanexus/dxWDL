@@ -44,6 +44,7 @@ object Main extends App {
     case class CompileOptions(archive: Boolean,
                               force: Boolean,
                               verbose: Boolean,
+                              verboseKeys: Set[String],
                               reorg: Boolean,
                               billTo: String,
                               region: String,
@@ -148,11 +149,23 @@ object Main extends App {
                         if (subargs.isEmpty) "normal"
                         else if (subargs.head == "relaxed") "relaxed"
                         else throw new Exception(s"Unknown sort option ${subargs.head}")
-                    case "verbose" => ""
+                    case "verbose" =>
+                        if (subargs.isEmpty) ""
+                        else if (subargs.length == 1) subargs.head
+                        else throw new Exception("Too many arguments to verbose flag")
                     case _ =>
                         throw new IllegalArgumentException(s"Unregonized keyword ${keyword}")
                 }
-                options(keyword) = value
+                options.get(keyword) match {
+                    case None =>
+                        // first time
+                        options(keyword) = value
+                    case Some(x) if keyword == "verbose" =>
+                        // append to the already existing verbose flags
+                        options(keyword) = x + " " + value
+                    case Some(x) =>
+                        options(keyword) = value
+                }
         }
         options.toMap
     }
@@ -288,10 +301,21 @@ object Main extends App {
             case Some("relaxed") => CompilerTopologicalSort.Mode.SortRelaxed
             case _ => throw new Exception("Sanity: bad sort mode")
         }
-
+        val verboseKeys: Set[String] = options.get("verbose") match {
+            case None => Set.empty
+            case Some(buf) =>
+                val modulesToTrace = buf.trim
+                if (modulesToTrace.isEmpty) {
+                    Set.empty
+                } else {
+                    modulesToTrace.split("\\s+").toSet
+                }
+        }
+        System.err.println(s"verboseKeys=${verboseKeys}")
         CompileOptions(options contains "archive",
                        options contains "force",
                        options contains "verbose",
+                       verboseKeys,
                        options contains "reorg",
                        billTo,
                        region,
@@ -345,7 +369,7 @@ object Main extends App {
 
         // Reorganize the declarations, to minimize the number of
         // applets, stages, and jobs.
-        val ns1 = CompilerReorgDecl(nsExpr, cOpt.verbose).apply
+        val ns1 = CompilerReorgDecl(nsExpr, cOpt.verbose, cOpt.verboseKeys).apply
         val ns = washNamespace(ns1, "reorg", cState)
 
         // Compile the WDL workflow into an Intermediate
@@ -478,7 +502,7 @@ object Main extends App {
            |    -inputs <string>      Path to cromwell style input file
            |    -reorg                Reorganize workflow output files
            |    -sort [string]        Sort call graph, to avoid forward references
-           |    -verbose              Print detailed progress reports
+           |    -verbose [flag]       Print detailed progress reports
            |
            |config
            |  Print the configuration parameters
