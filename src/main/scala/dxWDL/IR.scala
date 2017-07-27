@@ -31,12 +31,14 @@ object IR {
 
     // There are several kinds of applets
     //   Eval:      evaluate WDL expressions, pure calculation
+    //   If:        block for a conditional
     //   Scatter:   utility block for scatter/gather
     //   Task:      call a task, execute a shell command (usually)
     //   WorkflowOutputs: evaluate workflow outputs, and clean up
     //              intermediate results if needed.
     sealed trait AppletKind
     case object AppletKindEval extends AppletKind
+    case class AppletKindIf(sourceCalls: Vector[String]) extends AppletKind
     case class AppletKindScatter(sourceCalls: Vector[String]) extends AppletKind
     case object AppletKindTask extends AppletKind
     case object AppletKindWorkflowOutputs extends AppletKind

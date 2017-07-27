@@ -18,7 +18,7 @@ import wdl4s.types._
 import wdl4s.values._
 import wdl4s.WdlExpression.AstForExpressions
 
-case class CompilerReorg(ns: WdlNamespace, verbose: Boolean) {
+case class CompilerReorgDecl(ns: WdlNamespace, verbose: Boolean) {
     val MAX_NUM_COLLECT_ITER = 10
     val cef = new CompilerErrorFormatter(ns.terminalMap)
 

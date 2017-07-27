@@ -160,6 +160,9 @@ object CompilerNative {
                     |    java -jar $${DX_FS_ROOT}/dxWDL.jar internal eval $${DX_FS_ROOT}/${WDL_SNIPPET_FILENAME} $${HOME}
                     |}""".stripMargin.trim
 
+            case IR.AppletKindIf(_) =>
+                throw new Exception("If block not currently supported in native pass")
+
             case IR.AppletKindScatter(_) =>
                 s"""|#!/bin/bash -ex
                     |main() {
@@ -438,6 +441,7 @@ object CompilerNative {
         val json = JsObject(attrs ++ access)
 
         val aplLinks = applet.kind match {
+            case IR.AppletKindIf(_) => appletDict
             case IR.AppletKindScatter(_) => appletDict
             case _ => Map.empty[String, (IR.Applet, DXApplet)]
         }
