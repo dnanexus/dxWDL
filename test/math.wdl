@@ -5,9 +5,10 @@ workflow math {
     Int ai
     Int bi
 
-#    if (ai < 10) {
+    # simple If block
+    if (ai < 10) {
         call lib.Inc as cond_inc { input: i=ai}
-#    }
+    }
 
     call lib.IntOps as int_ops1 {
         input: a=ai, b=bi

@@ -11,6 +11,7 @@ import scala.util.{Failure, Success, Try}
 import spray.json._
 import spray.json.DefaultJsonProtocol
 import spray.json.JsString
+import Utils.Verbose
 import wdl4s.{ImportResolver, Task, WdlNamespace, WdlNamespaceWithWorkflow, WdlSource,
     Workflow, WorkflowOutput}
 
@@ -37,14 +38,13 @@ object Main extends App {
                      outputs: Option[Seq[WorkflowOutput]],
                      wdlSourceFile: Path,
                      resolver: ImportResolver,
-                     verbose: Boolean)
+                     verbose: Verbose)
 
     // Packing of all compiler flags in an easy to digest
     // format
     case class CompileOptions(archive: Boolean,
                               force: Boolean,
-                              verbose: Boolean,
-                              verboseKeys: Set[String],
+                              verbose: Verbose,
                               reorg: Boolean,
                               billTo: String,
                               region: String,
@@ -254,7 +254,7 @@ object Main extends App {
         val cleanNs = WdlNamespace.loadUsingSource(
             lines, None, Some(List(cState.resolver))
         ).get
-        if (cState.verbose)
+        if (cState.verbose.on)
             writeToFile(cState.wdlSourceFile, "." + suffix, lines)
         cleanNs
     }
@@ -311,11 +311,9 @@ object Main extends App {
                     modulesToTrace.split("\\s+").toSet
                 }
         }
-        System.err.println(s"verboseKeys=${verboseKeys}")
         CompileOptions(options contains "archive",
                        options contains "force",
-                       options contains "verbose",
-                       verboseKeys,
+                       Verbose(options contains "verbose", verboseKeys),
                        options contains "reorg",
                        billTo,
                        region,
@@ -359,17 +357,17 @@ object Main extends App {
         // Additionally perform check for cycles in the workflow
         // Assuming the source file is xxx.wdl, the new name will
         // be xxx.sorted.wdl.
-        val nsSorted1 = CompilerTopologicalSort.apply(orgNs, cOpt.sortMode, cOpt.verbose)
+        val nsSorted1 = CompilerTopologicalSort.apply(orgNs, cOpt.sortMode, cOpt.verbose.on)
         val nsSorted = washNamespace(nsSorted1, "sorted", cState)
 
         // Simplify the original workflow, for example,
         // convert call arguments from expressions to variables.
-        val nsExpr1 = CompilerSimplifyExpr.apply(nsSorted, cOpt.verbose)
+        val nsExpr1 = CompilerSimplifyExpr.apply(nsSorted, cOpt.verbose.on)
         val nsExpr = washNamespace(nsExpr1, "simplified", cState)
 
         // Reorganize the declarations, to minimize the number of
         // applets, stages, and jobs.
-        val ns1 = CompilerReorgDecl(nsExpr, cOpt.verbose, cOpt.verboseKeys).apply
+        val ns1 = CompilerReorgDecl(nsExpr, cOpt.verbose).apply
         val ns = washNamespace(ns1, "reorg", cState)
 
         // Compile the WDL workflow into an Intermediate
@@ -381,7 +379,7 @@ object Main extends App {
             .apply(ns, cState.outputs)
 
         // Write out the intermediate representation
-        prettyPrintIR(wdlSourceFile, irNs, cOpt.verbose)
+        prettyPrintIR(wdlSourceFile, irNs, cOpt.verbose.on)
 
         // Backend compiler pass
         cOpt.compileMode match {
@@ -390,7 +388,7 @@ object Main extends App {
                 val wdlInputs = options.get("inputs").map(Paths.get(_))
                 CompilerNative.apply(irNs, wdlInputs, cOpt.dxProject, instanceTypeDB,
                                      cOpt.dxWDLrtId,
-                                     cOpt.folder, cef, cOpt.force, cOpt.archive, cOpt.verbose)
+                                     cOpt.folder, cef, cOpt.force, cOpt.archive, cOpt.verbose.on)
             case Some(x) if x.toLowerCase == "ir" => "IR-xxxx"
             case Some(other) => throw new Exception(s"Unknown compilation mode ${other}")
         }

@@ -18,10 +18,10 @@ import wdl4s.types._
 import wdl4s.values._
 import wdl4s.WdlExpression.AstForExpressions
 
-case class CompilerReorgDecl(ns: WdlNamespace, verbose: Boolean, verboseKeys: Set[String]) {
+case class CompilerReorgDecl(ns: WdlNamespace, verbose: Utils.Verbose) {
     val MAX_NUM_COLLECT_ITER = 10
     val cef = new CompilerErrorFormatter(ns.terminalMap)
-    val verbose2:Boolean = verboseKeys contains "reorg"
+    val verbose2:Boolean = verbose.keywords contains "reorg"
 
     case class DeclReorgState(definedVars: Set[String],
                               top: Vector[Scope],
@@ -216,7 +216,7 @@ case class CompilerReorgDecl(ns: WdlNamespace, verbose: Boolean, verboseKeys: Se
     }
 
     def apply : WdlNamespace = {
-        Utils.trace(verbose, "Reorganizing declarations")
+        Utils.trace(verbose.on, "Reorganizing declarations")
 
         // Process the original WDL file,
         // Do not modify the tasks

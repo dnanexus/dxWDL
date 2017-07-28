@@ -19,7 +19,7 @@ case class CompilerIR(destination: String,
                       instanceTypeDB: InstanceTypeDB,
                       cef: CompilerErrorFormatter,
                       reorg: Boolean,
-                      verbose: Boolean) {
+                      verbose: Utils.Verbose) {
     class DynamicInstanceTypesException private(ex: Exception) extends RuntimeException(ex) {
         def this() = this(new RuntimeException("Runtime instance type calculation required"))
     }
@@ -335,7 +335,7 @@ task Add {
     //
     def compileCommon(appletName: String,
                       declarations: Seq[Declaration]) : (IR.Stage, IR.Applet) = {
-        Utils.trace(verbose, s"Compiling common applet ${appletName}".format(appletName))
+        Utils.trace(verbose.on, s"Compiling common applet ${appletName}".format(appletName))
 
         // Only workflow declarations that do not have an expression,
         // needs to be provide by the user.
@@ -395,7 +395,7 @@ workflow w {
     def compileEvalAndPassClosure(appletName: String,
                                   declarations: Seq[Declaration],
                                   env: CallEnv) : (IR.Stage, IR.Applet) = {
-        Utils.trace(verbose, s"Compiling evaluation applet ${appletName}")
+        Utils.trace(verbose.on, s"Compiling evaluation applet ${appletName}")
 
         // Figure out the closure
         var closure = Map.empty[String, LinkedVar]
@@ -482,7 +482,7 @@ workflow w {
     def compileOutputSection(appletName: String,
                              env: CallEnv,
                              wfOutputs: Seq[WorkflowOutput]) : (IR.Stage, IR.Applet) = {
-        Utils.trace(verbose, s"Compiling output section applet ${appletName}")
+        Utils.trace(verbose.on, s"Compiling output section applet ${appletName}")
         outputSectionTypeCheck(wfOutputs)
 
         // Figure out the closure
@@ -547,7 +547,7 @@ workflow w {
 
     // Compile a WDL task into an applet
     def compileTask(task : Task) : (IR.Applet, Vector[IR.CVar]) = {
-        Utils.trace(verbose, s"Compiling task ${task.name}")
+        Utils.trace(verbose.on, s"Compiling task ${task.name}")
 
         // The task inputs are those that do not have expressions
         val inputVars : Vector[IR.CVar] =  task.declarations.map{ decl =>
@@ -883,7 +883,7 @@ workflow w {
                        scatter: Scatter,
                        taskApplets: Map[String, (IR.Applet, Vector[IR.CVar])],
                        env : CallEnv) : (IR.Stage, IR.Applet) = {
-        Utils.trace(verbose, s"compiling scatter ${stageName}")
+        Utils.trace(verbose.on, s"compiling scatter ${stageName}")
         val (topDecls, calls) = blockSplit(scatter.children.toVector)
 
         // Figure out the input definitions
@@ -928,7 +928,7 @@ workflow w {
                   cond: If,
                   taskApplets: Map[String, (IR.Applet, Vector[IR.CVar])],
                   env : CallEnv) : (IR.Stage, IR.Applet) = {
-        Utils.trace(verbose, s"compiling If block ${stageName}")
+        Utils.trace(verbose.on, s"compiling If block ${stageName}")
         val (topDecls, calls) = blockSplit(cond.children.toVector)
 
         // Figure out the input definitions
@@ -968,7 +968,7 @@ workflow w {
     def compileWorkflow(wf: Workflow,
                         wfOutputs: Option[Seq[WorkflowOutput]],
                         taskApplets: Map[String, (IR.Applet, Vector[IR.CVar])]) : IR.Workflow = {
-        Utils.trace(verbose, "FrontEnd: compiling workflow")
+        Utils.trace(verbose.on, "FrontEnd: compiling workflow")
 
         // Get rid of workflow output declarations
         val children = wf.children.filter(x => !x.isInstanceOf[WorkflowOutput])
@@ -1070,19 +1070,19 @@ workflow w {
     // compile the WDL source code into intermediate representation
     def apply(ns : WdlNamespace,
               wfOutputs: Option[Seq[WorkflowOutput]]) : IR.Namespace = {
-        Utils.trace(verbose, "FrontEnd pass")
+        Utils.trace(verbose.on, "FrontEnd pass")
 
         // Load all accessed applets, local or imported
         val accessedTasks: Set[Task] = loadImportedTasks(ns)
         val accessedTaskNames = accessedTasks.map(task => task.name)
-        Utils.trace(verbose, s"Accessed tasks = ${accessedTaskNames}")
+        Utils.trace(verbose.on, s"Accessed tasks = ${accessedTaskNames}")
 
         // Make sure all local tasks are included; we want to compile
         // them even if they are not accessed.
         val allTasks:Set[Task] = accessedTasks ++ ns.tasks.toSet
 
         // compile all the tasks into applets
-        Utils.trace(verbose, "FrontEnd: compiling tasks into dx:applets")
+        Utils.trace(verbose.on, "FrontEnd: compiling tasks into dx:applets")
 
         val taskApplets: Map[String, (IR.Applet, Vector[IR.CVar])] = allTasks.map{ task =>
             val (applet, outputs) = compileTask(task)

@@ -41,6 +41,12 @@ object Utils {
     // applet calls applets that implement tasks.
     case class AppletLinkInfo(inputs: Map[String, WdlType], dxApplet: DXApplet)
 
+    // Encapsulation of verbosity flags.
+    //  on --       is the overall setting true/false
+    //  keywords -- specific words to trace
+    case class Verbose(on: Boolean,
+                       keywords: Set[String])
+
     object AppletLinkInfo {
         def writeJson(ali: AppletLinkInfo) : JsValue = {
             // Serialize applet input definitions, so they could be used

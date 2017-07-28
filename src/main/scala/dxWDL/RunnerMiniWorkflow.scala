@@ -56,7 +56,7 @@ case class RunnerMiniWorkflow(cef: CompilerErrorFormatter, verbose: Boolean) {
     case class ElemCall(outputs: Map[String, WdlVarLinks]) extends Elem
     type Env = Map[String, Elem]
 
-    def callUniqueName(call : Call) : String = {
+    private def callUniqueName(call : Call) : String = {
         call.alias match {
             case Some(x) => x
             case None => Utils.taskOfCall(call).name
@@ -89,7 +89,7 @@ case class RunnerMiniWorkflow(cef: CompilerErrorFormatter, verbose: Boolean) {
     //
     // The front end pass makes sure that the range of expressions is
     // limited: constants, variables, and member accesses.
-    def wvlEvalExpression(expr: WdlExpression, env : Env) : WdlVarLinks = {
+    private def wvlEvalExpression(expr: WdlExpression, env : Env) : WdlVarLinks = {
         expr.ast match {
             case t: Terminal =>
                 val srcStr = t.getSourceString
@@ -146,9 +146,9 @@ case class RunnerMiniWorkflow(cef: CompilerErrorFormatter, verbose: Boolean) {
         call inc as inc {input: i=k}
     }
       */
-    def buildAppletInputs(call: Call,
-                          apLinkInfo: AppletLinkInfo,
-                          env : Env) : ObjectNode = {
+    private def buildAppletInputs(call: Call,
+                                  apLinkInfo: AppletLinkInfo,
+                                  env : Env) : ObjectNode = {
         val callName = callUniqueName(call)
         val appInputs: Map[String, Option[WdlVarLinks]] = apLinkInfo.inputs.map{
             case (varName, wdlType) =>
@@ -193,7 +193,7 @@ case class RunnerMiniWorkflow(cef: CompilerErrorFormatter, verbose: Boolean) {
 
     // Create a mapping from the job output variables to json values. These
     // are variables that can be referenced by other calls.
-    def jobOutputEnv(call: Call, dxJob: DXJob) : Env = {
+    private def jobOutputEnv(call: Call, dxJob: DXJob) : Env = {
         val prefix = callUniqueName(call)
         val task = Utils.taskOfCall(call)
         val retValues = task.outputs.map { tso =>
@@ -203,18 +203,18 @@ case class RunnerMiniWorkflow(cef: CompilerErrorFormatter, verbose: Boolean) {
         Map(prefix -> ElemCall(retValues))
     }
 
+    private def flattenEnv(scEnv: Env) : Map[String, WdlVarLinks] = {
+        scEnv.map{
+            case (key, ElemTop(wvl)) => Map(key -> wvl)
+            case (callName, ElemCall(outputs)) =>
+                outputs.map{ case (varName, wvl) => callName + "." + varName -> wvl }.toMap
+        }.flatten.toMap
+    }
+
     // Gather outputs from calls in a scatter block into arrays. Essentially,
     // take a list of WDL values, and convert them into a wdl array. The complexity
     // comes in, because we need to carry around Json links to platform data objects.
-    def gatherOutputs(scOutputs : List[Env]) : Map[String, JsValue] = {
-        def flattenEnv(scEnv: Env) : Map[String, WdlVarLinks] = {
-            scEnv.map{
-                case (key, ElemTop(wvl)) => Map(key -> wvl)
-                case (callName, ElemCall(outputs)) =>
-                    outputs.map{ case (varName, wvl) => callName + "." + varName -> wvl }.toMap
-            }.flatten.toMap
-        }
-
+    private def gatherOutputs(scOutputs : List[Env]) : Map[String, JsValue] = {
         // Map each individual variable to a list of output fields.
         val outputs : List[(String, JsonNode)] =
             scOutputs.map{ scEnv =>
@@ -240,10 +240,10 @@ case class RunnerMiniWorkflow(cef: CompilerErrorFormatter, verbose: Boolean) {
     // wait for the jobs to complete, because that would require
     // leaving an auxiliary instance up for the duration of the subjob
     // executions.  Return the variables calculated.
-    def evalScatter(scatter : Scatter,
-                    collection : WdlVarLinks,
-                    calls : Seq[(Call, AppletLinkInfo)],
-                    outerEnv : Map[String, WdlVarLinks]) : Map[String, JsValue] = {
+    private def evalScatter(scatter : Scatter,
+                            collection : WdlVarLinks,
+                            calls : Seq[(Call, AppletLinkInfo)],
+                            outerEnv : Map[String, WdlVarLinks]) : Map[String, JsValue] = {
         System.err.println(s"evalScatter")
 
         // add the top declarations in the scatter block to the
@@ -251,7 +251,7 @@ case class RunnerMiniWorkflow(cef: CompilerErrorFormatter, verbose: Boolean) {
         val (topDecls,_) = Utils.splitBlockDeclarations(scatter.children.toList)
 
         val collElements : Seq[WdlVarLinks] = WdlVarLinks.unpackWdlArray(collection)
-        var scOutputs : List[Env] = List()
+        var scOutputs = Vector.empty[Env]
         collElements.foreach { case elem =>
             // Bind the iteration variable inside the loop
             val envWithIterItem: Map[String, WdlVarLinks] = outerEnv + (scatter.item -> elem)
@@ -264,10 +264,10 @@ case class RunnerMiniWorkflow(cef: CompilerErrorFormatter, verbose: Boolean) {
                 .filter{ case (varName, _) => !isGeneratedVar(varName) }
                 .map{ case (varName, wvl) => varName -> ElemTop(wvl) }
                 .toMap
-            val tmpVars =
-                bValues.filter{ case (varName, bVal) => isGeneratedVar(varName) }
-                    .map{ case (varName, bVal) => varName -> bVal.wdlValue }
-                    .toMap
+            val tmpVars = bValues
+                .filter{ case (varName, bVal) => isGeneratedVar(varName) }
+                .map{ case (varName, bVal) => varName -> bVal.wdlValue }
+                .toMap
             // export top variables
             scOutputs = scOutputs :+ topOutputs
             innerEnvRaw = innerEnvRaw ++ envWithIterItem
@@ -300,19 +300,75 @@ case class RunnerMiniWorkflow(cef: CompilerErrorFormatter, verbose: Boolean) {
 
         // Gather phase. Collect call outputs in arrays, do not wait
         // for the jobs to complete.
-        gatherOutputs(scOutputs)
+        gatherOutputs(scOutputs.toList)
     }
 
-    // Launch a job for each call, and link them with JBORs. Do not
-    // wait for the jobs to complete, because that would require
-    // leaving an auxiliary instance up for the duration of the subjob
-    // executions.  Return the variables calculated.
-    def evalIf(cond : If,
-               condition : WdlVarLinks,
-               calls : Seq[(Call, AppletLinkInfo)],
-               outerEnv : Map[String, WdlVarLinks]) : Map[String, JsValue] = {
+    // Check the condition. If false, return immediately. If true,
+    // execute the top declarations, and then launch a subjobs for
+    // each call. Return a JBORs for the results, do not
+    // wait for the subjobs to complete, because that would require
+    // leaving an auxiliary instance up for the duration of the
+    // executions.
+    private def evalIf(cond : If,
+                       condition : WdlVarLinks,
+                       calls : Seq[(Call, AppletLinkInfo)],
+                       outerEnv: Map[String, WdlVarLinks]) : Map[String, JsValue] = {
         System.err.println(s"evalIf")
-        throw new Exception("Not implemented yet")
+
+        // Evaluate condition
+        val condValue:WdlValue = WdlVarLinks.eval(condition, true)
+        val b = condValue match {
+            case WdlBoolean(b) => b
+            case _ => throw new AppInternalException("conditional expression is not boolean")
+        }
+        if (!b)
+            return Map.empty
+
+        // Evaluate the declarations at the top of the block
+        val (topDecls,_) = Utils.splitBlockDeclarations(cond.children.toList)
+        var allOutputs = Vector.empty[Env]
+
+        // calculate declarations at the top of the block
+        val bValues = RunnerEval.evalDeclarations(topDecls, outerEnv)
+        val innerEnvRaw = bValues.map{ case(key, bVal) => key -> bVal.wvl }.toMap
+
+        val topOutputs = innerEnvRaw
+            .filter{ case (varName, _) => !isGeneratedVar(varName) }
+            .map{ case (varName, wvl) => varName -> ElemTop(wvl) }
+            .toMap
+        val tmpVars = bValues
+            .filter{ case (varName, bVal) => isGeneratedVar(varName) }
+            .map{ case (varName, bVal) => varName -> bVal.wdlValue }
+            .toMap
+
+        // export top variables
+        allOutputs = allOutputs :+ topOutputs
+        var innerEnv:Env = innerEnvRaw.map{ case(key, wvl) => key -> ElemTop(wvl) }.toMap
+
+        // iterate over the calls
+        calls.foreach { case (call,apLinkInfo) =>
+            val inputs : ObjectNode = buildAppletInputs(call, apLinkInfo, innerEnv)
+            System.err.println(s"call=${callUniqueName(call)} inputs=${inputs}")
+            val dxJob: DXJob = apLinkInfo.dxApplet.newRun().setRawInput(inputs).run()
+            val jobOutputs: Env = jobOutputEnv(call, dxJob)
+
+            // add the job outputs to the environment. This makes them available to the applets
+            // that come next.
+            innerEnv = innerEnv ++ jobOutputs
+            allOutputs = allOutputs :+ jobOutputs
+        }
+        tmpVars.foreach{ case (_, wdlValue ) => WdlVarLinks.deleteLocal(wdlValue) }
+
+        // Convert results into outputs
+        val outputs : Vector[(String, JsonNode)] =
+            allOutputs.map{ scEnv =>
+                flattenEnv(scEnv).map{ case (varName, wvl) =>
+                    WdlVarLinks.genFields(wvl, varName)
+                }.toList.flatten
+            }.flatten
+        outputs.map { case (key, jsl) =>
+            key ->  Utils.jsValueOfJsonNode(jsl)
+        }.toMap
     }
 
     // Load from disk a mapping of applet name to id. We
