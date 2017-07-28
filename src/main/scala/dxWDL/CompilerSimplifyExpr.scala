@@ -10,6 +10,7 @@ import java.io.{File, FileWriter, PrintWriter}
 import java.nio.file.{Files, Path, Paths}
 import scala.collection.mutable.Queue
 import scala.util.{Failure, Success, Try}
+import Utils.{genTmpVarName, Verbose}
 import wdl4s._
 import wdl4s.AstTools
 import wdl4s.AstTools.EnhancedAstNode
@@ -20,30 +21,19 @@ import wdl4s.types._
 import wdl4s.values._
 import wdl4s.WdlExpression.AstForExpressions
 
-object CompilerSimplifyExpr {
-    var tmpVarCnt = 0
-
-    // Compiler state.
-    // Packs common arguments passed between methods.
-    case class State(wf: Workflow,
-                     cef: CompilerErrorFormatter,
-                     verbose: Boolean)
-
-    private def genTmpVarName() : String = {
-        val tmpVarName: String = s"${Utils.TMP_VAR_NAME_PREFIX}${tmpVarCnt}"
-        tmpVarCnt = tmpVarCnt + 1
-        tmpVarName
-    }
+case class CompilerSimplifyExpr(wf: Workflow,
+                                cef: CompilerErrorFormatter,
+                                verbose: Verbose) {
+    val verbose2:Boolean = verbose.keywords contains "simplify"
 
     // A member access expression such as [A.x]. Check if
     // A is a call.
     private def isCallOutputAccess(expr: WdlExpression,
                                    ast: Ast,
-                                   call: Call,
-                                   cState: State) : Boolean = {
+                                   call: Call) : Boolean = {
         val lhs:String = WdlExpression.toString(ast.getAttribute("lhs"))
         try {
-            val wdlType = WdlNamespace.lookupType(cState.wf)(lhs)
+            val wdlType = WdlNamespace.lookupType(wf)(lhs)
             wdlType.isInstanceOf[WdlCallOutputsObjectType]
         } catch {
             case e:Throwable=> false
@@ -72,12 +62,12 @@ object CompilerSimplifyExpr {
     //  }
     //
     // Inside a scatter we can deal with field accesses,
-    private def simplifyCall(call: Call, cState: State) : Vector[Scope] = {
+    private def simplifyCall(call: Call) : Vector[Scope] = {
         val tmpDecls = Queue[Scope]()
         val inputs: Map[String, WdlExpression]  = call.inputMappings.map { case (key, expr) =>
             val rhs = expr.ast match {
                 case t: Terminal => expr
-                case a: Ast if (a.isMemberAccess && isCallOutputAccess(expr, a, call, cState)) =>
+                case a: Ast if (a.isMemberAccess && isCallOutputAccess(expr, a, call)) =>
                     // Accessing an expression like A.B.C
                     // The expression could be:
                     // 1) Result from a previous call
@@ -120,11 +110,10 @@ object CompilerSimplifyExpr {
     //    call Add { input: a=xtmp6 }
     // }
     //
-    def simplifyScatter(ssc: Scatter,
-                        cState: State) : Vector[Scope] = {
+    def simplifyScatter(ssc: Scatter) : Vector[Scope] = {
         // simplify expressions in the children
         val children: Vector[Scope] = ssc.children
-            .map(x => simplify(x, cState))
+            .map(x => simplify(x))
             .toVector
             .flatten
 
@@ -134,7 +123,7 @@ object CompilerSimplifyExpr {
                                         new WdlStandardLibraryFunctionsType,
                                         Some(ssc)) match {
                 case Success(wdlType) => wdlType
-                case _ => throw new Exception(cState.cef.couldNotEvaluateType(ssc.ast))
+                case _ => throw new Exception(cef.couldNotEvaluateType(ssc.ast))
             }
 
         if (isConstOrVar(ssc.collection)) {
@@ -153,10 +142,10 @@ object CompilerSimplifyExpr {
         }
     }
 
-    def simplifyIf(cond: If, cState: State) : Vector[Scope] = {
+    def simplifyIf(cond: If) : Vector[Scope] = {
         // simplify expressions in the children
         val children: Vector[Scope] = cond.children
-            .map(x => simplify(x, cState))
+            .map(x => simplify(x))
             .toVector
             .flatten
 
@@ -166,7 +155,7 @@ object CompilerSimplifyExpr {
                                        new WdlStandardLibraryFunctionsType,
                                        Some(cond)) match {
                 case Success(wdlType) => wdlType
-                case _ => throw new Exception(cState.cef.couldNotEvaluateType(cond.ast))
+                case _ => throw new Exception(cef.couldNotEvaluateType(cond.ast))
             }
 
         if (isConstOrVar(cond.condition)) {
@@ -185,24 +174,27 @@ object CompilerSimplifyExpr {
     }
 
     // Convert complex expressions to independent declarations
-    def simplify(scope: Scope, cState:State): Vector[Scope] = {
+    def simplify(scope: Scope): Vector[Scope] = {
         scope match {
-            case ssc:Scatter => simplifyScatter(ssc, cState)
-            case call:Call => simplifyCall(call, cState)
-            case cond:If => simplifyIf(cond, cState)
+            case ssc:Scatter => simplifyScatter(ssc)
+            case call:Call => simplifyCall(call)
+            case cond:If => simplifyIf(cond)
             case decl:Declaration => Vector(decl)
             case wfo:WorkflowOutput => Vector(wfo)
             case x =>
-                throw new Exception(cState.cef.notCurrentlySupported(
+                throw new Exception(cef.notCurrentlySupported(
                                         x.ast,
                                         s"Unimplemented workflow element"))
         }
     }
 
-    def simplifyWorkflow(wf: Workflow, cState: State) : Workflow = {
-        val children: Vector[Scope] = wf.children.map(x => simplify(x, cState)).toVector.flatten
+    def simplifyWorkflow(wf: Workflow) : Workflow = {
+        val children: Vector[Scope] = wf.children.map(x => simplify(x)).toVector.flatten
         WdlRewrite.workflow(wf, children)
     }
+}
+
+object CompilerSimplifyExpr {
 
     // Make a pass on all declarations, and make sure no reserved words or prefixes
     // are used.
@@ -232,8 +224,8 @@ object CompilerSimplifyExpr {
         }
     }
 
-    def apply(ns: WdlNamespace, verbose: Boolean) : WdlNamespace = {
-        Utils.trace(verbose, "simplifying workflow expressions")
+    def apply(ns: WdlNamespace, verbose: Verbose) : WdlNamespace = {
+        Utils.trace(verbose.on, "simplifying workflow expressions")
         val cef = new CompilerErrorFormatter(ns.terminalMap)
         checkReservedWords(ns, cef)
 
@@ -241,8 +233,8 @@ object CompilerSimplifyExpr {
         // Do not modify the tasks
         ns match {
             case nswf : WdlNamespaceWithWorkflow =>
-                val cState = State(nswf.workflow, cef, verbose)
-                val wf2 = simplifyWorkflow(nswf.workflow, cState)
+                val cse = new CompilerSimplifyExpr(nswf.workflow, cef, verbose)
+                val wf2 = cse.simplifyWorkflow(nswf.workflow)
                 WdlRewrite.namespace(nswf, wf2)
             case _ => ns
         }

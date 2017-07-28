@@ -47,6 +47,11 @@ object Utils {
     case class Verbose(on: Boolean,
                        keywords: Set[String])
 
+    // Topological sort mode of operation
+    object TopoMode extends Enumeration {
+        val Check, Sort, SortRelaxed = Value
+    }
+
     object AppletLinkInfo {
         def writeJson(ali: AppletLinkInfo) : JsValue = {
             // Serialize applet input definitions, so they could be used
@@ -98,6 +103,14 @@ object Utils {
 
     // Prefixes used for generated applets
     val reservedAppletPrefixes = List(SCATTER, COMMON)
+
+    var tmpVarCnt = 0
+    def genTmpVarName() : String = {
+        val tmpVarName: String = s"${TMP_VAR_NAME_PREFIX}${tmpVarCnt}"
+        tmpVarCnt = tmpVarCnt + 1
+        tmpVarName
+    }
+
 
     def isGeneratedVar(varName: String) : Boolean = {
         varName.startsWith(TMP_VAR_NAME_PREFIX)

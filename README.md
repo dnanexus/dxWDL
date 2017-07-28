@@ -16,10 +16,12 @@ interest.
 
 The main WDL features not yet supported are:
 - Nested workflows (sub-workflows)
-- Conditionals
 - Objects
 
-*Use at your own risk:* for the time being, dxWDL is an exploratory project not covered by DNAnexus service and support agreements. The developers welcome feedback, requests, and bug reports on a best-effort basis.
+*Use at your own risk:* for the time being, dxWDL is an exploratory
+ project not covered by DNAnexus service and support agreements. The
+ developers welcome feedback, requests, and bug reports on a
+ best-effort basis.
 
 ## Getting started
 Prerequisites: DNAnexus platform account, dx-toolkit, java 8+, python 2.7.

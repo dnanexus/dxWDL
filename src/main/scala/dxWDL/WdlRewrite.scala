@@ -154,7 +154,7 @@ object WdlRewrite {
     def cond [Child <: Scope] (old: If,
                                children: Seq[Child],
                                condition: WdlExpression): If = {
-        val fresh = wdl4s.If(old.index, old.condition, INVALID_AST)
+        val fresh = wdl4s.If(old.index, condition, INVALID_AST)
         fresh.children = children
         updateScope(old, fresh)
         fresh

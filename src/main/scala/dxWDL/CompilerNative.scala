@@ -626,6 +626,7 @@ object CompilerNative {
                 // for scatters.
                 val call2Stage = irApplet.kind match {
                     case IR.AppletKindScatter(sourceCalls) => sourceCalls.map(x => x -> stg.name).toMap
+                    case IR.AppletKindIf(sourceCalls) => sourceCalls.map(x => x -> stg.name).toMap
                     case _ => Map.empty[String, String]
                 }
 

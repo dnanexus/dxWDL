@@ -1,5 +1,7 @@
 import "library_math.wdl" as lib
 
+
+
 workflow math {
     Array[Int] numbers
     Int ai
@@ -8,6 +10,20 @@ workflow math {
     # simple If block
     if (ai < 10) {
         call lib.Inc as cond_inc { input: i=ai}
+    }
+
+    if (12 < 10) {
+        # This is not supposed to run
+        Int false_branch = 10
+    }
+
+    # conditional block with several calls and declarations
+    if (length(numbers) > 0) {
+        Int f0 = 2
+        Int f1 = 3
+
+        call lib.Add as fibo_add1 { input: a = f0, b = f1 }
+        call lib.Add as fibo_add2 { input: a = fibo_add1.result, b=f1 }
     }
 
     call lib.IntOps as int_ops1 {
@@ -48,11 +64,13 @@ workflow math {
     call lib.Sum as inc_sum {input: ints = inc2.result}
 
     output {
+        Int? invalid = false_branch
         Int x = int_ops3.mul
         Int y = int_ops3.sub
         Int sum = int_ops5.sum
         Int div = int_ops5.div
         Int sum2 = inc_sum.result
         Int? ai_inc_maybe = cond_inc.result
+        Int? fibo2 = fibo_add2.result
     }
 }

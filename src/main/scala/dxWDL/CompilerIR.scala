@@ -733,7 +733,6 @@ workflow w {
             }
         }
         val preVars: Vector[IR.CVar] = preDecls
-            .filter( decl  => !Utils.isGeneratedVar(decl.unqualifiedName) )
             .map( decl => IR.CVar(decl.unqualifiedName, decl.wdlType, decl.ast) )
             .toVector
         val outputVars : Vector[IR.CVar] = children.map {
@@ -743,8 +742,6 @@ workflow w {
                     val varName = callUniqueName(call) ++ "." ++ tso.unqualifiedName
                     IR.CVar(varName, outsideType(tso.wdlType), tso.ast)
                 }
-            case decl:Declaration if (Utils.isGeneratedVar(decl.unqualifiedName)) =>
-                Vector.empty
             case decl:Declaration =>
                 Vector(IR.CVar(decl.unqualifiedName, outsideType(decl.wdlType), decl.ast))
             case x =>

@@ -1,14 +1,14 @@
 /** Execute a small workflow on the platform. Such a workflow
 (1) starts with declarations
-(2) has a block command (scatter, if, etc.)
+(2) has exactly one block command (scatter, if, etc.)
 (3) ends with an output section.
 
-The canonical example for what is happening here, is the workflow below.
-The scatter block has two calls, and it iterates over the "numbers"
-array. It is legal to have declarations requiring evaluation at
-the top of the block, and, inside the scatter block.
+Workflow wf_scat shows a scatter example. The scatter block has two
+calls, and it iterates over the "numbers" array. It is legal to have
+declarations requiring evaluation at the top of the block, and, inside
+the scatter block.
 
-workflow scatter {
+workflow wf_scat {
     String pattern
     Array[Int] numbers = [1, 3, 7, 15]
     Array[Int] index = range(length(numbers))
@@ -22,6 +22,22 @@ workflow scatter {
     Array[Int] inc1_result = inc1.result
     Array[Int] inc2_result = inc2.result
   }
+}
+
+A workflow with a conditional block is wf_cond.
+
+workflow wf_cond {
+   Int x
+   Int y
+
+   if (x > 10) {
+      call Add {input: a=x, b=y}
+      call Mul {input: a=Add.result, b=3}
+   }
+   output {
+      Add.result
+      Mul.result
+   }
 }
   */
 
@@ -323,6 +339,7 @@ case class RunnerMiniWorkflow(cef: CompilerErrorFormatter, verbose: Boolean) {
         }
         if (!b)
             return Map.empty
+        System.err.println(s"condition is true")
 
         // Evaluate the declarations at the top of the block
         val (topDecls,_) = Utils.splitBlockDeclarations(cond.children.toList)
@@ -333,17 +350,14 @@ case class RunnerMiniWorkflow(cef: CompilerErrorFormatter, verbose: Boolean) {
         val innerEnvRaw = bValues.map{ case(key, bVal) => key -> bVal.wvl }.toMap
 
         val topOutputs = innerEnvRaw
-            .filter{ case (varName, _) => !isGeneratedVar(varName) }
             .map{ case (varName, wvl) => varName -> ElemTop(wvl) }
-            .toMap
-        val tmpVars = bValues
-            .filter{ case (varName, bVal) => isGeneratedVar(varName) }
-            .map{ case (varName, bVal) => varName -> bVal.wdlValue }
             .toMap
 
         // export top variables
         allOutputs = allOutputs :+ topOutputs
-        var innerEnv:Env = innerEnvRaw.map{ case(key, wvl) => key -> ElemTop(wvl) }.toMap
+        var innerEnv:Env = (innerEnvRaw ++ outerEnv).map{
+            case(key, wvl) => key -> ElemTop(wvl)
+        }.toMap
 
         // iterate over the calls
         calls.foreach { case (call,apLinkInfo) =>
@@ -357,7 +371,6 @@ case class RunnerMiniWorkflow(cef: CompilerErrorFormatter, verbose: Boolean) {
             innerEnv = innerEnv ++ jobOutputs
             allOutputs = allOutputs :+ jobOutputs
         }
-        tmpVars.foreach{ case (_, wdlValue ) => WdlVarLinks.deleteLocal(wdlValue) }
 
         // Convert results into outputs
         val outputs : Vector[(String, JsonNode)] =
@@ -462,7 +475,6 @@ case class RunnerMiniWorkflow(cef: CompilerErrorFormatter, verbose: Boolean) {
         // workflow. Ignore compiler generated variables; these should
         // not be exported.
         val topDeclOutputs: Map[String, JsValue] = preDecls
-            .filter{ case (varName, _) => !isGeneratedVar(varName) }
             .map{ case (varName, wvl) => WdlVarLinks.genFields(wvl, varName) }
             .flatten
             .map{ case (varName, js) => varName -> Utils.jsValueOfJsonNode(js) }

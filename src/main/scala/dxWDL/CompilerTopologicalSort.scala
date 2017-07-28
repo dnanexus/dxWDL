@@ -3,6 +3,7 @@ package dxWDL
 import java.io.{File, FileWriter, PrintWriter}
 import java.nio.file.{Path, Paths}
 import scala.collection.mutable.Queue
+import Utils.{TopoMode, Verbose}
 import wdl4s.AstTools
 import wdl4s.AstTools.EnhancedAstNode
 import wdl4s.{Call, Declaration, Scatter, Scope,
@@ -15,17 +16,10 @@ import wdl4s.types._
 import wdl4s.values._
 import wdl4s.WdlExpression.AstForExpressions
 
-object CompilerTopologicalSort {
-    // TODO: move common procs to a common place
-
-    // Mode of operation
-    object Mode extends Enumeration {
-        val Check, Sort, SortRelaxed = Value
-    }
-
-    case class State(cef: CompilerErrorFormatter,
-                     terminalMap: Map[Terminal, WdlSource],
-                     verbose: Boolean)
+case class CompilerTopologicalSort(cef: CompilerErrorFormatter,
+                                   mode: TopoMode.Value,
+                                   verbose: Verbose) {
+    val verbose2:Boolean = verbose.keywords contains "toposort"
 
     // Generic topological sorting procedure
     // Scala code only slightly modified from https://gist.github.com/ThiporKong/4399695
@@ -64,15 +58,17 @@ object CompilerTopologicalSort {
     }
 
     // Internal procedure to sort children nodes at a particular level in the AST
-    def tsortASTnodes(nodes: Seq[Scope], cState:State, recursionDepth: Int) : Seq[Scope] = {
+    def tsortASTnodes(nodes: Seq[Scope], recursionDepth: Int) : Seq[Scope] = {
         val indent = " "*recursionDepth*4
 
         val recursedNodes = nodes.map {
              case scatter : Scatter => {
-                 //Utils.trace(cState.verbose, indent+"Recursively performing toological sort on scatter: " + scatter.fullyQualifiedName)
+                 Utils.trace(verbose2,
+                             indent+"Recursively performing toological sort on scatter: " +
+                                 scatter.fullyQualifiedName)
                  val newScatter = WdlRewrite.scatter(scatter,
-                    tsortASTnodes(scatter.children, cState, recursionDepth + 1))
-                 //Utils.trace(cState.verbose, indent+"End recursion")
+                                                     tsortASTnodes(scatter.children, recursionDepth + 1))
+                 Utils.trace(verbose2, indent+"End recursion")
                  newScatter.asInstanceOf[GraphNode]
              }
              case x => x.asInstanceOf[GraphNode]
@@ -129,42 +125,49 @@ object CompilerTopologicalSort {
         }.flatten.toSet
 
         // Print out edges of DAG for debugging purposes
-/*        edges.foreach {
-            case (v,w) => Utils.trace(cState.verbose, indent + v.asInstanceOf[GraphNode].fullyQualifiedName + " -> " + w.asInstanceOf[GraphNode].fullyQualifiedName)
-        }*/
+        edges.foreach {
+            case (v,w) => Utils.trace(
+                verbose2,
+                indent + v.asInstanceOf[GraphNode].fullyQualifiedName + " -> " + w.asInstanceOf[GraphNode].fullyQualifiedName)
+        }
 
         // Topologically sort graph or return error that workflow contains a cycle
         val sortedNodes = tsort(edges).toSeq.filter(x=>nodes.contains(x))
-
-
-        Utils.trace(cState.verbose,
-            indent + "Sorted nodes: " + sortedNodes.map { node => node.asInstanceOf[GraphNode].fullyQualifiedName }.mkString(", "))
-
+        Utils.trace(verbose2,
+                    indent + "Sorted nodes: " +
+                        sortedNodes.map {
+                            node => node.asInstanceOf[GraphNode].fullyQualifiedName }.mkString(", ")
+        )
         sortedNodes
     }
 
     // Alternative method of sorting that does not collapse scatters
-    def tsortASTNodesAlternative(allNodesSorted: Seq[GraphNode], nodes: Seq[GraphNode], cState: State, recursionDepth: Int) : Seq[GraphNode] = {
+    def tsortASTNodesAlternative(allNodesSorted: Seq[GraphNode],
+                                 nodes: Seq[GraphNode],
+                                 recursionDepth: Int) : Seq[GraphNode] = {
         val indent = " "*recursionDepth*4
         val recursedNodes : Seq[GraphNode] = nodes.map {
              case scatter : Scatter => {
-                 //Utils.trace(cState.verbose, indent+"Recursively sorting scatter: " + scatter.fullyQualifiedName)
-                 val newScatter = WdlRewrite.scatter(scatter,
-                    tsortASTNodesAlternative(allNodesSorted, scatter.children.map{ x => x.asInstanceOf[GraphNode] }, cState, recursionDepth + 1))
-                 //Utils.trace(cState.verbose, indent+"End recursion")
+                 Utils.trace(verbose2, indent+"Recursively sorting scatter: " + scatter.fullyQualifiedName)
+                 val newScatter = WdlRewrite.scatter(
+                     scatter,
+                     tsortASTNodesAlternative(
+                         allNodesSorted,
+                         scatter.children.map{ x => x.asInstanceOf[GraphNode] }, recursionDepth + 1))
+                 Utils.trace(verbose2, indent+"End recursion")
                  newScatter.asInstanceOf[GraphNode]
              }
              case x => x.asInstanceOf[GraphNode]
         }
         // TODO: bad big O here.  Better to filter allNodesSorted, however it needs to contain the new scatters
         val filteredNodes = recursedNodes.sortWith { (a,b) => allNodesSorted.indexOf(a) < allNodesSorted.indexOf(b) }
-/*        Utils.trace(cState.verbose,
-            indent + "Sorted nodes: " + filteredNodes.map { node => node.asInstanceOf[GraphNode].fullyQualifiedName }.mkString(", "))*/
+        Utils.trace(verbose2,
+            indent + "Sorted nodes: " + filteredNodes.map { node => node.asInstanceOf[GraphNode].fullyQualifiedName }.mkString(", "))
 
         filteredNodes
     }
 
-    def sortWorkflowAlternative(nswf: WdlNamespaceWithWorkflow, cState: State): Seq[Scope] = {
+    def sortWorkflowAlternative(nswf: WdlNamespaceWithWorkflow): Seq[Scope] = {
         val wf = nswf.workflow
         val edges = wf.descendants.map { scope =>
             scope.asInstanceOf[GraphNode].upstream.map { dependant =>
@@ -172,50 +175,50 @@ object CompilerTopologicalSort {
             }
         }.flatten.toSet
         val allNodesSorted = tsort(edges).toSeq.map { x => x.asInstanceOf[GraphNode] }
-        /*Utils.trace(cState.verbose,
-            "Globally sorted nodes: " + allNodesSorted.map { node => node.asInstanceOf[GraphNode].fullyQualifiedName }.mkString(", "))*/
-        tsortASTNodesAlternative(allNodesSorted, wf.children.map { x => x.asInstanceOf[GraphNode] }, cState, 0)
+        Utils.trace(verbose2,
+            "Globally sorted nodes: " + allNodesSorted.map { node => node.asInstanceOf[GraphNode].fullyQualifiedName }.mkString(", "))
+        tsortASTNodesAlternative(allNodesSorted, wf.children.map { x => x.asInstanceOf[GraphNode] }, 0)
     }
 
     // WDL-specific wrapper for topological sorting
-    def sortWorkflow(nswf: WdlNamespaceWithWorkflow,
-                     mode: Mode.Value,
-                     cState: State) : WdlNamespaceWithWorkflow = {
+    def sortWorkflow(nswf: WdlNamespaceWithWorkflow) : WdlNamespaceWithWorkflow = {
         val wf = nswf.workflow
         mode match {
-            case Mode.Check =>
+            case TopoMode.Check =>
                 // Try sorting, and report on any circular dependencies.
                 // Do not modify the workflow.
-                Utils.trace(cState.verbose, "Checking the workflow is sorted")
-                val sortedNodes = tsortASTnodes(wf.children, cState, 0)
+                Utils.trace(verbose.on, "Checking the workflow is sorted")
+                val sortedNodes = tsortASTnodes(wf.children, 0)
                 nswf
-            case Mode.Sort =>
+            case TopoMode.Sort =>
                 // Default sort mode
-                Utils.trace(cState.verbose, "Performing default 'scatter collapsed' topological sort")
-                val sortedNodes = tsortASTnodes(wf.children, cState, 0)
+                Utils.trace(verbose.on, "Performing default 'scatter collapsed' topological sort")
+                val sortedNodes = tsortASTnodes(wf.children, 0)
                 val sortedWf = WdlRewrite.workflow(wf, sortedNodes)
                 WdlRewrite.namespace(sortedWf, nswf.tasks)
-            case Mode.SortRelaxed =>
-                Utils.trace(cState.verbose, "Performing alternative 'relaxed' topological sort")
-                val sortedNodes = sortWorkflowAlternative(nswf, cState)
+            case TopoMode.SortRelaxed =>
+                Utils.trace(verbose.on, "Performing alternative 'relaxed' topological sort")
+                val sortedNodes = sortWorkflowAlternative(nswf)
                 val sortedWf = WdlRewrite.workflow(wf, sortedNodes)
                 WdlRewrite.namespace(sortedWf, nswf.tasks)
         }
     }
 
-    def apply(ns: WdlNamespace,
-              mode: Mode.Value,
-              verbose: Boolean) : WdlNamespace = {
-        Utils.trace(verbose, "Topological sort pass")
-
-        val tm = ns.terminalMap
-        val cef = new CompilerErrorFormatter(tm)
-        val cState = State(cef, tm, verbose)
-
+    def apply(ns: WdlNamespace) : WdlNamespace = {
+        Utils.trace(verbose.on, "Topological sort pass")
         ns match {
-            case nswf : WdlNamespaceWithWorkflow =>
-                sortWorkflow(nswf, mode, cState)
+            case nswf : WdlNamespaceWithWorkflow => sortWorkflow(nswf)
             case ns => ns
         }
+    }
+}
+
+object CompilerTopologicalSort {
+    def apply(ns: WdlNamespace,
+              mode: TopoMode.Value,
+              verbose: Verbose) : WdlNamespace = {
+        val cef = new CompilerErrorFormatter(ns.terminalMap)
+        val c = CompilerTopologicalSort(cef, mode, verbose)
+        c.apply(ns)
     }
 }

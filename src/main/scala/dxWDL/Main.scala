@@ -11,7 +11,7 @@ import scala.util.{Failure, Success, Try}
 import spray.json._
 import spray.json.DefaultJsonProtocol
 import spray.json.JsString
-import Utils.Verbose
+import Utils.{TopoMode, Verbose}
 import wdl4s.{ImportResolver, Task, WdlNamespace, WdlNamespaceWithWorkflow, WdlSource,
     Workflow, WorkflowOutput}
 
@@ -52,7 +52,7 @@ object Main extends App {
                               folder: String,
                               dxWDLrtId: String,
                               compileMode: Option[String],
-                              sortMode: CompilerTopologicalSort.Mode.Value)
+                              sortMode: TopoMode.Value)
 
     private def normKey(s: String) : String= {
         s.replaceAll("_", "").toUpperCase
@@ -296,9 +296,9 @@ object Main extends App {
         val dxWDLrtId = getAssetId(region)
         val compileMode: Option[String] = options.get("compilemode")
         val sortMode = options.get("sort") match {
-            case None => CompilerTopologicalSort.Mode.Check
-            case Some("normal") => CompilerTopologicalSort.Mode.Sort
-            case Some("relaxed") => CompilerTopologicalSort.Mode.SortRelaxed
+            case None => TopoMode.Check
+            case Some("normal") => TopoMode.Sort
+            case Some("relaxed") => TopoMode.SortRelaxed
             case _ => throw new Exception("Sanity: bad sort mode")
         }
         val verboseKeys: Set[String] = options.get("verbose") match {
@@ -357,12 +357,12 @@ object Main extends App {
         // Additionally perform check for cycles in the workflow
         // Assuming the source file is xxx.wdl, the new name will
         // be xxx.sorted.wdl.
-        val nsSorted1 = CompilerTopologicalSort.apply(orgNs, cOpt.sortMode, cOpt.verbose.on)
+        val nsSorted1 = CompilerTopologicalSort.apply(orgNs, cOpt.sortMode, cOpt.verbose)
         val nsSorted = washNamespace(nsSorted1, "sorted", cState)
 
         // Simplify the original workflow, for example,
         // convert call arguments from expressions to variables.
-        val nsExpr1 = CompilerSimplifyExpr.apply(nsSorted, cOpt.verbose.on)
+        val nsExpr1 = CompilerSimplifyExpr.apply(nsSorted, cOpt.verbose)
         val nsExpr = washNamespace(nsExpr1, "simplified", cState)
 
         // Reorganize the declarations, to minimize the number of
