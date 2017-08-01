@@ -155,9 +155,15 @@ object WdlVarLinks {
     // serialize complex JSON structure to a file, upload, and
     // return a dxlink to the file
     private def serializeJsValueToDxFile(wdlType: WdlType, jsVal: JsValue) : JsValue = {
-        val buf = jsVal.prettyPrint
-        val fileName = wdlType.toWdlString
-        Utils.uploadString(buf, fileName)
+        assert(!isNativeDxType(wdlType))
+        if (isDxFile(jsVal)) {
+            // The JSON structure is already a file, no need for further encapsulation
+            jsVal
+        } else {
+            val buf = jsVal.prettyPrint
+            val fileName = wdlType.toWdlString
+            Utils.uploadString(buf, fileName)
+        }
     }
 
     private def wdlFileOfDxLink(jsValue: JsValue, force: Boolean) : WdlValue = {
@@ -593,8 +599,14 @@ object WdlVarLinks {
                         case _ => throw new Exception("Sanity")
                     }
                 }
-                val jsSrlFileLink = serializeJsValueToDxFile(wdlType, JsArray(jsVec))
-                WdlVarLinks(wdlType, DxlValue(jsSrlFileLink))
+                val jsArr = JsArray(jsVec)
+                val jsn =
+                    if (isNativeDxType(wdlType))
+                        jsArr
+                    else
+                        serializeJsValueToDxFile(wdlType, jsArr)
+                WdlVarLinks(wdlType, DxlValue(jsn))
+
             case DxlJob(_, varName) =>
                 val jobVec:Vector[DXJob] = vec.map{ wvl =>
                     wvl.dxlink match {
