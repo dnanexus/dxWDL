@@ -62,12 +62,6 @@ object CompilerNative {
                        "class" -> JsString("array:" ++ dxType),
                        "optional" -> JsBoolean(true)))
         }
-        def mkComplexNoFiles() : Vector[Map[String,JsValue]] = {
-            // A JSON structure, passed as a file
-            Vector(Map("name" -> JsString(name),
-                       "help" -> JsString(wdlType.toWdlString),
-                       "class" -> JsString("file")))
-        }
         def mkComplex() : Vector[Map[String,JsValue]] = {
             // A large JSON structure passed as a file, and a
             // vector of platform files.
@@ -99,7 +93,7 @@ object CompilerNative {
                 case WdlArrayType(WdlFileType) => mkPrimitiveArray("file")
 
                 // complex types, that may contains files
-                case _  if !(WdlVarLinks.mayHaveFiles(t)) =>  mkComplexNoFiles()
+                //case _  if !(WdlVarLinks.mayHaveFiles(t)) =>  mkComplexNoFiles()
                 case _ => mkComplex()
             }
         }
@@ -350,14 +344,12 @@ object CompilerNative {
         if (cState.archive)
             buildCmd = buildCmd :+ "-a"
         val commandStr = buildCmd.mkString(" ")
-        var outstr = ""
-        var errstr = ""
 
         def build() : Option[DXApplet] = {
             try {
                 // Run the dx-build command
                 Utils.trace(cState.verbose, commandStr)
-                val (outstr, errstr) = Utils.execCommand(commandStr, Some(DX_COMPILE_TIMEOUT))
+                val (outstr, _) = Utils.execCommand(commandStr, Some(DX_COMPILE_TIMEOUT))
 
                 // extract the appID from the output
                 val app : JsObject = outstr.parseJson.asJsObject
@@ -368,15 +360,13 @@ object CompilerNative {
             } catch {
                 case e : Throwable =>
                     // Triage the error, according to the exception message.
-                    // Can this error be retried?
+                    // Is this a retriable error?
                     val msg = e.getMessage
-                    if ((msg contains "ssh") || (msg contains "timeout")) {
-                        None
-                    } else {
-                        System.err.println(s"STDOUT:${outstr}")
-                        System.err.println(s"STDERR:${errstr}")
+                    if ((msg contains "The folder could not be found") ||
+                            (msg contains "No value found")) {
                         throw new Exception(s"build command ${commandStr} failed")
                     }
+                    None
             }
         }
 

@@ -452,14 +452,6 @@ workflow w {
     }
 
 
-    def outputSectionTypeCheck(outputs: Seq[WorkflowOutput]) : Unit = {
-        // Make sure all workflow outputs have native dx types
-        outputs.foreach{ wot =>
-            if (!WdlVarLinks.isNativeDxType(wot.wdlType))
-                throw new Exception(cef.workflowOutputShouldHaveDxType(wot.ast))
-        }
-    }
-
     // 1. The output variable name must not have dots, these
     //    are illegal in dx.
     // 2. The expression requires variable renaming
@@ -483,7 +475,6 @@ workflow w {
                              env: CallEnv,
                              wfOutputs: Seq[WorkflowOutput]) : (IR.Stage, IR.Applet) = {
         Utils.trace(verbose.on, s"Compiling output section applet ${appletName}")
-        outputSectionTypeCheck(wfOutputs)
 
         // Figure out the closure
         var closure = Map.empty[String, LinkedVar]

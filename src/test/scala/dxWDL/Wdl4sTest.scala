@@ -7,7 +7,8 @@ import org.scalatest.{BeforeAndAfterEach, FlatSpec, OneInstancePerTest}
 import scala.sys.process._
 import spray.json._
 import spray.json.DefaultJsonProtocol
-import wdl4s.{AstTools, Call, Task, WdlExpression, WdlNamespace, WdlNamespaceWithWorkflow, Workflow}
+import wdl4s.{AstTools, GraphNode, Call, Scatter, Scope, Task, WdlExpression,
+    WdlNamespace, WdlNamespaceWithWorkflow, Workflow}
 import wdl4s.AstTools.EnhancedAstNode
 import wdl4s.parser.WdlParser.{Ast, AstNode, Terminal}
 import wdl4s.types._
@@ -521,6 +522,56 @@ class Wdl4sTest extends FlatSpec with BeforeAndAfterEach with OneInstancePerTest
             //System.err.println(s"dep vars(${expr.toWdlString}) = ${variables}")
             //assert(expr.toWdlString == variables)
             assert(variables == List("p"))
+        }
+    }
+
+    it should "Figure out out if a declaration escapes its block" in {
+        val wdl = """|
+                     |task Add {
+                     |    Int a
+                     |    Int b
+                     |
+                     |    command {
+                     |        echo $((a + b))
+                     |    }
+                     |    output {
+                     |        Int result = read_int(stdout())
+                     |    }
+                     |}
+                     |
+                     |workflow w {
+                     |    Array[Int] integers = [1, 5, 10, 21]
+                     |    scatter (i in integers) {
+                     |        Int x = i
+                     |        Int y = i
+                     |    }
+                     |    call Add  {
+                     |        input: a=x[0], b=x[1]
+                     |    }
+                     |    output {
+                     |        Add.result
+                     |    }
+                     |}""".stripMargin.trim
+
+        val ns = WdlNamespaceWithWorkflow.load(wdl, Seq.empty).get
+        val wf:Workflow = ns match {
+            case nswf : WdlNamespaceWithWorkflow => nswf.workflow
+            case _ => throw new Exception("sanity")
+        }
+
+        val (topDecls, rest) = Utils.splitBlockDeclarations(wf.children.toList)
+        val scatter = rest.head match {
+            case ssc:Scatter => ssc
+            case _ => throw new Exception("sanity")
+        }
+        scatter.declarations.map { decl =>
+            val dNodes:Set[GraphNode] = decl.downstream
+
+            // figure out if these downstream nodes are in the same scope.
+            val dnScopes:Set[String] = dNodes.map{ node => node.fullyQualifiedName }
+            System.err.println(s"""|decl ${decl.fullyQualifiedName}
+                                   |downstream scopes=${dnScopes}
+                                   |""".stripMargin.trim)
         }
     }
 }
