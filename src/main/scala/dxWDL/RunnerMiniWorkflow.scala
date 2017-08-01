@@ -52,7 +52,7 @@ import scala.collection.JavaConverters._
 import scala.collection.mutable.HashMap
 import spray.json._
 import spray.json.DefaultJsonProtocol
-import Utils.{AppletLinkInfo, isGeneratedVar}
+import Utils.{AppletLinkInfo, transformVarName}
 import wdl4s._
 import wdl4s.AstTools
 import wdl4s.AstTools.EnhancedAstNode
@@ -273,7 +273,7 @@ case class RunnerMiniWorkflow(cef: CompilerErrorFormatter, verbose: Boolean) {
             val bValues = RunnerEval.evalDeclarations(topDecls, envWithIterItem)
             var innerEnvRaw = bValues.map{ case(key, bVal) => key -> bVal.wvl }.toMap
             val topOutputs = innerEnvRaw
-                .filter{ case (varName, _) => exportVars contains varName }
+                .filter{ case (varName, _) => exportVars contains transformVarName(varName) }
                 .map{ case (varName, wvl) => varName -> ElemTop(wvl) }
                 .toMap
             // export top variables
@@ -304,7 +304,7 @@ case class RunnerMiniWorkflow(cef: CompilerErrorFormatter, verbose: Boolean) {
                 case None => ()
             }
             val tmpVars = bValues
-                .filter{ case (varName, bVal) => !(exportVars contains varName) }
+                .filter{ case (varName, bVal) => !(exportVars contains transformVarName(varName)) }
                 .map{ case (varName, bVal) => varName -> bVal.wdlValue }
                 .toMap
             tmpVars.foreach{ case (_, wdlValue ) => WdlVarLinks.deleteLocal(wdlValue) }
@@ -346,7 +346,7 @@ case class RunnerMiniWorkflow(cef: CompilerErrorFormatter, verbose: Boolean) {
         val bValues = RunnerEval.evalDeclarations(topDecls, outerEnv)
         val innerEnvRaw = bValues.map{ case(key, bVal) => key -> bVal.wvl }.toMap
         val topOutputs = innerEnvRaw
-            .filter{ case (varName, _) => exportVars contains varName }
+            .filter{ case (varName, _) => exportVars contains transformVarName(varName) }
             .map{ case (varName, wvl) => varName -> ElemTop(wvl) }
             .toMap
 
@@ -476,7 +476,7 @@ case class RunnerMiniWorkflow(cef: CompilerErrorFormatter, verbose: Boolean) {
         // workflow. Ignore non-exported values.
         val js_outputs: Map[String, JsValue] =
             (blockOutputs ++ preDecls)
-                .filter{ case (varName, _) => exportVars contains varName}
+                .filter{ case (varName, _) => exportVars contains transformVarName(varName)}
                 .map{ case (varName, wvl) => WdlVarLinks.genFields(wvl, varName) }
                 .flatten
                 .map{ case (varName, js) => varName -> Utils.jsValueOfJsonNode(js) }
