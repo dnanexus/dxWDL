@@ -154,6 +154,14 @@ workflow files {
         call FileArraySize {input: files=fa}
     }
 
+    # conditionals
+    if (2 < 1) {
+        String false_branch = "This branch is not supposed to be taken"
+    }
+    if (length(allFiles) > 0) {
+        call z_Copy as Copy3 { input : src=f, basename="branching" }
+    }
+
     output {
         Copy2.outf_sorted
         FindFiles.texts
@@ -164,5 +172,7 @@ workflow files {
         gather.str
         ident.result
         FileArraySize.result
+        false_branch
+        Copy3.outf
     }
 }

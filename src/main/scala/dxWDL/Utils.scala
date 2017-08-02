@@ -41,6 +41,17 @@ object Utils {
     // applet calls applets that implement tasks.
     case class AppletLinkInfo(inputs: Map[String, WdlType], dxApplet: DXApplet)
 
+    // Encapsulation of verbosity flags.
+    //  on --       is the overall setting true/false
+    //  keywords -- specific words to trace
+    case class Verbose(on: Boolean,
+                       keywords: Set[String])
+
+    // Topological sort mode of operation
+    object TopoMode extends Enumeration {
+        val Check, Sort, SortRelaxed = Value
+    }
+
     object AppletLinkInfo {
         def writeJson(ali: AppletLinkInfo) : JsValue = {
             // Serialize applet input definitions, so they could be used
@@ -73,6 +84,7 @@ object Utils {
     val DX_HOME = "/home/dnanexus"
     val DX_INSTANCE_TYPE_ATTR = "dx_instance_type"
     val FLAT_FILES_SUFFIX = "___dxfiles"
+    val IF = "if"
     val INSTANCE_TYPE_DB_FILENAME = "instanceTypeDB.json"
     val INTERMEDIATE_RESULTS_FOLDER = "intermediate"
     val LINK_INFO_FILENAME = "linking.json"
@@ -91,6 +103,14 @@ object Utils {
 
     // Prefixes used for generated applets
     val reservedAppletPrefixes = List(SCATTER, COMMON)
+
+    var tmpVarCnt = 0
+    def genTmpVarName() : String = {
+        val tmpVarName: String = s"${TMP_VAR_NAME_PREFIX}${tmpVarCnt}"
+        tmpVarCnt = tmpVarCnt + 1
+        tmpVarName
+    }
+
 
     def isGeneratedVar(varName: String) : Boolean = {
         varName.startsWith(TMP_VAR_NAME_PREFIX)

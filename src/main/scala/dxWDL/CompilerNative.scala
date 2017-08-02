@@ -62,12 +62,6 @@ object CompilerNative {
                        "class" -> JsString("array:" ++ dxType),
                        "optional" -> JsBoolean(true)))
         }
-        def mkComplexNoFiles() : Vector[Map[String,JsValue]] = {
-            // A JSON structure, passed as a file
-            Vector(Map("name" -> JsString(name),
-                       "help" -> JsString(wdlType.toWdlString),
-                       "class" -> JsString("file")))
-        }
         def mkComplex() : Vector[Map[String,JsValue]] = {
             // A large JSON structure passed as a file, and a
             // vector of platform files.
@@ -99,7 +93,7 @@ object CompilerNative {
                 case WdlArrayType(WdlFileType) => mkPrimitiveArray("file")
 
                 // complex types, that may contains files
-                case _  if !(WdlVarLinks.mayHaveFiles(t)) =>  mkComplexNoFiles()
+                //case _  if !(WdlVarLinks.mayHaveFiles(t)) =>  mkComplexNoFiles()
                 case _ => mkComplex()
             }
         }
@@ -160,13 +154,13 @@ object CompilerNative {
                     |    java -jar $${DX_FS_ROOT}/dxWDL.jar internal eval $${DX_FS_ROOT}/${WDL_SNIPPET_FILENAME} $${HOME}
                     |}""".stripMargin.trim
 
-            case IR.AppletKindScatter(_) =>
+            case (IR.AppletKindIf(_) | IR.AppletKindScatter(_)) =>
                 s"""|#!/bin/bash -ex
                     |main() {
                     |    echo "working directory =$${PWD}"
                     |    echo "home dir =$${HOME}"
                     |    echo "user= $${USER}"
-                    |    java -jar $${DX_FS_ROOT}/dxWDL.jar internal launchScatter $${DX_FS_ROOT}/${WDL_SNIPPET_FILENAME} $${HOME}
+                    |    java -jar $${DX_FS_ROOT}/dxWDL.jar internal miniWorkflow $${DX_FS_ROOT}/${WDL_SNIPPET_FILENAME} $${HOME}
                     |}""".stripMargin.trim
 
             case IR.AppletKindTask =>
@@ -349,10 +343,11 @@ object CompilerNative {
             buildCmd = buildCmd :+ "-f"
         if (cState.archive)
             buildCmd = buildCmd :+ "-a"
+        val commandStr = buildCmd.mkString(" ")
+
         def build() : Option[DXApplet] = {
             try {
                 // Run the dx-build command
-                val commandStr = buildCmd.mkString(" ")
                 Utils.trace(cState.verbose, commandStr)
                 val (outstr, _) = Utils.execCommand(commandStr, Some(DX_COMPILE_TIMEOUT))
 
@@ -363,7 +358,15 @@ object CompilerNative {
                     case _ => None
                 }
             } catch {
-                case e : Throwable => None
+                case e : Throwable =>
+                    // Triage the error, according to the exception message.
+                    // Is this a retriable error?
+                    val msg = e.getMessage
+                    if ((msg contains "The folder could not be found") ||
+                            (msg contains "No value found")) {
+                        throw new Exception(s"build command ${commandStr} failed")
+                    }
+                    None
             }
         }
 
@@ -438,6 +441,7 @@ object CompilerNative {
         val json = JsObject(attrs ++ access)
 
         val aplLinks = applet.kind match {
+            case IR.AppletKindIf(_) => appletDict
             case IR.AppletKindScatter(_) => appletDict
             case _ => Map.empty[String, (IR.Applet, DXApplet)]
         }
@@ -612,6 +616,7 @@ object CompilerNative {
                 // for scatters.
                 val call2Stage = irApplet.kind match {
                     case IR.AppletKindScatter(sourceCalls) => sourceCalls.map(x => x -> stg.name).toMap
+                    case IR.AppletKindIf(sourceCalls) => sourceCalls.map(x => x -> stg.name).toMap
                     case _ => Map.empty[String, String]
                 }
 

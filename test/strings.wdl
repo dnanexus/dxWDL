@@ -52,6 +52,16 @@ workflow strings {
     String s
     Array[String] sa
 
+    # conditional blocks
+    if (length(sa) == 3 ) {
+        call lib.Concat as cond_c1 {
+            input: x="hello", y="world"
+        }
+        call lib.Concat as cond_c2 {
+            input: x=cond_c1.result, y="2"
+        }
+    }
+
     # The following two calls are equivalent to
     # concatenating three variables
     call lib.Concat as concat1 {
@@ -89,6 +99,7 @@ workflow strings {
     }
 
     output {
+        cond_c2.result
         concat1.result
         concat2.result
         concat3.result

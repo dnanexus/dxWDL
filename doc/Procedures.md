@@ -7,9 +7,13 @@
 - Merge onto master branch, make sure travis tests pass
 - Tag git with the release version
 - Build new externally visible release
-  * run `release.py`
+  * run `build_jar.py --release`
   * Update [releases](https://github.com/dnanexus-rnd/dxWDL/releases) github page,
     use the `Draft a new release` button.
+
+## Post release
+- Update the version number in `reference.conf`. We don't want
+to mix the experimental release, with the old code.
 
 
 ## Coding guidelines
@@ -18,8 +22,7 @@
 - Unit tests should assert, and not print to the console
 - WDL test files belong in the top directory `test`
 
-# Building
-## Installation of software prerequisits
+## Building
 
 The main library we depend on is
 [wdl4s](http://broadinstitute.github.io/wdl4s/latest/wdl4s/index.html). This

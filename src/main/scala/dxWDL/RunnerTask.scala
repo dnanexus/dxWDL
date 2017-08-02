@@ -423,7 +423,7 @@ object RunnerTask {
         // Return promises (JBORs) for all the outputs. Since the signature of the sub-job
         // is exactly the same as the parent, we can immediately exit the parent job.
         val outputs: Map[String, JsonNode] = task.outputs.map { tso =>
-            val wvl = WdlVarLinks(tso.wdlType, DxlJob(dxSubJob, IORef.Output, tso.unqualifiedName))
+            val wvl = WdlVarLinks(tso.wdlType, DxlJob(dxSubJob, tso.unqualifiedName))
             WdlVarLinks.genFields(wvl, tso.unqualifiedName)
         }.flatten.toMap
 

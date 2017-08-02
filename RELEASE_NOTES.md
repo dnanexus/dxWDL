@@ -1,5 +1,8 @@
 # Release Notes
 
+## 0.36
+- Conditionals
+
 ## 0.35
 - Support white space in destination argument
 - Allow providing the dx instance type directly in the runtime attributes.

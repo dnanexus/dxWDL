@@ -11,6 +11,7 @@ import scala.util.{Failure, Success, Try}
 import spray.json._
 import spray.json.DefaultJsonProtocol
 import spray.json.JsString
+import Utils.{TopoMode, Verbose}
 import wdl4s.{ImportResolver, Task, WdlNamespace, WdlNamespaceWithWorkflow, WdlSource,
     Workflow, WorkflowOutput}
 
@@ -26,7 +27,7 @@ object Main extends App {
         val Compile, Config, Internal, Version  = Value
     }
     object InternalOp extends Enumeration {
-        val Eval, LaunchScatter,
+        val Eval, MiniWorkflow,
             TaskEpilog, TaskProlog, TaskRelaunch,
             WorkflowOutputs, WorkflowOutputsAndReorg = Value
     }
@@ -37,13 +38,13 @@ object Main extends App {
                      outputs: Option[Seq[WorkflowOutput]],
                      wdlSourceFile: Path,
                      resolver: ImportResolver,
-                     verbose: Boolean)
+                     verbose: Verbose)
 
     // Packing of all compiler flags in an easy to digest
     // format
     case class CompileOptions(archive: Boolean,
                               force: Boolean,
-                              verbose: Boolean,
+                              verbose: Verbose,
                               reorg: Boolean,
                               billTo: String,
                               region: String,
@@ -51,7 +52,7 @@ object Main extends App {
                               folder: String,
                               dxWDLrtId: String,
                               compileMode: Option[String],
-                              sortMode: CompilerTopologicalSort.Mode.Value)
+                              sortMode: TopoMode.Value)
 
     private def normKey(s: String) : String= {
         s.replaceAll("_", "").toUpperCase
@@ -148,11 +149,23 @@ object Main extends App {
                         if (subargs.isEmpty) "normal"
                         else if (subargs.head == "relaxed") "relaxed"
                         else throw new Exception(s"Unknown sort option ${subargs.head}")
-                    case "verbose" => ""
+                    case "verbose" =>
+                        if (subargs.isEmpty) ""
+                        else if (subargs.length == 1) subargs.head
+                        else throw new Exception("Too many arguments to verbose flag")
                     case _ =>
                         throw new IllegalArgumentException(s"Unregonized keyword ${keyword}")
                 }
-                options(keyword) = value
+                options.get(keyword) match {
+                    case None =>
+                        // first time
+                        options(keyword) = value
+                    case Some(x) if keyword == "verbose" =>
+                        // append to the already existing verbose flags
+                        options(keyword) = x + " " + value
+                    case Some(x) =>
+                        options(keyword) = value
+                }
         }
         options.toMap
     }
@@ -241,7 +254,7 @@ object Main extends App {
         val cleanNs = WdlNamespace.loadUsingSource(
             lines, None, Some(List(cState.resolver))
         ).get
-        if (cState.verbose)
+        if (cState.verbose.on)
             writeToFile(cState.wdlSourceFile, "." + suffix, lines)
         cleanNs
     }
@@ -283,15 +296,24 @@ object Main extends App {
         val dxWDLrtId = getAssetId(region)
         val compileMode: Option[String] = options.get("compilemode")
         val sortMode = options.get("sort") match {
-            case None => CompilerTopologicalSort.Mode.Check
-            case Some("normal") => CompilerTopologicalSort.Mode.Sort
-            case Some("relaxed") => CompilerTopologicalSort.Mode.SortRelaxed
+            case None => TopoMode.Check
+            case Some("normal") => TopoMode.Sort
+            case Some("relaxed") => TopoMode.SortRelaxed
             case _ => throw new Exception("Sanity: bad sort mode")
         }
-
+        val verboseKeys: Set[String] = options.get("verbose") match {
+            case None => Set.empty
+            case Some(buf) =>
+                val modulesToTrace = buf.trim
+                if (modulesToTrace.isEmpty) {
+                    Set.empty
+                } else {
+                    modulesToTrace.split("\\s+").toSet
+                }
+        }
         CompileOptions(options contains "archive",
                        options contains "force",
-                       options contains "verbose",
+                       Verbose(options contains "verbose", verboseKeys),
                        options contains "reorg",
                        billTo,
                        region,
@@ -335,24 +357,29 @@ object Main extends App {
         // Additionally perform check for cycles in the workflow
         // Assuming the source file is xxx.wdl, the new name will
         // be xxx.sorted.wdl.
-        val sortedNs1 = CompilerTopologicalSort.apply(orgNs, cOpt.sortMode, cOpt.verbose)
-        val sortedNs = washNamespace(sortedNs1, "sorted", cState)
+        val nsSorted1 = CompilerTopologicalSort.apply(orgNs, cOpt.sortMode, cOpt.verbose)
+        val nsSorted = washNamespace(nsSorted1, "sorted", cState)
 
         // Simplify the original workflow, for example,
         // convert call arguments from expressions to variables.
-        val ns1 = CompilerSimplify.apply(sortedNs, cOpt.verbose)
-        val ns = washNamespace(ns1, "simplified", cState)
+        val nsExpr1 = CompilerSimplifyExpr.apply(nsSorted, cOpt.verbose)
+        val nsExpr = washNamespace(nsExpr1, "simplified", cState)
+
+        // Reorganize the declarations, to minimize the number of
+        // applets, stages, and jobs.
+        val ns1 = CompilerReorgDecl(nsExpr, cOpt.verbose).apply
+        val ns = washNamespace(ns1, "reorg", cState)
 
         // Compile the WDL workflow into an Intermediate
         // Representation (IR) For some reason, the pretty printer
         // mangles the outputs, which is why we pass the originals
         // unmodified.
         val cef = new CompilerErrorFormatter(ns.terminalMap)
-        val irNs = CompilerIR.apply(ns, cState.outputs, instanceTypeDB,
-                                    cOpt.folder, cef, cOpt.reorg, cOpt.verbose)
+        val irNs = CompilerIR(cState.outputs, cOpt.folder, instanceTypeDB, cef, cOpt.reorg, cOpt.verbose)
+            .apply(ns)
 
         // Write out the intermediate representation
-        prettyPrintIR(wdlSourceFile, irNs, cOpt.verbose)
+        prettyPrintIR(wdlSourceFile, irNs, cOpt.verbose.on)
 
         // Backend compiler pass
         cOpt.compileMode match {
@@ -361,7 +388,7 @@ object Main extends App {
                 val wdlInputs = options.get("inputs").map(Paths.get(_))
                 CompilerNative.apply(irNs, wdlInputs, cOpt.dxProject, instanceTypeDB,
                                      cOpt.dxWDLrtId,
-                                     cOpt.folder, cef, cOpt.force, cOpt.archive, cOpt.verbose)
+                                     cOpt.folder, cef, cOpt.force, cOpt.archive, cOpt.verbose.on)
             case Some(x) if x.toLowerCase == "ir" => "IR-xxxx"
             case Some(other) => throw new Exception(s"Unknown compilation mode ${other}")
         }
@@ -405,9 +432,11 @@ object Main extends App {
         try {
             op match {
                 case InternalOp.Eval =>
-                    RunnerEval.apply(workflowOfNamespace(ns), jobInputPath, jobOutputPath, jobInfoPath)
-                case InternalOp.LaunchScatter =>
-                    RunnerScatter.apply(workflowOfNamespace(ns), jobInputPath, jobOutputPath, jobInfoPath)
+                    RunnerEval.apply(workflowOfNamespace(ns),
+                                     jobInputPath, jobOutputPath, jobInfoPath)
+                case InternalOp.MiniWorkflow =>
+                    RunnerMiniWorkflow.apply(workflowOfNamespace(ns),
+                                             jobInputPath, jobOutputPath, jobInfoPath)
                 case InternalOp.TaskEpilog =>
                     RunnerTask.epilog(taskOfNamespace(ns), jobInputPath, jobOutputPath, jobInfoPath)
                 case InternalOp.TaskProlog =>
@@ -471,7 +500,7 @@ object Main extends App {
            |    -inputs <string>      Path to cromwell style input file
            |    -reorg                Reorganize workflow output files
            |    -sort [string]        Sort call graph, to avoid forward references
-           |    -verbose              Print detailed progress reports
+           |    -verbose [flag]       Print detailed progress reports
            |
            |config
            |  Print the configuration parameters

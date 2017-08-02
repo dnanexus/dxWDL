@@ -20,6 +20,9 @@ workflow decl_mid_wf {
     }
 
     Int k = 2 * j
+    # This declaration should not be moved by the reorg
+    # step
+    String c_result = concat.result
 
     call math_lib.Add as add2 {
         input: a = j, b = k

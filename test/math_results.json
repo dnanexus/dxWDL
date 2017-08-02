@@ -1,7 +1,9 @@
 {
-    "math_outputs.y": -6,
-    "math_outputs.x": 40,
-    "math_outputs.sum": 151,
-    "math_outputs.div": 4,
-    "math_outputs.sum2" : 15
+  "math_outputs.y": -6,
+  "math_outputs.x": 40,
+  "math_outputs.sum": 151,
+  "math_outputs.div": 4,
+  "math_outputs.sum2" : 15,
+  "math_outputs.ai_inc_maybe" : 3,
+  "math_outputs.fibo2" : 8
 }

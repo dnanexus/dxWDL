@@ -31,7 +31,8 @@ object IORef extends Enumeration {
 sealed trait DxLink
 case class DxlValue(jsn: JsValue) extends DxLink  // This may contain dx-files
 case class DxlStage(dxStage: DXWorkflow.Stage, ioRef: IORef.Value, varName: String) extends DxLink
-case class DxlJob(dxJob: DXJob, ioRef: IORef.Value, varName: String) extends DxLink
+case class DxlJob(dxJob: DXJob, varName: String) extends DxLink
+case class DxlJobArray(dxJobVec: Vector[DXJob], varName: String) extends DxLink
 
 case class WdlVarLinks(wdlType: WdlType, dxlink: DxLink)
 
@@ -44,10 +45,12 @@ object WdlVarLinks {
         val (key, value) = wvl.dxlink match {
             case DxlValue(jsn) =>
                 "JSON" -> jsn.prettyPrint
-            case DxlJob(dxJob, ioRef, varEncName) =>
-                "jobRef" -> varEncName
             case DxlStage(dxStage, ioRef, varEncName) =>
                 "stageRef" -> varEncName
+            case DxlJob(dxJob, varEncName) =>
+                "jobRef" -> varEncName
+            case DxlJobArray(dxJobVec, varEncName) =>
+                "jobRefArray" -> varEncName
         }
         YamlObject(
             YamlString("type") -> YamlString(wvl.wdlType.toWdlString),
@@ -149,6 +152,20 @@ object WdlVarLinks {
         }
     }
 
+    // serialize complex JSON structure to a file, upload, and
+    // return a dxlink to the file
+    private def serializeJsValueToDxFile(wdlType: WdlType, jsVal: JsValue) : JsValue = {
+        assert(!isNativeDxType(wdlType))
+        if (isDxFile(jsVal)) {
+            // The JSON structure is already a file, no need for further encapsulation
+            jsVal
+        } else {
+            val buf = jsVal.prettyPrint
+            val fileName = wdlType.toWdlString
+            Utils.uploadString(buf, fileName)
+        }
+    }
+
     private def wdlFileOfDxLink(jsValue: JsValue, force: Boolean) : WdlValue = {
         // Download the file, and place it in a local file, with the
         // same name as the platform. All files have to be downloaded
@@ -200,30 +217,6 @@ object WdlVarLinks {
                    | WdlArrayType(WdlStringType)
                    | WdlArrayType(WdlFileType) => true
             case _ => false
-        }
-    }
-
-    // Could a structure of this type include Files? Some examples:
-    // Array[Int]        false
-    // Map[String,File]  true
-    // Object            true
-    //
-    // Objects may include files, because their types are only
-    // known at runtime
-    def mayHaveFiles(wdlType: WdlType) : Boolean = {
-        wdlType match {
-            // base cases
-            case WdlBooleanType | WdlIntegerType | WdlFloatType | WdlStringType => false
-            case WdlFileType => true
-            case WdlObjectType => true
-
-            // recursion
-            case WdlOptionalType(t) => mayHaveFiles(t)
-            case WdlArrayType(t) => mayHaveFiles(t)
-            case WdlPairType(lType, rType) =>
-                mayHaveFiles(lType) || mayHaveFiles(rType)
-            case WdlMapType(keyType, valueType) =>
-                mayHaveFiles(keyType) || mayHaveFiles(valueType)
         }
     }
 
@@ -461,9 +454,7 @@ object WdlVarLinks {
             WdlVarLinks(wdlTypeOrg, DxlValue(js))
         } else {
             // Complex values, that may have files in them. For example, ragged file arrays.
-            val buf = js.prettyPrint
-            val fileName = wdlType.toWdlString
-            val jsSrlFileLink = Utils.uploadString(buf, fileName)
+            val jsSrlFileLink = serializeJsValueToDxFile(wdlType, js)
             WdlVarLinks(wdlTypeOrg, DxlValue(jsSrlFileLink))
         }
     }
@@ -484,6 +475,17 @@ object WdlVarLinks {
         }
     }
 
+    def mkJborArray(dxJobVec: Vector[DXJob],
+                    varName: String) : JsonNode = {
+        val jbors: Vector[JsValue] = dxJobVec.map{ dxJob =>
+            val jobId : String = dxJob.getId()
+            Utils.makeJBOR(jobId, varName)
+        }
+        val retval = Utils.jsonNodeOfJsValue(JsArray(jbors))
+        System.err.println(s"mkJborArray(${varName})  ${retval}")
+        retval
+    }
+
     // create input/output fields that bind the variable name [bindName] to
     // this WdlVar
     def genFields(wvl : WdlVarLinks, bindName: String) : List[(String, JsonNode)] = {
@@ -491,21 +493,31 @@ object WdlVarLinks {
 
         def mkSimple() : (String, JsonNode) = {
             val jsNode : JsonNode = wvl.dxlink match {
+                case DxlValue(jsn) => Utils.jsonNodeOfJsValue(jsn)
                 case DxlStage(dxStage, ioRef, varEncName) =>
                     ioRef match {
                         case IORef.Input => dxStage.getInputReference(varEncName)
                         case IORef.Output => dxStage.getOutputReference(varEncName)
                     }
-                case DxlJob(dxJob, ioRef, varEncName) =>
+                case DxlJob(dxJob, varEncName) =>
                     val jobId : String = dxJob.getId()
                     Utils.jsonNodeOfJsValue(Utils.makeJBOR(jobId, varEncName))
-                case DxlValue(jsn) => Utils.jsonNodeOfJsValue(jsn)
+                case DxlJobArray(dxJobVec, varEncName) =>
+                    mkJborArray(dxJobVec, varEncName)
             }
             (bindEncName, jsNode)
         }
-        def mkComplex() : Map[String,JsonNode] = {
+        def mkComplex(wdlType: WdlType) : Map[String,JsonNode] = {
             val bindEncName_F = bindEncName + Utils.FLAT_FILES_SUFFIX
             wvl.dxlink match {
+                case DxlValue(jsn) =>
+                    // files that are embedded in the structure
+                    val dxFiles = findDxFiles(jsn)
+                    val jsFiles = dxFiles.map(x => Utils.jsValueOfJsonNode(x.getLinkAsJson))
+                    // convert the top level structure into a file
+                    val jsSrlFileLink = serializeJsValueToDxFile(wdlType, jsn)
+                    Map(bindEncName -> Utils.jsonNodeOfJsValue(jsSrlFileLink),
+                        bindEncName_F -> Utils.jsonNodeOfJsValue(JsArray(jsFiles)))
                 case DxlStage(dxStage, ioRef, varEncName) =>
                     val varEncName_F = varEncName + Utils.FLAT_FILES_SUFFIX
                     ioRef match {
@@ -518,18 +530,16 @@ object WdlVarLinks {
                             bindEncName_F -> dxStage.getOutputReference(varEncName_F)
                         )
                     }
-                case DxlJob(dxJob, ioRef, varEncName) =>
+                case DxlJob(dxJob, varEncName) =>
                     val varEncName_F = varEncName + Utils.FLAT_FILES_SUFFIX
                     val jobId : String = dxJob.getId()
-                    Map(
-                        bindEncName -> Utils.jsonNodeOfJsValue(Utils.makeJBOR(jobId, varEncName)),
+                    Map(bindEncName -> Utils.jsonNodeOfJsValue(Utils.makeJBOR(jobId, varEncName)),
                         bindEncName_F -> Utils.jsonNodeOfJsValue(Utils.makeJBOR(jobId, varEncName_F))
                     )
-                case DxlValue(jsn) =>
-                    val dxFiles = findDxFiles(jsn)
-                    val jsFiles = dxFiles.map(x => Utils.jsValueOfJsonNode(x.getLinkAsJson))
-                    Map(bindEncName -> Utils.jsonNodeOfJsValue(jsn),
-                        bindEncName_F -> Utils.jsonNodeOfJsValue(JsArray(jsFiles.toVector)))
+                case DxlJobArray(dxJobVec, varEncName) =>
+                    val varEncName_F = varEncName + Utils.FLAT_FILES_SUFFIX
+                    Map(bindEncName -> mkJborArray(dxJobVec, varEncName),
+                        bindEncName_F -> mkJborArray(dxJobVec, varEncName_F))
             }
         }
 
@@ -537,13 +547,10 @@ object WdlVarLinks {
         if (isNativeDxType(wdlType)) {
             // Types that are supported natively in DX
             List(mkSimple())
-        } else if (!mayHaveFiles(wdlType)) {
-            // Complex type that is guarantied to have no files. It can be mapped
-            // into a single JSON structure
-            List(mkSimple())
         } else {
-            // Most general complex type requiring two fields: a JSON structure, and a flat array of files.
-            mkComplex().toList
+            // General complex type requiring two fields: a JSON
+            // structure, and a flat array of files.
+            mkComplex(wdlType).toList
         }
     }
 
@@ -576,4 +583,42 @@ object WdlVarLinks {
             }
         }.flatten.toMap
     }
+
+    // Merge an array of links into one. All the links
+    // have to be of the same dxlink type.
+    def merge(vec: Vector[WdlVarLinks]) : WdlVarLinks = {
+        if (vec.isEmpty)
+            throw new Exception("Sanity: WVL array has to be non empty")
+
+        val wdlType = WdlArrayType(vec.head.wdlType)
+        vec.head.dxlink match {
+            case DxlValue(_) =>
+                val jsVec:Vector[JsValue] = vec.map{ wvl =>
+                    wvl.dxlink match {
+                        case DxlValue(jsv) => jsv
+                        case _ => throw new Exception("Sanity")
+                    }
+                }
+                val jsArr = JsArray(jsVec)
+                val jsn =
+                    if (isNativeDxType(wdlType))
+                        jsArr
+                    else
+                        serializeJsValueToDxFile(wdlType, jsArr)
+                WdlVarLinks(wdlType, DxlValue(jsn))
+
+            case DxlJob(_, varName) =>
+                val jobVec:Vector[DXJob] = vec.map{ wvl =>
+                    wvl.dxlink match {
+                        case DxlJob(job,name) =>
+                            assert(name == varName)
+                            job
+                        case _ => throw new Exception("Sanity")
+                    }
+                }
+                WdlVarLinks(wdlType, DxlJobArray(jobVec, varName))
+            case _ => throw new Exception(s"Don't know how to merge WVL arrays of type ${vec.head}")
+        }
+    }
+
 }

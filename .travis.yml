@@ -56,10 +56,12 @@ script:
   # Test on US-east
   - dx select dxWDL_playground
   - java -jar dxWDL-*.jar compile test/trivial.wdl --destination /travis_ci --force
+  - dx run /travis_ci/trivial
 
   # Test on Sydney region
   - dx select dxWDL_Sydney
   - java -jar dxWDL-*.jar compile test/trivial.wdl --destination '/Swiss Cheese/' --force
+  - dx run /travis_ci/trivial
 
 env:
   global:

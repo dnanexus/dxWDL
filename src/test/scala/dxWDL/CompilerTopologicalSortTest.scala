@@ -6,7 +6,7 @@ import org.scalatest.{BeforeAndAfterEach, FlatSpec, OneInstancePerTest}
 import scala.sys.process._
 import spray.json._
 import spray.json.DefaultJsonProtocol
-//import spray.json.JsString
+import Utils.{TopoMode, Verbose}
 import wdl4s.{AstTools, Call, Task, WdlExpression, WdlNamespace, WdlNamespaceWithWorkflow, Workflow}
 import wdl4s.AstTools.EnhancedAstNode
 import wdl4s.types._
@@ -56,21 +56,20 @@ class CompilerTopologicalSortTest extends FlatSpec with BeforeAndAfterEach {
      }
 
      def sortWorkflowHelper(wdl: String, relaxed: Boolean) : (Seq[String], Seq[Scope]) =  {
-        val ns = WdlNamespaceWithWorkflow.load(wdl, Seq.empty).get
-        val wf = ns.workflow
+         val ns = WdlNamespaceWithWorkflow.load(wdl, Seq.empty).get
+         val wf = ns.workflow
 
-        val tm = ns.terminalMap
-        val cef = new CompilerErrorFormatter(tm)
-        val verbose = false
-        val cState = CompilerTopologicalSort.State(cef, tm, verbose)
-        val sortedNodes =
-            if (relaxed) {
-                CompilerTopologicalSort.tsortASTnodes(wf.children, cState, 0)
-            } else {
-                CompilerTopologicalSort.sortWorkflowAlternative(ns, cState)
-            }
-        val sortedNames = getNames(sortedNodes)
-        (sortedNames, sortedNodes)
+         val cef = new CompilerErrorFormatter(ns.terminalMap)
+         val verbose = Verbose(false, Set.empty)
+         val cts = CompilerTopologicalSort(cef, TopoMode.Sort, verbose)
+         val sortedNodes =
+             if (relaxed) {
+                 cts.tsortASTnodes(wf.children, 0)
+             } else {
+                 cts.sortWorkflowAlternative(ns)
+             }
+         val sortedNames = getNames(sortedNodes)
+         (sortedNames, sortedNodes)
      }
 
 
