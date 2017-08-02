@@ -68,15 +68,21 @@ case class CompilerReorgDecl(ns: WdlNamespace, verbose: Utils.Verbose) {
         val vars:Set[String] = expr.variableReferences
             .map(WdlExpression.toString(_))
             .toSet
-        val refs = nodeRefs ++ memberAccesses ++ vars
+        val refsWithPossibleDups:Set[String] = nodeRefs ++ memberAccesses ++ vars
+
+        // The above may hold duplicates, such as x and A.B.x. Remove
+        // duplicates by using the longest string, out of (x, B.x, A.B.x)
+        val refs = refsWithPossibleDups.foldLeft(Set.empty[String]) { case (accu, fqn) =>
+            if (accu.exists(_.endsWith(fqn)))
+                accu
+            else
+                accu + fqn
+        }
 
         // The memeber accesses and variable-references may not be
         // fully qualified, so try prefixing the FQN too.
         val fqn = decl.ancestry.head.fullyQualifiedName
-        val retval = refs.forall{ x =>
-            (definedVars contains x) ||
-            (definedVars contains (fqn + "." + x))
-        }
+        val retval = refs.forall{ x => definedVars contains x }
         Utils.trace(verbose2, s"""|dependsOnlyOnVars ${expr.toWdlString}
                                   |  fqn = ${fqn}
                                   |  nodeRefs=${nodeRefs}
@@ -185,7 +191,8 @@ case class CompilerReorgDecl(ns: WdlNamespace, verbose: Utils.Verbose) {
 
     // Attempt to collect declarations at the block level, to reduce
     // the number of extra jobs required for calculations.
-    def reorgBlock(elems: Seq[Scope], definedVars: Set[String]) : Block  = {
+    def reorgBlock(oldBlock:Scope, elems: Seq[Scope], definedVars: Set[String]) : Block  = {
+        Utils.trace(verbose2, s"reorgBlock(${oldBlock.fullyQualifiedName})")
         val drs = DeclReorgState(definedVars, Vector.empty[Scope], elems.toVector)
         collectDeclarations(drs)
     }
@@ -193,11 +200,11 @@ case class CompilerReorgDecl(ns: WdlNamespace, verbose: Utils.Verbose) {
     def reorg(scope: Scope, definedVars: Set[String]): (Scope, Set[String]) = {
         scope match {
             case ssc:Scatter =>
-                val blk = reorgBlock(ssc.children, definedVars + ssc.item)
+                val blk = reorgBlock(ssc, ssc.children, definedVars + ssc.item)
                 val ssc2 = WdlRewrite.scatter(ssc, blk.children, ssc.collection)
                 (ssc2, blk.definedVars)
             case cond:If =>
-                val blk = reorgBlock(cond.children, definedVars)
+                val blk = reorgBlock(cond, cond.children, definedVars)
                 val cond2 = WdlRewrite.cond(cond, blk.children, cond.condition)
                 (cond2, blk.definedVars)
             case call:Call => (call, definedVars ++ definitions(call))
@@ -211,7 +218,7 @@ case class CompilerReorgDecl(ns: WdlNamespace, verbose: Utils.Verbose) {
     }
 
     def reorgWorkflow(wf: Workflow) : Workflow = {
-        val blk = reorgBlock(wf.children, Set.empty)
+        val blk = reorgBlock(wf, wf.children, Set.empty)
         WdlRewrite.workflow(wf, blk.children)
     }
 

@@ -42,9 +42,10 @@ workflow math {
         input: a = (int_ops4.result * 5), b = (int_ops4.result + 1)
     }
 
-    # - several calls in a scatter
-    # - expression in the collection
-    # - use of the range and length stdlib functions
+    # several calls in a scatter
+    # expression in the collection
+    # use of the range and length stdlib functions
+    # expressions that should be collected at the top
     scatter (k in range(length(numbers))) {
         call lib.Inc as inc {input: i= numbers[k]}
         call lib.Twice as twice {input: i=inc.result}

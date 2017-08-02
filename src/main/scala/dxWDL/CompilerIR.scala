@@ -981,7 +981,7 @@ workflow w {
     // Compile a workflow, having compiled the independent tasks.
     def compileWorkflow(wf: Workflow,
                         taskApplets: Map[String, (IR.Applet, Vector[IR.CVar])]) : IR.Workflow = {
-        Utils.trace(verbose.on, "FrontEnd: compiling workflow")
+        Utils.trace(verbose.on, "IR: compiling workflow")
 
         // Get rid of workflow output declarations
         val children = wf.children.filter(x => !x.isInstanceOf[WorkflowOutput])
@@ -1082,7 +1082,7 @@ workflow w {
 
     // compile the WDL source code into intermediate representation
     def apply(ns : WdlNamespace) : IR.Namespace = {
-        Utils.trace(verbose.on, "FrontEnd pass")
+        Utils.trace(verbose.on, "IR pass")
 
         // Load all accessed applets, local or imported
         val accessedTasks: Set[Task] = loadImportedTasks(ns)
@@ -1094,7 +1094,7 @@ workflow w {
         val allTasks:Set[Task] = accessedTasks ++ ns.tasks.toSet
 
         // compile all the tasks into applets
-        Utils.trace(verbose.on, "FrontEnd: compiling tasks into dx:applets")
+        Utils.trace(verbose.on, "compiling tasks into dx:applets")
 
         val taskApplets: Map[String, (IR.Applet, Vector[IR.CVar])] = allTasks.map{ task =>
             val (applet, outputs) = compileTask(task)
