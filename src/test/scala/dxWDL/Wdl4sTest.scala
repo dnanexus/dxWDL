@@ -7,8 +7,8 @@ import org.scalatest.{BeforeAndAfterEach, FlatSpec, OneInstancePerTest}
 import scala.sys.process._
 import spray.json._
 import spray.json.DefaultJsonProtocol
-import wdl4s.{AstTools, GraphNode, Call, Scatter, Scope, Task, WdlExpression,
-    WdlNamespace, WdlNamespaceWithWorkflow, Workflow}
+import wdl4s.{AstTools, Declaration, GraphNode, Call, Scatter, Scope, Task, WdlExpression,
+    WdlNamespace, WdlNamespaceWithWorkflow, Workflow, WorkflowOutput}
 import wdl4s.AstTools.EnhancedAstNode
 import wdl4s.parser.WdlParser.{Ast, AstNode, Terminal}
 import wdl4s.types._
@@ -525,7 +525,40 @@ class Wdl4sTest extends FlatSpec with BeforeAndAfterEach with OneInstancePerTest
         }
     }
 
-    it should "Figure out out if a declaration escapes its block" in {
+    // figure out if a variable escapes
+    def isLocal(decl: Declaration,
+                wfOutputs: Seq[WorkflowOutput]) : Boolean = {
+        // find all dependent nodes
+        val dNodes:Set[GraphNode] = decl.downstream
+        val declParent:Scope = decl.parent.get
+
+        // figure out if these downstream nodes are in the same scope.
+        val dnScopes:Set[GraphNode] = dNodes.filter{ node =>
+            node.parent.get.fullyQualifiedName != declParent.fullyQualifiedName
+            //&&
+            //node.fullyQualifiedName != decl.fullyQualifiedName
+        }
+        val dnScopeFQN = dnScopes.map{ x => x.fullyQualifiedName }
+
+        // Also check if the declaration appears in the workflow output
+        val unusedInWfOutput = wfOutputs.forall(x => !(x.upstream contains decl))
+
+        val allOutputs = wfOutputs.map(_.fullyQualifiedName)
+
+        // the declaration is used only locally
+        val retval = dnScopes.isEmpty && unusedInWfOutput
+/*        System.err.println(s"""|decl ${decl.fullyQualifiedName}
+                               |declParent ${declParent.fullyQualifiedName}
+                               |downstream scopes=${dnScopeFQN}
+                               |retval=${retval}
+                               |allOutputs=${allOutputs}
+                               |unusedInWfOutput=${unusedInWfOutput}
+                               |
+                               |""".stripMargin.trim)*/
+        retval
+    }
+
+    it should "tell if a declaration is local to a block" in {
         val wdl = """|
                      |task Add {
                      |    Int a
@@ -544,12 +577,14 @@ class Wdl4sTest extends FlatSpec with BeforeAndAfterEach with OneInstancePerTest
                      |    scatter (i in integers) {
                      |        Int x = i
                      |        Int y = i
+                     |        Array[Int] z = [x,x]
                      |    }
                      |    call Add  {
                      |        input: a=x[0], b=x[1]
                      |    }
                      |    output {
                      |        Add.result
+                     |        z
                      |    }
                      |}""".stripMargin.trim
 
@@ -564,14 +599,13 @@ class Wdl4sTest extends FlatSpec with BeforeAndAfterEach with OneInstancePerTest
             case ssc:Scatter => ssc
             case _ => throw new Exception("sanity")
         }
-        scatter.declarations.map { decl =>
-            val dNodes:Set[GraphNode] = decl.downstream
+        val wfOutputs:Seq[WorkflowOutput] = wf.outputs
 
-            // figure out if these downstream nodes are in the same scope.
-            val dnScopes:Set[String] = dNodes.map{ node => node.fullyQualifiedName }
-            System.err.println(s"""|decl ${decl.fullyQualifiedName}
-                                   |downstream scopes=${dnScopes}
-                                   |""".stripMargin.trim)
-        }
+        val decls: List[String] =
+            scatter.declarations
+                .filter { decl => !isLocal(decl, wfOutputs) }
+                .map { decl => decl.unqualifiedName }
+                .toList
+        assert(decls == List("x", "z"))
     }
 }

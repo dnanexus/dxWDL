@@ -63,7 +63,9 @@ import wdl4s.values._
 import wdl4s.WdlExpression.AstForExpressions
 import WdlVarLinks._
 
-case class RunnerMiniWorkflow(cef: CompilerErrorFormatter, verbose: Boolean) {
+case class RunnerMiniWorkflow(exportVars: Set[String],
+                              cef: CompilerErrorFormatter,
+                              verbose: Boolean) {
     // An environment element could be one of:
     // - top level value
     // - dictionary of values returned from a call
@@ -79,6 +81,10 @@ case class RunnerMiniWorkflow(cef: CompilerErrorFormatter, verbose: Boolean) {
         }
     }
 
+    // check if a variable should be exported from this applet
+    private def isExported(varName: String) : Boolean = {
+        exportVars contains (transformVarName(varName))
+    }
     // find the sequence of applets inside the scatter block. In the example,
     // these are: [inc1, inc2]
     private def findApplets(scope: Scope,
@@ -254,7 +260,6 @@ case class RunnerMiniWorkflow(cef: CompilerErrorFormatter, verbose: Boolean) {
     private def evalScatter(scatter : Scatter,
                             collection : WdlVarLinks,
                             calls : Seq[(Call, AppletLinkInfo)],
-                            exportVars: Set[String],
                             outerEnv : Map[String, WdlVarLinks]) : Map[String, WdlVarLinks] = {
         System.err.println(s"evalScatter")
 
@@ -273,7 +278,7 @@ case class RunnerMiniWorkflow(cef: CompilerErrorFormatter, verbose: Boolean) {
             val bValues = RunnerEval.evalDeclarations(topDecls, envWithIterItem)
             var innerEnvRaw = bValues.map{ case(key, bVal) => key -> bVal.wvl }.toMap
             val topOutputs = innerEnvRaw
-                .filter{ case (varName, _) => exportVars contains transformVarName(varName) }
+                .filter{ case (varName, _) => isExported(varName) }
                 .map{ case (varName, wvl) => varName -> ElemTop(wvl) }
                 .toMap
             // export top variables
@@ -304,7 +309,7 @@ case class RunnerMiniWorkflow(cef: CompilerErrorFormatter, verbose: Boolean) {
                 case None => ()
             }
             val tmpVars = bValues
-                .filter{ case (varName, bVal) => !(exportVars contains transformVarName(varName)) }
+                .filter{ case (varName, bVal) => !isExported(varName) }
                 .map{ case (varName, bVal) => varName -> bVal.wdlValue }
                 .toMap
             tmpVars.foreach{ case (_, wdlValue ) => WdlVarLinks.deleteLocal(wdlValue) }
@@ -324,7 +329,6 @@ case class RunnerMiniWorkflow(cef: CompilerErrorFormatter, verbose: Boolean) {
     private def evalIf(cond : If,
                        condition : WdlVarLinks,
                        calls : Seq[(Call, AppletLinkInfo)],
-                       exportVars: Set[String],
                        outerEnv: Map[String, WdlVarLinks]) : Map[String, WdlVarLinks] = {
         System.err.println(s"evalIf")
 
@@ -346,7 +350,7 @@ case class RunnerMiniWorkflow(cef: CompilerErrorFormatter, verbose: Boolean) {
         val bValues = RunnerEval.evalDeclarations(topDecls, outerEnv)
         val innerEnvRaw = bValues.map{ case(key, bVal) => key -> bVal.wvl }.toMap
         val topOutputs = innerEnvRaw
-            .filter{ case (varName, _) => exportVars contains transformVarName(varName) }
+            .filter{ case (varName, _) => isExported(varName) }
             .map{ case (varName, wvl) => varName -> ElemTop(wvl) }
             .toMap
 
@@ -441,8 +445,7 @@ case class RunnerMiniWorkflow(cef: CompilerErrorFormatter, verbose: Boolean) {
     }
 
     def apply(wf: Workflow,
-              inputs : Map[String, WdlVarLinks],
-              exportVars: Set[String]) : JsValue = {
+              inputs : Map[String, WdlVarLinks]) : JsValue = {
         System.err.println(s"inputs=${inputs}")
 
         // Evaluate the declarations prior to the main block, and add them to the environment.
@@ -462,11 +465,11 @@ case class RunnerMiniWorkflow(cef: CompilerErrorFormatter, verbose: Boolean) {
             case scatter:Scatter =>
                 // Lookup the array we are looping on, it is guarantied to be a variable.
                 val collection = lookup(outerEnv, scatter.collection.toWdlString)
-                evalScatter(scatter, collection, applets, exportVars, outerEnv)
+                evalScatter(scatter, collection, applets, outerEnv)
             case cond:If =>
                 // Lookup the condition variable
                 val condition = lookup(outerEnv, cond.condition.toWdlString)
-                evalIf(cond, condition, applets, exportVars, outerEnv)
+                evalIf(cond, condition, applets, outerEnv)
             case x =>
                 throw new Exception(cef.notCurrentlySupported(x.ast, "scope element"))
         }
@@ -476,7 +479,7 @@ case class RunnerMiniWorkflow(cef: CompilerErrorFormatter, verbose: Boolean) {
         // workflow. Ignore non-exported values.
         val js_outputs: Map[String, JsValue] =
             (blockOutputs ++ preDecls)
-                .filter{ case (varName, _) => exportVars contains transformVarName(varName)}
+                .filter{ case (varName, _) => isExported(varName) }
                 .map{ case (varName, wvl) => WdlVarLinks.genFields(wvl, varName) }
                 .flatten
                 .map{ case (varName, js) => varName -> Utils.jsValueOfJsonNode(js) }
@@ -509,8 +512,8 @@ object RunnerMiniWorkflow {
 
         // Run the workflow
         val cef = new CompilerErrorFormatter(wf.wdlSyntaxErrorFormatter.terminalMap)
-        val r = RunnerMiniWorkflow(cef, false)
-        val json = r.apply(wf, inputs, exportVars)
+        val r = RunnerMiniWorkflow(exportVars, cef, false)
+        val json = r.apply(wf, inputs)
 
         // write the outputs to the job_output.json file
         val ast_pp = json.prettyPrint

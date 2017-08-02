@@ -60,6 +60,8 @@ workflow optionals {
 
         # we need to pass {a, b}
         call lib.Add as add3
+
+        Array[Int] series=[x,1]
     }
     output {
         mul2.result
@@ -68,5 +70,6 @@ workflow optionals {
         unused_args.result
         add2.result
         mi2.result
+        series
     }
 }
