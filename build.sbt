@@ -2,7 +2,7 @@
 import sbt.Keys._
 enablePlugins(GitVersioning)
 
-scalaVersion := "2.12.1"
+scalaVersion := "2.12.3"
 name := "dxWDL"
 organization := "com.dnanexus"
 
