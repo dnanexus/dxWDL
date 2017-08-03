@@ -8,21 +8,19 @@ and compiles it to an equivalent workflow on the DNAnexus platform.
 ## Release status
 <a href="https://travis-ci.org/dnanexus-rnd/dxWDL"><img src="https://travis-ci.org/dnanexus-rnd/dxWDL.svg?branch=master"/></a>
 
-This project is in beta testing, and does not yet support all WDL
-features. Initially, we have focused on enabling the
-[GATK best practices pipeline](https://github.com/broadinstitute/wdl/blob/develop/scripts/broad_pipelines/PublicPairedSingleSampleWf_160927.wdl). Other
-features will be added as the project matures and according to user
-interest.
+dxWDL provides a reasonably complete set of WDL features for beta
+testing, in particular enabling the [GATK best practices pipeline](https://github.com/broadinstitute/wdl/blob/develop/scripts/broad_pipelines/PublicPairedSingleSampleWf_170412.wdl).
+A few significant WDL features are not yet supported, but may be
+added according to user interest:
 
-The main WDL features not yet supported are:
 - Nested workflows (sub-workflows)
 - Nested scatters
 - Objects
 
+
 *Use at your own risk:* for the time being, dxWDL is an exploratory
- project not covered by DNAnexus service and support agreements. The
- developers welcome feedback, requests, and bug reports on a
- best-effort basis.
+ tool NOT covered by DNAnexus service and support agreements. We
+ welcome feedback and provide assistance on a best-effort basis.
 
 ## Getting started
 Prerequisites: DNAnexus platform account, dx-toolkit, java 8+, python 2.7.
