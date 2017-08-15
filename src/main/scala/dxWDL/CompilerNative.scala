@@ -269,7 +269,7 @@ object CompilerNative {
                 aplLinks.map{ case (key, (irApplet, dxApplet)) =>
                     // Reduce the information to what will be needed for runtime linking.
                     val appInputDefs: Map[String, WdlType] = irApplet.inputs.map{
-                        case IR.CVar(name, wdlType, _) => (name -> wdlType)
+                        case IR.CVar(name, wdlType, _, _) => (name -> wdlType)
                     }.toMap
                     val ali = AppletLinkInfo(appInputDefs, dxApplet)
                     key -> AppletLinkInfo.writeJson(ali)
@@ -315,6 +315,7 @@ object CompilerNative {
     }
 
     // Sending a string to the command line shell may require quoting it.
+    // Quoting is needed if the string contains white spaces.
     private def quoteIfNeeded(buf: String) : String = {
         if (!buf.matches("\\S+")) s"""'${buf}'"""
         else buf

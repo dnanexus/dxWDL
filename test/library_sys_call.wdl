@@ -11,6 +11,9 @@ task cgrep {
     String pattern
     File in_file
 
+    parameter_meta {
+        in_file : "stream"
+    }
     command {
         grep '${pattern}' ${in_file} | wc -l
     }
@@ -21,6 +24,10 @@ task cgrep {
 
 task wc {
     File in_file
+
+    parameter_meta {
+        in_file : "stream"
+    }
     command {
         cat ${in_file} | wc -l
     }
