@@ -158,7 +158,7 @@ object RunnerTask {
         // convert the WDL values to JSON
         val jsOutputs : Seq[(String, JsValue)] = outputs.map {
             case (key,wdlType,wdlValue) =>
-                val wvl = WdlVarLinks.apply(wdlType, wdlValue)
+                val wvl = WdlVarLinks.apply(wdlType, DeclAttrs.empty, wdlValue)
                 val l = WdlVarLinks.genFields(wvl, key)
                 l.map{ case (x,y) => (x, Utils.jsValueOfJsonNode(y)) }
         }.flatten
@@ -174,7 +174,8 @@ object RunnerTask {
         def lookup(varName : String) : WdlValue = {
             env.get(varName) match {
                 case Some(x) => x
-                case None => throw new AppInternalException(s"No value found for variable ${varName}")
+                case None => throw new AppInternalException(
+                    s"No value found for variable ${varName}")
             }
         }
         def evalStringExpr(expr: WdlExpression) : String = {
@@ -185,7 +186,7 @@ object RunnerTask {
                     s"docker is not a string expression ${v.toWdlString}")
             }
         }
-        // Figure out if docker is used. If so, it is specifed by an
+        // Figure out if docker is used. If so, it is specified by an
         // expression that requires evaluation.
         val docker: Option[String] =
             task.runtimeAttributes.attrs.get("docker") match {
@@ -423,7 +424,9 @@ object RunnerTask {
         // Return promises (JBORs) for all the outputs. Since the signature of the sub-job
         // is exactly the same as the parent, we can immediately exit the parent job.
         val outputs: Map[String, JsonNode] = task.outputs.map { tso =>
-            val wvl = WdlVarLinks(tso.wdlType, DxlJob(dxSubJob, tso.unqualifiedName))
+            val wvl = WdlVarLinks(tso.wdlType,
+                                  DeclAttrs.empty,
+                                  DxlJob(dxSubJob, tso.unqualifiedName))
             WdlVarLinks.genFields(wvl, tso.unqualifiedName)
         }.flatten.toMap
 

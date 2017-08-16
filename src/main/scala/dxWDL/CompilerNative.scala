@@ -114,7 +114,7 @@ object CompilerNative {
             |    echo "user= $${USER}"
             |
             |    # evaluate input arguments, and download input files
-            |    java -jar $${DX_FS_ROOT}/dxWDL.jar internal taskProlog $${DX_FS_ROOT}/${Utils.WDL_SNIPPET_FILENAME} $${HOME}
+            |    java -jar $${DX_FS_ROOT}/dxWDL.jar internal taskProlog $${DX_FS_ROOT}/${WDL_SNIPPET_FILENAME} $${HOME}
             |    # Debugging outputs
             |    ls -lR
             |    cat $${HOME}/execution/meta/script
@@ -139,7 +139,7 @@ object CompilerNative {
             |    fi
             |
             |    # evaluate applet outputs, and upload result files
-            |    java -jar $${DX_FS_ROOT}/dxWDL.jar internal taskEpilog $${DX_FS_ROOT}/${Utils.WDL_SNIPPET_FILENAME} $${HOME}
+            |    java -jar $${DX_FS_ROOT}/dxWDL.jar internal taskEpilog $${DX_FS_ROOT}/${WDL_SNIPPET_FILENAME} $${HOME}
             |""".stripMargin.trim
     }
 
@@ -174,7 +174,7 @@ object CompilerNative {
                         s"""|#!/bin/bash -ex
                             |main() {
                             |    # evaluate the instance type, and launch a sub job on it
-                            |    java -jar $${DX_FS_ROOT}/dxWDL.jar internal taskRelaunch $${DX_FS_ROOT}/${Utils.WDL_SNIPPET_FILENAME} $${HOME}
+                            |    java -jar $${DX_FS_ROOT}/dxWDL.jar internal taskRelaunch $${DX_FS_ROOT}/${WDL_SNIPPET_FILENAME} $${HOME}
                             |}
                             |
                             |# We are on the correct instance type, run the task
@@ -554,15 +554,23 @@ object CompilerNative {
                         // in a value at runtime.
                         dxBuilder
                     case IR.SArgConst(wValue) =>
-                        val wvl = WdlVarLinks.apply(cVar.wdlType, wValue)
-                        val fields = genFieldsCastIfRequired(wvl, wValue.wdlType, cVar.dxVarName, cState)
+                        val wvl = WdlVarLinks.apply(cVar.wdlType, cVar.attrs, wValue)
+                        val fields = genFieldsCastIfRequired(wvl,
+                                                             wValue.wdlType,
+                                                             cVar.dxVarName,
+                                                             cState)
                         fields.foldLeft(dxBuilder) { case (b, (fieldName, jsonNode)) =>
                             b.put(fieldName, jsonNode)
                         }
                     case IR.SArgLink(stageName, argName) =>
                         val dxStage = stageDict(stageName)
-                        val wvl = WdlVarLinks(cVar.wdlType, DxlStage(dxStage, IORef.Output, argName.dxVarName))
-                        val fields = genFieldsCastIfRequired(wvl, argName.wdlType, cVar.dxVarName, cState)
+                        val wvl = WdlVarLinks(cVar.wdlType,
+                                              cVar.attrs,
+                                              DxlStage(dxStage, IORef.Output, argName.dxVarName))
+                        val fields = genFieldsCastIfRequired(wvl,
+                                                             argName.wdlType,
+                                                             cVar.dxVarName,
+                                                             cState)
                         fields.foldLeft(dxBuilder) { case (b, (fieldName, jsonNode)) =>
                             b.put(fieldName, jsonNode)
                         }

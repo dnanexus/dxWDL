@@ -88,7 +88,7 @@ object RunnerEval {
                 case (WdlOptionalType(t), Some(expr)) =>
                     try {
                         val v : WdlValue = expr.evaluate(lookup, DxFunctions).get
-                        val wvl = WdlVarLinks.apply(t, v)
+                        val wvl = WdlVarLinks.apply(t, DeclAttrs.empty, v)
                         env = env + (decl.unqualifiedName -> (wvl, Some(v)))
                         Some((wvl, v))
                     } catch {
@@ -99,7 +99,7 @@ object RunnerEval {
 
                 case (t, Some(expr)) =>
                     val v : WdlValue = expr.evaluate(lookup, DxFunctions).get
-                    val wvl = WdlVarLinks.apply(t, v)
+                    val wvl = WdlVarLinks.apply(t, DeclAttrs.empty, v)
                     env = env + (decl.unqualifiedName -> (wvl, Some(v)))
                     Some((wvl, v))
             }

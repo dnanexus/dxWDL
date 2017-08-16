@@ -351,12 +351,13 @@ task Add {
         // y, pi -- calculated, non inputs
         val inputVars : Vector[IR.CVar] =  declarations.map{ decl =>
             decl.expression match {
-                case None => Some(IR.CVar(decl.unqualifiedName, decl.wdlType, Map.empty, decl.ast))
+                case None => Some(IR.CVar(decl.unqualifiedName, decl.wdlType,
+                                          DeclAttrs.empty, decl.ast))
                 case Some(_) => None
             }
         }.flatten.toVector
         val outputVars: Vector[IR.CVar] = declarations.map{ decl =>
-            IR.CVar(decl.unqualifiedName, decl.wdlType, Map.empty, decl.ast)
+            IR.CVar(decl.unqualifiedName, decl.wdlType, DeclAttrs.empty, decl.ast)
         }.toVector
         val code:Workflow = genEvalWorkflowFromDeclarations(appletName,
                                                             declarations,
@@ -411,7 +412,7 @@ workflow w {
 
         // figure out the inputs
         closure = closure.map{ case (key,lVar) =>
-            val cVar = IR.CVar(key, lVar.cVar.wdlType, Map.empty, lVar.cVar.ast)
+            val cVar = IR.CVar(key, lVar.cVar.wdlType, DeclAttrs.empty, lVar.cVar.ast)
             key -> LinkedVar(cVar, lVar.sArg)
         }.toMap
         val inputVars: Vector[IR.CVar] = closure.map{ case (_, lVar) => lVar.cVar }.toVector
@@ -421,7 +422,7 @@ workflow w {
 
         // figure out the outputs
         val outputVars: Vector[IR.CVar] = declarations.map{ decl =>
-            IR.CVar(decl.unqualifiedName, decl.wdlType, Map.empty, decl.ast)
+            IR.CVar(decl.unqualifiedName, decl.wdlType, DeclAttrs.empty, decl.ast)
         }.toVector
         val outputDeclarations = declarations.map{ decl =>
             decl.expression match {
@@ -486,7 +487,7 @@ workflow w {
 
         // figure out the inputs
         closure = closure.map{ case (key,lVar) =>
-            val cVar = IR.CVar(key, lVar.cVar.wdlType, Map.empty, lVar.cVar.ast)
+            val cVar = IR.CVar(key, lVar.cVar.wdlType, DeclAttrs.empty, lVar.cVar.ast)
             key -> LinkedVar(cVar, lVar.sArg)
         }.toMap
         val inputVars: Vector[IR.CVar] = closure.map{ case (_, lVar) => lVar.cVar }.toVector
@@ -502,7 +503,7 @@ workflow w {
 
         // Workflow outputs
         val outputPairs: Vector[(WorkflowOutput, IR.CVar)] = wfOutputs.map { wot =>
-            val cVar = IR.CVar(wot.unqualifiedName, wot.wdlType, Map.empty, wot.ast)
+            val cVar = IR.CVar(wot.unqualifiedName, wot.wdlType, DeclAttrs.empty, wot.ast)
             val dxVarName = Utils.transformVarName(wot.unqualifiedName)
             val dxWot = WdlRewrite.workflowOutput(dxVarName,
                                                   wot.wdlType,
@@ -542,33 +543,18 @@ workflow w {
     def compileTask(task : Task) : (IR.Applet, Vector[IR.CVar]) = {
         Utils.trace(verbose.on, s"Compiling task ${task.name}")
 
-        // Get the attributes from the parameter-meta
-        // section. Currently, we only support a single attribute,
-        // streaming, and it applies only to files. However, the
-        // groundwork is being layed out to support more complex
-        // annotations in the future.
-        def getAttrs(varName: String, ast: Ast) : Map[String, JsValue] = {
-            val attr:Option[(String,String)] = task.parameterMeta.find{ case (k,v) =>  k == varName }
-            attr match {
-                case None => Map.empty
-                case Some((_,"stream")) => Map("stream" -> JsBoolean(true))
-                case Some((_,x)) =>
-                    throw new Exception(cef.notCurrentlySupported(ast, s"attribute ${x}"))
-            }
-        }
-
         // The task inputs are those that do not have expressions
         val inputVars : Vector[IR.CVar] =  task.declarations.map{ decl =>
             decl.expression match {
                 case None => Some(IR.CVar(decl.unqualifiedName,
                                           decl.wdlType,
-                                          getAttrs(decl.unqualifiedName, decl.ast),
+                                          DeclAttrs.get(task, decl.unqualifiedName, decl.ast, cef),
                                           decl.ast))
                 case Some(_) => None
             }
         }.flatten.toVector
         val outputVars : Vector[IR.CVar] = task.outputs.map{ tso =>
-            IR.CVar(tso.unqualifiedName, tso.wdlType, Map.empty, tso.ast)
+            IR.CVar(tso.unqualifiedName, tso.wdlType, DeclAttrs.empty, tso.ast)
         }.toVector
 
         // Figure out if we need to use docker
@@ -714,7 +700,7 @@ workflow w {
             case (varName, LinkedVar(cVar, _)) =>
                 // a variable that must be passed to the scatter applet
                 assert(env contains varName)
-                Some(IR.CVar(varName, cVar.wdlType, Map.empty, cVar.ast))
+                Some(IR.CVar(varName, cVar.wdlType, DeclAttrs.empty, cVar.ast))
         }.flatten.toVector
 
         (closure, inputVars)
@@ -766,17 +752,18 @@ workflow w {
             }
         }
         val preVars: Vector[IR.CVar] = preDecls
-            .map( decl => IR.CVar(decl.unqualifiedName, decl.wdlType, Map.empty, decl.ast) )
+            .map( decl => IR.CVar(decl.unqualifiedName, decl.wdlType, DeclAttrs.empty, decl.ast) )
             .toVector
         val outputVars : Vector[IR.CVar] = children.map {
             case call:TaskCall =>
                 val task = taskOfCall(call)
                 task.outputs.map { tso =>
                     val varName = callUniqueName(call) ++ "." ++ tso.unqualifiedName
-                    IR.CVar(varName, outsideType(tso.wdlType), Map.empty, tso.ast)
+                    IR.CVar(varName, outsideType(tso.wdlType), DeclAttrs.empty, tso.ast)
                 }
             case decl:Declaration if !isLocal(decl) =>
-                Vector(IR.CVar(decl.unqualifiedName, outsideType(decl.wdlType), Map.empty, decl.ast))
+                Vector(IR.CVar(decl.unqualifiedName, outsideType(decl.wdlType),
+                               DeclAttrs.empty, decl.ast))
             case decl:Declaration =>
                 // local variables, do not export
                 Vector()

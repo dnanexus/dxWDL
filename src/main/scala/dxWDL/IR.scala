@@ -25,7 +25,7 @@ object IR {
     // specification fields, such as {help, suggestions, patterns}.
     case class CVar(name: String,
                     wdlType: WdlType,
-                    attrs: Map[String, JsValue],
+                    attrs: DeclAttrs,
                     ast: Ast) {
         // dx does not allow dots in variable names, so we
         // convert them to underscores.
@@ -110,7 +110,7 @@ object IR {
             YamlString("name") -> YamlString(cVar.name),
             YamlString("dxName") -> YamlString(cVar.dxVarName)
         )
-        val attrs: Map[YamlValue, YamlValue] = cVar.attrs.map{
+        val attrs: Map[YamlValue, YamlValue] = cVar.attrs.m.map{
             case (k,v) => YamlString(k) -> YamlString(v.toString)
         }.toMap
         YamlObject(m ++ attrs)

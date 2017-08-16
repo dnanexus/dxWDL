@@ -127,7 +127,7 @@ case class RunnerMiniWorkflow(exportVars: Set[String],
                             throw new Exception(cef.expressionMustBeConstOrVar(expr))
                         }
                         val wdlValue = expr.evaluate(nullLookup, NoFunctions).get
-                        WdlVarLinks.apply(wdlValue.wdlType, wdlValue)
+                        WdlVarLinks.apply(wdlValue.wdlType, DeclAttrs.empty, wdlValue)
                 }
 
             case a: Ast if a.isMemberAccess =>
@@ -220,8 +220,10 @@ case class RunnerMiniWorkflow(exportVars: Set[String],
         val prefix = callUniqueName(call)
         val task = Utils.taskOfCall(call)
         val retValues = task.outputs
-            .map { tso => tso.unqualifiedName -> WdlVarLinks(tso.wdlType,
-                                                             DxlJob(dxJob, tso.unqualifiedName)) }
+            .map { tso => tso.unqualifiedName -> WdlVarLinks(
+                      tso.wdlType,
+                      DeclAttrs.empty,
+                      DxlJob(dxJob, tso.unqualifiedName)) }
             .toMap
         Map(prefix -> ElemCall(retValues))
     }

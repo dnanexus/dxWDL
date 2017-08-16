@@ -34,7 +34,9 @@ case class DxlStage(dxStage: DXWorkflow.Stage, ioRef: IORef.Value, varName: Stri
 case class DxlJob(dxJob: DXJob, varName: String) extends DxLink
 case class DxlJobArray(dxJobVec: Vector[DXJob], varName: String) extends DxLink
 
-case class WdlVarLinks(wdlType: WdlType, dxlink: DxLink)
+case class WdlVarLinks(wdlType: WdlType,
+                       attrs: DeclAttrs,
+                       dxlink: DxLink)
 
 // Bridge between WDL values and DNAx values.
 case class BValue(wvl: WdlVarLinks, wdlValue: WdlValue)
@@ -336,7 +338,7 @@ object WdlVarLinks {
         (wvl.wdlType, jsn) match {
             case (WdlArrayType(t), JsArray(l)) =>
                 // Array
-                l.map(elem => WdlVarLinks(t, DxlValue(elem)))
+                l.map(elem => WdlVarLinks(t, wvl.attrs, DxlValue(elem)))
 
             case (WdlMapType(keyType, valueType), _) =>
                 // Map. Convert into an array of WDL pairs.
@@ -345,7 +347,7 @@ object WdlVarLinks {
                 val wdlType = WdlPairType(keyType, valueType)
                 kv.map{ case (k, v) =>
                     val js:JsValue = JsArray(Vector(k, v))
-                    WdlVarLinks(wdlType, DxlValue(js))
+                    WdlVarLinks(wdlType, wvl.attrs, DxlValue(js))
                 }
 
             case (t,_) =>
@@ -360,8 +362,8 @@ object WdlVarLinks {
         (wvl.wdlType, jsValue) match {
             case (WdlPairType(lType, rType), JsArray(vec)) =>
                 field match {
-                    case "left" =>  WdlVarLinks(lType, DxlValue(vec(0)))
-                    case "right" =>  WdlVarLinks(rType, DxlValue(vec(1)))
+                    case "left" =>  WdlVarLinks(lType, wvl.attrs, DxlValue(vec(0)))
+                    case "right" =>  WdlVarLinks(rType, wvl.attrs, DxlValue(vec(1)))
                     case _ => throw new Exception(s"Unknown field ${field} in pair ${wvl}")
                 }
             case _ =>
@@ -446,32 +448,32 @@ object WdlVarLinks {
     }
 
     // import a WDL value
-    def apply(wdlTypeOrg: WdlType, wdlValue: WdlValue) : WdlVarLinks = {
+    def apply(wdlTypeOrg: WdlType, attrs: DeclAttrs, wdlValue: WdlValue) : WdlVarLinks = {
         // Strip optional types
         val wdlType = Utils.stripOptional(wdlTypeOrg)
         val js = jsOfComplexWdlValue(wdlType, wdlValue)
         if (isNativeDxType(wdlType)) {
-            WdlVarLinks(wdlTypeOrg, DxlValue(js))
+            WdlVarLinks(wdlTypeOrg, attrs, DxlValue(js))
         } else {
             // Complex values, that may have files in them. For example, ragged file arrays.
             val jsSrlFileLink = serializeJsValueToDxFile(wdlType, js)
-            WdlVarLinks(wdlTypeOrg, DxlValue(jsSrlFileLink))
+            WdlVarLinks(wdlTypeOrg, attrs, DxlValue(jsSrlFileLink))
         }
     }
 
     // Convert an input field to a dx-links structure. This allows
     // passing it to other jobs.
-    def apply(wdlType: WdlType, jsValue: JsValue) : WdlVarLinks = {
+    def apply(wdlType: WdlType, attrs: DeclAttrs, jsValue: JsValue) : WdlVarLinks = {
         if (isNativeDxType(wdlType)) {
             // This is primitive value, or a single dimensional
             // array of primitive values.
-            WdlVarLinks(wdlType, DxlValue(jsValue))
+            WdlVarLinks(wdlType, attrs, DxlValue(jsValue))
         } else {
             // complex types
             val dxfile = dxFileOfJsValue(jsValue)
             val buf = Utils.downloadString(dxfile)
             val jsSrlVal:JsValue = buf.parseJson
-            WdlVarLinks(wdlType, DxlValue(jsSrlVal))
+            WdlVarLinks(wdlType, attrs, DxlValue(jsSrlVal))
         }
     }
 
@@ -573,12 +575,12 @@ object WdlVarLinks {
                     fields.get(key) match {
                         case None => None
                         case Some(jsValue) =>
-                            val wvl = apply(wType, jsValue)
+                            val wvl = apply(wType, DeclAttrs.empty, jsValue)
                             Some(key -> wvl)
                     }
                 case Some(wType) =>
                     val jsValue = fields(key)
-                    val wvl = apply(wType, jsValue)
+                    val wvl = apply(wType, DeclAttrs.empty, jsValue)
                     Some(key -> wvl)
             }
         }.flatten.toMap
@@ -591,6 +593,7 @@ object WdlVarLinks {
             throw new Exception("Sanity: WVL array has to be non empty")
 
         val wdlType = WdlArrayType(vec.head.wdlType)
+        val declAttrs = vec.head.attrs
         vec.head.dxlink match {
             case DxlValue(_) =>
                 val jsVec:Vector[JsValue] = vec.map{ wvl =>
@@ -605,7 +608,7 @@ object WdlVarLinks {
                         jsArr
                     else
                         serializeJsValueToDxFile(wdlType, jsArr)
-                WdlVarLinks(wdlType, DxlValue(jsn))
+                WdlVarLinks(wdlType, declAttrs, DxlValue(jsn))
 
             case DxlJob(_, varName) =>
                 val jobVec:Vector[DXJob] = vec.map{ wvl =>
@@ -616,7 +619,7 @@ object WdlVarLinks {
                         case _ => throw new Exception("Sanity")
                     }
                 }
-                WdlVarLinks(wdlType, DxlJobArray(jobVec, varName))
+                WdlVarLinks(wdlType, declAttrs, DxlJobArray(jobVec, varName))
             case _ => throw new Exception(s"Don't know how to merge WVL arrays of type ${vec.head}")
         }
     }
