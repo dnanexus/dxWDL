@@ -50,7 +50,8 @@ object RunnerTask {
     }
 
     def evalDeclarations(task : Task,
-                         taskInputs : Map[String, WdlValue]) : Map[Declaration, WdlValue] = {
+                         taskInputs : Map[String, WdlValue])
+            : Map[Declaration, (DeclAttrs, WdlValue)] = {
         var env = taskInputs
         def lookup(varName : String) : WdlValue =
             env.get(varName) match {
@@ -89,7 +90,9 @@ object RunnerTask {
         task.declarations.map{ decl =>
             evalDecl(decl) match {
                 case None => None
-                case Some(v) => Some(decl, v)
+                case Some(v) =>
+                    val attrs = DeclAttrs.get(task, decl.unqualifiedName)
+                    Some(decl -> (attrs, v))
             }
         }.flatten.toMap
     }
@@ -215,16 +218,62 @@ object RunnerTask {
         }
     }
 
+    // Each file marked "stream", is converted into a special fifo
+    // file on the instance.
+    def fileStreams(inputs: Map[Declaration, (DeclAttrs, WdlValue)])
+            : (String, String, Map[Declaration, WdlValue]) = {
+        val m:Map[Declaration, (WdlValue, String)] = inputs.map{
+            case (decl, (attrs, wdlValue)) =>
+                if (Utils.stripOptional(decl.wdlType) == WdlFileType &&
+                        attrs.isStream) {
+                    // A file that needs to be stream-downloaded.
+                    // Make a named pipe, and stream the file from the platform to the pipe.
+                    // Keep track of the download process.
+                    val filename = Paths.get(wdlValue.toString).toFile().getName()
+                    val fifo:Path = Paths.get(Utils.DX_HOME, "fifo_" + filename)
+                    val bashSnippet:String =
+                        s"""|mkfifo ${fifo.toString}
+                            |dx cat ${fileid} > ${fifo.toString} &
+                            |download_stream_pids+=($$!)
+                            |""".stripMargin
+                    decl -> (WdlSingleFile(fifo.toString), bashSnippet)
+                } else {
+                    // anything else
+                    decl -> (wdlValue, "")
+                }
+        }
+
+        // set up all the named pipes
+        val snippets:String = m.collect{
+            case (_, (_, bashSnippet)) if !bashSnippet.isEmpty => bashSnippet
+        }.mkString("\n")
+        val bashProlog = "download_stream_pids=()\n" + snippets + "\n"
+
+        // Wait for all download processes to complete. It is legal
+        // for the user job to read only the beginning of the
+        // file. This causes the download streams to close
+        // prematurely, which can be show up as an error. We need to tolerate this
+        // case.
+        val bashEpilog:String = """wait ${!download_stream_pids[@]}"""
+
+        val inputsWithPipes = m.map{ case (decl, (wdlValue, _)) => decl -> wdlValue }.toMap
+        (bashProlog, bashEpilog, inputsWithPipes)
+    }
+
     def writeBashScript(task: Task,
-                        inputs: Map[Declaration, WdlValue]) {
+                        inputs: Map[Declaration, (DeclAttrs, WdlValue)]) {
         val metaDir = getMetaDir()
         val scriptPath = metaDir.resolve("script")
         val stdoutPath = metaDir.resolve("stdout")
         val stderrPath = metaDir.resolve("stderr")
         val rcPath = metaDir.resolve("rc")
 
+        // deal with files that require streaming
+        val (bashProlog, bashEpilog, inputsWithPipes) = fileStreams(inputs)
+
         // instantiate the command
-        val shellCmd : String = task.instantiateCommand(inputs, DxFunctions).get
+        val taskCmd : String = task.instantiateCommand(inputsWithPipes, DxFunctions).get
+        val shellCmd = List(bashProlog, taskCmd, bashEpilog).mkString("\n")
 
         // This is based on Cromwell code from
         // [BackgroundAsyncJobExecutionActor.scala].  Generate a bash
@@ -272,7 +321,7 @@ object RunnerTask {
 
         // serialize the environment, so we don't have to calculate it again in
         // the epilog
-        val env = topDecls.map{ case (decl, wdlValue) => decl.unqualifiedName -> wdlValue}.toMap
+        val env = topDecls.map{ case (decl, (_,wdlValue)) => decl.unqualifiedName -> wdlValue}.toMap
         writeEnvToDisk(env)
     }
 
