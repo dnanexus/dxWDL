@@ -31,7 +31,9 @@ import wdl4s.AstTools._
 import wdl4s.expression.{WdlStandardLibraryFunctionsType, WdlStandardLibraryFunctions}
 import wdl4s.types._
 import wdl4s.values._
-import wdl4s.{Call, Declaration, WdlNamespaceWithWorkflow, Task, TaskOutput, WdlExpression, WdlNamespace, Workflow}
+import wdl4s.{Call, Declaration, DeclarationInterface,
+    Task, TaskOutput, WdlExpression,
+    WdlNamespace, WdlNamespaceWithWorkflow, Workflow}
 import wdl4s.WdlExpression.AstForExpressions
 
 object RunnerTask {
@@ -49,50 +51,95 @@ object RunnerTask {
         metaDir
     }
 
-    def evalDeclarations(task : Task,
-                         taskInputs : Map[String, WdlValue])
-            : Map[Declaration, (DeclAttrs, WdlValue)] = {
-        var env = taskInputs
+    private def evalDeclarations(task: Task,
+                                 declarations: Seq[DeclarationInterface],
+                                 inputs : Map[String, WdlVarLinks]) : Map[String, BValue] = {
+        // Environment that includes a cache for values that have
+        // already been evaluated.  It is more efficient to make the
+        // conversion once, however, that is not the main point
+        // here. There are types that require special care, for
+        // example files. We need to make sure we download files
+        // exactly once, and later, we want to be able to delete them.
+        var env: Map[String, (WdlVarLinks, Option[WdlValue])] =
+            inputs.map{ case (key, wvl) => key -> (wvl, None) }.toMap
+
+        def evalAndCache(key: String, wvl: WdlVarLinks) : WdlValue = {
+            val v: WdlValue =
+                if (wvl.attrs.stream) {
+                    WdlVarLinks.eval(wvl, false)
+                } else {
+                    WdlVarLinks.eval(wvl, true)
+                }
+            env = env + (key -> (wvl, Some(v)))
+            v
+        }
+
         def lookup(varName : String) : WdlValue =
             env.get(varName) match {
-                case Some(x) => x
-                case None => throw new UnboundVariableException(varName)
+                case Some((wvl, None)) =>
+                    // Make a value from a dx-links structure. This also causes any file
+                    // to be downloaded. Keep the result cached.
+                    evalAndCache(varName, wvl)
+                case Some((_, Some(v))) =>
+                    // We have already evalulated this structure
+                    v
+                case None =>
+                    throw new AppInternalException(s"Accessing unbound variable ${varName}")
             }
 
-        def evalDecl(decl : Declaration) : Option[WdlValue] = {
+        def evalDecl(decl : DeclarationInterface) : Option[(WdlVarLinks, WdlValue)] = {
+            val attrs = DeclAttrs.get(task, decl.unqualifiedName)
             (decl.wdlType, decl.expression) match {
                 // optional input
                 case (WdlOptionalType(_), None) =>
-                    taskInputs.get(decl.unqualifiedName) match {
+                    inputs.get(decl.unqualifiedName) match {
                         case None => None
-                        case Some(x) => Some(x)
+                        case Some(wvl) =>
+                            val v: WdlValue = evalAndCache(decl.unqualifiedName, wvl)
+                            Some((wvl, v))
                     }
 
-                    // compulsory input.
-                    // Here, we fail if an input has not been provided. This
-                    // is not the Cromwell behavior, which allows unbound variables,
-                    // as long as they are not accessed.
+                // compulsory input
                 case (_, None) =>
-                    taskInputs.get(decl.unqualifiedName) match {
-                        case None => throw new UnboundVariableException(decl.unqualifiedName)
-                        case Some(x) => Some(x)
+                    inputs.get(decl.unqualifiedName) match {
+                        case None =>
+                            throw new AppInternalException(s"Accessing unbound variable ${decl.unqualifiedName}")
+                        case Some(wvl) =>
+                            val v: WdlValue = evalAndCache(decl.unqualifiedName, wvl)
+                            Some((wvl, v))
                     }
 
                 // declaration to evaluate, not an input
-                case (_, Some(expr)) =>
+                case (WdlOptionalType(t), Some(expr)) =>
+                    try {
+                        val v : WdlValue = expr.evaluate(lookup, DxFunctions).get
+                        val wvl = WdlVarLinks.apply(t, attrs, v)
+                        env = env + (decl.unqualifiedName -> (wvl, Some(v)))
+                        Some((wvl, v))
+                    } catch {
+                        // trying to access an unbound variable.
+                        // Since the result is optional.
+                        case e: AppInternalException => None
+                    }
+
+                case (t, Some(expr)) =>
                     val v : WdlValue = expr.evaluate(lookup, DxFunctions).get
-                    Some(v)
+                    val wvl = WdlVarLinks.apply(t, attrs, v)
+                    env = env + (decl.unqualifiedName -> (wvl, Some(v)))
+                    Some((wvl, v))
             }
         }
 
-        // evaluate the declarations, and discard any optionals that did not have an
-        // input
-        task.declarations.map{ decl =>
+        // Process all the declarations. Take care to add new bindings
+        // to the environment, so variables like [cmdline] will be able to
+        // access previous results.
+        declarations.map{ decl =>
             evalDecl(decl) match {
-                case None => None
-                case Some(v) =>
-                    val attrs = DeclAttrs.get(task, decl.unqualifiedName)
-                    Some(decl -> (attrs, v))
+                case Some((wvl, wdlValue)) =>
+                    Some(decl.unqualifiedName -> BValue(wvl, wdlValue, decl))
+                case None =>
+                    // optional input that was not provided
+                    None
             }
         }.flatten.toMap
     }
@@ -220,25 +267,29 @@ object RunnerTask {
 
     // Each file marked "stream", is converted into a special fifo
     // file on the instance.
-    def fileStreams(inputs: Map[Declaration, (DeclAttrs, WdlValue)])
-            : (String, String, Map[Declaration, WdlValue]) = {
+    private def handleFiles(inputs: Map[String, BValue])
+            : (String, String, Map[Declaration, WdlValue]) =
+    {
         val m:Map[Declaration, (WdlValue, String)] = inputs.map{
-            case (decl, (attrs, wdlValue)) =>
+            case (_, BValue(wvl, wdlValue, decl)) =>
                 if (Utils.stripOptional(decl.wdlType) == WdlFileType &&
-                        attrs.isStream) {
+                        wvl.attrs.stream) {
                     // A file that needs to be stream-downloaded.
                     // Make a named pipe, and stream the file from the platform to the pipe.
                     // Keep track of the download process.
+                    //
+                    // All other files have already been downloaded
                     val filename = Paths.get(wdlValue.toString).toFile().getName()
                     val fifo:Path = Paths.get(Utils.DX_HOME, "fifo_" + filename)
+                    val dxFileId = WdlVarLinks.getFileId(wvl)
                     val bashSnippet:String =
                         s"""|mkfifo ${fifo.toString}
-                            |dx cat ${fileid} > ${fifo.toString} &
+                            |dx cat ${dxFileId} > ${fifo.toString} &
                             |download_stream_pids+=($$!)
                             |""".stripMargin
                     decl -> (WdlSingleFile(fifo.toString), bashSnippet)
                 } else {
-                    // anything else
+                    // everything else
                     decl -> (wdlValue, "")
                 }
         }
@@ -261,15 +312,15 @@ object RunnerTask {
     }
 
     def writeBashScript(task: Task,
-                        inputs: Map[Declaration, (DeclAttrs, WdlValue)]) {
+                        inputs: Map[String, BValue]) : Unit = {
         val metaDir = getMetaDir()
         val scriptPath = metaDir.resolve("script")
         val stdoutPath = metaDir.resolve("stdout")
         val stderrPath = metaDir.resolve("stderr")
         val rcPath = metaDir.resolve("rc")
 
-        // deal with files that require streaming
-        val (bashProlog, bashEpilog, inputsWithPipes) = fileStreams(inputs)
+        // deal with files
+        val (bashProlog, bashEpilog, inputsWithPipes) = handleFiles(inputs)
 
         // instantiate the command
         val taskCmd : String = task.instantiateCommand(inputsWithPipes, DxFunctions).get
@@ -309,22 +360,6 @@ object RunnerTask {
         Utils.writeFileContent(scriptPath, script)
     }
 
-    def prologCore(task: Task, inputs: Map[String, WdlValue]) : Unit = {
-        val topDecls = evalDeclarations(task, inputs)
-
-        // Write shell script to a file. It will be executed by the dx-applet code
-        writeBashScript(task, topDecls)
-
-        // write the script that launches the shell script. It could be a docker
-        // image.
-        writeSubmitBashScript(task, inputs)
-
-        // serialize the environment, so we don't have to calculate it again in
-        // the epilog
-        val env = topDecls.map{ case (decl, (_,wdlValue)) => decl.unqualifiedName -> wdlValue}.toMap
-        writeEnvToDisk(env)
-    }
-
     // Calculate the input variables for the task, download the input files,
     // and build a shell script to run the command.
     def prolog(task: Task,
@@ -339,31 +374,41 @@ object RunnerTask {
         val inputLines : String = Utils.readFileContent(jobInputPath)
         var inputWvls = WdlVarLinks.loadJobInputsAsLinks(inputLines, inputTypes)
 
-        // convert to WDL values.
-        //
-        // Download any files now, because we do not know what will be
-        // accessed in the shell command. It will not be possible to
-        // download on-demand when the shell command runs.
-        val inputs = inputWvls.map{ case (key, wvl) =>
-            key -> WdlVarLinks.eval(wvl, true)
+        // add the attributes from the parameter_meta section of the task
+         inputWvls = inputWvls.map{ case (varName, wvl) =>
+             val attrs = DeclAttrs.get(task, varName)
+             key -> WdlVarLinks(wvl.wdlType, attrs, wvl.dxlink)
+         }.toMap
+
+        // evaluate the top declarations
+        val decls: Map[String, BValue] = evalDeclarations(task, task.declarations, inputWvls)
+
+        // Write shell script to a file. It will be executed by the dx-applet code
+        writeBashScript(task, decls)
+
+        // write the script that launches the shell script. It could be a docker
+        // image.
+        writeSubmitBashScript(task, inputWvls)
+
+        // serialize the environment, so we don't have to calculate it again in
+        // the epilog
+        val env = decls.map{
+            case (varName, BValue(_,_,wdlValue)) => varName -> wdlValue
         }.toMap
-        prologCore(task, inputs)
+        writeEnvToDisk(env)
     }
 
-    def epilogCore(task: Task) : Seq[(String, WdlType, WdlValue)]  = {
-        val taskInputs : Map[String, WdlValue] = readTaskDeclarationsFromDisk()
-        // evaluate outputs
-        evalTaskOutputs(task, taskInputs)
-    }
 
     def epilog(task: Task,
                jobInputPath : Path,
                jobOutputPath : Path,
                jobInfoPath: Path) : Unit = {
-        val outputs : Seq[(String, WdlType, WdlValue)] = epilogCore(task)
+        val taskInputs : Map[String, WdlValue] = readTaskDeclarationsFromDisk()
+
+        // evaluate outputs
+        val outputs : Seq[(String, WdlType, WdlValue)] = evalTaskOutputs(task, taskInputs)
         writeJobOutputs(jobOutputPath, outputs)
     }
-
 
 
     // Evaluate the runtime expressions, and figure out which instance type

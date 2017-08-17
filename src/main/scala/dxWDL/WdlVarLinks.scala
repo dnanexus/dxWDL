@@ -11,7 +11,7 @@ import net.jcazevedo.moultingyaml.DefaultYamlProtocol._
 import scala.collection.mutable.HashMap
 import spray.json._
 import spray.json.DefaultJsonProtocol
-import spray.json.JsString
+import wdl4s.DeclarationInterface
 import wdl4s.parser.WdlParser.{Ast, Terminal}
 import wdl4s.types._
 import wdl4s.values._
@@ -39,7 +39,11 @@ case class WdlVarLinks(wdlType: WdlType,
                        dxlink: DxLink)
 
 // Bridge between WDL values and DNAx values.
-case class BValue(wvl: WdlVarLinks, wdlValue: WdlValue)
+//
+// The [declaration] is temporary, to be removed after upgrading to wdl 0.15
+case class BValue(wvl: WdlVarLinks,
+                  wdlValue: WdlValue,
+                  declaration: DeclarationInterface)
 
 object WdlVarLinks {
     // Human readable representation of a WdlVarLinks structure
@@ -237,7 +241,20 @@ object WdlVarLinks {
         }
     }
 
-    def unmarshalJsMap(jsValue: JsValue) : (Vector[JsValue], Vector[JsValue]) = {
+    // Get the file-id
+    def getFileId(wvl: WdlVarLinks) : String = {
+        assert(Util.stripOptional(wvl.wdlType) == WdlFileType)
+        wvl.dxlink match {
+            case DxlValue(jsn) =>
+                val dxFiles = findDxFiles(jsn)
+                assert(dxFiles.length == 1)
+                dxFiles.head.getId()
+            case _ =>
+                throw new Exception("cannot get file-id from non-JSON")
+        }
+    }
+
+    private def unmarshalJsMap(jsValue: JsValue) : (Vector[JsValue], Vector[JsValue]) = {
         try {
             val fields = jsValue.asJsObject.fields
             val kJs: Vector[JsValue] = fields("keys") match {
@@ -484,7 +501,7 @@ object WdlVarLinks {
             Utils.makeJBOR(jobId, varName)
         }
         val retval = Utils.jsonNodeOfJsValue(JsArray(jbors))
-        System.err.println(s"mkJborArray(${varName})  ${retval}")
+        //System.err.println(s"mkJborArray(${varName})  ${retval}")
         retval
     }
 
@@ -623,5 +640,4 @@ object WdlVarLinks {
             case _ => throw new Exception(s"Don't know how to merge WVL arrays of type ${vec.head}")
         }
     }
-
 }

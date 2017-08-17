@@ -110,7 +110,8 @@ object RunnerEval {
         // access previous results.
         declarations.map{ decl =>
             evalDecl(decl) match {
-                case Some((wvl, wdlValue)) => Some(decl.unqualifiedName -> BValue(wvl,wdlValue))
+                case Some((wvl, wdlValue)) =>
+                    Some(decl.unqualifiedName -> BValue(wvl, wdlValue, decl))
                 case None =>
                     // optional input that was not provided
                     None

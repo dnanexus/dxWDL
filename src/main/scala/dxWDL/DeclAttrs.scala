@@ -8,7 +8,7 @@ import wdl4s.types._
 import wdl4s.values._
 
 case class DeclAttrs(m: Map[String, JsValue]) {
-    def isStream : Boolean = {
+    lazy val stream : Boolean = {
         m.get("stream") match {
             case Some(JsBoolean(true)) => true
             case _ => false
