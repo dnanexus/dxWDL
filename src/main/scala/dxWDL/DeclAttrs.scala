@@ -24,11 +24,22 @@ object DeclAttrs {
     // streaming, and it applies only to files. However, the
     // groundwork is being layed to support more complex
     // annotations.
-    def get(task:Task, varName: String) : DeclAttrs = {
+    def get(task:Task,
+            varName: String,
+            cef: CompilerErrorFormatter) : DeclAttrs = {
         val attr:Option[(String,String)] = task.parameterMeta.find{ case (k,v) =>  k == varName }
         val m:Map[String, JsValue] = attr match {
             case None => Map.empty
-            case Some((_,"stream")) => Map("stream" -> JsBoolean(true))
+            case Some((_,"stream")) =>
+                // Only files can be streamed
+                val declOpt = task.declarations.find{ decl => decl.unqualifiedName == varName }
+                val decl = declOpt match {
+                    case None => throw new Exception(s"No variable ${varName}")
+                    case Some(x) => x
+                }
+                if (Utils.stripOptional(decl.wdlType) != WdlFileType)
+                    throw new Exception(cef.onlyFilesCanBeStreamed(decl.ast))
+                Map("stream" -> JsBoolean(true))
             case Some((_,x)) =>
                 // ignoring other attributes
                 Map.empty

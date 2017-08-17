@@ -429,6 +429,7 @@ object Main extends App {
         val (jobInputPath, jobOutputPath, jobErrorPath, jobInfoPath) =
             Utils.jobFilesOfHomeDir(homeDir)
         val ns = WdlNamespace.loadUsingPath(Paths.get(wdlDefPath), None, None).get
+        val cef = new CompilerErrorFormatter(ns.terminalMap)
         try {
             op match {
                 case InternalOp.Eval =>
@@ -438,11 +439,14 @@ object Main extends App {
                     RunnerMiniWorkflow.apply(workflowOfNamespace(ns),
                                              jobInputPath, jobOutputPath, jobInfoPath)
                 case InternalOp.TaskEpilog =>
-                    RunnerTask.epilog(taskOfNamespace(ns), jobInputPath, jobOutputPath, jobInfoPath)
+                    val runner = RunnerTask(taskOfNamespace(ns), cef)
+                    runner.epilog(jobInputPath, jobOutputPath, jobInfoPath)
                 case InternalOp.TaskProlog =>
-                    RunnerTask.prolog(taskOfNamespace(ns), jobInputPath, jobOutputPath, jobInfoPath)
+                    val runner = RunnerTask(taskOfNamespace(ns), cef)
+                    runner.prolog(jobInputPath, jobOutputPath, jobInfoPath)
                 case InternalOp.TaskRelaunch =>
-                    RunnerTask.relaunch(taskOfNamespace(ns), jobInputPath, jobOutputPath, jobInfoPath)
+                    val runner = RunnerTask(taskOfNamespace(ns), cef)
+                    runner.relaunch(jobInputPath, jobOutputPath, jobInfoPath)
                 case InternalOp.WorkflowOutputs =>
                     RunnerWorkflowOutputs.apply(workflowOfNamespace(ns),
                                                 jobInputPath, jobOutputPath, jobInfoPath, false)

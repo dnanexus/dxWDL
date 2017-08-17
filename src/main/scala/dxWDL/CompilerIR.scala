@@ -548,7 +548,7 @@ workflow w {
             decl.expression match {
                 case None => Some(IR.CVar(decl.unqualifiedName,
                                           decl.wdlType,
-                                          DeclAttrs.get(task, decl.unqualifiedName),
+                                          DeclAttrs.get(task, decl.unqualifiedName, cef),
                                           decl.ast))
                 case Some(_) => None
             }

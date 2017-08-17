@@ -11,7 +11,7 @@ import net.jcazevedo.moultingyaml.DefaultYamlProtocol._
 import scala.collection.mutable.HashMap
 import spray.json._
 import spray.json.DefaultJsonProtocol
-import wdl4s.DeclarationInterface
+import wdl4s.Declaration
 import wdl4s.parser.WdlParser.{Ast, Terminal}
 import wdl4s.types._
 import wdl4s.values._
@@ -43,7 +43,7 @@ case class WdlVarLinks(wdlType: WdlType,
 // The [declaration] is temporary, to be removed after upgrading to wdl 0.15
 case class BValue(wvl: WdlVarLinks,
                   wdlValue: WdlValue,
-                  declaration: DeclarationInterface)
+                  declaration: Option[Declaration])
 
 object WdlVarLinks {
     // Human readable representation of a WdlVarLinks structure
@@ -243,7 +243,7 @@ object WdlVarLinks {
 
     // Get the file-id
     def getFileId(wvl: WdlVarLinks) : String = {
-        assert(Util.stripOptional(wvl.wdlType) == WdlFileType)
+        assert(Utils.stripOptional(wvl.wdlType) == WdlFileType)
         wvl.dxlink match {
             case DxlValue(jsn) =>
                 val dxFiles = findDxFiles(jsn)

@@ -31,28 +31,20 @@ import wdl4s.AstTools._
 import wdl4s.expression.{WdlStandardLibraryFunctionsType, WdlStandardLibraryFunctions}
 import wdl4s.types._
 import wdl4s.values._
-import wdl4s.{Call, Declaration, DeclarationInterface,
+import wdl4s.{Call, Declaration,
     Task, TaskOutput, WdlExpression,
     WdlNamespace, WdlNamespaceWithWorkflow, Workflow}
 import wdl4s.WdlExpression.AstForExpressions
 
-object RunnerTask {
-    // Stream where to emit debugging information. By default,
-    // goes to stderr on the instance. Requires reconfiguration
-    // in unit test environments
-    var errStream: PrintStream = System.err
-    def setErrStream(err: PrintStream) = {
-        errStream = err
-    }
-
+case class RunnerTask(task:Task,
+                      cef: CompilerErrorFormatter) {
     def getMetaDir() = {
         val metaDir = Utils.getMetaDirPath()
         Utils.safeMkdir(metaDir)
         metaDir
     }
 
-    private def evalDeclarations(task: Task,
-                                 declarations: Seq[DeclarationInterface],
+    private def evalDeclarations(declarations: Seq[Declaration],
                                  inputs : Map[String, WdlVarLinks]) : Map[String, BValue] = {
         // Environment that includes a cache for values that have
         // already been evaluated.  It is more efficient to make the
@@ -87,8 +79,8 @@ object RunnerTask {
                     throw new AppInternalException(s"Accessing unbound variable ${varName}")
             }
 
-        def evalDecl(decl : DeclarationInterface) : Option[(WdlVarLinks, WdlValue)] = {
-            val attrs = DeclAttrs.get(task, decl.unqualifiedName)
+        def evalDecl(decl : Declaration) : Option[(WdlVarLinks, WdlValue)] = {
+            val attrs = DeclAttrs.get(task, decl.unqualifiedName, cef)
             (decl.wdlType, decl.expression) match {
                 // optional input
                 case (WdlOptionalType(_), None) =>
@@ -136,7 +128,7 @@ object RunnerTask {
         declarations.map{ decl =>
             evalDecl(decl) match {
                 case Some((wvl, wdlValue)) =>
-                    Some(decl.unqualifiedName -> BValue(wvl, wdlValue, decl))
+                    Some(decl.unqualifiedName -> BValue(wvl, wdlValue, Some(decl)))
                 case None =>
                     // optional input that was not provided
                     None
@@ -145,8 +137,7 @@ object RunnerTask {
     }
 
     // evaluate Task output expressions
-    def evalTaskOutputs(task : Task,
-                        inputs : Map[String, WdlValue]) : Seq[(String, WdlType, WdlValue)] = {
+    def evalTaskOutputs(inputs : Map[String, WdlValue]) : Seq[(String, WdlType, WdlValue)] = {
         def lookup(varName : String) : WdlValue = {
             inputs.get(varName) match {
                 case Some(x) => x
@@ -214,13 +205,12 @@ object RunnerTask {
         }.flatten
         val json = JsObject(jsOutputs.toMap)
         val ast_pp = json.prettyPrint
-        errStream.println(s"writeJobOutputs ${ast_pp}")
+        System.err.println(s"writeJobOutputs ${ast_pp}")
         // write to the job outputs
         Utils.writeFileContent(jobOutputPath, ast_pp)
     }
 
-    def writeSubmitBashScript(task: Task,
-                              env: Map[String, WdlValue]) : Unit = {
+    def writeSubmitBashScript(env: Map[String, WdlValue]) : Unit = {
         def lookup(varName : String) : WdlValue = {
             env.get(varName) match {
                 case Some(x) => x
@@ -259,7 +249,7 @@ object RunnerTask {
                 val dockerRunScript =
                     s"""|#!/bin/bash -ex
                         |dx-docker run --entrypoint /bin/bash -v ${DX_HOME}:${DX_HOME} ${imgName} $${HOME}/execution/meta/script""".stripMargin.trim
-                errStream.println(s"writing docker run script to ${dockerRunPath}")
+                System.err.println(s"writing docker run script to ${dockerRunPath}")
                 Utils.writeFileContent(dockerRunPath, dockerRunScript)
                 dockerRunPath.toFile.setExecutable(true)
         }
@@ -271,8 +261,8 @@ object RunnerTask {
             : (String, String, Map[Declaration, WdlValue]) =
     {
         val m:Map[Declaration, (WdlValue, String)] = inputs.map{
-            case (_, BValue(wvl, wdlValue, decl)) =>
-                if (Utils.stripOptional(decl.wdlType) == WdlFileType &&
+            case (_, BValue(wvl, wdlValue, Some(decl))) =>
+                if (Utils.stripOptional(wvl.wdlType) == WdlFileType &&
                         wvl.attrs.stream) {
                     // A file that needs to be stream-downloaded.
                     // Make a named pipe, and stream the file from the platform to the pipe.
@@ -292,6 +282,7 @@ object RunnerTask {
                     // everything else
                     decl -> (wdlValue, "")
                 }
+            case (_, BValue(_, _, None)) => throw new Exception("Sanity")
         }
 
         // set up all the named pipes
@@ -311,8 +302,7 @@ object RunnerTask {
         (bashProlog, bashEpilog, inputsWithPipes)
     }
 
-    def writeBashScript(task: Task,
-                        inputs: Map[String, BValue]) : Unit = {
+    def writeBashScript(inputs: Map[String, BValue]) : Unit = {
         val metaDir = getMetaDir()
         val scriptPath = metaDir.resolve("script")
         val stdoutPath = metaDir.resolve("stdout")
@@ -356,19 +346,18 @@ object RunnerTask {
                     |echo $$? > ${rcPath}
                     |""".stripMargin.trim + "\n"
             }
-        errStream.println(s"writing bash script to ${scriptPath}")
+        System.err.println(s"writing bash script to ${scriptPath}")
         Utils.writeFileContent(scriptPath, script)
     }
 
     // Calculate the input variables for the task, download the input files,
     // and build a shell script to run the command.
-    def prolog(task: Task,
-               jobInputPath : Path,
+    def prolog(jobInputPath : Path,
                jobOutputPath : Path,
                jobInfoPath: Path) : Unit = {
         // Extract types for the inputs
         val (inputTypes,_) = Utils.loadExecInfo(Utils.readFileContent(jobInfoPath))
-        errStream.println(s"WdlType mapping =${inputTypes}")
+        System.err.println(s"WdlType mapping =${inputTypes}")
 
         // Read the job input file
         val inputLines : String = Utils.readFileContent(jobInputPath)
@@ -376,45 +365,42 @@ object RunnerTask {
 
         // add the attributes from the parameter_meta section of the task
          inputWvls = inputWvls.map{ case (varName, wvl) =>
-             val attrs = DeclAttrs.get(task, varName)
-             key -> WdlVarLinks(wvl.wdlType, attrs, wvl.dxlink)
+             val attrs = DeclAttrs.get(task, varName, cef)
+             varName -> WdlVarLinks(wvl.wdlType, attrs, wvl.dxlink)
          }.toMap
 
         // evaluate the top declarations
-        val decls: Map[String, BValue] = evalDeclarations(task, task.declarations, inputWvls)
+        val decls: Map[String, BValue] = evalDeclarations(task.declarations, inputWvls)
 
         // Write shell script to a file. It will be executed by the dx-applet code
-        writeBashScript(task, decls)
+        writeBashScript(decls)
 
         // write the script that launches the shell script. It could be a docker
         // image.
-        writeSubmitBashScript(task, inputWvls)
+        val env:Map[String, WdlValue] = decls.map{
+            case (varName, BValue(_,wdlValue,_)) => varName -> wdlValue
+        }.toMap
+        writeSubmitBashScript(env)
 
         // serialize the environment, so we don't have to calculate it again in
         // the epilog
-        val env = decls.map{
-            case (varName, BValue(_,_,wdlValue)) => varName -> wdlValue
-        }.toMap
         writeEnvToDisk(env)
     }
 
-
-    def epilog(task: Task,
-               jobInputPath : Path,
+    def epilog(jobInputPath : Path,
                jobOutputPath : Path,
                jobInfoPath: Path) : Unit = {
         val taskInputs : Map[String, WdlValue] = readTaskDeclarationsFromDisk()
 
         // evaluate outputs
-        val outputs : Seq[(String, WdlType, WdlValue)] = evalTaskOutputs(task, taskInputs)
+        val outputs : Seq[(String, WdlType, WdlValue)] = evalTaskOutputs(taskInputs)
         writeJobOutputs(jobOutputPath, outputs)
     }
 
 
     // Evaluate the runtime expressions, and figure out which instance type
     // this task requires.
-    def calcInstanceType(task: Task,
-                         taskInputs: Map[String, WdlVarLinks],
+    def calcInstanceType(taskInputs: Map[String, WdlVarLinks],
                          instanceTypeDB: InstanceTypeDB) : String = {
         // input variables that were already calculated
         val env = HashMap.empty[String, WdlValue]
@@ -444,7 +430,7 @@ object RunnerTask {
         val diskSpace = evalAttr("disks")
         val cores = evalAttr("cpu")
         val iType = instanceTypeDB.apply(dxInstaceType, memory, diskSpace, cores)
-        errStream.println(s"""|calcInstanceType memory=${memory} disk=${diskSpace}
+        System.err.println(s"""|calcInstanceType memory=${memory} disk=${diskSpace}
                               |cores=${cores} instancetype=${iType}"""
                               .stripMargin.replaceAll("\n", " "))
         iType
@@ -484,13 +470,12 @@ object RunnerTask {
     /** The runtime attributes need to be calculated at runtime. Evaluate them,
       *  determine the instance type [xxxx], and relaunch the job on [xxxx]
       */
-    def relaunch(task: Task,
-                 jobInputPath : Path,
+    def relaunch(jobInputPath : Path,
                  jobOutputPath : Path,
                  jobInfoPath: Path) : Unit = {
         // Extract types for the inputs
         val (inputTypes,_) = Utils.loadExecInfo(Utils.readFileContent(jobInfoPath))
-        errStream.println(s"WdlType mapping =${inputTypes}")
+        System.err.println(s"WdlType mapping =${inputTypes}")
 
         val dxEnv: DXEnvironment = DXEnvironment.create()
         val dxJob = dxEnv.getJob()
@@ -507,7 +492,7 @@ object RunnerTask {
 
         // evaluate the runtime attributes
         // determine the instance type
-        val instanceType:String = calcInstanceType(task, inputWvls, instanceTypeDB)
+        val instanceType:String = calcInstanceType(inputWvls, instanceTypeDB)
 
         // relaunch the applet on the correct instance type
         val inputs = relaunchBuildInputs(inputWvls)
@@ -530,7 +515,7 @@ object RunnerTask {
             outputs.map{ case (key, json) => key -> Utils.jsValueOfJsonNode(json) }.toMap
         )
         val ast_pp = json.prettyPrint
-        errStream.println(s"outputs = ${ast_pp}")
+        System.err.println(s"outputs = ${ast_pp}")
         Utils.writeFileContent(jobOutputPath, ast_pp)
     }
 }

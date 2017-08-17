@@ -24,14 +24,6 @@ case class CompilerErrorFormatter(terminalMap: Map[Terminal, WdlSource]) {
             |""".stripMargin
     }
 
-    def expressionMustBeConstOrVar(expr: WdlExpression) : String = {
-        val t: Terminal = AstTools.findTerminals(expr.ast).head
-        s"""|Expression ${expr.toWdlString} must be const or variable
-            |
-            |${pointToSource(t)}
-            |""".stripMargin
-    }
-
     def evaluatingTerminal(t: Terminal, x: String) = {
         s"""|Looking up string ${x}, while evaluating terminal
             |
@@ -40,9 +32,25 @@ case class CompilerErrorFormatter(terminalMap: Map[Terminal, WdlSource]) {
 
     }
 
+    def expressionMustBeConstOrVar(expr: WdlExpression) : String = {
+        val t: Terminal = AstTools.findTerminals(expr.ast).head
+        s"""|Expression ${expr.toWdlString} must be const or variable
+            |
+            |${pointToSource(t)}
+            |""".stripMargin
+    }
+
     def illegalCallName(call: Call) : String = {
         val name: Terminal = call.ast.getAttribute("name").asInstanceOf[Terminal]
         s"""|Illegal call name
+            |
+            |${pointToSource(name)}
+            |""".stripMargin
+    }
+
+    def illegalVariableName(ast: Ast) : String = {
+        val name: Terminal = ast.getAttribute("name").asInstanceOf[Terminal]
+        s"""|Illegal variable name
             |
             |${pointToSource(name)}
             |""".stripMargin
@@ -70,11 +78,11 @@ case class CompilerErrorFormatter(terminalMap: Map[Terminal, WdlSource]) {
             |""".stripMargin
     }
 
-    def illegalVariableName(ast: Ast) : String = {
-        val name: Terminal = ast.getAttribute("name").asInstanceOf[Terminal]
-        s"""|Illegal variable name
+    def onlyFilesCanBeStreamed(ast: Ast) : String = {
+        val t: Terminal = AstTools.findTerminals(ast).head
+        s"""|Only files can be streamed
             |
-            |${pointToSource(name)}
+            |${pointToSource(t)}
             |""".stripMargin
     }
 
@@ -86,14 +94,14 @@ case class CompilerErrorFormatter(terminalMap: Map[Terminal, WdlSource]) {
             |""".stripMargin
     }
 
-   def undefinedMemberAccess(ast: Ast): String = {
+    def undefinedMemberAccess(ast: Ast): String = {
         val lhsAst = ast.getAttribute("lhs").asInstanceOf[Terminal]
         val fqn = WdlExpression.toString(ast)
         s"""|Undefined member access (${fqn})
             |
             |${pointToSource(lhsAst)}
             |""".stripMargin
-   }
+    }
 
     def workflowOutputShouldHaveDxType(ast: Ast): String = {
         val t: Terminal = ast.getAttribute("name").asInstanceOf[Terminal]

@@ -420,7 +420,7 @@ case class RunnerMiniWorkflow(exportVars: Set[String],
 
         // evaluate the expressions, given the workflow inputs
         val env:Map[String, BValue] = RunnerEval.evalDeclarations(exprDecls, inputs)
-        env.map{ case (key, BValue(wvl,_)) => key -> wvl }.toMap
+        env.map{ case (key, BValue(wvl,_,_)) => key -> wvl }.toMap
     }
 
     // Split a workflow into the top declarations,
