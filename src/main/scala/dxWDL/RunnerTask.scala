@@ -44,6 +44,10 @@ case class RunnerTask(task:Task,
         metaDir
     }
 
+    // TODO: merge this method with the corresponding method in RunnerEval.
+    // The differences are:
+    // 1) use of the task to get declaration attributes
+    // 2) Dealing with file streams
     private def evalDeclarations(declarations: Seq[Declaration],
                                  inputs : Map[String, WdlVarLinks]) : Map[String, BValue] = {
         // Environment that includes a cache for values that have
@@ -137,11 +141,14 @@ case class RunnerTask(task:Task,
     }
 
     // evaluate Task output expressions
-    def evalTaskOutputs(inputs : Map[String, WdlValue]) : Seq[(String, WdlType, WdlValue)] = {
+    private def evalTaskOutputs(inputs : Map[String, WdlValue])
+            : Seq[(String, WdlType, WdlValue)] =
+    {
         def lookup(varName : String) : WdlValue = {
             inputs.get(varName) match {
                 case Some(x) => x
-                case None => throw new AppInternalException(s"No value found for variable ${varName}")
+                case None => throw new AppInternalException(
+                    s"No value found for variable ${varName}")
             }
         }
         def evalTaskOutput(tso: TaskOutput, expr: WdlExpression) : (String, WdlType, WdlValue) = {
@@ -167,7 +174,7 @@ case class RunnerTask(task:Task,
     }
 
     // serialize the task inputs to json, and then write to a file.
-    def writeEnvToDisk(env : Map[String, WdlValue]) : Unit = {
+    private def writeEnvToDisk(env : Map[String, WdlValue]) : Unit = {
         val m : Map[String, JsValue] = env.map{ case(varName, wdlValue) =>
             (varName, JsString(Utils.marshal(wdlValue)))
         }.toMap
@@ -176,7 +183,7 @@ case class RunnerTask(task:Task,
         Utils.writeFileContent(inputVarsPath, buf)
     }
 
-    def readTaskDeclarationsFromDisk() : Map[String, WdlValue] = {
+    private def readTaskDeclarationsFromDisk() : Map[String, WdlValue] = {
         val inputVarsPath = getMetaDir().resolve("inputVars.json")
         val buf = Utils.readFileContent(inputVarsPath)
         val json : JsValue = buf.parseJson
@@ -194,8 +201,8 @@ case class RunnerTask(task:Task,
     }
 
     // Upload output files as a consequence
-    def writeJobOutputs(jobOutputPath : Path,
-                        outputs : Seq[(String, WdlType, WdlValue)]) : Unit = {
+    private def writeJobOutputs(jobOutputPath : Path,
+                                outputs : Seq[(String, WdlType, WdlValue)]) : Unit = {
         // convert the WDL values to JSON
         val jsOutputs : Seq[(String, JsValue)] = outputs.map {
             case (key,wdlType,wdlValue) =>
@@ -210,7 +217,7 @@ case class RunnerTask(task:Task,
         Utils.writeFileContent(jobOutputPath, ast_pp)
     }
 
-    def writeSubmitBashScript(env: Map[String, WdlValue]) : Unit = {
+    private def writeSubmitBashScript(env: Map[String, WdlValue]) : Unit = {
         def lookup(varName : String) : WdlValue = {
             env.get(varName) match {
                 case Some(x) => x
@@ -257,52 +264,57 @@ case class RunnerTask(task:Task,
 
     // Each file marked "stream", is converted into a special fifo
     // file on the instance.
-    private def handleFiles(inputs: Map[String, BValue])
-            : (String, String, Map[Declaration, WdlValue]) =
-    {
+    private def handleStreamingFiles(inputs: Map[String, BValue])
+            : (String, String, Map[Declaration, WdlValue]) = {
+        // A file that needs to be stream-downloaded.
+        // Make a named pipe, and stream the file from the platform to the pipe.
+        // Keep track of the download process.
+        //
+        // All other files have already been downloaded
+        def mkfifo(wvl: WdlVarLinks, path: String) : (WdlValue, String) = {
+            val filename = Paths.get(path).toFile.getName
+            val fifo:Path = Paths.get(Utils.DX_HOME, "fifo_" + filename)
+            val dxFileId = WdlVarLinks.getFileId(wvl)
+            val bashSnippet:String =
+                s"""|mkfifo ${fifo.toString}
+                    |dx cat ${dxFileId} > ${fifo.toString} &
+                    |download_stream_pids+=($$!)
+                    |""".stripMargin
+            (WdlSingleFile(fifo.toString), bashSnippet)
+        }
+
         val m:Map[Declaration, (WdlValue, String)] = inputs.map{
-            case (_, BValue(wvl, wdlValue, Some(decl))) =>
-                if (Utils.stripOptional(wvl.wdlType) == WdlFileType &&
-                        wvl.attrs.stream) {
-                    // A file that needs to be stream-downloaded.
-                    // Make a named pipe, and stream the file from the platform to the pipe.
-                    // Keep track of the download process.
-                    //
-                    // All other files have already been downloaded
-                    val filename = Paths.get(wdlValue.toString).toFile().getName()
-                    val fifo:Path = Paths.get(Utils.DX_HOME, "fifo_" + filename)
-                    val dxFileId = WdlVarLinks.getFileId(wvl)
-                    val bashSnippet:String =
-                        s"""|mkfifo ${fifo.toString}
-                            |dx cat ${dxFileId} > ${fifo.toString} &
-                            |download_stream_pids+=($$!)
-                            |""".stripMargin
-                    decl -> (WdlSingleFile(fifo.toString), bashSnippet)
-                } else {
-                    // everything else
-                    decl -> (wdlValue, "")
-                }
             case (_, BValue(_, _, None)) => throw new Exception("Sanity")
+            case (_, BValue(wvl, wdlValue, Some(decl))) =>
+                wdlValue match {
+                    case WdlSingleFile(path) if wvl.attrs.stream =>
+                        decl -> mkfifo(wvl, path)
+                    case WdlOptionalValue(_,Some(WdlSingleFile(path))) if wvl.attrs.stream =>
+                        decl -> mkfifo(wvl, path)
+                    case _ =>
+                        // everything else
+                        decl -> (wdlValue, "")
+                }
         }
 
         // set up all the named pipes
-        val snippets:String = m.collect{
+        val snippets = m.collect{
             case (_, (_, bashSnippet)) if !bashSnippet.isEmpty => bashSnippet
-        }.mkString("\n")
-        val bashProlog = "download_stream_pids=()\n" + snippets + "\n"
+        }.toVector
+        val bashProlog = ("download_stream_pids=()" +:
+                              snippets).mkString("\n")
 
         // Wait for all download processes to complete. It is legal
         // for the user job to read only the beginning of the
         // file. This causes the download streams to close
         // prematurely, which can be show up as an error. We need to tolerate this
         // case.
-        val bashEpilog:String = """wait ${!download_stream_pids[@]}"""
-
+        val bashEpilog:String = "wait ${download_stream_pids[@]}"
         val inputsWithPipes = m.map{ case (decl, (wdlValue, _)) => decl -> wdlValue }.toMap
         (bashProlog, bashEpilog, inputsWithPipes)
     }
 
-    def writeBashScript(inputs: Map[String, BValue]) : Unit = {
+    private def writeBashScript(inputs: Map[String, BValue]) : Unit = {
         val metaDir = getMetaDir()
         val scriptPath = metaDir.resolve("script")
         val stdoutPath = metaDir.resolve("stdout")
@@ -310,7 +322,7 @@ case class RunnerTask(task:Task,
         val rcPath = metaDir.resolve("rc")
 
         // deal with files
-        val (bashProlog, bashEpilog, inputsWithPipes) = handleFiles(inputs)
+        val (bashProlog, bashEpilog, inputsWithPipes) = handleStreamingFiles(inputs)
 
         // instantiate the command
         val taskCmd : String = task.instantiateCommand(inputsWithPipes, DxFunctions).get
@@ -400,8 +412,8 @@ case class RunnerTask(task:Task,
 
     // Evaluate the runtime expressions, and figure out which instance type
     // this task requires.
-    def calcInstanceType(taskInputs: Map[String, WdlVarLinks],
-                         instanceTypeDB: InstanceTypeDB) : String = {
+    private def calcInstanceType(taskInputs: Map[String, WdlVarLinks],
+                                 instanceTypeDB: InstanceTypeDB) : String = {
         // input variables that were already calculated
         val env = HashMap.empty[String, WdlValue]
         def lookup(varName : String) : WdlValue = {
@@ -436,7 +448,7 @@ case class RunnerTask(task:Task,
         iType
     }
 
-    def relaunchBuildInputs(inputWvls: Map[String, WdlVarLinks]) : ObjectNode = {
+    private def relaunchBuildInputs(inputWvls: Map[String, WdlVarLinks]) : ObjectNode = {
         var builder : DXJSON.ObjectBuilder = DXJSON.getObjectBuilder()
         inputWvls.foreach{ case (varName, wvl) =>
             WdlVarLinks.genFields(wvl, varName).foreach{ case (fieldName, jsNode) =>
@@ -446,7 +458,9 @@ case class RunnerTask(task:Task,
         builder.build()
     }
 
-    def runSubJob(entryPoint:String, instanceType:String, inputs:ObjectNode) : DXJob = {
+    private def runSubJob(entryPoint:String,
+                          instanceType:String,
+                          inputs:ObjectNode) : DXJob = {
         val req: ObjectNode = DXJSON.getObjectBuilder()
             .put("function", entryPoint)
             .put("input", inputs)
