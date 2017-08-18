@@ -1,4 +1,5 @@
 {
   "files_outputs.colocation_result" : "False",
-  "files_outputs.FileArraySize_result" : [4, 6]
+  "files_outputs.FileArraySize_result" : [4, 6],
+  "files_outputs.head_result" : ["Nut", "Nut", "Nut", "Nut"]
 }

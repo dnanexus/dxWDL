@@ -37,9 +37,13 @@ object DeclAttrs {
                     case None => throw new Exception(s"No variable ${varName}")
                     case Some(x) => x
                 }
-                if (Utils.stripOptional(decl.wdlType) != WdlFileType)
-                    throw new Exception(cef.onlyFilesCanBeStreamed(decl.ast))
-                Map("stream" -> JsBoolean(true))
+                if (Utils.stripOptional(decl.wdlType) != WdlFileType) {
+                    val msg = cef.onlyFilesCanBeStreamed(decl.ast)
+                    System.err.println(s"Warning: ${msg}")
+                    Map.empty
+                } else {
+                    Map("stream" -> JsBoolean(true))
+                }
             case Some((_,x)) =>
                 // ignoring other attributes
                 Map.empty

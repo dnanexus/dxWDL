@@ -36,6 +36,20 @@ task wc {
     }
 }
 
+task head {
+    File in_file
+    Int num_lines
+
+    parameter_meta {
+        in_file : "stream"
+    }
+    command {
+        head -n ${num_lines} ${in_file}
+    }
+    output {
+        String result = read_string(stdout())
+    }
+}
 
 # Make sure that two input files are
 # in the same directory.
