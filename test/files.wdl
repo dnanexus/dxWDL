@@ -125,6 +125,14 @@ workflow files {
         input : A=f1, B=f2
     }
 
+    # Try an applet that streams two files
+    call lib.diff as diff1 {
+        input: a=f, b=f
+    }
+    call lib.diff as diff2 {
+        input: a=f, b=f2
+    }
+
     call z_Copy as Copy { input : src=f, basename="tearFrog" }
     call z_Copy as Copy2 { input : src=Copy.outf, basename="mixing" }
     call z_FindFiles as FindFiles
@@ -168,6 +176,8 @@ workflow files {
     }
 
     output {
+        diff1.result
+        diff2.result
         Copy2.outf_sorted
         FindFiles.texts
         FindFiles.hotels
