@@ -268,12 +268,15 @@ case class RunnerTask(task:Task,
             : (String, String, Map[Declaration, WdlValue]) = {
         // A file that needs to be stream-downloaded.
         // Make a named pipe, and stream the file from the platform to the pipe.
-        // Keep track of the download process.
+        // Keep track of the download process. We need to ensure pipes have
+        // different names, even if the file-names are the same.
         //
-        // All other files have already been downloaded
+        // Note: all other files have already been downloaded.
+        var fifoCount = 0
         def mkfifo(wvl: WdlVarLinks, path: String) : (WdlValue, String) = {
             val filename = Paths.get(path).toFile.getName
-            val fifo:Path = Paths.get(Utils.DX_HOME, "fifo_" + filename)
+            val fifo:Path = Paths.get(Utils.DX_HOME, s"fifo_${fifoCount}_${filename}")
+            fifoCount += 1
             val dxFileId = WdlVarLinks.getFileId(wvl)
             val bashSnippet:String =
                 s"""|mkfifo ${fifo.toString}

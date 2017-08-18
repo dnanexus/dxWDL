@@ -1,5 +1,8 @@
 # Release Notes
 
+## 0.38
+- Minor fixes, and better testing, for file streaming
+
 ## 0.37
 - File download streaming
 

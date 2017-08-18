@@ -6,7 +6,7 @@ task Add {
     Int b
 
     command {
-        echo $((a + b))
+        echo $((${a} + ${b}))
     }
     output {
         Int result = read_int(stdout())
