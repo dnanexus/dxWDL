@@ -1,5 +1,8 @@
 # Release Notes
 
+## 0.37
+- File download streaming
+
 ## 0.36
 - Conditionals
 
