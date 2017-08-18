@@ -64,6 +64,35 @@ runtime {
 }
 ```
 
+Normally, a file used in a task is downloaded to the instance, and
+then used locally (*locallized*). If the file only needs to be
+examined once in sequential order, then this can be optimized by
+streaming instead. The Unix `cat`, `wc`, and `head` commands are of this
+nature. To specify that a file is to be streamed, mark it as such in
+the `parameter_meta` section. For example:
+
+```
+task head {
+    File in_file
+    Int num_lines
+
+    parameter_meta {
+        in_file : "stream"
+    }
+    command {
+        head -n ${num_lines} ${in_file}
+    }
+    output {
+        String result = read_string(stdout())
+    }
+}
+```
+
+File streaming is an optimization, and there are limiting rules to its
+correct usage. The file must be accessed only once, in sequential
+order, from the beginning. It need not be read to the end. If the task
+does not keep this contract, it could fail in unexpected ways.
+
 ## Debugging an applet
 
 If you build an applet on the platform with dxWDL, and want to

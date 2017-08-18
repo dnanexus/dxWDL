@@ -11,6 +11,9 @@ task cgrep {
     String pattern
     File in_file
 
+    parameter_meta {
+        in_file : "stream"
+    }
     command {
         grep '${pattern}' ${in_file} | wc -l
     }
@@ -21,6 +24,10 @@ task cgrep {
 
 task wc {
     File in_file
+
+    parameter_meta {
+        in_file : "stream"
+    }
     command {
         cat ${in_file} | wc -l
     }
@@ -29,6 +36,20 @@ task wc {
     }
 }
 
+task head {
+    File in_file
+    Int num_lines
+
+    parameter_meta {
+        in_file : "stream"
+    }
+    command {
+        head -n ${num_lines} ${in_file}
+    }
+    output {
+        String result = read_string(stdout())
+    }
+}
 
 # Make sure that two input files are
 # in the same directory.

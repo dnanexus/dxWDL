@@ -88,7 +88,7 @@ object RunnerEval {
                 case (WdlOptionalType(t), Some(expr)) =>
                     try {
                         val v : WdlValue = expr.evaluate(lookup, DxFunctions).get
-                        val wvl = WdlVarLinks.apply(t, v)
+                        val wvl = WdlVarLinks.apply(t, DeclAttrs.empty, v)
                         env = env + (decl.unqualifiedName -> (wvl, Some(v)))
                         Some((wvl, v))
                     } catch {
@@ -99,7 +99,7 @@ object RunnerEval {
 
                 case (t, Some(expr)) =>
                     val v : WdlValue = expr.evaluate(lookup, DxFunctions).get
-                    val wvl = WdlVarLinks.apply(t, v)
+                    val wvl = WdlVarLinks.apply(t, DeclAttrs.empty, v)
                     env = env + (decl.unqualifiedName -> (wvl, Some(v)))
                     Some((wvl, v))
             }
@@ -110,7 +110,8 @@ object RunnerEval {
         // access previous results.
         declarations.map{ decl =>
             evalDecl(decl) match {
-                case Some((wvl, wdlValue)) => Some(decl.unqualifiedName -> BValue(wvl,wdlValue))
+                case Some((wvl, wdlValue)) =>
+                    Some(decl.unqualifiedName -> BValue(wvl, wdlValue, None))
                 case None =>
                     // optional input that was not provided
                     None

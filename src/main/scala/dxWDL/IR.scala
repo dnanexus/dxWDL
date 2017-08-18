@@ -18,10 +18,15 @@ import wdl4s.values._
 object IR {
 
     // Compile time representation of a variable. Used also as
-    // an applet argument.
-    // At compile time, we need to keep track of the syntax-tree, for error
+    // an applet argument. We keep track of the syntax-tree, for error
     // reporting purposes.
-    case class CVar(name: String, wdlType: WdlType, ast: Ast) {
+    //
+    // The attributes are used to encode DNAx applet input/output
+    // specification fields, such as {help, suggestions, patterns}.
+    case class CVar(name: String,
+                    wdlType: WdlType,
+                    attrs: DeclAttrs,
+                    ast: Ast) {
         // dx does not allow dots in variable names, so we
         // convert them to underscores.
         //
@@ -100,11 +105,15 @@ object IR {
 
     // Human readable representation of the IR, with YAML
     def yaml(cVar: CVar) : YamlObject = {
-        YamlObject(
+        val m : Map[YamlValue, YamlValue] = Map(
             YamlString("type") -> YamlString(cVar.wdlType.toWdlString),
             YamlString("name") -> YamlString(cVar.name),
             YamlString("dxName") -> YamlString(cVar.dxVarName)
         )
+        val attrs: Map[YamlValue, YamlValue] = cVar.attrs.m.map{
+            case (k,v) => YamlString(k) -> YamlString(v.toString)
+        }.toMap
+        YamlObject(m ++ attrs)
     }
 
     def yaml(applet: Applet) : YamlObject = {

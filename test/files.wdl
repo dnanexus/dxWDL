@@ -1,7 +1,6 @@
 # File path handling, and files with the same name
 
 import "library_sys_call.wdl" as lib
-import "library_sg.wdl" as lib_sg
 
 # Trying out file copy operations
 task z_Copy {
@@ -60,10 +59,13 @@ task z_FileSizes {
     }
 }
 
-task z_analysis {
+# Create a file with several lines.
+task GenFile {
     String str
     command <<<
-       echo "xyz12345" >> ${str}.txt
+       echo "Nut" >> ${str}.txt
+       echo "Screwdriver" >> ${str}.txt
+       echo "Wrench" >> ${str}.txt
     >>>
     output {
         File out = "${str}.txt"
@@ -103,6 +105,9 @@ task FileArrayMake{
 task FileArraySize {
     Array[File] files
 
+    parameter_meta {
+        files : "stream"
+    }
     command <<<
         wc -c ${sep=' ' files} | cut -d ' ' -f 1 | tail -1
     >>>
@@ -128,13 +133,13 @@ workflow files {
 
     String wf_suffix = ".txt"
 
-    call lib_sg.Prepare as prepare
-    scatter (x in prepare.array) {
-        call z_analysis as analysis {input: str=x}
+    scatter (x in ["one", "two", "three", "four"]) {
+        call GenFile {input: str=x}
+        call lib.wc as wc {input: in_file = GenFile.out}
+        call lib.head as head {input: in_file = GenFile.out, num_lines=1}
     }
-    call lib_sg.Gather as gather {input: files=analysis.out}
 
-    scatter (filename in analysis.out) {
+    scatter (filename in GenFile.out) {
         String prefix = ".txt"
         String prefix2 = ".cpp"
         String suffix = wf_suffix
@@ -169,10 +174,10 @@ workflow files {
 #       FindFiles2.elements
 #       FindFiles2.emptyFiles
         colocation.result
-        gather.str
         ident.result
         FileArraySize.result
         false_branch
         Copy3.outf
+        head.result
     }
 }
