@@ -9,7 +9,8 @@
 - Build new externally visible release
   * run `build_jar.py --release`
   * Update [releases](https://github.com/dnanexus-rnd/dxWDL/releases) github page,
-    use the `Draft a new release` button.
+  use the `Draft a new release` button.
+  * Upload a dxWDL.jar file
 
 ## Post release
 - Update the version number in `reference.conf`. We don't want
