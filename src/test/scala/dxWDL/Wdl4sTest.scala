@@ -7,12 +7,11 @@ import org.scalatest.{BeforeAndAfterEach, FlatSpec}
 import scala.sys.process._
 import spray.json._
 import spray.json.DefaultJsonProtocol
-import wdl4s.{AstTools, Declaration, GraphNode, Call, Scatter, Scope, Task, WdlExpression,
-    WdlNamespace, WdlNamespaceWithWorkflow, Workflow, WorkflowOutput}
-import wdl4s.AstTools.EnhancedAstNode
+import wdl4s.wdl._
+import wdl4s.wdl.AstTools.EnhancedAstNode
 import wdl4s.parser.WdlParser.{Ast, AstNode, Terminal}
-import wdl4s.types._
-import wdl4s.values._
+import wdl4s.wdl.types._
+import wdl4s.wdl.values._
 
 
 class Wdl4sTest extends FlatSpec with BeforeAndAfterEach {
@@ -24,8 +23,8 @@ class Wdl4sTest extends FlatSpec with BeforeAndAfterEach {
 
 
     // Look for a call inside a namespace.
-    private def getCallFromNamespace(ns : WdlNamespaceWithWorkflow, callName : String ) : Call = {
-        val wf: Workflow = ns.workflow
+    private def getCallFromNamespace(ns : WdlNamespaceWithWorkflow, callName : String ) : WdlCall = {
+        val wf: WdlWorkflow = ns.workflow
         wf.findCallByName(callName) match {
             case None => throw new AppInternalException(s"Call ${callName} not found in WDL file")
             case Some(call) => call
@@ -126,7 +125,7 @@ class Wdl4sTest extends FlatSpec with BeforeAndAfterEach {
 
         // Accesses to the pair [p] should depend only on the top level
         // variable(s)
-        val addCall:Call = ns.workflow.findCallByName("Add").get
+        val addCall:WdlCall = ns.workflow.findCallByName("Add").get
         addCall.inputMappings.foreach{ case (key,expr) =>
             //System.err.println(s"key=${key} expr=${expr.toWdlString}")
             //assert(expr.prerequisiteCallNames.isEmpty)
@@ -134,8 +133,8 @@ class Wdl4sTest extends FlatSpec with BeforeAndAfterEach {
                 val wdlType = WdlNamespace.lookupType(ns.workflow)(fqn)
                 System.err.println(s"fqn=${fqn} wdlType=${wdlType}")
             }*/
-            val variables = AstTools.findVariableReferences(expr.ast).map{ case t:Terminal =>
-                WdlExpression.toString(t)
+            val variables = AstTools.findVariableReferences(expr.ast).map{
+                varRef => varRef.terminal.getSourceString
             }
             //System.err.println(s"dep vars(${expr.toWdlString}) = ${variables}")
             //assert(expr.toWdlString == variables)
@@ -147,11 +146,11 @@ class Wdl4sTest extends FlatSpec with BeforeAndAfterEach {
     def isLocal(decl: Declaration,
                 wfOutputs: Seq[WorkflowOutput]) : Boolean = {
         // find all dependent nodes
-        val dNodes:Set[GraphNode] = decl.downstream
+        val dNodes:Set[WdlGraphNode] = decl.downstream
         val declParent:Scope = decl.parent.get
 
         // figure out if these downstream nodes are in the same scope.
-        val dnScopes:Set[GraphNode] = dNodes.filter{ node =>
+        val dnScopes:Set[WdlGraphNode] = dNodes.filter{ node =>
             node.parent.get.fullyQualifiedName != declParent.fullyQualifiedName
             //&&
             //node.fullyQualifiedName != decl.fullyQualifiedName
@@ -207,7 +206,7 @@ class Wdl4sTest extends FlatSpec with BeforeAndAfterEach {
                      |}""".stripMargin.trim
 
         val ns = WdlNamespaceWithWorkflow.load(wdl, Seq.empty).get
-        val wf:Workflow = ns match {
+        val wf:WdlWorkflow = ns match {
             case nswf : WdlNamespaceWithWorkflow => nswf.workflow
             case _ => throw new Exception("sanity")
         }

@@ -9,8 +9,8 @@ import org.scalatest.{BeforeAndAfterEach, FlatSpec, OneInstancePerTest}
 import scala.collection.JavaConverters._
 import spray.json._
 import spray.json.DefaultJsonProtocol
-import wdl4s.types._
-import wdl4s.values._
+import wdl4s.wdl.types._
+import wdl4s.wdl.values._
 
 class UtilsTest extends FlatSpec with BeforeAndAfterEach with OneInstancePerTest {
     private def checkMarshal(v : WdlValue) : Unit = {

@@ -6,8 +6,8 @@ import dxWDL.MainSpec._
 import dxWDL.SampleWdl.{EmptyInvalid, EmptyTask, EmptyWorkflow, ThreeStep}
 import net.jcazevedo.moultingyaml._
 import net.jcazevedo.moultingyaml.DefaultYamlProtocol._
-import wdl4s.{AstTools, WdlExpression, WdlNamespaceWithWorkflow}
-import wdl4s.AstTools.EnhancedAstNode
+import wdl4s.wdl.{AstTools, WdlExpression, WdlNamespaceWithWorkflow}
+import wdl4s.wdl.AstTools.EnhancedAstNode
 
 // JSON parsing library
 import spray.json._

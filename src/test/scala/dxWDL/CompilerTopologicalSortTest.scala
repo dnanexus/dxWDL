@@ -7,14 +7,10 @@ import scala.sys.process._
 import spray.json._
 import spray.json.DefaultJsonProtocol
 import Utils.{TopoMode, Verbose}
-import wdl4s.{AstTools, Call, Task, WdlExpression, WdlNamespace, WdlNamespaceWithWorkflow, Workflow}
-import wdl4s.AstTools.EnhancedAstNode
-import wdl4s.types._
-import wdl4s.values._
-import wdl4s.{Call, Declaration, Scatter, Scope,
-    Task, TaskCall, TaskOutput,
-    WdlExpression, WdlNamespace, WdlNamespaceWithWorkflow,
-    Workflow, WorkflowCall, WdlSource, GraphNode}
+import wdl4s.wdl._
+import wdl4s.wdl.AstTools.EnhancedAstNode
+import wdl4s.wdl.types._
+import wdl4s.wdl.values._
 
 
 class CompilerTopologicalSortTest extends FlatSpec with BeforeAndAfterEach {
@@ -52,7 +48,7 @@ class CompilerTopologicalSortTest extends FlatSpec with BeforeAndAfterEach {
                          |}""".stripMargin.trim
 
      def getNames(nodes: Seq[Scope]) = {
-         nodes.map { node => node.asInstanceOf[GraphNode].fullyQualifiedName }
+         nodes.map { node => node.asInstanceOf[WdlGraphNode].fullyQualifiedName }
      }
 
      def sortWorkflowHelper(wdl: String, relaxed: Boolean) : (Seq[String], Seq[Scope]) =  {
