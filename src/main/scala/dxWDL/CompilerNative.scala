@@ -11,10 +11,10 @@ import scala.collection.JavaConverters._
 import spray.json._
 import spray.json.DefaultJsonProtocol
 import Utils.{AppletLinkInfo, CHECKSUM_PROP, WDL_SNIPPET_FILENAME}
-import wdl4s.expression.{NoFunctions, WdlStandardLibraryFunctionsType}
+import wdl4s.wdl.expression.{NoFunctions, WdlStandardLibraryFunctionsType}
 import wdl4s.parser.WdlParser.Ast
-import wdl4s.types._
-import wdl4s.values._
+import wdl4s.wdl.types._
+import wdl4s.wdl.values._
 import WdlVarLinks._
 
 object CompilerNative {

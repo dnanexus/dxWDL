@@ -6,10 +6,10 @@ import scala.collection.mutable.Queue
 import Utils.{TopoMode, Verbose}
 import wdl4s.wdl.AstTools
 import wdl4s.wdl.AstTools.EnhancedAstNode
-import wdl4s.wdl.{Call, Declaration, Scatter, Scope,
-    Task, TaskCall, TaskOutput,
-    WdlExpression, WdlNamespace, WdlNamespaceWithWorkflow,
-    Workflow, WorkflowCall, WdlSource, WdlGraphNode}
+import wdl4s.wdl.{Declaration, Scatter, Scope,
+    TaskOutput, WdlExpression,
+    WdlNamespace, WdlNamespaceWithWorkflow, WdlTask, WdlTaskCall,
+    WdlWorkflow, WorkflowSource, WdlGraphNode}
 import wdl4s.wdl.command.{ParameterCommandPart, StringCommandPart}
 import wdl4s.parser.WdlParser.{Ast, AstNode, Terminal}
 import wdl4s.wdl.types._

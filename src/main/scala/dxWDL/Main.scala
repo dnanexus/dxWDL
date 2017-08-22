@@ -13,7 +13,7 @@ import spray.json.DefaultJsonProtocol
 import spray.json.JsString
 import Utils.{TopoMode, Verbose}
 import wdl4s.wdl.{ImportResolver, WdlNamespace, WdlTask,
-    WdlNamespaceWithWorkflow, Workflow, WorkflowOutput, WorkflowSource}
+    WdlNamespaceWithWorkflow, WdlWorkflow, WorkflowOutput, WorkflowSource}
 
 object Main extends App {
     sealed trait Termination
@@ -332,7 +332,7 @@ object Main extends App {
 
         // Resolving imports. Look for referenced files in the
         // source directory.
-        def resolver(filename: String) : WdlSource = {
+        def resolver(filename: String) : WorkflowSource = {
             var sourceDir:Path = wdlSourceFile.getParent()
             if (sourceDir == null) {
                 // source file has no parent directory, use the
@@ -414,7 +414,7 @@ object Main extends App {
         ns.tasks.head
     }
 
-    def workflowOfNamespace(ns: WdlNamespace): Workflow = {
+    def workflowOfNamespace(ns: WdlNamespace): WdlWorkflow = {
         ns match {
             case nswf: WdlNamespaceWithWorkflow => nswf.workflow
             case _ => throw new Exception("WDL file contains no workflow")

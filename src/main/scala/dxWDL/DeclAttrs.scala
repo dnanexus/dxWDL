@@ -2,10 +2,10 @@
 package dxWDL
 
 import spray.json._
-import wdl4s.{Declaration, Task}
+import wdl4s.wdl.{Declaration, WdlTask}
 import wdl4s.parser.WdlParser.{Ast, AstNode, Terminal}
-import wdl4s.types._
-import wdl4s.values._
+import wdl4s.wdl.types._
+import wdl4s.wdl.values._
 
 case class DeclAttrs(m: Map[String, JsValue]) {
     lazy val stream : Boolean = {
@@ -24,7 +24,7 @@ object DeclAttrs {
     // streaming, and it applies only to files. However, the
     // groundwork is being layed to support more complex
     // annotations.
-    def get(task:Task,
+    def get(task:WdlTask,
             varName: String,
             cef: CompilerErrorFormatter) : DeclAttrs = {
         val attr:Option[(String,String)] = task.parameterMeta.find{ case (k,v) =>  k == varName }
@@ -32,7 +32,8 @@ object DeclAttrs {
             case None => Map.empty
             case Some((_,"stream")) =>
                 // Only files can be streamed
-                val declOpt = task.declarations.find{ decl => decl.unqualifiedName == varName }
+                val declOpt:Option[Declaration] =
+                    task.declarations.find{ decl => decl.unqualifiedName == varName }
                 val decl = declOpt match {
                     case None => throw new Exception(s"No variable ${varName}")
                     case Some(x) => x

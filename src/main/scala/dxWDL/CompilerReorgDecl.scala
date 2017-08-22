@@ -42,7 +42,7 @@ case class CompilerReorgDecl(ns: WdlNamespace, verbose: Utils.Verbose) {
                 cond.children.foldLeft(Set.empty[String]) {
                     (accu,child) => accu ++ definitions(child)
                 }
-            case call:Call => Set(call.fullyQualifiedName)
+            case call:WdlCall => Set(call.fullyQualifiedName)
             case decl:Declaration => Set(decl.fullyQualifiedName)
             case wfo:WorkflowOutput => Set(wfo.fullyQualifiedName)
             case x =>
@@ -66,7 +66,7 @@ case class CompilerReorgDecl(ns: WdlNamespace, verbose: Utils.Verbose) {
             .map(ma => ma.lhs)
             .toSet
         val vars:Set[String] = expr.variableReferences
-            .map(WdlExpression.toString(_))
+            .map(varRef => varRef.terminal.getSourceString)
             .toSet
         val refsWithPossibleDups:Set[String] = nodeRefs ++ memberAccesses ++ vars
 
@@ -207,7 +207,7 @@ case class CompilerReorgDecl(ns: WdlNamespace, verbose: Utils.Verbose) {
                 val blk = reorgBlock(cond, cond.children, definedVars)
                 val cond2 = WdlRewrite.cond(cond, blk.children, cond.condition)
                 (cond2, blk.definedVars)
-            case call:Call => (call, definedVars ++ definitions(call))
+            case call:WdlCall => (call, definedVars ++ definitions(call))
             case decl:Declaration => (decl, definedVars ++ definitions(decl))
             case wfo:WorkflowOutput => (wfo, definedVars ++ definitions(wfo))
             case x =>
@@ -217,7 +217,7 @@ case class CompilerReorgDecl(ns: WdlNamespace, verbose: Utils.Verbose) {
         }
     }
 
-    def reorgWorkflow(wf: Workflow) : Workflow = {
+    def reorgWorkflow(wf: WdlWorkflow) : WdlWorkflow = {
         val blk = reorgBlock(wf, wf.children, Set.empty)
         WdlRewrite.workflow(wf, blk.children)
     }

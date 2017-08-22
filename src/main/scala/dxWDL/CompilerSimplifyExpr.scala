@@ -21,7 +21,7 @@ import wdl4s.wdl.types._
 import wdl4s.wdl.values._
 import wdl4s.wdl.WdlExpression.AstForExpressions
 
-case class CompilerSimplifyExpr(wf: Workflow,
+case class CompilerSimplifyExpr(wf: WdlWorkflow,
                                 cef: CompilerErrorFormatter,
                                 verbose: Verbose) {
     val verbose2:Boolean = verbose.keywords contains "simplify"
@@ -30,7 +30,7 @@ case class CompilerSimplifyExpr(wf: Workflow,
     // A is a call.
     private def isCallOutputAccess(expr: WdlExpression,
                                    ast: Ast,
-                                   call: Call) : Boolean = {
+                                   call: WdlCall) : Boolean = {
         val lhs:String = WdlExpression.toString(ast.getAttribute("lhs"))
         try {
             val wdlType = WdlNamespace.lookupType(wf)(lhs)
@@ -62,7 +62,7 @@ case class CompilerSimplifyExpr(wf: Workflow,
     //  }
     //
     // Inside a scatter we can deal with field accesses,
-    private def simplifyCall(call: Call) : Vector[Scope] = {
+    private def simplifyCall(call: WdlCall) : Vector[Scope] = {
         val tmpDecls = Queue[Scope]()
         val inputs: Map[String, WdlExpression]  = call.inputMappings.map { case (key, expr) =>
             val rhs = expr.ast match {
@@ -88,8 +88,8 @@ case class CompilerSimplifyExpr(wf: Workflow,
         }
 
         val callModifiedInputs = call match {
-            case tc: TaskCall => WdlRewrite.taskCall(tc, inputs)
-            case wfc: WorkflowCall => throw new Exception(s"Unimplemented WorkflowCall")
+            case tc: WdlTaskCall => WdlRewrite.taskCall(tc, inputs)
+            case wfc: WdlWorkflowCall => throw new Exception(s"Unimplemented WorkflowCall")
         }
         tmpDecls += callModifiedInputs
         tmpDecls.toVector
@@ -177,7 +177,7 @@ case class CompilerSimplifyExpr(wf: Workflow,
     def simplify(scope: Scope): Vector[Scope] = {
         scope match {
             case ssc:Scatter => simplifyScatter(ssc)
-            case call:Call => simplifyCall(call)
+            case call:WdlCall => simplifyCall(call)
             case cond:If => simplifyIf(cond)
             case decl:Declaration => Vector(decl)
             case wfo:WorkflowOutput => Vector(wfo)
@@ -188,7 +188,7 @@ case class CompilerSimplifyExpr(wf: Workflow,
         }
     }
 
-    def simplifyWorkflow(wf: Workflow) : Workflow = {
+    def simplifyWorkflow(wf: WdlWorkflow) : WdlWorkflow = {
         val children: Vector[Scope] = wf.children.map(x => simplify(x)).toVector.flatten
         WdlRewrite.workflow(wf, children)
     }

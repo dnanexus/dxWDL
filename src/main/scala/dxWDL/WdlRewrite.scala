@@ -85,8 +85,8 @@ object WdlRewrite {
     }
 
     // Modify the children in a workflow.
-    def workflow[Child <: Scope] (wfOld: WdlWorkflo,
-                                  children: Seq[Child]): WdlWorkflo = {
+    def workflow[Child <: Scope] (wfOld: WdlWorkflow,
+                                  children: Seq[Child]): WdlWorkflow = {
         val wf = new WdlWorkflow(wfOld.unqualifiedName,
                                  Seq.empty, // no output wildcards
                                  wfOld.wdlSyntaxErrorFormatter,
@@ -97,7 +97,7 @@ object WdlRewrite {
         wf
     }
 
-    def workflowGenEmpty(wfName: String) : WdlWorkflo = {
+    def workflowGenEmpty(wfName: String) : WdlWorkflow = {
         new WdlWorkflow(wfName,
                         List.empty,
                         INVALID_ERR_FORMATTER,
@@ -160,7 +160,7 @@ object WdlRewrite {
         fresh
     }
 
-    def namespace(wf: WdlWorkflo, tasks: Seq[WdlTask]) : WdlNamespaceWithWorkflow = {
+    def namespace(wf: WdlWorkflow, tasks: Seq[WdlTask]) : WdlNamespaceWithWorkflow = {
         new WdlNamespaceWithWorkflow(None, wf,
                                      Vector.empty, Vector.empty,
                                      tasks,
@@ -169,7 +169,7 @@ object WdlRewrite {
                                      WdlRewrite.INVALID_AST)
     }
 
-    def namespace(old: WdlNamespaceWithWorkflow, wf: WdlWorkflo) : WdlNamespaceWithWorkflow = {
+    def namespace(old: WdlNamespaceWithWorkflow, wf: WdlWorkflow) : WdlNamespaceWithWorkflow = {
         val fresh = new WdlNamespaceWithWorkflow(old.importedAs,
                                                  wf,
                                                  old.imports,

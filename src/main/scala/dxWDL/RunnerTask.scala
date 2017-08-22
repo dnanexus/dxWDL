@@ -31,8 +31,7 @@ import wdl4s.wdl.AstTools._
 import wdl4s.wdl.expression.{WdlStandardLibraryFunctionsType, WdlStandardLibraryFunctions}
 import wdl4s.wdl.types._
 import wdl4s.wdl.values._
-import wdl4s.wdl.{Call, Declaration,
-    Task, TaskOutput, WdlExpression,
+import wdl4s.wdl.{Declaration, TaskOutput, WdlCall, WdlExpression, WdlTask,
     WdlNamespace, WdlNamespaceWithWorkflow}
 import wdl4s.wdl.WdlExpression.AstForExpressions
 
