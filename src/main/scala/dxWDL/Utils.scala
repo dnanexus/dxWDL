@@ -14,13 +14,13 @@ import scala.sys.process._
 import scala.util.{Failure, Success, Try}
 import spray.json._
 import spray.json.DefaultJsonProtocol
-import wdl4s.AstTools
-import wdl4s.AstTools.EnhancedAstNode
-import wdl4s.{Call, Declaration, Scatter, Scope, Task, WdlExpression, WdlNamespaceWithWorkflow,
-    WdlNamespace, WdlSource, Workflow}
+import wdl4s.wdl.AstTools
+import wdl4s.wdl.AstTools.EnhancedAstNode
+import wdl4s.wdl.{Declaration, Scatter, Scope, WdlCall, WdlExpression, WdlNamespaceWithWorkflow,
+    WdlNamespace, WorkflowSource, WdlTask, WdlWorkflow}
 import wdl4s.parser.WdlParser.{Ast, AstNode, Terminal}
-import wdl4s.types._
-import wdl4s.values._
+import wdl4s.wdl.types._
+import wdl4s.wdl.values._
 
 // Exception used for AppInternError
 class AppInternalException private(ex: RuntimeException) extends RuntimeException(ex) {
@@ -287,10 +287,10 @@ object Utils {
         }
     }
 
-    def taskOfCall(call : Call) : Task = {
+    def taskOfCall(call : WdlCall) : WdlTask = {
         call.callable match {
-            case task: Task => task
-            case workflow: Workflow =>
+            case task: WdlTask => task
+            case workflow: WdlWorkflow =>
                 throw new AppInternalException(s"Workflows are not support in calls ${call.callable}")
         }
     }

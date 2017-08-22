@@ -9,11 +9,11 @@
   */
 package dxWDL
 
-import wdl4s._
-import wdl4s.AstTools
+import wdl4s.wdl._
+import wdl4s.wdl.AstTools
 import wdl4s.parser.WdlParser.{Ast, AstNode, Terminal}
-import wdl4s.types._
-import wdl4s.values._
+import wdl4s.wdl.types._
+import wdl4s.wdl.values._
 
 object WdlRewrite {
     val INVALID_AST = AstTools.getAst("", "")
@@ -50,13 +50,13 @@ object WdlRewrite {
     }
 
     // Create an empty task.
-    def taskGenEmpty(name: String, scope: Scope) : Task = {
-        val task = new Task(name,
-                            Vector.empty,  // command Template
-                            new RuntimeAttributes(Map.empty[String,WdlExpression]),
-                            Map.empty[String, String], // meta
-                            Map.empty[String, String], // parameter meta
-                            scope.ast)
+    def taskGenEmpty(name: String, scope: Scope) : WdlTask = {
+        val task = new WdlTask(name,
+                               Vector.empty,  // command Template
+                               new RuntimeAttributes(Map.empty[String,WdlExpression]),
+                               Map.empty[String, String], // meta
+                               Map.empty[String, String], // parameter meta
+                               scope.ast)
         updateScope(scope, task)
         task
     }
@@ -160,7 +160,7 @@ object WdlRewrite {
         fresh
     }
 
-    def namespace(wf: Workflow, tasks: Seq[Task]) : WdlNamespaceWithWorkflow = {
+    def namespace(wf: Workflow, tasks: Seq[WdlTask]) : WdlNamespaceWithWorkflow = {
         new WdlNamespaceWithWorkflow(None, wf,
                                      Vector.empty, Vector.empty,
                                      tasks,
@@ -182,7 +182,7 @@ object WdlRewrite {
         fresh
     }
 
-    def namespace(task:Task) : WdlNamespaceWithoutWorkflow = {
+    def namespace(task:WdlTask) : WdlNamespaceWithoutWorkflow = {
         new WdlNamespaceWithoutWorkflow(None,
                                         Vector.empty,
                                         Vector.empty,

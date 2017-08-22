@@ -11,9 +11,9 @@ import net.jcazevedo.moultingyaml.DefaultYamlProtocol._
 import spray.json._
 import spray.json.DefaultJsonProtocol
 import wdl4s.parser.WdlParser.{Ast, AstNode, Terminal}
-import wdl4s.{WdlExpression, WdlNamespace}
-import wdl4s.types._
-import wdl4s.values._
+import wdl4s.wdl.{WdlExpression, WdlNamespace}
+import wdl4s.wdl.types._
+import wdl4s.wdl.values._
 
 object IR {
 
