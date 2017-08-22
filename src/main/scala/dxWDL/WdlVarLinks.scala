@@ -11,10 +11,10 @@ import net.jcazevedo.moultingyaml.DefaultYamlProtocol._
 import scala.collection.mutable.HashMap
 import spray.json._
 import spray.json.DefaultJsonProtocol
-import wdl4s.Declaration
+import wdl4s.wdl.Declaration
 import wdl4s.parser.WdlParser.{Ast, Terminal}
-import wdl4s.types._
-import wdl4s.values._
+import wdl4s.wdl.types._
+import wdl4s.wdl.values._
 
 object IORef extends Enumeration {
     val Input, Output = Value

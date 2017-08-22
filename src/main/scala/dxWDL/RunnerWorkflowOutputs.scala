@@ -14,9 +14,9 @@ import net.jcazevedo.moultingyaml.DefaultYamlProtocol._
 import scala.collection.JavaConverters._
 import spray.json._
 import spray.json.DefaultJsonProtocol
-import wdl4s.{Declaration, WdlNamespaceWithWorkflow, WdlExpression, Workflow, WorkflowOutput}
-import wdl4s.types._
-import wdl4s.values._
+import wdl4s.wdl.{Declaration, WdlNamespaceWithWorkflow, WdlExpression, WdlWorkflow, WorkflowOutput}
+import wdl4s.wdl.types._
+import wdl4s.wdl.values._
 import WdlVarLinks._
 
 object RunnerWorkflowOutputs {
@@ -143,7 +143,7 @@ object RunnerWorkflowOutputs {
         YamlObject(m).print()
     }
 
-    def apply(wf: Workflow,
+    def apply(wf: WdlWorkflow,
               jobInputPath : Path,
               jobOutputPath : Path,
               jobInfoPath: Path,

@@ -17,7 +17,7 @@ import wdl4s.wdl.values._
 
 object WdlRewrite {
     val INVALID_AST = AstTools.getAst("", "")
-    val INVALID_ERR_FORMATTER = WdlSyntaxErrorFormatter(Map.empty[Terminal, WdlSource])
+    val INVALID_ERR_FORMATTER = WdlSyntaxErrorFormatter(Map.empty[Terminal, WorkflowSource])
 
     // copy references from old scope to newly minted scope.
     private def updateScope(old: Scope, fresh: Scope) : Unit = {
@@ -41,9 +41,9 @@ object WdlRewrite {
     }
 
     // Modify the inputs in a task-call
-    def taskCall(tc: TaskCall,
-                 inputMappings: Map[String, WdlExpression]) : TaskCall = {
-        val tc1 = TaskCall(tc.alias, tc.task, inputMappings, tc.ast)
+    def taskCall(tc: WdlTaskCall,
+                 inputMappings: Map[String, WdlExpression]) : WdlTaskCall = {
+        val tc1 = WdlTaskCall(tc.alias, tc.task, inputMappings, tc.ast)
         tc1.children = tc.children
         updateScope(tc, tc1)
         tc1
@@ -85,25 +85,25 @@ object WdlRewrite {
     }
 
     // Modify the children in a workflow.
-    def workflow[Child <: Scope] (wfOld: Workflow,
-                                  children: Seq[Child]): Workflow = {
-        val wf = new Workflow(wfOld.unqualifiedName,
-                              Seq.empty, // no output wildcards
-                              wfOld.wdlSyntaxErrorFormatter,
-                              wfOld.meta, wfOld.parameterMeta,
-                              wfOld.ast)
+    def workflow[Child <: Scope] (wfOld: WdlWorkflo,
+                                  children: Seq[Child]): WdlWorkflo = {
+        val wf = new WdlWorkflow(wfOld.unqualifiedName,
+                                 Seq.empty, // no output wildcards
+                                 wfOld.wdlSyntaxErrorFormatter,
+                                 wfOld.meta, wfOld.parameterMeta,
+                                 wfOld.ast)
         wf.children = children
         updateScope(wfOld, wf)
         wf
     }
 
-    def workflowGenEmpty(wfName: String) : Workflow = {
-        new Workflow(wfName,
-                     List.empty,
-                     INVALID_ERR_FORMATTER,
-                     Map.empty[String, String],
-                     Map.empty[String, String],
-                     INVALID_AST)
+    def workflowGenEmpty(wfName: String) : WdlWorkflo = {
+        new WdlWorkflow(wfName,
+                        List.empty,
+                        INVALID_ERR_FORMATTER,
+                        Map.empty[String, String],
+                        Map.empty[String, String],
+                        INVALID_AST)
     }
 
     def workflowOutput(varName: String,
@@ -154,13 +154,13 @@ object WdlRewrite {
     def cond [Child <: Scope] (old: If,
                                children: Seq[Child],
                                condition: WdlExpression): If = {
-        val fresh = wdl4s.If(old.index, condition, INVALID_AST)
+        val fresh = wdl4s.wdl.If(old.index, condition, INVALID_AST)
         fresh.children = children
         updateScope(old, fresh)
         fresh
     }
 
-    def namespace(wf: Workflow, tasks: Seq[WdlTask]) : WdlNamespaceWithWorkflow = {
+    def namespace(wf: WdlWorkflo, tasks: Seq[WdlTask]) : WdlNamespaceWithWorkflow = {
         new WdlNamespaceWithWorkflow(None, wf,
                                      Vector.empty, Vector.empty,
                                      tasks,
@@ -169,7 +169,7 @@ object WdlRewrite {
                                      WdlRewrite.INVALID_AST)
     }
 
-    def namespace(old: WdlNamespaceWithWorkflow, wf: Workflow) : WdlNamespaceWithWorkflow = {
+    def namespace(old: WdlNamespaceWithWorkflow, wf: WdlWorkflo) : WdlNamespaceWithWorkflow = {
         val fresh = new WdlNamespaceWithWorkflow(old.importedAs,
                                                  wf,
                                                  old.imports,

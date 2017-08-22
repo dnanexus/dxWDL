@@ -27,16 +27,16 @@ import scala.collection.mutable.HashMap
 import scala.collection.JavaConverters._
 import spray.json._
 import spray.json.DefaultJsonProtocol
-import wdl4s.AstTools._
-import wdl4s.expression.{WdlStandardLibraryFunctionsType, WdlStandardLibraryFunctions}
-import wdl4s.types._
-import wdl4s.values._
-import wdl4s.{Call, Declaration,
+import wdl4s.wdl.AstTools._
+import wdl4s.wdl.expression.{WdlStandardLibraryFunctionsType, WdlStandardLibraryFunctions}
+import wdl4s.wdl.types._
+import wdl4s.wdl.values._
+import wdl4s.wdl.{Call, Declaration,
     Task, TaskOutput, WdlExpression,
-    WdlNamespace, WdlNamespaceWithWorkflow, Workflow}
-import wdl4s.WdlExpression.AstForExpressions
+    WdlNamespace, WdlNamespaceWithWorkflow}
+import wdl4s.wdl.WdlExpression.AstForExpressions
 
-case class RunnerTask(task:Task,
+case class RunnerTask(task:WdlTask,
                       cef: CompilerErrorFormatter) {
     def getMetaDir() = {
         val metaDir = Utils.getMetaDirPath()

@@ -12,8 +12,8 @@ import spray.json._
 import spray.json.DefaultJsonProtocol
 import spray.json.JsString
 import Utils.{TopoMode, Verbose}
-import wdl4s.{ImportResolver, Task, WdlNamespace, WdlNamespaceWithWorkflow, WdlSource,
-    Workflow, WorkflowOutput}
+import wdl4s.wdl.{ImportResolver, WdlNamespace, WdlTask,
+    WdlNamespaceWithWorkflow, Workflow, WorkflowOutput, WorkflowSource}
 
 object Main extends App {
     sealed trait Termination
@@ -407,7 +407,7 @@ object Main extends App {
     }
 
     // Extract the only task from a namespace
-    def taskOfNamespace(ns: WdlNamespace) : Task = {
+    def taskOfNamespace(ns: WdlNamespace) : WdlTask = {
         val numTasks = ns.tasks.length
         if (numTasks != 1)
             throw new Exception(s"WDL file contains ${numTasks} tasks, instead of 1")
