@@ -10,9 +10,9 @@ organization := "com.dnanexus"
 git.gitHeadCommit := git.gitHeadCommit.value map { _.take(8) }
 versionWithGit
 
-resolvers ++= Seq(
-    "Broad Artifactory Releases" at "https://broadinstitute.jfrog.io/broadinstitute/libs-release/"
-)
+//resolvers ++= Seq(
+//    "Broad Artifactory Releases" at "https://broadinstitute.jfrog.io/broadinstitute/libs-release/"
+//)
 
 // Show deprecation warnings
 scalacOptions ++= Seq("-unchecked", "-deprecation")
@@ -23,7 +23,7 @@ logLevel in assembly := Level.Info
 assemblyOutputPath in assembly := file("applet_resources/resources/dxWDL.jar")
 
 libraryDependencies ++= Seq(
-    "org.broadinstitute" %% "wdl4s" % "0.13",
+    "org.broadinstitute" %% "wdl4s-wdl" % "0.14-8c87cdc-SNAP",
     "io.spray" %% "spray-json" % "1.3.2",
     "net.jcazevedo" %% "moultingyaml" % "0.4.0",
     "com.typesafe" % "config" % "1.3.1",
