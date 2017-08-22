@@ -6,20 +6,14 @@
   */
 package dxWDL
 
-import java.io.{File, FileWriter, PrintWriter}
-import java.nio.file.{Files, Path, Paths}
 import scala.collection.mutable.Queue
-import scala.util.{Failure, Success, Try}
+import scala.util.{Success}
 import Utils.{genTmpVarName, Verbose}
 import wdl4s.wdl._
-import wdl4s.wdl.AstTools
-import wdl4s.wdl.AstTools.EnhancedAstNode
-import wdl4s.wdl.command.{ParameterCommandPart, StringCommandPart}
 import wdl4s.wdl.expression._
-import wdl4s.parser.WdlParser.{Ast, AstNode, Terminal}
+import wdl4s.parser.WdlParser.{Ast, Terminal}
 import wdl4s.wdl.types._
-import wdl4s.wdl.values._
-import wdl4s.wdl.WdlExpression.AstForExpressions
+//import wdl4s.wdl.WdlExpression.AstForExpressions
 
 case class CompilerSimplifyExpr(wf: WdlWorkflow,
                                 cef: CompilerErrorFormatter,
@@ -48,6 +42,10 @@ case class CompilerSimplifyExpr(wf: WdlWorkflow,
         }
     }
 
+    def isMemberAccess(a: Ast) = {
+        wdl4s.wdl.WdlExpression.AstForExpressions(a).isMemberAccess
+    }
+
     // Transform a call by lifting its non trivial expressions,
     // and converting them into declarations. For example:
     //
@@ -67,7 +65,7 @@ case class CompilerSimplifyExpr(wf: WdlWorkflow,
         val inputs: Map[String, WdlExpression]  = call.inputMappings.map { case (key, expr) =>
             val rhs = expr.ast match {
                 case t: Terminal => expr
-                case a: Ast if (a.isMemberAccess && isCallOutputAccess(expr, a, call)) =>
+                case a: Ast if (isMemberAccess(a) && isCallOutputAccess(expr, a, call)) =>
                     // Accessing an expression like A.B.C
                     // The expression could be:
                     // 1) Result from a previous call

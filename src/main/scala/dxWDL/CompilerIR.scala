@@ -2,16 +2,13 @@
   */
 package dxWDL
 
-import java.nio.file.{Files, Paths, Path}
 import net.jcazevedo.moultingyaml._
-import net.jcazevedo.moultingyaml.DefaultYamlProtocol._
 import scala.util.{Failure, Success, Try}
-import spray.json._
 import wdl4s.wdl._
 import wdl4s.wdl.AstTools
 import wdl4s.wdl.AstTools.EnhancedAstNode
 import wdl4s.wdl.expression._
-import wdl4s.parser.WdlParser.{Ast, AstNode, Terminal}
+import wdl4s.parser.WdlParser.{Ast, Terminal}
 import wdl4s.wdl.types._
 import wdl4s.wdl.values._
 import wdl4s.wdl.WdlExpression.AstForExpressions
@@ -244,11 +241,6 @@ task Add {
             case a: Ast if a.isMemberAccess =>
                 // This is a case of accessing something like A.B.C
                 // The RHS is C, and the LHS is A.B
-                val rhs : Terminal = a.getAttribute("rhs") match {
-                    case rhs:Terminal if rhs.getTerminalStr == "identifier" => rhs
-                    case _ => throw new Exception(cef.rightSideMustBeIdentifer(a))
-                }
-
                 // The FQN is "A.B.C"
                 val fqn = WdlExpression.toString(a)
                 env.get(fqn) match {

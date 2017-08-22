@@ -4,20 +4,16 @@
 package dxWDL
 
 // DX bindings
-import com.dnanexus.{DXApplet, DXAnalysis, DXAPI, DXContainer, DXDataObject,
-    DXEnvironment, DXJob, DXJSON, DXFile, DXProject, DXSearch}
+import com.dnanexus.{DXAnalysis, DXAPI, DXContainer, DXDataObject,
+    DXEnvironment, DXJSON, DXFile, DXProject, DXSearch}
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.node.ObjectNode
 import java.nio.file.Path
 import net.jcazevedo.moultingyaml._
-import net.jcazevedo.moultingyaml.DefaultYamlProtocol._
 import scala.collection.JavaConverters._
 import spray.json._
-import spray.json.DefaultJsonProtocol
-import wdl4s.wdl.{Declaration, WdlNamespaceWithWorkflow, WdlExpression, WdlWorkflow, WorkflowOutput}
-import wdl4s.wdl.types._
-import wdl4s.wdl.values._
-import WdlVarLinks._
+import wdl4s.wdl.{Declaration, WdlWorkflow, WorkflowOutput}
+import WdlVarLinks.yaml
 
 object RunnerWorkflowOutputs {
 

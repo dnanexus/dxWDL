@@ -1,7 +1,7 @@
 package dxWDL
 
 import wdl4s.wdl.AstTools
-import wdl4s.parser.WdlParser.{Ast, AstNode, Terminal}
+import wdl4s.parser.WdlParser.{Ast, Terminal}
 import wdl4s.wdl._
 
 case class CompilerErrorFormatter(terminalMap: Map[Terminal, WorkflowSource]) {

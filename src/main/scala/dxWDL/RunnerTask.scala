@@ -18,22 +18,15 @@ task Add {
 
 package dxWDL
 
-import com.dnanexus.{DXAPI, DXApplet, DXEnvironment, DXFile, DXJob, DXJSON, DXProject}
+import com.dnanexus.{DXAPI, DXJob, DXJSON}
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.node.ObjectNode
-import java.io.PrintStream
-import java.nio.file.{Path, Paths, Files}
+import java.nio.file.{Path, Paths}
 import scala.collection.mutable.HashMap
-import scala.collection.JavaConverters._
 import spray.json._
-import spray.json.DefaultJsonProtocol
-import wdl4s.wdl.AstTools._
-import wdl4s.wdl.expression.{WdlStandardLibraryFunctionsType, WdlStandardLibraryFunctions}
 import wdl4s.wdl.types._
 import wdl4s.wdl.values._
-import wdl4s.wdl.{Declaration, TaskOutput, WdlCall, WdlExpression, WdlTask,
-    WdlNamespace, WdlNamespaceWithWorkflow}
-import wdl4s.wdl.WdlExpression.AstForExpressions
+import wdl4s.wdl.{Declaration, TaskOutput, WdlExpression, WdlTask}
 
 case class RunnerTask(task:WdlTask,
                       cef: CompilerErrorFormatter) {
@@ -349,7 +342,7 @@ case class RunnerTask(task:WdlTask,
                     |""".stripMargin.trim + "\n"
             } else {
                 val cdHome = s"cd ${Utils.DX_HOME}"
-                var cmdLines: List[String] = bashPrologEpilog match {
+                val cmdLines: List[String] = bashPrologEpilog match {
                     case None =>
                         List(cdHome, shellCmd)
                     case Some((bashProlog, bashEpilog)) =>
@@ -539,10 +532,6 @@ case class RunnerTask(task:WdlTask,
         // Extract types for the inputs
         val (inputTypes,_) = Utils.loadExecInfo(Utils.readFileContent(jobInfoPath))
         System.err.println(s"WdlType mapping =${inputTypes}")
-
-        val dxEnv: DXEnvironment = DXEnvironment.create()
-        val dxJob = dxEnv.getJob()
-        val dxProject = dxEnv.getProjectContext()
 
         // Read the job input file, and load the inputs without downloading
         val inputLines : String = Utils.readFileContent(jobInputPath)

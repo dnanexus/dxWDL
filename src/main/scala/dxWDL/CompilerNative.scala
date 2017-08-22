@@ -4,18 +4,14 @@ package dxWDL
 
 // DX bindings
 import com.fasterxml.jackson.databind.JsonNode
-import com.dnanexus.{DXApplet, DXDataObject, DXJSON, DXProject, DXSearch, DXUtil, DXWorkflow}
+import com.dnanexus.{DXApplet, DXDataObject, DXJSON, DXProject, DXSearch, DXWorkflow}
 import java.nio.file.{Files, Paths, Path}
 import java.security.MessageDigest
 import scala.collection.JavaConverters._
 import spray.json._
-import spray.json.DefaultJsonProtocol
 import Utils.{AppletLinkInfo, CHECKSUM_PROP, WDL_SNIPPET_FILENAME}
-import wdl4s.wdl.expression.{NoFunctions, WdlStandardLibraryFunctionsType}
 import wdl4s.parser.WdlParser.Ast
 import wdl4s.wdl.types._
-import wdl4s.wdl.values._
-import WdlVarLinks._
 
 object CompilerNative {
     val DX_COMPILE_TIMEOUT = 30
@@ -458,7 +454,7 @@ object CompilerNative {
                             appletDict: Map[String, (IR.Applet, DXApplet)],
                             cState: State) : (DXApplet, Vector[IR.CVar]) = {
         // Search for existing applets on the platform, in the same path
-        var existingApl: List[DXApplet] = DXSearch.findDataObjects().nameMatchesExactly(applet.name)
+        val existingApl: List[DXApplet] = DXSearch.findDataObjects().nameMatchesExactly(applet.name)
             .inFolder(cState.dxProject, cState.folder).withClassApplet().execute().asList()
             .asScala.toList
 

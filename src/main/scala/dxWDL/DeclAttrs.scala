@@ -3,9 +3,7 @@ package dxWDL
 
 import spray.json._
 import wdl4s.wdl.{Declaration, WdlTask}
-import wdl4s.parser.WdlParser.{Ast, AstNode, Terminal}
 import wdl4s.wdl.types._
-import wdl4s.wdl.values._
 
 case class DeclAttrs(m: Map[String, JsValue]) {
     lazy val stream : Boolean = {

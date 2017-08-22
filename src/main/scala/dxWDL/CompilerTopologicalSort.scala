@@ -1,20 +1,7 @@
 package dxWDL
 
-import java.io.{File, FileWriter, PrintWriter}
-import java.nio.file.{Path, Paths}
-import scala.collection.mutable.Queue
 import Utils.{TopoMode, Verbose}
-import wdl4s.wdl.AstTools
-import wdl4s.wdl.AstTools.EnhancedAstNode
-import wdl4s.wdl.{Declaration, Scatter, Scope,
-    TaskOutput, WdlExpression,
-    WdlNamespace, WdlNamespaceWithWorkflow, WdlTask, WdlTaskCall,
-    WdlWorkflow, WorkflowSource, WdlGraphNode}
-import wdl4s.wdl.command.{ParameterCommandPart, StringCommandPart}
-import wdl4s.parser.WdlParser.{Ast, AstNode, Terminal}
-import wdl4s.wdl.types._
-import wdl4s.wdl.values._
-import wdl4s.wdl.WdlExpression.AstForExpressions
+import wdl4s.wdl.{Scatter, Scope, WdlNamespace, WdlNamespaceWithWorkflow, WdlGraphNode}
 
 case class CompilerTopologicalSort(cef: CompilerErrorFormatter,
                                    mode: TopoMode.Value,
@@ -188,7 +175,7 @@ case class CompilerTopologicalSort(cef: CompilerErrorFormatter,
                 // Try sorting, and report on any circular dependencies.
                 // Do not modify the workflow.
                 Utils.trace(verbose.on, "Checking the workflow is sorted")
-                val sortedNodes = tsortASTnodes(wf.children, 0)
+                tsortASTnodes(wf.children, 0)
                 nswf
             case TopoMode.Sort =>
                 // Default sort mode

@@ -11,7 +11,7 @@ package dxWDL
 
 import wdl4s.wdl._
 import wdl4s.wdl.AstTools
-import wdl4s.parser.WdlParser.{Ast, AstNode, Terminal}
+import wdl4s.parser.WdlParser.{Ast, Terminal}
 import wdl4s.wdl.types._
 import wdl4s.wdl.values._
 

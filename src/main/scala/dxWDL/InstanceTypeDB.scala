@@ -30,10 +30,7 @@ package dxWDL
 import com.dnanexus.{DXAPI, DXJSON, DXProject}
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.node.ObjectNode
-import java.nio.file.Path
 import spray.json._
-import spray.json.DefaultJsonProtocol
-import wdl4s.wdl.types._
 import wdl4s.wdl.values._
 
 // Instance Type on the platform. For example:

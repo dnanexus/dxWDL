@@ -15,7 +15,6 @@ package dxWDL
 
 import wdl4s.wdl._
 import wdl4s.wdl.command.{CommandPart, ParameterCommandPart, StringCommandPart}
-import wdl4s.parser.WdlParser.{Ast, AstNode, Terminal}
 
 case class WdlPrettyPrinter(fqnFlag: Boolean, workflowOutputs: Option[Seq[WorkflowOutput]]) {
 

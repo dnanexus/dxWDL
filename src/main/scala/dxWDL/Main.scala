@@ -1,15 +1,13 @@
 package dxWDL
 
-import com.dnanexus.{DXApplet, DXProject, DXUtil, DXContainer, DXWorkflow}
+import com.dnanexus.DXProject
 import com.typesafe.config._
-import java.io.{File, FileWriter, PrintWriter}
-import java.nio.file.{Path, Paths, Files}
-import net.jcazevedo.moultingyaml._
+import java.io.{FileWriter, PrintWriter}
+import java.nio.file.{Path, Paths}
 import scala.collection.JavaConverters._
 import scala.collection.mutable.HashMap
-import scala.util.{Failure, Success, Try}
+import scala.util.{Failure, Success}
 import spray.json._
-import spray.json.DefaultJsonProtocol
 import spray.json.JsString
 import Utils.{TopoMode, Verbose}
 import wdl4s.wdl.{ImportResolver, WdlNamespace, WdlTask,

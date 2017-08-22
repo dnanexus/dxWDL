@@ -45,23 +45,16 @@ package dxWDL
 
 // DX bindings
 import com.dnanexus._
-import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.node.ObjectNode
 import java.nio.file.{Path, Paths, Files}
-import scala.collection.JavaConverters._
 import scala.collection.mutable.HashMap
 import spray.json._
-import spray.json.DefaultJsonProtocol
 import Utils.{AppletLinkInfo, transformVarName}
 import wdl4s.wdl._
-import wdl4s.wdl.AstTools
-import wdl4s.wdl.AstTools.EnhancedAstNode
 import wdl4s.wdl.expression._
-import wdl4s.parser.WdlParser.{Ast, AstNode, Terminal}
-import wdl4s.wdl.types._
+import wdl4s.parser.WdlParser.{Ast, Terminal}
 import wdl4s.wdl.values._
 import wdl4s.wdl.WdlExpression.AstForExpressions
-import WdlVarLinks._
 
 case class RunnerMiniWorkflow(exportVars: Set[String],
                               cef: CompilerErrorFormatter,

@@ -50,16 +50,16 @@ class Wdl4sTest extends FlatSpec with BeforeAndAfterEach {
     }
 
     it should "retrieve source code for task" in {
-        val wdl = """|task a {
-                     |  String prefix
-                     |  Array[Int] ints
-                     |  command {
-                     |    python script.py ${write_lines(ints)} > ${prefix + ".out"}
-                     |  }
-                     |}
-                     |workflow wf {
-                     |  call a
-                     |}""".stripMargin.trim
+        val wdl = s"""|task a {
+                      |  String prefix
+                      |  Array[Int] ints
+                      |  command {
+                      |    python script.py $${write_lines(ints)} > $${prefix + ".out"}
+                      |  }
+                      |}
+                      |workflow wf {
+                      |  call a
+                      |}""".stripMargin.trim
 
 
         val ns = WdlNamespaceWithWorkflow.load(wdl, Seq.empty).get

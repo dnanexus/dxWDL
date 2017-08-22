@@ -3,16 +3,13 @@
 package dxWDL
 
 // DX bindings
-import com.dnanexus.{DXApplet, DXFile, DXJob, DXProject, DXWorkflow}
+import com.dnanexus.{DXFile, DXJob, DXProject, DXWorkflow}
 import com.fasterxml.jackson.databind.JsonNode
 import java.nio.file.{Files, Path, Paths}
 import net.jcazevedo.moultingyaml._
-import net.jcazevedo.moultingyaml.DefaultYamlProtocol._
 import scala.collection.mutable.HashMap
 import spray.json._
-import spray.json.DefaultJsonProtocol
 import wdl4s.wdl.Declaration
-import wdl4s.parser.WdlParser.{Ast, Terminal}
 import wdl4s.wdl.types._
 import wdl4s.wdl.values._
 
@@ -206,7 +203,7 @@ object WdlVarLinks {
                     DxFunctions.registerRemoteFile(path.toString, dxFile)
                 }
                 localDxFiles(path) = dxFile
-            case Some(dxFile) =>
+            case Some(_) =>
                 // we have already downloaded the file
                 ()
         }
@@ -235,7 +232,7 @@ object WdlVarLinks {
             case JsObject(_) if isDxFile(jsValue) =>
                 Vector(dxFileOfJsValue(jsValue))
             case JsObject(fields) =>
-                fields.map{ case(k,v) => findDxFiles(v) }.toVector.flatten
+                fields.map{ case(_,v) => findDxFiles(v) }.toVector.flatten
             case JsArray(elems) =>
                 elems.map(e => findDxFiles(e)).flatten
         }
@@ -268,7 +265,7 @@ object WdlVarLinks {
             assert(kJs.length == vJs.length)
             (kJs, vJs)
         } catch {
-            case e : Throwable =>
+            case _ : Throwable =>
                 System.err.println(s"Deserialization error: ${jsValue}")
                 throw new Exception("JSON value deserialization error, expected Map")
         }
@@ -367,7 +364,7 @@ object WdlVarLinks {
                     WdlVarLinks(wdlType, wvl.attrs, DxlValue(js))
                 }
 
-            case (t,_) =>
+            case (_,_) =>
                 // Error
                 throw new AppInternalException(s"Can't unpack ${wvl.wdlType.toWdlString} ${jsn}")
             }

@@ -7,9 +7,8 @@ import java.nio.file.{Files, FileSystems, Path, Paths, PathMatcher}
 import scala.util.{Try, Success, Failure}
 import scala.collection.JavaConverters._
 import scala.collection.mutable.HashMap
-import wdl4s.wdl.expression.{WdlStandardLibraryFunctionsType, WdlStandardLibraryFunctions}
+import wdl4s.wdl.expression.WdlStandardLibraryFunctions
 import wdl4s.wdl.TsvSerializable
-import wdl4s.wdl.types._
 import wdl4s.wdl.values._
 
 object DxFunctions extends WdlStandardLibraryFunctions {
