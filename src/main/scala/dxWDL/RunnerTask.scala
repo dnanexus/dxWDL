@@ -389,7 +389,7 @@ case class RunnerTask(task:Task,
         val dockerRunPath = getMetaDir().resolve("script.submit")
         val dockerRunScript = bashPrologEpilog match {
             case None =>
-                s"""|#!/bin/bash -ex"
+                s"""|#!/bin/bash -ex
                     |${dockerCmd}""".stripMargin
             case Some((bashProlog, bashEpilog)) =>
                 List("#!/bin/bash -ex",
