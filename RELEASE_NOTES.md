@@ -1,5 +1,8 @@
 # Release Notes
 
+## 0.39
+- Streaming works with tasks that use docker
+
 ## 0.38
 - Minor fixes, and better testing, for file streaming
 

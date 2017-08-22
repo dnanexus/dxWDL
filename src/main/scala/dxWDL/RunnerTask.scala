@@ -217,7 +217,8 @@ case class RunnerTask(task:Task,
         Utils.writeFileContent(jobOutputPath, ast_pp)
     }
 
-    private def writeSubmitBashScript(env: Map[String, WdlValue]) : Unit = {
+    // Figure out if a docker image is specified. If so, return it as a string.
+    private def dockerImage(env: Map[String, WdlValue]) : Option[String] = {
         def lookup(varName : String) : WdlValue = {
             env.get(varName) match {
                 case Some(x) => x
@@ -235,37 +236,16 @@ case class RunnerTask(task:Task,
         }
         // Figure out if docker is used. If so, it is specified by an
         // expression that requires evaluation.
-        val docker: Option[String] =
-            task.runtimeAttributes.attrs.get("docker") match {
-                case None => None
-                case Some(expr) => Some(evalStringExpr(expr))
-            }
-        docker match {
-            case None => ()
-            case Some(imgName) =>
-                // The user wants to use a docker container with the
-                // image [imgName]. We implement this with dx-docker.
-                // There may be corner cases where the image will run
-                // into permission limitations due to security.
-                //
-                // Map the home directory into the container, so that
-                // we can reach the result files, and upload them to
-                // the platform.
-                val DX_HOME = Utils.DX_HOME
-                val dockerRunPath = getMetaDir().resolve("script.submit")
-                val dockerRunScript =
-                    s"""|#!/bin/bash -ex
-                        |dx-docker run --entrypoint /bin/bash -v ${DX_HOME}:${DX_HOME} ${imgName} $${HOME}/execution/meta/script""".stripMargin.trim
-                System.err.println(s"writing docker run script to ${dockerRunPath}")
-                Utils.writeFileContent(dockerRunPath, dockerRunScript)
-                dockerRunPath.toFile.setExecutable(true)
+        task.runtimeAttributes.attrs.get("docker") match {
+            case None => None
+            case Some(expr) => Some(evalStringExpr(expr))
         }
     }
 
     // Each file marked "stream", is converted into a special fifo
     // file on the instance.
     private def handleStreamingFiles(inputs: Map[String, BValue])
-            : (String, String, Map[Declaration, WdlValue]) = {
+            : (Option[(String, String)], Map[String, BValue]) = {
         // A file that needs to be stream-downloaded.
         // Make a named pipe, and stream the file from the platform to the pipe.
         // Keep track of the download process. We need to ensure pipes have
@@ -281,55 +261,76 @@ case class RunnerTask(task:Task,
             val bashSnippet:String =
                 s"""|mkfifo ${fifo.toString}
                     |dx cat ${dxFileId} > ${fifo.toString} &
-                    |download_stream_pids+=($$!)
                     |""".stripMargin
             (WdlSingleFile(fifo.toString), bashSnippet)
         }
 
-        val m:Map[Declaration, (WdlValue, String)] = inputs.map{
-            case (_, BValue(_, _, None)) => throw new Exception("Sanity")
-            case (_, BValue(wvl, wdlValue, Some(decl))) =>
-                wdlValue match {
+        val m:Map[String, (String, BValue)] = inputs.map{
+            case (varName, BValue(wvl, wdlValue, declOpt)) =>
+                val (wdlValueRewrite,bashSnippet) = wdlValue match {
                     case WdlSingleFile(path) if wvl.attrs.stream =>
-                        decl -> mkfifo(wvl, path)
+                        mkfifo(wvl, path)
                     case WdlOptionalValue(_,Some(WdlSingleFile(path))) if wvl.attrs.stream =>
-                        decl -> mkfifo(wvl, path)
+                        mkfifo(wvl, path)
                     case _ =>
                         // everything else
-                        decl -> (wdlValue, "")
+                        (wdlValue,"")
                 }
-        }
+                val bVal:BValue = BValue(wvl, wdlValueRewrite, declOpt)
+                varName -> (bashSnippet, bVal)
+        }.toMap
 
         // set up all the named pipes
         val snippets = m.collect{
-            case (_, (_, bashSnippet)) if !bashSnippet.isEmpty => bashSnippet
+            case (_, (bashSnippet,_)) if !bashSnippet.isEmpty => bashSnippet
         }.toVector
-        val bashProlog = ("download_stream_pids=()" +:
+        val bashProlog = ("background_pids=()" +:
                               snippets).mkString("\n")
 
-        // Wait for all download processes to complete. It is legal
+        // Wait for all background processes to complete. It is legal
         // for the user job to read only the beginning of the
         // file. This causes the download streams to close
-        // prematurely, which can be show up as an error. We need to tolerate this
-        // case.
-        val bashEpilog:String = "wait ${download_stream_pids[@]}"
-        val inputsWithPipes = m.map{ case (decl, (wdlValue, _)) => decl -> wdlValue }.toMap
-        (bashProlog, bashEpilog, inputsWithPipes)
+        // prematurely, which can be show up as an error. We need to
+        // tolerate this case.
+        val bashEpilog = ""
+//            "wait ${background_pids[@]}"
+/*            """|echo "robust wait for ${background_pids[@]}"
+               |for pid in ${background_pids[@]}; do
+               |  while [[ ( -d /proc/$pid ) && ( -z `grep zombie /proc/$pid/status` ) ]]; do
+               |    sleep 10
+               |    echo "waiting for $pid"
+               |  done
+               |done
+               |""".stripMargin.trim + "\n" */
+        val inputsWithPipes = m.map{ case (varName, (_,bValue)) => varName -> bValue }.toMap
+        val bashPrologEpilog =
+            if (fifoCount == 0) {
+                // No streaming files
+                None
+            } else {
+                // There are some streaming files
+                Some((bashProlog, bashEpilog))
+            }
+        (bashPrologEpilog, inputsWithPipes)
     }
 
-    private def writeBashScript(inputs: Map[String, BValue]) : Unit = {
+    // Write the core bash script into a file. In some cases, we
+    // need to run some shell setup statements before and after this
+    // script. Returns these as two strings (prolog, epilog).
+    private def writeBashScript(inputs: Map[String, BValue],
+                                bashPrologEpilog: Option[(String, String)]) : Unit = {
         val metaDir = getMetaDir()
         val scriptPath = metaDir.resolve("script")
         val stdoutPath = metaDir.resolve("stdout")
         val stderrPath = metaDir.resolve("stderr")
         val rcPath = metaDir.resolve("rc")
 
-        // deal with files
-        val (bashProlog, bashEpilog, inputsWithPipes) = handleStreamingFiles(inputs)
-
         // instantiate the command
-        val taskCmd : String = task.instantiateCommand(inputsWithPipes, DxFunctions).get
-        val shellCmd = List(bashProlog, taskCmd, bashEpilog).mkString("\n")
+        val env: Map[Declaration, WdlValue] = inputs.map {
+            case (_, BValue(_,wdlValue,Some(decl))) => decl -> wdlValue
+            case (_, BValue(varName,_,None)) => throw new Exception("missing declaration")
+        }.toMap
+        val shellCmd : String = task.instantiateCommand(env, DxFunctions).get
 
         // This is based on Cromwell code from
         // [BackgroundAsyncJobExecutionActor.scala].  Generate a bash
@@ -349,12 +350,17 @@ case class RunnerTask(task:Task,
                     |echo 0 > ${rcPath}
                     |""".stripMargin.trim + "\n"
             } else {
+                val cdHome = s"cd ${Utils.DX_HOME}"
+                var cmdLines: List[String] = bashPrologEpilog match {
+                    case None =>
+                        List(cdHome, shellCmd)
+                    case Some((bashProlog, bashEpilog)) =>
+                        List(cdHome, bashProlog, shellCmd, bashEpilog)
+                }
+                val cmd = cmdLines.mkString("\n")
                 s"""|#!/bin/bash
                     |(
-                    |if [ -d ${Utils.DX_HOME} ]; then
-                    |  cd ${Utils.DX_HOME}
-                    |fi
-                    |${shellCmd}
+                    |${cmd}
                     |) \\
                     |  > >( tee ${stdoutPath} ) \\
                     |  2> >( tee ${stderrPath} >&2 )
@@ -363,6 +369,40 @@ case class RunnerTask(task:Task,
             }
         System.err.println(s"writing bash script to ${scriptPath}")
         Utils.writeFileContent(scriptPath, script)
+    }
+
+    private def writeDockerSubmitBashScript(env: Map[String, WdlValue],
+                                            imgName: String,
+                                            bashPrologEpilog: Option[(String, String)]) : Unit = {
+        // The user wants to use a docker container with the
+        // image [imgName]. We implement this with dx-docker.
+        // There may be corner cases where the image will run
+        // into permission limitations due to security.
+        //
+        // Map the home directory into the container, so that
+        // we can reach the result files, and upload them to
+        // the platform.
+        val DX_HOME = Utils.DX_HOME
+        val dockerCmd = s"""|dx-docker run --entrypoint /bin/bash
+                            |-v ${DX_HOME}:${DX_HOME}
+                            |${imgName}
+                            |$${HOME}/execution/meta/script""".stripMargin.replaceAll("\n", " ")
+        val dockerRunPath = getMetaDir().resolve("script.submit")
+        val dockerRunScript = bashPrologEpilog match {
+            case None =>
+                s"""|#!/bin/bash -ex
+                    |${dockerCmd}""".stripMargin
+            case Some((bashProlog, bashEpilog)) =>
+                List("#!/bin/bash -ex",
+                     bashProlog,
+                     dockerCmd,
+                     bashEpilog
+                ).mkString("\n")
+        }
+        System.err.println(s"writing docker run script to ${dockerRunPath}")
+        Utils.writeFileContent(dockerRunPath,
+                               dockerRunScript)
+        dockerRunPath.toFile.setExecutable(true)
     }
 
     // Calculate the input variables for the task, download the input files,
@@ -385,17 +425,25 @@ case class RunnerTask(task:Task,
          }.toMap
 
         // evaluate the top declarations
-        val decls: Map[String, BValue] = evalDeclarations(task.declarations, inputWvls)
-
-        // Write shell script to a file. It will be executed by the dx-applet code
-        writeBashScript(decls)
-
-        // write the script that launches the shell script. It could be a docker
-        // image.
-        val env:Map[String, WdlValue] = decls.map{
+        val inputs: Map[String, BValue] = evalDeclarations(task.declarations, inputWvls)
+        val env:Map[String, WdlValue] = inputs.map{
             case (varName, BValue(_,wdlValue,_)) => varName -> wdlValue
         }.toMap
-        writeSubmitBashScript(env)
+        val docker = dockerImage(env)
+
+        // deal with files that need streaming
+        val (bashPrologEpilog, inputsWithPipes) = handleStreamingFiles(inputs)
+
+        // Write shell script to a file. It will be executed by the dx-applet code
+        docker match {
+            case None =>
+                writeBashScript(inputsWithPipes, bashPrologEpilog)
+            case Some(img) =>
+                // write a script that launches the actual command inside a docker image.
+                // Streamed files are set up before launching docker.
+                writeBashScript(inputsWithPipes, None)
+                writeDockerSubmitBashScript(env, img, bashPrologEpilog)
+        }
 
         // serialize the environment, so we don't have to calculate it again in
         // the epilog

@@ -121,16 +121,16 @@ workflow files {
     File f1
     File f2
 
-    call lib.Colocation as colocation {
-        input : A=f1, B=f2
-    }
-
     # Try an applet that streams two files
     call lib.diff as diff1 {
         input: a=f, b=f
     }
     call lib.diff as diff2 {
         input: a=f, b=f2
+    }
+
+    call lib.Colocation as colocation {
+        input : A=f1, B=f2
     }
 
     call z_Copy as Copy { input : src=f, basename="tearFrog" }
