@@ -11,15 +11,15 @@ import java.nio.file.{Files, Path, Paths}
 import scala.collection.mutable.Queue
 import scala.util.{Failure, Success, Try}
 import Utils.{genTmpVarName, Verbose}
-import wdl4s._
-import wdl4s.AstTools
-import wdl4s.AstTools.EnhancedAstNode
-import wdl4s.command.{ParameterCommandPart, StringCommandPart}
-import wdl4s.expression._
+import wdl4s.wdl._
+import wdl4s.wdl.AstTools
+import wdl4s.wdl.AstTools.EnhancedAstNode
+import wdl4s.wdl.command.{ParameterCommandPart, StringCommandPart}
+import wdl4s.wdl.expression._
 import wdl4s.parser.WdlParser.{Ast, AstNode, Terminal}
-import wdl4s.types._
-import wdl4s.values._
-import wdl4s.WdlExpression.AstForExpressions
+import wdl4s.wdl.types._
+import wdl4s.wdl.values._
+import wdl4s.wdl.WdlExpression.AstForExpressions
 
 case class CompilerSimplifyExpr(wf: Workflow,
                                 cef: CompilerErrorFormatter,

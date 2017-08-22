@@ -4,17 +4,17 @@ import java.io.{File, FileWriter, PrintWriter}
 import java.nio.file.{Path, Paths}
 import scala.collection.mutable.Queue
 import Utils.{TopoMode, Verbose}
-import wdl4s.AstTools
-import wdl4s.AstTools.EnhancedAstNode
-import wdl4s.{Call, Declaration, Scatter, Scope,
+import wdl4s.wdl.AstTools
+import wdl4s.wdl.AstTools.EnhancedAstNode
+import wdl4s.wdl.{Call, Declaration, Scatter, Scope,
     Task, TaskCall, TaskOutput,
     WdlExpression, WdlNamespace, WdlNamespaceWithWorkflow,
-    Workflow, WorkflowCall, WdlSource, GraphNode}
-import wdl4s.command.{ParameterCommandPart, StringCommandPart}
+    Workflow, WorkflowCall, WdlSource, WdlGraphNode}
+import wdl4s.wdl.command.{ParameterCommandPart, StringCommandPart}
 import wdl4s.parser.WdlParser.{Ast, AstNode, Terminal}
-import wdl4s.types._
-import wdl4s.values._
-import wdl4s.WdlExpression.AstForExpressions
+import wdl4s.wdl.types._
+import wdl4s.wdl.values._
+import wdl4s.wdl.WdlExpression.AstForExpressions
 
 case class CompilerTopologicalSort(cef: CompilerErrorFormatter,
                                    mode: TopoMode.Value,
@@ -69,9 +69,9 @@ case class CompilerTopologicalSort(cef: CompilerErrorFormatter,
                  val newScatter = WdlRewrite.scatter(scatter,
                                                      tsortASTnodes(scatter.children, recursionDepth + 1))
                  Utils.trace(verbose2, indent+"End recursion")
-                 newScatter.asInstanceOf[GraphNode]
+                 newScatter.asInstanceOf[WdlGraphNode]
              }
-             case x => x.asInstanceOf[GraphNode]
+             case x => x.asInstanceOf[WdlGraphNode]
          }
 
         // Create workflow graph sequence of edges for topological sorting
@@ -80,9 +80,9 @@ case class CompilerTopologicalSort(cef: CompilerErrorFormatter,
         // Create a mapping from a child of a scatter node to the root level scatter
         // node it belongs to. This allows for a root level scatter node to be placed
         // after its last dependency.
-        val scatterParent : Map[GraphNode, Scatter] = recursedNodes.map {
-            case scat: Scatter => scat.descendants.map { d => (d.asInstanceOf[GraphNode], scat) }
-            case _ => Set[(GraphNode, Scatter)]()
+        val scatterParent : Map[WdlGraphNode, Scatter] = recursedNodes.map {
+            case scat: Scatter => scat.descendants.map { d => (d.asInstanceOf[WdlGraphNode], scat) }
+            case _ => Set[(WdlGraphNode, Scatter)]()
         }.flatten.toMap
 
         // Generate a list of edges corresponding to dependencies for this call
@@ -107,7 +107,7 @@ case class CompilerTopologicalSort(cef: CompilerErrorFormatter,
                 case scatter: Scatter => {
                     // If a scatter's descendants have parents outside the scatter context,
                     // map the scatter itself to them.
-                    val nodeDescendants = scatter.descendants.map { d => d.asInstanceOf[GraphNode] }
+                    val nodeDescendants = scatter.descendants.map { d => d.asInstanceOf[WdlGraphNode] }
                     val upstreamParents = nodeDescendants.map { d => d.upstream }.flatten.toSet
                     ((upstreamParents -- nodeDescendants) - gnode).map{ parent =>
                         // If the parent outside the scatter is also a member of a scatter, use it instead.
@@ -128,7 +128,7 @@ case class CompilerTopologicalSort(cef: CompilerErrorFormatter,
         edges.foreach {
             case (v,w) => Utils.trace(
                 verbose2,
-                indent + v.asInstanceOf[GraphNode].fullyQualifiedName + " -> " + w.asInstanceOf[GraphNode].fullyQualifiedName)
+                indent + v.asInstanceOf[WdlGraphNode].fullyQualifiedName + " -> " + w.asInstanceOf[WdlGraphNode].fullyQualifiedName)
         }
 
         // Topologically sort graph or return error that workflow contains a cycle
@@ -136,33 +136,33 @@ case class CompilerTopologicalSort(cef: CompilerErrorFormatter,
         Utils.trace(verbose2,
                     indent + "Sorted nodes: " +
                         sortedNodes.map {
-                            node => node.asInstanceOf[GraphNode].fullyQualifiedName }.mkString(", ")
+                            node => node.asInstanceOf[WdlGraphNode].fullyQualifiedName }.mkString(", ")
         )
         sortedNodes
     }
 
     // Alternative method of sorting that does not collapse scatters
-    def tsortASTNodesAlternative(allNodesSorted: Seq[GraphNode],
-                                 nodes: Seq[GraphNode],
-                                 recursionDepth: Int) : Seq[GraphNode] = {
+    def tsortASTNodesAlternative(allNodesSorted: Seq[WdlGraphNode],
+                                 nodes: Seq[WdlGraphNode],
+                                 recursionDepth: Int) : Seq[WdlGraphNode] = {
         val indent = " "*recursionDepth*4
-        val recursedNodes : Seq[GraphNode] = nodes.map {
+        val recursedNodes : Seq[WdlGraphNode] = nodes.map {
              case scatter : Scatter => {
                  Utils.trace(verbose2, indent+"Recursively sorting scatter: " + scatter.fullyQualifiedName)
                  val newScatter = WdlRewrite.scatter(
                      scatter,
                      tsortASTNodesAlternative(
                          allNodesSorted,
-                         scatter.children.map{ x => x.asInstanceOf[GraphNode] }, recursionDepth + 1))
+                         scatter.children.map{ x => x.asInstanceOf[WdlGraphNode] }, recursionDepth + 1))
                  Utils.trace(verbose2, indent+"End recursion")
-                 newScatter.asInstanceOf[GraphNode]
+                 newScatter.asInstanceOf[WdlGraphNode]
              }
-             case x => x.asInstanceOf[GraphNode]
+             case x => x.asInstanceOf[WdlGraphNode]
         }
         // TODO: bad big O here.  Better to filter allNodesSorted, however it needs to contain the new scatters
         val filteredNodes = recursedNodes.sortWith { (a,b) => allNodesSorted.indexOf(a) < allNodesSorted.indexOf(b) }
         Utils.trace(verbose2,
-            indent + "Sorted nodes: " + filteredNodes.map { node => node.asInstanceOf[GraphNode].fullyQualifiedName }.mkString(", "))
+            indent + "Sorted nodes: " + filteredNodes.map { node => node.asInstanceOf[WdlGraphNode].fullyQualifiedName }.mkString(", "))
 
         filteredNodes
     }
@@ -170,14 +170,14 @@ case class CompilerTopologicalSort(cef: CompilerErrorFormatter,
     def sortWorkflowAlternative(nswf: WdlNamespaceWithWorkflow): Seq[Scope] = {
         val wf = nswf.workflow
         val edges = wf.descendants.map { scope =>
-            scope.asInstanceOf[GraphNode].upstream.map { dependant =>
-                (dependant.asInstanceOf[GraphNode], scope.asInstanceOf[GraphNode])
+            scope.asInstanceOf[WdlGraphNode].upstream.map { dependant =>
+                (dependant.asInstanceOf[WdlGraphNode], scope.asInstanceOf[WdlGraphNode])
             }
         }.flatten.toSet
-        val allNodesSorted = tsort(edges).toSeq.map { x => x.asInstanceOf[GraphNode] }
+        val allNodesSorted = tsort(edges).toSeq.map { x => x.asInstanceOf[WdlGraphNode] }
         Utils.trace(verbose2,
-            "Globally sorted nodes: " + allNodesSorted.map { node => node.asInstanceOf[GraphNode].fullyQualifiedName }.mkString(", "))
-        tsortASTNodesAlternative(allNodesSorted, wf.children.map { x => x.asInstanceOf[GraphNode] }, 0)
+            "Globally sorted nodes: " + allNodesSorted.map { node => node.asInstanceOf[WdlGraphNode].fullyQualifiedName }.mkString(", "))
+        tsortASTNodesAlternative(allNodesSorted, wf.children.map { x => x.asInstanceOf[WdlGraphNode] }, 0)
     }
 
     // WDL-specific wrapper for topological sorting
