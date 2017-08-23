@@ -1,8 +1,6 @@
 package dxWDL
 
-import com.dnanexus.{DXEnvironment, DXProject}
 import org.scalatest.{BeforeAndAfterEach, FlatSpec, OneInstancePerTest}
-import wdl4s.wdl.types._
 import wdl4s.wdl.values._
 
 class InstaceTypeDBTest extends FlatSpec with BeforeAndAfterEach with OneInstancePerTest {

@@ -1,18 +1,9 @@
 package dxWDL
 
-import java.io.PrintStream
-import java.nio.charset.StandardCharsets
-import java.nio.file.{Path, Paths, Files}
 import org.scalatest.{BeforeAndAfterEach, FlatSpec}
-import scala.sys.process._
-import spray.json._
-import spray.json.DefaultJsonProtocol
 import wdl4s.wdl._
 import wdl4s.wdl.AstTools.EnhancedAstNode
-import wdl4s.parser.WdlParser.{Ast, AstNode, Terminal}
 import wdl4s.wdl.types._
-import wdl4s.wdl.values._
-
 
 class Wdl4sTest extends FlatSpec with BeforeAndAfterEach {
 

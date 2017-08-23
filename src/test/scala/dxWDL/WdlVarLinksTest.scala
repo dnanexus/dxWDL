@@ -2,9 +2,7 @@ package dxWDL
 
 import org.scalatest.{BeforeAndAfterEach, FlatSpec}
 import spray.json._
-import spray.json.DefaultJsonProtocol
 import wdl4s.wdl.types._
-import wdl4s.wdl.values._
 
 class WdlVarLinksTest extends FlatSpec with BeforeAndAfterEach {
 

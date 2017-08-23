@@ -1,16 +1,7 @@
 package dxWDL
 
-import java.nio.charset.StandardCharsets
-import java.nio.file.{Path, Paths, Files}
-import org.scalatest.{BeforeAndAfterEach, FlatSpec, OneInstancePerTest}
-import scala.sys.process._
-import spray.json._
-import spray.json.DefaultJsonProtocol
-//import spray.json.JsString
+import org.scalatest.{BeforeAndAfterEach, FlatSpec}
 import wdl4s.wdl._
-import wdl4s.wdl.AstTools.EnhancedAstNode
-import wdl4s.wdl.types._
-import wdl4s.wdl.values._
 
 class CompilerUnitTest extends FlatSpec with BeforeAndAfterEach {
 
