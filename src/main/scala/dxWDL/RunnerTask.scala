@@ -237,7 +237,7 @@ case class RunnerTask(task:WdlTask,
     // Each file marked "stream", is converted into a special fifo
     // file on the instance.
     private def handleStreamingFiles(inputs: Map[String, BValue])
-            : (Option[(String, String)], Map[Declaration, WdlValue]) = {
+            : (Option[(String, String)], Map[String, BValue]) = {
         // A file that needs to be stream-downloaded.
         // Make a named pipe, and stream the file from the platform to the pipe.
         // Keep track of the download process. We need to ensure pipes have
@@ -251,29 +251,30 @@ case class RunnerTask(task:WdlTask,
             fifoCount += 1
             val dxFileId = WdlVarLinks.getFileId(wvl)
             val bashSnippet:String =
-                s"""|mkfifo ${fifo.toString}
+                                s"""|mkfifo ${fifo.toString}
                     |dx cat ${dxFileId} > ${fifo.toString} &
-                    |""".stripMargin
+                                    |""".stripMargin
             (WdlSingleFile(fifo.toString), bashSnippet)
         }
 
-        val m:Map[Declaration, (WdlValue, String)] = inputs.map{
-            case (_, BValue(_, _, None)) => throw new Exception("Sanity")
-            case (_, BValue(wvl, wdlValue, Some(decl))) =>
-                wdlValue match {
+        val m:Map[String, (String, BValue)] = inputs.map{
+            case (varName, BValue(wvl, wdlValue, declOpt)) =>
+                val (wdlValueRewrite,bashSnippet) = wdlValue match {
                     case WdlSingleFile(path) if wvl.attrs.stream =>
-                        decl -> mkfifo(wvl, path)
+                        mkfifo(wvl, path)
                     case WdlOptionalValue(_,Some(WdlSingleFile(path))) if wvl.attrs.stream =>
-                        decl -> mkfifo(wvl, path)
+                        mkfifo(wvl, path)
                     case _ =>
                         // everything else
-                        decl -> (wdlValue, "")
+                        (wdlValue,"")
                 }
-        }
+                val bVal:BValue = BValue(wvl, wdlValueRewrite, declOpt)
+                varName -> (bashSnippet, bVal)
+        }.toMap
 
         // set up all the named pipes
         val snippets = m.collect{
-            case (_, (_, bashSnippet)) if !bashSnippet.isEmpty => bashSnippet
+            case (_, (bashSnippet,_)) if !bashSnippet.isEmpty => bashSnippet
         }.toVector
         val bashProlog = ("background_pids=()" +:
                               snippets).mkString("\n")
@@ -284,16 +285,16 @@ case class RunnerTask(task:WdlTask,
         // prematurely, which can be show up as an error. We need to
         // tolerate this case.
         val bashEpilog = ""
-//            "wait ${background_pids[@]}"
-/*            """|echo "robust wait for ${background_pids[@]}"
+        //            "wait ${background_pids[@]}"
+        /*            """|echo "robust wait for ${background_pids[@]}"
                |for pid in ${background_pids[@]}; do
                |  while [[ ( -d /proc/$pid ) && ( -z `grep zombie /proc/$pid/status` ) ]]; do
                |    sleep 10
                |    echo "waiting for $pid"
                |  done
                |done
-               |""".stripMargin.trim + "\n" */
-        val inputsWithPipes = m.map{ case (decl, (wdlValue, _)) => decl -> wdlValue }.toMap
+         |""".stripMargin.trim + "\n" */
+        val inputsWithPipes = m.map{ case (varName, (_,bValue)) => varName -> bValue }.toMap
         val bashPrologEpilog =
             if (fifoCount == 0) {
                 // No streaming files
@@ -428,11 +429,11 @@ case class RunnerTask(task:WdlTask,
         // Write shell script to a file. It will be executed by the dx-applet code
         docker match {
             case None =>
-                writeBashScript(inputs, bashPrologEpilog)
+                writeBashScript(inputsWithPipes, bashPrologEpilog)
             case Some(img) =>
                 // write a script that launches the actual command inside a docker image.
                 // Streamed files are set up before launching docker.
-                writeBashScript(inputs, None)
+                writeBashScript(inputsWithPipes, None)
                 writeDockerSubmitBashScript(env, img, bashPrologEpilog)
         }
 
