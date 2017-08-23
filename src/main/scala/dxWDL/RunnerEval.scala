@@ -20,17 +20,12 @@
 package dxWDL
 
 // DX bindings
-import com.dnanexus.{DXApplet, DXEnvironment, DXFile, DXJob}
 import com.fasterxml.jackson.databind.JsonNode
 import java.nio.file.Path
-import scala.collection.JavaConverters._
 import spray.json._
-import spray.json.DefaultJsonProtocol
-import wdl4s.{Declaration, DeclarationInterface, WdlNamespaceWithWorkflow,
-    WdlExpression, Workflow, WorkflowOutput}
-import wdl4s.types._
-import wdl4s.values._
-import WdlVarLinks._
+import wdl4s.wdl.{Declaration, DeclarationInterface, WdlWorkflow, WorkflowOutput}
+import wdl4s.wdl.types._
+import wdl4s.wdl.values._
 
 object RunnerEval {
     def evalDeclarations(declarations: Seq[DeclarationInterface],
@@ -119,7 +114,7 @@ object RunnerEval {
         }.flatten.toMap
     }
 
-    def apply(wf: Workflow,
+    def apply(wf: WdlWorkflow,
               jobInputPath : Path,
               jobOutputPath : Path,
               jobInfoPath: Path) : Unit = {

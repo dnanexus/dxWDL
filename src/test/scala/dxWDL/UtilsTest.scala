@@ -1,16 +1,12 @@
 package dxWDL
 
 import com.typesafe.config._
-import java.nio.charset.StandardCharsets
-import java.nio.file.{Path, Paths, Files}
 import net.jcazevedo.moultingyaml._
-import net.jcazevedo.moultingyaml.DefaultYamlProtocol._
 import org.scalatest.{BeforeAndAfterEach, FlatSpec, OneInstancePerTest}
 import scala.collection.JavaConverters._
 import spray.json._
-import spray.json.DefaultJsonProtocol
-import wdl4s.types._
-import wdl4s.values._
+import wdl4s.wdl.types._
+import wdl4s.wdl.values._
 
 class UtilsTest extends FlatSpec with BeforeAndAfterEach with OneInstancePerTest {
     private def checkMarshal(v : WdlValue) : Unit = {

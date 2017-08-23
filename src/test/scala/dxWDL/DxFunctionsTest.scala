@@ -1,10 +1,7 @@
 package dxWDL
 
 import java.io.PrintStream
-import java.nio.file.{Files, FileSystems, Path, Paths, PathMatcher}
 import org.scalatest.{BeforeAndAfterEach, FlatSpec}
-import wdl4s.types._
-import wdl4s.values._
 
 /**Writes to nowhere*/
 class NullOutputStream extends java.io.OutputStream {

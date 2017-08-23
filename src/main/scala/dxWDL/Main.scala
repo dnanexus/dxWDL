@@ -1,19 +1,17 @@
 package dxWDL
 
-import com.dnanexus.{DXApplet, DXProject, DXUtil, DXContainer, DXWorkflow}
+import com.dnanexus.DXProject
 import com.typesafe.config._
-import java.io.{File, FileWriter, PrintWriter}
-import java.nio.file.{Path, Paths, Files}
-import net.jcazevedo.moultingyaml._
+import java.io.{FileWriter, PrintWriter}
+import java.nio.file.{Path, Paths}
 import scala.collection.JavaConverters._
 import scala.collection.mutable.HashMap
-import scala.util.{Failure, Success, Try}
+import scala.util.{Failure, Success}
 import spray.json._
-import spray.json.DefaultJsonProtocol
 import spray.json.JsString
 import Utils.{TopoMode, Verbose}
-import wdl4s.{ImportResolver, Task, WdlNamespace, WdlNamespaceWithWorkflow, WdlSource,
-    Workflow, WorkflowOutput}
+import wdl4s.wdl.{ImportResolver, WdlNamespace, WdlTask,
+    WdlNamespaceWithWorkflow, WdlWorkflow, WorkflowOutput, WorkflowSource}
 
 object Main extends App {
     sealed trait Termination
@@ -332,7 +330,7 @@ object Main extends App {
 
         // Resolving imports. Look for referenced files in the
         // source directory.
-        def resolver(filename: String) : WdlSource = {
+        def resolver(filename: String) : WorkflowSource = {
             var sourceDir:Path = wdlSourceFile.getParent()
             if (sourceDir == null) {
                 // source file has no parent directory, use the
@@ -407,14 +405,14 @@ object Main extends App {
     }
 
     // Extract the only task from a namespace
-    def taskOfNamespace(ns: WdlNamespace) : Task = {
+    def taskOfNamespace(ns: WdlNamespace) : WdlTask = {
         val numTasks = ns.tasks.length
         if (numTasks != 1)
             throw new Exception(s"WDL file contains ${numTasks} tasks, instead of 1")
         ns.tasks.head
     }
 
-    def workflowOfNamespace(ns: WdlNamespace): Workflow = {
+    def workflowOfNamespace(ns: WdlNamespace): WdlWorkflow = {
         ns match {
             case nswf: WdlNamespaceWithWorkflow => nswf.workflow
             case _ => throw new Exception("WDL file contains no workflow")

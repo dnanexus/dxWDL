@@ -1,22 +1,13 @@
 package dxWDL
 
-import java.nio.charset.StandardCharsets
-import java.nio.file.{Path, Paths, Files}
-import org.scalatest.{BeforeAndAfterEach, FlatSpec, OneInstancePerTest}
-import scala.sys.process._
-import spray.json._
-import spray.json.DefaultJsonProtocol
-//import spray.json.JsString
-import wdl4s.{AstTools, Call, Task, WdlExpression, WdlNamespace, WdlNamespaceWithWorkflow, Workflow}
-import wdl4s.AstTools.EnhancedAstNode
-import wdl4s.types._
-import wdl4s.values._
+import org.scalatest.{BeforeAndAfterEach, FlatSpec}
+import wdl4s.wdl._
 
 class CompilerUnitTest extends FlatSpec with BeforeAndAfterEach {
 
     // Look for a call inside a namespace.
-    private def getCallFromNamespace(ns : WdlNamespaceWithWorkflow, callName : String ) : Call = {
-        val wf: Workflow = ns.workflow
+    private def getCallFromNamespace(ns : WdlNamespaceWithWorkflow, callName : String ) : WdlCall = {
+        val wf: WdlWorkflow = ns.workflow
         wf.findCallByName(callName) match {
             case None => throw new AppInternalException(s"Call ${callName} not found in WDL file")
             case Some(call) => call
@@ -99,8 +90,8 @@ class CompilerUnitTest extends FlatSpec with BeforeAndAfterEach {
                      |}""".stripMargin.trim
 
         val ns = WdlNamespaceWithWorkflow.load(wdl, Seq.empty).get
-        val wf: Workflow = ns.workflow
-        val call : Call = getCallFromNamespace(ns, "diff")
+        val wf: WdlWorkflow = ns.workflow
+        val call : WdlCall = getCallFromNamespace(ns, "diff")
 
         //var env : Compile.CallEnv = Map.empty[String, WdlVarLinks]
 /*        var closure = Map.empty[String, WdlVarLinks]

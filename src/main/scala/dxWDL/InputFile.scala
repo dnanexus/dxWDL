@@ -23,12 +23,11 @@ package dxWDL
 
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.node.ObjectNode
-import com.dnanexus.{DXAPI, DXDataObject, DXJSON, DXFile, DXProject, DXSearch, DXWorkflow}
-import java.nio.file.{Path, Paths, Files}
+import com.dnanexus.{DXAPI, DXJSON, DXFile, DXProject, DXSearch, DXWorkflow}
+import java.nio.file.{Path, Paths}
 import scala.collection.JavaConverters._
 import scala.collection.mutable.HashMap
 import spray.json._
-import spray.json.DefaultJsonProtocol
 import Utils.UNIVERSAL_FILE_PREFIX
 
 object InputFile {

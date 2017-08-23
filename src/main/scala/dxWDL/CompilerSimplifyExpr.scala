@@ -6,22 +6,16 @@
   */
 package dxWDL
 
-import java.io.{File, FileWriter, PrintWriter}
-import java.nio.file.{Files, Path, Paths}
 import scala.collection.mutable.Queue
-import scala.util.{Failure, Success, Try}
+import scala.util.{Success}
 import Utils.{genTmpVarName, Verbose}
-import wdl4s._
-import wdl4s.AstTools
-import wdl4s.AstTools.EnhancedAstNode
-import wdl4s.command.{ParameterCommandPart, StringCommandPart}
-import wdl4s.expression._
-import wdl4s.parser.WdlParser.{Ast, AstNode, Terminal}
-import wdl4s.types._
-import wdl4s.values._
-import wdl4s.WdlExpression.AstForExpressions
+import wdl4s.wdl._
+import wdl4s.wdl.expression._
+import wdl4s.parser.WdlParser.{Ast, Terminal}
+import wdl4s.wdl.types._
+//import wdl4s.wdl.WdlExpression.AstForExpressions
 
-case class CompilerSimplifyExpr(wf: Workflow,
+case class CompilerSimplifyExpr(wf: WdlWorkflow,
                                 cef: CompilerErrorFormatter,
                                 verbose: Verbose) {
     val verbose2:Boolean = verbose.keywords contains "simplify"
@@ -30,7 +24,7 @@ case class CompilerSimplifyExpr(wf: Workflow,
     // A is a call.
     private def isCallOutputAccess(expr: WdlExpression,
                                    ast: Ast,
-                                   call: Call) : Boolean = {
+                                   call: WdlCall) : Boolean = {
         val lhs:String = WdlExpression.toString(ast.getAttribute("lhs"))
         try {
             val wdlType = WdlNamespace.lookupType(wf)(lhs)
@@ -48,6 +42,10 @@ case class CompilerSimplifyExpr(wf: Workflow,
         }
     }
 
+    def isMemberAccess(a: Ast) = {
+        wdl4s.wdl.WdlExpression.AstForExpressions(a).isMemberAccess
+    }
+
     // Transform a call by lifting its non trivial expressions,
     // and converting them into declarations. For example:
     //
@@ -62,12 +60,12 @@ case class CompilerSimplifyExpr(wf: Workflow,
     //  }
     //
     // Inside a scatter we can deal with field accesses,
-    private def simplifyCall(call: Call) : Vector[Scope] = {
+    private def simplifyCall(call: WdlCall) : Vector[Scope] = {
         val tmpDecls = Queue[Scope]()
         val inputs: Map[String, WdlExpression]  = call.inputMappings.map { case (key, expr) =>
             val rhs = expr.ast match {
                 case t: Terminal => expr
-                case a: Ast if (a.isMemberAccess && isCallOutputAccess(expr, a, call)) =>
+                case a: Ast if (isMemberAccess(a) && isCallOutputAccess(expr, a, call)) =>
                     // Accessing an expression like A.B.C
                     // The expression could be:
                     // 1) Result from a previous call
@@ -88,8 +86,8 @@ case class CompilerSimplifyExpr(wf: Workflow,
         }
 
         val callModifiedInputs = call match {
-            case tc: TaskCall => WdlRewrite.taskCall(tc, inputs)
-            case wfc: WorkflowCall => throw new Exception(s"Unimplemented WorkflowCall")
+            case tc: WdlTaskCall => WdlRewrite.taskCall(tc, inputs)
+            case wfc: WdlWorkflowCall => throw new Exception(s"Unimplemented WorkflowCall")
         }
         tmpDecls += callModifiedInputs
         tmpDecls.toVector
@@ -177,7 +175,7 @@ case class CompilerSimplifyExpr(wf: Workflow,
     def simplify(scope: Scope): Vector[Scope] = {
         scope match {
             case ssc:Scatter => simplifyScatter(ssc)
-            case call:Call => simplifyCall(call)
+            case call:WdlCall => simplifyCall(call)
             case cond:If => simplifyIf(cond)
             case decl:Declaration => Vector(decl)
             case wfo:WorkflowOutput => Vector(wfo)
@@ -188,7 +186,7 @@ case class CompilerSimplifyExpr(wf: Workflow,
         }
     }
 
-    def simplifyWorkflow(wf: Workflow) : Workflow = {
+    def simplifyWorkflow(wf: WdlWorkflow) : WdlWorkflow = {
         val children: Vector[Scope] = wf.children.map(x => simplify(x)).toVector.flatten
         WdlRewrite.workflow(wf, children)
     }

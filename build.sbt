@@ -15,7 +15,44 @@ resolvers ++= Seq(
 )
 
 // Show deprecation warnings
-scalacOptions ++= Seq("-unchecked", "-deprecation")
+scalacOptions ++= Seq(
+    "-unchecked",
+    "-deprecation",
+    "-feature",
+    "-explaintypes",
+    "-encoding", "UTF-8",
+
+/*    "-Xfuture",
+    "-Xlint:adapted-args",
+    "-Xlint:by-name-right-associative",
+    "-Xlint:constant", */
+    "-Xlint:delayedinit-select",
+    "-Xlint:doc-detached",
+    "-Xlint:inaccessible",
+    "-Xlint:infer-any",
+    "-Xlint:missing-interpolator",
+    "-Xlint:nullary-override",
+    "-Xlint:nullary-unit",
+    "-Xlint:option-implicit",
+    "-Xlint:package-object-classes",
+    "-Xlint:poly-implicit-overload",
+    "-Xlint:private-shadow",
+    "-Xlint:stars-align",
+    "-Xlint:type-parameter-shadow",
+//    "-Xlint:unsound-match",
+//    "-Yno-adapted-args",
+    "-Ywarn-dead-code",
+//    "-Ywarn-numeric-widen",
+//    "-Ywarn-value-discard",
+    "-Ywarn-inaccessible",
+//    "-Ywarn-unused:implicits",
+//    "-Ywarn-unused:privates"
+//    "-Ywarn-unused:locals"
+//    "-Ywarn-unused:patvars"
+
+    "-Ywarn-unused:imports", // warns about every unused import on every command.
+    "-Xfatal-warnings"       // makes those warnings fatal.
+)
 
 // Assembly settings
 assemblyJarName in assembly := "dxWDL.jar"
@@ -23,7 +60,7 @@ logLevel in assembly := Level.Info
 assemblyOutputPath in assembly := file("applet_resources/resources/dxWDL.jar")
 
 libraryDependencies ++= Seq(
-    "org.broadinstitute" %% "wdl4s" % "0.13",
+    "org.broadinstitute" %% "wdl4s-wdl" % "0.15",
     "io.spray" %% "spray-json" % "1.3.2",
     "net.jcazevedo" %% "moultingyaml" % "0.4.0",
     "com.typesafe" % "config" % "1.3.1",

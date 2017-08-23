@@ -1,21 +1,8 @@
 package dxWDL
 
-import java.nio.charset.StandardCharsets
-import java.nio.file.{Path, Paths, Files}
-import org.scalatest.{BeforeAndAfterEach, FlatSpec, OneInstancePerTest}
-import scala.sys.process._
-import spray.json._
-import spray.json.DefaultJsonProtocol
+import org.scalatest.{BeforeAndAfterEach, FlatSpec}
 import Utils.{TopoMode, Verbose}
-import wdl4s.{AstTools, Call, Task, WdlExpression, WdlNamespace, WdlNamespaceWithWorkflow, Workflow}
-import wdl4s.AstTools.EnhancedAstNode
-import wdl4s.types._
-import wdl4s.values._
-import wdl4s.{Call, Declaration, Scatter, Scope,
-    Task, TaskCall, TaskOutput,
-    WdlExpression, WdlNamespace, WdlNamespaceWithWorkflow,
-    Workflow, WorkflowCall, WdlSource, GraphNode}
-
+import wdl4s.wdl._
 
 class CompilerTopologicalSortTest extends FlatSpec with BeforeAndAfterEach {
     val simpleWdl = """|task add {
@@ -52,7 +39,7 @@ class CompilerTopologicalSortTest extends FlatSpec with BeforeAndAfterEach {
                          |}""".stripMargin.trim
 
      def getNames(nodes: Seq[Scope]) = {
-         nodes.map { node => node.asInstanceOf[GraphNode].fullyQualifiedName }
+         nodes.map { node => node.asInstanceOf[WdlGraphNode].fullyQualifiedName }
      }
 
      def sortWorkflowHelper(wdl: String, relaxed: Boolean) : (Seq[String], Seq[Scope]) =  {

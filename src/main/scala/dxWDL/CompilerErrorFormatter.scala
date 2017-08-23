@@ -1,10 +1,10 @@
 package dxWDL
 
-import wdl4s.AstTools
-import wdl4s.parser.WdlParser.{Ast, AstNode, Terminal}
-import wdl4s._
+import wdl4s.wdl.AstTools
+import wdl4s.parser.WdlParser.{Ast, Terminal}
+import wdl4s.wdl._
 
-case class CompilerErrorFormatter(terminalMap: Map[Terminal, WdlSource]) {
+case class CompilerErrorFormatter(terminalMap: Map[Terminal, WorkflowSource]) {
     private def pointToSource(t: Terminal): String = s"${line(t)}\n${" " * (t.getColumn - 1)}^"
     private def line(t:Terminal): String = terminalMap.get(t).get.split("\n")(t.getLine - 1)
 
@@ -40,7 +40,7 @@ case class CompilerErrorFormatter(terminalMap: Map[Terminal, WdlSource]) {
             |""".stripMargin
     }
 
-    def illegalCallName(call: Call) : String = {
+    def illegalCallName(call: WdlCall) : String = {
         val name: Terminal = call.ast.getAttribute("name").asInstanceOf[Terminal]
         s"""|Illegal call name
             |

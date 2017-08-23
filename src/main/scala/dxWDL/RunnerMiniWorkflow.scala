@@ -45,23 +45,16 @@ package dxWDL
 
 // DX bindings
 import com.dnanexus._
-import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.node.ObjectNode
 import java.nio.file.{Path, Paths, Files}
-import scala.collection.JavaConverters._
 import scala.collection.mutable.HashMap
 import spray.json._
-import spray.json.DefaultJsonProtocol
 import Utils.{AppletLinkInfo, transformVarName}
-import wdl4s._
-import wdl4s.AstTools
-import wdl4s.AstTools.EnhancedAstNode
-import wdl4s.expression._
-import wdl4s.parser.WdlParser.{Ast, AstNode, Terminal}
-import wdl4s.types._
-import wdl4s.values._
-import wdl4s.WdlExpression.AstForExpressions
-import WdlVarLinks._
+import wdl4s.wdl._
+import wdl4s.wdl.expression._
+import wdl4s.parser.WdlParser.{Ast, Terminal}
+import wdl4s.wdl.values._
+import wdl4s.wdl.WdlExpression.AstForExpressions
 
 case class RunnerMiniWorkflow(exportVars: Set[String],
                               cef: CompilerErrorFormatter,
@@ -74,7 +67,7 @@ case class RunnerMiniWorkflow(exportVars: Set[String],
     case class ElemCall(outputs: Map[String, WdlVarLinks]) extends Elem
     type Env = Map[String, Elem]
 
-    private def callUniqueName(call : Call) : String = {
+    private def callUniqueName(call : WdlCall) : String = {
         call.alias match {
             case Some(x) => x
             case None => Utils.taskOfCall(call).name
@@ -89,10 +82,10 @@ case class RunnerMiniWorkflow(exportVars: Set[String],
     // these are: [inc1, inc2]
     private def findApplets(scope: Scope,
                             linkInfo: Map[String, AppletLinkInfo])
-            : Seq[(Call, AppletLinkInfo)] = {
+            : Seq[(WdlCall, AppletLinkInfo)] = {
         // Match each call with its dx:applet
         scope.children.map {
-            case call: TaskCall =>
+            case call: WdlTaskCall =>
                 val dxAppletName = call.task.name
                 linkInfo.get(dxAppletName) match {
                     case Some(x) => Some((call, x))
@@ -100,7 +93,6 @@ case class RunnerMiniWorkflow(exportVars: Set[String],
                         throw new AppInternalException(
                             s"Could not find linking information for ${dxAppletName}")
                 }
-            case call: WorkflowCall => throw new Exception("Calling workflows not supported")
             case _ => None
         }.flatten
     }
@@ -168,7 +160,7 @@ case class RunnerMiniWorkflow(exportVars: Set[String],
         call inc as inc {input: i=k}
     }
       */
-    private def buildAppletInputs(call: Call,
+    private def buildAppletInputs(call: WdlCall,
                                   apLinkInfo: AppletLinkInfo,
                                   env : Env) : ObjectNode = {
         val callName = callUniqueName(call)
@@ -215,7 +207,7 @@ case class RunnerMiniWorkflow(exportVars: Set[String],
 
     // Create a mapping from the job output variables to json values. These
     // are variables that can be referenced by other calls.
-    private def jobOutputEnv(call: Call,
+    private def jobOutputEnv(call: WdlCall,
                              dxJob: DXJob) : Env = {
         val prefix = callUniqueName(call)
         val task = Utils.taskOfCall(call)
@@ -261,7 +253,7 @@ case class RunnerMiniWorkflow(exportVars: Set[String],
     // executions.  Return the variables calculated.
     private def evalScatter(scatter : Scatter,
                             collection : WdlVarLinks,
-                            calls : Seq[(Call, AppletLinkInfo)],
+                            calls : Seq[(WdlCall, AppletLinkInfo)],
                             outerEnv : Map[String, WdlVarLinks]) : Map[String, WdlVarLinks] = {
         System.err.println(s"evalScatter")
 
@@ -330,7 +322,7 @@ case class RunnerMiniWorkflow(exportVars: Set[String],
     // executions.
     private def evalIf(cond : If,
                        condition : WdlVarLinks,
-                       calls : Seq[(Call, AppletLinkInfo)],
+                       calls : Seq[(WdlCall, AppletLinkInfo)],
                        outerEnv: Map[String, WdlVarLinks]) : Map[String, WdlVarLinks] = {
         System.err.println(s"evalIf")
 
@@ -425,7 +417,7 @@ case class RunnerMiniWorkflow(exportVars: Set[String],
 
     // Split a workflow into the top declarations,
     // the and the main scope (Scatter, If, etc.)
-    private def workflowSplit(wf: Workflow) : (Vector[Declaration], Scope) = {
+    private def workflowSplit(wf: WdlWorkflow) : (Vector[Declaration], Scope) = {
         val (topDecls, rest) = Utils.splitBlockDeclarations(wf.children.toList)
         val scope: Scope = rest.head match {
             case scatter:Scatter => scatter
@@ -446,7 +438,7 @@ case class RunnerMiniWorkflow(exportVars: Set[String],
         }
     }
 
-    def apply(wf: Workflow,
+    def apply(wf: WdlWorkflow,
               inputs : Map[String, WdlVarLinks]) : JsValue = {
         System.err.println(s"inputs=${inputs}")
 
@@ -461,7 +453,7 @@ case class RunnerMiniWorkflow(exportVars: Set[String],
         val dxProject = dxEnv.getProjectContext()
         val linkInfo = loadLinkInfo(dxProject)
         System.err.println(s"link info=${linkInfo}")
-        val applets : Seq[(Call, AppletLinkInfo)] = findApplets(scope, linkInfo)
+        val applets : Seq[(WdlCall, AppletLinkInfo)] = findApplets(scope, linkInfo)
 
         val blockOutputs : Map[String, WdlVarLinks] = scope match {
             case scatter:Scatter =>
@@ -494,7 +486,7 @@ case class RunnerMiniWorkflow(exportVars: Set[String],
 
 
 object RunnerMiniWorkflow {
-    def apply(wf: Workflow,
+    def apply(wf: WdlWorkflow,
               jobInputPath : Path,
               jobOutputPath : Path,
               jobInfoPath: Path) : Unit = {

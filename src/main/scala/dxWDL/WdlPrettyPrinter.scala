@@ -13,9 +13,8 @@
   */
 package dxWDL
 
-import wdl4s._
-import wdl4s.command.{CommandPart, ParameterCommandPart, StringCommandPart}
-import wdl4s.parser.WdlParser.{Ast, AstNode, Terminal}
+import wdl4s.wdl._
+import wdl4s.wdl.command.{CommandPart, ParameterCommandPart, StringCommandPart}
 
 case class WdlPrettyPrinter(fqnFlag: Boolean, workflowOutputs: Option[Seq[WorkflowOutput]]) {
 
@@ -79,7 +78,7 @@ case class WdlPrettyPrinter(fqnFlag: Boolean, workflowOutputs: Option[Seq[Workfl
         firstLine +: nonEmptyLines :+ endLine
     }
 
-    def apply(call: TaskCall, level: Int) : Vector[String] = {
+    def apply(call: WdlTaskCall, level: Int) : Vector[String] = {
         val aliasStr = call.alias match {
             case None => ""
             case Some(nm) => " as " ++ nm
@@ -128,7 +127,7 @@ case class WdlPrettyPrinter(fqnFlag: Boolean, workflowOutputs: Option[Seq[Workfl
 
     def apply(scope: Scope, level: Int) : Vector[String] = {
         scope match {
-            case x:TaskCall => apply(x, level)
+            case x:WdlTaskCall => apply(x, level)
             case x:Declaration => apply(x, level)
             case x:Scatter => apply(x, level)
             case x:If => apply(x, level)
@@ -144,7 +143,7 @@ case class WdlPrettyPrinter(fqnFlag: Boolean, workflowOutputs: Option[Seq[Workfl
         Vector(indentLine(ln, level))
     }
 
-    def apply(task: Task, level:Int) : Vector[String] = {
+    def apply(task: WdlTask, level:Int) : Vector[String] = {
         val decls = task.declarations.map(x => apply(x, level + 1)).flatten.toVector
         val runtime = task.runtimeAttributes.attrs.map{ case (key, expr) =>
             indentLine(s"${key}: ${expr.toWdlString}", level + 2)
@@ -181,7 +180,7 @@ case class WdlPrettyPrinter(fqnFlag: Boolean, workflowOutputs: Option[Seq[Workfl
         Vector(indentLine(ln, level))
     }
 
-    def apply(wf: Workflow, level: Int) : Vector[String] = {
+    def apply(wf: WdlWorkflow, level: Int) : Vector[String] = {
         // split the workflow outputs from the other children, they
         // are treated separately
         val (wfChildren, wfOutputs) = wf.children.partition {
@@ -189,7 +188,7 @@ case class WdlPrettyPrinter(fqnFlag: Boolean, workflowOutputs: Option[Seq[Workfl
             case _ => true
         }
         val children = wfChildren.map {
-            case call: TaskCall => apply(call, level + 1)
+            case call: WdlTaskCall => apply(call, level + 1)
             case sc: Scatter => apply(sc, level + 1)
             case decl: Declaration => apply(decl, level + 1)
             case cond: If  => apply(cond, level + 1)

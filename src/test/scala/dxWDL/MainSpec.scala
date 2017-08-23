@@ -2,15 +2,7 @@ package dxWDL
 
 import better.files._
 import org.scalatest.{BeforeAndAfterAll, FlatSpec, Matchers}
-import dxWDL.MainSpec._
-import dxWDL.SampleWdl.{EmptyInvalid, EmptyTask, EmptyWorkflow, ThreeStep}
-import net.jcazevedo.moultingyaml._
-import net.jcazevedo.moultingyaml.DefaultYamlProtocol._
-import wdl4s.{AstTools, WdlExpression, WdlNamespaceWithWorkflow}
-import wdl4s.AstTools.EnhancedAstNode
-
-// JSON parsing library
-import spray.json._
+import dxWDL.SampleWdl.ThreeStep
 
 class MainSpec extends FlatSpec with Matchers with BeforeAndAfterAll {
 

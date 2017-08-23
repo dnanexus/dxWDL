@@ -1,6 +1,6 @@
 package dxWDL
 
-import com.dnanexus.{DXApplet, DXAPI, DXFile, DXProject, DXJSON, DXUtil, DXDataObject}
+import com.dnanexus.{DXApplet, DXAPI, DXFile, DXProject, DXJSON}
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.node.ObjectNode
@@ -11,16 +11,10 @@ import scala.collection.JavaConverters._
 import scala.concurrent._
 import ExecutionContext.Implicits.global
 import scala.sys.process._
-import scala.util.{Failure, Success, Try}
 import spray.json._
-import spray.json.DefaultJsonProtocol
-import wdl4s.AstTools
-import wdl4s.AstTools.EnhancedAstNode
-import wdl4s.{Call, Declaration, Scatter, Scope, Task, WdlExpression, WdlNamespaceWithWorkflow,
-    WdlNamespace, WdlSource, Workflow}
-import wdl4s.parser.WdlParser.{Ast, AstNode, Terminal}
-import wdl4s.types._
-import wdl4s.values._
+import wdl4s.wdl.{Declaration, Scope, WdlCall, WdlTask, WdlWorkflow}
+import wdl4s.wdl.types._
+import wdl4s.wdl.values._
 
 // Exception used for AppInternError
 class AppInternalException private(ex: RuntimeException) extends RuntimeException(ex) {
@@ -287,10 +281,10 @@ object Utils {
         }
     }
 
-    def taskOfCall(call : Call) : Task = {
+    def taskOfCall(call : WdlCall) : WdlTask = {
         call.callable match {
-            case task: Task => task
-            case workflow: Workflow =>
+            case task: WdlTask => task
+            case workflow: WdlWorkflow =>
                 throw new AppInternalException(s"Workflows are not support in calls ${call.callable}")
         }
     }
@@ -328,9 +322,9 @@ object Utils {
                     case (JsString(wTypeStr), JsString(wValueStr)) =>
                         val wType : WdlType = WdlType.fromWdlString(wTypeStr)
                         wType.fromWdlString(wValueStr)
-                    case _ => throw new AppInternalException("JSON vector should have two strings ${buf}")
+                    case _ => throw new AppInternalException(s"JSON vector should have two strings ${buf}")
                 }
-            case _ => throw new AppInternalException("Error unmarshalling json value ${buf}")
+            case _ => throw new AppInternalException(s"Error unmarshalling json value ${buf}")
         }
     }
 
@@ -396,9 +390,7 @@ object Utils {
 
     // Run a child process and collect stdout and stderr into strings
     def execCommand(cmdLine : String, timeout: Option[Int]) : (String, String) = {
-        val processBuilder = new java.lang.ProcessBuilder()
         val cmds = Seq("/bin/sh", "-c", cmdLine)
-
         val outStream = new StringBuilder()
         val errStream = new StringBuilder()
         val logger = ProcessLogger(
@@ -407,7 +399,7 @@ object Utils {
         )
 
         val p : Process = Process(cmds).run(logger, false)
-        val retcode = timeout match {
+        timeout match {
             case None =>
                 // blocks, and returns the exit code. Does NOT connect
                 // the standard in of the child job to the parent
@@ -417,7 +409,6 @@ object Utils {
                     System.err.println(s"STDERR: ${errStream.toString()}")
                     throw new Exception(s"Error running command ${cmdLine}")
                 }
-                retcode
             case Some(nSec) =>
                 val f = Future(blocking(p.exitValue()))
                 try {
