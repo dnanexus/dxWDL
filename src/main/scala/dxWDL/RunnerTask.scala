@@ -251,9 +251,9 @@ case class RunnerTask(task:WdlTask,
             fifoCount += 1
             val dxFileId = WdlVarLinks.getFileId(wvl)
             val bashSnippet:String =
-                                s"""|mkfifo ${fifo.toString}
+                s"""|mkfifo ${fifo.toString}
                     |dx cat ${dxFileId} > ${fifo.toString} &
-                                    |""".stripMargin
+                    |""".stripMargin
             (WdlSingleFile(fifo.toString), bashSnippet)
         }
 
@@ -286,14 +286,7 @@ case class RunnerTask(task:WdlTask,
         // tolerate this case.
         val bashEpilog = ""
         //            "wait ${background_pids[@]}"
-        /*            """|echo "robust wait for ${background_pids[@]}"
-               |for pid in ${background_pids[@]}; do
-               |  while [[ ( -d /proc/$pid ) && ( -z `grep zombie /proc/$pid/status` ) ]]; do
-               |    sleep 10
-               |    echo "waiting for $pid"
-               |  done
-               |done
-         |""".stripMargin.trim + "\n" */
+
         val inputsWithPipes = m.map{ case (varName, (_,bValue)) => varName -> bValue }.toMap
         val bashPrologEpilog =
             if (fifoCount == 0) {
