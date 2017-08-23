@@ -253,6 +253,7 @@ case class RunnerTask(task:WdlTask,
             val bashSnippet:String =
                 s"""|mkfifo ${fifo.toString}
                     |dx cat ${dxFileId} > ${fifo.toString} &
+                    |background_pids+=($$!)
                     |""".stripMargin
             (WdlSingleFile(fifo.toString), bashSnippet)
         }
@@ -279,14 +280,38 @@ case class RunnerTask(task:WdlTask,
         val bashProlog = ("background_pids=()" +:
                               snippets).mkString("\n")
 
-        // Wait for all background processes to complete. It is legal
-        // for the user job to read only the beginning of the
-        // file. This causes the download streams to close
-        // prematurely, which can be show up as an error. We need to
-        // tolerate this case.
-        val bashEpilog = ""
-        //            "wait ${background_pids[@]}"
-
+        // We cannot wait for all background processes to complete,
+        // because the worker process may not read one of the fifo streams.
+        // We want to make sure there were no abnormal terminations.
+        //
+        // Assumptions
+        // 1) 'dx cat' returns zero status when a user reads only the beginning
+        //    of a file
+        val bashEpilog =
+            s"""|for pid in $${background_pids[@]}; do
+                |  p_status=`ps --pid $$pid --no-headers | wc -l`
+                |  if [[ $$p_status == 0 ]]; then
+                |    # the process is already dead, check correct exit status
+                |    wait $$pid
+                |  else
+                |    echo "Warning: background download process $$pid has not exited."
+                |    echo "Perhaps the worker process did not read it."
+                |    ps --pid $$pid -F
+                |done
+                |""".stripMargin
+        // This version waits for all downloads to complete
+        /*s"""|for pid in $${background_pids[@]}; do
+              |  wait $$pid
+              |done
+              |""".stripMargin*/
+        // This version also looks at zombie status
+/*             |for pid in ${background_pids[@]}; do
+               |  while [[ ( -d /proc/$pid ) && ( -z `grep zombie /proc/$pid/status` ) ]]; do
+               |    sleep 10
+               |    echo "waiting for $pid"
+               |  done
+               |done
+               |""".stripMargin.trim + "\n" */
         val inputsWithPipes = m.map{ case (varName, (_,bValue)) => varName -> bValue }.toMap
         val bashPrologEpilog =
             if (fifoCount == 0) {
