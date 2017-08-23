@@ -1,5 +1,9 @@
 # Release Notes
 
+## 0.40
+- Upgrade to wdl4s version 0.15.
+- Enabling a group of compiler warnings, and removing unused imports
+
 ## 0.39
 - Streaming works with tasks that use docker
 
