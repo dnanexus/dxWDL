@@ -79,7 +79,7 @@ case class CompilerSimplifyExpr(wf: WdlWorkflow,
                     val calleeDecl: Declaration =
                         call.declarations.find(decl => decl.unqualifiedName == key).get
                     val wdlType = calleeDecl.wdlType
-                    tmpDecls += Declaration(wdlType, tmpVarName, Some(expr), call.parent, a)
+                    tmpDecls += Declaration(wdlType, tmpVarName, Some(expr), call.parent, Map.empty, a)
                     WdlExpression.fromString(tmpVarName)
             }
             (key -> rhs)

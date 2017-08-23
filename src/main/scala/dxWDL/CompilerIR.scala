@@ -820,7 +820,7 @@ workflow w {
                     WdlRewrite.taskCall(tc, inputs)
                 case d:Declaration =>
                     new Declaration(d.wdlType, d.unqualifiedName,
-                                    d.expression.map(transform), d.parent, d.ast)
+                                    d.expression.map(transform), d.parent, d.attributes, d.ast)
                 case _ => throw new Exception("Unimplemented scatter element")
             }
         }

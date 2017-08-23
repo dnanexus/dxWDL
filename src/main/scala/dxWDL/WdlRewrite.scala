@@ -37,7 +37,7 @@ object WdlRewrite {
             case Some(e) => s"${wdlType.toWdlString} ${name} = ${e.toWdlString}"
         }
         val ast: Ast = AstTools.getAst(textualRepr, "")
-        Declaration(wdlType, name, expr, None, ast)
+        Declaration(wdlType, name, expr, None, Map.empty, ast)
     }
 
     // Modify the inputs in a task-call

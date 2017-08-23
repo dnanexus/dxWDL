@@ -110,7 +110,7 @@ case class CompilerReorgDecl(ns: WdlNamespace, verbose: Utils.Verbose) {
 
         // If the next element is a declaration, move it up; it is "stuck"
         bottom = bottom match {
-            case (Declaration(_,_,_,_,_)) +: tl =>
+            case (Declaration(_,_,_,_,_,_)) +: tl =>
                 moved = moved :+ bottom.head
                 definedVars = definedVars ++ definitions(bottom.head)
                 tl
