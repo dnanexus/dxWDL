@@ -1,5 +1,13 @@
 # Release Notes
 
+## 0.40
+- Upgrade to wdl4s version 0.15.
+- Enable several compiler warnings, removing unused imports
+- Bug fixes:
+  * Wrong dx project name when using multiple shells, and
+    different projects
+  * Better handling of errors from background 'dx cat' processes.
+
 ## 0.39
 - Streaming works with tasks that use docker
 

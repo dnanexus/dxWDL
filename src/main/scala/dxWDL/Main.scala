@@ -260,6 +260,18 @@ object Main extends App {
     // Get basic information about the dx environment, and process
     // the compiler flags
     def compilerOptions(options: OptionsMap) : CompileOptions = {
+        val verboseKeys: Set[String] = options.get("verbose") match {
+            case None => Set.empty
+            case Some(buf) =>
+                val modulesToTrace = buf.trim
+                if (modulesToTrace.isEmpty) {
+                    Set.empty
+                } else {
+                    modulesToTrace.split("\\s+").toSet
+                }
+        }
+        val verbose = Verbose(options contains "verbose", verboseKeys)
+
         // There are three possible syntaxes:
         //    project-id:/folder
         //    project-id:
@@ -282,12 +294,13 @@ object Main extends App {
             throw new Exception(s"destination cannot specify empty folder")
 
         val dxProject : DXProject = project match {
-            case None =>
-                // get the default project
-                val dxEnv = com.dnanexus.DXEnvironment.create()
-                dxEnv.getProjectContext()
-            case Some(p) => DXProject.getInstance(p)
+            case None => Utils.getCurrentProject
+            case Some(p) => Utils.lookupProject(p)
         }
+
+        val projName = dxProject.describe.getName
+        Utils.trace(verbose.on, s"project: ${projName}")
+
         // get billTo and region from the project
         val (billTo, region) = Utils.projectDescribeExtraInfo(dxProject)
 
@@ -299,19 +312,9 @@ object Main extends App {
             case Some("relaxed") => TopoMode.SortRelaxed
             case _ => throw new Exception("Sanity: bad sort mode")
         }
-        val verboseKeys: Set[String] = options.get("verbose") match {
-            case None => Set.empty
-            case Some(buf) =>
-                val modulesToTrace = buf.trim
-                if (modulesToTrace.isEmpty) {
-                    Set.empty
-                } else {
-                    modulesToTrace.split("\\s+").toSet
-                }
-        }
         CompileOptions(options contains "archive",
                        options contains "force",
-                       Verbose(options contains "verbose", verboseKeys),
+                       verbose,
                        options contains "reorg",
                        billTo,
                        region,

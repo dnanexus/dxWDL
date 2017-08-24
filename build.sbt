@@ -22,10 +22,9 @@ scalacOptions ++= Seq(
     "-explaintypes",
     "-encoding", "UTF-8",
 
-/*    "-Xfuture",
-    "-Xlint:adapted-args",
+    "-Xfuture",
     "-Xlint:by-name-right-associative",
-    "-Xlint:constant", */
+    "-Xlint:constant",
     "-Xlint:delayedinit-select",
     "-Xlint:doc-detached",
     "-Xlint:inaccessible",
@@ -40,12 +39,11 @@ scalacOptions ++= Seq(
     "-Xlint:stars-align",
     "-Xlint:type-parameter-shadow",
 //    "-Xlint:unsound-match",
-//    "-Yno-adapted-args",
     "-Ywarn-dead-code",
 //    "-Ywarn-numeric-widen",
 //    "-Ywarn-value-discard",
     "-Ywarn-inaccessible",
-//    "-Ywarn-unused:implicits",
+    "-Ywarn-unused:implicits",
 //    "-Ywarn-unused:privates"
 //    "-Ywarn-unused:locals"
 //    "-Ywarn-unused:patvars"
