@@ -1,6 +1,6 @@
 package dxWDL
 
-import com.dnanexus.{DXApplet, DXAPI, DXFile, DXProject, DXJSON}
+import com.dnanexus.{DXApplet, DXAPI, DXFile, DXJSON, DXProject}
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.node.ObjectNode
@@ -9,6 +9,7 @@ import java.nio.file.{Path, Paths, Files}
 import java.util.Base64
 import scala.collection.JavaConverters._
 import scala.concurrent._
+import scala.collection.mutable.HashMap
 import ExecutionContext.Implicits.global
 import scala.sys.process._
 import spray.json._
@@ -91,6 +92,10 @@ object Utils {
     val UPLOAD_RETRY_LIMIT = DOWNLOAD_RETRY_LIMIT
     val UNIVERSAL_FILE_PREFIX = "dx://"
     val WDL_SNIPPET_FILENAME = "source.wdl"
+
+    // Lookup cache for projects. This saves
+    // repeated searches for projects we already found.
+    val projectDict = HashMap.empty[String, DXProject]
 
     // Substrings used by the compiler for encoding purposes
     val reservedSubstrings = List("___")
@@ -185,6 +190,65 @@ object Utils {
         (inputSpec.map(wdlTypeOfVar).toMap,
          outputSpec.map(wdlTypeOfVar).toMap)
     }
+
+    def lookupProject(projName: String): DXProject = {
+        if (projName.startsWith("project-")) {
+            // A project ID
+            DXProject.getInstance(projName)
+        } else {
+            if (projectDict contains projName) {
+                //System.err.println(s"Cached project ${projName}")
+                return projectDict(projName)
+            }
+
+            // A project name, resolve it
+            val req: ObjectNode = DXJSON.getObjectBuilder()
+                .put("name", projName)
+                .put("limit", 2)
+                .build()
+            val rep = DXAPI.systemFindProjects(req, classOf[JsonNode])
+            val repJs:JsValue = Utils.jsValueOfJsonNode(rep)
+
+            val results = repJs.asJsObject.fields.get("results") match {
+                case Some(JsArray(x)) => x
+                case _ => throw new Exception(
+                    s"Bad response from systemFindProject API call (${repJs.prettyPrint}), when resolving project ${projName}.")
+            }
+            if (results.length > 1)
+                throw new Exception(s"Found more than one project named ${projName}")
+            if (results.length == 0)
+                throw new Exception(s"Project ${projName} not found")
+            val dxProject = results(0).asJsObject.fields.get("id") match {
+                case Some(JsString(id)) => DXProject.getInstance(id)
+                case _ => throw new Exception(s"Bad response from SystemFindProject API call ${repJs.prettyPrint}")
+            }
+            projectDict(projName) = dxProject
+            dxProject
+        }
+    }
+
+    // Get the project name.
+    //
+    // We use dxpy here, because there is some subtle difference
+    // between dxjava and dxpy.  When opening sessions on two
+    // terminals, and selecting two projects, dxpy will correctly
+    // provide pwd, dxjava only returns the name stored in
+    // ~/.dnanexus_config.DX_PROJECT_CONTEXT_NAME.
+    def getCurrentProject: DXProject = {
+        // version with dxjava
+        //val dxEnv = com.dnanexus.DXEnvironment.create()
+        //dxEnv.getProjectContext()
+        val (path, _) = execCommand("dx pwd", None)
+        val index = path.lastIndexOf(':')
+        val projName:String =
+            if (index == -1) {
+                path
+            } else {
+                path.substring(0, index)
+            }
+        lookupProject(projName)
+    }
+
 
     // Create a file from a string
     def writeFileContent(path : Path, str : String) : Unit = {

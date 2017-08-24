@@ -21,55 +21,13 @@ This is the dx JSON input:
   */
 package dxWDL
 
-import com.fasterxml.jackson.databind.JsonNode
-import com.fasterxml.jackson.databind.node.ObjectNode
-import com.dnanexus.{DXAPI, DXJSON, DXFile, DXProject, DXSearch, DXWorkflow}
+import com.dnanexus.{DXFile, DXProject, DXSearch, DXWorkflow}
 import java.nio.file.{Path, Paths}
 import scala.collection.JavaConverters._
-import scala.collection.mutable.HashMap
 import spray.json._
 import Utils.UNIVERSAL_FILE_PREFIX
 
 object InputFile {
-    // Projects we have already looked up
-    val projectDict = HashMap.empty[String, DXProject]
-
-    private def lookupProject(projName: String): DXProject = {
-        if (projName.startsWith("project-")) {
-            // A project ID
-            DXProject.getInstance(projName)
-        } else {
-            if (projectDict contains projName) {
-                //System.err.println(s"Cached project ${projName}")
-                return projectDict(projName)
-            }
-
-            // A project name, resolve it
-            val req: ObjectNode = DXJSON.getObjectBuilder()
-                .put("name", projName)
-                .put("limit", 2)
-                .build()
-            val rep = DXAPI.systemFindProjects(req, classOf[JsonNode])
-            val repJs:JsValue = Utils.jsValueOfJsonNode(rep)
-
-            val results = repJs.asJsObject.fields.get("results") match {
-                case Some(JsArray(x)) => x
-                case _ => throw new Exception(
-                    s"Bad response from systemFindProject API call (${repJs.prettyPrint}), when resolving project ${projName}.")
-            }
-            if (results.length > 1)
-                throw new Exception(s"Found more than one project named ${projName}")
-            if (results.length == 0)
-                throw new Exception(s"Project ${projName} not found")
-            val dxProject = results(0).asJsObject.fields.get("id") match {
-                case Some(JsString(id)) => DXProject.getInstance(id)
-                case _ => throw new Exception(s"Bad response from SystemFindProject API call ${repJs.prettyPrint}")
-            }
-            projectDict(projName) = dxProject
-            dxProject
-        }
-    }
-
     private def lookupFile(dxProject: Option[DXProject], fileName: String): DXFile = {
         if (fileName.startsWith("file-")) {
             // A file ID
@@ -103,7 +61,7 @@ object InputFile {
         } else if (components.length == 2) {
             val projName = components(0)
             val fileName = components(1)
-            val dxProject = lookupProject(projName)
+            val dxProject = Utils.lookupProject(projName)
             lookupFile(Some(dxProject), fileName)
         } else if (components.length == 1) {
             val fileName = components(0)

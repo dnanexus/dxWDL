@@ -1,11 +1,7 @@
 task diff {
-    File a
-    File b
+    File a { stream: True}
+    File b { stream: True}
 
-    parameter_meta {
-        a : "stream"
-        b : "stream"
-    }
     runtime {
         docker: "ubuntu:16.04"
     }

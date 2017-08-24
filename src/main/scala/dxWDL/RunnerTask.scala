@@ -237,7 +237,7 @@ case class RunnerTask(task:WdlTask,
     // Each file marked "stream", is converted into a special fifo
     // file on the instance.
     private def handleStreamingFiles(inputs: Map[String, BValue])
-            : (Option[(String, String)], Map[String, BValue]) = {
+            : (Option[String], Map[String, BValue]) = {
         // A file that needs to be stream-downloaded.
         // Make a named pipe, and stream the file from the platform to the pipe.
         // Keep track of the download process. We need to ensure pipes have
@@ -253,6 +253,7 @@ case class RunnerTask(task:WdlTask,
             val bashSnippet:String =
                 s"""|mkfifo ${fifo.toString}
                     |dx cat ${dxFileId} > ${fifo.toString} &
+                    |background_pids+=($$!)
                     |""".stripMargin
             (WdlSingleFile(fifo.toString), bashSnippet)
         }
@@ -273,37 +274,25 @@ case class RunnerTask(task:WdlTask,
         }.toMap
 
         // set up all the named pipes
-        val snippets = m.collect{
-            case (_, (bashSnippet,_)) if !bashSnippet.isEmpty => bashSnippet
-        }.toVector
-        val bashProlog = ("background_pids=()" +:
-                              snippets).mkString("\n")
-
-        // Wait for all background processes to complete. It is legal
-        // for the user job to read only the beginning of the
-        // file. This causes the download streams to close
-        // prematurely, which can be show up as an error. We need to
-        // tolerate this case.
-        val bashEpilog = ""
-        //            "wait ${background_pids[@]}"
+        val bashSetupStreams:Option[String] =
+            if (fifoCount > 0) {
+                // There are streaming files to set up
+                val snippets = m.collect{
+                    case (_, (bashSnippet,_)) if !bashSnippet.isEmpty => bashSnippet
+                }
+                Some(snippets.mkString("\n"))
+            } else {
+                None
+            }
 
         val inputsWithPipes = m.map{ case (varName, (_,bValue)) => varName -> bValue }.toMap
-        val bashPrologEpilog =
-            if (fifoCount == 0) {
-                // No streaming files
-                None
-            } else {
-                // There are some streaming files
-                Some((bashProlog, bashEpilog))
-            }
-        (bashPrologEpilog, inputsWithPipes)
+        (bashSetupStreams, inputsWithPipes)
     }
 
     // Write the core bash script into a file. In some cases, we
     // need to run some shell setup statements before and after this
     // script. Returns these as two strings (prolog, epilog).
-    private def writeBashScript(inputs: Map[String, BValue],
-                                bashPrologEpilog: Option[(String, String)]) : Unit = {
+    private def writeBashScript(inputs: Map[String, BValue]) : Unit = {
         val metaDir = getMetaDir()
         val scriptPath = metaDir.resolve("script")
         val stdoutPath = metaDir.resolve("stdout")
@@ -335,17 +324,10 @@ case class RunnerTask(task:WdlTask,
                     |echo 0 > ${rcPath}
                     |""".stripMargin.trim + "\n"
             } else {
-                val cdHome = s"cd ${Utils.DX_HOME}"
-                val cmdLines: List[String] = bashPrologEpilog match {
-                    case None =>
-                        List(cdHome, shellCmd)
-                    case Some((bashProlog, bashEpilog)) =>
-                        List(cdHome, bashProlog, shellCmd, bashEpilog)
-                }
-                val cmd = cmdLines.mkString("\n")
                 s"""|#!/bin/bash
                     |(
-                    |${cmd}
+                    |    cd ${Utils.DX_HOME}
+                    |    ${shellCmd}
                     |) \\
                     |  > >( tee ${stdoutPath} ) \\
                     |  2> >( tee ${stderrPath} >&2 )
@@ -357,8 +339,7 @@ case class RunnerTask(task:WdlTask,
     }
 
     private def writeDockerSubmitBashScript(env: Map[String, WdlValue],
-                                            imgName: String,
-                                            bashPrologEpilog: Option[(String, String)]) : Unit = {
+                                            imgName: String) : Unit = {
         // The user wants to use a docker container with the
         // image [imgName]. We implement this with dx-docker.
         // There may be corner cases where the image will run
@@ -373,20 +354,11 @@ case class RunnerTask(task:WdlTask,
                             |${imgName}
                             |$${HOME}/execution/meta/script""".stripMargin.replaceAll("\n", " ")
         val dockerRunPath = getMetaDir().resolve("script.submit")
-        val dockerRunScript = bashPrologEpilog match {
-            case None =>
-                s"""|#!/bin/bash -ex
-                    |${dockerCmd}""".stripMargin
-            case Some((bashProlog, bashEpilog)) =>
-                List("#!/bin/bash -ex",
-                     bashProlog,
-                     dockerCmd,
-                     bashEpilog
-                ).mkString("\n")
-        }
+        val dockerRunScript =
+            s"""|#!/bin/bash -ex
+                |${dockerCmd}""".stripMargin
         System.err.println(s"writing docker run script to ${dockerRunPath}")
-        Utils.writeFileContent(dockerRunPath,
-                               dockerRunScript)
+        Utils.writeFileContent(dockerRunPath, dockerRunScript)
         dockerRunPath.toFile.setExecutable(true)
     }
 
@@ -417,17 +389,24 @@ case class RunnerTask(task:WdlTask,
         val docker = dockerImage(env)
 
         // deal with files that need streaming
-        val (bashPrologEpilog, inputsWithPipes) = handleStreamingFiles(inputs)
+        val (bashSetupStreams, inputsWithPipes) = handleStreamingFiles(inputs)
+        bashSetupStreams match {
+            case Some(snippet) =>
+                val path = getMetaDir().resolve("setup_streams")
+                System.err.println(s"writing bash script for stream(s) set up to ${path}")
+                Utils.writeFileContent(path, snippet)
+                path.toFile.setExecutable(true)
+            case None => ()
+        }
 
         // Write shell script to a file. It will be executed by the dx-applet code
+        writeBashScript(inputsWithPipes)
         docker match {
-            case None =>
-                writeBashScript(inputsWithPipes, bashPrologEpilog)
             case Some(img) =>
                 // write a script that launches the actual command inside a docker image.
                 // Streamed files are set up before launching docker.
-                writeBashScript(inputsWithPipes, None)
-                writeDockerSubmitBashScript(env, img, bashPrologEpilog)
+                writeDockerSubmitBashScript(env, img)
+            case None => ()
         }
 
         // serialize the environment, so we don't have to calculate it again in
