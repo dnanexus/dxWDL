@@ -21,6 +21,7 @@ object DeclAttrs {
     private def process(decl: Declaration,
                         attrs: Map[String, WdlValue],
                         cef: CompilerErrorFormatter) : Map[String, WdlValue] = {
+        System.err.println(s"process attributes ${attrs}")
         attrs.foldLeft(Map.empty[String, WdlValue]) {
             case (accu, (attrName, attrVal)) =>
                 attrName match {

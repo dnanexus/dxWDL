@@ -545,6 +545,10 @@ workflow w {
                 case Some(_) => None
             }
         }.flatten.toVector
+        inputVars.foreach { cVar =>
+            if (cVar.attrs.stream)
+                Utils.trace(verbose.on, s"${cVar.name} in task ${task.name} should be streamed")
+        }
         val outputVars : Vector[IR.CVar] = task.outputs.map{ tso =>
             IR.CVar(tso.unqualifiedName, tso.wdlType, DeclAttrs.empty, tso.ast)
         }.toVector
