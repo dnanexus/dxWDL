@@ -48,8 +48,8 @@ object DeclAttrs {
             varName: String,
             cef: CompilerErrorFormatter) : DeclAttrs = {
         val declOpt = task.declarations.find(decl => decl.unqualifiedName == varName)
-        declOpt match {
-            case None => DeclAttrs(Map.empty)
+        val m: Map[String, WdlValue] = declOpt match {
+            case None => Map.empty
             case Some(decl) =>
                 // Evaluate the expressions. We currently support only
                 // constants, and very simple expressions.
@@ -62,5 +62,6 @@ object DeclAttrs {
                 }.toMap
                 process(decl, attrs, cef)
         }
+        DeclAttrs(m)
     }
 }
