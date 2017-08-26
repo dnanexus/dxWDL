@@ -238,12 +238,14 @@ case class RunnerTask(task:WdlTask,
     // file on the instance.
     private def handleStreamingFiles(inputs: Map[String, BValue])
             : (Option[String], Map[String, BValue]) = {
-        // A file that needs to be stream-downloaded.
-        // Make a named pipe, and stream the file from the platform to the pipe.
-        // Keep track of the download process. We need to ensure pipes have
-        // different names, even if the file-names are the same.
+        // A file that needs to be stream-downloaded. Make a named
+        // pipe, and stream the file from the platform to the pipe.
+        // Ensure pipes have different names, even if the
+        // file-names are the same. Write the process ids of the download jobs,
+        // to stdout. The calling script will keep track of them, and check
+        // for abnormal termination.
         //
-        // Note: all other files have already been downloaded.
+        // Note: at this point, all other files have already been downloaded.
         var fifoCount = 0
         def mkfifo(wvl: WdlVarLinks, path: String) : (WdlValue, String) = {
             val filename = Paths.get(path).toFile.getName
@@ -253,7 +255,7 @@ case class RunnerTask(task:WdlTask,
             val bashSnippet:String =
                 s"""|mkfifo ${fifo.toString}
                     |dx cat ${dxFileId} > ${fifo.toString} &
-                    |background_pids+=($$!)
+                    |echo $$!
                     |""".stripMargin
             (WdlSingleFile(fifo.toString), bashSnippet)
         }
