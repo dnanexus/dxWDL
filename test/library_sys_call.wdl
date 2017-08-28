@@ -9,7 +9,7 @@ task ps {
 
 task cgrep {
     String pattern
-    File in_file  { stream: True}
+    File in_file  { stream: true}
 
     command {
         grep '${pattern}' ${in_file} | wc -l
@@ -20,7 +20,7 @@ task cgrep {
 }
 
 task wc {
-    File in_file  { stream: True}
+    File in_file  { stream: true}
 
     command {
         cat ${in_file} | wc -l
@@ -31,7 +31,7 @@ task wc {
 }
 
 task head {
-    File in_file  { stream: True}
+    File in_file  { stream: true}
     Int num_lines
 
     command {
@@ -43,8 +43,8 @@ task head {
 }
 
 task diff {
-    File a  { stream: True}
-    File b  { stream: True}
+    File a  { stream: true}
+    File b  { stream: true}
 
     runtime {
         docker: "ubuntu:16.04"

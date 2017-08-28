@@ -246,6 +246,7 @@ case class RunnerTask(task:WdlTask,
         // Note: all other files have already been downloaded.
         var fifoCount = 0
         def mkfifo(wvl: WdlVarLinks, path: String) : (WdlValue, String) = {
+            System.err.println(s"Creating named fifo for file ${path}, it will be streamed")
             val filename = Paths.get(path).toFile.getName
             val fifo:Path = Paths.get(Utils.DX_HOME, s"fifo_${fifoCount}_${filename}")
             fifoCount += 1

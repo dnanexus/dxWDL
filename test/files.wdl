@@ -103,7 +103,7 @@ task FileArrayMake{
 
 # Calculate the total number of bytes the array has
 task FileArraySize {
-    Array[File] files  { stream: True }
+    Array[File] files  { stream: true }
 
     command <<<
         wc -c ${sep=' ' files} | cut -d ' ' -f 1 | tail -1

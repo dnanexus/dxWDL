@@ -2,7 +2,6 @@
 package dxWDL
 
 import wdl4s.wdl.{Declaration, WdlTask}
-import wdl4s.wdl.expression.NoFunctions
 import wdl4s.wdl.types._
 import wdl4s.wdl.values._
 
@@ -51,17 +50,7 @@ object DeclAttrs {
         val declOpt = task.declarations.find(decl => decl.unqualifiedName == varName)
         val m: Map[String, WdlValue] = declOpt match {
             case None => Map.empty
-            case Some(decl) =>
-                // Evaluate the expressions. We currently support only
-                // constants, and very simple expressions.
-                val attrs = decl.attributes.map{case (varName, expr) =>
-                    def nullLookup(varName : String) : WdlValue = {
-                        throw new Exception(cef.expressionMustBeConst(expr))
-                    }
-                    val wdlValue = expr.evaluate(nullLookup, NoFunctions).get
-                    varName -> wdlValue
-                }.toMap
-                process(decl, attrs, cef)
+            case Some(decl) => process(decl, decl.attributes, cef)
         }
         DeclAttrs(m)
     }

@@ -105,7 +105,16 @@ case class WdlPrettyPrinter(fqnFlag: Boolean, workflowOutputs: Option[Seq[Workfl
             case None => ""
             case Some(x) => " = " ++ x.toWdlString
         }
-        val ln = s"${decl.wdlType.toWdlString} ${decl.unqualifiedName} ${exprStr}"
+        val attrs =
+            if (decl.attributes.isEmpty) {
+                ""
+            } else {
+                val buf = decl.attributes.map{ case (key, wdlValue) =>
+                    s"${key} : ${wdlValue.toWdlString}"
+                }.mkString(", ")
+                " {" + buf + "}"
+            }
+        val ln = s"${decl.wdlType.toWdlString} ${decl.unqualifiedName} ${exprStr} ${attrs}"
         Vector(indentLine(ln, level))
     }
 
