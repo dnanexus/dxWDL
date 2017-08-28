@@ -1,5 +1,8 @@
 # Release Notes
 
+## 0.41
+- Minor fixes to streaming
+
 ## 0.40
 - Upgrade to wdl4s version 0.15.
 - Enable several compiler warnings, removing unused imports
