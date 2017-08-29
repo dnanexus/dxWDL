@@ -85,3 +85,37 @@ task IntOps {
         Int result = a * b + 1
     }
 }
+
+# Create a complex number with a WDL object
+task ComplexGen {
+    Int a
+    Int b
+
+    command <<<
+python <<CODE
+print('\t'.join(["a", "b"]))
+print('\t'.join(["${a}", "${b}"]))
+CODE
+>>>
+    output {
+        Object result = read_object(stdout())
+    }
+}
+
+# Add to complex numbers represented as objects
+task ComplexAdd {
+    Object y
+    Object z
+
+    command <<<
+python <<CODE
+a = ${y.a} + ${z.a}
+b = ${y.b} + ${z.b}
+print('\t'.join(["a","b"]))
+print('\t'.join([str(a), str(b)]))
+CODE
+>>>
+    output {
+        Object result = read_object(stdout())
+    }
+}

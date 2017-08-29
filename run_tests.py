@@ -45,7 +45,10 @@ medium_test_list = [
     "instance_types",
 
     # Complex data types
-    "dict"
+    "dict",
+
+    # objects
+    "complex"
 ] + small_test_list
 
 # Tests with the reorg flags

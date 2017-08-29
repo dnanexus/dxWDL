@@ -1,5 +1,8 @@
 # Release Notes
 
+## 0.42
+- WDL objects
+
 ## 0.41
 - Minor fixes to streaming
 
