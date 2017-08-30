@@ -86,6 +86,8 @@ object WdlVarLinks {
                     deleteLocal(k)
                     deleteLocal(v)
                 }
+            case WdlObject(m) =>
+                m.foreach { case (_, v) => deleteLocal(v) }
             case WdlPair(left, right) =>
                 deleteLocal(left)
                 deleteLocal(right)
@@ -265,9 +267,39 @@ object WdlVarLinks {
             assert(kJs.length == vJs.length)
             (kJs, vJs)
         } catch {
-            case _ : Throwable =>
+            case e: Throwable =>
                 System.err.println(s"Deserialization error: ${jsValue}")
-                throw new Exception("JSON value deserialization error, expected Map")
+                throw e
+        }
+    }
+
+    private def unmarshalJsObject(jsValue: JsValue) :Vector[(String, WdlType, JsValue)] = {
+        try {
+            val fields = jsValue.asJsObject.fields
+            val keys: Vector[String] = fields("keys").map{
+                case JsString(s) => s
+                case other  => throw new Exception(s"key field is not a string (${other})")
+            }
+            val wdlTypes: Vector[WdlType] = fields("types").map{
+                case JsString(s) => WdlType.fromWdlString(s)
+                case other  => throw new Exception(s"type field is not a string (${other})")
+            }
+            val values: Vector[JsValue] = fields("values")
+
+            // all the vectors should have the same length
+            val len = keys.length
+            assert(len == wdlTypes.length)
+            assert(len == values.length)
+
+            // create tuples from the separate vectors
+            val range = (0 to (len-1)).toVector
+            range.map{ i =>
+                (keys(i), wdlTypes(i), values(i))
+            }.toVector
+        } catch {
+            case e : Throwable =>
+                System.err.println(s"Deserialization error: ${jsValue}")
+                throw e
         }
     }
 
@@ -299,14 +331,14 @@ object WdlVarLinks {
                 }.toMap
                 WdlMap(WdlMapType(keyType, valueType), m)
 
-            case (WdlPairType(lType, rType), JsArray(vec)) =>
-                assert(vec.length == 2)
+            case (WdlPairType(lType, rType), JsArray(vec)) if (vec.length == 2) =>
                 val left = evalCore(lType, vec(0), force)
                 val right = evalCore(rType, vec(1), force)
                 WdlPair(left, right)
 
-            // TODO
-            //case (WdlObjectType, WdlObject())
+            case (WdlObjectType, JsObject(_)) =>
+                WdlObject(unmarshalJsObject(jsValue))
+
             case _ =>
                 throw new AppInternalException(
                     s"Unsupport combination ${wdlType.toWdlString} ${jsValue.prettyPrint}"
@@ -452,8 +484,15 @@ object WdlVarLinks {
                 val rJs = jsOfComplexWdlValue(rType, r)
                 JsArray(lJs, rJs)
 
-                // TODO
-                //case (WdlObjectType, WdlObject())
+            // objects. These are represented as three arrays: keys,
+            // wdl-types, and values (in JSON).
+            case (WdlObjectType, WdlObject(m: Map[String, WdlValue])) =>
+                val keys = m.keys.map(k => JsString(k))
+                val types = m.values.map(v => JsString(v.wdlType.toWdlString))
+                val values: Seq[JsValue] = m.values.map(v => jsOfComplexWdlValue(v.wdlType, v))
+                JsObject("keys" -> JsArray(keys.toVector),
+                         "types" -> JsArray(types.toVector),
+                         "values" -> JsArray(values.toVector))
 
             case _ => throw new Exception(
                 s"Unsupported WDL type ${wdlType.toWdlString} ${wdlValue.toWdlString}"
@@ -479,7 +518,7 @@ object WdlVarLinks {
     // passing it to other jobs.
     def apply(wdlType: WdlType, attrs: DeclAttrs, jsValue: JsValue) : WdlVarLinks = {
         if (isNativeDxType(wdlType)) {
-            // This is primitive value, or a single dimensional
+            // This is a primitive value, or a single dimensional
             // array of primitive values.
             WdlVarLinks(wdlType, attrs, DxlValue(jsValue))
         } else {

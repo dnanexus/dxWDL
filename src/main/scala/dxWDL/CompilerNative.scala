@@ -89,7 +89,6 @@ object CompilerNative {
                 case WdlArrayType(WdlFileType) => mkPrimitiveArray("file")
 
                 // complex types, that may contains files
-                //case _  if !(WdlVarLinks.mayHaveFiles(t)) =>  mkComplexNoFiles()
                 case _ => mkComplex()
             }
         }
