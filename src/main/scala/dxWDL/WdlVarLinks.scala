@@ -276,15 +276,24 @@ object WdlVarLinks {
     private def unmarshalJsObject(jsValue: JsValue) :Vector[(String, WdlType, JsValue)] = {
         try {
             val fields = jsValue.asJsObject.fields
-            val keys: Vector[String] = fields("keys").map{
-                case JsString(s) => s
-                case other  => throw new Exception(s"key field is not a string (${other})")
+            val keys: Vector[String] = fields("keys") match {
+                case JsArray(x) => x.map{
+                    case JsString(s) => s
+                    case other  => throw new Exception(s"key field is not a string (${other})")
+                }
+                case _ => throw new Exception("Malformed JSON")
             }
-            val wdlTypes: Vector[WdlType] = fields("types").map{
-                case JsString(s) => WdlType.fromWdlString(s)
-                case other  => throw new Exception(s"type field is not a string (${other})")
+            val wdlTypes: Vector[WdlType] = fields("types") match {
+                case JsArray(x) => x.map{
+                    case JsString(s) => WdlType.fromWdlString(s)
+                    case other  => throw new Exception(s"type field is not a string (${other})")
+                }
+                case _ => throw new Exception("Malformed JSON")
             }
-            val values: Vector[JsValue] = fields("values")
+            val values: Vector[JsValue] = fields("values") match {
+                case JsArray(x) => x
+                case _ => throw new Exception("Malformed JSON")
+            }
 
             // all the vectors should have the same length
             val len = keys.length
@@ -331,13 +340,17 @@ object WdlVarLinks {
                 }.toMap
                 WdlMap(WdlMapType(keyType, valueType), m)
 
+            case (WdlObjectType, JsObject(_)) =>
+                val vec: Vector[(String, WdlType, JsValue)] = unmarshalJsObject(jsValue)
+                val m = vec.map{ case (key, wdlType, jsv) =>
+                    key -> evalCore(wdlType, jsv, force)
+                }.toMap
+                WdlObject(m)
+
             case (WdlPairType(lType, rType), JsArray(vec)) if (vec.length == 2) =>
                 val left = evalCore(lType, vec(0), force)
                 val right = evalCore(rType, vec(1), force)
                 WdlPair(left, right)
-
-            case (WdlObjectType, JsObject(_)) =>
-                WdlObject(unmarshalJsObject(jsValue))
 
             case _ =>
                 throw new AppInternalException(
@@ -406,6 +419,13 @@ object WdlVarLinks {
     private def memberAccessStep(wvl: WdlVarLinks, field: String) : WdlVarLinks = {
         val jsValue = getRawJsValue(wvl)
         (wvl.wdlType, jsValue) match {
+            case (_:WdlObject, JsObject(_)) =>
+                val vec:Vector[(String, WdlType, JsValue)] = unmarshalJsObject(jsValue)
+                val fieldVal = vec.find{ case (key,_,_) => key == field }
+                fieldVal match {
+                    case Some((_,wdlType,jsv)) => WdlVarLinks(wdlType, wvl.attrs, DxlValue(jsv))
+                    case _ => throw new Exception(s"Unknown field ${field} in object ${wvl}")
+                }
             case (WdlPairType(lType, rType), JsArray(vec)) =>
                 field match {
                     case "left" =>  WdlVarLinks(lType, wvl.attrs, DxlValue(vec(0)))
@@ -479,20 +499,20 @@ object WdlVarLinks {
                 val vJs = jsOfComplexWdlValue(values.wdlType, values)
                 JsObject("keys" -> kJs, "values" -> vJs)
 
-            case (WdlPairType(lType, rType), WdlPair(l,r)) =>
-                val lJs = jsOfComplexWdlValue(lType, l)
-                val rJs = jsOfComplexWdlValue(rType, r)
-                JsArray(lJs, rJs)
-
             // objects. These are represented as three arrays: keys,
             // wdl-types, and values (in JSON).
             case (WdlObjectType, WdlObject(m: Map[String, WdlValue])) =>
                 val keys = m.keys.map(k => JsString(k))
                 val types = m.values.map(v => JsString(v.wdlType.toWdlString))
-                val values: Seq[JsValue] = m.values.map(v => jsOfComplexWdlValue(v.wdlType, v))
+                val values = m.values.map(v => jsOfComplexWdlValue(v.wdlType, v))
                 JsObject("keys" -> JsArray(keys.toVector),
                          "types" -> JsArray(types.toVector),
                          "values" -> JsArray(values.toVector))
+
+            case (WdlPairType(lType, rType), WdlPair(l,r)) =>
+                val lJs = jsOfComplexWdlValue(lType, l)
+                val rJs = jsOfComplexWdlValue(rType, r)
+                JsArray(lJs, rJs)
 
             case _ => throw new Exception(
                 s"Unsupported WDL type ${wdlType.toWdlString} ${wdlValue.toWdlString}"
