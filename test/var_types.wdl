@@ -1,4 +1,6 @@
-# A very simple WDL file, that includes a single task
+# Check that rarely used types actually work (float, boolean).
+# Experiment with casting between types.
+
 task ddd_join_many {
     Boolean b
     Int i
@@ -22,6 +24,10 @@ workflow var_types {
         input : b=b, i=i, x=x, s=s
     }
     output {
-        join_many.result
+        # Casting
+        Int num17 = "17"
+        Float f1 = "1.2"
+
+        String jm = join_many.result
     }
 }

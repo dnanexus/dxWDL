@@ -109,8 +109,8 @@ task ComplexAdd {
 
     command <<<
 python <<CODE
-a = ${y.a} + ${z.a}
-b = ${y.b} + ${z.b}
+a = int(${y.a}) + int(${z.a})
+b = int(${y.b}) + int(${z.b})
 print('\t'.join(["a","b"]))
 print('\t'.join([str(a), str(b)]))
 CODE

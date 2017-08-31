@@ -23,13 +23,15 @@ package dxWDL
 import com.fasterxml.jackson.databind.JsonNode
 import java.nio.file.Path
 import spray.json._
-import wdl4s.wdl.{Declaration, DeclarationInterface, WdlWorkflow, WorkflowOutput}
+import wdl4s.wdl.{Declaration, DeclarationInterface, WdlTask, WdlWorkflow, WorkflowOutput}
 import wdl4s.wdl.types._
 import wdl4s.wdl.values._
 
 object RunnerEval {
     def evalDeclarations(declarations: Seq[DeclarationInterface],
-                         inputs : Map[String, WdlVarLinks]) : Map[String, BValue] = {
+                         inputs : Map[String, WdlVarLinks],
+                         force: Boolean,
+                         taskOpt : Option[(WdlTask, CompilerErrorFormatter)]) : Map[String, BValue] = {
         // Environment that includes a cache for values that have
         // already been evaluated.  It is more efficient to make the
         // conversion once, however, that is not the main point
@@ -40,7 +42,12 @@ object RunnerEval {
             inputs.map{ case (key, wvl) => key -> (wvl, None) }.toMap
 
         def evalAndCache(key: String, wvl: WdlVarLinks) : WdlValue = {
-            val v: WdlValue = WdlVarLinks.eval(wvl, false)
+            val v: WdlValue =
+                if (wvl.attrs.stream) {
+                    WdlVarLinks.eval(wvl, false)
+                } else {
+                    WdlVarLinks.eval(wvl, force)
+                }
             env = env + (key -> (wvl, Some(v)))
             v
         }
@@ -59,6 +66,10 @@ object RunnerEval {
             }
 
         def evalDecl(decl : DeclarationInterface) : Option[(WdlVarLinks, WdlValue)] = {
+            val attrs = taskOpt match {
+                case None => DeclAttrs.empty
+                case Some((task, cef)) => DeclAttrs.get(task, decl.unqualifiedName, cef)
+            }
             (decl.wdlType, decl.expression) match {
                 // optional input
                 case (WdlOptionalType(_), None) =>
@@ -82,8 +93,9 @@ object RunnerEval {
                 // declaration to evaluate, not an input
                 case (WdlOptionalType(t), Some(expr)) =>
                     try {
-                        val v : WdlValue = expr.evaluate(lookup, DxFunctions).get
-                        val wvl = WdlVarLinks.apply(t, DeclAttrs.empty, v)
+                        val vRaw : WdlValue = expr.evaluate(lookup, DxFunctions).get
+                        val v: WdlValue = Utils.cast(t, vRaw)
+                        val wvl = WdlVarLinks.apply(t, attrs, v)
                         env = env + (decl.unqualifiedName -> (wvl, Some(v)))
                         Some((wvl, v))
                     } catch {
@@ -93,8 +105,9 @@ object RunnerEval {
                     }
 
                 case (t, Some(expr)) =>
-                    val v : WdlValue = expr.evaluate(lookup, DxFunctions).get
-                    val wvl = WdlVarLinks.apply(t, DeclAttrs.empty, v)
+                    val vRaw : WdlValue = expr.evaluate(lookup, DxFunctions).get
+                    val v: WdlValue = Utils.cast(t, vRaw)
+                    val wvl = WdlVarLinks.apply(t, attrs, v)
                     env = env + (decl.unqualifiedName -> (wvl, Some(v)))
                     Some((wvl, v))
             }
@@ -106,7 +119,7 @@ object RunnerEval {
         declarations.map{ decl =>
             evalDecl(decl) match {
                 case Some((wvl, wdlValue)) =>
-                    Some(decl.unqualifiedName -> BValue(wvl, wdlValue, None))
+                    Some(decl.unqualifiedName -> BValue(wvl, wdlValue))
                 case None =>
                     // optional input that was not provided
                     None
@@ -134,7 +147,7 @@ object RunnerEval {
             case _:WorkflowOutput => None
             case _ => throw new Exception("Eval workflow contains a non declaration")
         }.flatten
-        val outputs : Map[String, BValue] = evalDeclarations(decls, inputs)
+        val outputs : Map[String, BValue] = evalDeclarations(decls, inputs, false, None)
 
         // Keep only exported variables
         val exported = outputs.filter{ case (varName, _) => outputTypes contains varName }

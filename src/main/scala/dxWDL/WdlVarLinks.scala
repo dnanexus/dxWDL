@@ -9,7 +9,6 @@ import java.nio.file.{Files, Path, Paths}
 import net.jcazevedo.moultingyaml._
 import scala.collection.mutable.HashMap
 import spray.json._
-import wdl4s.wdl.Declaration
 import wdl4s.wdl.types._
 import wdl4s.wdl.values._
 
@@ -36,11 +35,7 @@ case class WdlVarLinks(wdlType: WdlType,
                        dxlink: DxLink)
 
 // Bridge between WDL values and DNAx values.
-//
-// The [declaration] is temporary, to be removed after upgrading to wdl 0.15
-case class BValue(wvl: WdlVarLinks,
-                  wdlValue: WdlValue,
-                  declaration: Option[Declaration])
+case class BValue(wvl: WdlVarLinks, wdlValue: WdlValue)
 
 object WdlVarLinks {
     // Human readable representation of a WdlVarLinks structure

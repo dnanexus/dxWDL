@@ -36,102 +36,6 @@ case class RunnerTask(task:WdlTask,
         metaDir
     }
 
-    // TODO: merge this method with the corresponding method in RunnerEval.
-    // The differences are:
-    // 1) use of the task to get declaration attributes
-    // 2) Dealing with file streams
-    private def evalDeclarations(declarations: Seq[Declaration],
-                                 inputs : Map[String, WdlVarLinks]) : Map[String, BValue] = {
-        // Environment that includes a cache for values that have
-        // already been evaluated.  It is more efficient to make the
-        // conversion once, however, that is not the main point
-        // here. There are types that require special care, for
-        // example files. We need to make sure we download files
-        // exactly once, and later, we want to be able to delete them.
-        var env: Map[String, (WdlVarLinks, Option[WdlValue])] =
-            inputs.map{ case (key, wvl) => key -> (wvl, None) }.toMap
-
-        def evalAndCache(key: String, wvl: WdlVarLinks) : WdlValue = {
-            val v: WdlValue =
-                if (wvl.attrs.stream) {
-                    WdlVarLinks.eval(wvl, false)
-                } else {
-                    WdlVarLinks.eval(wvl, true)
-                }
-            env = env + (key -> (wvl, Some(v)))
-            v
-        }
-
-        def lookup(varName : String) : WdlValue =
-            env.get(varName) match {
-                case Some((wvl, None)) =>
-                    // Make a value from a dx-links structure. This also causes any file
-                    // to be downloaded. Keep the result cached.
-                    evalAndCache(varName, wvl)
-                case Some((_, Some(v))) =>
-                    // We have already evalulated this structure
-                    v
-                case None =>
-                    throw new AppInternalException(s"Accessing unbound variable ${varName}")
-            }
-
-        def evalDecl(decl : Declaration) : Option[(WdlVarLinks, WdlValue)] = {
-            val attrs = DeclAttrs.get(task, decl.unqualifiedName, cef)
-            (decl.wdlType, decl.expression) match {
-                // optional input
-                case (WdlOptionalType(_), None) =>
-                    inputs.get(decl.unqualifiedName) match {
-                        case None => None
-                        case Some(wvl) =>
-                            val v: WdlValue = evalAndCache(decl.unqualifiedName, wvl)
-                            Some((wvl, v))
-                    }
-
-                // compulsory input
-                case (_, None) =>
-                    inputs.get(decl.unqualifiedName) match {
-                        case None =>
-                            throw new AppInternalException(s"Accessing unbound variable ${decl.unqualifiedName}")
-                        case Some(wvl) =>
-                            val v: WdlValue = evalAndCache(decl.unqualifiedName, wvl)
-                            Some((wvl, v))
-                    }
-
-                // declaration to evaluate, not an input
-                case (WdlOptionalType(t), Some(expr)) =>
-                    try {
-                        val v : WdlValue = expr.evaluate(lookup, DxFunctions).get
-                        val wvl = WdlVarLinks.apply(t, attrs, v)
-                        env = env + (decl.unqualifiedName -> (wvl, Some(v)))
-                        Some((wvl, v))
-                    } catch {
-                        // trying to access an unbound variable.
-                        // Since the result is optional.
-                        case e: AppInternalException => None
-                    }
-
-                case (t, Some(expr)) =>
-                    val v : WdlValue = expr.evaluate(lookup, DxFunctions).get
-                    val wvl = WdlVarLinks.apply(t, attrs, v)
-                    env = env + (decl.unqualifiedName -> (wvl, Some(v)))
-                    Some((wvl, v))
-            }
-        }
-
-        // Process all the declarations. Take care to add new bindings
-        // to the environment, so variables like [cmdline] will be able to
-        // access previous results.
-        declarations.map{ decl =>
-            evalDecl(decl) match {
-                case Some((wvl, wdlValue)) =>
-                    Some(decl.unqualifiedName -> BValue(wvl, wdlValue, Some(decl)))
-                case None =>
-                    // optional input that was not provided
-                    None
-            }
-        }.flatten.toMap
-    }
-
     // evaluate Task output expressions
     private def evalTaskOutputs(inputs : Map[String, WdlValue])
             : Seq[(String, WdlType, WdlValue)] =
@@ -144,7 +48,8 @@ case class RunnerTask(task:WdlTask,
             }
         }
         def evalTaskOutput(tso: TaskOutput, expr: WdlExpression) : (String, WdlType, WdlValue) = {
-            val v : WdlValue = expr.evaluate(lookup, DxFunctions).get
+            val vRaw : WdlValue = expr.evaluate(lookup, DxFunctions).get
+            val v = Utils.cast(tso.wdlType, vRaw)
             (tso.unqualifiedName, tso.wdlType, v)
         }
         task.outputs.map { case outdef =>
@@ -261,7 +166,7 @@ case class RunnerTask(task:WdlTask,
         }
 
         val m:Map[String, (String, BValue)] = inputs.map{
-            case (varName, BValue(wvl, wdlValue, declOpt)) =>
+            case (varName, BValue(wvl, wdlValue)) =>
                 val (wdlValueRewrite,bashSnippet) = wdlValue match {
                     case WdlSingleFile(path) if wvl.attrs.stream =>
                         mkfifo(wvl, path)
@@ -271,7 +176,7 @@ case class RunnerTask(task:WdlTask,
                         // everything else
                         (wdlValue,"")
                 }
-                val bVal:BValue = BValue(wvl, wdlValueRewrite, declOpt)
+                val bVal:BValue = BValue(wvl, wdlValueRewrite)
                 varName -> (bashSnippet, bVal)
         }.toMap
 
@@ -384,9 +289,10 @@ case class RunnerTask(task:WdlTask,
          }.toMap
 
         // evaluate the top declarations
-        val inputs: Map[String, BValue] = evalDeclarations(task.declarations, inputWvls)
+        val inputs: Map[String, BValue] =
+            RunnerEval.evalDeclarations(task.declarations, inputWvls, true, Some((task, cef)))
         val env:Map[String, WdlValue] = inputs.map{
-            case (varName, BValue(_,wdlValue,_)) => varName -> wdlValue
+            case (varName, BValue(_,wdlValue)) => varName -> wdlValue
         }.toMap
         val docker = dockerImage(env)
 

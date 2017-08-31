@@ -75,6 +75,7 @@ object Utils {
 
     val CHECKSUM_PROP = "dxWDL_checksum"
     val COMMON = "common"
+    val DEFAULT_APPLET_TIMEOUT = 48
     val DOWNLOAD_RETRY_LIMIT = 3
     val DX_HOME = "/home/dnanexus"
     val DX_INSTANCE_TYPE_ATTR = "dx_instance_type"
@@ -628,5 +629,20 @@ object Utils {
         if (!verbose)
             return
         System.err.println(msg)
+    }
+
+    // coerce a WDL value to the required type (if needed)
+    def cast(wdlType: WdlType, v: WdlValue) : WdlValue = {
+        val retVal =
+            if (v.wdlType != wdlType) {
+                // we need to convert types
+                System.err.println(s"Casting from ${v.wdlType} to ${wdlType}")
+                wdlType.coerceRawValue(v).get
+            } else {
+                // no need to change types
+                v
+            }
+        assert(retVal.wdlType == wdlType)
+        retVal
     }
 }

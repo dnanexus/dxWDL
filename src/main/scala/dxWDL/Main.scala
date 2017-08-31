@@ -50,7 +50,8 @@ object Main extends App {
                               folder: String,
                               dxWDLrtId: String,
                               compileMode: Option[String],
-                              sortMode: TopoMode.Value)
+                              sortMode: TopoMode.Value,
+                              appletTimeout: Option[Int])
 
     private def normKey(s: String) : String= {
         s.replaceAll("_", "").toUpperCase
@@ -272,6 +273,7 @@ object Main extends App {
         }
         val verbose = Verbose(options contains "verbose", verboseKeys)
 
+
         // There are three possible syntaxes:
         //    project-id:/folder
         //    project-id:
@@ -312,6 +314,14 @@ object Main extends App {
             case Some("relaxed") => TopoMode.SortRelaxed
             case _ => throw new Exception("Sanity: bad sort mode")
         }
+        val appletTimeout =
+            if (options contains "noAppletTimeout") {
+                None
+            } else {
+                // default timeout
+                Some(Utils.DEFAULT_APPLET_TIMEOUT)
+            }
+
         CompileOptions(options contains "archive",
                        options contains "force",
                        verbose,
@@ -322,7 +332,8 @@ object Main extends App {
                        folder,
                        dxWDLrtId,
                        compileMode,
-                       sortMode)
+                       sortMode,
+                       appletTimeout)
     }
 
     def compileBody(wdlSourceFile : Path, options: OptionsMap) : String = {
@@ -387,9 +398,10 @@ object Main extends App {
             case None =>
                 // Generate dx:applets and dx:workflow from the IR
                 val wdlInputs = options.get("inputs").map(Paths.get(_))
-                CompilerNative.apply(irNs, wdlInputs, cOpt.dxProject, instanceTypeDB,
-                                     cOpt.dxWDLrtId,
-                                     cOpt.folder, cef, cOpt.force, cOpt.archive, cOpt.verbose.on)
+                CompilerNative(cOpt.dxWDLrtId, cOpt.dxProject, instanceTypeDB,
+                               cOpt.folder, cef,
+                               cOpt.appletTimeout,
+                               cOpt.force, cOpt.archive, cOpt.verbose).apply(irNs, wdlInputs)
             case Some(x) if x.toLowerCase == "ir" => "IR-xxxx"
             case Some(other) => throw new Exception(s"Unknown compilation mode ${other}")
         }
@@ -488,34 +500,36 @@ object Main extends App {
     }
 
     val UsageMessage =
-        """|java -jar dxWDL.jar <action> <parameters> [options]
-           |
-           |Actions:
-           |
-           |compile <WDL file>
-           |  Compile a wdl file into a dnanexus workflow.
-           |  Optionally, specify a destination path on the
-           |  platform. If a WDL inputs files is specified, a dx JSON
-           |  inputs file is generated from it.
-           |  options:
-           |    -archive              Archive older versions of applets
-           |    -compileMode <string> Compilation mode, a debugging flag
-           |    -destination <string> Output folder on the platform for workflow
-           |    -force                Delete existing applets/workflows
-           |    -inputs <string>      Path to cromwell style input file
-           |    -reorg                Reorganize workflow output files
-           |    -sort [string]        Sort call graph, to avoid forward references
-           |    -verbose [flag]       Print detailed progress reports
-           |
-           |config
-           |  Print the configuration parameters
-           |
-           |internal <sub command>
-           |  Various internal commands
-           |
-           |version
-           |  Report the current version
-           |""".stripMargin
+        s"""|java -jar dxWDL.jar <action> <parameters> [options]
+            |
+            |Actions:
+            |
+            |compile <WDL file>
+            |  Compile a wdl file into a dnanexus workflow.
+            |  Optionally, specify a destination path on the
+            |  platform. If a WDL inputs files is specified, a dx JSON
+            |  inputs file is generated from it.
+            |  options:
+            |    -archive              Archive older versions of applets
+            |    -compileMode <string> Compilation mode, a debugging flag
+            |    -destination <string> Output folder on the platform for workflow
+            |    -force                Delete existing applets/workflows
+            |    -inputs <string>      Path to cromwell style input file
+            |    -noAppletTimeout      By default, applets cannot run more than ${Utils.DEFAULT_APPLET_TIMEOUT} hours.
+            |                          Remove this limitation.
+            |    -reorg                Reorganize workflow output files
+            |    -sort [string]        Sort call graph, to avoid forward references
+            |    -verbose [flag]       Print detailed progress reports
+            |
+            |config
+            |  Print the configuration parameters
+            |
+            |internal <sub command>
+            |  Various internal commands
+            |
+            |version
+            |  Report the current version
+            |""".stripMargin
 
     val termination = dispatchCommand(args)
 
