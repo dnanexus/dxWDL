@@ -20,14 +20,11 @@ test_dir = os.path.join(top_dir, "test")
 git_revision = subprocess.check_output(["git", "describe", "--always", "--dirty", "--tags"]).strip()
 test_files={}
 test_failing=set([])
-reserved_test_names=['S', 'M', 'All', 'list']
-small_test_list = [
-    "math", "strings", "files"
-]
+reserved_test_names=['M', 'All', 'list']
 
 medium_test_list = [
     # Basics
-    "var_types", "cast",
+    "cast", "math", "strings", "files",
 
     # various advanced features
     "advanced",
@@ -44,12 +41,12 @@ medium_test_list = [
     # Variable instance types
     "instance_types",
 
-    # Complex data types
+    # Maps and pairs.
     "dict",
 
     # objects
     "complex"
-] + small_test_list
+]
 
 # Tests with the reorg flags
 test_reorg=["files"]
@@ -281,8 +278,6 @@ def print_test_list():
 
 # Choose set set of tests to run
 def choose_tests(test_name):
-    if test_name == 'S':
-        return small_test_list
     if test_name == 'M':
         return medium_test_list
     if test_name == 'All':

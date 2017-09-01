@@ -494,7 +494,8 @@ case class CompilerNative(dxWDLrtId: String,
     // When [force] is true, always rebuild. Otherwise, rebuild only
     // if the WDL code has changed.
     def buildAppletIfNeeded(applet: IR.Applet,
-                            appletDict: Map[String, (IR.Applet, DXApplet)]) : (DXApplet, Vector[IR.CVar]) = {
+                            appletDict: Map[String, (IR.Applet, DXApplet)])
+            : (DXApplet, Vector[IR.CVar]) = {
         // Search for existing applets on the platform, in the same path
         val existingApl: List[DXApplet] = DXSearch.findDataObjects().nameMatchesExactly(applet.name)
             .inFolder(dxProject, folder).withClassApplet().execute().asList()

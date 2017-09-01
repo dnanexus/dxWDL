@@ -84,7 +84,8 @@ object RunnerEval {
                 case (_, None) =>
                     inputs.get(decl.unqualifiedName) match {
                         case None =>
-                            throw new AppInternalException(s"Accessing unbound variable ${decl.unqualifiedName}")
+                            throw new AppInternalException(
+                                s"Accessing unbound variable ${decl.unqualifiedName}")
                         case Some(wvl) =>
                             val v: WdlValue = evalAndCache(decl.unqualifiedName, wvl)
                             Some((wvl, v))
@@ -94,7 +95,7 @@ object RunnerEval {
                 case (WdlOptionalType(t), Some(expr)) =>
                     try {
                         val vRaw : WdlValue = expr.evaluate(lookup, DxFunctions).get
-                        val v: WdlValue = Utils.cast(t, vRaw)
+                        val v: WdlValue = Utils.cast(t, vRaw, decl.unqualifiedName)
                         val wvl = WdlVarLinks.apply(t, attrs, v)
                         env = env + (decl.unqualifiedName -> (wvl, Some(v)))
                         Some((wvl, v))
@@ -106,7 +107,7 @@ object RunnerEval {
 
                 case (t, Some(expr)) =>
                     val vRaw : WdlValue = expr.evaluate(lookup, DxFunctions).get
-                    val v: WdlValue = Utils.cast(t, vRaw)
+                    val v: WdlValue = Utils.cast(t, vRaw, decl.unqualifiedName)
                     val wvl = WdlVarLinks.apply(t, attrs, v)
                     env = env + (decl.unqualifiedName -> (wvl, Some(v)))
                     Some((wvl, v))

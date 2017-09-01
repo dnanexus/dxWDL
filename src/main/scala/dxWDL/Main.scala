@@ -273,7 +273,6 @@ object Main extends App {
         }
         val verbose = Verbose(options contains "verbose", verboseKeys)
 
-
         // There are three possible syntaxes:
         //    project-id:/folder
         //    project-id:
@@ -387,8 +386,8 @@ object Main extends App {
         // mangles the outputs, which is why we pass the originals
         // unmodified.
         val cef = new CompilerErrorFormatter(ns.terminalMap)
-        val irNs = CompilerIR(cState.outputs, cOpt.folder, instanceTypeDB, cef, cOpt.reorg, cOpt.verbose)
-            .apply(ns)
+        val irNs = CompilerIR(cState.outputs, cOpt.folder, instanceTypeDB, cef,
+                              cOpt.reorg, cOpt.verbose).apply(ns)
 
         // Write out the intermediate representation
         prettyPrintIR(wdlSourceFile, irNs, cOpt.verbose.on)

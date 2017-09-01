@@ -172,22 +172,29 @@ object WdlVarLinks {
         // into the same directory; the only exception we make is for
         // disambiguation purposes.
         val dxFile = dxFileOfJsValue(jsValue)
-        val fName = dxFile.describe().getName()
-        val shortPath = Utils.inputFilesDirPath.resolve(fName)
-        val path : Path =
-            if (Files.exists(shortPath)) {
-                // Short path already exists. Note: this check is brittle in the case
-                // of concurrent downloads.
-                val fid = dxFile.getId()
-                System.err.println(s"Disambiguating file ${fid} with name ${fName}")
-                val dir:Path = Utils.inputFilesDirPath.resolve(fid)
-                Utils.safeMkdir(dir)
-                Utils.inputFilesDirPath.resolve(fid).resolve(fName)
-            } else {
-                shortPath
-            }
-        localDxFiles.get(path) match {
+
+        // Check if we have already downloaded the file
+        val alreadyHere = localDxFiles.find{ case (path, dxFileLocal) => dxFile == dxFileLocal }
+        val localPath = alreadyHere match {
+            case Some((path, dxFileLocal)) =>
+                // we already downloaded the file
+                path
             case None =>
+                val fName = dxFile.describe().getName()
+                val shortPath = Utils.inputFilesDirPath.resolve(fName)
+                val path : Path =
+                    if (Files.exists(shortPath)) {
+                        // Short path already exists. Note: this check is brittle in the case
+                        // of concurrent downloads.
+                        val fid = dxFile.getId()
+                        System.err.println(s"Disambiguating file ${fid} with name ${fName}")
+                        val dir:Path = Utils.inputFilesDirPath.resolve(fid)
+                        Utils.safeMkdir(dir)
+                        Utils.inputFilesDirPath.resolve(fid).resolve(fName)
+                    } else {
+                        shortPath
+                    }
+
                 if (force) {
                     // Download right now
                     Utils.downloadFile(path, dxFile)
@@ -200,11 +207,9 @@ object WdlVarLinks {
                     DxFunctions.registerRemoteFile(path.toString, dxFile)
                 }
                 localDxFiles(path) = dxFile
-            case Some(_) =>
-                // we have already downloaded the file
-                ()
+                path
         }
-        WdlSingleFile(path.toString)
+        WdlSingleFile(localPath.toString)
     }
 
     // Is this a WDL type that maps to a native DX type?
@@ -529,9 +534,30 @@ object WdlVarLinks {
         }
     }
 
+    // Search recursively in [jsValue] for any dx:files. Localize these
+    // files by creating empty local files to represent them. Do not
+    // download the file body.
+    private def localizeFiles(jsValue: JsValue) : Unit = {
+        jsValue match {
+            case JsBoolean(_) | JsNull | JsNumber(_) | JsString(_) =>
+                Vector.empty[DXFile]
+            case JsObject(_) if isDxFile(jsValue) =>
+                Vector(wdlFileOfDxLink(jsValue, false))
+            case JsObject(fields) =>
+                fields.foreach{ case(_,v) => localizeFiles(v) }
+            case JsArray(elems) =>
+                elems.foreach(e => localizeFiles(e))
+        }
+    }
+
     // Convert an input field to a dx-links structure. This allows
     // passing it to other jobs.
+    //
+    // Note: we need to represent dx-files as local paths, even if we
+    // do not download them. This is because accessing these files
+    // later on will cause a WDL failure.
     def apply(wdlType: WdlType, attrs: DeclAttrs, jsValue: JsValue) : WdlVarLinks = {
+        //localizeFiles(jsValue)
         if (isNativeDxType(wdlType)) {
             // This is a primitive value, or a single dimensional
             // array of primitive values.

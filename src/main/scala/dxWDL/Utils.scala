@@ -632,11 +632,11 @@ object Utils {
     }
 
     // coerce a WDL value to the required type (if needed)
-    def cast(wdlType: WdlType, v: WdlValue) : WdlValue = {
+    def cast(wdlType: WdlType, v: WdlValue, varName: String) : WdlValue = {
         val retVal =
             if (v.wdlType != wdlType) {
                 // we need to convert types
-                System.err.println(s"Casting from ${v.wdlType} to ${wdlType}")
+                System.err.println(s"Casting variable ${varName} from ${v.wdlType} to ${wdlType}")
                 wdlType.coerceRawValue(v).get
             } else {
                 // no need to change types

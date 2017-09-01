@@ -49,7 +49,7 @@ case class RunnerTask(task:WdlTask,
         }
         def evalTaskOutput(tso: TaskOutput, expr: WdlExpression) : (String, WdlType, WdlValue) = {
             val vRaw : WdlValue = expr.evaluate(lookup, DxFunctions).get
-            val v = Utils.cast(tso.wdlType, vRaw)
+            val v = Utils.cast(tso.wdlType, vRaw, tso.unqualifiedName)
             (tso.unqualifiedName, tso.wdlType, v)
         }
         task.outputs.map { case outdef =>
@@ -208,8 +208,13 @@ case class RunnerTask(task:WdlTask,
 
         // instantiate the command
         val env: Map[Declaration, WdlValue] = inputs.map {
-            case (_, BValue(_,wdlValue,Some(decl))) => decl -> wdlValue
-            case (_, BValue(varName,_,None)) => throw new Exception("missing declaration")
+            case (varName, BValue(cVar,wdlValue)) =>
+                val decl = task.declarations.find(_.unqualifiedName == varName) match {
+                    case Some(x) => x
+                    case None => throw new Exception(
+                        s"Cannot find declaration for variable ${varName}")
+                }
+                decl -> wdlValue
         }.toMap
         val shellCmd : String = task.instantiateCommand(env, DxFunctions).get
 

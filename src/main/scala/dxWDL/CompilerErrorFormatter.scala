@@ -103,14 +103,4 @@ case class CompilerErrorFormatter(terminalMap: Map[Terminal, WorkflowSource]) {
             |""".stripMargin
     }
 
-    def workflowOutputShouldHaveDxType(ast: Ast): String = {
-        val t: Terminal = ast.getAttribute("name").asInstanceOf[Terminal]
-        s"""|Workflow output should have a native dx type. The primitive
-            |dx types are {Boolean, Int, Float, String, File}. Arrays
-            |of primitives, such as Array[File], are also allowed.
-            |WDL maps, pairs, and ragged arrays are not allowed.
-            |
-            |${pointToSource(t)}
-            |""".stripMargin
-   }
 }
