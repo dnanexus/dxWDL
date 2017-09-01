@@ -11,6 +11,7 @@ import wdl4s.wdl.expression.WdlStandardLibraryFunctions
 import wdl4s.wdl.TsvSerializable
 import wdl4s.wdl.values._
 
+
 object DxFunctions extends WdlStandardLibraryFunctions {
     // Stream where to emit debugging information. By default,
     // goes to stderr on the instance. Requires reconfiguration

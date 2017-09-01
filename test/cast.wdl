@@ -31,6 +31,19 @@ task FileIdent {
     }
 }
 
+task JoinMisc {
+    Boolean b
+    Int i
+    Float x
+    String s
+
+    command {
+    }
+    output {
+        String result = "${b}_${i}_${x}_${s}"
+    }
+}
+
 workflow cast {
     Int i
     String s
@@ -59,9 +72,19 @@ workflow cast {
     Array[Int] ytmp1 = [i]
     call SumArray as SumArray2 {input: ints=ytmp1 }
 
+    # Check various rarely used types (float, boolean)
+    Boolean b = true
+    Int i2 = "3"
+    Float x = "4.2"
+    String s2 = "zoology"
+    call JoinMisc {
+        input : b=b, i=i2, x=x, s=s2
+    }
+
     output {
-       Add.result
-       SumArray.result
-       SumArray2.result
+        Add.result
+        SumArray.result
+        SumArray2.result
+        JoinMisc.result
     }
 }

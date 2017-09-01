@@ -4,4 +4,5 @@
   "files_outputs.head_result" : ["Nut", "Nut", "Nut", "Nut"],
   "files_outputs.diff1_result" : 0,
   "files_outputs.diff2_result" : 281
+  "files_outputs.ident_result" : [u'/home/dnanexus/execution/inputs/one.txt', u'/home/dnanexus/execution/inputs/two.txt', u'/home/dnanexus/execution/inputs/three.txt', u'/home/dnanexus/execution/inputs/four.txt']
 }
