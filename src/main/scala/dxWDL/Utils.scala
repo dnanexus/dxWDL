@@ -75,6 +75,7 @@ object Utils {
 
     val CHECKSUM_PROP = "dxWDL_checksum"
     val COMMON = "common"
+    val DEFAULT_APPLET_TIMEOUT = 48
     val DOWNLOAD_RETRY_LIMIT = 3
     val DX_HOME = "/home/dnanexus"
     val DX_INSTANCE_TYPE_ATTR = "dx_instance_type"
@@ -575,6 +576,51 @@ object Utils {
         throw new Exception(s"Failure to upload file ${path}")
     }
 
+    // Parse a dnanexus file descriptor. Examples:
+    //
+    // "$dnanexus_link": {
+    //    "project": "project-BKJfY1j0b06Z4y8PX8bQ094f",
+    //    "id": "file-BKQGkgQ0b06xG5560GGQ001B"
+    //   }
+    //
+    //  {"$dnanexus_link": "file-F0J6JbQ0ZvgVz1J9q5qKfkqP"}
+    //
+    def dxFileOfJsValue(jsValue : JsValue) : DXFile = {
+        val innerObj = jsValue match {
+            case JsObject(fields) =>
+                fields.get("$dnanexus_link") match {
+                    case None => throw new AppInternalException(s"Non-dxfile json $jsValue")
+                    case Some(x) => x
+                }
+            case  _ =>
+                throw new AppInternalException(s"Non-dxfile json $jsValue")
+        }
+
+        val (fid, projId) : (String, Option[String]) = innerObj match {
+            case JsString(fid) =>
+                // We just have a file-id
+                (fid, None)
+            case JsObject(linkFields) =>
+                // file-id and project-id
+                val fid =
+                    linkFields.get("id") match {
+                        case Some(JsString(s)) => s
+                        case _ => throw new AppInternalException(s"No file ID found in $jsValue")
+                    }
+                linkFields.get("project") match {
+                    case Some(JsString(pid : String)) => (fid, Some(pid))
+                    case _ => (fid, None)
+                }
+            case _ =>
+                throw new AppInternalException(s"Could not parse a dxlink from $innerObj")
+        }
+
+        projId match {
+            case None => DXFile.getInstance(fid)
+            case Some(pid) => DXFile.getInstance(fid, DXProject.getInstance(pid))
+        }
+    }
+
     // types
     def isOptional(t: WdlType) : Boolean = {
         t match {
@@ -617,16 +663,25 @@ object Utils {
             ""
     }
 
-    def inputsToString(m: Map[String, WdlValue]) : String = {
-        m.map{ case(key, wVal) =>
-            key ++ " -> " ++ wVal.wdlType.toString ++ "(" ++ wVal.toWdlString ++ ")"
-        }.mkString("\n")
-    }
-
     // Used by the compiler to provide more information to the user
     def trace(verbose: Boolean, msg: String) : Unit = {
         if (!verbose)
             return
         System.err.println(msg)
+    }
+
+    // coerce a WDL value to the required type (if needed)
+    def cast(wdlType: WdlType, v: WdlValue, varName: String) : WdlValue = {
+        val retVal =
+            if (v.wdlType != wdlType) {
+                // we need to convert types
+                System.err.println(s"Casting variable ${varName} from ${v.wdlType} to ${wdlType}")
+                wdlType.coerceRawValue(v).get
+            } else {
+                // no need to change types
+                v
+            }
+        assert(retVal.wdlType == wdlType)
+        retVal
     }
 }

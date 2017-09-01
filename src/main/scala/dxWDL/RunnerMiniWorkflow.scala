@@ -269,7 +269,7 @@ case class RunnerMiniWorkflow(exportVars: Set[String],
             System.err.println(s"envWithIterItem= ${envWithIterItem}")
 
             // calculate declarations at the top of the block
-            val bValues = RunnerEval.evalDeclarations(topDecls, envWithIterItem)
+            val bValues = RunnerEval.evalDeclarations(topDecls, envWithIterItem, false, None)
             var innerEnvRaw = bValues.map{ case(key, bVal) => key -> bVal.wvl }.toMap
             val topOutputs = innerEnvRaw
                 .filter{ case (varName, _) => isExported(varName) }
@@ -341,7 +341,7 @@ case class RunnerMiniWorkflow(exportVars: Set[String],
         var allOutputs = Vector.empty[Env]
 
         // calculate declarations at the top of the block
-        val bValues = RunnerEval.evalDeclarations(topDecls, outerEnv)
+        val bValues = RunnerEval.evalDeclarations(topDecls, outerEnv, false, None)
         val innerEnvRaw = bValues.map{ case(key, bVal) => key -> bVal.wvl }.toMap
         val topOutputs = innerEnvRaw
             .filter{ case (varName, _) => isExported(varName) }
@@ -411,8 +411,8 @@ case class RunnerMiniWorkflow(exportVars: Set[String],
         val exprDecls = decls.filter(decl => decl.expression != None)
 
         // evaluate the expressions, given the workflow inputs
-        val env:Map[String, BValue] = RunnerEval.evalDeclarations(exprDecls, inputs)
-        env.map{ case (key, BValue(wvl,_,_)) => key -> wvl }.toMap
+        val env:Map[String, BValue] = RunnerEval.evalDeclarations(exprDecls, inputs, false, None)
+        env.map{ case (key, BValue(wvl,_)) => key -> wvl }.toMap
     }
 
     // Split a workflow into the top declarations,

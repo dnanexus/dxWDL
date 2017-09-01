@@ -3,5 +3,6 @@
   "files_outputs.FileArraySize_result" : [4, 6],
   "files_outputs.head_result" : ["Nut", "Nut", "Nut", "Nut"],
   "files_outputs.diff1_result" : 0,
-  "files_outputs.diff2_result" : 281
+  "files_outputs.diff2_result" : 281,
+  "files_outputs.ident_result" : ["/home/dnanexus/execution/inputs/one.txt", "/home/dnanexus/execution/inputs/two.txt", "/home/dnanexus/execution/inputs/three.txt", "/home/dnanexus/execution/inputs/four.txt"]
 }

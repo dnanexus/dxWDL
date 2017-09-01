@@ -160,7 +160,8 @@ object RunnerWorkflowOutputs {
             case wot:WorkflowOutput => Some(wot)
             case _ => throw new Exception("Workflow contains a non declaration")
         }.flatten
-        val outputs : Map[String, BValue] = RunnerEval.evalDeclarations(outputDecls, inputs)
+        val outputs : Map[String, BValue] =
+            RunnerEval.evalDeclarations(outputDecls, inputs, false, None)
 
         val outputFields: Map[String, JsonNode] = outputs.map {
             case (varName, bValue) =>

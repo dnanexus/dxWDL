@@ -1,3 +1,4 @@
 {
-  "trivial_outputs.sum" : 8
+  "trivial_outputs.a" : 5,
+  "trivial_outputs.b" : 1
 }

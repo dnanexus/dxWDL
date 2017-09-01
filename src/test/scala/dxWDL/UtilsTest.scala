@@ -99,16 +99,6 @@ class UtilsTest extends FlatSpec with BeforeAndAfterEach with OneInstancePerTest
         assert(b.toWdlString == "true")
     }
 
-    it should "print call inputs correctly" in {
-        val m = Map("A" -> WdlBoolean(true),
-                    "B" -> WdlInteger(23),
-                    "C" -> WdlFloat(44.3),
-                    "D" -> WdlString("ddd"),
-                    "E" -> WdlFile("/tmp/xx"))
-        val s = Utils.inputsToString(m)
-        //System.err.print(s"callInputs=\n${Utils.inputsToString(m)}\n")
-    }
-
     it should "pretty print strings in IR with newlines" in {
         val yaml1 = YamlString(
             """\//||\/||

@@ -214,6 +214,22 @@ task Add {
             subBlocks :+ BlockDecl(decls)
     }
 
+    // Check if the environment has A.B.C, A.B, or A.
+    private def trailSearch(env: CallEnv, ast: Ast) : Option[(String, LinkedVar)] = {
+        env.get(WdlExpression.toString(ast)) match {
+            case None if !ast.isMemberAccess =>
+                None
+            case None =>
+                ast.getAttribute("lhs") match {
+                    case lhs:Ast => trailSearch(env, lhs)
+                    case _ => None
+                }
+            case Some(lVar) =>
+                Some(WdlExpression.toString(ast), lVar)
+        }
+    }
+
+
     // Update a closure with all the variables required
     // for an expression. Ignore variable accesses outside the environment;
     // it is assumed that these are accesses to local variables.
@@ -221,9 +237,9 @@ task Add {
     // @param  closure   call closure
     // @param  env       mapping from fully qualified WDL name to a dxlink
     // @param  expr      expression as it appears in source WDL
-    def updateClosure(closure : CallEnv,
-                      env : CallEnv,
-                      expr : WdlExpression) : CallEnv = {
+    private def updateClosure(closure : CallEnv,
+                              env : CallEnv,
+                              expr : WdlExpression) : CallEnv = {
         expr.ast match {
             case t: Terminal =>
                 val srcStr = t.getSourceString
@@ -239,16 +255,16 @@ task Add {
                 }
 
             case a: Ast if a.isMemberAccess =>
-                // This is a case of accessing something like A.B.C
-                // The RHS is C, and the LHS is A.B
-                // The FQN is "A.B.C"
-                val fqn = WdlExpression.toString(a)
-                env.get(fqn) match {
-                    case Some(lVar) =>
-                        closure + (fqn -> lVar)
+                // This is a case of accessing something like A.B.C.
+                trailSearch(env, a) match {
+                    case Some((varName, lVar)) =>
+                        closure + (varName -> lVar)
                     case None =>
+                        // The variable is declared locally, it is not
+                        // passed from the outside.
                         closure
                 }
+
             case a: Ast =>
                 // Figure out which variables are needed to calculate this expression,
                 // and add bindings for them
@@ -479,7 +495,7 @@ workflow w {
 
         // figure out the inputs
         closure = closure.map{ case (key,lVar) =>
-            val cVar = IR.CVar(key, lVar.cVar.wdlType, DeclAttrs.empty, lVar.cVar.ast)
+            val cVar = IR.CVar(key, lVar.cVar.wdlType, lVar.cVar.attrs, lVar.cVar.ast)
             key -> LinkedVar(cVar, lVar.sArg)
         }.toMap
         val inputVars: Vector[IR.CVar] = closure.map{ case (_, lVar) => lVar.cVar }.toVector

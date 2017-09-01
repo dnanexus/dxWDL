@@ -38,15 +38,11 @@ scalacOptions ++= Seq(
     "-Xlint:private-shadow",
     "-Xlint:stars-align",
     "-Xlint:type-parameter-shadow",
-//    "-Xlint:unsound-match",
     "-Ywarn-dead-code",
-//    "-Ywarn-numeric-widen",
-//    "-Ywarn-value-discard",
     "-Ywarn-inaccessible",
-    "-Ywarn-unused:implicits",
-//    "-Ywarn-unused:privates"
-//    "-Ywarn-unused:locals"
-//    "-Ywarn-unused:patvars"
+//    "-Ywarn-unused:implicits",
+//    "-Ywarn-unused:privates",
+//    "-Ywarn-unused:locals",
 
     "-Ywarn-unused:imports", // warns about every unused import on every command.
     "-Xfatal-warnings"       // makes those warnings fatal.
