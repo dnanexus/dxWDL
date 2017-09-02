@@ -2,6 +2,7 @@
 
 ## 0.42
 - WDL objects
+- Type coercion
 
 ## 0.41
 - Minor fixes to streaming
