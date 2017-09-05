@@ -21,13 +21,20 @@ This is the dx JSON input:
   */
 package dxWDL
 
-import com.dnanexus.{DXFile, DXProject, DXSearch, DXWorkflow}
+import com.fasterxml.jackson.databind.JsonNode
+import com.fasterxml.jackson.databind.node.ObjectNode
+import com.dnanexus.{DXFile, DXAPI, DXJSON, DXProject, DXSearch, DXWorkflow}
 import java.nio.file.{Path, Paths}
 import scala.collection.JavaConverters._
 import spray.json._
 import Utils.UNIVERSAL_FILE_PREFIX
 
-object InputFile {
+case class InputFile(verbose: Utils.Verbose) {
+    // A replacement for the DXWorkflow.Stage inner class
+    case class WorkflowStage(id: String) {
+        def getId() = id
+    }
+
     private def lookupFile(dxProject: Option[DXProject], fileName: String): DXFile = {
         if (fileName.startsWith("file-")) {
             // A file ID
@@ -86,7 +93,7 @@ object InputFile {
 
     private def lookupStage(name: String,
                             wf: IR.Workflow,
-                            stageDict: Map[String, DXWorkflow.Stage]) : DXWorkflow.Stage= {
+                            stageDict: Map[String, WorkflowStage]) : WorkflowStage= {
         stageDict.get(name) match {
             case None =>
                 System.err.println(s"stage dictionary: ${stageDict}")
@@ -99,7 +106,7 @@ object InputFile {
     // dx input file
     private def dxTranslate(wf: IR.Workflow,
                             wdlInputs: JsObject,
-                            stageDict: Map[String, DXWorkflow.Stage],
+                            stageDict: Map[String, WorkflowStage],
                             callDict: Map[String, String]) : JsObject= {
         val m: Map[String, JsValue] = wdlInputs.fields.map{ case (key, v) =>
             val components = key.split("\\.")
@@ -150,13 +157,42 @@ object InputFile {
         JsObject(m)
     }
 
+    // Query a platform workflow, and get a mapping from stage-name to stage-id.
+    private def queryWorkflowStages(dxwfl: DXWorkflow) : Map[String, WorkflowStage] = {
+        val req: ObjectNode = DXJSON.getObjectBuilder()
+            .put("fields", DXJSON.getObjectBuilder()
+                     .put("stages", true)
+                     .build()).build()
+        val rep = DXAPI.workflowDescribe(dxwfl.getId(), req, classOf[JsonNode])
+        val repJs:JsValue = Utils.jsValueOfJsonNode(rep)
+        val stages = repJs.asJsObject.fields.get("stages") match {
+            case None => throw new Exception("Failed to get workflow stages")
+            case Some(JsArray(x)) => x
+            case other => throw new Exception(s"Malformed stages fields ${other}")
+        }
+        stages.map{ stageMetadata =>
+            val id = stageMetadata.asJsObject.fields.get("id") match {
+                case None => throw new Exception("workflow stage doesn't have an ID")
+                case Some(JsString(x)) => x
+                case other => throw new Exception(s"Malformed id field ${other}")
+            }
+            val name = stageMetadata.asJsObject.fields.get("name") match {
+                case None => throw new Exception("workflow stage doesn't have a name")
+                case Some(JsString(x)) => x
+                case other => throw new Exception(s"Malformed name field ${other}")
+            }
+            name -> WorkflowStage(id)
+        }.toMap
+    }
+
     // Build a dx input file, based on the wdl input file and the workflow
-    def apply(wf: IR.Workflow,
-              stageDict: Map[String, DXWorkflow.Stage],
-              callDict: Map[String, String],
-              inputPath: Path,
-              verbose: Boolean) : Unit = {
-        Utils.trace(verbose, s"Translating WDL input file ${inputPath}")
+    def apply(dxwfl: DXWorkflow,
+              wf: IR.Workflow,
+              inputPath: Path) : Unit = {
+        Utils.trace(verbose.on, s"Translating WDL input file ${inputPath}")
+        val callDict = IR.callDict(wf)
+        val stageDict: Map[String, WorkflowStage] = queryWorkflowStages(dxwfl)
+
         // read the input file xxxx.json
         val wdlInputs: JsObject = Utils.readFileContent(inputPath).parseJson.asJsObject
 
@@ -167,6 +203,6 @@ object InputFile {
         val filename = Utils.replaceFileSuffix(inputPath, ".dx.json")
         val dxInputFile = inputPath.getParent().resolve(filename)
         Utils.writeFileContent(dxInputFile, dxInputs.prettyPrint)
-        Utils.trace(verbose, s"Wrote dx JSON input file ${dxInputFile}")
+        Utils.trace(verbose.on, s"Wrote dx JSON input file ${dxInputFile}")
     }
 }

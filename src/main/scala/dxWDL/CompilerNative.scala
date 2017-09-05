@@ -239,25 +239,6 @@ case class CompilerNative(dxWDLrtId: String,
         }
     }
 
-    // A workflow with the same name could, potentially, exist. We support two options:
-    // 1) Default: throw `workflow already exists` exception
-    // 2) Force: remove old workflow, and build new one
-    def handleOldWorkflow(wfName: String) : Unit = {
-        val oldWf = DXSearch.findDataObjects().nameMatchesExactly(wfName)
-            .inFolder(dxProject, folder).withClassWorkflow().execute().asList()
-        if (oldWf.isEmpty) return
-
-        // workflow exists
-        if (!force) {
-            val projName = dxProject.describe().getName()
-            throw new Exception(s"Workflow ${wfName} already exists in ${projName}:${folder}")
-        }
-
-        // force: remove old workflow
-        Utils.trace(verbose.on, "[Force] Removing old workflow")
-        dxProject.removeObjects(oldWf)
-    }
-
     // create a directory structure for this applet
     // applets/
     //        task-name/
@@ -614,16 +595,49 @@ case class CompilerNative(dxWDLrtId: String,
         dxBuilder.build()
     }
 
-    // Compile an entire workflow
-    def compileWorkflow(wf: IR.Workflow) :
-            (DXWorkflow, Map[String, DXWorkflow.Stage], Map[String, String]) = {
+    def buildWorkflow(wf: IR.Workflow,
+                      wfDigest: String,
+                      appletDict: Map[String, (IR.Applet, DXApplet)]) : DXWorkflow = {
         // create fresh workflow
-        handleOldWorkflow(wf.name)
         val dxwfl = DXWorkflow.newWorkflow()
             .setProject(dxProject)
             .setFolder(folder)
             .setName(wf.name).build()
 
+        // Create a dx:workflow stage for each stage in the IR.
+        // The accumulator state holds:
+        // - the workflow version, which gets incremented per stage
+        // - a dictionary of stages, mapping name to stage. This is used
+        //   to locate variable references.
+        //
+        val stageDictInit = Map.empty[String, DXWorkflow.Stage]
+        val _ = wf.stages.foldLeft((0, stageDictInit)) {
+            case ((version, stageDict), stg) =>
+                val (irApplet,dxApplet) = appletDict(stg.appletName)
+                val linkedInputs : Vector[(IR.CVar, IR.SArg)] = irApplet.inputs zip stg.inputs
+                val inputs: JsonNode = genStageInputs(linkedInputs, irApplet, stageDict)
+                val modif: DXWorkflow.Modification[DXWorkflow.Stage] =
+                    dxwfl.addStage(dxApplet, stg.name, inputs, version)
+                val nextVersion = modif.getEditVersion()
+                val dxStage : DXWorkflow.Stage = modif.getValue()
+                Utils.trace(verbose.on, s"Stage ${stg.name} = ${dxStage.getId()}")
+                (nextVersion,
+                 stageDict ++ Map(stg.name -> dxStage))
+        }
+        dxwfl.close()
+
+        // Add a checksum for the WDL code as a property of the applet.
+        // This allows to quickly check if anything has changed, saving
+        // unnecessary builds.
+        dxwfl.putProperty(CHECKSUM_PROP, wfDigest)
+        dxwfl
+    }
+
+    // Compile an entire workflow
+    //
+    // - Calculate the workflow checksum from the intermediate representation
+    // - Do not rebuild the workflow if it has a correct checksum
+    def buildWorkflowIfNeeded(wf: IR.Workflow) : DXWorkflow = {
         // Build the individual applets. We need to keep track of
         // the applets created, to be able to link calls. For example,
         // a scatter calls other applets; we need to pass the applet IDs
@@ -636,43 +650,63 @@ case class CompilerNative(dxWDLrtId: String,
                 appletDict + (a.name -> (a, dxApplet))
         }.toMap
 
-        // Create a dx:workflow stage for each stage in the IR.
-        //
-        // The accumulator state holds:
-        // - the workflow version, which gets incremented per stage
-        // - a dictionary of stages, mapping name to stage. This is used
-        //   to locate variable references.
-        val stageDictInit = Map.empty[String, DXWorkflow.Stage]
-        val callDictInit = Map.empty[String, String]
-        val (_,stageDict, callDict) = wf.stages.foldLeft((0, stageDictInit, callDictInit)) {
-            case ((version, stageDict, callDict), stg) =>
-                val (irApplet,dxApplet) = appletDict(stg.appletName)
-                val linkedInputs : Vector[(IR.CVar, IR.SArg)] = irApplet.inputs zip stg.inputs
-                val inputs: JsonNode = genStageInputs(linkedInputs, irApplet, stageDict)
-                val modif: DXWorkflow.Modification[DXWorkflow.Stage] =
-                    dxwfl.addStage(dxApplet, stg.name, inputs, version)
-                val nextVersion = modif.getEditVersion()
-                val dxStage : DXWorkflow.Stage = modif.getValue()
-                Utils.trace(verbose.on, s"Stage ${stg.name} = ${dxStage.getId()}")
+        // the workflow digest depends on the IR and the applets
+        val wfDigest:String = chksum(
+            List(IR.yaml(wf).prettyPrint,
+                 appletDict.toString).mkString("\n")
+        )
 
-                // map source calls to the stage name. For example, this happens
-                // for scatters.
-                val call2Stage = irApplet.kind match {
-                    case IR.AppletKindScatter(sourceCalls) => sourceCalls.map(x => x -> stg.name).toMap
-                    case IR.AppletKindIf(sourceCalls) => sourceCalls.map(x => x -> stg.name).toMap
-                    case _ => Map.empty[String, String]
+        // Search for existing workflows on the platform, in the same path
+        val existingWfl = DXSearch.findDataObjects().nameMatchesExactly(wf.name)
+            .inFolder(dxProject, folder).withClassWorkflow().execute().asList()
+            .asScala.toList
+
+        val buildRequired =
+            if (existingWfl.size == 0) {
+                true
+            } else if (existingWfl.size == 1) {
+                // Check if workflow code has changed
+                val dxWfl = existingWfl.head
+                val desc: DXWorkflow.Describe = dxWfl.describe(
+                    DXDataObject.DescribeOptions.get().withProperties())
+                val props: Map[String, String] = desc.getProperties().asScala.toMap
+                props.get(CHECKSUM_PROP) match {
+                    case None =>
+                        System.err.println(s"""|No checksum found for workflow ${wf.name}
+                                               |${dxWfl.getId()}, rebuilding""".stripMargin)
+                        true
+                    case Some(dxWflChksum) =>
+                        if (wfDigest != dxWflChksum) {
+                            Utils.trace(verbose.on, "Workflow has changed, rebuild required")
+                            true
+                        } else {
+                            Utils.trace(verbose.on, "Workflow has not changed")
+                            false
+                        }
                 }
+            } else {
+                throw new Exception(s"""|More than one workflow ${wf.name} found in
+                                        |path ${dxProject.getId()}:${folder}""".stripMargin)
+            }
 
-                (nextVersion,
-                 stageDict ++ Map(stg.name -> dxStage),
-                 callDict ++ call2Stage)
+        if (buildRequired) {
+            // workflow exists
+            if (!force) {
+                val projName = dxProject.describe().getName()
+                throw new Exception(s"Workflow ${wf.name} already exists in ${projName}:${folder}")
+            }
+            // force: remove old workflow
+            Utils.trace(verbose.on, "[Force] Removing old workflow")
+            dxProject.removeObjects(existingWfl.asJava)
+            buildWorkflow(wf, wfDigest, appletDict)
+        } else {
+            // Old workflow exists, and it has not changed.
+            assert(existingWfl.size > 0)
+            existingWfl.head
         }
-        dxwfl.close()
-        (dxwfl, stageDict, callDict)
     }
 
-    def apply(ns: IR.Namespace,
-              wdlInputFile: Option[Path]) : String = {
+    def apply(ns: IR.Namespace) : (Option[DXWorkflow], Vector[DXApplet]) = {
         Utils.trace(verbose.on, "Backend pass")
         ns.workflow match {
             case None =>
@@ -680,18 +714,11 @@ case class CompilerNative(dxWDLrtId: String,
                     val (dxApplet, _) = buildAppletIfNeeded(applet, Map.empty)
                     dxApplet
                 }
-                val ids: Seq[String] = dxApplets.map(x => x.getId())
-                ids.mkString(", ")
+                (None, dxApplets.toVector)
 
             case Some(iRepWf) =>
-                val (dxwfl, stageDict, callDict) = compileWorkflow(iRepWf)
-                wdlInputFile match {
-                    case None => ()
-                    case Some(path) =>
-                        InputFile.apply(iRepWf, stageDict, callDict,
-                                        path, verbose.on)
-                }
-                dxwfl.getId()
+                val dxwfl = buildWorkflowIfNeeded(iRepWf)
+                (Some(dxwfl), Vector.empty)
         }
     }
 }

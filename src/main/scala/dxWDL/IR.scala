@@ -103,36 +103,62 @@ object IR {
 
     // Automatic conversion to/from Yaml
     object IrInternalYamlProtocol extends DefaultYamlProtocol {
+        implicit object InstanceTypeYamlFormat extends YamlFormat[InstanceType] {
+            def write(it: InstanceType) =
+                it match {
+                    case InstanceTypeDefault =>
+                        YamlString("Default")
+                    case InstanceTypeConst(name) =>
+                        // we assume the name is not one of the other options
+                        YamlString(name)
+                    case InstanceTypeRuntime =>
+                        YamlString("Runtime")
+                }
+            def read(value: YamlValue) = value match {
+                case YamlString("Default") => InstanceTypeDefault
+                case YamlString("Runtime") => InstanceTypeRuntime
+                case YamlString(name) => InstanceTypeConst(name)
+                case unrecognized => deserializationError(s"InstanceType expected ${unrecognized}")
+            }
+        }
+
         implicit object AppletKindYamlFormat  extends YamlFormat[AppletKind] {
             def write(aKind: AppletKind) =
                 aKind match {
                     case AppletKindEval =>
-                        YamlArray(YamlString("Eval"))
+                        YamlString("Eval")
                     case AppletKindIf(sourceCalls) =>
-                        YamlArray(YamlString("If"), sourceCalls.toYaml)
+                        YamlObject(
+                            YamlString("type") -> YamlString("If"),
+                            YamlString("calls") -> sourceCalls.toYaml)
                     case AppletKindScatter(sourceCalls) =>
-                        YamlArray(YamlString("Scatter"), sourceCalls.toYaml)
+                        YamlObject(
+                            YamlString("type") -> YamlString("Scatter"),
+                            YamlString("calls") -> sourceCalls.toYaml)
                     case AppletKindTask =>
-                        YamlArray(YamlString("Task"))
+                        YamlString("Task")
                     case AppletKindWorkflowOutputs =>
-                        YamlArray(YamlString("WorkflowOutputs"))
+                        YamlString("WorkflowOutputs")
                     case AppletKindWorkflowOutputsAndReorg =>
-                        YamlArray(YamlString("WorkflowOutputsAndReorg"))
+                        YamlString("WorkflowOutputsAndReorg")
                 }
-
             def read(value: YamlValue) = value match {
-                case YamlArray(Vector(YamlString("Eval"))) =>
+                case YamlString("Eval") =>
                     AppletKindEval
-                case YamlArray(Vector(YamlString("If"), sourceCalls)) =>
-                    AppletKindIf(sourceCalls.convertTo[Vector[String]])
-                case YamlArray(Vector(YamlString("Scatter"), sourceCalls)) =>
-                    AppletKindScatter(sourceCalls.convertTo[Vector[String]])
-                case YamlArray(Vector(YamlString("Task"))) =>
+                case YamlString("Task") =>
                     AppletKindTask
-                case YamlArray(Vector(YamlString("WorkflowOutputs"))) =>
+                case YamlString("WorkflowOutputs") =>
                     AppletKindWorkflowOutputs
-                case YamlArray(Vector(YamlString("WorkflowOutputsAndReorg"))) =>
+                case YamlString("WorkflowOutputsAndReorg") =>
                     AppletKindWorkflowOutputsAndReorg
+                case YamlObject(_) =>
+                    value.asYamlObject.getFields(YamlString("type"), YamlString("calls"))
+                    match {
+                    case Seq(YamlString("If"), calls) =>
+                            AppletKindIf(calls.convertTo[Vector[String]])
+                    case Seq(YamlString("Scatter"), calls) =>
+                            AppletKindScatter(calls.convertTo[Vector[String]])
+                    }
                 case unrecognized => deserializationError(s"AppletKind expected ${unrecognized}")
             }
         }
@@ -194,73 +220,76 @@ object IR {
             }
         }
 
-//        implicit val appletFormat = yamlFormat7(Applet)
+        implicit object AppletFormat extends YamlFormat[Applet] {
+            def write(applet: Applet) = {
+                // discard empty lines
+                val lines = WdlPrettyPrinter(false, None).apply(applet.ns, 0)
+                val wdlCode = lines.map{ x =>
+                    if (!x.trim.isEmpty) Some(x)
+                    else None
+                }.flatten.mkString("\n")
+                YamlArray(
+                    YamlString(applet.name),
+                    applet.inputs.toYaml,
+                    applet.outputs.toYaml,
+                    applet.instanceType.toYaml,
+                    applet.docker.toYaml,
+                    YamlString(applet.destination),
+                    YamlString(wdlCode))
+            }
+
+            def read(value: YamlValue) =
+                value match {
+                    case YamlArray(
+                        Vector(
+                            YamlString(name),
+                            inputs,
+                            outputs,
+                            instanceType,
+                            YamlBoolean(docker),
+                            YamlString(destination),
+                            kind,
+                            YamlString(wdlCode))) =>
+                        Applet(name,
+                               inputs.convertTo[Vector[CVar]],
+                               outputs.convertTo[Vector[CVar]],
+                               instanceType.convertTo[InstanceType],
+                               docker,
+                               destination,
+                               kind.convertTo[AppletKind],
+                               WdlNamespace.loadUsingSource(wdlCode, None, None).get)
+                    case unrecognized =>
+                        deserializationError(s"Applet expected ${unrecognized}")
+                }
+        }
+
+        implicit val stageFormat = yamlFormat4(Stage)
+        implicit val workflowFormat = yamlFormat3(Workflow)
+        implicit val namespaceFormat = yamlFormat2(Namespace)
     }
     import IrInternalYamlProtocol._
 
-
+    // convenience methods, so we don't need to export the InternalYamlProtocol
     def yaml(cVar: CVar) = cVar.toYaml
-
-    def yaml(applet: Applet) : YamlObject = {
-        val inputs = applet.inputs.map(yaml)
-        val outputs = applet.outputs.map(yaml)
-        val docker: Map[YamlValue, YamlValue] = applet.docker match {
-            case false => Map()
-            case true => Map(YamlString("docker") -> YamlBoolean(true))
-        }
-        val instanceType: Map[YamlValue, YamlValue] = applet.instanceType match {
-            case InstanceTypeDefault => Map()
-            case InstanceTypeConst(x) => Map(YamlString("instanceType") -> YamlString(x))
-            case InstanceTypeRuntime  => Map(YamlString("instanceType") -> YamlString("calculated at runtime"))
-        }
-        val wdlCode:String = WdlPrettyPrinter(false, None)
-            .apply(applet.ns, 0)
-            .mkString("\n")
-        val m: Map[YamlValue, YamlValue] = Map(
-            YamlString("name") -> YamlString(applet.name),
-            YamlString("inputs") -> YamlArray(inputs.toVector),
-            YamlString("outputs") -> YamlArray(outputs.toVector),
-            YamlString("destination") -> YamlString(applet.destination),
-            YamlString("kind") -> applet.kind.toYaml,
-            YamlString("wdlCode") -> YamlString(wdlCode)
-        )
-        YamlObject(m ++ docker ++ instanceType)
-    }
-
     def yaml(sArg: SArg) : YamlValue = sArg.toYaml
+    def yaml(wf: Workflow) : YamlValue = wf.toYaml
+    def yaml(ns: Namespace) : YamlValue = ns.toYaml
 
-    def yaml(stage: Stage) : YamlObject = {
-        val inputs = stage.inputs.map(yaml)
-        val outputs = stage.outputs.map(yaml)
-        YamlObject(
-            YamlString("name") -> YamlString(stage.name),
-            YamlString("appletName") -> YamlString(stage.appletName),
-            YamlString("inputs") -> YamlArray(inputs.toVector),
-            YamlString("outputs") -> YamlArray(outputs.toVector)
-        )
-    }
-
-    def yaml(wf: Workflow) : YamlObject = {
-        val stages = wf.stages.map(yaml)
-        val applets = wf.applets.map(yaml)
-        YamlObject(
-            YamlString("name") -> YamlString(wf.name),
-            YamlString("stages") -> YamlArray(stages.toVector),
-            YamlString("applets") -> YamlArray(applets.toVector)
-        )
-    }
-
-    def yaml(ns: Namespace) : YamlObject = {
-        ns.workflow match {
-            case None =>
-                YamlObject(
-                    YamlString("applets") -> YamlArray(ns.applets.map(yaml))
-                )
-            case Some(wf) =>
-                YamlObject(
-                    YamlString("workflow") -> yaml(wf),
-                    YamlString("applets") -> YamlArray(ns.applets.map(yaml))
-                )
+    // build a mapping from call to stage name
+    def callDict(wf: Workflow) : Map[String, String] = {
+        val appletDict: Map[String, Applet] =
+            wf.applets.map(a => a.name -> a).toMap
+        wf.stages.foldLeft(Map.empty[String, String]) {
+            case (callDict, stg) =>
+                val apl:Applet = appletDict(stg.appletName)
+                // map source calls to the stage name. For example, this happens
+                // for scatters.
+                val call2Stage = apl.kind match {
+                    case AppletKindScatter(sourceCalls) => sourceCalls.map(x => x -> stg.name).toMap
+                    case AppletKindIf(sourceCalls) => sourceCalls.map(x => x -> stg.name).toMap
+                    case _ => Map.empty[String, String]
+                }
+                callDict ++ call2Stage
         }
     }
 }
