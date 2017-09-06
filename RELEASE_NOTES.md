@@ -1,8 +1,11 @@
 # Release Notes
 
 ## 0.42
-- WDL objects
+- WDL objects: experimental
 - Type coercion
+- Faster compilation when applets already exist. Using bulk describe API, instead
+  of looking up each applet separately.
+- Adding checksum to workflow, recompile only if it has not changed
 
 ## 0.41
 - Minor fixes to streaming

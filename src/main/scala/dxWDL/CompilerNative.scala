@@ -13,6 +13,60 @@ import Utils.{AppletLinkInfo, CHECKSUM_PROP, WDL_SNIPPET_FILENAME}
 import wdl4s.parser.WdlParser.Ast
 import wdl4s.wdl.types._
 
+// Keep all the information about an applet in packaged form
+case class AppletInfo(name:String,
+                      applet:DXApplet,
+                      props: Map[String, String])
+
+// Take a snapshot of the platform target path before the build starts.
+// Make an efficient directory of all the applets that exist there.
+case class AppletDirectory(dxProject:DXProject,
+                           folder: String,
+                           verbose: Utils.Verbose) {
+    lazy val appletDir : Map[String, Vector[AppletInfo]] = bulkAppletLookup()
+
+    // Instead of looking applets one by one, perform a bulk lookup, and
+    // find all the applets in the target directory. Setup an easy to
+    // use map with information on each applet name.
+    private def bulkAppletLookup() : Map[String, Vector[AppletInfo]] = {
+        val dxApplets: List[DXApplet] = DXSearch.findDataObjects()
+            .inFolder(dxProject, folder)
+            .withClassApplet()
+            .includeDescribeOutput(DXDataObject.DescribeOptions.get().withProperties())
+            .execute().asList().asScala.toList
+
+        // discard applet that have no checksum property
+        val aplInfoList: List[AppletInfo] = dxApplets.map{ dxApl =>
+            val desc = dxApl.getCachedDescribe()
+            val name = desc.getName()
+            val props: Map[String, String] = desc.getProperties().asScala.toMap
+            AppletInfo(name, dxApl, props)
+        }
+
+        // There could be multiple versions of the same applet, collect their
+        // information in vectors
+        aplInfoList.foldLeft(Map.empty[String, Vector[AppletInfo]]) {
+            case (accu, aplInfo) =>
+                val name = aplInfo.name
+                accu.get(name) match {
+                    case None =>
+                        // first time we have seen this applet
+                        accu + (name -> Vector(aplInfo))
+                    case Some(vec) =>
+                        // there is already at least one applet by this name
+                        accu + (name -> (vec :+ aplInfo))
+                }
+        }
+    }
+
+    def lookup(aplName: String) : Vector[AppletInfo] = {
+        appletDir.get(aplName) match {
+            case None => Vector.empty
+            case Some(v) => v
+        }
+    }
+}
+
 case class CompilerNative(dxWDLrtId: String,
                           dxProject: DXProject,
                           instanceTypeDB: InstanceTypeDB,
@@ -26,6 +80,8 @@ case class CompilerNative(dxWDLrtId: String,
     val MAX_NUM_RETRIES = 5
     val MIN_SLEEP_SEC = 5
     val MAX_SLEEP_SEC = 30
+
+    val aplDir = AppletDirectory(dxProject, folder, verbose)
 
     // For primitive types, and arrays of such types, we can map directly
     // to the equivalent dx types. For example,
@@ -477,10 +533,7 @@ case class CompilerNative(dxWDLrtId: String,
     def buildAppletIfNeeded(applet: IR.Applet,
                             appletDict: Map[String, (IR.Applet, DXApplet)])
             : (DXApplet, Vector[IR.CVar]) = {
-        // Search for existing applets on the platform, in the same path
-        val existingApl: List[DXApplet] = DXSearch.findDataObjects().nameMatchesExactly(applet.name)
-            .inFolder(dxProject, folder).withClassApplet().execute().asList()
-            .asScala.toList
+        val existingApl = aplDir.lookup(applet.name)
 
         // Build an applet structure locally
         val appletDir = localBuildApplet(applet, appletDict)
@@ -491,13 +544,13 @@ case class CompilerNative(dxWDLrtId: String,
                 true
             } else if (existingApl.size == 1) {
                 // Check if applet code has changed
-                val dxApl = existingApl.head
-                val desc: DXApplet.Describe = dxApl.describe(
-                    DXDataObject.DescribeOptions.get().withProperties())
-                val props: Map[String, String] = desc.getProperties().asScala.toMap
+                val dxAplInfo = existingApl.head
+                val props = dxAplInfo.props
                 props.get(CHECKSUM_PROP) match {
                     case None =>
-                        System.err.println(s"No checksum found for applet ${applet.name} ${dxApl.getId()}, rebuilding")
+                        System.err.println(
+                            s"""|No checksum found for applet ${applet.name}
+                                |${dxAplInfo.applet.getId()}, rebuilding""".stripMargin)
                         true
                     case Some(dxAplChksum) =>
                         if (digest != dxAplChksum) {
@@ -510,7 +563,7 @@ case class CompilerNative(dxWDLrtId: String,
                 }
             } else {
                 throw new Exception(s"""|More than one applet ${applet.name} found in
-                                        | path ${dxProject.getId()}:${folder}""")
+                                        |path ${dxProject.getId()}:${folder}""".stripMargin)
             }
 
         if (buildRequired) {
@@ -526,7 +579,7 @@ case class CompilerNative(dxWDLrtId: String,
             // Old applet exists, and it has not changed. Return the
             // applet-id.
             assert(existingApl.size > 0)
-            (existingApl.head, applet.outputs)
+            (existingApl.head.applet, applet.outputs)
         }
     }
 
