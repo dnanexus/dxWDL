@@ -5,7 +5,8 @@
 - Type coercion
 - Faster compilation when applets already exist. Using bulk describe API, instead
   of looking up each applet separately.
-- Adding checksum to workflow, recompile only if it has not changed
+- Adding checksum to dx:workflow objects, recompile only if it has not changed
+- Specified behavior of input/output files in doc/Internals.md
 
 ## 0.41
 - Minor fixes to streaming
