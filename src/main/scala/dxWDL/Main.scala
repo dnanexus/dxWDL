@@ -1,6 +1,6 @@
 package dxWDL
 
-import com.dnanexus.DXProject
+import com.dnanexus.{DXProject, DXWorkflow}
 import com.typesafe.config._
 import java.io.{FileWriter, PrintWriter}
 import java.nio.file.{Path, Paths}
@@ -393,16 +393,30 @@ object Main extends App {
         prettyPrintIR(wdlSourceFile, irNs, cOpt.verbose.on)
 
         // Backend compiler pass
-        cOpt.compileMode match {
+        val wf:Option[DXWorkflow] = cOpt.compileMode match {
             case None =>
                 // Generate dx:applets and dx:workflow from the IR
-                val wdlInputs = options.get("inputs").map(Paths.get(_))
-                CompilerNative(cOpt.dxWDLrtId, cOpt.dxProject, instanceTypeDB,
-                               cOpt.folder, cef,
-                               cOpt.appletTimeout,
-                               cOpt.force, cOpt.archive, cOpt.verbose).apply(irNs, wdlInputs)
-            case Some(x) if x.toLowerCase == "ir" => "IR-xxxx"
+                val (wf, _) =
+                    CompilerNative(cOpt.dxWDLrtId, cOpt.dxProject, instanceTypeDB,
+                                   cOpt.folder, cef,
+                                   cOpt.appletTimeout,
+                                   cOpt.force, cOpt.archive, cOpt.verbose).apply(irNs)
+                wf
+            case Some(x) if x.toLowerCase == "ir" => None
             case Some(other) => throw new Exception(s"Unknown compilation mode ${other}")
+        }
+
+        // generate dx inputs from the Cromwell-style input specification.
+        val wdlInputs: Option[Path] = options.get("inputs").map(Paths.get(_))
+        (wf, irNs.workflow, wdlInputs) match {
+            case (Some(dxwfl), Some(irWf), Some(path)) =>
+                InputFile(cOpt.verbose).apply(dxwfl, irWf, path)
+                dxwfl.getId
+            case _ => ()
+        }
+        wf match {
+            case Some(dxwfl) => dxwfl.getId
+            case None => ""
         }
     }
 
