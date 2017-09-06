@@ -690,14 +690,16 @@ case class CompilerNative(dxWDLrtId: String,
             }
 
         if (buildRequired) {
-            // workflow exists
-            if (!force) {
-                val projName = dxProject.describe().getName()
-                throw new Exception(s"Workflow ${wf.name} already exists in ${projName}:${folder}")
+            if (existingWfl.size > 0) {
+                // workflow exists, and needs to be removed
+                if (!force) {
+                    val projName = dxProject.describe().getName()
+                    throw new Exception(s"""|Workflow ${wf.name} already exists in
+                                            | ${projName}:${folder}""".stripMargin)
+                }
+                Utils.trace(verbose.on, "[Force] Removing old workflow")
+                dxProject.removeObjects(existingWfl.asJava)
             }
-            // force: remove old workflow
-            Utils.trace(verbose.on, "[Force] Removing old workflow")
-            dxProject.removeObjects(existingWfl.asJava)
             buildWorkflow(wf, wfDigest, appletDict)
         } else {
             // Old workflow exists, and it has not changed.
