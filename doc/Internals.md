@@ -416,3 +416,53 @@ regions, and their assets. When compiling in project *P*, in region
 reference assets residing only in region *R*. When creating a new
 dxWDL release, the runtime library is copied to all supported regions,
 and an updated configuration file folded into the dxWDL jar file.
+
+
+## File paths
+
+When WDL code executes on a platform instance, it assumes the runtime
+system places input files in a known location. This is called *file
+localization*, and is a bit underspecified in the existing WDL
+[draft specification](https://github.com/broadinstitute/wdl/blob/develop/SPEC.md). This
+section describes the dxWDL implementation.
+
+A task can have input files, for example, task `wc` takes `in_file`.
+
+```
+task wc {
+    File in_file
+
+    command {
+        cat ${in_file} | wc -l
+    }
+    output {
+        Int count = read_int(stdout())
+    }
+}
+```
+
+The task runs under the dnanexus user, whose home directory is
+`DX_HOME`. All input WdlFiles are downloaded from the platform to the
+directory `DX_HOME/execution/inputs/`. For example, if file `Foo.txt` is
+an input, a read-only copy is placed in
+`DX_HOME/execution/inputs/Foo.txt`. If an additional `Foo.txt` file is an
+input, and it's file ID is `file-xxxx`, it will be downloaded to
+`DX_HOME/execution/inputs/file-xxxx/Foo.txt`.
+
+An output WDL file is specified by its local path, and will be uploaded to
+a platform destination retaining its name. The rest of the path is
+ignored. For example, WdlFile `DX_HOME/X/Y/myOutput.tsv` is
+uploaded to a platform file named `myOutput.tsv`. The output path can
+be set in the *dx:workflow*. If there are several output WdlFiles with
+the same name, they will be versions of the same platform file. For
+example, `DX_HOME/Z/myOutput.tsv` will be a such second
+version.
+
+The issues with this implementation are:
+1. There is no way to set the platform path for an individual WdlFile
+2. There is a mismatch between the platform, that allows file versioning,
+   and WdlFiles, that do not.
+
+In addition, some WDL constructs allows examining the path of a
+WdlFile. This information then leaks to downstream workflow stages,
+making the execution dependent on the runtime system implementation.
