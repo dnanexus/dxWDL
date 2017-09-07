@@ -2,13 +2,13 @@
 // DNAx JSON representations.
 package dxWDL
 
-import com.dnanexus.{DXFile, DXJob, DXWorkflow}
+import com.dnanexus.{DXFile, DXJob}
 import com.fasterxml.jackson.databind.JsonNode
 import java.nio.file.Paths
 import LocalDxFiles.wdlFileOfDxLink
 import net.jcazevedo.moultingyaml._
 import spray.json._
-import Utils.dxFileOfJsValue
+import Utils.{dxFileOfJsValue, DXWorkflowStage}
 import wdl4s.wdl.types._
 import wdl4s.wdl.values._
 
@@ -26,7 +26,7 @@ object IORef extends Enumeration {
 // A complex value is implemented as a json structure, and all the files it references.
 sealed trait DxLink
 case class DxlValue(jsn: JsValue) extends DxLink  // This may contain dx-files
-case class DxlStage(dxStage: DXWorkflow.Stage, ioRef: IORef.Value, varName: String) extends DxLink
+case class DxlStage(dxStage: DXWorkflowStage, ioRef: IORef.Value, varName: String) extends DxLink
 case class DxlJob(dxJob: DXJob, varName: String) extends DxLink
 case class DxlJobArray(dxJobVec: Vector[DXJob], varName: String) extends DxLink
 

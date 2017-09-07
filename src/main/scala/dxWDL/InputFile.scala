@@ -27,14 +27,9 @@ import com.dnanexus.{DXFile, DXAPI, DXJSON, DXProject, DXSearch, DXWorkflow}
 import java.nio.file.{Path, Paths}
 import scala.collection.JavaConverters._
 import spray.json._
-import Utils.UNIVERSAL_FILE_PREFIX
+import Utils.{UNIVERSAL_FILE_PREFIX, DXWorkflowStage}
 
 case class InputFile(verbose: Utils.Verbose) {
-    // A replacement for the DXWorkflow.Stage inner class
-    case class WorkflowStage(id: String) {
-        def getId() = id
-    }
-
     private def lookupFile(dxProject: Option[DXProject], fileName: String): DXFile = {
         if (fileName.startsWith("file-")) {
             // A file ID
@@ -93,7 +88,7 @@ case class InputFile(verbose: Utils.Verbose) {
 
     private def lookupStage(name: String,
                             wf: IR.Workflow,
-                            stageDict: Map[String, WorkflowStage]) : WorkflowStage= {
+                            stageDict: Map[String, DXWorkflowStage]) : DXWorkflowStage= {
         stageDict.get(name) match {
             case None =>
                 System.err.println(s"stage dictionary: ${stageDict}")
@@ -106,7 +101,7 @@ case class InputFile(verbose: Utils.Verbose) {
     // dx input file
     private def dxTranslate(wf: IR.Workflow,
                             wdlInputs: JsObject,
-                            stageDict: Map[String, WorkflowStage],
+                            stageDict: Map[String, DXWorkflowStage],
                             callDict: Map[String, String]) : JsObject= {
         val m: Map[String, JsValue] = wdlInputs.fields.map{ case (key, v) =>
             val components = key.split("\\.")
@@ -158,7 +153,7 @@ case class InputFile(verbose: Utils.Verbose) {
     }
 
     // Query a platform workflow, and get a mapping from stage-name to stage-id.
-    private def queryWorkflowStages(dxwfl: DXWorkflow) : Map[String, WorkflowStage] = {
+    private def queryWorkflowStages(dxwfl: DXWorkflow) : Map[String, DXWorkflowStage] = {
         val req: ObjectNode = DXJSON.getObjectBuilder()
             .put("fields", DXJSON.getObjectBuilder()
                      .put("stages", true)
@@ -181,7 +176,7 @@ case class InputFile(verbose: Utils.Verbose) {
                 case Some(JsString(x)) => x
                 case other => throw new Exception(s"Malformed name field ${other}")
             }
-            name -> WorkflowStage(id)
+            name -> DXWorkflowStage(id)
         }.toMap
     }
 
@@ -191,7 +186,7 @@ case class InputFile(verbose: Utils.Verbose) {
               inputPath: Path) : Unit = {
         Utils.trace(verbose.on, s"Translating WDL input file ${inputPath}")
         val callDict = IR.callDict(wf)
-        val stageDict: Map[String, WorkflowStage] = queryWorkflowStages(dxwfl)
+        val stageDict: Map[String, DXWorkflowStage] = queryWorkflowStages(dxwfl)
 
         // read the input file xxxx.json
         val wdlInputs: JsObject = Utils.readFileContent(inputPath).parseJson.asJsObject

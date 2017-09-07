@@ -4,13 +4,14 @@ package dxWDL
 
 // DX bindings
 import com.fasterxml.jackson.databind.JsonNode
-import com.dnanexus.{DXApplet, DXDataObject, DXJSON, DXProject, DXSearch, DXWorkflow}
+import com.fasterxml.jackson.databind.node.ObjectNode
+import com.dnanexus.{DXApplet, DXAPI, DXDataObject, DXJSON, DXProject, DXSearch, DXWorkflow}
 import java.nio.file.{Files, Paths, Path}
 import java.security.MessageDigest
 import scala.collection.JavaConverters._
 import scala.collection.mutable.HashMap
 import spray.json._
-import Utils.{AppletLinkInfo, CHECKSUM_PROP, WDL_SNIPPET_FILENAME}
+import Utils.{AppletLinkInfo, CHECKSUM_PROP, WDL_SNIPPET_FILENAME, DXWorkflowStage}
 import wdl4s.parser.WdlParser.Ast
 import wdl4s.wdl.types._
 
@@ -626,7 +627,7 @@ case class CompilerNative(dxWDLrtId: String,
     // It comprises mappings from variable name to WdlType.
     def genStageInputs(inputs: Vector[(IR.CVar, IR.SArg)],
                        irApplet: IR.Applet,
-                       stageDict: Map[String, DXWorkflow.Stage]) : JsonNode = {
+                       stageDict: Map[String, DXWorkflowStage]) : JsonNode = {
         val dxBuilder = inputs.foldLeft(DXJSON.getObjectBuilder()) {
             case (dxBuilder, (cVar, sArg)) =>
                 sArg match {
@@ -659,42 +660,54 @@ case class CompilerNative(dxWDLrtId: String,
         dxBuilder.build()
     }
 
+    // Create the workflow in a single API call.
+    //
+    // Prepare the list of stages, and the checksum in
+    // advance. Previously we needed an API call for each stage.
+    //
+    // TODO: make use of capability to specify workflow level input/outputs
     def buildWorkflow(wf: IR.Workflow,
                       wfDigest: String,
                       appletDict: Map[String, (IR.Applet, DXApplet)]) : DXWorkflow = {
-        // create fresh workflow
-        val dxwfl = DXWorkflow.newWorkflow()
-            .setProject(dxProject)
-            .setFolder(folder)
-            .setName(wf.name).build()
-
-        // Create a dx:workflow stage for each stage in the IR.
-        // The accumulator state holds:
-        // - the workflow version, which gets incremented per stage
-        // - a dictionary of stages, mapping name to stage. This is used
-        //   to locate variable references.
-        //
-        val stageDictInit = Map.empty[String, DXWorkflow.Stage]
-        val _ = wf.stages.foldLeft((0, stageDictInit)) {
-            case ((version, stageDict), stg) =>
+        val stageDictInit = Map.empty[String, DXWorkflowStage]
+        val stagesReqEmpty = DXJSON.getArrayBuilder()
+        val (_,stagesReq,_) = wf.stages.foldLeft((0, stagesReqEmpty, stageDictInit)) {
+            case ((version, stagesReq, stageDict), stg) =>
                 val (irApplet,dxApplet) = appletDict(stg.appletName)
                 val linkedInputs : Vector[(IR.CVar, IR.SArg)] = irApplet.inputs zip stg.inputs
                 val inputs: JsonNode = genStageInputs(linkedInputs, irApplet, stageDict)
-                val modif: DXWorkflow.Modification[DXWorkflow.Stage] =
-                    dxwfl.addStage(dxApplet, stg.name, inputs, version)
-                val nextVersion = modif.getEditVersion()
-                val dxStage : DXWorkflow.Stage = modif.getValue()
-                Utils.trace(verbose.on, s"Stage ${stg.name} = ${dxStage.getId()}")
-                (nextVersion,
-                 stageDict ++ Map(stg.name -> dxStage))
-        }
-        dxwfl.close()
+                val stgId = DXWorkflowStage(s"stage_${version}")
+                // convert the per-stage metadata into JSON
+                val stageReqDesc = DXJSON.getObjectBuilder()
+                    .put("id", stgId.getId)
+                    .put("executable", dxApplet.getId)
+                    .put("name", stg.name)
+                    .put("input", inputs)
+                    .build()
 
-        // Add a checksum for the WDL code as a property of the applet.
-        // This allows to quickly check if anything has changed, saving
-        // unnecessary builds.
-        dxwfl.putProperty(CHECKSUM_PROP, wfDigest)
-        dxwfl
+                (version + 1,
+                 stagesReq.add(stageReqDesc),
+                 stageDict ++ Map(stg.name -> stgId))
+        }
+
+        // pack all the arguments into a single API call
+        val req: ObjectNode = DXJSON.getObjectBuilder()
+            .put("project", dxProject.getId)
+            .put("name", wf.name)
+            .put("folder", folder)
+            .put("properties", DXJSON.getObjectBuilder()
+                     .put(CHECKSUM_PROP, wfDigest)
+                     .build())
+            .put("stages", stagesReq.build())
+            .build()
+        val rep = DXAPI.workflowNew(req, classOf[JsonNode])
+        val repJs:JsValue = Utils.jsValueOfJsonNode(rep)
+        val wfid:String = repJs.asJsObject.fields.get("id") match {
+            case None => throw new Exception("workflowNew API call did not returnd an ID")
+            case Some(JsString(x)) => x
+            case other => throw new Exception(s"workflowNew API call returned invalid ID ${other}")
+        }
+        DXWorkflow.getInstance(wfid)
     }
 
     // Compile an entire workflow
