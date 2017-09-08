@@ -16,12 +16,13 @@ import wdl4s.parser.WdlParser.Ast
 import wdl4s.wdl.types._
 
 // Keep all the information about an applet in packaged form
-case class AppletInfo(name:String, applet:DXApplet, digest: Option[String])
+case class AppletInfo(name:String, applet:DXApplet, digest: String)
 
 // Take a snapshot of the platform target path before the build starts.
 // Make an efficient directory of all the applets that exist there. Update
 // the directory when an applet is compiled.
-case class AppletDirectory(dxProject:DXProject,
+case class AppletDirectory(ns: IR.Namespace,
+                           dxProject:DXProject,
                            folder: String,
                            verbose: Utils.Verbose) {
     private lazy val appletDir : HashMap[String, Vector[AppletInfo]] = bulkAppletLookup()
@@ -30,18 +31,40 @@ case class AppletDirectory(dxProject:DXProject,
     // find all the applets in the target directory. Setup an easy to
     // use map with information on each applet name.
     private def bulkAppletLookup() : HashMap[String, Vector[AppletInfo]] = {
-        val dxApplets: List[DXApplet] = DXSearch.findDataObjects()
+        // get all the applet names
+        val allAppletNames: Vector[String] = ns.workflow match {
+            case None => ns.applets.map{ case (k,_) => k }.toVector
+            case Some(wf) => wf.applets.map{ case (k,_) => k }.toVector
+        }
+
+        val dxAppletsInFolder: List[DXApplet] = DXSearch.findDataObjects()
             .inFolder(dxProject, folder)
             .withClassApplet()
             .includeDescribeOutput(DXDataObject.DescribeOptions.get().withProperties())
             .execute().asList().asScala.toList
 
-        // discard applet that have no checksum property
+        // Leave only applets that could belong to the workflow
+        val dxApplets = dxAppletsInFolder.filter{ dxApl =>
+            val name = dxApl.getCachedDescribe().getName
+            allAppletNames contains name
+        }
+
+        // filter out an
         val aplInfoList: List[AppletInfo] = dxApplets.map{ dxApl =>
             val desc = dxApl.getCachedDescribe()
             val name = desc.getName()
             val props: Map[String, String] = desc.getProperties().asScala.toMap
-            AppletInfo(name, dxApl, props.get(CHECKSUM_PROP))
+            val digest:String = props.get(CHECKSUM_PROP) match {
+                case None =>
+                    System.err.println(
+                        s"""|Applet ${name} has no checksum, and is invalid. It was probably
+                            |not created with dxWDL. Please remove it with:
+                            |dx rm ${dxProject}:${folder}/${name}
+                            |""".stripMargin.trim)
+                    throw new Exception("Encountered invalid applet, not created with dxWDL")
+                case Some(x) => x
+            }
+            AppletInfo(name, dxApl, digest)
         }
 
         // There could be multiple versions of the same applet, collect their
@@ -69,7 +92,7 @@ case class AppletDirectory(dxProject:DXProject,
     }
 
     def insert(name:String, applet:DXApplet, digest: String) : Unit = {
-        val aInfo = AppletInfo(name, applet, Some(digest))
+        val aInfo = AppletInfo(name, applet, digest)
         appletDir.get(name) match {
             case None =>
                 appletDir(name) = Vector(aInfo)
@@ -92,8 +115,6 @@ case class CompilerNative(dxWDLrtId: String,
     val MAX_NUM_RETRIES = 5
     val MIN_SLEEP_SEC = 5
     val MAX_SLEEP_SEC = 30
-
-    val aplDir = AppletDirectory(dxProject, folder, verbose)
 
     // For primitive types, and arrays of such types, we can map directly
     // to the equivalent dx types. For example,
@@ -415,7 +436,8 @@ case class CompilerNative(dxWDLrtId: String,
     //
     def dxBuildApp(appletDir : Path,
                    appletName : String,
-                   folder : String) : DXApplet = {
+                   folder : String,
+                   digest: String) : DXApplet = {
         Utils.trace(verbose.on, s"Building applet ${appletName}")
         val path =
             if (folder.endsWith("/")) (folder ++ appletName)
@@ -424,11 +446,21 @@ case class CompilerNative(dxWDLrtId: String,
         val dest =
             if (path.startsWith("/")) pId ++ ":" ++ path
             else pId ++ ":/" ++ path
+
+        // Add a checksum for the WDL code as a property of the applet.
+        // This allows to quickly check if anything has changed, saving
+        // unnecessary builds.
+        //
+        // We want the checksum to be added atomically to the applet. This
+        // avoids the creation of applets without a checksum.
+        val props = s"""{ \\"properties\\" : { \\"${CHECKSUM_PROP}\\" : \\"${digest}\\" } }"""
         var buildCmd = List("dx",
                             "build",
                             quoteIfNeeded(appletDir.toString()),
                             "--destination",
-                            quoteIfNeeded(dest))
+                            quoteIfNeeded(dest),
+                            "--extra-args",
+                            "\"" + props.toString + "\"")
         if (force)
             buildCmd = buildCmd :+ "-f"
         if (archive)
@@ -530,9 +562,12 @@ case class CompilerNative(dxWDLrtId: String,
         val json = JsObject(attrs ++ access)
 
         val aplLinks = applet.kind match {
-            case IR.AppletKindIf(_) => appletDict
-            case IR.AppletKindScatter(_) => appletDict
-            case _ => Map.empty[String, (IR.Applet, DXApplet)]
+            case IR.AppletKindIf(calls) =>
+                calls.map{ case (_,tName) => tName -> appletDict(tName) }.toMap
+            case IR.AppletKindScatter(calls) =>
+                calls.map{ case (_,tName) => tName -> appletDict(tName) }.toMap
+            case _ =>
+                Map.empty[String, (IR.Applet, DXApplet)]
         }
         // create a directory structure for this applet
         createAppletDirStruct(applet, aplLinks, json)
@@ -543,7 +578,8 @@ case class CompilerNative(dxWDLrtId: String,
     // When [force] is true, always rebuild. Otherwise, rebuild only
     // if the WDL code has changed.
     def buildAppletIfNeeded(applet: IR.Applet,
-                            appletDict: Map[String, (IR.Applet, DXApplet)])
+                            appletDict: Map[String, (IR.Applet, DXApplet)],
+                            aplDir: AppletDirectory)
             : (DXApplet, Vector[IR.CVar]) = {
         val existingApl = aplDir.lookup(applet.name)
 
@@ -557,20 +593,13 @@ case class CompilerNative(dxWDLrtId: String,
             } else if (existingApl.size == 1) {
                 // Check if applet code has changed
                 val dxAplInfo = existingApl.head
-                dxAplInfo.digest match {
-                    case None =>
-                        System.err.println(
-                            s"""|No checksum found for applet ${applet.name}
-                                |${dxAplInfo.applet.getId()}, rebuilding""".stripMargin)
-                        true
-                    case Some(dxAplChksum) =>
-                        if (digest != dxAplChksum) {
-                            Utils.trace(verbose.on, "Applet has changed, rebuild required")
-                            true
-                        } else {
-                            Utils.trace(verbose.on, "Applet has not changed")
-                            false
-                        }
+                if (digest != dxAplInfo.digest) {
+                    Utils.trace(verbose.on,
+                                s"Applet has changed, rebuild required (checksum {new=${digest} old=${dxAplInfo.digest}}")
+                    true
+                } else {
+                    Utils.trace(verbose.on, "Applet has not changed")
+                    false
                 }
             } else {
                 throw new Exception(s"""|More than one applet ${applet.name} found in
@@ -579,12 +608,9 @@ case class CompilerNative(dxWDLrtId: String,
 
         if (buildRequired) {
             // Compile a WDL snippet into an applet.
-            val dxApplet = dxBuildApp(appletDir, applet.name, folder)
+            val dxApplet = dxBuildApp(appletDir, applet.name, folder, digest)
 
-            // Add a checksum for the WDL code as a property of the applet.
-            // This allows to quickly check if anything has changed, saving
-            // unnecessary builds.
-            dxApplet.putProperty(CHECKSUM_PROP, digest)
+            //dxApplet.putProperty(CHECKSUM_PROP, digest)
             aplDir.insert(applet.name, dxApplet, digest)
             (dxApplet, applet.outputs)
         } else {
@@ -714,17 +740,18 @@ case class CompilerNative(dxWDLrtId: String,
     //
     // - Calculate the workflow checksum from the intermediate representation
     // - Do not rebuild the workflow if it has a correct checksum
-    def buildWorkflowIfNeeded(wf: IR.Workflow) : DXWorkflow = {
+    def buildWorkflowIfNeeded(wf: IR.Workflow,
+                              aplDir: AppletDirectory) : DXWorkflow = {
         // Build the individual applets. We need to keep track of
         // the applets created, to be able to link calls. For example,
         // a scatter calls other applets; we need to pass the applet IDs
         // to the launcher at runtime.
         val initAppletDict = Map.empty[String, (IR.Applet, DXApplet)]
         val appletDict = wf.applets.foldLeft(initAppletDict) {
-            case (appletDict, a) =>
-                val (dxApplet, _) = buildAppletIfNeeded(a, appletDict)
-                Utils.trace(verbose.on, s"Applet ${a.name} = ${dxApplet.getId()}")
-                appletDict + (a.name -> (a, dxApplet))
+            case (appletDict, (_,apl)) =>
+                val (dxApplet, _) = buildAppletIfNeeded(apl, appletDict, aplDir)
+                Utils.trace(verbose.on, s"Applet ${apl.name} = ${dxApplet.getId()}")
+                appletDict + (apl.name -> (apl, dxApplet))
         }.toMap
 
         // the workflow digest depends on the IR and the applets
@@ -747,19 +774,23 @@ case class CompilerNative(dxWDLrtId: String,
                 val desc: DXWorkflow.Describe = dxWfl.describe(
                     DXDataObject.DescribeOptions.get().withProperties())
                 val props: Map[String, String] = desc.getProperties().asScala.toMap
-                props.get(CHECKSUM_PROP) match {
+                val oldWfDigest:String = props.get(CHECKSUM_PROP) match {
                     case None =>
-                        System.err.println(s"""|No checksum found for workflow ${wf.name}
-                                               |${dxWfl.getId()}, rebuilding""".stripMargin)
-                        true
-                    case Some(dxWflChksum) =>
-                        if (wfDigest != dxWflChksum) {
-                            Utils.trace(verbose.on, "Workflow has changed, rebuild required")
-                            true
-                        } else {
-                            Utils.trace(verbose.on, "Workflow has not changed")
-                            false
-                        }
+                        System.err.println(
+                            s"""|Workflow ${wf.name} has no checksum, and is invalid. It was probably
+                                |not created with dxWDL. Please remove it with:
+                                |dx rm ${dxProject}:${folder}/${wf.name}
+                                |""".stripMargin.trim)
+                        throw new Exception("Encountered invalid workflow, not created with dxWDL")
+                    case Some(x) => x
+                }
+                if (wfDigest != oldWfDigest) {
+                    Utils.trace(verbose.on,
+                                s"Workflow has changed, rebuild required (checksum {new=${wfDigest} old=${oldWfDigest}}")
+                    true
+                } else {
+                    Utils.trace(verbose.on, "Workflow has not changed")
+                    false
                 }
             } else {
                 throw new Exception(s"""|More than one workflow ${wf.name} found in
@@ -787,16 +818,21 @@ case class CompilerNative(dxWDLrtId: String,
 
     def apply(ns: IR.Namespace) : (Option[DXWorkflow], Vector[DXApplet]) = {
         Utils.trace(verbose.on, "Backend pass")
+
+        // Efficiently build a directory of the currently existing applets.
+        // We don't want to build them if we don't have to.
+        val aplDir = AppletDirectory(ns, dxProject, folder, verbose)
+
         ns.workflow match {
             case None =>
-                val dxApplets = ns.applets.map{ applet =>
-                    val (dxApplet, _) = buildAppletIfNeeded(applet, Map.empty)
+                val dxApplets = ns.applets.map{ case (_,applet) =>
+                    val (dxApplet, _) = buildAppletIfNeeded(applet, Map.empty, aplDir)
                     dxApplet
                 }
                 (None, dxApplets.toVector)
 
             case Some(iRepWf) =>
-                val dxwfl = buildWorkflowIfNeeded(iRepWf)
+                val dxwfl = buildWorkflowIfNeeded(iRepWf, aplDir)
                 (Some(dxwfl), Vector.empty)
         }
     }

@@ -931,13 +931,14 @@ workflow w {
 
         val outputVars = blockOutputs(preDecls, scatter, scatter.children)
         val wdlCode = blockGenWorklow(preDecls, scatter, taskApplets, inputVars, outputVars)
+        val callDict = calls.map(c => c.unqualifiedName -> Utils.taskOfCall(c).name).toMap
         val applet = IR.Applet(wfUnqualifiedName ++ "_" ++ stageName,
                                inputVars ++ extraTaskInputVars,
                                outputVars,
                                calcInstanceType(None),
                                false,
                                destination,
-                               IR.AppletKindScatter(calls.map(_.unqualifiedName).toVector),
+                               IR.AppletKindScatter(callDict),
                                wdlCode)
         verifyWdlCodeIsLegal(applet.ns)
 
@@ -976,13 +977,14 @@ workflow w {
 
         val outputVars = blockOutputs(preDecls, cond, cond.children)
         val wdlCode = blockGenWorklow(preDecls, cond, taskApplets, inputVars, outputVars)
+        val callDict = calls.map(c => c.unqualifiedName -> Utils.taskOfCall(c).name).toMap
         val applet = IR.Applet(wfUnqualifiedName ++ "_" ++ stageName,
                                inputVars ++ extraTaskInputVars,
                                outputVars,
                                calcInstanceType(None),
                                false,
                                destination,
-                               IR.AppletKindIf(calls.map(_.unqualifiedName).toVector),
+                               IR.AppletKindIf(callDict),
                                wdlCode)
         verifyWdlCodeIsLegal(applet.ns)
 
@@ -1078,8 +1080,13 @@ workflow w {
                 allStageInfo :+ (outSecStg, Some(outSecApl))
         }
         val (stages, auxApplets) = allStageWithOutputInfo.unzip
-        val tApplets: Vector[IR.Applet] = taskApplets.map{ case (k,(applet,_)) => applet }.toVector
-        IR.Workflow(wf.unqualifiedName, stages, tApplets ++ auxApplets.flatten.toVector)
+        val tApplets: Map[String, IR.Applet] =
+            taskApplets.map{ case (k,(applet,_)) => k -> applet }.toMap
+        val aApplets: Map[String, IR.Applet] =
+            auxApplets
+                .flatten
+                .map(apl => apl.name -> apl).toMap
+        IR.Workflow(wf.unqualifiedName, stages, tApplets ++ aApplets)
     }
 
     // Load imported tasks
@@ -1116,9 +1123,9 @@ workflow w {
             task.name -> (applet, outputs)
         }.toMap
 
-        val irApplets: Vector[IR.Applet] = taskApplets.map{
-            case (key, (irApplet,_)) => irApplet
-        }.toVector
+        val irApplets: Map[String, IR.Applet] = taskApplets.map{
+            case (key, (irApplet,_)) => key -> irApplet
+        }.toMap
 
         ns match {
             case nswf : WdlNamespaceWithWorkflow =>

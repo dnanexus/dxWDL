@@ -56,8 +56,8 @@ object IR {
     //              intermediate results if needed.
     sealed trait AppletKind
     case object AppletKindEval extends AppletKind
-    case class AppletKindIf(sourceCalls: Vector[String]) extends AppletKind
-    case class AppletKindScatter(sourceCalls: Vector[String]) extends AppletKind
+    case class AppletKindIf(calls: Map[String, String]) extends AppletKind
+    case class AppletKindScatter(calls: Map[String, String]) extends AppletKind
     case object AppletKindTask extends AppletKind
     case object AppletKindWorkflowOutputs extends AppletKind
     case object AppletKindWorkflowOutputsAndReorg extends AppletKind
@@ -95,11 +95,10 @@ object IR {
 
     case class Workflow(name: String,
                         stages: Vector[Stage],
-                        applets: Vector[Applet])
+                        applets: Map[String, Applet])
 
     case class Namespace(workflow: Option[Workflow],
-                         applets: Vector[Applet])
-
+                         applets: Map[String, Applet])
 
     // Automatic conversion to/from Yaml
     object IrInternalYamlProtocol extends DefaultYamlProtocol {
@@ -126,38 +125,44 @@ object IR {
             def write(aKind: AppletKind) =
                 aKind match {
                     case AppletKindEval =>
-                        YamlString("Eval")
-                    case AppletKindIf(sourceCalls) =>
+                        YamlObject(YamlString("aKind") -> YamlString("Eval"))
+                    case AppletKindIf(calls) =>
                         YamlObject(
-                            YamlString("type") -> YamlString("If"),
-                            YamlString("calls") -> sourceCalls.toYaml)
-                    case AppletKindScatter(sourceCalls) =>
+                            YamlString("aKind") -> YamlString("If"),
+                            YamlString("calls") -> calls.toYaml)
+                    case AppletKindScatter(calls) =>
                         YamlObject(
-                            YamlString("type") -> YamlString("Scatter"),
-                            YamlString("calls") -> sourceCalls.toYaml)
+                            YamlString("aKind") -> YamlString("Scatter"),
+                            YamlString("calls") -> calls.toYaml)
                     case AppletKindTask =>
-                        YamlString("Task")
+                        YamlObject(YamlString("aKind") -> YamlString("Task"))
                     case AppletKindWorkflowOutputs =>
-                        YamlString("WorkflowOutputs")
+                        YamlObject(YamlString("aKind") -> YamlString("WorkflowOutputs"))
                     case AppletKindWorkflowOutputsAndReorg =>
-                        YamlString("WorkflowOutputsAndReorg")
+                        YamlObject(YamlString("aKind") -> YamlString("WorkflowOutputsAndReorg"))
                 }
             def read(value: YamlValue) = value match {
-                case YamlString("Eval") =>
-                    AppletKindEval
-                case YamlString("Task") =>
-                    AppletKindTask
-                case YamlString("WorkflowOutputs") =>
-                    AppletKindWorkflowOutputs
-                case YamlString("WorkflowOutputsAndReorg") =>
-                    AppletKindWorkflowOutputsAndReorg
                 case YamlObject(_) =>
-                    value.asYamlObject.getFields(YamlString("type"), YamlString("calls"))
-                    match {
-                    case Seq(YamlString("If"), calls) =>
-                            AppletKindIf(calls.convertTo[Vector[String]])
-                    case Seq(YamlString("Scatter"), calls) =>
-                            AppletKindScatter(calls.convertTo[Vector[String]])
+                    val yo = value.asYamlObject
+                    yo.getFields(YamlString("aKind")) match {
+                        case Seq(YamlString("Eval")) =>
+                            AppletKindEval
+                        case Seq(YamlString("Task")) =>
+                            AppletKindTask
+                        case Seq(YamlString("WorkflowOutputs")) =>
+                            AppletKindWorkflowOutputs
+                        case Seq(YamlString("WorkflowOutputsAndReorg")) =>
+                            AppletKindWorkflowOutputsAndReorg
+                        case Seq(YamlString("If")) =>
+                            yo.getFields(YamlString("calls")) match {
+                                case Seq(calls) =>
+                                    AppletKindIf(calls.convertTo[Map[String, String]])
+                            }
+                        case Seq(YamlString("Scatter")) =>
+                            yo.getFields(YamlString("calls")) match {
+                                case Seq(calls) =>
+                                    AppletKindScatter(calls.convertTo[Map[String, String]])
+                            }
                     }
                 case unrecognized => deserializationError(s"AppletKind expected ${unrecognized}")
             }
@@ -189,30 +194,45 @@ object IR {
         implicit object SArgYamlFormat extends YamlFormat[SArg] {
             def write(sArg: SArg) = {
                 sArg match {
-                    case SArgEmpty => YamlString("empty")
+                    case SArgEmpty =>
+                        YamlObject(YamlString("kind") -> YamlString("empty"))
                     case SArgConst(wVal) =>
-                        YamlArray(Vector(YamlString(wVal.wdlType.toWdlString),
-                                         YamlString(wVal.toWdlString)))
+                        YamlObject(YamlString("kind") -> YamlString("const"),
+                                   YamlString("wdlType") -> YamlString(wVal.wdlType.toWdlString),
+                                   YamlString("value") ->  YamlString(wVal.toWdlString))
                     case SArgLink(stageName, cVar) =>
-                        YamlObject(YamlString("stageName") -> YamlString(stageName),
+                        YamlObject(YamlString("kind") -> YamlString("link"),
+                                   YamlString("stageName") -> YamlString(stageName),
                                    YamlString("cVar") -> cVar.toYaml)
                 }
             }
 
             def read(value: YamlValue) = {
                 value match {
-                    case YamlString("empty") =>
-                        SArgEmpty
-                    case YamlArray(Vector(YamlString(wdlType), YamlString(wdlValue))) =>
-                        val t:WdlType = WdlType.fromWdlString(wdlType)
-                        val v = t.fromWdlString(wdlValue)
-                        SArgConst(v)
                     case YamlObject(_) =>
-                        value.asYamlObject.getFields(YamlString("stage"),
-                                                     YamlString("cVar")) match {
-                            case Seq(YamlString(stageName),
-                                     cVar) =>
-                                SArgLink(stageName, cVar.convertTo[CVar])
+                        val yo = value.asYamlObject
+                        yo.getFields(YamlString("kind")) match {
+                            case Seq(YamlString("empty")) =>
+                                SArgEmpty
+                            case Seq(YamlString("const")) =>
+                                yo.getFields(YamlString("wdlType"),
+                                             YamlString("value")) match {
+                                    case Seq(YamlString(wdlType), YamlString(value)) =>
+                                        val t:WdlType = WdlType.fromWdlString(wdlType)
+                                        val v = t.fromWdlString(value)
+                                        SArgConst(v)
+                                    case _ => deserializationError("SArg malformed const")
+                                }
+                            case Seq(YamlString("link")) =>
+                                yo.getFields(YamlString("stage"),
+                                             YamlString("cVar")) match {
+                                    case Seq(YamlString(stageName),
+                                             cVar) =>
+                                        SArgLink(stageName, cVar.convertTo[CVar])
+                                    case _ => deserializationError("SArg malformed link")
+                                }
+                            case unrecognized =>
+                                deserializationError(s"CVar expected ${unrecognized}")
                         }
                     case unrecognized =>
                         deserializationError(s"CVar expected ${unrecognized}")
@@ -228,39 +248,51 @@ object IR {
                     if (!x.trim.isEmpty) Some(x)
                     else None
                 }.flatten.mkString("\n")
-                YamlArray(
-                    YamlString(applet.name),
-                    applet.inputs.toYaml,
-                    applet.outputs.toYaml,
-                    applet.instanceType.toYaml,
-                    applet.docker.toYaml,
-                    YamlString(applet.destination),
-                    YamlString(wdlCode))
+                YamlObject(
+                    YamlString("name") -> YamlString(applet.name),
+                    YamlString("inputs") -> applet.inputs.toYaml,
+                    YamlString("outputs") -> applet.outputs.toYaml,
+                    YamlString("instanceType") -> applet.instanceType.toYaml,
+                    YamlString("docker") -> applet.docker.toYaml,
+                    YamlString("destination") -> YamlString(applet.destination),
+                    YamlString("kind") -> applet.kind.toYaml,
+                    YamlString("ns") -> YamlString(wdlCode))
             }
 
-            def read(value: YamlValue) =
+            def read(value: YamlValue) = {
                 value match {
-                    case YamlArray(
-                        Vector(
-                            YamlString(name),
-                            inputs,
-                            outputs,
-                            instanceType,
-                            YamlBoolean(docker),
-                            YamlString(destination),
-                            kind,
-                            YamlString(wdlCode))) =>
-                        Applet(name,
-                               inputs.convertTo[Vector[CVar]],
-                               outputs.convertTo[Vector[CVar]],
-                               instanceType.convertTo[InstanceType],
-                               docker,
-                               destination,
-                               kind.convertTo[AppletKind],
-                               WdlNamespace.loadUsingSource(wdlCode, None, None).get)
+                    case YamlObject(_) =>
+                        value.asYamlObject.getFields(
+                            YamlString("name"),
+                            YamlString("inputs"),
+                            YamlString("outputs"),
+                            YamlString("instanceType"),
+                            YamlString("docker"),
+                            YamlString("destination"),
+                            YamlString("kind"),
+                            YamlString("ns")) match {
+                            case Seq(
+                                YamlString(name),
+                                inputs,
+                                outputs,
+                                instanceType,
+                                YamlBoolean(docker),
+                                YamlString(destination),
+                                kind,
+                                YamlString(wdlCode)) =>
+                                Applet(name,
+                                       inputs.convertTo[Vector[CVar]],
+                                       outputs.convertTo[Vector[CVar]],
+                                       instanceType.convertTo[InstanceType],
+                                       docker,
+                                       destination,
+                                       kind.convertTo[AppletKind],
+                                       WdlNamespace.loadUsingSource(wdlCode, None, None).get)
+                        }
                     case unrecognized =>
                         deserializationError(s"Applet expected ${unrecognized}")
                 }
+            }
         }
 
         implicit val stageFormat = yamlFormat4(Stage)
@@ -277,19 +309,30 @@ object IR {
 
     // build a mapping from call to stage name
     def callDict(wf: Workflow) : Map[String, String] = {
-        val appletDict: Map[String, Applet] =
-            wf.applets.map(a => a.name -> a).toMap
         wf.stages.foldLeft(Map.empty[String, String]) {
             case (callDict, stg) =>
-                val apl:Applet = appletDict(stg.appletName)
+                val apl:Applet = wf.applets(stg.appletName)
                 // map source calls to the stage name. For example, this happens
                 // for scatters.
                 val call2Stage = apl.kind match {
-                    case AppletKindScatter(sourceCalls) => sourceCalls.map(x => x -> stg.name).toMap
-                    case AppletKindIf(sourceCalls) => sourceCalls.map(x => x -> stg.name).toMap
+                    case AppletKindScatter(calls) =>
+                        calls.map{
+                            case (unqualifiedName,_) => unqualifiedName -> stg.name
+                        }.toMap
+                    case AppletKindIf(calls) =>
+                        calls.map{
+                            case (unqualifiedName,_) => unqualifiedName -> stg.name
+                        }.toMap
                     case _ => Map.empty[String, String]
                 }
                 callDict ++ call2Stage
         }
+    }
+
+    def prettyPrint(y: YamlValue) : String = {
+        //y.prettyPrint
+        y.print(Flow,
+                ScalarStyle.DEFAULT,
+                LineBreak.DEFAULT)
     }
 }
