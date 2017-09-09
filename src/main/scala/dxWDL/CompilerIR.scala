@@ -997,7 +997,7 @@ workflow w {
 
     // Compile a workflow, having compiled the independent tasks.
     def compileWorkflow(wf: WdlWorkflow,
-                        taskApplets: Map[String, (IR.Applet, Vector[IR.CVar])]) : IR.Workflow = {
+                        taskApplets: Map[String, (IR.Applet, Vector[IR.CVar])]) : IR.Namespace = {
         Utils.trace(verbose.on, "IR: compiling workflow")
 
         // Get rid of workflow output declarations
@@ -1086,7 +1086,8 @@ workflow w {
             auxApplets
                 .flatten
                 .map(apl => apl.name -> apl).toMap
-        IR.Workflow(wf.unqualifiedName, stages, tApplets ++ aApplets)
+        val irwf = IR.Workflow(wf.unqualifiedName, stages)
+        IR.Namespace(Some(irwf), tApplets ++ aApplets)
     }
 
     // Load imported tasks
@@ -1130,8 +1131,7 @@ workflow w {
         ns match {
             case nswf : WdlNamespaceWithWorkflow =>
                 val wf = nswf.workflow
-                val irWf = compileWorkflow(wf, taskApplets)
-                IR.Namespace(Some(irWf), irApplets)
+                compileWorkflow(wf, taskApplets)
             case _ =>
                 // The namespace contains only applets, there
                 // is no workflow to compile.

@@ -182,17 +182,20 @@ case class InputFile(verbose: Utils.Verbose) {
 
     // Build a dx input file, based on the wdl input file and the workflow
     def apply(dxwfl: DXWorkflow,
-              wf: IR.Workflow,
+              ns: IR.Namespace,
               inputPath: Path) : Unit = {
         Utils.trace(verbose.on, s"Translating WDL input file ${inputPath}")
-        val callDict = IR.callDict(wf)
+        val callDict = IR.callDict(ns)
         val stageDict: Map[String, DXWorkflowStage] = queryWorkflowStages(dxwfl)
 
         // read the input file xxxx.json
         val wdlInputs: JsObject = Utils.readFileContent(inputPath).parseJson.asJsObject
 
         // translate the key-value entries
-        val dxInputs: JsObject = dxTranslate(wf, wdlInputs, stageDict, callDict)
+        val dxInputs: JsObject = ns.workflow match {
+            case None => JsObject(Map.empty[String, JsValue])
+            case Some(wf) => dxTranslate(wf, wdlInputs, stageDict, callDict)
+        }
 
         // write back out as xxxx.dx.json
         val filename = Utils.replaceFileSuffix(inputPath, ".dx.json")

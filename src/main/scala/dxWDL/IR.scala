@@ -94,8 +94,7 @@ object IR {
                      outputs: Vector[CVar])
 
     case class Workflow(name: String,
-                        stages: Vector[Stage],
-                        applets: Map[String, Applet])
+                        stages: Vector[Stage])
 
     case class Namespace(workflow: Option[Workflow],
                          applets: Map[String, Applet])
@@ -296,7 +295,7 @@ object IR {
         }
 
         implicit val stageFormat = yamlFormat4(Stage)
-        implicit val workflowFormat = yamlFormat3(Workflow)
+        implicit val workflowFormat = yamlFormat2(Workflow)
         implicit val namespaceFormat = yamlFormat2(Namespace)
     }
     import IrInternalYamlProtocol._
@@ -308,31 +307,35 @@ object IR {
     def yaml(ns: Namespace) : YamlValue = ns.toYaml
 
     // build a mapping from call to stage name
-    def callDict(wf: Workflow) : Map[String, String] = {
-        wf.stages.foldLeft(Map.empty[String, String]) {
-            case (callDict, stg) =>
-                val apl:Applet = wf.applets(stg.appletName)
-                // map source calls to the stage name. For example, this happens
-                // for scatters.
-                val call2Stage = apl.kind match {
-                    case AppletKindScatter(calls) =>
-                        calls.map{
-                            case (unqualifiedName,_) => unqualifiedName -> stg.name
-                        }.toMap
-                    case AppletKindIf(calls) =>
-                        calls.map{
-                            case (unqualifiedName,_) => unqualifiedName -> stg.name
-                        }.toMap
-                    case _ => Map.empty[String, String]
+    def callDict(ns:Namespace) : Map[String, String] = {
+        ns.workflow match {
+            case None => Map.empty
+            case Some(wf) =>
+                wf.stages.foldLeft(Map.empty[String, String]) {
+                    case (callDict, stg) =>
+                        val apl:Applet = ns.applets(stg.appletName)
+                        // map source calls to the stage name. For example, this happens
+                        // for scatters.
+                        val call2Stage = apl.kind match {
+                            case AppletKindScatter(calls) =>
+                                calls.map{
+                                    case (unqualifiedName,_) => unqualifiedName -> stg.name
+                                }.toMap
+                            case AppletKindIf(calls) =>
+                                calls.map{
+                                    case (unqualifiedName,_) => unqualifiedName -> stg.name
+                                }.toMap
+                            case _ => Map.empty[String, String]
+                        }
+                        callDict ++ call2Stage
                 }
-                callDict ++ call2Stage
         }
     }
 
     def prettyPrint(y: YamlValue) : String = {
-        //y.prettyPrint
-        y.print(Flow,
+        y.prettyPrint
+/*        y.print(Flow,
                 ScalarStyle.DEFAULT,
-                LineBreak.DEFAULT)
+                LineBreak.DEFAULT)*/
     }
 }

@@ -410,7 +410,7 @@ object Main extends App {
         val wdlInputs: Option[Path] = options.get("inputs").map(Paths.get(_))
         (wf, irNs.workflow, wdlInputs) match {
             case (Some(dxwfl), Some(irWf), Some(path)) =>
-                InputFile(cOpt.verbose).apply(dxwfl, irWf, path)
+                InputFile(cOpt.verbose).apply(dxwfl, irNs, path)
                 dxwfl.getId
             case _ => ()
         }

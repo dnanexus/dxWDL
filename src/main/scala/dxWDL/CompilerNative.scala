@@ -32,10 +32,7 @@ case class AppletDirectory(ns: IR.Namespace,
     // use map with information on each applet name.
     private def bulkAppletLookup() : HashMap[String, Vector[AppletInfo]] = {
         // get all the applet names
-        val allAppletNames: Vector[String] = ns.workflow match {
-            case None => ns.applets.map{ case (k,_) => k }.toVector
-            case Some(wf) => wf.applets.map{ case (k,_) => k }.toVector
-        }
+        val allAppletNames: Vector[String] = ns.applets.map{ case (k,_) => k }.toVector
 
         val dxAppletsInFolder: List[DXApplet] = DXSearch.findDataObjects()
             .inFolder(dxProject, folder)
@@ -740,14 +737,15 @@ case class CompilerNative(dxWDLrtId: String,
     //
     // - Calculate the workflow checksum from the intermediate representation
     // - Do not rebuild the workflow if it has a correct checksum
-    def buildWorkflowIfNeeded(wf: IR.Workflow,
+    def buildWorkflowIfNeeded(ns: IR.Namespace,
+                              wf: IR.Workflow,
                               aplDir: AppletDirectory) : DXWorkflow = {
         // Build the individual applets. We need to keep track of
         // the applets created, to be able to link calls. For example,
         // a scatter calls other applets; we need to pass the applet IDs
         // to the launcher at runtime.
         val initAppletDict = Map.empty[String, (IR.Applet, DXApplet)]
-        val appletDict = wf.applets.foldLeft(initAppletDict) {
+        val appletDict = ns.applets.foldLeft(initAppletDict) {
             case (appletDict, (_,apl)) =>
                 val (dxApplet, _) = buildAppletIfNeeded(apl, appletDict, aplDir)
                 Utils.trace(verbose.on, s"Applet ${apl.name} = ${dxApplet.getId()}")
@@ -823,17 +821,16 @@ case class CompilerNative(dxWDLrtId: String,
         // We don't want to build them if we don't have to.
         val aplDir = AppletDirectory(ns, dxProject, folder, verbose)
 
+        val dxApplets = ns.applets.map{ case (_,applet) =>
+            val (dxApplet, _) = buildAppletIfNeeded(applet, Map.empty, aplDir)
+            dxApplet
+        }.toVector
         ns.workflow match {
             case None =>
-                val dxApplets = ns.applets.map{ case (_,applet) =>
-                    val (dxApplet, _) = buildAppletIfNeeded(applet, Map.empty, aplDir)
-                    dxApplet
-                }
-                (None, dxApplets.toVector)
-
-            case Some(iRepWf) =>
-                val dxwfl = buildWorkflowIfNeeded(iRepWf, aplDir)
-                (Some(dxwfl), Vector.empty)
+                (None, dxApplets)
+            case Some(wf) =>
+                val dxwfl = buildWorkflowIfNeeded(ns, wf, aplDir)
+                (Some(dxwfl), dxApplets)
         }
     }
 }
