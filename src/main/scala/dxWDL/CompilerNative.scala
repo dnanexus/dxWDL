@@ -606,8 +606,6 @@ case class CompilerNative(dxWDLrtId: String,
         if (buildRequired) {
             // Compile a WDL snippet into an applet.
             val dxApplet = dxBuildApp(appletDir, applet.name, folder, digest)
-
-            //dxApplet.putProperty(CHECKSUM_PROP, digest)
             aplDir.insert(applet.name, dxApplet, digest)
             (dxApplet, applet.outputs)
         } else {
@@ -739,19 +737,7 @@ case class CompilerNative(dxWDLrtId: String,
     // - Do not rebuild the workflow if it has a correct checksum
     def buildWorkflowIfNeeded(ns: IR.Namespace,
                               wf: IR.Workflow,
-                              aplDir: AppletDirectory) : DXWorkflow = {
-        // Build the individual applets. We need to keep track of
-        // the applets created, to be able to link calls. For example,
-        // a scatter calls other applets; we need to pass the applet IDs
-        // to the launcher at runtime.
-        val initAppletDict = Map.empty[String, (IR.Applet, DXApplet)]
-        val appletDict = ns.applets.foldLeft(initAppletDict) {
-            case (appletDict, (_,apl)) =>
-                val (dxApplet, _) = buildAppletIfNeeded(apl, appletDict, aplDir)
-                Utils.trace(verbose.on, s"Applet ${apl.name} = ${dxApplet.getId()}")
-                appletDict + (apl.name -> (apl, dxApplet))
-        }.toMap
-
+                              appletDict: Map[String, (IR.Applet, DXApplet)]) : DXWorkflow = {
         // the workflow digest depends on the IR and the applets
         val wfDigest:String = chksum(
             List(IR.yaml(wf).prettyPrint,
@@ -814,6 +800,51 @@ case class CompilerNative(dxWDLrtId: String,
         }
     }
 
+    // Sort the applets according to dependencies. The lowest
+    // ones are tasks, because they depend on nothing else. On the top
+    // are generated applets like scatters and if-blocks.
+    def sortAppletsByDependencies(appletDict: Map[String, IR.Applet]) : Vector[IR.Applet] = {
+        def immediateDeps(apl: IR.Applet) :Vector[IR.Applet] = {
+            val calls:Seq[String] = apl.kind match {
+                case IR.AppletKindIf(calls) => calls.map{ case (_,taskName) => taskName }.toSeq
+                case IR.AppletKindScatter(calls) => calls.map{ case (_,taskName) => taskName }.toSeq
+                case _ => Vector.empty
+            }
+            calls.map{ name =>
+                appletDict.get(name) match {
+                    case None => throw new Exception(
+                        s"Applet ${apl.name} depends on an unknown applet ${name}")
+                    case Some(x) => x
+                }
+            }.toVector
+        }
+        def transitiveDeps(apl: IR.Applet) :Vector[IR.Applet] = {
+            val nextLevel:Vector[IR.Applet] = immediateDeps(apl)
+            if (nextLevel.isEmpty) {
+                Vector(apl)
+            } else {
+                val lowerLevels:Vector[IR.Applet] =
+                    nextLevel
+                        .map(apl => transitiveDeps(apl))
+                        .flatten
+                lowerLevels ++ nextLevel ++ Vector(apl)
+            }
+        }
+
+        val (_,sortedApplets:Vector[IR.Applet]) =
+            appletDict.foldLeft(Set.empty[String], Vector.empty[IR.Applet]) {
+                case ((sortedNames, sortedApplets), (_,apl)) =>
+                    if (sortedNames contains apl.name) {
+                        (sortedNames, sortedApplets)
+                    } else {
+                        val next:Vector[IR.Applet] = transitiveDeps(apl)
+                        val nextNames:Set[String] = next.map(_.name).toSet
+                        (sortedNames ++ nextNames, sortedApplets ++ next)
+                    }
+            }
+        sortedApplets
+    }
+
     def apply(ns: IR.Namespace) : (Option[DXWorkflow], Vector[DXApplet]) = {
         Utils.trace(verbose.on, "Backend pass")
 
@@ -821,15 +852,26 @@ case class CompilerNative(dxWDLrtId: String,
         // We don't want to build them if we don't have to.
         val aplDir = AppletDirectory(ns, dxProject, folder, verbose)
 
-        val dxApplets = ns.applets.map{ case (_,applet) =>
-            val (dxApplet, _) = buildAppletIfNeeded(applet, Map.empty, aplDir)
-            dxApplet
-        }.toVector
+        // Sort the applets according to dependencies.
+        val applets = sortAppletsByDependencies(ns.applets)
+
+        // Build the individual applets. We need to keep track of
+        // the applets created, to be able to link calls. For example,
+        // a scatter calls other applets; we need to pass the applet IDs
+        // to the launcher at runtime.
+        val appletDict = applets.foldLeft(Map.empty[String, (IR.Applet, DXApplet)]) {
+            case (appletDict, apl) =>
+                val (dxApplet, _) = buildAppletIfNeeded(apl, appletDict, aplDir)
+                Utils.trace(verbose.on, s"Applet ${apl.name} = ${dxApplet.getId()}")
+                appletDict + (apl.name -> (apl, dxApplet))
+        }.toMap
+
+        val dxApplets = appletDict.map{ case (_, (_,dxApl)) => dxApl }.toVector
         ns.workflow match {
             case None =>
                 (None, dxApplets)
             case Some(wf) =>
-                val dxwfl = buildWorkflowIfNeeded(ns, wf, aplDir)
+                val dxwfl = buildWorkflowIfNeeded(ns, wf, appletDict)
                 (Some(dxwfl), dxApplets)
         }
     }
