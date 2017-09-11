@@ -66,7 +66,11 @@ case class WdlPrettyPrinter(fqnFlag: Boolean, workflowOutputs: Option[Seq[Workfl
 
         // remove empty lines; we are not sure how they are generated, but they mess
         // up pretty printing downstream.
-        val nonEmptyLines: Vector[String] = command.split("\n").filter(l => !l.trim().isEmpty).toVector
+        val nonEmptyLines: Vector[String] =
+            command
+                .split("\n")
+                .filter(l => !l.trim().isEmpty)
+                .toVector
 
         // special syntex for short commands
         val (bgnSym,endSym) =
@@ -217,16 +221,21 @@ case class WdlPrettyPrinter(fqnFlag: Boolean, workflowOutputs: Option[Seq[Workfl
         buildBlock( s"workflow ${wfName}", lines, level)
     }
 
+    // dx:applet and dx:workflow checksums rely on consistent compilation. A
+    // WDL source file should compile to the exact same WDL fragments. To
+    // ensure this, the imports and tasks are sorted. There have seen cases where
+    // different orders resulted by repeated compilation.
     def apply(ns: WdlNamespace, level: Int) : Vector[String] = {
         // print the imports
-        val importLines: Vector[String] = ns.imports.map{
-            imp => s"""import "${imp.uri}" as ${imp.namespaceName}"""
-        }.toVector
+        val importLines: Vector[String] = ns.imports
+            .sortBy(_.uri)
+            .map(imp => s"""import "${imp.uri}" as ${imp.namespaceName}""")
+            .toVector
 
         // tasks
-        val taskLines: Vector[String] = ns.tasks.map(
-            task => apply(task, level) :+ "\n"
-        ).toVector.flatten
+        val taskLines: Vector[String] = ns.tasks
+            .sortBy(_.name)
+            .map(task => apply(task, level)).toVector.flatten
 
         // workflow, if it exists
         val wfLines: Vector[String] = ns match {
@@ -234,8 +243,7 @@ case class WdlPrettyPrinter(fqnFlag: Boolean, workflowOutputs: Option[Seq[Workfl
             case _ => Vector()
         }
 
-        val allLines = importLines ++ Vector("\n") ++
-            taskLines ++ Vector("\n") ++ wfLines
+        val allLines = importLines ++ taskLines ++ wfLines
         allLines.map(x => indentLine(x, level))
     }
 }

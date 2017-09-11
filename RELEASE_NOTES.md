@@ -1,5 +1,10 @@
 # Release Notes
 
+## 0.43
+- Speed up the creation of a dx:workflow. With one API call create
+all the workflow stages, and add set the checksum property.
+- Speeding up applet construction
+
 ## 0.42
 - WDL objects: experimental
 - Type coercion

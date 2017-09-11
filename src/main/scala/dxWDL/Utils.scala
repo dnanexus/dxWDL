@@ -36,6 +36,24 @@ object Utils {
     // applet calls applets that implement tasks.
     case class AppletLinkInfo(inputs: Map[String, WdlType], dxApplet: DXApplet)
 
+    // A stand in for the DXWorkflow.Stage inner class (we don't have a constructor for it)
+    case class DXWorkflowStage(id: String) {
+        def getId() = id
+
+        def getInputReference(inputName:String) : JsonNode = {
+            val dxlink:ObjectNode = DXJSON.getObjectBuilder()
+                .put("stage", id)
+                .put("inputField", inputName).build()
+            DXJSON.getObjectBuilder().put("$dnanexus_link", dxlink).build()
+        }
+        def getOutputReference(outputName:String) : JsonNode = {
+            val dxlink:ObjectNode = DXJSON.getObjectBuilder()
+                .put("stage", id)
+                .put("outputField", outputName).build()
+            DXJSON.getObjectBuilder().put("$dnanexus_link", dxlink).build()
+        }
+    }
+
     // Encapsulation of verbosity flags.
     //  on --       is the overall setting true/false
     //  keywords -- specific words to trace
