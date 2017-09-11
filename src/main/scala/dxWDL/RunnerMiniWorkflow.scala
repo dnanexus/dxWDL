@@ -387,20 +387,21 @@ case class RunnerMiniWorkflow(exportVars: Set[String],
     private def loadLinkInfo(dxProject: DXProject) : Map[String, AppletLinkInfo]= {
         System.err.println(s"Loading link information")
         val linkSourceFile: Path = Paths.get("/" + Utils.LINK_INFO_FILENAME)
-        if (!Files.exists(linkSourceFile))
+        if (!Files.exists(linkSourceFile)) {
             Map.empty
-
-        val info: String = Utils.readFileContent(linkSourceFile)
-        try {
-            info.parseJson.asJsObject.fields.map {
-                case (key:String, jso) =>
-                    key -> AppletLinkInfo.readJson(jso, dxProject)
-                case _ =>
-                    throw new AppInternalException(s"Bad JSON")
-            }.toMap
-        } catch {
-            case e : Throwable =>
-                throw new AppInternalException(s"Link JSON information is badly formatted ${info}")
+        } else {
+            val info: String = Utils.readFileContent(linkSourceFile)
+            try {
+                info.parseJson.asJsObject.fields.map {
+                    case (key:String, jso) =>
+                        key -> AppletLinkInfo.readJson(jso, dxProject)
+                    case _ =>
+                        throw new AppInternalException(s"Bad JSON")
+                }.toMap
+            } catch {
+                case e : Throwable =>
+                    throw new AppInternalException(s"Link JSON information is badly formatted ${info}")
+            }
         }
     }
 
