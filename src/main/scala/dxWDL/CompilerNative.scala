@@ -141,7 +141,7 @@ case class CompilerNative(dxWDLrtId: String,
                        "optional" -> JsBoolean(true)))
         }
         def mkComplex() : Vector[Map[String,JsValue]] = {
-            // A large JSON structure passed as a file, and a
+            // A large JSON structure passed as a hash, and a
             // vector of platform files.
             //
             // Note: the help field for the file vector is empty,
@@ -149,7 +149,7 @@ case class CompilerNative(dxWDLrtId: String,
             // will not interpret it.
             Vector(Map("name" -> JsString(name),
                        "help" -> JsString(wdlType.toWdlString),
-                       "class" -> JsString("file")),
+                       "class" -> JsString("hash")),
                    Map("name" -> JsString(name + Utils.FLAT_FILES_SUFFIX),
                        "class" -> JsString("array:file"),
                        "optional" -> JsBoolean(true)))

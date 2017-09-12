@@ -5,7 +5,6 @@ package dxWDL
 import com.dnanexus.{DXFile, DXJob}
 import com.fasterxml.jackson.databind.JsonNode
 import java.nio.file.Paths
-import LocalDxFiles.wdlFileOfDxLink
 import net.jcazevedo.moultingyaml._
 import spray.json._
 import Utils.{dxFileOfJsValue, DXWorkflowStage}
@@ -19,11 +18,13 @@ object IORef extends Enumeration {
 // A union of all the different ways of building a value
 // from JSON passed by the platform.
 //
-// Complex values are WDL values that have files embedded in them. For example:
-// - Ragged file array:  Array[Array[File]]
-// - Object with file elements
-// - Map of files:     Map[String, File]
-// A complex value is implemented as a json structure, and all the files it references.
+// A complex values is a WDL values that does not map to a native dx:type. Such
+// values may also have files embedded in them. For example:
+//  - Ragged file array:  Array[Array[File]]
+//  - Object with file elements
+//  - Map of files:     Map[String, File]
+// A complex value is implemented as a json structure, and an array of
+// all the files it references.
 sealed trait DxLink
 case class DxlValue(jsn: JsValue) extends DxLink  // This may contain dx-files
 case class DxlStage(dxStage: DXWorkflowStage, ioRef: IORef.Value, varName: String) extends DxLink
@@ -99,17 +100,18 @@ object WdlVarLinks {
         }
     }
 
-    // serialize complex JSON structure to a file, upload, and
-    // return a dxlink to the file
-    private def serializeJsValueToDxFile(wdlType: WdlType, jsVal: JsValue) : JsValue = {
+    private def jsValueToDxHash(wdlType: WdlType, jsVal: JsValue) : JsValue = {
         assert(!isNativeDxType(wdlType))
-        if (isDxFile(jsVal)) {
-            // The JSON structure is already a file, no need for further encapsulation
-            jsVal
-        } else {
-            val buf = jsVal.prettyPrint
-            val fileName = wdlType.toWdlString
-            Utils.uploadString(buf, fileName)
+        JsObject("val" -> jsVal)
+    }
+
+    private def dxHashToJsValue(jsRaw: JsValue) : JsValue = {
+        jsRaw match {
+            case JsObject(fields) if fields contains "val" =>
+                fields("val")
+            case _ =>
+                System.err.println(s"dxHashToJsValue, strange case ${jsRaw}")
+                jsRaw
         }
     }
 
@@ -264,22 +266,13 @@ object WdlVarLinks {
         val jsRaw: JsValue = wvl.dxlink match {
             case DxlValue(jsn) => jsn
             case _ =>
-                throw new AppInternalException(s"Unsupported conversion from ${wvl.dxlink} to WdlValue")
+                throw new AppInternalException(
+                    s"Unsupported conversion from ${wvl.dxlink} to WdlValue")
         }
-        if (!isNativeDxType(wvl.wdlType)) {
-            jsRaw match {
-                case JsObject(_) if isDxFile(jsRaw) =>
-                    // The JSON points to a platform file, it needs
-                    // to be downloaded and parsed.
-                    val dxfile = dxFileOfJsValue(jsRaw)
-                    val buf = Utils.downloadString(dxfile)
-                    buf.parseJson
-                case _ =>
-                    //System.err.println(s"Non native DX type ${wvl.wdlType.toWdlString}")
-                    jsRaw
-            }
-        } else {
+        if (isNativeDxType(wvl.wdlType)) {
             jsRaw
+        } else {
+            dxHashToJsValue(jsRaw)
         }
     }
 
@@ -421,24 +414,8 @@ object WdlVarLinks {
             WdlVarLinks(wdlTypeOrg, attrs, DxlValue(js))
         } else {
             // Complex values, that may have files in them. For example, ragged file arrays.
-            val jsSrlFileLink = serializeJsValueToDxFile(wdlType, js)
-            WdlVarLinks(wdlTypeOrg, attrs, DxlValue(jsSrlFileLink))
-        }
-    }
-
-    // Search recursively in [jsValue] for any dx:files. Localize these
-    // files by creating empty local files to represent them. Do not
-    // download the file body.
-    private def localizeFiles(jsValue: JsValue) : Unit = {
-        jsValue match {
-            case JsBoolean(_) | JsNull | JsNumber(_) | JsString(_) =>
-                Vector.empty[DXFile]
-            case JsObject(_) if isDxFile(jsValue) =>
-                Vector(wdlFileOfDxLink(jsValue, false))
-            case JsObject(fields) =>
-                fields.foreach{ case(_,v) => localizeFiles(v) }
-            case JsArray(elems) =>
-                elems.foreach(e => localizeFiles(e))
+            val hash:JsValue = jsValueToDxHash(wdlType, js)
+            WdlVarLinks(wdlTypeOrg, attrs, DxlValue(hash))
         }
     }
 
@@ -449,16 +426,13 @@ object WdlVarLinks {
     // do not download them. This is because accessing these files
     // later on will cause a WDL failure.
     def apply(wdlType: WdlType, attrs: DeclAttrs, jsValue: JsValue) : WdlVarLinks = {
-        //localizeFiles(jsValue)
         if (isNativeDxType(wdlType)) {
             // This is a primitive value, or a single dimensional
             // array of primitive values.
             WdlVarLinks(wdlType, attrs, DxlValue(jsValue))
         } else {
             // complex types
-            val dxfile = dxFileOfJsValue(jsValue)
-            val buf = Utils.downloadString(dxfile)
-            val jsSrlVal:JsValue = buf.parseJson
+            val jsSrlVal:JsValue = dxHashToJsValue(jsValue)
             WdlVarLinks(wdlType, attrs, DxlValue(jsSrlVal))
         }
     }
@@ -502,8 +476,8 @@ object WdlVarLinks {
                     // files that are embedded in the structure
                     val dxFiles = findDxFiles(jsn)
                     val jsFiles = dxFiles.map(x => Utils.jsValueOfJsonNode(x.getLinkAsJson))
-                    // convert the top level structure into a file
-                    val jsSrlFileLink = serializeJsValueToDxFile(wdlType, jsn)
+                    // convert the top level structure into a hash
+                    val jsSrlFileLink = jsValueToDxHash(wdlType, jsn)
                     Map(bindEncName -> Utils.jsonNodeOfJsValue(jsSrlFileLink),
                         bindEncName_F -> Utils.jsonNodeOfJsValue(JsArray(jsFiles)))
                 case DxlStage(dxStage, ioRef, varEncName) =>
@@ -593,7 +567,7 @@ object WdlVarLinks {
                     if (isNativeDxType(wdlType))
                         jsArr
                     else
-                        serializeJsValueToDxFile(wdlType, jsArr)
+                        jsValueToDxHash(wdlType, jsArr)
                 WdlVarLinks(wdlType, declAttrs, DxlValue(jsn))
 
             case DxlJob(_, varName) =>
