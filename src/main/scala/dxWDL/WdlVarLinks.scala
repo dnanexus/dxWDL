@@ -100,21 +100,6 @@ object WdlVarLinks {
         }
     }
 
-    private def jsValueToDxHash(wdlType: WdlType, jsVal: JsValue) : JsValue = {
-        assert(!isNativeDxType(wdlType))
-        JsObject("val" -> jsVal)
-    }
-
-    private def dxHashToJsValue(jsRaw: JsValue) : JsValue = {
-        jsRaw match {
-            case JsObject(fields) if fields contains "val" =>
-                fields("val")
-            case _ =>
-                System.err.println(s"dxHashToJsValue, strange case ${jsRaw}")
-                jsRaw
-        }
-    }
-
     // Is this a WDL type that maps to a native DX type?
     def isNativeDxType(wdlType: WdlType) : Boolean = {
         Utils.stripOptional(wdlType) match {
@@ -263,16 +248,11 @@ object WdlVarLinks {
     }
 
     private def getRawJsValue(wvl: WdlVarLinks) : JsValue = {
-        val jsRaw: JsValue = wvl.dxlink match {
+        wvl.dxlink match {
             case DxlValue(jsn) => jsn
             case _ =>
                 throw new AppInternalException(
                     s"Unsupported conversion from ${wvl.dxlink} to WdlValue")
-        }
-        if (isNativeDxType(wvl.wdlType)) {
-            jsRaw
-        } else {
-            dxHashToJsValue(jsRaw)
         }
     }
 
@@ -409,32 +389,8 @@ object WdlVarLinks {
     def apply(wdlTypeOrg: WdlType, attrs: DeclAttrs, wdlValue: WdlValue) : WdlVarLinks = {
         // Strip optional types
         val wdlType = Utils.stripOptional(wdlTypeOrg)
-        val js = jsOfComplexWdlValue(wdlType, wdlValue)
-        if (isNativeDxType(wdlType)) {
-            WdlVarLinks(wdlTypeOrg, attrs, DxlValue(js))
-        } else {
-            // Complex values, that may have files in them. For example, ragged file arrays.
-            val hash:JsValue = jsValueToDxHash(wdlType, js)
-            WdlVarLinks(wdlTypeOrg, attrs, DxlValue(hash))
-        }
-    }
-
-    // Convert an input field to a dx-links structure. This allows
-    // passing it to other jobs.
-    //
-    // Note: we need to represent dx-files as local paths, even if we
-    // do not download them. This is because accessing these files
-    // later on will cause a WDL failure.
-    def apply(wdlType: WdlType, attrs: DeclAttrs, jsValue: JsValue) : WdlVarLinks = {
-        if (isNativeDxType(wdlType)) {
-            // This is a primitive value, or a single dimensional
-            // array of primitive values.
-            WdlVarLinks(wdlType, attrs, DxlValue(jsValue))
-        } else {
-            // complex types
-            val jsSrlVal:JsValue = dxHashToJsValue(jsValue)
-            WdlVarLinks(wdlType, attrs, DxlValue(jsSrlVal))
-        }
+        val jsValue = jsOfComplexWdlValue(wdlType, wdlValue)
+        WdlVarLinks(wdlTypeOrg, attrs, DxlValue(jsValue))
     }
 
     def mkJborArray(dxJobVec: Vector[DXJob],
@@ -446,6 +402,23 @@ object WdlVarLinks {
         val retval = Utils.jsonNodeOfJsValue(JsArray(jbors))
         //System.err.println(s"mkJborArray(${varName})  ${retval}")
         retval
+    }
+
+
+    // Dx allows hashes as an input/output type. If the JSON value is
+    // not a hash (js-object), we need to add an outer layer to it.
+    private def jsValueToDxHash(wdlType: WdlType, jsVal: JsValue) : JsValue = {
+        jsVal match {
+            case JsObject(_) => jsVal
+            case _ => JsObject("tag" -> jsVal)
+        }
+    }
+    private def dxHashToJsValue(wdlType: WdlType, jsValue: JsValue) : JsValue = {
+        jsValue match {
+            case JsObject(fields) if fields contains "tag" =>
+                fields("tag")
+            case _ => jsValue
+        }
     }
 
     // create input/output fields that bind the variable name [bindName] to
@@ -517,6 +490,16 @@ object WdlVarLinks {
     }
 
 
+    // Convert an input field to a dx-links structure. This allows
+    // passing it to other jobs.
+    //
+    // Note: we need to represent dx-files as local paths, even if we
+    // do not download them. This is because accessing these files
+    // later on will cause a WDL failure.
+    def importFromDxExec(wdlType: WdlType, attrs: DeclAttrs, jsValue: JsValue) : WdlVarLinks = {
+        WdlVarLinks(wdlType, attrs, DxlValue(dxHashToJsValue(wdlType, jsValue)))
+    }
+
     // Read the job-inputs JSON file, and convert the variables
     // to links that can be passed to other applets.
     def loadJobInputsAsLinks(inputLines : String, closureTypes : Map[String, Option[WdlType]]) :
@@ -535,12 +518,12 @@ object WdlVarLinks {
                     fields.get(key) match {
                         case None => None
                         case Some(jsValue) =>
-                            val wvl = apply(wType, DeclAttrs.empty, jsValue)
+                            val wvl = importFromDxExec(wType, DeclAttrs.empty, jsValue)
                             Some(key -> wvl)
                     }
                 case Some(wType) =>
                     val jsValue = fields(key)
-                    val wvl = apply(wType, DeclAttrs.empty, jsValue)
+                    val wvl = importFromDxExec(wType, DeclAttrs.empty, jsValue)
                     Some(key -> wvl)
             }
         }.flatten.toMap
@@ -562,13 +545,7 @@ object WdlVarLinks {
                         case _ => throw new Exception("Sanity")
                     }
                 }
-                val jsArr = JsArray(jsVec)
-                val jsn =
-                    if (isNativeDxType(wdlType))
-                        jsArr
-                    else
-                        jsValueToDxHash(wdlType, jsArr)
-                WdlVarLinks(wdlType, declAttrs, DxlValue(jsn))
+                WdlVarLinks(wdlType, declAttrs, DxlValue(JsArray(jsVec)))
 
             case DxlJob(_, varName) =>
                 val jobVec:Vector[DXJob] = vec.map{ wvl =>

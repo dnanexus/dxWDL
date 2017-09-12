@@ -23,6 +23,7 @@ package dxWDL
 import com.fasterxml.jackson.databind.JsonNode
 import java.nio.file.Path
 import spray.json._
+import Utils.appletLog
 import wdl4s.wdl.{Declaration, DeclarationInterface, WdlTask, WdlWorkflow, WorkflowOutput}
 import wdl4s.wdl.types._
 import wdl4s.wdl.values._
@@ -140,7 +141,7 @@ object RunnerEval {
         val inputLines : String = Utils.readFileContent(jobInputPath)
         val inputs: Map[String, WdlVarLinks] = WdlVarLinks.loadJobInputsAsLinks(inputLines,
                                                                                 inputTypes)
-        System.err.println(s"Initial inputs=${inputs}")
+        appletLog(s"Initial inputs=${inputs}")
 
         // make sure the workflow elements are all declarations
         val decls: Seq[Declaration] = wf.children.map {
@@ -161,7 +162,7 @@ object RunnerEval {
 
         val json = JsObject(m)
         val ast_pp = json.prettyPrint
-        System.err.println(s"exported = ${ast_pp}")
+        appletLog(s"exported = ${ast_pp}")
         Utils.writeFileContent(jobOutputPath, ast_pp)
     }
 }

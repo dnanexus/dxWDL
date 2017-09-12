@@ -49,7 +49,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode
 import java.nio.file.{Path, Paths, Files}
 import scala.collection.mutable.HashMap
 import spray.json._
-import Utils.{AppletLinkInfo, transformVarName}
+import Utils.{AppletLinkInfo, appletLog, transformVarName}
 import wdl4s.wdl._
 import wdl4s.wdl.expression._
 import wdl4s.parser.WdlParser.{Ast, Terminal}
@@ -255,7 +255,7 @@ case class RunnerMiniWorkflow(exportVars: Set[String],
                             collection : WdlVarLinks,
                             calls : Seq[(WdlCall, AppletLinkInfo)],
                             outerEnv : Map[String, WdlVarLinks]) : Map[String, WdlVarLinks] = {
-        System.err.println(s"evalScatter")
+        appletLog(s"evalScatter")
 
         // add the top declarations in the scatter block to the
         // environment
@@ -266,7 +266,7 @@ case class RunnerMiniWorkflow(exportVars: Set[String],
         collElements.foreach { case elem =>
             // Bind the iteration variable inside the loop
             val envWithIterItem: Map[String, WdlVarLinks] = outerEnv + (scatter.item -> elem)
-            System.err.println(s"envWithIterItem= ${envWithIterItem}")
+            appletLog(s"envWithIterItem= ${envWithIterItem}")
 
             // calculate declarations at the top of the block
             val bValues = RunnerEval.evalDeclarations(topDecls, envWithIterItem, false, None)
@@ -282,7 +282,7 @@ case class RunnerMiniWorkflow(exportVars: Set[String],
 
             calls.foreach { case (call,apLinkInfo) =>
                 val inputs : ObjectNode = buildAppletInputs(call, apLinkInfo, innerEnv)
-                System.err.println(s"call=${callUniqueName(call)} inputs=${inputs}")
+                appletLog(s"call=${callUniqueName(call)} inputs=${inputs}")
                 val dxJob : DXJob = apLinkInfo.dxApplet.newRun().setRawInput(inputs).run()
                 val jobOutputs : Env = jobOutputEnv(call, dxJob)
 
@@ -324,7 +324,7 @@ case class RunnerMiniWorkflow(exportVars: Set[String],
                        condition : WdlVarLinks,
                        calls : Seq[(WdlCall, AppletLinkInfo)],
                        outerEnv: Map[String, WdlVarLinks]) : Map[String, WdlVarLinks] = {
-        System.err.println(s"evalIf")
+        appletLog(s"evalIf")
 
         // Evaluate condition
         val condValue:WdlValue = WdlVarLinks.eval(condition, true)
@@ -334,7 +334,7 @@ case class RunnerMiniWorkflow(exportVars: Set[String],
         }
         if (!b)
             return Map.empty
-        System.err.println(s"condition is true")
+        appletLog(s"condition is true")
 
         // Evaluate the declarations at the top of the block
         val (topDecls,_) = Utils.splitBlockDeclarations(cond.children.toList)
@@ -357,7 +357,7 @@ case class RunnerMiniWorkflow(exportVars: Set[String],
         // iterate over the calls
         calls.foreach { case (call,apLinkInfo) =>
             val inputs : ObjectNode = buildAppletInputs(call, apLinkInfo, innerEnv)
-            System.err.println(s"call=${callUniqueName(call)} inputs=${inputs}")
+            appletLog(s"call=${callUniqueName(call)} inputs=${inputs}")
             val dxJob: DXJob = apLinkInfo.dxApplet.newRun().setRawInput(inputs).run()
             val jobOutputs: Env = jobOutputEnv(call, dxJob)
 
@@ -385,7 +385,7 @@ case class RunnerMiniWorkflow(exportVars: Set[String],
     // need this in order to call the right version of other
     // applets.
     private def loadLinkInfo(dxProject: DXProject) : Map[String, AppletLinkInfo]= {
-        System.err.println(s"Loading link information")
+        appletLog(s"Loading link information")
         val linkSourceFile: Path = Paths.get("/" + Utils.LINK_INFO_FILENAME)
         if (!Files.exists(linkSourceFile)) {
             Map.empty
@@ -433,7 +433,7 @@ case class RunnerMiniWorkflow(exportVars: Set[String],
                        varName: String) : WdlVarLinks = {
         outerEnv.get(varName) match {
             case None =>
-                System.err.println(s"outerEnv=${outerEnv}")
+                appletLog(s"outerEnv=${outerEnv}")
                 throw new AppInternalException(s"Variable ${varName} not found in environment")
             case Some(wvl) => wvl
         }
@@ -441,7 +441,7 @@ case class RunnerMiniWorkflow(exportVars: Set[String],
 
     def apply(wf: WdlWorkflow,
               inputs : Map[String, WdlVarLinks]) : JsValue = {
-        System.err.println(s"inputs=${inputs}")
+        appletLog(s"inputs=${inputs}")
 
         // Evaluate the declarations prior to the main block, and add them to the environment.
         // This is the environment outside the block.
@@ -453,7 +453,7 @@ case class RunnerMiniWorkflow(exportVars: Set[String],
         val dxEnv = DXEnvironment.create()
         val dxProject = dxEnv.getProjectContext()
         val linkInfo = loadLinkInfo(dxProject)
-        System.err.println(s"link info=${linkInfo}")
+        appletLog(s"link info=${linkInfo}")
         val applets : Seq[(WdlCall, AppletLinkInfo)] = findApplets(scope, linkInfo)
 
         val blockOutputs : Map[String, WdlVarLinks] = scope match {
@@ -468,7 +468,7 @@ case class RunnerMiniWorkflow(exportVars: Set[String],
             case x =>
                 throw new Exception(cef.notCurrentlySupported(x.ast, "scope element"))
         }
-        System.err.println(s"block outputs=${blockOutputs}")
+        appletLog(s"block outputs=${blockOutputs}")
 
         // Add the declarations at the beginning of the
         // workflow. Ignore non-exported values.
@@ -485,7 +485,6 @@ case class RunnerMiniWorkflow(exportVars: Set[String],
     }
 }
 
-
 object RunnerMiniWorkflow {
     def apply(wf: WdlWorkflow,
               jobInputPath : Path,
@@ -493,11 +492,11 @@ object RunnerMiniWorkflow {
               jobInfoPath: Path) : Unit = {
         // Extract types for closure inputs
         val (closureTypes,outputTypes) = Utils.loadExecInfo(Utils.readFileContent(jobInfoPath))
-        System.err.println(s"WdlType mapping =${closureTypes}")
+        appletLog(s"WdlType mapping =${closureTypes}")
         val exportVars = outputTypes.collect{
             case (varName, Some(_)) => varName
         }.toSet
-        System.err.println(s"exportVars=${exportVars}")
+        appletLog(s"exportVars=${exportVars}")
 
         // Parse the inputs, do not download files from the platform.
         // They will be passed as links to the tasks.
@@ -512,7 +511,7 @@ object RunnerMiniWorkflow {
 
         // write the outputs to the job_output.json file
         val ast_pp = json.prettyPrint
-        System.err.println(s"outputs = ${ast_pp}")
+        appletLog(s"outputs = ${ast_pp}")
         Utils.writeFileContent(jobOutputPath, ast_pp)
     }
 }
