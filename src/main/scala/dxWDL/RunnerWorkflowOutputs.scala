@@ -12,6 +12,7 @@ import java.nio.file.Path
 import net.jcazevedo.moultingyaml._
 import scala.collection.JavaConverters._
 import spray.json._
+import Utils.appletLog
 import wdl4s.wdl.{Declaration, WdlWorkflow, WorkflowOutput}
 import WdlVarLinks.yaml
 
@@ -63,13 +64,13 @@ object RunnerWorkflowOutputs {
         val fileOutputs : Set[DXFile] = WdlVarLinks.findDxFiles(outputs).toSet
         val fileInputs: Set[DXFile] = WdlVarLinks.findDxFiles(inputs).toSet
         val realOutputs:Set[DXFile] = fileOutputs.toSet -- fileInputs.toSet
-        System.err.println(s"analysis has ${fileOutputs.size} output files")
-        System.err.println(s"analysis has ${fileInputs.size} input files")
-        System.err.println(s"analysis has ${realOutputs.size} real outputs")
+        appletLog(s"analysis has ${fileOutputs.size} output files")
+        appletLog(s"analysis has ${fileInputs.size} input files")
+        appletLog(s"analysis has ${realOutputs.size} real outputs")
 
-        System.err.println("Checking timestamps")
+        appletLog("Checking timestamps")
         if (realOutputs.size > Utils.MAX_NUM_FILES_MOVE_LIMIT) {
-            System.err.println(s"WARNING: Large number of outputs (${realOutputs.size}), not moving objects")
+            appletLog(s"WARNING: Large number of outputs (${realOutputs.size}), not moving objects")
             return Vector.empty
         }
         val anlCreateTs:java.util.Date = dxAnalysis.describe.getCreationDate()
@@ -81,7 +82,7 @@ object RunnerWorkflowOutputs {
         val outputFiles: Vector[DXFile] = realFreshOutputs.map(
             dxObj => DXFile.getInstance(dxObj.getId())
         ).toVector
-        System.err.println(s"analysis has ${outputFiles.length} verified output files")
+        appletLog(s"analysis has ${outputFiles.length} verified output files")
 
         outputFiles
     }
@@ -94,7 +95,7 @@ object RunnerWorkflowOutputs {
         val dxAnalysis = dxEnv.getJob.describe.getAnalysis
         val outFolder = dxAnalysis.describe.getFolder
         val intermFolder = outFolder + "/" + Utils.INTERMEDIATE_RESULTS_FOLDER
-        System.err.println(s"proj=${dxProjDesc.getName} outFolder=${outFolder}")
+        appletLog(s"proj=${dxProjDesc.getName} outFolder=${outFolder}")
 
         // find all analysis output files
         val analysisFiles: Vector[DXFile] = analysisFileOutputs(dxProject, dxAnalysis)
@@ -108,12 +109,12 @@ object RunnerWorkflowOutputs {
         }.toVector.flatten
         val exportIds:Set[String] = exportFiles.map(_.getId).toSet
         val exportNames:Seq[String] = bulkGetFilenames(exportFiles, dxProject)
-        System.err.println(s"exportFiles=${exportNames}")
+        appletLog(s"exportFiles=${exportNames}")
 
         // Figure out which of the files should be kept
         val intermediateFiles = analysisFiles.filter(x => !(exportIds contains x.getId))
         val iNames:Seq[String] = bulkGetFilenames(intermediateFiles, dxProject)
-        System.err.println(s"intermediate files=${iNames}")
+        appletLog(s"intermediate files=${iNames}")
         if (intermediateFiles.isEmpty)
             return
 
@@ -122,10 +123,10 @@ object RunnerWorkflowOutputs {
         val folderContents:DXContainer.FolderContents = dxProject.listFolder(outFolder)
         val subFolders: List[String] = folderContents.getSubfolders().asScala.toList
         if (!(subFolders contains intermFolder)) {
-            System.err.println(s"Creating intermediate results sub-folder ${intermFolder}")
+            appletLog(s"Creating intermediate results sub-folder ${intermFolder}")
             dxProject.newFolder(intermFolder)
         } else {
-            System.err.println(s"Intermediate results sub-folder ${intermFolder} already exists")
+            appletLog(s"Intermediate results sub-folder ${intermFolder} already exists")
         }
         dxProject.moveObjects(intermediateFiles.asJava, intermFolder)
     }
@@ -152,7 +153,7 @@ object RunnerWorkflowOutputs {
         val inputLines : String = Utils.readFileContent(jobInputPath)
         val inputs: Map[String, WdlVarLinks] = WdlVarLinks.loadJobInputsAsLinks(inputLines,
                                                                                 inputTypes)
-        System.err.println(s"Initial inputs=\n${prettyPrint(inputs)}")
+        appletLog(s"Initial inputs=\n${prettyPrint(inputs)}")
 
         // Make sure the workflow elements are all declarations
         val outputDecls: Seq[WorkflowOutput] = wf.children.map {
@@ -174,7 +175,7 @@ object RunnerWorkflowOutputs {
 
         val json = JsObject(m)
         val ast_pp = json.prettyPrint
-        System.err.println(s"exported = ${ast_pp}")
+        appletLog(s"exported = ${ast_pp}")
         Utils.writeFileContent(jobOutputPath, ast_pp)
 
         if (reorgFiles) {

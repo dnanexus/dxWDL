@@ -24,6 +24,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode
 import java.nio.file.{Path, Paths}
 import scala.collection.mutable.HashMap
 import spray.json._
+import Utils.appletLog
 import wdl4s.wdl.types._
 import wdl4s.wdl.values._
 import wdl4s.wdl.{Declaration, TaskOutput, WdlExpression, WdlTask}
@@ -109,7 +110,7 @@ case class RunnerTask(task:WdlTask,
         }.flatten
         val json = JsObject(jsOutputs.toMap)
         val ast_pp = json.prettyPrint
-        System.err.println(s"writeJobOutputs ${ast_pp}")
+        appletLog(s"writeJobOutputs ${ast_pp}")
         // write to the job outputs
         Utils.writeFileContent(jobOutputPath, ast_pp)
     }
@@ -246,7 +247,7 @@ case class RunnerTask(task:WdlTask,
                     |echo $$? > ${rcPath}
                     |""".stripMargin.trim + "\n"
             }
-        System.err.println(s"writing bash script to ${scriptPath}")
+        appletLog(s"writing bash script to ${scriptPath}")
         Utils.writeFileContent(scriptPath, script)
     }
 
@@ -269,7 +270,7 @@ case class RunnerTask(task:WdlTask,
         val dockerRunScript =
             s"""|#!/bin/bash -ex
                 |${dockerCmd}""".stripMargin
-        System.err.println(s"writing docker run script to ${dockerRunPath}")
+        appletLog(s"writing docker run script to ${dockerRunPath}")
         Utils.writeFileContent(dockerRunPath, dockerRunScript)
         dockerRunPath.toFile.setExecutable(true)
     }
@@ -281,7 +282,7 @@ case class RunnerTask(task:WdlTask,
                jobInfoPath: Path) : Unit = {
         // Extract types for the inputs
         val (inputTypes,_) = Utils.loadExecInfo(Utils.readFileContent(jobInfoPath))
-        System.err.println(s"WdlType mapping =${inputTypes}")
+        appletLog(s"WdlType mapping =${inputTypes}")
 
         // Read the job input file
         val inputLines : String = Utils.readFileContent(jobInputPath)
@@ -306,7 +307,7 @@ case class RunnerTask(task:WdlTask,
         bashSetupStreams match {
             case Some(snippet) =>
                 val path = getMetaDir().resolve("setup_streams")
-                System.err.println(s"writing bash script for stream(s) set up to ${path}")
+                appletLog(s"writing bash script for stream(s) set up to ${path}")
                 Utils.writeFileContent(path, snippet)
                 path.toFile.setExecutable(true)
             case None => ()
@@ -370,7 +371,7 @@ case class RunnerTask(task:WdlTask,
         val diskSpace = evalAttr("disks")
         val cores = evalAttr("cpu")
         val iType = instanceTypeDB.apply(dxInstaceType, memory, diskSpace, cores)
-        System.err.println(s"""|calcInstanceType memory=${memory} disk=${diskSpace}
+        appletLog(s"""|calcInstanceType memory=${memory} disk=${diskSpace}
                               |cores=${cores} instancetype=${iType}"""
                               .stripMargin.replaceAll("\n", " "))
         iType
@@ -417,7 +418,7 @@ case class RunnerTask(task:WdlTask,
                  jobInfoPath: Path) : Unit = {
         // Extract types for the inputs
         val (inputTypes,_) = Utils.loadExecInfo(Utils.readFileContent(jobInfoPath))
-        System.err.println(s"WdlType mapping =${inputTypes}")
+        appletLog(s"WdlType mapping =${inputTypes}")
 
         // Read the job input file, and load the inputs without downloading
         val inputLines : String = Utils.readFileContent(jobInputPath)
@@ -453,7 +454,7 @@ case class RunnerTask(task:WdlTask,
             outputs.map{ case (key, json) => key -> Utils.jsValueOfJsonNode(json) }.toMap
         )
         val ast_pp = json.prettyPrint
-        System.err.println(s"outputs = ${ast_pp}")
+        appletLog(s"outputs = ${ast_pp}")
         Utils.writeFileContent(jobOutputPath, ast_pp)
     }
 }

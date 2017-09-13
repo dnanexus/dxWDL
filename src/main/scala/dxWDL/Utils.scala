@@ -91,6 +91,7 @@ object Utils {
         }
     }
 
+    val APPLET_LOG_MSG_LIMIT = 1000
     val CHECKSUM_PROP = "dxWDL_checksum"
     val COMMON = "common"
     val DEFAULT_APPLET_TIMEOUT = 48
@@ -506,12 +507,6 @@ object Utils {
     }
 
 
-    // download platform file contents directly into an in-memory string
-    def downloadString(dxfile: DXFile) : String = {
-        val bytes = dxfile.downloadBytes()
-        new String(bytes, StandardCharsets.UTF_8)
-    }
-
     // download a file from the platform to a path on the local disk.
     //
     // Note: this function assumes that the target path does not exist yet
@@ -546,17 +541,6 @@ object Utils {
         }
         if (!rc)
             throw new Exception(s"Failure to download file ${path}")
-    }
-
-    def uploadString(buf: String, fileNameDbg: String) : JsValue = {
-        val dxfile = DXFile.newFile().setName(fileNameDbg).build()
-        dxfile.upload(buf.getBytes())
-        dxfile.closeAndWait()
-
-        // return a dx-link
-        val fid = dxfile.getId()
-        val v = s"""{ "$$dnanexus_link": "${fid}" }"""
-        v.parseJson
     }
 
     // Upload a local file to the platform, and return a json link
@@ -679,6 +663,16 @@ object Utils {
             s.flatMap(sanitizeChar)
         else
             ""
+    }
+
+    // Logging output for applets at runtime
+    def appletLog(msg:String) : Unit = {
+        val shortMsg =
+            if (msg.length > APPLET_LOG_MSG_LIMIT)
+                "Message is too long for logging"
+            else
+                msg
+        System.err.println(shortMsg)
     }
 
     // Used by the compiler to provide more information to the user
