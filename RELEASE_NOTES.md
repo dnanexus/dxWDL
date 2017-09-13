@@ -1,5 +1,8 @@
 # Release Notes
 
+## 0.44
+- Use hashes instead of files for non-native dx types
+
 ## 0.43
 - Speed up the creation of a dx:workflow. With one API call create
 all the workflow stages, and add set the checksum property.
