@@ -93,7 +93,7 @@ class UtilsTest extends FlatSpec with BeforeAndAfterEach with OneInstancePerTest
 
         val m : Map[String, JsValue] = x.asJsObject.fields
         val m2 = m + ("optional" -> JsBoolean(true))
-        val x2 = JsObject(m2)
+        val _ = JsObject(m2)
         //System.err.println(s"json=${x2.prettyPrint}")
     }
 

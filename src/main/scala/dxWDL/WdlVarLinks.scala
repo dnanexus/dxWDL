@@ -7,7 +7,7 @@ import com.fasterxml.jackson.databind.JsonNode
 import java.nio.file.Paths
 import net.jcazevedo.moultingyaml._
 import spray.json._
-import Utils.{dxFileOfJsValue, FLAT_FILES_SUFFIX, DXWorkflowStage}
+import Utils.{appletLog, dxFileOfJsValue, FLAT_FILES_SUFFIX, DXWorkflowStage}
 import wdl4s.wdl.types._
 import wdl4s.wdl.values._
 
@@ -180,16 +180,19 @@ object WdlVarLinks {
     }
 
     private def unmarshalWdlObject(m:Map[String, JsValue]) : Map[String, (WdlType, JsValue)] = {
-        m.map{ case (key, value) =>
-            val jsoFields = value.asJsObject.fields
-            if (!List("type", "value").forall(jsoFields contains _))
-                throw new Exception(s"JSON object ${value} does not contain fields {type, value}")
-            val wdlType = jsoFields("type") match {
-                case JsString(s) => WdlType.fromWdlString(s)
-                case other  => throw new Exception(s"type field is not a string (${other})")
-            }
-            val jsv = jsoFields("value")
-            key -> (wdlType, jsv)
+        m.map{
+            case (key, JsObject(fields)) =>
+                if (!List("type", "value").forall(fields contains _))
+                    throw new Exception(
+                        s"JSON object ${JsObject(fields)} does not contain fields {type, value}")
+                val wdlType = fields("type") match {
+                    case JsString(s) => WdlType.fromWdlString(s)
+                    case other  => throw new Exception(s"type field is not a string (${other})")
+                }
+                key -> (wdlType, fields("value"))
+            case (key, other) =>
+                appletLog(s"Unmarshalling error for  JsObject=${JsObject(m)}")
+                throw new Exception(s"key=${key}, expecting ${other} to be a JsObject")
         }.toMap
     }
 
@@ -221,11 +224,12 @@ object WdlVarLinks {
                 WdlMap(WdlMapType(keyType, valueType), m)
 
             case (WdlObjectType, JsObject(fields)) =>
-                val m = unmarshalWdlObject(fields).map{
-                    case (key, (wdlType, v:JsValue)) =>
-                        key -> evalCore(wdlType, v, force)
+                val m:Map[String, (WdlType, JsValue)] = unmarshalWdlObject(fields)
+                val m2 = m.map{
+                    case (key, (t, v)) =>
+                        key -> evalCore(t, v, force)
                 }.toMap
-                WdlObject(m)
+                WdlObject(m2)
 
             case (WdlPairType(lType, rType), JsObject(fields))
                     if (List("left", "right").forall(fields contains _)) =>
@@ -405,44 +409,37 @@ object WdlVarLinks {
     // do not download them. This is because accessing these files
     // later on will cause a WDL failure.
     def importFromDxExec(ioClass:IOClass, attrs:DeclAttrs, jsValue: JsValue) : WdlVarLinks = {
-        val wdlType = ioClass match {
-            case IOClass.BOOLEAN => WdlBooleanType
-            case IOClass.INT => WdlIntegerType
-            case IOClass.FLOAT => WdlFloatType
-            case IOClass.STRING => WdlStringType
-            case IOClass.FILE => WdlFileType
-            case IOClass.ARRAY_OF_BOOLEANS => WdlArrayType(WdlBooleanType)
-            case IOClass.ARRAY_OF_INTS => WdlArrayType(WdlIntegerType)
-            case IOClass.ARRAY_OF_FLOATS => WdlArrayType(WdlFloatType)
-            case IOClass.ARRAY_OF_STRINGS => WdlArrayType(WdlStringType)
-            case IOClass.ARRAY_OF_FILES => WdlArrayType(WdlFileType)
+        val (wdlType, jsv) = ioClass match {
+            case IOClass.BOOLEAN => (WdlBooleanType, jsValue)
+            case IOClass.INT => (WdlIntegerType, jsValue)
+            case IOClass.FLOAT => (WdlFloatType, jsValue)
+            case IOClass.STRING => (WdlStringType, jsValue)
+            case IOClass.FILE => (WdlFileType, jsValue)
+            case IOClass.ARRAY_OF_BOOLEANS => (WdlArrayType(WdlBooleanType), jsValue)
+            case IOClass.ARRAY_OF_INTS => (WdlArrayType(WdlIntegerType), jsValue)
+            case IOClass.ARRAY_OF_FLOATS => (WdlArrayType(WdlFloatType), jsValue)
+            case IOClass.ARRAY_OF_STRINGS => (WdlArrayType(WdlStringType), jsValue)
+            case IOClass.ARRAY_OF_FILES => (WdlArrayType(WdlFileType), jsValue)
             case IOClass.HASH =>
                 jsValue match {
-                    // An object, the type is embedded as a 'wdlType' field
-                    case JsObject(fields) if (fields contains "wdlType") =>
-                        fields("wdlType") match {
-                            case JsString(s) => WdlType.fromWdlString(s)
-                            case _ =>
-                                throw new Exception(s"malformed or missing wdlType field in ${jsValue}")
+                    case JsObject(fields) =>
+                        // An object, the type is embedded as a 'wdlType' field
+                        fields.get("wdlType") match {
+                            case Some(JsString(s)) =>
+                                val t = WdlType.fromWdlString(s)
+                                if (fields contains "value") {
+                                    // the value is encapsulated in the "value" field
+                                    (t, fields("value"))
+                                } else {
+                                    // strip the wdlType field
+                                    (t, JsObject(fields - "wdlType"))
+                                }
+                            case _ => throw new Exception(
+                                s"missing or malformed wdlType field in ${jsValue}")
                         }
-                    case _ =>
-                        throw new Exception(s"missing wdlType field in ${jsValue}")
-                }
-            case other => throw new Exception(s"unhandled IO class ${other}")
-        }
-        val jsv:JsValue = ioClass match {
-            case IOClass.HASH =>
-                // complex type
-                jsValue match {
-                    // An object, the type is embedded as a 'wdlType' field
-                    case JsObject(fields) if (fields contains "value") =>
-                        fields("value")
-                    case JsObject(_) => jsValue
                     case _ => throw new Exception(s"IO class is HASH, but JSON is ${jsValue}")
                 }
-            case _ =>
-                // native dx type
-                jsValue
+            case other => throw new Exception(s"unhandled IO class ${other}")
         }
         WdlVarLinks(wdlType, attrs, DxlValue(jsv))
     }
