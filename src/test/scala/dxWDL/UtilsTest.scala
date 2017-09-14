@@ -44,49 +44,6 @@ class UtilsTest extends FlatSpec with BeforeAndAfterEach with OneInstancePerTest
         checkMarshal(WdlFloat(4.2))
     }
 
-    it should "parse job executable info, and extract help strings" in {
-        val jobInfo = """{"links": ["file-F11jP2Q0ZvgYvPv77JBXgyB0"], "inputSpec": [{"help": "Int", "name": "ai", "class": "int"}, {"help": "Int", "name": "bi", "class": "int"}, {"optional": true, "name": "dbg_sleep", "class": "int"}], "dxapi": "1.0.0", "id": "applet-F11jP700ZvgvzxJ3Jq7p6jJZ", "title": "", "runSpec": {"execDepends": [{"name": "dx-java-bindings"}, {"name": "openjdk-8-jre-headless"}, {"package_manager": "apt", "name": "dx-toolkit"}], "bundledDependsByRegion": {"aws:us-east-1": [{"name": "resources.tar.gz", "id": {"$dnanexus_link": "file-F11jP2Q0ZvgYvPv77JBXgyB0"}}]}, "bundledDepends": [{"name": "resources.tar.gz", "id": {"$dnanexus_link": "file-F11jP2Q0ZvgYvPv77JBXgyB0"}}], "systemRequirements": {"main": {"instanceType": "mem1_ssd1_x2"}}, "executionPolicy": {}, "release": "14.04", "interpreter": "bash", "distribution": "Ubuntu"}, "access": {"network": []}, "state": "closed", "folder": "/", "description": "", "tags": [], "outputSpec": [{"help": "Int", "name": "sum", "class": "int"}], "sponsored": false, "createdBy": {"user": "user-orodeh"}, "class": "applet", "types": [], "hidden": false, "name": "add3.Add", "created": 1480820636000, "modified": 1480871955198, "summary": "", "project": "container-F12504j0188Bgk6pFXZY6PP3", "developerNotes": ""}"""
-
-        val (infoIn,infoOut) = Utils.loadExecInfo(jobInfo)
-        assert(infoIn("ai") == Some(WdlIntegerType))
-        assert(infoIn("bi") == Some(WdlIntegerType))
-        assert(infoIn("dbg_sleep") == None)
-        assert(infoOut("sum") == Some(WdlIntegerType))
-    }
-
-    it should "parse job executable info (II)" in {
-        val jobInfo = """{
-        "inputSpec": [
-            {
-                "help": "Int",
-                "name": "ai",
-                "class": "int"
-            }
-        ],
-        "dxapi": "1.0.0",
-        "id": "applet-F2KGBj80ZvgjbQY30vQ4qKZY",
-        "title": "",
-        "runSpec": {
-            "executionPolicy": {},
-            "release": "14.04",
-            "interpreter": "bash",
-            "distribution": "Ubuntu"
-        },
-        "outputSpec": [
-            {
-                "help": "Int",
-                "name": "ai",
-                "class": "int"
-            }
-        ],
-        "class": "applet",
-        "types": []
-    }"""
-
-        var (info,_) = Utils.loadExecInfo(jobInfo)
-        assert(info("ai") == Some(WdlIntegerType))
-    }
-
     it should "sanitize json strings" in {
         List("A", "2211", "abcf", "abc ABC 123").foreach(s =>
             assert(Utils.sanitize(s) == s)
@@ -136,7 +93,7 @@ class UtilsTest extends FlatSpec with BeforeAndAfterEach with OneInstancePerTest
 
         val m : Map[String, JsValue] = x.asJsObject.fields
         val m2 = m + ("optional" -> JsBoolean(true))
-        val x2 = JsObject(m2)
+        val _ = JsObject(m2)
         //System.err.println(s"json=${x2.prettyPrint}")
     }
 

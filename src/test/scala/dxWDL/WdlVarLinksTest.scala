@@ -1,25 +1,25 @@
 package dxWDL
 
-import org.scalatest.{BeforeAndAfterEach, FlatSpec}
+import com.dnanexus.{IOClass}
+import org.scalatest.FlatSpec
 import spray.json._
 import wdl4s.wdl.types._
 
-class WdlVarLinksTest extends FlatSpec with BeforeAndAfterEach {
+class WdlVarLinksTest extends FlatSpec {
 
     it should "import JSON values" in {
-        val x = WdlVarLinks.importFromDxExec(WdlBooleanType, DeclAttrs.empty, JsBoolean(true))
-        //System.err.println(x)
+        val wvl = WdlVarLinks.importFromDxExec(IOClass.BOOLEAN, DeclAttrs.empty, JsBoolean(true))
+        assert(wvl.wdlType == WdlBooleanType)
 
-        val y = WdlVarLinks.importFromDxExec(WdlArrayType(WdlIntegerType),
-                                  DeclAttrs.empty,
-                                  JsArray(Vector(JsNumber(1), JsNumber(2.3))))
-        //System.err.println(y)
+        val wvl2 = WdlVarLinks.importFromDxExec(IOClass.ARRAY_OF_FLOATS, DeclAttrs.empty,
+                                                JsArray(Vector(JsNumber(1), JsNumber(2.3))))
+        assert(wvl2.wdlType == WdlArrayType(WdlFloatType))
 
-        val z = WdlVarLinks.importFromDxExec(WdlArrayType(WdlStringType),
-                                  DeclAttrs.empty,
-                                  JsArray(Vector(JsString("hello"),
-                                                 JsString("sunshine"),
-                                                 JsString("ride"))))
-        //System.err.println(z)
+        val wvl3 = WdlVarLinks.importFromDxExec(IOClass.ARRAY_OF_STRINGS,
+                                                DeclAttrs.empty,
+                                                JsArray(Vector(JsString("hello"),
+                                                               JsString("sunshine"),
+                                                               JsString("ride"))))
+        assert(wvl3.wdlType == WdlArrayType(WdlStringType))
     }
 }

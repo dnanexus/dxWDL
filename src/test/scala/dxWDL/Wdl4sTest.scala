@@ -13,16 +13,6 @@ class Wdl4sTest extends FlatSpec with BeforeAndAfterEach {
     }
 
 
-    // Look for a call inside a namespace.
-    private def getCallFromNamespace(ns : WdlNamespaceWithWorkflow, callName : String ) : WdlCall = {
-        val wf: WdlWorkflow = ns.workflow
-        wf.findCallByName(callName) match {
-            case None => throw new AppInternalException(s"Call ${callName} not found in WDL file")
-            case Some(call) => call
-        }
-    }
-
-
     // Fails with wdl4s v0.6, because
     //   '5 * (1 + 1)'  is converted into '5 * 1 + 1'
     //
@@ -146,12 +136,10 @@ class Wdl4sTest extends FlatSpec with BeforeAndAfterEach {
             //&&
             //node.fullyQualifiedName != decl.fullyQualifiedName
         }
-        val dnScopeFQN = dnScopes.map{ x => x.fullyQualifiedName }
+        val _ = dnScopes.map{ x => x.fullyQualifiedName }
 
         // Also check if the declaration appears in the workflow output
         val unusedInWfOutput = wfOutputs.forall(x => !(x.upstream contains decl))
-
-        val allOutputs = wfOutputs.map(_.fullyQualifiedName)
 
         // the declaration is used only locally
         val retval = dnScopes.isEmpty && unusedInWfOutput

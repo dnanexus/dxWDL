@@ -131,12 +131,10 @@ case class CompilerNative(dxWDLrtId: String,
         val name = Utils.encodeAppletVarName(varName)
         def mkPrimitive(dxType: String) : Vector[Map[String, JsValue]] = {
             Vector(Map("name" -> JsString(name),
-                       "help" -> JsString(wdlType.toWdlString),
                        "class" -> JsString(dxType)))
         }
         def mkPrimitiveArray(dxType: String) : Vector[Map[String, JsValue]] = {
             Vector(Map("name" -> JsString(name),
-                       "help" -> JsString(wdlType.toWdlString),
                        "class" -> JsString("array:" ++ dxType),
                        "optional" -> JsBoolean(true)))
         }
@@ -148,7 +146,6 @@ case class CompilerNative(dxWDLrtId: String,
             // so that the WdlVarLinks.loadJobInputsAsLinks method
             // will not interpret it.
             Vector(Map("name" -> JsString(name),
-                       "help" -> JsString(wdlType.toWdlString),
                        "class" -> JsString("hash")),
                    Map("name" -> JsString(name + Utils.FLAT_FILES_SUFFIX),
                        "class" -> JsString("array:file"),

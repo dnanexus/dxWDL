@@ -6,13 +6,13 @@ import wdl4s.wdl._
 class CompilerUnitTest extends FlatSpec with BeforeAndAfterEach {
 
     // Look for a call inside a namespace.
-    private def getCallFromNamespace(ns : WdlNamespaceWithWorkflow, callName : String ) : WdlCall = {
+/*    private def getCallFromNamespace(ns : WdlNamespaceWithWorkflow, callName : String ) : WdlCall = {
         val wf: WdlWorkflow = ns.workflow
         wf.findCallByName(callName) match {
             case None => throw new AppInternalException(s"Call ${callName} not found in WDL file")
             case Some(call) => call
         }
-    }
+    }*/
 
     // TODO
     //
@@ -47,6 +47,7 @@ class CompilerUnitTest extends FlatSpec with BeforeAndAfterEach {
         val outputs : Seq[(String, WdlType, WdlValue)] = evalCall(call, inputs)
     }*/
 
+    /*
     "Compiler" should "Report a useful error for a missing reference" in {
         val wdl = """|task mul2 {
                      |    Int i
@@ -65,9 +66,9 @@ class CompilerUnitTest extends FlatSpec with BeforeAndAfterEach {
                      |    call mul2 { input: i=C }
                      |}
                      |""".stripMargin.trim
-    }
+    }*/
 
-    it should "Handle array access" in {
+/*    it should "Handle array access" in {
         val wdl = """|task diff {
                      |  File A
                      |  File B
@@ -90,7 +91,7 @@ class CompilerUnitTest extends FlatSpec with BeforeAndAfterEach {
                      |}""".stripMargin.trim
 
         val ns = WdlNamespaceWithWorkflow.load(wdl, Seq.empty).get
-        val wf: WdlWorkflow = ns.workflow
+        //val wf: WdlWorkflow = ns.workflow
         val call : WdlCall = getCallFromNamespace(ns, "diff")
 
         //var env : Compile.CallEnv = Map.empty[String, WdlVarLinks]
@@ -99,15 +100,9 @@ class CompilerUnitTest extends FlatSpec with BeforeAndAfterEach {
             System.err.println(s"${expr} --> ${expr.ast}")
             closure = Compile.updateClosure(wf, closure, env, expr, true)
         }*/
-    }
+    } */
 
-    it should "Provide proper error code for unsupported types" in {
-        val wdl = """|workflow foo {
-                     |  Array[Array[Array[Int]]] aaai
-                     |}"""
-    }
-
-
+    /*
     it should "Provide proper error code for declarations inside scatters" in {
         val wdl = """|task inc {
                      | Int i
@@ -128,7 +123,7 @@ class CompilerUnitTest extends FlatSpec with BeforeAndAfterEach {
                      |    String s = "abc"
                      |    call inc as inc2 {input: i=i}
                      |}"""
-    }
+    }*/
 
     def compareIgnoreWhitespace(a: String, b:String): Boolean = {
         val retval = (a.replaceAll("\\s+", "") == b.replaceAll("\\s+", ""))
@@ -150,6 +145,7 @@ class CompilerUnitTest extends FlatSpec with BeforeAndAfterEach {
         assert(compareIgnoreWhitespace(strWdlCode, wdl))
     }
 
+    /*
     it should "Pretty print workflow" in {
         val wdl = """|task inc {
                      |  Int i
@@ -176,6 +172,6 @@ class CompilerUnitTest extends FlatSpec with BeforeAndAfterEach {
             case _ => throw new Exception("WDL file contains no workflow")
         }
         val strWdlCode = WdlPrettyPrinter(true, None).apply(wf, 0).mkString("\n")
-        //assert(compareIgnoreWhitespace(strWdlCode, wdl))
-    }
+        assert(compareIgnoreWhitespace(strWdlCode, wdl))
+    }*/
 }

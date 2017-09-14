@@ -281,12 +281,12 @@ case class RunnerTask(task:WdlTask,
                jobOutputPath : Path,
                jobInfoPath: Path) : Unit = {
         // Extract types for the inputs
-        val (inputTypes,_) = Utils.loadExecInfo(Utils.readFileContent(jobInfoPath))
-        appletLog(s"WdlType mapping =${inputTypes}")
+        val (inputSpec,_) = Utils.loadExecInfo
+        appletLog(s"WdlType mapping =${inputSpec}")
 
         // Read the job input file
         val inputLines : String = Utils.readFileContent(jobInputPath)
-        var inputWvls = WdlVarLinks.loadJobInputsAsLinks(inputLines, inputTypes)
+        var inputWvls = WdlVarLinks.loadJobInputsAsLinks(inputLines, inputSpec)
 
         // add the attributes from the parameter_meta section of the task
          inputWvls = inputWvls.map{ case (varName, wvl) =>
@@ -417,12 +417,12 @@ case class RunnerTask(task:WdlTask,
                  jobOutputPath : Path,
                  jobInfoPath: Path) : Unit = {
         // Extract types for the inputs
-        val (inputTypes,_) = Utils.loadExecInfo(Utils.readFileContent(jobInfoPath))
-        appletLog(s"WdlType mapping =${inputTypes}")
+        val (inputSpec,_) = Utils.loadExecInfo
+        appletLog(s"WdlType mapping =${inputSpec}")
 
         // Read the job input file, and load the inputs without downloading
         val inputLines : String = Utils.readFileContent(jobInputPath)
-        val inputWvls = WdlVarLinks.loadJobInputsAsLinks(inputLines, inputTypes)
+        val inputWvls = WdlVarLinks.loadJobInputsAsLinks(inputLines, inputSpec)
 
         // Figure out the available instance types, and their prices,
         // by reading the file
