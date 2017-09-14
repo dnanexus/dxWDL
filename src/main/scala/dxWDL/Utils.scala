@@ -112,7 +112,6 @@ object Utils {
     val TMP_VAR_NAME_PREFIX = "xtmp"
     val UPLOAD_RETRY_LIMIT = DOWNLOAD_RETRY_LIMIT
     val UNIVERSAL_FILE_PREFIX = "dx://"
-    val WDL_SNIPPET_FILENAME = "source.wdl"
 
     lazy val dxEnv = DXEnvironment.create()
 

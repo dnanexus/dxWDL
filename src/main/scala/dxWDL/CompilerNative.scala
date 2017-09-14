@@ -9,95 +9,11 @@ import com.dnanexus.{DXApplet, DXAPI, DXDataObject, DXJSON, DXProject, DXSearch,
 import java.nio.file.{Files, Paths, Path}
 import java.security.MessageDigest
 import scala.collection.JavaConverters._
-import scala.collection.mutable.HashMap
 import spray.json._
-import Utils.{AppletLinkInfo, CHECKSUM_PROP, WDL_SNIPPET_FILENAME, DXWorkflowStage}
+import Utils.{AppletLinkInfo, CHECKSUM_PROP, DXWorkflowStage,
+    INSTANCE_TYPE_DB_FILENAME, LINK_INFO_FILENAME}
 import wdl4s.parser.WdlParser.Ast
 import wdl4s.wdl.types._
-
-// Keep all the information about an applet in packaged form
-case class AppletInfo(name:String, applet:DXApplet, digest: String)
-
-// Take a snapshot of the platform target path before the build starts.
-// Make an efficient directory of all the applets that exist there. Update
-// the directory when an applet is compiled.
-case class AppletDirectory(ns: IR.Namespace,
-                           dxProject:DXProject,
-                           folder: String,
-                           verbose: Utils.Verbose) {
-    private lazy val appletDir : HashMap[String, Vector[AppletInfo]] = bulkAppletLookup()
-
-    // Instead of looking applets one by one, perform a bulk lookup, and
-    // find all the applets in the target directory. Setup an easy to
-    // use map with information on each applet name.
-    private def bulkAppletLookup() : HashMap[String, Vector[AppletInfo]] = {
-        // get all the applet names
-        val allAppletNames: Vector[String] = ns.applets.map{ case (k,_) => k }.toVector
-
-        val dxAppletsInFolder: List[DXApplet] = DXSearch.findDataObjects()
-            .inFolder(dxProject, folder)
-            .withClassApplet()
-            .includeDescribeOutput(DXDataObject.DescribeOptions.get().withProperties())
-            .execute().asList().asScala.toList
-
-        // Leave only applets that could belong to the workflow
-        val dxApplets = dxAppletsInFolder.filter{ dxApl =>
-            val name = dxApl.getCachedDescribe().getName
-            allAppletNames contains name
-        }
-
-        // filter out an
-        val aplInfoList: List[AppletInfo] = dxApplets.map{ dxApl =>
-            val desc = dxApl.getCachedDescribe()
-            val name = desc.getName()
-            val props: Map[String, String] = desc.getProperties().asScala.toMap
-            val digest:String = props.get(CHECKSUM_PROP) match {
-                case None =>
-                    System.err.println(
-                        s"""|Applet ${name} has no checksum, and is invalid. It was probably
-                            |not created with dxWDL. Please remove it with:
-                            |dx rm ${dxProject}:${folder}/${name}
-                            |""".stripMargin.trim)
-                    throw new Exception("Encountered invalid applet, not created with dxWDL")
-                case Some(x) => x
-            }
-            AppletInfo(name, dxApl, digest)
-        }
-
-        // There could be multiple versions of the same applet, collect their
-        // information in vectors
-        val hm = HashMap.empty[String, Vector[AppletInfo]]
-        aplInfoList.foreach{ case aplInfo =>
-            val name = aplInfo.name
-            hm.get(name) match {
-                case None =>
-                    // first time we have seen this applet
-                    hm(name) = Vector(aplInfo)
-                case Some(vec) =>
-                    // there is already at least one applet by this name
-                    hm(name) = hm(name) :+ aplInfo
-            }
-        }
-        hm
-    }
-
-    def lookup(aplName: String) : Vector[AppletInfo] = {
-        appletDir.get(aplName) match {
-            case None => Vector.empty
-            case Some(v) => v
-        }
-    }
-
-    def insert(name:String, applet:DXApplet, digest: String) : Unit = {
-        val aInfo = AppletInfo(name, applet, digest)
-        appletDir.get(name) match {
-            case None =>
-                appletDir(name) = Vector(aInfo)
-            case Some(vec) =>
-                appletDir(name) = vec :+ aInfo
-        }
-    }
-}
 
 case class CompilerNative(dxWDLrtId: String,
                           dxProject: DXProject,
@@ -182,18 +98,46 @@ case class CompilerNative(dxWDLrtId: String,
         }
     }
 
+    def genPreamble(wdlCode:String,
+                    linkInfo: Option[String],
+                    dbInstance: Option[String]): String = {
+        val part1 =
+            s"""|    echo "working directory =$${PWD}"
+                |    echo "home dir =$${HOME}"
+                |
+                |    # write the WDL script into a file
+                |    cat >$${DX_FS_ROOT}/source.wdl <<'EOL'
+                |${wdlCode}
+                |EOL
+                |""".stripMargin.trim
+
+        val part2 = linkInfo.map{ info =>
+            s"""|    # write the linking information into a file
+                |    cat >$${DX_FS_ROOT}/${LINK_INFO_FILENAME} <<'EOL'
+                |${info}
+                |EOL
+                |""".stripMargin.trim
+        }
+
+        val part3 = dbInstance.map { db =>
+            s"""|    # write the instance type DB
+                |    cat >$${DX_FS_ROOT}/${INSTANCE_TYPE_DB_FILENAME} <<'EOL'
+                |${db}
+                |EOL
+                |""".stripMargin.trim
+        }
+
+        List(Some(part1), part2, part3).flatten.mkString("\n")
+    }
+
     def genBashScriptTaskBody(): String = {
-        s"""|    echo "working directory =$${PWD}"
-            |    echo "home dir =$${HOME}"
-            |    echo "user= $${USER}"
-            |
-            |    # Keep track of streaming files. Each such file
+        s"""|    # Keep track of streaming files. Each such file
             |    # is converted into a fifo, and a 'dx cat' process
             |    # runs in the background.
             |    background_pids=()
             |
             |    # evaluate input arguments, and download input files
-            |    java -jar $${DX_FS_ROOT}/dxWDL.jar internal taskProlog $${DX_FS_ROOT}/${WDL_SNIPPET_FILENAME} $${HOME}
+            |    java -jar $${DX_FS_ROOT}/dxWDL.jar internal taskProlog $${DX_FS_ROOT}/source.wdl $${HOME}
             |    # Debugging outputs
             |    ls -lR
             |    cat $${HOME}/execution/meta/script
@@ -259,66 +203,56 @@ case class CompilerNative(dxWDLrtId: String,
             |    fi
             |
             |    # evaluate applet outputs, and upload result files
-            |    java -jar $${DX_FS_ROOT}/dxWDL.jar internal taskEpilog $${DX_FS_ROOT}/${WDL_SNIPPET_FILENAME} $${HOME}
+            |    java -jar $${DX_FS_ROOT}/dxWDL.jar internal taskEpilog $${DX_FS_ROOT}/source.wdl $${HOME}
             |""".stripMargin.trim
     }
 
-    def genBashScript(appKind: IR.AppletKind, instanceType: IR.InstanceType) : String = {
+    def genBashScriptNonTask(miniCmd:String,
+                             setupFilesScript:String) : String = {
+        s"""|#!/bin/bash -ex
+            |main() {
+            |${setupFilesScript}
+            |    java -jar $${DX_FS_ROOT}/dxWDL.jar internal ${miniCmd} $${DX_FS_ROOT}/source.wdl $${HOME}
+            |}""".stripMargin.trim
+    }
+
+    def genBashScript(appKind: IR.AppletKind,
+                      instanceType: IR.InstanceType,
+                      wdlCode: String,
+                      linkInfo: Option[String],
+                      dbInstance: Option[String]) : String = {
+        val setupFilesScript = genPreamble(wdlCode, linkInfo, dbInstance)
         appKind match {
             case IR.AppletKindEval =>
-                s"""|#!/bin/bash -ex
-                    |main() {
-                    |    echo "working directory =$${PWD}"
-                    |    echo "home dir =$${HOME}"
-                    |    echo "user= $${USER}"
-                    |    java -jar $${DX_FS_ROOT}/dxWDL.jar internal eval $${DX_FS_ROOT}/${WDL_SNIPPET_FILENAME} $${HOME}
-                    |}""".stripMargin.trim
-
+                genBashScriptNonTask("eval", setupFilesScript)
             case (IR.AppletKindIf(_) | IR.AppletKindScatter(_)) =>
-                s"""|#!/bin/bash -ex
-                    |main() {
-                    |    echo "working directory =$${PWD}"
-                    |    echo "home dir =$${HOME}"
-                    |    echo "user= $${USER}"
-                    |    java -jar $${DX_FS_ROOT}/dxWDL.jar internal miniWorkflow $${DX_FS_ROOT}/${WDL_SNIPPET_FILENAME} $${HOME}
-                    |}""".stripMargin.trim
-
+                genBashScriptNonTask("miniWorkflow", setupFilesScript)
             case IR.AppletKindTask =>
                 instanceType match {
                     case IR.InstanceTypeDefault | IR.InstanceTypeConst(_) =>
                         s"""|#!/bin/bash -ex
                             |main() {
+                            |${setupFilesScript}
                             |${genBashScriptTaskBody()}
                             |}""".stripMargin
                     case IR.InstanceTypeRuntime =>
                         s"""|#!/bin/bash -ex
                             |main() {
+                            |${setupFilesScript}
                             |    # evaluate the instance type, and launch a sub job on it
-                            |    java -jar $${DX_FS_ROOT}/dxWDL.jar internal taskRelaunch $${DX_FS_ROOT}/${WDL_SNIPPET_FILENAME} $${HOME}
+                            |    java -jar $${DX_FS_ROOT}/dxWDL.jar internal taskRelaunch $${DX_FS_ROOT}/source.wdl $${HOME}
                             |}
                             |
                             |# We are on the correct instance type, run the task
                             |body() {
+                            |${setupFilesScript}
                             |${genBashScriptTaskBody()}
                             |}""".stripMargin.trim
                 }
-
             case IR.AppletKindWorkflowOutputs =>
-                s"""|#!/bin/bash -ex
-                    |main() {
-                    |    echo "working directory =$${PWD}"
-                    |    echo "home dir =$${HOME}"
-                    |    echo "user= $${USER}"
-                    |    java -jar $${DX_FS_ROOT}/dxWDL.jar internal workflowOutputs $${DX_FS_ROOT}/${WDL_SNIPPET_FILENAME} $${HOME}
-                    |}""".stripMargin.trim
+                genBashScriptNonTask("workflowOutputs", setupFilesScript)
             case IR.AppletKindWorkflowOutputsAndReorg =>
-                s"""|#!/bin/bash -ex
-                    |main() {
-                    |    echo "working directory =$${PWD}"
-                    |    echo "home dir =$${HOME}"
-                    |    echo "user= $${USER}"
-                    |    java -jar $${DX_FS_ROOT}/dxWDL.jar internal workflowOutputsAndReorg $${DX_FS_ROOT}/${WDL_SNIPPET_FILENAME} $${HOME}
-                    |}""".stripMargin.trim
+                genBashScriptNonTask("workflowOutputsAndReorg", setupFilesScript)
         }
     }
 
@@ -347,40 +281,40 @@ case class CompilerNative(dxWDLrtId: String,
         Files.createDirectory(appletDir)
 
         val srcDir = Files.createDirectory(Paths.get(appletDir.toString(), "src"))
-        val resourcesDir = Files.createDirectory(Paths.get(appletDir.toString(), "resources"))
 
-        // write the bash script
-        val bashScript = genBashScript(applet.kind, applet.instanceType)
-        Utils.writeFileContent(srcDir.resolve("code.sh"), bashScript)
-
-        // Copy the WDL file.
-        //
+        // generate the wdl source file
         val wdlCode:String = WdlPrettyPrinter(false, None).apply(applet.ns, 0)
             .mkString("\n")
-        Utils.writeFileContent(resourcesDir.resolve(Utils.WDL_SNIPPET_FILENAME),
-                               wdlCode)
 
-        // write linking information
-        if (!aplLinks.isEmpty) {
-            val linkInfo = JsObject(
-                aplLinks.map{ case (key, (irApplet, dxApplet)) =>
-                    // Reduce the information to what will be needed for runtime linking.
-                    val appInputDefs: Map[String, WdlType] = irApplet.inputs.map{
-                        case IR.CVar(name, wdlType, _, _) => (name -> wdlType)
-                    }.toMap
-                    val ali = AppletLinkInfo(appInputDefs, dxApplet)
-                    key -> AppletLinkInfo.writeJson(ali)
-                }.toMap
-            )
-            Utils.writeFileContent(resourcesDir.resolve(Utils.LINK_INFO_FILENAME),
-                                   linkInfo.prettyPrint)
-        }
+        // create linking information
+        val linkInfo:Option[String] =
+            if (aplLinks.isEmpty) {
+                None
+            } else {
+                val linkInfo = JsObject(
+                    aplLinks.map{ case (key, (irApplet, dxApplet)) =>
+                        // Reduce the information to what will be needed for runtime linking.
+                        val appInputDefs: Map[String, WdlType] = irApplet.inputs.map{
+                            case IR.CVar(name, wdlType, _, _) => (name -> wdlType)
+                        }.toMap
+                        val ali = AppletLinkInfo(appInputDefs, dxApplet)
+                        key -> AppletLinkInfo.writeJson(ali)
+                    }.toMap)
+                Some(linkInfo.prettyPrint)
+            }
 
         // Add the pricing model, if this will be needed
-        if (applet.instanceType == IR.InstanceTypeRuntime) {
-            Utils.writeFileContent(resourcesDir.resolve(Utils.INSTANCE_TYPE_DB_FILENAME),
-                                   instanceTypeDB.toJson.prettyPrint)
-        }
+        val dbInstance =
+            if (applet.instanceType == IR.InstanceTypeRuntime) {
+                Some(instanceTypeDB.toJson.prettyPrint)
+            } else {
+                None
+            }
+
+        // write the bash script
+        val bashScript = genBashScript(applet.kind, applet.instanceType,
+                                       wdlCode, linkInfo, dbInstance)
+        Utils.writeFileContent(srcDir.resolve("code.sh"), bashScript)
 
         // write the dxapp.json
         Utils.writeFileContent(appletDir.resolve("dxapp.json"), appJson.prettyPrint)
