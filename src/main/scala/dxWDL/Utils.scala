@@ -115,8 +115,6 @@ object Utils {
 
     lazy val dxEnv = DXEnvironment.create()
 
-    lazy val dxEnv = DXEnvironment.create()
-
     // Lookup cache for projects. This saves
     // repeated searches for projects we already found.
     val projectDict = HashMap.empty[String, DXProject]
