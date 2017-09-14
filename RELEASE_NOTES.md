@@ -4,6 +4,8 @@
 - Use hashes instead of files for non-native dx types
 - Do not use the help field in applet input/output arguments to carry
   WDL typing information.
+- Fold small text files into the applet bash script. This speeds up the 'dx build'
+  command, and avoids uploading the them as separate platform files.
 
 ## 0.43
 - Speed up the creation of a dx:workflow. With one API call create

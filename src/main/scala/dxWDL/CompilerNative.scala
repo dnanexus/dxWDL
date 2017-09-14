@@ -98,9 +98,9 @@ case class CompilerNative(dxWDLrtId: String,
         }
     }
 
-    def genPreamble(wdlCode:String,
-                    linkInfo: Option[String],
-                    dbInstance: Option[String]): String = {
+    def genSourceFiles(wdlCode:String,
+                       linkInfo: Option[String],
+                       dbInstance: Option[String]): String = {
         val part1 =
             s"""|    echo "working directory =$${PWD}"
                 |    echo "home dir =$${HOME}"
@@ -221,7 +221,7 @@ case class CompilerNative(dxWDLrtId: String,
                       wdlCode: String,
                       linkInfo: Option[String],
                       dbInstance: Option[String]) : String = {
-        val setupFilesScript = genPreamble(wdlCode, linkInfo, dbInstance)
+        val setupFilesScript = genSourceFiles(wdlCode, linkInfo, dbInstance)
         appKind match {
             case IR.AppletKindEval =>
                 genBashScriptNonTask("eval", setupFilesScript)
