@@ -2,12 +2,12 @@
 // DNAx JSON representations.
 package dxWDL
 
-import com.dnanexus.{DXFile, DXJob}
+import com.dnanexus.{DXFile, DXJob, IOClass}
 import com.fasterxml.jackson.databind.JsonNode
 import java.nio.file.Paths
 import net.jcazevedo.moultingyaml._
 import spray.json._
-import Utils.{dxFileOfJsValue, DXWorkflowStage}
+import Utils.{dxFileOfJsValue, FLAT_FILES_SUFFIX, DXWorkflowStage}
 import wdl4s.wdl.types._
 import wdl4s.wdl.values._
 
@@ -386,17 +386,65 @@ object WdlVarLinks {
     // Dx allows hashes as an input/output type. If the JSON value is
     // not a hash (js-object), we need to add an outer layer to it.
     private def jsValueToDxHash(wdlType: WdlType, jsVal: JsValue) : JsValue = {
-        jsVal match {
-            case JsObject(_) => jsVal
-            case _ => JsObject("tag" -> jsVal)
+        val m:Map[String, JsValue] = jsVal match {
+            case JsObject(fields) =>
+                assert(!(fields contains "wdlType"))
+                fields
+            case _ =>
+                // Embed the value into a JSON object
+                Map("value" -> jsVal)
         }
+        val mWithType = m + ("wdlType" -> JsString(wdlType.toWdlString))
+        JsObject(mWithType)
     }
-    private def dxHashToJsValue(wdlType: WdlType, jsValue: JsValue) : JsValue = {
-        jsValue match {
-            case JsObject(fields) if fields contains "tag" =>
-                fields("tag")
-            case _ => jsValue
+
+    // Convert an input field to a dx-links structure. This allows
+    // passing it to other jobs.
+    //
+    // Note: we need to represent dx-files as local paths, even if we
+    // do not download them. This is because accessing these files
+    // later on will cause a WDL failure.
+    def importFromDxExec(ioClass:IOClass, attrs:DeclAttrs, jsValue: JsValue) : WdlVarLinks = {
+        val wdlType = ioClass match {
+            case IOClass.BOOLEAN => WdlBooleanType
+            case IOClass.INT => WdlIntegerType
+            case IOClass.FLOAT => WdlFloatType
+            case IOClass.STRING => WdlStringType
+            case IOClass.FILE => WdlFileType
+            case IOClass.ARRAY_OF_BOOLEANS => WdlArrayType(WdlBooleanType)
+            case IOClass.ARRAY_OF_INTS => WdlArrayType(WdlIntegerType)
+            case IOClass.ARRAY_OF_FLOATS => WdlArrayType(WdlFloatType)
+            case IOClass.ARRAY_OF_STRINGS => WdlArrayType(WdlStringType)
+            case IOClass.ARRAY_OF_FILES => WdlArrayType(WdlFileType)
+            case IOClass.HASH =>
+                jsValue match {
+                    // An object, the type is embedded as a 'wdlType' field
+                    case JsObject(fields) if (fields contains "wdlType") =>
+                        fields("wdlType") match {
+                            case JsString(s) => WdlType.fromWdlString(s)
+                            case _ =>
+                                throw new Exception(s"malformed or missing wdlType field in ${jsValue}")
+                        }
+                    case _ =>
+                        throw new Exception(s"missing wdlType field in ${jsValue}")
+                }
+            case other => throw new Exception(s"unhandled IO class ${other}")
         }
+        val jsv:JsValue = ioClass match {
+            case IOClass.HASH =>
+                // complex type
+                jsValue match {
+                    // An object, the type is embedded as a 'wdlType' field
+                    case JsObject(fields) if (fields contains "value") =>
+                        fields("value")
+                    case JsObject(_) => jsValue
+                    case _ => throw new Exception(s"IO class is HASH, but JSON is ${jsValue}")
+                }
+            case _ =>
+                // native dx type
+                jsValue
+        }
+        WdlVarLinks(wdlType, attrs, DxlValue(jsv))
     }
 
     // create input/output fields that bind the variable name [bindName] to
@@ -421,18 +469,18 @@ object WdlVarLinks {
             (bindEncName, jsNode)
         }
         def mkComplex(wdlType: WdlType) : Map[String,JsonNode] = {
-            val bindEncName_F = bindEncName + Utils.FLAT_FILES_SUFFIX
+            val bindEncName_F = bindEncName + FLAT_FILES_SUFFIX
             wvl.dxlink match {
                 case DxlValue(jsn) =>
                     // files that are embedded in the structure
                     val dxFiles = findDxFiles(jsn)
                     val jsFiles = dxFiles.map(x => Utils.jsValueOfJsonNode(x.getLinkAsJson))
                     // convert the top level structure into a hash
-                    val jsSrlFileLink = jsValueToDxHash(wdlType, jsn)
-                    Map(bindEncName -> Utils.jsonNodeOfJsValue(jsSrlFileLink),
+                    val hash = jsValueToDxHash(wdlType, jsn)
+                    Map(bindEncName -> Utils.jsonNodeOfJsValue(hash),
                         bindEncName_F -> Utils.jsonNodeOfJsValue(JsArray(jsFiles)))
                 case DxlStage(dxStage, ioRef, varEncName) =>
-                    val varEncName_F = varEncName + Utils.FLAT_FILES_SUFFIX
+                    val varEncName_F = varEncName + FLAT_FILES_SUFFIX
                     ioRef match {
                         case IORef.Input => Map(
                             bindEncName -> dxStage.getInputReference(varEncName),
@@ -444,13 +492,13 @@ object WdlVarLinks {
                         )
                     }
                 case DxlJob(dxJob, varEncName) =>
-                    val varEncName_F = varEncName + Utils.FLAT_FILES_SUFFIX
+                    val varEncName_F = varEncName + FLAT_FILES_SUFFIX
                     val jobId : String = dxJob.getId()
                     Map(bindEncName -> Utils.jsonNodeOfJsValue(Utils.makeJBOR(jobId, varEncName)),
                         bindEncName_F -> Utils.jsonNodeOfJsValue(Utils.makeJBOR(jobId, varEncName_F))
                     )
                 case DxlJobArray(dxJobVec, varEncName) =>
-                    val varEncName_F = varEncName + Utils.FLAT_FILES_SUFFIX
+                    val varEncName_F = varEncName + FLAT_FILES_SUFFIX
                     Map(bindEncName -> mkJborArray(dxJobVec, varEncName),
                         bindEncName_F -> mkJborArray(dxJobVec, varEncName_F))
             }
@@ -468,43 +516,26 @@ object WdlVarLinks {
     }
 
 
-    // Convert an input field to a dx-links structure. This allows
-    // passing it to other jobs.
-    //
-    // Note: we need to represent dx-files as local paths, even if we
-    // do not download them. This is because accessing these files
-    // later on will cause a WDL failure.
-    def importFromDxExec(wdlType: WdlType, attrs: DeclAttrs, jsValue: JsValue) : WdlVarLinks = {
-        WdlVarLinks(wdlType, attrs, DxlValue(dxHashToJsValue(wdlType, jsValue)))
-    }
-
     // Read the job-inputs JSON file, and convert the variables
     // to links that can be passed to other applets.
-    def loadJobInputsAsLinks(inputLines : String, closureTypes : Map[String, Option[WdlType]]) :
-            Map[String, WdlVarLinks] = {
-        // Read the job_inputs.json file. Convert it to a mapping from string to JSON
-        // value.
+    def loadJobInputsAsLinks(inputLines: String,
+                             inputSpec:Map[String, IOClass]): Map[String, WdlVarLinks] = {
+        // Discard auxiliary fields
         val jsonAst : JsValue = inputLines.parseJson
-        val fields : Map[String, JsValue] = jsonAst.asJsObject.fields
+        val fields : Map[String, JsValue] = jsonAst
+            .asJsObject.fields
+            .filter{ case (fieldName,_) => !fieldName.endsWith(FLAT_FILES_SUFFIX) }
 
         // Create a mapping from each key to its WDL value,
         // ignore all untyped fields.
-        closureTypes.map { case (key,wdlTypeOpt) =>
-            wdlTypeOpt match {
-                case None => None
-                case Some(WdlOptionalType(wType)) =>
-                    fields.get(key) match {
-                        case None => None
-                        case Some(jsValue) =>
-                            val wvl = importFromDxExec(wType, DeclAttrs.empty, jsValue)
-                            Some(key -> wvl)
-                    }
-                case Some(wType) =>
-                    val jsValue = fields(key)
-                    val wvl = importFromDxExec(wType, DeclAttrs.empty, jsValue)
-                    Some(key -> wvl)
+        fields.map { case (key,jsValue) =>
+            val ioClass = inputSpec.get(key) match {
+                case Some(x) => x
+                case None => throw new Exception(s"Key ${key} has no IO specification")
             }
-        }.flatten.toMap
+            val wvl = importFromDxExec(ioClass, DeclAttrs.empty, jsValue)
+            key -> wvl
+        }.toMap
     }
 
     // Merge an array of links into one. All the links

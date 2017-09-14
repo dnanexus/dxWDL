@@ -146,13 +146,13 @@ object RunnerWorkflowOutputs {
               jobInfoPath: Path,
               reorgFiles: Boolean) : Unit = {
         // Figure out input/output types
-        val (inputTypes, outputTypes) = Utils.loadExecInfo(Utils.readFileContent(jobInfoPath))
+        val (inputSpec, outputSpec) = Utils.loadExecInfo
 
         // Parse the inputs, do not download files from the platform,
         // they will be passed as links.
         val inputLines : String = Utils.readFileContent(jobInputPath)
-        val inputs: Map[String, WdlVarLinks] = WdlVarLinks.loadJobInputsAsLinks(inputLines,
-                                                                                inputTypes)
+        val inputs: Map[String, WdlVarLinks] =
+            WdlVarLinks.loadJobInputsAsLinks(inputLines, inputSpec)
         appletLog(s"Initial inputs=\n${prettyPrint(inputs)}")
 
         // Make sure the workflow elements are all declarations

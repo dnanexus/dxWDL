@@ -491,18 +491,16 @@ object RunnerMiniWorkflow {
               jobOutputPath : Path,
               jobInfoPath: Path) : Unit = {
         // Extract types for closure inputs
-        val (closureTypes,outputTypes) = Utils.loadExecInfo(Utils.readFileContent(jobInfoPath))
-        appletLog(s"WdlType mapping =${closureTypes}")
-        val exportVars = outputTypes.collect{
-            case (varName, Some(_)) => varName
-        }.toSet
+        val (inputSpec, outputSpec) = Utils.loadExecInfo
+        appletLog(s"WdlType mapping =${inputSpec}")
+        val exportVars = outputSpec.keys.toSet
         appletLog(s"exportVars=${exportVars}")
 
         // Parse the inputs, do not download files from the platform.
         // They will be passed as links to the tasks.
         val inputLines : String = Utils.readFileContent(jobInputPath)
         val inputs : Map[String, WdlVarLinks] =
-            WdlVarLinks.loadJobInputsAsLinks(inputLines, closureTypes)
+            WdlVarLinks.loadJobInputsAsLinks(inputLines, inputSpec)
 
         // Run the workflow
         val cef = new CompilerErrorFormatter(wf.wdlSyntaxErrorFormatter.terminalMap)

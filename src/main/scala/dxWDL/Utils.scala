@@ -1,6 +1,7 @@
 package dxWDL
 
-import com.dnanexus.{DXApplet, DXAPI, DXFile, DXJSON, DXProject}
+import com.dnanexus.{DXApplet, DXAPI, DXEnvironment, DXFile, DXJSON, DXProject,
+    IOClass, InputParameter, OutputParameter}
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.node.ObjectNode
@@ -113,6 +114,8 @@ object Utils {
     val UNIVERSAL_FILE_PREFIX = "dx://"
     val WDL_SNIPPET_FILENAME = "source.wdl"
 
+    lazy val dxEnv = DXEnvironment.create()
+
     // Lookup cache for projects. This saves
     // repeated searches for projects we already found.
     val projectDict = HashMap.empty[String, DXProject]
@@ -169,46 +172,22 @@ object Utils {
     // Used to convert into the JSON datatype used by dxjava
     val objMapper : ObjectMapper = new ObjectMapper()
 
-    // Load the information from:
-    //   ${HOME}/dnanexus-executable.json
-    //
-    // We specifically need the help strings, which map each variable to
-    // its WDL type. The specification looks like this:
-    // [
-    //   {"help": "Int", "name": "bi", "class": "int"}, ...
-    // ]
-    def loadExecInfo(jobInfo: String) : (Map[String, Option[WdlType]], Map[String, Option[WdlType]]) = {
-        val info: JsValue = jobInfo.parseJson
-        val inputSpec: Vector[JsValue] = info.asJsObject.fields.get("inputSpec") match {
-            case None => Vector()
-            case Some(JsArray(x)) => x
-            case Some(_) => throw new AppInternalException("Bad format for exec information")
-        }
-        val outputSpec: Vector[JsValue] = info.asJsObject.fields.get("outputSpec") match {
-            case None => Vector()
-            case Some(JsArray(x)) => x
-            case Some(_) => throw new AppInternalException("Bad format for exec information")
-        }
-        def getJsString(js: JsValue) = {
-            js match {
-                case JsString(s) => s
-                case _ => throw new AppInternalException("Bad format for exec information: getJsString")
-            }
-        }
-        def wdlTypeOfVar(varDef: JsValue) : (String, Option[WdlType]) = {
-            val v = varDef.asJsObject
-            val name = getJsString(v.fields("name"))
-            v.fields.get("help") match {
-                case None => name -> None
-                case Some(x) =>
-                    val helpStr = getJsString(x)
-                    val wType : WdlType = WdlType.fromWdlString(helpStr)
-                    name -> Some(wType)
-            }
-        }
+    // Get the dx:classes for inputs and outputs
+    def loadExecInfo : (Map[String, IOClass], Map[String, IOClass]) = {
+        val dxapp : DXApplet = dxEnv.getJob().describe().getApplet()
+        val desc : DXApplet.Describe = dxapp.describe()
+        val inputSpecRaw: List[InputParameter] = desc.getInputSpecification().asScala.toList
+        val inputSpec:Map[String, IOClass] = inputSpecRaw.map(
+            iSpec => iSpec.getName -> iSpec.getIOClass
+        ).toMap
+        val outputSpecRaw: List[OutputParameter] = desc.getOutputSpecification().asScala.toList
+        val outputSpec:Map[String, IOClass] = outputSpecRaw.map(
+            iSpec => iSpec.getName -> iSpec.getIOClass
+        ).toMap
 
-        (inputSpec.map(wdlTypeOfVar).toMap,
-         outputSpec.map(wdlTypeOfVar).toMap)
+        // remove auxiliary fields
+        (inputSpec.filter{ case (fieldName,_) => !fieldName.endsWith(FLAT_FILES_SUFFIX) },
+         outputSpec.filter{ case (fieldName,_) => !fieldName.endsWith(FLAT_FILES_SUFFIX) })
     }
 
     def lookupProject(projName: String): DXProject = {
