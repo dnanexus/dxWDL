@@ -82,11 +82,6 @@ case class AppletDirectory(ns: IR.Namespace,
 
     def insert(name:String, applet:DXApplet, digest: String) : Unit = {
         val aInfo = AppletInfo(name, applet, digest)
-        appletDir.get(name) match {
-            case None =>
-                appletDir(name) = Vector(aInfo)
-            case Some(vec) =>
-                appletDir(name) = vec :+ aInfo
-        }
+        appletDir(name) = Vector(aInfo)
     }
 }

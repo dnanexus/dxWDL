@@ -5,13 +5,13 @@ package dxWDL
 // DX bindings
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.node.ObjectNode
-import com.dnanexus.{DXApplet, DXAPI, DXDataObject, DXJSON, DXProject, DXSearch, DXWorkflow}
-import java.nio.file.{Files, Paths, Path}
+import com.dnanexus.{DXApplet, DXAPI, DXDataObject, DXFile,
+    DXJSON, DXProject, DXRecord, DXSearch, DXWorkflow}
 import java.security.MessageDigest
 import scala.collection.JavaConverters._
 import spray.json._
-import Utils.{AppletLinkInfo, CHECKSUM_PROP, DXWorkflowStage,
-    INSTANCE_TYPE_DB_FILENAME, LINK_INFO_FILENAME}
+import Utils.{AppletLinkInfo, base64Encode, CHECKSUM_PROP, dxFileOfJsValue, DXWorkflowStage,
+    INSTANCE_TYPE_DB_FILENAME, jsValueOfJsonNode, jsonNodeOfJsValue, LINK_INFO_FILENAME}
 import wdl4s.parser.WdlParser.Ast
 import wdl4s.wdl.types._
 
@@ -24,11 +24,6 @@ case class CompilerNative(dxWDLrtId: String,
                           force: Boolean,
                           archive: Boolean,
                           verbose: Utils.Verbose) {
-    val DX_COMPILE_TIMEOUT = 30
-    val MAX_NUM_RETRIES = 5
-    val MIN_SLEEP_SEC = 5
-    val MAX_SLEEP_SEC = 30
-
     // For primitive types, and arrays of such types, we can map directly
     // to the equivalent dx types. For example,
     //   Int  -> int
@@ -101,14 +96,19 @@ case class CompilerNative(dxWDLrtId: String,
     def genSourceFiles(wdlCode:String,
                        linkInfo: Option[String],
                        dbInstance: Option[String]): String = {
+        // UU64 encode the WDL script to avoid characters that interact
+        // badly with bash
+        val wdlCodeUu64 = base64Encode(wdlCode)
         val part1 =
             s"""|    echo "working directory =$${PWD}"
                 |    echo "home dir =$${HOME}"
                 |
                 |    # write the WDL script into a file
-                |    cat >$${DX_FS_ROOT}/source.wdl <<'EOL'
-                |${wdlCode}
+                |    cat >$${DX_FS_ROOT}/source.wdl.uu64 <<'EOL'
+                |${wdlCodeUu64}
                 |EOL
+                |# decode the WDL script
+                |base64 -i $${DX_FS_ROOT}/source.wdl.uu64 -o $${DX_FS_ROOT}/source.wdl
                 |""".stripMargin.trim
 
         val part2 = linkInfo.map{ info =>
@@ -210,8 +210,9 @@ case class CompilerNative(dxWDLrtId: String,
     def genBashScriptNonTask(miniCmd:String,
                              setupFilesScript:String) : String = {
         s"""|#!/bin/bash -ex
-            |main() {
             |${setupFilesScript}
+            |
+            |main() {
             |    java -jar $${DX_FS_ROOT}/dxWDL.jar internal ${miniCmd} $${DX_FS_ROOT}/source.wdl $${HOME}
             |}""".stripMargin.trim
     }
@@ -231,21 +232,22 @@ case class CompilerNative(dxWDLrtId: String,
                 instanceType match {
                     case IR.InstanceTypeDefault | IR.InstanceTypeConst(_) =>
                         s"""|#!/bin/bash -ex
-                            |main() {
                             |${setupFilesScript}
+                            |
+                            |main() {
                             |${genBashScriptTaskBody()}
                             |}""".stripMargin
                     case IR.InstanceTypeRuntime =>
                         s"""|#!/bin/bash -ex
-                            |main() {
                             |${setupFilesScript}
+                            |
+                            |main() {
                             |    # evaluate the instance type, and launch a sub job on it
                             |    java -jar $${DX_FS_ROOT}/dxWDL.jar internal taskRelaunch $${DX_FS_ROOT}/source.wdl $${HOME}
                             |}
                             |
                             |# We are on the correct instance type, run the task
                             |body() {
-                            |${setupFilesScript}
                             |${genBashScriptTaskBody()}
                             |}""".stripMargin.trim
                 }
@@ -256,12 +258,26 @@ case class CompilerNative(dxWDLrtId: String,
         }
     }
 
-    // create a directory structure for this applet
-    // applets/
-    //        task-name/
-    //                  dxapp.json
-    //                  resources/
-    //                      workflowFile.wdl
+    // Calculate the MD5 checksum of a string
+    def chksum(s: String) : String = {
+        val digest = MessageDigest.getInstance("MD5").digest(s.getBytes)
+        digest.map("%02X" format _).mkString
+    }
+
+    // Add a checksum to a request
+    def checksumReq(req: JsValue) : (String, JsValue) = {
+        val digest = chksum(req.toString)
+        val props = Map("properties" ->
+                            JsObject(CHECKSUM_PROP -> JsString(digest)))
+        val reqChk = req match {
+            case JsObject(fields) =>
+                JsObject(fields ++ props)
+            case _ => throw new Exception("sanity")
+        }
+        (digest, reqChk)
+    }
+
+    // Bundle all the applet code into one bash script.
     //
     // For applets that call other applets, we pass a directory
     // of the callees, so they could be found a runtime. This is
@@ -269,19 +285,8 @@ case class CompilerNative(dxWDLrtId: String,
     //
     // Calculate a checksum of the inputs that went into the making of the applet.
     // This helps
-    def createAppletDirStruct(applet: IR.Applet,
-                              aplLinks: Map[String, (IR.Applet, DXApplet)],
-                              appJson : JsObject) : Path = {
-        // create temporary directory
-        val appletDir : Path = Utils.appCompileDirPath.resolve(applet.name)
-        Utils.safeMkdir(appletDir)
-
-        // Clean up the task subdirectory, if it it exists
-        Utils.deleteRecursive(appletDir.toFile())
-        Files.createDirectory(appletDir)
-
-        val srcDir = Files.createDirectory(Paths.get(appletDir.toString(), "src"))
-
+    def genAppletScript(applet: IR.Applet,
+                        aplLinks: Map[String, (IR.Applet, DXApplet)]) : String = {
         // generate the wdl source file
         val wdlCode:String = WdlPrettyPrinter(false, None).apply(applet.ns, 0)
             .mkString("\n")
@@ -312,18 +317,15 @@ case class CompilerNative(dxWDLrtId: String,
             }
 
         // write the bash script
-        val bashScript = genBashScript(applet.kind, applet.instanceType,
-                                       wdlCode, linkInfo, dbInstance)
-        Utils.writeFileContent(srcDir.resolve("code.sh"), bashScript)
-
-        // write the dxapp.json
-        Utils.writeFileContent(appletDir.resolve("dxapp.json"), appJson.prettyPrint)
-        appletDir
+        val script = genBashScript(applet.kind, applet.instanceType,
+                                   wdlCode, linkInfo, dbInstance)
+        script
     }
 
     // Set the run spec.
     //
-    def calcRunSpec(iType: IR.InstanceType) : JsValue = {
+    def calcRunSpec(bashScript: String,
+                    iType: IR.InstanceType) : JsValue = {
         // find the dxWDL asset
         val instanceType:String = iType match {
             case IR.InstanceTypeConst(x) => x
@@ -338,142 +340,49 @@ case class CompilerNative(dxWDLrtId: String,
                                                         JsObject("hours" -> JsNumber(hours))
                         ))
             }
+        // Extract the archive from the details field
+        val record = DXRecord.getInstance(dxWDLrtId)
+        val descOptions = DXDataObject.DescribeOptions.get().inProject(dxProject).withDetails
+        val details = jsValueOfJsonNode(
+            record.describe(descOptions).getDetails(classOf[JsonNode]))
+        val dxLink = details.asJsObject.fields.get("archiveFileId") match {
+            case Some(x) => x
+            case None => throw new Exception(s"record does not have an archive field ${details}")
+        }
+        val tarArchive:DXFile = dxFileOfJsValue(dxLink)
+
         val runSpec: Map[String, JsValue] = Map(
+            "code" -> JsString(bashScript),
             "interpreter" -> JsString("bash"),
-            "file" -> JsString("src/code.sh"),
-            "distribution" -> JsString("Ubuntu"),
-            "release" -> JsString("14.04"),
-            "assetDepends" -> JsArray(
-                JsObject("id" -> JsString(dxWDLrtId))
-            ),
             "systemRequirements" ->
                 JsObject("main" ->
-                             JsObject("instanceType" -> JsString(instanceType)))
+                             JsObject("instanceType" -> JsString(instanceType))),
+            "distribution" -> JsString("Ubuntu"),
+            "release" -> JsString("14.04"),
+            "bundledDepends" -> JsArray(
+                JsObject(
+                    "name" -> JsString("dxWDLrt"),
+                    "id" -> JsObject("$dnanexus_link" -> JsString(tarArchive.getId()))))
         )
         JsObject(runSpec ++ timeoutSpec)
     }
 
-    // Sending a string to the command line shell may require quoting it.
-    // Quoting is needed if the string contains white spaces.
-    private def quoteIfNeeded(buf: String) : String = {
-        if (!buf.matches("\\S+")) s"""'${buf}'"""
-        else buf
-    }
+    // Build an applet by calling /applet/new
+    def appletGenApiCall(applet: IR.Applet,
+                         bashScript: String,
+                         folder : String) : JsValue = {
+        Utils.trace(verbose.on, s"Building /applet/new request for ${applet.name}")
 
-    // Perform a "dx build" on a local directory representing an applet
-    //
-    def dxBuildApp(appletDir : Path,
-                   appletName : String,
-                   folder : String,
-                   digest: String) : DXApplet = {
-        Utils.trace(verbose.on, s"Building applet ${appletName}")
-        val path =
-            if (folder.endsWith("/")) (folder ++ appletName)
-            else (folder ++ "/" ++ appletName)
-        val pId = dxProject.getId()
-        val dest =
-            if (path.startsWith("/")) pId ++ ":" ++ path
-            else pId ++ ":/" ++ path
+        // We need to implement the archiving option
+        assert(!archive)
 
-        // Add a checksum for the WDL code as a property of the applet.
-        // This allows to quickly check if anything has changed, saving
-        // unnecessary builds.
-        //
-        // We want the checksum to be added atomically to the applet. This
-        // avoids the creation of applets without a checksum.
-        val props = s"""{ \\"properties\\" : { \\"${CHECKSUM_PROP}\\" : \\"${digest}\\" } }"""
-        var buildCmd = List("dx",
-                            "build",
-                            quoteIfNeeded(appletDir.toString()),
-                            "--destination",
-                            quoteIfNeeded(dest),
-                            "--extra-args",
-                            "\"" + props.toString + "\"")
-        if (force)
-            buildCmd = buildCmd :+ "-f"
-        if (archive)
-            buildCmd = buildCmd :+ "-a"
-        val commandStr = buildCmd.mkString(" ")
-
-        def build() : Option[DXApplet] = {
-            try {
-                // Run the dx-build command
-                Utils.trace(verbose.on, commandStr)
-                val (outstr, _) = Utils.execCommand(commandStr, Some(DX_COMPILE_TIMEOUT))
-
-                // extract the appID from the output
-                val app : JsObject = outstr.parseJson.asJsObject
-                app.fields("id") match {
-                    case JsString(appId) => Some(DXApplet.getInstance(appId, dxProject))
-                    case _ => None
-                }
-            } catch {
-                case e : Throwable =>
-                    // Triage the error, according to the exception message.
-                    // Is this a retriable error?
-                    val msg = e.getMessage
-                    if ((msg contains "The folder could not be found") ||
-                            (msg contains "No value found")) {
-                        throw new Exception(s"build command ${commandStr} failed")
-                    }
-                    None
-            }
-        }
-
-        // Retry the build operation with exponential backoff
-        var retrySleepSec = MIN_SLEEP_SEC
-        for (i <- 1 to MAX_NUM_RETRIES) {
-            build() match {
-                case None => ()
-                case Some(dxApp) => return dxApp
-            }
-            System.err.println(s"Build attempt ${i} failed")
-            if (i < MAX_NUM_RETRIES) {
-                System.err.println(s"Sleeping for ${retrySleepSec} seconds")
-                Thread.sleep(retrySleepSec * 1000)
-                retrySleepSec = Math.min(MAX_SLEEP_SEC, retrySleepSec*2)
-            }
-        }
-        throw new Exception(s"Failed to build applet ${appletName}")
-    }
-
-
-    // Calculate the MD5 checksum of a string
-    def chksum(s: String) : String = {
-        val digest = MessageDigest.getInstance("MD5").digest(s.getBytes)
-        digest.map("%02X" format _).mkString
-    }
-
-    // Concatenate all the files in the directory into a string, and
-    // checksum the string. We assume the files are small enough to
-    // fit in memory, and that the directory structure does not
-    // matter, only file content. This is sufficient for our purposes.
-    def checksumDirectory(dir: Path) : String = {
-        val content = Files.walk(dir).iterator().asScala
-            .filter(Files.isRegularFile(_))
-            .map(path => Utils.readFileContent(path))
-        chksum(content.mkString("\n"))
-    }
-
-
-    // Write the WDL code to a file, and generate a bash applet to run
-    // it on the platform.
-    def localBuildApplet(applet: IR.Applet,
-                         appletDict: Map[String, (IR.Applet, DXApplet)]) : Path = {
-        Utils.trace(verbose.on, s"Compiling applet ${applet.name}")
-        val inputSpec : Seq[JsValue] = applet.inputs.map(cVar =>
+        val inputSpec : Vector[JsValue] = applet.inputs.map(cVar =>
             wdlVarToSpec(cVar.dxVarName, cVar.wdlType, cVar.ast)
-        ).flatten
-        val outputDecls : Seq[JsValue] = applet.outputs.map(cVar =>
+        ).flatten.toVector
+        val outputSpec : Vector[JsValue] = applet.outputs.map(cVar =>
             wdlVarToSpec(cVar.dxVarName, cVar.wdlType, cVar.ast)
-        ).flatten
-        val runSpec : JsValue = calcRunSpec(applet.instanceType)
-        val attrs = Map(
-            "name" -> JsString(applet.name),
-            "inputSpec" -> JsArray(inputSpec.toVector),
-            "outputSpec" -> JsArray(outputDecls.toVector),
-            "runSpec" -> runSpec
-        )
+        ).flatten.toVector
+        val runSpec : JsValue = calcRunSpec(bashScript, applet.instanceType)
 
         // Even scatters need network access, because
         // they spawn subjobs that (may) use dx-docker.
@@ -482,23 +391,33 @@ case class CompilerNative(dxWDLrtId: String,
 
         // The WorkflowOutput applet requires higher permissions
         // to organize the output directory.
-        val proj:Map[String, JsValue] = applet.kind match {
+        val projAccess:Map[String, JsValue] = applet.kind match {
             case IR.AppletKindWorkflowOutputsAndReorg => Map("project" -> JsString("CONTRIBUTE"))
             case _ => Map()
         }
-        val access = Map("access" -> JsObject(network ++ proj))
-        val json = JsObject(attrs ++ access)
+        val access = JsObject("access" -> JsObject(network ++ projAccess))
 
-        val aplLinks = applet.kind match {
-            case IR.AppletKindIf(calls) =>
-                calls.map{ case (_,tName) => tName -> appletDict(tName) }.toMap
-            case IR.AppletKindScatter(calls) =>
-                calls.map{ case (_,tName) => tName -> appletDict(tName) }.toMap
-            case _ =>
-                Map.empty[String, (IR.Applet, DXApplet)]
+        // pack all the arguments into a single request
+        JsObject(
+            "project" -> JsString(dxProject.getId),
+            "name" -> JsString(applet.name),
+            "folder" -> JsString(folder),
+            "parents" -> JsBoolean(true),
+            "inputSpec" -> JsArray(inputSpec),
+            "outputSpec" -> JsArray(outputSpec),
+            "runSpec" -> runSpec,
+            "dxapi" -> JsString("1.0.0"),
+            "access" -> access
+        )
+    }
+
+    def apiParseReplyID(rep: JsonNode) : String = {
+        val repJs:JsValue = jsValueOfJsonNode(rep)
+        repJs.asJsObject.fields.get("id") match {
+            case None => throw new Exception("API call did not returnd an ID")
+            case Some(JsString(x)) => x
+            case other => throw new Exception(s"API call returned invalid ID ${other}")
         }
-        // create a directory structure for this applet
-        createAppletDirStruct(applet, aplLinks, json)
     }
 
     // Rebuild the applet if needed.
@@ -509,34 +428,48 @@ case class CompilerNative(dxWDLrtId: String,
                             appletDict: Map[String, (IR.Applet, DXApplet)],
                             aplDir: AppletDirectory)
             : (DXApplet, Vector[IR.CVar]) = {
+        Utils.trace(verbose.on, s"Compiling applet ${applet.name}")
         val existingApl = aplDir.lookup(applet.name)
 
         // Build an applet structure locally
-        val appletDir = localBuildApplet(applet, appletDict)
-        val digest = checksumDirectory(appletDir)
+        val bashScript = genAppletScript(applet, appletDict)
+        val req = appletGenApiCall(applet, bashScript, folder)
+        val (digest,appletApiRequest) = checksumReq(req)
 
-        val buildRequired =
-            if (existingApl.size == 0) {
-                true
-            } else if (existingApl.size == 1) {
+        val buildRequired = existingApl.size match {
+            case 0 => true
+            case 1 =>
                 // Check if applet code has changed
                 val dxAplInfo = existingApl.head
                 if (digest != dxAplInfo.digest) {
-                    Utils.trace(verbose.on,
-                                s"Applet has changed, rebuild required (checksum {new=${digest} old=${dxAplInfo.digest}}")
+                    Utils.trace(verbose.on, s"Applet has changed, rebuild required")
                     true
                 } else {
                     Utils.trace(verbose.on, "Applet has not changed")
                     false
                 }
-            } else {
-                throw new Exception(s"""|More than one applet ${applet.name} found in
-                                        |path ${dxProject.getId()}:${folder}""".stripMargin)
-            }
+            case _ =>
+                System.err.println(s"""|More than one applet ${applet.name} found in
+                                       |path ${dxProject.getId()}:${folder}""".stripMargin)
+                true
+        }
 
         if (buildRequired) {
+            if (existingApl.size > 0) {
+                // applet exists, and needs to be removed
+                if (!force) {
+                    val projName = dxProject.describe().getName()
+                    throw new Exception(s"""|Applet ${applet.name} already exists in
+                                            | ${projName}:${folder}""".stripMargin)
+                }
+                Utils.trace(verbose.on, "[Force] Removing old applets")
+                val dxObjects:Vector[DXApplet] = existingApl.map(_.applet).toVector
+                dxProject.removeObjects(dxObjects.asJava)
+            }
             // Compile a WDL snippet into an applet.
-            val dxApplet = dxBuildApp(appletDir, applet.name, folder, digest)
+            val rep = DXAPI.appletNew(jsonNodeOfJsValue(appletApiRequest), classOf[JsonNode])
+            val id = apiParseReplyID(rep)
+            val dxApplet = DXApplet.getInstance(id)
             aplDir.insert(applet.name, dxApplet, digest)
             (dxApplet, applet.outputs)
         } else {
@@ -653,13 +586,8 @@ case class CompilerNative(dxWDLrtId: String,
             .put("stages", stagesReq.build())
             .build()
         val rep = DXAPI.workflowNew(req, classOf[JsonNode])
-        val repJs:JsValue = Utils.jsValueOfJsonNode(rep)
-        val wfid:String = repJs.asJsObject.fields.get("id") match {
-            case None => throw new Exception("workflowNew API call did not returnd an ID")
-            case Some(JsString(x)) => x
-            case other => throw new Exception(s"workflowNew API call returned invalid ID ${other}")
-        }
-        DXWorkflow.getInstance(wfid)
+        val id = apiParseReplyID(rep)
+        DXWorkflow.getInstance(id)
     }
 
     // Compile an entire workflow
@@ -680,10 +608,9 @@ case class CompilerNative(dxWDLrtId: String,
             .inFolder(dxProject, folder).withClassWorkflow().execute().asList()
             .asScala.toList
 
-        val buildRequired =
-            if (existingWfl.size == 0) {
-                true
-            } else if (existingWfl.size == 1) {
+        val buildRequired = existingWfl.size match {
+            case 0 => true
+            case 1 =>
                 // Check if workflow code has changed
                 val dxWfl = existingWfl.head
                 val desc: DXWorkflow.Describe = dxWfl.describe(
@@ -707,10 +634,8 @@ case class CompilerNative(dxWDLrtId: String,
                     Utils.trace(verbose.on, "Workflow has not changed")
                     false
                 }
-            } else {
-                throw new Exception(s"""|More than one workflow ${wf.name} found in
-                                        |path ${dxProject.getId()}:${folder}""".stripMargin)
-            }
+            case _ => true
+        }
 
         if (buildRequired) {
             if (existingWfl.size > 0) {
