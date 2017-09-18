@@ -11,7 +11,7 @@ import java.security.MessageDigest
 import scala.collection.JavaConverters._
 import spray.json._
 import Utils.{AppletLinkInfo, base64Encode, CHECKSUM_PROP, dxFileOfJsValue, DXWorkflowStage,
-    INSTANCE_TYPE_DB_FILENAME, jsValueOfJsonNode, jsonNodeOfJsValue, LINK_INFO_FILENAME}
+    INSTANCE_TYPE_DB_FILENAME, jsValueOfJsonNode, jsonNodeOfJsValue, LINK_INFO_FILENAME, trace}
 import wdl4s.parser.WdlParser.Ast
 import wdl4s.wdl.types._
 
@@ -24,6 +24,19 @@ case class CompilerNative(dxWDLrtId: String,
                           force: Boolean,
                           archive: Boolean,
                           verbose: Utils.Verbose) {
+    lazy val tarArchive:DXFile = {
+            // Extract the archive from the details field
+        val record = DXRecord.getInstance(dxWDLrtId)
+        val descOptions = DXDataObject.DescribeOptions.get().inProject(dxProject).withDetails
+        val details = jsValueOfJsonNode(
+            record.describe(descOptions).getDetails(classOf[JsonNode]))
+        val dxLink = details.asJsObject.fields.get("archiveFileId") match {
+            case Some(x) => x
+            case None => throw new Exception(s"record does not have an archive field ${details}")
+        }
+        dxFileOfJsValue(dxLink)
+    }
+
     // For primitive types, and arrays of such types, we can map directly
     // to the equivalent dx types. For example,
     //   Int  -> int
@@ -108,7 +121,7 @@ case class CompilerNative(dxWDLrtId: String,
                 |${wdlCodeUu64}
                 |EOL
                 |# decode the WDL script
-                |base64 -i $${DX_FS_ROOT}/source.wdl.uu64 -o $${DX_FS_ROOT}/source.wdl
+                |base64 -d $${DX_FS_ROOT}/source.wdl.uu64 > $${DX_FS_ROOT}/source.wdl
                 |""".stripMargin.trim
 
         val part2 = linkInfo.map{ info =>
@@ -266,7 +279,7 @@ case class CompilerNative(dxWDLrtId: String,
 
     // Add a checksum to a request
     def checksumReq(req: JsValue) : (String, JsValue) = {
-        val digest = chksum(req.toString)
+        val digest = chksum(req.prettyPrint)
         val props = Map("properties" ->
                             JsObject(CHECKSUM_PROP -> JsString(digest)))
         val reqChk = req match {
@@ -282,9 +295,6 @@ case class CompilerNative(dxWDLrtId: String,
     // For applets that call other applets, we pass a directory
     // of the callees, so they could be found a runtime. This is
     // equivalent to linking, in a standard C compiler.
-    //
-    // Calculate a checksum of the inputs that went into the making of the applet.
-    // This helps
     def genAppletScript(applet: IR.Applet,
                         aplLinks: Map[String, (IR.Applet, DXApplet)]) : String = {
         // generate the wdl source file
@@ -317,9 +327,8 @@ case class CompilerNative(dxWDLrtId: String,
             }
 
         // write the bash script
-        val script = genBashScript(applet.kind, applet.instanceType,
-                                   wdlCode, linkInfo, dbInstance)
-        script
+        genBashScript(applet.kind, applet.instanceType,
+                      wdlCode, linkInfo, dbInstance)
     }
 
     // Set the run spec.
@@ -340,16 +349,6 @@ case class CompilerNative(dxWDLrtId: String,
                                                         JsObject("hours" -> JsNumber(hours))
                         ))
             }
-        // Extract the archive from the details field
-        val record = DXRecord.getInstance(dxWDLrtId)
-        val descOptions = DXDataObject.DescribeOptions.get().inProject(dxProject).withDetails
-        val details = jsValueOfJsonNode(
-            record.describe(descOptions).getDetails(classOf[JsonNode]))
-        val dxLink = details.asJsObject.fields.get("archiveFileId") match {
-            case Some(x) => x
-            case None => throw new Exception(s"record does not have an archive field ${details}")
-        }
-        val tarArchive:DXFile = dxFileOfJsValue(dxLink)
 
         val runSpec: Map[String, JsValue] = Map(
             "code" -> JsString(bashScript),
@@ -371,7 +370,7 @@ case class CompilerNative(dxWDLrtId: String,
     def appletGenApiCall(applet: IR.Applet,
                          bashScript: String,
                          folder : String) : JsValue = {
-        Utils.trace(verbose.on, s"Building /applet/new request for ${applet.name}")
+        trace(verbose.on, s"Building /applet/new request for ${applet.name}")
 
         // We need to implement the archiving option
         assert(!archive)
@@ -428,13 +427,31 @@ case class CompilerNative(dxWDLrtId: String,
                             appletDict: Map[String, (IR.Applet, DXApplet)],
                             aplDir: AppletDirectory)
             : (DXApplet, Vector[IR.CVar]) = {
-        Utils.trace(verbose.on, s"Compiling applet ${applet.name}")
+        trace(verbose.on, s"Compiling applet ${applet.name}")
         val existingApl = aplDir.lookup(applet.name)
 
-        // Build an applet structure locally
-        val bashScript = genAppletScript(applet, appletDict)
+        // limit the applet dictionary, only to actual dependencies
+        val aplLinks = applet.kind match {
+            case IR.AppletKindIf(calls) =>
+                calls.map{ case (_,tName) => tName -> appletDict(tName) }.toMap
+            case IR.AppletKindScatter(calls) =>
+                calls.map{ case (_,tName) => tName -> appletDict(tName) }.toMap
+            case _ =>
+                Map.empty[String, (IR.Applet, DXApplet)]
+        }
+
+        // Build an applet script
+        val bashScript = genAppletScript(applet, aplLinks)
+
+        // Calculate a checksum of the inputs that went into the
+        // making of the applet.
         val req = appletGenApiCall(applet, bashScript, folder)
         val (digest,appletApiRequest) = checksumReq(req)
+        if (verbose.on) {
+            val fName = s"${applet.name}_req_${digest}.json"
+            val trgPath = Utils.appCompileDirPath.resolve(fName)
+            Utils.writeFileContent(trgPath, req.prettyPrint)
+        }
 
         val buildRequired = existingApl.size match {
             case 0 => true
@@ -442,10 +459,10 @@ case class CompilerNative(dxWDLrtId: String,
                 // Check if applet code has changed
                 val dxAplInfo = existingApl.head
                 if (digest != dxAplInfo.digest) {
-                    Utils.trace(verbose.on, s"Applet has changed, rebuild required")
+                    trace(verbose.on, s"Applet has changed, rebuild required")
                     true
                 } else {
-                    Utils.trace(verbose.on, "Applet has not changed")
+                    trace(verbose.on, "Applet has not changed")
                     false
                 }
             case _ =>
@@ -462,7 +479,7 @@ case class CompilerNative(dxWDLrtId: String,
                     throw new Exception(s"""|Applet ${applet.name} already exists in
                                             | ${projName}:${folder}""".stripMargin)
                 }
-                Utils.trace(verbose.on, "[Force] Removing old applets")
+                trace(verbose.on, "[Force] Removing old applets")
                 val dxObjects:Vector[DXApplet] = existingApl.map(_.applet).toVector
                 dxProject.removeObjects(dxObjects.asJava)
             }
@@ -627,11 +644,10 @@ case class CompilerNative(dxWDLrtId: String,
                     case Some(x) => x
                 }
                 if (wfDigest != oldWfDigest) {
-                    Utils.trace(verbose.on,
-                                s"Workflow has changed, rebuild required (checksum {new=${wfDigest} old=${oldWfDigest}}")
+                    trace(verbose.on, "Workflow has changed, rebuild required")
                     true
                 } else {
-                    Utils.trace(verbose.on, "Workflow has not changed")
+                    trace(verbose.on, "Workflow has not changed")
                     false
                 }
             case _ => true
@@ -645,7 +661,7 @@ case class CompilerNative(dxWDLrtId: String,
                     throw new Exception(s"""|Workflow ${wf.name} already exists in
                                             | ${projName}:${folder}""".stripMargin)
                 }
-                Utils.trace(verbose.on, "[Force] Removing old workflow")
+                trace(verbose.on, "[Force] Removing old workflow")
                 dxProject.removeObjects(existingWfl.asJava)
             }
             buildWorkflow(wf, wfDigest, appletDict)
@@ -657,8 +673,8 @@ case class CompilerNative(dxWDLrtId: String,
     }
 
     // Sort the applets according to dependencies. The lowest
-    // ones are tasks, because they depend on nothing else. On the top
-    // are generated applets like scatters and if-blocks.
+    // ones are tasks, because they depend on nothing else. Last come
+    // generated applets like scatters and if-blocks.
     def sortAppletsByDependencies(appletDict: Map[String, IR.Applet]) : Vector[IR.Applet] = {
         def immediateDeps(apl: IR.Applet) :Vector[IR.Applet] = {
             val calls:Seq[String] = apl.kind match {
@@ -694,6 +710,8 @@ case class CompilerNative(dxWDLrtId: String,
                         (sortedNames, sortedApplets)
                     } else {
                         val next:Vector[IR.Applet] = transitiveDeps(apl)
+                            // prune applets we have already seen
+                            .filter(x => !(sortedNames contains x.name))
                         val nextNames:Set[String] = next.map(_.name).toSet
                         (sortedNames ++ nextNames, sortedApplets ++ next)
                     }
@@ -702,7 +720,7 @@ case class CompilerNative(dxWDLrtId: String,
     }
 
     def apply(ns: IR.Namespace) : (Option[DXWorkflow], Vector[DXApplet]) = {
-        Utils.trace(verbose.on, "Backend pass")
+        trace(verbose.on, "Backend pass")
 
         // Efficiently build a directory of the currently existing applets.
         // We don't want to build them if we don't have to.
@@ -710,6 +728,8 @@ case class CompilerNative(dxWDLrtId: String,
 
         // Sort the applets according to dependencies.
         val applets = sortAppletsByDependencies(ns.applets)
+        val appletNames = applets.map(_.name)
+        trace(verbose.on, s"compilation order=${appletNames}")
 
         // Build the individual applets. We need to keep track of
         // the applets created, to be able to link calls. For example,
@@ -718,7 +738,7 @@ case class CompilerNative(dxWDLrtId: String,
         val appletDict = applets.foldLeft(Map.empty[String, (IR.Applet, DXApplet)]) {
             case (appletDict, apl) =>
                 val (dxApplet, _) = buildAppletIfNeeded(apl, appletDict, aplDir)
-                Utils.trace(verbose.on, s"Applet ${apl.name} = ${dxApplet.getId()}")
+                trace(verbose.on, s"Applet ${apl.name} = ${dxApplet.getId()}")
                 appletDict + (apl.name -> (apl, dxApplet))
         }.toMap
 
