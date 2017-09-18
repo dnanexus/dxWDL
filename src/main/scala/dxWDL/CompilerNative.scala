@@ -5,7 +5,7 @@ package dxWDL
 // DX bindings
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.node.ObjectNode
-import com.dnanexus.{DXApplet, DXAPI, DXDataObject, DXFile,
+import com.dnanexus.{DXApplet, DXAPI, DXDataObject,
     DXJSON, DXProject, DXRecord, DXSearch, DXWorkflow}
 import java.security.MessageDigest
 import scala.collection.JavaConverters._
@@ -24,8 +24,11 @@ case class CompilerNative(dxWDLrtId: String,
                           force: Boolean,
                           archive: Boolean,
                           verbose: Utils.Verbose) {
-    lazy val tarArchive:DXFile = {
-            // Extract the archive from the details field
+    lazy val runtimeLibrary:JsValue = getRuntimeLibrary()
+
+    // Open the archive
+    // Extract the archive from the details field
+    def getRuntimeLibrary(): JsValue = {
         val record = DXRecord.getInstance(dxWDLrtId)
         val descOptions = DXDataObject.DescribeOptions.get().inProject(dxProject).withDetails
         val details = jsValueOfJsonNode(
@@ -34,7 +37,12 @@ case class CompilerNative(dxWDLrtId: String,
             case Some(x) => x
             case None => throw new Exception(s"record does not have an archive field ${details}")
         }
-        dxFileOfJsValue(dxLink)
+        val dxFile = dxFileOfJsValue(dxLink)
+        val name = dxFile.describe.getName()
+        JsObject(
+            "name" -> JsString(name),
+            "id" -> JsObject("$dnanexus_link" -> JsString(dxFile.getId()))
+        )
     }
 
     // For primitive types, and arrays of such types, we can map directly
@@ -358,10 +366,7 @@ case class CompilerNative(dxWDLrtId: String,
                              JsObject("instanceType" -> JsString(instanceType))),
             "distribution" -> JsString("Ubuntu"),
             "release" -> JsString("14.04"),
-            "bundledDepends" -> JsArray(
-                JsObject(
-                    "name" -> JsString("dxWDLrt"),
-                    "id" -> JsObject("$dnanexus_link" -> JsString(tarArchive.getId()))))
+            "bundledDepends" -> JsArray(runtimeLibrary)
         )
         JsObject(runSpec ++ timeoutSpec)
     }
