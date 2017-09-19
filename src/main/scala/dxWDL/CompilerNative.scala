@@ -4,9 +4,7 @@ package dxWDL
 
 // DX bindings
 import com.fasterxml.jackson.databind.JsonNode
-import com.fasterxml.jackson.databind.node.ObjectNode
-import com.dnanexus.{DXApplet, DXAPI, DXDataObject,
-    DXJSON, DXProject, DXRecord, DXWorkflow}
+import com.dnanexus.{DXApplet, DXAPI, DXDataObject, DXProject, DXRecord, DXWorkflow}
 import java.security.MessageDigest
 import scala.collection.JavaConverters._
 import spray.json._
@@ -299,9 +297,14 @@ case class CompilerNative(dxWDLrtId: String,
         (digest, reqChk)
     }
 
+    // Do we need to build this applet/workflow?
+    //
+    // Returns:
+    //   None: build is required: None
+    //   Some(dxobject) : the right object is already on the platform
     def isBuildRequired(name: String,
                         digest: String,
-                        dxObjDir: DxObjectDirectory) : Boolean = {
+                        dxObjDir: DxObjectDirectory) : Option[DXDataObject] = {
         val existingDxObjs = dxObjDir.lookup(name)
         val buildRequired:Boolean = existingDxObjs.size match {
             case 0 => true
@@ -322,17 +325,22 @@ case class CompilerNative(dxWDLrtId: String,
                 true
         }
 
-        if (buildRequired && !existingDxObjs.isEmpty) {
-            // dx:object exists, and needs to be removed
-            if (!force) {
-                throw new Exception(s"""|dx:object ${name} already exists in
-                                        | ${projName}:${folder}""".stripMargin)
+        if (buildRequired) {
+            if (!existingDxObjs.isEmpty) {
+                // dx:object exists, and needs to be removed
+                if (!force) {
+                    throw new Exception(s"""|${kind} ${name} already exists in
+                                            | ${projName}:${folder}""".stripMargin)
+                }
+                val objs = existingDxObjs.map(_.dxObj)
+                trace(verbose.on, s"Removing old ${name} ${objs.map(_.getId)}")
+                dxProject.removeObjects(objs.asJava)
             }
-            val objs = existingDxObjs.map(_.dxObj)
-            trace(verbose.on, s"Removing old ${name} ${objs.map(_.getId)}")
-            dxProject.removeObjects(objs.asJava)
+            None
+        } else {
+            assert(existingDxObjs.size == 1)
+            Some(existingDxObjs.head.dxObj)
         }
-        buildRequired
     }
 
     // Bundle all the applet code into one bash script.
@@ -495,18 +503,18 @@ case class CompilerNative(dxWDLrtId: String,
         }
 
         val buildRequired = isBuildRequired(applet.name, digest, dxObjDir)
-        if (buildRequired) {
-            // Compile a WDL snippet into an applet.
-            val rep = DXAPI.appletNew(jsonNodeOfJsValue(appletApiRequest), classOf[JsonNode])
-            val id = apiParseReplyID(rep)
-            val dxApplet = DXApplet.getInstance(id)
-            dxObjDir.insert(applet.name, dxApplet, digest)
-            (dxApplet, applet.outputs)
-        } else {
-            // Old applet exists, and it has not changed. Return the
-            // applet-id.
-            val dxApplet = dxObjDir.lookup(applet.name)
-            (dxApplet.asInstanceOf[DXApplet], applet.outputs)
+        buildRequired match {
+            case None =>
+                // Compile a WDL snippet into an applet.
+                val rep = DXAPI.appletNew(jsonNodeOfJsValue(appletApiRequest), classOf[JsonNode])
+                val id = apiParseReplyID(rep)
+                val dxApplet = DXApplet.getInstance(id)
+                dxObjDir.insert(applet.name, dxApplet, digest)
+                (dxApplet, applet.outputs)
+            case Some(dxObj) =>
+                // Old applet exists, and it has not changed. Return the
+                // applet-id.
+                (dxObj.asInstanceOf[DXApplet], applet.outputs)
         }
     }
 
@@ -517,24 +525,27 @@ case class CompilerNative(dxWDLrtId: String,
     // modify the JSON to get around this.
     def genFieldsCastIfRequired(wvl: WdlVarLinks,
                                 rawSrcType: WdlType,
-                                bindName: String) : List[(String, JsonNode)] = {
+                                bindName: String) : List[(String, JsValue)] = {
 //        System.err.println(s"genFieldsCastIfRequired(${bindName})  trgType=${wvl.wdlType.toWdlString} srcType=${srcType.toWdlString}")
         val srcType = Utils.stripOptional(rawSrcType)
         val trgType = Utils.stripOptional(wvl.wdlType)
 
-        if (trgType == srcType) {
-            WdlVarLinks.genFields(wvl, bindName)
-        } else if (trgType == WdlArrayType(srcType)) {
-            // Cast from T to Array[T]
-            WdlVarLinks.genFields(wvl, bindName).map{ case(key, jsonNode) =>
-                val jsonArr = DXJSON.getArrayBuilder().add(jsonNode).build()
-                (key, jsonArr)
-            }.toList
-        } else {
-            throw new Exception(s"""|Linking error: source type=${rawSrcType.toWdlString}
-                                    |target type=${wvl.wdlType.toWdlString}, bindName=${bindName}"""
-                                    .stripMargin.replaceAll("\n", " "))
-        }
+        val l:List[(String, JsValue)] =
+            if (trgType == srcType) {
+                WdlVarLinks.genFields(wvl, bindName).map { case(key, jsonNode) =>
+                    (key, jsValueOfJsonNode(jsonNode))
+                }
+            } else if (trgType == WdlArrayType(srcType)) {
+                // Cast from T to Array[T]
+                WdlVarLinks.genFields(wvl, bindName).map{ case(key, jsonNode) =>
+                    (key, JsArray(jsValueOfJsonNode(jsonNode)))
+                }
+            } else {
+                throw new Exception(s"""|Linking error: source type=${rawSrcType.toWdlString}
+                                        |target type=${wvl.wdlType.toWdlString}, bindName=${bindName}"""
+                                        .stripMargin.replaceAll("\n", " "))
+            }
+        l.map{ case (key, json) => key -> json }
     }
 
     // Calculate the stage inputs from the call closure
@@ -542,23 +553,21 @@ case class CompilerNative(dxWDLrtId: String,
     // It comprises mappings from variable name to WdlType.
     def genStageInputs(inputs: Vector[(IR.CVar, IR.SArg)],
                        irApplet: IR.Applet,
-                       stageDict: Map[String, DXWorkflowStage]) : JsonNode = {
-        val dxBuilder = inputs.foldLeft(DXJSON.getObjectBuilder()) {
-            case (dxBuilder, (cVar, sArg)) =>
+                       stageDict: Map[String, DXWorkflowStage]) : JsValue = {
+        val jsInputs:Map[String, JsValue] = inputs.foldLeft(Map.empty[String, JsValue]){
+            case (m, (cVar, sArg)) =>
                 sArg match {
                     case IR.SArgEmpty =>
                         // We do not have a value for this input at compile time.
                         // For compulsory applet inputs, the user will have to fill
                         // in a value at runtime.
-                        dxBuilder
+                        m
                     case IR.SArgConst(wValue) =>
                         val wvl = WdlVarLinks.apply(cVar.wdlType, cVar.attrs, wValue)
                         val fields = genFieldsCastIfRequired(wvl,
                                                              wValue.wdlType,
                                                              cVar.dxVarName)
-                        fields.foldLeft(dxBuilder) { case (b, (fieldName, jsonNode)) =>
-                            b.put(fieldName, jsonNode)
-                        }
+                        m ++ fields.toMap
                     case IR.SArgLink(stageName, argName) =>
                         val dxStage = stageDict(stageName)
                         val wvl = WdlVarLinks(cVar.wdlType,
@@ -567,12 +576,10 @@ case class CompilerNative(dxWDLrtId: String,
                         val fields = genFieldsCastIfRequired(wvl,
                                                              argName.wdlType,
                                                              cVar.dxVarName)
-                        fields.foldLeft(dxBuilder) { case (b, (fieldName, jsonNode)) =>
-                            b.put(fieldName, jsonNode)
-                        }
+                        m ++ fields.toMap
                 }
         }
-        dxBuilder.build()
+        JsObject(jsInputs)
     }
 
     // Create the workflow in a single API call.
@@ -582,40 +589,32 @@ case class CompilerNative(dxWDLrtId: String,
     //
     // TODO: make use of capability to specify workflow level input/outputs
     def buildWorkflow(wf: IR.Workflow,
-                      wfDigest: String,
+                      digest: String,
                       appletDict: Map[String, (IR.Applet, DXApplet)]) : DXWorkflow = {
-        val stageDictInit = Map.empty[String, DXWorkflowStage]
-        val stagesReqEmpty = DXJSON.getArrayBuilder()
-        val (_,stagesReq,_) = wf.stages.foldLeft((0, stagesReqEmpty, stageDictInit)) {
+        val (_,stagesReq,_) = wf.stages.foldLeft((0, Vector.empty[JsValue], Map.empty[String, DXWorkflowStage])) {
             case ((version, stagesReq, stageDict), stg) =>
                 val (irApplet,dxApplet) = appletDict(stg.appletName)
                 val linkedInputs : Vector[(IR.CVar, IR.SArg)] = irApplet.inputs zip stg.inputs
-                val inputs: JsonNode = genStageInputs(linkedInputs, irApplet, stageDict)
+                val inputs = genStageInputs(linkedInputs, irApplet, stageDict)
                 val stgId = DXWorkflowStage(s"stage_${version}")
                 // convert the per-stage metadata into JSON
-                val stageReqDesc = DXJSON.getObjectBuilder()
-                    .put("id", stgId.getId)
-                    .put("executable", dxApplet.getId)
-                    .put("name", stg.name)
-                    .put("input", inputs)
-                    .build()
-
+                val stageReqDesc = JsObject(
+                    "id" -> JsString(stgId.getId),
+                    "executable" -> JsString(dxApplet.getId),
+                    "name" -> JsString(stg.name),
+                    "input" -> inputs)
                 (version + 1,
-                 stagesReq.add(stageReqDesc),
+                 stagesReq :+ stageReqDesc,
                  stageDict ++ Map(stg.name -> stgId))
         }
 
         // pack all the arguments into a single API call
-        val req: ObjectNode = DXJSON.getObjectBuilder()
-            .put("project", dxProject.getId)
-            .put("name", wf.name)
-            .put("folder", folder)
-            .put("properties", DXJSON.getObjectBuilder()
-                     .put(CHECKSUM_PROP, wfDigest)
-                     .build())
-            .put("stages", stagesReq.build())
-            .build()
-        val rep = DXAPI.workflowNew(req, classOf[JsonNode])
+        val req = JsObject("project" -> JsString(dxProject.getId),
+                           "name" -> JsString(wf.name),
+                           "folder" -> JsString(folder),
+                           "properties" -> JsObject(CHECKSUM_PROP -> JsString(digest)),
+                           "stages" -> JsArray(stagesReq))
+        val rep = DXAPI.workflowNew(jsonNodeOfJsValue(req), classOf[JsonNode])
         val id = apiParseReplyID(rep)
         DXWorkflow.getInstance(id)
     }
@@ -629,17 +628,19 @@ case class CompilerNative(dxWDLrtId: String,
                               appletDict: Map[String, (IR.Applet, DXApplet)],
                               dxObjDir: DxObjectDirectory) : DXWorkflow = {
         // the workflow digest depends on the IR and the applets
-        val wfDigest:String = chksum(
+        val digest:String = chksum(
             List(IR.yaml(wf).prettyPrint,
                  appletDict.toString).mkString("\n")
         )
-        val buildRequired = isBuildRequired(wf.name, wfDigest, dxObjDir)
-        if (buildRequired) {
-            buildWorkflow(wf, wfDigest, appletDict)
-        } else {
-            // Old workflow exists, and it has not changed.
-            val dxWf = dxObjDir.lookup(wf.name)
-            dxWf.asInstanceOf[DXWorkflow]
+        val buildRequired = isBuildRequired(wf.name, digest, dxObjDir)
+        buildRequired match {
+            case None =>
+                val dxWorkflow = buildWorkflow(wf, digest, appletDict)
+                dxObjDir.insert(wf.name, dxWorkflow, digest)
+                dxWorkflow
+            case Some(dxObj) =>
+                // Old workflow exists, and it has not changed.
+                dxObj.asInstanceOf[DXWorkflow]
         }
     }
 
