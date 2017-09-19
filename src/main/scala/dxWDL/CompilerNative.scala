@@ -6,7 +6,7 @@ package dxWDL
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.node.ObjectNode
 import com.dnanexus.{DXApplet, DXAPI, DXDataObject,
-    DXJSON, DXProject, DXRecord, DXSearch, DXWorkflow}
+    DXJSON, DXProject, DXRecord, DXWorkflow}
 import java.security.MessageDigest
 import scala.collection.JavaConverters._
 import spray.json._
@@ -25,6 +25,7 @@ case class CompilerNative(dxWDLrtId: String,
                           archive: Boolean,
                           verbose: Utils.Verbose) {
     lazy val runtimeLibrary:JsValue = getRuntimeLibrary()
+    lazy val projName = dxProject.describe().getName()
 
     // Open the archive
     // Extract the archive from the details field
@@ -298,6 +299,42 @@ case class CompilerNative(dxWDLrtId: String,
         (digest, reqChk)
     }
 
+    def isBuildRequired(name: String,
+                        digest: String,
+                        dxObjDir: DxObjectDirectory) : Boolean = {
+        val existingDxObjs = dxObjDir.lookup(name)
+        val buildRequired:Boolean = existingDxObjs.size match {
+            case 0 => true
+            case 1 =>
+                // Check if applet code has changed
+                val dxObjInfo = existingDxObjs.head
+                val kind = dxObjInfo.kind
+                if (digest != dxObjInfo.digest) {
+                    trace(verbose.on, s"${kind} has changed, rebuild required")
+                    true
+                } else {
+                    trace(verbose.on, s"${kind} has not changed")
+                    false
+                }
+            case _ =>
+                System.err.println(s"""|More than one dx:object ${name} found in
+                                       |path ${dxProject.getId()}:${folder}""".stripMargin)
+                true
+        }
+
+        if (buildRequired && !existingDxObjs.isEmpty) {
+            // dx:object exists, and needs to be removed
+            if (!force) {
+                throw new Exception(s"""|dx:object ${name} already exists in
+                                        | ${projName}:${folder}""".stripMargin)
+            }
+            val objs = existingDxObjs.map(_.dxObj)
+            trace(verbose.on, s"Removing old ${name} ${objs.map(_.getId)}")
+            dxProject.removeObjects(objs.asJava)
+        }
+        buildRequired
+    }
+
     // Bundle all the applet code into one bash script.
     //
     // For applets that call other applets, we pass a directory
@@ -430,10 +467,9 @@ case class CompilerNative(dxWDLrtId: String,
     // if the WDL code has changed.
     def buildAppletIfNeeded(applet: IR.Applet,
                             appletDict: Map[String, (IR.Applet, DXApplet)],
-                            aplDir: AppletDirectory)
+                            dxObjDir: DxObjectDirectory)
             : (DXApplet, Vector[IR.CVar]) = {
         trace(verbose.on, s"Compiling applet ${applet.name}")
-        val existingApl = aplDir.lookup(applet.name)
 
         // limit the applet dictionary, only to actual dependencies
         val aplLinks = applet.kind match {
@@ -458,47 +494,19 @@ case class CompilerNative(dxWDLrtId: String,
             Utils.writeFileContent(trgPath, req.prettyPrint)
         }
 
-        val buildRequired = existingApl.size match {
-            case 0 => true
-            case 1 =>
-                // Check if applet code has changed
-                val dxAplInfo = existingApl.head
-                if (digest != dxAplInfo.digest) {
-                    trace(verbose.on, s"Applet has changed, rebuild required")
-                    true
-                } else {
-                    trace(verbose.on, "Applet has not changed")
-                    false
-                }
-            case _ =>
-                System.err.println(s"""|More than one applet ${applet.name} found in
-                                       |path ${dxProject.getId()}:${folder}""".stripMargin)
-                true
-        }
-
+        val buildRequired = isBuildRequired(applet.name, digest, dxObjDir)
         if (buildRequired) {
-            if (existingApl.size > 0) {
-                // applet exists, and needs to be removed
-                if (!force) {
-                    val projName = dxProject.describe().getName()
-                    throw new Exception(s"""|Applet ${applet.name} already exists in
-                                            | ${projName}:${folder}""".stripMargin)
-                }
-                trace(verbose.on, "[Force] Removing old applets")
-                val dxObjects:Vector[DXApplet] = existingApl.map(_.applet).toVector
-                dxProject.removeObjects(dxObjects.asJava)
-            }
             // Compile a WDL snippet into an applet.
             val rep = DXAPI.appletNew(jsonNodeOfJsValue(appletApiRequest), classOf[JsonNode])
             val id = apiParseReplyID(rep)
             val dxApplet = DXApplet.getInstance(id)
-            aplDir.insert(applet.name, dxApplet, digest)
+            dxObjDir.insert(applet.name, dxApplet, digest)
             (dxApplet, applet.outputs)
         } else {
             // Old applet exists, and it has not changed. Return the
             // applet-id.
-            assert(existingApl.size > 0)
-            (existingApl.head.applet, applet.outputs)
+            val dxApplet = dxObjDir.lookup(applet.name)
+            (dxApplet.asInstanceOf[DXApplet], applet.outputs)
         }
     }
 
@@ -618,62 +626,20 @@ case class CompilerNative(dxWDLrtId: String,
     // - Do not rebuild the workflow if it has a correct checksum
     def buildWorkflowIfNeeded(ns: IR.Namespace,
                               wf: IR.Workflow,
-                              appletDict: Map[String, (IR.Applet, DXApplet)]) : DXWorkflow = {
+                              appletDict: Map[String, (IR.Applet, DXApplet)],
+                              dxObjDir: DxObjectDirectory) : DXWorkflow = {
         // the workflow digest depends on the IR and the applets
         val wfDigest:String = chksum(
             List(IR.yaml(wf).prettyPrint,
                  appletDict.toString).mkString("\n")
         )
-
-        // Search for existing workflows on the platform, in the same path
-        val existingWfl = DXSearch.findDataObjects().nameMatchesExactly(wf.name)
-            .inFolder(dxProject, folder).withClassWorkflow().execute().asList()
-            .asScala.toList
-
-        val buildRequired = existingWfl.size match {
-            case 0 => true
-            case 1 =>
-                // Check if workflow code has changed
-                val dxWfl = existingWfl.head
-                val desc: DXWorkflow.Describe = dxWfl.describe(
-                    DXDataObject.DescribeOptions.get().withProperties())
-                val props: Map[String, String] = desc.getProperties().asScala.toMap
-                val oldWfDigest:String = props.get(CHECKSUM_PROP) match {
-                    case None =>
-                        System.err.println(
-                            s"""|Workflow ${wf.name} has no checksum, and is invalid. It was probably
-                                |not created with dxWDL. Please remove it with:
-                                |dx rm ${dxProject}:${folder}/${wf.name}
-                                |""".stripMargin.trim)
-                        throw new Exception("Encountered invalid workflow, not created with dxWDL")
-                    case Some(x) => x
-                }
-                if (wfDigest != oldWfDigest) {
-                    trace(verbose.on, "Workflow has changed, rebuild required")
-                    true
-                } else {
-                    trace(verbose.on, "Workflow has not changed")
-                    false
-                }
-            case _ => true
-        }
-
+        val buildRequired = isBuildRequired(wf.name, wfDigest, dxObjDir)
         if (buildRequired) {
-            if (existingWfl.size > 0) {
-                // workflow exists, and needs to be removed
-                if (!force) {
-                    val projName = dxProject.describe().getName()
-                    throw new Exception(s"""|Workflow ${wf.name} already exists in
-                                            | ${projName}:${folder}""".stripMargin)
-                }
-                trace(verbose.on, "[Force] Removing old workflow")
-                dxProject.removeObjects(existingWfl.asJava)
-            }
             buildWorkflow(wf, wfDigest, appletDict)
         } else {
             // Old workflow exists, and it has not changed.
-            assert(existingWfl.size > 0)
-            existingWfl.head
+            val dxWf = dxObjDir.lookup(wf.name)
+            dxWf.asInstanceOf[DXWorkflow]
         }
     }
 
@@ -729,7 +695,7 @@ case class CompilerNative(dxWDLrtId: String,
 
         // Efficiently build a directory of the currently existing applets.
         // We don't want to build them if we don't have to.
-        val aplDir = AppletDirectory(ns, dxProject, folder, verbose)
+        val dxObjDir = DxObjectDirectory(ns, dxProject, folder, verbose)
 
         // Sort the applets according to dependencies.
         val applets = sortAppletsByDependencies(ns.applets)
@@ -742,7 +708,7 @@ case class CompilerNative(dxWDLrtId: String,
         // to the launcher at runtime.
         val appletDict = applets.foldLeft(Map.empty[String, (IR.Applet, DXApplet)]) {
             case (appletDict, apl) =>
-                val (dxApplet, _) = buildAppletIfNeeded(apl, appletDict, aplDir)
+                val (dxApplet, _) = buildAppletIfNeeded(apl, appletDict, dxObjDir)
                 trace(verbose.on, s"Applet ${apl.name} = ${dxApplet.getId()}")
                 appletDict + (apl.name -> (apl, dxApplet))
         }.toMap
@@ -752,7 +718,7 @@ case class CompilerNative(dxWDLrtId: String,
             case None =>
                 (None, dxApplets)
             case Some(wf) =>
-                val dxwfl = buildWorkflowIfNeeded(ns, wf, appletDict)
+                val dxwfl = buildWorkflowIfNeeded(ns, wf, appletDict, dxObjDir)
                 (Some(dxwfl), dxApplets)
         }
     }
