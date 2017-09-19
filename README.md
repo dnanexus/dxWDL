@@ -44,10 +44,49 @@ Compilation can be controled with several parameters.
 | ------  | ------------ |
 | archive | Archive older versions of applets (*dx build -a*)|
 | destination | Set the output folder on the platform |
+| inputs |  Use a cromwell style inputs file |
 | force   | Delete existing applets/workflows |
 | sort    | Sort call graph, to avoid forward references, used for CWL |
 | verbose | Print detailed progress information |
 
+The `-inputs` option allows specifying a Cromwell JSON
+[format](https://software.broadinstitute.org/wdl/documentation/inputs.php)
+inputs file.  An equivalent DNAx format inputs file is generated from
+it. For example, workflow
+[files](https://github.com/dnanexus-rnd/dxWDL/blob/master/test/files.wdl)
+has input file
+```
+{
+  "files.f": "dx://file-F5gkKkQ0ZvgjG3g16xyFf7b1",
+  "files.f1": "dx://file-F5gkQ3Q0ZvgzxKZ28JX5YZjy",
+  "files.f2": "dx://file-F5gkPXQ0Zvgp2y4Q8GJFYZ8G"
+}
+```
+
+The command
+```
+java -jar dxWDL-0.44.jar compile test/files.wdl -inputs test/files_input.json
+```
+
+generates a `test/files_input.dx.json` file that looks like this:
+```
+{
+  "stage_0.f": {
+    "$dnanexus_link": "file-F5gkKkQ0ZvgjG3g16xyFf7b1"
+  },
+  "stage_0.f1": {
+    "$dnanexus_link": "file-F5gkQ3Q0ZvgzxKZ28JX5YZjy"
+  },
+  "stage_0.f2": {
+    "$dnanexus_link": "file-F5gkPXQ0Zvgp2y4Q8GJFYZ8G"
+  }
+}
+```
+
+The workflow can then be run with the command:
+```
+dx run files -f test/files_input.dx.json
+```
 
 ## Extensions (experimental)
 
