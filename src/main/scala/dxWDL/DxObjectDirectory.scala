@@ -3,15 +3,23 @@
 package dxWDL
 
 import com.dnanexus.{DXApplet, DXDataObject, DXProject, DXSearch, DXWorkflow}
+import java.time.{LocalDateTime, ZoneId}
 import scala.collection.JavaConverters._
 import scala.collection.mutable.HashMap
+import scala.collection.mutable.HashSet
 import Utils.CHECKSUM_PROP
 
 // Keep all the information about an applet in packaged form
 case class DxObjectInfo(name:String,
+                        crDate: LocalDateTime,
                         dxObj:DXDataObject,
                         digest: String) {
-    lazy val kind = dxObj.getClass.getSimpleName
+    lazy val dxClass:String =
+        dxObj.getClass.getSimpleName match {
+            case "DXWorkflow" => "Workflow"
+            case "DXApplet" => "Applet"
+            case other => other
+        }
 }
 
 // Take a snapshot of the platform target path before the build starts.
@@ -22,6 +30,7 @@ case class DxObjectDirectory(ns: IR.Namespace,
                              folder: String,
                              verbose: Utils.Verbose) {
     private lazy val objDir : HashMap[String, Vector[DxObjectInfo]] = bulkLookup()
+    private val folders = HashSet.empty[String]
 
     // Instead of looking applets/workflows one by one, perform a bulk lookup, and
     // find all the objects in the target directory. Setup an easy to
@@ -60,6 +69,9 @@ case class DxObjectDirectory(ns: IR.Namespace,
         val dxObjectList: List[DxObjectInfo] = dxObjects.map{ dxObj =>
             val desc = dxObj.getCachedDescribe()
             val name = desc.getName()
+            val crDate = desc.getCreationDate
+            val crLdt:LocalDateTime = LocalDateTime.ofInstant(crDate.toInstant(), ZoneId.systemDefault())
+
             val props: Map[String, String] = desc.getProperties().asScala.toMap
             val digest:String = props.get(CHECKSUM_PROP) match {
                 case None =>
@@ -71,7 +83,7 @@ case class DxObjectDirectory(ns: IR.Namespace,
                     throw new Exception("Encountered invalid applet, not created with dxWDL")
                 case Some(x) => x
             }
-            DxObjectInfo(name, dxObj, digest)
+            DxObjectInfo(name, crLdt, dxObj, digest)
         }
 
         // There could be multiple versions of the same applet/workflow, collect their
@@ -99,7 +111,15 @@ case class DxObjectDirectory(ns: IR.Namespace,
     }
 
     def insert(name:String, dxObj:DXDataObject, digest: String) : Unit = {
-        val aInfo = DxObjectInfo(name, dxObj, digest)
+        val aInfo = DxObjectInfo(name, LocalDateTime.now, dxObj, digest)
         objDir(name) = Vector(aInfo)
+    }
+
+    // create a folder, if it does not already exist.
+    def newFolder(fullPath:String) : Unit = {
+        if (!(folders contains fullPath)) {
+            dxProject.newFolder(fullPath, true)
+            folders.add(fullPath)
+        }
     }
 }

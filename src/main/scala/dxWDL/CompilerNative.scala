@@ -6,6 +6,7 @@ package dxWDL
 import com.fasterxml.jackson.databind.JsonNode
 import com.dnanexus.{DXApplet, DXAPI, DXDataObject, DXProject, DXRecord, DXWorkflow}
 import java.security.MessageDigest
+import java.time.format.DateTimeFormatter
 import scala.collection.JavaConverters._
 import spray.json._
 import Utils.{AppletLinkInfo, base64Encode, CHECKSUM_PROP, dxFileOfJsValue, DXWorkflowStage,
@@ -297,6 +298,48 @@ case class CompilerNative(dxWDLrtId: String,
         (digest, reqChk)
     }
 
+    // Move an object into an archive directory. If the object
+    // is an applet, for example /A/B/C/GLnexus, move it to
+    //     /A/B/C/Applet_archive/GLnexus (Day Mon DD hh:mm:ss year)
+    // If the object is a workflow, move it to
+    //     /A/B/C/Workflow_archive/GLnexus (Day Mon DD hh:mm:ss year)
+    //
+    // Examples:
+    //   GLnexus (Fri Aug 19 18:01:02 2016)
+    //   GLnexus (Mon Mar  7 15:18:14 2016)
+    //
+    // Note: 'dx build' does not support workflow archiving at the moment.
+    def archiveDxObject(objInfo:DxObjectInfo,
+                        dxObjDir: DxObjectDirectory) : Unit = {
+        trace(verbose.on, s"Archiving ${objInfo.name} ${objInfo.dxObj.getId}")
+        val dxClass:String = objInfo.dxClass
+        val destFolder = folder ++ "/." ++ dxClass + "_archive"
+
+        // move the object to the new location
+        dxObjDir.newFolder(destFolder)
+        dxProject.move(List(objInfo.dxObj).asJava, List.empty[String].asJava, destFolder)
+
+        // add the date to the object name
+        val formatter = DateTimeFormatter.ofPattern("EE MMM dd kk:mm:ss yyyy")
+        val crDateStr = objInfo.crDate.format(formatter)
+        val req = JsObject(
+            "project" -> JsString(dxProject.getId),
+            "name" -> JsString(s"${objInfo.name} ${crDateStr}")
+        )
+
+        dxClass match {
+            case "Workflow" =>
+                DXAPI.workflowRename(objInfo.dxObj.getId,
+                                     jsonNodeOfJsValue(req),
+                                     classOf[JsonNode])
+            case "Applet" =>
+                DXAPI.appletRename(objInfo.dxObj.getId,
+                                   jsonNodeOfJsValue(req),
+                                   classOf[JsonNode])
+            case other => throw new Exception(s"Unkown class ${other}")
+        }
+    }
+
     // Do we need to build this applet/workflow?
     //
     // Returns:
@@ -311,30 +354,37 @@ case class CompilerNative(dxWDLrtId: String,
             case 1 =>
                 // Check if applet code has changed
                 val dxObjInfo = existingDxObjs.head
-                val kind = dxObjInfo.kind
+                val dxClass:String = dxObjInfo.dxClass
                 if (digest != dxObjInfo.digest) {
-                    trace(verbose.on, s"${kind} has changed, rebuild required")
+                    trace(verbose.on, s"${dxClass} has changed, rebuild required")
                     true
                 } else {
-                    trace(verbose.on, s"${kind} has not changed")
+                    trace(verbose.on, s"${dxClass} has not changed")
                     false
                 }
             case _ =>
-                System.err.println(s"""|More than one dx:object ${name} found in
+                val dxClass = existingDxObjs.head.dxClass
+                System.err.println(s"""|More than one ${dxClass} ${name} found in
                                        |path ${dxProject.getId()}:${folder}""".stripMargin)
                 true
         }
 
         if (buildRequired) {
-            if (!existingDxObjs.isEmpty) {
-                // dx:object exists, and needs to be removed
-                if (!force) {
-                    throw new Exception(s"""|${kind} ${name} already exists in
+            if (existingDxObjs.size > 0) {
+                if (archive) {
+                    // archive the applet/workflow(s)
+                    existingDxObjs.foreach(x => archiveDxObject(x, dxObjDir))
+                } else if (force) {
+                    // the dx:object exists, and needs to be removed. There
+                    // may be several versions, all are removed.
+                    val objs = existingDxObjs.map(_.dxObj)
+                    trace(verbose.on, s"Removing old ${name} ${objs.map(_.getId)}")
+                    dxProject.removeObjects(objs.asJava)
+                } else {
+                    val dxClass = existingDxObjs.head.dxClass
+                    throw new Exception(s"""|${dxClass} ${name} already exists in
                                             | ${projName}:${folder}""".stripMargin)
                 }
-                val objs = existingDxObjs.map(_.dxObj)
-                trace(verbose.on, s"Removing old ${name} ${objs.map(_.getId)}")
-                dxProject.removeObjects(objs.asJava)
             }
             None
         } else {
@@ -421,9 +471,6 @@ case class CompilerNative(dxWDLrtId: String,
                      bashScript: String,
                      folder : String) : JsValue = {
         trace(verbose.on, s"Building /applet/new request for ${applet.name}")
-
-        // We need to implement the archiving option
-        assert(!archive)
 
         val inputSpec : Vector[JsValue] = applet.inputs.map(cVar =>
             wdlVarToSpec(cVar.dxVarName, cVar.wdlType, cVar.ast)
