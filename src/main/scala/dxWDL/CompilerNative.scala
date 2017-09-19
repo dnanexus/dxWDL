@@ -371,10 +371,10 @@ case class CompilerNative(dxWDLrtId: String,
         JsObject(runSpec ++ timeoutSpec)
     }
 
-    // Build an applet by calling /applet/new
-    def appletGenApiCall(applet: IR.Applet,
-                         bashScript: String,
-                         folder : String) : JsValue = {
+    // Build an '/applet/new' request
+    def appletNewReq(applet: IR.Applet,
+                     bashScript: String,
+                     folder : String) : JsValue = {
         trace(verbose.on, s"Building /applet/new request for ${applet.name}")
 
         // We need to implement the archiving option
@@ -399,7 +399,7 @@ case class CompilerNative(dxWDLrtId: String,
             case IR.AppletKindWorkflowOutputsAndReorg => Map("project" -> JsString("CONTRIBUTE"))
             case _ => Map()
         }
-        val access = JsObject("access" -> JsObject(network ++ projAccess))
+        val access = JsObject(network ++ projAccess)
 
         // pack all the arguments into a single request
         JsObject(
@@ -450,7 +450,7 @@ case class CompilerNative(dxWDLrtId: String,
 
         // Calculate a checksum of the inputs that went into the
         // making of the applet.
-        val req = appletGenApiCall(applet, bashScript, folder)
+        val req = appletNewReq(applet, bashScript, folder)
         val (digest,appletApiRequest) = checksumReq(req)
         if (verbose.on) {
             val fName = s"${applet.name}_req_${digest}.json"
