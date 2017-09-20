@@ -1,5 +1,8 @@
 # Release Notes
 
+## 0.45
+- Default workflow inputs
+
 ## 0.44
 - Use hashes instead of files for non-native dx types
 - Do not use the help field in applet input/output arguments to carry

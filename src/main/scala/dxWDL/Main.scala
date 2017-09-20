@@ -386,7 +386,7 @@ object Main extends App {
         // mangles the outputs, which is why we pass the originals
         // unmodified.
         val cef = new CompilerErrorFormatter(ns.terminalMap)
-        val irNs = CompilerIR(cState.outputs, cOpt.folder, instanceTypeDB, cef,
+        var irNs = CompilerIR(cState.outputs, cOpt.folder, instanceTypeDB, cef,
                               cOpt.reorg, cOpt.verbose).apply(ns)
 
         // Write out the intermediate representation
@@ -406,6 +406,17 @@ object Main extends App {
             case Some(other) => throw new Exception(s"Unknown compilation mode ${other}")
         }
 
+        val defaultInputs: Option[Path] = options.get("defaults").map(Paths.get(_))
+        irNs = defaultInputs match {
+            case Some(path) =>
+                // embed the defaults into the IR
+                /*InputFile(cOpt.verbose).apply(dxwfl, irNs, path)
+                 dxwfl.getId*/
+                throw new Exception("unimplemented")
+            case _ => irNs
+        }
+
+        //
         // generate dx inputs from the Cromwell-style input specification.
         val wdlInputs: Option[Path] = options.get("inputs").map(Paths.get(_))
         (wf, irNs.workflow, wdlInputs) match {
