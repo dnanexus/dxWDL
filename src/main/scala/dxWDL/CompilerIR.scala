@@ -37,6 +37,14 @@ case class CompilerIR(gWorkflowOutputs: Option[Seq[WorkflowOutput]],
     // Environment (scope) where a call is made
     type CallEnv = Map[String, LinkedVar]
 
+    // generate a stage Id
+    var stageNum = 0
+    def genStageId() : Utils.DXWorkflowStage = {
+        val retval = Utils.DXWorkflowStage(s"stage_${stageNum}")
+        stageNum += 1
+        retval
+    }
+
     // Convert the environment to yaml, and then pretty
     // print it.
     def prettyPrint(env: CallEnv) : String = {
@@ -382,7 +390,7 @@ task Add {
                                WdlRewrite.namespace(code, Seq.empty))
         verifyWdlCodeIsLegal(applet.ns)
 
-        (IR.Stage(appletName, appletName, Vector[IR.SArg](), outputVars),
+        (IR.Stage(appletName, genStageId(), appletName, Vector[IR.SArg](), outputVars),
          applet)
     }
 
@@ -458,7 +466,7 @@ workflow w {
         // Link to the X.y original variables
         val inputs: Vector[IR.SArg] = closure.map{ case (_, lVar) => lVar.sArg }.toVector
 
-        (IR.Stage(appletName, appletName, inputs, outputVars),
+        (IR.Stage(appletName, genStageId(), appletName, inputs, outputVars),
          applet)
     }
 
@@ -543,7 +551,7 @@ workflow w {
         // Link to the X.y original variables
         val inputs: Vector[IR.SArg] = closure.map{ case (_, lVar) => lVar.sArg }.toVector
 
-        (IR.Stage(appletName, appletName, inputs, outputVars),
+        (IR.Stage(appletName, genStageId(), appletName, inputs, outputVars),
          applet)
     }
 
@@ -646,7 +654,7 @@ workflow w {
         }
 
         val stageName = callUniqueName(call)
-        IR.Stage(stageName, task.name, inputs, callee.outputs)
+        IR.Stage(stageName, genStageId(), task.name, inputs, callee.outputs)
     }
 
     // Split a block (Scatter, If, ..) into the top declarations,
@@ -945,7 +953,7 @@ workflow w {
         val sargs : Vector[IR.SArg] = closure.map {
             case (_, LinkedVar(_, sArg)) => sArg
         }.toVector
-        (IR.Stage(stageName, applet.name, sargs, outputVars),
+        (IR.Stage(stageName, genStageId(), applet.name, sargs, outputVars),
          applet)
     }
 
@@ -991,7 +999,7 @@ workflow w {
         val sargs : Vector[IR.SArg] = closure.map {
             case (_, LinkedVar(_, sArg)) => sArg
         }.toVector
-        (IR.Stage(stageName, applet.name, sargs, outputVars),
+        (IR.Stage(stageName, genStageId(), applet.name, sargs, outputVars),
          applet)
     }
 
@@ -1022,23 +1030,23 @@ workflow w {
 
         // Create a stage per call/scatter-block/declaration-block
         val subBlocks = splitIntoBlocks(wfBody)
-        val initAccu : Vector[(IR.Stage, Option[IR.Applet])] =
-            Vector((commonStage, Some(commonApplet)))
+        val initAccu : (Vector[(IR.Stage, Option[IR.Applet])]) =
+            (Vector((commonStage, Some(commonApplet))))
         val allStageInfo = subBlocks.foldLeft(initAccu) { (accu, child) =>
             val (stage, appletOpt) = child match {
                 case BlockDecl(decls) =>
-                    evalAppletNum = evalAppletNum + 1
+                    evalAppletNum += 1
                     val appletName = wf.unqualifiedName ++ "_eval" ++ evalAppletNum.toString
                     val (stage, applet) = compileEvalAndPassClosure(appletName, decls, env)
                     (stage, Some(applet))
                 case BlockIf(preDecls, cond) =>
-                    condNum = condNum + 1
+                    condNum += 1
                     val condName = Utils.IF ++ "_" ++ condNum.toString
                     val (stage, applet) = compileIf(wf.unqualifiedName, condName, preDecls,
                                                     cond, taskApplets, env)
                     (stage, Some(applet))
                 case BlockScatter(preDecls, scatter) =>
-                    scatterNum = scatterNum + 1
+                    scatterNum += 1
                     val scatterName = Utils.SCATTER ++ "_" ++ scatterNum.toString
                     val (stage, applet) = compileScatter(wf.unqualifiedName, scatterName, preDecls,
                                                          scatter, taskApplets, env)
@@ -1050,6 +1058,7 @@ workflow w {
                     throw new Exception(cef.notCurrentlySupported(
                                             x.ast, s"Workflow element type=${x}"))
             }
+
             // Add bindings for the output variables. This allows later calls to refer
             // to these results. In case of scatters, there is no block name to reference.
             for (cVar <- stage.outputs) {

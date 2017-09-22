@@ -397,12 +397,25 @@ object Main extends App {
             case Some(path) =>
                 // embed the defaults into the IR
                 Utils.trace(cOpt.verbose.on, s"Embedding defaults into IR")
-                IR.embedDefaults(irNs, path)
+                InputFile(cOpt.verbose).embedDefaults(irNs, path)
             case _ => irNs
         }
 
         // Write out the intermediate representation
         prettyPrintIR(wdlSourceFile, irNs, cOpt.verbose.on)
+
+        // generate dx inputs from the Cromwell-style input specification.
+        val wdlInputs: Option[Path] = options.get("inputs").map(Paths.get(_))
+        wdlInputs match {
+            case Some(path) =>
+                val dxInputs = InputFile(cOpt.verbose).dxFromCromwell(irNs, path)
+                // write back out as xxxx.dx.json
+                val filename = Utils.replaceFileSuffix(path, ".dx.json")
+                val dxInputFile = path.getParent().resolve(filename)
+                Utils.writeFileContent(dxInputFile, dxInputs.prettyPrint)
+                Utils.trace(cOpt.verbose.on, s"Wrote dx JSON input file ${dxInputFile}")
+            case _ => ()
+        }
 
         // Backend compiler pass
         val wf:Option[DXWorkflow] = cOpt.compileMode match {
@@ -418,15 +431,6 @@ object Main extends App {
             case Some(other) => throw new Exception(s"Unknown compilation mode ${other}")
         }
 
-        //
-        // generate dx inputs from the Cromwell-style input specification.
-        val wdlInputs: Option[Path] = options.get("inputs").map(Paths.get(_))
-        (wf, irNs.workflow, wdlInputs) match {
-            case (Some(dxwfl), Some(irWf), Some(path)) =>
-                InputFile(cOpt.verbose).apply(dxwfl, irNs, path)
-                dxwfl.getId
-            case _ => ()
-        }
         wf match {
             case Some(dxwfl) => dxwfl.getId
             case None => ""

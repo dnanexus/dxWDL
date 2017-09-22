@@ -8,7 +8,6 @@
 // We use YAML as a human readable representation of the IR.
 package dxWDL
 
-import java.nio.file.Path
 import net.jcazevedo.moultingyaml._
 import spray.json._
 import wdl4s.wdl.WdlNamespace
@@ -91,6 +90,7 @@ object IR {
     case class SArgLink(stageName: String, argName: CVar) extends SArg
 
     case class Stage(name: String,
+                     id: Utils.DXWorkflowStage,
                      appletName: String,
                      inputs: Vector[SArg],
                      outputs: Vector[CVar])
@@ -101,109 +101,6 @@ object IR {
     case class Namespace(workflow: Option[Workflow],
                          applets: Map[String, Applet])
 
-
-    // build a mapping from call to stage name
-    def callDict(ns:Namespace) : Map[String, String] = {
-        ns.workflow match {
-            case None => Map.empty
-            case Some(wf) =>
-                wf.stages.foldLeft(Map.empty[String, String]) {
-                    case (callDict, stg) =>
-                        val apl:Applet = ns.applets(stg.appletName)
-                        // map source calls to the stage name. For example, this happens
-                        // for scatters.
-                        val call2Stage = apl.kind match {
-                            case AppletKindScatter(calls) =>
-                                calls.map{
-                                    case (unqualifiedName,_) => unqualifiedName -> stg.name
-                                }.toMap
-                            case AppletKindIf(calls) =>
-                                calls.map{
-                                    case (unqualifiedName,_) => unqualifiedName -> stg.name
-                                }.toMap
-                            case _ => Map.empty[String, String]
-                        }
-                        callDict ++ call2Stage
-                }
-        }
-    }
-
-    // Embed default values into the IR
-    //
-    // Make a sequential pass on the IR, figure out the fully qualified names
-    // of all CVar and SArgs. If they have a default value, add it as an attribute
-    // (DeclAttrs).
-    def embedDefaults(ns: Namespace,
-                      defaultInputs: Path) : Namespace = {
-        // read the default inputs file (xxxx.json)
-        val defaults:JsObject = Utils.readFileContent(defaultInputs).parseJson.asJsObject
-
-        // if applet inputs have defaults, set them as attributes
-        def addDefaultsToApplet(apl:Applet, wdlNameTrail:String) : Applet = {
-            val inputsWithDefaults = apl.inputs.map{ cVar =>
-                val fqn = s"${wdlNameTrail}.${cVar.name}"
-                defaults.fields.get(fqn) match {
-                    case None => cVar
-                    case Some(dflt:JsValue) =>
-                        val attrs = cVar.attrs.add("default", dflt)
-                        cVar.copy(attrs = attrs)
-                }
-            }
-            apl.copy(inputs = inputsWithDefaults)
-        }
-
-        // If a stage has defaults, set the SArg to a constant. The user
-        // can override it at runtime.
-        def addDefaultsToStage(stg:Stage, wdlNameTrail:String) : Stage = {
-            val inputsWithDefaults:Vector[SArg] = stg.inputs.zipWithIndex.map{
-                case (sArg,idx) =>
-                    val callee:Applet = ns.applets(stg.appletName)
-                    val cVar = callee.inputs(idx)
-                    val fqn = s"${wdlNameTrail}.${cVar.name}"
-                    defaults.fields.get(fqn) match {
-                        case None => sArg
-                        case Some(dflt:JsValue) =>
-                            val wvl = WdlVarLinks(cVar.wdlType, cVar.attrs, DxlValue(dflt))
-                            val w = WdlVarLinks.eval(wvl, false)
-                            SArgConst(w)
-                    }
-            }
-            stg.copy(inputs = inputsWithDefaults)
-        }
-
-        // figure out the WDL ancestry to an applet. What piece
-        // of WDL code is the source for this applet?
-        ns.workflow match {
-            case Some(wf)  =>
-                val applets = ns.applets.map{ case (name, applet) =>
-                    val nameTrail = applet.kind match {
-                        case AppletKindTask => applet.name
-                        case _ => wf.name
-                    }
-                    val apl = addDefaultsToApplet(applet, nameTrail)
-                    apl.name -> apl
-                }.toMap
-                // add defaults to workflow stages
-                val stages = wf.stages.map{ stg =>
-                    val nameTrail = s"${wf.name}.${stg.name}"
-                    addDefaultsToStage(stg, nameTrail)
-                }
-                val wfWithDefaults = wf.copy(stages = stages)
-                Namespace(Some(wfWithDefaults), applets)
-
-            case None =>
-                // The namespace comprises tasks only
-                val applets = ns.applets.map{ case (name, applet) =>
-                    val nameTrail = applet.kind match {
-                        case AppletKindTask => applet.name
-                        case _ => throw new Exception("sanity")
-                    }
-                    val apl = addDefaultsToApplet(applet, nameTrail)
-                    apl.name -> apl
-                }.toMap
-                Namespace(None, applets)
-        }
-    }
 
     // Automatic conversion to/from Yaml
     object IrInternalYamlProtocol extends DefaultYamlProtocol {
@@ -425,7 +322,8 @@ object IR {
             }
         }
 
-        implicit val stageFormat = yamlFormat4(Stage)
+        implicit val dxWorkflowStageFormat = yamlFormat1(Utils.DXWorkflowStage)
+        implicit val stageFormat = yamlFormat5(Stage)
         implicit val workflowFormat = yamlFormat2(Workflow)
         implicit val namespaceFormat = yamlFormat2(Namespace)
     }

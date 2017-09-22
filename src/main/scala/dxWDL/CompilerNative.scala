@@ -647,16 +647,15 @@ case class CompilerNative(dxWDLrtId: String,
                 val (irApplet,dxApplet) = appletDict(stg.appletName)
                 val linkedInputs : Vector[(IR.CVar, IR.SArg)] = irApplet.inputs zip stg.inputs
                 val inputs = genStageInputs(linkedInputs, irApplet, stageDict)
-                val stgId = DXWorkflowStage(s"stage_${version}")
                 // convert the per-stage metadata into JSON
                 val stageReqDesc = JsObject(
-                    "id" -> JsString(stgId.getId),
+                    "id" -> JsString(stg.id.getId),
                     "executable" -> JsString(dxApplet.getId),
                     "name" -> JsString(stg.name),
                     "input" -> inputs)
                 (version + 1,
                  stagesReq :+ stageReqDesc,
-                 stageDict ++ Map(stg.name -> stgId))
+                 stageDict ++ Map(stg.name -> stg.id))
         }
 
         // pack all the arguments into a single API call
