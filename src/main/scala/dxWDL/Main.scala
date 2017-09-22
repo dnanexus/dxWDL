@@ -389,8 +389,17 @@ object Main extends App {
         // mangles the outputs, which is why we pass the originals
         // unmodified.
         val cef = new CompilerErrorFormatter(ns.terminalMap)
-        val irNs = CompilerIR(cState.outputs, cOpt.folder, instanceTypeDB, cef,
+        var irNs = CompilerIR(cState.outputs, cOpt.folder, instanceTypeDB, cef,
                               cOpt.reorg, cOpt.verbose).apply(ns)
+
+        val defaultInputs: Option[Path] = options.get("defaults").map(Paths.get(_))
+        irNs = defaultInputs match {
+            case Some(path) =>
+                // embed the defaults into the IR
+                Utils.trace(cOpt.verbose.on, s"Embedding defaults into IR")
+                IR.embedDefaults(irNs, path)
+            case _ => irNs
+        }
 
         // Write out the intermediate representation
         prettyPrintIR(wdlSourceFile, irNs, cOpt.verbose.on)
@@ -409,21 +418,12 @@ object Main extends App {
             case Some(other) => throw new Exception(s"Unknown compilation mode ${other}")
         }
 
-        val defaultInputs: Option[Path] = options.get("defaults").map(Paths.get(_))
-        val irNs2 = defaultInputs match {
-            case Some(path) =>
-                // embed the defaults into the IR
-                Utils.trace(verbose.on, s"Embedding defaults into IR")
-                IR.embedDefaults(irNs, path)
-            case _ => irNs
-        }
-
         //
         // generate dx inputs from the Cromwell-style input specification.
         val wdlInputs: Option[Path] = options.get("inputs").map(Paths.get(_))
-        (wf, irNs2.workflow, wdlInputs) match {
+        (wf, irNs.workflow, wdlInputs) match {
             case (Some(dxwfl), Some(irWf), Some(path)) =>
-                InputFile(cOpt.verbose).apply(dxwfl, irNs2, path)
+                InputFile(cOpt.verbose).apply(dxwfl, irNs, path)
                 dxwfl.getId
             case _ => ()
         }

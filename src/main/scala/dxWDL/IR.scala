@@ -8,7 +8,9 @@
 // We use YAML as a human readable representation of the IR.
 package dxWDL
 
+import java.nio.file.Path
 import net.jcazevedo.moultingyaml._
+import spray.json._
 import wdl4s.wdl.WdlNamespace
 import wdl4s.wdl.types._
 import wdl4s.wdl.values._
@@ -136,28 +138,34 @@ object IR {
         // read the default inputs file (xxxx.json)
         val defaults:JsObject = Utils.readFileContent(defaultInputs).parseJson.asJsObject
 
+        // if applet inputs have defaults, set them as attributes
         def addDefaultsToApplet(apl:Applet, wdlNameTrail:String) : Applet = {
             val inputsWithDefaults = apl.inputs.map{ cVar =>
                 val fqn = s"${wdlNameTrail}.${cVar.name}"
                 defaults.fields.get(fqn) match {
                     case None => cVar
-                    case Some(defVal:JsValue) =>
-                        val attrs = cVar.attrs ++ Map("default" -> defVal)
-                        cVar.copy(atts = attrs)
+                    case Some(dflt:JsValue) =>
+                        val attrs = cVar.attrs.add("default", dflt)
+                        cVar.copy(attrs = attrs)
                 }
             }
             apl.copy(inputs = inputsWithDefaults)
         }
 
+        // If a stage has defaults, set the SArg to a constant. The user
+        // can override it at runtime.
         def addDefaultsToStage(stg:Stage, wdlNameTrail:String) : Stage = {
-            val inputsWithDefaults:Vector[SArg] = stg.inputs.imap{
-                case (i, sArg) =>
+            val inputsWithDefaults:Vector[SArg] = stg.inputs.zipWithIndex.map{
+                case (sArg,idx) =>
                     val callee:Applet = ns.applets(stg.appletName)
-                    val cVar = callee.inputs.get(i)
-                    val fqn = s"${nameTrail}.${cVar.name}"
+                    val cVar = callee.inputs(idx)
+                    val fqn = s"${wdlNameTrail}.${cVar.name}"
                     defaults.fields.get(fqn) match {
                         case None => sArg
-                        case Some(dflt:JsValue) => SArg.Const(?wdlVar?)
+                        case Some(dflt:JsValue) =>
+                            val wvl = WdlVarLinks(cVar.wdlType, cVar.attrs, DxlValue(dflt))
+                            val w = WdlVarLinks.eval(wvl, false)
+                            SArgConst(w)
                     }
             }
             stg.copy(inputs = inputsWithDefaults)
@@ -176,18 +184,18 @@ object IR {
                     apl.name -> apl
                 }.toMap
                 // add defaults to workflow stages
-                wf.stages.map{ stg =>
+                val stages = wf.stages.map{ stg =>
                     val nameTrail = s"${wf.name}.${stg.name}"
                     addDefaultsToStage(stg, nameTrail)
                 }
-                Namespace(Some(wf), applets)
+                val wfWithDefaults = wf.copy(stages = stages)
+                Namespace(Some(wfWithDefaults), applets)
 
             case None =>
                 // The namespace comprises tasks only
                 val applets = ns.applets.map{ case (name, applet) =>
                     val nameTrail = applet.kind match {
-                        case AppletKindTask =>
-                            applet.name
+                        case AppletKindTask => applet.name
                         case _ => throw new Exception("sanity")
                     }
                     val apl = addDefaultsToApplet(applet, nameTrail)
@@ -214,7 +222,7 @@ object IR {
                 case YamlString("Default") => InstanceTypeDefault
                 case YamlString("Runtime") => InstanceTypeRuntime
                 case YamlString(name) => InstanceTypeConst(name)
-                case unrecognized => deserializationError(s"InstanceType expected ${unrecognized}")
+                case unrecognized => throw new Exception(s"InstanceType expected ${unrecognized}")
             }
         }
 
@@ -261,7 +269,30 @@ object IR {
                                     AppletKindScatter(calls.convertTo[Map[String, String]])
                             }
                     }
-                case unrecognized => deserializationError(s"AppletKind expected ${unrecognized}")
+                case unrecognized => throw new Exception(s"AppletKind expected ${unrecognized}")
+            }
+        }
+
+        implicit object DeclAttrsYamlFormat extends YamlFormat[DeclAttrs] {
+            def write(dAttrs: DeclAttrs) : YamlValue = {
+                val yAttrs:Map[YamlValue, YamlValue] = dAttrs.m.map{
+                    case (key,value) =>
+                        YamlString(key) -> YamlString(value.prettyPrint)
+                }.toMap
+                YamlObject(yAttrs)
+            }
+            def read(value: YamlValue) : DeclAttrs = {
+                val m:Map[String, JsValue] = value match {
+                    case YamlObject(fields) =>
+                        fields.map{
+                            case (YamlString(key),YamlString(value)) =>
+                                key -> value.parseJson
+                            case _ =>
+                                throw new Exception("invalid")
+                        }
+                    case _ => throw new Exception("invalid")
+                }
+                DeclAttrs(m)
             }
         }
 
@@ -269,21 +300,23 @@ object IR {
             def write(cVar: CVar) = {
                 val m : Map[YamlValue, YamlValue] = Map(
                     YamlString("type") -> YamlString(cVar.wdlType.toWdlString),
-                    YamlString("name") -> YamlString(cVar.name)
+                    YamlString("name") -> YamlString(cVar.name),
+                    YamlString("attributes") -> cVar.attrs.toYaml
                 )
                 YamlObject(m)
             }
 
             def read(value: YamlValue) = {
-                value.asYamlObject.getFields(YamlString("type"), YamlString("name"))
-                    match {
-                    case Seq(YamlString(wdlType), YamlString(name)) =>
+                value.asYamlObject.getFields(YamlString("type"),
+                                             YamlString("name"),
+                                             YamlString("attributes")) match {
+                    case Seq(YamlString(wdlType), YamlString(name), attrs) =>
                         new CVar(name,
                                  WdlType.fromWdlString(wdlType),
-                                 DeclAttrs.empty,
+                                 attrs.convertTo[DeclAttrs],
                                  WdlRewrite.INVALID_AST)
                     case unrecognized =>
-                        deserializationError(s"CVar expected ${unrecognized}")
+                        throw new Exception(s"CVar expected ${unrecognized}")
                 }
             }
         }
@@ -318,7 +351,7 @@ object IR {
                                         val t:WdlType = WdlType.fromWdlString(wdlType)
                                         val v = t.fromWdlString(value)
                                         SArgConst(v)
-                                    case _ => deserializationError("SArg malformed const")
+                                    case _ => throw new Exception("SArg malformed const")
                                 }
                             case Seq(YamlString("link")) =>
                                 yo.getFields(YamlString("stage"),
@@ -326,13 +359,13 @@ object IR {
                                     case Seq(YamlString(stageName),
                                              cVar) =>
                                         SArgLink(stageName, cVar.convertTo[CVar])
-                                    case _ => deserializationError("SArg malformed link")
+                                    case _ => throw new Exception("SArg malformed link")
                                 }
                             case unrecognized =>
-                                deserializationError(s"CVar expected ${unrecognized}")
+                                throw new Exception(s"CVar expected ${unrecognized}")
                         }
                     case unrecognized =>
-                        deserializationError(s"CVar expected ${unrecognized}")
+                        throw new Exception(s"CVar expected ${unrecognized}")
                 }
             }
         }
@@ -387,7 +420,7 @@ object IR {
                                        WdlNamespace.loadUsingSource(wdlCode, None, None).get)
                         }
                     case unrecognized =>
-                        deserializationError(s"Applet expected ${unrecognized}")
+                        throw new Exception(s"Applet expected ${unrecognized}")
                 }
             }
         }

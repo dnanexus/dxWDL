@@ -12,6 +12,11 @@ case class DeclAttrs(m: Map[String, JsValue]) {
             case _ => false
         }
     }
+
+    // add another attribute
+    def add(key:String, value:JsValue) : DeclAttrs = {
+        DeclAttrs(m + (key -> value))
+    }
 }
 
 object DeclAttrs {
