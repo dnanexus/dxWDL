@@ -133,6 +133,9 @@ object Main extends App {
                 val keyword = normKeyword(keyOrg)
                 val value = keyword match {
                     case "archive" => ""
+                    case "defaults" =>
+                        assert(subargs.length == 1)
+                        subargs.head
                     case "destination" =>
                         assert(subargs.length == 1)
                         subargs.head
@@ -386,7 +389,7 @@ object Main extends App {
         // mangles the outputs, which is why we pass the originals
         // unmodified.
         val cef = new CompilerErrorFormatter(ns.terminalMap)
-        var irNs = CompilerIR(cState.outputs, cOpt.folder, instanceTypeDB, cef,
+        val irNs = CompilerIR(cState.outputs, cOpt.folder, instanceTypeDB, cef,
                               cOpt.reorg, cOpt.verbose).apply(ns)
 
         // Write out the intermediate representation
@@ -407,21 +410,20 @@ object Main extends App {
         }
 
         val defaultInputs: Option[Path] = options.get("defaults").map(Paths.get(_))
-        irNs = defaultInputs match {
+        val irNs2 = defaultInputs match {
             case Some(path) =>
                 // embed the defaults into the IR
-                /*InputFile(cOpt.verbose).apply(dxwfl, irNs, path)
-                 dxwfl.getId*/
-                throw new Exception("unimplemented")
+                Utils.trace(verbose.on, s"Embedding defaults into IR")
+                IR.embedDefaults(irNs, path)
             case _ => irNs
         }
 
         //
         // generate dx inputs from the Cromwell-style input specification.
         val wdlInputs: Option[Path] = options.get("inputs").map(Paths.get(_))
-        (wf, irNs.workflow, wdlInputs) match {
+        (wf, irNs2.workflow, wdlInputs) match {
             case (Some(dxwfl), Some(irWf), Some(path)) =>
-                InputFile(cOpt.verbose).apply(dxwfl, irNs, path)
+                InputFile(cOpt.verbose).apply(dxwfl, irNs2, path)
                 dxwfl.getId
             case _ => ()
         }
@@ -536,9 +538,10 @@ object Main extends App {
             |  options:
             |    -archive              Archive older versions of applets
             |    -compileMode <string> Compilation mode, a debugging flag
+            |    -defaults <string>    Path to Cromwell formatted default values file
             |    -destination <string> Output folder on the platform for workflow
             |    -force                Delete existing applets/workflows
-            |    -inputs <string>      Path to cromwell style input file
+            |    -inputs <string>      Path to Cromwell formatted input file
             |    -noAppletTimeout      By default, applets cannot run more than ${Utils.DEFAULT_APPLET_TIMEOUT} hours.
             |                          Remove this limitation.
             |    -reorg                Reorganize workflow output files
