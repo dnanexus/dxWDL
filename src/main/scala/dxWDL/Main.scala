@@ -406,9 +406,9 @@ object Main extends App {
 
         // generate dx inputs from the Cromwell-style input specification.
         val wdlInputs: Option[Path] = options.get("inputs").map(Paths.get(_))
-        wdlInputs match {
-            case Some(path) =>
-                val dxInputs = InputFile(cOpt.verbose).dxFromCromwell(irNs, path)
+        (wdlInputs, irNs.workflow) match {
+            case (Some(path), Some(irwf)) =>
+                val dxInputs = InputFile(cOpt.verbose).dxFromCromwell(irNs, irwf, path)
                 // write back out as xxxx.dx.json
                 val filename = Utils.replaceFileSuffix(path, ".dx.json")
                 val dxInputFile = path.getParent().resolve(filename)

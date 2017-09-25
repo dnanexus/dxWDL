@@ -23,11 +23,10 @@ package dxWDL
 
 import com.dnanexus.{DXFile, DXProject, DXSearch}
 import scala.collection.mutable.HashMap
-import IR._
 import java.nio.file.{Path, Paths}
 import scala.collection.JavaConverters._
 import spray.json._
-import Utils.{UNIVERSAL_FILE_PREFIX}
+import Utils.{trace, UNIVERSAL_FILE_PREFIX}
 
 case class InputFile(verbose: Utils.Verbose) {
     private def lookupFile(dxProject: Option[DXProject], fileName: String): DXFile = {
@@ -91,15 +90,15 @@ case class InputFile(verbose: Utils.Verbose) {
     // Make a sequential pass on the IR, figure out the fully qualified names
     // of all CVar and SArgs. If they have a default value, add it as an attribute
     // (DeclAttrs).
-    def embedDefaults(ns: Namespace,
-                      defaultInputs: Path) : Namespace = {
-        Utils.trace(verbose.on, s"Embedding defaults into the IR")
+    def embedDefaults(ns: IR.Namespace,
+                      defaultInputs: Path) : IR.Namespace = {
+        trace(verbose.on, s"Embedding defaults into the IR")
 
         // read the default inputs file (xxxx.json)
         val defaults:JsObject = Utils.readFileContent(defaultInputs).parseJson.asJsObject
 
         // if applet inputs have defaults, set them as attributes
-        def addDefaultsToApplet(apl:Applet, wdlNameTrail:String) : Applet = {
+        def addDefaultsToApplet(apl:IR.Applet, wdlNameTrail:String) : IR.Applet = {
             val inputsWithDefaults = apl.inputs.map{ cVar =>
                 val fqn = s"${wdlNameTrail}.${cVar.name}"
                 defaults.fields.get(fqn) match {
@@ -114,10 +113,10 @@ case class InputFile(verbose: Utils.Verbose) {
 
         // If a stage has defaults, set the SArg to a constant. The user
         // can override it at runtime.
-        def addDefaultsToStage(stg:Stage, wdlNameTrail:String) : Stage = {
-            val inputsWithDefaults:Vector[SArg] = stg.inputs.zipWithIndex.map{
+        def addDefaultsToStage(stg:IR.Stage, wdlNameTrail:String) : IR.Stage = {
+            val inputsWithDefaults:Vector[IR.SArg] = stg.inputs.zipWithIndex.map{
                 case (sArg,idx) =>
-                    val callee:Applet = ns.applets(stg.appletName)
+                    val callee:IR.Applet = ns.applets(stg.appletName)
                     val cVar = callee.inputs(idx)
                     val fqn = s"${wdlNameTrail}.${cVar.name}"
                     defaults.fields.get(fqn) match {
@@ -125,7 +124,7 @@ case class InputFile(verbose: Utils.Verbose) {
                         case Some(dflt:JsValue) =>
                             val wvl = WdlVarLinks(cVar.wdlType, cVar.attrs, DxlValue(dflt))
                             val w = WdlVarLinks.eval(wvl, false)
-                            SArgConst(w)
+                            IR.SArgConst(w)
                     }
             }
             stg.copy(inputs = inputsWithDefaults)
@@ -137,7 +136,7 @@ case class InputFile(verbose: Utils.Verbose) {
             case Some(wf)  =>
                 val applets = ns.applets.map{ case (name, applet) =>
                     val nameTrail = applet.kind match {
-                        case AppletKindTask => applet.name
+                        case IR.AppletKindTask => applet.name
                         case _ => wf.name
                     }
                     val apl = addDefaultsToApplet(applet, nameTrail)
@@ -149,80 +148,78 @@ case class InputFile(verbose: Utils.Verbose) {
                     addDefaultsToStage(stg, nameTrail)
                 }
                 val wfWithDefaults = wf.copy(stages = stages)
-                Namespace(Some(wfWithDefaults), applets)
+                IR.Namespace(Some(wfWithDefaults), applets)
 
             case None =>
                 // The namespace comprises tasks only
                 val applets = ns.applets.map{ case (name, applet) =>
                     val nameTrail = applet.kind match {
-                        case AppletKindTask => applet.name
+                        case IR.AppletKindTask => applet.name
                         case _ => throw new Exception("sanity")
                     }
                     val apl = addDefaultsToApplet(applet, nameTrail)
                     apl.name -> apl
                 }.toMap
-                Namespace(None, applets)
+                IR.Namespace(None, applets)
         }
     }
 
     // Build a dx input file, based on the wdl input file and the workflow
-    def dxFromCromwell(ns: Namespace,
+    def dxFromCromwell(ns: IR.Namespace,
+                       wf: IR.Workflow,
                        inputPath: Path) : JsObject = {
-        Utils.trace(verbose.on, s"Translating WDL input file ${inputPath}")
-
+        trace(verbose.on, s"Translating WDL input file ${inputPath}")
 
         // read the input file xxxx.json
         val wdlInputs: JsObject = Utils.readFileContent(inputPath).parseJson.asJsObject
+        val inputFields = HashMap.empty[String, JsValue]
+        wdlInputs.fields.foreach{ case (k,v) => inputFields(k) = v }
 
         // The general idea here is to figure out the ancestry of each
         // applet/call/workflow input. This provides the fully-qualified-name (fqn)
         // of each IR variable. Then we check if the fqn is defined in
         // the input file.
+        val workflowBindings = HashMap.empty[String, JsValue]
 
-        // make a pass on all applets in the namespace
-        val appletBindings = HashMap.empty[String, JsValue]
-        ns.applets.foreach{ case (name, applet) =>
-            val nameTrail = applet.kind match {
-                case AppletKindTask => applet.name
-                case other =>
-                    ns.workflow match {
-                        case Some(wf) =>
-                            // An applet generated from a piece of the workflow
-                            wf.name
-                        case None =>
-                            // A namespace with no workflow, it cannot have generated applets.
-                            throw new Exception(s"Sanity, bad applet type ${other}")
+        // make a pass on all the stages
+        wf.stages.foreach{ stage =>
+            val callee:IR.Applet = ns.applets(stage.appletName)
+
+            // make a pass on all call inputs
+            stage.inputs.zipWithIndex.foreach{
+                case (sArg,idx) =>
+                    val cVar = callee.inputs(idx)
+                    val fqn = s"${wf.name}.${stage.name}.${cVar.name}"
+                    inputFields.get(fqn).map{ jsv =>
+                        val dxName = s"${stage.id.getId}.${cVar.name}"
+                        trace(verbose.on, s"${fqn} -> ${dxName}")
+                        workflowBindings(dxName) = translateValue(jsv)
                     }
             }
-            // search for all the applet inputs
-            applet.inputs.foreach{ cVar =>
-                val fqn = s"${nameTrail}.${cVar.name}"
-                wdlInputs.fields.get(fqn).map{ jsv =>
-                    appletBindings(fqn) = translateValue(jsv)
-                }
-            }
-        }
+            // check if the applet called from this stage has bindings
+            callee.kind match {
+                case IR.AppletKindTask =>
+                    // We aren't handling applet settings currently
+                    ()
+                case other =>
+                    // An applet generated from a piece of the workflow.
+                    // search for all the applet inputs
+                    callee.inputs.foreach{ cVar =>
+                        val fqn = s"${wf.name}.${cVar.name}"
+                        inputFields.get(fqn).map{ jsv =>
+                            val dxName = s"${stage.id.getId}.${cVar.name}"
+                            trace(verbose.on, s"${fqn} -> ${dxName}")
+                            workflowBindings(dxName) = translateValue(jsv)
 
-        // make a pass on the workflow, if there is one
-        val workflowBindings = HashMap.empty[String, JsValue]
-        ns.workflow.map{ wf =>
-            wf.stages.foreach{ stg =>
-                val nameTrail = s"${wf.name}.${stg.name}"
-
-                // make a pass on all call inputs
-                stg.inputs.zipWithIndex.foreach{
-                    case (sArg,idx) =>
-                        val callee:Applet = ns.applets(stg.appletName)
-                        val cVar = callee.inputs(idx)
-                        val fqn = s"${nameTrail}.${cVar.name}"
-                        wdlInputs.fields.get(fqn).map{ jsv =>
-                            appletBindings(fqn) = translateValue(jsv)
+                            // Do not assign the value to any later stages.
+                            // We found the variable declaration, the others
+                            // are variable uses.
+                            inputFields -= fqn
                         }
-                }
+                    }
             }
         }
 
-        val m:Map[String, JsValue] = appletBindings.toMap ++ workflowBindings.toMap
-        JsObject(m)
+        JsObject(workflowBindings.toMap)
     }
 }
