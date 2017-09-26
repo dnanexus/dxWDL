@@ -181,20 +181,44 @@ case class InputFile(verbose: Utils.Verbose) {
         // the input file.
         val workflowBindings = HashMap.empty[String, JsValue]
 
+        // If WDL variable fully qualified name [fqn] was provided in the
+        // input file, set [stage.cvar] to its JSON value
+        def checkAndBind(fqn:String, dxName:String) : Unit = {
+            inputFields.get(fqn) match {
+                case None => ()
+                case Some(jsv) =>
+                    trace(verbose.on, s"${fqn} -> ${dxName}")
+                    workflowBindings(dxName) = translateValue(jsv)
+                    // Do not assign the value to any later stages.
+                    // We found the variable declaration, the others
+                    // are variable uses.
+                    inputFields -= fqn
+            }
+        }
+        def compoundCalls(stage:IR.Stage,
+                          calls:Map[String, String]) : Unit = {
+            calls.foreach{ case (callName, appletName) =>
+                val callee:IR.Applet = ns.applets(appletName)
+                callee.inputs.zipWithIndex.foreach{
+                    case (cVar,idx) =>
+                        val fqn = s"${wf.name}.${callName}.${cVar.name}"
+                        val dxName = s"${stage.id.getId}.${callName}_${cVar.name}"
+                        checkAndBind(fqn, dxName)
+                }
+            }
+        }
+
         // make a pass on all the stages
         wf.stages.foreach{ stage =>
             val callee:IR.Applet = ns.applets(stage.appletName)
 
             // make a pass on all call inputs
             stage.inputs.zipWithIndex.foreach{
-                case (sArg,idx) =>
+                case (_,idx) =>
                     val cVar = callee.inputs(idx)
                     val fqn = s"${wf.name}.${stage.name}.${cVar.name}"
-                    inputFields.get(fqn).map{ jsv =>
-                        val dxName = s"${stage.id.getId}.${cVar.name}"
-                        trace(verbose.on, s"${fqn} -> ${dxName}")
-                        workflowBindings(dxName) = translateValue(jsv)
-                    }
+                    val dxName = s"${stage.id.getId}.${cVar.name}"
+                    checkAndBind(fqn, dxName)
             }
             // check if the applet called from this stage has bindings
             callee.kind match {
@@ -206,20 +230,24 @@ case class InputFile(verbose: Utils.Verbose) {
                     // search for all the applet inputs
                     callee.inputs.foreach{ cVar =>
                         val fqn = s"${wf.name}.${cVar.name}"
-                        inputFields.get(fqn).map{ jsv =>
-                            val dxName = s"${stage.id.getId}.${cVar.name}"
-                            trace(verbose.on, s"${fqn} -> ${dxName}")
-                            workflowBindings(dxName) = translateValue(jsv)
-
-                            // Do not assign the value to any later stages.
-                            // We found the variable declaration, the others
-                            // are variable uses.
-                            inputFields -= fqn
-                        }
+                        val dxName = s"${stage.id.getId}.${cVar.name}"
+                        checkAndBind(fqn, dxName)
                     }
+            }
+            // compound stages, for example if blocks, or scatters.
+            // They contain calls to applets.
+            callee.kind match {
+                case IR.AppletKindIf(calls) => compoundCalls(stage, calls)
+                case IR.AppletKindScatter(calls) => compoundCalls(stage, calls)
+                case _ => ()
             }
         }
 
+        if (!inputFields.isEmpty) {
+            System.err.println("Could not map all the input fields. These were left:")
+            System.err.println(s"${inputFields}")
+            throw new Exception("Failed to map all input fields")
+        }
         JsObject(workflowBindings.toMap)
     }
 }
