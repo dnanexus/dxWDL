@@ -686,18 +686,18 @@ case class CompilerNative(dxWDLrtId: String,
         assert(!wf.stages.isEmpty)
         val stage0 = wf.stages.head
         val applet0 = ns.applets(stage0.appletName)
-        val wfInputs:Vector[CVar] = applet0.inputs
-        val inputSpec:JsValue = wfInputs.map(cVar =>
-            JsObject("name" -> cVar.name,
-                     "class" -> dxClassOfWdlType(cVar.wdlType)))
+        val wfInputs:Vector[IR.CVar] = applet0.inputs
+        val inputSpec:Vector[JsValue] = wfInputs.map(cVar =>
+            JsObject("name" -> JsString(cVar.name),
+                     "class" -> JsString(dxClassOfWdlType(cVar.wdlType))))
 
         // Figure out the workflow outputs by looking at the last stage/applet
-        val stage0 = wf.stages.last
-        val applet0 = ns.applets(stage0.appletName)
-        val wfInputs:Vector[CVar] = applet0.inputs
-        val inputSpec:JsValue = wfInputs.map(cVar =>
-            JsObject("name" -> cVar.name,
-                     "class" -> dxClassOfWdlType(cVar.wdlType)))
+        val stageLast = wf.stages.last
+        val appletLast = ns.applets(stageLast.appletName)
+        val wfOutputs:Vector[IR.CVar] = appletLast.inputs
+        val outputSpec:Vector[JsValue] = wfOutputs.map(cVar =>
+            JsObject("name" -> JsString(cVar.name),
+                     "class" -> JsString(dxClassOfWdlType(cVar.wdlType))))
 
         // pack all the arguments into a single API call
         val req = JsObject("project" -> JsString(dxProject.getId),
@@ -705,8 +705,8 @@ case class CompilerNative(dxWDLrtId: String,
                            "folder" -> JsString(folder),
                            "properties" -> JsObject(CHECKSUM_PROP -> JsString(digest)),
                            "stages" -> JsArray(stagesReq),
-                           "workflowInputSpec" -> inputSpec,
-                           "workflowOutputSpec" -> outputSpec)
+                           "workflowInputSpec" -> JsArray(inputSpec),
+                           "workflowOutputSpec" -> JsArray(outputSpec))
         val rep = DXAPI.workflowNew(jsonNodeOfJsValue(req), classOf[JsonNode])
         val id = apiParseReplyID(rep)
         DXWorkflow.getInstance(id)
