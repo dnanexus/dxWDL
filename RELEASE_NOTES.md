@@ -1,5 +1,10 @@
 # Release Notes
 
+## 0.45
+- Default workflow inputs. The `--defaults` command line argument
+embeds key-value pairs as workflow defaults. They can be overridden
+at runtime if necessary.
+
 ## 0.44
 - Use hashes instead of files for non-native dx types
 - Do not use the help field in applet input/output arguments to carry

@@ -133,6 +133,9 @@ object Main extends App {
                 val keyword = normKeyword(keyOrg)
                 val value = keyword match {
                     case "archive" => ""
+                    case "defaults" =>
+                        assert(subargs.length == 1)
+                        subargs.head
                     case "destination" =>
                         assert(subargs.length == 1)
                         subargs.head
@@ -386,11 +389,32 @@ object Main extends App {
         // mangles the outputs, which is why we pass the originals
         // unmodified.
         val cef = new CompilerErrorFormatter(ns.terminalMap)
-        val irNs = CompilerIR(cState.outputs, cOpt.folder, instanceTypeDB, cef,
+        var irNs = CompilerIR(cState.outputs, cOpt.folder, instanceTypeDB, cef,
                               cOpt.reorg, cOpt.verbose).apply(ns)
+
+        val defaultInputs: Option[Path] = options.get("defaults").map(Paths.get(_))
+        irNs = defaultInputs match {
+            case Some(path) =>
+                // embed the defaults into the IR
+                InputFile(cOpt.verbose).embedDefaults(irNs, path)
+            case _ => irNs
+        }
 
         // Write out the intermediate representation
         prettyPrintIR(wdlSourceFile, irNs, cOpt.verbose.on)
+
+        // generate dx inputs from the Cromwell-style input specification.
+        val wdlInputs: Option[Path] = options.get("inputs").map(Paths.get(_))
+        (wdlInputs, irNs.workflow) match {
+            case (Some(path), Some(irwf)) =>
+                val dxInputs = InputFile(cOpt.verbose).dxFromCromwell(irNs, irwf, path)
+                // write back out as xxxx.dx.json
+                val filename = Utils.replaceFileSuffix(path, ".dx.json")
+                val dxInputFile = path.getParent().resolve(filename)
+                Utils.writeFileContent(dxInputFile, dxInputs.prettyPrint)
+                Utils.trace(cOpt.verbose.on, s"Wrote dx JSON input file ${dxInputFile}")
+            case _ => ()
+        }
 
         // Backend compiler pass
         val wf:Option[DXWorkflow] = cOpt.compileMode match {
@@ -406,14 +430,6 @@ object Main extends App {
             case Some(other) => throw new Exception(s"Unknown compilation mode ${other}")
         }
 
-        // generate dx inputs from the Cromwell-style input specification.
-        val wdlInputs: Option[Path] = options.get("inputs").map(Paths.get(_))
-        (wf, irNs.workflow, wdlInputs) match {
-            case (Some(dxwfl), Some(irWf), Some(path)) =>
-                InputFile(cOpt.verbose).apply(dxwfl, irNs, path)
-                dxwfl.getId
-            case _ => ()
-        }
         wf match {
             case Some(dxwfl) => dxwfl.getId
             case None => ""
@@ -525,9 +541,10 @@ object Main extends App {
             |  options:
             |    -archive              Archive older versions of applets
             |    -compileMode <string> Compilation mode, a debugging flag
+            |    -defaults <string>    Path to Cromwell formatted default values file
             |    -destination <string> Output folder on the platform for workflow
             |    -force                Delete existing applets/workflows
-            |    -inputs <string>      Path to cromwell style input file
+            |    -inputs <string>      Path to Cromwell formatted input file
             |    -noAppletTimeout      By default, applets cannot run more than ${Utils.DEFAULT_APPLET_TIMEOUT} hours.
             |                          Remove this limitation.
             |    -reorg                Reorganize workflow output files

@@ -11,7 +11,6 @@ import scala.collection.JavaConverters._
 import spray.json._
 import Utils.{AppletLinkInfo, base64Encode, CHECKSUM_PROP, dxFileOfJsValue, DXWorkflowStage,
     INSTANCE_TYPE_DB_FILENAME, jsValueOfJsonNode, jsonNodeOfJsValue, LINK_INFO_FILENAME, trace}
-import wdl4s.parser.WdlParser.Ast
 import wdl4s.wdl.types._
 
 case class CompilerNative(dxWDLrtId: String,
@@ -57,18 +56,22 @@ case class CompilerNative(dxWDLrtId: String,
     // Ragged arrays, maps, and objects, cannot be mapped in such a trivial way.
     // These are called "Complex Types", or "Complex". They are handled
     // by passing a JSON structure and a vector of dx:files.
-    def wdlVarToSpec(varName: String,
-                     wdlType : WdlType,
-                     ast: Ast) : Vector[JsValue] = {
-        val name = Utils.encodeAppletVarName(varName)
+    def cVarToSpec(cVar: IR.CVar) : Vector[JsValue] = {
+        val name = Utils.encodeAppletVarName(cVar.dxVarName)
+        val defaultVal:Map[String, JsValue] = cVar.attrs.getDefault match {
+            case None => Map.empty
+            case Some(v) => Map("default" -> v)
+        }
         def mkPrimitive(dxType: String) : Vector[Map[String, JsValue]] = {
             Vector(Map("name" -> JsString(name),
-                       "class" -> JsString(dxType)))
+                       "class" -> JsString(dxType))
+                       ++ defaultVal)
         }
         def mkPrimitiveArray(dxType: String) : Vector[Map[String, JsValue]] = {
             Vector(Map("name" -> JsString(name),
                        "class" -> JsString("array:" ++ dxType),
-                       "optional" -> JsBoolean(true)))
+                       "optional" -> JsBoolean(true))
+                       ++ defaultVal)
         }
         def mkComplex() : Vector[Map[String,JsValue]] = {
             // A large JSON structure passed as a hash, and a
@@ -78,7 +81,8 @@ case class CompilerNative(dxWDLrtId: String,
             // so that the WdlVarLinks.loadJobInputsAsLinks method
             // will not interpret it.
             Vector(Map("name" -> JsString(name),
-                       "class" -> JsString("hash")),
+                       "class" -> JsString("hash"))
+                       ++ defaultVal,
                    Map("name" -> JsString(name + Utils.FLAT_FILES_SUFFIX),
                        "class" -> JsString("array:file"),
                        "optional" -> JsBoolean(true)))
@@ -104,8 +108,8 @@ case class CompilerNative(dxWDLrtId: String,
             }
         }
 
-        val vec: Vector[Map[String,JsValue]] = nonOptional(Utils.stripOptional(wdlType))
-        wdlType match {
+        val vec: Vector[Map[String,JsValue]] = nonOptional(Utils.stripOptional(cVar.wdlType))
+        cVar.wdlType match {
             case WdlOptionalType(t) =>
                 // An optional variable, make it an optional dx input/output
                 vec.map{ m => JsObject(m + ("optional" -> JsBoolean(true))) }
@@ -473,10 +477,10 @@ case class CompilerNative(dxWDLrtId: String,
         trace(verbose.on, s"Building /applet/new request for ${applet.name}")
 
         val inputSpec : Vector[JsValue] = applet.inputs.map(cVar =>
-            wdlVarToSpec(cVar.dxVarName, cVar.wdlType, cVar.ast)
+            cVarToSpec(cVar)
         ).flatten.toVector
         val outputSpec : Vector[JsValue] = applet.outputs.map(cVar =>
-            wdlVarToSpec(cVar.dxVarName, cVar.wdlType, cVar.ast)
+            cVarToSpec(cVar)
         ).flatten.toVector
         val runSpec : JsValue = calcRunSpec(bashScript, applet.instanceType)
 
@@ -643,16 +647,15 @@ case class CompilerNative(dxWDLrtId: String,
                 val (irApplet,dxApplet) = appletDict(stg.appletName)
                 val linkedInputs : Vector[(IR.CVar, IR.SArg)] = irApplet.inputs zip stg.inputs
                 val inputs = genStageInputs(linkedInputs, irApplet, stageDict)
-                val stgId = DXWorkflowStage(s"stage_${version}")
                 // convert the per-stage metadata into JSON
                 val stageReqDesc = JsObject(
-                    "id" -> JsString(stgId.getId),
+                    "id" -> JsString(stg.id.getId),
                     "executable" -> JsString(dxApplet.getId),
                     "name" -> JsString(stg.name),
                     "input" -> inputs)
                 (version + 1,
                  stagesReq :+ stageReqDesc,
-                 stageDict ++ Map(stg.name -> stgId))
+                 stageDict ++ Map(stg.name -> stg.id))
         }
 
         // pack all the arguments into a single API call

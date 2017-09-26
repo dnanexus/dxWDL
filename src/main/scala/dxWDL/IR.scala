@@ -9,6 +9,7 @@
 package dxWDL
 
 import net.jcazevedo.moultingyaml._
+import spray.json._
 import wdl4s.wdl.WdlNamespace
 import wdl4s.wdl.types._
 import wdl4s.wdl.values._
@@ -89,6 +90,7 @@ object IR {
     case class SArgLink(stageName: String, argName: CVar) extends SArg
 
     case class Stage(name: String,
+                     id: Utils.DXWorkflowStage,
                      appletName: String,
                      inputs: Vector[SArg],
                      outputs: Vector[CVar])
@@ -98,6 +100,7 @@ object IR {
 
     case class Namespace(workflow: Option[Workflow],
                          applets: Map[String, Applet])
+
 
     // Automatic conversion to/from Yaml
     object IrInternalYamlProtocol extends DefaultYamlProtocol {
@@ -116,7 +119,7 @@ object IR {
                 case YamlString("Default") => InstanceTypeDefault
                 case YamlString("Runtime") => InstanceTypeRuntime
                 case YamlString(name) => InstanceTypeConst(name)
-                case unrecognized => deserializationError(s"InstanceType expected ${unrecognized}")
+                case unrecognized => throw new Exception(s"InstanceType expected ${unrecognized}")
             }
         }
 
@@ -163,7 +166,30 @@ object IR {
                                     AppletKindScatter(calls.convertTo[Map[String, String]])
                             }
                     }
-                case unrecognized => deserializationError(s"AppletKind expected ${unrecognized}")
+                case unrecognized => throw new Exception(s"AppletKind expected ${unrecognized}")
+            }
+        }
+
+        implicit object DeclAttrsYamlFormat extends YamlFormat[DeclAttrs] {
+            def write(dAttrs: DeclAttrs) : YamlValue = {
+                val yAttrs:Map[YamlValue, YamlValue] = dAttrs.m.map{
+                    case (key,value) =>
+                        YamlString(key) -> YamlString(value.prettyPrint)
+                }.toMap
+                YamlObject(yAttrs)
+            }
+            def read(value: YamlValue) : DeclAttrs = {
+                val m:Map[String, JsValue] = value match {
+                    case YamlObject(fields) =>
+                        fields.map{
+                            case (YamlString(key),YamlString(value)) =>
+                                key -> value.parseJson
+                            case _ =>
+                                throw new Exception("invalid")
+                        }
+                    case _ => throw new Exception("invalid")
+                }
+                DeclAttrs(m)
             }
         }
 
@@ -171,21 +197,23 @@ object IR {
             def write(cVar: CVar) = {
                 val m : Map[YamlValue, YamlValue] = Map(
                     YamlString("type") -> YamlString(cVar.wdlType.toWdlString),
-                    YamlString("name") -> YamlString(cVar.name)
+                    YamlString("name") -> YamlString(cVar.name),
+                    YamlString("attributes") -> cVar.attrs.toYaml
                 )
                 YamlObject(m)
             }
 
             def read(value: YamlValue) = {
-                value.asYamlObject.getFields(YamlString("type"), YamlString("name"))
-                    match {
-                    case Seq(YamlString(wdlType), YamlString(name)) =>
+                value.asYamlObject.getFields(YamlString("type"),
+                                             YamlString("name"),
+                                             YamlString("attributes")) match {
+                    case Seq(YamlString(wdlType), YamlString(name), attrs) =>
                         new CVar(name,
                                  WdlType.fromWdlString(wdlType),
-                                 DeclAttrs.empty,
+                                 attrs.convertTo[DeclAttrs],
                                  WdlRewrite.INVALID_AST)
                     case unrecognized =>
-                        deserializationError(s"CVar expected ${unrecognized}")
+                        throw new Exception(s"CVar expected ${unrecognized}")
                 }
             }
         }
@@ -220,7 +248,7 @@ object IR {
                                         val t:WdlType = WdlType.fromWdlString(wdlType)
                                         val v = t.fromWdlString(value)
                                         SArgConst(v)
-                                    case _ => deserializationError("SArg malformed const")
+                                    case _ => throw new Exception("SArg malformed const")
                                 }
                             case Seq(YamlString("link")) =>
                                 yo.getFields(YamlString("stage"),
@@ -228,13 +256,13 @@ object IR {
                                     case Seq(YamlString(stageName),
                                              cVar) =>
                                         SArgLink(stageName, cVar.convertTo[CVar])
-                                    case _ => deserializationError("SArg malformed link")
+                                    case _ => throw new Exception("SArg malformed link")
                                 }
                             case unrecognized =>
-                                deserializationError(s"CVar expected ${unrecognized}")
+                                throw new Exception(s"CVar expected ${unrecognized}")
                         }
                     case unrecognized =>
-                        deserializationError(s"CVar expected ${unrecognized}")
+                        throw new Exception(s"CVar expected ${unrecognized}")
                 }
             }
         }
@@ -289,12 +317,13 @@ object IR {
                                        WdlNamespace.loadUsingSource(wdlCode, None, None).get)
                         }
                     case unrecognized =>
-                        deserializationError(s"Applet expected ${unrecognized}")
+                        throw new Exception(s"Applet expected ${unrecognized}")
                 }
             }
         }
 
-        implicit val stageFormat = yamlFormat4(Stage)
+        implicit val dxWorkflowStageFormat = yamlFormat1(Utils.DXWorkflowStage)
+        implicit val stageFormat = yamlFormat5(Stage)
         implicit val workflowFormat = yamlFormat2(Workflow)
         implicit val namespaceFormat = yamlFormat2(Namespace)
     }
@@ -305,32 +334,6 @@ object IR {
     def yaml(sArg: SArg) : YamlValue = sArg.toYaml
     def yaml(wf: Workflow) : YamlValue = wf.toYaml
     def yaml(ns: Namespace) : YamlValue = ns.toYaml
-
-    // build a mapping from call to stage name
-    def callDict(ns:Namespace) : Map[String, String] = {
-        ns.workflow match {
-            case None => Map.empty
-            case Some(wf) =>
-                wf.stages.foldLeft(Map.empty[String, String]) {
-                    case (callDict, stg) =>
-                        val apl:Applet = ns.applets(stg.appletName)
-                        // map source calls to the stage name. For example, this happens
-                        // for scatters.
-                        val call2Stage = apl.kind match {
-                            case AppletKindScatter(calls) =>
-                                calls.map{
-                                    case (unqualifiedName,_) => unqualifiedName -> stg.name
-                                }.toMap
-                            case AppletKindIf(calls) =>
-                                calls.map{
-                                    case (unqualifiedName,_) => unqualifiedName -> stg.name
-                                }.toMap
-                            case _ => Map.empty[String, String]
-                        }
-                        callDict ++ call2Stage
-                }
-        }
-    }
 
     def prettyPrint(y: YamlValue) : String = {
         y.prettyPrint

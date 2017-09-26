@@ -40,18 +40,19 @@ argument ```X```, then: ``` dx run foo -i0.X="hello world" ```
 
 Compilation can be controled with several parameters.
 
-| Option  |  Description |
-| ------  | ------------ |
-| archive | Archive older versions of applets (*dx build -a*)|
+| Option   |  Description |
+| ------   | ------------ |
+| archive  | Archive older versions of applets and workflows |
+| defaults | A file with default parameter settings. The syntax is Cromwell style. |
 | destination | Set the output folder on the platform |
-| inputs |  Use a cromwell style inputs file |
-| force   | Delete existing applets/workflows |
-| sort    | Sort call graph, to avoid forward references, used for CWL |
-| verbose | Print detailed progress information |
+| force    | Overwrite existing applets/workflows if they have changed |
+| inputs   | A cromwell style inputs file |
+| sort     | Sort call graph, to avoid forward references, used for CWL |
+| verbose  | Print detailed progress information |
 
 The `-inputs` option allows specifying a Cromwell JSON
 [format](https://software.broadinstitute.org/wdl/documentation/inputs.php)
-inputs file.  An equivalent DNAx format inputs file is generated from
+inputs file. An equivalent DNAx format inputs file is generated from
 it. For example, workflow
 [files](https://github.com/dnanexus-rnd/dxWDL/blob/master/test/files.wdl)
 has input file
@@ -86,6 +87,18 @@ generates a `test/files_input.dx.json` file that looks like this:
 The workflow can then be run with the command:
 ```
 dx run files -f test/files_input.dx.json
+```
+
+The `-defaults` option is similar to `-inputs`. It takes a JSON file with key-value pairs,
+and compiles them as defaults into the workflow. If the `files.wdl` worklow is compiled with
+`-defaults` instead of `-inputs`
+```
+java -jar dxWDL-0.44.jar compile test/files.wdl -defaults test/files_input.json
+```
+
+It can be run without parameters, for an equivalent execution.
+```
+dx run files
 ```
 
 ## Extensions (experimental)
@@ -164,11 +177,11 @@ is as follows:
 | Array[Float]   |   array:float |
 | Array[String]  |   array:string |
 | Array[File]    |   array:file |
-| Complex types  |   file + array:file |
+| Complex types  |   hash + array:file |
 
 Ragged arrays of files (Array[Array[File]]), and other more complex
 WDL types, are mapped to two fields: a flat array of files, and a
-file, which is a json serialized representation of the WDL value. The
+hash, which is a json serialized representation of the WDL value. The
 flat file array informs the job manager about data objects that need to
 be closed and cloned into the workspace.
 

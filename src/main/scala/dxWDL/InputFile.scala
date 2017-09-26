@@ -21,13 +21,12 @@ This is the dx JSON input:
   */
 package dxWDL
 
-import com.fasterxml.jackson.databind.JsonNode
-import com.fasterxml.jackson.databind.node.ObjectNode
-import com.dnanexus.{DXFile, DXAPI, DXJSON, DXProject, DXSearch, DXWorkflow}
+import com.dnanexus.{DXFile, DXProject, DXSearch}
+import scala.collection.mutable.HashMap
 import java.nio.file.{Path, Paths}
 import scala.collection.JavaConverters._
 import spray.json._
-import Utils.{UNIVERSAL_FILE_PREFIX, DXWorkflowStage}
+import Utils.{trace, UNIVERSAL_FILE_PREFIX}
 
 case class InputFile(verbose: Utils.Verbose) {
     private def lookupFile(dxProject: Option[DXProject], fileName: String): DXFile = {
@@ -86,121 +85,173 @@ case class InputFile(verbose: Utils.Verbose) {
         }
     }
 
-    private def lookupStage(name: String,
-                            wf: IR.Workflow,
-                            stageDict: Map[String, DXWorkflowStage]) : DXWorkflowStage= {
-        stageDict.get(name) match {
-            case None =>
-                System.err.println(s"stage dictionary: ${stageDict}")
-                throw new Exception(s"Stage ${name} not found for workflow ${wf.name}")
-            case Some(x) => x
-        }
-    }
+    // Embed default values into the IR
+    //
+    // Make a sequential pass on the IR, figure out the fully qualified names
+    // of all CVar and SArgs. If they have a default value, add it as an attribute
+    // (DeclAttrs).
+    def embedDefaults(ns: IR.Namespace,
+                      defaultInputs: Path) : IR.Namespace = {
+        trace(verbose.on, s"Embedding defaults into the IR")
 
-    // Translate entries in the Cromwell input file, into a valid JSON
-    // dx input file
-    private def dxTranslate(wf: IR.Workflow,
-                            wdlInputs: JsObject,
-                            stageDict: Map[String, DXWorkflowStage],
-                            callDict: Map[String, String]) : JsObject= {
-        val m: Map[String, JsValue] = wdlInputs.fields.map{ case (key, v) =>
-            val components = key.split("\\.")
-            val dxKey: Option[String] =
-                components.length match {
-                    case 0|1 =>
-                        // Comments
-                        System.err.println(s"Skipping ${key}")
-                        None
-                    case 2|3 if (components(0).startsWith("##")) =>
-                        // Comments
-                        System.err.println(s"Skipping ${key}")
-                        None
-                    case 2 =>
-                        // workflow inputs are passed to the initial
-                        // stage (common).
-                        assert(components(0) == wf.name)
-                        val varName = components(1)
-                        val stage = lookupStage(wf.name + "_" + Utils.COMMON, wf, stageDict)
-                        Some(s"${stage.getId}.${varName}")
-                    case 3 =>
-                        // parameters for call
-                        assert(components(0) == wf.name)
-                        val callName = components(1)
-                        val varName = components(2)
-                        stageDict.get(callName) match {
-                            case Some(stage) =>
-                                // call is implemented as a stage
-                                Some(s"${stage.getId()}.${varName}")
-                            case None =>
-                                // call is an element in a scatter, or a larger applet
-                                val stage = callDict.get(callName) match {
-                                    case Some(x) => lookupStage(x, wf, stageDict)
-                                    case None =>
-                                        throw new Exception(s"Call ${callName} not found for workflow ${wf.name}")
-                                }
-                                Some(s"${stage.getId}.${callName}_${varName}")
-                        }
-                    case _ =>
-                        throw new Exception(s"String ${key} has too many components")
+        // read the default inputs file (xxxx.json)
+        val defaults:JsObject = Utils.readFileContent(defaultInputs).parseJson.asJsObject
+
+        // if applet inputs have defaults, set them as attributes
+        def addDefaultsToApplet(apl:IR.Applet, wdlNameTrail:String) : IR.Applet = {
+            val inputsWithDefaults = apl.inputs.map{ cVar =>
+                val fqn = s"${wdlNameTrail}.${cVar.name}"
+                defaults.fields.get(fqn) match {
+                    case None => cVar
+                    case Some(dflt:JsValue) =>
+                        val jsv = translateValue(dflt)
+                        val attrs = cVar.attrs.add("default", jsv)
+                        cVar.copy(attrs = attrs)
                 }
-            val dxVal = translateValue(v)
-            dxKey match {
-                case None => None
-                case Some(x) => Some(x -> dxVal)
             }
-        }.flatten.toMap
-        JsObject(m)
-    }
-
-    // Query a platform workflow, and get a mapping from stage-name to stage-id.
-    private def queryWorkflowStages(dxwfl: DXWorkflow) : Map[String, DXWorkflowStage] = {
-        val req: ObjectNode = DXJSON.getObjectBuilder()
-            .put("fields", DXJSON.getObjectBuilder()
-                     .put("stages", true)
-                     .build()).build()
-        val rep = DXAPI.workflowDescribe(dxwfl.getId(), req, classOf[JsonNode])
-        val repJs:JsValue = Utils.jsValueOfJsonNode(rep)
-        val stages = repJs.asJsObject.fields.get("stages") match {
-            case None => throw new Exception("Failed to get workflow stages")
-            case Some(JsArray(x)) => x
-            case other => throw new Exception(s"Malformed stages fields ${other}")
+            apl.copy(inputs = inputsWithDefaults)
         }
-        stages.map{ stageMetadata =>
-            val id = stageMetadata.asJsObject.fields.get("id") match {
-                case None => throw new Exception("workflow stage doesn't have an ID")
-                case Some(JsString(x)) => x
-                case other => throw new Exception(s"Malformed id field ${other}")
+
+        // If a stage has defaults, set the SArg to a constant. The user
+        // can override it at runtime.
+        def addDefaultsToStage(stg:IR.Stage, wdlNameTrail:String) : IR.Stage = {
+            val inputsWithDefaults:Vector[IR.SArg] = stg.inputs.zipWithIndex.map{
+                case (sArg,idx) =>
+                    val callee:IR.Applet = ns.applets(stg.appletName)
+                    val cVar = callee.inputs(idx)
+                    val fqn = s"${wdlNameTrail}.${cVar.name}"
+                    defaults.fields.get(fqn) match {
+                        case None => sArg
+                        case Some(dflt:JsValue) =>
+                            val jsv = translateValue(dflt)
+                            val wvl = WdlVarLinks(cVar.wdlType, cVar.attrs, DxlValue(jsv))
+                            val w = WdlVarLinks.eval(wvl, false)
+                            IR.SArgConst(w)
+                    }
             }
-            val name = stageMetadata.asJsObject.fields.get("name") match {
-                case None => throw new Exception("workflow stage doesn't have a name")
-                case Some(JsString(x)) => x
-                case other => throw new Exception(s"Malformed name field ${other}")
-            }
-            name -> DXWorkflowStage(id)
-        }.toMap
+            stg.copy(inputs = inputsWithDefaults)
+        }
+
+        // figure out the WDL ancestry of an applet. What piece
+        // of WDL code is the source for this applet?
+        ns.workflow match {
+            case Some(wf)  =>
+                val applets = ns.applets.map{ case (name, applet) =>
+                    val nameTrail = applet.kind match {
+                        case IR.AppletKindTask => applet.name
+                        case _ => wf.name
+                    }
+                    val apl = addDefaultsToApplet(applet, nameTrail)
+                    apl.name -> apl
+                }.toMap
+                // add defaults to workflow stages
+                val stages = wf.stages.map{ stg =>
+                    val nameTrail = s"${wf.name}.${stg.name}"
+                    addDefaultsToStage(stg, nameTrail)
+                }
+                val wfWithDefaults = wf.copy(stages = stages)
+                IR.Namespace(Some(wfWithDefaults), applets)
+
+            case None =>
+                // The namespace comprises tasks only
+                val applets = ns.applets.map{ case (name, applet) =>
+                    val nameTrail = applet.kind match {
+                        case IR.AppletKindTask => applet.name
+                        case _ => throw new Exception("sanity")
+                    }
+                    val apl = addDefaultsToApplet(applet, nameTrail)
+                    apl.name -> apl
+                }.toMap
+                IR.Namespace(None, applets)
+        }
     }
 
     // Build a dx input file, based on the wdl input file and the workflow
-    def apply(dxwfl: DXWorkflow,
-              ns: IR.Namespace,
-              inputPath: Path) : Unit = {
-        Utils.trace(verbose.on, s"Translating WDL input file ${inputPath}")
-        val callDict = IR.callDict(ns)
-        val stageDict: Map[String, DXWorkflowStage] = queryWorkflowStages(dxwfl)
+    def dxFromCromwell(ns: IR.Namespace,
+                       wf: IR.Workflow,
+                       inputPath: Path) : JsObject = {
+        trace(verbose.on, s"Translating WDL input file ${inputPath}")
 
         // read the input file xxxx.json
         val wdlInputs: JsObject = Utils.readFileContent(inputPath).parseJson.asJsObject
+        val inputFields = HashMap.empty[String, JsValue]
+        wdlInputs.fields.foreach{ case (k,v) => inputFields(k) = v }
 
-        // translate the key-value entries
-        val dxInputs: JsObject = ns.workflow match {
-            case None => JsObject(Map.empty[String, JsValue])
-            case Some(wf) => dxTranslate(wf, wdlInputs, stageDict, callDict)
+        // The general idea here is to figure out the ancestry of each
+        // applet/call/workflow input. This provides the fully-qualified-name (fqn)
+        // of each IR variable. Then we check if the fqn is defined in
+        // the input file.
+        val workflowBindings = HashMap.empty[String, JsValue]
+
+        // If WDL variable fully qualified name [fqn] was provided in the
+        // input file, set [stage.cvar] to its JSON value
+        def checkAndBind(fqn:String, dxName:String) : Unit = {
+            inputFields.get(fqn) match {
+                case None => ()
+                case Some(jsv) =>
+                    trace(verbose.on, s"${fqn} -> ${dxName}")
+                    workflowBindings(dxName) = translateValue(jsv)
+                    // Do not assign the value to any later stages.
+                    // We found the variable declaration, the others
+                    // are variable uses.
+                    inputFields -= fqn
+            }
+        }
+        // This works for calls inside an if/scatter block. The naming is:
+        //  STAGE_ID.CALL_VARNAME
+        def compoundCalls(stage:IR.Stage,
+                          calls:Map[String, String]) : Unit = {
+            calls.foreach{ case (callName, appletName) =>
+                val callee:IR.Applet = ns.applets(appletName)
+                callee.inputs.zipWithIndex.foreach{
+                    case (cVar,idx) =>
+                        val fqn = s"${wf.name}.${callName}.${cVar.name}"
+                        val dxName = s"${stage.id.getId}.${callName}_${cVar.name}"
+                        checkAndBind(fqn, dxName)
+                }
+            }
         }
 
-        // write back out as xxxx.dx.json
-        val filename = Utils.replaceFileSuffix(inputPath, ".dx.json")
-        val dxInputFile = inputPath.getParent().resolve(filename)
-        Utils.writeFileContent(dxInputFile, dxInputs.prettyPrint)
-        Utils.trace(verbose.on, s"Wrote dx JSON input file ${dxInputFile}")
+        // make a pass on all the stages
+        wf.stages.foreach{ stage =>
+            val callee:IR.Applet = ns.applets(stage.appletName)
+
+            // make a pass on all call inputs
+            stage.inputs.zipWithIndex.foreach{
+                case (_,idx) =>
+                    val cVar = callee.inputs(idx)
+                    val fqn = s"${wf.name}.${stage.name}.${cVar.name}"
+                    val dxName = s"${stage.id.getId}.${cVar.name}"
+                    checkAndBind(fqn, dxName)
+            }
+            // check if the applet called from this stage has bindings
+            callee.kind match {
+                case IR.AppletKindTask =>
+                    // We aren't handling applet settings currently
+                    ()
+                case other =>
+                    // An applet generated from a piece of the workflow.
+                    // search for all the applet inputs
+                    callee.inputs.foreach{ cVar =>
+                        val fqn = s"${wf.name}.${cVar.name}"
+                        val dxName = s"${stage.id.getId}.${cVar.name}"
+                        checkAndBind(fqn, dxName)
+                    }
+            }
+            // compound stages, for example if blocks, or scatters.
+            // They contain calls to applets.
+            callee.kind match {
+                case IR.AppletKindIf(calls) => compoundCalls(stage, calls)
+                case IR.AppletKindScatter(calls) => compoundCalls(stage, calls)
+                case _ => ()
+            }
+        }
+
+        if (!inputFields.isEmpty) {
+            System.err.println("Could not map all the input fields. These were left:")
+            System.err.println(s"${inputFields}")
+            throw new Exception("Failed to map all input fields")
+        }
+        JsObject(workflowBindings.toMap)
     }
 }
