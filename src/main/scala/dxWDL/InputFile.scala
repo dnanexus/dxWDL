@@ -104,7 +104,8 @@ case class InputFile(verbose: Utils.Verbose) {
                 defaults.fields.get(fqn) match {
                     case None => cVar
                     case Some(dflt:JsValue) =>
-                        val attrs = cVar.attrs.add("default", dflt)
+                        val jsv = translateValue(dflt)
+                        val attrs = cVar.attrs.add("default", jsv)
                         cVar.copy(attrs = attrs)
                 }
             }
@@ -122,7 +123,8 @@ case class InputFile(verbose: Utils.Verbose) {
                     defaults.fields.get(fqn) match {
                         case None => sArg
                         case Some(dflt:JsValue) =>
-                            val wvl = WdlVarLinks(cVar.wdlType, cVar.attrs, DxlValue(dflt))
+                            val jsv = translateValue(dflt)
+                            val wvl = WdlVarLinks(cVar.wdlType, cVar.attrs, DxlValue(jsv))
                             val w = WdlVarLinks.eval(wvl, false)
                             IR.SArgConst(w)
                     }
@@ -195,6 +197,8 @@ case class InputFile(verbose: Utils.Verbose) {
                     inputFields -= fqn
             }
         }
+        // This works for calls inside an if/scatter block. The naming is:
+        //  STAGE_ID.CALL_VARNAME
         def compoundCalls(stage:IR.Stage,
                           calls:Map[String, String]) : Unit = {
             calls.foreach{ case (callName, appletName) =>

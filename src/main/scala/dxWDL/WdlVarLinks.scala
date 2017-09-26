@@ -237,9 +237,12 @@ object WdlVarLinks {
                 val right = evalCore(rType, fields("right"), force)
                 WdlPair(left, right)
 
+            case (WdlOptionalType(t), jsv) =>
+                evalCore(t, jsv, force)
+
             case _ =>
                 throw new AppInternalException(
-                    s"Unsupport combination ${wdlType.toWdlString} ${jsValue.prettyPrint}"
+                    s"Unsupported combination ${wdlType.toWdlString} ${jsValue.prettyPrint}"
                 )
         }
     }
@@ -267,17 +270,21 @@ object WdlVarLinks {
         val jsn = getRawJsValue(wvl)
         (wvl.wdlType, jsn) match {
             case (WdlArrayType(t), JsArray(l)) =>
-                // Array
                 l.map(elem => WdlVarLinks(t, wvl.attrs, DxlValue(elem)))
 
+            // Map. Convert into an array of WDL pairs.
             case (WdlMapType(keyType, valueType), _) =>
-                // Map. Convert into an array of WDL pairs.
                 val wdlType = WdlPairType(keyType, valueType)
                 unmarshalWdlMap(jsn).map{
                     case (k:JsValue, v:JsValue) =>
                         val js:JsValue = JsObject("left" -> k, "right" -> v)
                         WdlVarLinks(wdlType, wvl.attrs, DxlValue(js))
                 }
+
+            // Strip optional type
+            case (WdlOptionalType(t), _) =>
+                val wvl1 = wvl.copy(wdlType = t)
+                unpackWdlArray(wvl1)
 
             case (_,_) =>
                 // Error
@@ -297,6 +304,11 @@ object WdlVarLinks {
             case (WdlPairType(lType, rType), JsObject(fields))
                     if (List("left", "right") contains fieldName) =>
                 WdlVarLinks(lType, wvl.attrs, DxlValue(fields(fieldName)))
+            case (WdlOptionalType(t), _) =>
+                // strip optional type
+                val wvl1 = wvl.copy(wdlType = t)
+                memberAccessStep(wvl1, fieldName)
+
             case _ =>
                 throw new Exception(s"member access to field ${fieldName} wvl=${wvl}")
         }
@@ -360,6 +372,10 @@ object WdlVarLinks {
                 val lJs = jsOfComplexWdlValue(lType, l)
                 val rJs = jsOfComplexWdlValue(rType, r)
                 JsObject("left" -> lJs, "right" -> rJs)
+
+            // Strip optional type
+            case (WdlOptionalType(t), _) =>
+                jsOfComplexWdlValue(t, wdlValue)
 
             case _ => throw new Exception(
                 s"Unsupported WDL type ${wdlType.toWdlString} ${wdlValue.toWdlString}"

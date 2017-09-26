@@ -396,7 +396,6 @@ object Main extends App {
         irNs = defaultInputs match {
             case Some(path) =>
                 // embed the defaults into the IR
-                Utils.trace(cOpt.verbose.on, s"Embedding defaults into IR")
                 InputFile(cOpt.verbose).embedDefaults(irNs, path)
             case _ => irNs
         }
