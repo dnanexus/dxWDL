@@ -633,16 +633,40 @@ case class CompilerNative(dxWDLrtId: String,
         JsObject(jsInputs)
     }
 
+    def dxClassOfWdlType(wdlType: WdlType) : String = {
+        val t = Utils.stripOptional(wdlType)
+        t match {
+            // primitive types
+            case WdlBooleanType => "boolean"
+            case WdlIntegerType => "int"
+            case WdlFloatType => "float"
+            case WdlStringType =>"string"
+            case WdlFileType => "file"
+
+            // single dimension arrays of primitive types
+            case WdlArrayType(WdlBooleanType) => "array:boolean"
+            case WdlArrayType(WdlIntegerType) => "array:int"
+            case WdlArrayType(WdlFloatType) => "array:float"
+            case WdlArrayType(WdlStringType) => "array:string"
+            case WdlArrayType(WdlFileType) => "array:file"
+
+            // complex types, that may contains files
+            case _ => "hash"
+        }
+    }
+
     // Create the workflow in a single API call.
     //
     // Prepare the list of stages, and the checksum in
     // advance. Previously we needed an API call for each stage.
     //
     // TODO: make use of capability to specify workflow level input/outputs
-    def buildWorkflow(wf: IR.Workflow,
+    def buildWorkflow(ns: IR.Namespace,
+                      wf: IR.Workflow,
                       digest: String,
                       appletDict: Map[String, (IR.Applet, DXApplet)]) : DXWorkflow = {
-        val (_,stagesReq,_) = wf.stages.foldLeft((0, Vector.empty[JsValue], Map.empty[String, DXWorkflowStage])) {
+        val (_,stagesReq,_) = wf.stages.foldLeft(
+            (0, Vector.empty[JsValue], Map.empty[String, DXWorkflowStage])) {
             case ((version, stagesReq, stageDict), stg) =>
                 val (irApplet,dxApplet) = appletDict(stg.appletName)
                 val linkedInputs : Vector[(IR.CVar, IR.SArg)] = irApplet.inputs zip stg.inputs
@@ -658,12 +682,31 @@ case class CompilerNative(dxWDLrtId: String,
                  stageDict ++ Map(stg.name -> stg.id))
         }
 
+        // Figure out the workflow inputs by looking at the first stage/applet
+        assert(!wf.stages.isEmpty)
+        val stage0 = wf.stages.head
+        val applet0 = ns.applets(stage0.appletName)
+        val wfInputs:Vector[CVar] = applet0.inputs
+        val inputSpec:JsValue = wfInputs.map(cVar =>
+            JsObject("name" -> cVar.name,
+                     "class" -> dxClassOfWdlType(cVar.wdlType)))
+
+        // Figure out the workflow outputs by looking at the last stage/applet
+        val stage0 = wf.stages.last
+        val applet0 = ns.applets(stage0.appletName)
+        val wfInputs:Vector[CVar] = applet0.inputs
+        val inputSpec:JsValue = wfInputs.map(cVar =>
+            JsObject("name" -> cVar.name,
+                     "class" -> dxClassOfWdlType(cVar.wdlType)))
+
         // pack all the arguments into a single API call
         val req = JsObject("project" -> JsString(dxProject.getId),
                            "name" -> JsString(wf.name),
                            "folder" -> JsString(folder),
                            "properties" -> JsObject(CHECKSUM_PROP -> JsString(digest)),
-                           "stages" -> JsArray(stagesReq))
+                           "stages" -> JsArray(stagesReq),
+                           "workflowInputSpec" -> inputSpec,
+                           "workflowOutputSpec" -> outputSpec)
         val rep = DXAPI.workflowNew(jsonNodeOfJsValue(req), classOf[JsonNode])
         val id = apiParseReplyID(rep)
         DXWorkflow.getInstance(id)
@@ -685,7 +728,7 @@ case class CompilerNative(dxWDLrtId: String,
         val buildRequired = isBuildRequired(wf.name, digest, dxObjDir)
         buildRequired match {
             case None =>
-                val dxWorkflow = buildWorkflow(wf, digest, appletDict)
+                val dxWorkflow = buildWorkflow(ns, wf, digest, appletDict)
                 dxObjDir.insert(wf.name, dxWorkflow, digest)
                 dxWorkflow
             case Some(dxObj) =>
