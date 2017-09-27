@@ -125,18 +125,6 @@ object Utils {
     // Prefixes used for generated applets
     val reservedAppletPrefixes = List(SCATTER, COMMON)
 
-    var tmpVarCnt = 0
-    def genTmpVarName() : String = {
-        val tmpVarName: String = s"${TMP_VAR_NAME_PREFIX}${tmpVarCnt}"
-        tmpVarCnt = tmpVarCnt + 1
-        tmpVarName
-    }
-
-
-    def isGeneratedVar(varName: String) : Boolean = {
-        varName.startsWith(TMP_VAR_NAME_PREFIX)
-    }
-
     lazy val execDirPath : Path = {
         val currentDir = System.getProperty("user.dir")
         val p = Paths.get(currentDir, "execution")
@@ -160,6 +148,38 @@ object Utils {
         val p = execDirPath.resolve("inputs")
         safeMkdir(p)
         p
+    }
+
+    var tmpVarCnt = 0
+    def genTmpVarName() : String = {
+        val tmpVarName: String = s"${TMP_VAR_NAME_PREFIX}${tmpVarCnt}"
+        tmpVarCnt = tmpVarCnt + 1
+        tmpVarName
+    }
+
+
+    def isGeneratedVar(varName: String) : Boolean = {
+        varName.startsWith(TMP_VAR_NAME_PREFIX)
+    }
+
+    // Is a declaration of a task/workflow an input for the
+    // compiled dx:applet/dx:workflow ?
+    //
+    // Examples:
+    //   File x
+    //   String y = "abc"
+    //   Float pi = 3 + .14
+    //   Int? z = 3
+    //
+    // x - must be provided as an applet input
+    // y, pi -- calculated, non inputs
+    // z - is an input with a default value
+    def declarationIsInput(decl: Declaration) : Boolean = {
+        (decl.expression, decl.wdlType) match {
+            case (None,_) => true
+            case (Some(_), WdlOptionalType(_)) => true
+            case (_,_) => false
+        }
     }
 
     // where script files are placed and generated
@@ -377,13 +397,24 @@ object Utils {
     def unmarshal(buf64 : String) : WdlValue = {
         val buf = base64Decode(buf64)
         buf.parseJson match {
-            case JsArray(vec) =>
-                if (vec.length != 2)
-                    throw new AppInternalException(s"JSON vector should have two elements ${buf}");
+            case JsArray(vec) if (vec.length == 2) =>
                 (vec(0), vec(1)) match {
                     case (JsString(wTypeStr), JsString(wValueStr)) =>
                         val wType : WdlType = WdlType.fromWdlString(wTypeStr)
-                        wType.fromWdlString(wValueStr)
+                        try {
+                            wType.fromWdlString(wValueStr)
+                        } catch {
+                            case e: Throwable =>
+                                wType match {
+                                    case WdlOptionalType(t) =>
+                                        System.err.println(s"Error unmarshalling wdlType=${wType.toWdlString}")
+                                        System.err.println(s"Value=${wValueStr}")
+                                        System.err.println(s"Trying again with type=${t.toWdlString}")
+                                        t.fromWdlString(wValueStr)
+                                    case _ =>
+                                        throw e
+                                }
+                        }
                     case _ => throw new AppInternalException(s"JSON vector should have two strings ${buf}")
                 }
             case _ => throw new AppInternalException(s"Error unmarshalling json value ${buf}")
