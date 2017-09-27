@@ -12,7 +12,6 @@ class Wdl4sTest extends FlatSpec with BeforeAndAfterEach {
         Utils.deleteRecursive(metaDir.toFile)
     }
 
-
     // Fails with wdl4s v0.6, because
     //   '5 * (1 + 1)'  is converted into '5 * 1 + 1'
     //
@@ -203,5 +202,39 @@ class Wdl4sTest extends FlatSpec with BeforeAndAfterEach {
                 .map { decl => decl.unqualifiedName }
                 .toList
         assert(decls == List("x", "z"))
+    }
+
+    it should "Handle null values" in {
+        val wdlCode =
+            s"""|task NullArray {
+                |  Array[String] arr
+                |  command {
+                |  }
+                |  output {
+                |     Int result = 3
+                |  }
+                |}
+                |
+                |workflow w {
+                |  call NullArray { input: arr=null }
+                |  output {
+                |    NullArray.result
+                |  }
+                |}""".stripMargin.trim
+
+        val ns = WdlNamespaceWithWorkflow.load(wdlCode, Seq.empty).get
+        //val expr = WdlExpression.fromString("null")
+        //System.out.println(s"expr=${expr.toWdlString}")
+        //System.out.println(s"type=${expr.wdlType}")
+
+        val call:WdlCall = ns.workflow.findCallByName("NullArray").get
+        call.inputMappings.foreach{ case (key,expr) =>
+            System.err.println(s"key=${key} expr=${expr.toWdlString}")
+            //assert(expr.prerequisiteCallNames.isEmpty)
+            /*expr.prerequisiteCallNames.map{ fqn =>
+                val wdlType = WdlNamespace.lookupType(ns.workflow)(fqn)
+                System.err.println(s"fqn=${fqn} wdlType=${wdlType}")
+             }*/
+        }
     }
 }

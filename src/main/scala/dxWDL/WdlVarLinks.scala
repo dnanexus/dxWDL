@@ -102,13 +102,14 @@ object WdlVarLinks {
 
     // Is this a WDL type that maps to a native DX type?
     def isNativeDxType(wdlType: WdlType) : Boolean = {
-        Utils.stripOptional(wdlType) match {
+        wdlType match {
             case WdlBooleanType | WdlIntegerType | WdlFloatType | WdlStringType | WdlFileType
                    | WdlArrayType(WdlBooleanType)
                    | WdlArrayType(WdlIntegerType)
                    | WdlArrayType(WdlFloatType)
                    | WdlArrayType(WdlStringType)
                    | WdlArrayType(WdlFileType) => true
+            case WdlOptionalType(t) => isNativeDxType(t)
             case _ => false
         }
     }
@@ -339,13 +340,13 @@ object WdlVarLinks {
             case (WdlFileType, WdlString(path)) => LocalDxFiles.upload(Paths.get(path))
             case (WdlFileType, WdlSingleFile(path)) => LocalDxFiles.upload(Paths.get(path))
             case (WdlStringType, WdlSingleFile(path)) => JsString(path)
-            case (_,WdlBoolean(b)) => JsBoolean(b)
-            case (_,WdlInteger(n)) => JsNumber(n)
-            case (_,WdlFloat(x)) => JsNumber(x)
-            case (_,WdlString(buf)) =>
+            case (WdlStringType, WdlString(buf)) =>
                 if (buf.length > Utils.MAX_STRING_LEN)
                     throw new AppInternalException(s"string is longer than ${Utils.MAX_STRING_LEN}")
                 JsString(buf)
+            case (WdlBooleanType,WdlBoolean(b)) => JsBoolean(b)
+            case (WdlIntegerType,WdlInteger(n)) => JsNumber(n)
+            case (WdlFloatType, WdlFloat(x)) => JsNumber(x)
 
             // Base case: empty array
             case (_, WdlArray(_, ar)) if ar.length == 0 =>
@@ -355,6 +356,10 @@ object WdlVarLinks {
             case (WdlArrayType(t), WdlArray(_, elems)) =>
                 val jsVals = elems.map(e => jsOfComplexWdlValue(t, e))
                 JsArray(jsVals.toVector)
+
+            // automatically cast an element from type T to Array[T]
+            case (WdlArrayType(t), elem) =>
+                JsArray(jsOfComplexWdlValue(t,elem))
 
             // Maps. These are projections from a key to value, where
             // the key and value types are statically known. We
@@ -374,21 +379,27 @@ object WdlVarLinks {
                 JsObject("left" -> lJs, "right" -> rJs)
 
             // Strip optional type
-            case (WdlOptionalType(t), _) =>
-                jsOfComplexWdlValue(t, wdlValue)
+            case (WdlOptionalType(t), WdlOptionalValue(_,Some(w))) =>
+                jsOfComplexWdlValue(t, w)
+            case (WdlOptionalType(t), w) =>
+                jsOfComplexWdlValue(t, w)
+            case (t, WdlOptionalValue(_,Some(w))) =>
+                jsOfComplexWdlValue(t, w)
 
-            case _ => throw new Exception(
-                s"Unsupported WDL type ${wdlType.toWdlString} ${wdlValue.toWdlString}"
-            )
+            // If the value is none then, it is a missing value
+            // What if the value is null?
+
+            case (_,_) => throw new Exception(
+                s"""|Unsupported combination type=(${wdlType.toWdlString},${wdlType})
+                    |value=(${wdlValue.toWdlString}, ${wdlValue})"""
+                    .stripMargin.replaceAll("\n", " "))
         }
     }
 
     // import a WDL value
-    def apply(wdlTypeOrg: WdlType, attrs: DeclAttrs, wdlValue: WdlValue) : WdlVarLinks = {
-        // Strip optional types
-        val wdlType = Utils.stripOptional(wdlTypeOrg)
+    def apply(wdlType: WdlType, attrs: DeclAttrs, wdlValue: WdlValue) : WdlVarLinks = {
         val jsValue = jsOfComplexWdlValue(wdlType, wdlValue)
-        WdlVarLinks(wdlTypeOrg, attrs, DxlValue(jsValue))
+        WdlVarLinks(wdlType, attrs, DxlValue(jsValue))
     }
 
     def mkJborArray(dxJobVec: Vector[DXJob],

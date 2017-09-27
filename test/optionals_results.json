@@ -1,4 +1,9 @@
 {
+  "mi1.result" : 17,
+  "mi2.result" : 17,
+  "mi3.result" : 34,
+  "ms1.result" : "french horn",
+  "ms2.result" : "flute",
   "mul2.result" : 10,
   "add.result" : 4,
   "scatter_1.add2_result": [9, 10],
