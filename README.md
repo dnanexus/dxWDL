@@ -145,6 +145,32 @@ correct usage. The file must be accessed only once, in sequential
 order, from the beginning. It need not be read to the end. If the task
 does not keep this contract, it could fail in unexpected ways.
 
+
+## Task and workflow inputs
+
+WDL assumes all declarations to a task (also workflow) can be assigned
+by the caller. However, there are many of declarations that are, in
+essence, temporary variables that hold calculations. In order to
+compile a task to an applet, we limit the applet inputs to unassigned
+expressions.
+
+```
+task manipulate {
+  Int x
+  Int y = 6
+  Int? z = 17
+
+  ...
+}
+```
+
+In the `manipulate` task `x` is an input, `y` is not. But what about `z`?
+The declaration for `z` assigns it a default value. Can it be overridden by
+the caller?
+
+We compile `z` to an applet input, with 17 as its default.
+
+
 ## Debugging an applet
 
 If you build an applet on the platform with dxWDL, and want to

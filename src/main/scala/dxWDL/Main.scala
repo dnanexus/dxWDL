@@ -29,6 +29,9 @@ object Main extends App {
             TaskEpilog, TaskProlog, TaskRelaunch,
             WorkflowOutputs, WorkflowOutputsAndReorg = Value
     }
+    object CompilerFlag extends Enumeration {
+        val Default, IR = Value
+    }
 
     // Compiler state.
     // Packs common arguments passed between methods.
@@ -49,7 +52,7 @@ object Main extends App {
                               dxProject: DXProject,
                               folder: String,
                               dxWDLrtId: String,
-                              compileMode: Option[String],
+                              compileMode: CompilerFlag.Value,
                               sortMode: TopoMode.Value,
                               appletTimeout: Option[Int])
 
@@ -125,6 +128,15 @@ object Main extends App {
             // "--Archive" -> "archive"
             word.replaceAll("-", "").toLowerCase
         }
+        def checkNumberOfArguments(keyword: String,
+                                   expectedNumArgs:Int,
+                                   subargs:List[String]) : Unit = {
+            if (expectedNumArgs != subargs.length)
+                throw new Exception(s"""|Wrong number of arguments for ${keyword}.
+                                        |Expected ${expectedNumArgs}, input is
+                                        |${subargs}"""
+                                        .stripMargin.replaceAll("\n", " "))
+        }
         val cmdLineOpts = splitCmdLine(arglist)
         val options = HashMap.empty[String, String]
         cmdLineOpts.foreach {
@@ -132,21 +144,30 @@ object Main extends App {
             case keyOrg :: subargs =>
                 val keyword = normKeyword(keyOrg)
                 val value = keyword match {
-                    case "archive" => ""
+                    case "archive" =>
+                        checkNumberOfArguments(keyword, 0, subargs)
+                        ""
                     case "defaults" =>
-                        assert(subargs.length == 1)
+                        checkNumberOfArguments(keyword, 1, subargs)
                         subargs.head
-                    case "destination" =>
-                        assert(subargs.length == 1)
+                    case ("destination"|"folder") =>
+                        checkNumberOfArguments(keyword, 1, subargs)
                         subargs.head
-                    case ("force"|"f"|"overwrite") => ""
+                    case ("force"|"f"|"overwrite") =>
+                        checkNumberOfArguments(keyword, 0, subargs)
+                        ""
+                    case "help" =>
+                        checkNumberOfArguments(keyword, 0, subargs)
+                        ""
                     case "inputs" =>
-                        assert(subargs.length == 1)
+                        checkNumberOfArguments(keyword, 1, subargs)
                         subargs.head
                     case "compilemode" =>
-                        assert(subargs.length == 1)
+                        checkNumberOfArguments(keyword, 1, subargs)
                         subargs.head
-                    case "reorg" => ""
+                    case "reorg" =>
+                        checkNumberOfArguments(keyword, 0, subargs)
+                        ""
                     case "sort" =>
                         if (subargs.isEmpty) "normal"
                         else if (subargs.head == "relaxed") "relaxed"
@@ -309,7 +330,11 @@ object Main extends App {
         val (billTo, region) = Utils.projectDescribeExtraInfo(dxProject)
 
         val dxWDLrtId = getAssetId(region)
-        val compileMode: Option[String] = options.get("compilemode")
+        val compileMode: CompilerFlag.Value = options.get("compilemode") match {
+            case None => CompilerFlag.Default
+            case Some(x) if (x.toLowerCase == "ir") => CompilerFlag.IR
+            case Some(other) => throw new Exception(s"unrecognized compiler flag ${other}")
+        }
         val sortMode = options.get("sort") match {
             case None => TopoMode.Check
             case Some("normal") => TopoMode.Sort
@@ -418,7 +443,7 @@ object Main extends App {
 
         // Backend compiler pass
         val wf:Option[DXWorkflow] = cOpt.compileMode match {
-            case None =>
+            case CompilerFlag.Default =>
                 // Generate dx:applets and dx:workflow from the IR
                 val (wf, _) =
                     CompilerNative(cOpt.dxWDLrtId, cOpt.dxProject, instanceTypeDB,
@@ -426,8 +451,8 @@ object Main extends App {
                                    cOpt.appletTimeout,
                                    cOpt.force, cOpt.archive, cOpt.verbose).apply(irNs)
                 wf
-            case Some(x) if x.toLowerCase == "ir" => None
-            case Some(other) => throw new Exception(s"Unknown compilation mode ${other}")
+            case CompilerFlag.IR =>
+                None
         }
 
         wf match {
@@ -437,14 +462,22 @@ object Main extends App {
     }
 
     def compile(args: Seq[String]): Termination = {
+        val wdlSourceFile = args.head
+        val options =
+            try {
+                parseCmdlineOptions(args.tail.toList)
+            } catch {
+                case e : Throwable =>
+                    return BadUsageTermination(Utils.exceptionToString(e))
+            }
+        if (options contains "help")
+            return BadUsageTermination("")
         try {
-            val wdlSourceFile = args.head
-            val options = parseCmdlineOptions(args.tail.toList)
             val dxc = compileBody(Paths.get(wdlSourceFile), options)
             SuccessfulTermination(dxc)
         } catch {
             case e : Throwable =>
-                UnsuccessfulTermination(Utils.exceptionToString(e))
+                return UnsuccessfulTermination(Utils.exceptionToString(e))
         }
     }
 
@@ -528,7 +561,7 @@ object Main extends App {
         }
     }
 
-    val UsageMessage =
+    val usageMessage =
         s"""|java -jar dxWDL.jar <action> <parameters> [options]
             |
             |Actions:
@@ -566,7 +599,7 @@ object Main extends App {
     termination match {
         case SuccessfulTermination(s) => println(s)
         case BadUsageTermination(s) if (s == "") =>
-            Console.err.println(UsageMessage)
+            Console.err.println(usageMessage)
             System.exit(1)
         case BadUsageTermination(s) =>
             Console.err.println(s)
