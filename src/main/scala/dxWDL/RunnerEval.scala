@@ -24,7 +24,7 @@ import com.fasterxml.jackson.databind.JsonNode
 import java.nio.file.Path
 import spray.json._
 import Utils.appletLog
-import wdl4s.wdl.{Declaration, DeclarationInterface, WdlTask, WdlWorkflow, WorkflowOutput}
+import wdl4s.wdl.{Declaration, DeclarationInterface, WdlTask, WdlExpression, WdlWorkflow, WorkflowOutput}
 import wdl4s.wdl.types._
 import wdl4s.wdl.values._
 
@@ -42,15 +42,19 @@ object RunnerEval {
         var env: Map[String, (WdlVarLinks, Option[WdlValue])] =
             inputs.map{ case (key, wvl) => key -> (wvl, None) }.toMap
 
-        def evalAndCache(key: String, wvl: WdlVarLinks) : WdlValue = {
-            val v: WdlValue =
-                if (wvl.attrs.stream) {
-                    WdlVarLinks.eval(wvl, false)
-                } else {
-                    WdlVarLinks.eval(wvl, force)
-                }
-            env = env + (key -> (wvl, Some(v)))
-            v
+        def wvlEvalCache(key: String, wvl: WdlVarLinks) : WdlValue = {
+            env.get(key) match {
+                case Some((_,Some(v))) => v
+                case _ =>
+                    val v: WdlValue =
+                        if (wvl.attrs.stream) {
+                            WdlVarLinks.eval(wvl, false)
+                        } else {
+                            WdlVarLinks.eval(wvl, force)
+                        }
+                    env = env + (key -> (wvl, Some(v)))
+                    v
+            }
         }
 
         def lookup(varName : String) : WdlValue =
@@ -58,13 +62,23 @@ object RunnerEval {
                 case Some((wvl, None)) =>
                     // Make a value from a dx-links structure. This also causes any file
                     // to be downloaded. Keep the result cached.
-                    evalAndCache(varName, wvl)
+                    wvlEvalCache(varName, wvl)
                 case Some((_, Some(v))) =>
                     // We have already evalulated this structure
                     v
                 case None =>
                     throw new AppInternalException(s"Accessing unbound variable ${varName}")
             }
+
+        def evalDeclBase(decl:DeclarationInterface,
+                         expr:WdlExpression,
+                         attrs:DeclAttrs) : (WdlVarLinks, WdlValue) = {
+            val vRaw : WdlValue = expr.evaluate(lookup, DxFunctions).get
+            val v: WdlValue = Utils.cast(decl.wdlType, vRaw, decl.unqualifiedName)
+            val wvl = WdlVarLinks.apply(decl.wdlType, attrs, v)
+            env = env + (decl.unqualifiedName -> (wvl, Some(v)))
+            (wvl, v)
+        }
 
         def evalDecl(decl : DeclarationInterface) : Option[(WdlVarLinks, WdlValue)] = {
             val attrs = taskOpt match {
@@ -77,7 +91,7 @@ object RunnerEval {
                     inputs.get(decl.unqualifiedName) match {
                         case None => None
                         case Some(wvl) =>
-                            val v: WdlValue = evalAndCache(decl.unqualifiedName, wvl)
+                            val v: WdlValue = wvlEvalCache(decl.unqualifiedName, wvl)
                             Some((wvl, v))
                     }
 
@@ -88,30 +102,31 @@ object RunnerEval {
                             throw new AppInternalException(
                                 s"Accessing unbound variable ${decl.unqualifiedName}")
                         case Some(wvl) =>
-                            val v: WdlValue = evalAndCache(decl.unqualifiedName, wvl)
+                            val v: WdlValue = wvlEvalCache(decl.unqualifiedName, wvl)
                             Some((wvl, v))
                     }
 
                 // declaration to evaluate, not an input
                 case (WdlOptionalType(t), Some(expr)) =>
                     try {
-                        val vRaw : WdlValue = expr.evaluate(lookup, DxFunctions).get
-                        val v: WdlValue = Utils.cast(t, vRaw, decl.unqualifiedName)
-                        val wvl = WdlVarLinks.apply(t, attrs, v)
-                        env = env + (decl.unqualifiedName -> (wvl, Some(v)))
-                        Some((wvl, v))
+                        // An optional type
+                        inputs.get(decl.unqualifiedName) match {
+                            case None =>
+                                Some(evalDeclBase(decl, expr, attrs))
+                            case Some(wvl) =>
+                                // An overriding value was provided, use it instead
+                                // of evaluating the right hand expression
+                                val v:WdlValue = wvlEvalCache(decl.unqualifiedName, wvl)
+                                Some(wvl, v)
+                        }
                     } catch {
-                        // trying to access an unbound variable.
-                        // Since the result is optional.
+                        // Trying to access an unbound variable. Since
+                        // the result is optional, we can just let it go.
                         case e: AppInternalException => None
                     }
 
                 case (t, Some(expr)) =>
-                    val vRaw : WdlValue = expr.evaluate(lookup, DxFunctions).get
-                    val v: WdlValue = Utils.cast(t, vRaw, decl.unqualifiedName)
-                    val wvl = WdlVarLinks.apply(t, attrs, v)
-                    env = env + (decl.unqualifiedName -> (wvl, Some(v)))
-                    Some((wvl, v))
+                    Some(evalDeclBase(decl, expr, attrs))
             }
         }
 

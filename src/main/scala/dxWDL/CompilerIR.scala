@@ -355,22 +355,13 @@ task Add {
                       declarations: Seq[Declaration]) : (IR.Stage, IR.Applet) = {
         Utils.trace(verbose.on, s"Compiling common applet ${appletName}".format(appletName))
 
-        // Only workflow declarations that do not have an expression,
-        // needs to be provide by the user.
-        //
-        // Examples:
-        //   File x
-        //   String y = "abc"
-        //   Float pi = 3 + .14
-        //
-        // x - must be provided as an applet input
-        // y, pi -- calculated, non inputs
+        // Only a subset of the workflow declarations are considered inputs.
         val inputVars : Vector[IR.CVar] =  declarations.map{ decl =>
-            decl.expression match {
-                case None => Some(IR.CVar(decl.unqualifiedName, decl.wdlType,
-                                          DeclAttrs.empty, decl.ast))
-                case Some(_) => None
-            }
+            if (Utils.declarationIsInput(decl))
+                Some(IR.CVar(decl.unqualifiedName, decl.wdlType,
+                             DeclAttrs.empty, decl.ast))
+            else
+                None
         }.flatten.toVector
         val outputVars: Vector[IR.CVar] = declarations.map{ decl =>
             IR.CVar(decl.unqualifiedName, decl.wdlType, DeclAttrs.empty, decl.ast)
@@ -559,15 +550,20 @@ workflow w {
     def compileTask(task : WdlTask) : (IR.Applet, Vector[IR.CVar]) = {
         Utils.trace(verbose.on, s"Compiling task ${task.name}")
 
-        // The task inputs are those that do not have expressions
+        // The task inputs are declarations that:
+        // 1) are unassigned (do not have an expression)
+        // 2) OR, are assigned, but optional
+        //
+        // According to the WDL specification, in fact, all task declarations
+        // are potential inputs. However, that does not make that much sense.
         val inputVars : Vector[IR.CVar] =  task.declarations.map{ decl =>
-            decl.expression match {
-                case None => Some(IR.CVar(decl.unqualifiedName,
-                                          decl.wdlType,
-                                          DeclAttrs.get(task, decl.unqualifiedName, cef),
-                                          decl.ast))
-                case Some(_) => None
-            }
+            if (Utils.declarationIsInput(decl))
+                Some(IR.CVar(decl.unqualifiedName,
+                             decl.wdlType,
+                             DeclAttrs.get(task, decl.unqualifiedName, cef),
+                             decl.ast))
+            else
+                None
         }.flatten.toVector
         val outputVars : Vector[IR.CVar] = task.outputs.map{ tso =>
             IR.CVar(tso.unqualifiedName, tso.wdlType, DeclAttrs.empty, tso.ast)

@@ -34,13 +34,27 @@ task MaybeInt {
     }
 }
 
+# A task that sets a default for an optional input
+task MaybeString {
+    String? instrument = "french horn"
+    command {
+    }
+    output {
+        String? result = instrument
+    }
+}
+
 workflow optionals {
     Int arg1
     Array[Int] integers = [1,2]
-    Int? rain
+    Int? rain = 13
+    Int? snow = 34
 
     call MaybeInt as mi1 { input: a=rain }
     call MaybeInt as mi2 { input: a=mi1.result}
+    call MaybeInt as mi3 { input: a=snow}
+    call MaybeString as ms1
+    call MaybeString as ms2 { input: instrument="flute" }
 
     # A call missing a compulsory argument
     call lib.Twice as mul2
@@ -48,11 +62,13 @@ workflow optionals {
     call ppp_set_def as set_def
     call lib.Add as add
     call ppp_unused_args as unused_args { input: a=1}
-    call ppp_unused_args as unused_args_a { input: a=1, ignore="null"}
+
+    # TODO: how is null represented in wdl4s?
+    #call ppp_unused_args as unused_args_a { input: a=1, ignore=null}
 
     scatter (x in integers) {
         call ppp_unused_args as unused_args_b { input: a=x }
-        call ppp_unused_args as unused_args_c { input: a=x*2, ignore=["null"] }
+        call ppp_unused_args as unused_args_c { input: a=x*2, ignore=["pitch"] }
 
         # verify that unbound compulsory arguments are provided as scatter
         # inputs
