@@ -96,6 +96,8 @@ object IR {
                      outputs: Vector[CVar])
 
     case class Workflow(name: String,
+                        inputs: Vector[CVar],
+                        outputs: Vector[CVar],
                         stages: Vector[Stage])
 
     case class Namespace(workflow: Option[Workflow],
@@ -324,7 +326,7 @@ object IR {
 
         implicit val dxWorkflowStageFormat = yamlFormat1(Utils.DXWorkflowStage)
         implicit val stageFormat = yamlFormat5(Stage)
-        implicit val workflowFormat = yamlFormat2(Workflow)
+        implicit val workflowFormat = yamlFormat4(Workflow)
         implicit val namespaceFormat = yamlFormat2(Namespace)
     }
     import IrInternalYamlProtocol._
