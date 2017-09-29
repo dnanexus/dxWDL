@@ -173,9 +173,13 @@ case class InputFile(verbose: Utils.Verbose) {
         trace(verbose.on, s"Translating WDL input file ${inputPath}")
 
         // read the input file xxxx.json
+        // skip comment lines, these start with ##.
         val wdlInputs: JsObject = Utils.readFileContent(inputPath).parseJson.asJsObject
         val inputFields = HashMap.empty[String, JsValue]
-        wdlInputs.fields.foreach{ case (k,v) => inputFields(k) = v }
+        wdlInputs.fields.foreach{ case (k,v) =>
+            if (!k.startsWith("##"))
+                inputFields(k) = v
+        }
 
         // The general idea here is to figure out the ancestry of each
         // applet/call/workflow input. This provides the fully-qualified-name (fqn)

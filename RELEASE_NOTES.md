@@ -3,8 +3,8 @@
 ## 0.46
 - Allow applet/workflow inputs that are optional, and have a default.
 - More friendly command line interface
-- Preperatory work for setting workflow level inputs and outputs. This makes use of the
-new platform capability.
+- Setting workflow level inputs and outputs. This makes use of the
+new platform capability to this effect.
 
 ## 0.45
 - Default workflow inputs. The `--defaults` command line argument
