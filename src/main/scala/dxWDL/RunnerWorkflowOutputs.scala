@@ -89,7 +89,7 @@ object RunnerWorkflowOutputs {
 
     // Move all intermediate results to a sub-folder
     def moveIntermediateResultFiles(dxEnv: DXEnvironment,
-                                    outputFields: Map[String, JsonNode]) : Unit = {
+                                    outputFields: Map[String, JsValue]) : Unit = {
         val dxProject = dxEnv.getProjectContext()
         val dxProjDesc = dxProject.describe
         val dxAnalysis = dxEnv.getJob.describe.getAnalysis
@@ -104,8 +104,7 @@ object RunnerWorkflowOutputs {
 
         // find all the object IDs that should be exported
         val exportFiles: Vector[DXFile] = outputFields.map{ case (key, jsn) =>
-            val jsValue = Utils.jsValueOfJsonNode(jsn)
-            WdlVarLinks.findDxFiles(jsValue)
+            WdlVarLinks.findDxFiles(jsn)
         }.toVector.flatten
         val exportIds:Set[String] = exportFiles.map(_.getId).toSet
         val exportNames:Seq[String] = bulkGetFilenames(exportFiles, dxProject)
@@ -164,16 +163,13 @@ object RunnerWorkflowOutputs {
         val outputs : Map[String, BValue] =
             RunnerEval.evalDeclarations(outputDecls, inputs, false, None)
 
-        val outputFields: Map[String, JsonNode] = outputs.map {
+        val outputFields: Map[String, JsValue] = outputs.map {
             case (varName, bValue) =>
                 val varNameOrg = varName.stripPrefix("out_")
                 WdlVarLinks.genFields(bValue.wvl, varNameOrg)
         }.flatten.toMap
-        val m = outputFields.map{ case (varName,jsNode) =>
-            (varName, Utils.jsValueOfJsonNode(jsNode))
-        }.toMap
 
-        val json = JsObject(m)
+        val json = JsObject(outputFields)
         val ast_pp = json.prettyPrint
         appletLog(s"exported = ${ast_pp}")
         Utils.writeFileContent(jobOutputPath, ast_pp)

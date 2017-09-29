@@ -105,8 +105,7 @@ case class RunnerTask(task:WdlTask,
         val jsOutputs : Seq[(String, JsValue)] = outputs.map {
             case (key,wdlType,wdlValue) =>
                 val wvl = WdlVarLinks.apply(wdlType, DeclAttrs.empty, wdlValue)
-                val l = WdlVarLinks.genFields(wvl, key)
-                l.map{ case (x,y) => (x, Utils.jsValueOfJsonNode(y)) }
+                WdlVarLinks.genFields(wvl, key)
         }.flatten
         val json = JsObject(jsOutputs.toMap)
         val ast_pp = json.prettyPrint
@@ -380,8 +379,8 @@ case class RunnerTask(task:WdlTask,
     private def relaunchBuildInputs(inputWvls: Map[String, WdlVarLinks]) : ObjectNode = {
         var builder : DXJSON.ObjectBuilder = DXJSON.getObjectBuilder()
         inputWvls.foreach{ case (varName, wvl) =>
-            WdlVarLinks.genFields(wvl, varName).foreach{ case (fieldName, jsNode) =>
-                builder = builder.put(fieldName, jsNode)
+            WdlVarLinks.genFields(wvl, varName).foreach{ case (fieldName, jsv) =>
+                builder = builder.put(fieldName, Utils.jsonNodeOfJsValue(jsv))
             }
         }
         builder.build()
@@ -441,7 +440,7 @@ case class RunnerTask(task:WdlTask,
 
         // Return promises (JBORs) for all the outputs. Since the signature of the sub-job
         // is exactly the same as the parent, we can immediately exit the parent job.
-        val outputs: Map[String, JsonNode] = task.outputs.map { tso =>
+        val outputs: Map[String, JsValue] = task.outputs.map { tso =>
             val wvl = WdlVarLinks(tso.wdlType,
                                   DeclAttrs.empty,
                                   DxlJob(dxSubJob, tso.unqualifiedName))
@@ -450,9 +449,7 @@ case class RunnerTask(task:WdlTask,
 
 
         // write the outputs to the job_output.json file
-        val json = JsObject(
-            outputs.map{ case (key, json) => key -> Utils.jsValueOfJsonNode(json) }.toMap
-        )
+        val json = JsObject(outputs)
         val ast_pp = json.prettyPrint
         appletLog(s"outputs = ${ast_pp}")
         Utils.writeFileContent(jobOutputPath, ast_pp)

@@ -1072,17 +1072,21 @@ workflow w {
         }
 
         // Possibly add workflow output processing
-        val allStageWithOutputInfo: Vector[(IR.Stage, Option[IR.Applet])] = gWorkflowOutputs match {
+        //
+        // TODO: sometimes the input/output applets can be optimized away.
+        val (allStageWithOutputInfo, wfOutputs):
+                (Vector[(IR.Stage, Option[IR.Applet])], Vector[IR.CVar]) = gWorkflowOutputs match {
             case None =>
                 // output section is empty, no need for an additional phase
-                allStageInfo
+                (allStageInfo, Vector.empty)
             case Some(outputs) =>
                 // output section is non empty, keep only those files
                 // at the destination directory
                 val (outSecStg, outSecApl) = compileOutputSection(
                     wf.unqualifiedName ++ "_" ++ Utils.OUTPUT_SECTION,
                     env, outputs)
-                allStageInfo :+ (outSecStg, Some(outSecApl))
+                (allStageInfo :+ (outSecStg, Some(outSecApl)),
+                    outSecApl.outputs)
         }
         val (stages, auxApplets) = allStageWithOutputInfo.unzip
         val tApplets: Map[String, IR.Applet] =
@@ -1091,7 +1095,11 @@ workflow w {
             auxApplets
                 .flatten
                 .map(apl => apl.name -> apl).toMap
-        val irwf = IR.Workflow(wf.unqualifiedName, stages)
+
+        // Derive workflow inputs from the first applet (common)
+        val wfInputs:Vector[IR.CVar] = commonApplet.inputs
+
+        val irwf = IR.Workflow(wf.unqualifiedName, wfInputs, wfOutputs, stages)
         IR.Namespace(Some(irwf), tApplets ++ aApplets)
     }
 

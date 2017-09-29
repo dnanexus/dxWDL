@@ -2,6 +2,7 @@
 
 ## 0.46
 - Allowing applet/workflow inputs that are optional, and have a default.
+- More friendly command line interface
 
 ## 0.45
 - Default workflow inputs. The `--defaults` command line argument
