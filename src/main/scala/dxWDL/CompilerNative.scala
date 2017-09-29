@@ -715,18 +715,37 @@ case class CompilerNative(dxWDLrtId: String,
         trace(verbose2, s"workflow output spec=${wfOutputSpec}")
 
         // pack all the arguments into a single API call
-        val req = JsObject("project" -> JsString(dxProject.getId),
-                           "name" -> JsString(wf.name),
-                           "folder" -> JsString(folder),
-                           "properties" -> JsObject(CHECKSUM_PROP -> JsString(digest)),
-                           "stages" -> JsArray(stagesReq),
-                           "workflowInputSpec" -> JsArray(wfInputSpec),
-                           "workflowOutputSpec" -> JsArray(wfOutputSpec)
-        )
-
-        val rep = DXAPI.workflowNew(jsonNodeOfJsValue(req), classOf[JsonNode])
-        val id = apiParseReplyID(rep)
-        DXWorkflow.getInstance(id)
+        //
+        // The [workflowOutputSpec, workflowOutputSpec} fields
+        // will be renamed next week to inputs/outputs.
+        // We are trying both here
+        try {
+            val req = JsObject("project" -> JsString(dxProject.getId),
+                               "name" -> JsString(wf.name),
+                               "folder" -> JsString(folder),
+                               "properties" -> JsObject(CHECKSUM_PROP -> JsString(digest)),
+                               "stages" -> JsArray(stagesReq),
+                               "workflowInputSpec" -> JsArray(wfInputSpec),
+                               "workflowOutputSpec" -> JsArray(wfOutputSpec)
+            )
+            val rep = DXAPI.workflowNew(jsonNodeOfJsValue(req), classOf[JsonNode])
+            val id = apiParseReplyID(rep)
+            DXWorkflow.getInstance(id)
+        } catch {
+            case e: Throwable =>
+                // Try with new field names
+                val req = JsObject("project" -> JsString(dxProject.getId),
+                                   "name" -> JsString(wf.name),
+                                   "folder" -> JsString(folder),
+                                   "properties" -> JsObject(CHECKSUM_PROP -> JsString(digest)),
+                                   "stages" -> JsArray(stagesReq),
+                                   "inputs" -> JsArray(wfInputSpec),
+                                   "outputs" -> JsArray(wfOutputSpec)
+                )
+                val rep = DXAPI.workflowNew(jsonNodeOfJsValue(req), classOf[JsonNode])
+                val id = apiParseReplyID(rep)
+                DXWorkflow.getInstance(id)
+        }
     }
 
     // Compile an entire workflow
