@@ -20,7 +20,6 @@
 package dxWDL
 
 // DX bindings
-import com.fasterxml.jackson.databind.JsonNode
 import java.nio.file.Path
 import spray.json._
 import Utils.appletLog
@@ -168,14 +167,11 @@ object RunnerEval {
 
         // Keep only exported variables
         val exported = outputs.filter{ case (varName, _) => outputSpec contains varName }
-        val outputFields: Map[String, JsonNode] = exported.map {
+        val outputFields: Map[String, JsValue] = exported.map {
             case (varName, bValue) => WdlVarLinks.genFields(bValue.wvl, varName)
         }.flatten.toMap
-        val m = outputFields.map{ case (varName,jsNode) =>
-            (varName, Utils.jsValueOfJsonNode(jsNode))
-        }.toMap
 
-        val json = JsObject(m)
+        val json = JsObject(outputFields)
         val ast_pp = json.prettyPrint
         appletLog(s"exported = ${ast_pp}")
         Utils.writeFileContent(jobOutputPath, ast_pp)

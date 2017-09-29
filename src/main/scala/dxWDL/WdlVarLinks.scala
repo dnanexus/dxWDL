@@ -3,7 +3,6 @@
 package dxWDL
 
 import com.dnanexus.{DXFile, DXJob, IOClass}
-import com.fasterxml.jackson.databind.JsonNode
 import java.nio.file.Paths
 import net.jcazevedo.moultingyaml._
 import spray.json._
@@ -403,14 +402,12 @@ object WdlVarLinks {
     }
 
     def mkJborArray(dxJobVec: Vector[DXJob],
-                    varName: String) : JsonNode = {
+                    varName: String) : JsValue = {
         val jbors: Vector[JsValue] = dxJobVec.map{ dxJob =>
             val jobId : String = dxJob.getId()
             Utils.makeJBOR(jobId, varName)
         }
-        val retval = Utils.jsonNodeOfJsValue(JsArray(jbors))
-        //System.err.println(s"mkJborArray(${varName})  ${retval}")
-        retval
+        JsArray(jbors)
     }
 
 
@@ -473,12 +470,12 @@ object WdlVarLinks {
 
     // create input/output fields that bind the variable name [bindName] to
     // this WdlVar
-    def genFields(wvl : WdlVarLinks, bindName: String) : List[(String, JsonNode)] = {
+    def genFields(wvl : WdlVarLinks, bindName: String) : List[(String, JsValue)] = {
         val bindEncName = Utils.encodeAppletVarName(Utils.transformVarName(bindName))
 
-        def mkSimple() : (String, JsonNode) = {
-            val jsNode : JsonNode = wvl.dxlink match {
-                case DxlValue(jsn) => Utils.jsonNodeOfJsValue(jsn)
+        def mkSimple() : (String, JsValue) = {
+            val jsv : JsValue = wvl.dxlink match {
+                case DxlValue(jsn) => jsn
                 case DxlStage(dxStage, ioRef, varEncName) =>
                     ioRef match {
                         case IORef.Input => dxStage.getInputReference(varEncName)
@@ -486,13 +483,13 @@ object WdlVarLinks {
                     }
                 case DxlJob(dxJob, varEncName) =>
                     val jobId : String = dxJob.getId()
-                    Utils.jsonNodeOfJsValue(Utils.makeJBOR(jobId, varEncName))
+                    Utils.makeJBOR(jobId, varEncName)
                 case DxlJobArray(dxJobVec, varEncName) =>
                     mkJborArray(dxJobVec, varEncName)
             }
-            (bindEncName, jsNode)
+            (bindEncName, jsv)
         }
-        def mkComplex(wdlType: WdlType) : Map[String,JsonNode] = {
+        def mkComplex(wdlType: WdlType) : Map[String, JsValue] = {
             val bindEncName_F = bindEncName + FLAT_FILES_SUFFIX
             wvl.dxlink match {
                 case DxlValue(jsn) =>
@@ -501,8 +498,8 @@ object WdlVarLinks {
                     val jsFiles = dxFiles.map(x => Utils.jsValueOfJsonNode(x.getLinkAsJson))
                     // convert the top level structure into a hash
                     val hash = jsValueToDxHash(wdlType, jsn)
-                    Map(bindEncName -> Utils.jsonNodeOfJsValue(hash),
-                        bindEncName_F -> Utils.jsonNodeOfJsValue(JsArray(jsFiles)))
+                    Map(bindEncName -> hash,
+                        bindEncName_F -> JsArray(jsFiles))
                 case DxlStage(dxStage, ioRef, varEncName) =>
                     val varEncName_F = varEncName + FLAT_FILES_SUFFIX
                     ioRef match {
@@ -518,8 +515,8 @@ object WdlVarLinks {
                 case DxlJob(dxJob, varEncName) =>
                     val varEncName_F = varEncName + FLAT_FILES_SUFFIX
                     val jobId : String = dxJob.getId()
-                    Map(bindEncName -> Utils.jsonNodeOfJsValue(Utils.makeJBOR(jobId, varEncName)),
-                        bindEncName_F -> Utils.jsonNodeOfJsValue(Utils.makeJBOR(jobId, varEncName_F))
+                    Map(bindEncName -> Utils.makeJBOR(jobId, varEncName),
+                        bindEncName_F -> Utils.makeJBOR(jobId, varEncName_F)
                     )
                 case DxlJobArray(dxJobVec, varEncName) =>
                     val varEncName_F = varEncName + FLAT_FILES_SUFFIX

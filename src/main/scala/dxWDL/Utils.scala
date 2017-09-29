@@ -41,17 +41,15 @@ object Utils {
     case class DXWorkflowStage(id: String) {
         def getId() = id
 
-        def getInputReference(inputName:String) : JsonNode = {
-            val dxlink:ObjectNode = DXJSON.getObjectBuilder()
-                .put("stage", id)
-                .put("inputField", inputName).build()
-            DXJSON.getObjectBuilder().put("$dnanexus_link", dxlink).build()
+        def getInputReference(inputName:String) : JsValue = {
+            JsObject("$dnanexus_link" -> JsObject(
+                         "stage" -> JsString(id),
+                         "inputField" -> JsString(inputName)))
         }
-        def getOutputReference(outputName:String) : JsonNode = {
-            val dxlink:ObjectNode = DXJSON.getObjectBuilder()
-                .put("stage", id)
-                .put("outputField", outputName).build()
-            DXJSON.getObjectBuilder().put("$dnanexus_link", dxlink).build()
+        def getOutputReference(outputName:String) : JsValue = {
+            JsObject("$dnanexus_link" -> JsObject(
+                         "stage" -> JsString(id),
+                         "outputField" -> JsString(outputName)))
         }
     }
 
