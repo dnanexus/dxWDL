@@ -719,9 +719,15 @@ case class CompilerNative(dxWDLrtId: String,
                            "name" -> JsString(wf.name),
                            "folder" -> JsString(folder),
                            "properties" -> JsObject(CHECKSUM_PROP -> JsString(digest)),
-                           "stages" -> JsArray(stagesReq),
-                           "workflowInputSpec" -> JsArray(wfInputSpec),
-                           "workflowOutputSpec" -> JsArray(wfOutputSpec))
+                           "stages" -> JsArray(stagesReq)
+                               // This needs to be uncommented, because the field
+                               // names are going to change.
+                               //   workflowInputSpec -> input(s)
+                               //   workflowOutputSpec -> output(s)
+                               /*,
+                                "workflowInputSpec" -> JsArray(wfInputSpec),
+                                "workflowOutputSpec" -> JsArray(wfOutputSpec)*/
+        )
 
         val rep = DXAPI.workflowNew(jsonNodeOfJsValue(req), classOf[JsonNode])
         val id = apiParseReplyID(rep)

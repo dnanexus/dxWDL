@@ -3,7 +3,7 @@
 ## 0.46
 - Allow applet/workflow inputs that are optional, and have a default.
 - More friendly command line interface
-- Declare workflow level inputs and outputs. This makes use of the
+- Preperatory work for setting workflow level inputs and outputs. This makes use of the
 new platform capability.
 
 ## 0.45
