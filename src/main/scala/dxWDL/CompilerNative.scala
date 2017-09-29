@@ -721,7 +721,8 @@ case class CompilerNative(dxWDLrtId: String,
                            "properties" -> JsObject(CHECKSUM_PROP -> JsString(digest)),
                            "stages" -> JsArray(stagesReq),
                            "workflowInputSpec" -> JsArray(wfInputSpec),
-                           "workflowOutputSpec" -> JsArray(wfOutputSpec))
+                           "workflowOutputSpec" -> JsArray(wfOutputSpec)
+        )
 
         val rep = DXAPI.workflowNew(jsonNodeOfJsValue(req), classOf[JsonNode])
         val id = apiParseReplyID(rep)
