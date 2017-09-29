@@ -1,8 +1,10 @@
 # Release Notes
 
 ## 0.46
-- Allowing applet/workflow inputs that are optional, and have a default.
+- Allow applet/workflow inputs that are optional, and have a default.
 - More friendly command line interface
+- Declare workflow level inputs and outputs. This makes use of the
+new platform capability.
 
 ## 0.45
 - Default workflow inputs. The `--defaults` command line argument
