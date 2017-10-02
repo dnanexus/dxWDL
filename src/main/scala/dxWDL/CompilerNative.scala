@@ -665,87 +665,31 @@ case class CompilerNative(dxWDLrtId: String,
                       wf: IR.Workflow,
                       digest: String,
                       appletDict: Map[String, (IR.Applet, DXApplet)]) : DXWorkflow = {
-        // Figure out the workflow inputs by looking at the first stage/applet
-        assert(!wf.stages.isEmpty)
-        val wfInputSpec:Vector[JsValue] = wf.inputs.map(cVar =>
-            JsObject("name" -> JsString(cVar.name),
-                     "class" -> JsString(dxClassOfWdlType(cVar.wdlType))
-            ))
-        trace(verbose2, s"workflow input spec=${wfInputSpec}")
-
-        // Link the first stage inputs to the workflow inputs
-        val stage0 = wf.stages.head
-        val (_, dxApplet0) = appletDict(stage0.appletName)
-        val stage0inputs:Map[String, JsObject] = wf.inputs.map{ cVar =>
-            cVar.name -> JsObject("$dnanexus_link" -> JsObject(
-                                               "workflowInputField" -> JsString(cVar.name)))
-        }.toMap
-        val stage0ReqDesc = JsObject(
-            "id" -> JsString(stage0.id.getId),
-            "executable" -> JsString(dxApplet0.getId),
-            "name" -> JsString(stage0.name),
-            "input" -> JsObject(stage0inputs))
-
-        // Link all the other stages
-        val (stagesReq,_) = wf.stages.tail.foldLeft(
-            (Vector(stage0ReqDesc), Map(stage0.name -> stage0.id))) {
-            case ((stagesReq, stageDict), stg) =>
-                val (irApplet,dxApplet) = appletDict(stg.appletName)
-                val linkedInputs : Vector[(IR.CVar, IR.SArg)] = irApplet.inputs zip stg.inputs
-                val inputs = genStageInputs(linkedInputs, stageDict)
-                // convert the per-stage metadata into JSON
-                val stageReqDesc = JsObject(
-                    "id" -> JsString(stg.id.getId),
-                    "executable" -> JsString(dxApplet.getId),
-                    "name" -> JsString(stg.name),
-                    "input" -> inputs)
-                (stagesReq :+ stageReqDesc,
-                 stageDict ++ Map(stg.name -> stg.id))
+        val (stagesReq,_) =
+            wf.stages.foldLeft((Vector.empty[JsValue], Map.empty[String, DXWorkflowStage])) {
+                case ((stagesReq, stageDict), stg) =>
+                    val (irApplet,dxApplet) = appletDict(stg.appletName)
+                    val linkedInputs : Vector[(IR.CVar, IR.SArg)] = irApplet.inputs zip stg.inputs
+                    val inputs = genStageInputs(linkedInputs, stageDict)
+                    // convert the per-stage metadata into JSON
+                    val stageReqDesc = JsObject(
+                        "id" -> JsString(stg.id.getId),
+                        "executable" -> JsString(dxApplet.getId),
+                        "name" -> JsString(stg.name),
+                        "input" -> inputs)
+                    (stagesReq :+ stageReqDesc,
+                     stageDict ++ Map(stg.name -> stg.id))
             }
 
-        // Figure out the workflow outputs
-        val stageLast = wf.stages.last
-        val wfOutputSpec:Vector[JsValue] = wf.outputs.map{ cVar =>
-            JsObject("name" -> JsString(cVar.dxVarName),
-                     "class" -> JsString(dxClassOfWdlType(cVar.wdlType)),
-                     "outputSource" -> JsObject("$dnanexus_link" -> JsObject(
-                                                    "stage" -> JsString(stageLast.id.getId) ,
-                                                    "outputField" -> JsString(cVar.dxVarName))))
-        }
-        trace(verbose2, s"workflow output spec=${wfOutputSpec}")
-
         // pack all the arguments into a single API call
-        //
-        // The [workflowOutputSpec, workflowOutputSpec} fields
-        // will be renamed next week to inputs/outputs.
-        // We are trying both here
-        try {
-            val req = JsObject("project" -> JsString(dxProject.getId),
-                               "name" -> JsString(wf.name),
-                               "folder" -> JsString(folder),
-                               "properties" -> JsObject(CHECKSUM_PROP -> JsString(digest)),
-                               "stages" -> JsArray(stagesReq),
-                               "workflowInputSpec" -> JsArray(wfInputSpec),
-                               "workflowOutputSpec" -> JsArray(wfOutputSpec)
-            )
-            val rep = DXAPI.workflowNew(jsonNodeOfJsValue(req), classOf[JsonNode])
-            val id = apiParseReplyID(rep)
-            DXWorkflow.getInstance(id)
-        } catch {
-            case e: Throwable =>
-                // Try with new field names
-                val req = JsObject("project" -> JsString(dxProject.getId),
-                                   "name" -> JsString(wf.name),
-                                   "folder" -> JsString(folder),
-                                   "properties" -> JsObject(CHECKSUM_PROP -> JsString(digest)),
-                                   "stages" -> JsArray(stagesReq),
-                                   "inputs" -> JsArray(wfInputSpec),
-                                   "outputs" -> JsArray(wfOutputSpec)
-                )
-                val rep = DXAPI.workflowNew(jsonNodeOfJsValue(req), classOf[JsonNode])
-                val id = apiParseReplyID(rep)
-                DXWorkflow.getInstance(id)
-        }
+        val req = JsObject("project" -> JsString(dxProject.getId),
+                           "name" -> JsString(wf.name),
+                           "folder" -> JsString(folder),
+                           "properties" -> JsObject(CHECKSUM_PROP -> JsString(digest)),
+                           "stages" -> JsArray(stagesReq))
+        val rep = DXAPI.workflowNew(jsonNodeOfJsValue(req), classOf[JsonNode])
+        val id = apiParseReplyID(rep)
+        DXWorkflow.getInstance(id)
     }
 
     // Compile an entire workflow
