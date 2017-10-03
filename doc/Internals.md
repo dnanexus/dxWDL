@@ -157,7 +157,7 @@ task Eval1 {
 
 
 ## Native
-The back-end takes a blueprint, generates a *dx:applet* from each applet definition, and then
+The backend takes a blueprint, generates a *dx:applet* from each applet definition, and then
 generates a *dx:workflow* that uses the applets in its stages.
 
 The blueprint can be written to a file in human readable syntax,
@@ -397,7 +397,7 @@ workflow salad2_output {
 
 
 A workflow may create hundreds of result files, only a small subset of
-which is declared in the output section. The applet organizes the
+which are declared in the output section. The applet organizes the
 output directory structure, and moves all non-final result files into
 subdirectory `intermediate`. This requires `CONTRIBUTE` applet
 *dx:permissions*, and is optional.
@@ -463,6 +463,75 @@ The issues with this implementation are:
 2. There is a mismatch between the platform, that allows file versioning,
    and WdlFiles, that do not.
 
-In addition, some WDL constructs allows examining the path of a
+In addition, some WDL constructs allow examining the path of a
 WdlFile. This information then leaks to downstream workflow stages,
 making the execution dependent on the runtime system implementation.
+
+
+## Calling dx:applets from a WDL workflow
+
+Sometimes, it is useful to be able to call existing DNAx applets. For example,
+an existing *dx:workflow* can be imported into WDL this way, without having
+to rewrite all the called applets. To achieve this, a compilation step called
+*Foreign Function Interface* (FFI) is implemented.
+
+FFI takes a platform path (project:folder) where the applets can be
+found. It generates a WDL header for each dx:applet, and writes
+these headers into a file. The WDL workflow imports this file, and can
+subsequentally call these applets.
+
+For example, applet `test/applets/mk_int_list` takes two integers, and
+returns a list with both. The python code is:
+
+```python
+def main(**job_inputs):
+    a = job_inputs['a']
+    b = job_inputs['b']
+
+    # Return output
+    output = {}
+    output["all"] = [a, b]
+    return output
+
+dxpy.run()
+```
+
+The input/output declaration in the `dxapp.json` is:
+```json
+  "inputSpec": [
+    {
+      "name": "a",
+      "class": "int"
+    },
+    {
+      "name": "b",
+      "class": "int"
+    }
+  ],
+  "outputSpec": [
+    {
+      "name": "all",
+      "class": "array:int"
+      }
+  ]
+```
+
+The FFI pass creates a WDL header that looks like this:
+```
+task mk_int_list {
+  Int a
+  Int b
+  command {}
+  output {
+    Array[Int] all = []
+  }
+  meta {
+    type: extern
+    applet_id: applet-xxxx
+  }
+}
+```
+
+Similarly to C external function declarations, this is an empty task
+used only to compile the WDL workflow. At runtime, the applet-id
+specified in the `meta` section is called.
