@@ -532,6 +532,6 @@ task mk_int_list {
 }
 ```
 
-Similarly to C external function declarations, this is an empty task
-used only to compile the WDL workflow. At runtime, the applet-id
+In the same spirit as C external declarations, this is an empty task
+used to compile the WDL workflow. At runtime, the applet-id
 specified in the `meta` section is called.
