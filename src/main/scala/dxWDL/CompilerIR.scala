@@ -91,7 +91,7 @@ task Add {
     }
 */
     def genAppletStub(applet: IR.Applet, scope: Scope) : WdlTask = {
-        val task = WdlRewrite.taskGenEmpty(applet.name, scope)
+        val task = WdlRewrite.taskGenEmpty(applet.name, Map.empty, scope)
         val inputs = applet.inputs.map{ cVar =>
             WdlRewrite.declaration(cVar.wdlType, cVar.name, None)
         }.toVector
@@ -353,7 +353,7 @@ task Add {
     //
     def compileCommon(appletName: String,
                       declarations: Seq[Declaration]) : (IR.Stage, IR.Applet) = {
-        Utils.trace(verbose.on, s"Compiling common applet ${appletName}".format(appletName))
+        Utils.trace(verbose.on, s"Compiling common applet ${appletName}")
 
         // Only a subset of the workflow declarations are considered inputs.
         val inputVars : Vector[IR.CVar] =  declarations.map{ decl =>

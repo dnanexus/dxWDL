@@ -1,6 +1,6 @@
 package dxWDL
 
-import com.dnanexus.{DXApplet, DXProject, DXWorkflow}
+import com.dnanexus.{DXProject, DXWorkflow}
 import com.typesafe.config._
 import java.io.{FileWriter, PrintWriter}
 import java.nio.file.{Path, Paths}
@@ -22,7 +22,7 @@ object Main extends App {
     type OptionsMap = Map[String, List[String]]
 
     object Actions extends Enumeration {
-        val Compile, Config, Internal, Version  = Value
+        val Compile, Config, FFI, Internal, Version  = Value
     }
     object InternalOp extends Enumeration {
         val Eval, MiniWorkflow,
@@ -50,10 +50,10 @@ object Main extends App {
                               defaults: Option[Path],
                               dxProject: DXProject,
                               dxWDLrtId: String,
-                              externalDxPath: List[String],
                               folder: String,
                               force: Boolean,
                               inputs: Option[Path],
+                              outputFile: Option[Path],
                               region: String,
                               reorg: Boolean,
                               sortMode: TopoMode.Value,
@@ -146,53 +146,58 @@ object Main extends App {
             case Nil => throw new Exception("sanity: empty command line option")
             case keyOrg :: subargs =>
                 val keyword = normKeyword(keyOrg)
-                val value = keyword match {
+                val (nKeyword, value) = keyword match {
                     case "archive" =>
                         checkNumberOfArguments(keyword, 0, subargs)
-                        ""
-                    case "defaults" =>
-                        checkNumberOfArguments(keyword, 1, subargs)
-                        subargs.head
-                    case ("destination"|"folder") =>
-                        checkNumberOfArguments(keyword, 1, subargs)
-                        subargs.head
-                    case ("force"|"f"|"overwrite") =>
-                        checkNumberOfArguments(keyword, 0, subargs)
-                        ""
-                    case "help" =>
-                        checkNumberOfArguments(keyword, 0, subargs)
-                        ""
-                    case "inputs" =>
-                        checkNumberOfArguments(keyword, 1, subargs)
-                        subargs.head
+                        (keyword, "")
                     case "compilemode" =>
                         checkNumberOfArguments(keyword, 1, subargs)
-                        subargs.head
+                        (keyword, subargs.head)
+                    case "defaults" =>
+                        checkNumberOfArguments(keyword, 1, subargs)
+                        (keyword, subargs.head)
+                    case ("destination"|"folder") =>
+                        checkNumberOfArguments(keyword, 1, subargs)
+                        ("destination", subargs.head)
+                    case ("force"|"f"|"overwrite") =>
+                        checkNumberOfArguments(keyword, 0, subargs)
+                        ("force", "")
+                    case "help" =>
+                        checkNumberOfArguments(keyword, 0, subargs)
+                        (keyword, "")
+                    case "inputs" =>
+                        checkNumberOfArguments(keyword, 1, subargs)
+                        (keyword, subargs.head)
+                    case ("o"|"output"|"outputfile") =>
+                        checkNumberOfArguments(keyword, 1, subargs)
+                        ("outputFile", subargs.head)
                     case "reorg" =>
                         checkNumberOfArguments(keyword, 0, subargs)
-                        ""
+                        (keyword, "")
                     case "sort" =>
-                        if (subargs.isEmpty) "normal"
-                        else if (subargs.head == "relaxed") "relaxed"
-                        else throw new Exception(s"Unknown sort option ${subargs.head}")
+                        val retval =
+                            if (subargs.isEmpty) "normal"
+                            else if (subargs.head == "relaxed") "relaxed"
+                            else throw new Exception(s"Unknown sort option ${subargs.head}")
+                        (keyword, retval)
                     case "verbose" =>
-                        if (subargs.isEmpty) ""
-                        else if (subargs.length == 1) subargs.head
-                        else throw new Exception("Too many arguments to verbose flag")
+                        val retval =
+                            if (subargs.isEmpty) ""
+                            else if (subargs.length == 1) subargs.head
+                            else throw new Exception("Too many arguments to verbose flag")
+                        (keyword, retval)
                     case _ =>
                         throw new IllegalArgumentException(s"Unregonized keyword ${keyword}")
                 }
-                options.get(keyword) match {
+                options.get(nKeyword) match {
                     case None =>
                         // first time
-                        options(keyword) = List(value)
-                    case Some(x) if (keyword == normKeyword("verbose")) =>
+                        options(nKeyword) = List(value)
+                    case Some(x) if (nKeyword == "verbose") =>
                         // append to the already existing verbose flags
-                        options(keyword) = value :: x
-                    case Some(x) if (keyword == normKeyword("externalDxPath")) =>
-                        options(keyword) = value :: x
+                        options(nKeyword) = value :: x
                     case Some(x) =>
-                        options(keyword) = List(value)
+                        options(nKeyword) = List(value)
                 }
         }
         options.toMap
@@ -347,10 +352,6 @@ object Main extends App {
                 // default timeout
                 Some(Utils.DEFAULT_APPLET_TIMEOUT)
             }
-        val externalDxPath = options.get("externalDxPath") match {
-            case None => List.empty
-            case Some(l) => l
-        }
         val defaults: Option[Path] = options.get("defaults") match {
             case None => None
             case Some(List(p)) => Some(Paths.get(p))
@@ -361,7 +362,11 @@ object Main extends App {
             case Some(List(p)) => Some(Paths.get(p))
             case _ => throw new Exception("inputs specified twice")
         }
-
+        val outputFile: Option[Path] = options.get("outputFile") match {
+            case None => None
+            case Some(List(p)) => Some(Paths.get(p))
+            case _ => throw new Exception("only one output file can be specified")
+        }
         CompileOptions(appletTimeout,
                        options contains "archive",
                        billTo,
@@ -369,10 +374,10 @@ object Main extends App {
                        defaults,
                        dxProject,
                        dxWDLrtId,
-                       externalDxPath,
                        folder,
                        options contains "force",
                        inputs,
+                       outputFile,
                        region,
                        options contains "reorg",
                        sortMode,
@@ -380,14 +385,6 @@ object Main extends App {
     }
 
     def compileBody(wdlSourceFile : Path, cOpt: CompileOptions) : String = {
-        if (!cOpt.externalDxPath.isEmpty) {
-            // create headers for calling dx:applets and dx:workflows
-            val dxExtern = DxExtern(cOpt.verbose)
-            val headers: Vector[(WdlTask, DXApplet)] =
-                cOpt.externalDxPath.map(p => dxExtern.apply(p)).toVector.flatten
-            // TODO: write into a WDL file
-        }
-
         // get list of available instance types
         val instanceTypeDB = InstanceTypeDB.query(cOpt.dxProject)
 
@@ -502,6 +499,31 @@ object Main extends App {
         }
     }
 
+    def ffi(args: Seq[String]): Termination = {
+        val options =
+            try {
+                parseCmdlineOptions(args.toList)
+            } catch {
+                case e : Throwable =>
+                    return BadUsageTermination(Utils.exceptionToString(e))
+            }
+        if (options contains "help")
+            return BadUsageTermination("")
+        val cOpt:CompileOptions = compilerOptions(options)
+        val output = cOpt.outputFile match {
+            case None => throw new Exception("Output file not specified")
+            case Some(x) => x
+        }
+        try {
+            DxFFI.apply(cOpt.dxProject, cOpt.folder, output, cOpt.force, cOpt.verbose)
+            SuccessfulTermination("")
+        } catch {
+            case e : Throwable =>
+                return UnsuccessfulTermination(Utils.exceptionToString(e))
+        }
+    }
+
+
     // Extract the only task from a namespace
     def taskOfNamespace(ns: WdlNamespace) : WdlTask = {
         val numTasks = ns.tasks.length
@@ -576,6 +598,7 @@ object Main extends App {
             case Some(x) => x match {
                 case Actions.Compile => compile(args.tail)
                 case Actions.Config => SuccessfulTermination(ConfigFactory.load().toString)
+                case Actions.FFI => ffi(args.tail)
                 case Actions.Internal => internalOp(args.tail)
                 case Actions.Version => SuccessfulTermination(getVersion())
             }
@@ -607,6 +630,14 @@ object Main extends App {
             |
             |config
             |  Print the configuration parameters
+            |
+            |ffi
+            |  Foreign Function Interface. Create stubs for calling dx
+            |  applets, and store them as WDL tasks in a local file. Allows
+            |  calling existing platform applets without modification.
+            |  options:
+            |    -folder <string>      Platform folder to search for applets
+            |    -o <string>           Destination file for WDL task definitions
             |
             |internal <sub command>
             |  Various internal commands

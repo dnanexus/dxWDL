@@ -50,17 +50,18 @@ object WdlRewrite {
     }
 
     // Create an empty task.
-    def taskGenEmpty(name: String, scope: Scope) : WdlTask = {
+    def taskGenEmpty(name: String,
+                     meta: Map[String, String],
+                     scope: Scope) : WdlTask = {
         val task = new WdlTask(name,
                                Vector.empty,  // command Template
                                new RuntimeAttributes(Map.empty[String,WdlExpression]),
-                               Map.empty[String, String], // meta
+                               meta,
                                Map.empty[String, String], // parameter meta
                                scope.ast)
         updateScope(scope, task)
         task
     }
-
 
     private def genDefaultValueOfType(wdlType: WdlType) : WdlValue = {
         wdlType match {
@@ -190,4 +191,23 @@ object WdlRewrite {
                                         Map.empty,
                                         WdlRewrite.INVALID_AST)
     }
+
+    def namespace(tasks:Vector[WdlTask]) : WdlNamespaceWithoutWorkflow = {
+        new WdlNamespaceWithoutWorkflow(None,
+                                        Vector.empty,
+                                        Vector.empty,
+                                        tasks,
+                                        Map.empty,
+                                        WdlRewrite.INVALID_AST)
+    }
+
+    def namespaceEmpty() : WdlNamespaceWithoutWorkflow = {
+        new WdlNamespaceWithoutWorkflow(None,
+                                        Vector.empty,
+                                        Vector.empty,
+                                        Vector.empty,
+                                        Map.empty,
+                                        WdlRewrite.INVALID_AST)
+    }
+
 }

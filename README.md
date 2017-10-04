@@ -171,6 +171,60 @@ the caller?
 We compile `z` to an applet input, with 17 as its default.
 
 
+## Calling existing applets
+
+Sometimes, it is useful to be able to call existing applets from a WDL
+workflow. It allows using an applet without porting it to WDL. The
+`ffi` subcommand is tailored for this use case. It searchs a platform
+folder and generates a WDL task for each applet.
+
+```
+java -jar dxWDL.jar ffi --folder /A/B/C --output dx_extern.wdl
+```
+
+The above command will find applets in the `/A/B/C` folder, generate
+tasks for them, and write to local file `dx_extern.wdl`. For example,
+if an applet has the `dxapp.json` signature:
+
+```
+{
+  "name": concat,
+  "inputSpec": [
+    {
+      "name": "a",
+      "class": "string"
+    },
+    {
+      "name": "b",
+      "class": "string"
+    }
+  ],
+  "outputSpec": [
+    {
+      "name": "result",
+      "class": "string"
+    }
+}
+```
+
+The dx_extern.wdl file will be:
+```
+task concat {
+  String a
+  String b
+  command {}
+  output {
+    String c = ""
+  }
+  meta {
+    type: "extern"
+    id: "applet-xxxx"
+  }
+}
+```
+The meta section includes the applet-id, which will be called at runtime.
+
+
 ## Debugging an applet
 
 If you build an applet on the platform with dxWDL, and want to
