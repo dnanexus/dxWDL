@@ -22,7 +22,7 @@ object Main extends App {
     type OptionsMap = Map[String, List[String]]
 
     object Actions extends Enumeration {
-        val Compile, Config, FFI, Internal, Version  = Value
+        val Compile, Config, DXCI, Internal, Version  = Value
     }
     object InternalOp extends Enumeration {
         val Eval, MiniWorkflow,
@@ -499,7 +499,7 @@ object Main extends App {
         }
     }
 
-    def ffi(args: Seq[String]): Termination = {
+    def dxci(args: Seq[String]): Termination = {
         val options =
             try {
                 parseCmdlineOptions(args.toList)
@@ -515,7 +515,7 @@ object Main extends App {
             case Some(x) => x
         }
         try {
-            DxFFI.apply(cOpt.dxProject, cOpt.folder, output, cOpt.force, cOpt.verbose)
+            DxCI.apply(cOpt.dxProject, cOpt.folder, output, cOpt.force, cOpt.verbose)
             SuccessfulTermination("")
         } catch {
             case e : Throwable =>
@@ -598,7 +598,7 @@ object Main extends App {
             case Some(x) => x match {
                 case Actions.Compile => compile(args.tail)
                 case Actions.Config => SuccessfulTermination(ConfigFactory.load().toString)
-                case Actions.FFI => ffi(args.tail)
+                case Actions.DXCI => dxci(args.tail)
                 case Actions.Internal => internalOp(args.tail)
                 case Actions.Version => SuccessfulTermination(getVersion())
             }
@@ -631,7 +631,7 @@ object Main extends App {
             |config
             |  Print the configuration parameters
             |
-            |ffi
+            |dxci
             |  Foreign Function Interface. Create stubs for calling dx
             |  applets, and store them as WDL tasks in a local file. Allows
             |  calling existing platform applets without modification.

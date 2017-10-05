@@ -68,7 +68,7 @@ case class CompilerIR(gWorkflowOutputs: Option[Seq[WorkflowOutput]],
 
     /** Create a stub for an applet. This is an empty task
       that includes the input and output definitions. It is used
-      to allow linking to externally defined tasks and applets.
+      to allow linking to native DNAx applets (and workflows in the future).
 
       For example, the stub for the Add task:
 task Add {
@@ -579,7 +579,7 @@ workflow w {
         }
         val kind =
             (task.meta.get("type"), task.meta.get("id")) match {
-                case (Some("extern"), Some(id)) =>
+                case (Some("native"), Some(id)) =>
                     // wrapper for a native applet
                     IR.AppletKindNative(id)
                 case (_,_) =>

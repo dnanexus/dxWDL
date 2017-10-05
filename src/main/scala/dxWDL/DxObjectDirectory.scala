@@ -73,18 +73,13 @@ case class DxObjectDirectory(ns: IR.Namespace,
             val crLdt:LocalDateTime = LocalDateTime.ofInstant(crDate.toInstant(), ZoneId.systemDefault())
 
             val props: Map[String, String] = desc.getProperties().asScala.toMap
-            val digest:String = props.get(CHECKSUM_PROP) match {
+            props.get(CHECKSUM_PROP) match {
                 case None =>
-                    System.err.println(
-                        s"""|object ${name} has no checksum, and is invalid. It was probably
-                            |not created with dxWDL. Please remove it with:
-                            |dx rm ${dxProject}:${folder}/${name}
-                            |""".stripMargin.trim)
-                    throw new Exception("Encountered invalid applet, not created with dxWDL")
-                case Some(x) => x
+                    None
+                case Some(digest) =>
+                    Some(DxObjectInfo(name, crLdt, dxObj, digest))
             }
-            DxObjectInfo(name, crLdt, dxObj, digest)
-        }
+        }.flatten
 
         // There could be multiple versions of the same applet/workflow, collect their
         // information in vectors

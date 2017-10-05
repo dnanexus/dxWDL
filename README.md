@@ -175,11 +175,12 @@ We compile `z` to an applet input, with 17 as its default.
 
 Sometimes, it is useful to be able to call existing applets from a WDL
 workflow. It allows using an applet without porting it to WDL. The
-`ffi` subcommand is tailored for this use case. It searchs a platform
-folder and generates a WDL task for each applet.
+`dxci` subcommand, short for DNAx Call Interface, is tailored for this
+use case. It searchs a platform folder and generates a WDL task for
+each applet.
 
 ```
-java -jar dxWDL.jar ffi --folder /A/B/C --output dx_extern.wdl
+java -jar dxWDL.jar dxci --folder /A/B/C --output dx_extern.wdl
 ```
 
 The above command will find applets in the `/A/B/C` folder, generate
@@ -217,7 +218,7 @@ task concat {
     String c = ""
   }
   meta {
-    type: "extern"
+    type: "native"
     id: "applet-xxxx"
   }
 }

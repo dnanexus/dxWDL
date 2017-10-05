@@ -526,7 +526,7 @@ task mk_int_list {
     Array[Int] all = []
   }
   meta {
-    type: "extern"
+    type: "native"
     id: "applet-xxxx"
   }
 }

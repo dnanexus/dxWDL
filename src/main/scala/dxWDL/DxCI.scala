@@ -35,7 +35,7 @@ task mk_int_list {
     Array[Int] all = []
   }
   meta {
-    type: extern
+    type: native
     applet_id: applet-xxxx
   }
 }
@@ -51,12 +51,13 @@ import Utils.{CHECKSUM_PROP, trace}
 import wdl4s.wdl.{WdlTask, WdlNamespace}
 import wdl4s.wdl.types._
 
-case class DxFFI(ns: WdlNamespace, verbose: Utils.Verbose) {
+case class DxCI(ns: WdlNamespace, verbose: Utils.Verbose) {
 
     private def wdlTypeOfIOClass(appletName:String,
                                  argName: String,
-                                 ioClass: IOClass) : WdlType = {
-        ioClass match {
+                                 ioClass: IOClass,
+                                 isOptional: Boolean) : WdlType = {
+        val t:WdlType = ioClass match {
             case IOClass.BOOLEAN => WdlBooleanType
             case IOClass.INT => WdlIntegerType
             case IOClass.FLOAT => WdlFloatType
@@ -71,6 +72,10 @@ case class DxFFI(ns: WdlNamespace, verbose: Utils.Verbose) {
                 s"""|Cannot call applet ${appletName} from WDL, argument ${argName}
                     |has IO class ${ioClass}""".stripMargin.replaceAll("\n", " "))
         }
+        if (isOptional)
+            WdlOptionalType(t)
+        else
+            t
     }
 
     // Convert an applet to a WDL task with an empty body
@@ -84,12 +89,12 @@ case class DxFFI(ns: WdlNamespace, verbose: Utils.Verbose) {
         val inputSpecRaw: List[InputParameter] = desc.getInputSpecification().asScala.toList
         val inputSpec:Map[String, WdlType] =
             inputSpecRaw.map{ iSpec =>
-                iSpec.getName -> wdlTypeOfIOClass(aplName, iSpec.getName, iSpec.getIOClass)
+                iSpec.getName -> wdlTypeOfIOClass(aplName, iSpec.getName, iSpec.getIOClass, iSpec.isOptional)
             }.toMap
         val outputSpecRaw: List[OutputParameter] = desc.getOutputSpecification().asScala.toList
         val outputSpec:Map[String, WdlType] =
             outputSpecRaw.map{ iSpec =>
-                iSpec.getName -> wdlTypeOfIOClass(aplName, iSpec.getName, iSpec.getIOClass)
+                iSpec.getName -> wdlTypeOfIOClass(aplName, iSpec.getName, iSpec.getIOClass, iSpec.isOptional)
             }.toMap
         (inputSpec, outputSpec)
     }
@@ -98,7 +103,7 @@ case class DxFFI(ns: WdlNamespace, verbose: Utils.Verbose) {
                               appletName: String,
                               inputSpec: Map[String, WdlType],
                               outputSpec: Map[String, WdlType]) : WdlTask = {
-        val meta = Map("type" -> "extern",
+        val meta = Map("type" -> "native",
                        "id" -> dxApplet.getId)
         val task = WdlRewrite.taskGenEmpty(appletName, meta, ns)
         val inputs = inputSpec.map{ case (name, wdlType) =>
@@ -154,7 +159,7 @@ case class DxFFI(ns: WdlNamespace, verbose: Utils.Verbose) {
     }
 }
 
-object DxFFI {
+object DxCI {
     // create headers for calling dx:applets and dx:workflows
     def apply(dxProject: DXProject,
               folder: String,
@@ -162,9 +167,9 @@ object DxFFI {
               force: Boolean,
               verbose: Utils.Verbose) : Unit = {
         val nsEmpty = WdlRewrite.namespaceEmpty()
-        val dxFfi = DxFFI(nsEmpty, verbose)
-        val dxExternTasks: Vector[WdlTask] = dxFfi.search(dxProject, folder)
-        val ns = WdlRewrite.namespace(dxExternTasks)
+        val dxFfi = DxCI(nsEmpty, verbose)
+        val dxNativeTasks: Vector[WdlTask] = dxFfi.search(dxProject, folder)
+        val ns = WdlRewrite.namespace(dxNativeTasks)
 
         // pretty print into a buffer
         val lines: String = WdlPrettyPrinter(false, None)

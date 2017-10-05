@@ -1,0 +1,29 @@
+{
+  "name": "native_diff",
+  "summary": "Compare two files",
+  "dxapi": "1.0.0",
+  "version": "0.0.1",
+  "inputSpec": [
+    {
+      "name": "a",
+      "class": "file"
+    },
+    {
+      "name": "b",
+      "class": "file"
+    }
+  ],
+  "outputSpec": [
+    {
+      "name": "equality",
+      "class": "boolean"
+    }
+  ],
+  "runSpec": {
+    "interpreter": "bash",
+    "file": "code.sh",
+    "distribution": "Ubuntu",
+    "release": "14.04"
+  },
+  "authorizedUsers": []
+}

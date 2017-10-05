@@ -1,0 +1,7 @@
+{
+  "call_native_outputs.mk_list_all" : [3, 5],
+  "call_native_outputs.concat_c" : "octopus_zebra_fish",
+  "call_native_outputs.mk_list2_all" : [3, 3],
+  "call_native_outputs.sum_result" : [2,4,6],
+  "call_native_outputs.sum2_result" : [1,2,3]
+}
