@@ -5,10 +5,12 @@
 set -e -x -o pipefail
 
 main() {
-    diff $a $b > "X.txt" || true
+    dx-download-all-inputs --parallel
+
+    diff in/a/fileA in/b/fileB > DIFF || true
 
     equivalent="true"
-    if [[ -s X.txt ]]; then
+    if [[ -s DIFF ]]; then
         equivalent="false"
     fi
 
