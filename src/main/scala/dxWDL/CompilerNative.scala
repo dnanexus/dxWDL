@@ -254,6 +254,8 @@ case class CompilerNative(dxWDLrtId: String,
                 genBashScriptNonTask("eval", setupFilesScript)
             case (IR.AppletKindIf(_) | IR.AppletKindScatter(_)) =>
                 genBashScriptNonTask("miniWorkflow", setupFilesScript)
+            case IR.AppletKindNative(_) =>
+                throw new Exception("Sanity: generating a bash script for a native applet")
             case IR.AppletKindTask =>
                 instanceType match {
                     case IR.InstanceTypeDefault | IR.InstanceTypeConst(_) =>
@@ -527,8 +529,7 @@ case class CompilerNative(dxWDLrtId: String,
     // if the WDL code has changed.
     def buildAppletIfNeeded(applet: IR.Applet,
                             appletDict: Map[String, (IR.Applet, DXApplet)],
-                            dxObjDir: DxObjectDirectory)
-            : (DXApplet, Vector[IR.CVar]) = {
+                            dxObjDir: DxObjectDirectory) : DXApplet = {
         trace(verbose.on, s"Compiling applet ${applet.name}")
 
         // limit the applet dictionary, only to actual dependencies
@@ -562,11 +563,11 @@ case class CompilerNative(dxWDLrtId: String,
                 val id = apiParseReplyID(rep)
                 val dxApplet = DXApplet.getInstance(id)
                 dxObjDir.insert(applet.name, dxApplet, digest)
-                (dxApplet, applet.outputs)
+                dxApplet
             case Some(dxObj) =>
                 // Old applet exists, and it has not changed. Return the
                 // applet-id.
-                (dxObj.asInstanceOf[DXApplet], applet.outputs)
+                dxObj.asInstanceOf[DXApplet]
         }
     }
 
@@ -782,7 +783,10 @@ case class CompilerNative(dxWDLrtId: String,
         // to the launcher at runtime.
         val appletDict = applets.foldLeft(Map.empty[String, (IR.Applet, DXApplet)]) {
             case (appletDict, apl) =>
-                val (dxApplet, _) = buildAppletIfNeeded(apl, appletDict, dxObjDir)
+                val dxApplet = apl.kind match {
+                    case IR.AppletKindNative(id) => DXApplet.getInstance(id)
+                    case _ => buildAppletIfNeeded(apl, appletDict, dxObjDir)
+                }
                 trace(verbose.on, s"Applet ${apl.name} = ${dxApplet.getId()}")
                 appletDict + (apl.name -> (apl, dxApplet))
         }.toMap

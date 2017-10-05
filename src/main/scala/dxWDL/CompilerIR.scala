@@ -546,6 +546,9 @@ workflow w {
          applet)
     }
 
+    // Check if a task is a real WDL task, or if it is a wrapper for a
+    // native applet.
+
     // Compile a WDL task into an applet
     def compileTask(task : WdlTask) : (IR.Applet, Vector[IR.CVar]) = {
         Utils.trace(verbose.on, s"Compiling task ${task.name}")
@@ -574,13 +577,23 @@ workflow w {
             case None => false
             case Some(_) => true
         }
+        val kind =
+            (task.meta.get("type"), task.meta.get("id")) match {
+                case (Some("extern"), Some(id)) =>
+                    // wrapper for a native applet
+                    IR.AppletKindNative(id)
+                case (_,_) =>
+                    // a WDL task
+                    IR.AppletKindTask
+            }
+
         val applet = IR.Applet(task.name,
                                inputVars,
                                outputVars,
                                calcInstanceType(Some(task)),
                                useDocker,
                                destination,
-                               IR.AppletKindTask,
+                               kind,
                                WdlRewrite.namespace(task))
         verifyWdlCodeIsLegal(applet.ns)
         (applet, outputVars)

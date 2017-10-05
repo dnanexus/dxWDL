@@ -145,7 +145,10 @@ case class DxFFI(ns: WdlNamespace, verbose: Utils.Verbose) {
                 val task = genAppletStub(apl, aplName, inputSpec, outputSpec)
                 Some(task)
             } catch {
-                case e : Throwable =>  None
+                case e : Throwable =>
+                    System.err.println(s"Unable to construct a WDL interface for applet ${aplName}")
+                    System.err.println(e.getMessage)
+                    None
             }
         }.flatten.toVector
     }

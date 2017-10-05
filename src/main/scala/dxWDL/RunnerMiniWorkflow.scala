@@ -192,18 +192,6 @@ case class RunnerMiniWorkflow(exportVars: Set[String],
                 }
                 varName -> wvl
         }
-/*
-        var builder : DXJSON.ObjectBuilder = DXJSON.getObjectBuilder()
-        appInputs.foreach{
-            case (varName, Some(wvl)) =>
-                WdlVarLinks.genFields(wvl, varName).foreach{ case (fieldName, jsv) =>
-                    builder = builder.put(fieldName, Utils.jsonNodeOfJsValue(jsv))
-                }
-            case _ => ()
-        }
-        builder.build()
- */
-
         val m = appInputs.foldLeft(Map.empty[String, JsValue]) {
             case (accu, (varName, Some(wvl))) =>
                 val fields = WdlVarLinks.genFields(wvl, varName)
