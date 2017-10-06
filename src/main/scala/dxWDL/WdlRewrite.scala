@@ -65,12 +65,18 @@ object WdlRewrite {
 
     private def genDefaultValueOfType(wdlType: WdlType) : WdlValue = {
         wdlType match {
-            case WdlArrayType(x) => WdlArray(WdlArrayType(x), List())  // an empty array
             case WdlBooleanType => WdlBoolean(true)
             case WdlIntegerType => WdlInteger(0)
             case WdlFloatType => WdlFloat(0.0)
             case WdlStringType => WdlString("")
-            case WdlFileType => WdlFile("/tmp/X.txt")
+            //case WdlFileType => WdlFile("/tmp/X.txt")
+            case WdlFileType => WdlFile("")
+            case WdlOptionalType(t) => genDefaultValueOfType(t)
+            case WdlArrayType(x) => WdlArray(WdlArrayType(x), List())  // an empty array
+            case WdlMapType(keyType, valueType) => WdlMap(WdlMapType(keyType, valueType), Map.empty)
+            case WdlObjectType => WdlObject(Map.empty)
+            case WdlPairType(lType, rType) => WdlPair(genDefaultValueOfType(lType),
+                                                      genDefaultValueOfType(rType))
             case _ => throw new Exception(s"Unhandled type ${wdlType.toWdlString}")
         }
     }
