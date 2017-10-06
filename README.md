@@ -223,7 +223,21 @@ task concat {
   }
 }
 ```
-The meta section includes the applet-id, which will be called at runtime.
+The meta section includes the applet-id, which will be called at runtime. A WDL file can
+call the `concat` task as follows:
+
+```
+import "dx_extern.wdl" as lib
+
+workflow w {
+  call lib.concat as concat {
+    input: a="double", b="espresso"
+  }
+  output {
+    concat.c
+  }
+}
+```
 
 
 ## Debugging an applet
