@@ -175,13 +175,13 @@ We compile `z` to an applet input, with 17 as its default.
 
 Sometimes, it is desirable to call an existing dx:applet from a WDL
 workflow. For example, when porting a native workflow, we can leave
-the applets as is, without rewriting them in WDL. The `dxci`
-subcommand, short for *Dx Call Interface*, is dedicated to this use
+the applets as is, without rewriting them in WDL. The `dxni`
+subcommand, short for *Dx Native Interface*, is dedicated to this use
 case. It searchs a platform folder and generates a WDL wrapper task for each
 applet. For example, the command:
 
 ```
-java -jar dxWDL.jar dxci --folder /A/B/C --output dx_extern.wdl
+java -jar dxWDL.jar dxni --folder /A/B/C --output dx_extern.wdl
 ```
 
 will find native applets in the `/A/B/C` folder, generate tasks for

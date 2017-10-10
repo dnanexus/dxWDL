@@ -22,7 +22,7 @@ object Main extends App {
     type OptionsMap = Map[String, List[String]]
 
     object Actions extends Enumeration {
-        val Compile, Config, DXCI, Internal, Version  = Value
+        val Compile, Config, DXNI, Internal, Version  = Value
     }
     object InternalOp extends Enumeration {
         val Eval, MiniWorkflow,
@@ -54,6 +54,7 @@ object Main extends App {
                               force: Boolean,
                               inputs: Option[Path],
                               outputFile: Option[Path],
+                              recursive: Boolean,
                               region: String,
                               reorg: Boolean,
                               sortMode: TopoMode.Value,
@@ -171,6 +172,9 @@ object Main extends App {
                     case ("o"|"output"|"outputfile") =>
                         checkNumberOfArguments(keyword, 1, subargs)
                         ("outputFile", subargs.head)
+                    case ("r"|"recursive") =>
+                        checkNumberOfArguments(keyword, 0, subargs)
+                        ("recursive", "")
                     case "reorg" =>
                         checkNumberOfArguments(keyword, 0, subargs)
                         (keyword, "")
@@ -378,6 +382,7 @@ object Main extends App {
                        options contains "force",
                        inputs,
                        outputFile,
+                       options contains "recursive",
                        region,
                        options contains "reorg",
                        sortMode,
@@ -499,7 +504,7 @@ object Main extends App {
         }
     }
 
-    def dxci(args: Seq[String]): Termination = {
+    def dxni(args: Seq[String]): Termination = {
         val options =
             try {
                 parseCmdlineOptions(args.toList)
@@ -514,8 +519,19 @@ object Main extends App {
             case None => throw new Exception("Output file not specified")
             case Some(x) => x
         }
+
+        // Validate the folder. It would have been nicer to be able
+        // to check if a folder exists, instead of validating by
+        // listing its contents, which could be very large.
         try {
-            DxCI.apply(cOpt.dxProject, cOpt.folder, output, cOpt.force, cOpt.verbose)
+            cOpt.dxProject.listFolder(cOpt.folder)
+        } catch {
+            case e : Throwable =>
+                return UnsuccessfulTermination(s"Folder ${cOpt.folder} is invalid")
+        }
+
+        try {
+            DxNI.apply(cOpt.dxProject, cOpt.folder, output, cOpt.recursive, cOpt.force, cOpt.verbose)
             SuccessfulTermination("")
         } catch {
             case e : Throwable =>
@@ -598,7 +614,7 @@ object Main extends App {
             case Some(x) => x match {
                 case Actions.Compile => compile(args.tail)
                 case Actions.Config => SuccessfulTermination(ConfigFactory.load().toString)
-                case Actions.DXCI => dxci(args.tail)
+                case Actions.DXNI => dxni(args.tail)
                 case Actions.Internal => internalOp(args.tail)
                 case Actions.Version => SuccessfulTermination(getVersion())
             }
@@ -620,7 +636,7 @@ object Main extends App {
             |    -compileMode <string> Compilation mode, a debugging flag
             |    -defaults <string>    Path to Cromwell formatted default values file
             |    -destination <string> Output folder on the platform for workflow
-            |    -force                Delete existing applets/workflows
+            |    -f | force            Delete existing applets/workflows
             |    -inputs <string>      Path to Cromwell formatted input file
             |    -noAppletTimeout      By default, applets cannot run more than ${Utils.DEFAULT_APPLET_TIMEOUT} hours.
             |                          Remove this limitation.
@@ -631,13 +647,14 @@ object Main extends App {
             |config
             |  Print the configuration parameters
             |
-            |dxci
-            |  Foreign Function Interface. Create stubs for calling dx
+            |dxni
+            |  Dx Native call Interface. Create stubs for calling dx
             |  applets, and store them as WDL tasks in a local file. Allows
             |  calling existing platform applets without modification.
             |  options:
             |    -folder <string>      Platform folder to search for applets
             |    -o <string>           Destination file for WDL task definitions
+            |    -r | recursive        Recursive search
             |
             |internal <sub command>
             |  Various internal commands
