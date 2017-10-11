@@ -2,7 +2,7 @@
 
 ## 0.47
 - Support calling native DNAx applets from a WDL workflow. A helper utility
-  is `dxci` (*Dx Call Interface*), it creates task wrappers for existing
+  is `dxni` (*Dx Native Interface*), it creates task wrappers for existing
   dx:applets.
 
 ## 0.46

@@ -35,11 +35,15 @@ case class InputFile(verbose: Utils.Verbose) {
             DXFile.getInstance(fileName)
         } else {
             val fullPath = Paths.get(fileName)
-            var folder = fullPath.getParent.toString
-            if (!folder.startsWith("/"))
-                folder = "/" + folder
+            trace(verbose.on, s"lookupFile: ${fullPath.toString}")
+            val parent = fullPath.getParent
+            var folder = "/"
+            if (parent != null) {
+                folder = parent.toString
+                if (!folder.startsWith("/"))
+                    folder = "/" + folder
+            }
             val baseName = fullPath.getFileName.toString
-
             val found:List[DXFile] = dxProject match  {
                 case Some(x) =>
                     DXSearch.findDataObjects().nameMatchesExactly(baseName)
