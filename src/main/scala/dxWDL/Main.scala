@@ -493,8 +493,11 @@ object Main extends App {
             case (Some(path), Some(irwf)) =>
                 val dxInputs = InputFile(bOpt.verbose).dxFromCromwell(irNs, irwf, path)
                 // write back out as xxxx.dx.json
-                val fullPath = Utils.replaceFileSuffix(path, ".dx.json")
-                val dxInputFile = Paths.get(fullPath)
+                val filename = Utils.replaceFileSuffix(path, ".dx.json")
+                val parent = path.getParent
+                val dxInputFile =
+                    if (parent != null) parent.resolve(filename)
+                    else Paths.get(filename)
                 Utils.writeFileContent(dxInputFile, dxInputs.prettyPrint)
                 Utils.trace(bOpt.verbose.on, s"Wrote dx JSON input file ${dxInputFile}")
             case _ => ()

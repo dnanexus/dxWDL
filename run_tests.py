@@ -338,16 +338,19 @@ def native_call_setup(project, applet_folder, version_id):
                       "native_mk_list",
                       "native_sum"]
     for napl in native_applets:
-        cmdline = [ "dx", "build", "-f",
-                    os.path.join(top_dir, "test/applets/{}".format(napl)),
-                    "--destination", (project.get_id() + ":" + applet_folder + "/") ]
-        print(" ".join(cmdline))
-        subprocess.check_output(cmdline)
+        try:
+            cmdline = [ "dx", "build",
+                        os.path.join(top_dir, "test/applets/{}".format(napl)),
+                        "--destination", (project.get_id() + ":" + applet_folder + "/") ]
+            print(" ".join(cmdline))
+            subprocess.check_output(cmdline)
+        except Exception, e:
+            print("Applet {} already exists".format(napl))
 
     # build WDL wrapper tasks in test/dx_extern.wdl
     cmdline = [ "java", "-jar",
                 os.path.join(top_dir, "dxWDL-{}.jar".format(version_id)),
-                "dxci",
+                "dxni",
                 "--force",
                 "--verbose",
                 "--folder", (project.get_id() + ":" + applet_folder),
