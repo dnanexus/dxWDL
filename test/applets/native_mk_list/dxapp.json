@@ -1,0 +1,34 @@
+{
+  "name": "native_mk_list",
+  "summary": "Create a list from two integers",
+  "dxapi": "1.0.0",
+  "version": "0.0.1",
+  "inputSpec": [
+    {
+      "name": "a",
+      "class": "int"
+    },
+    {
+      "name": "b",
+      "class": "int"
+    }
+  ],
+  "outputSpec": [
+    {
+      "name": "all",
+      "class": "array:int"
+    }
+  ],
+  "runSpec": {
+    "interpreter": "python2.7",
+    "file": "code.py",
+    "systemRequirements": {
+      "main": {
+        "instanceType": "mem1_ssd1_x2"
+      }
+    },
+    "distribution": "Ubuntu",
+    "release": "14.04"
+  },
+  "authorizedUsers": []
+}

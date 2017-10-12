@@ -156,7 +156,9 @@ case class WdlPrettyPrinter(fqnFlag: Boolean, workflowOutputs: Option[Seq[Workfl
         val paramMeta = task.parameterMeta.map{ case (x,y) =>
             indentLine(s"""${x}: "${y}" """, level + 2)
         }.toVector
-        val meta = task.meta.map{ case (x,y) =>  s"${x}: ${y}" }.toVector
+        val meta = task.meta.map{ case (x,y) =>
+            indentLine(s"""${x}: "${y}" """, level + 2)
+        }.toVector
 
         val body = decls ++
             buildCommandBlock(task.commandTemplate, level + 1) ++

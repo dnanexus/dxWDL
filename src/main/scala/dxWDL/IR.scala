@@ -51,14 +51,16 @@ object IR {
     // There are several kinds of applets
     //   Eval:      evaluate WDL expressions, pure calculation
     //   If:        block for a conditional
+    //   Native:    a native platform applet
     //   Scatter:   utility block for scatter/gather
     //   Task:      call a task, execute a shell command (usually)
     //   WorkflowOutputs: evaluate workflow outputs, and clean up
     //              intermediate results if needed.
     sealed trait AppletKind
     case object AppletKindEval extends AppletKind
-    case class AppletKindIf(calls: Map[String, String]) extends AppletKind
-    case class AppletKindScatter(calls: Map[String, String]) extends AppletKind
+    case class  AppletKindIf(calls: Map[String, String]) extends AppletKind
+    case class  AppletKindNative(id: String) extends AppletKind
+    case class  AppletKindScatter(calls: Map[String, String]) extends AppletKind
     case object AppletKindTask extends AppletKind
     case object AppletKindWorkflowOutputs extends AppletKind
     case object AppletKindWorkflowOutputsAndReorg extends AppletKind
@@ -134,6 +136,10 @@ object IR {
                         YamlObject(
                             YamlString("aKind") -> YamlString("If"),
                             YamlString("calls") -> calls.toYaml)
+                    case AppletKindNative(id) =>
+                        YamlObject(
+                            YamlString("aKind") -> YamlString("Native"),
+                            YamlString("id") -> YamlString(id))
                     case AppletKindScatter(calls) =>
                         YamlObject(
                             YamlString("aKind") -> YamlString("Scatter"),
@@ -151,6 +157,11 @@ object IR {
                     yo.getFields(YamlString("aKind")) match {
                         case Seq(YamlString("Eval")) =>
                             AppletKindEval
+                        case Seq(YamlString("Native")) =>
+                            yo.getFields(YamlString("id")) match {
+                                case Seq(YamlString(id)) =>
+                                    AppletKindNative(id)
+                            }
                         case Seq(YamlString("Task")) =>
                             AppletKindTask
                         case Seq(YamlString("WorkflowOutputs")) =>

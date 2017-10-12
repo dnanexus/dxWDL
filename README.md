@@ -171,6 +171,76 @@ the caller?
 We compile `z` to an applet input, with 17 as its default.
 
 
+## Calling existing applets
+
+Sometimes, it is desirable to call an existing dx:applet from a WDL
+workflow. For example, when porting a native workflow, we can leave
+the applets as is, without rewriting them in WDL. The `dxni`
+subcommand, short for *Dx Native Interface*, is dedicated to this use
+case. It searchs a platform folder and generates a WDL wrapper task for each
+applet. For example, the command:
+
+```
+java -jar dxWDL.jar dxni --folder /A/B/C --output dx_extern.wdl
+```
+
+will find native applets in the `/A/B/C` folder, generate tasks for
+them, and write to local file `dx_extern.wdl`. If an
+applet has the `dxapp.json` signature:
+
+```
+{
+  "name": concat,
+  "inputSpec": [
+    {
+      "name": "a",
+      "class": "string"
+    },
+    {
+      "name": "b",
+      "class": "string"
+    }
+  ],
+  "outputSpec": [
+    {
+      "name": "result",
+      "class": "string"
+    }
+}
+```
+
+The WDL definition file will be:
+```
+task concat {
+  String a
+  String b
+  command {}
+  output {
+    String c = ""
+  }
+  meta {
+    type: "native"
+    id: "applet-xxxx"
+  }
+}
+```
+The meta section includes the applet-id, which will be called at runtime. A WDL file can
+call the `concat` task as follows:
+
+```
+import "dx_extern.wdl" as lib
+
+workflow w {
+  call lib.concat as concat {
+    input: a="double", b="espresso"
+  }
+  output {
+    concat.c
+  }
+}
+```
+
+
 ## Debugging an applet
 
 If you build an applet on the platform with dxWDL, and want to

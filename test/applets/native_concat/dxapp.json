@@ -1,0 +1,36 @@
+{
+  "name": "native_concat",
+  "summary": "Concatenate two strings",
+  "dxapi": "1.0.0",
+  "version": "0.0.1",
+  "inputSpec": [
+    {
+      "name": "a",
+      "class": "string",
+      "optional": true
+    },
+    {
+      "name": "b",
+      "class": "string",
+      "optional": true
+    }
+  ],
+  "outputSpec": [
+    {
+      "name": "c",
+      "class": "string"
+    }
+  ],
+  "runSpec": {
+    "interpreter": "python2.7",
+    "file": "code.py",
+    "systemRequirements": {
+      "main": {
+        "instanceType": "mem1_ssd1_x4"
+      }
+    },
+    "distribution": "Ubuntu",
+    "release": "14.04"
+  },
+  "authorizedUsers": []
+}

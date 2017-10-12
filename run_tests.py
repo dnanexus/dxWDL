@@ -45,7 +45,10 @@ medium_test_list = [
     "dict",
 
     # objects
-    "complex"
+    "complex",
+
+    # calling native dx applets
+    "call_native"
 ]
 
 # Tests with the reorg flags
@@ -327,6 +330,35 @@ def compiler_per_test_flags(tname):
     return flags
 
 ######################################################################
+# Set up the native calling tests
+def native_call_setup(project, applet_folder, version_id):
+    # build the native applets
+    native_applets = ["native_concat",
+                      "native_diff",
+                      "native_mk_list",
+                      "native_sum"]
+    for napl in native_applets:
+        try:
+            cmdline = [ "dx", "build",
+                        os.path.join(top_dir, "test/applets/{}".format(napl)),
+                        "--destination", (project.get_id() + ":" + applet_folder + "/") ]
+            print(" ".join(cmdline))
+            subprocess.check_output(cmdline)
+        except Exception, e:
+            print("Applet {} already exists".format(napl))
+
+    # build WDL wrapper tasks in test/dx_extern.wdl
+    cmdline = [ "java", "-jar",
+                os.path.join(top_dir, "dxWDL-{}.jar".format(version_id)),
+                "dxni",
+                "--force",
+                "--verbose",
+                "--folder", (project.get_id() + ":" + applet_folder),
+                "--output", os.path.join(top_dir, "test/dx_extern.wdl")]
+    print(" ".join(cmdline))
+    subprocess.check_output(cmdline)
+
+######################################################################
 ## Program entry point
 def main():
     argparser = argparse.ArgumentParser(description="Run WDL compiler tests on the platform")
@@ -395,6 +427,9 @@ def main():
         compiler_flags.append("-reorg")
     if args.verbose:
         compiler_flags.append("-verbose")
+
+    if "call_native" in test_names:
+        native_call_setup(project, applet_folder, version_id)
 
     try:
         # Compile the WDL workflows

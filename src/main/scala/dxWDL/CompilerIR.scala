@@ -68,7 +68,7 @@ case class CompilerIR(gWorkflowOutputs: Option[Seq[WorkflowOutput]],
 
     /** Create a stub for an applet. This is an empty task
       that includes the input and output definitions. It is used
-      to allow linking to externally defined tasks and applets.
+      to allow linking to native DNAx applets (and workflows in the future).
 
       For example, the stub for the Add task:
 task Add {
@@ -91,7 +91,7 @@ task Add {
     }
 */
     def genAppletStub(applet: IR.Applet, scope: Scope) : WdlTask = {
-        val task = WdlRewrite.taskGenEmpty(applet.name, scope)
+        val task = WdlRewrite.taskGenEmpty(applet.name, Map.empty, scope)
         val inputs = applet.inputs.map{ cVar =>
             WdlRewrite.declaration(cVar.wdlType, cVar.name, None)
         }.toVector
@@ -353,7 +353,7 @@ task Add {
     //
     def compileCommon(appletName: String,
                       declarations: Seq[Declaration]) : (IR.Stage, IR.Applet) = {
-        Utils.trace(verbose.on, s"Compiling common applet ${appletName}".format(appletName))
+        Utils.trace(verbose.on, s"Compiling common applet ${appletName}")
 
         // Only a subset of the workflow declarations are considered inputs.
         val inputVars : Vector[IR.CVar] =  declarations.map{ decl =>
@@ -546,6 +546,9 @@ workflow w {
          applet)
     }
 
+    // Check if a task is a real WDL task, or if it is a wrapper for a
+    // native applet.
+
     // Compile a WDL task into an applet
     def compileTask(task : WdlTask) : (IR.Applet, Vector[IR.CVar]) = {
         Utils.trace(verbose.on, s"Compiling task ${task.name}")
@@ -574,13 +577,23 @@ workflow w {
             case None => false
             case Some(_) => true
         }
+        val kind =
+            (task.meta.get("type"), task.meta.get("id")) match {
+                case (Some("native"), Some(id)) =>
+                    // wrapper for a native applet
+                    IR.AppletKindNative(id)
+                case (_,_) =>
+                    // a WDL task
+                    IR.AppletKindTask
+            }
+
         val applet = IR.Applet(task.name,
                                inputVars,
                                outputVars,
                                calcInstanceType(Some(task)),
                                useDocker,
                                destination,
-                               IR.AppletKindTask,
+                               kind,
                                WdlRewrite.namespace(task))
         verifyWdlCodeIsLegal(applet.ns)
         (applet, outputVars)

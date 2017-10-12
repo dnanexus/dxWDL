@@ -243,29 +243,6 @@ object Utils {
         }
     }
 
-    // Get the project name.
-    //
-    // We use dxpy here, because there is some subtle difference
-    // between dxjava and dxpy.  When opening sessions on two
-    // terminals, and selecting two projects, dxpy will correctly
-    // provide pwd, dxjava only returns the name stored in
-    // ~/.dnanexus_config.DX_PROJECT_CONTEXT_NAME.
-    def getCurrentProject: DXProject = {
-        // version with dxjava
-        //val dxEnv = com.dnanexus.DXEnvironment.create()
-        //dxEnv.getProjectContext()
-        val (path, _) = execCommand("dx pwd", None)
-        val index = path.lastIndexOf(':')
-        val projName:String =
-            if (index == -1) {
-                path
-            } else {
-                path.substring(0, index)
-            }
-        lookupProject(projName)
-    }
-
-
     // Create a file from a string
     def writeFileContent(path : Path, str : String) : Unit = {
         Files.write(path, str.getBytes(StandardCharsets.UTF_8))

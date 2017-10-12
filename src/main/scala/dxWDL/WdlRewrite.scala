@@ -50,26 +50,33 @@ object WdlRewrite {
     }
 
     // Create an empty task.
-    def taskGenEmpty(name: String, scope: Scope) : WdlTask = {
+    def taskGenEmpty(name: String,
+                     meta: Map[String, String],
+                     scope: Scope) : WdlTask = {
         val task = new WdlTask(name,
                                Vector.empty,  // command Template
                                new RuntimeAttributes(Map.empty[String,WdlExpression]),
-                               Map.empty[String, String], // meta
+                               meta,
                                Map.empty[String, String], // parameter meta
                                scope.ast)
         updateScope(scope, task)
         task
     }
 
-
     private def genDefaultValueOfType(wdlType: WdlType) : WdlValue = {
         wdlType match {
-            case WdlArrayType(x) => WdlArray(WdlArrayType(x), List())  // an empty array
             case WdlBooleanType => WdlBoolean(true)
             case WdlIntegerType => WdlInteger(0)
             case WdlFloatType => WdlFloat(0.0)
             case WdlStringType => WdlString("")
-            case WdlFileType => WdlFile("/tmp/X.txt")
+            //case WdlFileType => WdlFile("/tmp/X.txt")
+            case WdlFileType => WdlFile("")
+            case WdlOptionalType(t) => genDefaultValueOfType(t)
+            case WdlArrayType(x) => WdlArray(WdlArrayType(x), List())  // an empty array
+            case WdlMapType(keyType, valueType) => WdlMap(WdlMapType(keyType, valueType), Map.empty)
+            case WdlObjectType => WdlObject(Map.empty)
+            case WdlPairType(lType, rType) => WdlPair(genDefaultValueOfType(lType),
+                                                      genDefaultValueOfType(rType))
             case _ => throw new Exception(s"Unhandled type ${wdlType.toWdlString}")
         }
     }
@@ -190,4 +197,23 @@ object WdlRewrite {
                                         Map.empty,
                                         WdlRewrite.INVALID_AST)
     }
+
+    def namespace(tasks:Vector[WdlTask]) : WdlNamespaceWithoutWorkflow = {
+        new WdlNamespaceWithoutWorkflow(None,
+                                        Vector.empty,
+                                        Vector.empty,
+                                        tasks,
+                                        Map.empty,
+                                        WdlRewrite.INVALID_AST)
+    }
+
+    def namespaceEmpty() : WdlNamespaceWithoutWorkflow = {
+        new WdlNamespaceWithoutWorkflow(None,
+                                        Vector.empty,
+                                        Vector.empty,
+                                        Vector.empty,
+                                        Map.empty,
+                                        WdlRewrite.INVALID_AST)
+    }
+
 }

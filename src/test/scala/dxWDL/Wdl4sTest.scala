@@ -229,7 +229,7 @@ class Wdl4sTest extends FlatSpec with BeforeAndAfterEach {
 
         val call:WdlCall = ns.workflow.findCallByName("NullArray").get
         call.inputMappings.foreach{ case (key,expr) =>
-            System.err.println(s"key=${key} expr=${expr.toWdlString}")
+            //System.err.println(s"key=${key} expr=${expr.toWdlString}")
             //assert(expr.prerequisiteCallNames.isEmpty)
             /*expr.prerequisiteCallNames.map{ fqn =>
                 val wdlType = WdlNamespace.lookupType(ns.workflow)(fqn)

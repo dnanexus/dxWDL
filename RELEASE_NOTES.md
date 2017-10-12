@@ -1,5 +1,10 @@
 # Release Notes
 
+## 0.47
+- Support calling native DNAx applets from a WDL workflow. A helper utility
+  is `dxni` (*Dx Native Interface*), it creates task wrappers for existing
+  dx:applets.
+
 ## 0.46
 - Allow applet/workflow inputs that are optional, and have a default.
 - More friendly command line interface

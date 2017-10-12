@@ -19,10 +19,10 @@ object Main extends App {
     case class UnsuccessfulTermination(output: String) extends Termination
     case class BadUsageTermination(info: String) extends Termination
 
-    type OptionsMap = Map[String, String]
+    type OptionsMap = Map[String, List[String]]
 
     object Actions extends Enumeration {
-        val Compile, Config, Internal, Version  = Value
+        val Compile, Config, DXNI, Internal, Version  = Value
     }
     object InternalOp extends Enumeration {
         val Eval, MiniWorkflow,
@@ -41,20 +41,27 @@ object Main extends App {
                      resolver: ImportResolver,
                      verbose: Verbose)
 
+    case class BaseOptions(dxProject: DXProject,
+                           folder: String,
+                           force: Boolean,
+                           verbose: Verbose)
+
     // Packing of all compiler flags in an easy to digest
     // format
-    case class CompileOptions(archive: Boolean,
-                              force: Boolean,
-                              verbose: Verbose,
-                              reorg: Boolean,
-                              billTo: String,
-                              region: String,
-                              dxProject: DXProject,
-                              folder: String,
-                              dxWDLrtId: String,
-                              compileMode: CompilerFlag.Value,
-                              sortMode: TopoMode.Value,
-                              appletTimeout: Option[Int])
+    case class CompilerOptions(appletTimeout: Option[Int],
+                               archive: Boolean,
+                               billTo: String,
+                               compileMode: CompilerFlag.Value,
+                               defaults: Option[Path],
+                               dxWDLrtId: String,
+                               inputs: Option[Path],
+                               region: String,
+                               reorg: Boolean,
+                               sortMode: TopoMode.Value)
+    // Packing of all compiler flags in an easy to digest
+    // format
+    case class DxniOptions(outputFile: Option[Path],
+                           recursive: Boolean)
 
     private def normKey(s: String) : String= {
         s.replaceAll("_", "").toUpperCase
@@ -138,56 +145,66 @@ object Main extends App {
                                         .stripMargin.replaceAll("\n", " "))
         }
         val cmdLineOpts = splitCmdLine(arglist)
-        val options = HashMap.empty[String, String]
+        val options = HashMap.empty[String, List[String]]
         cmdLineOpts.foreach {
             case Nil => throw new Exception("sanity: empty command line option")
             case keyOrg :: subargs =>
                 val keyword = normKeyword(keyOrg)
-                val value = keyword match {
+                val (nKeyword, value) = keyword match {
                     case "archive" =>
                         checkNumberOfArguments(keyword, 0, subargs)
-                        ""
-                    case "defaults" =>
-                        checkNumberOfArguments(keyword, 1, subargs)
-                        subargs.head
-                    case ("destination"|"folder") =>
-                        checkNumberOfArguments(keyword, 1, subargs)
-                        subargs.head
-                    case ("force"|"f"|"overwrite") =>
-                        checkNumberOfArguments(keyword, 0, subargs)
-                        ""
-                    case "help" =>
-                        checkNumberOfArguments(keyword, 0, subargs)
-                        ""
-                    case "inputs" =>
-                        checkNumberOfArguments(keyword, 1, subargs)
-                        subargs.head
+                        (keyword, "")
                     case "compilemode" =>
                         checkNumberOfArguments(keyword, 1, subargs)
-                        subargs.head
+                        (keyword, subargs.head)
+                    case "defaults" =>
+                        checkNumberOfArguments(keyword, 1, subargs)
+                        (keyword, subargs.head)
+                    case ("destination"|"folder") =>
+                        checkNumberOfArguments(keyword, 1, subargs)
+                        ("destination", subargs.head)
+                    case ("force"|"f"|"overwrite") =>
+                        checkNumberOfArguments(keyword, 0, subargs)
+                        ("force", "")
+                    case "help" =>
+                        checkNumberOfArguments(keyword, 0, subargs)
+                        (keyword, "")
+                    case "inputs" =>
+                        checkNumberOfArguments(keyword, 1, subargs)
+                        (keyword, subargs.head)
+                    case ("o"|"output"|"outputfile") =>
+                        checkNumberOfArguments(keyword, 1, subargs)
+                        ("outputFile", subargs.head)
+                    case ("r"|"recursive") =>
+                        checkNumberOfArguments(keyword, 0, subargs)
+                        ("recursive", "")
                     case "reorg" =>
                         checkNumberOfArguments(keyword, 0, subargs)
-                        ""
+                        (keyword, "")
                     case "sort" =>
-                        if (subargs.isEmpty) "normal"
-                        else if (subargs.head == "relaxed") "relaxed"
-                        else throw new Exception(s"Unknown sort option ${subargs.head}")
+                        val retval =
+                            if (subargs.isEmpty) "normal"
+                            else if (subargs.head == "relaxed") "relaxed"
+                            else throw new Exception(s"Unknown sort option ${subargs.head}")
+                        (keyword, retval)
                     case "verbose" =>
-                        if (subargs.isEmpty) ""
-                        else if (subargs.length == 1) subargs.head
-                        else throw new Exception("Too many arguments to verbose flag")
+                        val retval =
+                            if (subargs.isEmpty) ""
+                            else if (subargs.length == 1) subargs.head
+                            else throw new Exception("Too many arguments to verbose flag")
+                        (keyword, retval)
                     case _ =>
                         throw new IllegalArgumentException(s"Unregonized keyword ${keyword}")
                 }
-                options.get(keyword) match {
+                options.get(nKeyword) match {
                     case None =>
                         // first time
-                        options(keyword) = value
-                    case Some(x) if keyword == "verbose" =>
+                        options(nKeyword) = List(value)
+                    case Some(x) if (nKeyword == "verbose") =>
                         // append to the already existing verbose flags
-                        options(keyword) = x + " " + value
+                        options(nKeyword) = value :: x
                     case Some(x) =>
-                        options(keyword) = value
+                        options(nKeyword) = List(value)
                 }
         }
         options.toMap
@@ -282,18 +299,37 @@ object Main extends App {
         cleanNs
     }
 
-    // Get basic information about the dx environment, and process
-    // the compiler flags
-    def compilerOptions(options: OptionsMap) : CompileOptions = {
+    // Get the project name.
+    //
+    // We use dxpy here, because there is some subtle difference
+    // between dxjava and dxpy.  When opening sessions on two
+    // terminals, and selecting two projects, dxpy will correctly
+    // provide pwd, dxjava only returns the name stored in
+    // ~/.dnanexus_config.DX_PROJECT_CONTEXT_NAME.
+    private def getCurrentProject(): DXProject = {
+        try {
+            // version with dxjava
+            //val dxEnv = com.dnanexus.DXEnvironment.create()
+            //dxEnv.getProjectContext()
+            val (path, _) = Utils.execCommand("dx pwd", None)
+            val index = path.lastIndexOf(':')
+            val projName:String =
+                if (index == -1) {
+                    path
+                } else {
+                    path.substring(0, index)
+                }
+            Utils.lookupProject(projName)
+        } catch {
+            case e : Throwable =>
+                throw new Exception("Could not execute 'dx pwd', please check that dx is in your path")
+        }
+    }
+
+    def baseOptions(options: OptionsMap) : BaseOptions = {
         val verboseKeys: Set[String] = options.get("verbose") match {
             case None => Set.empty
-            case Some(buf) =>
-                val modulesToTrace = buf.trim
-                if (modulesToTrace.isEmpty) {
-                    Set.empty
-                } else {
-                    modulesToTrace.split("\\s+").toSet
-                }
+            case Some(modulesToTrace) => modulesToTrace.toSet
         }
         val verbose = Verbose(options contains "verbose", verboseKeys)
 
@@ -303,7 +339,7 @@ object Main extends App {
         //    /folder
         val (project, folder) = options.get("destination") match {
             case None => (None, "/")
-            case Some(d) if d contains ":" =>
+            case Some(List(d)) if d contains ":" =>
                 val vec = d.split(":")
                 vec.length match {
                     case 1 if (d.endsWith(":")) =>
@@ -311,34 +347,42 @@ object Main extends App {
                     case 2 => (Some(vec(0)), vec(1))
                     case _ => throw new Exception(s"Invalid path syntex <${d}>")
                 }
-            case Some(d) if d.startsWith("/") =>
+            case Some(List(d)) if d.startsWith("/") =>
                 (None, d)
-            case Some(d) => throw new Exception(s"Invalid path syntex <${d}>")
+            case Some(other) => throw new Exception(s"Invalid path syntex <${other}>")
         }
         if (folder.isEmpty)
             throw new Exception(s"destination cannot specify empty folder")
 
         val dxProject : DXProject = project match {
-            case None => Utils.getCurrentProject
+            case None => getCurrentProject()
             case Some(p) => Utils.lookupProject(p)
         }
 
         val projName = dxProject.describe.getName
         Utils.trace(verbose.on, s"project: ${projName}")
 
-        // get billTo and region from the project
-        val (billTo, region) = Utils.projectDescribeExtraInfo(dxProject)
+        BaseOptions(dxProject,
+                    folder,
+                    options contains "force",
+                    verbose)
+    }
 
+    // Get basic information about the dx environment, and process
+    // the compiler flags
+    def compilerOptions(options: OptionsMap, bOpt: BaseOptions) : CompilerOptions = {
+        // get billTo and region from the project
+        val (billTo, region) = Utils.projectDescribeExtraInfo(bOpt.dxProject)
         val dxWDLrtId = getAssetId(region)
         val compileMode: CompilerFlag.Value = options.get("compilemode") match {
             case None => CompilerFlag.Default
-            case Some(x) if (x.toLowerCase == "ir") => CompilerFlag.IR
+            case Some(List(x)) if (x.toLowerCase == "ir") => CompilerFlag.IR
             case Some(other) => throw new Exception(s"unrecognized compiler flag ${other}")
         }
         val sortMode = options.get("sort") match {
             case None => TopoMode.Check
-            case Some("normal") => TopoMode.Sort
-            case Some("relaxed") => TopoMode.SortRelaxed
+            case Some(List("normal")) => TopoMode.Sort
+            case Some(List("relaxed")) => TopoMode.SortRelaxed
             case _ => throw new Exception("Sanity: bad sort mode")
         }
         val appletTimeout =
@@ -348,26 +392,43 @@ object Main extends App {
                 // default timeout
                 Some(Utils.DEFAULT_APPLET_TIMEOUT)
             }
-
-        CompileOptions(options contains "archive",
-                       options contains "force",
-                       verbose,
-                       options contains "reorg",
-                       billTo,
-                       region,
-                       dxProject,
-                       folder,
-                       dxWDLrtId,
-                       compileMode,
-                       sortMode,
-                       appletTimeout)
+        val defaults: Option[Path] = options.get("defaults") match {
+            case None => None
+            case Some(List(p)) => Some(Paths.get(p))
+            case _ => throw new Exception("defaults specified twice")
+        }
+        val inputs: Option[Path] = options.get("inputs") match {
+            case None => None
+            case Some(List(p)) => Some(Paths.get(p))
+            case _ => throw new Exception("inputs specified twice")
+        }
+        CompilerOptions(appletTimeout,
+                        options contains "archive",
+                        billTo,
+                        compileMode,
+                        defaults,
+                        dxWDLrtId,
+                        inputs,
+                        region,
+                        options contains "reorg",
+                        sortMode)
     }
 
-    def compileBody(wdlSourceFile : Path, options: OptionsMap) : String = {
-        val cOpt:CompileOptions = compilerOptions(options)
+    def dnxiOptions(options: OptionsMap) : DxniOptions = {
+        val outputFile: Option[Path] = options.get("outputFile") match {
+            case None => None
+            case Some(List(p)) => Some(Paths.get(p))
+            case _ => throw new Exception("only one output file can be specified")
+        }
+        DxniOptions(outputFile,
+                    options contains "recursive")
+    }
 
+    def compileBody(wdlSourceFile : Path,
+                    cOpt: CompilerOptions,
+                    bOpt: BaseOptions) : String = {
         // get list of available instance types
-        val instanceTypeDB = InstanceTypeDB.query(cOpt.dxProject)
+        val instanceTypeDB = InstanceTypeDB.query(bOpt.dxProject)
 
         // Resolving imports. Look for referenced files in the
         // source directory.
@@ -388,7 +449,7 @@ object Main extends App {
                     System.err.println("Error loading WDL source code")
                     throw f
             }
-        val cState = State(orgNs, outputs(orgNs), wdlSourceFile, resolver, cOpt.verbose)
+        val cState = State(orgNs, outputs(orgNs), wdlSourceFile, resolver, bOpt.verbose)
 
         // Topologically sort the WDL file so no forward references exist in
         // subsequent steps. Create new file to hold the result.
@@ -396,17 +457,17 @@ object Main extends App {
         // Additionally perform check for cycles in the workflow
         // Assuming the source file is xxx.wdl, the new name will
         // be xxx.sorted.wdl.
-        val nsSorted1 = CompilerTopologicalSort.apply(orgNs, cOpt.sortMode, cOpt.verbose)
+        val nsSorted1 = CompilerTopologicalSort.apply(orgNs, cOpt.sortMode, bOpt.verbose)
         val nsSorted = washNamespace(nsSorted1, "sorted", cState)
 
         // Simplify the original workflow, for example,
         // convert call arguments from expressions to variables.
-        val nsExpr1 = CompilerSimplifyExpr.apply(nsSorted, cOpt.verbose)
+        val nsExpr1 = CompilerSimplifyExpr.apply(nsSorted, bOpt.verbose)
         val nsExpr = washNamespace(nsExpr1, "simplified", cState)
 
         // Reorganize the declarations, to minimize the number of
         // applets, stages, and jobs.
-        val ns1 = CompilerReorgDecl(nsExpr, cOpt.verbose).apply
+        val ns1 = CompilerReorgDecl(nsExpr, bOpt.verbose).apply
         val ns = washNamespace(ns1, "reorg", cState)
 
         // Compile the WDL workflow into an Intermediate
@@ -414,30 +475,31 @@ object Main extends App {
         // mangles the outputs, which is why we pass the originals
         // unmodified.
         val cef = new CompilerErrorFormatter(ns.terminalMap)
-        var irNs = CompilerIR(cState.outputs, cOpt.folder, instanceTypeDB, cef,
-                              cOpt.reorg, cOpt.verbose).apply(ns)
+        var irNs = CompilerIR(cState.outputs, bOpt.folder, instanceTypeDB, cef,
+                              cOpt.reorg, bOpt.verbose).apply(ns)
 
-        val defaultInputs: Option[Path] = options.get("defaults").map(Paths.get(_))
-        irNs = defaultInputs match {
+        irNs = cOpt.defaults match {
             case Some(path) =>
                 // embed the defaults into the IR
-                InputFile(cOpt.verbose).embedDefaults(irNs, path)
+                InputFile(bOpt.verbose).embedDefaults(irNs, path)
             case _ => irNs
         }
 
         // Write out the intermediate representation
-        prettyPrintIR(wdlSourceFile, irNs, cOpt.verbose.on)
+        prettyPrintIR(wdlSourceFile, irNs, bOpt.verbose.on)
 
         // generate dx inputs from the Cromwell-style input specification.
-        val wdlInputs: Option[Path] = options.get("inputs").map(Paths.get(_))
-        (wdlInputs, irNs.workflow) match {
+        (cOpt.inputs, irNs.workflow) match {
             case (Some(path), Some(irwf)) =>
-                val dxInputs = InputFile(cOpt.verbose).dxFromCromwell(irNs, irwf, path)
+                val dxInputs = InputFile(bOpt.verbose).dxFromCromwell(irNs, irwf, path)
                 // write back out as xxxx.dx.json
                 val filename = Utils.replaceFileSuffix(path, ".dx.json")
-                val dxInputFile = path.getParent().resolve(filename)
+                val parent = path.getParent
+                val dxInputFile =
+                    if (parent != null) parent.resolve(filename)
+                    else Paths.get(filename)
                 Utils.writeFileContent(dxInputFile, dxInputs.prettyPrint)
-                Utils.trace(cOpt.verbose.on, s"Wrote dx JSON input file ${dxInputFile}")
+                Utils.trace(bOpt.verbose.on, s"Wrote dx JSON input file ${dxInputFile}")
             case _ => ()
         }
 
@@ -446,10 +508,10 @@ object Main extends App {
             case CompilerFlag.Default =>
                 // Generate dx:applets and dx:workflow from the IR
                 val (wf, _) =
-                    CompilerNative(cOpt.dxWDLrtId, cOpt.dxProject, instanceTypeDB,
-                                   cOpt.folder, cef,
+                    CompilerNative(cOpt.dxWDLrtId, bOpt.dxProject, instanceTypeDB,
+                                   bOpt.folder, cef,
                                    cOpt.appletTimeout,
-                                   cOpt.force, cOpt.archive, cOpt.verbose).apply(irNs)
+                                   bOpt.force, cOpt.archive, bOpt.verbose).apply(irNs)
                 wf
             case CompilerFlag.IR =>
                 None
@@ -471,15 +533,86 @@ object Main extends App {
                     return BadUsageTermination(Utils.exceptionToString(e))
             }
         if (options contains "help")
-            return BadUsageTermination("")
+            return BadUsageTermination(
+                s"""|options:
+                    |    -archive              Archive older versions of applets
+                    |    -compileMode <string> Compilation mode, a debugging flag
+                    |    -defaults <string>    Path to Cromwell formatted default values file
+                    |    -destination <string> Output path on the platform for workflow
+                    |    -inputs <string>      Path to Cromwell formatted input file
+                    |    -noAppletTimeout      By default, applets cannot run more than ${Utils.DEFAULT_APPLET_TIMEOUT} hours.
+                    |                          Remove this limitation.
+                    |    -reorg                Reorganize workflow output files
+                    |    -sort [string]        Sort call graph, to avoid forward references
+                    |""".stripMargin)
+
+        val (bOpt, cOpt): (BaseOptions, CompilerOptions) =
+            try {
+                val bOpt = baseOptions(options)
+                val cOpt = compilerOptions(options, bOpt)
+                (bOpt, cOpt)
+            } catch {
+                case e: Throwable =>
+                    return BadUsageTermination(Utils.exceptionToString(e))
+            }
         try {
-            val dxc = compileBody(Paths.get(wdlSourceFile), options)
+            val dxc = compileBody(Paths.get(wdlSourceFile), cOpt, bOpt)
             SuccessfulTermination(dxc)
         } catch {
             case e : Throwable =>
                 return UnsuccessfulTermination(Utils.exceptionToString(e))
         }
     }
+
+    def dxni(args: Seq[String]): Termination = {
+        val options =
+            try {
+                parseCmdlineOptions(args.toList)
+            } catch {
+                case e : Throwable =>
+                    return BadUsageTermination(Utils.exceptionToString(e))
+            }
+        if (options contains "help")
+
+        return BadUsageTermination(
+            """|options:
+               |    -folder <string>      Platform folder to search for applets
+               |    -o <string>           Destination file for WDL task definitions
+               |    -r | recursive        Recursive search
+               |""".stripMargin)
+
+        val (bOpt, dOpt): (BaseOptions, DxniOptions) =
+            try {
+                (baseOptions(options), dnxiOptions(options))
+            } catch {
+                case e: Throwable =>
+                    return BadUsageTermination(Utils.exceptionToString(e))
+            }
+
+        val output = dOpt.outputFile match {
+            case None => throw new Exception("Output file not specified")
+            case Some(x) => x
+        }
+
+        // Validate the folder. It would have been nicer to be able
+        // to check if a folder exists, instead of validating by
+        // listing its contents, which could be very large.
+        try {
+            bOpt.dxProject.listFolder(bOpt.folder)
+        } catch {
+            case e : Throwable =>
+                return UnsuccessfulTermination(s"Folder ${bOpt.folder} is invalid")
+        }
+
+        try {
+            DxNI.apply(bOpt.dxProject, bOpt.folder, output, dOpt.recursive, bOpt.force, bOpt.verbose)
+            SuccessfulTermination("")
+        } catch {
+            case e : Throwable =>
+                return UnsuccessfulTermination(Utils.exceptionToString(e))
+        }
+    }
+
 
     // Extract the only task from a namespace
     def taskOfNamespace(ns: WdlNamespace) : WdlTask = {
@@ -555,6 +688,7 @@ object Main extends App {
             case Some(x) => x match {
                 case Actions.Compile => compile(args.tail)
                 case Actions.Config => SuccessfulTermination(ConfigFactory.load().toString)
+                case Actions.DXNI => dxni(args.tail)
                 case Actions.Internal => internalOp(args.tail)
                 case Actions.Version => SuccessfulTermination(getVersion())
             }
@@ -565,33 +699,20 @@ object Main extends App {
         s"""|java -jar dxWDL.jar <action> <parameters> [options]
             |
             |Actions:
+            |  compile <WDL file>
+            |    Compile a wdl file into a dnanexus workflow.
+            |    Optionally, specify a destination path on the
+            |    platform. If a WDL inputs files is specified, a dx JSON
+            |    inputs file is generated from it.
+            |  dxni
+            |    Dx Native call Interface. Create stubs for calling dx
+            |    applets, and store them as WDL tasks in a local file. Allows
+            |    calling existing platform applets without modification.
+            |    options:
             |
-            |compile <WDL file>
-            |  Compile a wdl file into a dnanexus workflow.
-            |  Optionally, specify a destination path on the
-            |  platform. If a WDL inputs files is specified, a dx JSON
-            |  inputs file is generated from it.
-            |  options:
-            |    -archive              Archive older versions of applets
-            |    -compileMode <string> Compilation mode, a debugging flag
-            |    -defaults <string>    Path to Cromwell formatted default values file
-            |    -destination <string> Output folder on the platform for workflow
-            |    -force                Delete existing applets/workflows
-            |    -inputs <string>      Path to Cromwell formatted input file
-            |    -noAppletTimeout      By default, applets cannot run more than ${Utils.DEFAULT_APPLET_TIMEOUT} hours.
-            |                          Remove this limitation.
-            |    -reorg                Reorganize workflow output files
-            |    -sort [string]        Sort call graph, to avoid forward references
-            |    -verbose [flag]       Print detailed progress reports
-            |
-            |config
-            |  Print the configuration parameters
-            |
-            |internal <sub command>
-            |  Various internal commands
-            |
-            |version
-            |  Report the current version
+            |Common options
+            |    -f | force             Delete existing applets/workflows
+            |    -verbose [flag]        Print detailed progress reports
             |""".stripMargin
 
     val termination = dispatchCommand(args)
