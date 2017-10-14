@@ -54,7 +54,7 @@ object Main extends App {
                                compileMode: CompilerFlag.Value,
                                defaults: Option[Path],
                                dxWDLrtId: String,
-                               inputs: Option[Path],
+                               inputs: List[Path],
                                region: String,
                                reorg: Boolean,
                                sortMode: TopoMode.Value)
@@ -160,9 +160,12 @@ object Main extends App {
                     case "defaults" =>
                         checkNumberOfArguments(keyword, 1, subargs)
                         (keyword, subargs.head)
-                    case ("destination"|"folder") =>
+                    case "destination" =>
                         checkNumberOfArguments(keyword, 1, subargs)
-                        ("destination", subargs.head)
+                        (keyword, subargs.head)
+                    case "folder" =>
+                        checkNumberOfArguments(keyword, 1, subargs)
+                        (keyword, subargs.head)
                     case ("force"|"f"|"overwrite") =>
                         checkNumberOfArguments(keyword, 0, subargs)
                         ("force", "")
@@ -175,6 +178,9 @@ object Main extends App {
                     case ("o"|"output"|"outputfile") =>
                         checkNumberOfArguments(keyword, 1, subargs)
                         ("outputFile", subargs.head)
+                    case "project" =>
+                        checkNumberOfArguments(keyword, 1, subargs)
+                        (keyword, subargs.head)
                     case ("r"|"recursive") =>
                         checkNumberOfArguments(keyword, 0, subargs)
                         ("recursive", "")
@@ -202,6 +208,8 @@ object Main extends App {
                         options(nKeyword) = List(value)
                     case Some(x) if (nKeyword == "verbose") =>
                         // append to the already existing verbose flags
+                        options(nKeyword) = value :: x
+                    case Some(x) if (nKeyword == "inputs") =>
                         options(nKeyword) = value :: x
                     case Some(x) =>
                         options(nKeyword) = List(value)
@@ -326,34 +334,51 @@ object Main extends App {
         }
     }
 
-    def baseOptions(options: OptionsMap) : BaseOptions = {
+    private def baseOptions(options: OptionsMap) : BaseOptions = {
         val verboseKeys: Set[String] = options.get("verbose") match {
             case None => Set.empty
             case Some(modulesToTrace) => modulesToTrace.toSet
         }
         val verbose = Verbose(options contains "verbose", verboseKeys)
+        var folder:Option[String] = options.get("folder") match {
+            case None => None
+            case Some(List(f)) => Some(f)
+            case _ => throw new Exception("sanity")
+        }
+        var project:Option[String] = options.get("project") match {
+            case None => None
+            case Some(List(p)) => Some(p)
+            case _ => throw new Exception("sanity")
+        }
 
         // There are three possible syntaxes:
         //    project-id:/folder
         //    project-id:
         //    /folder
-        val (project, folder) = options.get("destination") match {
-            case None => (None, "/")
+        options.get("destination") match {
+            case None => ()
             case Some(List(d)) if d contains ":" =>
                 val vec = d.split(":")
                 vec.length match {
                     case 1 if (d.endsWith(":")) =>
-                        (Some(vec(0)), "/")
-                    case 2 => (Some(vec(0)), vec(1))
+                        project = Some(vec(0))
+                    case 2 =>
+                        project = Some(vec(0))
+                        folder = Some(vec(1))
                     case _ => throw new Exception(s"Invalid path syntex <${d}>")
                 }
             case Some(List(d)) if d.startsWith("/") =>
-                (None, d)
+                folder = Some(d)
             case Some(other) => throw new Exception(s"Invalid path syntex <${other}>")
         }
-        if (folder.isEmpty)
-            throw new Exception(s"destination cannot specify empty folder")
 
+        val dxFolder = folder match {
+            case None => "/"
+            case Some(d) =>
+                if (d.isEmpty)
+                    throw new Exception(s"Cannot specify empty folder")
+                d
+        }
         val dxProject : DXProject = project match {
             case None => getCurrentProject()
             case Some(p) => Utils.lookupProject(p)
@@ -363,14 +388,14 @@ object Main extends App {
         Utils.trace(verbose.on, s"project: ${projName}")
 
         BaseOptions(dxProject,
-                    folder,
+                    dxFolder,
                     options contains "force",
                     verbose)
     }
 
     // Get basic information about the dx environment, and process
     // the compiler flags
-    def compilerOptions(options: OptionsMap, bOpt: BaseOptions) : CompilerOptions = {
+    private def compilerOptions(options: OptionsMap, bOpt: BaseOptions) : CompilerOptions = {
         // get billTo and region from the project
         val (billTo, region) = Utils.projectDescribeExtraInfo(bOpt.dxProject)
         val dxWDLrtId = getAssetId(region)
@@ -397,10 +422,9 @@ object Main extends App {
             case Some(List(p)) => Some(Paths.get(p))
             case _ => throw new Exception("defaults specified twice")
         }
-        val inputs: Option[Path] = options.get("inputs") match {
-            case None => None
-            case Some(List(p)) => Some(Paths.get(p))
-            case _ => throw new Exception("inputs specified twice")
+        val inputs: List[Path] = options.get("inputs") match {
+            case None => List.empty
+            case Some(pl) => pl.map(p => Paths.get(p))
         }
         CompilerOptions(appletTimeout,
                         options contains "archive",
@@ -414,7 +438,7 @@ object Main extends App {
                         sortMode)
     }
 
-    def dnxiOptions(options: OptionsMap) : DxniOptions = {
+    private def dnxiOptions(options: OptionsMap) : DxniOptions = {
         val outputFile: Option[Path] = options.get("outputFile") match {
             case None => None
             case Some(List(p)) => Some(Paths.get(p))
@@ -489,18 +513,20 @@ object Main extends App {
         prettyPrintIR(wdlSourceFile, irNs, bOpt.verbose.on)
 
         // generate dx inputs from the Cromwell-style input specification.
-        (cOpt.inputs, irNs.workflow) match {
-            case (Some(path), Some(irwf)) =>
-                val dxInputs = InputFile(bOpt.verbose).dxFromCromwell(irNs, irwf, path)
-                // write back out as xxxx.dx.json
-                val filename = Utils.replaceFileSuffix(path, ".dx.json")
-                val parent = path.getParent
-                val dxInputFile =
-                    if (parent != null) parent.resolve(filename)
-                    else Paths.get(filename)
-                Utils.writeFileContent(dxInputFile, dxInputs.prettyPrint)
-                Utils.trace(bOpt.verbose.on, s"Wrote dx JSON input file ${dxInputFile}")
-            case _ => ()
+        irNs.workflow match {
+            case None => ()
+            case Some(irwf) =>
+                cOpt.inputs.foreach{ path =>
+                    val dxInputs = InputFile(bOpt.verbose).dxFromCromwell(irNs, irwf, path)
+                    // write back out as xxxx.dx.json
+                    val filename = Utils.replaceFileSuffix(path, ".dx.json")
+                    val parent = path.getParent
+                    val dxInputFile =
+                        if (parent != null) parent.resolve(filename)
+                        else Paths.get(filename)
+                    Utils.writeFileContent(dxInputFile, dxInputs.prettyPrint)
+                    Utils.trace(bOpt.verbose.on, s"Wrote dx JSON input file ${dxInputFile}")
+                }
         }
 
         // Backend compiler pass
@@ -533,19 +559,7 @@ object Main extends App {
                     return BadUsageTermination(Utils.exceptionToString(e))
             }
         if (options contains "help")
-            return BadUsageTermination(
-                s"""|options:
-                    |    -archive              Archive older versions of applets
-                    |    -compileMode <string> Compilation mode, a debugging flag
-                    |    -defaults <string>    Path to Cromwell formatted default values file
-                    |    -destination <string> Output path on the platform for workflow
-                    |    -inputs <string>      Path to Cromwell formatted input file
-                    |    -noAppletTimeout      By default, applets cannot run more than ${Utils.DEFAULT_APPLET_TIMEOUT} hours.
-                    |                          Remove this limitation.
-                    |    -reorg                Reorganize workflow output files
-                    |    -sort [string]        Sort call graph, to avoid forward references
-                    |""".stripMargin)
-
+            return BadUsageTermination("")
         val (bOpt, cOpt): (BaseOptions, CompilerOptions) =
             try {
                 val bOpt = baseOptions(options)
@@ -573,14 +587,7 @@ object Main extends App {
                     return BadUsageTermination(Utils.exceptionToString(e))
             }
         if (options contains "help")
-
-        return BadUsageTermination(
-            """|options:
-               |    -folder <string>      Platform folder to search for applets
-               |    -o <string>           Destination file for WDL task definitions
-               |    -r | recursive        Recursive search
-               |""".stripMargin)
-
+            return BadUsageTermination("")
         val (bOpt, dOpt): (BaseOptions, DxniOptions) =
             try {
                 (baseOptions(options), dnxiOptions(options))
@@ -704,14 +711,30 @@ object Main extends App {
             |    Optionally, specify a destination path on the
             |    platform. If a WDL inputs files is specified, a dx JSON
             |    inputs file is generated from it.
+            |    options
+            |      -archive              Archive older versions of applets
+            |      -compileMode <string> Compilation mode, a debugging flag
+            |      -defaults <string>    Path to Cromwell formatted default values file
+            |      -destination <string> Output path on the platform for workflow
+            |      -inputs <string>      Path to Cromwell formatted input file
+            |      -noAppletTimeout      By default, applets cannot run more than ${Utils.DEFAULT_APPLET_TIMEOUT} hours.
+            |                          Remove this limitation.
+            |      -reorg                Reorganize workflow output files
+            |      -sort [string]        Sort call graph, to avoid forward references
+            |
             |  dxni
             |    Dx Native call Interface. Create stubs for calling dx
             |    applets, and store them as WDL tasks in a local file. Allows
             |    calling existing platform applets without modification.
             |    options:
+            |      -o <string>           Destination file for WDL task definitions
+            |      -r | recursive        Recursive search
             |
             |Common options
+            |    -destination           Full platform path (project:/folder)
             |    -f | force             Delete existing applets/workflows
+            |    -folder <string>       Platform folder
+            |    -project <string>      Platform project
             |    -verbose [flag]        Print detailed progress reports
             |""".stripMargin
 
