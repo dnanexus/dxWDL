@@ -1,11 +1,23 @@
 import "library_math.wdl" as lib
 
-
+# Create an array of integers from an integer.
+task RangeFromInt {
+    Int len
+    command {}
+    output {
+        Array[Int] result = range(len)
+    }
+}
 
 workflow math {
     Array[Int] numbers
     Int ai
     Int bi
+
+    # Conversion from Array[Int] to Array[Array[Int]]
+    scatter (k in [2,3,5]) {
+        call RangeFromInt as rfi { input: len=k }
+    }
 
     # simple If block
     if (ai < 10) {
@@ -73,5 +85,6 @@ workflow math {
         Int sum2 = inc_sum.result
         Int? ai_inc_maybe = cond_inc.result
         Int? fibo2 = fibo_add2.result
+        Array[Array[Int]] rra = rfi.result
     }
 }
