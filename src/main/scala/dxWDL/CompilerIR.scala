@@ -772,7 +772,12 @@ workflow w {
         def outsideType(t: WdlType) : WdlType = {
             scope match {
                 case _:Scatter => WdlArrayType(t)
-                case _:If => WdlOptionalType(t)
+                case _:If => t match {
+                    // If the type is already optional, don't make it
+                    // double optional.
+                    case WdlOptionalType(_) => t
+                    case _ => WdlOptionalType(t)
+                }
                 case _ => t
             }
         }

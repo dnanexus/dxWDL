@@ -615,9 +615,11 @@ object Utils {
         }
     }
 
+    // We need to deal with types like:
+    //     Int??, Array[File]??
     def stripOptional(t: WdlType) : WdlType = {
         t match {
-            case WdlOptionalType(x) => x
+            case WdlOptionalType(x) => stripOptional(x)
             case x => x
         }
     }
