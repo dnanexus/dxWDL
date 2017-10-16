@@ -1,5 +1,8 @@
 # Release Notes
 
+## 0.48
+- Support string interpolation
+
 ## 0.47
 - Support calling native DNAx applets from a WDL workflow. A helper utility
   is `dxni` (*Dx Native Interface*), it creates task wrappers for existing

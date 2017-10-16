@@ -63,11 +63,12 @@ workflow strings {
     }
 
     # The following two calls are equivalent to
-    # concatenating three variables
+    # concatenating three variables.
+    # Test string interpolation.
     call lib.Concat as concat1 {
         input:
-            x = s + ".aligned",
-            y = s + ".duplicate_metrics"
+            x = "${s}.aligned",
+            y = "${s}.duplicate_metrics"
     }
     call lib.Concat as concat2 {
         input:
@@ -82,8 +83,18 @@ workflow strings {
             sub("frogs_toads_salamander", "frogs", "xRIPx")
         ]
     }
+
     call lib.ConcatArray as concat4 {
         input : words=sa
+    }
+
+    String fruit = "orange"
+    String ice = "popsicle"
+    call lib.ConcatArray as concat5 {
+        input: words = [
+            "Tamara likes ${fruit}s and ${ice}s",
+            "Whould you like some too?"
+        ]
     }
 
     # Ragged array of strings
@@ -104,6 +115,7 @@ workflow strings {
         concat2.result
         concat3.result
         concat4.result
+        concat5.result
         collect.result
     }
 }

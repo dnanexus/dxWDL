@@ -34,10 +34,20 @@ case class CompilerSimplifyExpr(wf: WdlWorkflow,
         }
     }
 
+    // Return true if we are certain there is no interpolation in this string.
+    //
+    // A literal can include an interpolation expression, for example:
+    //   "${filename}.vcf.gz"
+    // Interpolation requires evaluation. This check is an approximation,
+    // it may cause us to create an unnecessary declaration.
+    private def nonInterpolation(t: Terminal) : Boolean = {
+        !(t.getSourceString contains "${")
+    }
+
     // Return true if an expression is a constant or a variable
     def isConstOrVar(expr: WdlExpression) : Boolean = {
         expr.ast match {
-            case t: Terminal => true
+            case t: Terminal if nonInterpolation(t) => true
             case _ => false
         }
     }
@@ -64,7 +74,7 @@ case class CompilerSimplifyExpr(wf: WdlWorkflow,
         val tmpDecls = Queue[Scope]()
         val inputs: Map[String, WdlExpression]  = call.inputMappings.map { case (key, expr) =>
             val rhs = expr.ast match {
-                case t: Terminal => expr
+                case t: Terminal if nonInterpolation(t) => expr
                 case a: Ast if (isMemberAccess(a) && isCallOutputAccess(expr, a, call)) =>
                     // Accessing an expression like A.B.C
                     // The expression could be:
@@ -73,13 +83,14 @@ case class CompilerSimplifyExpr(wf: WdlWorkflow,
                     // Only the first case can be handled inline, the other requires
                     // a temporary variable
                     expr
-                case a: Ast =>
+                case _ =>
                     // replace an expression with a temporary variable
                     val tmpVarName = genTmpVarName()
                     val calleeDecl: Declaration =
                         call.declarations.find(decl => decl.unqualifiedName == key).get
                     val wdlType = calleeDecl.wdlType
-                    tmpDecls += Declaration(wdlType, tmpVarName, Some(expr), call.parent, a)
+                    //tmpDecls += Declaration(wdlType, tmpVarName, Some(expr), call.parent, a)
+                    tmpDecls += WdlRewrite.declaration(wdlType, tmpVarName, Some(expr))
                     WdlExpression.fromString(tmpVarName)
             }
             (key -> rhs)

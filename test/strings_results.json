@@ -4,5 +4,6 @@
   "strings_outputs.concat2_result": "frogs.aligned_frogs.duplicate_metrics_xRIPx",
   "strings_outputs.concat3_result": "delicate.aligned_number.duplicate_metrics_xRIPx_toads_salamander",
   "strings_outputs.concat4_result": "A_B_C",
+  "strings_outputs.concat5.result": "Tamara likes oranges and popsicles_Whould you like some too?",
   "strings_outputs.collect_result":  ["1", "2", "3 INPUT=4", "5", "6 INPUT=7 INPUT=8"]
 }
