@@ -660,7 +660,7 @@ object Main extends App {
                     RunnerMiniWorkflow.apply(workflowOfNamespace(ns),
                                              jobInputPath, jobOutputPath, jobInfoPath,
                                              false)
-                case InternalOp.ScatterCollect =>
+                case InternalOp.ScatterCollectSubjob =>
                     RunnerMiniWorkflow.apply(workflowOfNamespace(ns),
                                              jobInputPath, jobOutputPath, jobInfoPath,
                                              true)

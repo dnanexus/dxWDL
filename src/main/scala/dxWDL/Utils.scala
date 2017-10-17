@@ -1,6 +1,6 @@
 package dxWDL
 
-import com.dnanexus.{DXApplet, DXAPI, DXEnvironment, DXFile, DXJSON, DXProject,
+import com.dnanexus.{DXApplet, DXAPI, DXEnvironment, DXFile, DXJob, DXJSON, DXProject,
     IOClass, InputParameter, OutputParameter}
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.databind.JsonNode
@@ -160,6 +160,20 @@ object Utils {
         varName.startsWith(TMP_VAR_NAME_PREFIX)
     }
 
+    // Is this a WDL type that maps to a native DX type?
+    def isNativeDxType(wdlType: WdlType) : Boolean = {
+        wdlType match {
+            case WdlBooleanType | WdlIntegerType | WdlFloatType | WdlStringType | WdlFileType
+                   | WdlArrayType(WdlBooleanType)
+                   | WdlArrayType(WdlIntegerType)
+                   | WdlArrayType(WdlFloatType)
+                   | WdlArrayType(WdlStringType)
+                   | WdlArrayType(WdlFileType) => true
+            case WdlOptionalType(t) => isNativeDxType(t)
+            case _ => false
+        }
+    }
+
     // Is a declaration of a task/workflow an input for the
     // compiled dx:applet/dx:workflow ?
     //
@@ -282,6 +296,39 @@ object Utils {
             DXJSON.getObjectBuilder().put("job", jobId).put("field", fieldName).build()
         // convert from ObjectNode to JsValue
         oNode.toString().parseJson
+    }
+
+    def runSubJob(entryPoint:String,
+                  instanceType:Option[String],
+                  inputs:JsValue,
+                  dependsOn: Vector[DXJob]) : DXJob = {
+        val fields = Map(
+            "function" -> JsString(entryPoint),
+            "input" -> inputs
+        )
+        val instanceFields = instanceType match {
+            case None => Map.empty
+            case Some(iType) =>
+                Map("systemRequirements" -> JsObject(
+                        entryPoint -> JsObject("instanceType" -> JsString(iType))
+                    ))
+        }
+        val dependsFields =
+            if (dependsOn.isEmpty) {
+                Map.empty
+            } else {
+                val jobIds = dependsOn.map{ dxJob => JsString(dxJob.getId) }.toVector
+                Map("dependsOn" -> JsArray(jobIds))
+            }
+        val req = JsObject(fields ++ instanceFields ++ dependsFields)
+        val retval: JsonNode = DXAPI.jobNew(jsonNodeOfJsValue(req), classOf[JsonNode])
+        val info: JsValue =  Utils.jsValueOfJsonNode(retval)
+        val id:String = info.asJsObject.fields.get("id") match {
+            case Some(JsString(x)) => x
+            case _ => throw new AppInternalException(
+                s"Bad format returned from jobNew ${info.prettyPrint}")
+        }
+        DXJob.getInstance(id)
     }
 
         // dx does not allow dots in variable names, so we

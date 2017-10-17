@@ -540,12 +540,11 @@ case class CompilerNative(dxWDLrtId: String,
         trace(verbose.on, s"Compiling applet ${applet.name}")
 
         // limit the applet dictionary, only to actual dependencies
-        val calls = applet.kind match {
+        val calls:Map[String, String] = applet.kind match {
             case IR.AppletKindIf(calls) => calls
             case IR.AppletKindScatter(calls) => calls
             case IR.AppletKindScatterCollect(calls) => calls
-            case _ =>
-                Map.empty[String, (IR.Applet, DXApplet)]
+            case _ => Map.empty
         }
         val aplLinks = calls.map{ case (_,tName) => tName -> appletDict(tName) }.toMap
 
@@ -734,12 +733,12 @@ case class CompilerNative(dxWDLrtId: String,
                 case IR.AppletKindIf(calls) => calls
                 case IR.AppletKindScatter(calls) => calls
                 case IR.AppletKindScatterCollect(calls) => calls
-                case _ => Vector.empty
+                case _ => Map.empty
             }
             calls.map{ case (_, taskName) =>
-                appletDict.get(name) match {
+                appletDict.get(taskName) match {
                     case None => throw new Exception(
-                        s"Applet ${apl.name} depends on an unknown applet ${name}")
+                        s"Applet ${apl.name} depends on an unknown applet ${taskName}")
                     case Some(x) => x
                 }
             }.toVector

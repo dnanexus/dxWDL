@@ -245,6 +245,31 @@ case class RunnerMiniWorkflow(exportVars: Set[String],
             .toMap
     }
 
+    // Launch a subjob to collect the outputs
+    private def launchCollectSubjob(childJobs: Vector[DXJob],
+                                    outputs: Vector[TaskOutput]) : Map[String, WdlVarLinks] = {
+        // Create the inputs the sub-job will need: child-jobs, field names, and wdl types.
+        // These are all encoded as JSON string arrays.
+        val childJobIds = childJobs.map{ dxJob => JsString(dxJob.getId) }.toVector
+        val fieldNames = outputs.map{ tso => JsString(tso.unqualifiedName) }.toVector
+        val wdlTypes = outputs.map{ tso => JsString(tso.wdlType.toWdlString) }.toVector
+        val inputs:JsValue = JsObject("childJobIds" -> JsArray(childJobIds),
+                                      "fieldNames" -> JsArray(fieldNames),
+                                      "wdlTypes" -> JsArray(wdlTypes))
+
+        // Run a sub-job with the "collect" entry point
+        val dxSubJob : DXJob = Utils.runSubJob("collect", None, inputs, childJobs)
+
+        // Return promises (JBORs) for all the outputs. Since the signature of the sub-job
+        // is exactly the same as the parent, we can immediately exit the parent job.
+        outputs.map { tso =>
+            val wvl = WdlVarLinks(tso.wdlType,
+                                  DeclAttrs.empty,
+                                  DxlJob(dxSubJob, tso.unqualifiedName))
+            tso.unqualifiedName -> wvl
+        }.toMap
+    }
+
     // Launch a job for each call, and link them with JBORs. Do not
     // wait for the jobs to complete, because that would require
     // leaving an auxiliary instance up for the duration of the subjob
@@ -261,6 +286,7 @@ case class RunnerMiniWorkflow(exportVars: Set[String],
 
         val collElements : Seq[WdlVarLinks] = WdlVarLinks.unpackWdlArray(collection)
         var scOutputs = Vector.empty[Env]
+        var childJobs = Vector.empty[DXJob]
         collElements.foreach { case elem =>
             // Bind the iteration variable inside the loop
             val envWithIterItem: Map[String, WdlVarLinks] = outerEnv + (scatter.item -> elem)
@@ -291,6 +317,7 @@ case class RunnerMiniWorkflow(exportVars: Set[String],
                 // that come next.
                 innerEnv = innerEnv ++ jobOutputs
                 scOutputs = scOutputs :+ jobOutputs
+                childJobs = childJobs :+ dxJob
             }
 
             // Cleanup the index variable, and the temporary
@@ -316,8 +343,15 @@ case class RunnerMiniWorkflow(exportVars: Set[String],
             // for the jobs to complete.
             gatherOutputs(scOutputs)
         } else {
-            // The output types are complex, requiring a subjob.
-            throw new Exception("TODO: unimplemented")
+            if (calls.isEmpty) {
+                // The scatter had zero child jobs
+                Map.empty
+            } else {
+                // The output types are complex, requiring a subjob.
+                val (call,_) = calls.head
+                val task = Utils.taskOfCall(call)
+                launchCollectSubjob(childJobs, task.outputs.toVector)
+            }
         }
     }
 

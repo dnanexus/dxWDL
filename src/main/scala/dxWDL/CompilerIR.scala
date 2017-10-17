@@ -4,6 +4,7 @@ package dxWDL
 
 import net.jcazevedo.moultingyaml._
 import scala.util.{Failure, Success, Try}
+import Utils.{isNativeDxType}
 import wdl4s.wdl._
 import wdl4s.wdl.AstTools
 import wdl4s.wdl.AstTools.EnhancedAstNode
@@ -956,7 +957,7 @@ workflow w {
         val callDict = calls.map(c => c.unqualifiedName -> Utils.taskOfCall(c).name).toMap
 
         // If any of the return types is non native, we need a collect job
-        val allNative = outputVars.forall(cVar => WdlVarLinks.isDxNative(cVar.wdlType))
+        val allNative = outputVars.forall(cVar => isNativeDxType(cVar.wdlType))
         val aKind =
             if (allNative) IR.AppletKindScatter(callDict)
             else IR.AppletKindScatterCollect(callDict)

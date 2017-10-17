@@ -18,9 +18,7 @@ task Add {
 
 package dxWDL
 
-import com.dnanexus.{DXAPI, DXJob, DXJSON}
-import com.fasterxml.jackson.databind.JsonNode
-import com.fasterxml.jackson.databind.node.ObjectNode
+import com.dnanexus.{DXJob}
 import java.nio.file.{Path, Paths}
 import scala.collection.mutable.HashMap
 import spray.json._
@@ -376,37 +374,13 @@ case class RunnerTask(task:WdlTask,
         iType
     }
 
-    private def relaunchBuildInputs(inputWvls: Map[String, WdlVarLinks]) : ObjectNode = {
-        var builder : DXJSON.ObjectBuilder = DXJSON.getObjectBuilder()
-        inputWvls.foreach{ case (varName, wvl) =>
-            WdlVarLinks.genFields(wvl, varName).foreach{ case (fieldName, jsv) =>
-                builder = builder.put(fieldName, Utils.jsonNodeOfJsValue(jsv))
-            }
+    private def relaunchBuildInputs(inputWvls: Map[String, WdlVarLinks]) : JsValue = {
+        val inputs:Map[String,JsValue] = inputWvls.foldLeft(Map.empty[String, JsValue]) {
+            case (accu, (varName, wvl)) =>
+                val fields = WdlVarLinks.genFields(wvl, varName)
+                accu ++ fields.toMap
         }
-        builder.build()
-    }
-
-    private def runSubJob(entryPoint:String,
-                          instanceType:String,
-                          inputs:ObjectNode) : DXJob = {
-        val req: ObjectNode = DXJSON.getObjectBuilder()
-            .put("function", entryPoint)
-            .put("input", inputs)
-            .put("systemRequirements",
-                 DXJSON.getObjectBuilder().put(entryPoint,
-                                               DXJSON.getObjectBuilder()
-                                                   .put("instanceType", instanceType)
-                                                   .build())
-                     .build())
-            .build()
-        val retval: JsonNode = DXAPI.jobNew(req, classOf[JsonNode])
-        val info: JsValue =  Utils.jsValueOfJsonNode(retval)
-        val id:String = info.asJsObject.fields.get("id") match {
-            case Some(JsString(x)) => x
-            case _ => throw new AppInternalException(
-                s"Bad format returned from jobNew ${info.prettyPrint}")
-        }
-        DXJob.getInstance(id)
+        JsObject(inputs.toMap)
     }
 
     /** The runtime attributes need to be calculated at runtime. Evaluate them,
@@ -436,7 +410,7 @@ case class RunnerTask(task:WdlTask,
         val inputs = relaunchBuildInputs(inputWvls)
 
         // Run a sub-job with the "body" entry point, and the required instance type
-        val dxSubJob : DXJob = runSubJob("body", instanceType, inputs)
+        val dxSubJob : DXJob = Utils.runSubJob("body", Some(instanceType), inputs, Vector.empty)
 
         // Return promises (JBORs) for all the outputs. Since the signature of the sub-job
         // is exactly the same as the parent, we can immediately exit the parent job.
