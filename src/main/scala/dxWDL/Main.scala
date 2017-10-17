@@ -25,7 +25,10 @@ object Main extends App {
         val Compile, Config, DXNI, Internal, Version  = Value
     }
     object InternalOp extends Enumeration {
-        val Eval, MiniWorkflow,
+        val Collect,
+            Eval,
+            MiniWorkflow,
+            ScatterCollectSubjob,
             TaskEpilog, TaskProlog, TaskRelaunch,
             WorkflowOutputs, WorkflowOutputsAndReorg = Value
     }
@@ -647,12 +650,20 @@ object Main extends App {
         val cef = new CompilerErrorFormatter(ns.terminalMap)
         try {
             op match {
+                case InternalOp.Collect =>
+                    RunnerCollect.apply(workflowOfNamespace(ns),
+                                        jobInputPath, jobOutputPath, jobInfoPath)
                 case InternalOp.Eval =>
                     RunnerEval.apply(workflowOfNamespace(ns),
                                      jobInputPath, jobOutputPath, jobInfoPath)
                 case InternalOp.MiniWorkflow =>
                     RunnerMiniWorkflow.apply(workflowOfNamespace(ns),
-                                             jobInputPath, jobOutputPath, jobInfoPath)
+                                             jobInputPath, jobOutputPath, jobInfoPath,
+                                             false)
+                case InternalOp.ScatterCollect =>
+                    RunnerMiniWorkflow.apply(workflowOfNamespace(ns),
+                                             jobInputPath, jobOutputPath, jobInfoPath,
+                                             true)
                 case InternalOp.TaskEpilog =>
                     val runner = RunnerTask(taskOfNamespace(ns), cef)
                     runner.epilog(jobInputPath, jobOutputPath, jobInfoPath)

@@ -954,13 +954,19 @@ workflow w {
         val outputVars = blockOutputs(preDecls, scatter, scatter.children)
         val wdlCode = blockGenWorklow(preDecls, scatter, taskApplets, inputVars, outputVars)
         val callDict = calls.map(c => c.unqualifiedName -> Utils.taskOfCall(c).name).toMap
+
+        // If any of the return types is non native, we need a collect job
+        val allNative = outputVars.forall(cVar => WdlVarLinks.isDxNative(cVar.wdlType))
+        val aKind =
+            if (allNative) IR.AppletKindScatter(callDict)
+            else IR.AppletKindScatterCollect(callDict)
         val applet = IR.Applet(wfUnqualifiedName ++ "_" ++ stageName,
                                inputVars ++ extraTaskInputVars,
                                outputVars,
                                calcInstanceType(None),
                                false,
                                destination,
-                               IR.AppletKindScatter(callDict),
+                               aKind,
                                wdlCode)
         verifyWdlCodeIsLegal(applet.ns)
 

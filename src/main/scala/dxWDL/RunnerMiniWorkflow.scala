@@ -57,6 +57,7 @@ import wdl4s.wdl.WdlExpression.AstForExpressions
 
 case class RunnerMiniWorkflow(exportVars: Set[String],
                               cef: CompilerErrorFormatter,
+                              collectSubjob: Boolean,
                               verbose: Boolean) {
     // An environment element could be one of:
     // - top level value
@@ -309,9 +310,15 @@ case class RunnerMiniWorkflow(exportVars: Set[String],
             tmpVars.foreach{ case (_, wdlValue ) => WdlVarLinks.deleteLocal(wdlValue) }
         }
 
-        // Gather phase. Collect call outputs in arrays, do not wait
-        // for the jobs to complete.
-        gatherOutputs(scOutputs)
+        // Gather phase.
+        if (!collectSubjob) {
+            // Collect call outputs in arrays, do not wait
+            // for the jobs to complete.
+            gatherOutputs(scOutputs)
+        } else {
+            // The output types are complex, requiring a subjob.
+            throw new Exception("TODO: unimplemented")
+        }
     }
 
     // Check the condition. If false, return immediately. If true,
@@ -491,7 +498,8 @@ object RunnerMiniWorkflow {
     def apply(wf: WdlWorkflow,
               jobInputPath : Path,
               jobOutputPath : Path,
-              jobInfoPath: Path) : Unit = {
+              jobInfoPath: Path,
+              collectSubjob: Boolean) : Unit = {
         // Extract types for closure inputs
         val (inputSpec, outputSpec) = Utils.loadExecInfo
         appletLog(s"WdlType mapping =${inputSpec}")
@@ -506,7 +514,7 @@ object RunnerMiniWorkflow {
 
         // Run the workflow
         val cef = new CompilerErrorFormatter(wf.wdlSyntaxErrorFormatter.terminalMap)
-        val r = RunnerMiniWorkflow(exportVars, cef, false)
+        val r = RunnerMiniWorkflow(exportVars, cef, collectSubjob, false)
         val json = r.apply(wf, inputs)
 
         // write the outputs to the job_output.json file
