@@ -68,13 +68,36 @@ import wdl4s.wdl.values._
 
 object RunnerCollect {
 
+    def findChildJobs() : Vector[DXJob] = {
+        // get the parent job
+        val dxEnv = DXEnvironment.create()
+        val dxJob: DXJob = dxEnv.getJob()
+
+        // find all the jobs we we are waiting for
+        val req = JsObject("fields" -> JsObject("dependsOn" -> JsBoolean(true)))
+        val retval: JsValue = jsValueOfJsonNode(
+            DXAPI.jobDescribe(dxJob.getId,
+                              jsonNodeOfJsValue(req),
+                              classOf[JsonNode])
+        )
+        val infoVec:Vector[JsValue] = retval match {
+            case JsArray(a) => a.toVector
+            case _ => throw new Exception(s"Wrong type returned from jobDescribe ${retval}")
+        }
+        infoVec.map{
+            case JsString(id) => DXJob.getInstance(id)
+            case _ => throw new Exception(s"Wrong type returned from jobDescribe ${retval}")
+        }.toVector
+    }
+
     // Describe all the scatter child jobs. Use a bulk-describe
     // for efficiency.
-    def describeSubJobs(jobs: Vector[DXJob]) : Vector[(DXJob, JsValue)] = {
+    def describeChildJobs(jobs: Vector[DXJob]) : Map[DXJob, (String, JsValue)] = {
         val jobInfoReq:Vector[JsValue] = jobs.map{ job =>
             JsObject(
                 "id" -> JsString(job.getId),
-                "describe" -> JsObject("outputs" -> JsBoolean(true))
+                "describe" -> JsObject("outputs" -> JsBoolean(true),
+                                       "executableName" -> JsBoolean(true))
             )
         }
         val req = JsObject("executions" -> JsArray(jobInfoReq))
@@ -82,7 +105,17 @@ object RunnerCollect {
             jsValueOfJsonNode(
                 DXAPI.systemDescribeExecutions(jsonNodeOfJsValue(req), classOf[JsonNode]))
         val infoVec = retval match {
-            case JsArray(a) => a.toVector
+            case JsArray(a) => a.map{ response =>
+                val execName = response.get("executableName") match {
+                    case JsString(id) => id
+                    case other => throw new Exception(s"wrong type for executableName ${other}")
+                }
+                val outputs = response.get("outputs") match {
+                    case None => throw new Exception(s"No outputs for a child job")
+                    case Some(o) => o
+                }
+                (execName, outputs)
+            }
             case _ => throw new Exception(s"Wrong type returned from bulk-describe ${retval}")
         }
         jobs zip infoVec
@@ -140,16 +173,17 @@ object RunnerCollect {
         // Figure out input/output types
         val (inputSpec, outputSpec) = Utils.loadExecInfo
 
-        // Parse the inputs, do not download files from the platform,
-        // they will be passed as links.
-        val inputLines : String = Utils.readFileContent(jobInputPath)
-        val inputs: Map[String, WdlVarLinks] = WdlVarLinks.loadJobInputsAsLinks(inputLines, inputSpec)
-        appletLog(s"Initial inputs=${inputs}")
+        // We cannot change the input fields, because this is a sub-job with the same
+        // input/output spec as the parent scatter. Therefore, we need to computationally
+        // figure out:
+        //   1) child job-ids
+        //   2) field names
+        //   3) WDL types
+        val childJobs:Vector[DXJob] = findChildJobs()
 
-        // safely extract the input arrays: child-jobs, field-names, and wdl-types.
-        val childJobs:Vector[DXJob] = extractStringArray(inputs, "childJobIds").map {
-            s => DXJob.getInstance(s)
-        }
+        // describe all the job outputs and which applet they were running
+        val jobDescs:Map[DXJob, (String, JsValue)] = describeChildJobs(childJobs)
+
         val fieldNames = extractStringArray(inputs, "fieldNames")
         val wdlTypes:Vector[WdlType] = extractStringArray(inputs, "wdlTypes").map{
             s => WdlType.fromWdlString(s)
@@ -158,8 +192,6 @@ object RunnerCollect {
             throw new Exception(s"""|The number of fields must be the same as the number
                                     |of types ${fieldNames.length} != ${wdlTypes.length}"""
                                     .stripMargin.replaceAll("\n", " "))
-
-        val jobDescs:Vector[(DXJob, JsValue)] = describeSubJobs(childJobs)
 
         // collect each field
         val wvlOutputs: Vector[(String, WdlVarLinks)] =

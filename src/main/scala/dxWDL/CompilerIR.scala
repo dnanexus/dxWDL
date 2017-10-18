@@ -956,7 +956,7 @@ workflow w {
         val wdlCode = blockGenWorklow(preDecls, scatter, taskApplets, inputVars, outputVars)
         val callDict = calls.map(c => c.unqualifiedName -> Utils.taskOfCall(c).name).toMap
 
-        // If any of the return types is non native, we need a collect job
+        // If any of the return types is non native, we need a collect subjob.
         val allNative = outputVars.forall(cVar => isNativeDxType(cVar.wdlType))
         val aKind =
             if (allNative) IR.AppletKindScatter(callDict)

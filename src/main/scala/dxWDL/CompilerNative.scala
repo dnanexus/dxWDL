@@ -246,7 +246,6 @@ case class CompilerNative(dxWDLrtId: String,
             |
             |collect() {
             |    java -jar $${DX_FS_ROOT}/dxWDL.jar internal collect $${DX_FS_ROOT}/source.wdl $${HOME}
-            |}
             |}""".stripMargin.trim
     }
 

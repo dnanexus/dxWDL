@@ -57,6 +57,7 @@ import wdl4s.wdl.WdlExpression.AstForExpressions
 
 case class RunnerMiniWorkflow(exportVars: Set[String],
                               cef: CompilerErrorFormatter,
+                              orgInputs: JsValue,
                               collectSubjob: Boolean,
                               verbose: Boolean) {
     // An environment element could be one of:
@@ -247,18 +248,14 @@ case class RunnerMiniWorkflow(exportVars: Set[String],
 
     // Launch a subjob to collect the outputs
     private def launchCollectSubjob(childJobs: Vector[DXJob],
-                                    outputs: Vector[TaskOutput]) : Map[String, WdlVarLinks] = {
-        // Create the inputs the sub-job will need: child-jobs, field names, and wdl types.
-        // These are all encoded as JSON string arrays.
-        val childJobIds = childJobs.map{ dxJob => JsString(dxJob.getId) }.toVector
-        val fieldNames = outputs.map{ tso => JsString(tso.unqualifiedName) }.toVector
-        val wdlTypes = outputs.map{ tso => JsString(tso.wdlType.toWdlString) }.toVector
-        val inputs:JsValue = JsObject("childJobIds" -> JsArray(childJobIds),
-                                      "fieldNames" -> JsArray(fieldNames),
-                                      "wdlTypes" -> JsArray(wdlTypes))
+                                    call: WdlCall) : Map[String, WdlVarLinks] = {
+        val prefix = callUniqueName(call)
+        val task = Utils.taskOfCall(call)
+        val outputs = task.outputs.toVector
 
-        // Run a sub-job with the "collect" entry point
-        val dxSubJob : DXJob = Utils.runSubJob("collect", None, inputs, childJobs)
+        // Run a sub-job with the "collect" entry point.
+        // We need to provide the exact same inputs.
+        val dxSubJob : DXJob = Utils.runSubJob("collect", None, orgInputs, childJobs)
 
         // Return promises (JBORs) for all the outputs. Since the signature of the sub-job
         // is exactly the same as the parent, we can immediately exit the parent job.
@@ -266,7 +263,7 @@ case class RunnerMiniWorkflow(exportVars: Set[String],
             val wvl = WdlVarLinks(tso.wdlType,
                                   DeclAttrs.empty,
                                   DxlJob(dxSubJob, tso.unqualifiedName))
-            tso.unqualifiedName -> wvl
+            (prefix + "." + tso.unqualifiedName) -> wvl
         }.toMap
     }
 
@@ -349,8 +346,7 @@ case class RunnerMiniWorkflow(exportVars: Set[String],
             } else {
                 // The output types are complex, requiring a subjob.
                 val (call,_) = calls.head
-                val task = Utils.taskOfCall(call)
-                launchCollectSubjob(childJobs, task.outputs.toVector)
+                launchCollectSubjob(childJobs, call)
             }
         }
     }
@@ -548,7 +544,7 @@ object RunnerMiniWorkflow {
 
         // Run the workflow
         val cef = new CompilerErrorFormatter(wf.wdlSyntaxErrorFormatter.terminalMap)
-        val r = RunnerMiniWorkflow(exportVars, cef, collectSubjob, false)
+        val r = RunnerMiniWorkflow(exportVars, cef, inputLines.parseJson, collectSubjob, false)
         val json = r.apply(wf, inputs)
 
         // write the outputs to the job_output.json file
