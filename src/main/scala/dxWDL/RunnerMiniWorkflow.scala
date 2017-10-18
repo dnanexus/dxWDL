@@ -248,10 +248,9 @@ case class RunnerMiniWorkflow(exportVars: Set[String],
 
     // Launch a subjob to collect the outputs
     private def launchCollectSubjob(childJobs: Vector[DXJob],
-                                    call: WdlCall) : Map[String, WdlVarLinks] = {
-        val prefix = callUniqueName(call)
-        val task = Utils.taskOfCall(call)
-        val outputs = task.outputs.toVector
+                                    calls: Vector[WdlCall]) : Map[String, WdlVarLinks] = {
+        appletLog(s"""|launching collect subjob
+                      |child jobs=${childJobs}""".stripMargin)
 
         // Run a sub-job with the "collect" entry point.
         // We need to provide the exact same inputs.
@@ -259,12 +258,17 @@ case class RunnerMiniWorkflow(exportVars: Set[String],
 
         // Return promises (JBORs) for all the outputs. Since the signature of the sub-job
         // is exactly the same as the parent, we can immediately exit the parent job.
-        outputs.map { tso =>
-            val wvl = WdlVarLinks(tso.wdlType,
-                                  DeclAttrs.empty,
-                                  DxlJob(dxSubJob, tso.unqualifiedName))
-            (prefix + "." + tso.unqualifiedName) -> wvl
-        }.toMap
+        calls.foldLeft(Map.empty[String, WdlVarLinks]) {
+            case (accu, call) =>
+                val prefix = callUniqueName(call)
+                val promiseMap = call.outputs.map{ cao =>
+                    val wvl = WdlVarLinks(cao.wdlType,
+                                          DeclAttrs.empty,
+                                          DxlJob(dxSubJob, cao.unqualifiedName))
+                    (prefix + "." + cao.unqualifiedName) -> wvl
+                }
+                accu ++ promiseMap
+        }
     }
 
     // Launch a job for each call, and link them with JBORs. Do not
@@ -340,13 +344,12 @@ case class RunnerMiniWorkflow(exportVars: Set[String],
             // for the jobs to complete.
             gatherOutputs(scOutputs)
         } else {
-            if (calls.isEmpty) {
-                // The scatter had zero child jobs
-                Map.empty
+            if (childJobs.isEmpty) {
+                return Map.empty
             } else {
                 // The output types are complex, requiring a subjob.
-                val (call,_) = calls.head
-                launchCollectSubjob(childJobs, call)
+                launchCollectSubjob(childJobs,
+                                    calls.map{case (x,_) => x}.toVector)
             }
         }
     }

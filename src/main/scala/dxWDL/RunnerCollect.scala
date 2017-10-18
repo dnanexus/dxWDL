@@ -6,7 +6,6 @@ GenFiles.result is a ragged array of files (Array[Array[File]]). The
 conversion between these two types is difficult, and requires this applet.
 
 ```
-# Create an array of integers from an integer.
 task GenFiles {
   ...
   output {
@@ -53,18 +52,38 @@ Larger context
 allows it to return immediately, and not wait for the child jobs to complete.
 Each scatter requires its own collect applet, because the output type is
 the same as the scatter output type.
+
+General case
+  In the general case the scatter can have several calls. The collect job
+has to wait for all child jobs, figure out which call generated them, and
+gather outputs in appropriate groups.
+
+workflow math {
+    scatter (k in [2,3,5]) {
+        call GenFiles  { input: len=k }
+        call CalcSize  { input: ... }
+        call MakeTable { input: ... }
+    }
+    output {
+        GenFiles.result
+        CalcSize.total
+        MakeTable.volume
+    }
+}
+```
+
   */
 package dxWDL
 
 // DX bindings
-import com.dnanexus.{DXAPI, DXJob}
+import com.dnanexus.{DXAPI, DXEnvironment, DXJob}
 import com.fasterxml.jackson.databind.JsonNode
 import java.nio.file.Path
+import scala.collection.mutable.HashMap
 import spray.json._
 import Utils.{appletLog, jsonNodeOfJsValue, jsValueOfJsonNode}
-import wdl4s.wdl.{WdlWorkflow}
+import wdl4s.wdl.{WdlCall, WdlWorkflow}
 import wdl4s.wdl.types._
-import wdl4s.wdl.values._
 
 object RunnerCollect {
 
@@ -80,13 +99,13 @@ object RunnerCollect {
                               jsonNodeOfJsValue(req),
                               classOf[JsonNode])
         )
-        val infoVec:Vector[JsValue] = retval match {
-            case JsArray(a) => a.toVector
-            case _ => throw new Exception(s"Wrong type returned from jobDescribe ${retval}")
+        val childJobs:Vector[JsValue] = retval.asJsObject.fields.get("dependsOn") match {
+            case Some(JsArray(a)) => a.toVector
+            case _ => throw new Exception(s"Field dependsOn missing jobDescribe ${retval}")
         }
-        infoVec.map{
+        childJobs.map{
             case JsString(id) => DXJob.getInstance(id)
-            case _ => throw new Exception(s"Wrong type returned from jobDescribe ${retval}")
+            case _ => throw new Exception(s"Wrong type returned in dependsOn field ${retval}")
         }.toVector
     }
 
@@ -106,11 +125,12 @@ object RunnerCollect {
                 DXAPI.systemDescribeExecutions(jsonNodeOfJsValue(req), classOf[JsonNode]))
         val infoVec = retval match {
             case JsArray(a) => a.map{ response =>
-                val execName = response.get("executableName") match {
-                    case JsString(id) => id
+                val fields = response.asJsObject.fields
+                val execName = fields.get("executableName") match {
+                    case Some(JsString(name)) => name
                     case other => throw new Exception(s"wrong type for executableName ${other}")
                 }
-                val outputs = response.get("outputs") match {
+                val outputs = fields.get("outputs") match {
                     case None => throw new Exception(s"No outputs for a child job")
                     case Some(o) => o
                 }
@@ -118,7 +138,7 @@ object RunnerCollect {
             }
             case _ => throw new Exception(s"Wrong type returned from bulk-describe ${retval}")
         }
-        jobs zip infoVec
+        (jobs zip infoVec).toMap
     }
 
     // Collect all the values of a field from a group of jobs. Convert
@@ -142,29 +162,25 @@ object RunnerCollect {
         (fieldName, wvl)
     }
 
-    // Safely extract an array of strings from the input.
-    // Validate any possible input.
-    def extractStringArray(inputs: Map[String, WdlVarLinks],
-                           fieldName: String) : Vector[String] = {
-        val wvl:WdlVarLinks = inputs.get(fieldName) match {
-            case None => throw new Exception(s"${fieldName} not provided")
-            case Some(x) => x
+    // Collect all outputs for a call
+    def collectCallOutputs(call: WdlCall,
+                           retvals: Vector[(DXJob, JsValue)]) : Map[String,JsValue] = {
+        val wvlOutputs: Vector[(String, WdlVarLinks)] =
+            call.outputs.map { caOut =>
+                collect(caOut.unqualifiedName, caOut.wdlType, retvals)
+            }.toVector
+        val outputs:Map[String, JsValue] = wvlOutputs.foldLeft(Map.empty[String, JsValue]) {
+            case (accu, (varName, wvl)) =>
+                val fields = WdlVarLinks.genFields(wvl, varName)
+                accu ++ fields.toMap
         }
-        if (wvl.wdlType != WdlArrayType(WdlStringType))
-            throw new Exception(s"${fieldName} has the wrong type ${wvl.wdlType.toWdlString}")
 
-        val wValue = WdlVarLinks.eval(wvl, false)
-        val strArr:Vector[String] = wValue match {
-            case WdlArray(WdlArrayType(WdlStringType), arr) =>
-                arr.map{
-                    case WdlString(s) => s
-                    case other => throw new Exception(s"invalid value ${other}")
-                }.toVector
-            case other =>
-                throw new Exception(s"invalid value ${other}")
-        }
-        strArr
+        // Add the call name as a prefix to all output names
+        outputs.map{ case (varName, jsv) =>
+            s"${call.unqualifiedName}_${varName}" -> jsv
+        }.toMap
     }
+
 
     def apply(wf: WdlWorkflow,
               jobInputPath : Path,
@@ -184,27 +200,40 @@ object RunnerCollect {
         // describe all the job outputs and which applet they were running
         val jobDescs:Map[DXJob, (String, JsValue)] = describeChildJobs(childJobs)
 
-        val fieldNames = extractStringArray(inputs, "fieldNames")
-        val wdlTypes:Vector[WdlType] = extractStringArray(inputs, "wdlTypes").map{
-            s => WdlType.fromWdlString(s)
+        // find the WDL tasks that were run
+        val execNames: Set[String] = jobDescs.foldLeft(Set.empty[String]) {
+            case (accu, (_, (execName,_))) =>
+                accu + execName
         }
-        if (fieldNames.length != wdlTypes.length)
-            throw new Exception(s"""|The number of fields must be the same as the number
-                                    |of types ${fieldNames.length} != ${wdlTypes.length}"""
-                                    .stripMargin.replaceAll("\n", " "))
 
-        // collect each field
-        val wvlOutputs: Vector[(String, WdlVarLinks)] =
-            (fieldNames zip wdlTypes).map { case (fieldName, wdlType) =>
-                collect(fieldName, wdlType, jobDescs)
+        // Map executable name to WDL task
+        val execName2Call: Map[String, WdlCall] = wf.calls.map{ call =>
+            val task = Utils.taskOfCall(call)
+            val taskName = task.unqualifiedName
+            if (!(execNames contains taskName))
+                throw new Exception(s"Encountered unknown executable ${taskName}")
+            taskName -> call
+        }.toMap
+
+        // group jobs by executable
+        val jobGroups = HashMap.empty[WdlCall, Vector[(DXJob, JsValue)]]
+        jobDescs.foreach { case (dxJob, (execName, retval)) =>
+            val call = execName2Call(execName)
+            val vec = jobGroups.get(call) match {
+                case None => Vector((dxJob, retval))
+                case Some(v) => v :+ (dxJob, retval)
             }
-        val outputs:Map[String,JsValue] = wvlOutputs.foldLeft(Map.empty[String, JsValue]) {
-            case (accu, (varName, wvl)) =>
-                val fields = WdlVarLinks.genFields(wvl, varName)
-                accu ++ fields.toMap
+            jobGroups(call) = vec
         }
 
-        val json = JsObject(outputs.toMap)
+        // collect each call outputs
+        val combinedOutputs = jobGroups.foldLeft(Map.empty[String, JsValue]) {
+            case (accu, (call, retvalVec)) =>
+                val callOutputs = collectCallOutputs(call, retvalVec)
+                accu ++ callOutputs
+        }
+
+        val json = JsObject(combinedOutputs)
         val ast_pp = json.prettyPrint
         appletLog(s"exported = ${ast_pp}")
         Utils.writeFileContent(jobOutputPath, ast_pp)

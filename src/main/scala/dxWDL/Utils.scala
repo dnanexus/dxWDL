@@ -321,6 +321,7 @@ object Utils {
                 Map("dependsOn" -> JsArray(jobIds))
             }
         val req = JsObject(fields ++ instanceFields ++ dependsFields)
+        System.err.println(s"subjob request=${req.prettyPrint}")
         val retval: JsonNode = DXAPI.jobNew(jsonNodeOfJsValue(req), classOf[JsonNode])
         val info: JsValue =  Utils.jsValueOfJsonNode(retval)
         val id:String = info.asJsObject.fields.get("id") match {
