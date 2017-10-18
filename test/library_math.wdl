@@ -119,3 +119,12 @@ CODE
         Object result = read_object(stdout())
     }
 }
+
+# Create an array of integers from an integer.
+task RangeFromInt {
+    Int len
+    command {}
+    output {
+        Array[Int] result = range(len)
+    }
+}

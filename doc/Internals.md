@@ -304,7 +304,7 @@ workflow math {
 The `math` workflow calls a scatter where each job returns an array of
 files. The scatter result (`GenFiles.result`) is a ragged array of
 files (`Array[Array[File]]`). Gathering the individual arrays, and
-creating a ragged array requires computation, necessitates a
+creating a ragged array requires computation, necessitating a
 job. This situation arises whenever the scatter output is a non-native
 DNAx type. To solve this, the scatter runs a `collect` subjob that
 waits for all child jobs to complete, and gathers their outputs

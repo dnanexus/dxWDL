@@ -1,14 +1,5 @@
 import "library_math.wdl" as lib
 
-# Create an array of integers from an integer.
-task RangeFromInt {
-    Int len
-    command {}
-    output {
-        Array[Int] result = range(len)
-    }
-}
-
 workflow math {
     Array[Int] numbers
     Int ai
@@ -16,7 +7,7 @@ workflow math {
 
     # Conversion from Array[Int] to Array[Array[Int]]
     scatter (k in [2,3,5]) {
-        call RangeFromInt as rfi { input: len=k }
+        call lib.RangeFromInt as rfi { input: len=k }
     }
 
     # simple If block

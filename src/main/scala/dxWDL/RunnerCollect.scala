@@ -76,9 +76,10 @@ workflow math {
 package dxWDL
 
 // DX bindings
-import com.dnanexus.{DXAPI, DXEnvironment, DXJob}
+import com.dnanexus.{DXAPI, DXEnvironment, DXJob, DXSearch}
 import com.fasterxml.jackson.databind.JsonNode
 import java.nio.file.Path
+import scala.collection.JavaConverters._
 import scala.collection.mutable.HashMap
 import spray.json._
 import Utils.{appletLog, jsonNodeOfJsValue, jsValueOfJsonNode}
@@ -90,23 +91,18 @@ object RunnerCollect {
     def findChildJobs() : Vector[DXJob] = {
         // get the parent job
         val dxEnv = DXEnvironment.create()
-        val dxJob: DXJob = dxEnv.getJob()
+        val dxJob = dxEnv.getJob()
+        val parentJob: DXJob = dxJob.describe().getParentJob()
 
-        // find all the jobs we we are waiting for
-        val req = JsObject("fields" -> JsObject("dependsOn" -> JsBoolean(true)))
-        val retval: JsValue = jsValueOfJsonNode(
-            DXAPI.jobDescribe(dxJob.getId,
-                              jsonNodeOfJsValue(req),
-                              classOf[JsonNode])
-        )
-        val childJobs:Vector[JsValue] = retval.asJsObject.fields.get("dependsOn") match {
-            case Some(JsArray(a)) => a.toVector
-            case _ => throw new Exception(s"Field dependsOn missing jobDescribe ${retval}")
-        }
-        childJobs.map{
-            case JsString(id) => DXJob.getInstance(id)
-            case _ => throw new Exception(s"Wrong type returned in dependsOn field ${retval}")
-        }.toVector
+        val childJobs : Vector[DXJob] = DXSearch.findExecutions()
+            .withParentJob(parentJob)
+            .withClassJob
+            .execute().asList().asScala.toVector
+
+        // make sure the collect subjob is not included. Theoretically,
+        // it should not be returned as a search result, but let's make
+        // sure
+        childJobs.filter(_ != dxJob)
     }
 
     // Describe all the scatter child jobs. Use a bulk-describe
@@ -120,23 +116,28 @@ object RunnerCollect {
             )
         }
         val req = JsObject("executions" -> JsArray(jobInfoReq))
+        System.err.println(s"bulk-describe request=${req}")
         val retval: JsValue =
             jsValueOfJsonNode(
                 DXAPI.systemDescribeExecutions(jsonNodeOfJsValue(req), classOf[JsonNode]))
-        val infoVec = retval match {
-            case JsArray(a) => a.map{ response =>
-                val fields = response.asJsObject.fields
-                val execName = fields.get("executableName") match {
-                    case Some(JsString(name)) => name
-                    case other => throw new Exception(s"wrong type for executableName ${other}")
-                }
-                val outputs = fields.get("outputs") match {
-                    case None => throw new Exception(s"No outputs for a child job")
-                    case Some(o) => o
-                }
-                (execName, outputs)
+        val results:Vector[JsValue] = retval.asJsObject.fields.get("results") match {
+            case Some(JsArray(x)) => x.toVector
+            case _ => throw new Exception(s"wrong type for executableName ${retval}")
+        }
+        val infoVec = results.map { desc =>
+            val fields = desc.asJsObject.fields.get("describe") match {
+                case Some(JsObject(fields)) => fields
+                case _ => throw new Exception(s"result does not contains a describe field ${desc}")
             }
-            case _ => throw new Exception(s"Wrong type returned from bulk-describe ${retval}")
+            val execName = fields.get("executableName") match {
+                case Some(JsString(name)) => name
+                case other => throw new Exception(s"wrong type for executableName ${other}")
+            }
+            val outputs = fields.get("outputs") match {
+                case None => throw new Exception(s"No outputs for a child job")
+                case Some(o) => o
+            }
+            (execName, outputs)
         }
         (jobs zip infoVec).toMap
     }
@@ -196,15 +197,18 @@ object RunnerCollect {
         //   2) field names
         //   3) WDL types
         val childJobs:Vector[DXJob] = findChildJobs()
+        System.err.println(s"childJobs=${childJobs}")
 
         // describe all the job outputs and which applet they were running
         val jobDescs:Map[DXJob, (String, JsValue)] = describeChildJobs(childJobs)
+        System.err.println(s"jobDescs=${childJobs}")
 
         // find the WDL tasks that were run
         val execNames: Set[String] = jobDescs.foldLeft(Set.empty[String]) {
             case (accu, (_, (execName,_))) =>
                 accu + execName
         }
+        System.err.println(s"execNames=${execNames}")
 
         // Map executable name to WDL task
         val execName2Call: Map[String, WdlCall] = wf.calls.map{ call =>
@@ -214,6 +218,7 @@ object RunnerCollect {
                 throw new Exception(s"Encountered unknown executable ${taskName}")
             taskName -> call
         }.toMap
+        System.err.println(s"execName2Call=${execName2Call}")
 
         // group jobs by executable
         val jobGroups = HashMap.empty[WdlCall, Vector[(DXJob, JsValue)]]
@@ -225,13 +230,15 @@ object RunnerCollect {
             }
             jobGroups(call) = vec
         }
+        System.err.println(s"jobGroups=${jobGroups}")
 
         // collect each call outputs
-        val combinedOutputs = jobGroups.foldLeft(Map.empty[String, JsValue]) {
-            case (accu, (call, retvalVec)) =>
-                val callOutputs = collectCallOutputs(call, retvalVec)
-                accu ++ callOutputs
-        }
+        val combinedOutputs:Map[String, JsValue] =
+            jobGroups.foldLeft(Map.empty[String, JsValue]) {
+                case (accu, (call, retvalVec)) =>
+                    val callOutputs = collectCallOutputs(call, retvalVec)
+                    accu ++ callOutputs
+            }
 
         val json = JsObject(combinedOutputs)
         val ast_pp = json.prettyPrint

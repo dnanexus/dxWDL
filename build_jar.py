@@ -15,12 +15,14 @@ HOME_REGION = "aws:us-east-1"
 # a mapping to the lists
 #    R : dxWDL_R
 TEST_DICT = {
-    "aws:us-east-1" :  "dxWDL_playground" ,
-    "aws:ap-southeast-2" : "dxWDL_Sydney"
+    "aws:us-east-1" :  "dxWDL_playground",
+    "aws:ap-southeast-2" : "dxWDL_Sydney",
+    "azure:westus" : "dxWDL_Azure"
 }
 RELEASE_DICT = {
-    "aws:us-east-1" :  "dxWDL" ,
-    "aws:ap-southeast-2" : "dxWDL_Sydney"
+    "aws:us-east-1" :  "dxWDL",
+    "aws:ap-southeast-2" : "dxWDL_Sydney",
+    "azure:westus" : "dxWDL_Azure"
 }
 
 def main():
