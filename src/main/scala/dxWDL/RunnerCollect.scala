@@ -133,8 +133,8 @@ object RunnerCollect {
                 case Some(JsString(name)) => name
                 case other => throw new Exception(s"wrong type for executableName ${other}")
             }
-            val outputs = fields.get("outputs") match {
-                case None => throw new Exception(s"No outputs for a child job")
+            val outputs = fields.get("output") match {
+                case None => throw new Exception(s"No output field for a child job ${desc}")
                 case Some(o) => o
             }
             (execName, outputs)

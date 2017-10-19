@@ -264,7 +264,7 @@ case class RunnerMiniWorkflow(exportVars: Set[String],
                 val promiseMap = call.outputs.map{ cao =>
                     val wvl = WdlVarLinks(cao.wdlType,
                                           DeclAttrs.empty,
-                                          DxlJob(dxSubJob, cao.unqualifiedName))
+                                          DxlJob(dxSubJob, prefix + "_" + cao.unqualifiedName))
                     (prefix + "." + cao.unqualifiedName) -> wvl
                 }
                 accu ++ promiseMap
