@@ -317,19 +317,18 @@ object Main extends App {
     // terminals, and selecting two projects, dxpy will correctly
     // provide pwd, dxjava only returns the name stored in
     // ~/.dnanexus_config.DX_PROJECT_CONTEXT_NAME.
-    private def getCurrentProjectFolder(): (DXProject, String) = {
+    private def getDxPwd(): (DXProject, String) = {
         try {
             // version with dxjava
             //val dxEnv = com.dnanexus.DXEnvironment.create()
             //dxEnv.getProjectContext()
             val (path, _) = Utils.execCommand("dx pwd", None)
-            val index = path.lastIndexOf(':')
-            val (projName, folder) =
-                if (index == -1) {
-                    (path, "/")
-                } else {
-                    path.substring(0, index)
-                }
+            val vec = path.split(":")
+            val (projName, folder) = vec.length match {
+                case 1 => (vec(0), "/")
+                case 2 => (vec(0), vec(1))
+                case _ => throw new Exception(s"Invalid path syntex <${path}>")
+            }
             val dxProj = Utils.lookupProject(projName)
             (dxProj, folder)
         } catch {
@@ -376,7 +375,7 @@ object Main extends App {
             case Some(other) => throw new Exception(s"Invalid path syntex <${other}>")
         }
 
-        val (crntProject, crntFolder) = getCurrentProjectAndFolder()
+        val (crntProject, crntFolder) = getDxPwd()
         val dxFolder = folder match {
             case None => crntFolder
             case Some(d) =>
