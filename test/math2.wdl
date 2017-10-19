@@ -1,11 +1,18 @@
-import "library_math.wdl" as lib
+#task Maybe {
+#    Int? n
+#    command {}
+#    output {
+#        Int? result = n
+#    }
+#}
 
 workflow math2 {
-    # Conversion from Array[Int] to Array[Array[Int]]
-    scatter (k in [2,3,5]) {
-        call lib.RangeFromInt as rfi { input: len=k }
-    }
+#    call Maybe {input: n=2}
+
+#    Array[Int] numbers = [1, 2, Maybe.result]
+    Array[Int] numbers = [1, 2]
+
     output {
-        Array[Array[Int]] rra = rfi.result
+        numbers
     }
 }

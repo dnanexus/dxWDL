@@ -394,6 +394,16 @@ object Utils {
         }
     }
 
+    def callUniqueName(call : WdlCall) : String = {
+        val retval = call.alias match {
+            case Some(x) => x
+            case None => Utils.taskOfCall(call).name
+        }
+        assert(retval == call.unqualifiedName)
+        retval
+    }
+
+
     def base64Encode(buf: String) : String = {
         Base64.getEncoder.encodeToString(buf.getBytes(StandardCharsets.UTF_8))
     }

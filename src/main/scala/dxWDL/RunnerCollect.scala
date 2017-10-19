@@ -82,11 +82,17 @@ import java.nio.file.Path
 import scala.collection.JavaConverters._
 import scala.collection.mutable.HashMap
 import spray.json._
-import Utils.{appletLog, jsonNodeOfJsValue, jsValueOfJsonNode}
+import Utils.{appletLog, callUniqueName, jsonNodeOfJsValue, jsValueOfJsonNode}
 import wdl4s.wdl.{WdlCall, WdlWorkflow}
 import wdl4s.wdl.types._
 
 object RunnerCollect {
+
+    case class ChildJobDesc(execName: String,
+                            unqCallName: String,
+                            seqNum: Int,
+                            outputs: JsValue,
+                            job: DXJob)
 
     def findChildJobs() : Vector[DXJob] = {
         // get the parent job
@@ -100,19 +106,21 @@ object RunnerCollect {
             .execute().asList().asScala.toVector
 
         // make sure the collect subjob is not included. Theoretically,
-        // it should not be returned as a search result, but let's make
-        // sure
+        // it should not be returned as a search result, becase we did
+        // not explicitly ask for subjobs. However, let's make
+        // sure.
         childJobs.filter(_ != dxJob)
     }
 
     // Describe all the scatter child jobs. Use a bulk-describe
     // for efficiency.
-    def describeChildJobs(jobs: Vector[DXJob]) : Map[DXJob, (String, JsValue)] = {
+    def describeChildJobs(jobs: Vector[DXJob]) : Vector[ChildJobDesc] = {
         val jobInfoReq:Vector[JsValue] = jobs.map{ job =>
             JsObject(
                 "id" -> JsString(job.getId),
                 "describe" -> JsObject("outputs" -> JsBoolean(true),
-                                       "executableName" -> JsBoolean(true))
+                                       "executableName" -> JsBoolean(true),
+                                       "properties" -> JsBoolean(true))
             )
         }
         val req = JsObject("executions" -> JsArray(jobInfoReq))
@@ -124,22 +132,30 @@ object RunnerCollect {
             case Some(JsArray(x)) => x.toVector
             case _ => throw new Exception(s"wrong type for executableName ${retval}")
         }
-        val infoVec = results.map { desc =>
+        (jobs zip results).map { case (dxJob, desc) =>
             val fields = desc.asJsObject.fields.get("describe") match {
                 case Some(JsObject(fields)) => fields
                 case _ => throw new Exception(s"result does not contains a describe field ${desc}")
             }
             val execName = fields.get("executableName") match {
                 case Some(JsString(name)) => name
-                case other => throw new Exception(s"wrong type for executableName ${other}")
+                case _ => throw new Exception(s"wrong type for executableName ${desc}")
+            }
+            val (unqCallName, seqNum) = fields.get("properties") match {
+                case Some(obj) =>
+                    obj.asJsObject.getFields("call", "seq_number") match {
+                        case Seq(JsString(unqCallName), JsString(seqNum)) =>
+                            (unqCallName, seqNum.toInt)
+                        case _ => throw new Exception(s"wrong value for properties ${desc}, ${obj}")
+                    }
+                case _ => throw new Exception(s"wrong type for properties ${desc}")
             }
             val outputs = fields.get("output") match {
                 case None => throw new Exception(s"No output field for a child job ${desc}")
                 case Some(o) => o
             }
-            (execName, outputs)
-        }
-        (jobs zip infoVec).toMap
+            ChildJobDesc(execName, unqCallName, seqNum, outputs, dxJob)
+        }.toVector
     }
 
     // Collect all the values of a field from a group of jobs. Convert
@@ -148,14 +164,17 @@ object RunnerCollect {
     // Assumptions: the jobs have already completed, and their files are closed.
     def collect(fieldName: String,
                 wdlType: WdlType,
-                jobDescs:Vector[(DXJob, JsValue)]) : (String, WdlVarLinks) = {
+                jobDescs:Vector[ChildJobDesc]) : (String, WdlVarLinks) = {
         // TODO:
         // The type could be optional, in which case the output field
         // will be generated only from a subset of the jobs.
-        val jsVec = jobDescs.map{ case (dxJob, desc) =>
-            desc.asJsObject.fields.get(fieldName) match {
+
+        // Sort the results by ascending sequence number
+        val jobsInLaunchOrder = jobDescs.sortWith(_.seqNum < _.seqNum)
+        val jsVec = jobsInLaunchOrder.map{ case desc =>
+            desc.outputs.asJsObject.fields.get(fieldName) match {
                 case None =>
-                    throw new Exception(s"missing field ${fieldName} from child job ${dxJob}}")
+                    throw new Exception(s"missing field ${fieldName} from child job ${desc.job}}")
                 case Some(x) => x
             }
         }
@@ -163,12 +182,13 @@ object RunnerCollect {
         (fieldName, wvl)
     }
 
-    // Collect all outputs for a call
+    // Collect all outputs for a call. All the output types go from T
+    // to Array[T].
     def collectCallOutputs(call: WdlCall,
-                           retvals: Vector[(DXJob, JsValue)]) : Map[String,JsValue] = {
+                           retvals: Vector[ChildJobDesc]) : Map[String,JsValue] = {
         val wvlOutputs: Vector[(String, WdlVarLinks)] =
             call.outputs.map { caOut =>
-                collect(caOut.unqualifiedName, caOut.wdlType, retvals)
+                collect(caOut.unqualifiedName, WdlArrayType(caOut.wdlType), retvals)
             }.toVector
         val outputs:Map[String, JsValue] = wvlOutputs.foldLeft(Map.empty[String, JsValue]) {
             case (accu, (varName, wvl)) =>
@@ -181,7 +201,6 @@ object RunnerCollect {
             s"${call.unqualifiedName}_${varName}" -> jsv
         }.toMap
     }
-
 
     def apply(wf: WdlWorkflow,
               jobInputPath : Path,
@@ -200,35 +219,27 @@ object RunnerCollect {
         System.err.println(s"childJobs=${childJobs}")
 
         // describe all the job outputs and which applet they were running
-        val jobDescs:Map[DXJob, (String, JsValue)] = describeChildJobs(childJobs)
-        System.err.println(s"jobDescs=${childJobs}")
+        val jobDescs:Vector[ChildJobDesc] = describeChildJobs(childJobs)
+        System.err.println(s"jobDescs=${jobDescs}")
 
-        // find the WDL tasks that were run
-        val execNames: Set[String] = jobDescs.foldLeft(Set.empty[String]) {
-            case (accu, (_, (execName,_))) =>
-                accu + execName
-        }
-        System.err.println(s"execNames=${execNames}")
-
-        // Map executable name to WDL task
-        val execName2Call: Map[String, WdlCall] = wf.calls.map{ call =>
-            val task = Utils.taskOfCall(call)
-            val taskName = task.unqualifiedName
-            if (!(execNames contains taskName))
-                throw new Exception(s"Encountered unknown executable ${taskName}")
-            taskName -> call
+        // Map call name to WDL call structure
+        val callName2Call: Map[String, WdlCall] = wf.calls.map{ call =>
+            callUniqueName(call) -> call
         }.toMap
-        System.err.println(s"execName2Call=${execName2Call}")
+        System.err.println(s"callName2Call=${callName2Call}")
 
         // group jobs by executable
-        val jobGroups = HashMap.empty[WdlCall, Vector[(DXJob, JsValue)]]
-        jobDescs.foreach { case (dxJob, (execName, retval)) =>
-            val call = execName2Call(execName)
-            val vec = jobGroups.get(call) match {
-                case None => Vector((dxJob, retval))
-                case Some(v) => v :+ (dxJob, retval)
+        val jobGroups = HashMap.empty[WdlCall, Vector[ChildJobDesc]]
+        jobDescs.foreach { desc =>
+            desc match {
+                case ChildJobDesc(_, unqCallName, _, retval,_) =>
+                    val call = callName2Call(unqCallName)
+                    val vec = jobGroups.get(call) match {
+                        case None => Vector(desc)
+                        case Some(v) => v :+ desc
+                    }
+                    jobGroups(call) = vec
             }
-            jobGroups(call) = vec
         }
         System.err.println(s"jobGroups=${jobGroups}")
 

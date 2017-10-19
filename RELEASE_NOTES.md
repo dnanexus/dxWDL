@@ -1,7 +1,10 @@
 # Release Notes
 
 ## 0.48
-- Support string interpolation
+- Support string interpolation in workflow expressions
+- Handle scatters where the called tasks return file arrays, and non-native
+platform types. This is done by spawning a subjob to collect all the outputs
+and bundle them.
 
 ## 0.47
 - Support calling native DNAx applets from a WDL workflow. A helper utility
