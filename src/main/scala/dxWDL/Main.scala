@@ -317,20 +317,21 @@ object Main extends App {
     // terminals, and selecting two projects, dxpy will correctly
     // provide pwd, dxjava only returns the name stored in
     // ~/.dnanexus_config.DX_PROJECT_CONTEXT_NAME.
-    private def getCurrentProject(): DXProject = {
+    private def getCurrentProjectFolder(): (DXProject, String) = {
         try {
             // version with dxjava
             //val dxEnv = com.dnanexus.DXEnvironment.create()
             //dxEnv.getProjectContext()
             val (path, _) = Utils.execCommand("dx pwd", None)
             val index = path.lastIndexOf(':')
-            val projName:String =
+            val (projName, folder) =
                 if (index == -1) {
-                    path
+                    (path, "/")
                 } else {
                     path.substring(0, index)
                 }
-            Utils.lookupProject(projName)
+            val dxProj = Utils.lookupProject(projName)
+            (dxProj, folder)
         } catch {
             case e : Throwable =>
                 throw new Exception("Could not execute 'dx pwd', please check that dx is in your path")
@@ -375,15 +376,16 @@ object Main extends App {
             case Some(other) => throw new Exception(s"Invalid path syntex <${other}>")
         }
 
+        val (crntProject, crntFolder) = getCurrentProjectAndFolder()
         val dxFolder = folder match {
-            case None => "/"
+            case None => crntFolder
             case Some(d) =>
                 if (d.isEmpty)
                     throw new Exception(s"Cannot specify empty folder")
                 d
         }
         val dxProject : DXProject = project match {
-            case None => getCurrentProject()
+            case None => crntProject
             case Some(p) => Utils.lookupProject(p)
         }
 
