@@ -323,12 +323,22 @@ In the general case the scatter can have several calls. The collect job
 has to wait for all child jobs, figure out which call generated them, and
 gather outputs in appropriate groups.
 
+In the example below, the task `MakeTable` is called twice. The
+collect subjob needs to distinguish between child jobs from the `t1`
+invocation and the `t2` invocation. The child jobs can complete out of
+order, and the output arrays should be sorted according to the launch
+order. For example, the `GenFiles` invocations should be sorted like
+this: `[ GenFiles(len=2) , GenFiles(len=3), GenFile(len=5)]`. To
+achieve this, two properties are added to each the child jobs (1) the
+call name, and (2) the invocation serial number.
+
 ```
 workflow math {
     scatter (k in [2,3,5]) {
         call GenFiles  { input: len=k }
         call CalcSize  { input: ... }
-        call MakeTable { input: ... }
+        call MakeTable as t1 { input: ... }
+        call MakeTable as t2 { input: ... }
     }
     output {
         GenFiles.result
