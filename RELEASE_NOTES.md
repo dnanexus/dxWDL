@@ -5,6 +5,7 @@
 - Handle scatters where the called tasks return file arrays, and non-native
 platform types. This is done by spawning a subjob to collect all the outputs
 and bundle them.
+- Azure us-west region is supported
 
 ## 0.47
 - Support calling native DNAx applets from a WDL workflow. A helper utility
