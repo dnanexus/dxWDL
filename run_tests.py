@@ -184,7 +184,8 @@ def build_workflow(tname, project, folder, version_id, compiler_flags):
                 "compile",
                 desc.wdl_source,
                 "-inputs", desc.wdl_input,
-                "-destination", (project.get_id() + ":" + folder) ]
+                "-folder", folder,
+                "-project", project.get_id() ]
     cmdline += compiler_flags
     print(" ".join(cmdline))
     subprocess.check_output(cmdline)
@@ -353,7 +354,8 @@ def native_call_setup(project, applet_folder, version_id):
                 "dxni",
                 "--force",
                 "--verbose",
-                "--folder", (project.get_id() + ":" + applet_folder),
+                "--folder", applet_folder,
+                "--project", project.get_id(),
                 "--output", os.path.join(top_dir, "test/dx_extern.wdl")]
     print(" ".join(cmdline))
     subprocess.check_output(cmdline)

@@ -53,6 +53,7 @@ object IR {
     //   If:        block for a conditional
     //   Native:    a native platform applet
     //   Scatter:   utility block for scatter/gather
+    //   ScatterCollect: utility block for scatter, with a gather subjob.
     //   Task:      call a task, execute a shell command (usually)
     //   WorkflowOutputs: evaluate workflow outputs, and clean up
     //              intermediate results if needed.
@@ -61,6 +62,7 @@ object IR {
     case class  AppletKindIf(calls: Map[String, String]) extends AppletKind
     case class  AppletKindNative(id: String) extends AppletKind
     case class  AppletKindScatter(calls: Map[String, String]) extends AppletKind
+    case class  AppletKindScatterCollect(calls: Map[String, String]) extends AppletKind
     case object AppletKindTask extends AppletKind
     case object AppletKindWorkflowOutputs extends AppletKind
     case object AppletKindWorkflowOutputsAndReorg extends AppletKind
@@ -144,6 +146,10 @@ object IR {
                         YamlObject(
                             YamlString("aKind") -> YamlString("Scatter"),
                             YamlString("calls") -> calls.toYaml)
+                    case AppletKindScatterCollect(calls) =>
+                        YamlObject(
+                            YamlString("aKind") -> YamlString("ScatterCollect"),
+                            YamlString("calls") -> calls.toYaml)
                     case AppletKindTask =>
                         YamlObject(YamlString("aKind") -> YamlString("Task"))
                     case AppletKindWorkflowOutputs =>
@@ -177,6 +183,11 @@ object IR {
                             yo.getFields(YamlString("calls")) match {
                                 case Seq(calls) =>
                                     AppletKindScatter(calls.convertTo[Map[String, String]])
+                            }
+                        case Seq(YamlString("ScatterCollect")) =>
+                            yo.getFields(YamlString("calls")) match {
+                                case Seq(calls) =>
+                                    AppletKindScatterCollect(calls.convertTo[Map[String, String]])
                             }
                     }
                 case unrecognized => throw new Exception(s"AppletKind expected ${unrecognized}")

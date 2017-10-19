@@ -1,11 +1,10 @@
 {
-  "mi1.result" : 17,
-  "mi2.result" : 17,
-  "mi3.result" : 34,
-  "ms1.result" : "french horn",
-  "ms2.result" : "flute",
-  "mul2.result" : 10,
-  "add.result" : 4,
-  "scatter_1.add2_result": [9, 10],
-  "scatter_1.add3_result": [34, 34]
+  "optionals_outputs.mi2_result" : 17,
+  "optionals_outputs.mi3_result" : 34,
+  "optionals_outputs.ms1_result" : "french horn",
+  "optionals_outputs.ms2_result" : "flute",
+  "optionals_outputs.mul2_result" : 10,
+  "optionals_outputs.add_result" : 4,
+  "optionals_outputs.add2_result": [9, 10],
+  "optionals_outputs.add3_result": [34, 34]
 }

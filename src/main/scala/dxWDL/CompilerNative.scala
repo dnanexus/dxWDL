@@ -233,13 +233,19 @@ case class CompilerNative(dxWDLrtId: String,
             |""".stripMargin.trim
     }
 
-    def genBashScriptNonTask(miniCmd:String,
-                             setupFilesScript:String) : String = {
-        s"""|#!/bin/bash -ex
-            |${setupFilesScript}
-            |
-            |main() {
+    def genBashScriptNonTask(miniCmd:String) : String = {
+        s"""|main() {
             |    java -jar $${DX_FS_ROOT}/dxWDL.jar internal ${miniCmd} $${DX_FS_ROOT}/source.wdl $${HOME}
+            |}""".stripMargin.trim
+    }
+
+    def genBashScriptScatterCollect() : String = {
+        s"""|main() {
+            |    java -jar $${DX_FS_ROOT}/dxWDL.jar internal scatterCollectSubjob $${DX_FS_ROOT}/source.wdl $${HOME}
+            |}
+            |
+            |collect() {
+            |    java -jar $${DX_FS_ROOT}/dxWDL.jar internal collect $${DX_FS_ROOT}/source.wdl $${HOME}
             |}""".stripMargin.trim
     }
 
@@ -248,28 +254,23 @@ case class CompilerNative(dxWDLrtId: String,
                       wdlCode: String,
                       linkInfo: Option[String],
                       dbInstance: Option[String]) : String = {
-        val setupFilesScript = genSourceFiles(wdlCode, linkInfo, dbInstance)
-        appKind match {
+        val body:String = appKind match {
             case IR.AppletKindEval =>
-                genBashScriptNonTask("eval", setupFilesScript)
+                genBashScriptNonTask("eval")
             case (IR.AppletKindIf(_) | IR.AppletKindScatter(_)) =>
-                genBashScriptNonTask("miniWorkflow", setupFilesScript)
+                genBashScriptNonTask("miniWorkflow")
+            case (IR.AppletKindScatterCollect(_)) =>
+                genBashScriptScatterCollect()
             case IR.AppletKindNative(_) =>
                 throw new Exception("Sanity: generating a bash script for a native applet")
             case IR.AppletKindTask =>
                 instanceType match {
                     case IR.InstanceTypeDefault | IR.InstanceTypeConst(_) =>
-                        s"""|#!/bin/bash -ex
-                            |${setupFilesScript}
-                            |
-                            |main() {
+                        s"""|main() {
                             |${genBashScriptTaskBody()}
                             |}""".stripMargin
                     case IR.InstanceTypeRuntime =>
-                        s"""|#!/bin/bash -ex
-                            |${setupFilesScript}
-                            |
-                            |main() {
+                        s"""|main() {
                             |    # evaluate the instance type, and launch a sub job on it
                             |    java -jar $${DX_FS_ROOT}/dxWDL.jar internal taskRelaunch $${DX_FS_ROOT}/source.wdl $${HOME}
                             |}
@@ -280,10 +281,15 @@ case class CompilerNative(dxWDLrtId: String,
                             |}""".stripMargin.trim
                 }
             case IR.AppletKindWorkflowOutputs =>
-                genBashScriptNonTask("workflowOutputs", setupFilesScript)
+                genBashScriptNonTask("workflowOutputs")
             case IR.AppletKindWorkflowOutputsAndReorg =>
-                genBashScriptNonTask("workflowOutputsAndReorg", setupFilesScript)
+                genBashScriptNonTask("workflowOutputsAndReorg")
         }
+        val setupFilesScript = genSourceFiles(wdlCode, linkInfo, dbInstance)
+        s"""|#!/bin/bash -ex
+            |${setupFilesScript}
+            |
+            |${body}""".stripMargin
     }
 
     // Calculate the MD5 checksum of a string
@@ -533,14 +539,13 @@ case class CompilerNative(dxWDLrtId: String,
         trace(verbose.on, s"Compiling applet ${applet.name}")
 
         // limit the applet dictionary, only to actual dependencies
-        val aplLinks = applet.kind match {
-            case IR.AppletKindIf(calls) =>
-                calls.map{ case (_,tName) => tName -> appletDict(tName) }.toMap
-            case IR.AppletKindScatter(calls) =>
-                calls.map{ case (_,tName) => tName -> appletDict(tName) }.toMap
-            case _ =>
-                Map.empty[String, (IR.Applet, DXApplet)]
+        val calls:Map[String, String] = applet.kind match {
+            case IR.AppletKindIf(calls) => calls
+            case IR.AppletKindScatter(calls) => calls
+            case IR.AppletKindScatterCollect(calls) => calls
+            case _ => Map.empty
         }
+        val aplLinks = calls.map{ case (_,tName) => tName -> appletDict(tName) }.toMap
 
         // Build an applet script
         val bashScript = genAppletScript(applet, aplLinks)
@@ -723,15 +728,16 @@ case class CompilerNative(dxWDLrtId: String,
     // generated applets like scatters and if-blocks.
     def sortAppletsByDependencies(appletDict: Map[String, IR.Applet]) : Vector[IR.Applet] = {
         def immediateDeps(apl: IR.Applet) :Vector[IR.Applet] = {
-            val calls:Seq[String] = apl.kind match {
-                case IR.AppletKindIf(calls) => calls.map{ case (_,taskName) => taskName }.toSeq
-                case IR.AppletKindScatter(calls) => calls.map{ case (_,taskName) => taskName }.toSeq
-                case _ => Vector.empty
+            val calls:Map[String, String] = apl.kind match {
+                case IR.AppletKindIf(calls) => calls
+                case IR.AppletKindScatter(calls) => calls
+                case IR.AppletKindScatterCollect(calls) => calls
+                case _ => Map.empty
             }
-            calls.map{ name =>
-                appletDict.get(name) match {
+            calls.map{ case (_, taskName) =>
+                appletDict.get(taskName) match {
                     case None => throw new Exception(
-                        s"Applet ${apl.name} depends on an unknown applet ${name}")
+                        s"Applet ${apl.name} depends on an unknown applet ${taskName}")
                     case Some(x) => x
                 }
             }.toVector

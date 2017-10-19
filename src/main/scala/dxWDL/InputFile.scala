@@ -251,6 +251,7 @@ case class InputFile(verbose: Utils.Verbose) {
             callee.kind match {
                 case IR.AppletKindIf(calls) => compoundCalls(stage, calls)
                 case IR.AppletKindScatter(calls) => compoundCalls(stage, calls)
+                case IR.AppletKindScatterCollect(calls) => compoundCalls(stage, calls)
                 case _ => ()
             }
         }

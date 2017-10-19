@@ -80,12 +80,16 @@ workflow optionals {
         Array[Int] series=[x,1]
     }
     output {
+        mi2.result
+        mi3.result
+        ms1.result
+        ms2.result
         mul2.result
         set_def.result
         add.result
         unused_args.result
         add2.result
-        mi2.result
+        add3.result
         series
     }
 }

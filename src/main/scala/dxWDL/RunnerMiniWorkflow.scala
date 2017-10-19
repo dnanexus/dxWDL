@@ -48,7 +48,7 @@ import com.dnanexus._
 import java.nio.file.{Path, Paths, Files}
 import scala.collection.mutable.HashMap
 import spray.json._
-import Utils.{AppletLinkInfo, appletLog, transformVarName}
+import Utils.{AppletLinkInfo, appletLog, callUniqueName, transformVarName}
 import wdl4s.wdl._
 import wdl4s.wdl.expression._
 import wdl4s.parser.WdlParser.{Ast, Terminal}
@@ -57,6 +57,8 @@ import wdl4s.wdl.WdlExpression.AstForExpressions
 
 case class RunnerMiniWorkflow(exportVars: Set[String],
                               cef: CompilerErrorFormatter,
+                              orgInputs: JsValue,
+                              collectSubjob: Boolean,
                               verbose: Boolean) {
     // An environment element could be one of:
     // - top level value
@@ -65,13 +67,6 @@ case class RunnerMiniWorkflow(exportVars: Set[String],
     case class ElemTop(wvl: WdlVarLinks) extends Elem
     case class ElemCall(outputs: Map[String, WdlVarLinks]) extends Elem
     type Env = Map[String, Elem]
-
-    private def callUniqueName(call : WdlCall) : String = {
-        call.alias match {
-            case Some(x) => x
-            case None => Utils.taskOfCall(call).name
-        }
-    }
 
     // check if a variable should be exported from this applet
     private def isExported(varName: String) : Boolean = {
@@ -244,6 +239,33 @@ case class RunnerMiniWorkflow(exportVars: Set[String],
             .toMap
     }
 
+    // Launch a subjob to collect the outputs
+    private def launchCollectSubjob(childJobs: Vector[DXJob],
+                                    calls: Vector[WdlCall]) : Map[String, WdlVarLinks] = {
+        appletLog(s"""|launching collect subjob
+                      |child jobs=${childJobs}""".stripMargin)
+        if (childJobs.isEmpty)
+            return Map.empty
+
+        // Run a sub-job with the "collect" entry point.
+        // We need to provide the exact same inputs.
+        val dxSubJob : DXJob = Utils.runSubJob("collect", None, orgInputs, childJobs)
+
+        // Return promises (JBORs) for all the outputs. Since the signature of the sub-job
+        // is exactly the same as the parent, we can immediately exit the parent job.
+        calls.foldLeft(Map.empty[String, WdlVarLinks]) {
+            case (accu, call) =>
+                val prefix = callUniqueName(call)
+                val promiseMap = call.outputs.map{ cao =>
+                    val wvl = WdlVarLinks(cao.wdlType,
+                                          DeclAttrs.empty,
+                                          DxlJob(dxSubJob, prefix + "_" + cao.unqualifiedName))
+                    (prefix + "." + cao.unqualifiedName) -> wvl
+                }
+                accu ++ promiseMap
+        }
+    }
+
     // Launch a job for each call, and link them with JBORs. Do not
     // wait for the jobs to complete, because that would require
     // leaving an auxiliary instance up for the duration of the subjob
@@ -259,7 +281,10 @@ case class RunnerMiniWorkflow(exportVars: Set[String],
         val (topDecls,_) = Utils.splitBlockDeclarations(scatter.children.toList)
 
         val collElements : Seq[WdlVarLinks] = WdlVarLinks.unpackWdlArray(collection)
-        var scOutputs = Vector.empty[Env]
+        var scJobOutputs = Vector.empty[Env]
+        var scTopOutputs = Vector.empty[Env]
+        var childJobs = Vector.empty[DXJob]
+        var launchSeqNum = 0
         collElements.foreach { case elem =>
             // Bind the iteration variable inside the loop
             val envWithIterItem: Map[String, WdlVarLinks] = outerEnv + (scatter.item -> elem)
@@ -273,23 +298,33 @@ case class RunnerMiniWorkflow(exportVars: Set[String],
                 .map{ case (varName, wvl) => varName -> ElemTop(wvl) }
                 .toMap
             // export top variables
-            scOutputs = scOutputs :+ topOutputs
+            scTopOutputs = scTopOutputs :+ topOutputs
             innerEnvRaw = innerEnvRaw ++ envWithIterItem
             var innerEnv:Env = innerEnvRaw.map{ case(key, wvl) => key -> ElemTop(wvl) }.toMap
 
             calls.foreach { case (call,apLinkInfo) =>
                 val inputs : JsValue = buildAppletInputs(call, apLinkInfo, innerEnv)
-                appletLog(s"call=${callUniqueName(call)} inputs=${inputs}")
+                val callUnqName = callUniqueName(call)
+                appletLog(s"call=${callUnqName} inputs=${inputs}")
+
+                // We may need to run a collect subjob. Add the call
+                // name, and the sequence number, to each applet run,
+                // so the collect subjob will be able to put the
+                // results back together.
                 val dxJob : DXJob = apLinkInfo.dxApplet
                     .newRun()
                     .setRawInput(Utils.jsonNodeOfJsValue(inputs))
+                    .putProperty("call", callUnqName)
+                    .putProperty("seq_number", launchSeqNum.toString)
                     .run()
                 val jobOutputs : Env = jobOutputEnv(call, dxJob)
 
                 // add the job outputs to the environment. This makes them available to the applets
                 // that come next.
                 innerEnv = innerEnv ++ jobOutputs
-                scOutputs = scOutputs :+ jobOutputs
+                scJobOutputs = scJobOutputs :+ jobOutputs
+                childJobs = childJobs :+ dxJob
+                launchSeqNum += 1
             }
 
             // Cleanup the index variable, and the temporary
@@ -309,9 +344,19 @@ case class RunnerMiniWorkflow(exportVars: Set[String],
             tmpVars.foreach{ case (_, wdlValue ) => WdlVarLinks.deleteLocal(wdlValue) }
         }
 
-        // Gather phase. Collect call outputs in arrays, do not wait
-        // for the jobs to complete.
-        gatherOutputs(scOutputs)
+        // Gather phase.
+        val topVars = gatherOutputs(scTopOutputs)
+        val childJobVars =
+            if (!collectSubjob) {
+                // Collect call outputs in arrays, do not wait
+                // for the jobs to complete.
+                gatherOutputs(scJobOutputs)
+            } else {
+                // The output types are complex, requiring a subjob.
+                launchCollectSubjob(childJobs,
+                                    calls.map{case (x,_) => x}.toVector)
+            }
+        topVars ++ childJobVars
     }
 
     // Check the condition. If false, return immediately. If true,
@@ -491,7 +536,8 @@ object RunnerMiniWorkflow {
     def apply(wf: WdlWorkflow,
               jobInputPath : Path,
               jobOutputPath : Path,
-              jobInfoPath: Path) : Unit = {
+              jobInfoPath: Path,
+              collectSubjob: Boolean) : Unit = {
         // Extract types for closure inputs
         val (inputSpec, outputSpec) = Utils.loadExecInfo
         appletLog(s"WdlType mapping =${inputSpec}")
@@ -506,7 +552,7 @@ object RunnerMiniWorkflow {
 
         // Run the workflow
         val cef = new CompilerErrorFormatter(wf.wdlSyntaxErrorFormatter.terminalMap)
-        val r = RunnerMiniWorkflow(exportVars, cef, false)
+        val r = RunnerMiniWorkflow(exportVars, cef, inputLines.parseJson, collectSubjob, false)
         val json = r.apply(wf, inputs)
 
         // write the outputs to the job_output.json file

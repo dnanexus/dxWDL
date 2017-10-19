@@ -167,6 +167,11 @@ workflow files {
         call FileArraySize {input: files=fa}
     }
 
+    # scatter that calls a task that returns a file array
+    scatter (k in [1,2,3]) {
+        call FileArrayMake as mk_arr {input: n=k}
+    }
+
     # conditionals
     if (2 < 1) {
         String false_branch = "This branch is not supposed to be taken"
@@ -188,6 +193,7 @@ workflow files {
         FileArraySize.result
         false_branch
         Copy3.outf
+        mk_arr.result
         head.result
     }
 }

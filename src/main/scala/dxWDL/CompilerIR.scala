@@ -4,6 +4,7 @@ package dxWDL
 
 import net.jcazevedo.moultingyaml._
 import scala.util.{Failure, Success, Try}
+import Utils.{isNativeDxType}
 import wdl4s.wdl._
 import wdl4s.wdl.AstTools
 import wdl4s.wdl.AstTools.EnhancedAstNode
@@ -772,7 +773,12 @@ workflow w {
         def outsideType(t: WdlType) : WdlType = {
             scope match {
                 case _:Scatter => WdlArrayType(t)
-                case _:If => WdlOptionalType(t)
+                case _:If => t match {
+                    // If the type is already optional, don't make it
+                    // double optional.
+                    case WdlOptionalType(_) => t
+                    case _ => WdlOptionalType(t)
+                }
                 case _ => t
             }
         }
@@ -949,13 +955,19 @@ workflow w {
         val outputVars = blockOutputs(preDecls, scatter, scatter.children)
         val wdlCode = blockGenWorklow(preDecls, scatter, taskApplets, inputVars, outputVars)
         val callDict = calls.map(c => c.unqualifiedName -> Utils.taskOfCall(c).name).toMap
+
+        // If any of the return types is non native, we need a collect subjob.
+        val allNative = outputVars.forall(cVar => isNativeDxType(cVar.wdlType))
+        val aKind =
+            if (allNative) IR.AppletKindScatter(callDict)
+            else IR.AppletKindScatterCollect(callDict)
         val applet = IR.Applet(wfUnqualifiedName ++ "_" ++ stageName,
                                inputVars ++ extraTaskInputVars,
                                outputVars,
                                calcInstanceType(None),
                                false,
                                destination,
-                               IR.AppletKindScatter(callDict),
+                               aKind,
                                wdlCode)
         verifyWdlCodeIsLegal(applet.ns)
 

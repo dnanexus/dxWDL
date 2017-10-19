@@ -6,7 +6,7 @@ import com.dnanexus.{DXFile, DXJob, IOClass}
 import java.nio.file.Paths
 import net.jcazevedo.moultingyaml._
 import spray.json._
-import Utils.{appletLog, dxFileOfJsValue, FLAT_FILES_SUFFIX, DXWorkflowStage}
+import Utils.{appletLog, dxFileOfJsValue, DXWorkflowStage, FLAT_FILES_SUFFIX, isNativeDxType}
 import wdl4s.wdl.types._
 import wdl4s.wdl.values._
 
@@ -96,20 +96,6 @@ object WdlVarLinks {
                     case _ => false
                 }
             case  _ => false
-        }
-    }
-
-    // Is this a WDL type that maps to a native DX type?
-    def isNativeDxType(wdlType: WdlType) : Boolean = {
-        wdlType match {
-            case WdlBooleanType | WdlIntegerType | WdlFloatType | WdlStringType | WdlFileType
-                   | WdlArrayType(WdlBooleanType)
-                   | WdlArrayType(WdlIntegerType)
-                   | WdlArrayType(WdlFloatType)
-                   | WdlArrayType(WdlStringType)
-                   | WdlArrayType(WdlFileType) => true
-            case WdlOptionalType(t) => isNativeDxType(t)
-            case _ => false
         }
     }
 

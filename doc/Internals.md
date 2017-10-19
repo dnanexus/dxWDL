@@ -280,6 +280,74 @@ Execute two declarations and a scatter. This avoids
 creating a fourth applet to calculate the `partial` and `xtmp1`
 arrays.
 
+
+## Scatters with a collect subjob
+
+```
+task GenFiles {
+  ...
+  output {
+      Array[File] result
+  }
+}
+
+workflow math {
+    scatter (k in [2,3,5]) {
+        call GenFiles { input: len=k }
+    }
+    output {
+        GenFiles.result
+    }
+}
+```
+
+The `math` workflow calls a scatter where each job returns an array of
+files. The scatter result (`GenFiles.result`) is a ragged array of
+files (`Array[Array[File]]`). Gathering the individual arrays, and
+creating a ragged array requires computation, necessitating a
+job. This situation arises whenever the scatter output is a non-native
+DNAx type. To solve this, the scatter runs a `collect` subjob that
+waits for all child jobs to complete, and gathers their outputs
+into the appropriate WDL types.
+
+
+```
+          scatter
+         /   | .. \
+   child-jobs      \
+                    \
+                     collect
+```
+
+In the general case the scatter can have several calls. The collect job
+has to wait for all child jobs, figure out which call generated them, and
+gather outputs in appropriate groups.
+
+In the example below, the task `MakeTable` is called twice. The
+collect subjob needs to distinguish between child jobs from the `t1`
+invocation and the `t2` invocation. The child jobs can complete out of
+order, and the output arrays should be sorted according to the launch
+order. For example, the `GenFiles` invocations should be sorted like
+this: `[ GenFiles(len=2) , GenFiles(len=3), GenFile(len=5)]`. To
+achieve this, two properties are added to each the child jobs (1) the
+call name, and (2) the invocation serial number.
+
+```
+workflow math {
+    scatter (k in [2,3,5]) {
+        call GenFiles  { input: len=k }
+        call CalcSize  { input: ... }
+        call MakeTable as t1 { input: ... }
+        call MakeTable as t2 { input: ... }
+    }
+    output {
+        GenFiles.result
+        CalcSize.total
+        MakeTable.volume
+    }
+}
+```
+
 ## Member accesses vs. Call member access
 
 WDL supports tuples and objects. The syntax for accessing members in
