@@ -317,20 +317,19 @@ object Main extends App {
     // terminals, and selecting two projects, dxpy will correctly
     // provide pwd, dxjava only returns the name stored in
     // ~/.dnanexus_config.DX_PROJECT_CONTEXT_NAME.
-    private def getDxPwd(): (DXProject, String) = {
+    private def getDxPwd(): (String, String) = {
         try {
             // version with dxjava
             //val dxEnv = com.dnanexus.DXEnvironment.create()
             //dxEnv.getProjectContext()
             val (path, _) = Utils.execCommand("dx pwd", None)
-            val vec = path.split(":")
+            val vec = path.trim.split(":")
             val (projName, folder) = vec.length match {
                 case 1 => (vec(0), "/")
                 case 2 => (vec(0), vec(1))
                 case _ => throw new Exception(s"Invalid path syntex <${path}>")
             }
-            val dxProj = Utils.lookupProject(projName)
-            (dxProj, folder)
+            (projName, folder)
         } catch {
             case e : Throwable =>
                 throw new Exception("Could not execute 'dx pwd', please check that dx is in your path")
@@ -343,12 +342,12 @@ object Main extends App {
             case Some(modulesToTrace) => modulesToTrace.toSet
         }
         val verbose = Verbose(options contains "verbose", verboseKeys)
-        var folder:Option[String] = options.get("folder") match {
+        var folderOpt:Option[String] = options.get("folder") match {
             case None => None
             case Some(List(f)) => Some(f)
             case _ => throw new Exception("sanity")
         }
-        var project:Option[String] = options.get("project") match {
+        var projectOpt:Option[String] = options.get("project") match {
             case None => None
             case Some(List(p)) => Some(p)
             case _ => throw new Exception("sanity")
@@ -364,33 +363,39 @@ object Main extends App {
                 val vec = d.split(":")
                 vec.length match {
                     case 1 if (d.endsWith(":")) =>
-                        project = Some(vec(0))
+                        projectOpt = Some(vec(0))
                     case 2 =>
-                        project = Some(vec(0))
-                        folder = Some(vec(1))
+                        projectOpt = Some(vec(0))
+                        folderOpt = Some(vec(1))
                     case _ => throw new Exception(s"Invalid path syntex <${d}>")
                 }
             case Some(List(d)) if d.startsWith("/") =>
-                folder = Some(d)
+                folderOpt = Some(d)
             case Some(other) => throw new Exception(s"Invalid path syntex <${other}>")
         }
 
-        val (crntProject, crntFolder) = getDxPwd()
-        val dxFolder = folder match {
-            case None => crntFolder
-            case Some(d) =>
-                if (d.isEmpty)
-                    throw new Exception(s"Cannot specify empty folder")
-                d
-        }
-        val dxProject : DXProject = project match {
-            case None => crntProject
-            case Some(p) => Utils.lookupProject(p)
+        // Use the current dx path, if nothing else was
+        // specified
+        val (projectRaw, folderRaw) = (projectOpt, folderOpt) match {
+            case (None, None) => getDxPwd()
+            case (None, Some(d)) =>
+                val (crntProj, _) = getDxPwd()
+                (crntProj, d)
+            case (Some(p), None) => (p, "/")
+            case (Some(p), Some(d)) =>(p, d)
         }
 
+        if (folderRaw.isEmpty)
+            throw new Exception(s"Cannot specify empty folder")
+        if (!folderRaw.startsWith("/"))
+            throw new Exception(s"Folder must start with '/'")
+        val dxFolder = folderRaw
+        val dxProject = Utils.lookupProject(projectRaw)
         val projName = dxProject.describe.getName
-        Utils.trace(verbose.on, s"project: ${projName}")
-
+        Utils.trace(verbose.on,
+                    s"""|project name: <${projName}>
+                        |project ID: <${dxProject.getId}>
+                        |folder: <${dxFolder}>""".stripMargin)
         BaseOptions(dxProject,
                     dxFolder,
                     options contains "force",
