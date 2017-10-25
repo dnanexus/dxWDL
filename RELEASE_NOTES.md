@@ -1,5 +1,9 @@
 # Release Notes
 
+## 0.49
+- Removed limitation on maximal hourly price per instance. Some bioinformatics pipelines
+regularly require heavy weight instances.
+
 ## 0.48
 - Support string interpolation in workflow expressions
 - Handle scatters where the called tasks return file arrays, and non-native

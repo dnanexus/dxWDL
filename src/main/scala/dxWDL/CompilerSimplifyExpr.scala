@@ -7,13 +7,12 @@
 package dxWDL
 
 import scala.collection.mutable.Queue
-import scala.util.{Success}
-import Utils.{genTmpVarName, Verbose}
+import scala.util.{Failure, Success}
+import Utils.{genTmpVarName, stripOptional, trace, Verbose}
 import wdl4s.wdl._
 import wdl4s.wdl.expression._
 import wdl4s.parser.WdlParser.{Ast, Terminal}
 import wdl4s.wdl.types._
-//import wdl4s.wdl.WdlExpression.AstForExpressions
 
 case class CompilerSimplifyExpr(wf: WdlWorkflow,
                                 cef: CompilerErrorFormatter,
@@ -31,6 +30,50 @@ case class CompilerSimplifyExpr(wf: WdlWorkflow,
             wdlType.isInstanceOf[WdlCallOutputsObjectType]
         } catch {
             case e:Throwable=> false
+        }
+    }
+
+    // Coercion is not required to move from source to target types
+    def callTypesMatch(a: Ast,
+                       expr: expr,
+                       call: WdlCall,
+                       calleeType: WdlType) : Boolean = {
+        if  (!isCallOutputAccess(expr, a, call))
+            return False
+        val callerType:WdlType = callOutputFieldType(expr, a)
+
+        val srcType: WdlType = stripOptional(callerType)
+        val trgType: WdlType = stripOptional(calleeType)
+        if (srcType == trgType ||
+                trgType == WdlArrayType(srcType)) {
+            return True
+        } else {
+            trace(verbose.on, s"coercion required ${srcType.toWdlString} -> ${trgType.toWdlString}")
+            trace(verbose.on, cef.traceExpression(ast))
+            return False
+        }
+    }
+
+
+    // A member access expression such as [A.x]. Check if
+    // A is a call.
+    private def callOutputFieldType(expr: WdlExpression,
+                                    ast: Ast) : WdlType = {
+        val lhs:String = WdlExpression.toString(ast.getAttribute("lhs"))
+        val rhs:String = WdlExpression.toString(ast.getAttribute("rhs"))
+        val call = wf.findCallByName(lhs) match {
+            case None =>
+                throw new Exception(s"lhs of ${expr.toWdlString} is not a call")
+            case Some(call) => call
+        }
+        val cOutOpt:Option[CallOutput] = call.outputs.find { cOutput =>
+            cOutput.taskOutput.unqualifiedName == rhs
+        }
+        cOutOpt match {
+            case None =>
+                throw new Exception(s"Could not find field ${rhs} in expression ${expr.toWdlString}")
+            case Some(cOut) =>
+                cOut.taskOutput.wdlType
         }
     }
 
@@ -72,26 +115,35 @@ case class CompilerSimplifyExpr(wf: WdlWorkflow,
     // Inside a scatter we can deal with field accesses,
     private def simplifyCall(call: WdlCall) : Vector[Scope] = {
         val tmpDecls = Queue[Scope]()
+
+        // replace an expression with a temporary variable
+        def replaceWithTempVar(t: WdlType, expr: WdlExpression) : WdlExpression = {
+            val tmpVarName = genTmpVarName()
+            tmpDecls += WdlRewrite.declaration(t, tmpVarName, Some(expr))
+            WdlExpression.fromString(tmpVarName)
+        }
+
         val inputs: Map[String, WdlExpression]  = call.inputMappings.map { case (key, expr) =>
+            val calleeDecl: Declaration =
+                call.declarations.find(decl => decl.unqualifiedName == key).get
+            val calleeType = calleeDecl.wdlType
             val rhs = expr.ast match {
                 case t: Terminal if nonInterpolation(t) => expr
-                case a: Ast if (isMemberAccess(a) && isCallOutputAccess(expr, a, call)) =>
+                case a: Ast if (isMemberAccess(a) && callTypesMatch(expr, a, call, calleeType)) =>
                     // Accessing an expression like A.B.C
                     // The expression could be:
                     // 1) Result from a previous call
                     // 2) Access to a field in a pair, or an object (pair.left, obj.name)
                     // Only the first case can be handled inline, the other requires
-                    // a temporary variable
-                    expr
+                    // a temporary variable. Any coercion operation requires a separate
+                    // expression.
+                    val callerType:WdlType = callOutputFieldType(expr, a)
+                    if (noCoercionNeeded(callerType, calleeType, a))
+                        expr
+                    else
+                        replaceWithTempVar(calleeType, expr)
                 case _ =>
-                    // replace an expression with a temporary variable
-                    val tmpVarName = genTmpVarName()
-                    val calleeDecl: Declaration =
-                        call.declarations.find(decl => decl.unqualifiedName == key).get
-                    val wdlType = calleeDecl.wdlType
-                    //tmpDecls += Declaration(wdlType, tmpVarName, Some(expr), call.parent, a)
-                    tmpDecls += WdlRewrite.declaration(wdlType, tmpVarName, Some(expr))
-                    WdlExpression.fromString(tmpVarName)
+                    replaceWithTempVar(calleeWdlType, expr)
             }
             (key -> rhs)
         }
@@ -127,12 +179,15 @@ case class CompilerSimplifyExpr(wf: WdlWorkflow,
             .flatten
 
         // Figure out the expression type for a collection we loop over in a scatter
+        val lookupType: (String => WdlType) = WdlNamespace.lookupType(ssc)
         val collType : WdlType =
-            ssc.collection.evaluateType(WdlNamespace.lookupType(ssc),
-                                        new WdlStandardLibraryFunctionsType,
-                                        Some(ssc)) match {
+            ssc.collection.evaluateType(lookupType,
+                                        new WdlStandardLibraryFunctionsType, Some(ssc)) match {
                 case Success(wdlType) => wdlType
-                case _ => throw new Exception(cef.couldNotEvaluateType(ssc.ast))
+                case Failure(f) =>
+                    val astCollection = ssc.ast.getAttribute("collection").asInstanceOf[Ast]
+                    System.err.println(cef.couldNotEvaluateType(astCollection))
+                    throw f
             }
 
         if (isConstOrVar(ssc.collection)) {
@@ -234,7 +289,7 @@ object CompilerSimplifyExpr {
     }
 
     def apply(ns: WdlNamespace, verbose: Verbose) : WdlNamespace = {
-        Utils.trace(verbose.on, "simplifying workflow expressions")
+        trace(verbose.on, "simplifying workflow expressions")
         val cef = new CompilerErrorFormatter(ns.terminalMap)
         checkReservedWords(ns, cef)
 

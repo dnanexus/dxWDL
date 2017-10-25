@@ -18,7 +18,7 @@ case class CompilerErrorFormatter(terminalMap: Map[Terminal, WorkflowSource]) {
 
     def couldNotEvaluateType(ast: Ast) : String = {
         val t: Terminal = AstTools.findTerminals(ast).head
-        s"""|Could not evaluate the WDL type for this expression
+        s"""|Could not evaluate the WDL type for expression
             |
             |${pointToSource(t)}
             |""".stripMargin
@@ -90,6 +90,14 @@ case class CompilerErrorFormatter(terminalMap: Map[Terminal, WorkflowSource]) {
         val t: Terminal = ast.getAttribute("name").asInstanceOf[Terminal]
         s"""|Right-hand side of expression must be an identifier
             |
+            |${pointToSource(t)}
+            |""".stripMargin
+    }
+
+    // debugging
+    def traceExpression(ast: Ast) : String = {
+        val t: Terminal = AstTools.findTerminals(ast).head
+        s"""|
             |${pointToSource(t)}
             |""".stripMargin
     }

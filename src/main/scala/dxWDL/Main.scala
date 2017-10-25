@@ -736,6 +736,7 @@ object Main extends App {
             |      -inputs <string>      Path to Cromwell formatted input file
             |      -noAppletTimeout      By default, applets cannot run more than ${Utils.DEFAULT_APPLET_TIMEOUT} hours.
             |                          Remove this limitation.
+            |                            Remove this limitation.
             |      -reorg                Reorganize workflow output files
             |      -sort [string]        Sort call graph, to avoid forward references
             |
