@@ -15,7 +15,6 @@ added according to user interest:
 
 - Nested workflows (sub-workflows)
 - Nested scatters
-- Objects
 
 
 *Use at your own risk:* for the time being, dxWDL is an exploratory

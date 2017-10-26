@@ -11,12 +11,15 @@ import java.util.Base64
 import scala.collection.JavaConverters._
 import scala.concurrent._
 import scala.collection.mutable.HashMap
+import scala.util.{Failure, Success}
 import ExecutionContext.Implicits.global
 import scala.sys.process._
 import spray.json._
-import wdl4s.wdl.{Declaration, Scope, WdlCall, WdlTask, WdlWorkflow}
+import wdl4s.wdl._
+import wdl4s.wdl.expression._
 import wdl4s.wdl.types._
 import wdl4s.wdl.values._
+
 
 // Exception used for AppInternError
 class AppInternalException private(ex: RuntimeException) extends RuntimeException(ex) {
@@ -738,5 +741,42 @@ object Utils {
             }
         assert(retVal.wdlType == wdlType)
         retVal
+    }
+
+    // This code is based on the lookupType method in the WdlNamespace trait
+    //   https://github.com/broadinstitute/wdl4s/blob/develop/wom/src/main/scala/wdl/WdlNamespace.scala
+    //
+    // It handles the case where the scatter collection is not an
+    // array.
+    def lookupType(from: Scope)(n: String): WdlType = {
+        val resolved:Option[WdlGraphNode] = from.resolveVariable(n)
+        System.err.println(s"resolved=${resolved}")
+        val wdlType = resolved match {
+            case Some(d: DeclarationInterface) => d.relativeWdlType(from)
+            case Some(c: WdlCall) => WdlCallOutputsObjectType(c)
+            case Some(s: Scatter) => s.collection.evaluateType(lookupType(s),
+                                                               new WdlStandardLibraryFunctionsType,
+                                                               Option(from)) match {
+                case Success(a: WdlArrayType) =>
+                    // Collection is an array
+                    a.memberType
+                case Success(WdlMapType(kType,vType)) =>
+                    // Collection is a map
+                    WdlPairType(kType, vType)
+                case Success(other) =>
+                    throw new Exception(
+                        s"""|Variable $n references a scatter block ${s.fullyQualifiedName},
+                            |but the collection evaluates to ${other.toWdlString}"""
+                            .stripMargin.replaceAll("\n", " "))
+                case Failure(f) =>
+                    throw f
+            }
+            case Some(_: WdlNamespace) => WdlNamespaceType
+
+            case _ =>
+                throw new Exception(s"Could not resolve $n from scope ${from.fullyQualifiedName}")
+        }
+        System.err.println(s"lookupType(${n}) = ${wdlType.toWdlString}")
+        wdlType
     }
 }

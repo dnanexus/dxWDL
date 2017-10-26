@@ -1,5 +1,3 @@
-# File path handling, and files with the same name
-
 # Trying out file copy operations
 task z_Copy {
     File src
@@ -15,39 +13,14 @@ task z_Copy {
     }
 }
 
-# create a ragged array of files, and count how many bytes each file-row
-# takes.
-# Create an array of [NR] files
-task FileArrayMake{
-    Int n
 
-    command <<<
-       for i in `seq ${n}`
-       do
-          echo $i > $i.txt
-       done
-    >>>
-    output {
-        Array[File] result = glob("*.txt")
-    }
-}
+workflow files {
+    File f
 
-workflow X {
-    # Ragged array of files
-    call FileArrayMake as mk1 {input: n=2}
-    call FileArrayMake as mk2 {input: n=3}
-    Array[Array[File]] allFiles = [mk1.result, mk2.result]
-
-    # conditionals
-    if (2 < 1) {
-        String false_branch = "This branch is not supposed to be taken"
-    }
-    if (length(allFiles) > 0) {
-        call z_Copy as Copy3 { input : src="/tmp/X.txt", basename="branching" }
-    }
+    call z_Copy as Copy { input : src=f, basename="tearFrog" }
+    call z_Copy as Copy2 { input : src=Copy.outf, basename="mixing" }
 
     output {
-        false_branch
-        Copy3.outf
+        Copy2.outf_sorted
     }
 }

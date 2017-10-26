@@ -69,7 +69,8 @@ workflow cast {
 
     # WDL casts an Int to an Array[Int] automatically
     # when it is a call argument
-    Array[Int] ytmp1 = [i]
+    #Array[Int] ytmp1 = [i]
+    Int ytmp1 = i
     call SumArray as SumArray2 {input: ints=ytmp1 }
 
     # Check various rarely used types (float, boolean)
