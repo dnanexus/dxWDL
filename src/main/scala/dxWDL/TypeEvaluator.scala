@@ -95,7 +95,12 @@ case class TypeEvaluator(override val lookup: String => WdlType,
 /*                                    from map { source =>
                                         evaluate(taskOutput.requiredExpression.ast) map { t => DeclarationInterface.relativeWdlType(source, taskOutput, t) }
  } getOrElse evaluate(taskOutput.requiredExpression.ast)*/
-                                    Success(taskOutput.wdlType)
+                                    val t = taskOutput.wdlType
+                                    val relative = from match {
+                                        case None => t
+                                        case Some(scope) => DeclarationInterface.relativeWdlType(scope, taskOutput, t)
+                                    }
+                                    Success(relative)
                                 case None => Failure(new WdlExpressionException(s"Could not find key ${rhs.getSourceString}"))
                             }
                         case WdlPairType(leftType, rightType) =>

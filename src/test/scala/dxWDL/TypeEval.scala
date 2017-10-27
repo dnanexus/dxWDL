@@ -57,7 +57,7 @@ class TypeEval extends FlatSpec {
         }
     }
 
-    ignore should "correctly evaluate expression types" in {
+    it should "correctly evaluate expression types" in {
         val ns = WdlNamespaceWithWorkflow.load(wdlCode, Seq.empty).get
         val wf = ns.workflow
 
@@ -110,17 +110,77 @@ class TypeEval extends FlatSpec {
             case None => throw new AppInternalException(s"Call Add not found in WDL file")
             case Some(call) => call
         }
-/*        copy2call.inputMappings.foreach { case (key, expr) =>
-            val t:WdlType = evalType(expr, copy2call)
-            System.err.println(s"key=${key} <- type(${expr.toWdlString}) = ${t.toWdlString}")
-        }*/
 
         val e1 = copy2call.inputMappings("src")
         val t1 = evalType(e1, copy2call)
-        System.err.println(s"type(${e1.toWdlString}) = ${t1.toWdlString}")
+        //System.err.println(s"type(${e1.toWdlString}) = ${t1.toWdlString}")
         assert(t1 == WdlFileType)
 
         val e2 = copy2call.inputMappings("basename")
         assert(evalType(e2, copy2call) == WdlStringType)
+    }
+
+
+    val wdlCode3 =
+    """|
+       |task Inc {
+       |  Int i
+       |
+       |  command <<<
+       |    python -c "print(${i} + 1)"
+       |  >>>
+       |  output {
+       |    Int result = read_int(stdout())
+       |  }
+       |}
+       |
+       |task Mod7 {
+       |  Int i
+       |
+       |  command <<<
+       |    python -c "print(${i} % 7)"
+       |  >>>
+       |  output {
+       |    Int result = read_int(stdout())
+       |  }
+       |}
+       |
+       |workflow math {
+       |  Int n = 5
+       |
+       |  scatter (k in range(length(n))) {
+       |    call Mod7 {input: i=k}
+       |  }
+       |
+       |  scatter (k in Mod7.result) {
+       |    call Inc {input: i=k}
+       |  }
+       |
+       |  output {
+       |    Inc.result
+       |  }
+       |}
+       |""".stripMargin
+
+    it should "take context into account" in {
+        val ns = WdlNamespaceWithWorkflow.load(wdlCode3, Seq.empty).get
+        val wf = ns.workflow
+
+        val incCall:WdlCall = wf.findCallByName("Inc") match {
+            case None => throw new AppInternalException(s"Call Add not found in WDL file")
+            case Some(call) => call
+        }
+
+        val e1 = incCall.inputMappings("i")
+        val t1 = evalType(e1, incCall)
+        //System.err.println(s"type(${e1.toWdlString}) = ${t1.toWdlString}")
+        assert(t1 == WdlIntegerType)
+
+        val output = wf.outputs.head
+        //System.err.println(output)
+        val e2 = output.requiredExpression
+        val t2 = evalType(e2, wf)
+        //System.err.println(s"type(${e2.toWdlString}) = ${t2.toWdlString}")
+        assert(t2 == WdlMaybeEmptyArrayType(WdlIntegerType))
     }
 }

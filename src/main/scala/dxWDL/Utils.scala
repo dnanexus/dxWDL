@@ -750,7 +750,7 @@ object Utils {
     // array.
     def lookupType(from: Scope)(n: String): WdlType = {
         val resolved:Option[WdlGraphNode] = from.resolveVariable(n)
-        System.err.println(s"resolved=${resolved}")
+        //System.err.println(s"resolved=${resolved}")
         val wdlType = resolved match {
             case Some(d: DeclarationInterface) => d.relativeWdlType(from)
             case Some(c: WdlCall) => WdlCallOutputsObjectType(c)
@@ -776,7 +776,7 @@ object Utils {
             case _ =>
                 throw new Exception(s"Could not resolve $n from scope ${from.fullyQualifiedName}")
         }
-        System.err.println(s"lookupType(${n}) = ${wdlType.toWdlString}")
+        //System.err.println(s"lookupType(${n}) = ${wdlType.toWdlString}")
         wdlType
     }
 }

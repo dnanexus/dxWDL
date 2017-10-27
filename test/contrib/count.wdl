@@ -3,7 +3,7 @@
 
 # See https://github.com/10XGenomics/cellranger/blob/master/mro/stages/common/setup_chunks/__init__.py
 task setup_chunks {
-
+  
   # A string that will be used to name files and directories.
   String sample_id
   # See the adjacent sample_def.json.
@@ -32,19 +32,19 @@ task setup_chunks {
 
     # Create the outs json
     echo '{"chunks": null, "chemistry_def": null, "barcode_whitelist": null}' > _outs
-
+    
     # Run the stage with martian_shell
-    mv /_jobinfo .
+    mv /_jobinfo .  
     stage_path=/cellranger/mro/stages/common/setup_chunks
     stage_phase=main
     /martian/adapters/python/martian_shell.py $stage_path $stage_phase . . run_file_whatever
-
+    
     # WDL-ize the outputs from the updated _outs json
     jq '.chunks' _outs > chunks.json
     jq '.chemistry_def' _outs > chemistry_def.json
     jq -r '.barcode_whitelist' _outs > barcode_whitelist.string
   >>>
-
+  
   runtime {
     docker: "marcusczi/cellranger_clean:cromwell"
     memory: "2 GB"
@@ -69,18 +69,18 @@ task chunk_reads_split {
   Int reads_per_file
 
   command <<<
-
-    # Create the _args
+   	
+    # Create the _args 
     echo "{}" > _args
     echo "$(jq --slurpfile var "${chunks_setup}" '. + {"chunks": $var |.[] }' _args)" > _args
     echo "$(jq --arg var ${reads_per_file} '. + {"reads_per_file": $var | fromjson}' _args)" > _args
-
+    
     # Run the stage via martian_shell
-    mv /_jobinfo .
+    mv /_jobinfo .  
     stage_path=/cellranger/mro/stages/common/chunk_reads
     stage_phase=split
     /martian/adapters/python/martian_shell.py $stage_path $stage_phase . . run_file_whatever
-
+    
     # Break the chunks into separate files so we can scatter over them
     jq -c '.chunks[]' _stage_defs | split -l 1 - partition_
 
@@ -101,7 +101,7 @@ task chunk_reads_split {
 
 task chunk_reads_main {
   # Chunk definitions from setup_chunks
-  File chunks
+  File chunks 
   # Maximum number of reads per chunked fastq
   Int reads_per_file
   # The chunk from chunk_reads_split
@@ -127,16 +127,16 @@ task chunk_reads_main {
     echo "$(jq --slurpfile var "${chunks}" '. + {"chunks": ($var | .[])}' _args)" > _args
     echo "$(jq --arg var ${reads_per_file} '. + {"reads_per_file": $var | fromjson}' _args)" > _args
     echo "$(jq --slurpfile var "${chunk}" '. |=  .+ ($var | .[])' _args)" > _args
-
+   
     # Create the outs object
     echo '{"out_chunks": null}' > _outs
-
+    
     # Execute via martian_shell
-    mv /_jobinfo .
+    mv /_jobinfo .  
     stage_path=/cellranger/mro/stages/common/chunk_reads
     stage_phase=main
     /martian/adapters/python/martian_shell.py $stage_path $stage_phase . files run_file_whatever
-
+    
     # Read the out_chunks definitions into a file
     jq '.out_chunks' _outs > out_chunks.json
 
@@ -193,19 +193,19 @@ task chunk_reads_join {
   String r = "}"
 
   command <<<
-
+    
     # Create the args
     echo "{}" > _args
     echo "{}" > _chunk_defs
     jq -s '.' '${sep="\' \'" outs}' > _chunk_outs
     echo '{"out_chunks": null}' > _outs
-
+    
     # Execute via martian_shell
-    mv /_jobinfo .
+    mv /_jobinfo .  
     stage_path=/cellranger/mro/stages/common/chunk_reads
     stage_phase=join
     /martian/adapters/python/martian_shell.py $stage_path $stage_phase . . run_file_whatever
-
+    
     # Write out_chunks to their own file
     jq '.out_chunks' _outs > out_chunks.json
 
@@ -245,15 +245,15 @@ task extract_reads_split {
   File out_chunks
   # String for the barcode whitelist, usually "737K-august-2016"
   String barcode_whitelist
-
+  
   command <<<
-    # Create the _args
+    # Create the _args 
     echo '{"initial_reads": null}' > _args
     echo "$(jq --slurpfile var "${out_chunks}" '. + {"chunks": ($var | .[])}' _args)" > _args
     echo "$(jq --arg var "${barcode_whitelist}" '. + {"barcode_whitelist": $var}' _args)" > _args
-
+    
     # Run via martian_shell
-    mv /_jobinfo .
+    mv /_jobinfo .  
     stage_path=/cellranger/mro/stages/common/extract_reads
     stage_phase=split
     /martian/adapters/python/martian_shell.py $stage_path $stage_phase . . run_file_whatever
@@ -261,7 +261,7 @@ task extract_reads_split {
     # Break the chunks into separate files so we can scatter over them
     jq -c '.chunks[]' _stage_defs | split -l 1 - partition_
   >>>
-
+ 
   runtime {
     docker: "marcusczi/cellranger_clean:cromwell"
     memory: "30 GB"
@@ -295,7 +295,7 @@ task extract_reads_main {
 
     tar xvf '${fastq_chunk}'
 
-    # Create the _args
+    # Create the _args 
     echo '{"rna_read_length": null, "initial_read": null, "skip_metrics": false}' > _args
     echo "$(jq --slurpfile var "${out_chunks}" '. + {"chunks": ($var | .[])}' _args)" > _args
     echo "$(jq --slurpfile var "${chemistry_def}" '. + {"chemistry_def": ($var | .[])}' _args)" > _args
@@ -304,14 +304,14 @@ task extract_reads_main {
     echo "$(jq --arg var ${subsample_rate} '. + {"subsample_rate": $var | fromjson}' _args)" > _args
     echo "$(jq --arg var '[${sep="," primers}]' '. + {"primers": $var | fromjson}' _args)" > _args
     echo "$(jq --slurpfile var "${chunk}" '. |=  .+ ($var | .[])' _args)" > _args
-
+    
     # Create the _outs
     echo '{"chunked_reporter": "chunked_reporter.pickle", "summary": "summary.json", "barcode_counts": "barcode_counts.json", ' > _outs
     echo '"reads": "reads", "read2s": "read2s", "trimmed_seqs": "trimmed_seqs", "gem_groups": null, ' >> _outs
     echo '"read_groups": null, "align": null, "bam_comments": null}' >> _outs
-
+    
     # Run via martian_shell
-    mv /_jobinfo .
+    mv /_jobinfo .  
     stage_path=/cellranger/mro/stages/common/extract_reads
     stage_phase=main
     /martian/adapters/python/martian_shell.py $stage_path $stage_phase . files run_file_whatever
@@ -335,7 +335,7 @@ task extract_reads_main {
 
 task extract_reads_join {
   # String that defines parameters to the aligner. An input to the workflow
-  String align
+  String align 
   String barcode_whitelist
   File chemistry_def
   # Output jsons produced by the extract_reads_main steps
@@ -349,7 +349,7 @@ task extract_reads_join {
   Array[Array[File]] trimmed_seqs_from_mains
   Array[File] chunked_reporter_from_mains
   Array[File] barcode_counts_from_mains
-
+    
   # These are defined so we can work with bash arrays with it being interpreted
   # as WDL
   String l = "{"
@@ -362,10 +362,10 @@ task extract_reads_join {
     echo "$(jq --arg var "${barcode_whitelist}" '. + {"barcode_whitelist": $var}' _args)" > _args
     echo "$(jq --arg var '${align}' '. + {"align": $var | fromjson}' _args)" > _args
     echo "$(jq --slurpfile var "${chemistry_def}" '. + {"chemistry_def": ($var | .[])}' _args)" > _args
-
+   
     # Create chunk_defs
     jq '.chunks' '${stage_defs}' > _chunk_defs
-
+    
     # Create chunk_outs. The outs files produced by the main stages contain paths that point
     # to files in those stages. We need to replace those with paths valid in this task.
     reads_array=('${sep="\' \'" reads_from_mains}')
@@ -385,14 +385,14 @@ task extract_reads_join {
       idx=$((idx+1))
     done
     jq -s '.' '${sep="\' \'" outs}' > _chunk_outs
-
+  
     # Create outs
     echo '{"summary": "extract_reads_summary.json", "barcode_counts": "barcode_counts.json", "reads": null, ' > _outs
     echo '"reads2": null, "trimmed_seqs": "trimmed_seqs", "gem_groups": null, "read_groups": null, ' >> _outs
     echo '"align": null, "bam_comments": null}' >> _outs
-
+    
     # Run the martian stage
-    mv /_jobinfo .
+    mv /_jobinfo .  
     stage_path=/cellranger/mro/stages/common/extract_reads
     stage_phase=join
     /martian/adapters/python/martian_shell.py $stage_path $stage_phase . files run_file_whatever
@@ -401,7 +401,7 @@ task extract_reads_join {
     jq -r '.read_groups[]' _outs > read_groups.lines
     jq -r '.gem_groups[]' _outs > gem_groups.lines
     jq -r '.bam_comments[]' _outs > bam_comments.lines
-
+    
     # Output the list of reads files and trimmed_seqs files
     # First move the reads and trimmed seqs to a path in cwd so we won't
     # have to do this in future stages
@@ -417,7 +417,7 @@ task extract_reads_join {
       ln "$trimmed_seqs_file" trimmed_seqs/$idx.bam
       idx=$((idx+1))
     done
-
+    
     # Then update the _outs with those paths
     echo "$(jq '.reads = []' _outs)" > _outs
     echo "$(jq '.trimmed_seqs = []' _outs)" > _outs
@@ -429,7 +429,7 @@ task extract_reads_join {
     for trimmed_seqs_file in trimmed_seqs/*; do
       echo "$(jq --arg var $trimmed_seqs_file '.trimmed_seqs |= .+ [$var]' _outs)" > _outs
     done
-
+    
     # And finally write those paths to something WDL can read
     jq -r '.reads[]' _outs > read_paths.lines
     jq -r '.trimmed_seqs[]' _outs > trimmed_seq_paths.lines
@@ -464,7 +464,7 @@ task align_reads_split {
   Array[String] read_paths
   Array[String] read_groups
   File reference_path
-
+  
   command <<<
     # todo is this necessary here? is the reference itself used or just the path to it?
     mkdir genome_reference && tar -xf ${reference_path} -C genome_reference --strip-components 1
@@ -477,9 +477,9 @@ task align_reads_split {
     echo "$(jq --arg var "$read_groups_json" '. + {"read_groups": ( $var | fromjson )}' _args)" > _args
     echo "$(jq --arg var "[]" '. + {"read2s": ( $var | fromjson )}' _args)" > _args
     echo "$(jq --arg var "genome_reference" '. + {"reference_path": $var}' _args)" > _args
-
+    
     # Run martian
-    mv /_jobinfo .
+    mv /_jobinfo .  
     stage_path=/cellranger/mro/stages/counter/align_reads
     stage_phase=split
     /martian/adapters/python/martian_shell.py $stage_path $stage_phase . . run_file_whatever
@@ -487,7 +487,7 @@ task align_reads_split {
     # Break the chunks into separate files so we can scatter over them
     jq -c '.chunks[]' _stage_defs | split -l 1 - partition_
   >>>
-
+ 
   runtime {
     docker: "marcusczi/cellranger_clean:cromwell"
     memory: "30 GB"
@@ -504,7 +504,7 @@ task align_reads_main {
 
   Int max_hits_per_read
   File reference_path
-  # A fastq produced by extract_reads
+  # A fastq produced by extract_reads 
   File chunked_fastq
   # The chunk definition produced by align_reads_split
   File chunk
@@ -520,11 +520,11 @@ task align_reads_main {
     echo "$(jq --arg var ${max_hits_per_read} '. + {"max_hits_per_read": ( $var | fromjson )}' _args)" > _args
     echo "$(jq --slurpfile var "${chunk}" '. |=  .+ ($var | .[]) ' _args)" > _args
     echo "$(jq --arg var "${chunked_fastq}" '. + {"read_chunk": $var}' _args)" > _args
-
+    
     # Create outs
     echo '{"genome_output": "genome_output.bam"}' > _outs
 
-    mv /_jobinfo .
+    mv /_jobinfo .  
     stage_path=/cellranger/mro/stages/counter/align_reads
     stage_phase=main
     /martian/adapters/python/martian_shell.py $stage_path $stage_phase . . run_file_whatever
@@ -552,7 +552,7 @@ task attach_bcs_and_umis_main {
   Array[Int] gem_groups
   Int umi_min_qual_threshold
   Array[String] bam_comments
-
+  
   # See the workflow definition, but here unpack the pair structure that these
   # main stages are being scattered over
   Pair[Int, Pair[File, File]] chunk
@@ -581,16 +581,16 @@ task attach_bcs_and_umis_main {
     echo "$(jq --arg var "${umi_min_qual_threshold}" '. + {"umi_min_qual_threshold": ( $var | fromjson )}' _args)" > _args
     echo "$(jq --arg var "${genome_output}" '. + {"chunk_genome_input": $var}' _args)" > _args
     echo "$(jq --arg var "${trimmed_seqs}" '. + {"chunk_trimmed_input": $var}' _args)" > _args
-
+    
     # Create the outs
     echo '{"chunked_reporter": "chunked_reporter.pickle", "output": "output.bam", "num_alignments": null}' > _outs
-
+    
     # Run via martian_shell
-    mv /_jobinfo .
+    mv /_jobinfo .  
     stage_path=/cellranger/mro/stages/counter/attach_bcs_and_umis
     stage_phase=main
     /martian/adapters/python/martian_shell.py $stage_path $stage_phase . . run_file_whatever
-
+    
     # Write num_alignments to something WDL can read
     jq -r '.num_alignments' _outs > num_alignments.int
   >>>
@@ -620,7 +620,7 @@ task attach_bcs_and_umis_join {
   Array[File] chunked_reporter_from_mains
   # outs jsons from the main phases
   Array[File] outs
-
+  
   # Needed to work with bash arrays
   String l = "{"
   String r = "}"
@@ -633,7 +633,7 @@ task attach_bcs_and_umis_join {
     # Create the args
     echo '{}' > _args
     echo "$(jq --arg var genome_reference '. + {"reference_path": $var}' _args)" > _args
-
+  
     # Create chunk_outs. Replace paths from the main stages with paths that are valid in
     # this join stage
     num_alignments_array=(${sep=" " num_alignments_from_mains})
@@ -653,16 +653,16 @@ task attach_bcs_and_umis_join {
 
     # Create the outs
     echo '{"summary": "attach_bcs_and_umis_summary.json", "barcode_summary": "barcode_summary.h5", "num_alignments": null}' > _outs
-
+    
     # Create a dummy _chunk_defs. Stage doesn't use it, but the file has to be there.
     echo '{}' > _chunk_defs
 
     # Run via martian_shell
-    mv /_jobinfo .
+    mv /_jobinfo .  
     stage_path=/cellranger/mro/stages/counter/attach_bcs_and_umis
     stage_phase=join
     /martian/adapters/python/martian_shell.py $stage_path $stage_phase . . run_file_whatever
-
+    
     # Make num_alignments readable by WDL
     jq '.num_alignments[]' _outs > num_alignments.lines
   >>>
@@ -689,16 +689,16 @@ task bucket_by_bc_split {
   Array[Int] num_alignments
 
   command <<<
-
+    
     # Create args
     echo '{"nbases": 2}' >  _args
     num_alignments_json='[${sep=", " num_alignments}]'
     echo "$(jq --arg var "$num_alignments_json" '. + {"num_alignments": ( $var | fromjson )}' _args)" > _args
     inputs_json='["${sep='\", \"' inputs}"]'
     echo "$(jq --arg var "$inputs_json" '. + {"inputs": ( $var | fromjson )}' _args)" > _args
-
+    
     # Run martian
-    mv /_jobinfo .
+    mv /_jobinfo .  
     stage_path=/cellranger/mro/stages/counter/bucket_reads_by_bc
     stage_phase=split
     /martian/adapters/python/martian_shell.py $stage_path $stage_phase . . run_file_whatever
@@ -706,7 +706,7 @@ task bucket_by_bc_split {
     # Break the chunks into separate files so we can scatter over them
     jq '.chunks[0].read_groups' _stage_defs > read_groups
   >>>
-
+ 
   runtime {
     docker: "marcusczi/cellranger_clean:cromwell"
     memory: "60 GB"
@@ -725,10 +725,10 @@ task bucket_by_bc_main {
   File chunk_input
   # json with a list of the read groups
   File read_groups
-
+  
 
   command <<<
-
+    
     # Create the args. cellranger hard codes nbases to 2
     echo '{"nbases": 2}' >  _args
     echo "$(jq --arg var "${chunk_input}" '. + {"chunk_input": $var}' _args)" > _args
@@ -738,13 +738,13 @@ task bucket_by_bc_main {
 
     # Create the outs
     echo '{"chunked_reporter": "chunked_reporter.pickle", "output": "output.bam", "num_alignments": null}' > _outs
-
+    
     # Run via martian_shell
-    mv /_jobinfo .
+    mv /_jobinfo .  
     stage_path=/cellranger/mro/stages/counter/bucket_reads_by_bc
     stage_phase=main
     /martian/adapters/python/martian_shell.py $stage_path $stage_phase . files run_file_whatever
-
+    
     # Pull the buckets definitions into a separate json file
     jq '.buckets' _outs > buckets
   >>>
@@ -786,7 +786,7 @@ task sort_by_bc_main {
   # A set of BAM from the bucket_by_bc steps. So this would be a list of "bc_AT.bam" files,
   # for example
   Array[File] bucketed_bams
-
+  
   command <<<
     # All the files have the same name, so move the bucketed bams to cwd with unique names
     idx=0
@@ -798,19 +798,19 @@ task sort_by_bc_main {
       bucket=$(echo $bucket | jq -c --arg v $new_path '. |= .+ [$v]')
       idx=$((idx+1))
     done
-
+    
     echo '{}' > _args
     echo "$(jq --arg var "$bucket" '. + {"bucket": ( $var | fromjson )}' _args)" > _args
-
+    
     echo '{"default": "default.bam", "total_reads": null}' > _outs
     mkdir files
 
     # Run via martian_shell
-    mv /_jobinfo .
+    mv /_jobinfo .  
     stage_path=/cellranger/mro/stages/counter/sort_reads_by_bc
     stage_phase=main
     /martian/adapters/python/martian_shell.py $stage_path $stage_phase . files run_file_whatever
-
+    
     jq '.total_reads' _outs > total_reads.int
   >>>
 
@@ -867,7 +867,7 @@ task sort_by_bc_join {
 
   command <<<
     set -x
-
+    
     echo '{}' > _args
     echo '[{"prefix": "AA"}, ' >> _chunk_defs
     echo '{"prefix": "AT"}, ' >> _chunk_defs
@@ -886,7 +886,7 @@ task sort_by_bc_join {
     echo '{"prefix": "GC"}, ' >> _chunk_defs
     echo '{"prefix": "GG"}, ' >> _chunk_defs
     echo '{"prefix": ""}]' >> _chunk_defs
-
+    
     echo '[{"default": "${sorted_AA}", "total_reads": ${total_AA}}, ' >> _chunk_outs
     echo '{"default": "${sorted_AT}", "total_reads": ${total_AT}}, ' >> _chunk_outs
     echo '{"default": "${sorted_AC}", "total_reads": ${total_AC}}, ' >> _chunk_outs
@@ -904,15 +904,15 @@ task sort_by_bc_join {
     echo '{"default": "${sorted_GC}", "total_reads": ${total_GC}}, ' >> _chunk_outs
     echo '{"default": "${sorted_GG}", "total_reads": ${total_GG}}, ' >> _chunk_outs
     echo '{"default": "${sorted_null}", "total_reads": ${total_null}}]' >> _chunk_outs
-
+    
     echo '{"default": "default.bam", "total_reads": null}' > _outs
 
     mkdir files
-    mv /_jobinfo .
+    mv /_jobinfo .  
     stage_path=/cellranger/mro/stages/counter/sort_reads_by_bc
     stage_phase=join
     /martian/adapters/python/martian_shell.py $stage_path $stage_phase . files run_file_whatever
-
+    
     jq '.total_reads' _outs > total_reads.int
   >>>
 
@@ -932,13 +932,13 @@ task sort_by_bc_join {
 # See https://github.com/10XGenomics/cellranger/blob/master/mro/stages/counter/mark_duplicates/__init__.py
 task mark_duplicates_split {
   File input_bam
-
+  
   command <<<
     # Create args
     echo '{"mem_gb": null}' >  _args
     echo "$(jq --arg var "${input_bam}" '. + {"input": $var}' _args)" > _args
 
-    mv /_jobinfo .
+    mv /_jobinfo .  
     stage_path=/cellranger/mro/stages/counter/mark_duplicates
     stage_phase=split
     /martian/adapters/python/martian_shell.py $stage_path $stage_phase . . run_file_whatever
@@ -946,7 +946,7 @@ task mark_duplicates_split {
     # Break the chunks into separate files so we can scatter over them
     jq -c '.chunks[]' _stage_defs | split -l 1 - partition_
   >>>
-
+ 
   runtime {
     docker: "marcusczi/cellranger_clean:cromwell"
     memory: "30 GB"
@@ -976,10 +976,10 @@ task mark_duplicates_main {
     echo "$(jq --arg var genome_reference '. + {"reference_path": $var}' _args)" > _args
     echo "$(jq --slurpfile var "${align}" '. + {"align": ( $var | .[] )}' _args)" > _args
     echo "$(jq --slurpfile var "${chunk}" '. |=  .+ ($var | .[]) ' _args)" > _args
-
+    
     echo '{"chunked_reporter": "chunked_reporter.pickle", "output": "output.bam", "summary": "mark_duplicates_summary.json"}' > _outs
 
-    mv /_jobinfo .
+    mv /_jobinfo .  
     stage_path=/cellranger/mro/stages/counter/mark_duplicates
     stage_phase=main
     /martian/adapters/python/martian_shell.py $stage_path $stage_phase . . run_file_whatever
@@ -1003,10 +1003,10 @@ task mark_duplicates_join {
   Array[File] output_bam_from_mains
   Array[File] chunked_reporter_from_mains
   Array[File] outs
-
+  
   String l = "{"
   String r = "}"
-
+  
   command <<<
 
     echo '{}' > _args
@@ -1027,12 +1027,12 @@ task mark_duplicates_join {
     done
     jq -s '.' '${sep="\' \'" outs}' > _chunk_outs
 
-    mv /_jobinfo .
+    mv /_jobinfo .  
     stage_path=/cellranger/mro/stages/counter/mark_duplicates
     stage_phase=join
     /martian/adapters/python/martian_shell.py $stage_path $stage_phase . . run_file_whatever
   >>>
-
+  
   runtime {
     docker: "marcusczi/cellranger_clean:cromwell"
     memory: "30 GB"
@@ -1080,7 +1080,7 @@ task count_genes_split {
     echo "$(jq --slurpfile var "${chemistry_def}" '. + {"chemistry_def": $var | .[]}' _args)" > _args
     echo "$(jq --arg var "$linked_bam_inputs" '. + {"inputs": ($var | fromjson)}' _args)" > _args
 
-    mv /_jobinfo .
+    mv /_jobinfo .  
     stage_path=/cellranger/mro/stages/counter/count_genes
     stage_phase=split
     /martian/adapters/python/martian_shell.py $stage_path $stage_phase . . run_file_whatever
@@ -1088,7 +1088,7 @@ task count_genes_split {
     # Break the chunks into separate files so we can scatter over them
     jq -c '.chunks[]' _stage_defs | split -l 1 - partition_
   >>>
-
+ 
   runtime {
     docker: "marcusczi/cellranger_clean:cromwell"
     memory: "30 GB"
@@ -1139,10 +1139,10 @@ task count_genes_main {
     echo "$(jq --slurpfile var "${align}" '. + {"align": $var | .[]}' _args)" > _args
     echo "$(jq --arg var "$linked_bam_inputs" '. + {"inputs": ($var | fromjson)}' _args)" > _args
     echo "$(jq --slurpfile var "${chunk}" '. |=  .+ ($var | .[]) ' _args)" > _args
-
+    
     echo '{"chunked_reporter": "chunked_reporter.pickle", "matrices_h5": "matrices.h5"}' > _outs
 
-    mv /_jobinfo .
+    mv /_jobinfo .  
     stage_path=/cellranger/mro/stages/counter/count_genes
     stage_phase=main
     /martian/adapters/python/martian_shell.py $stage_path $stage_phase . . run_file_whatever
@@ -1171,7 +1171,7 @@ task count_genes_join {
   Array[File] outs
   Array[File] matrices_h5_from_mains
   Array[File] chunked_reporter_from_mains
-
+  
   String l = "{"
   String r = "}"
 
@@ -1183,7 +1183,7 @@ task count_genes_join {
     echo "$(jq --slurpfile var "${chemistry_def}" '. + {"chemistry_def": $var | .[]}' _args)" > _args
     echo "$(jq --arg var "$gem_groups_json" '. + {"gem_groups": ( $var | fromjson )}' _args)" > _args
     echo "$(jq --arg var "${sample_id}" '. + {"sample_id": $var}' _args)" > _args
-
+    
     echo '{}' > _chunk_defs
 
     # Create the chunk outs
@@ -1198,10 +1198,10 @@ task count_genes_join {
       idx=$((idx+1))
     done
     jq -s '.' '${sep="\' \'" outs}' > _chunk_outs
-
+    
     echo '{"barcode_summary": "barcode_summary.h5", "matrices_h5": "matrices.h5", "reporter_summary": "reporter_summary.json", "matrices_mex": "matrices_mex"}' > _outs
 
-    mv /_jobinfo .
+    mv /_jobinfo .  
     stage_path=/cellranger/mro/stages/counter/count_genes
     stage_phase=join
     /martian/adapters/python/martian_shell.py $stage_path $stage_phase . . run_file_whatever
@@ -1209,7 +1209,7 @@ task count_genes_join {
     # tar the matrices_mex folder so it can be extracted from the task
     tar -czf matrices_mex.tar.gz matrices_mex
   >>>
-
+  
   runtime {
     docker: "marcusczi/cellranger_clean:cromwell"
     memory: "30 GB"
@@ -1251,13 +1251,13 @@ task filter_barcodes {
     echo "$(jq --arg var "$gem_groups_json" '. + {"gem_groups": ( $var | fromjson )}' _args)" > _args
     echo "$(jq --slurpfile var "${chemistry_def}" '. + {"chemistry_def": $var | .[]}' _args)" > _args
     echo "$(jq --arg var "${barcode_summary}" '. + {"barcode_summary": $var}' _args)" > _args
-
+    
 
     # Create outs
     echo '{"summary": "filter_barcodes_summary.json", "filtered_barcodes": "filtered_barcodes.csv", ' >> _outs
     echo '"filtered_matrices_h5": "filtered_matrices.h5", "filtered_matrices_mex": "filtered_matrices_mex"}' >> _outs
 
-    mv /_jobinfo .
+    mv /_jobinfo .  
     stage_path=/cellranger/mro/stages/counter/filter_barcodes
     stage_phase=main
     /martian/adapters/python/martian_shell.py $stage_path $stage_phase . . run_file_whatever
@@ -1266,7 +1266,7 @@ task filter_barcodes {
     tar -czf filtered_matrices_mex.tar.gz filtered_matrices_mex
 
   >>>
-
+  
   runtime {
     docker: "marcusczi/cellranger_clean:cromwell"
     memory: "30 GB"
@@ -1406,8 +1406,7 @@ workflow count {
       gem_groups = extract_reads_join.gem_groups
   }
 
-  Array[Pair[Int, Pair[File, File]]] gems = get_trimmed_and_aligned.gem_group_trimmed_and_aligned
-  scatter(chunk in gems) {
+  scatter(chunk in get_trimmed_and_aligned.gem_group_trimmed_and_aligned) {
     call attach_bcs_and_umis_main {
       input:
         reference_path = reference_path,
@@ -1417,7 +1416,7 @@ workflow count {
         umi_min_qual_threshold = umi_min_qual_threshold,
         barcode_counts = extract_reads_join.barcode_counts,
         chunk = chunk,
-        bam_comments = extract_reads_join.bam_comments
+        bam_comments = extract_reads_join.bam_comments 
     }
   }
 
@@ -1443,7 +1442,7 @@ workflow count {
         read_groups = bucket_by_bc_split.read_groups
     }
   }
-
+  
   call sort_by_bc_main as sort_AA { input: bucketed_bams = bucket_by_bc_main.AA_bam }
   call sort_by_bc_main as sort_AT { input: bucketed_bams = bucket_by_bc_main.AT_bam }
   call sort_by_bc_main as sort_AG { input: bucketed_bams = bucket_by_bc_main.AG_bam }
@@ -1461,7 +1460,7 @@ workflow count {
   call sort_by_bc_main as sort_CG { input: bucketed_bams = bucket_by_bc_main.CG_bam }
   call sort_by_bc_main as sort_CC { input: bucketed_bams = bucket_by_bc_main.CC_bam }
   call sort_by_bc_main as sort_null { input: bucketed_bams = bucket_by_bc_main.null_bam }
-
+  
   call sort_by_bc_join {
     input:
       sorted_AA = sort_AA.default, sorted_AT = sort_AT.default, sorted_AC = sort_AC.default, sorted_AG = sort_AG.default,
@@ -1480,7 +1479,7 @@ workflow count {
     input:
       input_bam = sort_by_bc_join.default
   }
-
+  
   scatter(chunk in mark_duplicates_split.chunks) {
     call mark_duplicates_main {
       input:
@@ -1531,7 +1530,7 @@ workflow count {
       sample_id = sample_id,
       outs = count_genes_main.outs
   }
-
+  
   call filter_barcodes {
     input:
       sample_id = sample_id,
