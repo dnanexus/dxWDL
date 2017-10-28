@@ -104,7 +104,7 @@ case class CompilerSimplifyExpr(wf: WdlWorkflow,
 
             // Files: it is legal to convert a file to a string, but not the other
             // way around.
-            case (WdlFileType, WdlStringType) => true
+            //case (WdlFileType, WdlStringType) => true
 
             // array
             case (WdlArrayType(WdlNothingType), WdlArrayType(_)) => true

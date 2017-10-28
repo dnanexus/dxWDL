@@ -112,9 +112,8 @@ case class CompilerErrorFormatter(terminalMap: Map[Terminal, WorkflowSource]) {
             case Nil => AstTools.findTerminals(call.ast).head
             case _ => AstTools.findTerminals(expr.ast).head
         }
-        s"""|Warning: implicit type coercion in workflow context.
-            |Expression <${expr.toWdlString}> is coerced from type ${srcType.toWdlString} to
-            |${trgType.toWdlString}. This may not provide incorrect results.
+        s"""|Warning: expression <${expr.toWdlString}> is coerced from type ${srcType.toWdlString}
+            |to ${trgType.toWdlString}.
             |
             |${pointToSource(t)}
             |""".stripMargin

@@ -100,6 +100,7 @@ object Utils {
     val DOWNLOAD_RETRY_LIMIT = 3
     val DX_HOME = "/home/dnanexus"
     val DX_INSTANCE_TYPE_ATTR = "dx_instance_type"
+    val DX_URL_PREFIX = "dx://"
     val FLAT_FILES_SUFFIX = "___dxfiles"
     val IF = "if"
     val INSTANCE_TYPE_DB_FILENAME = "instanceTypeDB.json"
@@ -111,7 +112,6 @@ object Utils {
     val SCATTER = "scatter"
     val TMP_VAR_NAME_PREFIX = "xtmp"
     val UPLOAD_RETRY_LIMIT = DOWNLOAD_RETRY_LIMIT
-    val UNIVERSAL_FILE_PREFIX = "dx://"
 
     lazy val dxEnv = DXEnvironment.create()
 

@@ -454,11 +454,71 @@ object WdlVarLinks {
         WdlVarLinks(wdlType, attrs, DxlValue(jsv))
     }
 
+    // Import a value specified in a Cromwell style JSON input
+    // file. Assume that all the platform files have already been
+    // converted into dx:links.
+    //
+    // The difficulty here is in avoiding an intermediate conversion
+    // into a WDL value. Most types pose no issues. However,
+    // dx:files cannot be converted into WDL files in all cases.
+    private def importFromCromwell(wdlType: WdlType,
+                                   jsv: JsValue) : JsValue = {
+        (wdlType, jsv) match {
+            // base case: primitive types
+            case (WdlBooleanType, JsBoolean(_)) => jsv
+            case (WdlIntegerType, JsNumber(_)) => jsv
+            case (WdlFloatType, JsNumber(_)) => jsv
+            case (WdlStringType, JsString(_)) => jsv
+            case (WdlFileType, JsObject(_)) => jsv
+
+            // strip optionals
+            case (WdlOptionalType(t), _) =>
+                importFromCromwell(t, jsv)
+
+            // arrays
+            case (WdlArrayType(t), JsArray(vec)) =>
+                JsArray(vec.map{
+                    elem => importFromCromwell(t, elem)
+                })
+
+            // Maps. These are serialized as an object with a keys array and
+            // a values array.
+            case (WdlMapType(keyType, valueType), JsObject(_)) =>
+                //val keys = JsArray(importFromCromwell(keyType, elem))
+                //JsObject("keys" -> kJs, "values" -> vJs)
+                throw new NotImplementedError("TODO: maps")
+
+            case (WdlPairType(lType, rType), _) =>
+                throw new NotImplementedError("TODO: pairs")
+
+            case (WdlObjectType, _) =>
+                throw new NotImplementedError("TODO: objects")
+
+            case _ =>
+                throw new Exception(
+                    s"""|Unsupported/Invalid type/JSON combination in input file
+                        |  wdlType= ${wdlType.toWdlString}
+                        |  JSON= ${jsv.prettyPrint}""".stripMargin.trim)
+        }
+    }
+
+    def importFromCromwellJSON(wdlType: WdlType,
+                               attrs:DeclAttrs,
+                               jsv: JsValue) : WdlVarLinks = {
+        val importedJs = importFromCromwell(wdlType, jsv)
+        WdlVarLinks(wdlType, attrs, DxlValue(importedJs))
+    }
+
     // create input/output fields that bind the variable name [bindName] to
     // this WdlVar
-    def genFields(wvl : WdlVarLinks, bindName: String) : List[(String, JsValue)] = {
-        val bindEncName = Utils.encodeAppletVarName(Utils.transformVarName(bindName))
-
+    def genFields(wvl : WdlVarLinks,
+                  bindName: String,
+                  encodeDots: Boolean = true) : List[(String, JsValue)] = {
+        val bindEncName =
+            if (encodeDots)
+                Utils.encodeAppletVarName(Utils.transformVarName(bindName))
+            else
+                bindName
         def mkSimple() : (String, JsValue) = {
             val jsv : JsValue = wvl.dxlink match {
                 case DxlValue(jsn) => jsn
@@ -521,7 +581,6 @@ object WdlVarLinks {
             mkComplex(wdlType).toList
         }
     }
-
 
     // Read the job-inputs JSON file, and convert the variables
     // to links that can be passed to other applets.
