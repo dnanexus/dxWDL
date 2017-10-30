@@ -147,26 +147,50 @@ object WdlVarLinks {
     private def marshalWdlMap(keyType:WdlType,
                               valueType:WdlType,
                               m:Map[WdlValue, WdlValue]) : JsValue = {
-        val keys:WdlValue = WdlArray(WdlArrayType(keyType), m.keys.toVector)
-        val kJs = jsOfComplexWdlValue(keys.wdlType, keys)
-        val values:WdlValue = WdlArray(WdlArrayType(valueType), m.values.toVector)
-        val vJs = jsOfComplexWdlValue(values.wdlType, values)
-        JsObject("keys" -> kJs, "values" -> vJs)
+        if (keyType == WdlStringType) {
+            // keys are strings
+            JsObject(m.map{
+                         case (WdlString(k), v) =>
+                             k -> jsOfComplexWdlValue(valueType, v)
+                         case (k,_) =>
+                             throw new Exception(s"key ${k.toWdlString} should be a WdlStringType")
+                     }.toMap)
+        }
+        else {
+            // general case
+            val keys:WdlValue = WdlArray(WdlArrayType(keyType), m.keys.toVector)
+            val kJs = jsOfComplexWdlValue(keys.wdlType, keys)
+            val values:WdlValue = WdlArray(WdlArrayType(valueType), m.values.toVector)
+            val vJs = jsOfComplexWdlValue(values.wdlType, values)
+            JsObject("keys" -> kJs, "values" -> vJs)
+        }
     }
 
-    private def unmarshalWdlMap(jsValue: JsValue) : Vector[(JsValue, JsValue)] = {
+    // Unwrap only the top layers of the JSON map, do not dive in recursively.
+    private def shallowUnmarshalWdlMap(keyType: WdlType,
+                                       valueType: WdlType,
+                                       jsValue: JsValue) : Map[JsValue, JsValue] = {
         try {
-            val fields = jsValue.asJsObject.fields
-            val kJs: Vector[JsValue] = fields("keys") match {
-                case JsArray(x) => x
-                case _ => throw new Exception("Malformed JSON")
+            if (keyType == WdlStringType) {
+                // specialization for the case where keys are strings.
+                val fields = jsValue.asJsObject.fields
+                fields.map{ case (k:String, v:JsValue) =>
+                    JsString(k) -> v
+                }.toMap
+            } else {
+                // general case.
+                val fields = jsValue.asJsObject.fields
+                val kJs: Vector[JsValue] = fields("keys") match {
+                    case JsArray(x) => x
+                    case _ => throw new Exception("Malformed JSON")
+                }
+                val vJs: Vector[JsValue] = fields("values") match {
+                    case JsArray(x) => x
+                    case _ => throw new Exception("Malformed JSON")
+                }
+                assert(kJs.length == vJs.length)
+                (kJs zip vJs).toMap
             }
-            val vJs: Vector[JsValue] = fields("values") match {
-                case JsArray(x) => x
-                case _ => throw new Exception("Malformed JSON")
-            }
-            assert(kJs.length == vJs.length)
-            kJs zip vJs
         } catch {
             case e: Throwable =>
                 System.err.println(s"Deserialization error: ${jsValue}")
@@ -218,12 +242,13 @@ object WdlVarLinks {
             // Maps. These are serialized as an object with a keys array and
             // a values array.
             case (WdlMapType(keyType, valueType), _) =>
-                val m: Map[WdlValue, WdlValue] = unmarshalWdlMap(jsValue).map{
-                    case (k:JsValue, v:JsValue) =>
-                        val kWdl = evalCore(keyType, k, force)
-                        val vWdl = evalCore(valueType, v, force)
-                        kWdl -> vWdl
-                }.toMap
+                val m: Map[WdlValue, WdlValue] =
+                    shallowUnmarshalWdlMap(keyType, valueType, jsValue).map{
+                        case (k:JsValue, v:JsValue) =>
+                            val kWdl = evalCore(keyType, k, force)
+                            val vWdl = evalCore(valueType, v, force)
+                            kWdl -> vWdl
+                    }.toMap
                 WdlMap(WdlMapType(keyType, valueType), m)
 
             case (WdlObjectType, JsObject(fields)) =>
@@ -278,11 +303,11 @@ object WdlVarLinks {
             // Map. Convert into an array of WDL pairs.
             case (WdlMapType(keyType, valueType), _) =>
                 val wdlType = WdlPairType(keyType, valueType)
-                unmarshalWdlMap(jsn).map{
+                shallowUnmarshalWdlMap(keyType, valueType, jsn).map{
                     case (k:JsValue, v:JsValue) =>
                         val js:JsValue = JsObject("left" -> k, "right" -> v)
                         WdlVarLinks(wdlType, wvl.attrs, DxlValue(js))
-                }
+                }.toVector
 
             // Strip optional type
             case (WdlOptionalType(t), _) =>
@@ -501,22 +526,14 @@ object WdlVarLinks {
                     elem => importFromCromwell(t, elem)
                 })
 
-            // Maps. These are serialized as an object with a keys array and
-            // a values array.
-            //
-            // For example, the JSON object {"A" -> 1, "B" -> 2, "C" -> 3} is converted into
-            // the WDL map {
-            //    "keys" ->   ["A", "B", "C"],
-            //    "values" -> [1, 2, 3]
-            // }
+            // Maps. Since these have string values, they are, essentially,
+            // mapped to WDL maps of type Map[String, T].
             case (WdlMapType(keyType, valueType), JsObject(fields)) =>
                 if (keyType != WdlStringType)
                     throw new Exception("Importing a JSON object to a WDL map requires string keys")
-                val keys:Vector[JsValue] = fields.map{ case (k,_) => JsString(k) }.toVector
-                val values:Vector[JsValue] = fields.map{ case (_,v) =>
-                    importFromCromwell(valueType, v)
-                }.toVector
-                JsObject("keys" -> JsArray(keys), "values" -> JsArray(values))
+                JsObject(fields.map{ case (k,v) =>
+                             k -> importFromCromwell(valueType, v)
+                         })
 
             case (WdlPairType(lType, rType), JsArray(Vector(l,r))) =>
                 val lJs = importFromCromwell(lType, l)
