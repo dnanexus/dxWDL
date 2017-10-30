@@ -542,7 +542,7 @@ object WdlVarLinks {
 
             case (WdlObjectType, _) =>
                 throw new Exception(
-                    s"""|WDL Objects are not supported when converting from JSON inputs ${jsv}
+                    s"""|WDL Objects are not supported when converting from JSON inputs
                         |type = ${wdlType.toWdlString}
                         |value = ${jsv.prettyPrint}
                         |""".stripMargin.trim)

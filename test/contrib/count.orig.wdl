@@ -1,3 +1,5 @@
+# This script was copied from: https://github.com/HumanCellAtlas/skylab/tree/master/10x/count
+#
 # NB: This WDL use jq a lot. The manual for jq is here: https://stedolan.github.io/jq/manual/
 # And you can experiment with different jq filters here: https://jqplay.org/
 
@@ -1399,18 +1401,14 @@ workflow count {
     }
   }
 
-#  call get_trimmed_and_aligned {
-#    input:
-#      trimmed_seqs = extract_reads_join.trimmed_seqs,
-#      genome_output = align_reads_main.genome_output,
-#      gem_groups = extract_reads_join.gem_groups
-#  }
+  call get_trimmed_and_aligned {
+    input:
+      trimmed_seqs = extract_reads_join.trimmed_seqs,
+      genome_output = align_reads_main.genome_output,
+      gem_groups = extract_reads_join.gem_groups
+  }
 
-  Array[Pair[File, File]] trimmed_and_aligned  =  zip(extract_reads_join.trimmed_seqs, align_reads_main.genome_output)
-  Array[Pair[Int, Pair[File, File]]] gem_group_trimmed_and_aligned  =  zip(extract_reads_join.gem_groups, trimmed_and_aligned)
-
-#  scatter(chunk in get_trimmed_and_aligned.gem_group_trimmed_and_aligned) {
-   scatter(chunk in gem_group_trimmed_and_aligned) {
+  scatter(chunk in get_trimmed_and_aligned.gem_group_trimmed_and_aligned) {
     call attach_bcs_and_umis_main {
       input:
         reference_path = reference_path,
