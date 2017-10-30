@@ -113,7 +113,7 @@ case class RunnerMiniWorkflow(exportVars: Set[String],
                             throw new Exception(cef.expressionMustBeConstOrVar(expr))
                         }
                         val wdlValue = expr.evaluate(nullLookup, NoFunctions).get
-                        WdlVarLinks.apply(wdlValue.wdlType, DeclAttrs.empty, wdlValue)
+                        WdlVarLinks.importFromWDL(wdlValue.wdlType, DeclAttrs.empty, wdlValue)
                 }
 
             case a: Ast if a.isMemberAccess =>

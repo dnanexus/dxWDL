@@ -605,7 +605,7 @@ case class CompilerNative(dxWDLrtId: String,
                         // in a value at runtime.
                         m
                     case IR.SArgConst(wValue) =>
-                        val wvl = WdlVarLinks.apply(cVar.wdlType, cVar.attrs, wValue)
+                        val wvl = WdlVarLinks.importFromWDL(cVar.wdlType, cVar.attrs, wValue)
                         val fields = genFieldsCastIfRequired(wvl, wValue.wdlType, cVar)
                         m ++ fields.toMap
                     case IR.SArgLink(stageName, argName) =>

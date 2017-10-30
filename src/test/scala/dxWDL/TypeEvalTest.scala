@@ -6,7 +6,7 @@ import wdl4s.wdl._
 import wdl4s.wdl.expression._
 import wdl4s.wdl.types._
 
-class TypeEval extends FlatSpec {
+class TypeEvalTest extends FlatSpec {
 
     val wdlCode =
         """|task Add {

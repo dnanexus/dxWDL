@@ -127,6 +127,23 @@ object WdlVarLinks {
         }
     }
 
+    // WDL maps and JSON objects are slightly different. A WDL map can
+    // have keys of any type, whereas a JSON object can only have string
+    // keys.
+    //
+    // For example, the WDL map {1 -> "A", 2 -> "B", 3 -> "C"} is converted into
+    // the JSON object {
+    //    "keys" ->   [1, 2, 3],
+    //    "values" -> ["A", "B", "C"]
+    // }
+    //
+    // If the WDL map key type is a string, we use the natural mapping. For example,
+    // WDL value {"apple" -> "1$", "pear" -> "3$", "orange" -> "2$"}
+    // is converted into JSON object {
+    //    "apple": "1$",
+    //    "pear" : "3$",
+    //    "orange" : "2$"
+    // }
     private def marshalWdlMap(keyType:WdlType,
                               valueType:WdlType,
                               m:Map[WdlValue, WdlValue]) : JsValue = {
@@ -382,7 +399,7 @@ object WdlVarLinks {
     }
 
     // import a WDL value
-    def apply(wdlType: WdlType, attrs: DeclAttrs, wdlValue: WdlValue) : WdlVarLinks = {
+    def importFromWDL(wdlType: WdlType, attrs: DeclAttrs, wdlValue: WdlValue) : WdlVarLinks = {
         val jsValue = jsOfComplexWdlValue(wdlType, wdlValue)
         WdlVarLinks(wdlType, attrs, DxlValue(jsValue))
     }
@@ -458,9 +475,12 @@ object WdlVarLinks {
     // file. Assume that all the platform files have already been
     // converted into dx:links.
     //
-    // The difficulty here is in avoiding an intermediate conversion
-    // into a WDL value. Most types pose no issues. However,
-    // dx:files cannot be converted into WDL files in all cases.
+    // Challenges:
+    // 1) avoiding an intermediate conversion into a WDL value. Most
+    // types pose no issues. However, dx:files cannot be converted
+    // into WDL files in all cases.
+    // 2) JSON maps and WDL maps are slighly different. WDL maps can have
+    // keys of any type, where JSON maps can only have string keys.
     private def importFromCromwell(wdlType: WdlType,
                                    jsv: JsValue) : JsValue = {
         (wdlType, jsv) match {
@@ -483,16 +503,32 @@ object WdlVarLinks {
 
             // Maps. These are serialized as an object with a keys array and
             // a values array.
-            case (WdlMapType(keyType, valueType), JsObject(_)) =>
-                //val keys = JsArray(importFromCromwell(keyType, elem))
-                //JsObject("keys" -> kJs, "values" -> vJs)
-                throw new NotImplementedError("TODO: maps")
+            //
+            // For example, the JSON object {"A" -> 1, "B" -> 2, "C" -> 3} is converted into
+            // the WDL map {
+            //    "keys" ->   ["A", "B", "C"],
+            //    "values" -> [1, 2, 3]
+            // }
+            case (WdlMapType(keyType, valueType), JsObject(fields)) =>
+                if (keyType != WdlStringType)
+                    throw new Exception("Importing a JSON object to a WDL map requires string keys")
+                val keys:Vector[JsValue] = fields.map{ case (k,_) => JsString(k) }.toVector
+                val values:Vector[JsValue] = fields.map{ case (_,v) =>
+                    importFromCromwell(valueType, v)
+                }.toVector
+                JsObject("keys" -> JsArray(keys), "values" -> JsArray(values))
 
-            case (WdlPairType(lType, rType), _) =>
-                throw new NotImplementedError("TODO: pairs")
+            case (WdlPairType(lType, rType), JsArray(Vector(l,r))) =>
+                val lJs = importFromCromwell(lType, l)
+                val rJs = importFromCromwell(rType, r)
+                JsObject("left" -> lJs, "right" -> rJs)
 
             case (WdlObjectType, _) =>
-                throw new NotImplementedError("TODO: objects")
+                throw new Exception(
+                    s"""|WDL Objects are not supported when converting from JSON inputs ${jsv}
+                        |type = ${wdlType.toWdlString}
+                        |value = ${jsv.prettyPrint}
+                        |""".stripMargin.trim)
 
             case _ =>
                 throw new Exception(
