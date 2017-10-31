@@ -73,10 +73,10 @@ object RunnerEval {
                          expr:WdlExpression,
                          attrs:DeclAttrs) : (WdlVarLinks, WdlValue) = {
             val vRaw : WdlValue = expr.evaluate(lookup, DxFunctions).get
-            val v: WdlValue = Utils.cast(decl.wdlType, vRaw, decl.unqualifiedName)
-            val wvl = WdlVarLinks.apply(decl.wdlType, attrs, v)
-            env = env + (decl.unqualifiedName -> (wvl, Some(v)))
-            (wvl, v)
+            val w: WdlValue = Utils.cast(decl.wdlType, vRaw, decl.unqualifiedName)
+            val wvl = WdlVarLinks.importFromWDL(decl.wdlType, attrs, w)
+            env = env + (decl.unqualifiedName -> (wvl, Some(w)))
+            (wvl, w)
         }
 
         def evalDecl(decl : DeclarationInterface) : Option[(WdlVarLinks, WdlValue)] = {

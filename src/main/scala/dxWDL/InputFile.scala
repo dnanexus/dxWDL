@@ -1,9 +1,7 @@
 /** Generate an input file for a dx:workflow based on the
-  WDL input file.
+  JSON input file.
 
-  In the documentation, we assume the workflow name is "myWorkflow"
-
-For example, this is a Cromwell input file for workflow optionals:
+For example, this is a input file for workflow optionals:
 {
   "optionals.arg1": 10,
   "optionals.mul2.i": 5,
@@ -26,7 +24,7 @@ import scala.collection.mutable.HashMap
 import java.nio.file.{Path, Paths}
 import scala.collection.JavaConverters._
 import spray.json._
-import Utils.{trace, UNIVERSAL_FILE_PREFIX}
+import Utils.{trace, DX_URL_PREFIX, FLAT_FILES_SUFFIX}
 
 case class InputFile(verbose: Utils.Verbose) {
     private def lookupFile(dxProject: Option[DXProject], fileName: String): DXFile = {
@@ -76,17 +74,31 @@ case class InputFile(verbose: Utils.Verbose) {
         }
     }
 
-    private def translateValue(v: JsValue) : JsValue= {
-        v match {
-            case JsString(s) if s.startsWith(UNIVERSAL_FILE_PREFIX) =>
+    // traverse the JSON structure, and replace file URLs with
+    // dx-links.
+    private def replaceURLsWithLinks(jsv: JsValue) : JsValue = {
+        jsv match {
+            case JsString(s) if s.startsWith(DX_URL_PREFIX) =>
                 // Identify platform file paths by their prefix,
                 // do a lookup, and create a dxlink
-                val dxFile: DXFile = lookupDxPath(s.substring(UNIVERSAL_FILE_PREFIX.length))
+                val dxFile: DXFile = lookupDxPath(s.substring(DX_URL_PREFIX.length))
                 Utils.jsValueOfJsonNode(dxFile.getLinkAsJson)
-            case JsArray(a) =>
-                JsArray(a.map(x => translateValue(x)))
-            case _ => v
+
+            case JsBoolean(_) | JsNull | JsNumber(_) | JsString(_) => jsv
+            case JsObject(fields) =>
+                JsObject(fields.map{
+                             case(k,v) => k -> replaceURLsWithLinks(v)
+                         }.toMap)
+            case JsArray(elems) =>
+                JsArray(elems.map(e => replaceURLsWithLinks(e)))
         }
+    }
+
+    // Import into a WDL value, and convert back to JSON.
+    private def translateValue(cVar: IR.CVar,
+                               jsv: JsValue) : WdlVarLinks = {
+        val jsWithDxLinks = replaceURLsWithLinks(jsv)
+        WdlVarLinks.importFromCromwellJSON(cVar.wdlType, cVar.attrs, jsWithDxLinks)
     }
 
     // Embed default values into the IR
@@ -108,8 +120,16 @@ case class InputFile(verbose: Utils.Verbose) {
                 defaults.fields.get(fqn) match {
                     case None => cVar
                     case Some(dflt:JsValue) =>
-                        val jsv = translateValue(dflt)
-                        val attrs = cVar.attrs.add("default", jsv)
+                        val wvl = translateValue(cVar, dflt)
+
+                        // We want a single JSON value representing
+                        // the variable. Discard the flat-files companion array.
+                        val jsValues:Seq[JsValue] =
+                            WdlVarLinks.genFields( wvl, "__dummy__")
+                                .filter { case (name, jsv) => !name.endsWith(FLAT_FILES_SUFFIX) }
+                                .map{ case (_, jsv) => jsv}
+                        assert (jsValues.size == 1)
+                        val attrs = cVar.attrs.add("default", jsValues.head)
                         cVar.copy(attrs = attrs)
                 }
             }
@@ -127,8 +147,7 @@ case class InputFile(verbose: Utils.Verbose) {
                     defaults.fields.get(fqn) match {
                         case None => sArg
                         case Some(dflt:JsValue) =>
-                            val jsv = translateValue(dflt)
-                            val wvl = WdlVarLinks(cVar.wdlType, cVar.attrs, DxlValue(jsv))
+                            val wvl = translateValue(cVar, dflt)
                             val w = WdlVarLinks.eval(wvl, false)
                             IR.SArgConst(w)
                     }
@@ -170,7 +189,7 @@ case class InputFile(verbose: Utils.Verbose) {
         }
     }
 
-    // Build a dx input file, based on the wdl input file and the workflow
+    // Build a dx input file, based on the JSON input file and the workflow
     def dxFromCromwell(ns: IR.Namespace,
                        wf: IR.Workflow,
                        inputPath: Path) : JsObject = {
@@ -193,12 +212,15 @@ case class InputFile(verbose: Utils.Verbose) {
 
         // If WDL variable fully qualified name [fqn] was provided in the
         // input file, set [stage.cvar] to its JSON value
-        def checkAndBind(fqn:String, dxName:String) : Unit = {
+        def checkAndBind(fqn:String, dxName:String, cVar:IR.CVar) : Unit = {
             inputFields.get(fqn) match {
                 case None => ()
                 case Some(jsv) =>
                     trace(verbose.on, s"${fqn} -> ${dxName}")
-                    workflowBindings(dxName) = translateValue(jsv)
+                    val wvl = translateValue(cVar, jsv)
+                    WdlVarLinks.genFields(wvl, dxName, encodeDots=false)
+                        .foreach{ case (name, jsv) => workflowBindings(name) = jsv }
+
                     // Do not assign the value to any later stages.
                     // We found the variable declaration, the others
                     // are variable uses.
@@ -215,7 +237,7 @@ case class InputFile(verbose: Utils.Verbose) {
                     case (cVar,idx) =>
                         val fqn = s"${wf.name}.${callName}.${cVar.name}"
                         val dxName = s"${stage.id.getId}.${callName}_${cVar.name}"
-                        checkAndBind(fqn, dxName)
+                        checkAndBind(fqn, dxName, cVar)
                 }
             }
         }
@@ -223,14 +245,13 @@ case class InputFile(verbose: Utils.Verbose) {
         // make a pass on all the stages
         wf.stages.foreach{ stage =>
             val callee:IR.Applet = ns.applets(stage.appletName)
-
             // make a pass on all call inputs
             stage.inputs.zipWithIndex.foreach{
                 case (_,idx) =>
                     val cVar = callee.inputs(idx)
                     val fqn = s"${wf.name}.${stage.name}.${cVar.name}"
                     val dxName = s"${stage.id.getId}.${cVar.name}"
-                    checkAndBind(fqn, dxName)
+                    checkAndBind(fqn, dxName, cVar)
             }
             // check if the applet called from this stage has bindings
             callee.kind match {
@@ -243,7 +264,7 @@ case class InputFile(verbose: Utils.Verbose) {
                     callee.inputs.foreach{ cVar =>
                         val fqn = s"${wf.name}.${cVar.name}"
                         val dxName = s"${stage.id.getId}.${cVar.name}"
-                        checkAndBind(fqn, dxName)
+                        checkAndBind(fqn, dxName, cVar)
                     }
             }
             // compound stages, for example if blocks, or scatters.

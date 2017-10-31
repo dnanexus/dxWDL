@@ -578,32 +578,17 @@ case class CompilerNative(dxWDLrtId: String,
 
     // Link source values to targets. This is the same as
     // WdlVarLinks.genFields, but overcomes certain cases where the
-    // source and target WDL types do not match. For example, if the
-    // source is a File, and the target is an Array[File], we can
-    // modify the JSON to get around this.
+    // source and target WDL types do not match.
     def genFieldsCastIfRequired(wvl: WdlVarLinks,
                                 rawSrcType: WdlType,
-                                bindName: String) : List[(String, JsValue)] = {
-//        System.err.println(s"genFieldsCastIfRequired(${bindName})  trgType=${wvl.wdlType.toWdlString} srcType=${srcType.toWdlString}")
+                                cVar: IR.CVar) : List[(String, JsValue)] = {
         val srcType = Utils.stripOptional(rawSrcType)
         val trgType = Utils.stripOptional(wvl.wdlType)
-
-        val l:List[(String, JsValue)] =
-            if (trgType == srcType) {
-                WdlVarLinks.genFields(wvl, bindName).map { case(key, jsv) =>
-                    (key, jsv)
-                }
-            } else if (trgType == WdlArrayType(srcType)) {
-                // Cast from T to Array[T]
-                WdlVarLinks.genFields(wvl, bindName).map{ case(key, jsv) =>
-                    (key, JsArray(jsv))
-                }
-            } else {
-                throw new Exception(s"""|Linking error: source type=${rawSrcType.toWdlString}
-                                        |target type=${wvl.wdlType.toWdlString}, bindName=${bindName}"""
-                                        .stripMargin.replaceAll("\n", " "))
-            }
-        l.map{ case (key, json) => key -> json }
+        if (srcType != trgType)
+            throw new Exception(s"""|Link time casting from ${srcType.toWdlString}
+                                    |to ${trgType.toWdlString} not supported."""
+                                    .stripMargin.replaceAll("\n", " "))
+        WdlVarLinks.genFields(wvl, cVar.dxVarName)
     }
 
     // Calculate the stage inputs from the call closure
@@ -620,19 +605,15 @@ case class CompilerNative(dxWDLrtId: String,
                         // in a value at runtime.
                         m
                     case IR.SArgConst(wValue) =>
-                        val wvl = WdlVarLinks.apply(cVar.wdlType, cVar.attrs, wValue)
-                        val fields = genFieldsCastIfRequired(wvl,
-                                                             wValue.wdlType,
-                                                             cVar.dxVarName)
+                        val wvl = WdlVarLinks.importFromWDL(cVar.wdlType, cVar.attrs, wValue)
+                        val fields = genFieldsCastIfRequired(wvl, wValue.wdlType, cVar)
                         m ++ fields.toMap
                     case IR.SArgLink(stageName, argName) =>
                         val dxStage = stageDict(stageName)
                         val wvl = WdlVarLinks(cVar.wdlType,
                                               cVar.attrs,
                                               DxlStage(dxStage, IORef.Output, argName.dxVarName))
-                        val fields = genFieldsCastIfRequired(wvl,
-                                                             argName.wdlType,
-                                                             cVar.dxVarName)
+                        val fields = genFieldsCastIfRequired(wvl, argName.wdlType, cVar)
                         m ++ fields.toMap
                 }
         }

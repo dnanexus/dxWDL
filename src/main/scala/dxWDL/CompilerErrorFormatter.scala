@@ -3,6 +3,7 @@ package dxWDL
 import wdl4s.wdl.AstTools
 import wdl4s.parser.WdlParser.{Ast, Terminal}
 import wdl4s.wdl._
+import wdl4s.wdl.types._
 
 case class CompilerErrorFormatter(terminalMap: Map[Terminal, WorkflowSource]) {
     private def pointToSource(t: Terminal): String = s"${line(t)}\n${" " * (t.getColumn - 1)}^"
@@ -16,9 +17,9 @@ case class CompilerErrorFormatter(terminalMap: Map[Terminal, WorkflowSource]) {
             |""".stripMargin
     }
 
-    def couldNotEvaluateType(ast: Ast) : String = {
-        val t: Terminal = AstTools.findTerminals(ast).head
-        s"""|Could not evaluate the WDL type for this expression
+    def couldNotEvaluateType(expr: WdlExpression) : String = {
+        val t: Terminal = AstTools.findTerminals(expr.ast).head
+        s"""|Could not evaluate the WDL type for expression
             |
             |${pointToSource(t)}
             |""".stripMargin
@@ -93,6 +94,31 @@ case class CompilerErrorFormatter(terminalMap: Map[Terminal, WorkflowSource]) {
             |${pointToSource(t)}
             |""".stripMargin
     }
+
+    // debugging
+    def traceExpression(ast: Ast) : String = {
+        val t: Terminal = AstTools.findTerminals(ast).head
+        s"""|
+            |${pointToSource(t)}
+            |""".stripMargin
+    }
+
+    def typeConversionRequired(expr: WdlExpression,
+                               call: WdlCall,
+                               srcType: WdlType,
+                               trgType: WdlType) : String = {
+        val termList: Seq[Terminal] = AstTools.findTerminals(expr.ast)
+        val t:Terminal = termList match {
+            case Nil => AstTools.findTerminals(call.ast).head
+            case _ => AstTools.findTerminals(expr.ast).head
+        }
+        s"""|Warning: expression <${expr.toWdlString}> is coerced from type ${srcType.toWdlString}
+            |to ${trgType.toWdlString}.
+            |
+            |${pointToSource(t)}
+            |""".stripMargin
+    }
+
 
     def undefinedMemberAccess(ast: Ast): String = {
         val lhsAst = ast.getAttribute("lhs").asInstanceOf[Terminal]

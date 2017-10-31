@@ -7,30 +7,124 @@
 package dxWDL
 
 import scala.collection.mutable.Queue
-import scala.util.{Success}
-import Utils.{genTmpVarName, Verbose}
+import scala.util.{Failure, Success}
+import Utils.{genTmpVarName, stripOptional, trace, Verbose}
 import wdl4s.wdl._
 import wdl4s.wdl.expression._
 import wdl4s.parser.WdlParser.{Ast, Terminal}
 import wdl4s.wdl.types._
-//import wdl4s.wdl.WdlExpression.AstForExpressions
 
 case class CompilerSimplifyExpr(wf: WdlWorkflow,
                                 cef: CompilerErrorFormatter,
                                 verbose: Verbose) {
     val verbose2:Boolean = verbose.keywords contains "simplify"
 
+    private def isMemberAccess(a: Ast) = {
+        wdl4s.wdl.WdlExpression.AstForExpressions(a).isMemberAccess
+    }
+
     // A member access expression such as [A.x]. Check if
     // A is a call.
-    private def isCallOutputAccess(expr: WdlExpression,
-                                   ast: Ast,
-                                   call: WdlCall) : Boolean = {
-        val lhs:String = WdlExpression.toString(ast.getAttribute("lhs"))
-        try {
-            val wdlType = WdlNamespace.lookupType(wf)(lhs)
-            wdlType.isInstanceOf[WdlCallOutputsObjectType]
-        } catch {
-            case e:Throwable=> false
+    private def isCallOutputAccess(ast: Ast) : Boolean = {
+        if (!isMemberAccess(ast)) {
+            false
+        } else {
+            val lhs:String = WdlExpression.toString(ast.getAttribute("lhs"))
+            try {
+                val wdlType = Utils.lookupType(wf)(lhs)
+                wdlType.isInstanceOf[WdlCallOutputsObjectType]
+            } catch {
+                case e:Throwable=> false
+            }
+        }
+    }
+
+    // Convert the source to a singleton array. It is used in
+    // the GATK best practices pipeline. This conversion may not be a
+    // good idea, but it is used.
+    //
+    //  https://github.com/openwdl/wdl/blob/develop/scripts/broad_pipelines/germline-short-variant-discovery/gvcf-generation-per-sample/0.2.0/PublicPairedSingleSampleWf_170412.wdl#L1256
+    //    input_bams = SortAndFixSampleBam.output_bam
+    //    input_bams is of type Array[File]
+    //    output_bam is of type File
+    private def typesArrayDiff(expr: WdlExpression,
+                               callerType:WdlType,
+                               calleeType:WdlType) : Boolean = {
+        val srcType: WdlType = stripOptional(callerType)
+        val trgType: WdlType = stripOptional(calleeType)
+        (srcType, trgType) match {
+            case (WdlArrayType(_), WdlArrayType(_)) => false
+            case (_, WdlArrayType(_)) =>
+                System.err.println(s"Warning: converting ${expr.toWdlString} from ${srcType.toWdlString} to ${trgType.toWdlString}")
+                //System.err.println(cef.traceExpression(expr.ast.asInstanceOf[Ast]))
+                true
+            case (_, _) => false
+        }
+    }
+
+    // Convert a T to Array[T]
+    //   1  -> [1]
+    //   "a" -> ["a"]
+    private def augmentExprToArray(expr: WdlExpression) : WdlExpression = {
+        // Convert the source to a singleton array. It is used in
+        // the GATK best practices pipeline. This conversion may not be a
+        // good idea, but it is used.
+        WdlExpression.fromString(s"[ ${expr.toWdlString} ]")
+    }
+
+    // Figure out the type of an expression
+    private def evalType(expr: WdlExpression, parent: Scope) : WdlType = {
+/*        expr.evaluateType(Utils.lookupType(parent),
+                          new WdlStandardLibraryFunctionsType,
+                          Some(parent)) match {*/
+        dxWDL.TypeEvaluator(Utils.lookupType(parent),
+                            new WdlStandardLibraryFunctionsType,
+                            Some(parent)).evaluate(expr.ast) match {
+            case Success(wdlType) => wdlType
+            case Failure(f) =>
+                System.err.println(cef.couldNotEvaluateType(expr))
+                throw f
+        }
+    }
+
+    // Make sure [srcType] can be coerced into [trgType]. wdl4s allows
+    // certain conversions that we do not. We assume that wdl4s type checking
+    // has already taken place; we don't need to repeat it.
+    //
+    // For example, in wdl4s it is legal to coerce a String into a
+    // File in workflow context. This is not possible in dxWDL.
+    private def typesMatch(srcType: WdlType, trgType: WdlType) : Boolean = {
+        (srcType, trgType) match {
+            // base cases
+            case (WdlBooleanType, WdlBooleanType) => true
+            case (WdlIntegerType, WdlIntegerType) => true
+            case (WdlFloatType, WdlFloatType) => true
+            case (WdlStringType, WdlStringType) => true
+            case (WdlFileType, WdlFileType) => true
+
+            // Files: it is legal to convert a file to a string, but not the other
+            // way around.
+            //case (WdlFileType, WdlStringType) => true
+
+            // array
+            case (WdlArrayType(WdlNothingType), WdlArrayType(_)) => true
+            case (WdlArrayType(s), WdlArrayType(t)) => typesMatch(s,t)
+
+            // strip optionals
+            case (WdlOptionalType(s), WdlOptionalType(t)) => typesMatch(s,t)
+            case (WdlOptionalType(s), t) => typesMatch(s,t)
+            case (s, WdlOptionalType(t)) => typesMatch(s,t)
+
+            // map
+            case (WdlMapType(sk, sv), WdlMapType(tk, tv)) =>
+                typesMatch(sk, tv) && typesMatch(sv, tv)
+
+            case (WdlPairType(sLeft, sRight), WdlPairType(tLeft, tRight)) =>
+                typesMatch(sLeft, tLeft) && typesMatch(sRight, tRight)
+
+            // objects
+            case (WdlObjectType, WdlObjectType) => true
+            case (_,_) => false
         }
     }
 
@@ -52,10 +146,6 @@ case class CompilerSimplifyExpr(wf: WdlWorkflow,
         }
     }
 
-    def isMemberAccess(a: Ast) = {
-        wdl4s.wdl.WdlExpression.AstForExpressions(a).isMemberAccess
-    }
-
     // Transform a call by lifting its non trivial expressions,
     // and converting them into declarations. For example:
     //
@@ -72,26 +162,40 @@ case class CompilerSimplifyExpr(wf: WdlWorkflow,
     // Inside a scatter we can deal with field accesses,
     private def simplifyCall(call: WdlCall) : Vector[Scope] = {
         val tmpDecls = Queue[Scope]()
+
+        // replace an expression with a temporary variable
+        def replaceWithTempVar(t: WdlType, expr: WdlExpression) : WdlExpression = {
+            val tmpVarName = genTmpVarName()
+            tmpDecls += WdlRewrite.declaration(t, tmpVarName, Some(expr))
+            WdlExpression.fromString(tmpVarName)
+        }
+
         val inputs: Map[String, WdlExpression]  = call.inputMappings.map { case (key, expr) =>
-            val rhs = expr.ast match {
+            val calleeDecl: Declaration =
+                call.declarations.find(decl => decl.unqualifiedName == key).get
+            val calleeType = calleeDecl.wdlType
+            val callerType = evalType(expr, call)
+            val rhs:WdlExpression = expr.ast match {
+                case _ if typesArrayDiff(expr, callerType, calleeType) =>
+                    // A coercion is required to convert the expression to the expected
+                    // type
+                    val augExpr = augmentExprToArray(expr)
+                    replaceWithTempVar(calleeType, augExpr)
+                case _ if (!typesMatch(callerType, calleeType)) =>
+                    System.err.println(cef.typeConversionRequired(expr, call,
+                                                                  callerType, calleeType))
+                    replaceWithTempVar(calleeType, expr)
                 case t: Terminal if nonInterpolation(t) => expr
-                case a: Ast if (isMemberAccess(a) && isCallOutputAccess(expr, a, call)) =>
+                case a: Ast if isCallOutputAccess(a) =>
                     // Accessing an expression like A.B.C
                     // The expression could be:
                     // 1) Result from a previous call
                     // 2) Access to a field in a pair, or an object (pair.left, obj.name)
                     // Only the first case can be handled inline, the other requires
-                    // a temporary variable
+                    // a temporary variable.
                     expr
                 case _ =>
-                    // replace an expression with a temporary variable
-                    val tmpVarName = genTmpVarName()
-                    val calleeDecl: Declaration =
-                        call.declarations.find(decl => decl.unqualifiedName == key).get
-                    val wdlType = calleeDecl.wdlType
-                    //tmpDecls += Declaration(wdlType, tmpVarName, Some(expr), call.parent, a)
-                    tmpDecls += WdlRewrite.declaration(wdlType, tmpVarName, Some(expr))
-                    WdlExpression.fromString(tmpVarName)
+                    replaceWithTempVar(calleeType, expr)
             }
             (key -> rhs)
         }
@@ -125,16 +229,8 @@ case class CompilerSimplifyExpr(wf: WdlWorkflow,
             .map(x => simplify(x))
             .toVector
             .flatten
-
         // Figure out the expression type for a collection we loop over in a scatter
-        val collType : WdlType =
-            ssc.collection.evaluateType(WdlNamespace.lookupType(ssc),
-                                        new WdlStandardLibraryFunctionsType,
-                                        Some(ssc)) match {
-                case Success(wdlType) => wdlType
-                case _ => throw new Exception(cef.couldNotEvaluateType(ssc.ast))
-            }
-
+        val collType : WdlType = evalType(ssc.collection, ssc)
         if (isConstOrVar(ssc.collection)) {
             // The collection is a simple variable, there is no need
             // to create an additional declaration
@@ -159,14 +255,7 @@ case class CompilerSimplifyExpr(wf: WdlWorkflow,
             .flatten
 
         // Figure out the expression type for a collection we loop over in a scatter
-        val exprType : WdlType =
-            cond.condition.evaluateType(WdlNamespace.lookupType(cond),
-                                       new WdlStandardLibraryFunctionsType,
-                                       Some(cond)) match {
-                case Success(wdlType) => wdlType
-                case _ => throw new Exception(cef.couldNotEvaluateType(cond.ast))
-            }
-
+        val exprType : WdlType = evalType(cond.condition, cond)
         if (isConstOrVar(cond.condition)) {
             // The condition is a simple variable, there is no need
             // to create an additional declaration
@@ -234,7 +323,7 @@ object CompilerSimplifyExpr {
     }
 
     def apply(ns: WdlNamespace, verbose: Verbose) : WdlNamespace = {
-        Utils.trace(verbose.on, "simplifying workflow expressions")
+        trace(verbose.on, "simplifying workflow expressions")
         val cef = new CompilerErrorFormatter(ns.terminalMap)
         checkReservedWords(ns, cef)
 

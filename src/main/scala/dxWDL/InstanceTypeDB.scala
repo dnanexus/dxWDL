@@ -416,12 +416,7 @@ object InstanceTypeDB extends DefaultJsonProtocol {
         val availableInstanceTypes: Vector[DxInstanceType] = crossTables(allAvailableIT, pm)
 
         // filter out instances that we cannot use
-        var iTypes = availableInstanceTypes.filter(instanceCriteria)
-
-        // Do not use overly expensive instances, this a temporary
-        // safe guard. We don't want the compiler to accidentally
-        // choose expensive instances, annoying the user.
-        iTypes = iTypes.filter(x => x.price <= Utils.MAX_HOURLY_RATE)
+        val iTypes: Vector[DxInstanceType] = availableInstanceTypes.filter(instanceCriteria)
         InstanceTypeDB(iTypes)
     }
 

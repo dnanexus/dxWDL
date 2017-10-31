@@ -11,12 +11,15 @@ import java.util.Base64
 import scala.collection.JavaConverters._
 import scala.concurrent._
 import scala.collection.mutable.HashMap
+import scala.util.{Failure, Success}
 import ExecutionContext.Implicits.global
 import scala.sys.process._
 import spray.json._
-import wdl4s.wdl.{Declaration, Scope, WdlCall, WdlTask, WdlWorkflow}
+import wdl4s.wdl._
+import wdl4s.wdl.expression._
 import wdl4s.wdl.types._
 import wdl4s.wdl.values._
+
 
 // Exception used for AppInternError
 class AppInternalException private(ex: RuntimeException) extends RuntimeException(ex) {
@@ -97,19 +100,18 @@ object Utils {
     val DOWNLOAD_RETRY_LIMIT = 3
     val DX_HOME = "/home/dnanexus"
     val DX_INSTANCE_TYPE_ATTR = "dx_instance_type"
+    val DX_URL_PREFIX = "dx://"
     val FLAT_FILES_SUFFIX = "___dxfiles"
     val IF = "if"
     val INSTANCE_TYPE_DB_FILENAME = "instanceTypeDB.json"
     val INTERMEDIATE_RESULTS_FOLDER = "intermediate"
     val LINK_INFO_FILENAME = "linking.json"
-    val MAX_HOURLY_RATE = 10.0
     val MAX_STRING_LEN = 8 * 1024     // Long strings cause problems with bash and the UI
     val MAX_NUM_FILES_MOVE_LIMIT = 1000
     val OUTPUT_SECTION = "outputs"
     val SCATTER = "scatter"
     val TMP_VAR_NAME_PREFIX = "xtmp"
     val UPLOAD_RETRY_LIMIT = DOWNLOAD_RETRY_LIMIT
-    val UNIVERSAL_FILE_PREFIX = "dx://"
 
     lazy val dxEnv = DXEnvironment.create()
 
@@ -121,7 +123,7 @@ object Utils {
     val reservedSubstrings = List("___")
 
     // Prefixes used for generated applets
-    val reservedAppletPrefixes = List(SCATTER, COMMON)
+    val reservedAppletPrefixes = List(SCATTER, IF)
 
     lazy val execDirPath : Path = {
         val currentDir = System.getProperty("user.dir")
@@ -739,5 +741,42 @@ object Utils {
             }
         assert(retVal.wdlType == wdlType)
         retVal
+    }
+
+    // This code is based on the lookupType method in the WdlNamespace trait
+    //   https://github.com/broadinstitute/wdl4s/blob/develop/wom/src/main/scala/wdl/WdlNamespace.scala
+    //
+    // It handles the case where the scatter collection is not an
+    // array.
+    def lookupType(from: Scope)(n: String): WdlType = {
+        val resolved:Option[WdlGraphNode] = from.resolveVariable(n)
+        //System.err.println(s"resolved=${resolved}")
+        val wdlType = resolved match {
+            case Some(d: DeclarationInterface) => d.relativeWdlType(from)
+            case Some(c: WdlCall) => WdlCallOutputsObjectType(c)
+            case Some(s: Scatter) => s.collection.evaluateType(lookupType(s),
+                                                               new WdlStandardLibraryFunctionsType,
+                                                               Option(from)) match {
+                case Success(a: WdlArrayType) =>
+                    // Collection is an array
+                    a.memberType
+                case Success(WdlMapType(kType,vType)) =>
+                    // Collection is a map
+                    WdlPairType(kType, vType)
+                case Success(other) =>
+                    throw new Exception(
+                        s"""|Variable $n references a scatter block ${s.fullyQualifiedName},
+                            |but the collection evaluates to ${other.toWdlString}"""
+                            .stripMargin.replaceAll("\n", " "))
+                case Failure(f) =>
+                    throw f
+            }
+            case Some(_: WdlNamespace) => WdlNamespaceType
+
+            case _ =>
+                throw new Exception(s"Could not resolve $n from scope ${from.fullyQualifiedName}")
+        }
+        //System.err.println(s"lookupType(${n}) = ${wdlType.toWdlString}")
+        wdlType
     }
 }
