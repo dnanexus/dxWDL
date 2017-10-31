@@ -3,6 +3,8 @@
 ## 0.49
 - Removed limitation on maximal hourly price per instance. Some bioinformatics pipelines
 regularly require heavy weight instances.
+- Fixed several WDL typing issues
+- Improving the internal representation of JSON objects given as input.
 
 ## 0.48
 - Support string interpolation in workflow expressions
