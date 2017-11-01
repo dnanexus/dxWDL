@@ -22,7 +22,7 @@ import com.dnanexus.{DXJob}
 import java.nio.file.{Path, Paths}
 import scala.collection.mutable.HashMap
 import spray.json._
-import Utils.{appletLog, TASK_DOWNLOAD_INPUTS}
+import Utils.{appletLog}
 import wdl4s.wdl.types._
 import wdl4s.wdl.values._
 import wdl4s.wdl.{Declaration, TaskOutput, WdlExpression, WdlTask}
@@ -273,27 +273,6 @@ case class RunnerTask(task:WdlTask,
     }
 
 
-    private def shouldDownloadFiles() : Boolean = {
-        // The default is to download all the input files. Check if
-        // this is disabled.
-        val downloadInputs: Option[Boolean] =
-            task.parameterMeta
-                .find{ case (k, _) => k.equalsIgnoreCase(TASK_DOWNLOAD_INPUTS) }
-                .map{ case (_, v) => v.equalsIgnoreCase("true") }
-        var forceFlag = downloadInputs match {
-            case Some(false) => false
-            case _ => true
-        }
-        if (task.commandTemplate.isEmpty) {
-            // If the shell command is empty, there is no need to download the files.
-            //
-            // Comment: what happens if we do a table read? Will that function
-            // know to download the file?
-            forceFlag = true
-        }
-        forceFlag
-    }
-
     // Calculate the input variables for the task, download the input files,
     // and build a shell script to run the command.
     def prolog(jobInputPath : Path,
@@ -313,9 +292,15 @@ case class RunnerTask(task:WdlTask,
              varName -> WdlVarLinks(wvl.wdlType, attrs, wvl.dxlink)
          }.toMap
 
-        // figure out if we don't need to download the input files
-        val forceFlag:Boolean = shouldDownloadFiles()
-        appletLog(s"download files=${forceFlag}")
+        val forceFlag:Boolean =
+            if (task.commandTemplate.isEmpty) {
+                // The shell command is empty, there is no need to download the files.
+                false
+            } else {
+                // default: download all input files
+                true
+            }
+        appletLog(s"Eagerly download input files=${forceFlag}")
 
         // evaluate the top declarations
         val inputs: Map[String, BValue] =

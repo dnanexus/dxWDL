@@ -1,4 +1,5 @@
 import "library_math.wdl" as lib
+import "library_sys_call.wdl" as lib_file
 
 task EmptyArray {
      Array[Int] fooAr
@@ -19,15 +20,6 @@ task SumArray {
     >>>
     output {
         Int result = read_int(stdout())
-    }
-}
-
-task FileIdent {
-    File aF
-    command {
-    }
-    output {
-       File result = aF
     }
 }
 
@@ -60,7 +52,7 @@ workflow cast {
     #Array[String] sArr2 = s
     #Array[File] fooArr2 = foo
 
-    call FileIdent { input: aF = foo }
+    call lib_file.FileIdent as FileIdent { input: aF = foo }
     File foo2 = FileIdent.result
     Array[File] fArr2 = [foo2]
 

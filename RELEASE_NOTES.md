@@ -1,8 +1,20 @@
 # Release Notes
 
 ## 0.50
-- Allowing a task to **not** download files, by setting the `download_inputs` flag to `false`
-in the `parameter_meta` section.
+- Tasks that have an empty command section do not download files eagerly. For example,
+if a task only looks at `size(file)`, it will not download the file at all.
+
+```
+task fileSize {
+    File in_file
+
+    command {}
+    output {
+        Float num_bytes = size(in_file)
+    }
+}
+```
+
 
 ## 0.49
 - Removed limitation on maximal hourly price per instance. Some bioinformatics pipelines
