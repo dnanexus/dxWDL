@@ -20,7 +20,7 @@ max_num_retries = 5
 dxWDL_jar_path = "applet_resources/resources/dxWDL.jar"
 
 def get_top_conf_path(top_dir):
-    return os.path.join(top_dir, "reference_stanza.conf")
+    return os.path.join(top_dir, "ref.conf")
 
 def get_crnt_conf_path(top_dir):
 #    try:
