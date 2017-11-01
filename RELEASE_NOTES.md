@@ -1,5 +1,9 @@
 # Release Notes
 
+## 0.50
+- Allowing a task to **not** download files, by setting the `download_inputs` flag to `false`
+in the `parameter_meta` section.
+
 ## 0.49
 - Removed limitation on maximal hourly price per instance. Some bioinformatics pipelines
 regularly require heavy weight instances.

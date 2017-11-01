@@ -194,6 +194,9 @@ task chunk_reads_join {
   String l = "{"
   String r = "}"
 
+  parameter_meta {
+    download_inputs : "false"
+  }
   command <<<
 
     # Create the args

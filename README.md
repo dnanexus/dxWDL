@@ -144,6 +144,26 @@ correct usage. The file must be accessed only once, in sequential
 order, from the beginning. It need not be read to the end. If the task
 does not keep this contract, it could fail in unexpected ways.
 
+Sometimes, a task accesses files, but does not need to download them. For
+example, if it flattens a ragged array of files (`Array[Array[File]`) into
+a single dimensional array (`Array[File]`). In order to prevent the download,
+set the `download_inputs` flag in the parameter_meta section to false.
+
+Here is a task that calculates the size of a file without downloading it
+```
+task size {
+    File in_file
+
+    parameter_meta {
+        download_inputs : "false"
+    }
+    command {}
+    output {
+        Float num_bytes = size(in_file)
+    }
+}
+```
+
 
 ## Task and workflow inputs
 

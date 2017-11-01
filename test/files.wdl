@@ -48,6 +48,9 @@ task z_FindFiles2 {
 task z_FileSizes {
     File car_desc
 
+    parameter_meta {
+        download_inputs : "false"
+    }
     command <<<
       echo "Iron" > A.txt
       echo "Silver" > B.txt
@@ -76,10 +79,26 @@ task z_file_ident {
     File fileA
     File fileB
 
+    parameter_meta {
+        download_inputs : "false"
+    }
     command {
     }
     output {
       String result = fileA
+    }
+}
+
+
+task fileSize {
+    File in_file
+
+    parameter_meta {
+        download_inputs : "false"
+    }
+    command {}
+    output {
+        Float num_bytes = size(in_file)
     }
 }
 

@@ -110,6 +110,7 @@ object Utils {
     val MAX_NUM_FILES_MOVE_LIMIT = 1000
     val OUTPUT_SECTION = "outputs"
     val SCATTER = "scatter"
+    val TASK_DOWNLOAD_INPUTS = "download_inputs"
     val TMP_VAR_NAME_PREFIX = "xtmp"
     val UPLOAD_RETRY_LIMIT = DOWNLOAD_RETRY_LIMIT
 

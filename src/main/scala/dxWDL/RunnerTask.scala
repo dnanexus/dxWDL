@@ -22,7 +22,7 @@ import com.dnanexus.{DXJob}
 import java.nio.file.{Path, Paths}
 import scala.collection.mutable.HashMap
 import spray.json._
-import Utils.appletLog
+import Utils.{appletLog, TASK_DOWNLOAD_INPUTS}
 import wdl4s.wdl.types._
 import wdl4s.wdl.values._
 import wdl4s.wdl.{Declaration, TaskOutput, WdlExpression, WdlTask}
@@ -272,6 +272,28 @@ case class RunnerTask(task:WdlTask,
         dockerRunPath.toFile.setExecutable(true)
     }
 
+
+    private def shouldDownloadFiles() : Boolean = {
+        // The default is to download all the input files. Check if
+        // this is disabled.
+        val downloadInputs: Option[Boolean] =
+            task.parameterMeta
+                .find{ case (k, _) => k.equalsIgnoreCase(TASK_DOWNLOAD_INPUTS) }
+                .map{ case (_, v) => v.equalsIgnoreCase("true") }
+        var forceFlag = downloadInputs match {
+            case Some(false) => false
+            case _ => true
+        }
+        if (task.commandTemplate.isEmpty) {
+            // If the shell command is empty, there is no need to download the files.
+            //
+            // Comment: what happens if we do a table read? Will that function
+            // know to download the file?
+            forceFlag = true
+        }
+        forceFlag
+    }
+
     // Calculate the input variables for the task, download the input files,
     // and build a shell script to run the command.
     def prolog(jobInputPath : Path,
@@ -291,9 +313,13 @@ case class RunnerTask(task:WdlTask,
              varName -> WdlVarLinks(wvl.wdlType, attrs, wvl.dxlink)
          }.toMap
 
+        // figure out if we don't need to download the input files
+        val forceFlag:Boolean = shouldDownloadFiles()
+        appletLog(s"download files=${forceFlag}")
+
         // evaluate the top declarations
         val inputs: Map[String, BValue] =
-            RunnerEval.evalDeclarations(task.declarations, inputWvls, true, Some((task, cef)))
+            RunnerEval.evalDeclarations(task.declarations, inputWvls, forceFlag, Some((task, cef)))
         val env:Map[String, WdlValue] = inputs.map{
             case (varName, BValue(_,wdlValue)) => varName -> wdlValue
         }.toMap
