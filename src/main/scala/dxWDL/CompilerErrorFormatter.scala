@@ -64,6 +64,14 @@ case class CompilerErrorFormatter(terminalMap: Map[Terminal, WorkflowSource]) {
             |""".stripMargin
     }
 
+    def missingVarRefException(ast: Ast) : String = {
+        val t: Terminal = AstTools.findTerminals(ast).head
+        s"""|Reference to missing variable
+            |
+            |${pointToSource(t)}
+            |""".stripMargin
+    }
+
     def missingScatterCollectionException(t: Terminal) : String = {
         s"""|Scatter collection variable missing
             |

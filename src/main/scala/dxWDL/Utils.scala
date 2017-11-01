@@ -95,7 +95,6 @@ object Utils {
 
     val APPLET_LOG_MSG_LIMIT = 1000
     val CHECKSUM_PROP = "dxWDL_checksum"
-    val COMMON = "common"
     val DEFAULT_APPLET_TIMEOUT = 48
     val DOWNLOAD_RETRY_LIMIT = 3
     val DX_HOME = "/home/dnanexus"
@@ -189,7 +188,7 @@ object Utils {
     // x - must be provided as an applet input
     // y, pi -- calculated, non inputs
     // z - is an input with a default value
-    def declarationIsInput(decl: Declaration) : Boolean = {
+    def declarationIsInput(decl: DeclarationInterface) : Boolean = {
         (decl.expression, decl.wdlType) match {
             case (None,_) => true
             case (Some(_), WdlOptionalType(_)) => true

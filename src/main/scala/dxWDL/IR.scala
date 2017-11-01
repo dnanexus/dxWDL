@@ -85,13 +85,15 @@ object IR {
                       kind: AppletKind,
                       ns: WdlNamespace)
 
-    /** An input to a stage. Could be empty, a wdl constant, or
-      * a link to an output variable from another stage.
+    /** An input to a stage. Could be empty, a wdl constant,
+      * a link to an output variable from another stage,
+      * or a workflow input.
       */
     sealed trait SArg
     case object SArgEmpty extends SArg
     case class SArgConst(wdlValue: WdlValue) extends SArg
     case class SArgLink(stageName: String, argName: CVar) extends SArg
+    case class SArgWorkflowInput(argName: CVar) extends SArg
 
     case class Stage(name: String,
                      id: Utils.DXWorkflowStage,
@@ -99,9 +101,12 @@ object IR {
                      inputs: Vector[SArg],
                      outputs: Vector[CVar])
 
+    /** A workflow output is linked to the stage that
+      * generated it.
+      */
     case class Workflow(name: String,
                         inputs: Vector[CVar],
-                        outputs: Vector[CVar],
+                        outputs: Vector[(CVar,SArg)],
                         stages: Vector[Stage])
 
     case class Namespace(workflow: Option[Workflow],
@@ -255,6 +260,9 @@ object IR {
                         YamlObject(YamlString("kind") -> YamlString("link"),
                                    YamlString("stageName") -> YamlString(stageName),
                                    YamlString("cVar") -> cVar.toYaml)
+                    case SArgWorkflowInput(cVar) =>
+                        YamlObject(YamlString("kind") -> YamlString("workflow_input"),
+                                   YamlString("cVar") -> cVar.toYaml)
                 }
             }
 
@@ -280,6 +288,12 @@ object IR {
                                     case Seq(YamlString(stageName),
                                              cVar) =>
                                         SArgLink(stageName, cVar.convertTo[CVar])
+                                    case _ => throw new Exception("SArg malformed link")
+                                }
+                            case Seq(YamlString("workflow_input")) =>
+                                yo.getFields(YamlString("cVar")) match {
+                                    case Seq(cVar) =>
+                                        SArgWorkflowInput(cVar.convertTo[CVar])
                                     case _ => throw new Exception("SArg malformed link")
                                 }
                             case unrecognized =>

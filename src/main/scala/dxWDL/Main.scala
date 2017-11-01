@@ -100,8 +100,16 @@ object Main extends App {
         ns match {
             case nswf: WdlNamespaceWithWorkflow =>
                 val wf = nswf.workflow
-                if (wf.hasEmptyOutputSection) None
-                else Some(wf.outputs)
+                try {
+                    Some(wf.outputs)
+                } catch {
+                    case e: Throwable =>
+                        if (wf.hasEmptyOutputSection)
+                            throw new Exception("""|The workflow has an empty output section.
+                                                   |please fill it in."""
+                                                    .stripMargin.replaceAll("\n", " "))
+                        throw e
+                }
             case _ => None
         }
     }
@@ -736,7 +744,6 @@ object Main extends App {
             |      -inputs <string>      Path to Cromwell formatted input file
             |      -noAppletTimeout      By default, applets cannot run more than ${Utils.DEFAULT_APPLET_TIMEOUT} hours.
             |                          Remove this limitation.
-            |                            Remove this limitation.
             |      -reorg                Reorganize workflow output files
             |      -sort [string]        Sort call graph, to avoid forward references
             |
