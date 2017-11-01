@@ -1,16 +1,11 @@
 package dxWDL
 
-import org.scalatest.{BeforeAndAfterEach, FlatSpec}
+import org.scalatest.{FlatSpec, Matchers}
 import wdl4s.wdl._
 import wdl4s.wdl.AstTools.EnhancedAstNode
 import wdl4s.wdl.types._
 
-class Wdl4sTest extends FlatSpec with BeforeAndAfterEach {
-
-    override def beforeEach() = {
-        val metaDir = Utils.getMetaDirPath()
-        Utils.deleteRecursive(metaDir.toFile)
-    }
+class Wdl4sTest extends FlatSpec with Matchers {
 
     // Fails with wdl4s v0.6, because
     //   '5 * (1 + 1)'  is converted into '5 * 1 + 1'
@@ -236,5 +231,25 @@ class Wdl4sTest extends FlatSpec with BeforeAndAfterEach {
                 System.err.println(s"fqn=${fqn} wdlType=${wdlType}")
              }*/
         }
+    }
+
+    it should "recognize an empty command section" in {
+        val wdlCode =
+            s"""|task emptyCommand {
+                |  Array[String] arr
+                |  command {
+                |  }
+                |  output {
+                |     Int result = 3
+                |  }
+                |}
+                |
+                |workflow w {}
+                |""".stripMargin.trim
+
+        val ns = WdlNamespaceWithWorkflow.load(wdlCode, Seq.empty).get
+        val task = ns.findTask("emptyCommand").get
+
+        task.commandTemplateString should equal("")
     }
 }

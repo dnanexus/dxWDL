@@ -293,7 +293,7 @@ case class RunnerTask(task:WdlTask,
          }.toMap
 
         val forceFlag:Boolean =
-            if (task.commandTemplate.isEmpty) {
+            if (task.commandTemplateString.trim.isEmpty) {
                 // The shell command is empty, there is no need to download the files.
                 false
             } else {
