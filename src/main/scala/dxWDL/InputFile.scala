@@ -148,7 +148,7 @@ case class InputFile(verbose: Utils.Verbose) {
                         case None => sArg
                         case Some(dflt:JsValue) =>
                             val wvl = translateValue(cVar, dflt)
-                            val w = WdlVarLinks.eval(wvl, false)
+                            val w = WdlVarLinks.eval(wvl, false, IODirection.Zero)
                             IR.SArgConst(w)
                     }
             }

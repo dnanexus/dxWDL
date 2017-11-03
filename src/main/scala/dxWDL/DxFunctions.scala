@@ -48,7 +48,12 @@ object DxFunctions extends WdlStandardLibraryFunctions {
                 // File has not been downloaded yet.
                 // Transfer it through the network, and store
                 // locally.
-                Utils.downloadFile(Paths.get(path), dxFile)
+                val p:Path = Paths.get(path)
+                if (Files.exists(p)) {
+                    errStream.println(s"Lazy download for ${p} invoked")
+                    Files.delete(p)
+                }
+                Utils.downloadFile(p, dxFile)
                 remoteFiles.remove(path)
             case None => ()
         }

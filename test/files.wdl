@@ -95,11 +95,10 @@ task TsvGenTable {
 # in the output section (upon access).
 task TsvReadTable {
     File tbl_file
-    Array[Array[String]] elements = read_tsv(tbl_file)
 
     command {}
     output {
-        Array[Array[String]] result = elements
+        Array[Array[String]] result = read_tsv(tbl_file)
     }
 }
 
@@ -127,83 +126,83 @@ workflow files {
     call TsvReadTable { input : tbl_file = TsvGenTable.tbl }
 
     # Try an applet that streams two files
-#    call lib.diff as diff1 {
-#        input: a=f, b=f
-#    }
-#    call lib.diff as diff2 {
-#        input: a=f, b=f2
-#    }
-#
-#    call lib.Colocation as colocation {
-#        input : A=f1, B=f2
-#    }
-#
-#    call z_Copy as Copy { input : src=f, basename="tearFrog" }
-#    call z_Copy as Copy2 { input : src=Copy.outf, basename="mixing" }
-#    call z_FindFiles as FindFiles
-#    call z_FindFiles2 as FindFiles2
-#
-#    # Calculate the sizes of files
-#    scatter (x in FindFiles2.elements) {
-#        call lib.FileSize as FileSize {input: in_file=x}
-#    }
-#
-#    String wf_suffix = ".txt"
-#    scatter (x in ["one", "two", "three", "four"]) {
-#        call GenFile {input: str=x}
-#        call lib.wc as wc {input: in_file = GenFile.out}
-#        call lib.head as head {input: in_file = GenFile.out, num_lines=1}
-#    }
-#
-#    scatter (filename in GenFile.out) {
-#        String prefix = ".txt"
-#        String prefix2 = ".cpp"
-#        String suffix = wf_suffix
-#
-#        call lib.FileIdent as ident {
-#          input:
-#             aF = sub(filename, prefix, "") + suffix,
-#             bF = sub(sub(filename, prefix, ""), prefix2, "") + suffix
-#        }
-#    }
-#
-#    # Ragged array of files
-#    call FileArrayMake as mk1 {input: n=2}
-#    call FileArrayMake as mk2 {input: n=3}
-#    Array[Array[File]] allFiles = [mk1.result, mk2.result]
-#    scatter (fa in allFiles) {
-#        call FileArraySize {input: files=fa}
-#    }
-#
-#    # scatter that calls a task that returns a file array
-#    scatter (k in [1,2,3]) {
-#        call FileArrayMake as mk_arr {input: n=k}
-#    }
-#
-#    # conditionals
-#    if (2 < 1) {
-#        String false_branch = "This branch is not supposed to be taken"
-#    }
-#    if (length(allFiles) > 0) {
-#        call z_Copy as Copy3 { input : src=f, basename="branching" }
-#    }
-#
-    output {
-#        diff1.result
-#        diff2.result
-#        Copy2.outf_sorted
-#        FindFiles.texts
-#        FindFiles.hotels
-##       FindFiles2.elements
-##       FindFiles2.emptyFiles
-#        FileSize.num_bytes
-#        colocation.result
-#        ident.result
-#        FileArraySize.result
-#        false_branch
-#        Copy3.outf
-#        mk_arr.result
-#        head.result
-        TsvReadTable.result
+    call lib.diff as diff1 {
+        input: a=f, b=f
     }
+    call lib.diff as diff2 {
+        input: a=f, b=f2
+    }
+
+    call lib.Colocation as colocation {
+        input : A=f1, B=f2
+    }
+
+    call z_Copy as Copy { input : src=f, basename="tearFrog" }
+    call z_Copy as Copy2 { input : src=Copy.outf, basename="mixing" }
+    call z_FindFiles as FindFiles
+    call z_FindFiles2 as FindFiles2
+
+    # Calculate the sizes of files
+    scatter (x in FindFiles2.elements) {
+        call lib.FileSize as FileSize {input: in_file=x}
+    }
+
+    String wf_suffix = ".txt"
+    scatter (x in ["one", "two", "three", "four"]) {
+        call GenFile {input: str=x}
+        call lib.wc as wc {input: in_file = GenFile.out}
+        call lib.head as head {input: in_file = GenFile.out, num_lines=1}
+    }
+
+    scatter (filename in GenFile.out) {
+        String prefix = ".txt"
+        String prefix2 = ".cpp"
+        String suffix = wf_suffix
+
+        call lib.FileIdent as ident {
+          input:
+             aF = sub(filename, prefix, "") + suffix,
+             bF = sub(sub(filename, prefix, ""), prefix2, "") + suffix
+        }
+    }
+
+    # Ragged array of files
+    call FileArrayMake as mk1 {input: n=2}
+    call FileArrayMake as mk2 {input: n=3}
+    Array[Array[File]] allFiles = [mk1.result, mk2.result]
+    scatter (fa in allFiles) {
+        call FileArraySize {input: files=fa}
+    }
+
+    # scatter that calls a task that returns a file array
+    scatter (k in [1,2,3]) {
+        call FileArrayMake as mk_arr {input: n=k}
+    }
+
+    # conditionals
+    if (2 < 1) {
+        String false_branch = "This branch is not supposed to be taken"
+    }
+    if (length(allFiles) > 0) {
+        call z_Copy as Copy3 { input : src=f, basename="branching" }
+    }
+
+   output {
+        diff1.result
+        diff2.result
+        Copy2.outf_sorted
+        FindFiles.texts
+        FindFiles.hotels
+#       FindFiles2.elements
+#       FindFiles2.emptyFiles
+        FileSize.num_bytes
+        colocation.result
+        ident.result
+        FileArraySize.result
+        false_branch
+        Copy3.outf
+        mk_arr.result
+        head.result
+       TsvReadTable.result
+   }
 }

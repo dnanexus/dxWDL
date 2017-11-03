@@ -161,7 +161,7 @@ object RunnerWorkflowOutputs {
             case _ => throw new Exception("Workflow contains a non declaration")
         }.flatten
         val outputs : Map[String, BValue] =
-            RunnerEval.evalDeclarations(outputDecls, inputs, false, None)
+            RunnerEval.evalDeclarations(outputDecls, inputs, false, None, IODirection.Upload)
 
         val outputFields: Map[String, JsValue] = outputs.map {
             case (varName, bValue) =>
