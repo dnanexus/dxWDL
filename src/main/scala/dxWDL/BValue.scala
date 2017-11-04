@@ -61,7 +61,7 @@ object BValue {
             case (WdlObjectType, WdlObject(m: Map[String, WdlValue])) =>
                 JsObject(m.map{ case (k, v) =>
                              k -> JsObject(
-                                 "type" -> JsString(w.wdlType.toWdlString),
+                                 "type" -> JsString(v.wdlType.toWdlString),
                                  "value" -> wdlToJSON(v.wdlType, v))
                          }.toMap)
 

@@ -7,7 +7,7 @@ import wdl4s.wdl.expression._
 import wdl4s.wdl.types._
 import wdl4s.wdl.values._
 
-class BValuesTest extends FlatSpec with Matchers {
+class BValueTest extends FlatSpec with Matchers {
 
     private def make(wdlValue: WdlValue) : BValue = {
         val wvl = WdlVarLinks.importFromWDL(wdlValue.wdlType,
@@ -43,7 +43,7 @@ class BValuesTest extends FlatSpec with Matchers {
         }
     }
 
-    it should "support maps" in {
+    it should "support maps and objects" in {
         val code=
             """|task t {
                |    Map[String, Int] mSI = {"Apple": 1, "Mellon": 2}
@@ -51,9 +51,15 @@ class BValuesTest extends FlatSpec with Matchers {
                |    Map[String, Float] mSF = {"Apple": 1.0, "Mellon": 2.3}
                |
                |    Map[String, Map[String, Int]] mmSI = {
-               |      "cheap": mSI,
-               |      "expensive": mSI2
+               |     "cheap": mSI,
+               |     "expensive": mSI2
                |    }
+               |
+               |    Object z1 = {"a": 1, "b": 2}
+               |    Object z2 = {"a": 0, "b": 3}
+               |
+               |    Pair[Int, String] p1 = (1, "snail")
+               |
                |    command {}
                |    output {}
                |}
@@ -73,8 +79,15 @@ class BValuesTest extends FlatSpec with Matchers {
             val e:WdlExpression = decl.expression.get
             val w:WdlValue = e.evaluate(lookup, NoFunctions).get
 
-            val bv = make(w)
-            bv should equal(BValue.fromJSON(BValue.toJSON(bv)))
+            // Coerce to the right type if needed
+            val wdlValue = Utils.cast(decl.wdlType, w, decl.unqualifiedName)
+
+            val bv = make(wdlValue)
+            val bvJs = BValue.toJSON(bv)
+            //System.err.println(bvJs.prettyPrint)
+            val bv2 = BValue.fromJSON(bvJs)
+            bv should equal(bv2)
+            //System.err.println(s"${decl.unqualifiedName} -> ${bv}")
 
             // add to environment
             env(decl.unqualifiedName) = w

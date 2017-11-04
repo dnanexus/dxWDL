@@ -296,11 +296,17 @@ case class RunnerTask(task:WdlTask,
         // serialize the environment, so we don't have to calculate it again in
         // the epilog
         writeDeclarationsToDisk(decls)
+
+        // Checkpoint the localized file tables
+        LocalDxFiles.freeze()
     }
 
     def epilog(jobInputPath : Path,
                jobOutputPath : Path,
                jobInfoPath: Path) : Unit = {
+        // Repopulate the localized file tables
+        LocalDxFiles.unfreeze()
+
         val decls : Map[String, BValue] = readDeclarationsFromDisk()
         val env:Map[String, WdlVarLinks] = decls.map{
             case (varName, BValue(wvl,_)) => varName -> wvl

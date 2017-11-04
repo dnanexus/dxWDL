@@ -307,7 +307,7 @@ def register_all_tests():
             try:
                 register_test(fname)
             except Exception, e:
-                print("Skipping WDL file {}".format(fname))
+                print("Skipping WDL file {} error={}".format(fname, e))
 
     # failing tests
     test_failing.add("bad_status")

@@ -28,7 +28,7 @@ object DxFunctions extends WdlStandardLibraryFunctions {
 
     // Files that have to be downloaded before read.
     // We download them once, and then remove them from the hashtable.
-    var remoteFiles = HashMap.empty[String, DXFile]
+    private val remoteFiles = HashMap.empty[String, DXFile]
 
 
     def registerRemoteFile(path: String, dxfile: DXFile) = {
@@ -51,6 +51,8 @@ object DxFunctions extends WdlStandardLibraryFunctions {
                 val p:Path = Paths.get(path)
                 if (Files.exists(p)) {
                     errStream.println(s"Lazy download for ${p} invoked")
+                    // Remove the empty file that is a stand-in for the
+                    // real file.
                     Files.delete(p)
                 }
                 Utils.downloadFile(p, dxFile)
