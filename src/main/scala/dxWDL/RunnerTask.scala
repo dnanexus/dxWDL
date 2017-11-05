@@ -299,6 +299,7 @@ case class RunnerTask(task:WdlTask,
 
         // Checkpoint the localized file tables
         LocalDxFiles.freeze()
+        DxFunctions.freeze()
     }
 
     def epilog(jobInputPath : Path,
@@ -306,6 +307,7 @@ case class RunnerTask(task:WdlTask,
                jobInfoPath: Path) : Unit = {
         // Repopulate the localized file tables
         LocalDxFiles.unfreeze()
+        DxFunctions.unfreeze()
 
         val decls : Map[String, BValue] = readDeclarationsFromDisk()
         val env:Map[String, WdlVarLinks] = decls.map{

@@ -50,10 +50,6 @@ object LocalDxFiles {
             val path = Paths.get(p)
             localized(path) = dxFile
             reverseLookup(dxFile) = path
-
-            // Repopulate the DxFunctions table, which has gone blank
-            // after shutdown.
-            DxFunctions.registerRemoteFile(p, dxFile)
         }
     }
 
@@ -114,7 +110,10 @@ object LocalDxFiles {
 
         val path = reverseLookup.get(dxFile) match {
             case Some(path) =>
-                // We already have a local copy
+                if (DxFunctions.isRemote(dxFile)) {
+                    // We haven't downloaded the file data itself
+                    download(path, dxFile, force)
+                }
                 path
             case None =>
                 // Need to download it

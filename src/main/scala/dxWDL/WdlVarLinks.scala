@@ -506,13 +506,28 @@ object WdlVarLinks {
         JsObject(mWithType)
     }
 
+    // Register each dx:file that the job received as input
+    private def localizeFileLinks(jsv:JsValue) : Unit = {
+        jsv match {
+            case JsBoolean(_) | JsNull | JsNumber(_) | JsString(_) => ()
+            case JsObject(_) if isDxFile(jsv) =>
+                LocalDxFiles.wdlFileOfDxLink(jsv, false)
+            case JsObject(fields) =>
+                fields.foreach{ case(_,v) => localizeFileLinks(v) }
+            case JsArray(elems) =>
+                elems.foreach(e => localizeFileLinks(e))
+        }
+    }
+
     // Convert an input field to a dx-links structure. This allows
     // passing it to other jobs.
     //
     // Note: we need to represent dx-files as local paths, even if we
     // do not download them. This is because accessing these files
     // later on will cause a WDL failure.
-    def importFromDxExec(ioClass:IOClass, attrs:DeclAttrs, jsValue: JsValue) : WdlVarLinks = {
+    def importFromDxExec(ioClass:IOClass,
+                         attrs:DeclAttrs,
+                         jsValue: JsValue) : WdlVarLinks = {
         val (wdlType, jsv) = ioClass match {
             case IOClass.BOOLEAN => (WdlBooleanType, jsValue)
             case IOClass.INT => (WdlIntegerType, jsValue)
@@ -545,6 +560,8 @@ object WdlVarLinks {
                 }
             case other => throw new Exception(s"unhandled IO class ${other}")
         }
+
+        localizeFileLinks(jsv)
         WdlVarLinks(wdlType, attrs, DxlValue(jsv))
     }
 

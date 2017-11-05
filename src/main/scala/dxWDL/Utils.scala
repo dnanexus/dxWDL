@@ -106,6 +106,7 @@ object Utils {
     val INSTANCE_TYPE_DB_FILENAME = "instanceTypeDB.json"
     val INTERMEDIATE_RESULTS_FOLDER = "intermediate"
     val LOCAL_DX_FILES_CHECKPOINT_FILE = "localized_files.json"
+    val DX_FUNCTIONS_FILES = "dx_functions_files.json"
     val LINK_INFO_FILENAME = "linking.json"
     val MAX_STRING_LEN = 8 * 1024     // Long strings cause problems with bash and the UI
     val MAX_NUM_FILES_MOVE_LIMIT = 1000
@@ -560,7 +561,7 @@ object Utils {
             val fid = dxfile.getId()
             try {
                 // Use dx download
-                val dxDownloadCmd = s"dx download ${fid} -o ${path.toString()}"
+                val dxDownloadCmd = s"dx download ${fid} -f -o ${path.toString()}"
                 System.err.println(s"--  ${dxDownloadCmd}")
                 val (outmsg, errmsg) = execCommand(dxDownloadCmd, None)
 
