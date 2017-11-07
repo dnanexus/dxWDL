@@ -1,4 +1,3 @@
 {
-  "SumArray.result": 7,
-  "SumArray2.result": 7
+  "X_outputs.TsvReadTable_result" :  [["11", "12", "13"], ["21", "22", "23"]]
 }

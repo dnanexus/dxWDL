@@ -144,6 +144,23 @@ correct usage. The file must be accessed only once, in sequential
 order, from the beginning. It need not be read to the end. If the task
 does not keep this contract, it could fail in unexpected ways.
 
+Some tasks have empty command sections. For example, the `fileSize`
+task (below) calculates the size of a file, but does not need to
+download it.  In such cases, the input files are downloaded lazily,
+only if their data is accessed.
+
+```
+task fileSize {
+    File in_file
+
+    command {}
+    output {
+        Float num_bytes = size(in_file)
+    }
+}
+```
+
+
 
 ## Task and workflow inputs
 

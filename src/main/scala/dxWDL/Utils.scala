@@ -105,6 +105,8 @@ object Utils {
     val IF = "if"
     val INSTANCE_TYPE_DB_FILENAME = "instanceTypeDB.json"
     val INTERMEDIATE_RESULTS_FOLDER = "intermediate"
+    val LOCAL_DX_FILES_CHECKPOINT_FILE = "localized_files.json"
+    val DX_FUNCTIONS_FILES = "dx_functions_files.json"
     val LINK_INFO_FILENAME = "linking.json"
     val MAX_STRING_LEN = 8 * 1024     // Long strings cause problems with bash and the UI
     val MAX_NUM_FILES_MOVE_LIMIT = 1000
@@ -554,7 +556,7 @@ object Utils {
     // download a file from the platform to a path on the local disk.
     //
     // Note: this function assumes that the target path does not exist yet
-    def downloadFile(path: Path, dxfile: DXFile) = {
+    def downloadFile(path: Path, dxfile: DXFile) : Unit = {
         def downloadOneFile(path: Path, dxfile: DXFile, counter: Int) : Boolean = {
             val fid = dxfile.getId()
             try {
@@ -733,7 +735,7 @@ object Utils {
         val retVal =
             if (v.wdlType != wdlType) {
                 // we need to convert types
-                System.err.println(s"Casting variable ${varName} from ${v.wdlType} to ${wdlType}")
+                //System.err.println(s"Casting variable ${varName} from ${v.wdlType} to ${wdlType}")
                 wdlType.coerceRawValue(v).get
             } else {
                 // no need to change types

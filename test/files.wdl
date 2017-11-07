@@ -42,20 +42,7 @@ task z_FindFiles2 {
     output {
         Array[File] elements = glob('*.txt')
         Array[File] emptyFiles = glob('*.none')
-    }
-}
-
-task z_FileSizes {
-    File car_desc
-
-    command <<<
-      echo "Iron" > A.txt
-      echo "Silver" > B.txt
-      echo "Gold" > C.txt
-    >>>
-    output {
-      Array[Float] file_sizes = [size("A.txt"), size("B.txt"), size("C.txt")]
-      Float car_size = size(car_desc)
+        Array[Float] file_sizes = [size("A.txt"), size("B.txt"), size("C.txt")]
     }
 }
 
@@ -72,18 +59,6 @@ task GenFile {
     }
 }
 
-task z_file_ident {
-    File fileA
-    File fileB
-
-    command {
-    }
-    output {
-      String result = fileA
-    }
-}
-
-
 # create a ragged array of files, and count how many bytes each file-row
 # takes.
 # Create an array of [NR] files
@@ -98,6 +73,32 @@ task FileArrayMake{
     >>>
     output {
         Array[File] result = glob("*.txt")
+    }
+}
+
+# Create the following TSV Table
+# 11   12   13
+# 21   22   23
+task TsvGenTable {
+    command {
+        echo -e "11\t12\t13" > table.txt
+        echo -e "21\t22\t23" >> table.txt
+    }
+    output {
+        File tbl = "table.txt"
+    }
+}
+
+# Read the table created by TsvGenTable.
+# The task has an empty command section, so
+# the [tbl_file] is supposted to be downloaded only
+# in the output section (upon access).
+task TsvReadTable {
+    File tbl_file
+
+    command {}
+    output {
+        Array[Array[String]] result = read_tsv(tbl_file)
     }
 }
 
@@ -121,6 +122,9 @@ workflow files {
     File f1
     File f2
 
+    call TsvGenTable
+    call TsvReadTable { input : tbl_file = TsvGenTable.tbl }
+
     # Try an applet that streams two files
     call lib.diff as diff1 {
         input: a=f, b=f
@@ -137,10 +141,13 @@ workflow files {
     call z_Copy as Copy2 { input : src=Copy.outf, basename="mixing" }
     call z_FindFiles as FindFiles
     call z_FindFiles2 as FindFiles2
-    call z_FileSizes as FileSizes { input: car_desc=FindFiles.texts[0] }
+
+    # Calculate the sizes of files
+    scatter (x in FindFiles2.elements) {
+        call lib.FileSize as FileSize {input: in_file=x}
+    }
 
     String wf_suffix = ".txt"
-
     scatter (x in ["one", "two", "three", "four"]) {
         call GenFile {input: str=x}
         call lib.wc as wc {input: in_file = GenFile.out}
@@ -152,10 +159,10 @@ workflow files {
         String prefix2 = ".cpp"
         String suffix = wf_suffix
 
-        call z_file_ident as ident {
+        call lib.FileIdent as ident {
           input:
-             fileA = sub(filename, prefix, "") + suffix,
-             fileB = sub(sub(filename, prefix, ""), prefix2, "") + suffix
+             aF = sub(filename, prefix, "") + suffix,
+             bF = sub(sub(filename, prefix, ""), prefix2, "") + suffix
         }
     }
 
@@ -180,7 +187,7 @@ workflow files {
         call z_Copy as Copy3 { input : src=f, basename="branching" }
     }
 
-    output {
+   output {
         diff1.result
         diff2.result
         Copy2.outf_sorted
@@ -188,6 +195,7 @@ workflow files {
         FindFiles.hotels
 #       FindFiles2.elements
 #       FindFiles2.emptyFiles
+        FileSize.num_bytes
         colocation.result
         ident.result
         FileArraySize.result
@@ -195,5 +203,6 @@ workflow files {
         Copy3.outf
         mk_arr.result
         head.result
-    }
+       TsvReadTable.result
+   }
 }

@@ -1,5 +1,21 @@
 # Release Notes
 
+## 0.50
+- Tasks that have an empty command section do not download files eagerly. For example,
+if a task only looks at `size(file)`, it will not download the file at all.
+
+```
+task fileSize {
+    File in_file
+
+    command {}
+    output {
+        Float num_bytes = size(in_file)
+    }
+}
+```
+
+
 ## 0.49
 - Removed limitation on maximal hourly price per instance. Some bioinformatics pipelines
 regularly require heavy weight instances.
