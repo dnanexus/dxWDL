@@ -73,11 +73,6 @@ object DxFunctions extends WdlStandardLibraryFunctions {
         remoteFiles(path) = dxfile
     }
 
-    def isRemote(dxFile:DXFile) : Boolean = {
-        // Note: performs a linear scan
-        remoteFiles.exists{ case (_, dxf) => dxf == dxFile }
-    }
-
     def unregisterRemoteFile(path: String) = {
         if (remoteFiles contains path)
             remoteFiles.remove(path)

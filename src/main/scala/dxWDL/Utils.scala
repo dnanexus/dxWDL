@@ -556,12 +556,12 @@ object Utils {
     // download a file from the platform to a path on the local disk.
     //
     // Note: this function assumes that the target path does not exist yet
-    def downloadFile(path: Path, dxfile: DXFile) = {
+    def downloadFile(path: Path, dxfile: DXFile) : Unit = {
         def downloadOneFile(path: Path, dxfile: DXFile, counter: Int) : Boolean = {
             val fid = dxfile.getId()
             try {
                 // Use dx download
-                val dxDownloadCmd = s"dx download ${fid} -f -o ${path.toString()}"
+                val dxDownloadCmd = s"dx download ${fid} -o ${path.toString()}"
                 System.err.println(s"--  ${dxDownloadCmd}")
                 val (outmsg, errmsg) = execCommand(dxDownloadCmd, None)
 

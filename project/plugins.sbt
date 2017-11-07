@@ -4,4 +4,4 @@ addSbtPlugin("org.scoverage" % "sbt-scoverage" % "1.5.0")
 addSbtPlugin("org.scoverage" % "sbt-coveralls" % "1.1.0")
 addSbtPlugin("com.eed3si9n" % "sbt-assembly" % "0.14.4")
 
-libraryDependencies += "org.slf4j" % "slf4j-nop" % "1.7.21"
+libraryDependencies += "org.slf4j" % "slf4j-nop" % "1.7.24"

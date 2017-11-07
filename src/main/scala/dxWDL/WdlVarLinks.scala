@@ -276,7 +276,7 @@ object WdlVarLinks {
 
             // File download
             case (WdlFileType, _) if ioDir == IODirection.Download =>
-                LocalDxFiles.wdlFileOfDxLink(jsValue, force)
+                LocalDxFiles.download(jsValue, force)
 
             case (WdlFileType, _) =>
                 throw new AppInternalException(
@@ -511,7 +511,7 @@ object WdlVarLinks {
         jsv match {
             case JsBoolean(_) | JsNull | JsNumber(_) | JsString(_) => ()
             case JsObject(_) if isDxFile(jsv) =>
-                LocalDxFiles.wdlFileOfDxLink(jsv, false)
+                LocalDxFiles.download(jsv, false)
             case JsObject(fields) =>
                 fields.foreach{ case(_,v) => localizeFileLinks(v) }
             case JsArray(elems) =>
