@@ -10,7 +10,6 @@ import java.nio.file.{Path, Paths, Files}
 import java.util.Base64
 import scala.collection.JavaConverters._
 import scala.concurrent._
-import scala.collection.mutable.HashMap
 import scala.util.{Failure, Success}
 import ExecutionContext.Implicits.global
 import scala.sys.process._
@@ -19,7 +18,6 @@ import wdl4s.wdl._
 import wdl4s.wdl.expression._
 import wdl4s.wdl.types._
 import wdl4s.wdl.values._
-
 
 // Exception used for AppInternError
 class AppInternalException private(ex: RuntimeException) extends RuntimeException(ex) {
@@ -116,10 +114,6 @@ object Utils {
     val UPLOAD_RETRY_LIMIT = DOWNLOAD_RETRY_LIMIT
 
     lazy val dxEnv = DXEnvironment.create()
-
-    // Lookup cache for projects. This saves
-    // repeated searches for projects we already found.
-    val projectDict = HashMap.empty[String, DXProject]
 
     // Substrings used by the compiler for encoding purposes
     val reservedSubstrings = List("___")
@@ -223,42 +217,6 @@ object Utils {
         // remove auxiliary fields
         (inputSpec.filter{ case (fieldName,_) => !fieldName.endsWith(FLAT_FILES_SUFFIX) },
          outputSpec.filter{ case (fieldName,_) => !fieldName.endsWith(FLAT_FILES_SUFFIX) })
-    }
-
-    def lookupProject(projName: String): DXProject = {
-        if (projName.startsWith("project-")) {
-            // A project ID
-            DXProject.getInstance(projName)
-        } else {
-            if (projectDict contains projName) {
-                //System.err.println(s"Cached project ${projName}")
-                return projectDict(projName)
-            }
-
-            // A project name, resolve it
-            val req: ObjectNode = DXJSON.getObjectBuilder()
-                .put("name", projName)
-                .put("limit", 2)
-                .build()
-            val rep = DXAPI.systemFindProjects(req, classOf[JsonNode])
-            val repJs:JsValue = Utils.jsValueOfJsonNode(rep)
-
-            val results = repJs.asJsObject.fields.get("results") match {
-                case Some(JsArray(x)) => x
-                case _ => throw new Exception(
-                    s"Bad response from systemFindProject API call (${repJs.prettyPrint}), when resolving project ${projName}.")
-            }
-            if (results.length > 1)
-                throw new Exception(s"Found more than one project named ${projName}")
-            if (results.length == 0)
-                throw new Exception(s"Project ${projName} not found")
-            val dxProject = results(0).asJsObject.fields.get("id") match {
-                case Some(JsString(id)) => DXProject.getInstance(id)
-                case _ => throw new Exception(s"Bad response from SystemFindProject API call ${repJs.prettyPrint}")
-            }
-            projectDict(projName) = dxProject
-            dxProject
-        }
     }
 
     // Create a file from a string
@@ -750,6 +708,7 @@ object Utils {
     //
     // It handles the case where the scatter collection is not an
     // array.
+    //
     def lookupType(from: Scope)(n: String): WdlType = {
         val resolved:Option[WdlGraphNode] = from.resolveVariable(n)
         //System.err.println(s"resolved=${resolved}")

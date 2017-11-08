@@ -256,12 +256,26 @@ workflow w {
 }
 ```
 
+## Using a docker image on the platform
+
+Docker images can be created with [dx-docker create-asset](https://wiki.dnanexus.com/Developer-Tutorials/Using-Docker-Images). In
+order to use such an image, you can specify the docker attribute in
+the runtime section as: `dx://project-id/image-name`. The project can
+be omitted if you are located in it already.
+
+For example:
+```
+runtime {
+   docker: "dx://image-name"
+}
+```
 
 ## Debugging an applet
 
-If you build an applet on the platform with dxWDL, and want to
-inspect it, use: ```dx get --omit-resources  <applet path>```. This will refrain from
-downloading the large resource files that go into the applet.
+If you build an applet on the platform with dxWDL, and want to inspect
+it, use: ```dx get --omit-resources <applet path>```. This will
+refrain from downloading the large resource files that go into the
+applet.
 
 
 # Design

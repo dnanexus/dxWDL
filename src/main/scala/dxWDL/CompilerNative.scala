@@ -450,7 +450,8 @@ case class CompilerNative(dxWDLrtId: String,
     // Set the run spec.
     //
     def calcRunSpec(bashScript: String,
-                    iType: IR.InstanceType) : JsValue = {
+                    iType: IR.InstanceType,
+                    docker: IR.DockerImage) : JsValue = {
         // find the dxWDL asset
         val instanceType:String = iType match {
             case IR.InstanceTypeConst(x) => x
@@ -476,7 +477,17 @@ case class CompilerNative(dxWDLrtId: String,
             "release" -> JsString("14.04"),
             "bundledDepends" -> JsArray(runtimeLibrary)
         )
-        JsObject(runSpec ++ timeoutSpec)
+
+        // If the docker image is a platform asset,
+        // add it to the asset-depends.
+        val dockerAssets: Map[String, JsValue] = docker match {
+            case IR.DockerImageNone => Map.empty
+            case IR.DockerImageNetwork => Map.empty
+            case IR.DockerImageDxAsset(asset: JsValue) =>
+                Map("assetDepends" -> JsArray(JsObject("id" -> asset)))
+        }
+
+        JsObject(runSpec ++ timeoutSpec ++ dockerAssets)
     }
 
     // Build an '/applet/new' request
@@ -491,7 +502,7 @@ case class CompilerNative(dxWDLrtId: String,
         val outputSpec : Vector[JsValue] = applet.outputs.map(cVar =>
             cVarToSpec(cVar)
         ).flatten.toVector
-        val runSpec : JsValue = calcRunSpec(bashScript, applet.instanceType)
+        val runSpec : JsValue = calcRunSpec(bashScript, applet.instanceType, applet.docker)
 
         // Even scatters need network access, because
         // they spawn subjobs that (may) use dx-docker.

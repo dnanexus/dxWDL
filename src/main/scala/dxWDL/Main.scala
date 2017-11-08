@@ -390,7 +390,7 @@ object Main extends App {
         if (!folderRaw.startsWith("/"))
             throw new Exception(s"Folder must start with '/'")
         val dxFolder = folderRaw
-        val dxProject = Utils.lookupProject(projectRaw)
+        val dxProject = DxPath.lookupProject(projectRaw)
         val projName = dxProject.describe.getName
         Utils.trace(verbose.on,
                     s"""|project name: <${projName}>

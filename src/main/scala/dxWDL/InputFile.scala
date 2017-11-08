@@ -19,61 +19,13 @@ This is the dx JSON input:
   */
 package dxWDL
 
-import com.dnanexus.{DXFile, DXProject, DXSearch}
+import com.dnanexus.DXDataObject
 import scala.collection.mutable.HashMap
-import java.nio.file.{Path, Paths}
-import scala.collection.JavaConverters._
+import java.nio.file.Path
 import spray.json._
 import Utils.{trace, DX_URL_PREFIX, FLAT_FILES_SUFFIX}
 
 case class InputFile(verbose: Utils.Verbose) {
-    private def lookupFile(dxProject: Option[DXProject], fileName: String): DXFile = {
-        if (fileName.startsWith("file-")) {
-            // A file ID
-            DXFile.getInstance(fileName)
-        } else {
-            val fullPath = Paths.get(fileName)
-            trace(verbose.on, s"lookupFile: ${fullPath.toString}")
-            val parent = fullPath.getParent
-            var folder = "/"
-            if (parent != null) {
-                folder = parent.toString
-                if (!folder.startsWith("/"))
-                    folder = "/" + folder
-            }
-            val baseName = fullPath.getFileName.toString
-            val found:List[DXFile] = dxProject match  {
-                case Some(x) =>
-                    DXSearch.findDataObjects().nameMatchesExactly(baseName)
-                        .inFolder(x, folder).withClassFile().execute().asList().asScala.toList
-                case None =>
-                    throw new Exception("File lookup requires project context")
-            }
-            if (found.length == 0)
-                throw new Exception(s"File ${fileName} not found in project ${dxProject}")
-            if (found.length > 1)
-                throw new Exception(s"Found more than one file named ${fileName} in project ${dxProject}")
-            found(0)
-        }
-    }
-
-    private def lookupDxPath(dxPath: String) : DXFile = {
-        val components = dxPath.split(":/")
-        if (components.length > 2) {
-            throw new Exception(s"Path ${dxPath} cannot more than two components")
-        } else if (components.length == 2) {
-            val projName = components(0)
-            val fileName = components(1)
-            val dxProject = Utils.lookupProject(projName)
-            lookupFile(Some(dxProject), fileName)
-        } else if (components.length == 1) {
-            val fileName = components(0)
-            lookupFile(None, fileName)
-        } else {
-            throw new Exception(s"Path ${dxPath} is invalid")
-        }
-    }
-
     // traverse the JSON structure, and replace file URLs with
     // dx-links.
     private def replaceURLsWithLinks(jsv: JsValue) : JsValue = {
@@ -81,7 +33,7 @@ case class InputFile(verbose: Utils.Verbose) {
             case JsString(s) if s.startsWith(DX_URL_PREFIX) =>
                 // Identify platform file paths by their prefix,
                 // do a lookup, and create a dxlink
-                val dxFile: DXFile = lookupDxPath(s.substring(DX_URL_PREFIX.length))
+                val dxFile: DXDataObject = DxPath.lookupDxURL(s)
                 Utils.jsValueOfJsonNode(dxFile.getLinkAsJson)
 
             case JsBoolean(_) | JsNull | JsNumber(_) | JsString(_) => jsv
