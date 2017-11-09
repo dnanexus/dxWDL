@@ -2,10 +2,9 @@
   */
 package dxWDL
 
-import com.dnanexus.{DXDataObject}
 import net.jcazevedo.moultingyaml._
 import scala.util.{Failure, Success, Try}
-import Utils.{isNativeDxType}
+import Utils.{DX_URL_PREFIX, isNativeDxType}
 import wdl4s.wdl._
 import wdl4s.wdl.AstTools
 import wdl4s.wdl.AstTools.EnhancedAstNode
@@ -601,14 +600,24 @@ workflow w {
                 IR.DockerImageNone
             case Some(expr) =>
                 evalIfIsWdlStringConst(expr) match {
-                    case None =>
+                    case Some(url) if url.startsWith(DX_URL_PREFIX) =>
+                        // A constant image specified with a DX URL
+                        val dxRecord = DxPath.lookupDxURLRecord(url)
+                        IR.DockerImageDxAsset(dxRecord)
+                    case _ =>
                         // Image will be downloaded from the network
                         IR.DockerImageNetwork
-                    case Some(dxUrl) =>
-                        // A constant image specified with a DX URL
-                        val dxObj:DXDataObject = DxPath.lookupDxURL(dxUrl)
-                        IR.DockerImageDxAsset(Utils.jsValueOfJsonNode(dxObj.getLinkAsJson))
                 }
+        }
+        // The docker container is on the platform, we need to remove
+        // the dxURLs in the runtime section, to avoid a runtime
+        // lookup. For example:
+        //
+        //   dx://dxWDL_playground:/glnexus_internal  ->   dx://record-xxxx
+        val taskCleaned = docker match {
+            case IR.DockerImageDxAsset(dxRecord) =>
+                WdlRewrite.taskReplaceDockerValue(task, dxRecord)
+            case _ => task
         }
         val kind =
             (task.meta.get("type"), task.meta.get("id")) match {
@@ -619,7 +628,6 @@ workflow w {
                     // a WDL task
                     IR.AppletKindTask
             }
-
         val applet = IR.Applet(task.name,
                                inputVars,
                                outputVars,
@@ -627,7 +635,7 @@ workflow w {
                                docker,
                                destination,
                                kind,
-                               WdlRewrite.namespace(task))
+                               WdlRewrite.namespace(taskCleaned))
         verifyWdlCodeIsLegal(applet.ns)
         (applet, outputVars)
     }

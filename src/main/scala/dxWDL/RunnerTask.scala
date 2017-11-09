@@ -22,7 +22,7 @@ import com.dnanexus.{DXJob}
 import java.nio.file.{Path, Paths}
 import scala.collection.mutable.HashMap
 import spray.json._
-import Utils.{appletLog}
+import Utils.{appletLog, DX_URL_PREFIX}
 import wdl4s.wdl.values._
 import wdl4s.wdl.{Declaration, WdlExpression, WdlTask}
 
@@ -74,7 +74,7 @@ case class RunnerTask(task:WdlTask,
     }
 
     // Figure out if a docker image is specified. If so, return it as a string.
-    private def dockerImage(env: Map[String, WdlValue]) : Option[String] = {
+    private def dockerImageEval(env: Map[String, WdlValue]) : Option[String] = {
         def lookup(varName : String) : WdlValue = {
             env.get(varName) match {
                 case Some(x) => x
@@ -95,6 +95,23 @@ case class RunnerTask(task:WdlTask,
         task.runtimeAttributes.attrs.get("docker") match {
             case None => None
             case Some(expr) => Some(evalStringExpr(expr))
+        }
+    }
+
+    private def dockerImage(env: Map[String, WdlValue]) : Option[String] = {
+        val dImg = dockerImageEval(env)
+        dImg match {
+            case Some(url) if url.startsWith(DX_URL_PREFIX) =>
+                // This is a record on the platform, created with
+                // dx-docker. Describe it with an API call, and get
+                // the docker image name.
+                appletLog(s"looking up dx:url ${url}")
+                val dxRecord = DxPath.lookupDxURLRecord(url)
+                appletLog(s"Found record ${dxRecord}")
+                val imageName = dxRecord.describe().getName
+                appletLog(s"Image name is ${imageName}")
+                Some(imageName)
+            case _ => dImg
         }
     }
 

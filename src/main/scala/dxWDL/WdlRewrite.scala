@@ -9,6 +9,7 @@
   */
 package dxWDL
 
+import com.dnanexus.{DXRecord}
 import wdl4s.wdl._
 import wdl4s.wdl.AstTools
 import wdl4s.parser.WdlParser.{Ast, Terminal}
@@ -61,6 +62,19 @@ object WdlRewrite {
                                scope.ast)
         updateScope(scope, task)
         task
+    }
+
+    // Replace the docker string with a dxURL that does not require
+    // runtime search. For example:
+    //
+    //   dx://dxWDL_playground:/glnexus_internal  ->   dx://record-xxxx
+    def taskReplaceDockerValue(task:WdlTask, dxRecord:DXRecord) : WdlTask = {
+        val attrs:Map[String, WdlExpression] = task.runtimeAttributes.attrs
+        val dxid = dxRecord.getId()
+        val url:String = s""" "${Utils.DX_URL_PREFIX}${dxid}" """
+        val urlExpr:WdlExpression = WdlExpression.fromString(url)
+        val cleaned = attrs + ("docker" -> urlExpr)
+        task.copy(runtimeAttributes = RuntimeAttributes(cleaned))
     }
 
     private def genDefaultValueOfType(wdlType: WdlType) : WdlValue = {

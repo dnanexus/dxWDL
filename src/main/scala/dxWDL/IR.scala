@@ -8,6 +8,7 @@
 // We use YAML as a human readable representation of the IR.
 package dxWDL
 
+import com.dnanexus.DXRecord
 import net.jcazevedo.moultingyaml._
 import spray.json._
 import wdl4s.wdl.WdlNamespace
@@ -57,7 +58,7 @@ object IR {
     sealed trait DockerImage
     case object DockerImageNone extends DockerImage
     case object DockerImageNetwork extends DockerImage
-    case class DockerImageDxAsset(asset: JsValue) extends DockerImage
+    case class DockerImageDxAsset(asset: DXRecord) extends DockerImage
 
     // There are several kinds of applets
     //   Eval:      evaluate WDL expressions, pure calculation
@@ -147,8 +148,9 @@ object IR {
                         YamlString("None")
                     case DockerImageNetwork =>
                         YamlString("Network")
-                    case DockerImageDxAsset(asset) =>
-                        YamlObject(YamlString("asset") -> YamlString(asset.prettyPrint))
+                    case DockerImageDxAsset(dxAsset) =>
+                        val assetJs = Utils.jsValueOfJsonNode(dxAsset.getLinkAsJson)
+                        YamlObject(YamlString("asset") -> YamlString(assetJs.prettyPrint))
                 }
             def read(value: YamlValue) : DockerImage = value match {
                 case YamlString("None") => DockerImageNone
@@ -156,7 +158,13 @@ object IR {
                 case YamlObject(_) =>
                     value.asYamlObject.getFields(YamlString("asset")) match {
                         case Seq(YamlString(buf)) =>
-                            DockerImageDxAsset(buf.parseJson)
+                            val assetJs = buf.parseJson
+                            val dxRecord = assetJs.asJsObject.getFields("id") match {
+                                case Seq(JsString(rid)) =>
+                                    DXRecord.getInstance(rid)
+                                case _ => throw new Exception(s"Unexpected dx:asset ${assetJs.prettyPrint}")
+                            }
+                            DockerImageDxAsset(dxRecord)
                     }
                 case unrecognized =>
                     throw new Exception(s"DocketImage expected ${unrecognized}")

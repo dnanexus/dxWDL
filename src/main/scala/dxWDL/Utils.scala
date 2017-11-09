@@ -94,7 +94,6 @@ object Utils {
     val APPLET_LOG_MSG_LIMIT = 1000
     val CHECKSUM_PROP = "dxWDL_checksum"
     val COMMON = "common"
-    val DEFAULT_APPLET_TIMEOUT = 48
     val DOWNLOAD_RETRY_LIMIT = 3
     val DX_HOME = "/home/dnanexus"
     val DX_INSTANCE_TYPE_ATTR = "dx_instance_type"

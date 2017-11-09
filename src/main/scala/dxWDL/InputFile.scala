@@ -33,7 +33,7 @@ case class InputFile(verbose: Utils.Verbose) {
             case JsString(s) if s.startsWith(DX_URL_PREFIX) =>
                 // Identify platform file paths by their prefix,
                 // do a lookup, and create a dxlink
-                val dxFile: DXDataObject = DxPath.lookupDxURL(s)
+                val dxFile: DXDataObject = DxPath.lookupDxURLFile(s)
                 Utils.jsValueOfJsonNode(dxFile.getLinkAsJson)
 
             case JsBoolean(_) | JsNull | JsNumber(_) | JsString(_) => jsv

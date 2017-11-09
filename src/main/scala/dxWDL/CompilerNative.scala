@@ -4,7 +4,7 @@ package dxWDL
 
 // DX bindings
 import com.fasterxml.jackson.databind.JsonNode
-import com.dnanexus.{DXApplet, DXAPI, DXDataObject, DXProject, DXRecord, DXWorkflow}
+import com.dnanexus.{DXApplet, DXAPI, DXDataObject, DXFile, DXProject, DXRecord, DXWorkflow}
 import java.security.MessageDigest
 import java.time.format.DateTimeFormatter
 import scala.collection.JavaConverters._
@@ -18,7 +18,6 @@ case class CompilerNative(dxWDLrtId: String,
                           instanceTypeDB: InstanceTypeDB,
                           folder: String,
                           cef: CompilerErrorFormatter,
-                          timeoutPolicy: Option[Int],
                           force: Boolean,
                           archive: Boolean,
                           verbose: Utils.Verbose) {
@@ -458,15 +457,6 @@ case class CompilerNative(dxWDLrtId: String,
             case IR.InstanceTypeDefault | IR.InstanceTypeRuntime =>
                 instanceTypeDB.getMinimalInstanceType
         }
-        val timeoutSpec: Map[String, JsValue] =
-            timeoutPolicy match {
-                case None => Map()
-                case Some(hours) =>
-                    Map("timeoutPolicy" -> JsObject("*" ->
-                                                        JsObject("hours" -> JsNumber(hours))
-                        ))
-            }
-
         val runSpec: Map[String, JsValue] = Map(
             "code" -> JsString(bashScript),
             "interpreter" -> JsString("bash"),
@@ -475,19 +465,32 @@ case class CompilerNative(dxWDLrtId: String,
                              JsObject("instanceType" -> JsString(instanceType))),
             "distribution" -> JsString("Ubuntu"),
             "release" -> JsString("14.04"),
-            "bundledDepends" -> JsArray(runtimeLibrary)
         )
 
         // If the docker image is a platform asset,
         // add it to the asset-depends.
-        val dockerAssets: Map[String, JsValue] = docker match {
-            case IR.DockerImageNone => Map.empty
-            case IR.DockerImageNetwork => Map.empty
-            case IR.DockerImageDxAsset(asset: JsValue) =>
-                Map("assetDepends" -> JsArray(JsObject("id" -> asset)))
-        }
+        val dockerAssets: Option[JsValue] = docker match {
+            case IR.DockerImageNone => None
+            case IR.DockerImageNetwork => None
+            case IR.DockerImageDxAsset(dxRecord) =>
+                val desc = dxRecord.describe(DXDataObject.DescribeOptions.get.withDetails)
 
-        JsObject(runSpec ++ timeoutSpec ++ dockerAssets)
+                // extract the archiveFileId field
+                val details:JsValue = jsValueOfJsonNode(desc.getDetails(classOf[JsonNode]))
+                val pkgFile:DXFile = details.asJsObject.fields.get("archiveFileId") match {
+                    case Some(id) => Utils.dxFileOfJsValue(id)
+                    case _ => throw new Exception(s"Badly formatted record ${dxRecord}")
+                }
+                val pkgName = pkgFile.describe.getName
+                Some(JsObject("name" -> JsString(pkgName),
+                             "id" -> jsValueOfJsonNode(pkgFile.getLinkAsJson)))
+        }
+        val bundledDepends = dockerAssets match {
+            case None => Vector(runtimeLibrary)
+            case Some(img) => Vector(runtimeLibrary, img)
+        }
+        JsObject(runSpec +
+                     ("bundledDepends" -> JsArray(bundledDepends)))
     }
 
     // Build an '/applet/new' request
