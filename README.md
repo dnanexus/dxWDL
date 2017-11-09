@@ -260,13 +260,17 @@ workflow w {
 
 Docker images can be created with [dx-docker create-asset](https://wiki.dnanexus.com/Developer-Tutorials/Using-Docker-Images). In
 order to use such an image, you can specify the docker attribute in
-the runtime section as: `dx://project-id/image-name`. The project can
+the runtime section as: `dx://project-id:/image-name`. The project can
 be omitted if you are located in it already.
 
 For example:
 ```
 runtime {
-   docker: "dx://image-name"
+   docker: "dx://GenomeSequenceProject:/A/B/myOrgTools"
+}
+
+runtime {
+   docker: "dx://project-xxxx:/record-yyyy"
 }
 ```
 
