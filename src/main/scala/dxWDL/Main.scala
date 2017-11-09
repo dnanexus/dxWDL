@@ -51,8 +51,7 @@ object Main extends App {
 
     // Packing of all compiler flags in an easy to digest
     // format
-    case class CompilerOptions(appletTimeout: Option[Int],
-                               archive: Boolean,
+    case class CompilerOptions(archive: Boolean,
                                billTo: String,
                                compileMode: CompilerFlag.Value,
                                defaults: Option[Path],
@@ -390,7 +389,7 @@ object Main extends App {
         if (!folderRaw.startsWith("/"))
             throw new Exception(s"Folder must start with '/'")
         val dxFolder = folderRaw
-        val dxProject = Utils.lookupProject(projectRaw)
+        val dxProject = DxPath.lookupProject(projectRaw)
         val projName = dxProject.describe.getName
         Utils.trace(verbose.on,
                     s"""|project name: <${projName}>
@@ -419,13 +418,6 @@ object Main extends App {
             case Some(List("relaxed")) => TopoMode.SortRelaxed
             case _ => throw new Exception("Sanity: bad sort mode")
         }
-        val appletTimeout =
-            if (options contains "noAppletTimeout") {
-                None
-            } else {
-                // default timeout
-                Some(Utils.DEFAULT_APPLET_TIMEOUT)
-            }
         val defaults: Option[Path] = options.get("defaults") match {
             case None => None
             case Some(List(p)) => Some(Paths.get(p))
@@ -435,8 +427,7 @@ object Main extends App {
             case None => List.empty
             case Some(pl) => pl.map(p => Paths.get(p))
         }
-        CompilerOptions(appletTimeout,
-                        options contains "archive",
+        CompilerOptions(options contains "archive",
                         billTo,
                         compileMode,
                         defaults,
@@ -545,7 +536,6 @@ object Main extends App {
                 val (wf, _) =
                     CompilerNative(cOpt.dxWDLrtId, bOpt.dxProject, instanceTypeDB,
                                    bOpt.folder, cef,
-                                   cOpt.appletTimeout,
                                    bOpt.force, cOpt.archive, bOpt.verbose).apply(irNs)
                 wf
             case CompilerFlag.IR =>
@@ -734,9 +724,6 @@ object Main extends App {
             |      -defaults <string>    Path to Cromwell formatted default values file
             |      -destination <string> Output path on the platform for workflow
             |      -inputs <string>      Path to Cromwell formatted input file
-            |      -noAppletTimeout      By default, applets cannot run more than ${Utils.DEFAULT_APPLET_TIMEOUT} hours.
-            |                          Remove this limitation.
-            |                            Remove this limitation.
             |      -reorg                Reorganize workflow output files
             |      -sort [string]        Sort call graph, to avoid forward references
             |

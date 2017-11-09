@@ -4,7 +4,7 @@ package dxWDL
 
 import net.jcazevedo.moultingyaml._
 import scala.util.{Failure, Success, Try}
-import Utils.{isNativeDxType}
+import Utils.{DX_URL_PREFIX, isNativeDxType}
 import wdl4s.wdl._
 import wdl4s.wdl.AstTools
 import wdl4s.wdl.AstTools.EnhancedAstNode
@@ -376,7 +376,7 @@ task Add {
                                inputVars,
                                outputVars,
                                calcInstanceType(None),
-                               false,
+                               IR.DockerImageNone,
                                destination,
                                IR.AppletKindEval,
                                WdlRewrite.namespace(code, Seq.empty))
@@ -449,7 +449,7 @@ workflow w {
                                inputVars,
                                outputVars,
                                calcInstanceType(None),
-                               false,
+                               IR.DockerImageNone,
                                destination,
                                IR.AppletKindEval,
                                WdlRewrite.namespace(code, Seq.empty))
@@ -534,7 +534,7 @@ workflow w {
                                inputVars,
                                outputVars,
                                calcInstanceType(None),
-                               false,
+                               IR.DockerImageNone,
                                destination,
                                appletKind,
                                WdlRewrite.namespace(code, Seq.empty))
@@ -547,9 +547,30 @@ workflow w {
          applet)
     }
 
+    // Check if the WDL expression is a string constant. If so, return it,
+    // otherwise, return None.
+    def evalIfIsWdlStringConst(expr: WdlExpression) : Option[String] = {
+        expr.ast match {
+            case t: Terminal if t.getTerminalStr == "identifier" =>
+                None
+            case t: Terminal =>
+                def lookup(x:String) : WdlValue = {
+                    throw new Exception(cef.evaluatingTerminal(t, x))
+                }
+                val ve = ValueEvaluator(lookup, PureStandardLibraryFunctions)
+                val wValue: WdlValue = ve.evaluate(expr.ast).get
+                wValue match {
+                    case WdlString(buf) => Some(buf)
+                    case _ => None
+                }
+            case a: Ast =>
+                None
+        }
+    }
+
     // Check if a task is a real WDL task, or if it is a wrapper for a
     // native applet.
-
+    //
     // Compile a WDL task into an applet
     def compileTask(task : WdlTask) : (IR.Applet, Vector[IR.CVar]) = {
         Utils.trace(verbose.on, s"Compiling task ${task.name}")
@@ -574,9 +595,29 @@ workflow w {
         }.toVector
 
         // Figure out if we need to use docker
-        val useDocker = task.runtimeAttributes.attrs.get("docker") match {
-            case None => false
-            case Some(_) => true
+        val docker = task.runtimeAttributes.attrs.get("docker") match {
+            case None =>
+                IR.DockerImageNone
+            case Some(expr) =>
+                evalIfIsWdlStringConst(expr) match {
+                    case Some(url) if url.startsWith(DX_URL_PREFIX) =>
+                        // A constant image specified with a DX URL
+                        val dxRecord = DxPath.lookupDxURLRecord(url)
+                        IR.DockerImageDxAsset(dxRecord)
+                    case _ =>
+                        // Image will be downloaded from the network
+                        IR.DockerImageNetwork
+                }
+        }
+        // The docker container is on the platform, we need to remove
+        // the dxURLs in the runtime section, to avoid a runtime
+        // lookup. For example:
+        //
+        //   dx://dxWDL_playground:/glnexus_internal  ->   dx://record-xxxx
+        val taskCleaned = docker match {
+            case IR.DockerImageDxAsset(dxRecord) =>
+                WdlRewrite.taskReplaceDockerValue(task, dxRecord)
+            case _ => task
         }
         val kind =
             (task.meta.get("type"), task.meta.get("id")) match {
@@ -587,15 +628,14 @@ workflow w {
                     // a WDL task
                     IR.AppletKindTask
             }
-
         val applet = IR.Applet(task.name,
                                inputVars,
                                outputVars,
                                calcInstanceType(Some(task)),
-                               useDocker,
+                               docker,
                                destination,
                                kind,
-                               WdlRewrite.namespace(task))
+                               WdlRewrite.namespace(taskCleaned))
         verifyWdlCodeIsLegal(applet.ns)
         (applet, outputVars)
     }
@@ -965,7 +1005,7 @@ workflow w {
                                inputVars ++ extraTaskInputVars,
                                outputVars,
                                calcInstanceType(None),
-                               false,
+                               IR.DockerImageNone,
                                destination,
                                aKind,
                                wdlCode)
@@ -1011,7 +1051,7 @@ workflow w {
                                inputVars ++ extraTaskInputVars,
                                outputVars,
                                calcInstanceType(None),
-                               false,
+                               IR.DockerImageNone,
                                destination,
                                IR.AppletKindIf(callDict),
                                wdlCode)

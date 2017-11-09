@@ -221,7 +221,7 @@ applet has the `dxapp.json` signature:
     {
       "name": "result",
       "class": "string"
-    }
+    }]
 }
 ```
 
@@ -256,12 +256,34 @@ workflow w {
 }
 ```
 
+## Using a docker image on the platform
+
+Normally, docker images are public, and stored in publicly available
+web sites. This enables reproducibility across different tools and
+environments. However, if you have private docker image that you wish
+to store on the platform, dx-docker
+[create-asset](https://wiki.dnanexus.com/Developer-Tutorials/Using-Docker-Images)
+can be used. In order to use a private image, you can specify the
+docker attribute in the runtime section as:
+`dx://project-id:/image-name`.
+
+For example:
+```
+runtime {
+   docker: "dx://GenomeSequenceProject:/A/B/myOrgTools"
+}
+
+runtime {
+   docker: "dx://project-xxxx:record-yyyy"
+}
+```
 
 ## Debugging an applet
 
-If you build an applet on the platform with dxWDL, and want to
-inspect it, use: ```dx get --omit-resources  <applet path>```. This will refrain from
-downloading the large resource files that go into the applet.
+If you build an applet on the platform with dxWDL, and want to inspect
+it, use: ```dx get --omit-resources <applet path>```. This will
+refrain from downloading the large resource files that go into the
+applet.
 
 
 # Design

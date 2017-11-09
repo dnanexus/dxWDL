@@ -15,6 +15,8 @@ task fileSize {
 }
 ```
 
+- Support docker images that reside on the platform.
+
 
 ## 0.49
 - Removed limitation on maximal hourly price per instance. Some bioinformatics pipelines
