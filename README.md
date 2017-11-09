@@ -221,7 +221,7 @@ applet has the `dxapp.json` signature:
     {
       "name": "result",
       "class": "string"
-    }
+    }]
 }
 ```
 
@@ -258,10 +258,14 @@ workflow w {
 
 ## Using a docker image on the platform
 
-Docker images can be created with [dx-docker create-asset](https://wiki.dnanexus.com/Developer-Tutorials/Using-Docker-Images). In
-order to use such an image, you can specify the docker attribute in
-the runtime section as: `dx://project-id:/image-name`. The project can
-be omitted if you are located in it already.
+Normally, docker images are public, and stored in publicly available
+web sites. This enables reproducibility across different tools and
+environments. However, if you have private docker image that you wish
+to store on the platform, dx-docker
+[create-asset](https://wiki.dnanexus.com/Developer-Tutorials/Using-Docker-Images)
+can be used. In order to use a private image, you can specify the
+docker attribute in the runtime section as:
+`dx://project-id:/image-name`.
 
 For example:
 ```
@@ -270,7 +274,7 @@ runtime {
 }
 
 runtime {
-   docker: "dx://project-xxxx:/record-yyyy"
+   docker: "dx://project-xxxx:record-yyyy"
 }
 ```
 
