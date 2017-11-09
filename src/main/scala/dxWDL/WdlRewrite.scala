@@ -74,7 +74,15 @@ object WdlRewrite {
         val url:String = s""" "${Utils.DX_URL_PREFIX}${dxid}" """
         val urlExpr:WdlExpression = WdlExpression.fromString(url)
         val cleaned = attrs + ("docker" -> urlExpr)
-        task.copy(runtimeAttributes = RuntimeAttributes(cleaned))
+        val task2 = new WdlTask(task.name,
+                                task.commandTemplate,
+                                RuntimeAttributes(cleaned),
+                                task.meta,
+                                task.parameterMeta,
+                                INVALID_AST)
+        task2.children = task.children
+        updateScope(task, task2)
+        task2
     }
 
     private def genDefaultValueOfType(wdlType: WdlType) : WdlValue = {
