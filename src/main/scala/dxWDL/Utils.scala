@@ -57,7 +57,9 @@ object Utils {
     // Encapsulation of verbosity flags.
     //  on --       is the overall setting true/false
     //  keywords -- specific words to trace
+    //  quiet:      if true, do not print warnings and informational messages
     case class Verbose(on: Boolean,
+                       quiet: Boolean,
                        keywords: Set[String])
 
     // Topological sort mode of operation
@@ -684,6 +686,12 @@ object Utils {
     def trace(verbose: Boolean, msg: String) : Unit = {
         if (!verbose)
             return
+        System.err.println(msg)
+    }
+
+    def warning(verbose:Verbose, msg:String) : Unit = {
+        if (verbose.quiet)
+            return;
         System.err.println(msg)
     }
 
