@@ -84,9 +84,9 @@ object DxPath {
             DXSearch.findDataObjects().nameMatchesExactly(baseName)
                 .inFolder(proj, folder).execute().asList().asScala.toList
         if (found.length == 0)
-            throw new Exception(s"Object ${objName} not found in path ${proj}/${folder}")
+            throw new Exception(s"Object ${objName} not found in path ${proj.getId}:${folder}")
         if (found.length > 1)
-            throw new Exception(s"Found more than one dx:object named ${objName} in path ${proj}:/${folder}")
+            throw new Exception(s"Found more than one dx:object named ${objName} in path ${proj.getId}:${folder}")
         return found(0)
     }
 

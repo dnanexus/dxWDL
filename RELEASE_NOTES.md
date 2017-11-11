@@ -1,5 +1,10 @@
 # Release Notes
 
+##  0.51
+- Adding a `-quiet` flag to suppress warning and informational
+  messages during compilation.
+- Minor fixes
+
 ## 0.50
 - Tasks that have an empty command section do not download files eagerly. For example,
 if a task only looks at `size(file)`, it will not download the file at all.

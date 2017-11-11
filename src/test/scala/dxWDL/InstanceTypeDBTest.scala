@@ -7,7 +7,6 @@ class InstaceTypeDBTest extends FlatSpec with BeforeAndAfterEach with OneInstanc
 
     it should "Work even without access to pricing information" in {
         val db = InstanceTypeDB.genTestDB(false)
-        //System.err.println(s"DB=${db.prettyPrint}")
 
         // parameters are:          RAM,     disk,     cores
         assert(db.choose(None, None, None, None) == "mem1_ssd1_x2")

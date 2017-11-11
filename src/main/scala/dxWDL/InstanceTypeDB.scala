@@ -31,6 +31,7 @@ import com.dnanexus.{DXAPI, DXJSON, DXProject}
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.node.ObjectNode
 import spray.json._
+import Utils.{Verbose, warning}
 import wdl4s.wdl.values._
 
 // Instance Type on the platform. For example:
@@ -420,17 +421,16 @@ object InstanceTypeDB extends DefaultJsonProtocol {
         InstanceTypeDB(iTypes)
     }
 
-    def query(dxProject: DXProject) : InstanceTypeDB = {
+    def query(dxProject: DXProject, verbose:Verbose) : InstanceTypeDB = {
         try {
             queryWithPrices(dxProject)
         } catch {
             // Insufficient permissions to describe the user, we cannot get the price list.
             case e: Throwable =>
-                System.err.println(
-                    """|Warning: insufficient permissions to retrieve the
-                       |instance price list. This will result in suboptimal machine choices,
-                       |incurring higher costs when running workflows."""
-                        .stripMargin.replaceAll("\n", " "))
+                warning(verbose, """|Warning: insufficient permissions to retrieve the
+                                    |instance price list. This will result in suboptimal machine choices,
+                                    |incurring higher costs when running workflows.
+                                    |""".stripMargin.replaceAll("\n", " "))
                 queryNoPrices(dxProject)
         }
     }

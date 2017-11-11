@@ -4,7 +4,7 @@ package dxWDL
 
 import net.jcazevedo.moultingyaml._
 import scala.util.{Failure, Success, Try}
-import Utils.{DX_URL_PREFIX, isNativeDxType}
+import Utils.{DX_URL_PREFIX, isNativeDxType, trace, warning}
 import wdl4s.wdl._
 import wdl4s.wdl.AstTools
 import wdl4s.wdl.AstTools.EnhancedAstNode
@@ -354,7 +354,7 @@ task Add {
     //
     def compileCommon(appletName: String,
                       declarations: Seq[Declaration]) : (IR.Stage, IR.Applet) = {
-        Utils.trace(verbose.on, s"Compiling common applet ${appletName}")
+        trace(verbose.on, s"Compiling common applet ${appletName}")
 
         // Only a subset of the workflow declarations are considered inputs.
         val inputVars : Vector[IR.CVar] =  declarations.map{ decl =>
@@ -406,7 +406,7 @@ workflow w {
     def compileEvalAndPassClosure(appletName: String,
                                   declarations: Seq[Declaration],
                                   env: CallEnv) : (IR.Stage, IR.Applet) = {
-        Utils.trace(verbose.on, s"Compiling evaluation applet ${appletName}")
+        trace(verbose.on, s"Compiling evaluation applet ${appletName}")
 
         // Figure out the closure
         var closure = Map.empty[String, LinkedVar]
@@ -485,7 +485,7 @@ workflow w {
     def compileOutputSection(appletName: String,
                              env: CallEnv,
                              wfOutputs: Seq[WorkflowOutput]) : (IR.Stage, IR.Applet) = {
-        Utils.trace(verbose.on, s"Compiling output section applet ${appletName}")
+        trace(verbose.on, s"Compiling output section applet ${appletName}")
 
         // Figure out the closure
         var closure = Map.empty[String, LinkedVar]
@@ -573,7 +573,7 @@ workflow w {
     //
     // Compile a WDL task into an applet
     def compileTask(task : WdlTask) : (IR.Applet, Vector[IR.CVar]) = {
-        Utils.trace(verbose.on, s"Compiling task ${task.name}")
+        trace(verbose.on, s"Compiling task ${task.name}")
 
         // The task inputs are declarations that:
         // 1) are unassigned (do not have an expression)
@@ -673,10 +673,10 @@ workflow w {
                     } else {
                         // A compulsory input. Print a warning, the user may wish to supply
                         // it at runtime.
-                        System.err.println(s"""|Note: workflow doesn't supply required input
-                                               |${cVar.name} to call ${call.unqualifiedName};
-                                               |leaving corresponding DNAnexus workflow input unbound"""
-                                               .stripMargin.replaceAll("\n", " "))
+                        warning(verbose, s"""|Note: workflow doesn't supply required input
+                                             |${cVar.name} to call ${call.unqualifiedName};
+                                             |leaving corresponding DNAnexus workflow input unbound
+                                             |""".stripMargin.replaceAll("\n", " "))
                         IR.SArgEmpty
                     }
                 case Some((_,e)) => e.ast match {
@@ -861,11 +861,11 @@ workflow w {
                     if (!Utils.isOptional(cVar.wdlType)) {
                         // A compulsory input. Print a warning, the user may wish to supply
                         // it at runtime.
-                        System.err.println(s"""|Note: workflow doesn't supply required required
-                                               |input ${cVar.name} to call ${call.unqualifiedName};
-                                               |which is in a scatter.
-                                               |Propagating input to applet."""
-                                               .stripMargin.replaceAll("\n", " "))
+                        warning(verbose, s"""|Note: workflow doesn't supply required
+                                             |input ${cVar.name} to call ${call.unqualifiedName};
+                                             |which is in a scatter.
+                                             |Propagating input to applet.
+                                             |""".stripMargin.replaceAll("\n", " "))
                     }
                     Some(IR.CVar(s"${call.unqualifiedName}_${cVar.name}", cVar.wdlType,
                                  cVar.attrs, cVar.ast))
@@ -975,7 +975,7 @@ workflow w {
                        scatter: Scatter,
                        taskApplets: Map[String, (IR.Applet, Vector[IR.CVar])],
                        env : CallEnv) : (IR.Stage, IR.Applet) = {
-        Utils.trace(verbose.on, s"compiling scatter ${stageName}")
+        trace(verbose.on, s"compiling scatter ${stageName}")
         val (topDecls, calls) = blockSplit(scatter.children.toVector)
 
         // Figure out the input definitions
@@ -1027,7 +1027,7 @@ workflow w {
                   cond: If,
                   taskApplets: Map[String, (IR.Applet, Vector[IR.CVar])],
                   env : CallEnv) : (IR.Stage, IR.Applet) = {
-        Utils.trace(verbose.on, s"compiling If block ${stageName}")
+        trace(verbose.on, s"compiling If block ${stageName}")
         val (topDecls, calls) = blockSplit(cond.children.toVector)
 
         // Figure out the input definitions
@@ -1067,7 +1067,7 @@ workflow w {
     // Compile a workflow, having compiled the independent tasks.
     def compileWorkflow(wf: WdlWorkflow,
                         taskApplets: Map[String, (IR.Applet, Vector[IR.CVar])]) : IR.Namespace = {
-        Utils.trace(verbose.on, "IR: compiling workflow")
+        trace(verbose.on, "IR: compiling workflow")
 
         // Get rid of workflow output declarations
         val children = wf.children.filter(x => !x.isInstanceOf[WorkflowOutput])
@@ -1183,19 +1183,19 @@ workflow w {
 
     // compile the WDL source code into intermediate representation
     def apply(ns : WdlNamespace) : IR.Namespace = {
-        Utils.trace(verbose.on, "IR pass")
+        trace(verbose.on, "IR pass")
 
         // Load all accessed applets, local or imported
         val accessedTasks: Set[WdlTask] = loadImportedTasks(ns)
         val accessedTaskNames = accessedTasks.map(task => task.name)
-        Utils.trace(verbose.on, s"Accessed tasks = ${accessedTaskNames}")
+        trace(verbose.on, s"Accessed tasks = ${accessedTaskNames}")
 
         // Make sure all local tasks are included; we want to compile
         // them even if they are not accessed.
         val allTasks:Set[WdlTask] = accessedTasks ++ ns.tasks.toSet
 
         // compile all the tasks into applets
-        Utils.trace(verbose.on, "compiling tasks into dx:applets")
+        trace(verbose.on, "compiling tasks into dx:applets")
 
         val taskApplets: Map[String, (IR.Applet, Vector[IR.CVar])] = allTasks.map{ task =>
             val (applet, outputs) = compileTask(task)

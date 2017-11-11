@@ -87,7 +87,6 @@ object Main extends App {
             assert(assetId.startsWith("record"))
             r -> assetId
         }.toMap
-        //System.err.println(s"allAssets = $assets")
 
         assets.get(region) match {
             case None => throw new Exception(s"Region ${region} is currently unsupported")
@@ -183,6 +182,9 @@ object Main extends App {
                     case "project" =>
                         checkNumberOfArguments(keyword, 1, subargs)
                         (keyword, subargs.head)
+                    case ("q"|"quiet") =>
+                        checkNumberOfArguments(keyword, 0, subargs)
+                        ("quiet", "")
                     case ("r"|"recursive") =>
                         checkNumberOfArguments(keyword, 0, subargs)
                         ("recursive", "")
@@ -340,7 +342,9 @@ object Main extends App {
             case None => Set.empty
             case Some(modulesToTrace) => modulesToTrace.toSet
         }
-        val verbose = Verbose(options contains "verbose", verboseKeys)
+        val verbose = Verbose(options contains "verbose",
+                              options contains "quiet",
+                              verboseKeys)
         var folderOpt:Option[String] = options.get("folder") match {
             case None => None
             case Some(List(f)) => Some(f)
@@ -452,7 +456,7 @@ object Main extends App {
                     cOpt: CompilerOptions,
                     bOpt: BaseOptions) : String = {
         // get list of available instance types
-        val instanceTypeDB = InstanceTypeDB.query(bOpt.dxProject)
+        val instanceTypeDB = InstanceTypeDB.query(bOpt.dxProject, bOpt.verbose)
 
         // Resolving imports. Look for referenced files in the
         // source directory.
@@ -740,6 +744,7 @@ object Main extends App {
             |    -f | force             Delete existing applets/workflows
             |    -folder <string>       Platform folder
             |    -project <string>      Platform project
+            |    -quiet                 Do not print warnings or informational outputs
             |    -verbose [flag]        Print detailed progress reports
             |""".stripMargin
 

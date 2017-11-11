@@ -10,7 +10,8 @@ import java.time.format.DateTimeFormatter
 import scala.collection.JavaConverters._
 import spray.json._
 import Utils.{AppletLinkInfo, base64Encode, CHECKSUM_PROP, dxFileOfJsValue, DXWorkflowStage,
-    INSTANCE_TYPE_DB_FILENAME, jsValueOfJsonNode, jsonNodeOfJsValue, LINK_INFO_FILENAME, trace}
+    INSTANCE_TYPE_DB_FILENAME, jsValueOfJsonNode, jsonNodeOfJsValue, LINK_INFO_FILENAME, trace,
+    warning}
 import wdl4s.wdl.types._
 
 case class CompilerNative(dxWDLrtId: String,
@@ -376,8 +377,8 @@ case class CompilerNative(dxWDLrtId: String,
                 }
             case _ =>
                 val dxClass = existingDxObjs.head.dxClass
-                System.err.println(s"""|More than one ${dxClass} ${name} found in
-                                       |path ${dxProject.getId()}:${folder}""".stripMargin)
+                warning(verbose, s"""|More than one ${dxClass} ${name} found in
+                                     |path ${dxProject.getId()}:${folder}""".stripMargin)
                 true
         }
 
