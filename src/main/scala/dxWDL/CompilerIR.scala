@@ -4,7 +4,7 @@ package dxWDL
 
 import net.jcazevedo.moultingyaml._
 import scala.util.{Failure, Success, Try}
-import Utils.{isNativeDxType}
+import Utils.{DX_URL_PREFIX, isNativeDxType, trace, warning}
 import wdl4s.wdl._
 import wdl4s.wdl.AstTools
 import wdl4s.wdl.AstTools.EnhancedAstNode
@@ -354,7 +354,7 @@ workflow w {
     def compileEvalAndPassClosure(appletName: String,
                                   declarations: Seq[Declaration],
                                   env: CallEnv) : (IR.Stage, IR.Applet) = {
-        Utils.trace(verbose.on, s"Compiling evaluation applet ${appletName}")
+        trace(verbose.on, s"Compiling evaluation applet ${appletName}")
 
         // Figure out the closure
         var closure = Map.empty[String, LinkedVar]
@@ -397,7 +397,7 @@ workflow w {
                                inputVars,
                                outputVars,
                                calcInstanceType(None),
-                               false,
+                               IR.DockerImageNone,
                                destination,
                                IR.AppletKindEval,
                                WdlRewrite.namespace(code, Seq.empty))
@@ -470,12 +470,33 @@ workflow w {
         }
     }
 
+    // Check if the WDL expression is a string constant. If so, return it,
+    // otherwise, return None.
+    def evalIfIsWdlStringConst(expr: WdlExpression) : Option[String] = {
+        expr.ast match {
+            case t: Terminal if t.getTerminalStr == "identifier" =>
+                None
+            case t: Terminal =>
+                def lookup(x:String) : WdlValue = {
+                    throw new Exception(cef.evaluatingTerminal(t, x))
+                }
+                val ve = ValueEvaluator(lookup, PureStandardLibraryFunctions)
+                val wValue: WdlValue = ve.evaluate(expr.ast).get
+                wValue match {
+                    case WdlString(buf) => Some(buf)
+                    case _ => None
+                }
+            case a: Ast =>
+                None
+        }
+    }
+
     // Check if a task is a real WDL task, or if it is a wrapper for a
     // native applet.
 
     // Compile a WDL task into an applet
     def compileTask(task : WdlTask) : (IR.Applet, Vector[IR.CVar]) = {
-        Utils.trace(verbose.on, s"Compiling task ${task.name}")
+        trace(verbose.on, s"Compiling task ${task.name}")
 
         // The task inputs are declarations that:
         // 1) are unassigned (do not have an expression)
@@ -497,9 +518,29 @@ workflow w {
         }.toVector
 
         // Figure out if we need to use docker
-        val useDocker = task.runtimeAttributes.attrs.get("docker") match {
-            case None => false
-            case Some(_) => true
+        val docker = task.runtimeAttributes.attrs.get("docker") match {
+            case None =>
+                IR.DockerImageNone
+            case Some(expr) =>
+                evalIfIsWdlStringConst(expr) match {
+                    case Some(url) if url.startsWith(DX_URL_PREFIX) =>
+                        // A constant image specified with a DX URL
+                        val dxRecord = DxPath.lookupDxURLRecord(url)
+                        IR.DockerImageDxAsset(dxRecord)
+                    case _ =>
+                        // Image will be downloaded from the network
+                        IR.DockerImageNetwork
+                }
+        }
+        // The docker container is on the platform, we need to remove
+        // the dxURLs in the runtime section, to avoid a runtime
+        // lookup. For example:
+        //
+        //   dx://dxWDL_playground:/glnexus_internal  ->   dx://record-xxxx
+        val taskCleaned = docker match {
+            case IR.DockerImageDxAsset(dxRecord) =>
+                WdlRewrite.taskReplaceDockerValue(task, dxRecord)
+            case _ => task
         }
         val kind =
             (task.meta.get("type"), task.meta.get("id")) match {
@@ -510,15 +551,14 @@ workflow w {
                     // a WDL task
                     IR.AppletKindTask
             }
-
         val applet = IR.Applet(task.name,
                                inputVars,
                                outputVars,
                                calcInstanceType(Some(task)),
-                               useDocker,
+                               docker,
                                destination,
                                kind,
-                               WdlRewrite.namespace(task))
+                               WdlRewrite.namespace(taskCleaned))
         verifyWdlCodeIsLegal(applet.ns)
         (applet, outputVars)
     }
@@ -556,10 +596,10 @@ workflow w {
                     } else {
                         // A compulsory input. Print a warning, the user may wish to supply
                         // it at runtime.
-                        System.err.println(s"""|Note: workflow doesn't supply required input
-                                               |${cVar.name} to call ${call.unqualifiedName};
-                                               |leaving corresponding DNAnexus workflow input unbound"""
-                                               .stripMargin.replaceAll("\n", " "))
+                        warning(verbose, s"""|Note: workflow doesn't supply required input
+                                             |${cVar.name} to call ${call.unqualifiedName};
+                                             |leaving corresponding DNAnexus workflow input unbound
+                                             |""".stripMargin.replaceAll("\n", " "))
                         IR.SArgEmpty
                     }
                 case Some((_,e)) => e.ast match {
@@ -827,7 +867,7 @@ workflow w {
                        scatter: Scatter,
                        taskApplets: Map[String, (IR.Applet, Vector[IR.CVar])],
                        env : CallEnv) : (IR.Stage, IR.Applet) = {
-        Utils.trace(verbose.on, s"compiling scatter ${stageName}")
+        trace(verbose.on, s"compiling scatter ${stageName}")
         val (topDecls, calls) = blockSplit(scatter.children.toVector)
 
         // Figure out the input definitions
@@ -850,7 +890,7 @@ workflow w {
                                inputVars,
                                outputVars,
                                calcInstanceType(None),
-                               false,
+                               IR.DockerImageNone,
                                destination,
                                aKind,
                                wdlCode)
@@ -872,7 +912,7 @@ workflow w {
                   cond: If,
                   taskApplets: Map[String, (IR.Applet, Vector[IR.CVar])],
                   env : CallEnv) : (IR.Stage, IR.Applet) = {
-        Utils.trace(verbose.on, s"compiling If block ${stageName}")
+        trace(verbose.on, s"compiling If block ${stageName}")
         val (topDecls, calls) = blockSplit(cond.children.toVector)
 
         // Figure out the input definitions
@@ -889,7 +929,7 @@ workflow w {
                                inputVars,
                                outputVars,
                                calcInstanceType(None),
-                               false,
+                               IR.DockerImageNone,
                                destination,
                                IR.AppletKindIf(callDict),
                                wdlCode)
@@ -905,7 +945,7 @@ workflow w {
     // Compile a workflow, having compiled the independent tasks.
     def compileWorkflow(wf: WdlWorkflow,
                         taskApplets: Map[String, (IR.Applet, Vector[IR.CVar])]) : IR.Namespace = {
-        Utils.trace(verbose.on, "IR: compiling workflow")
+        trace(verbose.on, "IR: compiling workflow")
 
         // Get rid of workflow output declarations
         val children = wf.children.filter(x => !x.isInstanceOf[WorkflowOutput])
@@ -1007,19 +1047,19 @@ workflow w {
 
     // compile the WDL source code into intermediate representation
     def apply(ns : WdlNamespace) : IR.Namespace = {
-        Utils.trace(verbose.on, "IR pass")
+        trace(verbose.on, "IR pass")
 
         // Load all accessed applets, local or imported
         val accessedTasks: Set[WdlTask] = loadImportedTasks(ns)
         val accessedTaskNames = accessedTasks.map(task => task.name)
-        Utils.trace(verbose.on, s"Accessed tasks = ${accessedTaskNames}")
+        trace(verbose.on, s"Accessed tasks = ${accessedTaskNames}")
 
         // Make sure all local tasks are included; we want to compile
         // them even if they are not accessed.
         val allTasks:Set[WdlTask] = accessedTasks ++ ns.tasks.toSet
 
         // compile all the tasks into applets
-        Utils.trace(verbose.on, "compiling tasks into dx:applets")
+        trace(verbose.on, "compiling tasks into dx:applets")
 
         val taskApplets: Map[String, (IR.Applet, Vector[IR.CVar])] = allTasks.map{ task =>
             val (applet, outputs) = compileTask(task)

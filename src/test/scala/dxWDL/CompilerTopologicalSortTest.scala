@@ -47,7 +47,7 @@ class CompilerTopologicalSortTest extends FlatSpec with BeforeAndAfterEach {
          val wf = ns.workflow
 
          val cef = new CompilerErrorFormatter(ns.terminalMap)
-         val verbose = Verbose(false, Set.empty)
+         val verbose = Verbose(false, true, Set.empty)
          val cts = CompilerTopologicalSort(cef, TopoMode.Sort, verbose)
          val sortedNodes =
              if (relaxed) {

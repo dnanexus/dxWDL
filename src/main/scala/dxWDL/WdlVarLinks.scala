@@ -1,5 +1,25 @@
-// Conversions from WDL types and data structures to
-// DNAx JSON representations.
+/**
+
+Conversions from WDL types and data structures to DNAx JSON
+representations. There are two difficulties this module needs to deal
+with: (1) WDL has high order types which DNAx does not, and (2) the
+file type is very different between WDL and DNAx.
+
+  A file is a heavy weight data type, downloading it can fill up the
+disk, and take a long time. There are import native WDL file
+operations that do not require file data. For example, getting
+file size, and passing around file references inside a
+workflow. Therefore, we want to implement lazy file download.
+
+A WDL file is equivalent to a path on a compute instance. There are
+cases where files with the same name are referenced, for example, in a
+scatter operation on an array AF of files. If we create local empty
+files, representing members of AF, we will need to disambiguate the
+files, and give them different paths. These "impure" paths, that are
+implementation depedent, can then percolate to the rest of the
+workflow. For this reason, we want to do lazy evaluation of WDL files,
+not just lazy download.
+  */
 package dxWDL
 
 import com.dnanexus.{DXFile, DXJob, IOClass}
@@ -12,6 +32,14 @@ import wdl4s.wdl.values._
 
 object IORef extends Enumeration {
     val Input, Output = Value
+}
+
+// The direction of IO:
+//  Download: downloading files
+//  Upload:  uploading files
+//  Zero:    no upload or download should be attempted
+object IODirection extends Enumeration {
+    val Download, Upload, Zero = Value
 }
 
 // A union of all the different ways of building a value
@@ -33,9 +61,6 @@ case class DxlJobArray(dxJobVec: Vector[DXJob], varName: String) extends DxLink
 case class WdlVarLinks(wdlType: WdlType,
                        attrs: DeclAttrs,
                        dxlink: DxLink)
-
-// Bridge between WDL values and DNAx values.
-case class BValue(wvl: WdlVarLinks, wdlValue: WdlValue)
 
 object WdlVarLinks {
     // Human readable representation of a WdlVarLinks structure
@@ -223,19 +248,44 @@ object WdlVarLinks {
         }.toMap
     }
 
-    private def evalCore(wdlType: WdlType, jsValue: JsValue, force: Boolean) : WdlValue = {
+    private def evalCore(wdlType: WdlType,
+                         jsValue: JsValue,
+                         force: Boolean,
+                         ioDir: IODirection.Value) : WdlValue = {
         (wdlType, jsValue)  match {
             // base case: primitive types
             case (WdlBooleanType, JsBoolean(b)) => WdlBoolean(b.booleanValue)
             case (WdlIntegerType, JsNumber(bnm)) => WdlInteger(bnm.intValue)
             case (WdlFloatType, JsNumber(bnm)) => WdlFloat(bnm.doubleValue)
             case (WdlStringType, JsString(s)) => WdlString(s)
-            case (WdlFileType, _) => LocalDxFiles.wdlFileOfDxLink(jsValue, force)
+
+            // File upload
+            case (WdlFileType, JsString(path)) if ioDir == IODirection.Upload =>
+                LocalDxFiles.upload(Paths.get(path))
+                WdlSingleFile(path)
+            case (WdlFileType, JsObject(_)) if ioDir == IODirection.Upload =>
+                // We already downloaded this file. We need to get from the dx:link
+                // to a WdlValue.
+                val dxFile = dxFileOfJsValue(jsValue)
+                LocalDxFiles.get(dxFile) match {
+                    case None =>
+                        throw new AppInternalException(
+                            s"dx:file ${jsValue} is not found locally, it cannot be uploaded.")
+                    case Some(path) => WdlSingleFile(path.toString)
+                }
+
+            // File download
+            case (WdlFileType, _) if ioDir == IODirection.Download =>
+                LocalDxFiles.download(jsValue, force)
+
+            case (WdlFileType, _) =>
+                throw new AppInternalException(
+                    s"File transfer not allowed ${jsValue.prettyPrint} direction=${ioDir}")
 
             // arrays
             case (WdlArrayType(t), JsArray(vec)) =>
                 val wVec: Seq[WdlValue] = vec.map{
-                    elem:JsValue => evalCore(t, elem, force)
+                    elem:JsValue => evalCore(t, elem, force, ioDir)
                 }
                 WdlArray(WdlArrayType(t), wVec)
 
@@ -245,8 +295,8 @@ object WdlVarLinks {
                 val m: Map[WdlValue, WdlValue] =
                     shallowUnmarshalWdlMap(keyType, valueType, jsValue).map{
                         case (k:JsValue, v:JsValue) =>
-                            val kWdl = evalCore(keyType, k, force)
-                            val vWdl = evalCore(valueType, v, force)
+                            val kWdl = evalCore(keyType, k, force, ioDir)
+                            val vWdl = evalCore(valueType, v, force, ioDir)
                             kWdl -> vWdl
                     }.toMap
                 WdlMap(WdlMapType(keyType, valueType), m)
@@ -255,18 +305,18 @@ object WdlVarLinks {
                 val m:Map[String, (WdlType, JsValue)] = unmarshalWdlObject(fields)
                 val m2 = m.map{
                     case (key, (t, v)) =>
-                        key -> evalCore(t, v, force)
+                        key -> evalCore(t, v, force, ioDir)
                 }.toMap
                 WdlObject(m2)
 
             case (WdlPairType(lType, rType), JsObject(fields))
                     if (List("left", "right").forall(fields contains _)) =>
-                val left = evalCore(lType, fields("left"), force)
-                val right = evalCore(rType, fields("right"), force)
+                val left = evalCore(lType, fields("left"), force, ioDir)
+                val right = evalCore(rType, fields("right"), force, ioDir)
                 WdlPair(left, right)
 
             case (WdlOptionalType(t), jsv) =>
-                evalCore(t, jsv, force)
+                evalCore(t, jsv, force, ioDir)
 
             case _ =>
                 throw new AppInternalException(
@@ -286,9 +336,11 @@ object WdlVarLinks {
 
     // Calculate a WdlValue from the dx-links structure. If [force] is true,
     // any files included in the structure will be downloaded.
-    def eval(wvl: WdlVarLinks, force: Boolean) : WdlValue = {
+    def eval(wvl: WdlVarLinks,
+             force: Boolean,
+             ioDir: IODirection.Value) : WdlValue = {
         val jsValue = getRawJsValue(wvl)
-        evalCore(wvl.wdlType, jsValue, force)
+        evalCore(wvl.wdlType, jsValue, force, ioDir)
     }
 
     // The reason we need a special method for unpacking an array (or a map),
@@ -454,13 +506,28 @@ object WdlVarLinks {
         JsObject(mWithType)
     }
 
+    // Register each dx:file that the job received as input
+    private def localizeFileLinks(jsv:JsValue) : Unit = {
+        jsv match {
+            case JsBoolean(_) | JsNull | JsNumber(_) | JsString(_) => ()
+            case JsObject(_) if isDxFile(jsv) =>
+                LocalDxFiles.download(jsv, false)
+            case JsObject(fields) =>
+                fields.foreach{ case(_,v) => localizeFileLinks(v) }
+            case JsArray(elems) =>
+                elems.foreach(e => localizeFileLinks(e))
+        }
+    }
+
     // Convert an input field to a dx-links structure. This allows
     // passing it to other jobs.
     //
     // Note: we need to represent dx-files as local paths, even if we
     // do not download them. This is because accessing these files
     // later on will cause a WDL failure.
-    def importFromDxExec(ioClass:IOClass, attrs:DeclAttrs, jsValue: JsValue) : WdlVarLinks = {
+    def importFromDxExec(ioClass:IOClass,
+                         attrs:DeclAttrs,
+                         jsValue: JsValue) : WdlVarLinks = {
         val (wdlType, jsv) = ioClass match {
             case IOClass.BOOLEAN => (WdlBooleanType, jsValue)
             case IOClass.INT => (WdlIntegerType, jsValue)
@@ -493,6 +560,8 @@ object WdlVarLinks {
                 }
             case other => throw new Exception(s"unhandled IO class ${other}")
         }
+
+        localizeFileLinks(jsv)
         WdlVarLinks(wdlType, attrs, DxlValue(jsv))
     }
 

@@ -95,3 +95,24 @@ CODE
         String result = read_string(stdout())
     }
 }
+
+
+task FileIdent {
+    File aF
+    File ?bF
+
+    command {
+    }
+    output {
+       File result = aF
+    }
+}
+
+task FileSize {
+    File in_file
+
+    command {}
+    output {
+        Float num_bytes = size(in_file)
+    }
+}

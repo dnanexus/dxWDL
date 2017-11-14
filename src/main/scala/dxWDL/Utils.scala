@@ -10,7 +10,6 @@ import java.nio.file.{Path, Paths, Files}
 import java.util.Base64
 import scala.collection.JavaConverters._
 import scala.concurrent._
-import scala.collection.mutable.HashMap
 import scala.util.{Failure, Success}
 import ExecutionContext.Implicits.global
 import scala.sys.process._
@@ -19,7 +18,6 @@ import wdl4s.wdl._
 import wdl4s.wdl.expression._
 import wdl4s.wdl.types._
 import wdl4s.wdl.values._
-
 
 // Exception used for AppInternError
 class AppInternalException private(ex: RuntimeException) extends RuntimeException(ex) {
@@ -59,7 +57,9 @@ object Utils {
     // Encapsulation of verbosity flags.
     //  on --       is the overall setting true/false
     //  keywords -- specific words to trace
+    //  quiet:      if true, do not print warnings and informational messages
     case class Verbose(on: Boolean,
+                       quiet: Boolean,
                        keywords: Set[String])
 
     // Topological sort mode of operation
@@ -95,7 +95,7 @@ object Utils {
 
     val APPLET_LOG_MSG_LIMIT = 1000
     val CHECKSUM_PROP = "dxWDL_checksum"
-    val DEFAULT_APPLET_TIMEOUT = 48
+    val COMMON = "common"
     val DOWNLOAD_RETRY_LIMIT = 3
     val DX_HOME = "/home/dnanexus"
     val DX_INSTANCE_TYPE_ATTR = "dx_instance_type"
@@ -104,20 +104,17 @@ object Utils {
     val IF = "if"
     val INSTANCE_TYPE_DB_FILENAME = "instanceTypeDB.json"
     val INTERMEDIATE_RESULTS_FOLDER = "intermediate"
+    val LOCAL_DX_FILES_CHECKPOINT_FILE = "localized_files.json"
+    val DX_FUNCTIONS_FILES = "dx_functions_files.json"
     val LINK_INFO_FILENAME = "linking.json"
     val MAX_STRING_LEN = 8 * 1024     // Long strings cause problems with bash and the UI
     val MAX_NUM_FILES_MOVE_LIMIT = 1000
     val OUTPUT_SECTION = "outputs"
     val SCATTER = "scatter"
-    val TASK_DOWNLOAD_INPUTS = "download_inputs"
     val TMP_VAR_NAME_PREFIX = "xtmp"
     val UPLOAD_RETRY_LIMIT = DOWNLOAD_RETRY_LIMIT
 
     lazy val dxEnv = DXEnvironment.create()
-
-    // Lookup cache for projects. This saves
-    // repeated searches for projects we already found.
-    val projectDict = HashMap.empty[String, DXProject]
 
     // Substrings used by the compiler for encoding purposes
     val reservedSubstrings = List("___")
@@ -188,7 +185,7 @@ object Utils {
     // x - must be provided as an applet input
     // y, pi -- calculated, non inputs
     // z - is an input with a default value
-    def declarationIsInput(decl: DeclarationInterface) : Boolean = {
+    def declarationIsInput(decl: Declaration) : Boolean = {
         (decl.expression, decl.wdlType) match {
             case (None,_) => true
             case (Some(_), WdlOptionalType(_)) => true
@@ -221,42 +218,6 @@ object Utils {
         // remove auxiliary fields
         (inputSpec.filter{ case (fieldName,_) => !fieldName.endsWith(FLAT_FILES_SUFFIX) },
          outputSpec.filter{ case (fieldName,_) => !fieldName.endsWith(FLAT_FILES_SUFFIX) })
-    }
-
-    def lookupProject(projName: String): DXProject = {
-        if (projName.startsWith("project-")) {
-            // A project ID
-            DXProject.getInstance(projName)
-        } else {
-            if (projectDict contains projName) {
-                //System.err.println(s"Cached project ${projName}")
-                return projectDict(projName)
-            }
-
-            // A project name, resolve it
-            val req: ObjectNode = DXJSON.getObjectBuilder()
-                .put("name", projName)
-                .put("limit", 2)
-                .build()
-            val rep = DXAPI.systemFindProjects(req, classOf[JsonNode])
-            val repJs:JsValue = Utils.jsValueOfJsonNode(rep)
-
-            val results = repJs.asJsObject.fields.get("results") match {
-                case Some(JsArray(x)) => x
-                case _ => throw new Exception(
-                    s"Bad response from systemFindProject API call (${repJs.prettyPrint}), when resolving project ${projName}.")
-            }
-            if (results.length > 1)
-                throw new Exception(s"Found more than one project named ${projName}")
-            if (results.length == 0)
-                throw new Exception(s"Project ${projName} not found")
-            val dxProject = results(0).asJsObject.fields.get("id") match {
-                case Some(JsString(id)) => DXProject.getInstance(id)
-                case _ => throw new Exception(s"Bad response from SystemFindProject API call ${repJs.prettyPrint}")
-            }
-            projectDict(projName) = dxProject
-            dxProject
-        }
     }
 
     // Create a file from a string
@@ -554,7 +515,7 @@ object Utils {
     // download a file from the platform to a path on the local disk.
     //
     // Note: this function assumes that the target path does not exist yet
-    def downloadFile(path: Path, dxfile: DXFile) = {
+    def downloadFile(path: Path, dxfile: DXFile) : Unit = {
         def downloadOneFile(path: Path, dxfile: DXFile, counter: Int) : Boolean = {
             val fid = dxfile.getId()
             try {
@@ -728,12 +689,18 @@ object Utils {
         System.err.println(msg)
     }
 
+    def warning(verbose:Verbose, msg:String) : Unit = {
+        if (verbose.quiet)
+            return;
+        System.err.println(msg)
+    }
+
     // coerce a WDL value to the required type (if needed)
     def cast(wdlType: WdlType, v: WdlValue, varName: String) : WdlValue = {
         val retVal =
             if (v.wdlType != wdlType) {
                 // we need to convert types
-                System.err.println(s"Casting variable ${varName} from ${v.wdlType} to ${wdlType}")
+                //System.err.println(s"Casting variable ${varName} from ${v.wdlType} to ${wdlType}")
                 wdlType.coerceRawValue(v).get
             } else {
                 // no need to change types
@@ -748,6 +715,7 @@ object Utils {
     //
     // It handles the case where the scatter collection is not an
     // array.
+    //
     def lookupType(from: Scope)(n: String): WdlType = {
         val resolved:Option[WdlGraphNode] = from.resolveVariable(n)
         //System.err.println(s"resolved=${resolved}")

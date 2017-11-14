@@ -31,7 +31,8 @@ object RunnerEval {
     def evalDeclarations(declarations: Seq[DeclarationInterface],
                          inputs : Map[String, WdlVarLinks],
                          force: Boolean,
-                         taskOpt : Option[(WdlTask, CompilerErrorFormatter)]) : Map[String, BValue] = {
+                         taskOpt : Option[(WdlTask, CompilerErrorFormatter)],
+                         ioDir: IODirection.Value) : Map[String, BValue] = {
         // Environment that includes a cache for values that have
         // already been evaluated.  It is more efficient to make the
         // conversion once, however, that is not the main point
@@ -47,9 +48,9 @@ object RunnerEval {
                 case _ =>
                     val v: WdlValue =
                         if (wvl.attrs.stream) {
-                            WdlVarLinks.eval(wvl, false)
+                            WdlVarLinks.eval(wvl, false, ioDir)
                         } else {
-                            WdlVarLinks.eval(wvl, force)
+                            WdlVarLinks.eval(wvl, force, ioDir)
                         }
                     env = env + (key -> (wvl, Some(v)))
                     v
@@ -63,15 +64,16 @@ object RunnerEval {
                     // to be downloaded. Keep the result cached.
                     wvlEvalCache(varName, wvl)
                 case Some((_, Some(v))) =>
-                    // We have already evalulated this structure
+                    // We have already evaluated this structure
                     v
                 case None =>
-                    throw new AppInternalException(s"Accessing unbound variable ${varName}")
+                    throw new UnboundVariableException(s"${varName}")
             }
 
         def evalDeclBase(decl:DeclarationInterface,
                          expr:WdlExpression,
                          attrs:DeclAttrs) : (WdlVarLinks, WdlValue) = {
+            appletLog(s"evaluating ${decl}")
             val vRaw : WdlValue = expr.evaluate(lookup, DxFunctions).get
             val w: WdlValue = Utils.cast(decl.wdlType, vRaw, decl.unqualifiedName)
             val wvl = WdlVarLinks.importFromWDL(decl.wdlType, attrs, w)
@@ -98,8 +100,7 @@ object RunnerEval {
                 case (_, None) =>
                     inputs.get(decl.unqualifiedName) match {
                         case None =>
-                            throw new AppInternalException(
-                                s"Accessing unbound variable ${decl.unqualifiedName}")
+                            throw new UnboundVariableException(s"${decl.unqualifiedName}")
                         case Some(wvl) =>
                             val v: WdlValue = wvlEvalCache(decl.unqualifiedName, wvl)
                             Some((wvl, v))
@@ -121,7 +122,7 @@ object RunnerEval {
                     } catch {
                         // Trying to access an unbound variable. Since
                         // the result is optional, we can just let it go.
-                        case e: AppInternalException => None
+                        case e: UnboundVariableException => None
                     }
 
                 case (t, Some(expr)) =>
@@ -132,7 +133,7 @@ object RunnerEval {
         // Process all the declarations. Take care to add new bindings
         // to the environment, so variables like [cmdline] will be able to
         // access previous results.
-        declarations.map{ decl =>
+        val outputs = declarations.map{ decl =>
             evalDecl(decl) match {
                 case Some((wvl, wdlValue)) =>
                     Some(decl.unqualifiedName -> BValue(wvl, wdlValue))
@@ -141,6 +142,8 @@ object RunnerEval {
                     None
             }
         }.flatten.toMap
+        appletLog(s"Eval env=${env}")
+        outputs
     }
 
     def apply(wf: WdlWorkflow,
@@ -163,7 +166,8 @@ object RunnerEval {
             case _:WorkflowOutput => None
             case _ => throw new Exception("Eval workflow contains a non declaration")
         }.flatten
-        val outputs : Map[String, BValue] = evalDeclarations(decls, inputs, false, None)
+        val outputs : Map[String, BValue] = evalDeclarations(decls, inputs, false, None,
+                                                             IODirection.Download)
 
         // Keep only exported variables
         val exported = outputs.filter{ case (varName, _) => outputSpec contains varName }

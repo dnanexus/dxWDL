@@ -7,6 +7,9 @@ import java.nio.file.{Files, FileSystems, Path, Paths, PathMatcher}
 import scala.util.{Try, Success, Failure}
 import scala.collection.JavaConverters._
 import scala.collection.mutable.HashMap
+import spray.json._
+import Utils.{dxFileOfJsValue, downloadFile, getMetaDirPath, jsValueOfJsonNode,
+    DX_FUNCTIONS_FILES, readFileContent, writeFileContent}
 import wdl4s.wdl.expression.WdlStandardLibraryFunctions
 import wdl4s.wdl.TsvSerializable
 import wdl4s.wdl.values._
@@ -28,7 +31,42 @@ object DxFunctions extends WdlStandardLibraryFunctions {
 
     // Files that have to be downloaded before read.
     // We download them once, and then remove them from the hashtable.
-    var remoteFiles = HashMap.empty[String, DXFile]
+    private val remoteFiles = HashMap.empty[String, DXFile]
+
+    // Checkpoint the mapping tables
+    //
+    // This is done when closing the Runner. For example, between
+    // the task-runner prolog and epilog.
+    //
+    // Convert the [localized] table to JSON, and write it
+    // out to a checkpoint file.
+    def freeze() : Unit = {
+        val m:Map[String, JsValue] = remoteFiles.map{ case (path, dxFile) =>
+            path.toString -> jsValueOfJsonNode(dxFile.getLinkAsJson)
+        }.toMap
+        val buf = JsObject(m).prettyPrint
+        val path = getMetaDirPath().resolve(DX_FUNCTIONS_FILES)
+        writeFileContent(path, buf)
+    }
+
+    // Read the checkpoint, and repopulate the table
+    def unfreeze() : Unit = {
+        val path = getMetaDirPath().resolve(DX_FUNCTIONS_FILES)
+        val buf = readFileContent(path)
+        val m: Map[String, DXFile] = buf.parseJson match {
+            case JsObject(fields) =>
+                fields.map{
+                    case (k,vJs) => k -> dxFileOfJsValue(vJs)
+                }.toMap
+            case other =>
+                throw new Exception(s"Deserialization error, checkpoint=${other.prettyPrint}")
+        }
+
+        // repopulate tables.
+        m.foreach{ case(p, dxFile) =>
+            remoteFiles(p) = dxFile
+        }
+    }
 
 
     def registerRemoteFile(path: String, dxfile: DXFile) = {
@@ -48,7 +86,14 @@ object DxFunctions extends WdlStandardLibraryFunctions {
                 // File has not been downloaded yet.
                 // Transfer it through the network, and store
                 // locally.
-                Utils.downloadFile(Paths.get(path), dxFile)
+                val p:Path = Paths.get(path)
+                if (Files.exists(p)) {
+                    errStream.println(s"Lazy download for ${p} invoked")
+                    // Remove the empty file that is a stand-in for the
+                    // real file.
+                    Files.delete(p)
+                }
+                downloadFile(p, dxFile)
                 remoteFiles.remove(path)
             case None => ()
         }

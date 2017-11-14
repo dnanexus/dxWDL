@@ -8,6 +8,7 @@
 // We use YAML as a human readable representation of the IR.
 package dxWDL
 
+import com.dnanexus.DXRecord
 import net.jcazevedo.moultingyaml._
 import spray.json._
 import wdl4s.wdl.WdlNamespace
@@ -48,6 +49,17 @@ object IR {
     case class InstanceTypeConst(name: String) extends InstanceType
     case object InstanceTypeRuntime extends InstanceType
 
+    // A task may specify a docker image to run under. There are three
+    // supported options:
+    //  None:    no image
+    //  Network: the image resides on a network site and requires download
+    //  DxAsset: the image is a platform asset
+    //
+    sealed trait DockerImage
+    case object DockerImageNone extends DockerImage
+    case object DockerImageNetwork extends DockerImage
+    case class DockerImageDxAsset(asset: DXRecord) extends DockerImage
+
     // There are several kinds of applets
     //   Eval:      evaluate WDL expressions, pure calculation
     //   If:        block for a conditional
@@ -71,7 +83,7 @@ object IR {
       * @param input         WDL input arguments
       * @param output        WDL output arguments
       * @param instaceType   a platform instance name
-      * @param docker        is docker used?
+      * @param docker        is docker used? if so, what image
       * @param destination   folder path on the platform
       * @param kind          Kind of applet: task, scatter, ...
       * @param ns            WDL namespace
@@ -80,7 +92,7 @@ object IR {
                       inputs: Vector[CVar],
                       outputs: Vector[CVar],
                       instanceType: InstanceType,
-                      docker: Boolean,
+                      docker: DockerImage,
                       destination: String,
                       kind: AppletKind,
                       ns: WdlNamespace)
@@ -133,6 +145,37 @@ object IR {
                 case unrecognized => throw new Exception(s"InstanceType expected ${unrecognized}")
             }
         }
+
+        implicit object DockerImageYamlFormat extends YamlFormat[DockerImage] {
+            def write(it: DockerImage) : YamlValue =
+                it match {
+                    case DockerImageNone =>
+                        YamlString("None")
+                    case DockerImageNetwork =>
+                        YamlString("Network")
+                    case DockerImageDxAsset(dxAsset) =>
+                        val assetJs = Utils.jsValueOfJsonNode(dxAsset.getLinkAsJson)
+                        YamlObject(YamlString("asset") -> YamlString(assetJs.prettyPrint))
+                }
+            def read(value: YamlValue) : DockerImage = value match {
+                case YamlString("None") => DockerImageNone
+                case YamlString("Network") => DockerImageNetwork
+                case YamlObject(_) =>
+                    value.asYamlObject.getFields(YamlString("asset")) match {
+                        case Seq(YamlString(buf)) =>
+                            val assetJs = buf.parseJson
+                            val dxRecord = assetJs.asJsObject.getFields("id") match {
+                                case Seq(JsString(rid)) =>
+                                    DXRecord.getInstance(rid)
+                                case _ => throw new Exception(s"Unexpected dx:asset ${assetJs.prettyPrint}")
+                            }
+                            DockerImageDxAsset(dxRecord)
+                    }
+                case unrecognized =>
+                    throw new Exception(s"DocketImage expected ${unrecognized}")
+            }
+        }
+
 
         implicit object AppletKindYamlFormat  extends YamlFormat[AppletKind] {
             def write(aKind: AppletKind) =
@@ -341,7 +384,7 @@ object IR {
                                 inputs,
                                 outputs,
                                 instanceType,
-                                YamlBoolean(docker),
+                                docker,
                                 YamlString(destination),
                                 kind,
                                 YamlString(wdlCode)) =>
@@ -349,7 +392,7 @@ object IR {
                                        inputs.convertTo[Vector[CVar]],
                                        outputs.convertTo[Vector[CVar]],
                                        instanceType.convertTo[InstanceType],
-                                       docker,
+                                       docker.convertTo[DockerImage],
                                        destination,
                                        kind.convertTo[AppletKind],
                                        WdlNamespace.loadUsingSource(wdlCode, None, None).get)

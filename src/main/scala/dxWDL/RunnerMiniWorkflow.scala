@@ -291,7 +291,8 @@ case class RunnerMiniWorkflow(exportVars: Set[String],
             appletLog(s"envWithIterItem= ${envWithIterItem}")
 
             // calculate declarations at the top of the block
-            val bValues = RunnerEval.evalDeclarations(topDecls, envWithIterItem, false, None)
+            val bValues = RunnerEval.evalDeclarations(topDecls, envWithIterItem, false, None,
+                                                      IODirection.Download)
             var innerEnvRaw = bValues.map{ case(key, bVal) => key -> bVal.wvl }.toMap
             val topOutputs = innerEnvRaw
                 .filter{ case (varName, _) => isExported(varName) }
@@ -372,7 +373,7 @@ case class RunnerMiniWorkflow(exportVars: Set[String],
         appletLog(s"evalIf")
 
         // Evaluate condition
-        val condValue:WdlValue = WdlVarLinks.eval(condition, true)
+        val condValue:WdlValue = WdlVarLinks.eval(condition, true, IODirection.Download)
         val b = condValue match {
             case WdlBoolean(b) => b
             case _ => throw new AppInternalException("conditional expression is not boolean")
@@ -386,7 +387,7 @@ case class RunnerMiniWorkflow(exportVars: Set[String],
         var allOutputs = Vector.empty[Env]
 
         // calculate declarations at the top of the block
-        val bValues = RunnerEval.evalDeclarations(topDecls, outerEnv, false, None)
+        val bValues = RunnerEval.evalDeclarations(topDecls, outerEnv, false, None, IODirection.Download)
         val innerEnvRaw = bValues.map{ case(key, bVal) => key -> bVal.wvl }.toMap
         val topOutputs = innerEnvRaw
             .filter{ case (varName, _) => isExported(varName) }
@@ -460,7 +461,8 @@ case class RunnerMiniWorkflow(exportVars: Set[String],
         val exprDecls = decls.filter(decl => decl.expression != None)
 
         // evaluate the expressions, given the workflow inputs
-        val env:Map[String, BValue] = RunnerEval.evalDeclarations(exprDecls, inputs, false, None)
+        val env:Map[String, BValue] = RunnerEval.evalDeclarations(exprDecls, inputs, false, None,
+                                                                  IODirection.Download)
         env.map{ case (key, BValue(wvl,_)) => key -> wvl }.toMap
     }
 

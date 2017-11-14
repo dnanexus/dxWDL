@@ -51,8 +51,7 @@ object Main extends App {
 
     // Packing of all compiler flags in an easy to digest
     // format
-    case class CompilerOptions(appletTimeout: Option[Int],
-                               archive: Boolean,
+    case class CompilerOptions(archive: Boolean,
                                billTo: String,
                                compileMode: CompilerFlag.Value,
                                defaults: Option[Path],
@@ -88,7 +87,6 @@ object Main extends App {
             assert(assetId.startsWith("record"))
             r -> assetId
         }.toMap
-        //System.err.println(s"allAssets = $assets")
 
         assets.get(region) match {
             case None => throw new Exception(s"Region ${region} is currently unsupported")
@@ -192,6 +190,9 @@ object Main extends App {
                     case "project" =>
                         checkNumberOfArguments(keyword, 1, subargs)
                         (keyword, subargs.head)
+                    case ("q"|"quiet") =>
+                        checkNumberOfArguments(keyword, 0, subargs)
+                        ("quiet", "")
                     case ("r"|"recursive") =>
                         checkNumberOfArguments(keyword, 0, subargs)
                         ("recursive", "")
@@ -349,7 +350,9 @@ object Main extends App {
             case None => Set.empty
             case Some(modulesToTrace) => modulesToTrace.toSet
         }
-        val verbose = Verbose(options contains "verbose", verboseKeys)
+        val verbose = Verbose(options contains "verbose",
+                              options contains "quiet",
+                              verboseKeys)
         var folderOpt:Option[String] = options.get("folder") match {
             case None => None
             case Some(List(f)) => Some(f)
@@ -398,7 +401,7 @@ object Main extends App {
         if (!folderRaw.startsWith("/"))
             throw new Exception(s"Folder must start with '/'")
         val dxFolder = folderRaw
-        val dxProject = Utils.lookupProject(projectRaw)
+        val dxProject = DxPath.lookupProject(projectRaw)
         val projName = dxProject.describe.getName
         Utils.trace(verbose.on,
                     s"""|project name: <${projName}>
@@ -427,13 +430,6 @@ object Main extends App {
             case Some(List("relaxed")) => TopoMode.SortRelaxed
             case _ => throw new Exception("Sanity: bad sort mode")
         }
-        val appletTimeout =
-            if (options contains "noAppletTimeout") {
-                None
-            } else {
-                // default timeout
-                Some(Utils.DEFAULT_APPLET_TIMEOUT)
-            }
         val defaults: Option[Path] = options.get("defaults") match {
             case None => None
             case Some(List(p)) => Some(Paths.get(p))
@@ -443,8 +439,7 @@ object Main extends App {
             case None => List.empty
             case Some(pl) => pl.map(p => Paths.get(p))
         }
-        CompilerOptions(appletTimeout,
-                        options contains "archive",
+        CompilerOptions(options contains "archive",
                         billTo,
                         compileMode,
                         defaults,
@@ -469,7 +464,7 @@ object Main extends App {
                     cOpt: CompilerOptions,
                     bOpt: BaseOptions) : String = {
         // get list of available instance types
-        val instanceTypeDB = InstanceTypeDB.query(bOpt.dxProject)
+        val instanceTypeDB = InstanceTypeDB.query(bOpt.dxProject, bOpt.verbose)
 
         // Resolving imports. Look for referenced files in the
         // source directory.
@@ -553,7 +548,6 @@ object Main extends App {
                 val (wf, _) =
                     CompilerNative(cOpt.dxWDLrtId, bOpt.dxProject, instanceTypeDB,
                                    bOpt.folder, cef,
-                                   cOpt.appletTimeout,
                                    bOpt.force, cOpt.archive, bOpt.verbose).apply(irNs)
                 wf
             case CompilerFlag.IR =>
@@ -742,8 +736,6 @@ object Main extends App {
             |      -defaults <string>    Path to Cromwell formatted default values file
             |      -destination <string> Output path on the platform for workflow
             |      -inputs <string>      Path to Cromwell formatted input file
-            |      -noAppletTimeout      By default, applets cannot run more than ${Utils.DEFAULT_APPLET_TIMEOUT} hours.
-            |                          Remove this limitation.
             |      -reorg                Reorganize workflow output files
             |      -sort [string]        Sort call graph, to avoid forward references
             |
@@ -760,6 +752,7 @@ object Main extends App {
             |    -f | force             Delete existing applets/workflows
             |    -folder <string>       Platform folder
             |    -project <string>      Platform project
+            |    -quiet                 Do not print warnings or informational outputs
             |    -verbose [flag]        Print detailed progress reports
             |""".stripMargin
 
