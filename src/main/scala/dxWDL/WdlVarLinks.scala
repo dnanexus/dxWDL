@@ -55,6 +55,7 @@ object IODirection extends Enumeration {
 sealed trait DxLink
 case class DxlValue(jsn: JsValue) extends DxLink  // This may contain dx-files
 case class DxlStage(dxStage: DXWorkflowStage, ioRef: IORef.Value, varName: String) extends DxLink
+case class DxlWorkflowInput(varName: String) extends DxLink
 case class DxlJob(dxJob: DXJob, varName: String) extends DxLink
 case class DxlJobArray(dxJobVec: Vector[DXJob], varName: String) extends DxLink
 
@@ -70,6 +71,8 @@ object WdlVarLinks {
                 "JSON" -> jsn.prettyPrint
             case DxlStage(dxStage, ioRef, varEncName) =>
                 "stageRef" -> varEncName
+            case DxlWorkflowInput(varEncName) =>
+                "workflowInput" -> varEncName
             case DxlJob(dxJob, varEncName) =>
                 "jobRef" -> varEncName
             case DxlJobArray(dxJobVec, varEncName) =>
@@ -649,6 +652,9 @@ object WdlVarLinks {
                         case IORef.Input => dxStage.getInputReference(varEncName)
                         case IORef.Output => dxStage.getOutputReference(varEncName)
                     }
+                case DxlWorkflowInput(varEncName) =>
+                    JsObject("$dnanexus_link" -> JsObject(
+                                 "workflowInputField" -> JsString(varEncName)))
                 case DxlJob(dxJob, varEncName) =>
                     val jobId : String = dxJob.getId()
                     Utils.makeJBOR(jobId, varEncName)
@@ -680,12 +686,20 @@ object WdlVarLinks {
                             bindEncName_F -> dxStage.getOutputReference(varEncName_F)
                         )
                     }
+                case DxlWorkflowInput(varEncName) =>
+                    val varEncName_F = varEncName + FLAT_FILES_SUFFIX
+                    Map( bindEncName ->
+                            JsObject("$dnanexus_link" -> JsObject(
+                                         "workflowInputField" -> JsString(varEncName))),
+                         bindEncName_F ->
+                            JsObject("$dnanexus_link" -> JsObject(
+                                         "workflowInputField" -> JsString(varEncName_F)))
+                    )
                 case DxlJob(dxJob, varEncName) =>
                     val varEncName_F = varEncName + FLAT_FILES_SUFFIX
                     val jobId : String = dxJob.getId()
                     Map(bindEncName -> Utils.makeJBOR(jobId, varEncName),
-                        bindEncName_F -> Utils.makeJBOR(jobId, varEncName_F)
-                    )
+                        bindEncName_F -> Utils.makeJBOR(jobId, varEncName_F))
                 case DxlJobArray(dxJobVec, varEncName) =>
                     val varEncName_F = varEncName + FLAT_FILES_SUFFIX
                     Map(bindEncName -> mkJborArray(dxJobVec, varEncName),

@@ -630,6 +630,8 @@ case class CompilerNative(dxWDLrtId: String,
                                               DxlStage(dxStage, IORef.Output, argName.dxVarName))
                         val fields = genFieldsCastIfRequired(wvl, argName.wdlType, cVar)
                         m ++ fields.toMap
+                    case IR.SArgWorkflowInput(argName) =>
+                        throw new NotImplementedError("workflow input")
                 }
         }
         JsObject(jsInputs)
