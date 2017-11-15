@@ -67,8 +67,7 @@ object IR {
     //   Scatter:   utility block for scatter/gather
     //   ScatterCollect: utility block for scatter, with a gather subjob.
     //   Task:      call a task, execute a shell command (usually)
-    //   WorkflowOutputs: evaluate workflow outputs, and clean up
-    //              intermediate results if needed.
+    //   WorkflowOutputReorg: move intermediate result files to a subdirectory.
     sealed trait AppletKind
     case object AppletKindEval extends AppletKind
     case class  AppletKindIf(calls: Map[String, String]) extends AppletKind
@@ -76,8 +75,7 @@ object IR {
     case class  AppletKindScatter(calls: Map[String, String]) extends AppletKind
     case class  AppletKindScatterCollect(calls: Map[String, String]) extends AppletKind
     case object AppletKindTask extends AppletKind
-    case object AppletKindWorkflowOutputs extends AppletKind
-    case object AppletKindWorkflowOutputsAndReorg extends AppletKind
+    case object AppletKindWorkflowOutputReorg extends AppletKind
 
     /** @param name          Name of applet
       * @param input         WDL input arguments
@@ -107,6 +105,17 @@ object IR {
     case class SArgLink(stageName: String, argName: CVar) extends SArg
     case class SArgWorkflowInput(argName: CVar) extends SArg
 
+    // Linking between a variable, and which stage we got
+    // it from.
+    case class LinkedVar(cVar: IR.CVar, sArg: IR.SArg) {
+        def yaml : YamlObject = {
+            YamlObject(
+                YamlString("cVar") -> IR.yaml(cVar),
+                YamlString("sArg") -> IR.yaml(sArg)
+            )
+        }
+    }
+
     case class Stage(name: String,
                      id: Utils.DXWorkflowStage,
                      appletName: String,
@@ -117,7 +126,7 @@ object IR {
       * generated it.
       */
     case class Workflow(name: String,
-                        inputs: Vector[CVar],
+                        inputs: Vector[(CVar,SArg)],
                         outputs: Vector[(CVar,SArg)],
                         stages: Vector[Stage])
 
@@ -200,10 +209,8 @@ object IR {
                             YamlString("calls") -> calls.toYaml)
                     case AppletKindTask =>
                         YamlObject(YamlString("aKind") -> YamlString("Task"))
-                    case AppletKindWorkflowOutputs =>
-                        YamlObject(YamlString("aKind") -> YamlString("WorkflowOutputs"))
-                    case AppletKindWorkflowOutputsAndReorg =>
-                        YamlObject(YamlString("aKind") -> YamlString("WorkflowOutputsAndReorg"))
+                    case AppletKindWorkflowOutputReorg =>
+                        YamlObject(YamlString("aKind") -> YamlString("WorkflowOutputReorg"))
                 }
             def read(value: YamlValue) = value match {
                 case YamlObject(_) =>
@@ -218,10 +225,8 @@ object IR {
                             }
                         case Seq(YamlString("Task")) =>
                             AppletKindTask
-                        case Seq(YamlString("WorkflowOutputs")) =>
-                            AppletKindWorkflowOutputs
-                        case Seq(YamlString("WorkflowOutputsAndReorg")) =>
-                            AppletKindWorkflowOutputsAndReorg
+                        case Seq(YamlString("WorkflowOutputReorg")) =>
+                            AppletKindWorkflowOutputReorg
                         case Seq(YamlString("If")) =>
                             yo.getFields(YamlString("calls")) match {
                                 case Seq(calls) =>

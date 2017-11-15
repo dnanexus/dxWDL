@@ -16,7 +16,7 @@ import Utils.appletLog
 import wdl4s.wdl.{Declaration, WdlWorkflow, WorkflowOutput}
 import WdlVarLinks.yaml
 
-object RunnerWorkflowOutputs {
+object RunnerWorkflowOutputReorg {
 
     // Efficiently get the names of many files. We
     // don't want to do a `describe` each one of them, instead,

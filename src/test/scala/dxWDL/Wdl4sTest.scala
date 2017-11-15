@@ -22,13 +22,11 @@ class Wdl4sTest extends FlatSpec with Matchers {
         val s = "\"dx://record-xxxx\""
         val expr = WdlExpression.fromString(s)
         val s2 = expr.toWdlString
-        System.err.println(s"${s2}")
         s should equal(s2)
     }
 
     it should "generate expression variable ID" in {
         val expr = WdlExpression.fromString("xxx")
-        //System.out.println(s"expr=${expr.toWdlString}")
         assert(expr.toWdlString == "xxx")
     }
 

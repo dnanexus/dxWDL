@@ -147,7 +147,7 @@ object WdlRewrite {
 
     def workflowOutput(varName: String,
                        wdlType: WdlType,
-                       expr: WdlExpression) = {
+                       expr: WdlExpression) : WorkflowOutput = {
         new WorkflowOutput("out_" + varName,
                            wdlType,
                            expr,

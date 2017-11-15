@@ -33,6 +33,14 @@ case class CompilerErrorFormatter(terminalMap: Map[Terminal, WorkflowSource]) {
 
     }
 
+    def workflowInputDefaultMustBeConst(expr: WdlExpression) = {
+        val t: Terminal = AstTools.findTerminals(expr.ast).head
+        s"""|Workflow input expression ${expr.toWdlString} must be const or variable
+            |
+            |${pointToSource(t)}
+            |""".stripMargin
+    }
+
     def expressionMustBeConstOrVar(expr: WdlExpression) : String = {
         val t: Terminal = AstTools.findTerminals(expr.ast).head
         s"""|Expression ${expr.toWdlString} must be const or variable

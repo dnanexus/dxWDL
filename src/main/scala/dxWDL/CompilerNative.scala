@@ -7,12 +7,14 @@ import com.fasterxml.jackson.databind.JsonNode
 import com.dnanexus.{DXApplet, DXAPI, DXDataObject, DXFile, DXProject, DXRecord, DXWorkflow}
 import java.security.MessageDigest
 import java.time.format.DateTimeFormatter
+import IR.{CVar, SArg}
 import scala.collection.JavaConverters._
 import spray.json._
 import Utils.{AppletLinkInfo, base64Encode, CHECKSUM_PROP, dxFileOfJsValue, DXWorkflowStage,
     INSTANCE_TYPE_DB_FILENAME, jsValueOfJsonNode, jsonNodeOfJsValue, LINK_INFO_FILENAME, trace,
     warning}
 import wdl4s.wdl.types._
+import wdl4s.wdl.values._
 
 case class CompilerNative(dxWDLrtId: String,
                           dxProject: DXProject,
@@ -57,7 +59,7 @@ case class CompilerNative(dxWDLrtId: String,
     // Ragged arrays, maps, and objects, cannot be mapped in such a trivial way.
     // These are called "Complex Types", or "Complex". They are handled
     // by passing a JSON structure and a vector of dx:files.
-    def cVarToSpec(cVar: IR.CVar) : Vector[JsValue] = {
+    def cVarToSpec(cVar: CVar) : Vector[JsValue] = {
         val name = Utils.encodeAppletVarName(cVar.dxVarName)
         val defaultVal:Map[String, JsValue] = cVar.attrs.getDefault match {
             case None => Map.empty
@@ -280,10 +282,8 @@ case class CompilerNative(dxWDLrtId: String,
                             |${genBashScriptTaskBody()}
                             |}""".stripMargin.trim
                 }
-            case IR.AppletKindWorkflowOutputs =>
+            case IR.AppletKindWorkflowOutputReorg =>
                 genBashScriptNonTask("workflowOutputs")
-            case IR.AppletKindWorkflowOutputsAndReorg =>
-                genBashScriptNonTask("workflowOutputsAndReorg")
         }
         val setupFilesScript = genSourceFiles(wdlCode, linkInfo, dbInstance)
         s"""|#!/bin/bash -ex
@@ -426,7 +426,7 @@ case class CompilerNative(dxWDLrtId: String,
                     aplLinks.map{ case (key, (irApplet, dxApplet)) =>
                         // Reduce the information to what will be needed for runtime linking.
                         val appInputDefs: Map[String, WdlType] = irApplet.inputs.map{
-                            case IR.CVar(name, wdlType, _, _) => (name -> wdlType)
+                            case CVar(name, wdlType, _, _) => (name -> wdlType)
                         }.toMap
                         val ali = AppletLinkInfo(appInputDefs, dxApplet)
                         key -> AppletLinkInfo.writeJson(ali)
@@ -516,7 +516,7 @@ case class CompilerNative(dxWDLrtId: String,
         // The WorkflowOutput applet requires higher permissions
         // to organize the output directory.
         val projAccess:Map[String, JsValue] = applet.kind match {
-            case IR.AppletKindWorkflowOutputsAndReorg => Map("project" -> JsString("CONTRIBUTE"))
+            case IR.AppletKindWorkflowOutputReorg => Map("project" -> JsString("CONTRIBUTE"))
             case _ => Map()
         }
         val access = JsObject(network ++ projAccess)
@@ -596,7 +596,7 @@ case class CompilerNative(dxWDLrtId: String,
     // source and target WDL types do not match.
     def genFieldsCastIfRequired(wvl: WdlVarLinks,
                                 rawSrcType: WdlType,
-                                cVar: IR.CVar) : List[(String, JsValue)] = {
+                                cVar: CVar) : List[(String, JsValue)] = {
         val srcType = Utils.stripOptional(rawSrcType)
         val trgType = Utils.stripOptional(wvl.wdlType)
         if (srcType != trgType)
@@ -609,7 +609,7 @@ case class CompilerNative(dxWDLrtId: String,
     // Calculate the stage inputs from the call closure
     //
     // It comprises mappings from variable name to WdlType.
-    def genStageInputs(inputs: Vector[(IR.CVar, IR.SArg)],
+    def genStageInputs(inputs: Vector[(CVar, SArg)],
                        stageDict: Map[String, DXWorkflowStage]) : JsValue = {
         val jsInputs:Map[String, JsValue] = inputs.foldLeft(Map.empty[String, JsValue]){
             case (m, (cVar, sArg)) =>
@@ -631,7 +631,11 @@ case class CompilerNative(dxWDLrtId: String,
                         val fields = genFieldsCastIfRequired(wvl, argName.wdlType, cVar)
                         m ++ fields.toMap
                     case IR.SArgWorkflowInput(argName) =>
-                        throw new NotImplementedError("workflow input")
+                        val wvl = WdlVarLinks(cVar.wdlType,
+                                              cVar.attrs,
+                                              DxlWorkflowInput(argName.dxVarName))
+                        val fields = genFieldsCastIfRequired(wvl, argName.wdlType, cVar)
+                        m ++ fields.toMap
                 }
         }
         JsObject(jsInputs)
@@ -659,6 +663,14 @@ case class CompilerNative(dxWDLrtId: String,
         }
     }
 
+    private def jsonFromWdl(cVar:CVar, wdlValue:WdlValue) : JsValue = {
+        val wvl = WdlVarLinks.importFromWDL(cVar.wdlType, DeclAttrs.empty, wdlValue)
+        wvl.dxlink match {
+            case DxlValue(jsv) => jsv
+            case _ => throw new Exception(s"WDL value cannot be converted into a JSON constant (${wdlValue})")
+        }
+    }
+
     // Create the workflow in a single API call.
     //
     // Prepare the list of stages, and the checksum in
@@ -669,11 +681,11 @@ case class CompilerNative(dxWDLrtId: String,
                       wf: IR.Workflow,
                       digest: String,
                       appletDict: Map[String, (IR.Applet, DXApplet)]) : DXWorkflow = {
-        val (stagesReq,_) =
+        val (stagesReq, stageDict) =
             wf.stages.foldLeft((Vector.empty[JsValue], Map.empty[String, DXWorkflowStage])) {
                 case ((stagesReq, stageDict), stg) =>
                     val (irApplet,dxApplet) = appletDict(stg.appletName)
-                    val linkedInputs : Vector[(IR.CVar, IR.SArg)] = irApplet.inputs zip stg.inputs
+                    val linkedInputs : Vector[(CVar, SArg)] = irApplet.inputs zip stg.inputs
                     val inputs = genStageInputs(linkedInputs, stageDict)
                     // convert the per-stage metadata into JSON
                     val stageReqDesc = JsObject(
@@ -685,12 +697,56 @@ case class CompilerNative(dxWDLrtId: String,
                      stageDict ++ Map(stg.name -> stg.id))
             }
 
+        // Workflow inputs
+        val wfInputSpec:Vector[JsValue] = wf.inputs.map{ case (cVar,sArg) =>
+            val defaultMap:Map[String, JsValue] = sArg match {
+                case IR.SArgWorkflowInput(_) =>
+                    // input is provided by the user
+                    Map.empty
+                case IR.SArgConst(wdlValue) =>
+                    // constant default value
+                    val jsv = jsonFromWdl(cVar, wdlValue)
+                    Map("default" -> jsv)
+                case other =>
+                    throw new Exception(s"Bad value for sArg ${other}")
+            }
+            val m = Map("name" -> JsString(cVar.name),
+                        "class" -> JsString(dxClassOfWdlType(cVar.wdlType)))
+            JsObject(m ++ defaultMap)
+        }
+        val wfOutputSpec:Vector[JsValue] = wf.outputs.map{ case (cVar,sArg) =>
+            val outputSource:JsValue = sArg match {
+                case IR.SArgConst(wdlValue) =>
+                    // constant
+                    jsonFromWdl(cVar, wdlValue)
+                case IR.SArgLink(stageName, argName: CVar) =>
+                    // output is from an intermediate stage
+                    val dxStage = stageDict(stageName)
+                    JsObject("$dnanexus_link" -> JsObject(
+                                 "stage" -> JsString(dxStage.getId),
+                                 "outputField" -> JsString(argName.dxVarName)))
+                case IR.SArgWorkflowInput(argName: CVar) =>
+                    // output is directly from the workflow input
+                    JsObject("$dnanexus_link" -> JsObject(
+                                 "workflowInputField" -> JsString(argName.dxVarName)))
+                case other =>
+                    throw new Exception(s"Bad value for sArg ${other}")
+            }
+            JsObject("name" -> JsString(cVar.dxVarName),
+                     "class" -> JsString(dxClassOfWdlType(cVar.wdlType)),
+                     "outputSource" -> outputSource)
+        }
+        trace(verbose2, s"workflow output spec=${wfOutputSpec}")
+
         // pack all the arguments into a single API call
         val req = JsObject("project" -> JsString(dxProject.getId),
                            "name" -> JsString(wf.name),
                            "folder" -> JsString(folder),
                            "properties" -> JsObject(CHECKSUM_PROP -> JsString(digest)),
-                           "stages" -> JsArray(stagesReq))
+                           "stages" -> JsArray(stagesReq),
+                           "inputs" -> JsArray(wfInputSpec),
+                           "outputs" -> JsArray(wfOutputSpec))
+
         val rep = DXAPI.workflowNew(jsonNodeOfJsValue(req), classOf[JsonNode])
         val id = apiParseReplyID(rep)
         DXWorkflow.getInstance(id)

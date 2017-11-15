@@ -14,7 +14,7 @@ A few significant WDL features are not yet supported, but may be
 added according to user interest:
 
 - Nested workflows (sub-workflows)
-- Nested scatters
+- Nested scatters, and conditionals nested in scatters.
 
 
 *Use at your own risk:* for the time being, dxWDL is an exploratory

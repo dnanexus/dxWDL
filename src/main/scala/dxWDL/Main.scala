@@ -30,7 +30,7 @@ object Main extends App {
             MiniWorkflow,
             ScatterCollectSubjob,
             TaskEpilog, TaskProlog, TaskRelaunch,
-            WorkflowOutputs, WorkflowOutputsAndReorg = Value
+            WorkflowOutputReorg = Value
     }
     object CompilerFlag extends Enumeration {
         val Default, IR = Value
@@ -681,12 +681,9 @@ object Main extends App {
                 case InternalOp.TaskRelaunch =>
                     val runner = RunnerTask(taskOfNamespace(ns), cef)
                     runner.relaunch(jobInputPath, jobOutputPath, jobInfoPath)
-                case InternalOp.WorkflowOutputs =>
-                    RunnerWorkflowOutputs.apply(workflowOfNamespace(ns),
-                                                jobInputPath, jobOutputPath, jobInfoPath, false)
-                case InternalOp.WorkflowOutputsAndReorg =>
-                    RunnerWorkflowOutputs.apply(workflowOfNamespace(ns),
-                                                jobInputPath, jobOutputPath, jobInfoPath, true)
+                case InternalOp.WorkflowOutputReorg =>
+                    RunnerWorkflowOutputReorg.apply(workflowOfNamespace(ns),
+                                                    jobInputPath, jobOutputPath, jobInfoPath, true)
             }
             SuccessfulTermination(s"success ${op}")
         } catch {
