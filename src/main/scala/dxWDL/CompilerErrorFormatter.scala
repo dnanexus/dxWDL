@@ -65,14 +65,23 @@ case class CompilerErrorFormatter(terminalMap: Map[Terminal, WorkflowSource]) {
             |""".stripMargin
     }
 
-    def missingVarRefException(t: Terminal) : String = {
+    def missingCallArgument(ast: Ast, msg:String) : String = {
+        val t: Terminal = AstTools.findTerminals(ast).head
+        s"""|Call is missing a compulsory argument.
+            |${msg}
+            |
+            |${pointToSource(t)}
+            |""".stripMargin
+    }
+
+    def missingVarRef(t: Terminal) : String = {
         s"""|Reference to missing variable
             |
             |${pointToSource(t)}
             |""".stripMargin
     }
 
-    def missingVarRefException(ast: Ast) : String = {
+    def missingVarRef(ast: Ast) : String = {
         val t: Terminal = AstTools.findTerminals(ast).head
         s"""|Reference to missing variable
             |
@@ -80,7 +89,7 @@ case class CompilerErrorFormatter(terminalMap: Map[Terminal, WorkflowSource]) {
             |""".stripMargin
     }
 
-    def missingScatterCollectionException(t: Terminal) : String = {
+    def missingScatterCollection(t: Terminal) : String = {
         s"""|Scatter collection variable missing
             |
             |${pointToSource(t)}

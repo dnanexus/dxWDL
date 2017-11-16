@@ -9,7 +9,7 @@ import scala.collection.mutable.HashMap
 import scala.util.{Failure, Success}
 import spray.json._
 import spray.json.JsString
-import Utils.{TopoMode, Verbose}
+import Utils.{TopoMode, Verbose, warning}
 import wdl4s.wdl.{ImportResolver, WdlNamespace, WdlTask,
     WdlNamespaceWithWorkflow, WdlWorkflow, WorkflowOutput, WorkflowSource}
 
@@ -94,19 +94,19 @@ object Main extends App {
         }
     }
 
-    def outputs(ns: WdlNamespace) : Option[Seq[WorkflowOutput]] = {
+    def getWorkflowOutputs(ns: WdlNamespace, verbose:Verbose) : Option[Seq[WorkflowOutput]] = {
         ns match {
             case nswf: WdlNamespaceWithWorkflow =>
                 val wf = nswf.workflow
                 try {
                     Some(wf.outputs)
                 } catch {
-                    case e: Throwable =>
-                        if (wf.hasEmptyOutputSection)
-                            throw new Exception("""|The workflow has an empty output section.
-                                                   |please fill it in."""
-                                                    .stripMargin.replaceAll("\n", " "))
-                        throw e
+                    case e: Throwable if (wf.hasEmptyOutputSection) =>
+                        warning(verbose, """|The workflow has an empty output section.
+                                            |It will have no outputs in."""
+                                    .stripMargin.replaceAll("\n", " "))
+                        None
+                    case e: Throwable => throw e
                 }
             case _ => None
         }
@@ -485,7 +485,8 @@ object Main extends App {
                     System.err.println("Error loading WDL source code")
                     throw f
             }
-        val cState = State(orgNs, outputs(orgNs), wdlSourceFile, resolver, bOpt.verbose)
+        val wfOutputs = getWorkflowOutputs(orgNs, bOpt.verbose)
+        val cState = State(orgNs, wfOutputs, wdlSourceFile, resolver, bOpt.verbose)
 
         // Topologically sort the WDL file so no forward references exist in
         // subsequent steps. Create new file to hold the result.

@@ -131,29 +131,30 @@ def find_test_from_analysis(analysis):
 # Check that a workflow returned the expected result for
 # a [key]
 def validate_result(tname, analysis_desc, key, expected_val):
-    # Split key into stage-number and name. For example:
-    #  '0.count' -> 0, count
-    stage_name = key.split('.')[0]
+    # Extract the key. For example, for workflow "math" returning
+    # output "count":
+    #    'math.count' -> count
+    wf_name = key.split('.')[0]
     field_name = key.split('.')[1]
+    if wf_name != tname:
+        raise Exception("Key {} is invalid, must start with workflow name".format(key))
     try:
         # get the actual results
-        stage_results = find_stage_outputs_by_name(tname, analysis_desc, stage_name)
-        if field_name not in stage_results:
-            print("field {} missing from stage results {}".format(field_name, stage_results))
+        results = analysis_desc['output']
+        if field_name not in results:
+            print("field {} missing from workflow results {}".format(field_name, results))
             return False
-        result = stage_results[field_name]
+        result = results[field_name]
         if type(result) is list:
             result.sort()
             expected_val.sort()
         if result != expected_val:
             print("Analysis {} gave unexpected results".format(tname))
-            print("stage={}".format(stage_name))
-            print("stage_results={}".format(stage_results))
-            print("Should be stage[{}].{} = {} , actual = {}".format(stage_name, field_name, expected_val, result))
+            print("results={}".format(results))
+            print("Field {} should be {}, actual = {}".format(field_name, expected_val, result))
             return False
         return True
     except Exception, e:
-        #print("no stage {} in results {}".format(stage_name, desc['stages']))
         print("exception message={}".format(e))
         return False
 

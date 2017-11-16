@@ -5,7 +5,7 @@ package dxWDL
 import IR.{CVar, LinkedVar, SArg}
 import net.jcazevedo.moultingyaml._
 import scala.util.{Failure, Success, Try}
-import Utils.{DX_URL_PREFIX, isNativeDxType, trace, warning}
+import Utils.{DX_URL_PREFIX, isNativeDxType, trace}
 import wdl4s.wdl._
 import wdl4s.wdl.AstTools
 import wdl4s.wdl.AstTools.EnhancedAstNode
@@ -53,7 +53,7 @@ case class CompilerIR(gWorkflowOutputs: Option[Seq[WorkflowOutput]],
             case Some(x) => x
             case None =>
                 val t: Terminal = AstTools.findTerminals(expr.ast).head
-                throw new Exception(cef.missingVarRefException(t))
+                throw new Exception(cef.missingVarRef(t))
         }
     }
 
@@ -419,16 +419,16 @@ workflow w {
                             case "identifier" =>
                                 env.get(srcStr) match {
                                     case Some(lVar) => lVar.sArg
-                                    case None => throw new Exception(cef.missingVarRefException(t))
+                                    case None => throw new Exception(cef.missingVarRef(t))
                                 }
-                            case _ => throw new Exception(cef.missingVarRefException(t))
+                            case _ => throw new Exception(cef.missingVarRef(t))
                         }
 
                     case a: Ast if a.isMemberAccess =>
                         // This is a case of accessing something like A.B.C.
                         trailSearch(env, a) match {
                             case Some((_, lVar)) => lVar.sArg
-                            case None => throw new Exception(cef.missingVarRefException(a))
+                            case None => throw new Exception(cef.missingVarRef(a))
                         }
 
                     case _:Ast => throw new Exception(cef.expressionMustBeConstOrVar(expr))
@@ -562,17 +562,16 @@ workflow w {
                     } else {
                         // A compulsory input. Print a warning, the user may wish to supply
                         // it at runtime.
-                        warning(verbose, s"""|Note: workflow doesn't supply required input
-                                             |${cVar.name} to call ${call.unqualifiedName};
-                                             |leaving corresponding DNAnexus workflow input unbound
-                                             |""".stripMargin.replaceAll("\n", " "))
-                        IR.SArgEmpty
+                        val msg = s"""|Workflow doesn't supply required input ${cVar.name}
+                                      |to call ${call.unqualifiedName}
+                                      |""".stripMargin.replaceAll("\n", " ")
+                        throw new Exception(cef.missingCallArgument(call.ast, msg))
                     }
                 case Some((_,e)) => e.ast match {
                     case t: Terminal if t.getTerminalStr == "identifier" =>
                         val lVar = env.get(t.getSourceString) match {
                             case Some(x) => x
-                            case None => throw new Exception(cef.missingVarRefException(t))
+                            case None => throw new Exception(cef.missingVarRef(t))
                         }
                         lVar.sArg
                     case t: Terminal =>
@@ -930,7 +929,7 @@ workflow w {
 
         // The outputs are equal to the inputs
         val outputDecls: Vector[WorkflowOutput] = wfOutputs.map{ case (cVar, _) =>
-            WdlRewrite.workflowOutput(cVar.name,
+            WdlRewrite.workflowOutput(cVar.dxVarName,
                                       cVar.wdlType,
                                       WdlExpression.fromString(cVar.dxVarName))
         }
@@ -966,10 +965,14 @@ workflow w {
         val children = wf.children.filter(x => !x.isInstanceOf[WorkflowOutput])
 
         // Only a subset of the workflow declarations are considered inputs.
-        val (wfInputDecls, wfProper) = children.partition{
+        // Limit the search to the top block of declarations. Those that come at the very
+        // beginning of the workflow.
+        val (topDeclBlock, wfProperBlocks) = Utils.splitBlockDeclarations(children.toList)
+        val (wfInputDecls, topDeclNonInputs) = topDeclBlock.partition{
             case decl:Declaration => Utils.declarationIsInput(decl)
             case _ => false
         }
+        val wfProper = topDeclNonInputs ++ wfProperBlocks
 
         // Represent the workflow inputs with CVars.
         // It is possible to provide a default value to a workflow input.

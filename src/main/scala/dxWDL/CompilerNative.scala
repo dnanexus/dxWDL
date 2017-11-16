@@ -283,7 +283,7 @@ case class CompilerNative(dxWDLrtId: String,
                             |}""".stripMargin.trim
                 }
             case IR.AppletKindWorkflowOutputReorg =>
-                genBashScriptNonTask("workflowOutputs")
+                genBashScriptNonTask("workflowOutputReorg")
         }
         val setupFilesScript = genSourceFiles(wdlCode, linkInfo, dbInstance)
         s"""|#!/bin/bash -ex

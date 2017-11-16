@@ -14,8 +14,8 @@ A few significant WDL features are not yet supported, but may be
 added according to user interest:
 
 - Nested workflows (sub-workflows)
-- Nested scatters, and conditionals nested in scatters.
-
+- Nested scatters, and conditionals nested in scatters
+- Expressions not supported in output section
 
 *Use at your own risk:* for the time being, dxWDL is an exploratory
  tool NOT covered by DNAnexus service and support agreements. We
@@ -35,7 +35,7 @@ $ java -jar dxWDL-xxx.jar compile /path/to/foo.wdl
 This compiles ```foo.wdl``` to platform workflow ```foo``` in dx's
 current project and folder. The generated workflow can then be run as
 usual using `dx run`. For example, if the workflow takes string
-argument ```X```, then: ``` dx run foo -i0.X="hello world" ```
+argument ```X```, then: ``` dx run foo -iX="hello world" ```
 
 Compilation can be controled with several parameters.
 
@@ -71,13 +71,13 @@ java -jar dxWDL-0.44.jar compile test/files.wdl -inputs test/files_input.json
 generates a `test/files_input.dx.json` file that looks like this:
 ```
 {
-  "stage_0.f": {
+  "f": {
     "$dnanexus_link": "file-F5gkKkQ0ZvgjG3g16xyFf7b1"
   },
-  "stage_0.f1": {
+  "f1": {
     "$dnanexus_link": "file-F5gkQ3Q0ZvgzxKZ28JX5YZjy"
   },
-  "stage_0.f2": {
+  "f2": {
     "$dnanexus_link": "file-F5gkPXQ0Zvgp2y4Q8GJFYZ8G"
   }
 }
@@ -161,7 +161,6 @@ task fileSize {
 ```
 
 
-
 ## Task and workflow inputs
 
 WDL assumes all declarations to a task (also workflow) can be assigned
@@ -186,6 +185,28 @@ the caller?
 
 We compile `z` to an applet input, with 17 as its default.
 
+In a workflow, the potential inputs are in the top block. A
+declaration is considered an input if it is unassigned or optional.
+For example, workflow `foo` has two inputs `ref_genome`
+and `num_bases`. Variable `coverage` is not compiled into an input
+because it is assigned, and is non optional. Declaration `config` is
+not considered a potential input, because it is not in the top block.
+
+```
+workflow foo {
+    File ref_genome
+    Int? numBases = 250
+    Float coverage = 0.8
+
+    call GetVersion
+    scatter (i in [1,2,3]) {
+        call RandCheck { input: ref=ref_genome, seed=i }
+    }
+
+    String config = "test"
+    ...
+}
+```
 
 ## Calling existing applets
 

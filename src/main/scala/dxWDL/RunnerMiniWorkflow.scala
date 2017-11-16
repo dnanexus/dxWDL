@@ -105,7 +105,7 @@ case class RunnerMiniWorkflow(exportVars: Set[String],
                     case "identifier" =>
                         env.get(srcStr) match {
                             case Some(ElemTop(x)) => x
-                            case _ => throw new Exception(cef.missingVarRefException(t))
+                            case _ => throw new Exception(cef.missingVarRef(t))
                         }
                     case _ =>
                         // a constant
