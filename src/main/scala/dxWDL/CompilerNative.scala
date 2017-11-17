@@ -14,7 +14,6 @@ import Utils.{AppletLinkInfo, base64Encode, CHECKSUM_PROP, dxFileOfJsValue, DXWo
     INSTANCE_TYPE_DB_FILENAME, jsValueOfJsonNode, jsonNodeOfJsValue, LINK_INFO_FILENAME, trace,
     warning}
 import wdl4s.wdl.types._
-import wdl4s.wdl.values._
 
 case class CompilerNative(dxWDLrtId: String,
                           dxProject: DXProject,
@@ -620,7 +619,7 @@ case class CompilerNative(dxWDLrtId: String,
                         // in a value at runtime.
                         m
                     case IR.SArgConst(wValue) =>
-                        val wvl = WdlVarLinks.importFromWDL(cVar.wdlType, cVar.attrs, wValue)
+                        val wvl = WdlVarLinks.importFromWDL(cVar.wdlType, cVar.attrs, wValue, IODirection.Zero)
                         val fields = genFieldsCastIfRequired(wvl, wValue.wdlType, cVar)
                         m ++ fields.toMap
                     case IR.SArgLink(stageName, argName) =>
@@ -641,42 +640,82 @@ case class CompilerNative(dxWDLrtId: String,
         JsObject(jsInputs)
     }
 
-    def dxClassOfWdlType(wdlType: WdlType) : String = {
-        val t = Utils.stripOptional(wdlType)
-        t match {
-            // primitive types
-            case WdlBooleanType => "boolean"
-            case WdlIntegerType => "int"
-            case WdlFloatType => "float"
-            case WdlStringType =>"string"
-            case WdlFileType => "file"
-
-            // single dimension arrays of primitive types
-            case WdlArrayType(WdlBooleanType) => "array:boolean"
-            case WdlArrayType(WdlIntegerType) => "array:int"
-            case WdlArrayType(WdlFloatType) => "array:float"
-            case WdlArrayType(WdlStringType) => "array:string"
-            case WdlArrayType(WdlFileType) => "array:file"
-
-            // complex types, that may contains files
-            case _ => "hash"
+    // construct the workflow input DNAx types and defaults.
+    //
+    // A WDL input can generate one or two DNAx inputs.  This requires
+    // creating a vector of JSON values from each input.
+    //
+    def buildWorkflowInputSpec(cVar:CVar,
+                               sArg:SArg,
+                               stageDict: Map[String, DXWorkflowStage]): Vector[JsValue] = {
+        // deal with default values
+        val attrs:DeclAttrs = sArg match {
+            case IR.SArgWorkflowInput(_) =>
+                // input is provided by the user
+                DeclAttrs.empty
+            case IR.SArgConst(wdlValue) =>
+                // note: this is not going to work for file constants.
+                val wvl = WdlVarLinks.importFromWDL(cVar.wdlType,
+                                                    DeclAttrs.empty,
+                                                    wdlValue,
+                                                    IODirection.Zero)
+                val jsv = WdlVarLinks.getRawJsValue(wvl)
+                DeclAttrs.empty.setDefault(jsv)
+            case other =>
+                throw new Exception(s"Bad value for sArg ${other}")
         }
+        assert(cVar.attrs.isEmpty)
+        val cVarWithDflt = cVar.copy(attrs = attrs)
+        cVarToSpec(cVarWithDflt)
     }
 
-    private def jsonFromWdl(cVar:CVar, wdlValue:WdlValue) : JsValue = {
-        val wvl = WdlVarLinks.importFromWDL(cVar.wdlType, DeclAttrs.empty, wdlValue)
-        wvl.dxlink match {
-            case DxlValue(jsv) => jsv
-            case _ => throw new Exception(s"WDL value cannot be converted into a JSON constant (${wdlValue})")
+    // Note: a single WDL output can generate one or two JSON outputs.
+    def buildWorkflowOutputSpec(cVar:CVar,
+                                sArg:SArg,
+                                stageDict: Map[String, DXWorkflowStage]): Vector[JsValue] = {
+        val oSpec: Vector[JsValue] = cVarToSpec(cVar)
+
+        // add the field names, to help index this structure
+        val oSpecMap:Map[String, JsValue] = oSpec.map{ jso =>
+            val nm = jso.asJsObject.fields.get("name") match {
+                case Some(JsString(nm)) => nm
+                case _ => throw new Exception("sanity")
+            }
+            (nm -> jso)
+        }.toMap
+
+        val outputSources:List[(String, JsValue)] = sArg match {
+            case IR.SArgConst(wdlValue) =>
+                // constant
+                throw new Exception(s"Constant workflow outputs not currently handled (${cVar}, ${sArg}, ${wdlValue})")
+            case IR.SArgLink(stageName, argName: CVar) =>
+                // output is from an intermediate stage
+                val dxStage = stageDict(stageName)
+                val wvl = WdlVarLinks(cVar.wdlType,
+                                      cVar.attrs,
+                                      DxlStage(dxStage, IORef.Output, argName.dxVarName))
+                genFieldsCastIfRequired(wvl, argName.wdlType, cVar)
+            case IR.SArgWorkflowInput(argName: CVar) =>
+                val wvl = WdlVarLinks(cVar.wdlType,
+                                      cVar.attrs,
+                                      DxlWorkflowInput(argName.dxVarName))
+                genFieldsCastIfRequired(wvl, argName.wdlType, cVar)
+            case other =>
+                throw new Exception(s"Bad value for sArg ${other}")
         }
+
+        // merge the specification and the output sources
+        outputSources.map{ case (fieldName, outputJs) =>
+            val specJs:JsValue = oSpecMap(fieldName)
+            JsObject(specJs.asJsObject.fields ++
+                         Map("outputSource" -> outputJs))
+        }.toVector
     }
 
     // Create the workflow in a single API call.
+    // - Prepare the list of stages, and the checksum in
+    //   advance.
     //
-    // Prepare the list of stages, and the checksum in
-    // advance. Previously we needed an API call for each stage.
-    //
-    // TODO: make use of capability to specify workflow level input/outputs
     def buildWorkflow(ns: IR.Namespace,
                       wf: IR.Workflow,
                       digest: String,
@@ -697,45 +736,13 @@ case class CompilerNative(dxWDLrtId: String,
                      stageDict ++ Map(stg.name -> stg.id))
             }
 
-        // Workflow inputs
         val wfInputSpec:Vector[JsValue] = wf.inputs.map{ case (cVar,sArg) =>
-            val defaultMap:Map[String, JsValue] = sArg match {
-                case IR.SArgWorkflowInput(_) =>
-                    // input is provided by the user
-                    Map.empty
-                case IR.SArgConst(wdlValue) =>
-                    // constant default value
-                    val jsv = jsonFromWdl(cVar, wdlValue)
-                    Map("default" -> jsv)
-                case other =>
-                    throw new Exception(s"Bad value for sArg ${other}")
-            }
-            val m = Map("name" -> JsString(cVar.name),
-                        "class" -> JsString(dxClassOfWdlType(cVar.wdlType)))
-            JsObject(m ++ defaultMap)
-        }
+            buildWorkflowInputSpec(cVar, sArg, stageDict)
+        }.flatten
         val wfOutputSpec:Vector[JsValue] = wf.outputs.map{ case (cVar,sArg) =>
-            val outputSource:JsValue = sArg match {
-                case IR.SArgConst(wdlValue) =>
-                    // constant
-                    jsonFromWdl(cVar, wdlValue)
-                case IR.SArgLink(stageName, argName: CVar) =>
-                    // output is from an intermediate stage
-                    val dxStage = stageDict(stageName)
-                    JsObject("$dnanexus_link" -> JsObject(
-                                 "stage" -> JsString(dxStage.getId),
-                                 "outputField" -> JsString(argName.dxVarName)))
-                case IR.SArgWorkflowInput(argName: CVar) =>
-                    // output is directly from the workflow input
-                    JsObject("$dnanexus_link" -> JsObject(
-                                 "workflowInputField" -> JsString(argName.dxVarName)))
-                case other =>
-                    throw new Exception(s"Bad value for sArg ${other}")
-            }
-            JsObject("name" -> JsString(cVar.dxVarName),
-                     "class" -> JsString(dxClassOfWdlType(cVar.wdlType)),
-                     "outputSource" -> outputSource)
-        }
+            buildWorkflowOutputSpec(cVar, sArg, stageDict)
+        }.flatten
+        trace(verbose2, s"workflow input spec=${wfInputSpec}")
         trace(verbose2, s"workflow output spec=${wfOutputSpec}")
 
         // pack all the arguments into a single API call

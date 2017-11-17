@@ -431,7 +431,12 @@ workflow w {
                             case None => throw new Exception(cef.missingVarRef(a))
                         }
 
-                    case _:Ast => throw new Exception(cef.expressionMustBeConstOrVar(expr))
+                    case a:Ast =>
+                        throw new Exception(s"Not currently supported: expressions in output section (${expr.toWdlString})")
+                        // Not clear what the problem is here
+                        /*throw new Exception(cef.notCurrentlySupported(
+                                                a,
+                                                s"Expressions in output section (${expr.toWdlString})"))*/
                 }
 
                 (cVar, sArg)

@@ -174,12 +174,13 @@ object WdlVarLinks {
     // }
     private def marshalWdlMap(keyType:WdlType,
                               valueType:WdlType,
-                              m:Map[WdlValue, WdlValue]) : JsValue = {
+                              m:Map[WdlValue, WdlValue],
+                              ioDir: IODirection.Value) : JsValue = {
         if (keyType == WdlStringType) {
             // keys are strings
             JsObject(m.map{
                          case (WdlString(k), v) =>
-                             k -> jsOfComplexWdlValue(valueType, v)
+                             k -> jsOfComplexWdlValue(valueType, v, ioDir)
                          case (k,_) =>
                              throw new Exception(s"key ${k.toWdlString} should be a WdlStringType")
                      }.toMap)
@@ -187,9 +188,9 @@ object WdlVarLinks {
         else {
             // general case
             val keys:WdlValue = WdlArray(WdlArrayType(keyType), m.keys.toVector)
-            val kJs = jsOfComplexWdlValue(keys.wdlType, keys)
+            val kJs = jsOfComplexWdlValue(keys.wdlType, keys, ioDir)
             val values:WdlValue = WdlArray(WdlArrayType(valueType), m.values.toVector)
-            val vJs = jsOfComplexWdlValue(values.wdlType, values)
+            val vJs = jsOfComplexWdlValue(values.wdlType, values, ioDir)
             JsObject("keys" -> kJs, "values" -> vJs)
         }
     }
@@ -226,10 +227,11 @@ object WdlVarLinks {
         }
     }
 
-    private def marshalWdlObject(m: Map[String, WdlValue]) : JsValue = {
+    private def marshalWdlObject(m: Map[String, WdlValue],
+                                 ioDir: IODirection.Value) : JsValue = {
         val jsm:Map[String, JsValue] = m.map{ case (key, w:WdlValue) =>
             key -> JsObject("type" -> JsString(w.wdlType.toWdlString),
-                            "value" -> jsOfComplexWdlValue(w.wdlType, w))
+                            "value" -> jsOfComplexWdlValue(w.wdlType, w, ioDir))
         }.toMap
         JsObject(jsm)
     }
@@ -328,7 +330,7 @@ object WdlVarLinks {
         }
     }
 
-    private def getRawJsValue(wvl: WdlVarLinks) : JsValue = {
+    def getRawJsValue(wvl: WdlVarLinks) : JsValue = {
         wvl.dxlink match {
             case DxlValue(jsn) => jsn
             case _ =>
@@ -416,11 +418,19 @@ object WdlVarLinks {
     // 1. Make a pass on the object, upload any files, and keep an in-memory JSON representation
     // 2. In memory we have a, potentially very large, JSON value. This can be handled pretty
     //    well by the platform as a dx:hash.
-    private def jsOfComplexWdlValue(wdlType: WdlType, wdlValue: WdlValue) : JsValue = {
+    private def jsOfComplexWdlValue(wdlType: WdlType,
+                                    wdlValue: WdlValue,
+                                    ioDir: IODirection.Value) : JsValue = {
+        def handleFile(path:String) : JsValue = ioDir match {
+            case IODirection.Upload => LocalDxFiles.upload(Paths.get(path))
+            case IODirection.Download => throw new Exception(s"Can't download file ${path}, ioDirection=${ioDir}")
+            case IODirection.Zero => throw new Exception(s"No runtime system in this context. Can't transfer files.")
+        }
+
         (wdlType, wdlValue) match {
             // Base case: primitive types
-            case (WdlFileType, WdlString(path)) => LocalDxFiles.upload(Paths.get(path))
-            case (WdlFileType, WdlSingleFile(path)) => LocalDxFiles.upload(Paths.get(path))
+            case (WdlFileType, WdlString(path)) => handleFile(path)
+            case (WdlFileType, WdlSingleFile(path)) => handleFile(path)
             case (WdlStringType, WdlSingleFile(path)) => JsString(path)
             case (WdlStringType, WdlString(buf)) =>
                 if (buf.length > Utils.MAX_STRING_LEN)
@@ -436,37 +446,37 @@ object WdlVarLinks {
 
             // Non empty array
             case (WdlArrayType(t), WdlArray(_, elems)) =>
-                val jsVals = elems.map(e => jsOfComplexWdlValue(t, e))
+                val jsVals = elems.map(e => jsOfComplexWdlValue(t, e, ioDir))
                 JsArray(jsVals.toVector)
 
             // automatically cast an element from type T to Array[T]
             case (WdlArrayType(t), elem) =>
-                JsArray(jsOfComplexWdlValue(t,elem))
+                JsArray(jsOfComplexWdlValue(t,elem, ioDir))
 
             // Maps. These are projections from a key to value, where
             // the key and value types are statically known. We
             // represent them in JSON as an array of keys, followed by
             // an array of values.
             case (WdlMapType(keyType, valueType), WdlMap(_, m)) =>
-                marshalWdlMap(keyType, valueType, m)
+                marshalWdlMap(keyType, valueType, m, ioDir)
 
             // keys are strings, requiring no conversion. Because objects
             // are not statically typed, we need to carry the types at runtime.
             case (WdlObjectType, WdlObject(m: Map[String, WdlValue])) =>
-                marshalWdlObject(m)
+                marshalWdlObject(m, ioDir)
 
             case (WdlPairType(lType, rType), WdlPair(l,r)) =>
-                val lJs = jsOfComplexWdlValue(lType, l)
-                val rJs = jsOfComplexWdlValue(rType, r)
+                val lJs = jsOfComplexWdlValue(lType, l, ioDir)
+                val rJs = jsOfComplexWdlValue(rType, r, ioDir)
                 JsObject("left" -> lJs, "right" -> rJs)
 
             // Strip optional type
             case (WdlOptionalType(t), WdlOptionalValue(_,Some(w))) =>
-                jsOfComplexWdlValue(t, w)
+                jsOfComplexWdlValue(t, w, ioDir)
             case (WdlOptionalType(t), w) =>
-                jsOfComplexWdlValue(t, w)
+                jsOfComplexWdlValue(t, w, ioDir)
             case (t, WdlOptionalValue(_,Some(w))) =>
-                jsOfComplexWdlValue(t, w)
+                jsOfComplexWdlValue(t, w, ioDir)
 
             // If the value is none then, it is a missing value
             // What if the value is null?
@@ -479,8 +489,11 @@ object WdlVarLinks {
     }
 
     // import a WDL value
-    def importFromWDL(wdlType: WdlType, attrs: DeclAttrs, wdlValue: WdlValue) : WdlVarLinks = {
-        val jsValue = jsOfComplexWdlValue(wdlType, wdlValue)
+    def importFromWDL(wdlType: WdlType,
+                      attrs: DeclAttrs,
+                      wdlValue: WdlValue,
+                      ioDir: IODirection.Value) : WdlVarLinks = {
+        val jsValue = jsOfComplexWdlValue(wdlType, wdlValue, ioDir)
         WdlVarLinks(wdlType, attrs, DxlValue(jsValue))
     }
 

@@ -9,7 +9,7 @@ import scala.collection.mutable.HashMap
 import scala.util.{Failure, Success}
 import spray.json._
 import spray.json.JsString
-import Utils.{TopoMode, Verbose, warning}
+import Utils.{TopoMode, Verbose}
 import wdl4s.wdl.{ImportResolver, WdlNamespace, WdlTask,
     WdlNamespaceWithWorkflow, WdlWorkflow, WorkflowOutput, WorkflowSource}
 
@@ -39,9 +39,8 @@ object Main extends App {
     // Compiler state.
     // Packs common arguments passed between methods.
     case class State(ns: WdlNamespace,
-                     outputs: Option[Seq[WorkflowOutput]],
-                     wdlSourceFile: Path,
                      resolver: ImportResolver,
+                     wdlSourceFile: Path,
                      verbose: Verbose)
 
     case class BaseOptions(dxProject: DXProject,
@@ -102,11 +101,13 @@ object Main extends App {
                     Some(wf.outputs)
                 } catch {
                     case e: Throwable if (wf.hasEmptyOutputSection) =>
-                        warning(verbose, """|The workflow has an empty output section.
-                                            |It will have no outputs in."""
-                                    .stripMargin.replaceAll("\n", " "))
-                        None
-                    case e: Throwable => throw e
+                        throw new Exception(
+                            """|The workflow has an empty output section, the default WDL option
+                               |is to output everything, which is
+                               |currently not supported. please explicitly specify the outputs.
+                               |""".stripMargin.replaceAll("\n", " "))
+                    case e: Throwable =>
+                        throw e
                 }
             case _ => None
         }
@@ -308,7 +309,8 @@ object Main extends App {
     def washNamespace(rewrittenNs: WdlNamespace,
                       suffix: String,
                       cState: State) : WdlNamespace = {
-        val lines: String = WdlPrettyPrinter(true, cState.outputs)
+        val wfOutputs = getWorkflowOutputs(rewrittenNs, cState.verbose)
+        val lines: String = WdlPrettyPrinter(true, wfOutputs)
             .apply(rewrittenNs, 0)
             .mkString("\n")
         val cleanNs = WdlNamespace.loadUsingSource(
@@ -485,8 +487,7 @@ object Main extends App {
                     System.err.println("Error loading WDL source code")
                     throw f
             }
-        val wfOutputs = getWorkflowOutputs(orgNs, bOpt.verbose)
-        val cState = State(orgNs, wfOutputs, wdlSourceFile, resolver, bOpt.verbose)
+        val cState = State(orgNs, resolver, wdlSourceFile, bOpt.verbose)
 
         // Topologically sort the WDL file so no forward references exist in
         // subsequent steps. Create new file to hold the result.
@@ -512,7 +513,8 @@ object Main extends App {
         // mangles the outputs, which is why we pass the originals
         // unmodified.
         val cef = new CompilerErrorFormatter(ns.terminalMap)
-        var irNs = CompilerIR(cState.outputs, bOpt.folder, instanceTypeDB, cef,
+        var irNs = CompilerIR(getWorkflowOutputs(ns, cState.verbose),
+                              bOpt.folder, instanceTypeDB, cef,
                               cOpt.reorg, bOpt.verbose).apply(ns)
 
         irNs = cOpt.defaults match {

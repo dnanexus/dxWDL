@@ -80,6 +80,25 @@ task RuntimeDockerChoice {
   }
 }
 
+task RuntimeDockerChoice2 {
+  String imageName
+
+  command {
+    python <<CODE
+    import os
+    import sys
+    print("We are inside a python docker image")
+    CODE
+  }
+  runtime {
+    docker: "${imageName}"
+    memory: "2 GB"
+  }
+  output {
+    String retval = read_string(stdout())
+  }
+}
+
 task Shortcut {
     command {
         line=$(cat /proc/meminfo | grep MemTotal)
@@ -100,12 +119,14 @@ workflow instance_types {
     call MemorySpec { input: memory_req_gb=12 }
     call NumCoresSpec { input: num_cores_req=5 }
     call RuntimeDockerChoice { input: imageName="python:2.7" }
+    call RuntimeDockerChoice2 { input: imageName="python:2.7" }
     call Shortcut
     output {
         MemorySpec.retval
         DiskSpaceSpec.retval
         NumCoresSpec.retval
         RuntimeDockerChoice.retval
+        RuntimeDockerChoice2.retval
         Shortcut.retval
     }
 }

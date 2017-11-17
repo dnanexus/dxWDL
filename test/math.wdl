@@ -66,6 +66,7 @@ workflow math {
     }
 
     call lib.Sum as inc_sum {input: ints = inc2.result}
+    Pair[Float,Int] p = (1.0, 19)
 
     output {
         Int? invalid = false_branch
@@ -77,5 +78,10 @@ workflow math {
         Int? ai_inc_maybe = cond_inc.result
         Int? fibo2 = fibo_add2.result
         Array[Array[Int]] rra = rfi.result
+
+        # Expressions in output section
+        Int expr1 = x + y
+        Int expr2 = sum2 + expr1
+        Float z = p.left
     }
 }
