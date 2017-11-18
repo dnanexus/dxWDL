@@ -414,7 +414,7 @@ object WdlVarLinks {
     }
 
     // Serialize a complex WDL value into a JSON value. The value could potentially point
-    // to many files. Serialization proceeds recursively, as follows
+    // to many files. Serialization proceeds recursively, as follows:
     // 1. Make a pass on the object, upload any files, and keep an in-memory JSON representation
     // 2. In memory we have a, potentially very large, JSON value. This can be handled pretty
     //    well by the platform as a dx:hash.
@@ -422,9 +422,15 @@ object WdlVarLinks {
                                     wdlValue: WdlValue,
                                     ioDir: IODirection.Value) : JsValue = {
         def handleFile(path:String) : JsValue = ioDir match {
-            case IODirection.Upload => LocalDxFiles.upload(Paths.get(path))
-            case IODirection.Download => throw new Exception(s"Can't download file ${path}, ioDirection=${ioDir}")
-            case IODirection.Zero => throw new Exception(s"No runtime system in this context. Can't transfer files.")
+            case IODirection.Upload =>
+                LocalDxFiles.upload(Paths.get(path))
+            case IODirection.Download =>
+                LocalDxFiles.get(Paths.get(path)) match {
+                    case None => throw new Exception(s"File ${path} has not been downloaded yet")
+                    case Some(dxFile) => Utils.jsValueOfJsonNode(dxFile.getLinkAsJson)
+                }
+            case IODirection.Zero =>
+                throw new Exception(s"No runtime system in this context. Can't transfer files.")
         }
 
         (wdlType, wdlValue) match {

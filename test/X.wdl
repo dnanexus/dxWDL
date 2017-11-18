@@ -8,7 +8,7 @@ workflow X {
     output {
         # Expressions in output section
         Int expr1 = x + y
-        Int expr2 = x + expr1
+#        Int expr2 = x + expr1
         Float z = p.left
     }
 }

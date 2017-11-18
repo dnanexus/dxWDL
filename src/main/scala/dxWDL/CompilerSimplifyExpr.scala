@@ -8,7 +8,7 @@ package dxWDL
 
 import scala.collection.mutable.Queue
 import scala.util.{Failure, Success}
-import Utils.{genTmpVarName, stripOptional, trace, Verbose, warning}
+import Utils.{genTmpVarName, nonInterpolation, stripOptional, trace, Verbose, warning}
 import wdl4s.wdl._
 import wdl4s.wdl.expression._
 import wdl4s.parser.WdlParser.{Ast, Terminal}
@@ -123,16 +123,6 @@ case class CompilerSimplifyExpr(wf: WdlWorkflow,
             case (WdlObjectType, WdlObjectType) => true
             case (_,_) => false
         }
-    }
-
-    // Return true if we are certain there is no interpolation in this string.
-    //
-    // A literal can include an interpolation expression, for example:
-    //   "${filename}.vcf.gz"
-    // Interpolation requires evaluation. This check is an approximation,
-    // it may cause us to create an unnecessary declaration.
-    private def nonInterpolation(t: Terminal) : Boolean = {
-        !(t.getSourceString contains "${")
     }
 
     // Return true if an expression is a constant or a variable
@@ -273,11 +263,20 @@ case class CompilerSimplifyExpr(wf: WdlWorkflow,
     def simplifyWorkflowOutput(wot: WorkflowOutput) : (Option[Declaration], WorkflowOutput) = {
         val wdlType = wot.wdlType
         val expr = wot.requiredExpression
-        val exprType = evalType(wot.requiredExpression, wot)
+        val maybeCoercion:Boolean =
+            try {
+                val exprType = evalType(wot.requiredExpression, wot)
+                exprType != wdlType
+            } catch {
+                case e:Throwable=>
+                    // We can't evaluate the type of the expressions, so
+                    // we suspect that coercion may be required.
+                    true
+            }
 
         val tempVarRequired = expr.ast match {
-            case _ if wdlType != exprType =>
-                // Coercion is needed, this could require calculation
+            case _ if maybeCoercion =>
+                // Coercion maybe needed, this requires calculation
                 true
             case t: Terminal if nonInterpolation(t) => false
             case a: Ast if isCallOutputAccess(a) =>
@@ -297,7 +296,7 @@ case class CompilerSimplifyExpr(wf: WdlWorkflow,
             // separate declaration for expression
             val tmpVarName = genTmpVarName()
             val tmpDecl:Declaration = WdlRewrite.declaration(wdlType, tmpVarName, Some(expr))
-            val wot1 = new WorkflowOutput(tmpVarName, wdlType,
+            val wot1 = new WorkflowOutput(wot.unqualifiedName, wot.wdlType,
                                           WdlExpression.fromString(tmpVarName),
                                           WdlRewrite.INVALID_AST,
                                           Some(wot))

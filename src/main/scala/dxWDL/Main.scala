@@ -686,7 +686,7 @@ object Main extends App {
                     runner.relaunch(jobInputPath, jobOutputPath, jobInfoPath)
                 case InternalOp.WorkflowOutputReorg =>
                     RunnerWorkflowOutputReorg.apply(workflowOfNamespace(ns),
-                                                    jobInputPath, jobOutputPath, jobInfoPath, true)
+                                                    jobInputPath, jobOutputPath, jobInfoPath)
             }
             SuccessfulTermination(s"success ${op}")
         } catch {

@@ -139,11 +139,13 @@ object RunnerWorkflowOutputReorg {
         YamlObject(m).print()
     }
 
+    // This is a bit over engineered. The variables are really just
+    // pass through, so that workflow will complete only after file
+    // movements are complete.
     def apply(wf: WdlWorkflow,
               jobInputPath : Path,
               jobOutputPath : Path,
-              jobInfoPath: Path,
-              reorgFiles: Boolean) : Unit = {
+              jobInfoPath: Path) : Unit = {
         // Figure out input/output types
         val (inputSpec, outputSpec) = Utils.loadExecInfo
 
@@ -174,10 +176,8 @@ object RunnerWorkflowOutputReorg {
         appletLog(s"exported = ${ast_pp}")
         Utils.writeFileContent(jobOutputPath, ast_pp)
 
-        if (reorgFiles) {
-            // Reorganize directory structure
-            val dxEnv = DXEnvironment.create()
-            moveIntermediateResultFiles(dxEnv, outputFields)
-        }
+        // Reorganize directory structure
+        val dxEnv = DXEnvironment.create()
+        moveIntermediateResultFiles(dxEnv, outputFields)
     }
 }

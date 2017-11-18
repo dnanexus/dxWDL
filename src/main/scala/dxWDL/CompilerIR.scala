@@ -5,7 +5,7 @@ package dxWDL
 import IR.{CVar, LinkedVar, SArg}
 import net.jcazevedo.moultingyaml._
 import scala.util.{Failure, Success, Try}
-import Utils.{DX_URL_PREFIX, isNativeDxType, trace}
+import Utils.{DX_URL_PREFIX, isNativeDxType, nonInterpolation, trace}
 import wdl4s.wdl._
 import wdl4s.wdl.AstTools
 import wdl4s.wdl.AstTools.EnhancedAstNode
@@ -450,14 +450,14 @@ workflow w {
         expr.ast match {
             case t: Terminal if t.getTerminalStr == "identifier" =>
                 None
-            case t: Terminal =>
+            case t: Terminal if nonInterpolation(t) =>
                 def lookup(x:String) : WdlValue = {
                     throw new Exception(cef.evaluatingTerminal(t, x))
                 }
                 val ve = ValueEvaluator(lookup, PureStandardLibraryFunctions)
                 val wValue: WdlValue = ve.evaluate(expr.ast).get
                 Some(wValue)
-            case a: Ast =>
+            case _ =>
                 None
         }
     }
@@ -974,7 +974,9 @@ workflow w {
         // beginning of the workflow.
         val (topDeclBlock, wfProperBlocks) = Utils.splitBlockDeclarations(children.toList)
         val (wfInputDecls, topDeclNonInputs) = topDeclBlock.partition{
-            case decl:Declaration => Utils.declarationIsInput(decl)
+            case decl:Declaration =>
+                Utils.declarationIsInput(decl) &&
+                !Utils.isGeneratedVar(decl.unqualifiedName)
             case _ => false
         }
         val wfProper = topDeclNonInputs ++ wfProperBlocks

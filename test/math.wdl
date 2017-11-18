@@ -80,8 +80,7 @@ workflow math {
         Array[Array[Int]] rra = rfi.result
 
         # Expressions in output section
-        Int expr1 = x + y
-        Int expr2 = sum2 + expr1
+        Int expr1 = ai + bi
         Float z = p.left
     }
 }
