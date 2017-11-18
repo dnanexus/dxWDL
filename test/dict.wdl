@@ -40,9 +40,9 @@ task makeSalad {
 }
 
 workflow dict {
-    Map[String, Int] mSI = {"a": 1, "b": 2}
+    Map[String, Int] mSI
     Map[Int, Int] mII = {1: 10, 2: 11}
-    Map[Int, Float]  mIF = {1: 1.2, 10: 113.0}
+    Map[Int, Float] mIF = {1: 1.2, 10: 113.0}
 
     call createFruit
     call createMultiFruit

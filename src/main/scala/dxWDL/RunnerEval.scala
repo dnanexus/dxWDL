@@ -76,7 +76,7 @@ object RunnerEval {
             appletLog(s"evaluating ${decl}")
             val vRaw : WdlValue = expr.evaluate(lookup, DxFunctions).get
             val w: WdlValue = Utils.cast(decl.wdlType, vRaw, decl.unqualifiedName)
-            val wvl = WdlVarLinks.importFromWDL(decl.wdlType, attrs, w)
+            val wvl = WdlVarLinks.importFromWDL(decl.wdlType, attrs, w, ioDir)
             env = env + (decl.unqualifiedName -> (wvl, Some(w)))
             (wvl, w)
         }

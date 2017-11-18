@@ -12,7 +12,8 @@ class BValueTest extends FlatSpec with Matchers {
     private def make(wdlValue: WdlValue) : BValue = {
         val wvl = WdlVarLinks.importFromWDL(wdlValue.wdlType,
                                             DeclAttrs.empty,
-                                            wdlValue)
+                                            wdlValue,
+                                            IODirection.Zero)
         BValue(wvl, wdlValue)
     }
 

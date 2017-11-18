@@ -30,7 +30,7 @@ object Main extends App {
             MiniWorkflow,
             ScatterCollectSubjob,
             TaskEpilog, TaskProlog, TaskRelaunch,
-            WorkflowOutputs, WorkflowOutputsAndReorg = Value
+            WorkflowOutputReorg = Value
     }
     object CompilerFlag extends Enumeration {
         val Default, IR = Value
@@ -39,9 +39,8 @@ object Main extends App {
     // Compiler state.
     // Packs common arguments passed between methods.
     case class State(ns: WdlNamespace,
-                     outputs: Option[Seq[WorkflowOutput]],
-                     wdlSourceFile: Path,
                      resolver: ImportResolver,
+                     wdlSourceFile: Path,
                      verbose: Verbose)
 
     case class BaseOptions(dxProject: DXProject,
@@ -94,12 +93,22 @@ object Main extends App {
         }
     }
 
-    def outputs(ns: WdlNamespace) : Option[Seq[WorkflowOutput]] = {
+    def getWorkflowOutputs(ns: WdlNamespace, verbose:Verbose) : Option[Seq[WorkflowOutput]] = {
         ns match {
             case nswf: WdlNamespaceWithWorkflow =>
                 val wf = nswf.workflow
-                if (wf.hasEmptyOutputSection) None
-                else Some(wf.outputs)
+                try {
+                    Some(wf.outputs)
+                } catch {
+                    case e: Throwable if (wf.hasEmptyOutputSection) =>
+                        throw new Exception(
+                            """|The workflow has an empty output section, the default WDL option
+                               |is to output everything, which is
+                               |currently not supported. please explicitly specify the outputs.
+                               |""".stripMargin.replaceAll("\n", " "))
+                    case e: Throwable =>
+                        throw e
+                }
             case _ => None
         }
     }
@@ -300,7 +309,8 @@ object Main extends App {
     def washNamespace(rewrittenNs: WdlNamespace,
                       suffix: String,
                       cState: State) : WdlNamespace = {
-        val lines: String = WdlPrettyPrinter(true, cState.outputs)
+        val wfOutputs = getWorkflowOutputs(rewrittenNs, cState.verbose)
+        val lines: String = WdlPrettyPrinter(true, wfOutputs)
             .apply(rewrittenNs, 0)
             .mkString("\n")
         val cleanNs = WdlNamespace.loadUsingSource(
@@ -477,7 +487,7 @@ object Main extends App {
                     System.err.println("Error loading WDL source code")
                     throw f
             }
-        val cState = State(orgNs, outputs(orgNs), wdlSourceFile, resolver, bOpt.verbose)
+        val cState = State(orgNs, resolver, wdlSourceFile, bOpt.verbose)
 
         // Topologically sort the WDL file so no forward references exist in
         // subsequent steps. Create new file to hold the result.
@@ -503,7 +513,8 @@ object Main extends App {
         // mangles the outputs, which is why we pass the originals
         // unmodified.
         val cef = new CompilerErrorFormatter(ns.terminalMap)
-        var irNs = CompilerIR(cState.outputs, bOpt.folder, instanceTypeDB, cef,
+        var irNs = CompilerIR(getWorkflowOutputs(ns, cState.verbose),
+                              bOpt.folder, instanceTypeDB, cef,
                               cOpt.reorg, bOpt.verbose).apply(ns)
 
         irNs = cOpt.defaults match {
@@ -673,12 +684,9 @@ object Main extends App {
                 case InternalOp.TaskRelaunch =>
                     val runner = RunnerTask(taskOfNamespace(ns), cef)
                     runner.relaunch(jobInputPath, jobOutputPath, jobInfoPath)
-                case InternalOp.WorkflowOutputs =>
-                    RunnerWorkflowOutputs.apply(workflowOfNamespace(ns),
-                                                jobInputPath, jobOutputPath, jobInfoPath, false)
-                case InternalOp.WorkflowOutputsAndReorg =>
-                    RunnerWorkflowOutputs.apply(workflowOfNamespace(ns),
-                                                jobInputPath, jobOutputPath, jobInfoPath, true)
+                case InternalOp.WorkflowOutputReorg =>
+                    RunnerWorkflowOutputReorg.apply(workflowOfNamespace(ns),
+                                                    jobInputPath, jobOutputPath, jobInfoPath)
             }
             SuccessfulTermination(s"success ${op}")
         } catch {

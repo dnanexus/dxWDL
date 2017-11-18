@@ -8,7 +8,7 @@ package dxWDL
 
 import scala.collection.mutable.Queue
 import scala.util.{Failure, Success}
-import Utils.{genTmpVarName, stripOptional, trace, Verbose}
+import Utils.{genTmpVarName, nonInterpolation, stripOptional, trace, Verbose, warning}
 import wdl4s.wdl._
 import wdl4s.wdl.expression._
 import wdl4s.parser.WdlParser.{Ast, Terminal}
@@ -55,8 +55,8 @@ case class CompilerSimplifyExpr(wf: WdlWorkflow,
         (srcType, trgType) match {
             case (WdlArrayType(_), WdlArrayType(_)) => false
             case (_, WdlArrayType(_)) =>
-                System.err.println(s"Warning: converting ${expr.toWdlString} from ${srcType.toWdlString} to ${trgType.toWdlString}")
-                //System.err.println(cef.traceExpression(expr.ast.asInstanceOf[Ast]))
+                warning(verbose,
+                        s"converting ${expr.toWdlString} from ${srcType.toWdlString} to ${trgType.toWdlString}")
                 true
             case (_, _) => false
         }
@@ -74,9 +74,6 @@ case class CompilerSimplifyExpr(wf: WdlWorkflow,
 
     // Figure out the type of an expression
     private def evalType(expr: WdlExpression, parent: Scope) : WdlType = {
-/*        expr.evaluateType(Utils.lookupType(parent),
-                          new WdlStandardLibraryFunctionsType,
-                          Some(parent)) match {*/
         dxWDL.TypeEvaluator(Utils.lookupType(parent),
                             new WdlStandardLibraryFunctionsType,
                             Some(parent)).evaluate(expr.ast) match {
@@ -128,16 +125,6 @@ case class CompilerSimplifyExpr(wf: WdlWorkflow,
         }
     }
 
-    // Return true if we are certain there is no interpolation in this string.
-    //
-    // A literal can include an interpolation expression, for example:
-    //   "${filename}.vcf.gz"
-    // Interpolation requires evaluation. This check is an approximation,
-    // it may cause us to create an unnecessary declaration.
-    private def nonInterpolation(t: Terminal) : Boolean = {
-        !(t.getSourceString contains "${")
-    }
-
     // Return true if an expression is a constant or a variable
     def isConstOrVar(expr: WdlExpression) : Boolean = {
         expr.ast match {
@@ -182,8 +169,8 @@ case class CompilerSimplifyExpr(wf: WdlWorkflow,
                     val augExpr = augmentExprToArray(expr)
                     replaceWithTempVar(calleeType, augExpr)
                 case _ if (!typesMatch(callerType, calleeType)) =>
-                    System.err.println(cef.typeConversionRequired(expr, call,
-                                                                  callerType, calleeType))
+                    warning(verbose, cef.typeConversionRequired(expr, call,
+                                                                callerType, calleeType))
                     replaceWithTempVar(calleeType, expr)
                 case t: Terminal if nonInterpolation(t) => expr
                 case a: Ast if isCallOutputAccess(a) =>
@@ -271,6 +258,73 @@ case class CompilerSimplifyExpr(wf: WdlWorkflow,
         }
     }
 
+    // If the workflow output has a complex expression, split that into
+    // a temporary variable.
+    def simplifyWorkflowOutput(wot: WorkflowOutput) : (Option[Declaration], WorkflowOutput) = {
+        val wdlType = wot.wdlType
+        val expr = wot.requiredExpression
+        val maybeCoercion:Boolean =
+            try {
+                val exprType = evalType(wot.requiredExpression, wot)
+                exprType != wdlType
+            } catch {
+                case e:Throwable=>
+                    // We can't evaluate the type of the expressions, so
+                    // we suspect that coercion may be required.
+                    true
+            }
+
+        val tempVarRequired = expr.ast match {
+            case _ if maybeCoercion =>
+                // Coercion maybe needed, this requires calculation
+                true
+            case t: Terminal if nonInterpolation(t) => false
+            case a: Ast if isCallOutputAccess(a) =>
+                // Accessing an expression like A.B.C
+                // The expression could be:
+                // 1) Result from a previous call
+                // 2) Access to a field in a pair, or an object (pair.left, obj.name)
+                // Only the first case can be handled inline, the other requires
+                // a temporary variable.
+                false
+            case _ =>
+                true
+        }
+        if (tempVarRequired) {
+            trace(verbose.on, s"building temporary variable for ${wot.toWdlString}")
+
+            // separate declaration for expression
+            val tmpVarName = genTmpVarName()
+            val tmpDecl:Declaration = WdlRewrite.declaration(wdlType, tmpVarName, Some(expr))
+            val wot1 = new WorkflowOutput(wot.unqualifiedName, wot.wdlType,
+                                          WdlExpression.fromString(tmpVarName),
+                                          WdlRewrite.INVALID_AST,
+                                          Some(wot))
+            (Some(tmpDecl), wot1)
+        } else {
+            (None, wot)
+        }
+    }
+
+    // Extract all the complex expressions from the output section,
+    // so it will be easier for downstream passes to deal with.
+    def simplifyOutputSection(wfOutputs: Vector[WorkflowOutput])
+            : (Vector[Declaration], Vector[WorkflowOutput]) = {
+        val tmpDecls = Queue.empty[Declaration]
+
+        val outputs: Vector[WorkflowOutput] = wfOutputs.map{ wot =>
+            val (declOpt, wot1) = simplifyWorkflowOutput(wot)
+            declOpt match {
+                case None => ()
+                case Some(decl) => tmpDecls += decl
+            }
+            wot1
+        }
+
+        (tmpDecls.toVector, outputs)
+    }
+
+
     // Convert complex expressions to independent declarations
     def simplify(scope: Scope): Vector[Scope] = {
         scope match {
@@ -278,7 +332,6 @@ case class CompilerSimplifyExpr(wf: WdlWorkflow,
             case call:WdlCall => simplifyCall(call)
             case cond:If => simplifyIf(cond)
             case decl:Declaration => Vector(decl)
-            case wfo:WorkflowOutput => Vector(wfo)
             case x =>
                 throw new Exception(cef.notCurrentlySupported(
                                         x.ast,
@@ -287,8 +340,20 @@ case class CompilerSimplifyExpr(wf: WdlWorkflow,
     }
 
     def simplifyWorkflow(wf: WdlWorkflow) : WdlWorkflow = {
-        val children: Vector[Scope] = wf.children.map(x => simplify(x)).toVector.flatten
-        WdlRewrite.workflow(wf, children)
+        val wfProper = wf.children.filter(x => !x.isInstanceOf[WorkflowOutput])
+        val wfProperSmp: Vector[Scope] = wfProper.map(x => simplify(x)).toVector.flatten
+
+        val outputs :Vector[WorkflowOutput] = wf.outputs.toVector
+        val (tmpDecls, outputsSmp) = simplifyOutputSection(outputs)
+
+        val allChildren = wfProperSmp ++ tmpDecls ++ outputsSmp
+        tmpDecls.foreach{ x =>
+            System.err.println(s"${x.toWdlString}")
+        }
+        outputsSmp.foreach{ x =>
+            System.err.println(s"${x.toWdlString}")
+        }
+        WdlRewrite.workflow(wf, allChildren)
     }
 }
 

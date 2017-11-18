@@ -96,12 +96,6 @@
   "PairedEndSingleSampleWorkflow.wgs_coverage_interval_list": "dx://dxWDL:/gatk-test-data/intervals/wgs_coverage_regions.hg38.interval_list",
   "PairedEndSingleSampleWorkflow.wgs_evaluation_interval_list": "dx://dxWDL:/gatk-test-data/intervals/wgs_evaluation_regions.hg38.interval_list",
 
-  "##_COMMENT5": "QUALITY CONTROL SETTINGS (to override defaults)",
-  "PairedEndSingleSampleWorkflow.ValidateReadGroupSamFile.ignore": ["null"],
-  "PairedEndSingleSampleWorkflow.ValidateReadGroupSamFile.max_output": 1000000000,
-  "PairedEndSingleSampleWorkflow.ValidateAggregatedSamFile.ignore": ["null"],
-  "PairedEndSingleSampleWorkflow.ValidateAggregatedSamFile.max_output": 1000000000,
-
   "##_COMMENT6": "DISK SIZES + PREEMPTIBLES",
   "PairedEndSingleSampleWorkflow.agg_small_disk": 200,
   "PairedEndSingleSampleWorkflow.agg_medium_disk": 300,

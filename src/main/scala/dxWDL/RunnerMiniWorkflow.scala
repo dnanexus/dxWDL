@@ -105,7 +105,7 @@ case class RunnerMiniWorkflow(exportVars: Set[String],
                     case "identifier" =>
                         env.get(srcStr) match {
                             case Some(ElemTop(x)) => x
-                            case _ => throw new Exception(cef.missingVarRefException(t))
+                            case _ => throw new Exception(cef.missingVarRef(t))
                         }
                     case _ =>
                         // a constant
@@ -113,7 +113,8 @@ case class RunnerMiniWorkflow(exportVars: Set[String],
                             throw new Exception(cef.expressionMustBeConstOrVar(expr))
                         }
                         val wdlValue = expr.evaluate(nullLookup, NoFunctions).get
-                        WdlVarLinks.importFromWDL(wdlValue.wdlType, DeclAttrs.empty, wdlValue)
+                        WdlVarLinks.importFromWDL(wdlValue.wdlType, DeclAttrs.empty, wdlValue,
+                                                  IODirection.Download)
                 }
 
             case a: Ast if a.isMemberAccess =>

@@ -21,6 +21,12 @@ case class DeclAttrs(m: Map[String, JsValue]) {
     def add(key:String, value:JsValue) : DeclAttrs = {
         DeclAttrs(m + (key -> value))
     }
+
+    def setDefault(value:JsValue) : DeclAttrs = {
+        add("default", value)
+    }
+
+    def isEmpty : Boolean = m.isEmpty
 }
 
 object DeclAttrs {

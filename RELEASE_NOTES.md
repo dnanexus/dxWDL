@@ -1,6 +1,18 @@
 # Release Notes
 
-##  0.51
+## 0.52
+Moving to use DNAnexus workflow inputs and outputs.
+
+Running a workflow now has slighly easier command line syntax.
+For example, if workflow `foo` takes an integer
+argument `N`, then running it through the CLI is done like
+this:
+```
+dx run foo -iN=19
+```
+
+
+## 0.51
 - Adding a `-quiet` flag to suppress warning and informational
   messages during compilation.
 - Minor fixes

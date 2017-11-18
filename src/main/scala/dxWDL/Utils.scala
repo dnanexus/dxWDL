@@ -14,6 +14,7 @@ import scala.util.{Failure, Success}
 import ExecutionContext.Implicits.global
 import scala.sys.process._
 import spray.json._
+import wdl4s.parser.WdlParser.{Terminal}
 import wdl4s.wdl._
 import wdl4s.wdl.expression._
 import wdl4s.wdl.types._
@@ -95,7 +96,6 @@ object Utils {
 
     val APPLET_LOG_MSG_LIMIT = 1000
     val CHECKSUM_PROP = "dxWDL_checksum"
-    val COMMON = "common"
     val DOWNLOAD_RETRY_LIMIT = 3
     val DX_HOME = "/home/dnanexus"
     val DX_INSTANCE_TYPE_ATTR = "dx_instance_type"
@@ -172,6 +172,18 @@ object Utils {
             case _ => false
         }
     }
+
+
+    // Return true if we are certain there is no interpolation in this string.
+    //
+    // A literal can include an interpolation expression, for example:
+    //   "${filename}.vcf.gz"
+    // Interpolation requires evaluation. This check is an approximation,
+    // it may cause us to create an unnecessary declaration.
+    def nonInterpolation(t: Terminal) : Boolean = {
+        !(t.getSourceString contains "${")
+    }
+
 
     // Is a declaration of a task/workflow an input for the
     // compiled dx:applet/dx:workflow ?

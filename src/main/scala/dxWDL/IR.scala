@@ -67,8 +67,7 @@ object IR {
     //   Scatter:   utility block for scatter/gather
     //   ScatterCollect: utility block for scatter, with a gather subjob.
     //   Task:      call a task, execute a shell command (usually)
-    //   WorkflowOutputs: evaluate workflow outputs, and clean up
-    //              intermediate results if needed.
+    //   WorkflowOutputReorg: move intermediate result files to a subdirectory.
     sealed trait AppletKind
     case object AppletKindEval extends AppletKind
     case class  AppletKindIf(calls: Map[String, String]) extends AppletKind
@@ -76,8 +75,7 @@ object IR {
     case class  AppletKindScatter(calls: Map[String, String]) extends AppletKind
     case class  AppletKindScatterCollect(calls: Map[String, String]) extends AppletKind
     case object AppletKindTask extends AppletKind
-    case object AppletKindWorkflowOutputs extends AppletKind
-    case object AppletKindWorkflowOutputsAndReorg extends AppletKind
+    case object AppletKindWorkflowOutputReorg extends AppletKind
 
     /** @param name          Name of applet
       * @param input         WDL input arguments
@@ -97,13 +95,26 @@ object IR {
                       kind: AppletKind,
                       ns: WdlNamespace)
 
-    /** An input to a stage. Could be empty, a wdl constant, or
-      * a link to an output variable from another stage.
+    /** An input to a stage. Could be empty, a wdl constant,
+      * a link to an output variable from another stage,
+      * or a workflow input.
       */
     sealed trait SArg
     case object SArgEmpty extends SArg
     case class SArgConst(wdlValue: WdlValue) extends SArg
     case class SArgLink(stageName: String, argName: CVar) extends SArg
+    case class SArgWorkflowInput(argName: CVar) extends SArg
+
+    // Linking between a variable, and which stage we got
+    // it from.
+    case class LinkedVar(cVar: IR.CVar, sArg: IR.SArg) {
+        def yaml : YamlObject = {
+            YamlObject(
+                YamlString("cVar") -> IR.yaml(cVar),
+                YamlString("sArg") -> IR.yaml(sArg)
+            )
+        }
+    }
 
     case class Stage(name: String,
                      id: Utils.DXWorkflowStage,
@@ -111,9 +122,12 @@ object IR {
                      inputs: Vector[SArg],
                      outputs: Vector[CVar])
 
+    /** A workflow output is linked to the stage that
+      * generated it.
+      */
     case class Workflow(name: String,
-                        inputs: Vector[CVar],
-                        outputs: Vector[CVar],
+                        inputs: Vector[(CVar,SArg)],
+                        outputs: Vector[(CVar,SArg)],
                         stages: Vector[Stage])
 
     case class Namespace(workflow: Option[Workflow],
@@ -195,10 +209,8 @@ object IR {
                             YamlString("calls") -> calls.toYaml)
                     case AppletKindTask =>
                         YamlObject(YamlString("aKind") -> YamlString("Task"))
-                    case AppletKindWorkflowOutputs =>
-                        YamlObject(YamlString("aKind") -> YamlString("WorkflowOutputs"))
-                    case AppletKindWorkflowOutputsAndReorg =>
-                        YamlObject(YamlString("aKind") -> YamlString("WorkflowOutputsAndReorg"))
+                    case AppletKindWorkflowOutputReorg =>
+                        YamlObject(YamlString("aKind") -> YamlString("WorkflowOutputReorg"))
                 }
             def read(value: YamlValue) = value match {
                 case YamlObject(_) =>
@@ -213,10 +225,8 @@ object IR {
                             }
                         case Seq(YamlString("Task")) =>
                             AppletKindTask
-                        case Seq(YamlString("WorkflowOutputs")) =>
-                            AppletKindWorkflowOutputs
-                        case Seq(YamlString("WorkflowOutputsAndReorg")) =>
-                            AppletKindWorkflowOutputsAndReorg
+                        case Seq(YamlString("WorkflowOutputReorg")) =>
+                            AppletKindWorkflowOutputReorg
                         case Seq(YamlString("If")) =>
                             yo.getFields(YamlString("calls")) match {
                                 case Seq(calls) =>
@@ -298,6 +308,9 @@ object IR {
                         YamlObject(YamlString("kind") -> YamlString("link"),
                                    YamlString("stageName") -> YamlString(stageName),
                                    YamlString("cVar") -> cVar.toYaml)
+                    case SArgWorkflowInput(cVar) =>
+                        YamlObject(YamlString("kind") -> YamlString("workflow_input"),
+                                   YamlString("cVar") -> cVar.toYaml)
                 }
             }
 
@@ -323,6 +336,12 @@ object IR {
                                     case Seq(YamlString(stageName),
                                              cVar) =>
                                         SArgLink(stageName, cVar.convertTo[CVar])
+                                    case _ => throw new Exception("SArg malformed link")
+                                }
+                            case Seq(YamlString("workflow_input")) =>
+                                yo.getFields(YamlString("cVar")) match {
+                                    case Seq(cVar) =>
+                                        SArgWorkflowInput(cVar.convertTo[CVar])
                                     case _ => throw new Exception("SArg malformed link")
                                 }
                             case unrecognized =>

@@ -1,5 +1,5 @@
 {
-  "Add.result": 14,
-  "SumArray.result": 7,
-  "cast_outputs.JoinMisc_result" : "true_3_4.2_zoology"
+  "cast.Add_result": 14,
+  "cast.SumArray_result": 7,
+  "cast.JoinMisc_result" : "true_3_4.2_zoology"
 }

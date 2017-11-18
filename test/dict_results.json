@@ -1,7 +1,6 @@
 {
-  "scatter_1.valueSI" : ["a", "b"],
-  "scatter_2.valueII" : [10, 11],
-  "mul.result" : 40,
-  "inc.result" : 41,
-  "makeSalad.ingredients" : ["carrots","oranges","pear","coconut"]
+  "dict.valueSI" : ["a", "b"],
+  "dict.valueII" : [10, 11],
+  "dict.addition" : 40,
+  "dict.inc_res" : 41
 }

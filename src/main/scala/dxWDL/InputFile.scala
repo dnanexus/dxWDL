@@ -1,5 +1,6 @@
 /** Generate an input file for a dx:workflow based on the
-  JSON input file.
+  JSON input file. Also deal with setting default values for
+a workflow and tasks.
 
 For example, this is a input file for workflow optionals:
 {
@@ -11,7 +12,7 @@ For example, this is a input file for workflow optionals:
 
 This is the dx JSON input:
 {
-  "0.arg1": 10,
+  "arg1": 10,
   "stage-xxxx.i": 5,
   "stage-yyyy.a": 1,
   "stage-yyyy.b": 3
@@ -21,6 +22,7 @@ package dxWDL
 
 import com.dnanexus.DXDataObject
 import scala.collection.mutable.HashMap
+import IR.{CVar, SArg}
 import java.nio.file.Path
 import spray.json._
 import Utils.{trace, DX_URL_PREFIX, FLAT_FILES_SUFFIX}
@@ -47,7 +49,7 @@ case class InputFile(verbose: Utils.Verbose) {
     }
 
     // Import into a WDL value, and convert back to JSON.
-    private def translateValue(cVar: IR.CVar,
+    private def translateValue(cVar: CVar,
                                jsv: JsValue) : WdlVarLinks = {
         val jsWithDxLinks = replaceURLsWithLinks(jsv)
         WdlVarLinks.importFromCromwellJSON(cVar.wdlType, cVar.attrs, jsWithDxLinks)
@@ -91,7 +93,7 @@ case class InputFile(verbose: Utils.Verbose) {
         // If a stage has defaults, set the SArg to a constant. The user
         // can override it at runtime.
         def addDefaultsToStage(stg:IR.Stage, wdlNameTrail:String) : IR.Stage = {
-            val inputsWithDefaults:Vector[IR.SArg] = stg.inputs.zipWithIndex.map{
+            val inputsWithDefaults:Vector[SArg] = stg.inputs.zipWithIndex.map{
                 case (sArg,idx) =>
                     val callee:IR.Applet = ns.applets(stg.appletName)
                     val cVar = callee.inputs(idx)
@@ -107,6 +109,22 @@ case class InputFile(verbose: Utils.Verbose) {
             stg.copy(inputs = inputsWithDefaults)
         }
 
+        // Set defaults for workflow inputs.
+        def addDefaultsToWorkflowInputs(inputs:Vector[(CVar, SArg)],
+                                        wfName:String) : Vector[(CVar, SArg)] = {
+            inputs.map { case (cVar, sArg) =>
+                val fqn = s"${wfName}.${cVar.name}"
+                val sArgDflt = defaults.fields.get(fqn) match {
+                    case None => sArg
+                    case Some(dflt:JsValue) =>
+                        val wvl = translateValue(cVar, dflt)
+                        val w = WdlVarLinks.eval(wvl, false, IODirection.Zero)
+                        IR.SArgConst(w)
+                }
+                (cVar, sArgDflt)
+            }.toVector
+        }
+
         // figure out the WDL ancestry of an applet. What piece
         // of WDL code is the source for this applet?
         ns.workflow match {
@@ -119,12 +137,16 @@ case class InputFile(verbose: Utils.Verbose) {
                     val apl = addDefaultsToApplet(applet, nameTrail)
                     apl.name -> apl
                 }.toMap
+
                 // add defaults to workflow stages
                 val stages = wf.stages.map{ stg =>
                     val nameTrail = s"${wf.name}.${stg.name}"
                     addDefaultsToStage(stg, nameTrail)
                 }
-                val wfWithDefaults = wf.copy(stages = stages)
+                // add defaults to workflow inputs
+                val inputs = addDefaultsToWorkflowInputs(wf.inputs, wf.name)
+
+                val wfWithDefaults = wf.copy(inputs = inputs, stages = stages)
                 IR.Namespace(Some(wfWithDefaults), applets)
 
             case None =>
@@ -164,7 +186,7 @@ case class InputFile(verbose: Utils.Verbose) {
 
         // If WDL variable fully qualified name [fqn] was provided in the
         // input file, set [stage.cvar] to its JSON value
-        def checkAndBind(fqn:String, dxName:String, cVar:IR.CVar) : Unit = {
+        def checkAndBind(fqn:String, dxName:String, cVar:CVar) : Unit = {
             inputFields.get(fqn) match {
                 case None => ()
                 case Some(jsv) =>
@@ -179,54 +201,11 @@ case class InputFile(verbose: Utils.Verbose) {
                     inputFields -= fqn
             }
         }
-        // This works for calls inside an if/scatter block. The naming is:
-        //  STAGE_ID.CALL_VARNAME
-        def compoundCalls(stage:IR.Stage,
-                          calls:Map[String, String]) : Unit = {
-            calls.foreach{ case (callName, appletName) =>
-                val callee:IR.Applet = ns.applets(appletName)
-                callee.inputs.zipWithIndex.foreach{
-                    case (cVar,idx) =>
-                        val fqn = s"${wf.name}.${callName}.${cVar.name}"
-                        val dxName = s"${stage.id.getId}.${callName}_${cVar.name}"
-                        checkAndBind(fqn, dxName, cVar)
-                }
-            }
-        }
 
-        // make a pass on all the stages
-        wf.stages.foreach{ stage =>
-            val callee:IR.Applet = ns.applets(stage.appletName)
-            // make a pass on all call inputs
-            stage.inputs.zipWithIndex.foreach{
-                case (_,idx) =>
-                    val cVar = callee.inputs(idx)
-                    val fqn = s"${wf.name}.${stage.name}.${cVar.name}"
-                    val dxName = s"${stage.id.getId}.${cVar.name}"
-                    checkAndBind(fqn, dxName, cVar)
-            }
-            // check if the applet called from this stage has bindings
-            callee.kind match {
-                case IR.AppletKindTask =>
-                    // We aren't handling applet settings currently
-                    ()
-                case other =>
-                    // An applet generated from a piece of the workflow.
-                    // search for all the applet inputs
-                    callee.inputs.foreach{ cVar =>
-                        val fqn = s"${wf.name}.${cVar.name}"
-                        val dxName = s"${stage.id.getId}.${cVar.name}"
-                        checkAndBind(fqn, dxName, cVar)
-                    }
-            }
-            // compound stages, for example if blocks, or scatters.
-            // They contain calls to applets.
-            callee.kind match {
-                case IR.AppletKindIf(calls) => compoundCalls(stage, calls)
-                case IR.AppletKindScatter(calls) => compoundCalls(stage, calls)
-                case IR.AppletKindScatterCollect(calls) => compoundCalls(stage, calls)
-                case _ => ()
-            }
+        wf.inputs.foreach { case (cVar, sArg) =>
+            val fqn = s"${wf.name}.${cVar.name}"
+            val dxName = s"${cVar.name}"
+            checkAndBind(fqn, dxName, cVar)
         }
 
         if (!inputFields.isEmpty) {

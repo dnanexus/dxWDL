@@ -49,6 +49,9 @@ workflow optionals {
     Array[Int] integers = [1,2]
     Int? rain = 13
     Int? snow = 34
+    Int a
+    Int b
+    Int b2
 
     call MaybeInt as mi1 { input: a=rain }
     call MaybeInt as mi2 { input: a=mi1.result}
@@ -56,11 +59,8 @@ workflow optionals {
     call MaybeString as ms1
     call MaybeString as ms2 { input: instrument="flute" }
 
-    # A call missing a compulsory argument
-    call lib.Twice as mul2
-    call lib.Twice as mul2b { input: i=arg1 }
+    call lib.Twice as mul2 { input: i=arg1 }
     call ppp_set_def as set_def
-    call lib.Add as add
     call ppp_unused_args as unused_args { input: a=1}
 
     # TODO: how is null represented in wdl4s?
@@ -72,10 +72,7 @@ workflow optionals {
 
         # verify that unbound compulsory arguments are provided as scatter
         # inputs
-        call lib.Add as add2 { input: a=x }
-
-        # we need to pass {a, b}
-        call lib.Add as add3
+        call lib.Add as add2 { input: a=x, b=b2}
 
         Array[Int] series=[x,1]
     }
@@ -86,10 +83,8 @@ workflow optionals {
         ms2.result
         mul2.result
         set_def.result
-        add.result
         unused_args.result
         add2.result
-        add3.result
         series
     }
 }
