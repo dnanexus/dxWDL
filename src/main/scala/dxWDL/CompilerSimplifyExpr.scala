@@ -347,12 +347,6 @@ case class CompilerSimplifyExpr(wf: WdlWorkflow,
         val (tmpDecls, outputsSmp) = simplifyOutputSection(outputs)
 
         val allChildren = wfProperSmp ++ tmpDecls ++ outputsSmp
-        tmpDecls.foreach{ x =>
-            System.err.println(s"${x.toWdlString}")
-        }
-        outputsSmp.foreach{ x =>
-            System.err.println(s"${x.toWdlString}")
-        }
         WdlRewrite.workflow(wf, allChildren)
     }
 }
