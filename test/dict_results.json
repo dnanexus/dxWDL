@@ -1,6 +1,6 @@
 {
-  "dict.valueSI" : ["a", "b"],
-  "dict.valueII" : [10, 11],
+  "dict.keysSI" : ["a", "b"],
+  "dict.valuesII" : [10, 11],
   "dict.addition" : 40,
   "dict.inc_res" : 41
 }

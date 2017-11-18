@@ -150,7 +150,6 @@ def validate_result(tname, analysis_desc, key, expected_val):
             expected_val.sort()
         if result != expected_val:
             print("Analysis {} gave unexpected results".format(tname))
-            print("results={}".format(results))
             print("Field {} should be {}, actual = {}".format(field_name, expected_val, result))
             return False
         return True
