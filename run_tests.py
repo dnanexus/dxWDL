@@ -145,7 +145,8 @@ def validate_result(tname, analysis_desc, key, expected_val):
             print("field {} missing from workflow results {}".format(field_name, results))
             return False
         result = results[field_name]
-        if type(result) is list:
+        if ((type(result) is list) and
+            (type(expected_val) is list)):
             result.sort()
             expected_val.sort()
         if result != expected_val:
