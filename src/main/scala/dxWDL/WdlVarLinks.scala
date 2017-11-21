@@ -528,17 +528,19 @@ object WdlVarLinks {
         JsObject(mWithType)
     }
 
-    // Register each dx:file that the job received as input
-    private def localizeFileLinks(jsv:JsValue) : Unit = {
-        jsv match {
+    // Download the dx:files in this wvl
+    def localizeFiles(wvl:WdlVarLinks) : Unit = {
+        def f(jsv:JsValue) : Unit = jsv match {
             case JsBoolean(_) | JsNull | JsNumber(_) | JsString(_) => ()
             case JsObject(_) if isDxFile(jsv) =>
-                LocalDxFiles.download(jsv, false)
+                LocalDxFiles.download(jsv, true)
             case JsObject(fields) =>
-                fields.foreach{ case(_,v) => localizeFileLinks(v) }
+                fields.foreach{ case(_,v) => f(v) }
             case JsArray(elems) =>
-                elems.foreach(e => localizeFileLinks(e))
+                elems.foreach(e => f(e))
         }
+        val jsv = getRawJsValue(wvl)
+        f(jsv)
     }
 
     // Convert an input field to a dx-links structure. This allows
@@ -583,7 +585,6 @@ object WdlVarLinks {
             case other => throw new Exception(s"unhandled IO class ${other}")
         }
 
-        localizeFileLinks(jsv)
         WdlVarLinks(wdlType, attrs, DxlValue(jsv))
     }
 

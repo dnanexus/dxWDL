@@ -178,5 +178,4 @@ object BValue {
             case other => throw new DeserializationException(s"BValue unexpected ${other}")
         }
     }
-
 }

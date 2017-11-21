@@ -78,10 +78,6 @@ case class CompilerNative(dxWDLrtId: String,
         def mkComplex() : Vector[Map[String,JsValue]] = {
             // A large JSON structure passed as a hash, and a
             // vector of platform files.
-            //
-            // Note: the help field for the file vector is empty,
-            // so that the WdlVarLinks.loadJobInputsAsLinks method
-            // will not interpret it.
             Vector(Map("name" -> JsString(name),
                        "class" -> JsString("hash"))
                        ++ defaultVal,

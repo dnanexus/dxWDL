@@ -1,19 +1,20 @@
-/* Evaluate the workflow outputs, and place intermediate results
- * in a subdirectory.
+/* Place intermediate workflow results in a subdirectory.
+ *
+ * All the workflow variables are passed through, so that the workflow
+ * will complete only after file movements are complete.
  */
 package dxWDL
 
 // DX bindings
 import com.dnanexus.{DXAnalysis, DXAPI, DXContainer, DXDataObject,
-    DXEnvironment, DXJSON, DXFile, DXProject, DXSearch}
+    DXEnvironment, DXJSON, DXFile, DXProject, DXSearch, IOClass}
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.node.ObjectNode
-import java.nio.file.Path
 import net.jcazevedo.moultingyaml._
 import scala.collection.JavaConverters._
 import spray.json._
 import Utils.appletLog
-import wdl4s.wdl.{Declaration, WdlWorkflow, WorkflowOutput}
+import wdl4s.wdl.WdlWorkflow
 import WdlVarLinks.yaml
 
 object RunnerWorkflowOutputReorg {
@@ -139,23 +140,14 @@ object RunnerWorkflowOutputReorg {
         YamlObject(m).print()
     }
 
-    // This is a bit over engineered. The variables are really just
-    // pass through, so that workflow will complete only after file
-    // movements are complete.
+    // The variables are passed through, so that workflow will
+    // complete only after file movements are complete.
     def apply(wf: WdlWorkflow,
-              jobInputPath : Path,
-              jobOutputPath : Path,
-              jobInfoPath: Path) : Unit = {
-        // Figure out input/output types
-        val (inputSpec, outputSpec) = Utils.loadExecInfo
-
-        // Parse the inputs, do not download files from the platform,
-        // they will be passed as links.
-        val inputLines : String = Utils.readFileContent(jobInputPath)
-        val inputs: Map[String, WdlVarLinks] =
-            WdlVarLinks.loadJobInputsAsLinks(inputLines, inputSpec)
+              inputSpec: Map[String, IOClass],
+              outputSpec: Map[String, IOClass],
+              inputs: Map[String, WdlVarLinks]) : Map[String, JsValue] = {
         appletLog(s"Initial inputs=\n${prettyPrint(inputs)}")
-
+/*
         // Make sure the workflow elements are all declarations
         val outputDecls: Seq[WorkflowOutput] = wf.children.map {
             case _: Declaration => None
@@ -165,19 +157,24 @@ object RunnerWorkflowOutputReorg {
         val outputs : Map[String, BValue] =
             RunnerEval.evalDeclarations(outputDecls, inputs, false, None, IODirection.Upload)
 
+        // pass through the inputs as outputs
         val outputFields: Map[String, JsValue] = outputs.map {
             case (varName, bValue) =>
                 val varNameOrg = varName.stripPrefix("out_")
                 WdlVarLinks.genFields(bValue.wvl, varNameOrg)
         }.flatten.toMap
+ */
 
-        val json = JsObject(outputFields)
-        val ast_pp = json.prettyPrint
-        appletLog(s"exported = ${ast_pp}")
-        Utils.writeFileContent(jobOutputPath, ast_pp)
+        // pass through the inputs as outputs
+        val outputFields: Map[String, JsValue] = inputs.map {
+            case (varName, wvl) =>
+                WdlVarLinks.genFields(wvl, varName)
+        }.flatten.toMap
 
         // Reorganize directory structure
         val dxEnv = DXEnvironment.create()
         moveIntermediateResultFiles(dxEnv, outputFields)
+
+        outputFields
     }
 }

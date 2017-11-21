@@ -20,7 +20,7 @@
 package dxWDL
 
 // DX bindings
-import java.nio.file.Path
+import com.dnanexus.IOClass
 import spray.json._
 import Utils.appletLog
 import wdl4s.wdl.{Declaration, DeclarationInterface, WdlTask, WdlExpression, WdlWorkflow, WorkflowOutput}
@@ -147,17 +147,9 @@ object RunnerEval {
     }
 
     def apply(wf: WdlWorkflow,
-              jobInputPath : Path,
-              jobOutputPath : Path,
-              jobInfoPath: Path) : Unit = {
-        // Figure out input/output types
-        //val (inputTypes, outputTypes) = Utils.loadExecInfo(Utils.readFileContent(jobInfoPath))
-        val (inputSpec, outputSpec) = Utils.loadExecInfo
-
-        // Parse the inputs, do not download files from the platform,
-        // they will be passed as links.
-        val inputLines : String = Utils.readFileContent(jobInputPath)
-        val inputs: Map[String, WdlVarLinks] = WdlVarLinks.loadJobInputsAsLinks(inputLines, inputSpec)
+              inputSpec: Map[String, IOClass],
+              outputSpec: Map[String, IOClass],
+              inputs: Map[String, WdlVarLinks]) : Map[String, JsValue] = {
         appletLog(s"Initial inputs=${inputs}")
 
         // make sure the workflow elements are all declarations
@@ -171,13 +163,8 @@ object RunnerEval {
 
         // Keep only exported variables
         val exported = outputs.filter{ case (varName, _) => outputSpec contains varName }
-        val outputFields: Map[String, JsValue] = exported.map {
+        exported.map {
             case (varName, bValue) => WdlVarLinks.genFields(bValue.wvl, varName)
         }.flatten.toMap
-
-        val json = JsObject(outputFields)
-        val ast_pp = json.prettyPrint
-        appletLog(s"exported = ${ast_pp}")
-        Utils.writeFileContent(jobOutputPath, ast_pp)
     }
 }

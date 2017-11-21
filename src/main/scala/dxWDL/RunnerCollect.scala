@@ -76,13 +76,12 @@ workflow math {
 package dxWDL
 
 // DX bindings
-import com.dnanexus.{DXAPI, DXEnvironment, DXJob, DXSearch}
+import com.dnanexus.{DXAPI, DXEnvironment, DXJob, DXSearch, IOClass}
 import com.fasterxml.jackson.databind.JsonNode
-import java.nio.file.Path
 import scala.collection.JavaConverters._
 import scala.collection.mutable.HashMap
 import spray.json._
-import Utils.{appletLog, callUniqueName, jsonNodeOfJsValue, jsValueOfJsonNode}
+import Utils.{callUniqueName, jsonNodeOfJsValue, jsValueOfJsonNode}
 import wdl4s.wdl.{WdlCall, WdlWorkflow}
 import wdl4s.wdl.types._
 
@@ -203,12 +202,9 @@ object RunnerCollect {
     }
 
     def apply(wf: WdlWorkflow,
-              jobInputPath : Path,
-              jobOutputPath : Path,
-              jobInfoPath: Path) : Unit = {
-        // Figure out input/output types
-        val (inputSpec, outputSpec) = Utils.loadExecInfo
-
+              inputSpec: Map[String, IOClass],
+              outputSpec: Map[String, IOClass],
+              inputs: Map[String, WdlVarLinks]) : Map[String, JsValue] = {
         // We cannot change the input fields, because this is a sub-job with the same
         // input/output spec as the parent scatter. Therefore, we need to computationally
         // figure out:
@@ -251,9 +247,6 @@ object RunnerCollect {
                     accu ++ callOutputs
             }
 
-        val json = JsObject(combinedOutputs)
-        val ast_pp = json.prettyPrint
-        appletLog(s"exported = ${ast_pp}")
-        Utils.writeFileContent(jobOutputPath, ast_pp)
+        combinedOutputs
     }
 }

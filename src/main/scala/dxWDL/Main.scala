@@ -660,34 +660,48 @@ object Main extends App {
         val ns = WdlNamespace.loadUsingPath(Paths.get(wdlDefPath), None, None).get
         val cef = new CompilerErrorFormatter(ns.terminalMap)
         try {
-            op match {
+            // Figure out input/output types
+            val (inputSpec, outputSpec) = Utils.loadExecInfo
+
+            // Parse the inputs, do not download files from the platform,
+            // they will be passed as links.
+            val inputLines : String = Utils.readFileContent(jobInputPath)
+            val inputs: Map[String, WdlVarLinks] = WdlVarLinks.loadJobInputsAsLinks(inputLines, inputSpec)
+            val orgInputs = inputLines.parseJson
+
+            val outputFields: Map[String, JsValue] = op match {
                 case InternalOp.Collect =>
-                    RunnerCollect.apply(workflowOfNamespace(ns),
-                                        jobInputPath, jobOutputPath, jobInfoPath)
+                    RunnerCollect.apply(workflowOfNamespace(ns), inputSpec, outputSpec, inputs)
                 case InternalOp.Eval =>
-                    RunnerEval.apply(workflowOfNamespace(ns),
-                                     jobInputPath, jobOutputPath, jobInfoPath)
+                    RunnerEval.apply(workflowOfNamespace(ns), inputSpec, outputSpec, inputs)
                 case InternalOp.MiniWorkflow =>
                     RunnerMiniWorkflow.apply(workflowOfNamespace(ns),
-                                             jobInputPath, jobOutputPath, jobInfoPath,
-                                             false)
+                                             inputSpec, outputSpec, inputs, orgInputs, false)
                 case InternalOp.ScatterCollectSubjob =>
                     RunnerMiniWorkflow.apply(workflowOfNamespace(ns),
-                                             jobInputPath, jobOutputPath, jobInfoPath,
-                                             true)
-                case InternalOp.TaskEpilog =>
-                    val runner = RunnerTask(taskOfNamespace(ns), cef)
-                    runner.epilog(jobInputPath, jobOutputPath, jobInfoPath)
-                case InternalOp.TaskProlog =>
-                    val runner = RunnerTask(taskOfNamespace(ns), cef)
-                    runner.prolog(jobInputPath, jobOutputPath, jobInfoPath)
-                case InternalOp.TaskRelaunch =>
-                    val runner = RunnerTask(taskOfNamespace(ns), cef)
-                    runner.relaunch(jobInputPath, jobOutputPath, jobInfoPath)
+                                             inputSpec, outputSpec, inputs, orgInputs, true)
                 case InternalOp.WorkflowOutputReorg =>
                     RunnerWorkflowOutputReorg.apply(workflowOfNamespace(ns),
-                                                    jobInputPath, jobOutputPath, jobInfoPath)
+                                                    inputSpec, outputSpec, inputs)
+
+                // Running tasks
+                case InternalOp.TaskEpilog =>
+                    val runner = RunnerTask(taskOfNamespace(ns), cef)
+                    runner.epilog(inputSpec, outputSpec, inputs)
+                case InternalOp.TaskProlog =>
+                    val runner = RunnerTask(taskOfNamespace(ns), cef)
+                    runner.prolog(inputSpec, outputSpec, inputs)
+                case InternalOp.TaskRelaunch =>
+                    val runner = RunnerTask(taskOfNamespace(ns), cef)
+                    runner.relaunch(inputSpec, outputSpec, inputs)
             }
+
+            // write outputs
+            val json = JsObject(outputFields)
+            val ast_pp = json.prettyPrint
+            Utils.writeFileContent(jobOutputPath, ast_pp)
+            System.err.println(s"Wrote outputs ${ast_pp}")
+
             SuccessfulTermination(s"success ${op}")
         } catch {
             case e : Throwable =>

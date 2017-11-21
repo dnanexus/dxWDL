@@ -537,30 +537,19 @@ case class RunnerMiniWorkflow(exportVars: Set[String],
 
 object RunnerMiniWorkflow {
     def apply(wf: WdlWorkflow,
-              jobInputPath : Path,
-              jobOutputPath : Path,
-              jobInfoPath: Path,
-              collectSubjob: Boolean) : Unit = {
-        // Extract types for closure inputs
-        val (inputSpec, outputSpec) = Utils.loadExecInfo
+              inputSpec: Map[String, IOClass],
+              outputSpec: Map[String, IOClass],
+              inputs: Map[String, WdlVarLinks],
+              orgInputs: JsValue,
+              collectSubjob: Boolean) : Map[String, JsValue] = {
         appletLog(s"WdlType mapping =${inputSpec}")
         val exportVars = outputSpec.keys.toSet
         appletLog(s"exportVars=${exportVars}")
 
-        // Parse the inputs, do not download files from the platform.
-        // They will be passed as links to the tasks.
-        val inputLines : String = Utils.readFileContent(jobInputPath)
-        val inputs : Map[String, WdlVarLinks] =
-            WdlVarLinks.loadJobInputsAsLinks(inputLines, inputSpec)
-
         // Run the workflow
         val cef = new CompilerErrorFormatter(wf.wdlSyntaxErrorFormatter.terminalMap)
-        val r = RunnerMiniWorkflow(exportVars, cef, inputLines.parseJson, collectSubjob, false)
+        val r = RunnerMiniWorkflow(exportVars, cef, orgInputs, collectSubjob, false)
         val json = r.apply(wf, inputs)
-
-        // write the outputs to the job_output.json file
-        val ast_pp = json.prettyPrint
-        appletLog(s"outputs = ${ast_pp}")
-        Utils.writeFileContent(jobOutputPath, ast_pp)
+        json.asJsObject.fields
     }
 }

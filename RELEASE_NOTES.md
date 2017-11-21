@@ -1,7 +1,7 @@
 # Release Notes
 
 ## 0.52
-Moving to use DNAnexus workflow inputs and outputs.
+- Moving to use DNAnexus workflow inputs and outputs.
 
 Running a workflow now has slighly easier command line syntax.
 For example, if workflow `foo` takes an integer
@@ -11,6 +11,8 @@ this:
 dx run foo -iN=19
 ```
 
+- Revamp the conversions between dx:file and wdl:file. This allows
+specifying dx files in defaults.
 
 ## 0.51
 - Adding a `-quiet` flag to suppress warning and informational
