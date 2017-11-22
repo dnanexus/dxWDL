@@ -147,25 +147,8 @@ object RunnerWorkflowOutputReorg {
               outputSpec: Map[String, IOClass],
               inputs: Map[String, WdlVarLinks]) : Map[String, JsValue] = {
         appletLog(s"Initial inputs=\n${prettyPrint(inputs)}")
-/*
-        // Make sure the workflow elements are all declarations
-        val outputDecls: Seq[WorkflowOutput] = wf.children.map {
-            case _: Declaration => None
-            case wot:WorkflowOutput => Some(wot)
-            case _ => throw new Exception("Workflow contains a non declaration")
-        }.flatten
-        val outputs : Map[String, BValue] =
-            RunnerEval.evalDeclarations(outputDecls, inputs, false, None, IODirection.Upload)
 
-        // pass through the inputs as outputs
-        val outputFields: Map[String, JsValue] = outputs.map {
-            case (varName, bValue) =>
-                val varNameOrg = varName.stripPrefix("out_")
-                WdlVarLinks.genFields(bValue.wvl, varNameOrg)
-        }.flatten.toMap
- */
-
-        // pass through the inputs as outputs
+        // pass through the inputs
         val outputFields: Map[String, JsValue] = inputs.map {
             case (varName, wvl) =>
                 WdlVarLinks.genFields(wvl, varName)

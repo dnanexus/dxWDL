@@ -348,6 +348,12 @@ object WdlVarLinks {
         evalCore(wvl.wdlType, jsValue, force, ioDir)
     }
 
+    // Download the dx:files in this wvl
+    def localize(wvl:WdlVarLinks, force:Boolean) : WdlValue = {
+        val jsValue = getRawJsValue(wvl)
+        evalCore(wvl.wdlType, jsValue, force, IODirection.Download)
+    }
+
     // The reason we need a special method for unpacking an array (or a map),
     // is because we DO NOT want to evaluate the sub-structures. The trouble is
     // files, that may all have the same paths, causing collisions.
@@ -526,21 +532,6 @@ object WdlVarLinks {
         }
         val mWithType = m + ("wdlType" -> JsString(wdlType.toWdlString))
         JsObject(mWithType)
-    }
-
-    // Download the dx:files in this wvl
-    def localizeFiles(wvl:WdlVarLinks) : Unit = {
-        def f(jsv:JsValue) : Unit = jsv match {
-            case JsBoolean(_) | JsNull | JsNumber(_) | JsString(_) => ()
-            case JsObject(_) if isDxFile(jsv) =>
-                LocalDxFiles.download(jsv, true)
-            case JsObject(fields) =>
-                fields.foreach{ case(_,v) => f(v) }
-            case JsArray(elems) =>
-                elems.foreach(e => f(e))
-        }
-        val jsv = getRawJsValue(wvl)
-        f(jsv)
     }
 
     // Convert an input field to a dx-links structure. This allows
