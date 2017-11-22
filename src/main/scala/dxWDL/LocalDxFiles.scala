@@ -7,7 +7,7 @@ import com.dnanexus.DXFile
 import java.nio.file.{Files, Path, Paths}
 import scala.collection.mutable.HashMap
 import spray.json._
-import Utils.{dxFileOfJsValue, getMetaDirPath, jsValueOfJsonNode,
+import Utils.{dxFileFromJsValue, getMetaDirPath, jsValueOfJsonNode,
     LOCAL_DX_FILES_CHECKPOINT_FILE, readFileContent, writeFileContent}
 import wdl4s.wdl.values._
 
@@ -39,7 +39,7 @@ object LocalDxFiles {
                         case None => throw new Exception(s"Could not unmarshal ${jsv}")
                         case Some(x) => x
                     }
-                    FileInfo(state2, dxFileOfJsValue(dxLink))
+                    FileInfo(state2, dxFileFromJsValue(dxLink))
                 case _ =>
                     throw new Exception(s"malformed FileInfo structure ${jsv}")
             }
@@ -104,7 +104,7 @@ object LocalDxFiles {
                 // Upload a local file to the cloud. This is
                 // not a file we downloaded previously.
                 val jsv:JsValue = Utils.uploadFile(path)
-                val dxFile = dxFileOfJsValue(jsv)
+                val dxFile = dxFileFromJsValue(jsv)
                 val fInfo = FileInfo(FileState.Local, dxFile)
                 localized(path) = fInfo
                 reverseLookup(dxFile) = path
@@ -132,7 +132,7 @@ object LocalDxFiles {
         // same name as the platform. All files have to be downloaded
         // into the same directory; the only exception we make is for
         // disambiguation purposes.
-        val dxFile = dxFileOfJsValue(jsValue)
+        val dxFile = dxFileFromJsValue(jsValue)
 
         val path = reverseLookup.get(dxFile) match {
             case Some(path) =>

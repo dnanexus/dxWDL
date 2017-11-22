@@ -10,7 +10,7 @@ import java.time.format.DateTimeFormatter
 import IR.{CVar, SArg}
 import scala.collection.JavaConverters._
 import spray.json._
-import Utils.{AppletLinkInfo, base64Encode, CHECKSUM_PROP, dxFileOfJsValue, DXWorkflowStage,
+import Utils.{AppletLinkInfo, base64Encode, CHECKSUM_PROP, dxFileFromJsValue, DXWorkflowStage,
     INSTANCE_TYPE_DB_FILENAME, jsValueOfJsonNode, jsonNodeOfJsValue, LINK_INFO_FILENAME, trace,
     warning}
 import wdl4s.wdl.types._
@@ -38,7 +38,7 @@ case class CompilerNative(dxWDLrtId: String,
             case Some(x) => x
             case None => throw new Exception(s"record does not have an archive field ${details}")
         }
-        val dxFile = dxFileOfJsValue(dxLink)
+        val dxFile = dxFileFromJsValue(dxLink)
         val name = dxFile.describe.getName()
         JsObject(
             "name" -> JsString(name),
@@ -474,7 +474,7 @@ case class CompilerNative(dxWDLrtId: String,
                 // extract the archiveFileId field
                 val details:JsValue = jsValueOfJsonNode(desc.getDetails(classOf[JsonNode]))
                 val pkgFile:DXFile = details.asJsObject.fields.get("archiveFileId") match {
-                    case Some(id) => Utils.dxFileOfJsValue(id)
+                    case Some(id) => dxFileFromJsValue(id)
                     case _ => throw new Exception(s"Badly formatted record ${dxRecord}")
                 }
                 val pkgName = pkgFile.describe.getName

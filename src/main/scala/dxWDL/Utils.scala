@@ -605,7 +605,7 @@ object Utils {
     //
     //  {"$dnanexus_link": "file-F0J6JbQ0ZvgVz1J9q5qKfkqP"}
     //
-    def dxFileOfJsValue(jsValue : JsValue) : DXFile = {
+    def dxFileFromJsValue(jsValue : JsValue) : DXFile = {
         val innerObj = jsValue match {
             case JsObject(fields) =>
                 fields.get("$dnanexus_link") match {
@@ -639,6 +639,10 @@ object Utils {
             case None => DXFile.getInstance(fid)
             case Some(pid) => DXFile.getInstance(fid, DXProject.getInstance(pid))
         }
+    }
+
+    def dxFileToJsValue(dxFile: DXFile) : JsValue = {
+        jsValueOfJsonNode(dxFile.getLinkAsJson)
     }
 
     // types

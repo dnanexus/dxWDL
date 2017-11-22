@@ -20,7 +20,7 @@ This is the dx JSON input:
   */
 package dxWDL
 
-import com.dnanexus.DXDataObject
+import com.dnanexus.{DXDataObject, DXFile}
 import scala.collection.mutable.HashMap
 import IR.{CVar, SArg}
 import java.nio.file.Path
@@ -36,7 +36,7 @@ case class InputFile(verbose: Utils.Verbose) {
                 // Identify platform file paths by their prefix,
                 // do a lookup, and create a dxlink
                 val dxFile: DXDataObject = DxPath.lookupDxURLFile(s)
-                Utils.jsValueOfJsonNode(dxFile.getLinkAsJson)
+                Utils.dxFileToJsValue(dxFile.asInstanceOf[DXFile])
 
             case JsBoolean(_) | JsNull | JsNumber(_) | JsString(_) => jsv
             case JsObject(fields) =>

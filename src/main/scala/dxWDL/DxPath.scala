@@ -135,4 +135,10 @@ object DxPath {
             throw new Exception(s"Found dx:object of the wrong type ${dxObj}")
         dxObj.asInstanceOf[DXFile]
     }
+
+    def dxFileToPath(dxFile: DXFile) : String = {
+        val fid = dxFile.getId
+        val projId = dxFile.getProject.getId
+        s"${DX_URL_PREFIX}${projId}:${fid}"
+    }
 }

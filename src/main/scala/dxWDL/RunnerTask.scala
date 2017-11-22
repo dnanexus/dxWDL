@@ -453,7 +453,6 @@ case class RunnerTask(task:WdlTask,
             varName -> WdlVarLinks(wvl.wdlType, attrs, wvl.dxlink)
         }.toMap
 
-
         val forceFlag =
             if (task.commandTemplateString.trim.isEmpty) {
                 // The shell command is empty, there is no need to download the files.

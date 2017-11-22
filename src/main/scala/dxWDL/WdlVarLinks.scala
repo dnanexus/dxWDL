@@ -26,7 +26,8 @@ import com.dnanexus.{DXFile, DXJob, IOClass}
 import java.nio.file.Paths
 import net.jcazevedo.moultingyaml._
 import spray.json._
-import Utils.{appletLog, dxFileOfJsValue, DXWorkflowStage, FLAT_FILES_SUFFIX, isNativeDxType}
+import Utils.{appletLog, dxFileFromJsValue, dxFileToJsValue,
+    DX_URL_PREFIX, DXWorkflowStage, FLAT_FILES_SUFFIX, isNativeDxType}
 import wdl4s.wdl.types._
 import wdl4s.wdl.values._
 
@@ -134,7 +135,7 @@ object WdlVarLinks {
             case JsBoolean(_) | JsNull | JsNumber(_) | JsString(_) =>
                 Vector.empty[DXFile]
             case JsObject(_) if isDxFile(jsValue) =>
-                Vector(dxFileOfJsValue(jsValue))
+                Vector(dxFileFromJsValue(jsValue))
             case JsObject(fields) =>
                 fields.map{ case(_,v) => findDxFiles(v) }.toVector.flatten
             case JsArray(elems) =>
@@ -180,7 +181,7 @@ object WdlVarLinks {
             // keys are strings
             JsObject(m.map{
                          case (WdlString(k), v) =>
-                             k -> jsOfComplexWdlValue(valueType, v, ioDir)
+                             k -> jsFromWdlValue(valueType, v, ioDir)
                          case (k,_) =>
                              throw new Exception(s"key ${k.toWdlString} should be a WdlStringType")
                      }.toMap)
@@ -188,9 +189,9 @@ object WdlVarLinks {
         else {
             // general case
             val keys:WdlValue = WdlArray(WdlArrayType(keyType), m.keys.toVector)
-            val kJs = jsOfComplexWdlValue(keys.wdlType, keys, ioDir)
+            val kJs = jsFromWdlValue(keys.wdlType, keys, ioDir)
             val values:WdlValue = WdlArray(WdlArrayType(valueType), m.values.toVector)
-            val vJs = jsOfComplexWdlValue(values.wdlType, values, ioDir)
+            val vJs = jsFromWdlValue(values.wdlType, values, ioDir)
             JsObject("keys" -> kJs, "values" -> vJs)
         }
     }
@@ -231,7 +232,7 @@ object WdlVarLinks {
                                  ioDir: IODirection.Value) : JsValue = {
         val jsm:Map[String, JsValue] = m.map{ case (key, w:WdlValue) =>
             key -> JsObject("type" -> JsString(w.wdlType.toWdlString),
-                            "value" -> jsOfComplexWdlValue(w.wdlType, w, ioDir))
+                            "value" -> jsFromWdlValue(w.wdlType, w, ioDir))
         }.toMap
         JsObject(jsm)
     }
@@ -253,6 +254,37 @@ object WdlVarLinks {
         }.toMap
     }
 
+    // Is this a local file path?
+    private def isLocalPath(path:String) : Boolean = !(path contains "//")
+
+    private def evalCoreHandleFile(jsv:JsValue,
+                                   force: Boolean,
+                                   ioDir: IODirection.Value) : WdlValue = {
+        (ioDir,jsv) match {
+            case (IODirection.Upload, JsString(path)) if isLocalPath(path) =>
+                // Local file that needs to be uploaded
+                LocalDxFiles.upload(Paths.get(path))
+                WdlSingleFile(path)
+            case (IODirection.Upload, JsObject(_)) =>
+                // We already downloaded this file. We need to get from the dx:link
+                // to a WdlValue.
+                val dxFile = dxFileFromJsValue(jsv)
+                LocalDxFiles.get(dxFile) match {
+                    case None =>
+                        throw new AppInternalException(
+                            s"dx:file ${jsv} is not found locally, it cannot be uploaded.")
+                    case Some(path) => WdlSingleFile(path.toString)
+                }
+            case (IODirection.Download, _) =>
+                LocalDxFiles.download(jsv, force)
+            case (IODirection.Zero, JsString(path)) if path.startsWith(DX_URL_PREFIX) =>
+                val dxFile = DxPath.lookupDxURLFile(path)
+                WdlSingleFile(DxPath.dxFileToPath(dxFile))
+            case (_,_) =>
+                throw new Exception(s"Cannot transfer ${jsv} in context ${ioDir}.")
+        }
+    }
+
     private def evalCore(wdlType: WdlType,
                          jsValue: JsValue,
                          force: Boolean,
@@ -263,29 +295,7 @@ object WdlVarLinks {
             case (WdlIntegerType, JsNumber(bnm)) => WdlInteger(bnm.intValue)
             case (WdlFloatType, JsNumber(bnm)) => WdlFloat(bnm.doubleValue)
             case (WdlStringType, JsString(s)) => WdlString(s)
-
-            // File upload
-            case (WdlFileType, JsString(path)) if ioDir == IODirection.Upload =>
-                LocalDxFiles.upload(Paths.get(path))
-                WdlSingleFile(path)
-            case (WdlFileType, JsObject(_)) if ioDir == IODirection.Upload =>
-                // We already downloaded this file. We need to get from the dx:link
-                // to a WdlValue.
-                val dxFile = dxFileOfJsValue(jsValue)
-                LocalDxFiles.get(dxFile) match {
-                    case None =>
-                        throw new AppInternalException(
-                            s"dx:file ${jsValue} is not found locally, it cannot be uploaded.")
-                    case Some(path) => WdlSingleFile(path.toString)
-                }
-
-            // File download
-            case (WdlFileType, _) if ioDir == IODirection.Download =>
-                LocalDxFiles.download(jsValue, force)
-
-            case (WdlFileType, _) =>
-                throw new AppInternalException(
-                    s"File transfer not allowed ${jsValue.prettyPrint} direction=${ioDir}")
+            case (WdlFileType, _) => evalCoreHandleFile(jsValue, force, ioDir)
 
             // arrays
             case (WdlArrayType(t), JsArray(vec)) =>
@@ -350,8 +360,7 @@ object WdlVarLinks {
 
     // Download the dx:files in this wvl
     def localize(wvl:WdlVarLinks, force:Boolean) : WdlValue = {
-        val jsValue = getRawJsValue(wvl)
-        evalCore(wvl.wdlType, jsValue, force, IODirection.Download)
+        eval(wvl, force, IODirection.Download)
     }
 
     // The reason we need a special method for unpacking an array (or a map),
@@ -424,7 +433,7 @@ object WdlVarLinks {
     // 1. Make a pass on the object, upload any files, and keep an in-memory JSON representation
     // 2. In memory we have a, potentially very large, JSON value. This can be handled pretty
     //    well by the platform as a dx:hash.
-    private def jsOfComplexWdlValue(wdlType: WdlType,
+    private def jsFromWdlValue(wdlType: WdlType,
                                     wdlValue: WdlValue,
                                     ioDir: IODirection.Value) : JsValue = {
         def handleFile(path:String) : JsValue = ioDir match {
@@ -433,10 +442,13 @@ object WdlVarLinks {
             case IODirection.Download =>
                 LocalDxFiles.get(Paths.get(path)) match {
                     case None => throw new Exception(s"File ${path} has not been downloaded yet")
-                    case Some(dxFile) => Utils.jsValueOfJsonNode(dxFile.getLinkAsJson)
+                    case Some(dxFile) => dxFileToJsValue(dxFile)
                 }
             case IODirection.Zero =>
-                throw new Exception(s"No runtime system in this context. Can't transfer files.")
+                if (!path.startsWith(DX_URL_PREFIX))
+                    throw new Exception(s"${path} is not a dx:file, cannot transfer it in this context.")
+                val dxFile = DxPath.lookupDxURLFile(path)
+                dxFileToJsValue(dxFile)
         }
 
         (wdlType, wdlValue) match {
@@ -458,12 +470,12 @@ object WdlVarLinks {
 
             // Non empty array
             case (WdlArrayType(t), WdlArray(_, elems)) =>
-                val jsVals = elems.map(e => jsOfComplexWdlValue(t, e, ioDir))
+                val jsVals = elems.map(e => jsFromWdlValue(t, e, ioDir))
                 JsArray(jsVals.toVector)
 
             // automatically cast an element from type T to Array[T]
             case (WdlArrayType(t), elem) =>
-                JsArray(jsOfComplexWdlValue(t,elem, ioDir))
+                JsArray(jsFromWdlValue(t,elem, ioDir))
 
             // Maps. These are projections from a key to value, where
             // the key and value types are statically known. We
@@ -478,17 +490,17 @@ object WdlVarLinks {
                 marshalWdlObject(m, ioDir)
 
             case (WdlPairType(lType, rType), WdlPair(l,r)) =>
-                val lJs = jsOfComplexWdlValue(lType, l, ioDir)
-                val rJs = jsOfComplexWdlValue(rType, r, ioDir)
+                val lJs = jsFromWdlValue(lType, l, ioDir)
+                val rJs = jsFromWdlValue(rType, r, ioDir)
                 JsObject("left" -> lJs, "right" -> rJs)
 
             // Strip optional type
             case (WdlOptionalType(t), WdlOptionalValue(_,Some(w))) =>
-                jsOfComplexWdlValue(t, w, ioDir)
+                jsFromWdlValue(t, w, ioDir)
             case (WdlOptionalType(t), w) =>
-                jsOfComplexWdlValue(t, w, ioDir)
+                jsFromWdlValue(t, w, ioDir)
             case (t, WdlOptionalValue(_,Some(w))) =>
-                jsOfComplexWdlValue(t, w, ioDir)
+                jsFromWdlValue(t, w, ioDir)
 
             // If the value is none then, it is a missing value
             // What if the value is null?
@@ -505,7 +517,7 @@ object WdlVarLinks {
                       attrs: DeclAttrs,
                       wdlValue: WdlValue,
                       ioDir: IODirection.Value) : WdlVarLinks = {
-        val jsValue = jsOfComplexWdlValue(wdlType, wdlValue, ioDir)
+        val jsValue = jsFromWdlValue(wdlType, wdlValue, ioDir)
         WdlVarLinks(wdlType, attrs, DxlValue(jsValue))
     }
 
