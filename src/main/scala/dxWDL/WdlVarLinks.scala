@@ -84,34 +84,6 @@ object WdlVarLinks {
             YamlString(key) -> YamlString(value))
     }
 
-    // remove persistent resources used by this variable
-    def deleteLocal(wdlValue: WdlValue) : Unit = {
-        wdlValue match {
-            case WdlBoolean(_) | WdlInteger(_) | WdlFloat(_) | WdlString(_) => ()
-            case WdlSingleFile(path) =>
-                LocalDxFiles.delete(Paths.get(path))
-
-            // recursion
-            case WdlOptionalValue(_, None) => ()
-            case WdlOptionalValue(_, Some(x)) =>
-                deleteLocal(x)
-            case WdlArray(_, a) =>
-                a.foreach(x => deleteLocal(x))
-            case WdlMap(_, m) =>
-                m.foreach{ case (k,v) =>
-                    deleteLocal(k)
-                    deleteLocal(v)
-                }
-            case WdlObject(m) =>
-                m.foreach { case (_, v) => deleteLocal(v) }
-            case WdlPair(left, right) =>
-                deleteLocal(left)
-                deleteLocal(right)
-            case _ =>
-                throw new Exception(s"Don't know how to delete a ${wdlValue} value")
-        }
-    }
-
     private def isDxFile(jsValue: JsValue): Boolean = {
         jsValue match {
             case JsObject(fields) =>
@@ -275,13 +247,19 @@ object WdlVarLinks {
                             s"dx:file ${jsv} is not found locally, it cannot be uploaded.")
                     case Some(path) => WdlSingleFile(path.toString)
                 }
+
             case (IODirection.Download, _) =>
                 LocalDxFiles.download(jsv, force)
+
             case (IODirection.Zero, JsString(path)) if path.startsWith(DX_URL_PREFIX) =>
                 val dxFile = DxPath.lookupDxURLFile(path)
-                WdlSingleFile(DxPath.dxFileToPath(dxFile))
+                WdlSingleFile(DxPath.dxFileToURL(dxFile))
+            case (IODirection.Zero, JsObject(_)) =>
+                val dxFile = dxFileFromJsValue(jsv)
+                WdlSingleFile(DxPath.dxFileToURL(dxFile))
+
             case (_,_) =>
-                throw new Exception(s"Cannot transfer ${jsv} in context ${ioDir}.")
+                throw new Exception(s"Cannot transfer ${jsv} in context ${ioDir}")
         }
     }
 

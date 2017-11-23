@@ -229,13 +229,16 @@ def run_workflow(project, test_folder, tname, wfId, delay_workspace_destruction)
                 analysis = workflow.run(project=project.get_id(),
                                         folder=test_folder,
                                         name="{} {}".format(desc.wf_name, git_revision),
-                                        delay_workspace_destruction=delay_workspace_destruction)
+                                        delay_workspace_destruction=delay_workspace_destruction,
+                                        instance_type="mem1_ssd1_x4")
             else:
                 analysis = workflow.run(inputs,
                                         project=project.get_id(),
                                         folder=test_folder,
                                         name="{} {}".format(desc.wf_name, git_revision),
-                                        delay_workspace_destruction=delay_workspace_destruction)
+                                        delay_workspace_destruction=delay_workspace_destruction,
+                                        instance_type="mem1_ssd1_x4")
+
             return analysis
         except Exception, e:
             print("exception message={}".format(e))

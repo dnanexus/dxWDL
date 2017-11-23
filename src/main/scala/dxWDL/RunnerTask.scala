@@ -93,8 +93,8 @@ private object RunnerTaskSerialization {
             case (t, WdlOptionalValue(_,Some(w))) =>
                 wdlToJSON(t, w)
 
-            // If the value is none then, it is a missing value
-            // What if the value is null?
+            // missing value
+            case (_, WdlOptionalValue(_,None)) => JsNull
 
             case (_,_) => throw new Exception(
                 s"""|Unsupported combination type=(${t.toWdlString},${t})
@@ -161,6 +161,8 @@ private object RunnerTaskSerialization {
                     case _ => throw new Exception(s"Malformed serialized par ${jsv}")
                 }
 
+            case (WdlOptionalType(t), JsNull) =>
+                WdlOptionalValue(t, None)
             case (WdlOptionalType(t), _) =>
                 wdlFromJSON(t, jsv)
 
@@ -190,75 +192,6 @@ private object RunnerTaskSerialization {
 
 case class RunnerTask(task:WdlTask,
                       cef: CompilerErrorFormatter) {
-
-    def taskEvalDeclarations(declarations: Seq[DeclarationInterface],
-                             envInputs : Map[String, WdlValue]) : Map[DeclarationInterface, WdlValue] = {
-        // Environment that includes a cache for values that have
-        // already been evaluated.  It is more efficient to make the
-        // conversion once, however, that is not the main point
-        // here. There are types that require special care, for
-        // example files. We need to make sure we download files
-        // exactly once, and later, we want to be able to delete them.
-        var env: Map[String, WdlValue] = envInputs
-
-        def lookup(varName : String) : WdlValue =
-            env.get(varName) match {
-                case Some(v) => v
-                case None => throw new UnboundVariableException(s"${varName}")
-            }
-
-        def evalAndCache(decl:DeclarationInterface,
-                         expr:WdlExpression) : WdlValue = {
-            appletLog(s"evaluating ${decl}")
-            val vRaw : WdlValue = expr.evaluate(lookup, DxFunctions).get
-            val w: WdlValue = Utils.cast(decl.wdlType, vRaw, decl.unqualifiedName)
-            env = env + (decl.unqualifiedName -> w)
-            w
-        }
-
-        def evalDecl(decl : DeclarationInterface) : WdlValue = {
-            (decl.wdlType, decl.expression) match {
-                // optional input
-                case (WdlOptionalType(t), None) =>
-                    envInputs.get(decl.unqualifiedName) match {
-                        case None => WdlOptionalValue(t, None)
-                        case Some(wdlValue) => wdlValue
-                    }
-
-                // compulsory input
-                case (_, None) =>
-                    envInputs.get(decl.unqualifiedName) match {
-                        case None =>
-                            throw new UnboundVariableException(s"${decl.unqualifiedName}")
-                        case Some(wdlValue) => wdlValue
-                    }
-
-                // declaration to evaluate, not an input
-                case (WdlOptionalType(t), Some(expr)) =>
-                    try {
-                        evalAndCache(decl, expr)
-                    } catch {
-                        // Trying to access an unbound variable. Since
-                        // the result is optional, we can just let it go.
-                        case e: UnboundVariableException =>
-                            WdlOptionalValue(t, None)
-                    }
-
-                case (t, Some(expr)) =>
-                    evalAndCache(decl, expr)
-            }
-        }
-
-        // Process all the declarations. Take care to add new bindings
-        // to the environment, so variables like [cmdline] will be able to
-        // access previous results.
-        val results = declarations.map{ decl =>
-            decl -> evalDecl(decl)
-        }.toMap
-        appletLog(s"Eval env=${env}")
-        results
-    }
-
     def getMetaDir() = {
         val metaDir = Utils.getMetaDirPath()
         Utils.safeMkdir(metaDir)
@@ -481,7 +414,7 @@ case class RunnerTask(task:WdlTask,
 
         // evaluate the declarations, and localize any files if necessary
         val env: Map[String, WdlValue] =
-            taskEvalDeclarations(task.declarations, envInput)
+            RunnerEval.evalDeclarations(task.declarations, envInput)
                 .map{ case (decl, v) => decl.unqualifiedName -> v}.toMap
         val docker = dockerImage(env)
 
@@ -526,7 +459,7 @@ case class RunnerTask(task:WdlTask,
         val env : Map[String, WdlValue] = readEnvFromDisk()
 
         // evaluate the output declarations.
-        val outputs: Map[DeclarationInterface, WdlValue] = taskEvalDeclarations(task.outputs, env)
+        val outputs: Map[DeclarationInterface, WdlValue] = RunnerEval.evalDeclarations(task.outputs, env)
 
         // Upload any output files to the platform.
         val wvlOutputs:Map[String, WdlVarLinks] = outputs.map{ case (decl, wdlValue) =>

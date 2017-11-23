@@ -53,6 +53,7 @@ import wdl4s.wdl._
 import wdl4s.wdl.expression._
 import wdl4s.parser.WdlParser.{Ast, Terminal}
 import wdl4s.wdl.values._
+import wdl4s.wdl.types._
 import wdl4s.wdl.WdlExpression.AstForExpressions
 
 case class RunnerMiniWorkflow(exportVars: Set[String],
@@ -91,6 +92,23 @@ case class RunnerMiniWorkflow(exportVars: Set[String],
         }.flatten
     }
 
+    private def wdlValueFromWVL(wvl: WdlVarLinks) : WdlValue =
+        WdlVarLinks.eval(wvl, false, IODirection.Zero)
+
+    private def wdlValueToWVL(t:WdlType, wdlValue:WdlValue) : WdlVarLinks =
+        WdlVarLinks.importFromWDL(t, DeclAttrs.empty, wdlValue, IODirection.Zero)
+
+    private def evalDeclarationsWVL(declarations: Seq[DeclarationInterface],
+                                    envInputs : Map[String, WdlVarLinks])
+            : Map[String, WdlVarLinks] = {
+        val inputs:Map[String, WdlValue] = envInputs.map{
+            case (key, wvl) => key -> wdlValueFromWVL(wvl)
+        }.toMap
+        val env = RunnerEval.evalDeclarations(declarations, inputs)
+        env.map { case (decl, wdlValue) =>
+            decl.unqualifiedName -> wdlValueToWVL(decl.wdlType, wdlValue)
+        }.toMap
+    }
 
     // Evaluate a call input expression, and return a WdlVarLink structure. It
     // is passed on to another dx:job.
@@ -113,8 +131,7 @@ case class RunnerMiniWorkflow(exportVars: Set[String],
                             throw new Exception(cef.expressionMustBeConstOrVar(expr))
                         }
                         val wdlValue = expr.evaluate(nullLookup, NoFunctions).get
-                        WdlVarLinks.importFromWDL(wdlValue.wdlType, DeclAttrs.empty, wdlValue,
-                                                  IODirection.Download)
+                        wdlValueToWVL(wdlValue.wdlType, wdlValue)
                 }
 
             case a: Ast if a.isMemberAccess =>
@@ -292,9 +309,7 @@ case class RunnerMiniWorkflow(exportVars: Set[String],
             appletLog(s"envWithIterItem= ${envWithIterItem}")
 
             // calculate declarations at the top of the block
-            val bValues = RunnerEval.evalDeclarations(topDecls, envWithIterItem, false, None,
-                                                      IODirection.Download)
-            var innerEnvRaw = bValues.map{ case(key, bVal) => key -> bVal.wvl }.toMap
+            var innerEnvRaw: Map[String, WdlVarLinks] = evalDeclarationsWVL(topDecls, envWithIterItem)
             val topOutputs = innerEnvRaw
                 .filter{ case (varName, _) => isExported(varName) }
                 .map{ case (varName, wvl) => varName -> ElemTop(wvl) }
@@ -328,22 +343,6 @@ case class RunnerMiniWorkflow(exportVars: Set[String],
                 childJobs = childJobs :+ dxJob
                 launchSeqNum += 1
             }
-
-            // Cleanup the index variable, and the temporary
-            // variables. They may be holding persistent resources. In
-            // particular, a file name is an important resource, if
-            // it is not removed, the name cannot be reused in the
-            // next loop iteration.
-            bValues.get(scatter.item) match {
-                case Some(iterElem: BValue) =>
-                    WdlVarLinks.deleteLocal(iterElem.wdlValue)
-                case None => ()
-            }
-            val tmpVars = bValues
-                .filter{ case (varName, bVal) => !isExported(varName) }
-                .map{ case (varName, bVal) => varName -> bVal.wdlValue }
-                .toMap
-            tmpVars.foreach{ case (_, wdlValue ) => WdlVarLinks.deleteLocal(wdlValue) }
         }
 
         // Gather phase.
@@ -388,8 +387,7 @@ case class RunnerMiniWorkflow(exportVars: Set[String],
         var allOutputs = Vector.empty[Env]
 
         // calculate declarations at the top of the block
-        val bValues = RunnerEval.evalDeclarations(topDecls, outerEnv, false, None, IODirection.Download)
-        val innerEnvRaw = bValues.map{ case(key, bVal) => key -> bVal.wvl }.toMap
+        val innerEnvRaw: Map[String, WdlVarLinks] = evalDeclarationsWVL(topDecls, outerEnv)
         val topOutputs = innerEnvRaw
             .filter{ case (varName, _) => isExported(varName) }
             .map{ case (varName, wvl) => varName -> ElemTop(wvl) }
@@ -462,9 +460,7 @@ case class RunnerMiniWorkflow(exportVars: Set[String],
         val exprDecls = decls.filter(decl => decl.expression != None)
 
         // evaluate the expressions, given the workflow inputs
-        val env:Map[String, BValue] = RunnerEval.evalDeclarations(exprDecls, inputs, false, None,
-                                                                  IODirection.Download)
-        env.map{ case (key, BValue(wvl,_)) => key -> wvl }.toMap
+        evalDeclarationsWVL(exprDecls, inputs)
     }
 
     // Split a workflow into the top declarations,
