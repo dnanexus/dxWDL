@@ -1,9 +1,11 @@
 import "library_math.wdl" as lib
 
 workflow math {
-    Array[Int] numbers
+    Array[Int]+ numbers
     Int ai
     Int bi
+
+    call lib.ArrayLength as aLen { input: ai=[] }
 
     # Conversion from Array[Int] to Array[Array[Int]]
     scatter (k in [2,3,5]) {
@@ -69,6 +71,7 @@ workflow math {
     Pair[Float,Int] p = (1.0, 19)
 
     output {
+        Int zero_len = aLen.result
         Int? invalid = false_branch
         Int x = int_ops3.mul
         Int y = int_ops3.sub

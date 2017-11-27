@@ -69,11 +69,15 @@ case class CompilerNative(dxWDLrtId: String,
                        "class" -> JsString(dxType))
                        ++ defaultVal)
         }
-        def mkPrimitiveArray(dxType: String) : Vector[Map[String, JsValue]] = {
-            Vector(Map("name" -> JsString(name),
-                       "class" -> JsString("array:" ++ dxType),
-                       "optional" -> JsBoolean(true))
-                       ++ defaultVal)
+        def mkPrimitiveArray(dxType: String, maybeEmpty:Boolean) : Vector[Map[String, JsValue]] = {
+            val m = Map("name" -> JsString(name),
+                        "class" -> JsString("array:" ++ dxType))
+            val opt = if (maybeEmpty) {
+                Map("optional" -> JsBoolean(true))
+            } else {
+                Map.empty[String, JsValue]
+            }
+            Vector(m ++ opt ++ defaultVal)
         }
         def mkComplex() : Vector[Map[String,JsValue]] = {
             // A large JSON structure passed as a hash, and a
@@ -85,6 +89,10 @@ case class CompilerNative(dxWDLrtId: String,
                        "class" -> JsString("array:file"),
                        "optional" -> JsBoolean(true)))
         }
+        def isPotentiallyEmpty(t: WdlType) : Boolean = t match {
+            case WdlMaybeEmptyArrayType(_) => true
+            case _ => false
+        }
         def nonOptional(t : WdlType) : Vector[Map[String, JsValue]] = {
             t match {
                 // primitive types
@@ -95,11 +103,16 @@ case class CompilerNative(dxWDLrtId: String,
                 case WdlFileType => mkPrimitive("file")
 
                 // single dimension arrays of primitive types
-                case WdlArrayType(WdlBooleanType) => mkPrimitiveArray("boolean")
-                case WdlArrayType(WdlIntegerType) => mkPrimitiveArray("int")
-                case WdlArrayType(WdlFloatType) => mkPrimitiveArray("float")
-                case WdlArrayType(WdlStringType) => mkPrimitiveArray("string")
-                case WdlArrayType(WdlFileType) => mkPrimitiveArray("file")
+                case WdlArrayType(WdlBooleanType) =>
+                    mkPrimitiveArray("boolean", isPotentiallyEmpty(t))
+                case WdlArrayType(WdlIntegerType) =>
+                    mkPrimitiveArray("int", isPotentiallyEmpty(t))
+                case WdlArrayType(WdlFloatType) =>
+                    mkPrimitiveArray("float", isPotentiallyEmpty(t))
+                case WdlArrayType(WdlStringType) =>
+                    mkPrimitiveArray("string", isPotentiallyEmpty(t))
+                case WdlArrayType(WdlFileType) =>
+                    mkPrimitiveArray("file", isPotentiallyEmpty(t))
 
                 // complex types, that may contains files
                 case _ => mkComplex()

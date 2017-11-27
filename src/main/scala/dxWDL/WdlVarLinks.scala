@@ -530,9 +530,10 @@ object WdlVarLinks {
     // Note: we need to represent dx-files as local paths, even if we
     // do not download them. This is because accessing these files
     // later on will cause a WDL failure.
-    def importFromDxExec(ioClass:IOClass,
-                         attrs:DeclAttrs,
-                         jsValue: JsValue) : WdlVarLinks = {
+    private [dxWDL] def importFromDxExec(ioClass:IOClass,
+                                         attrs:DeclAttrs,
+                                         jsValue: JsValue) : WdlVarLinks = {
+        appletLog(s"importFromDxExec ioClass=${ioClass} js=${jsValue}")
         val (wdlType, jsv) = ioClass match {
             case IOClass.BOOLEAN => (WdlBooleanType, jsValue)
             case IOClass.INT => (WdlIntegerType, jsValue)
@@ -723,15 +724,38 @@ object WdlVarLinks {
     // to links that can be passed to other applets.
     def loadJobInputsAsLinks(inputLines: String,
                              inputSpec:Map[String, IOClass]): Map[String, WdlVarLinks] = {
+        def isArrayIOClass(ioClass:IOClass) : Boolean = ioClass match {
+            case IOClass.ARRAY_OF_BOOLEANS => true
+            case IOClass.ARRAY_OF_INTS => true
+            case IOClass.ARRAY_OF_FLOATS => true
+            case IOClass.ARRAY_OF_STRINGS => true
+            case IOClass.ARRAY_OF_FILES => true
+            case _ => false
+        }
+
         // Discard auxiliary fields
         val jsonAst : JsValue = inputLines.parseJson
         val fields : Map[String, JsValue] = jsonAst
             .asJsObject.fields
             .filter{ case (fieldName,_) => !fieldName.endsWith(FLAT_FILES_SUFFIX) }
 
+        // Some inputs could be missing. We want to convert
+        // a missing input array to an empty array instead.
+        //
+        // This is like DNAx semantics, but not exactly WDL. If a task has
+        // array input A, and it is called without A, then, the callee will
+        // see A=[], instead of A=null.
+        val missingFields = inputSpec.foldLeft(Map.empty[String, JsValue]) {
+            case (accu, (key, ioClass)) if isArrayIOClass(ioClass) =>
+                fields.get(key) match {
+                    case None => accu + (key -> JsArray(Vector.empty))
+                    case Some(v) => accu
+                }
+            case (accu, (key, ioClass)) => accu
+        }
+
         // Create a mapping from each key to its WDL value,
-        // ignore all untyped fields.
-        fields.map { case (key,jsValue) =>
+        (fields ++ missingFields).map { case (key,jsValue) =>
             val ioClass = inputSpec.get(key) match {
                 case Some(x) => x
                 case None => throw new Exception(s"Key ${key} has no IO specification")

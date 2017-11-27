@@ -38,11 +38,21 @@ object RunnerEval {
         // exactly once, and later, we want to be able to delete them.
         var env: Map[String, WdlValue] = envInputs
 
-        def lookup(varName : String) : WdlValue =
-            env.get(varName) match {
-                case Some(v) => v
-                case None => throw new UnboundVariableException(s"${varName}")
-            }
+        def lookup(varName : String) : WdlValue = env.get(varName) match {
+            case Some(v) => v
+            case None =>
+                // A value for this variable has not been passed. Check if it
+                // is optional.
+                val varDefinition = declarations.find(_.unqualifiedName == varName) match {
+                    case Some(x) => x
+                    case None => throw new Exception(
+                        s"Cannot find declaration for variable ${varName}")
+                }
+                varDefinition.wdlType match {
+                    case WdlOptionalType(t) => WdlOptionalValue(t, None)
+                    case _ =>  throw new UnboundVariableException(s"${varName}")
+                }
+        }
 
         def evalAndCache(decl:DeclarationInterface,
                          expr:WdlExpression) : WdlValue = {
@@ -70,18 +80,13 @@ object RunnerEval {
                         case Some(wdlValue) => wdlValue
                     }
 
-                // declaration to evaluate, not an input
-                case (WdlOptionalType(t), Some(expr)) =>
-                    try {
-                        evalAndCache(decl, expr)
-                    } catch {
-                        // Trying to access an unbound variable. Since
-                        // the result is optional, we can just let it go.
-                        case e: UnboundVariableException =>
-                            WdlOptionalValue(t, None)
-                    }
+                case (_, Some(expr)) if (envInputs contains decl.unqualifiedName) =>
+                    // An overriding value was provided, use it instead
+                    // of evaluating the right hand expression
+                    envInputs(decl.unqualifiedName)
 
-                case (t, Some(expr)) =>
+                case (_, Some(expr)) =>
+                    // declaration to evaluate, not an input
                     evalAndCache(decl, expr)
             }
         }

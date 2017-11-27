@@ -53,7 +53,7 @@ medium_test_list = [
 
 # Tests with the reorg flags
 test_reorg=["files", "math"]
-test_defaults=[]   #["files", "math"]
+test_defaults=["files", "math"]
 
 TestDesc = namedtuple('TestDesc', 'wf_name wdl_source wdl_input dx_input results')
 
@@ -222,23 +222,18 @@ def run_workflow(project, test_folder, tname, wfId, delay_workspace_destruction)
     def once():
         try:
             desc = test_files[tname]
-            inputs = read_json_file_maybe_empty(desc.dx_input)
+            if tname in test_defaults:
+                inputs = {}
+            else:
+                inputs = read_json_file_maybe_empty(desc.dx_input)
             workflow = dxpy.DXWorkflow(project=project.get_id(), dxid=wfId)
             project.new_folder(test_folder, parents=True)
-            if tname in test_defaults:
-                analysis = workflow.run(project=project.get_id(),
-                                        folder=test_folder,
-                                        name="{} {}".format(desc.wf_name, git_revision),
-                                        delay_workspace_destruction=delay_workspace_destruction,
-                                        instance_type="mem1_ssd1_x4")
-            else:
-                analysis = workflow.run(inputs,
-                                        project=project.get_id(),
-                                        folder=test_folder,
-                                        name="{} {}".format(desc.wf_name, git_revision),
-                                        delay_workspace_destruction=delay_workspace_destruction,
-                                        instance_type="mem1_ssd1_x4")
-
+            analysis = workflow.run(inputs,
+                                    project=project.get_id(),
+                                    folder=test_folder,
+                                    name="{} {}".format(desc.wf_name, git_revision),
+                                    delay_workspace_destruction=delay_workspace_destruction,
+                                    instance_type="mem1_ssd1_x4")
             return analysis
         except Exception, e:
             print("exception message={}".format(e))
