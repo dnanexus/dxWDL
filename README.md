@@ -1,7 +1,7 @@
 # dxWDL
 
 dxWDL takes a bioinformatics pipeline written in
-[Workflow Definition Language](http://www.openwdl.org/)
+[Workflow Description Language](http://www.openwdl.org/)
 and compiles it to an equivalent workflow on the DNAnexus platform.
 
 
