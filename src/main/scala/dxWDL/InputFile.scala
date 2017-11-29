@@ -113,7 +113,8 @@ case class InputFile(verbose: Utils.Verbose) {
         def addDefaultsToWorkflowInputs(inputs:Vector[(CVar, SArg)],
                                         wfName:String) : Vector[(CVar, SArg)] = {
             inputs.map { case (cVar, sArg) =>
-                val fqn = s"${wfName}.${cVar.name}"
+                val basename = cVar.name.replaceAll("___", ".")
+                val fqn = s"${wfName}.${basename}"
                 val sArgDflt = defaults.fields.get(fqn) match {
                     case None => sArg
                     case Some(dflt:JsValue) =>
@@ -203,7 +204,9 @@ case class InputFile(verbose: Utils.Verbose) {
         }
 
         wf.inputs.foreach { case (cVar, sArg) =>
-            val fqn = s"${wf.name}.${cVar.name}"
+            // proxy inputs, created for unbound call inputs contain '___'
+            val basename = cVar.name.replaceAll("___", ".")
+            val fqn = s"${wf.name}.${basename}"
             val dxName = s"${cVar.name}"
             checkAndBind(fqn, dxName, cVar)
         }

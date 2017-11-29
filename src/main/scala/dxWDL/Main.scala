@@ -496,11 +496,11 @@ object Main extends App {
         // Assuming the source file is xxx.wdl, the new name will
         // be xxx.sorted.wdl.
         val nsSorted1 = CompilerTopologicalSort.apply(orgNs, cOpt.sortMode, bOpt.verbose)
-        val nsSorted = washNamespace(nsSorted1, "sorted", cState)
+        washNamespace(nsSorted1, "sorted", cState)
 
         // Simplify the original workflow, for example,
         // convert call arguments from expressions to variables.
-        val nsExpr1 = CompilerSimplifyExpr.apply(nsSorted, bOpt.verbose)
+        val nsExpr1 = CompilerSimplifyExpr.apply(orgNs, bOpt.verbose)
         val nsExpr = washNamespace(nsExpr1, "simplified", cState)
 
         // Reorganize the declarations, to minimize the number of

@@ -308,8 +308,8 @@ object Utils {
         DXJob.getInstance(id)
     }
 
-        // dx does not allow dots in variable names, so we
-        // convert them to underscores.
+    // dx does not allow dots in variable names, so we
+    // convert them to underscores.
     def transformVarName(varName: String) : String = {
         varName.replaceAll("\\.", "_")
     }
@@ -320,10 +320,6 @@ object Utils {
     def encodeAppletVarName(varName : String) : String = {
         // Make sure the variable does not already have the "___"
         // sequence.
-        reservedSubstrings.foreach{ s =>
-            if (varName contains s)
-                throw new Exception(s"Variable ${varName} includes the reserved substring ${s}")
-        }
         if (varName contains ".")
             throw new Exception(s"Variable ${varName} includes the illegal symbol \\.")
         varName
@@ -371,12 +367,7 @@ object Utils {
     }
 
     def callUniqueName(call : WdlCall) : String = {
-        val retval = call.alias match {
-            case Some(x) => x
-            case None => Utils.taskOfCall(call).name
-        }
-        assert(retval == call.unqualifiedName)
-        retval
+        call.unqualifiedName
     }
 
 

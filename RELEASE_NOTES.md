@@ -13,8 +13,8 @@ dx run foo -iN=19
 
 - Revamp the conversions between dx:file and wdl:file. This allows
 specifying dx files in defaults.
-- Initial support for non-empty WDL arrays (Array[Int]+)
-
+- Initial support for non-empty WDL array types, for example `Array[String]+`.
+- Improved handling of optional values
 
 ## 0.51
 - Adding a `-quiet` flag to suppress warning and informational
