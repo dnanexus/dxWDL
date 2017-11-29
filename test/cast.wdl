@@ -47,11 +47,6 @@ workflow cast {
     # Handling of empty arrays as input/output
     call EmptyArray { input: fooAr=[] }
 
-    # WDL does not automatically cast from type T to Array[T]
-    #Array[Int] iArr2 = i
-    #Array[String] sArr2 = s
-    #Array[File] fooArr2 = foo
-
     call lib_file.FileIdent as FileIdent { input: aF = foo }
     File foo2 = FileIdent.result
     Array[File] fArr2 = [foo2]
@@ -59,11 +54,7 @@ workflow cast {
     call lib.Add as Add { input: a=i, b=i }
     call SumArray {input: ints=iArr }
 
-    # WDL casts an Int to an Array[Int] automatically
-    # when it is a call argument
-    #Array[Int] ytmp1 = [i]
-    Int ytmp1 = i
-    call SumArray as SumArray2 {input: ints=ytmp1 }
+    call SumArray as SumArray2 {input: ints=[i] }
 
     # Check various rarely used types (float, boolean)
     Boolean b = true

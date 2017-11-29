@@ -208,6 +208,34 @@ workflow foo {
 }
 ```
 
+WDL allows leaving required call inputs unassigned, and
+specifying them from the input file. For example, workflow `math`
+calls task `add`, but does not specify argument `b`. It can then
+be specified from the input file as follows: `{ "math.add.b" : 3}`.
+
+```
+task add {
+    Int a
+    Int b
+    output {
+        Int result = a + b
+    }
+}
+
+workflow math {
+    call add { input: a = 3 }
+    output {
+       add.result
+    }
+}
+```
+
+The dx:workflow that is compiled from `math` can set this variable from
+the command line as follows:
+```
+dx run math -iadd___b=5
+```
+
 ## Calling existing applets
 
 Sometimes, it is desirable to call an existing dx:applet from a WDL
