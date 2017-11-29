@@ -84,6 +84,15 @@ object WdlVarLinks {
             YamlString(key) -> YamlString(value))
     }
 
+    def getRawJsValue(wvl: WdlVarLinks) : JsValue = {
+        wvl.dxlink match {
+            case DxlValue(jsn) => jsn
+            case _ =>
+                throw new AppInternalException(
+                    s"Unsupported conversion from ${wvl.dxlink} to WdlValue")
+        }
+    }
+
     private def isDxFile(jsValue: JsValue): Boolean = {
         jsValue match {
             case JsObject(fields) =>
@@ -113,6 +122,11 @@ object WdlVarLinks {
             case JsArray(elems) =>
                 elems.map(e => findDxFiles(e)).flatten
         }
+    }
+
+    // find all dx:files referenced from the variable
+    def findDxFiles(wvl: WdlVarLinks) : Vector[DXFile] = {
+        findDxFiles(getRawJsValue(wvl))
     }
 
     // Get the file-id
@@ -318,15 +332,6 @@ object WdlVarLinks {
         }
     }
 
-    def getRawJsValue(wvl: WdlVarLinks) : JsValue = {
-        wvl.dxlink match {
-            case DxlValue(jsn) => jsn
-            case _ =>
-                throw new AppInternalException(
-                    s"Unsupported conversion from ${wvl.dxlink} to WdlValue")
-        }
-    }
-
     // Calculate a WdlValue from the dx-links structure. If [force] is true,
     // any files included in the structure will be downloaded.
     def eval(wvl: WdlVarLinks,
@@ -340,6 +345,7 @@ object WdlVarLinks {
     def localize(wvl:WdlVarLinks, force:Boolean) : WdlValue = {
         eval(wvl, force, IODirection.Download)
     }
+
 
     // The reason we need a special method for unpacking an array (or a map),
     // is because we DO NOT want to evaluate the sub-structures. The trouble is
@@ -533,7 +539,7 @@ object WdlVarLinks {
     private [dxWDL] def importFromDxExec(ioClass:IOClass,
                                          attrs:DeclAttrs,
                                          jsValue: JsValue) : WdlVarLinks = {
-        appletLog(s"importFromDxExec ioClass=${ioClass} js=${jsValue}")
+        //appletLog(s"importFromDxExec ioClass=${ioClass} js=${jsValue}")
         val (wdlType, jsv) = ioClass match {
             case IOClass.BOOLEAN => (WdlBooleanType, jsValue)
             case IOClass.INT => (WdlIntegerType, jsValue)

@@ -912,36 +912,24 @@ workflow w {
          applet)
     }
 
-    // Create an applet to reorganize the output files. We want
-    // to move the intermediate results to a subdirectory.
-    //
-    // Tricky parts:
-    // 1) It needs to process all the workflow outputs, to find the files
-    //    that belong to the final results.
-    // 2) The workflow must wait for the reorg to complete. To achieve
-    //    this, we return the inputs as outputs. The workflow as a whole
-    //    waits on the reorg applet outputs.
+    // Create an applet to reorganize the output files. We want to
+    // move the intermediate results to a subdirectory.  The applet
+    // needs to process all the workflow outputs, to find the files
+    // that belong to the final results.
     private def createReorgApplet(wfUnqualifiedName: String,
                                   wfOutputs: Vector[(CVar, SArg)]) : (IR.Stage, IR.Applet) = {
         val appletName = wfUnqualifiedName ++ "_reorg"
         trace(verbose.on, s"Compiling output reorganization applet ${appletName}")
 
         val inputVars: Vector[IR.CVar] = wfOutputs.map{ case (cVar, _) => cVar }
-        val outputVars: Vector[IR.CVar] = inputVars
+        val outputVars= Vector.empty[IR.CVar]
         val inputDecls: Vector[Declaration] = wfOutputs.map{ case(cVar, _) =>
             WdlRewrite.declaration(cVar.wdlType, cVar.dxVarName, None)
         }.toVector
 
-        // The outputs are equal to the inputs
-        val outputDecls: Vector[WorkflowOutput] = wfOutputs.map{ case (cVar, _) =>
-            WdlRewrite.workflowOutput(cVar.dxVarName,
-                                      cVar.wdlType,
-                                      WdlExpression.fromString(cVar.dxVarName))
-        }
-
         // Create a workflow with no calls.
         val code:WdlWorkflow = WdlRewrite.workflowGenEmpty("w")
-        code.children = inputDecls ++ outputDecls
+        code.children = inputDecls
 
         // We need minimal compute resources, use the default instance type
         val applet = IR.Applet(appletName,

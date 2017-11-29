@@ -539,7 +539,8 @@ case class CompilerNative(dxWDLrtId: String,
             "outputSpec" -> JsArray(outputSpec),
             "runSpec" -> runSpec,
             "dxapi" -> JsString("1.0.0"),
-            "access" -> access
+            "access" -> access,
+            "tags" -> JsArray(JsString("dxWDL"))
         )
     }
 
@@ -761,11 +762,16 @@ case class CompilerNative(dxWDLrtId: String,
                            "properties" -> JsObject(CHECKSUM_PROP -> JsString(digest)),
                            "stages" -> JsArray(stagesReq),
                            "inputs" -> JsArray(wfInputSpec),
-                           "outputs" -> JsArray(wfOutputSpec))
+                           "outputs" -> JsArray(wfOutputSpec),
+                           "tags" -> JsArray(JsString("dxWDL")))
 
         val rep = DXAPI.workflowNew(jsonNodeOfJsValue(req), classOf[JsonNode])
         val id = apiParseReplyID(rep)
-        DXWorkflow.getInstance(id)
+        val dxWf = DXWorkflow.getInstance(id)
+
+        // close the workflow
+        dxWf.close()
+        dxWf
     }
 
     // Compile an entire workflow

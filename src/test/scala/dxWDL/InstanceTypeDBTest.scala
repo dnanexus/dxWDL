@@ -9,16 +9,16 @@ class InstaceTypeDBTest extends FlatSpec with BeforeAndAfterEach with OneInstanc
         val db = InstanceTypeDB.genTestDB(false)
 
         // parameters are:          RAM,     disk,     cores
-        assert(db.choose(None, None, None, None) == "mem1_ssd1_x2")
+        assert(db.choose3Attr(None, None, None) == "mem1_ssd1_x2")
     }
 
     it should "Choose reasonable platform instance types" in {
         // parameters are:          RAM,     disk,     cores
         val db = InstanceTypeDB.genTestDB(true)
-        assert(db.choose(None, None, None, None) == "mem1_ssd1_x2")
-        assert(db.choose(None, Some(3*1024), Some(100), Some(5)) == "mem1_ssd1_x8")
-        assert(db.choose(None, Some(2*1024), Some(20), None) == "mem1_ssd1_x2")
-        assert(db.choose(None, Some(30*1024), Some(128), Some(8)) == "mem3_ssd1_x8")
+        assert(db.choose3Attr(None, None, None) == "mem1_ssd1_x2")
+        assert(db.choose3Attr(Some(3*1024), Some(100), Some(5)) == "mem1_ssd1_x8")
+        assert(db.choose3Attr(Some(2*1024), Some(20), None) == "mem1_ssd1_x2")
+        assert(db.choose3Attr(Some(30*1024), Some(128), Some(8)) == "mem3_ssd1_x8")
 
         assert(db.apply(None,
                         Some(WdlString("3 GB")),

@@ -89,8 +89,8 @@ object RunnerWorkflowOutputReorg {
     }
 
     // Move all intermediate results to a sub-folder
-    def moveIntermediateResultFiles(dxEnv: DXEnvironment,
-                                    outputFields: Map[String, JsValue]) : Unit = {
+    def moveIntermediateResultFiles(exportFiles: Vector[DXFile]): Unit = {
+        val dxEnv = DXEnvironment.create()
         val dxProject = dxEnv.getProjectContext()
         val dxProjDesc = dxProject.describe
         val dxAnalysis = dxEnv.getJob.describe.getAnalysis
@@ -103,10 +103,6 @@ object RunnerWorkflowOutputReorg {
         if (analysisFiles.isEmpty)
             return
 
-        // find all the object IDs that should be exported
-        val exportFiles: Vector[DXFile] = outputFields.map{ case (key, jsn) =>
-            WdlVarLinks.findDxFiles(jsn)
-        }.toVector.flatten
         val exportIds:Set[String] = exportFiles.map(_.getId).toSet
         val exportNames:Seq[String] = bulkGetFilenames(exportFiles, dxProject)
         appletLog(s"exportFiles=${exportNames}")
@@ -145,19 +141,17 @@ object RunnerWorkflowOutputReorg {
     def apply(wf: WdlWorkflow,
               inputSpec: Map[String, IOClass],
               outputSpec: Map[String, IOClass],
-              inputs: Map[String, WdlVarLinks]) : Map[String, JsValue] = {
-        appletLog(s"Initial inputs=\n${prettyPrint(inputs)}")
+              wfInputs: Map[String, WdlVarLinks]) : Map[String, JsValue] = {
+        appletLog(s"Initial inputs=\n${prettyPrint(wfInputs)}")
 
-        // pass through the inputs
-        val outputFields: Map[String, JsValue] = inputs.map {
-            case (varName, wvl) =>
-                WdlVarLinks.genFields(wvl, varName)
-        }.flatten.toMap
+        val wfOutputFiles: Vector[DXFile] = wfInputs.map{ case (_, wvl) =>
+            WdlVarLinks.findDxFiles(wvl)
+        }.toVector.flatten
 
         // Reorganize directory structure
-        val dxEnv = DXEnvironment.create()
-        moveIntermediateResultFiles(dxEnv, outputFields)
+        moveIntermediateResultFiles(wfOutputFiles)
 
-        outputFields
+        // empty results
+        Map.empty[String, JsValue]
     }
 }

@@ -32,7 +32,6 @@ case class CompilerReorgDecl(ns: WdlNamespace, verbose: Utils.Verbose) {
                 }
             case call:WdlCall => Set(call.fullyQualifiedName)
             case decl:Declaration => Set(decl.fullyQualifiedName)
-            case wfo:WorkflowOutput => Set(wfo.fullyQualifiedName)
             case x =>
                 throw new Exception(cef.notCurrentlySupported(
                                         x.ast,
@@ -197,7 +196,6 @@ case class CompilerReorgDecl(ns: WdlNamespace, verbose: Utils.Verbose) {
                 (cond2, blk.definedVars)
             case call:WdlCall => (call, definedVars ++ definitions(call))
             case decl:Declaration => (decl, definedVars ++ definitions(decl))
-            case wfo:WorkflowOutput => (wfo, definedVars ++ definitions(wfo))
             case x =>
                 throw new Exception(cef.notCurrentlySupported(
                                         x.ast,
@@ -206,8 +204,12 @@ case class CompilerReorgDecl(ns: WdlNamespace, verbose: Utils.Verbose) {
     }
 
     def reorgWorkflow(wf: WdlWorkflow) : WdlWorkflow = {
-        val blk = reorgBlock(wf, wf.children, Set.empty)
-        WdlRewrite.workflow(wf, blk.children)
+        // split out the workflow outputs
+        val wfProper = wf.children.filter(x => !x.isInstanceOf[WorkflowOutput])
+        val wfOutputs :Vector[WorkflowOutput] = wf.outputs.toVector
+
+        val blk = reorgBlock(wf, wfProper, Set.empty)
+        WdlRewrite.workflow(wf, blk.children ++ wfOutputs)
     }
 
     def apply : WdlNamespace = {

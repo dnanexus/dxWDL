@@ -314,12 +314,8 @@ object Utils {
         varName.replaceAll("\\.", "_")
     }
 
-    // Dots are illegal in applet variable names. For example,
-    // "Add.sum" must be encoded. As a TEMPORARY hack, we convert
-    // dots into "___".
+    // Dots are illegal in applet variable names.
     def encodeAppletVarName(varName : String) : String = {
-        // Make sure the variable does not already have the "___"
-        // sequence.
         if (varName contains ".")
             throw new Exception(s"Variable ${varName} includes the illegal symbol \\.")
         varName
