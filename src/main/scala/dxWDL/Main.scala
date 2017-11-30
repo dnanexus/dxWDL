@@ -495,12 +495,12 @@ object Main extends App {
         // Additionally perform check for cycles in the workflow
         // Assuming the source file is xxx.wdl, the new name will
         // be xxx.sorted.wdl.
-        CompilerTopologicalSort.apply(orgNs, cOpt.sortMode, bOpt.verbose)
-        //val nsSorted = washNamespace(nsSorted1, "sorted", cState)
+        val nsSorted = CompilerTopologicalSort.apply(orgNs, cOpt.sortMode, bOpt.verbose)
+        val nsSorted1 = washNamespace(nsSorted, "sorted", cState)
 
         // Simplify the original workflow, for example,
         // convert call arguments from expressions to variables.
-        val nsExpr1 = CompilerSimplifyExpr.apply(orgNs, bOpt.verbose)
+        val nsExpr1 = CompilerSimplifyExpr.apply(nsSorted1, bOpt.verbose)
         val nsExpr = washNamespace(nsExpr1, "simplified", cState)
 
         // Reorganize the declarations, to minimize the number of
@@ -513,8 +513,7 @@ object Main extends App {
         // mangles the outputs, which is why we pass the originals
         // unmodified.
         val cef = new CompilerErrorFormatter(ns.terminalMap)
-        var irNs = CompilerIR(getWorkflowOutputs(ns, cState.verbose),
-                              bOpt.folder, instanceTypeDB, cef,
+        var irNs = CompilerIR(bOpt.folder, instanceTypeDB, cef,
                               cOpt.reorg, bOpt.verbose).apply(ns)
 
         irNs = cOpt.defaults match {

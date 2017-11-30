@@ -15,8 +15,7 @@ import wdl4s.wdl.types._
 import wdl4s.wdl.values._
 import wdl4s.wdl.WdlExpression.AstForExpressions
 
-case class CompilerIR(gWorkflowOutputs: Option[Seq[WorkflowOutput]],
-                      destination: String,
+case class CompilerIR(destination: String,
                       instanceTypeDB: InstanceTypeDB,
                       cef: CompilerErrorFormatter,
                       reorg: Boolean,
@@ -400,10 +399,12 @@ workflow w {
     }
 
     //  1) Assert that there are no calculations in the outputs
-    //  2) Figure out from gWorkflowOutputs the output cVars and sArgs.
+    //  2) Figure out from the output cVars and sArgs.
     //
-    private def prepareOutputSection(env: CallEnv) : Vector[(CVar, SArg)] = {
-        gWorkflowOutputs match {
+    private def prepareOutputSection(env: CallEnv,
+                                     wfOutputs: Option[Seq[WorkflowOutput]])
+            : Vector[(CVar, SArg)] = {
+        wfOutputs match {
             case None =>
                 Vector.empty
             case Some(outputs) => outputs.map { wot =>
@@ -1049,7 +1050,7 @@ workflow w {
             accu :+ (stage,appletOpt)
         }
 
-        val wfOutputs = prepareOutputSection(env)
+        val wfOutputs = prepareOutputSection(env, Some(wf.outputs))
 
         // Add a reorganization applet if requested
         val allStageInfoWithReorg: Vector[(IR.Stage, Option[IR.Applet])] =

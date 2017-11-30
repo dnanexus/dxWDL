@@ -770,7 +770,12 @@ case class CompilerNative(dxWDLrtId: String,
         val dxWf = DXWorkflow.getInstance(id)
 
         // close the workflow
-        dxWf.close()
+        try {
+            dxWf.close()
+        } catch {
+            case e: Throwable =>
+                warning(verbose, e.getMessage)
+        }
         dxWf
     }
 
