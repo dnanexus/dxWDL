@@ -767,16 +767,7 @@ case class CompilerNative(dxWDLrtId: String,
 
         val rep = DXAPI.workflowNew(jsonNodeOfJsValue(req), classOf[JsonNode])
         val id = apiParseReplyID(rep)
-        val dxWf = DXWorkflow.getInstance(id)
-
-        // close the workflow
-        try {
-            dxWf.close()
-        } catch {
-            case e: Throwable =>
-                warning(verbose, e.getMessage)
-        }
-        dxWf
+        DXWorkflow.getInstance(id)
     }
 
     // Compile an entire workflow
