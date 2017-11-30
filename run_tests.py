@@ -52,7 +52,7 @@ medium_test_list = [
 ]
 
 # Tests with the reorg flags
-test_reorg=["files", "math", "X"]
+test_reorg=["files", "math"]
 test_defaults=["files", "math"]
 
 TestDesc = namedtuple('TestDesc', 'wf_name wdl_source wdl_input dx_input results')

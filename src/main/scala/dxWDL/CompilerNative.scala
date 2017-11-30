@@ -639,7 +639,7 @@ case class CompilerNative(dxWDLrtId: String,
                                               DxlStage(dxStage, IORef.Output, argName.dxVarName))
                         val fields = genFieldsCastIfRequired(wvl, argName.wdlType, cVar)
                         m ++ fields.toMap
-                    case IR.SArgWorkflowInput(argName) =>
+                    case IR.SArgWorkflowInput(argName, _) =>
                         val wvl = WdlVarLinks(cVar.wdlType,
                                               cVar.attrs,
                                               DxlWorkflowInput(argName.dxVarName))
@@ -660,7 +660,7 @@ case class CompilerNative(dxWDLrtId: String,
                                stageDict: Map[String, DXWorkflowStage]): Vector[JsValue] = {
         // deal with default values
         val attrs:DeclAttrs = sArg match {
-            case IR.SArgWorkflowInput(_) =>
+            case IR.SArgWorkflowInput(_, _) =>
                 // input is provided by the user
                 DeclAttrs.empty
             case IR.SArgConst(wdlValue) =>
@@ -705,7 +705,7 @@ case class CompilerNative(dxWDLrtId: String,
                                       cVar.attrs,
                                       DxlStage(dxStage, IORef.Output, argName.dxVarName))
                 genFieldsCastIfRequired(wvl, argName.wdlType, cVar)
-            case IR.SArgWorkflowInput(argName: CVar) =>
+            case IR.SArgWorkflowInput(argName: CVar, _) =>
                 val wvl = WdlVarLinks(cVar.wdlType,
                                       cVar.attrs,
                                       DxlWorkflowInput(argName.dxVarName))

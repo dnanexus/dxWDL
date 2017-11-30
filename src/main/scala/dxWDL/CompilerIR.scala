@@ -566,8 +566,7 @@ workflow w {
                         // This is an applet optional input, we don't have to supply it
                         IR.SArgEmpty
                     } else {
-                        // A compulsory input. Print a warning, the user may wish to supply
-                        // it at runtime.
+                        // A missing compulsory input
                         val msg = s"""|Workflow doesn't supply required input ${cVar.name}
                                       |to call ${call.unqualifiedName}
                                       |""".stripMargin.replaceAll("\n", " ")
@@ -982,6 +981,11 @@ workflow w {
             case decl:Declaration =>
                 val cVar = CVar(decl.unqualifiedName, decl.wdlType, DeclAttrs.empty, decl.ast)
                 val sArg = decl.expression match {
+                    case None if (cVar.name contains "___") =>
+                        // An artificial input, to allow providing a value
+                        // for an internal call argument
+                        val originalFqn = cVar.name.replaceAll("___", ".")
+                        IR.SArgWorkflowInput(cVar, Some(originalFqn))
                     case None =>
                         // a default value is not provided, this is a workflow input
                         IR.SArgWorkflowInput(cVar)

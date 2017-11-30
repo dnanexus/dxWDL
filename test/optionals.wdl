@@ -11,6 +11,10 @@ workflow optionals {
     Int b
     Boolean? flag
 
+    # Missing compulsory argument, should be added as
+    # an artifical workflow input
+    call lib.Inc as inc
+
     call lib_str.ConcatArray as concatArr {
         input: words = sa
     }
@@ -47,6 +51,7 @@ workflow optionals {
         Array[Int] series=[x,1]
     }
     output {
+        inc.result
         concatArr.result
         concat.result
         mi2.result
