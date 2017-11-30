@@ -9,13 +9,11 @@ and compiles it to an equivalent workflow on the DNAnexus platform.
 <a href="https://travis-ci.org/dnanexus-rnd/dxWDL"><img src="https://travis-ci.org/dnanexus-rnd/dxWDL.svg?branch=master"/></a>
 
 dxWDL provides a reasonably complete set of WDL features for beta
-testing, in particular enabling the [GATK best practices pipeline](https://github.com/openwdl/wdl/blob/master/scripts/broad_pipelines/germline-short-variant-discovery/gvcf-generation-per-sample/1.0.0/GOTC_PairedEndSingleSampleWf.wdl).
-A few significant WDL features are not yet supported, but may be
+testing. A few significant WDL features are not yet supported, but may be
 added according to user interest:
 
 - Nested workflows (sub-workflows)
 - Nested scatters, and conditionals nested in scatters
-- Expressions in workflow output section
 
 *Use at your own risk:* for the time being, dxWDL is an exploratory
  tool NOT covered by DNAnexus service and support agreements. We
