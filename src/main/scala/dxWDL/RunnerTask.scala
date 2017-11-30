@@ -18,18 +18,180 @@ task Add {
 
 package dxWDL
 
-import com.dnanexus.{DXJob}
+import com.dnanexus.{DXJob, IOClass}
 import java.nio.file.{Path, Paths}
 import scala.collection.mutable.HashMap
 import spray.json._
-import Utils.{appletLog, DX_URL_PREFIX}
+import Utils.{appletLog, DX_URL_PREFIX, RUNNER_TASK_ENV_FILE}
+import wdl4s.wdl.{Declaration, DeclarationInterface, WdlExpression, WdlTask}
 import wdl4s.wdl.values._
-import wdl4s.wdl.{Declaration, WdlExpression, WdlTask}
+import wdl4s.wdl.types._
+
+private object RunnerTaskSerialization {
+    // Serialization of a WDL value to JSON
+    private def wdlToJSON(t:WdlType, w:WdlValue) : JsValue = {
+        (t, w)  match {
+            // Base case: primitive types.
+            // Files are encoded as their full path.
+            case (WdlBooleanType, WdlBoolean(b)) => JsBoolean(b)
+            case (WdlIntegerType, WdlInteger(n)) => JsNumber(n)
+            case (WdlFloatType, WdlFloat(x)) => JsNumber(x)
+            case (WdlStringType, WdlString(s)) => JsString(s)
+            case (WdlStringType, WdlSingleFile(path)) => JsString(path)
+            case (WdlFileType, WdlSingleFile(path)) => JsString(path)
+            case (WdlFileType, WdlString(path)) => JsString(path)
+
+            // arrays
+            // Base case: empty array
+            case (_, WdlArray(_, ar)) if ar.length == 0 =>
+                JsArray(Vector.empty)
+
+            // Non empty array
+            case (WdlArrayType(t), WdlArray(_, elems)) =>
+                val jsVals = elems.map(e => wdlToJSON(t, e))
+                JsArray(jsVals.toVector)
+
+            // Maps. These are projections from a key to value, where
+            // the key and value types are statically known.
+            //
+            // keys are strings, we can use JSON objects
+            case (WdlMapType(WdlStringType, valueType), WdlMap(_, m)) =>
+                JsObject(m.map{
+                         case (WdlString(k), v) =>
+                             k -> wdlToJSON(valueType, v)
+                         case (k,_) =>
+                             throw new Exception(s"key ${k.toWdlString} should be a WdlStringType")
+                     }.toMap)
+
+            // general case, the keys are not strings.
+            case (WdlMapType(keyType, valueType), WdlMap(_, m)) =>
+                val keys:WdlValue = WdlArray(WdlArrayType(keyType), m.keys.toVector)
+                val kJs = wdlToJSON(keys.wdlType, keys)
+                val values:WdlValue = WdlArray(WdlArrayType(valueType), m.values.toVector)
+                val vJs = wdlToJSON(values.wdlType, values)
+                JsObject("keys" -> kJs, "values" -> vJs)
+
+            // keys are strings, requiring no conversion. We do
+            // need to carry the types are runtime.
+            case (WdlObjectType, WdlObject(m: Map[String, WdlValue])) =>
+                JsObject(m.map{ case (k, v) =>
+                             k -> JsObject(
+                                 "type" -> JsString(v.wdlType.toWdlString),
+                                 "value" -> wdlToJSON(v.wdlType, v))
+                         }.toMap)
+
+            case (WdlPairType(lType, rType), WdlPair(l,r)) =>
+                val lJs = wdlToJSON(lType, l)
+                val rJs = wdlToJSON(rType, r)
+                JsObject("left" -> lJs, "right" -> rJs)
+
+            // Strip optional type
+            case (WdlOptionalType(t), WdlOptionalValue(_,Some(w))) =>
+                wdlToJSON(t, w)
+            case (WdlOptionalType(t), w) =>
+                wdlToJSON(t, w)
+            case (t, WdlOptionalValue(_,Some(w))) =>
+                wdlToJSON(t, w)
+
+            // missing value
+            case (_, WdlOptionalValue(_,None)) => JsNull
+
+            case (_,_) => throw new Exception(
+                s"""|Unsupported combination type=(${t.toWdlString},${t})
+                    |value=(${w.toWdlString}, ${w})"""
+                    .stripMargin.replaceAll("\n", " "))
+        }
+    }
+
+    private def wdlFromJSON(t:WdlType, jsv:JsValue) : WdlValue = {
+        (t, jsv)  match {
+            // base case: primitive types
+            case (WdlBooleanType, JsBoolean(b)) => WdlBoolean(b.booleanValue)
+            case (WdlIntegerType, JsNumber(bnm)) => WdlInteger(bnm.intValue)
+            case (WdlFloatType, JsNumber(bnm)) => WdlFloat(bnm.doubleValue)
+            case (WdlStringType, JsString(s)) => WdlString(s)
+            case (WdlFileType, JsString(path)) => WdlSingleFile(path)
+
+            // arrays
+            case (WdlArrayType(t), JsArray(vec)) =>
+                WdlArray(WdlArrayType(t),
+                         vec.map{ elem => wdlFromJSON(t, elem) })
+
+
+            // maps with string keys
+            case (WdlMapType(WdlStringType, valueType), JsObject(fields)) =>
+                val m: Map[WdlValue, WdlValue] = fields.map {
+                    case (k,v) =>
+                        WdlString(k) -> wdlFromJSON(valueType, v)
+                }.toMap
+                WdlMap(WdlMapType(WdlStringType, valueType), m)
+
+            // General maps. These are serialized as an object with a keys array and
+            // a values array.
+            case (WdlMapType(keyType, valueType), JsObject(_)) =>
+                jsv.asJsObject.getFields("keys", "values") match {
+                    case Seq(JsArray(kJs), JsArray(vJs)) =>
+                        val m = (kJs zip vJs).map{ case (k, v) =>
+                            val kWdl = wdlFromJSON(keyType, k)
+                            val vWdl = wdlFromJSON(valueType, v)
+                            kWdl -> vWdl
+                        }.toMap
+                        WdlMap(WdlMapType(keyType, valueType), m)
+                    case _ => throw new Exception(s"Malformed serialized map ${jsv}")
+                }
+
+            case (WdlObjectType, JsObject(fields)) =>
+                val m: Map[String, WdlValue] = fields.map{ case (k,v) =>
+                    val elem:WdlValue =
+                        v.asJsObject.getFields("type", "value") match {
+                            case Seq(JsString(elemTypeStr), elemValue) =>
+                                val elemType:WdlType = WdlType.fromWdlString(elemTypeStr)
+                                wdlFromJSON(elemType, elemValue)
+                        }
+                    k -> elem
+                }.toMap
+                WdlObject(m)
+
+            case (WdlPairType(lType, rType), JsObject(_)) =>
+                jsv.asJsObject.getFields("left", "right") match {
+                    case Seq(lJs, rJs) =>
+                        val left = wdlFromJSON(lType, lJs)
+                        val right = wdlFromJSON(rType, rJs)
+                        WdlPair(left, right)
+                    case _ => throw new Exception(s"Malformed serialized par ${jsv}")
+                }
+
+            case (WdlOptionalType(t), JsNull) =>
+                WdlOptionalValue(t, None)
+            case (WdlOptionalType(t), _) =>
+                wdlFromJSON(t, jsv)
+
+            case _ =>
+                throw new AppInternalException(
+                    s"Unsupported combination ${t.toWdlString} ${jsv.prettyPrint}"
+                )
+        }
+    }
+
+    // serialization routines
+    def toJSON(w:WdlValue) : JsValue = {
+        JsObject("wdlType" -> JsString(w.wdlType.toWdlString),
+                 "wdlValue" -> wdlToJSON(w.wdlType, w))
+    }
+
+    def fromJSON(jsv:JsValue) : WdlValue = {
+        jsv.asJsObject.getFields("wdlType", "wdlValue") match {
+            case Seq(JsString(typeStr), wValue) =>
+                val wdlType = WdlType.fromWdlString(typeStr)
+                wdlFromJSON(wdlType, wValue)
+            case other => throw new DeserializationException(s"WdlValue unexpected ${other}")
+        }
+    }
+}
+
 
 case class RunnerTask(task:WdlTask,
                       cef: CompilerErrorFormatter) {
-    private val DECL_VARS_FILE:String = "declVars.json"
-
     def getMetaDir() = {
         val metaDir = Utils.getMetaDirPath()
         Utils.safeMkdir(metaDir)
@@ -37,40 +199,25 @@ case class RunnerTask(task:WdlTask,
     }
 
     // serialize the task inputs to json, and then write to a file.
-    private def writeDeclarationsToDisk(decls: Map[String, BValue]) : Unit = {
-        val m : Map[String, JsValue] = decls.map{ case(varName, bv) =>
-            (varName, BValue.toJSON(bv))
+    private def writeEnvToDisk(env: Map[String, WdlValue]) : Unit = {
+        val m : Map[String, JsValue] = env.map{ case(varName, v) =>
+            (varName, RunnerTaskSerialization.toJSON(v))
         }.toMap
         val buf = (JsObject(m)).prettyPrint
-        Utils.writeFileContent(getMetaDir().resolve(DECL_VARS_FILE),
+        Utils.writeFileContent(getMetaDir().resolve(RUNNER_TASK_ENV_FILE),
                                buf)
     }
 
-    private def readDeclarationsFromDisk() : Map[String, BValue] = {
-        val buf = Utils.readFileContent(getMetaDir().resolve(DECL_VARS_FILE))
+    private def readEnvFromDisk() : Map[String, WdlValue] = {
+        val buf = Utils.readFileContent(getMetaDir().resolve(RUNNER_TASK_ENV_FILE))
         val json : JsValue = buf.parseJson
         val m = json match {
             case JsObject(m) => m
             case _ => throw new Exception("Malformed task declarations")
         }
         m.map { case (key, jsVal) =>
-            key -> BValue.fromJSON(jsVal)
+            key -> RunnerTaskSerialization.fromJSON(jsVal)
         }.toMap
-    }
-
-    // Upload output files as a consequence
-    private def writeJobOutputs(jobOutputPath : Path,
-                                outputs : Map[String, BValue]) : Unit = {
-        // convert the WDL values to JSON
-        val jsOutputs : List[(String, JsValue)] = outputs.map {
-            case (key, BValue(wvl,_)) =>
-                WdlVarLinks.genFields(wvl, key)
-        }.toList.flatten
-        val json = JsObject(jsOutputs.toMap)
-        val ast_pp = json.prettyPrint
-        appletLog(s"writeJobOutputs ${ast_pp}")
-        // write to the job outputs
-        Utils.writeFileContent(jobOutputPath, ast_pp)
     }
 
     // Figure out if a docker image is specified. If so, return it as a string.
@@ -115,67 +262,45 @@ case class RunnerTask(task:WdlTask,
         }
     }
 
-    // Each file marked "stream", is converted into a special fifo
+    // Each file marked "stream" is converted into a special fifo
     // file on the instance.
-    private def handleStreamingFiles(inputs: Map[String, BValue])
-            : (Option[String], Map[String, BValue]) = {
-        // A file that needs to be stream-downloaded. Make a named
-        // pipe, and stream the file from the platform to the pipe.
-        // Ensure pipes have different names, even if the
-        // file-names are the same. Write the process ids of the download jobs,
-        // to stdout. The calling script will keep track of them, and check
-        // for abnormal termination.
-        //
-        // Note: at this point, all other files have already been downloaded.
-        var fifoCount = 0
-        def mkfifo(wvl: WdlVarLinks, path: String) : (WdlValue, String) = {
-            val filename = Paths.get(path).toFile.getName
-            val fifo:Path = Paths.get(Utils.DX_HOME, s"fifo_${fifoCount}_${filename}")
-            fifoCount += 1
-            val dxFileId = WdlVarLinks.getFileId(wvl)
-            val bashSnippet:String =
-                s"""|mkfifo ${fifo.toString}
-                    |dx cat ${dxFileId} > ${fifo.toString} &
-                    |echo $$!
-                    |""".stripMargin
-            (WdlSingleFile(fifo.toString), bashSnippet)
+    //
+    // Make a named pipe, and stream the file from the platform to the
+    // pipe. Ensure pipes have different names, even if the
+    // file-names are the same. Write the process ids of the download
+    // jobs to stdout. The calling script will keep track of them,
+    // and check for abnormal termination.
+    //
+    private var fifoCount = 0
+    private def mkfifo(wvl: WdlVarLinks, path: String) : (WdlValue, String) = {
+        val filename = Paths.get(path).toFile.getName
+        val fifo:Path = Paths.get(Utils.DX_HOME, s"fifo_${fifoCount}_${filename}")
+        fifoCount += 1
+        val dxFileId = WdlVarLinks.getFileId(wvl)
+        val bashSnippet:String =
+            s"""|mkfifo ${fifo.toString}
+                |dx cat ${dxFileId} > ${fifo.toString} &
+                |echo $$!
+                |""".stripMargin
+        (WdlSingleFile(fifo.toString), bashSnippet)
+    }
+
+    private def handleStreamingFile(wvl: WdlVarLinks,
+                                    wdlValue:WdlValue) : (WdlValue, String) = {
+        wdlValue match {
+            case WdlSingleFile(path) if wvl.attrs.stream =>
+                mkfifo(wvl, path)
+            case WdlOptionalValue(_,Some(WdlSingleFile(path))) if wvl.attrs.stream =>
+                mkfifo(wvl, path)
+            case _ =>
+                throw new Exception(s"Value is not a streaming file ${wvl} ${wdlValue}")
         }
-
-        val m:Map[String, (String, BValue)] = inputs.map{
-            case (varName, BValue(wvl, wdlValue)) =>
-                val (wdlValueRewrite,bashSnippet) = wdlValue match {
-                    case WdlSingleFile(path) if wvl.attrs.stream =>
-                        mkfifo(wvl, path)
-                    case WdlOptionalValue(_,Some(WdlSingleFile(path))) if wvl.attrs.stream =>
-                        mkfifo(wvl, path)
-                    case _ =>
-                        // everything else
-                        (wdlValue,"")
-                }
-                val bVal:BValue = BValue(wvl, wdlValueRewrite)
-                varName -> (bashSnippet, bVal)
-        }.toMap
-
-        // set up all the named pipes
-        val bashSetupStreams:Option[String] =
-            if (fifoCount > 0) {
-                // There are streaming files to set up
-                val snippets = m.collect{
-                    case (_, (bashSnippet,_)) if !bashSnippet.isEmpty => bashSnippet
-                }
-                Some(snippets.mkString("\n"))
-            } else {
-                None
-            }
-
-        val inputsWithPipes = m.map{ case (varName, (_,bValue)) => varName -> bValue }.toMap
-        (bashSetupStreams, inputsWithPipes)
     }
 
     // Write the core bash script into a file. In some cases, we
     // need to run some shell setup statements before and after this
     // script. Returns these as two strings (prolog, epilog).
-    private def writeBashScript(inputs: Map[String, BValue]) : Unit = {
+    private def writeBashScript(env: Map[String, WdlValue]) : Unit = {
         val metaDir = getMetaDir()
         val scriptPath = metaDir.resolve("script")
         val stdoutPath = metaDir.resolve("stdout")
@@ -183,8 +308,8 @@ case class RunnerTask(task:WdlTask,
         val rcPath = metaDir.resolve("rc")
 
         // instantiate the command
-        val env: Map[Declaration, WdlValue] = inputs.map {
-            case (varName, BValue(cVar,wdlValue)) =>
+        val cmdEnv: Map[Declaration, WdlValue] = env.map {
+            case (varName, wdlValue) =>
                 val decl = task.declarations.find(_.unqualifiedName == varName) match {
                     case Some(x) => x
                     case None => throw new Exception(
@@ -192,7 +317,7 @@ case class RunnerTask(task:WdlTask,
                 }
                 decl -> wdlValue
         }.toMap
-        val shellCmd : String = task.instantiateCommand(env, DxFunctions).get
+        val shellCmd : String = task.instantiateCommand(cmdEnv, DxFunctions).get
 
         // This is based on Cromwell code from
         // [BackgroundAsyncJobExecutionActor.scala].  Generate a bash
@@ -250,58 +375,61 @@ case class RunnerTask(task:WdlTask,
         dockerRunPath.toFile.setExecutable(true)
     }
 
-
     // Calculate the input variables for the task, download the input files,
     // and build a shell script to run the command.
-    def prolog(jobInputPath : Path,
-               jobOutputPath : Path,
-               jobInfoPath: Path) : Unit = {
-        // Extract types for the inputs
-        val (inputSpec,_) = Utils.loadExecInfo
-        appletLog(s"WdlType mapping =${inputSpec}")
-
-        // Read the job input file
-        val inputLines : String = Utils.readFileContent(jobInputPath)
-        var inputWvls = WdlVarLinks.loadJobInputsAsLinks(inputLines, inputSpec)
-
+    def prolog(inputSpec: Map[String, IOClass],
+               outputSpec: Map[String, IOClass],
+               inputs: Map[String, WdlVarLinks]) : Map[String, JsValue] = {
         // add the attributes from the parameter_meta section of the task
-         inputWvls = inputWvls.map{ case (varName, wvl) =>
-             val attrs = DeclAttrs.get(task, varName, cef)
-             varName -> WdlVarLinks(wvl.wdlType, attrs, wvl.dxlink)
-         }.toMap
+        val inputWvls = inputs.map{ case (varName, wvl) =>
+            val attrs = DeclAttrs.get(task, varName, cef)
+            varName -> WdlVarLinks(wvl.wdlType, attrs, wvl.dxlink)
+        }.toMap
 
-        val forceFlag:Boolean =
+        val forceFlag =
             if (task.commandTemplateString.trim.isEmpty) {
                 // The shell command is empty, there is no need to download the files.
                 false
             } else {
                 // default: download all input files
+                appletLog(s"Eagerly download input files")
                 true
             }
-        appletLog(s"Eagerly download input files=${forceFlag}")
 
-        // evaluate the declarations
-        val decls: Map[String, BValue] =
-            RunnerEval.evalDeclarations(task.declarations, inputWvls, forceFlag, Some((task, cef)),
-                                        IODirection.Download)
-        val env:Map[String, WdlValue] = decls.map{
-            case (varName, BValue(_,wdlValue)) => varName -> wdlValue
+        var bashSnippetVec = Vector.empty[String]
+        val envInput = inputWvls.map{ case (key, wvl) =>
+            val w:WdlValue =
+                if (wvl.attrs.stream) {
+                    // streaming file, create a named fifo for it
+                    val w:WdlValue = WdlVarLinks.localize(wvl, false)
+                    val (wdlValueRewrite,bashSnippet) = handleStreamingFile(wvl, w)
+                    bashSnippetVec = bashSnippetVec :+ bashSnippet
+                    wdlValueRewrite
+                } else  {
+                    // regular file
+                    WdlVarLinks.localize(wvl, forceFlag)
+                }
+            key -> w
         }.toMap
+
+        // evaluate the declarations, and localize any files if necessary
+        val env: Map[String, WdlValue] =
+            RunnerEval.evalDeclarations(task.declarations, envInput)
+                .map{ case (decl, v) => decl.unqualifiedName -> v}.toMap
         val docker = dockerImage(env)
 
         // deal with files that need streaming
-        val (bashSetupStreams, inputsWithPipes) = handleStreamingFiles(decls)
-        bashSetupStreams match {
-            case Some(snippet) =>
-                val path = getMetaDir().resolve("setup_streams")
-                appletLog(s"writing bash script for stream(s) set up to ${path}")
-                Utils.writeFileContent(path, snippet)
-                path.toFile.setExecutable(true)
-            case None => ()
+        if (bashSnippetVec.size > 0) {
+            // set up all the named pipes
+            val path = getMetaDir().resolve("setup_streams")
+            appletLog(s"writing bash script for stream(s) set up to ${path}")
+            val snippet = bashSnippetVec.mkString("\n")
+            Utils.writeFileContent(path, snippet)
+            path.toFile.setExecutable(true)
         }
 
         // Write shell script to a file. It will be executed by the dx-applet code
-        writeBashScript(inputsWithPipes)
+        writeBashScript(env)
         docker match {
             case Some(img) =>
                 // write a script that launches the actual command inside a docker image.
@@ -312,30 +440,40 @@ case class RunnerTask(task:WdlTask,
 
         // serialize the environment, so we don't have to calculate it again in
         // the epilog
-        writeDeclarationsToDisk(decls)
+        writeEnvToDisk(env)
 
         // Checkpoint the localized file tables
         LocalDxFiles.freeze()
         DxFunctions.freeze()
+
+        Map.empty
     }
 
-    def epilog(jobInputPath : Path,
-               jobOutputPath : Path,
-               jobInfoPath: Path) : Unit = {
+    def epilog(inputSpec: Map[String, IOClass],
+               outputSpec: Map[String, IOClass],
+               inputs: Map[String, WdlVarLinks]) : Map[String, JsValue] = {
         // Repopulate the localized file tables
         LocalDxFiles.unfreeze()
         DxFunctions.unfreeze()
 
-        val decls : Map[String, BValue] = readDeclarationsFromDisk()
-        val env:Map[String, WdlVarLinks] = decls.map{
-            case (varName, BValue(wvl,_)) => varName -> wvl
+        val env : Map[String, WdlValue] = readEnvFromDisk()
+
+        // evaluate the output declarations.
+        val outputs: Map[DeclarationInterface, WdlValue] = RunnerEval.evalDeclarations(task.outputs, env)
+
+        // Upload any output files to the platform.
+        val wvlOutputs:Map[String, WdlVarLinks] = outputs.map{ case (decl, wdlValue) =>
+            // The declaration type is sometimes more accurate than the type of the wdlValue
+            val wvl = WdlVarLinks.importFromWDL(decl.wdlType,
+                                                DeclAttrs.empty, wdlValue, IODirection.Upload)
+            decl.unqualifiedName -> wvl
         }.toMap
 
-        // evaluate the output declarations. Upload any output files to the platform.
-        val outputs: Map[String, BValue] =
-            RunnerEval.evalDeclarations(task.outputs, env, true, Some((task, cef)),
-                                        IODirection.Upload)
-        writeJobOutputs(jobOutputPath, outputs)
+        // convert the WDL values to JSON
+        val outputFields:Map[String, JsValue] = wvlOutputs.map {
+            case (key, wvl) => WdlVarLinks.genFields(wvl, key)
+        }.toList.flatten.toMap
+        outputFields
     }
 
 
@@ -372,8 +510,8 @@ case class RunnerTask(task:WdlTask,
         val cores = evalAttr("cpu")
         val iType = instanceTypeDB.apply(dxInstaceType, memory, diskSpace, cores)
         appletLog(s"""|calcInstanceType memory=${memory} disk=${diskSpace}
-                              |cores=${cores} instancetype=${iType}"""
-                              .stripMargin.replaceAll("\n", " "))
+                      |cores=${cores} instancetype=${iType}"""
+                      .stripMargin.replaceAll("\n", " "))
         iType
     }
 
@@ -389,17 +527,9 @@ case class RunnerTask(task:WdlTask,
     /** The runtime attributes need to be calculated at runtime. Evaluate them,
       *  determine the instance type [xxxx], and relaunch the job on [xxxx]
       */
-    def relaunch(jobInputPath : Path,
-                 jobOutputPath : Path,
-                 jobInfoPath: Path) : Unit = {
-        // Extract types for the inputs
-        val (inputSpec,_) = Utils.loadExecInfo
-        appletLog(s"WdlType mapping =${inputSpec}")
-
-        // Read the job input file, and load the inputs without downloading
-        val inputLines : String = Utils.readFileContent(jobInputPath)
-        val inputWvls = WdlVarLinks.loadJobInputsAsLinks(inputLines, inputSpec)
-
+    def relaunch(inputSpec: Map[String, IOClass],
+                 outputSpec: Map[String, IOClass],
+                 inputWvls: Map[String, WdlVarLinks]) : Map[String, JsValue] = {
         // Figure out the available instance types, and their prices,
         // by reading the file
         val dbRaw = Utils.readFileContent(Paths.get("/" + Utils.INSTANCE_TYPE_DB_FILENAME))
@@ -423,11 +553,6 @@ case class RunnerTask(task:WdlTask,
                                   DxlJob(dxSubJob, tso.unqualifiedName))
             WdlVarLinks.genFields(wvl, tso.unqualifiedName)
         }.flatten.toMap
-
-        // write the outputs to the job_output.json file
-        val json = JsObject(outputs)
-        val ast_pp = json.prettyPrint
-        appletLog(s"outputs = ${ast_pp}")
-        Utils.writeFileContent(jobOutputPath, ast_pp)
+        outputs
     }
 }

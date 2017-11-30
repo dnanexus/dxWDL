@@ -128,3 +128,12 @@ task RangeFromInt {
         Array[Int] result = range(len)
     }
 }
+
+# checking behavior with empty arrays
+task ArrayLength {
+    Array[Int] ai
+    command {}
+    output {
+        Int result = length(ai)
+    }
+}

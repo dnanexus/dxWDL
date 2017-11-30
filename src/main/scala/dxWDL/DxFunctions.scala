@@ -8,7 +8,7 @@ import scala.util.{Try, Success, Failure}
 import scala.collection.JavaConverters._
 import scala.collection.mutable.HashMap
 import spray.json._
-import Utils.{dxFileOfJsValue, downloadFile, getMetaDirPath, jsValueOfJsonNode,
+import Utils.{dxFileFromJsValue, downloadFile, getMetaDirPath, jsValueOfJsonNode,
     DX_FUNCTIONS_FILES, readFileContent, writeFileContent}
 import wdl4s.wdl.expression.WdlStandardLibraryFunctions
 import wdl4s.wdl.TsvSerializable
@@ -56,7 +56,7 @@ object DxFunctions extends WdlStandardLibraryFunctions {
         val m: Map[String, DXFile] = buf.parseJson match {
             case JsObject(fields) =>
                 fields.map{
-                    case (k,vJs) => k -> dxFileOfJsValue(vJs)
+                    case (k,vJs) => k -> dxFileFromJsValue(vJs)
                 }.toMap
             case other =>
                 throw new Exception(s"Deserialization error, checkpoint=${other.prettyPrint}")

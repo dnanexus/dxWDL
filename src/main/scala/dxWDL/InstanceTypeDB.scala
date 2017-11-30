@@ -105,9 +105,9 @@ case class InstanceTypeDB(instances: Vector[DxInstanceType]) {
     // we use here is:
     // 1) discard all instances that do not have enough resources
     // 2) choose the cheapest instance
-    private def choose3Attr(memoryMB: Option[Int],
-                            diskGB: Option[Int],
-                            cpu: Option[Int]) : String = {
+    def choose3Attr(memoryMB: Option[Int],
+                    diskGB: Option[Int],
+                    cpu: Option[Int]) : String = {
         // discard all instances that are too weak
         val sufficient: Vector[DxInstanceType] =
             instances.filter(x => x.satisfies(memoryMB, diskGB, cpu))
@@ -124,25 +124,18 @@ case class InstanceTypeDB(instances: Vector[DxInstanceType]) {
         bestInstance.name
     }
 
-    def choose(iTypeShortcut: Option[String],
-               memoryMB: Option[Int],
-               diskGB: Option[Int],
-               cpu: Option[Int]) : String = {
-        iTypeShortcut match {
-            case Some(iType) =>
-                // Short circut the calculation, and just choose this instance.
-                // Make sure it is available.
-                instances.find(x => x.name == iType) match {
-                    case Some(x) =>
-                        // instance exists, and can be used
-                        iType
-                    case None =>
-                        // Probably a bad instance name
-                        throw new Exception(s"""|Instance type ${iTypeShortcut} is unavailable
-                                                |or badly named"""
-                                                .stripMargin.replaceAll("\n", " "))
-                }
-            case None => choose3Attr(memoryMB, diskGB, cpu)
+    def chooseShortcut(iType: String) : String = {
+        // Short circut the calculation, and just choose this instance.
+        // Make sure it is available.
+        instances.find(x => x.name == iType) match {
+            case Some(x) =>
+                // instance exists, and can be used
+                iType
+            case None =>
+                // Probably a bad instance name
+                throw new Exception(s"""|Instance type ${iType} is unavailable
+                                        |or badly named"""
+                                        .stripMargin.replaceAll("\n", " "))
         }
     }
 
@@ -167,9 +160,10 @@ case class InstanceTypeDB(instances: Vector[DxInstanceType]) {
               wdlDiskGB: Option[WdlValue],
               wdlCpu: Option[WdlValue]) : String = {
         // Shortcut the entire calculation, and provide the dx instance type directly
-        val iTypeShortcut : Option[String] = dxInstaceType match {
+        dxInstaceType match {
             case None => None
-            case Some(WdlString(iType)) => Some(iType)
+            case Some(WdlString(iType)) =>
+                return chooseShortcut(iType)
             case Some(x) =>
                 throw new Exception(s"""|dxInstaceType has to evaluate to a
                                         |WdlString type ${x.toWdlString}"""
@@ -239,8 +233,7 @@ case class InstanceTypeDB(instances: Vector[DxInstanceType]) {
             case Some(WdlFloat(x)) => Some(x.toInt)
             case Some(x) => throw new Exception(s"Cpu has to evaluate to a numeric value ${x}")
         }
-
-        choose(iTypeShortcut, memoryMB, diskGB, cpu)
+        return choose3Attr(memoryMB, diskGB, cpu)
     }
 
     // sort the instances, and print them out

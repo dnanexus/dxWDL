@@ -8,7 +8,7 @@ package dxWDL
 
 import scala.collection.mutable.Queue
 import scala.util.{Failure, Success}
-import Utils.{genTmpVarName, nonInterpolation, stripOptional, trace, Verbose, warning}
+import Utils.{genTmpVarName, nonInterpolation, trace, Verbose, warning}
 import wdl4s.wdl._
 import wdl4s.wdl.expression._
 import wdl4s.parser.WdlParser.{Ast, Terminal}
@@ -18,6 +18,7 @@ case class CompilerSimplifyExpr(wf: WdlWorkflow,
                                 cef: CompilerErrorFormatter,
                                 verbose: Verbose) {
     val verbose2:Boolean = verbose.keywords contains "simplify"
+    var wfMissingInputs = Queue.empty[Declaration]
 
     private def isMemberAccess(a: Ast) = {
         wdl4s.wdl.WdlExpression.AstForExpressions(a).isMemberAccess
@@ -37,39 +38,6 @@ case class CompilerSimplifyExpr(wf: WdlWorkflow,
                 case e:Throwable=> false
             }
         }
-    }
-
-    // Convert the source to a singleton array. It is used in
-    // the GATK best practices pipeline. This conversion may not be a
-    // good idea, but it is used.
-    //
-    //  https://github.com/openwdl/wdl/blob/develop/scripts/broad_pipelines/germline-short-variant-discovery/gvcf-generation-per-sample/0.2.0/PublicPairedSingleSampleWf_170412.wdl#L1256
-    //    input_bams = SortAndFixSampleBam.output_bam
-    //    input_bams is of type Array[File]
-    //    output_bam is of type File
-    private def typesArrayDiff(expr: WdlExpression,
-                               callerType:WdlType,
-                               calleeType:WdlType) : Boolean = {
-        val srcType: WdlType = stripOptional(callerType)
-        val trgType: WdlType = stripOptional(calleeType)
-        (srcType, trgType) match {
-            case (WdlArrayType(_), WdlArrayType(_)) => false
-            case (_, WdlArrayType(_)) =>
-                warning(verbose,
-                        s"converting ${expr.toWdlString} from ${srcType.toWdlString} to ${trgType.toWdlString}")
-                true
-            case (_, _) => false
-        }
-    }
-
-    // Convert a T to Array[T]
-    //   1  -> [1]
-    //   "a" -> ["a"]
-    private def augmentExprToArray(expr: WdlExpression) : WdlExpression = {
-        // Convert the source to a singleton array. It is used in
-        // the GATK best practices pipeline. This conversion may not be a
-        // good idea, but it is used.
-        WdlExpression.fromString(s"[ ${expr.toWdlString} ]")
     }
 
     // Figure out the type of an expression
@@ -133,6 +101,54 @@ case class CompilerSimplifyExpr(wf: WdlWorkflow,
         }
     }
 
+    // replace an expression with a temporary variable
+    def genTopLevelVar(call: WdlCall, decl:Declaration, varName:String) : WdlExpression = {
+        wfMissingInputs += WdlRewrite.declaration(decl.wdlType, varName, None)
+        WdlExpression.fromString(varName)
+    }
+
+
+    // For a call, check that it provides all the compulsory task inputs,
+    // ignore optional inputs. If a call argument is missing, add the fully
+    // qualified name as a workflow input. This will allow allow overriding
+    // this value at runtime.
+    def unspecifiedCallInputs(call: WdlCall) : Map[String, WdlExpression] = {
+        val task = Utils.taskOfCall(call)
+        val taskInputDecls:Seq[Declaration] =
+            task.declarations.filter(decl =>
+                Utils.declarationIsInput(decl) && !Utils.isOptional(decl.wdlType)
+            )
+        val callArgs:Set[String] = call.inputMappings.map{ case (k,_) => k}.toSet
+        val missing:Seq[Declaration] = taskInputDecls.filter{ decl =>
+            !(callArgs contains decl.unqualifiedName)
+        }
+        missing.map{ decl =>
+            // unbound input; the workflow does not provide it.
+            if (!Utils.isOptional(decl.wdlType)) {
+                // A compulsory input, a potential error in the script.
+                warning(verbose, s"""|Note: workflow doesn't supply required
+                                     |input ${decl.unqualifiedName} to call ${call.unqualifiedName};
+                                     |which is in a scatter.
+                                     |Propagating input to applet.
+                                     |""".stripMargin.replaceAll("\n", " "))
+            }
+            // safety: check that there isn't an existing variable with
+            // this name
+            val varName = s"${call.unqualifiedName}___${decl.unqualifiedName}"
+            wf.resolveVariable(varName) match {
+                case Some(_) =>
+                    throw new Exception(
+                        s"""|There is an existing variable/call called ${varName},
+                            |cannot generate workflow input for call ${call.unqualifiedName}
+                            |input ${decl.unqualifiedName}
+                            |""".stripMargin.replaceAll("\n", " "))
+                case None => ()
+            }
+            val wfInput:WdlExpression = genTopLevelVar(call, decl, varName)
+            decl.unqualifiedName -> wfInput
+        }.toMap
+    }
+
     // Transform a call by lifting its non trivial expressions,
     // and converting them into declarations. For example:
     //
@@ -163,12 +179,9 @@ case class CompilerSimplifyExpr(wf: WdlWorkflow,
             val calleeType = calleeDecl.wdlType
             val callerType = evalType(expr, call)
             val rhs:WdlExpression = expr.ast match {
-                case _ if typesArrayDiff(expr, callerType, calleeType) =>
+                case _ if (!typesMatch(callerType, calleeType)) =>
                     // A coercion is required to convert the expression to the expected
                     // type
-                    val augExpr = augmentExprToArray(expr)
-                    replaceWithTempVar(calleeType, augExpr)
-                case _ if (!typesMatch(callerType, calleeType)) =>
                     warning(verbose, cef.typeConversionRequired(expr, call,
                                                                 callerType, calleeType))
                     replaceWithTempVar(calleeType, expr)
@@ -187,8 +200,12 @@ case class CompilerSimplifyExpr(wf: WdlWorkflow,
             (key -> rhs)
         }
 
+        // Look for missing call inputs, and create top level workflow variables from them.
+        // This allows setting them as workflow inputs.
+        val missingInputs:Map[String, WdlExpression] = unspecifiedCallInputs(call)
+
         val callModifiedInputs = call match {
-            case tc: WdlTaskCall => WdlRewrite.taskCall(tc, inputs)
+            case tc: WdlTaskCall => WdlRewrite.taskCall(tc, inputs ++ missingInputs)
             case wfc: WdlWorkflowCall => throw new Exception(s"Unimplemented WorkflowCall")
         }
         tmpDecls += callModifiedInputs
@@ -341,12 +358,12 @@ case class CompilerSimplifyExpr(wf: WdlWorkflow,
 
     def simplifyWorkflow(wf: WdlWorkflow) : WdlWorkflow = {
         val wfProper = wf.children.filter(x => !x.isInstanceOf[WorkflowOutput])
-        val wfProperSmp: Vector[Scope] = wfProper.map(x => simplify(x)).toVector.flatten
+        val wfProperSmpl: Vector[Scope] = wfProper.map(x => simplify(x)).toVector.flatten
 
         val outputs :Vector[WorkflowOutput] = wf.outputs.toVector
-        val (tmpDecls, outputsSmp) = simplifyOutputSection(outputs)
+        val (tmpDecls, outputsSmpl) = simplifyOutputSection(outputs)
 
-        val allChildren = wfProperSmp ++ tmpDecls ++ outputsSmp
+        val allChildren = wfMissingInputs.toVector ++ wfProperSmpl ++ tmpDecls ++ outputsSmpl
         WdlRewrite.workflow(wf, allChildren)
     }
 }
@@ -359,6 +376,10 @@ object CompilerSimplifyExpr {
         def checkVarName(varName: String, ast: Ast) : Unit = {
             if (Utils.isGeneratedVar(varName))
                 throw new Exception(cef.illegalVariableName(ast))
+            Utils.reservedSubstrings.foreach{ s =>
+                if (varName contains s)
+                    throw new Exception(cef.illegalVariableName(ast))
+            }
         }
         def deepCheck(children: Seq[Scope]) : Unit = {
             children.foreach {

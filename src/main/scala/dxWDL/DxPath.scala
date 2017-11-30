@@ -1,3 +1,14 @@
+/**
+  Methods to convert between logical dx paths, and resolved file-ids.
+
+  Logical dx:path           dxURL
+  genome_ref:/A/B/C.txt     dx://proj-xxxx:file-yyyy
+  viral_ngs:/stats/flu.txt  dx://proj-zzzz:file-vvvv
+
+  Optionally, the logical path can be added to the dxURL. for example:
+
+  genome_ref:/A/B/C.txt     dx://proj-xxxx:file-yyyy::/A/B/C.txt
+*/
 package dxWDL
 
 import com.dnanexus.{DXAPI, DXApplet, DXDataObject, DXFile, DXProject, DXRecord, DXSearch, DXWorkflow}
@@ -11,7 +22,7 @@ import Utils.{DX_URL_PREFIX, jsonNodeOfJsValue, jsValueOfJsonNode, trace}
 object DxPath {
     // Lookup cache for projects. This saves
     // repeated searches for projects we already found.
-    val projectDict = HashMap.empty[String, DXProject]
+    private val projectDict = HashMap.empty[String, DXProject]
 
     def lookupProject(projName: String): DXProject = {
         if (projName.startsWith("project-")) {
@@ -115,10 +126,18 @@ object DxPath {
     }
 
 
+    // strip the prefix, and the optional suffix
     private def lookupDxURL(buf: String) : DXDataObject = {
         assert(buf.startsWith(DX_URL_PREFIX))
         val s = buf.substring(DX_URL_PREFIX.length)
-        lookupDxPath(s)
+        val index = s.lastIndexOf("::")
+        val s1 =
+            if (index == -1) {
+                s
+            } else {
+                s.substring(0, index)
+            }
+        lookupDxPath(s1)
     }
 
     // More accurate types
@@ -134,5 +153,20 @@ object DxPath {
         if (!dxObj.isInstanceOf[DXFile])
             throw new Exception(s"Found dx:object of the wrong type ${dxObj}")
         dxObj.asInstanceOf[DXFile]
+    }
+
+    // Convert a dx-file to a string with the format:
+    //   dx://proj-xxxx:file-yyyy::/A/B/C.txt
+    def dxFileToURL(dxFile: DXFile) : String = {
+        val desc = dxFile.describe
+        val logicalName = s"${desc.getFolder}/${desc.getName}"
+        val fid = dxFile.getId
+        val proj = dxFile.getProject
+        if (proj == null) {
+            s"${DX_URL_PREFIX}${fid}::${logicalName}"
+        } else {
+            val projId = proj.getId
+            s"${DX_URL_PREFIX}${projId}:${fid}::${logicalName}"
+        }
     }
 }

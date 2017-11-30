@@ -9,13 +9,11 @@ and compiles it to an equivalent workflow on the DNAnexus platform.
 <a href="https://travis-ci.org/dnanexus-rnd/dxWDL"><img src="https://travis-ci.org/dnanexus-rnd/dxWDL.svg?branch=master"/></a>
 
 dxWDL provides a reasonably complete set of WDL features for beta
-testing, in particular enabling the [GATK best practices pipeline](https://github.com/openwdl/wdl/blob/master/scripts/broad_pipelines/germline-short-variant-discovery/gvcf-generation-per-sample/1.0.0/GOTC_PairedEndSingleSampleWf.wdl).
-A few significant WDL features are not yet supported, but may be
+testing. A few significant WDL features are not yet supported, but may be
 added according to user interest:
 
 - Nested workflows (sub-workflows)
 - Nested scatters, and conditionals nested in scatters
-- Expressions in workflow output section
 
 *Use at your own risk:* for the time being, dxWDL is an exploratory
  tool NOT covered by DNAnexus service and support agreements. We
@@ -206,6 +204,34 @@ workflow foo {
     String config = "test"
     ...
 }
+```
+
+WDL allows leaving required call inputs unassigned, and
+specifying them from the input file. For example, workflow `math`
+calls task `add`, but does not specify argument `b`. It can then
+be specified from the input file as follows: `{ "math.add.b" : 3}`.
+
+```
+task add {
+    Int a
+    Int b
+    output {
+        Int result = a + b
+    }
+}
+
+workflow math {
+    call add { input: a = 3 }
+    output {
+       add.result
+    }
+}
+```
+
+The dx:workflow that is compiled from `math` can set this variable from
+the command line as follows:
+```
+dx run math -iadd___b=5
 ```
 
 ## Calling existing applets

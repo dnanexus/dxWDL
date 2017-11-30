@@ -20,7 +20,7 @@ This is the dx JSON input:
   */
 package dxWDL
 
-import com.dnanexus.DXDataObject
+import com.dnanexus.{DXDataObject, DXFile}
 import scala.collection.mutable.HashMap
 import IR.{CVar, SArg}
 import java.nio.file.Path
@@ -36,7 +36,7 @@ case class InputFile(verbose: Utils.Verbose) {
                 // Identify platform file paths by their prefix,
                 // do a lookup, and create a dxlink
                 val dxFile: DXDataObject = DxPath.lookupDxURLFile(s)
-                Utils.jsValueOfJsonNode(dxFile.getLinkAsJson)
+                Utils.dxFileToJsValue(dxFile.asInstanceOf[DXFile])
 
             case JsBoolean(_) | JsNull | JsNumber(_) | JsString(_) => jsv
             case JsObject(fields) =>
@@ -113,7 +113,10 @@ case class InputFile(verbose: Utils.Verbose) {
         def addDefaultsToWorkflowInputs(inputs:Vector[(CVar, SArg)],
                                         wfName:String) : Vector[(CVar, SArg)] = {
             inputs.map { case (cVar, sArg) =>
-                val fqn = s"${wfName}.${cVar.name}"
+                val fqn = sArg match {
+                    case IR.SArgWorkflowInput(_,Some(orgName)) => s"${wfName}.${orgName}"
+                    case _ =>  s"${wfName}.${cVar.name}"
+                }
                 val sArgDflt = defaults.fields.get(fqn) match {
                     case None => sArg
                     case Some(dflt:JsValue) =>
@@ -203,7 +206,10 @@ case class InputFile(verbose: Utils.Verbose) {
         }
 
         wf.inputs.foreach { case (cVar, sArg) =>
-            val fqn = s"${wf.name}.${cVar.name}"
+            val fqn = sArg match {
+                case IR.SArgWorkflowInput(_,Some(orgName)) => s"${wf.name}.${orgName}"
+                case _ =>  s"${wf.name}.${cVar.name}"
+            }
             val dxName = s"${cVar.name}"
             checkAndBind(fqn, dxName, cVar)
         }

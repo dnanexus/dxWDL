@@ -108,6 +108,8 @@ task Shortcut {
     }
     runtime {
         dx_instance_type: "mem1_ssd2_x4"
+        memory: "invalid memory specification --- should not be used"
+        disks: "invalid disk specification --- should not be used"
     }
     output {
         String retval = read_string(stdout())

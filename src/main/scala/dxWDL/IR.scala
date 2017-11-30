@@ -103,7 +103,14 @@ object IR {
     case object SArgEmpty extends SArg
     case class SArgConst(wdlValue: WdlValue) extends SArg
     case class SArgLink(stageName: String, argName: CVar) extends SArg
-    case class SArgWorkflowInput(argName: CVar) extends SArg
+
+    // The [fqn] is for a special case where a required call input
+    // was unspecified in the workflow. It can still be provided
+    // at the command line, or from an input file.
+    //
+    // fqn: the original name in the workflow
+    case class SArgWorkflowInput(argName: CVar,
+                                 fqn: Option[String] = None) extends SArg
 
     // Linking between a variable, and which stage we got
     // it from.
@@ -308,9 +315,10 @@ object IR {
                         YamlObject(YamlString("kind") -> YamlString("link"),
                                    YamlString("stageName") -> YamlString(stageName),
                                    YamlString("cVar") -> cVar.toYaml)
-                    case SArgWorkflowInput(cVar) =>
+                    case SArgWorkflowInput(cVar, fqn) =>
                         YamlObject(YamlString("kind") -> YamlString("workflow_input"),
-                                   YamlString("cVar") -> cVar.toYaml)
+                                   YamlString("cVar") -> cVar.toYaml,
+                                   YamlString("fqn") -> fqn.toYaml)
                 }
             }
 
@@ -339,9 +347,9 @@ object IR {
                                     case _ => throw new Exception("SArg malformed link")
                                 }
                             case Seq(YamlString("workflow_input")) =>
-                                yo.getFields(YamlString("cVar")) match {
-                                    case Seq(cVar) =>
-                                        SArgWorkflowInput(cVar.convertTo[CVar])
+                                yo.getFields(YamlString("cVar"), YamlString("fqn")) match {
+                                    case Seq(cVar, fqn) =>
+                                        SArgWorkflowInput(cVar.convertTo[CVar], fqn.convertTo[Option[String]])
                                     case _ => throw new Exception("SArg malformed link")
                                 }
                             case unrecognized =>

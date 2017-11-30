@@ -10,7 +10,7 @@ import java.time.format.DateTimeFormatter
 import IR.{CVar, SArg}
 import scala.collection.JavaConverters._
 import spray.json._
-import Utils.{AppletLinkInfo, base64Encode, CHECKSUM_PROP, dxFileOfJsValue, DXWorkflowStage,
+import Utils.{AppletLinkInfo, base64Encode, CHECKSUM_PROP, dxFileFromJsValue, DXWorkflowStage,
     INSTANCE_TYPE_DB_FILENAME, jsValueOfJsonNode, jsonNodeOfJsValue, LINK_INFO_FILENAME, trace,
     warning}
 import wdl4s.wdl.types._
@@ -38,7 +38,7 @@ case class CompilerNative(dxWDLrtId: String,
             case Some(x) => x
             case None => throw new Exception(s"record does not have an archive field ${details}")
         }
-        val dxFile = dxFileOfJsValue(dxLink)
+        val dxFile = dxFileFromJsValue(dxLink)
         val name = dxFile.describe.getName()
         JsObject(
             "name" -> JsString(name),
@@ -69,25 +69,29 @@ case class CompilerNative(dxWDLrtId: String,
                        "class" -> JsString(dxType))
                        ++ defaultVal)
         }
-        def mkPrimitiveArray(dxType: String) : Vector[Map[String, JsValue]] = {
-            Vector(Map("name" -> JsString(name),
-                       "class" -> JsString("array:" ++ dxType),
-                       "optional" -> JsBoolean(true))
-                       ++ defaultVal)
+        def mkPrimitiveArray(dxType: String, maybeEmpty:Boolean) : Vector[Map[String, JsValue]] = {
+            val m = Map("name" -> JsString(name),
+                        "class" -> JsString("array:" ++ dxType))
+            val opt = if (maybeEmpty) {
+                Map("optional" -> JsBoolean(true))
+            } else {
+                Map.empty[String, JsValue]
+            }
+            Vector(m ++ opt ++ defaultVal)
         }
         def mkComplex() : Vector[Map[String,JsValue]] = {
             // A large JSON structure passed as a hash, and a
             // vector of platform files.
-            //
-            // Note: the help field for the file vector is empty,
-            // so that the WdlVarLinks.loadJobInputsAsLinks method
-            // will not interpret it.
             Vector(Map("name" -> JsString(name),
                        "class" -> JsString("hash"))
                        ++ defaultVal,
                    Map("name" -> JsString(name + Utils.FLAT_FILES_SUFFIX),
                        "class" -> JsString("array:file"),
                        "optional" -> JsBoolean(true)))
+        }
+        def isPotentiallyEmpty(t: WdlType) : Boolean = t match {
+            case WdlMaybeEmptyArrayType(_) => true
+            case _ => false
         }
         def nonOptional(t : WdlType) : Vector[Map[String, JsValue]] = {
             t match {
@@ -99,11 +103,16 @@ case class CompilerNative(dxWDLrtId: String,
                 case WdlFileType => mkPrimitive("file")
 
                 // single dimension arrays of primitive types
-                case WdlArrayType(WdlBooleanType) => mkPrimitiveArray("boolean")
-                case WdlArrayType(WdlIntegerType) => mkPrimitiveArray("int")
-                case WdlArrayType(WdlFloatType) => mkPrimitiveArray("float")
-                case WdlArrayType(WdlStringType) => mkPrimitiveArray("string")
-                case WdlArrayType(WdlFileType) => mkPrimitiveArray("file")
+                case WdlArrayType(WdlBooleanType) =>
+                    mkPrimitiveArray("boolean", isPotentiallyEmpty(t))
+                case WdlArrayType(WdlIntegerType) =>
+                    mkPrimitiveArray("int", isPotentiallyEmpty(t))
+                case WdlArrayType(WdlFloatType) =>
+                    mkPrimitiveArray("float", isPotentiallyEmpty(t))
+                case WdlArrayType(WdlStringType) =>
+                    mkPrimitiveArray("string", isPotentiallyEmpty(t))
+                case WdlArrayType(WdlFileType) =>
+                    mkPrimitiveArray("file", isPotentiallyEmpty(t))
 
                 // complex types, that may contains files
                 case _ => mkComplex()
@@ -478,7 +487,7 @@ case class CompilerNative(dxWDLrtId: String,
                 // extract the archiveFileId field
                 val details:JsValue = jsValueOfJsonNode(desc.getDetails(classOf[JsonNode]))
                 val pkgFile:DXFile = details.asJsObject.fields.get("archiveFileId") match {
-                    case Some(id) => Utils.dxFileOfJsValue(id)
+                    case Some(id) => dxFileFromJsValue(id)
                     case _ => throw new Exception(s"Badly formatted record ${dxRecord}")
                 }
                 val pkgName = pkgFile.describe.getName
@@ -530,7 +539,8 @@ case class CompilerNative(dxWDLrtId: String,
             "outputSpec" -> JsArray(outputSpec),
             "runSpec" -> runSpec,
             "dxapi" -> JsString("1.0.0"),
-            "access" -> access
+            "access" -> access,
+            "tags" -> JsArray(JsString("dxWDL"))
         )
     }
 
@@ -629,7 +639,7 @@ case class CompilerNative(dxWDLrtId: String,
                                               DxlStage(dxStage, IORef.Output, argName.dxVarName))
                         val fields = genFieldsCastIfRequired(wvl, argName.wdlType, cVar)
                         m ++ fields.toMap
-                    case IR.SArgWorkflowInput(argName) =>
+                    case IR.SArgWorkflowInput(argName, _) =>
                         val wvl = WdlVarLinks(cVar.wdlType,
                                               cVar.attrs,
                                               DxlWorkflowInput(argName.dxVarName))
@@ -650,7 +660,7 @@ case class CompilerNative(dxWDLrtId: String,
                                stageDict: Map[String, DXWorkflowStage]): Vector[JsValue] = {
         // deal with default values
         val attrs:DeclAttrs = sArg match {
-            case IR.SArgWorkflowInput(_) =>
+            case IR.SArgWorkflowInput(_, _) =>
                 // input is provided by the user
                 DeclAttrs.empty
             case IR.SArgConst(wdlValue) =>
@@ -695,7 +705,7 @@ case class CompilerNative(dxWDLrtId: String,
                                       cVar.attrs,
                                       DxlStage(dxStage, IORef.Output, argName.dxVarName))
                 genFieldsCastIfRequired(wvl, argName.wdlType, cVar)
-            case IR.SArgWorkflowInput(argName: CVar) =>
+            case IR.SArgWorkflowInput(argName: CVar, _) =>
                 val wvl = WdlVarLinks(cVar.wdlType,
                                       cVar.attrs,
                                       DxlWorkflowInput(argName.dxVarName))
@@ -752,11 +762,21 @@ case class CompilerNative(dxWDLrtId: String,
                            "properties" -> JsObject(CHECKSUM_PROP -> JsString(digest)),
                            "stages" -> JsArray(stagesReq),
                            "inputs" -> JsArray(wfInputSpec),
-                           "outputs" -> JsArray(wfOutputSpec))
+                           "outputs" -> JsArray(wfOutputSpec),
+                           "tags" -> JsArray(JsString("dxWDL")))
 
         val rep = DXAPI.workflowNew(jsonNodeOfJsValue(req), classOf[JsonNode])
         val id = apiParseReplyID(rep)
-        DXWorkflow.getInstance(id)
+        val dxWf = DXWorkflow.getInstance(id)
+
+        // close the workflow
+        try {
+            dxWf.close()
+        } catch {
+            case e: Throwable =>
+                warning(verbose, e.getMessage)
+        }
+        dxWf
     }
 
     // Compile an entire workflow

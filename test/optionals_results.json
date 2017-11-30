@@ -1,8 +1,11 @@
 {
+  "optionals.inc_result": 107,
+  "optionals.concat_result": "FAIL_FAIL",
   "optionals.mi2_result" : 13,
   "optionals.mi3_result" : 34,
   "optionals.ms1_result" : "french horn",
   "optionals.ms2_result" : "flute",
   "optionals.mul2_result" : 20,
-  "optionals.add2_result": [9, 10]
+  "optionals.add2_result": [9, 10],
+  "optionals.add3_result": [34, 34]
 }

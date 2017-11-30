@@ -15,8 +15,7 @@ import wdl4s.wdl.types._
 import wdl4s.wdl.values._
 import wdl4s.wdl.WdlExpression.AstForExpressions
 
-case class CompilerIR(gWorkflowOutputs: Option[Seq[WorkflowOutput]],
-                      destination: String,
+case class CompilerIR(destination: String,
                       instanceTypeDB: InstanceTypeDB,
                       cef: CompilerErrorFormatter,
                       reorg: Boolean,
@@ -400,10 +399,12 @@ workflow w {
     }
 
     //  1) Assert that there are no calculations in the outputs
-    //  2) Figure out from gWorkflowOutputs the output cVars and sArgs.
+    //  2) Figure out from the output cVars and sArgs.
     //
-    private def prepareOutputSection(env: CallEnv) : Vector[(CVar, SArg)] = {
-        gWorkflowOutputs match {
+    private def prepareOutputSection(env: CallEnv,
+                                     wfOutputs: Option[Seq[WorkflowOutput]])
+            : Vector[(CVar, SArg)] = {
+        wfOutputs match {
             case None =>
                 Vector.empty
             case Some(outputs) => outputs.map { wot =>
@@ -565,8 +566,7 @@ workflow w {
                         // This is an applet optional input, we don't have to supply it
                         IR.SArgEmpty
                     } else {
-                        // A compulsory input. Print a warning, the user may wish to supply
-                        // it at runtime.
+                        // A missing compulsory input
                         val msg = s"""|Workflow doesn't supply required input ${cVar.name}
                                       |to call ${call.unqualifiedName}
                                       |""".stripMargin.replaceAll("\n", " ")
@@ -912,36 +912,24 @@ workflow w {
          applet)
     }
 
-    // Create an applet to reorganize the output files. We want
-    // to move the intermediate results to a subdirectory.
-    //
-    // Tricky parts:
-    // 1) It needs to process all the workflow outputs, to find the files
-    //    that belong to the final results.
-    // 2) The workflow must wait for the reorg to complete. To achieve
-    //    this, we return the inputs as outputs. The workflow as a whole
-    //    waits on the reorg applet outputs.
+    // Create an applet to reorganize the output files. We want to
+    // move the intermediate results to a subdirectory.  The applet
+    // needs to process all the workflow outputs, to find the files
+    // that belong to the final results.
     private def createReorgApplet(wfUnqualifiedName: String,
                                   wfOutputs: Vector[(CVar, SArg)]) : (IR.Stage, IR.Applet) = {
         val appletName = wfUnqualifiedName ++ "_reorg"
         trace(verbose.on, s"Compiling output reorganization applet ${appletName}")
 
         val inputVars: Vector[IR.CVar] = wfOutputs.map{ case (cVar, _) => cVar }
-        val outputVars: Vector[IR.CVar] = inputVars
+        val outputVars= Vector.empty[IR.CVar]
         val inputDecls: Vector[Declaration] = wfOutputs.map{ case(cVar, _) =>
             WdlRewrite.declaration(cVar.wdlType, cVar.dxVarName, None)
         }.toVector
 
-        // The outputs are equal to the inputs
-        val outputDecls: Vector[WorkflowOutput] = wfOutputs.map{ case (cVar, _) =>
-            WdlRewrite.workflowOutput(cVar.dxVarName,
-                                      cVar.wdlType,
-                                      WdlExpression.fromString(cVar.dxVarName))
-        }
-
         // Create a workflow with no calls.
         val code:WdlWorkflow = WdlRewrite.workflowGenEmpty("w")
-        code.children = inputDecls ++ outputDecls
+        code.children = inputDecls
 
         // We need minimal compute resources, use the default instance type
         val applet = IR.Applet(appletName,
@@ -993,6 +981,11 @@ workflow w {
             case decl:Declaration =>
                 val cVar = CVar(decl.unqualifiedName, decl.wdlType, DeclAttrs.empty, decl.ast)
                 val sArg = decl.expression match {
+                    case None if (cVar.name contains "___") =>
+                        // An artificial input, to allow providing a value
+                        // for an internal call argument
+                        val originalFqn = cVar.name.replaceAll("___", ".")
+                        IR.SArgWorkflowInput(cVar, Some(originalFqn))
                     case None =>
                         // a default value is not provided, this is a workflow input
                         IR.SArgWorkflowInput(cVar)
@@ -1061,7 +1054,7 @@ workflow w {
             accu :+ (stage,appletOpt)
         }
 
-        val wfOutputs = prepareOutputSection(env)
+        val wfOutputs = prepareOutputSection(env, Some(wf.outputs))
 
         // Add a reorganization applet if requested
         val allStageInfoWithReorg: Vector[(IR.Stage, Option[IR.Applet])] =

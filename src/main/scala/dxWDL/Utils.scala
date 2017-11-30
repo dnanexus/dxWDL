@@ -97,6 +97,7 @@ object Utils {
     val APPLET_LOG_MSG_LIMIT = 1000
     val CHECKSUM_PROP = "dxWDL_checksum"
     val DOWNLOAD_RETRY_LIMIT = 3
+    val DX_FUNCTIONS_FILES = "dx_functions_files.json"
     val DX_HOME = "/home/dnanexus"
     val DX_INSTANCE_TYPE_ATTR = "dx_instance_type"
     val DX_URL_PREFIX = "dx://"
@@ -105,12 +106,12 @@ object Utils {
     val INSTANCE_TYPE_DB_FILENAME = "instanceTypeDB.json"
     val INTERMEDIATE_RESULTS_FOLDER = "intermediate"
     val LOCAL_DX_FILES_CHECKPOINT_FILE = "localized_files.json"
-    val DX_FUNCTIONS_FILES = "dx_functions_files.json"
     val LINK_INFO_FILENAME = "linking.json"
     val MAX_STRING_LEN = 8 * 1024     // Long strings cause problems with bash and the UI
     val MAX_NUM_FILES_MOVE_LIMIT = 1000
     val OUTPUT_SECTION = "outputs"
     val SCATTER = "scatter"
+    val RUNNER_TASK_ENV_FILE = "taskEnv.json"
     val TMP_VAR_NAME_PREFIX = "xtmp"
     val UPLOAD_RETRY_LIMIT = DOWNLOAD_RETRY_LIMIT
 
@@ -307,22 +308,14 @@ object Utils {
         DXJob.getInstance(id)
     }
 
-        // dx does not allow dots in variable names, so we
-        // convert them to underscores.
+    // dx does not allow dots in variable names, so we
+    // convert them to underscores.
     def transformVarName(varName: String) : String = {
         varName.replaceAll("\\.", "_")
     }
 
-    // Dots are illegal in applet variable names. For example,
-    // "Add.sum" must be encoded. As a TEMPORARY hack, we convert
-    // dots into "___".
+    // Dots are illegal in applet variable names.
     def encodeAppletVarName(varName : String) : String = {
-        // Make sure the variable does not already have the "___"
-        // sequence.
-        reservedSubstrings.foreach{ s =>
-            if (varName contains s)
-                throw new Exception(s"Variable ${varName} includes the reserved substring ${s}")
-        }
         if (varName contains ".")
             throw new Exception(s"Variable ${varName} includes the illegal symbol \\.")
         varName
@@ -370,12 +363,7 @@ object Utils {
     }
 
     def callUniqueName(call : WdlCall) : String = {
-        val retval = call.alias match {
-            case Some(x) => x
-            case None => Utils.taskOfCall(call).name
-        }
-        assert(retval == call.unqualifiedName)
-        retval
+        call.unqualifiedName
     }
 
 
@@ -604,7 +592,7 @@ object Utils {
     //
     //  {"$dnanexus_link": "file-F0J6JbQ0ZvgVz1J9q5qKfkqP"}
     //
-    def dxFileOfJsValue(jsValue : JsValue) : DXFile = {
+    def dxFileFromJsValue(jsValue : JsValue) : DXFile = {
         val innerObj = jsValue match {
             case JsObject(fields) =>
                 fields.get("$dnanexus_link") match {
@@ -638,6 +626,10 @@ object Utils {
             case None => DXFile.getInstance(fid)
             case Some(pid) => DXFile.getInstance(fid, DXProject.getInstance(pid))
         }
+    }
+
+    def dxFileToJsValue(dxFile: DXFile) : JsValue = {
+        jsValueOfJsonNode(dxFile.getLinkAsJson)
     }
 
     // types

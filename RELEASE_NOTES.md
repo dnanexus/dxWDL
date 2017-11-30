@@ -1,16 +1,51 @@
 # Release Notes
 
 ## 0.52
-Moving to use DNAnexus workflow inputs and outputs.
-
+- Uplift the code to use DNAnexus workflow inputs and outputs.
 Running a workflow now has slighly easier command line syntax.
 For example, if workflow `foo` takes an integer
 argument `N`, then running it through the CLI is done like
 this:
+
 ```
 dx run foo -iN=19
 ```
 
+- Revamp the conversions between dx:file and wdl:file. This allows
+specifying dx files in defaults.
+- Initial support for non-empty WDL array types, for example `Array[String]+`.
+- Improved handling of optional values
+
+- An experimental new syntax for specifying inputs where the workflow
+is underspecified. WDL allows leaving required call inputs unassigned, and
+specifying them from the input file. For example, workflow `math`
+calls task `add`, but does not specify argument `b`. It can then
+be specified from the input file as follows: `{ "math.add.b" : 3}`.
+
+```
+task add {
+    Int a
+    Int b
+    output {
+        Int result = a + b
+    }
+}
+
+workflow math {
+    call add { input: a = 3 }
+    output {
+       add.result
+    }
+}
+```
+
+The dx:workflow that is compiled from `math` can set this variable from
+the command line as follows:
+```
+dx run math -iadd___b=5
+```
+
+This command line syntax may change in the future.
 
 ## 0.51
 - Adding a `-quiet` flag to suppress warning and informational

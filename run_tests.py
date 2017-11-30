@@ -52,7 +52,8 @@ medium_test_list = [
 ]
 
 # Tests with the reorg flags
-test_reorg=["files"]
+test_reorg=["files", "math"]
+test_defaults=["files", "math"]
 
 TestDesc = namedtuple('TestDesc', 'wf_name wdl_source wdl_input dx_input results')
 
@@ -145,7 +146,8 @@ def validate_result(tname, analysis_desc, key, expected_val):
             print("field {} missing from workflow results {}".format(field_name, results))
             return False
         result = results[field_name]
-        if type(result) is list:
+        if ((type(result) is list) and
+            (type(expected_val) is list)):
             result.sort()
             expected_val.sort()
         if result != expected_val:
@@ -183,7 +185,6 @@ def build_workflow(tname, project, folder, version_id, compiler_flags):
                 os.path.join(top_dir, "dxWDL-{}.jar".format(version_id)),
                 "compile",
                 desc.wdl_source,
-                "-inputs", desc.wdl_input,
                 "-folder", folder,
                 "-project", project.get_id() ]
     cmdline += compiler_flags
@@ -221,15 +222,18 @@ def run_workflow(project, test_folder, tname, wfId, delay_workspace_destruction)
     def once():
         try:
             desc = test_files[tname]
-            inputs = read_json_file_maybe_empty(desc.dx_input)
-            #print("inputs={}".format(inputs))
+            if tname in test_defaults:
+                inputs = {}
+            else:
+                inputs = read_json_file_maybe_empty(desc.dx_input)
             workflow = dxpy.DXWorkflow(project=project.get_id(), dxid=wfId)
             project.new_folder(test_folder, parents=True)
             analysis = workflow.run(inputs,
                                     project=project.get_id(),
                                     folder=test_folder,
                                     name="{} {}".format(desc.wf_name, git_revision),
-                                    delay_workspace_destruction=delay_workspace_destruction)
+                                    delay_workspace_destruction=delay_workspace_destruction,
+                                    instance_type="mem1_ssd1_x4")
             return analysis
         except Exception, e:
             print("exception message={}".format(e))
@@ -326,8 +330,15 @@ def build_dirs(project):
 # Some compiler flags are test specific
 def compiler_per_test_flags(tname):
     flags = []
+    desc = test_files[tname]
     if tname in test_reorg:
         flags.append("-reorg")
+    if tname in test_defaults:
+        flags.append("-defaults")
+        flags.append(desc.wdl_input)
+    else:
+        flags.append("-inputs")
+        flags.append(desc.wdl_input)
     return flags
 
 ######################################################################
@@ -380,8 +391,6 @@ def main():
                            action="store_true", default=False)
     argparser.add_argument("--project", help="DNAnexus project ID",
                            default="project-F07pBj80ZvgfzQK28j35Gj54")
-    argparser.add_argument("--reorg", help="Reorganize workflow outputs",
-                           action="store_true", default=False)
     argparser.add_argument("--test", help="Run a test, or a subgroup of tests",
                            action="append", default=[])
     argparser.add_argument("--test-list", help="Print a list of available tests",
@@ -425,8 +434,6 @@ def main():
         compiler_flags += ["-compileMode", args.compile_mode]
     if args.force:
         compiler_flags.append("-force")
-    if args.reorg:
-        compiler_flags.append("-reorg")
     if args.verbose:
         compiler_flags.append("-verbose")
 
