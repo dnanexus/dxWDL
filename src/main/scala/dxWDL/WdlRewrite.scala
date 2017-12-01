@@ -91,11 +91,17 @@ object WdlRewrite {
             case WdlIntegerType => WdlInteger(0)
             case WdlFloatType => WdlFloat(0.0)
             case WdlStringType => WdlString("")
-            //case WdlFileType => WdlFile("/tmp/X.txt")
             case WdlFileType => WdlFile("")
+
             case WdlOptionalType(t) => genDefaultValueOfType(t)
-            case WdlArrayType(x) => WdlArray(WdlArrayType(x), List())  // an empty array
-            case WdlMapType(keyType, valueType) => WdlMap(WdlMapType(keyType, valueType), Map.empty)
+            case WdlMaybeEmptyArrayType(t) =>
+                // an empty array
+                WdlArray(WdlMaybeEmptyArrayType(t), List())
+            case WdlNonEmptyArrayType(t) =>
+                // Non empty array
+                WdlArray(WdlNonEmptyArrayType(t), List(genDefaultValueOfType(t)))
+            case WdlMapType(keyType, valueType) =>
+                WdlMap(WdlMapType(keyType, valueType), Map.empty)
             case WdlObjectType => WdlObject(Map.empty)
             case WdlPairType(lType, rType) => WdlPair(genDefaultValueOfType(lType),
                                                       genDefaultValueOfType(rType))

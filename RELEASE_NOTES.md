@@ -1,5 +1,12 @@
 # Release Notes
 
+## 0.54
+- More accurate detection of the IO classes in dx:applets.
+
+## 0.53
+- Not closing dx:workflow objects, this is too restrictive.
+
+
 ## 0.52
 - Uplift the code to use DNAnexus workflow inputs and outputs.
 Running a workflow now has slighly easier command line syntax.
