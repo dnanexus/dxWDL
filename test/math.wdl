@@ -4,6 +4,7 @@ workflow math {
     Array[Int]+ numbers
     Int ai
     Int bi
+    Int? ci = 2 + 3 + 5
 
     call lib.ArrayLength as aLen { input: ai=[] }
 
@@ -70,6 +71,10 @@ workflow math {
     call lib.Sum as inc_sum {input: ints = inc2.result}
     Pair[Float,Int] p = (1.0, 19)
 
+    call lib.Inc as inc4 {
+        input:  i = ci
+    }
+
     output {
         Int zero_len = aLen.result
         Int? invalid = false_branch
@@ -85,5 +90,6 @@ workflow math {
         # Expressions in output section
         Int expr1 = ai + bi
         Float z = p.left
+        Int co = inc4.result
     }
 }

@@ -14,8 +14,7 @@ class Wdl4sTest extends FlatSpec with Matchers {
         val s = "5 * (1 + 1)"
         val expr : WdlExpression = WdlExpression.fromString(s)
         val s2 = expr.toWdlString
-        assert(s == s2)
-
+        s should equal(s2)
     }
 
     it should "convert string constants to expressions" in {
@@ -27,7 +26,7 @@ class Wdl4sTest extends FlatSpec with Matchers {
 
     it should "generate expression variable ID" in {
         val expr = WdlExpression.fromString("xxx")
-        assert(expr.toWdlString == "xxx")
+        expr.toWdlString should equal("xxx")
     }
 
     it should "retrieve source code for task" in {
@@ -45,12 +44,12 @@ class Wdl4sTest extends FlatSpec with Matchers {
 
         val ns = WdlNamespaceWithWorkflow.load(wdl, Seq.empty).get
         ns.findTask("a") foreach { task =>
-            assert(task.name == "a")
+            task.name should equal("a")
         }
 
         /* Traverse the tree to find all Task definitions */
         AstTools.findAsts(ns.ast, "Task") foreach {ast =>
-            assert("a" == ast.getAttribute("name").sourceString)
+            "a" should equal(ast.getAttribute("name").sourceString)
         }
 
         // doesn't work, toWdlString is not implemented for values
@@ -119,7 +118,7 @@ class Wdl4sTest extends FlatSpec with Matchers {
             }
             //System.err.println(s"dep vars(${expr.toWdlString}) = ${variables}")
             //assert(expr.toWdlString == variables)
-            assert(variables == List("p"))
+            variables should equal(List("p"))
         }
     }
 
@@ -202,7 +201,7 @@ class Wdl4sTest extends FlatSpec with Matchers {
                 .filter { decl => !isLocal(decl, wfOutputs) }
                 .map { decl => decl.unqualifiedName }
                 .toList
-        assert(decls == List("x", "z"))
+        decls should equal(List("x", "z"))
     }
 
     it should "Handle null values" in {

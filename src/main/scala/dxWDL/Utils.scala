@@ -35,6 +35,10 @@ class UnboundVariableException private(ex: RuntimeException) extends RuntimeExce
 }
 
 object Utils {
+    class VariableAccessException private(ex: Exception) extends RuntimeException(ex) {
+        def this() = this(new RuntimeException("Variable access in supposed constant"))
+    }
+
     // Information used to link applets that call other applets. For example, a scatter
     // applet calls applets that implement tasks.
     case class AppletLinkInfo(inputs: Map[String, WdlType], dxApplet: DXApplet)
@@ -186,6 +190,32 @@ object Utils {
     }
 
 
+    // Check if the WDL expression is a constant. If so, calculate and return it.
+    // Otherwise, return None.
+    def ifConstEval(expr: WdlExpression) : Option[WdlValue] = {
+        try {
+            def lookup(x:String) : WdlValue = {
+                throw new VariableAccessException()
+            }
+            val ve = ValueEvaluator(lookup, PureStandardLibraryFunctions)
+            ve.evaluate(expr.ast) match {
+                case Failure(_) => None
+                case Success(wValue:WdlValue) => Some(wValue)
+            }
+        } catch {
+            case e: VariableAccessException =>
+                // Not a constant
+                None
+        }
+    }
+
+    def isExpressionConst(expr: WdlExpression) : Boolean = {
+        ifConstEval(expr) match {
+            case None => false
+            case Some(_) => true
+        }
+    }
+
     // Is a declaration of a task/workflow an input for the
     // compiled dx:applet/dx:workflow ?
     //
@@ -196,12 +226,17 @@ object Utils {
     //   Int? z = 3
     //
     // x - must be provided as an applet input
-    // y, pi -- calculated, non inputs
+    // y - can be overriden, so is an input
+    // pi -- calculated, non inputs
     // z - is an input with a default value
     def declarationIsInput(decl: Declaration) : Boolean = {
         (decl.expression, decl.wdlType) match {
             case (None,_) => true
             case (Some(_), WdlOptionalType(_)) => true
+            case (Some(expr), _) if isExpressionConst(expr) =>
+                //true
+                // This causes bugs that we will deal with later.
+                false
             case (_,_) => false
         }
     }

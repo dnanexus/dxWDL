@@ -10,6 +10,7 @@ workflow optionals {
     Int a
     Int b
     Boolean? flag
+    Array[String] foodArray = ["our", "own", "peanut", "butter"]
 
     # Missing compulsory argument, should be added as
     # an artifical workflow input
@@ -17,6 +18,9 @@ workflow optionals {
 
     call lib_str.ConcatArray as concatArr {
         input: words = sa
+    }
+    call lib_str.ConcatArray as concatArr2 {
+        input: words = foodArray
     }
 
     call lib_str.Concat as concat { input:

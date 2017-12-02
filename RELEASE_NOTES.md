@@ -2,6 +2,10 @@
 
 ## 0.54
 - More accurate detection of the IO classes in dx:applets.
+- Improved handling of WDL constants. For example, multi word
+constants such as `["1", "2", "4"]`, and `4 + 11` are recognized as
+such. When possible, they are evaluated at runtime.
+
 
 ## 0.53
 - Not closing dx:workflow objects, this is too restrictive.

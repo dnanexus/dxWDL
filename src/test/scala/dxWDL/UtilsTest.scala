@@ -2,21 +2,22 @@ package dxWDL
 
 import com.typesafe.config._
 import net.jcazevedo.moultingyaml._
-import org.scalatest.{BeforeAndAfterEach, FlatSpec, OneInstancePerTest}
+import org.scalatest.{FlatSpec, Matchers}
 import scala.collection.JavaConverters._
 import spray.json._
+import wdl4s.wdl._
 import wdl4s.wdl.types._
 import wdl4s.wdl.values._
 
-class UtilsTest extends FlatSpec with BeforeAndAfterEach with OneInstancePerTest {
+class UtilsTest extends FlatSpec with Matchers {
     private def checkMarshal(v : WdlValue) : Unit = {
         val m = Utils.marshal(v)
         val u = Utils.unmarshal(m)
-        assert(v == u)
+        v should equal(u)
     }
 
 
-    "Utils" should "marshal and unmarshal wdlValues" in {
+    it should "marshal and unmarshal wdlValues" in {
         checkMarshal(WdlString("hello"))
         checkMarshal(WdlInteger(33))
         checkMarshal(WdlArray(
@@ -46,14 +47,14 @@ class UtilsTest extends FlatSpec with BeforeAndAfterEach with OneInstancePerTest
 
     it should "sanitize json strings" in {
         List("A", "2211", "abcf", "abc ABC 123").foreach(s =>
-            assert(Utils.sanitize(s) == s)
+            Utils.sanitize(s) should equal(s)
         )
-        assert(Utils.sanitize("{}\\//") == "     ")
+        Utils.sanitize("{}\\//") should equal("     ")
     }
 
     it should "print WdlBoolean in a human readable fashion" in {
         val b = WdlBoolean(true)
-        assert(b.toWdlString == "true")
+        b.toWdlString should equal("true")
     }
 
     it should "pretty print strings in IR with newlines" in {
@@ -66,7 +67,7 @@ class UtilsTest extends FlatSpec with BeforeAndAfterEach with OneInstancePerTest
                      |  \//||\/||
                      |  // ||  ||__
                      |""".stripMargin
-        assert(yaml1.prettyPrint == buf)
+        yaml1.prettyPrint should equal(buf)
         //print(buf)
 
 /*        {
@@ -82,6 +83,23 @@ class UtilsTest extends FlatSpec with BeforeAndAfterEach with OneInstancePerTest
                           | world
                           | it is nice outside""".stripMargin)
         } */
+    }
+
+    it should "evaluate constants" in {
+        val expr = WdlExpression.fromString("[1, 2, 19]")
+        val answer = WdlArray(WdlArrayType(WdlIntegerType),
+                              List(WdlInteger(1), WdlInteger(2), WdlInteger(19)))
+        Utils.ifConstEval(expr) should equal(Some(answer))
+    }
+
+    it should "evaluate expressions with constants only" in {
+        val expr = WdlExpression.fromString("3 + 8")
+        Utils.ifConstEval(expr) should equal(Some(WdlInteger(11)))
+    }
+
+    it should "identify non-constants" in {
+        val expr = WdlExpression.fromString("i")
+        Utils.ifConstEval(expr) should equal(None)
     }
 
     "SprayJs" should "marshal optionals" in {
@@ -115,6 +133,7 @@ class UtilsTest extends FlatSpec with BeforeAndAfterEach with OneInstancePerTest
             assert(assetId.startsWith("record"))
             r -> assetId
         }.toMap
-        assert(assets("aws:us-east-1") == "record-F5gyyXj0P26p9Jx12q3XY0qV")
+        assets("aws:us-east-1") should equal("record-F5gyyXj0P26p9Jx12q3XY0qV")
     }
+
 }
