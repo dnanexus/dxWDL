@@ -1,12 +1,12 @@
 package dxWDL
 
-import org.scalatest.{FlatSpec}
+import org.scalatest.{FlatSpec, Matchers}
 import scala.util.{Failure, Success}
 import wdl4s.wdl._
 import wdl4s.wdl.expression._
 import wdl4s.wdl.types._
 
-class TypeEvalTest extends FlatSpec {
+class TypeEvalTest extends FlatSpec with Matchers {
 
     val wdlCode =
         """|task Add {
@@ -69,7 +69,7 @@ class TypeEvalTest extends FlatSpec {
 
         call.inputMappings.foreach { case (_, expr) =>
             val t:WdlType = evalType(expr, ssc)
-            assert(t == WdlIntegerType)
+            t should equal(WdlIntegerType)
         }
     }
 
@@ -114,10 +114,10 @@ class TypeEvalTest extends FlatSpec {
         val e1 = copy2call.inputMappings("src")
         val t1 = evalType(e1, copy2call)
         //System.err.println(s"type(${e1.toWdlString}) = ${t1.toWdlString}")
-        assert(t1 == WdlFileType)
+        t1 should equal(WdlFileType)
 
         val e2 = copy2call.inputMappings("basename")
-        assert(evalType(e2, copy2call) == WdlStringType)
+        evalType(e2, copy2call) should equal(WdlStringType)
     }
 
 
@@ -174,13 +174,13 @@ class TypeEvalTest extends FlatSpec {
         val e1 = incCall.inputMappings("i")
         val t1 = evalType(e1, incCall)
         //System.err.println(s"type(${e1.toWdlString}) = ${t1.toWdlString}")
-        assert(t1 == WdlIntegerType)
+        t1 should equal(WdlIntegerType)
 
         val output = wf.outputs.head
         //System.err.println(output)
         val e2 = output.requiredExpression
         val t2 = evalType(e2, wf)
         //System.err.println(s"type(${e2.toWdlString}) = ${t2.toWdlString}")
-        assert(t2 == WdlMaybeEmptyArrayType(WdlIntegerType))
+        t2 should equal(WdlMaybeEmptyArrayType(WdlIntegerType))
     }
 }

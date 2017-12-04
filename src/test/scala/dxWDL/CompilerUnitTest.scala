@@ -1,9 +1,9 @@
 package dxWDL
 
-import org.scalatest.{BeforeAndAfterEach, FlatSpec}
+import org.scalatest.{FlatSpec, Matchers}
 import wdl4s.wdl._
 
-class CompilerUnitTest extends FlatSpec with BeforeAndAfterEach {
+class CompilerUnitTest extends FlatSpec with Matchers {
 
     // Look for a call inside a namespace.
 /*    private def getCallFromNamespace(ns : WdlNamespaceWithWorkflow, callName : String ) : WdlCall = {
@@ -142,7 +142,7 @@ class CompilerUnitTest extends FlatSpec with BeforeAndAfterEach {
         val ns = WdlNamespace.loadUsingSource(wdl, None, None).get
         val decl = ns.declarations.head
         val strWdlCode = WdlPrettyPrinter(true, None).apply(decl, 0).mkString("\n")
-        assert(compareIgnoreWhitespace(strWdlCode, wdl))
+        compareIgnoreWhitespace(strWdlCode, wdl) should be(true)
     }
 
     /*

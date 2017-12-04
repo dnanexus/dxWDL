@@ -58,25 +58,39 @@ case class DxNI(ns: WdlNamespace, verbose: Utils.Verbose) {
                                  argName: String,
                                  ioClass: IOClass,
                                  isOptional: Boolean) : WdlType = {
-        val t:WdlType = ioClass match {
-            case IOClass.BOOLEAN => WdlBooleanType
-            case IOClass.INT => WdlIntegerType
-            case IOClass.FLOAT => WdlFloatType
-            case IOClass.STRING => WdlStringType
-            case IOClass.FILE => WdlFileType
-            case IOClass.ARRAY_OF_BOOLEANS => WdlArrayType(WdlBooleanType)
-            case IOClass.ARRAY_OF_INTS => WdlArrayType(WdlIntegerType)
-            case IOClass.ARRAY_OF_FLOATS => WdlArrayType(WdlFloatType)
-            case IOClass.ARRAY_OF_STRINGS => WdlArrayType(WdlStringType)
-            case IOClass.ARRAY_OF_FILES => WdlArrayType(WdlFileType)
+        if (isOptional) {
+            ioClass match {
+            case IOClass.BOOLEAN => WdlOptionalType(WdlBooleanType)
+            case IOClass.INT => WdlOptionalType(WdlIntegerType)
+            case IOClass.FLOAT => WdlOptionalType(WdlFloatType)
+            case IOClass.STRING => WdlOptionalType(WdlStringType)
+            case IOClass.FILE => WdlOptionalType(WdlFileType)
+            case IOClass.ARRAY_OF_BOOLEANS => WdlMaybeEmptyArrayType(WdlBooleanType)
+            case IOClass.ARRAY_OF_INTS => WdlMaybeEmptyArrayType(WdlIntegerType)
+            case IOClass.ARRAY_OF_FLOATS => WdlMaybeEmptyArrayType(WdlFloatType)
+            case IOClass.ARRAY_OF_STRINGS => WdlMaybeEmptyArrayType(WdlStringType)
+            case IOClass.ARRAY_OF_FILES => WdlMaybeEmptyArrayType(WdlFileType)
             case _ => throw new Exception(
                 s"""|Cannot call applet ${appletName} from WDL, argument ${argName}
                     |has IO class ${ioClass}""".stripMargin.replaceAll("\n", " "))
+            }
+        } else {
+            ioClass match {
+                case IOClass.BOOLEAN => WdlBooleanType
+                case IOClass.INT => WdlIntegerType
+                case IOClass.FLOAT => WdlFloatType
+                case IOClass.STRING => WdlStringType
+                case IOClass.FILE => WdlFileType
+                case IOClass.ARRAY_OF_BOOLEANS => WdlNonEmptyArrayType(WdlBooleanType)
+                case IOClass.ARRAY_OF_INTS => WdlNonEmptyArrayType(WdlIntegerType)
+                case IOClass.ARRAY_OF_FLOATS => WdlNonEmptyArrayType(WdlFloatType)
+                case IOClass.ARRAY_OF_STRINGS => WdlNonEmptyArrayType(WdlStringType)
+                case IOClass.ARRAY_OF_FILES => WdlNonEmptyArrayType(WdlFileType)
+                case _ => throw new Exception(
+                    s"""|Cannot call applet ${appletName} from WDL, argument ${argName}
+                        |has IO class ${ioClass}""".stripMargin.replaceAll("\n", " "))
+            }
         }
-        if (isOptional)
-            WdlOptionalType(t)
-        else
-            t
     }
 
     // Convert an applet to a WDL task with an empty body

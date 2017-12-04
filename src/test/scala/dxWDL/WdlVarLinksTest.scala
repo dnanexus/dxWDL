@@ -1,25 +1,25 @@
 package dxWDL
 
 import com.dnanexus.{IOClass}
-import org.scalatest.FlatSpec
+import org.scalatest.{FlatSpec, Matchers}
 import spray.json._
 import wdl4s.wdl.types._
 
-class WdlVarLinksTest extends FlatSpec {
+class WdlVarLinksTest extends FlatSpec with Matchers {
 
     it should "import JSON values" in {
         val wvl = WdlVarLinks.importFromDxExec(IOClass.BOOLEAN, DeclAttrs.empty, JsBoolean(true))
-        assert(wvl.wdlType == WdlBooleanType)
+        wvl.wdlType should equal(WdlBooleanType)
 
         val wvl2 = WdlVarLinks.importFromDxExec(IOClass.ARRAY_OF_FLOATS, DeclAttrs.empty,
                                                 JsArray(Vector(JsNumber(1), JsNumber(2.3))))
-        assert(wvl2.wdlType == WdlArrayType(WdlFloatType))
+        wvl2.wdlType should equal(WdlArrayType(WdlFloatType))
 
         val wvl3 = WdlVarLinks.importFromDxExec(IOClass.ARRAY_OF_STRINGS,
                                                 DeclAttrs.empty,
                                                 JsArray(Vector(JsString("hello"),
                                                                JsString("sunshine"),
                                                                JsString("ride"))))
-        assert(wvl3.wdlType == WdlArrayType(WdlStringType))
+        wvl3.wdlType should equal(WdlArrayType(WdlStringType))
     }
 }

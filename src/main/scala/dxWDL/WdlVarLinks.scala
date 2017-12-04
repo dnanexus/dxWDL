@@ -445,8 +445,18 @@ object WdlVarLinks {
                     throw new AppInternalException(s"string is longer than ${Utils.MAX_STRING_LEN}")
                 JsString(buf)
             case (WdlBooleanType,WdlBoolean(b)) => JsBoolean(b)
+            case (WdlBooleanType,WdlString("true")) => JsBoolean(true)
+            case (WdlBooleanType,WdlString("false")) => JsBoolean(false)
+
+            // Integer conversions
             case (WdlIntegerType,WdlInteger(n)) => JsNumber(n)
+            case (WdlIntegerType,WdlString(s)) => JsNumber(s.toInt)
+            case (WdlIntegerType,WdlFloat(x)) => JsNumber(x.toInt)
+
+            // Float conversions
             case (WdlFloatType, WdlFloat(x)) => JsNumber(x)
+            case (WdlFloatType, WdlInteger(n)) => JsNumber(n.toFloat)
+            case (WdlFloatType, WdlString(s)) => JsNumber(s.toFloat)
 
             // Base case: empty array
             case (_, WdlArray(_, ar)) if ar.length == 0 =>

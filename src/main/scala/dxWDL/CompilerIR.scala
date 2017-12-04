@@ -5,7 +5,7 @@ package dxWDL
 import IR.{CVar, LinkedVar, SArg}
 import net.jcazevedo.moultingyaml._
 import scala.util.{Failure, Success, Try}
-import Utils.{DX_URL_PREFIX, isNativeDxType, nonInterpolation, trace}
+import Utils.{DX_URL_PREFIX, isNativeDxType, trace}
 import wdl4s.wdl._
 import wdl4s.wdl.AstTools
 import wdl4s.wdl.AstTools.EnhancedAstNode
@@ -445,24 +445,6 @@ workflow w {
         }
     }
 
-    // Check if the WDL expression is a constant. If so, return it,
-    // otherwise, return None.
-    private def evalIfIsWdlConst(expr: WdlExpression) : Option[WdlValue] = {
-        expr.ast match {
-            case t: Terminal if t.getTerminalStr == "identifier" =>
-                None
-            case t: Terminal if nonInterpolation(t) =>
-                def lookup(x:String) : WdlValue = {
-                    throw new Exception(cef.evaluatingTerminal(t, x))
-                }
-                val ve = ValueEvaluator(lookup, PureStandardLibraryFunctions)
-                val wValue: WdlValue = ve.evaluate(expr.ast).get
-                Some(wValue)
-            case _ =>
-                None
-        }
-    }
-
     // Check if a task is a real WDL task, or if it is a wrapper for a
     // native applet.
 
@@ -494,7 +476,7 @@ workflow w {
             case None =>
                 IR.DockerImageNone
             case Some(expr) =>
-                evalIfIsWdlConst(expr) match {
+                Utils.ifConstEval(expr) match {
                     case Some(WdlString(url)) if url.startsWith(DX_URL_PREFIX) =>
                         // A constant image specified with a DX URL
                         val dxRecord = DxPath.lookupDxURLRecord(url)
@@ -990,8 +972,9 @@ workflow w {
                         // a default value is not provided, this is a workflow input
                         IR.SArgWorkflowInput(cVar)
                     case Some(expr) =>
-                        evalIfIsWdlConst(expr) match {
-                            case Some(wdlConst) => IR.SArgConst(wdlConst)
+                        Utils.ifConstEval(expr) match {
+                            case Some(wdlConst) =>
+                                IR.SArgConst(wdlConst)
                             case None => throw new Exception(cef.workflowInputDefaultMustBeConst(expr))
                         }
                 }

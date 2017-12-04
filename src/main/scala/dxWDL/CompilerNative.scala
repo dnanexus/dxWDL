@@ -600,21 +600,6 @@ case class CompilerNative(dxWDLrtId: String,
         }
     }
 
-    // Link source values to targets. This is the same as
-    // WdlVarLinks.genFields, but overcomes certain cases where the
-    // source and target WDL types do not match.
-    def genFieldsCastIfRequired(wvl: WdlVarLinks,
-                                rawSrcType: WdlType,
-                                cVar: CVar) : List[(String, JsValue)] = {
-        val srcType = Utils.stripOptional(rawSrcType)
-        val trgType = Utils.stripOptional(wvl.wdlType)
-        if (srcType != trgType)
-            throw new Exception(s"""|Link time casting from ${srcType.toWdlString}
-                                    |to ${trgType.toWdlString} not supported."""
-                                    .stripMargin.replaceAll("\n", " "))
-        WdlVarLinks.genFields(wvl, cVar.dxVarName)
-    }
-
     // Calculate the stage inputs from the call closure
     //
     // It comprises mappings from variable name to WdlType.
@@ -630,20 +615,20 @@ case class CompilerNative(dxWDLrtId: String,
                         m
                     case IR.SArgConst(wValue) =>
                         val wvl = WdlVarLinks.importFromWDL(cVar.wdlType, cVar.attrs, wValue, IODirection.Zero)
-                        val fields = genFieldsCastIfRequired(wvl, wValue.wdlType, cVar)
+                        val fields = WdlVarLinks.genFields(wvl, cVar.dxVarName)
                         m ++ fields.toMap
                     case IR.SArgLink(stageName, argName) =>
                         val dxStage = stageDict(stageName)
                         val wvl = WdlVarLinks(cVar.wdlType,
                                               cVar.attrs,
                                               DxlStage(dxStage, IORef.Output, argName.dxVarName))
-                        val fields = genFieldsCastIfRequired(wvl, argName.wdlType, cVar)
+                        val fields = WdlVarLinks.genFields(wvl, cVar.dxVarName)
                         m ++ fields.toMap
                     case IR.SArgWorkflowInput(argName, _) =>
                         val wvl = WdlVarLinks(cVar.wdlType,
                                               cVar.attrs,
                                               DxlWorkflowInput(argName.dxVarName))
-                        val fields = genFieldsCastIfRequired(wvl, argName.wdlType, cVar)
+                        val fields = WdlVarLinks.genFields(wvl, cVar.dxVarName)
                         m ++ fields.toMap
                 }
         }
@@ -704,12 +689,12 @@ case class CompilerNative(dxWDLrtId: String,
                 val wvl = WdlVarLinks(cVar.wdlType,
                                       cVar.attrs,
                                       DxlStage(dxStage, IORef.Output, argName.dxVarName))
-                genFieldsCastIfRequired(wvl, argName.wdlType, cVar)
+                WdlVarLinks.genFields(wvl, cVar.dxVarName)
             case IR.SArgWorkflowInput(argName: CVar, _) =>
                 val wvl = WdlVarLinks(cVar.wdlType,
                                       cVar.attrs,
                                       DxlWorkflowInput(argName.dxVarName))
-                genFieldsCastIfRequired(wvl, argName.wdlType, cVar)
+                WdlVarLinks.genFields(wvl, cVar.dxVarName)
             case other =>
                 throw new Exception(s"Bad value for sArg ${other}")
         }

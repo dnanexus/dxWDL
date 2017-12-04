@@ -6,5 +6,6 @@
   "math.div": 4,
   "math.sum2" : 15,
   "math.ai_inc_maybe" : 3,
-  "math.fibo2" : 8
+  "math.fibo2" : 8,
+  "math.co" : 11
 }

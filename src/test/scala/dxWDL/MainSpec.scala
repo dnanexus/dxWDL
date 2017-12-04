@@ -1,10 +1,10 @@
 package dxWDL
 
 import better.files._
-import org.scalatest.{BeforeAndAfterAll, FlatSpec, Matchers}
+import org.scalatest.{FlatSpec, Matchers}
 import dxWDL.SampleWdl.ThreeStep
 
-class MainSpec extends FlatSpec with Matchers with BeforeAndAfterAll {
+class MainSpec extends FlatSpec with Matchers {
 
     import Main._
 
