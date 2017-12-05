@@ -1,4 +1,8 @@
 {
+  "math.incA_result": 4,
+  "math.incB_result": 11,
+  "math.incD_result": 1001,
+  "math.incE_result": 18,
   "math.zero_len": 0,
   "math.y": -6,
   "math.x": 40,
@@ -6,6 +10,5 @@
   "math.div": 4,
   "math.sum2" : 15,
   "math.ai_inc_maybe" : 3,
-  "math.fibo2" : 8,
-  "math.co" : 11
+  "math.fibo2" : 8
 }

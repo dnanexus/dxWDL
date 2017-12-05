@@ -5,7 +5,7 @@ package dxWDL
 import IR.{CVar, LinkedVar, SArg}
 import net.jcazevedo.moultingyaml._
 import scala.util.{Failure, Success, Try}
-import Utils.{DX_URL_PREFIX, isNativeDxType, trace}
+import Utils.{DX_URL_PREFIX, isNativeDxType, trace, warning}
 import wdl4s.wdl._
 import wdl4s.wdl.AstTools
 import wdl4s.wdl.AstTools.EnhancedAstNode
@@ -19,6 +19,7 @@ case class CompilerIR(destination: String,
                       instanceTypeDB: InstanceTypeDB,
                       cef: CompilerErrorFormatter,
                       reorg: Boolean,
+                      lockedWf: Boolean,
                       verbose: Utils.Verbose) {
     class DynamicInstanceTypesException private(ex: Exception) extends RuntimeException(ex) {
         def this() = this(new RuntimeException("Runtime instance type calculation required"))
@@ -546,14 +547,15 @@ workflow w {
                     // input is unbound; the workflow does not provide it.
                     if (Utils.isOptional(cVar.wdlType)) {
                         // This is an applet optional input, we don't have to supply it
-                        IR.SArgEmpty
                     } else {
-                        // A missing compulsory input
+                        // A missing compulsory input, it may be provided on the command
+                        // line.
                         val msg = s"""|Workflow doesn't supply required input ${cVar.name}
                                       |to call ${call.unqualifiedName}
                                       |""".stripMargin.replaceAll("\n", " ")
-                        throw new Exception(cef.missingCallArgument(call.ast, msg))
+                        warning(verbose, cef.missingCallArgument(call.ast, msg))
                     }
+                    IR.SArgEmpty
                 case Some((_,e)) => e.ast match {
                     case t: Terminal if t.getTerminalStr == "identifier" =>
                         val lVar = env.get(t.getSourceString) match {
@@ -931,6 +933,51 @@ workflow w {
          applet)
     }
 
+    // Represent the workflow inputs with CVars.
+    // It is possible to provide a default value to a workflow input.
+    // For example:
+    // workflow w {
+    //   Int? x = 3
+    //   ...
+    // }
+    // We handle only the case where the default is a constant.
+    def buildWorkflowInputs(wfInputDecls: Seq[Declaration]) : Vector[(CVar,SArg)] = {
+        wfInputDecls.map{
+            case decl:Declaration =>
+                val cVar = CVar(decl.unqualifiedName, decl.wdlType, DeclAttrs.empty, decl.ast)
+                decl.expression match {
+                    case None if (cVar.name contains "___") =>
+                        // An artificial input, to allow providing a value
+                        // for an internal call argument
+                        val originalFqn = cVar.name.replaceAll("___", ".")
+                        (cVar, IR.SArgWorkflowInput(cVar, Some(originalFqn)))
+                    case None =>
+                        // A workflow input
+                        (cVar, IR.SArgWorkflowInput(cVar))
+                    case Some(expr) =>
+                        Utils.ifConstEval(expr) match {
+                            case Some(wdlConst) =>
+                                if (Utils.isOptional(decl.wdlType)) {
+                                    // the constant is a default value
+                                    val wvl = WdlVarLinks.importFromWDL(cVar.wdlType,
+                                                                        DeclAttrs.empty,
+                                                                        wdlConst,
+                                                                        IODirection.Zero)
+                                    val jsv = WdlVarLinks.getRawJsValue(wvl)
+                                    val attrs = DeclAttrs.empty.setDefault(jsv)
+                                    val cVarWithDflt = CVar(decl.unqualifiedName, decl.wdlType,
+                                                            attrs, decl.ast)
+                                    (cVarWithDflt, IR.SArgWorkflowInput(cVar))
+                                } else {
+                                    (cVar, IR.SArgConst(wdlConst))
+                                }
+                            case None =>
+                                throw new Exception(cef.workflowInputDefaultMustBeConst(expr))
+                        }
+                }
+        }.toVector
+    }
+
     // Compile a workflow, having compiled the independent tasks.
     def compileWorkflow(wf: WdlWorkflow,
                         taskApplets: Map[String, (IR.Applet, Vector[CVar])]) : IR.Namespace = {
@@ -950,36 +997,7 @@ workflow w {
             case _ => false
         }
         val wfProper = topDeclNonInputs ++ wfProperBlocks
-
-        // Represent the workflow inputs with CVars.
-        // It is possible to provide a default value to a workflow input.
-        // For example:
-        // workflow w {
-        //   Int? x = 3
-        //   ...
-        // }
-        // We handle only the case where the default is a constant.
-        val wfInputs: Vector[(CVar,SArg)] = wfInputDecls.map{
-            case decl:Declaration =>
-                val cVar = CVar(decl.unqualifiedName, decl.wdlType, DeclAttrs.empty, decl.ast)
-                val sArg = decl.expression match {
-                    case None if (cVar.name contains "___") =>
-                        // An artificial input, to allow providing a value
-                        // for an internal call argument
-                        val originalFqn = cVar.name.replaceAll("___", ".")
-                        IR.SArgWorkflowInput(cVar, Some(originalFqn))
-                    case None =>
-                        // a default value is not provided, this is a workflow input
-                        IR.SArgWorkflowInput(cVar)
-                    case Some(expr) =>
-                        Utils.ifConstEval(expr) match {
-                            case Some(wdlConst) =>
-                                IR.SArgConst(wdlConst)
-                            case None => throw new Exception(cef.workflowInputDefaultMustBeConst(expr))
-                        }
-                }
-                (cVar, sArg)
-        }.toVector
+        val wfInputs = buildWorkflowInputs(wfInputDecls)
 
         // Create a stage per call/scatter-block/declaration-block
         val subBlocks = splitIntoBlocks(wfProper)

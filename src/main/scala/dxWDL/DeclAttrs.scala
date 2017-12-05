@@ -27,6 +27,10 @@ case class DeclAttrs(m: Map[String, JsValue]) {
     }
 
     def isEmpty : Boolean = m.isEmpty
+
+    def merge(attrs: DeclAttrs) : DeclAttrs = {
+        DeclAttrs(attrs.m ++ m)
+    }
 }
 
 object DeclAttrs {

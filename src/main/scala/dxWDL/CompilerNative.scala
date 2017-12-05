@@ -22,6 +22,7 @@ case class CompilerNative(dxWDLrtId: String,
                           cef: CompilerErrorFormatter,
                           force: Boolean,
                           archive: Boolean,
+                          lockedWf: Boolean,
                           verbose: Utils.Verbose) {
     val verbose2:Boolean = verbose.keywords contains "compilernative"
     lazy val runtimeLibrary:JsValue = getRuntimeLibrary()
@@ -649,7 +650,6 @@ case class CompilerNative(dxWDLrtId: String,
                 // input is provided by the user
                 DeclAttrs.empty
             case IR.SArgConst(wdlValue) =>
-                // note: this is not going to work for file constants.
                 val wvl = WdlVarLinks.importFromWDL(cVar.wdlType,
                                                     DeclAttrs.empty,
                                                     wdlValue,
@@ -659,8 +659,8 @@ case class CompilerNative(dxWDLrtId: String,
             case other =>
                 throw new Exception(s"Bad value for sArg ${other}")
         }
-        assert(cVar.attrs.isEmpty)
-        val cVarWithDflt = cVar.copy(attrs = attrs)
+        val allAttrs = attrs.merge(cVar.attrs)
+        val cVarWithDflt = cVar.copy(attrs = allAttrs)
         cVarToSpec(cVarWithDflt)
     }
 

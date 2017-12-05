@@ -4,7 +4,23 @@ workflow math {
     Array[Int]+ numbers
     Int ai
     Int bi
-    Int? ci = 2 + 3 + 5
+    Int? x_ai = 1
+    Int? x_bi
+    Int x_di
+    Int? x_ei = 2 + 3 + 5 + 7
+
+    call lib.Inc as incA {
+        input:  i = x_ai
+    }
+    call lib.Inc as incB {
+        input:  i = x_bi
+    }
+    call lib.Inc as incD {
+        input:  i = x_di
+    }
+    call lib.Inc as incE {
+        input:  i = x_ei
+    }
 
     call lib.ArrayLength as aLen { input: ai=[] }
 
@@ -71,11 +87,12 @@ workflow math {
     call lib.Sum as inc_sum {input: ints = inc2.result}
     Pair[Float,Int] p = (1.0, 19)
 
-    call lib.Inc as inc4 {
-        input:  i = ci
-    }
-
     output {
+        Int incA_result = incA.result
+        Int incB_result = incB.result
+        Int incD_result = incD.result
+        Int incE_result = incE.result
+
         Int zero_len = aLen.result
         Int? invalid = false_branch
         Int x = int_ops3.mul
@@ -90,6 +107,5 @@ workflow math {
         # Expressions in output section
         Int expr1 = ai + bi
         Float z = p.left
-        Int co = inc4.result
     }
 }

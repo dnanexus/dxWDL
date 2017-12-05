@@ -2,7 +2,7 @@ import "library_math.wdl" as lib
 import "library_string.wdl" as lib_str
 
 workflow optionals {
-    Array[String] sa
+    Array[String] sa = []
     Int arg1
     Array[Int]+ integers
     Int? rain = 13
