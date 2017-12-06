@@ -31,7 +31,7 @@ import com.dnanexus.{DXAPI, DXJSON, DXProject}
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.node.ObjectNode
 import spray.json._
-import Utils.{Verbose, warning}
+import Utils.{DEFAULT_INSTANCE_TYPE, Verbose, warning}
 import wdl4s.wdl.values._
 
 // Instance Type on the platform. For example:
@@ -139,6 +139,7 @@ case class InstanceTypeDB(instances: Vector[DxInstanceType]) {
         }
     }
 
+    // The cheapest available instance, this is normally also the smallest.
     private def calcMinimalInstanceType(iTypes: Set[DxInstanceType]) : DxInstanceType = {
         if (iTypes.isEmpty)
             throw new Exception("empty list")
@@ -149,9 +150,14 @@ case class InstanceTypeDB(instances: Vector[DxInstanceType]) {
         }
     }
 
-    // The cheapest available instance, this is normally also the smallest.
-    def getMinimalInstanceType() : String = {
-        calcMinimalInstanceType(instances.toSet).name
+    // An fast but cheap instance type.
+    //
+    def defaultInstanceType : String = {
+        val iType = instances.find(x => x.name == DEFAULT_INSTANCE_TYPE) match {
+            case Some(iType) => iType
+            case None => calcMinimalInstanceType(instances.toSet)
+        }
+        iType.name
     }
 
     // Currently, we support only constants.

@@ -100,16 +100,18 @@ object Utils {
 
     val APPLET_LOG_MSG_LIMIT = 1000
     val CHECKSUM_PROP = "dxWDL_checksum"
+    val COMMON = "common"
+    val DEFAULT_INSTANCE_TYPE = "mem1_ssd1_x4"
     val DOWNLOAD_RETRY_LIMIT = 3
     val DX_FUNCTIONS_FILES = "dx_functions_files.json"
     val DX_HOME = "/home/dnanexus"
     val DX_INSTANCE_TYPE_ATTR = "dx_instance_type"
     val DX_URL_PREFIX = "dx://"
     val FLAT_FILES_SUFFIX = "___dxfiles"
-    val INPUT_SECTION = "inputs"
     val IF = "if"
     val INSTANCE_TYPE_DB_FILENAME = "instanceTypeDB.json"
     val INTERMEDIATE_RESULTS_FOLDER = "intermediate"
+    val LAST_STAGE = "last"
     val LOCAL_DX_FILES_CHECKPOINT_FILE = "localized_files.json"
     val LINK_INFO_FILENAME = "linking.json"
     val MAX_STRING_LEN = 8 * 1024     // Long strings cause problems with bash and the UI

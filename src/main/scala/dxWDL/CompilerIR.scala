@@ -5,7 +5,7 @@ package dxWDL
 import IR.{CVar, LinkedVar, SArg}
 import net.jcazevedo.moultingyaml._
 import scala.util.{Failure, Success, Try}
-import Utils.{DX_URL_PREFIX, isNativeDxType, trace, warning}
+import Utils.{DXWorkflowStage, DX_URL_PREFIX, LAST_STAGE, isNativeDxType, trace, warning}
 import wdl4s.wdl._
 import wdl4s.wdl.AstTools
 import wdl4s.wdl.AstTools.EnhancedAstNode
@@ -30,8 +30,8 @@ case class CompilerIR(destination: String,
 
     // generate a stage Id
     var stageNum = 0
-    def genStageId() : Utils.DXWorkflowStage = {
-        val retval = Utils.DXWorkflowStage(s"stage_${stageNum}")
+    def genStageId() : DXWorkflowStage = {
+        val retval = DXWorkflowStage(s"stage_${stageNum}")
         stageNum += 1
         retval
     }
@@ -122,6 +122,8 @@ task Add {
             if (nm contains sb)
                 throw new Exception(cef.illegalCallName(call))
         }
+        if (nm == LAST_STAGE)
+            throw new Exception(cef.illegalCallName(call))
         nm
     }
 
@@ -579,7 +581,8 @@ workflow w {
         }
 
         val stageName = callUniqueName(call)
-        IR.Stage(stageName, genStageId(), task.name, inputs, callee.outputs)
+        IR.Stage(stageName, DXWorkflowStage(stageName), task.name, inputs,
+                 callee.outputs)
     }
 
     // Split a block (Scatter, If, ..) into the top declarations,
@@ -1032,12 +1035,10 @@ workflow w {
 
     // Create a preliminary applet to handle workflow input/outputs. This is
     // used only in the absence of workflow-level inputs/outputs.
-    def compilePassthroughApplet(appletName: String,
-                                 inputs: Vector[(CVar, SArg)],
-                                 isInputStage:Boolean) : (IR.Stage, IR.Applet) = {
-        trace(verbose.on, s"Compiling passthrough applet ${appletName}")
+    def compileCommonApplet(appletName: String,
+                            inputs: Vector[(CVar, SArg)]) : (IR.Stage, IR.Applet) = {
+        trace(verbose.on, s"Compiling common applet ${appletName}")
 
-        // Don't we need to deal with default values?
         val inputVars : Vector[IR.CVar] = inputs.map{ case (cVar, _) => cVar }
         val outputVars: Vector[IR.CVar] = inputVars
         val declarations: Seq[Declaration] = inputs.map { case (cVar,_) =>
@@ -1058,11 +1059,69 @@ workflow w {
                                WdlRewrite.namespace(code, Seq.empty))
         verifyWdlCodeIsLegal(applet.ns)
 
-        val linkedArgs: Vector[SArg] =
-            if (isInputStage) Vector.empty[IR.SArg]
-            else inputs.map{ case (_, sArg) => sArg }.toVector
+        (IR.Stage(appletName, genStageId(), appletName, Vector.empty[IR.SArg], outputVars),
+         applet)
+    }
 
-        (IR.Stage(appletName, genStageId(), appletName, linkedArgs, outputVars),
+    // 1. The output variable name must not have dots, these
+    //    are illegal in dx.
+    // 2. The expression requires variable renaming
+    //
+    // For example:
+    // workflow w {
+    //    Int mutex_count
+    //    File genome_ref
+    //    output {
+    //       Int count = mutec.count
+    //       File ref = genome.ref
+    //    }
+    // }
+    //
+    // Must be converted into:
+    // output {
+    //     Int count = mutec_count
+    //     File ref = genome_ref
+    // }
+    def compileOutputSection(appletName: String,
+                             wfOutputs: Vector[(CVar, SArg)],
+                             outputDecls: Seq[WorkflowOutput]) : (IR.Stage, IR.Applet) = {
+        trace(verbose.on, s"Compiling output section applet ${appletName}")
+
+        val inputVars: Vector[IR.CVar] = wfOutputs.map{ case (cVar,_) => cVar }.toVector
+        val inputDecls: Vector[Declaration] = wfOutputs.map{ case(cVar, _) =>
+            WdlRewrite.declaration(cVar.wdlType, cVar.dxVarName, None)
+        }.toVector
+
+        // Workflow outputs
+        val outputPairs: Vector[(WorkflowOutput, IR.CVar)] = outputDecls.map { wot =>
+            val cVar = IR.CVar(wot.unqualifiedName, wot.wdlType, DeclAttrs.empty, wot.ast)
+            val dxVarName = Utils.transformVarName(wot.unqualifiedName)
+            val dxWot = WdlRewrite.workflowOutput(dxVarName,
+                                                  wot.wdlType,
+                                                  WdlExpression.fromString(dxVarName))
+            (dxWot, cVar)
+        }.toVector
+        val (outputs, outputVars) = outputPairs.unzip
+
+        // Create a workflow with no calls.
+        val code:WdlWorkflow = WdlRewrite.workflowGenEmpty("w")
+        code.children = inputDecls ++ outputs
+
+        // We need minimal compute resources, use the default instance type
+        val applet = IR.Applet(appletName,
+                               inputVars,
+                               outputVars,
+                               calcInstanceType(None),
+                               IR.DockerImageNone,
+                               destination,
+                               IR.AppletKindEval,
+                               WdlRewrite.namespace(code, Seq.empty))
+        verifyWdlCodeIsLegal(applet.ns)
+
+        // Link to the X.y original variables
+        val inputs: Vector[IR.SArg] = wfOutputs.map{ case (_, sArg) => sArg }.toVector
+
+        (IR.Stage(appletName, DXWorkflowStage(LAST_STAGE), appletName, inputs, outputVars),
          applet)
     }
 
@@ -1096,9 +1155,8 @@ workflow w {
 
         // Create a preliminary stage to handle workflow inputs, and top-level
         // declarations.
-        val (inputStage, inputApplet) = compilePassthroughApplet(
-            wf.unqualifiedName ++ "_" ++ Utils.INPUT_SECTION,
-            wfInputs, true)
+        val (inputStage, inputApplet) = compileCommonApplet(
+            wf.unqualifiedName ++ "_" ++ Utils.COMMON,wfInputs)
 
         // An environment where variables are defined
         val initEnv : CallEnv = inputStage.outputs.map { cVar =>
@@ -1114,9 +1172,9 @@ workflow w {
 
         // output section is non empty, keep only those files
         // at the destination directory
-        val (outputStage, outputApplet) = compilePassthroughApplet(
+        val (outputStage, outputApplet) = compileOutputSection(
             wf.unqualifiedName ++ "_" ++ Utils.OUTPUT_SECTION,
-            wfOutputs, false)
+            wfOutputs, wf.outputs)
 
         (allStageInfo :+ (outputStage, Some(outputApplet)),
          wfOutputs)

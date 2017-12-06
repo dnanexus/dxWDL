@@ -700,8 +700,11 @@ object Main extends App {
                     runner.relaunch(inputSpec, outputSpec, inputs)
             }
 
-            // write outputs
-            val json = JsObject(outputFields)
+            // write outputs, ignore null values, these could occur for optional
+            // values that were not specified.
+            val json = JsObject(outputFields.filter{
+                                    case (_,jsValue) => jsValue != null && jsValue != JsNull
+                                })
             val ast_pp = json.prettyPrint
             Utils.writeFileContent(jobOutputPath, ast_pp)
             System.err.println(s"Wrote outputs ${ast_pp}")
@@ -754,6 +757,7 @@ object Main extends App {
             |      -defaults <string>    Path to Cromwell formatted default values file
             |      -destination <string> Output path on the platform for workflow
             |      -inputs <string>      Path to Cromwell formatted input file
+            |      -locked               Create a locked-down workflow (experimental)
             |      -reorg                Reorganize workflow output files
             |      -sort [string]        Sort call graph, to avoid forward references
             |

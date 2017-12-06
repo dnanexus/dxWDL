@@ -49,7 +49,7 @@ case class InputFile(verbose: Utils.Verbose) {
     }
 
     // Import into a WDL value, and convert back to JSON.
-    private def translateValue(cVar: CVar,
+    private def translateValue(cVar: IR.CVar,
                                jsv: JsValue) : WdlVarLinks = {
         val jsWithDxLinks = replaceURLsWithLinks(jsv)
         WdlVarLinks.importFromCromwellJSON(cVar.wdlType, cVar.attrs, jsWithDxLinks)
@@ -93,7 +93,7 @@ case class InputFile(verbose: Utils.Verbose) {
         // If a stage has defaults, set the SArg to a constant. The user
         // can override it at runtime.
         def addDefaultsToStage(stg:IR.Stage, wdlNameTrail:String) : IR.Stage = {
-            val inputsWithDefaults:Vector[SArg] = stg.inputs.zipWithIndex.map{
+            val inputsWithDefaults:Vector[IR.SArg] = stg.inputs.zipWithIndex.map{
                 case (sArg,idx) =>
                     val callee:IR.Applet = ns.applets(stg.appletName)
                     val cVar = callee.inputs(idx)
@@ -140,12 +140,12 @@ case class InputFile(verbose: Utils.Verbose) {
                     val apl = addDefaultsToApplet(applet, nameTrail)
                     apl.name -> apl
                 }.toMap
-
                 // add defaults to workflow stages
                 val stages = wf.stages.map{ stg =>
                     val nameTrail = s"${wf.name}.${stg.name}"
                     addDefaultsToStage(stg, nameTrail)
                 }
+
                 // add defaults to workflow inputs
                 val inputs = addDefaultsToWorkflowInputs(wf.inputs, wf.name)
 
@@ -189,7 +189,7 @@ case class InputFile(verbose: Utils.Verbose) {
 
         // If WDL variable fully qualified name [fqn] was provided in the
         // input file, set [stage.cvar] to its JSON value
-        def checkAndBind(fqn:String, dxName:String, cVar:CVar) : Unit = {
+        def checkAndBind(fqn:String, dxName:String, cVar:IR.CVar) : Unit = {
             inputFields.get(fqn) match {
                 case None => ()
                 case Some(jsv) =>
@@ -202,6 +202,32 @@ case class InputFile(verbose: Utils.Verbose) {
                     // We found the variable declaration, the others
                     // are variable uses.
                     inputFields -= fqn
+            }
+        }
+        // make a pass on all the stages
+        wf.stages.foreach{ stage =>
+            val callee:IR.Applet = ns.applets(stage.appletName)
+            // make a pass on all call inputs
+            stage.inputs.zipWithIndex.foreach{
+                case (_,idx) =>
+                    val cVar = callee.inputs(idx)
+                    val fqn = s"${wf.name}.${stage.name}.${cVar.name}"
+                    val dxName = s"${stage.id.getId}.${cVar.name}"
+                    checkAndBind(fqn, dxName, cVar)
+            }
+            // check if the applet called from this stage has bindings
+            callee.kind match {
+                case IR.AppletKindTask =>
+                    // We aren't handling applet settings currently
+                    ()
+                case other =>
+                    // An applet generated from a piece of the workflow.
+                    // search for all the applet inputs
+                    callee.inputs.foreach{ cVar =>
+                        val fqn = s"${wf.name}.${cVar.name}"
+                        val dxName = s"${stage.id.getId}.${cVar.name}"
+                        checkAndBind(fqn, dxName, cVar)
+                    }
             }
         }
 

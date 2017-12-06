@@ -465,7 +465,7 @@ case class CompilerNative(dxWDLrtId: String,
         val instanceType:String = iType match {
             case IR.InstanceTypeConst(x) => x
             case IR.InstanceTypeDefault | IR.InstanceTypeRuntime =>
-                instanceTypeDB.getMinimalInstanceType
+                instanceTypeDB.defaultInstanceType
         }
         val runSpec: Map[String, JsValue] = Map(
             "code" -> JsString(bashScript),

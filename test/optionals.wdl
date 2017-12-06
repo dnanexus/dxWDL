@@ -47,10 +47,7 @@ workflow optionals {
 
         # verify that unbound compulsory arguments are provided as scatter
         # inputs
-        call lib.Add as add2 { input: a=x }
-
-        # we need to pass {a, b}
-        call lib.Add as add3
+        call lib.Add as add2 { input: a=x, b=8 }
 
         Array[Int] series=[x,1]
     }
@@ -66,7 +63,6 @@ workflow optionals {
         set_def.result
         unused_args.result
         add2.result
-        add3.result
         series
     }
 }
