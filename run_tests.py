@@ -387,6 +387,8 @@ def main():
     argparser.add_argument("--folder", help="Use an existing folder, instead of building dxWDL")
     argparser.add_argument("--lazy", help="Only compile workflows that are unbuilt",
                            action="store_true", default=False)
+    argparser.add_argument("--locked", help="Generate locked-down workflows",
+                           action="store_true", default=False)
     argparser.add_argument("--no-wait", help="Exit immediately after launching tests",
                            action="store_true", default=False)
     argparser.add_argument("--project", help="DNAnexus project ID",
@@ -427,7 +429,9 @@ def main():
         home_ad = util.build(project, applet_folder, version_id, top_dir)
         jar_path = util.build_final_jar(version_id, top_dir, [home_ad])
 
-    compiler_flags=[]
+    compiler_flags = []
+    if args.locked:
+        compiler_flags.append("-locked")
     if args.archive:
         compiler_flags.append("-archive")
     if args.compile_mode:

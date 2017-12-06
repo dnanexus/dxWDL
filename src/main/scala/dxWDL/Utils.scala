@@ -106,6 +106,7 @@ object Utils {
     val DX_INSTANCE_TYPE_ATTR = "dx_instance_type"
     val DX_URL_PREFIX = "dx://"
     val FLAT_FILES_SUFFIX = "___dxfiles"
+    val INPUT_SECTION = "inputs"
     val IF = "if"
     val INSTANCE_TYPE_DB_FILENAME = "instanceTypeDB.json"
     val INTERMEDIATE_RESULTS_FOLDER = "intermediate"

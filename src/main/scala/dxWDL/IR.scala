@@ -129,13 +129,15 @@ object IR {
                      inputs: Vector[SArg],
                      outputs: Vector[CVar])
 
+
     /** A workflow output is linked to the stage that
       * generated it.
       */
     case class Workflow(name: String,
                         inputs: Vector[(CVar,SArg)],
                         outputs: Vector[(CVar,SArg)],
-                        stages: Vector[Stage])
+                        stages: Vector[Stage],
+                        isLockedDown: Boolean)
 
     case class Namespace(workflow: Option[Workflow],
                          applets: Map[String, Applet])
@@ -418,7 +420,7 @@ object IR {
 
         implicit val dxWorkflowStageFormat = yamlFormat1(Utils.DXWorkflowStage)
         implicit val stageFormat = yamlFormat5(Stage)
-        implicit val workflowFormat = yamlFormat4(Workflow)
+        implicit val workflowFormat = yamlFormat5(Workflow)
         implicit val namespaceFormat = yamlFormat2(Namespace)
     }
     import IrInternalYamlProtocol._

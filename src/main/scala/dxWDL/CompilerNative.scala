@@ -731,25 +731,34 @@ case class CompilerNative(dxWDLrtId: String,
                      stageDict ++ Map(stg.name -> stg.id))
             }
 
-        val wfInputSpec:Vector[JsValue] = wf.inputs.map{ case (cVar,sArg) =>
-            buildWorkflowInputSpec(cVar, sArg, stageDict)
-        }.flatten
-        val wfOutputSpec:Vector[JsValue] = wf.outputs.map{ case (cVar,sArg) =>
-            buildWorkflowOutputSpec(cVar, sArg, stageDict)
-        }.flatten
-        trace(verbose2, s"workflow input spec=${wfInputSpec}")
-        trace(verbose2, s"workflow output spec=${wfOutputSpec}")
+        // pack all the arguments into a single API call
+        val reqFields = Map("project" -> JsString(dxProject.getId),
+                            "name" -> JsString(wf.name),
+                            "folder" -> JsString(folder),
+                            "properties" -> JsObject(CHECKSUM_PROP -> JsString(digest)),
+                            "stages" -> JsArray(stagesReq),
+                            "tags" -> JsArray(JsString("dxWDL")))
+
+        val wfInputOutput: Map[String, JsValue] =
+            if (wf.isLockedDown) {
+                // Locked workflows have well defined inputs and outputs
+                val wfInputSpec:Vector[JsValue] = wf.inputs.map{ case (cVar,sArg) =>
+                    buildWorkflowInputSpec(cVar, sArg, stageDict)
+                }.flatten
+                val wfOutputSpec:Vector[JsValue] = wf.outputs.map{ case (cVar,sArg) =>
+                    buildWorkflowOutputSpec(cVar, sArg, stageDict)
+                }.flatten
+                trace(verbose2, s"workflow input spec=${wfInputSpec}")
+                trace(verbose2, s"workflow output spec=${wfOutputSpec}")
+
+                Map("inputs" -> JsArray(wfInputSpec),
+                    "outputs" -> JsArray(wfOutputSpec))
+            } else {
+                Map.empty
+            }
 
         // pack all the arguments into a single API call
-        val req = JsObject("project" -> JsString(dxProject.getId),
-                           "name" -> JsString(wf.name),
-                           "folder" -> JsString(folder),
-                           "properties" -> JsObject(CHECKSUM_PROP -> JsString(digest)),
-                           "stages" -> JsArray(stagesReq),
-                           "inputs" -> JsArray(wfInputSpec),
-                           "outputs" -> JsArray(wfOutputSpec),
-                           "tags" -> JsArray(JsString("dxWDL")))
-
+        val req = JsObject(reqFields ++ wfInputOutput)
         val rep = DXAPI.workflowNew(jsonNodeOfJsValue(req), classOf[JsonNode])
         val id = apiParseReplyID(rep)
         DXWorkflow.getInstance(id)
