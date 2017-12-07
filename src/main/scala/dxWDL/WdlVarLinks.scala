@@ -113,7 +113,7 @@ object WdlVarLinks {
     // those as a vector.
     def findDxFiles(jsValue: JsValue) : Vector[DXFile] = {
         jsValue match {
-            case JsBoolean(_) | JsNull | JsNumber(_) | JsString(_) =>
+            case JsBoolean(_) | JsNumber(_) | JsString(_) | JsNull | null =>
                 Vector.empty[DXFile]
             case JsObject(_) if isDxFile(jsValue) =>
                 Vector(dxFileFromJsValue(jsValue))
@@ -322,6 +322,8 @@ object WdlVarLinks {
                 val right = evalCore(rType, fields("right"), force, ioDir)
                 WdlPair(left, right)
 
+            case (WdlOptionalType(t), (null|JsNull)) =>
+                WdlOptionalValue(t, None)
             case (WdlOptionalType(t), jsv) =>
                 evalCore(t, jsv, force, ioDir)
 
@@ -491,6 +493,8 @@ object WdlVarLinks {
             // Strip optional type
             case (WdlOptionalType(t), WdlOptionalValue(_,Some(w))) =>
                 jsFromWdlValue(t, w, ioDir)
+            case (WdlOptionalType(t), WdlOptionalValue(_,None)) =>
+                JsNull
             case (WdlOptionalType(t), w) =>
                 jsFromWdlValue(t, w, ioDir)
             case (t, WdlOptionalValue(_,Some(w))) =>
@@ -606,7 +610,8 @@ object WdlVarLinks {
             case (WdlStringType, JsString(_)) => jsv
             case (WdlFileType, JsObject(_)) => jsv
 
-            // strip optionals
+            // optionals
+            case (WdlOptionalType(t), (null|JsNull)) => JsNull
             case (WdlOptionalType(t), _) =>
                 importFromCromwell(t, jsv)
 

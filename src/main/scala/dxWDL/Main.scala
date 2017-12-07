@@ -55,6 +55,7 @@ object Main extends App {
                                compileMode: CompilerFlag.Value,
                                defaults: Option[Path],
                                dxWDLrtId: String,
+                               lockedWf: Boolean,
                                inputs: List[Path],
                                region: String,
                                reorg: Boolean,
@@ -185,6 +186,9 @@ object Main extends App {
                     case "inputs" =>
                         checkNumberOfArguments(keyword, 1, subargs)
                         (keyword, subargs.head)
+                    case "locked" =>
+                        checkNumberOfArguments(keyword, 0, subargs)
+                        (keyword, "")
                     case ("o"|"output"|"outputfile") =>
                         checkNumberOfArguments(keyword, 1, subargs)
                         ("outputFile", subargs.head)
@@ -446,6 +450,7 @@ object Main extends App {
                         compileMode,
                         defaults,
                         dxWDLrtId,
+                        options contains "locked",
                         inputs,
                         region,
                         options contains "reorg",
@@ -514,7 +519,7 @@ object Main extends App {
         // unmodified.
         val cef = new CompilerErrorFormatter(ns.terminalMap)
         var irNs = CompilerIR(bOpt.folder, instanceTypeDB, cef,
-                              cOpt.reorg, bOpt.verbose).apply(ns)
+                              cOpt.reorg, cOpt.lockedWf, bOpt.verbose).apply(ns)
 
         irNs = cOpt.defaults match {
             case Some(path) =>
@@ -550,7 +555,7 @@ object Main extends App {
                 val (wf, _) =
                     CompilerNative(cOpt.dxWDLrtId, bOpt.dxProject, instanceTypeDB,
                                    bOpt.folder, cef,
-                                   bOpt.force, cOpt.archive, bOpt.verbose).apply(irNs)
+                                   bOpt.force, cOpt.archive, cOpt.lockedWf, bOpt.verbose).apply(irNs)
                 wf
             case CompilerFlag.IR =>
                 None
@@ -695,8 +700,11 @@ object Main extends App {
                     runner.relaunch(inputSpec, outputSpec, inputs)
             }
 
-            // write outputs
-            val json = JsObject(outputFields)
+            // write outputs, ignore null values, these could occur for optional
+            // values that were not specified.
+            val json = JsObject(outputFields.filter{
+                                    case (_,jsValue) => jsValue != null && jsValue != JsNull
+                                })
             val ast_pp = json.prettyPrint
             Utils.writeFileContent(jobOutputPath, ast_pp)
             System.err.println(s"Wrote outputs ${ast_pp}")
@@ -749,6 +757,7 @@ object Main extends App {
             |      -defaults <string>    Path to Cromwell formatted default values file
             |      -destination <string> Output path on the platform for workflow
             |      -inputs <string>      Path to Cromwell formatted input file
+            |      -locked               Create a locked-down workflow (experimental)
             |      -reorg                Reorganize workflow output files
             |      -sort [string]        Sort call graph, to avoid forward references
             |

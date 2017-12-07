@@ -113,14 +113,6 @@ def read_json_file_maybe_empty(path):
     else:
         return read_json_file(path)
 
-def find_stage_outputs_by_name(tname, desc, stage_name):
-    stages = desc['stages']
-    for snum in range(len(stages)):
-        crnt = stages[snum]['execution']['name']
-        if crnt == stage_name:
-            return stages[snum]['execution']['output']
-    raise Exception("Analysis for test {} does not have stage {}".format(tname, stage_name))
-
 def find_test_from_analysis(analysis):
     anl_desc = analysis.describe()
     wf_name = anl_desc["name"].split(' ')[0]
@@ -131,7 +123,7 @@ def find_test_from_analysis(analysis):
 
 # Check that a workflow returned the expected result for
 # a [key]
-def validate_result(tname, analysis_desc, key, expected_val):
+def validate_result(tname, anl_outputs, key, expected_val):
     # Extract the key. For example, for workflow "math" returning
     # output "count":
     #    'math.count' -> count
@@ -141,11 +133,10 @@ def validate_result(tname, analysis_desc, key, expected_val):
         raise Exception("Key {} is invalid, must start with workflow name".format(key))
     try:
         # get the actual results
-        results = analysis_desc['output']
-        if field_name not in results:
-            print("field {} missing from workflow results {}".format(field_name, results))
+        if field_name not in anl_outputs:
+            print("field {} missing from workflow results {}".format(field_name, anl_outputs))
             return False
-        result = results[field_name]
+        result = anl_outputs[field_name]
         if ((type(result) is list) and
             (type(expected_val) is list)):
             result.sort()
@@ -247,7 +238,17 @@ def run_workflow(project, test_folder, tname, wfId, delay_workspace_destruction)
         time.sleep(5)
     raise ("Error running workflow")
 
-def run_workflow_subset(project, workflows, test_folder, delay_workspace_destruction, no_wait):
+def extract_outputs(tname, analysis_desc, locked):
+    if locked:
+        return analysis_desc["output"]
+    stages = analysis_desc['stages']
+    for snum in range(len(stages)):
+        crnt = stages[snum]
+        if crnt['id'] == 'last':
+            return stages[snum]['execution']['output']
+    raise Exception("Analysis for test {} does not have stage 'last'".format(tname))
+
+def run_workflow_subset(project, workflows, test_folder, delay_workspace_destruction, no_wait, locked):
     # Run the workflows
     test_analyses=[]
     for tname, wfid in workflows.iteritems():
@@ -268,13 +269,13 @@ def run_workflow_subset(project, workflows, test_folder, delay_workspace_destruc
         analysis_desc = analysis.describe()
         tname = find_test_from_analysis(analysis)
         test_desc = test_files[tname]
-        output = analysis_desc["output"]
+        anl_outputs = extract_outputs(tname, analysis_desc, locked)
         shouldbe = read_json_file_maybe_empty(test_desc.results)
         correct = True
         print("Checking results for workflow {}".format(test_desc.wf_name))
 
         for key, expected_val in shouldbe.iteritems():
-            correct = validate_result(tname, analysis_desc, key, expected_val)
+            correct = validate_result(tname, anl_outputs, key, expected_val)
         if correct:
             print("Analysis {} passed".format(tname))
 
@@ -387,6 +388,8 @@ def main():
     argparser.add_argument("--folder", help="Use an existing folder, instead of building dxWDL")
     argparser.add_argument("--lazy", help="Only compile workflows that are unbuilt",
                            action="store_true", default=False)
+    argparser.add_argument("--locked", help="Generate locked-down workflows",
+                           action="store_true", default=False)
     argparser.add_argument("--no-wait", help="Exit immediately after launching tests",
                            action="store_true", default=False)
     argparser.add_argument("--project", help="DNAnexus project ID",
@@ -427,7 +430,9 @@ def main():
         home_ad = util.build(project, applet_folder, version_id, top_dir)
         jar_path = util.build_final_jar(version_id, top_dir, [home_ad])
 
-    compiler_flags=[]
+    compiler_flags = []
+    if args.locked:
+        compiler_flags.append("-locked")
     if args.archive:
         compiler_flags.append("-archive")
     if args.compile_mode:
@@ -454,7 +459,7 @@ def main():
             print("workflow({}) = {}".format(tname, wfid))
         if not args.compile_only:
             run_workflow_subset(project, workflows, test_folder, args.delay_workspace_destruction,
-                                args.no_wait)
+                                args.no_wait, args.locked)
     finally:
         print("Test complete")
 

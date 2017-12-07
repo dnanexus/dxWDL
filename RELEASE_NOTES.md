@@ -5,6 +5,13 @@
 - Improved handling of WDL constants. For example, multi word
 constants such as `["1", "2", "4"]`, and `4 + 11` are recognized as
 such. When possible, they are evaluated at runtime.
+- Revert default compilation to a regular workflow. It is possible to
+compile to a locked-down workflow by specifying `-locked` on the
+command line. To specify command workflow inputs from the command line
+use:
+```
+dx run foo -i0.N=19
+```
 
 
 ## 0.53

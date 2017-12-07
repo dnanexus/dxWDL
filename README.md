@@ -33,7 +33,7 @@ $ java -jar dxWDL-xxx.jar compile /path/to/foo.wdl
 This compiles ```foo.wdl``` to platform workflow ```foo``` in dx's
 current project and folder. The generated workflow can then be run as
 usual using `dx run`. For example, if the workflow takes string
-argument ```X```, then: ``` dx run foo -iX="hello world" ```
+argument ```X```, then: ``` dx run foo -i0.X="hello world" ```
 
 Compilation can be controled with several parameters.
 
@@ -44,6 +44,7 @@ Compilation can be controled with several parameters.
 | destination | Set the output folder on the platform |
 | force    | Overwrite existing applets/workflows if they have changed |
 | inputs   | A cromwell style inputs file |
+| locked   | Create a locked-down workflow (experimental) |
 | sort     | Sort call graph, to avoid forward references, used for CWL |
 | verbose  | Print detailed progress information |
 
@@ -231,8 +232,11 @@ workflow math {
 The dx:workflow that is compiled from `math` can set this variable from
 the command line as follows:
 ```
-dx run math -iadd___b=5
+dx run math -iadd.b=5
 ```
+
+Setting workflow variables from the command line works for all unnested calls.
+If the call is inside a scatter or an if block, this is not supported.
 
 ## Calling existing applets
 

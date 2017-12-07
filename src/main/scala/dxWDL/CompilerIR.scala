@@ -5,7 +5,7 @@ package dxWDL
 import IR.{CVar, LinkedVar, SArg}
 import net.jcazevedo.moultingyaml._
 import scala.util.{Failure, Success, Try}
-import Utils.{DX_URL_PREFIX, isNativeDxType, trace}
+import Utils.{DXWorkflowStage, DX_URL_PREFIX, LAST_STAGE, isNativeDxType, trace, warning}
 import wdl4s.wdl._
 import wdl4s.wdl.AstTools
 import wdl4s.wdl.AstTools.EnhancedAstNode
@@ -19,6 +19,7 @@ case class CompilerIR(destination: String,
                       instanceTypeDB: InstanceTypeDB,
                       cef: CompilerErrorFormatter,
                       reorg: Boolean,
+                      lockedWf: Boolean,
                       verbose: Utils.Verbose) {
     class DynamicInstanceTypesException private(ex: Exception) extends RuntimeException(ex) {
         def this() = this(new RuntimeException("Runtime instance type calculation required"))
@@ -29,8 +30,8 @@ case class CompilerIR(destination: String,
 
     // generate a stage Id
     var stageNum = 0
-    def genStageId() : Utils.DXWorkflowStage = {
-        val retval = Utils.DXWorkflowStage(s"stage_${stageNum}")
+    def genStageId() : DXWorkflowStage = {
+        val retval = DXWorkflowStage(s"stage_${stageNum}")
         stageNum += 1
         retval
     }
@@ -121,6 +122,8 @@ task Add {
             if (nm contains sb)
                 throw new Exception(cef.illegalCallName(call))
         }
+        if (nm == LAST_STAGE)
+            throw new Exception(cef.illegalCallName(call))
         nm
     }
 
@@ -377,8 +380,8 @@ workflow w {
             }
         }.toVector
         val code:WdlWorkflow = genEvalWorkflowFromDeclarations(appletName,
-                                                            inputDecls ++ outputDeclarations,
-                                                            outputVars)
+                                                               inputDecls ++ outputDeclarations,
+                                                               outputVars)
 
         // We need minimal compute resources, use the default instance type
         val applet = IR.Applet(appletName,
@@ -401,49 +404,47 @@ workflow w {
     //  1) Assert that there are no calculations in the outputs
     //  2) Figure out from the output cVars and sArgs.
     //
-    private def prepareOutputSection(env: CallEnv,
-                                     wfOutputs: Option[Seq[WorkflowOutput]])
-            : Vector[(CVar, SArg)] = {
-        wfOutputs match {
-            case None =>
-                Vector.empty
-            case Some(outputs) => outputs.map { wot =>
-                val cVar = CVar(wot.unqualifiedName, wot.wdlType, DeclAttrs.empty, wot.ast)
+    private def prepareOutputSection(
+        env: CallEnv,
+        wfOutputs: Seq[WorkflowOutput]) : Vector[(CVar, SArg)] =
+    {
+        wfOutputs.map { wot =>
+            val cVar = CVar(wot.unqualifiedName, wot.wdlType, DeclAttrs.empty, wot.ast)
 
-                // we only want to deal with expressions that do
-                // not require calculation.
-                val expr = wot.requiredExpression
-                val sArg = expr.ast match {
-                    case t: Terminal =>
-                        val srcStr = t.getSourceString
-                        t.getTerminalStr match {
-                            case "identifier" =>
-                                env.get(srcStr) match {
-                                    case Some(lVar) => lVar.sArg
-                                    case None => throw new Exception(cef.missingVarRef(t))
-                                }
-                            case _ => throw new Exception(cef.missingVarRef(t))
-                        }
+            // we only want to deal with expressions that do
+            // not require calculation.
+            val expr = wot.requiredExpression
+            val sArg = expr.ast match {
+                case t: Terminal =>
+                    val srcStr = t.getSourceString
+                    t.getTerminalStr match {
+                        case "identifier" =>
+                            env.get(srcStr) match {
+                                case Some(lVar) => lVar.sArg
+                                case None => throw new Exception(cef.missingVarRef(t))
+                            }
+                        case _ => throw new Exception(cef.missingVarRef(t))
+                    }
 
-                    case a: Ast if a.isMemberAccess =>
-                        // This is a case of accessing something like A.B.C.
-                        trailSearch(env, a) match {
-                            case Some((_, lVar)) => lVar.sArg
-                            case None => throw new Exception(cef.missingVarRef(a))
-                        }
+                case a: Ast if a.isMemberAccess =>
+                    // This is a case of accessing something like A.B.C.
+                    trailSearch(env, a) match {
+                        case Some((_, lVar)) => lVar.sArg
+                        case None => throw new Exception(cef.missingVarRef(a))
+                    }
 
-                    case a:Ast =>
-                        throw new Exception(s"Not currently supported: expressions in output section (${expr.toWdlString})")
-                        // Not clear what the problem is here
-                        /*throw new Exception(cef.notCurrentlySupported(
-                                                a,
-                                                s"Expressions in output section (${expr.toWdlString})"))*/
-                }
+                case a:Ast =>
+                    throw new Exception(s"Not currently supported: expressions in output section (${expr.toWdlString})")
+                    // Not clear what the problem is here
+                    /*throw new Exception(cef.notCurrentlySupported(
+                     a,
+                     s"Expressions in output section (${expr.toWdlString})"))*/
+            }
 
-                (cVar, sArg)
-            }.toVector
-        }
+            (cVar, sArg)
+        }.toVector
     }
+
 
     // Check if a task is a real WDL task, or if it is a wrapper for a
     // native applet.
@@ -546,14 +547,15 @@ workflow w {
                     // input is unbound; the workflow does not provide it.
                     if (Utils.isOptional(cVar.wdlType)) {
                         // This is an applet optional input, we don't have to supply it
-                        IR.SArgEmpty
                     } else {
-                        // A missing compulsory input
+                        // A missing compulsory input, it may be provided on the command
+                        // line.
                         val msg = s"""|Workflow doesn't supply required input ${cVar.name}
                                       |to call ${call.unqualifiedName}
                                       |""".stripMargin.replaceAll("\n", " ")
-                        throw new Exception(cef.missingCallArgument(call.ast, msg))
+                        warning(verbose, cef.missingCallArgument(call.ast, msg))
                     }
+                    IR.SArgEmpty
                 case Some((_,e)) => e.ast match {
                     case t: Terminal if t.getTerminalStr == "identifier" =>
                         val lVar = env.get(t.getSourceString) match {
@@ -579,7 +581,8 @@ workflow w {
         }
 
         val stageName = callUniqueName(call)
-        IR.Stage(stageName, genStageId(), task.name, inputs, callee.outputs)
+        IR.Stage(stageName, DXWorkflowStage(stageName), task.name, inputs,
+                 callee.outputs)
     }
 
     // Split a block (Scatter, If, ..) into the top declarations,
@@ -813,12 +816,12 @@ workflow w {
     // well evaluate those expressions as well.
     //
     // Note: the front end pass ensures that the scatter collection is a variable.
-    def compileScatter(wfUnqualifiedName : String,
-                       stageName: String,
-                       preDecls: Vector[Declaration],
-                       scatter: Scatter,
-                       taskApplets: Map[String, (IR.Applet, Vector[CVar])],
-                       env : CallEnv) : (IR.Stage, IR.Applet) = {
+    private def compileScatter(wfUnqualifiedName : String,
+                               stageName: String,
+                               preDecls: Vector[Declaration],
+                               scatter: Scatter,
+                               taskApplets: Map[String, (IR.Applet, Vector[CVar])],
+                               env : CallEnv) : (IR.Stage, IR.Applet) = {
         trace(verbose.on, s"compiling scatter ${stageName}")
         val (topDecls, calls) = blockSplit(scatter.children.toVector)
 
@@ -858,12 +861,12 @@ workflow w {
     // Compile a conditional block.
     //
     // Note: the front end pass ensures that the if condition is a variable.
-    def compileIf(wfUnqualifiedName : String,
-                  stageName: String,
-                  preDecls: Vector[Declaration],
-                  cond: If,
-                  taskApplets: Map[String, (IR.Applet, Vector[CVar])],
-                  env : CallEnv) : (IR.Stage, IR.Applet) = {
+    private def compileIf(wfUnqualifiedName : String,
+                          stageName: String,
+                          preDecls: Vector[Declaration],
+                          cond: If,
+                          taskApplets: Map[String, (IR.Applet, Vector[CVar])],
+                          env : CallEnv) : (IR.Stage, IR.Applet) = {
         trace(verbose.on, s"compiling If block ${stageName}")
         val (topDecls, calls) = blockSplit(cond.children.toVector)
 
@@ -927,73 +930,63 @@ workflow w {
         // Link to the X.y original variables
         val inputs: Vector[IR.SArg] = wfOutputs.map{ case (_, sArg) => sArg }.toVector
 
-        (IR.Stage(appletName, genStageId(), appletName, inputs, outputVars),
+        (IR.Stage("reorg", genStageId(), appletName, inputs, outputVars),
          applet)
     }
 
-    // Compile a workflow, having compiled the independent tasks.
-    def compileWorkflow(wf: WdlWorkflow,
-                        taskApplets: Map[String, (IR.Applet, Vector[CVar])]) : IR.Namespace = {
-        trace(verbose.on, "IR: compiling workflow")
-
-        // Get rid of workflow output declarations
-        val children = wf.children.filter(x => !x.isInstanceOf[WorkflowOutput])
-
-        // Only a subset of the workflow declarations are considered inputs.
-        // Limit the search to the top block of declarations. Those that come at the very
-        // beginning of the workflow.
-        val (topDeclBlock, wfProperBlocks) = Utils.splitBlockDeclarations(children.toList)
-        val (wfInputDecls, topDeclNonInputs) = topDeclBlock.partition{
-            case decl:Declaration =>
-                Utils.declarationIsInput(decl) &&
-                !Utils.isGeneratedVar(decl.unqualifiedName)
-            case _ => false
-        }
-        val wfProper = topDeclNonInputs ++ wfProperBlocks
-
-        // Represent the workflow inputs with CVars.
-        // It is possible to provide a default value to a workflow input.
-        // For example:
-        // workflow w {
-        //   Int? x = 3
-        //   ...
-        // }
-        // We handle only the case where the default is a constant.
-        val wfInputs: Vector[(CVar,SArg)] = wfInputDecls.map{
+    // Represent the workflow inputs with CVars.
+    // It is possible to provide a default value to a workflow input.
+    // For example:
+    // workflow w {
+    //   Int? x = 3
+    //   ...
+    // }
+    // We handle only the case where the default is a constant.
+    def buildWorkflowInputs(wfInputDecls: Seq[Declaration]) : Vector[(CVar,SArg)] = {
+        wfInputDecls.map{
             case decl:Declaration =>
                 val cVar = CVar(decl.unqualifiedName, decl.wdlType, DeclAttrs.empty, decl.ast)
-                val sArg = decl.expression match {
-                    case None if (cVar.name contains "___") =>
-                        // An artificial input, to allow providing a value
-                        // for an internal call argument
-                        val originalFqn = cVar.name.replaceAll("___", ".")
-                        IR.SArgWorkflowInput(cVar, Some(originalFqn))
+                decl.expression match {
                     case None =>
-                        // a default value is not provided, this is a workflow input
-                        IR.SArgWorkflowInput(cVar)
+                        // A workflow input
+                        (cVar, IR.SArgWorkflowInput(cVar))
                     case Some(expr) =>
                         Utils.ifConstEval(expr) match {
                             case Some(wdlConst) =>
-                                IR.SArgConst(wdlConst)
-                            case None => throw new Exception(cef.workflowInputDefaultMustBeConst(expr))
+                                if (Utils.isOptional(decl.wdlType)) {
+                                    // the constant is a default value
+                                    val wvl = WdlVarLinks.importFromWDL(cVar.wdlType,
+                                                                        DeclAttrs.empty,
+                                                                        wdlConst,
+                                                                        IODirection.Zero)
+                                    val jsv = WdlVarLinks.getRawJsValue(wvl)
+                                    val attrs = DeclAttrs.empty.setDefault(jsv)
+                                    val cVarWithDflt = CVar(decl.unqualifiedName, decl.wdlType,
+                                                            attrs, decl.ast)
+                                    (cVarWithDflt, IR.SArgWorkflowInput(cVar))
+                                } else {
+                                    (cVar, IR.SArgConst(wdlConst))
+                                }
+                            case None =>
+                                throw new Exception(cef.workflowInputDefaultMustBeConst(expr))
                         }
                 }
-                (cVar, sArg)
         }.toVector
+    }
 
-        // Create a stage per call/scatter-block/declaration-block
-        val subBlocks = splitIntoBlocks(wfProper)
-
-        // An environment where variables are defined. Initialized
-        // to workflow inputs.
-        var env : CallEnv = wfInputs.map { case (cVar,sArg) =>
-            cVar.name -> LinkedVar(cVar, sArg)
-        }.toMap
+    def buildWorkflowBackbone(
+        wf: WdlWorkflow,
+        subBlocks: Vector[Block],
+        accu: Vector[(IR.Stage, Option[IR.Applet])],
+        env_i: CallEnv,
+        taskApplets: Map[String, (IR.Applet, Vector[CVar])])
+            : (Vector[(IR.Stage, Option[IR.Applet])], CallEnv) = {
+        var env = env_i
         var evalAppletNum = 0
         var scatterNum = 0
         var condNum = 0
 
-        val allStageInfo = subBlocks.foldLeft(Vector.empty[(IR.Stage, Option[IR.Applet])]) {
+        val allStageInfo = subBlocks.foldLeft(accu) {
             (accu, child) =>
             val (stage, appletOpt) = child match {
                 case BlockDecl(decls) =>
@@ -1036,19 +1029,193 @@ workflow w {
             }
             accu :+ (stage,appletOpt)
         }
+        (allStageInfo, env)
+    }
 
-        val wfOutputs = prepareOutputSection(env, Some(wf.outputs))
+
+    // Create a preliminary applet to handle workflow input/outputs. This is
+    // used only in the absence of workflow-level inputs/outputs.
+    def compileCommonApplet(appletName: String,
+                            inputs: Vector[(CVar, SArg)]) : (IR.Stage, IR.Applet) = {
+        trace(verbose.on, s"Compiling common applet ${appletName}")
+
+        val inputVars : Vector[IR.CVar] = inputs.map{ case (cVar, _) => cVar }
+        val outputVars: Vector[IR.CVar] = inputVars
+        val declarations: Seq[Declaration] = inputs.map { case (cVar,_) =>
+            WdlRewrite.declaration(cVar.wdlType, cVar.name, None)
+        }
+        val code:WdlWorkflow = genEvalWorkflowFromDeclarations(appletName,
+                                                               declarations,
+                                                               outputVars)
+
+        // We need minimal compute resources, use the default instance type
+        val applet = IR.Applet(appletName,
+                               inputVars,
+                               outputVars,
+                               calcInstanceType(None),
+                               IR.DockerImageNone,
+                               destination,
+                               IR.AppletKindEval,
+                               WdlRewrite.namespace(code, Seq.empty))
+        verifyWdlCodeIsLegal(applet.ns)
+
+        (IR.Stage("common", genStageId(), appletName, Vector.empty[IR.SArg], outputVars),
+         applet)
+    }
+
+    // 1. The output variable name must not have dots, these
+    //    are illegal in dx.
+    // 2. The expression requires variable renaming
+    //
+    // For example:
+    // workflow w {
+    //    Int mutex_count
+    //    File genome_ref
+    //    output {
+    //       Int count = mutec.count
+    //       File ref = genome.ref
+    //    }
+    // }
+    //
+    // Must be converted into:
+    // output {
+    //     Int count = mutec_count
+    //     File ref = genome_ref
+    // }
+    def compileOutputSection(appletName: String,
+                             wfOutputs: Vector[(CVar, SArg)],
+                             outputDecls: Seq[WorkflowOutput]) : (IR.Stage, IR.Applet) = {
+        trace(verbose.on, s"Compiling output section applet ${appletName}")
+
+        val inputVars: Vector[IR.CVar] = wfOutputs.map{ case (cVar,_) => cVar }.toVector
+        val inputDecls: Vector[Declaration] = wfOutputs.map{ case(cVar, _) =>
+            WdlRewrite.declaration(cVar.wdlType, cVar.dxVarName, None)
+        }.toVector
+
+        // Workflow outputs
+        val outputPairs: Vector[(WorkflowOutput, IR.CVar)] = outputDecls.map { wot =>
+            val cVar = IR.CVar(wot.unqualifiedName, wot.wdlType, DeclAttrs.empty, wot.ast)
+            val dxVarName = Utils.transformVarName(wot.unqualifiedName)
+            val dxWot = WdlRewrite.workflowOutput(dxVarName,
+                                                  wot.wdlType,
+                                                  WdlExpression.fromString(dxVarName))
+            (dxWot, cVar)
+        }.toVector
+        val (outputs, outputVars) = outputPairs.unzip
+
+        // Create a workflow with no calls.
+        val code:WdlWorkflow = WdlRewrite.workflowGenEmpty("w")
+        code.children = inputDecls ++ outputs
+
+        // We need minimal compute resources, use the default instance type
+        val applet = IR.Applet(appletName,
+                               inputVars,
+                               outputVars,
+                               calcInstanceType(None),
+                               IR.DockerImageNone,
+                               destination,
+                               IR.AppletKindEval,
+                               WdlRewrite.namespace(code, Seq.empty))
+        verifyWdlCodeIsLegal(applet.ns)
+
+        // Link to the X.y original variables
+        val inputs: Vector[IR.SArg] = wfOutputs.map{ case (_, sArg) => sArg }.toVector
+
+        (IR.Stage("outputs", DXWorkflowStage(LAST_STAGE), appletName, inputs, outputVars),
+         applet)
+    }
+
+    // Compile a workflow, having compiled the independent tasks.
+    def compileWorkflowLocked(wf: WdlWorkflow,
+                              wfInputs: Vector[(CVar, SArg)],
+                              subBlocks: Vector[Block],
+                              taskApplets: Map[String, (IR.Applet, Vector[CVar])]) :
+            (Vector[(IR.Stage, Option[IR.Applet])], Vector[(CVar, SArg)]) = {
+        trace(verbose.on, "IR: compiling locked-down workflow")
+
+        // Locked-down workflow, we have workflow level inputs and outputs
+        val initEnv : CallEnv = wfInputs.map { case (cVar,sArg) =>
+            cVar.name -> LinkedVar(cVar, sArg)
+        }.toMap
+        val stageAccu = Vector.empty[(IR.Stage, Option[IR.Applet])]
+
+        // link together all the stages into a linear workflow
+        val (allStageInfo, env) = buildWorkflowBackbone(wf, subBlocks, stageAccu, initEnv, taskApplets)
+        val wfOutputs: Vector[(CVar, SArg)] = prepareOutputSection(env, wf.outputs)
+        (allStageInfo, wfOutputs)
+    }
+
+    // Compile a workflow, having compiled the independent tasks.
+    def compileWorkflowRegular(wf: WdlWorkflow,
+                               wfInputs: Vector[(CVar, SArg)],
+                               subBlocks: Vector[Block],
+                               taskApplets: Map[String, (IR.Applet, Vector[CVar])]) :
+            (Vector[(IR.Stage, Option[IR.Applet])], Vector[(CVar, SArg)]) = {
+        trace(verbose.on, "IR: compiling regular workflow")
+
+        // Create a preliminary stage to handle workflow inputs, and top-level
+        // declarations.
+        val (inputStage, inputApplet) = compileCommonApplet(
+            wf.unqualifiedName ++ "_" ++ Utils.COMMON,wfInputs)
+
+        // An environment where variables are defined
+        val initEnv : CallEnv = inputStage.outputs.map { cVar =>
+            cVar.name -> LinkedVar(cVar, IR.SArgLink(inputStage.name, cVar))
+        }.toMap
+
+        val initAccu : (Vector[(IR.Stage, Option[IR.Applet])]) =
+            (Vector((inputStage, Some(inputApplet))))
+
+        // link together all the stages into a linear workflow
+        val (allStageInfo, env) = buildWorkflowBackbone(wf, subBlocks, initAccu, initEnv, taskApplets)
+        val wfOutputs: Vector[(CVar, SArg)] = prepareOutputSection(env, wf.outputs)
+
+        // output section is non empty, keep only those files
+        // at the destination directory
+        val (outputStage, outputApplet) = compileOutputSection(
+            wf.unqualifiedName ++ "_" ++ Utils.OUTPUT_SECTION,
+            wfOutputs, wf.outputs)
+
+        (allStageInfo :+ (outputStage, Some(outputApplet)),
+         wfOutputs)
+    }
+
+    // Compile a workflow, having compiled the independent tasks.
+    def compileWorkflow(wf: WdlWorkflow,
+                        taskApplets: Map[String, (IR.Applet, Vector[CVar])]) : IR.Namespace = {
+        // Get rid of workflow output declarations
+        val children = wf.children.filter(x => !x.isInstanceOf[WorkflowOutput])
+
+        // Only a subset of the workflow declarations are considered inputs.
+        // Limit the search to the top block of declarations. Those that come at the very
+        // beginning of the workflow.
+        val (topDeclBlock, wfProperBlocks) = Utils.splitBlockDeclarations(children.toList)
+        val (wfInputDecls, topDeclNonInputs) = topDeclBlock.partition{
+            case decl:Declaration =>
+                Utils.declarationIsInput(decl) &&
+                !Utils.isGeneratedVar(decl.unqualifiedName)
+            case _ => false
+        }
+        val wfProper = topDeclNonInputs ++ wfProperBlocks
+        val wfInputs:Vector[(CVar, SArg)] = buildWorkflowInputs(wfInputDecls)
+
+        // Create a stage per call/scatter-block/declaration-block
+        val subBlocks = splitIntoBlocks(wfProper)
+
+        val (allStageInfo_i, wfOutputs) =
+            if (lockedWf)
+                compileWorkflowLocked(wf, wfInputs, subBlocks, taskApplets)
+            else
+                compileWorkflowRegular(wf, wfInputs, subBlocks, taskApplets)
+        var allStageInfo = allStageInfo_i
 
         // Add a reorganization applet if requested
-        val allStageInfoWithReorg: Vector[(IR.Stage, Option[IR.Applet])] =
-            if (reorg) {
-                val (rStage, rApl) = createReorgApplet(wf.unqualifiedName, wfOutputs)
-                allStageInfo :+ (rStage, Some(rApl))
-            } else {
-                allStageInfo
-            }
+        if (reorg) {
+            val (rStage, rApl) = createReorgApplet(wf.unqualifiedName, wfOutputs)
+            allStageInfo = allStageInfo :+ (rStage, Some(rApl))
+        }
 
-        val (stages, auxApplets) = allStageInfoWithReorg.unzip
+        val (stages, auxApplets) = allStageInfo.unzip
         val tApplets: Map[String, IR.Applet] =
             taskApplets.map{ case (k,(applet,_)) => k -> applet }.toMap
         val aApplets: Map[String, IR.Applet] =
@@ -1056,7 +1223,7 @@ workflow w {
                 .flatten
                 .map(apl => apl.name -> apl).toMap
 
-        val irwf = IR.Workflow(wf.unqualifiedName, wfInputs, wfOutputs, stages)
+        val irwf = IR.Workflow(wf.unqualifiedName, wfInputs, wfOutputs, stages, lockedWf)
         IR.Namespace(Some(irwf), tApplets ++ aApplets)
     }
 

@@ -1,4 +1,7 @@
 {
+  "math.x_ai" : 3,
+  "math.x_bi" : 10,
+  "math.x_di" : 1000,
   "math.ai": 2,
   "math.bi": 3,
   "math.numbers" : [2,3,5]
