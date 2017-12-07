@@ -930,7 +930,7 @@ workflow w {
         // Link to the X.y original variables
         val inputs: Vector[IR.SArg] = wfOutputs.map{ case (_, sArg) => sArg }.toVector
 
-        (IR.Stage(appletName, genStageId(), appletName, inputs, outputVars),
+        (IR.Stage("reorg", genStageId(), appletName, inputs, outputVars),
          applet)
     }
 
@@ -1059,7 +1059,7 @@ workflow w {
                                WdlRewrite.namespace(code, Seq.empty))
         verifyWdlCodeIsLegal(applet.ns)
 
-        (IR.Stage(appletName, genStageId(), appletName, Vector.empty[IR.SArg], outputVars),
+        (IR.Stage("common", genStageId(), appletName, Vector.empty[IR.SArg], outputVars),
          applet)
     }
 
@@ -1121,7 +1121,7 @@ workflow w {
         // Link to the X.y original variables
         val inputs: Vector[IR.SArg] = wfOutputs.map{ case (_, sArg) => sArg }.toVector
 
-        (IR.Stage(appletName, DXWorkflowStage(LAST_STAGE), appletName, inputs, outputVars),
+        (IR.Stage("outputs", DXWorkflowStage(LAST_STAGE), appletName, inputs, outputVars),
          applet)
     }
 

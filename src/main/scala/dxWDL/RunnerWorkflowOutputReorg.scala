@@ -13,7 +13,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode
 import net.jcazevedo.moultingyaml._
 import scala.collection.JavaConverters._
 import spray.json._
-import Utils.appletLog
+import Utils.{appletLog, INTERMEDIATE_RESULTS_FOLDER}
 import wdl4s.wdl.WdlWorkflow
 import WdlVarLinks.yaml
 
@@ -118,7 +118,8 @@ object RunnerWorkflowOutputReorg {
         // a single API call, to improve performance.
         val folderContents:DXContainer.FolderContents = dxProject.listFolder(outFolder)
         val subFolders: List[String] = folderContents.getSubfolders().asScala.toList
-        if (!(subFolders contains intermFolder)) {
+        appletLog(s"subfolders=${subFolders}")
+        if (!(subFolders contains INTERMEDIATE_RESULTS_FOLDER)) {
             appletLog(s"Creating intermediate results sub-folder ${intermFolder}")
             dxProject.newFolder(intermFolder)
         } else {
