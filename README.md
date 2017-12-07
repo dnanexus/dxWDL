@@ -6,7 +6,7 @@ and compiles it to an equivalent workflow on the DNAnexus platform.
 
 
 ## Release status
-<a href="https://travis-ci.org/dnanexus-rnd/dxWDL"><img src="https://travis-ci.org/dnanexus-rnd/dxWDL.svg?branch=master"/></a>
+<a href="https://travis-ci.org/dnanexus/dxWDL"><img src="https://travis-ci.org/dnanexus/dxWDL.svg?branch=master"/></a>
 
 dxWDL provides a reasonably complete set of WDL features for beta
 testing. A few significant WDL features are not yet supported, but may be
@@ -24,7 +24,7 @@ Prerequisites: DNAnexus platform account, dx-toolkit, java 8+, python 2.7.
 
 Make sure you've installed the dx-toolkit CLI, and initialized it with
 `dx login`. Download the latest compiler jar file from the
-[releases](https://github.com/dnanexus-rnd/dxWDL/releases) page.
+[releases](https://github.com/dnanexus/dxWDL/releases) page.
 
 To compile a workflow:
 ```
@@ -52,7 +52,7 @@ The `-inputs` option allows specifying a Cromwell JSON
 [format](https://software.broadinstitute.org/wdl/documentation/inputs.php)
 inputs file. An equivalent DNAx format inputs file is generated from
 it. For example, workflow
-[files](https://github.com/dnanexus-rnd/dxWDL/blob/master/test/files.wdl)
+[files](https://github.com/dnanexus/dxWDL/blob/master/test/files.wdl)
 has input file
 ```
 {
