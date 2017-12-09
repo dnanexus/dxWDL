@@ -19,7 +19,7 @@ task Add {
 package dxWDL
 
 import com.dnanexus.{DXJob, IOClass}
-import java.nio.file.{Path, Paths}
+import java.nio.file.{Path, Paths, Files}
 import scala.collection.mutable.HashMap
 import spray.json._
 import Utils.{appletLog, DX_URL_PREFIX, RUNNER_TASK_ENV_FILE}
@@ -271,15 +271,17 @@ case class RunnerTask(task:WdlTask,
     // jobs to stdout. The calling script will keep track of them,
     // and check for abnormal termination.
     //
-    private var fifoCount = 0
-    private def mkfifo(wvl: WdlVarLinks, path: String) : (WdlValue, String) = {
-        val filename = Paths.get(path).toFile.getName
-        val fifo:Path = Paths.get(Utils.DX_HOME, s"fifo_${fifoCount}_${filename}")
+    var fifoCount = 0
+    def mkfifo(wvl: WdlVarLinks, path: String) : (WdlValue, String) = {
+        val fid = WdlVarLinks.getFileId(wvl)
+        val basename = Paths.get(path).toFile.getName
+        val dirPath = Utils.inputFilesDirPath.resolve("fifo").resolve(fifoCount.toString)
+        Files.createDirectories(dirPath)
         fifoCount += 1
-        val dxFileId = WdlVarLinks.getFileId(wvl)
+        val fifo:Path = dirPath.resolve(basename)
         val bashSnippet:String =
             s"""|mkfifo ${fifo.toString}
-                |dx cat ${dxFileId} > ${fifo.toString} &
+                |dx cat ${fid} > ${fifo.toString} &
                 |echo $$!
                 |""".stripMargin
         (WdlSingleFile(fifo.toString), bashSnippet)

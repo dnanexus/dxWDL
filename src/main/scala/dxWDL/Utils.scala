@@ -748,7 +748,9 @@ object Utils {
                 // no need to change types
                 v
             }
-        assert(retVal.wdlType == wdlType)
+        if (retVal.wdlType != wdlType) {
+            System.err.println(S"Warning: type of ${v.toWdlString} not converted into ${retval.wdlType}"
+        }
         retVal
     }
 

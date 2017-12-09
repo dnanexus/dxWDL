@@ -28,6 +28,7 @@ task z_FindFiles {
     output {
         Array[File] texts = glob("*.txt")
         Array[File] hotels = glob("H/*.hotel")
+        File? missing = "NoFileHere.txt"
     }
 }
 
@@ -193,6 +194,7 @@ workflow files {
         Copy2.outf_sorted
         FindFiles.texts
         FindFiles.hotels
+        FindFiles.missing
 #       FindFiles2.elements
 #       FindFiles2.emptyFiles
         FileSize.num_bytes

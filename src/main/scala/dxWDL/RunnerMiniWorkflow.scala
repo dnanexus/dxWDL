@@ -212,7 +212,8 @@ case class RunnerMiniWorkflow(exportVars: Set[String],
             case (accu, (varName, None)) =>
                 accu
         }
-        JsObject(m)
+        val mNonNull = m.filter{ case (key, value) => value != null && value != JsNull}
+        JsObject(mNonNull)
     }
 
     // Create a mapping from the job output variables to json values. These

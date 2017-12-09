@@ -127,6 +127,22 @@ object LocalDxFiles {
         DxFunctions.unregisterRemoteFile(path.toString)
     }
 
+
+    // Create a local path for a DNAx file. The normal location, is to download
+    // to the $HOME/inputs directory. However, since downloaded files may have the same
+    // name, we may need to disambiguate them.
+    private def createUniqueDownloadPath(fid:String, basename:String) : Path = {
+        val shortPath = Utils.inputFilesDirPath.resolve(basename)
+        if (Files.exists(shortPath)) {
+            System.err.println(s"Disambiguating file ${fid} with name ${basename}")
+            val dir:Path = Utils.inputFilesDirPath.resolve(fid)
+            Utils.safeMkdir(dir)
+            Utils.inputFilesDirPath.resolve(fid).resolve(basename)
+        } else {
+            shortPath
+        }
+    }
+
     def download(jsValue: JsValue, force: Boolean) : WdlValue = {
         // Download the file, and place it in a local file, with the
         // same name as the platform. All files have to be downloaded
@@ -159,20 +175,8 @@ object LocalDxFiles {
 
             case None =>
                 // Need to download it
-                val fName = dxFile.describe().getName()
-                val shortPath = Utils.inputFilesDirPath.resolve(fName)
-                val path : Path =
-                    if (Files.exists(shortPath)) {
-                        // Short path already exists. Note: this check is brittle in the case
-                        // of concurrent downloads.
-                        val fid = dxFile.getId()
-                        System.err.println(s"Disambiguating file ${fid} with name ${fName}")
-                        val dir:Path = Utils.inputFilesDirPath.resolve(fid)
-                        Utils.safeMkdir(dir)
-                        Utils.inputFilesDirPath.resolve(fid).resolve(fName)
-                    } else {
-                        shortPath
-                    }
+                val path = createUniqueDownloadPath(dxFile.getId(),
+                                                    dxFile.describe().getName())
                 val fState = if (force) {
                     // Download right now
                     Utils.downloadFile(path, dxFile)

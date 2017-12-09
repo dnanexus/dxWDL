@@ -23,7 +23,7 @@ not just lazy download.
 package dxWDL
 
 import com.dnanexus.{DXFile, DXJob, IOClass}
-import java.nio.file.Paths
+import java.nio.file.{Files, Paths}
 import net.jcazevedo.moultingyaml._
 import spray.json._
 import Utils.{appletLog, dxFileFromJsValue, dxFileToJsValue,
@@ -491,6 +491,9 @@ object WdlVarLinks {
                 JsObject("left" -> lJs, "right" -> rJs)
 
             // Strip optional type
+            case (WdlOptionalType(t), WdlOptionalValue(_,Some(WdlSingleFile(path)))) =>
+                if (Files.exists(Paths.get(path))) handleFile(path)
+                else JsNull
             case (WdlOptionalType(t), WdlOptionalValue(_,Some(w))) =>
                 jsFromWdlValue(t, w, ioDir)
             case (WdlOptionalType(t), WdlOptionalValue(_,None)) =>
