@@ -12,6 +12,11 @@ workflow optionals {
     Boolean? flag
     Array[String] foodArray = ["our", "own", "peanut", "butter"]
 
+    # scatter that returns an optional type
+#    scatter (i in [1, 10, 100]) {
+#        call isLargeInt { input: a=i }
+#    }
+
     # Missing compulsory argument, should be added as
     # an artifical workflow input
     call lib.Inc as inc
@@ -28,9 +33,9 @@ workflow optionals {
         y = if defined(flag) then 'OKAY' else 'FAIL'
     }
 
-    call MaybeInt as mi1 { input: a=rain }
-    call MaybeInt as mi2 { input: a=mi1.result}
-    call MaybeInt as mi3 { input: a=snow}
+    call lib.MaybeInt as mi1 { input: a=rain }
+    call lib.MaybeInt as mi2 { input: a=mi1.result}
+    call lib.MaybeInt as mi3 { input: a=snow}
     call MaybeString as ms1
     call MaybeString as ms2 { input: instrument="flute" }
 
@@ -66,6 +71,7 @@ workflow optionals {
         series
     }
 }
+
 task ppp_set_def {
     Int? i
 
@@ -91,15 +97,6 @@ task ppp_unused_args {
     }
 }
 
-task MaybeInt {
-    Int? a
-    command {
-    }
-    output {
-        Int? result = a
-    }
-}
-
 # A task that sets a default for an optional input
 task MaybeString {
     String? instrument = "french horn"
@@ -109,3 +106,11 @@ task MaybeString {
         String? result = instrument
     }
 }
+
+#task isLargeInt {
+#    Int a
+#    command {}
+#    output {
+#        Int? result = {if (a > 1) then a}
+#    }
+#}

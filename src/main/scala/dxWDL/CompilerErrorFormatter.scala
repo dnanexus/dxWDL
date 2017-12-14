@@ -153,5 +153,4 @@ case class CompilerErrorFormatter(terminalMap: Map[Terminal, WorkflowSource]) {
             |${pointToSource(lhsAst)}
             |""".stripMargin
     }
-
 }

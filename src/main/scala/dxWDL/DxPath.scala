@@ -109,7 +109,7 @@ object DxPath {
     }
 
     private def lookupDxPath(dxPath: String) : DXDataObject = {
-        val components = dxPath.split(":/")
+        val components = dxPath.split(":")
         if (components.length > 2) {
             throw new Exception(s"Path ${dxPath} cannot have more than two components")
         } else if (components.length == 2) {

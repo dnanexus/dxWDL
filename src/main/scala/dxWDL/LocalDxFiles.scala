@@ -12,16 +12,21 @@ import Utils.{dxFileFromJsValue, getMetaDirPath, jsValueOfJsonNode,
 import wdl4s.wdl.values._
 
 object LocalDxFiles {
-    // A file can be in two possible states
+    // A file can be in three possible states
     //  Local: has been downloaded in full to the local machine
     //  Remote: an empty file has been created locally in the correct
     //     filesystem path. The data has not been downloaded. Metadata
     //     operations such as "get file size" are performed via API
     //     calls.
+    //
+    // Note: streaming files are considered remote.
     object FileState extends Enumeration {
         val Local, Remote = Value
     }
     case class FileInfo(state: FileState.Value, dxFile: DXFile)
+
+    // Used when disambiguating files
+    var file_count = 0
 
     object FileInfo {
         def toJSON(fInfo: FileInfo) : JsValue = {
@@ -134,16 +139,17 @@ object LocalDxFiles {
     private def createUniqueDownloadPath(fid:String, basename:String) : Path = {
         val shortPath = Utils.inputFilesDirPath.resolve(basename)
         if (Files.exists(shortPath)) {
+            file_count += 1
             System.err.println(s"Disambiguating file ${fid} with name ${basename}")
-            val dir:Path = Utils.inputFilesDirPath.resolve(fid)
+            val dir:Path = Utils.inputFilesDirPath.resolve(file_count.toString)
             Utils.safeMkdir(dir)
-            Utils.inputFilesDirPath.resolve(fid).resolve(basename)
+            dir.resolve(basename)
         } else {
             shortPath
         }
     }
 
-    def download(jsValue: JsValue, force: Boolean) : WdlValue = {
+    def download(jsValue: JsValue, ioMode: IOMode.Value) : WdlValue = {
         // Download the file, and place it in a local file, with the
         // same name as the platform. All files have to be downloaded
         // into the same directory; the only exception we make is for
@@ -153,11 +159,11 @@ object LocalDxFiles {
         val path = reverseLookup.get(dxFile) match {
             case Some(path) =>
                 val fInfo:FileInfo = localized.get(path).get
-                fInfo.state match {
-                    case FileState.Local =>
+                (fInfo.state, ioMode) match {
+                    case (FileState.Local,_) =>
                         // the file has already been downloaded
                         ()
-                    case FileState.Remote if force =>
+                    case (FileState.Remote, IOMode.Data) =>
                         // We haven't downloaded the file data itself, but
                         // we do have a sentinal in place (empty file).
                         //
@@ -166,9 +172,10 @@ object LocalDxFiles {
                         Files.delete(path)
                         Utils.downloadFile(path, dxFile)
                         localized(path) = FileInfo(FileState.Local, dxFile)
-                    case FileState.Remote if !force =>
-                        // the file is remote, but we don't want to download it
-                        // right now
+                    case (FileState.Remote, IOMode.Stream) =>
+                        throw new Exception(s"Trying to stream file ${path} that has already been localized")
+                    case (_,_) =>
+                        // the file is remote, and is going to stay remote
                         ()
                 }
                 path
@@ -177,18 +184,23 @@ object LocalDxFiles {
                 // Need to download it
                 val path = createUniqueDownloadPath(dxFile.getId(),
                                                     dxFile.describe().getName())
-                val fState = if (force) {
-                    // Download right now
-                    Utils.downloadFile(path, dxFile)
-                    FileState.Local
-                } else {
-                    // Create an empty file, to mark the fact that the path and
-                    // file name are in use. We may not end up downloading the
-                    // file, and accessing the data, however, we need to keep
-                    // the path in the WdlFile value unique.
-                    Files.createFile(path)
-                    DxFunctions.registerRemoteFile(path.toString, dxFile)
-                    FileState.Remote
+                val fState = ioMode match {
+                    case IOMode.Data =>
+                        // Download right now
+                        Utils.downloadFile(path, dxFile)
+                        FileState.Local
+                    case IOMode.Remote =>
+                        // Create an empty file, to mark the fact that the path and
+                        // file name are in use. We may not end up downloading the
+                        // file, and accessing the data, however, we need to keep
+                        // the path in the WdlFile value unique.
+                        Files.createFile(path)
+                        DxFunctions.registerRemoteFile(path.toString, dxFile)
+                        FileState.Remote
+                    case IOMode.Stream =>
+                        // A file that will be streamed. The file itself will be create
+                        // immediately following this call, with a mkfifo system call.
+                        FileState.Remote
                 }
                 localized(path) = FileInfo(fState, dxFile)
                 reverseLookup(dxFile) = path

@@ -463,7 +463,7 @@ workflow w {
             if (Utils.declarationIsInput(decl))
                 Some(CVar(decl.unqualifiedName,
                              decl.wdlType,
-                             DeclAttrs.get(task, decl.unqualifiedName, cef),
+                             DeclAttrs.get(task, decl.unqualifiedName, Some(cef)),
                              decl.ast))
             else
                 None

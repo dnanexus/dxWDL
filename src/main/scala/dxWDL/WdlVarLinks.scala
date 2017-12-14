@@ -27,7 +27,8 @@ import java.nio.file.{Files, Paths}
 import net.jcazevedo.moultingyaml._
 import spray.json._
 import Utils.{appletLog, dxFileFromJsValue, dxFileToJsValue,
-    DX_URL_PREFIX, DXWorkflowStage, FLAT_FILES_SUFFIX, isNativeDxType}
+    DX_URL_PREFIX, DXIOParam, DXWorkflowStage, FLAT_FILES_SUFFIX, isNativeDxType}
+import wdl4s.wdl.{WdlTask}
 import wdl4s.wdl.types._
 import wdl4s.wdl.values._
 
@@ -36,9 +37,9 @@ object IORef extends Enumeration {
 }
 
 // The direction of IO:
-//  Download: downloading files
-//  Upload:  uploading files
-//  Zero:    no upload or download should be attempted
+//   Download: downloading files
+//   Upload:  uploading files
+//   Zero:    no upload or download should be attempted
 object IODirection extends Enumeration {
     val Download, Upload, Zero = Value
 }
@@ -130,13 +131,13 @@ object WdlVarLinks {
     }
 
     // Get the file-id
-    def getFileId(wvl: WdlVarLinks) : String = {
+    def getDxFile(wvl: WdlVarLinks) : DXFile = {
         assert(Utils.stripOptional(wvl.wdlType) == WdlFileType)
         wvl.dxlink match {
             case DxlValue(jsn) =>
                 val dxFiles = findDxFiles(jsn)
                 assert(dxFiles.length == 1)
-                dxFiles.head.getId()
+                dxFiles.head
             case _ =>
                 throw new Exception("cannot get file-id from non-JSON")
         }
@@ -244,7 +245,7 @@ object WdlVarLinks {
     private def isLocalPath(path:String) : Boolean = !(path contains "//")
 
     private def evalCoreHandleFile(jsv:JsValue,
-                                   force: Boolean,
+                                   ioMode: IOMode.Value,
                                    ioDir: IODirection.Value) : WdlValue = {
         (ioDir,jsv) match {
             case (IODirection.Upload, JsString(path)) if isLocalPath(path) =>
@@ -263,7 +264,7 @@ object WdlVarLinks {
                 }
 
             case (IODirection.Download, _) =>
-                LocalDxFiles.download(jsv, force)
+                LocalDxFiles.download(jsv, ioMode)
 
             case (IODirection.Zero, JsString(path)) if path.startsWith(DX_URL_PREFIX) =>
                 val dxFile = DxPath.lookupDxURLFile(path)
@@ -279,7 +280,7 @@ object WdlVarLinks {
 
     private def evalCore(wdlType: WdlType,
                          jsValue: JsValue,
-                         force: Boolean,
+                         ioMode: IOMode.Value,
                          ioDir: IODirection.Value) : WdlValue = {
         (wdlType, jsValue)  match {
             // base case: primitive types
@@ -287,12 +288,16 @@ object WdlVarLinks {
             case (WdlIntegerType, JsNumber(bnm)) => WdlInteger(bnm.intValue)
             case (WdlFloatType, JsNumber(bnm)) => WdlFloat(bnm.doubleValue)
             case (WdlStringType, JsString(s)) => WdlString(s)
-            case (WdlFileType, _) => evalCoreHandleFile(jsValue, force, ioDir)
+            case (WdlFileType, _) => evalCoreHandleFile(jsValue, ioMode, ioDir)
 
-            // arrays
+            // empty array
+            case (WdlArrayType(t), JsNull) =>
+                WdlArray(WdlArrayType(t), List.empty[WdlValue])
+
+            // array
             case (WdlArrayType(t), JsArray(vec)) =>
                 val wVec: Seq[WdlValue] = vec.map{
-                    elem:JsValue => evalCore(t, elem, force, ioDir)
+                    elem:JsValue => evalCore(t, elem, ioMode, ioDir)
                 }
                 WdlArray(WdlArrayType(t), wVec)
 
@@ -302,8 +307,8 @@ object WdlVarLinks {
                 val m: Map[WdlValue, WdlValue] =
                     shallowUnmarshalWdlMap(keyType, valueType, jsValue).map{
                         case (k:JsValue, v:JsValue) =>
-                            val kWdl = evalCore(keyType, k, force, ioDir)
-                            val vWdl = evalCore(valueType, v, force, ioDir)
+                            val kWdl = evalCore(keyType, k, ioMode, ioDir)
+                            val vWdl = evalCore(valueType, v, ioMode, ioDir)
                             kWdl -> vWdl
                     }.toMap
                 WdlMap(WdlMapType(keyType, valueType), m)
@@ -312,20 +317,20 @@ object WdlVarLinks {
                 val m:Map[String, (WdlType, JsValue)] = unmarshalWdlObject(fields)
                 val m2 = m.map{
                     case (key, (t, v)) =>
-                        key -> evalCore(t, v, force, ioDir)
+                        key -> evalCore(t, v, ioMode, ioDir)
                 }.toMap
                 WdlObject(m2)
 
             case (WdlPairType(lType, rType), JsObject(fields))
                     if (List("left", "right").forall(fields contains _)) =>
-                val left = evalCore(lType, fields("left"), force, ioDir)
-                val right = evalCore(rType, fields("right"), force, ioDir)
+                val left = evalCore(lType, fields("left"), ioMode, ioDir)
+                val right = evalCore(rType, fields("right"), ioMode, ioDir)
                 WdlPair(left, right)
 
             case (WdlOptionalType(t), (null|JsNull)) =>
                 WdlOptionalValue(t, None)
             case (WdlOptionalType(t), jsv) =>
-                evalCore(t, jsv, force, ioDir)
+                evalCore(t, jsv, ioMode, ioDir)
 
             case _ =>
                 throw new AppInternalException(
@@ -334,18 +339,18 @@ object WdlVarLinks {
         }
     }
 
-    // Calculate a WdlValue from the dx-links structure. If [force] is true,
+    // Calculate a WdlValue from the dx-links structure. If [ioMode] is true,
     // any files included in the structure will be downloaded.
     def eval(wvl: WdlVarLinks,
-             force: Boolean,
+             ioMode: IOMode.Value,
              ioDir: IODirection.Value) : WdlValue = {
         val jsValue = getRawJsValue(wvl)
-        evalCore(wvl.wdlType, jsValue, force, ioDir)
+        evalCore(wvl.wdlType, jsValue, ioMode, ioDir)
     }
 
     // Download the dx:files in this wvl
-    def localize(wvl:WdlVarLinks, force:Boolean) : WdlValue = {
-        eval(wvl, force, IODirection.Download)
+    def localize(wvl:WdlVarLinks, ioMode:IOMode.Value) : WdlValue = {
+        eval(wvl, ioMode, IODirection.Download)
     }
 
 
@@ -463,6 +468,8 @@ object WdlVarLinks {
             // Base case: empty array
             case (_, WdlArray(_, ar)) if ar.length == 0 =>
                 JsArray(Vector.empty)
+            case (WdlArrayType(t), null) =>
+                JsArray(Vector.empty)
 
             // Non empty array
             case (WdlArrayType(t), WdlArray(_, elems)) =>
@@ -547,50 +554,78 @@ object WdlVarLinks {
         JsObject(mWithType)
     }
 
+    private def unmarshalHash(jsv:JsValue) : (WdlType, JsValue) = {
+        jsv match {
+            case JsObject(fields) =>
+                // An object, the type is embedded as a 'wdlType' field
+                fields.get("wdlType") match {
+                    case Some(JsString(s)) =>
+                        val t = WdlType.fromWdlString(s)
+                        if (fields contains "value") {
+                            // the value is encapsulated in the "value" field
+                            (t, fields("value"))
+                        } else {
+                            // strip the wdlType field
+                            (t, JsObject(fields - "wdlType"))
+                        }
+                    case _ => throw new Exception(
+                        s"missing or malformed wdlType field in ${jsv}")
+                }
+            case other =>
+                throw new Exception(s"JSON ${jsv} does not match the marshalled WDL value")
+        }
+    }
+
     // Convert an input field to a dx-links structure. This allows
     // passing it to other jobs.
     //
     // Note: we need to represent dx-files as local paths, even if we
     // do not download them. This is because accessing these files
     // later on will cause a WDL failure.
-    private [dxWDL] def importFromDxExec(ioClass:IOClass,
+    private [dxWDL] def importFromDxExec(ioParam:DXIOParam,
                                          attrs:DeclAttrs,
                                          jsValue: JsValue) : WdlVarLinks = {
         //appletLog(s"importFromDxExec ioClass=${ioClass} js=${jsValue}")
-        val (wdlType, jsv) = ioClass match {
-            case IOClass.BOOLEAN => (WdlBooleanType, jsValue)
-            case IOClass.INT => (WdlIntegerType, jsValue)
-            case IOClass.FLOAT => (WdlFloatType, jsValue)
-            case IOClass.STRING => (WdlStringType, jsValue)
-            case IOClass.FILE => (WdlFileType, jsValue)
-            case IOClass.ARRAY_OF_BOOLEANS => (WdlArrayType(WdlBooleanType), jsValue)
-            case IOClass.ARRAY_OF_INTS => (WdlArrayType(WdlIntegerType), jsValue)
-            case IOClass.ARRAY_OF_FLOATS => (WdlArrayType(WdlFloatType), jsValue)
-            case IOClass.ARRAY_OF_STRINGS => (WdlArrayType(WdlStringType), jsValue)
-            case IOClass.ARRAY_OF_FILES => (WdlArrayType(WdlFileType), jsValue)
-            case IOClass.HASH =>
-                jsValue match {
-                    case JsObject(fields) =>
-                        // An object, the type is embedded as a 'wdlType' field
-                        fields.get("wdlType") match {
-                            case Some(JsString(s)) =>
-                                val t = WdlType.fromWdlString(s)
-                                if (fields contains "value") {
-                                    // the value is encapsulated in the "value" field
-                                    (t, fields("value"))
-                                } else {
-                                    // strip the wdlType field
-                                    (t, JsObject(fields - "wdlType"))
-                                }
-                            case _ => throw new Exception(
-                                s"missing or malformed wdlType field in ${jsValue}")
-                        }
-                    case _ => throw new Exception(s"IO class is HASH, but JSON is ${jsValue}")
+        if (ioParam.ioClass == IOClass.HASH) {
+            val (t, v) = unmarshalHash(jsValue)
+            if (ioParam.optional)
+                (WdlOptionalType(t), v)
+            else
+                (t, v)
+            WdlVarLinks(t, attrs, DxlValue(v))
+        } else {
+            val wdlType =
+                if (ioParam.optional) {
+                    ioParam.ioClass match {
+                        case IOClass.BOOLEAN => WdlOptionalType(WdlBooleanType)
+                        case IOClass.INT => WdlOptionalType(WdlIntegerType)
+                        case IOClass.FLOAT => WdlOptionalType(WdlFloatType)
+                        case IOClass.STRING => WdlOptionalType(WdlStringType)
+                        case IOClass.FILE => WdlOptionalType(WdlFileType)
+                        case IOClass.ARRAY_OF_BOOLEANS => WdlMaybeEmptyArrayType(WdlBooleanType)
+                        case IOClass.ARRAY_OF_INTS => WdlMaybeEmptyArrayType(WdlIntegerType)
+                        case IOClass.ARRAY_OF_FLOATS => WdlMaybeEmptyArrayType(WdlFloatType)
+                        case IOClass.ARRAY_OF_STRINGS => WdlMaybeEmptyArrayType(WdlStringType)
+                        case IOClass.ARRAY_OF_FILES => WdlMaybeEmptyArrayType(WdlFileType)
+                        case other => throw new Exception(s"unhandled IO class ${other}")
+                    }
+                } else {
+                    ioParam.ioClass match {
+                        case IOClass.BOOLEAN => WdlBooleanType
+                        case IOClass.INT => WdlIntegerType
+                        case IOClass.FLOAT => WdlFloatType
+                        case IOClass.STRING => WdlStringType
+                        case IOClass.FILE => WdlFileType
+                        case IOClass.ARRAY_OF_BOOLEANS => WdlNonEmptyArrayType(WdlBooleanType)
+                        case IOClass.ARRAY_OF_INTS => WdlNonEmptyArrayType(WdlIntegerType)
+                        case IOClass.ARRAY_OF_FLOATS => WdlNonEmptyArrayType(WdlFloatType)
+                        case IOClass.ARRAY_OF_STRINGS => WdlNonEmptyArrayType(WdlStringType)
+                        case IOClass.ARRAY_OF_FILES => WdlNonEmptyArrayType(WdlFileType)
+                        case other => throw new Exception(s"unhandled IO class ${other}")
+                    }
                 }
-            case other => throw new Exception(s"unhandled IO class ${other}")
+            WdlVarLinks(wdlType, attrs, DxlValue(jsValue))
         }
-
-        WdlVarLinks(wdlType, attrs, DxlValue(jsv))
     }
 
     // Import a value specified in a Cromwell style JSON input
@@ -747,32 +782,21 @@ object WdlVarLinks {
     // Read the job-inputs JSON file, and convert the variables
     // to links that can be passed to other applets.
     def loadJobInputsAsLinks(inputLines: String,
-                             inputSpec:Map[String, IOClass]): Map[String, WdlVarLinks] = {
-        def isArrayIOClass(ioClass:IOClass) : Boolean = ioClass match {
-            case IOClass.ARRAY_OF_BOOLEANS => true
-            case IOClass.ARRAY_OF_INTS => true
-            case IOClass.ARRAY_OF_FLOATS => true
-            case IOClass.ARRAY_OF_STRINGS => true
-            case IOClass.ARRAY_OF_FILES => true
-            case _ => false
-        }
-
+                             inputSpec:Map[String, DXIOParam],
+                             taskOpt: Option[WdlTask]): Map[String, WdlVarLinks] = {
         // Discard auxiliary fields
         val jsonAst : JsValue = inputLines.parseJson
         val fields : Map[String, JsValue] = jsonAst
             .asJsObject.fields
             .filter{ case (fieldName,_) => !fieldName.endsWith(FLAT_FILES_SUFFIX) }
 
-        // Some inputs could be missing. We want to convert
-        // a missing input array to an empty array instead.
-        //
-        // This is like DNAx semantics, but not exactly WDL. If a task has
-        // array input A, and it is called without A, then, the callee will
-        // see A=[], instead of A=null.
+        // Optional inputs could be missing, we want to convert
+        // them into appropriate JSON null.
         val missingFields = inputSpec.foldLeft(Map.empty[String, JsValue]) {
-            case (accu, (key, ioClass)) if isArrayIOClass(ioClass) =>
+            case (accu, (key, ioParam)) if ioParam.optional =>
                 fields.get(key) match {
-                    case None => accu + (key -> JsArray(Vector.empty))
+                    case None if ioParam.optional =>
+                        accu + (key -> JsNull)
                     case Some(v) => accu
                 }
             case (accu, (key, ioClass)) => accu
@@ -780,11 +804,16 @@ object WdlVarLinks {
 
         // Create a mapping from each key to its WDL value,
         (fields ++ missingFields).map { case (key,jsValue) =>
-            val ioClass = inputSpec.get(key) match {
+            val ioParam = inputSpec.get(key) match {
                 case Some(x) => x
                 case None => throw new Exception(s"Key ${key} has no IO specification")
             }
-            val wvl = importFromDxExec(ioClass, DeclAttrs.empty, jsValue)
+            // Attach attributes, if any
+            val attrs = taskOpt match {
+                case None => DeclAttrs.empty
+                case Some(task) => DeclAttrs.get(task, key, None)
+            }
+            val wvl = importFromDxExec(ioParam, attrs, jsValue)
             key -> wvl
         }.toMap
     }

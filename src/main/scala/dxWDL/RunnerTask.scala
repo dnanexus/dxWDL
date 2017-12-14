@@ -18,11 +18,11 @@ task Add {
 
 package dxWDL
 
-import com.dnanexus.{DXJob, IOClass}
-import java.nio.file.{Path, Paths, Files}
+import com.dnanexus.{DXJob}
+import java.nio.file.{Path, Paths}
 import scala.collection.mutable.HashMap
 import spray.json._
-import Utils.{appletLog, DX_URL_PREFIX, RUNNER_TASK_ENV_FILE}
+import Utils.{appletLog, DXIOParam, DX_URL_PREFIX, RUNNER_TASK_ENV_FILE}
 import wdl4s.wdl.{Declaration, DeclarationInterface, WdlExpression, WdlTask}
 import wdl4s.wdl.values._
 import wdl4s.wdl.types._
@@ -271,29 +271,27 @@ case class RunnerTask(task:WdlTask,
     // jobs to stdout. The calling script will keep track of them,
     // and check for abnormal termination.
     //
-    var fifoCount = 0
-    def mkfifo(wvl: WdlVarLinks, path: String) : (WdlValue, String) = {
-        val fid = WdlVarLinks.getFileId(wvl)
-        val basename = Paths.get(path).toFile.getName
-        val dirPath = Utils.inputFilesDirPath.resolve("fifo").resolve(fifoCount.toString)
-        Files.createDirectories(dirPath)
-        fifoCount += 1
-        val fifo:Path = dirPath.resolve(basename)
+    def mkfifo(wvl: WdlVarLinks) : (WdlValue, String) = {
+        val dxFile = WdlVarLinks.getDxFile(wvl)
+        val p:Path = LocalDxFiles.get(dxFile) match {
+            case None => throw new Exception(s"File ${dxFile} has not been localized yet")
+            case Some(p) => p
+        }
         val bashSnippet:String =
-            s"""|mkfifo ${fifo.toString}
-                |dx cat ${fid} > ${fifo.toString} &
+            s"""|mkfifo ${p}
+                |dx cat ${dxFile.getId} > ${p} &
                 |echo $$!
                 |""".stripMargin
-        (WdlSingleFile(fifo.toString), bashSnippet)
+        (WdlSingleFile(p.toString), bashSnippet)
     }
 
     private def handleStreamingFile(wvl: WdlVarLinks,
                                     wdlValue:WdlValue) : (WdlValue, String) = {
         wdlValue match {
-            case WdlSingleFile(path) if wvl.attrs.stream =>
-                mkfifo(wvl, path)
-            case WdlOptionalValue(_,Some(WdlSingleFile(path))) if wvl.attrs.stream =>
-                mkfifo(wvl, path)
+            case WdlSingleFile(_) if wvl.attrs.stream =>
+                mkfifo(wvl)
+            case WdlOptionalValue(_,Some(WdlSingleFile(_))) if wvl.attrs.stream =>
+                mkfifo(wvl)
             case _ =>
                 throw new Exception(s"Value is not a streaming file ${wvl} ${wdlValue}")
         }
@@ -379,23 +377,17 @@ case class RunnerTask(task:WdlTask,
 
     // Calculate the input variables for the task, download the input files,
     // and build a shell script to run the command.
-    def prolog(inputSpec: Map[String, IOClass],
-               outputSpec: Map[String, IOClass],
-               inputs: Map[String, WdlVarLinks]) : Map[String, JsValue] = {
-        // add the attributes from the parameter_meta section of the task
-        val inputWvls = inputs.map{ case (varName, wvl) =>
-            val attrs = DeclAttrs.get(task, varName, cef)
-            varName -> WdlVarLinks(wvl.wdlType, attrs, wvl.dxlink)
-        }.toMap
-
-        val forceFlag =
+    def prolog(inputSpec: Map[String, DXIOParam],
+               outputSpec: Map[String, DXIOParam],
+               inputWvls: Map[String, WdlVarLinks]) : Map[String, JsValue] = {
+        val ioMode =
             if (task.commandTemplateString.trim.isEmpty) {
                 // The shell command is empty, there is no need to download the files.
-                false
+                IOMode.Remote
             } else {
                 // default: download all input files
                 appletLog(s"Eagerly download input files")
-                true
+                IOMode.Data
             }
 
         var bashSnippetVec = Vector.empty[String]
@@ -403,13 +395,13 @@ case class RunnerTask(task:WdlTask,
             val w:WdlValue =
                 if (wvl.attrs.stream) {
                     // streaming file, create a named fifo for it
-                    val w:WdlValue = WdlVarLinks.localize(wvl, false)
+                    val w:WdlValue = WdlVarLinks.localize(wvl, IOMode.Stream)
                     val (wdlValueRewrite,bashSnippet) = handleStreamingFile(wvl, w)
                     bashSnippetVec = bashSnippetVec :+ bashSnippet
                     wdlValueRewrite
                 } else  {
                     // regular file
-                    WdlVarLinks.localize(wvl, forceFlag)
+                    WdlVarLinks.localize(wvl, ioMode)
                 }
             key -> w
         }.toMap
@@ -451,8 +443,8 @@ case class RunnerTask(task:WdlTask,
         Map.empty
     }
 
-    def epilog(inputSpec: Map[String, IOClass],
-               outputSpec: Map[String, IOClass],
+    def epilog(inputSpec: Map[String, DXIOParam],
+               outputSpec: Map[String, DXIOParam],
                inputs: Map[String, WdlVarLinks]) : Map[String, JsValue] = {
         // Repopulate the localized file tables
         LocalDxFiles.unfreeze()
@@ -492,7 +484,7 @@ case class RunnerTask(task:WdlTask,
                     // value not evaluated yet, calculate and keep in cache
                     taskInputs.get(varName) match {
                         case Some(wvl) =>
-                            env(varName) = WdlVarLinks.eval(wvl, true, IODirection.Download)
+                            env(varName) = WdlVarLinks.eval(wvl, IOMode.Data, IODirection.Download)
                             env(varName)
                         case None => throw new UnboundVariableException(varName)
                     }
@@ -529,8 +521,8 @@ case class RunnerTask(task:WdlTask,
     /** The runtime attributes need to be calculated at runtime. Evaluate them,
       *  determine the instance type [xxxx], and relaunch the job on [xxxx]
       */
-    def relaunch(inputSpec: Map[String, IOClass],
-                 outputSpec: Map[String, IOClass],
+    def relaunch(inputSpec: Map[String, DXIOParam],
+                 outputSpec: Map[String, DXIOParam],
                  inputWvls: Map[String, WdlVarLinks]) : Map[String, JsValue] = {
         // Figure out the available instance types, and their prices,
         // by reading the file

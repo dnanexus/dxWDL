@@ -27,7 +27,7 @@ medium_test_list = [
     "cast", "math", "strings", "files",
 
     # various advanced features
-    "advanced",
+    "advanced", "conditionals",
 
     # optional arguments
     "optionals",
@@ -54,6 +54,8 @@ medium_test_list = [
 # Tests with the reorg flags
 test_reorg=["files", "math"]
 test_defaults=["files", "math"]
+test_locked=["math", "strings", "conditionals", "advanced", "bad_status", "bad_status2",
+             "instance_types", "dict"]
 
 TestDesc = namedtuple('TestDesc', 'wf_name wdl_source wdl_input dx_input results')
 
@@ -332,6 +334,8 @@ def build_dirs(project):
 def compiler_per_test_flags(tname):
     flags = []
     desc = test_files[tname]
+    if tname in test_locked:
+        flags.append("-locked")
     if tname in test_reorg:
         flags.append("-reorg")
     if tname in test_defaults:

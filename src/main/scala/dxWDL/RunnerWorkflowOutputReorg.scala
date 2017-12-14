@@ -7,13 +7,13 @@ package dxWDL
 
 // DX bindings
 import com.dnanexus.{DXAnalysis, DXAPI, DXContainer, DXDataObject,
-    DXEnvironment, DXJSON, DXFile, DXProject, DXSearch, IOClass}
+    DXEnvironment, DXJSON, DXFile, DXProject, DXSearch}
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.node.ObjectNode
 import net.jcazevedo.moultingyaml._
 import scala.collection.JavaConverters._
 import spray.json._
-import Utils.{appletLog, INTERMEDIATE_RESULTS_FOLDER}
+import Utils.{appletLog, DXIOParam, INTERMEDIATE_RESULTS_FOLDER}
 import wdl4s.wdl.WdlWorkflow
 import WdlVarLinks.yaml
 
@@ -140,8 +140,8 @@ object RunnerWorkflowOutputReorg {
     // The variables are passed through, so that workflow will
     // complete only after file movements are complete.
     def apply(wf: WdlWorkflow,
-              inputSpec: Map[String, IOClass],
-              outputSpec: Map[String, IOClass],
+              inputSpec: Map[String, DXIOParam],
+              outputSpec: Map[String, DXIOParam],
               wfInputs: Map[String, WdlVarLinks]) : Map[String, JsValue] = {
         appletLog(s"Initial inputs=\n${prettyPrint(wfInputs)}")
 
