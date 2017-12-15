@@ -27,7 +27,7 @@ medium_test_list = [
     "cast", "math", "strings", "files",
 
     # various advanced features
-    "advanced",
+    "advanced", "conditionals",
 
     # optional arguments
     "optionals",
@@ -54,6 +54,9 @@ medium_test_list = [
 # Tests with the reorg flags
 test_reorg=["files", "math"]
 test_defaults=["files", "math"]
+
+test_locked=["math", "conditionals", "advanced", "bad_status", "bad_status2",
+             "instance_types", "dict"]
 
 TestDesc = namedtuple('TestDesc', 'wf_name wdl_source wdl_input dx_input results')
 
@@ -84,6 +87,7 @@ def get_workflow_name(filename):
 
 # Register a test name, find its inputs and expected results files.
 def register_test(tname):
+    global test_files
     if tname in reserved_test_names:
         raise Exception("Test name {} is reserved".format(tname))
     wdl_file = os.path.join(test_dir, tname + ".wdl")
@@ -238,17 +242,19 @@ def run_workflow(project, test_folder, tname, wfId, delay_workspace_destruction)
         time.sleep(5)
     raise ("Error running workflow")
 
-def extract_outputs(tname, analysis_desc, locked):
+def extract_outputs(tname, analysis_desc):
+    locked = tname in test_locked
     if locked:
-        return analysis_desc["output"]
-    stages = analysis_desc['stages']
-    for snum in range(len(stages)):
-        crnt = stages[snum]
-        if crnt['id'] == 'last':
-            return stages[snum]['execution']['output']
-    raise Exception("Analysis for test {} does not have stage 'last'".format(tname))
+        return analysis_desc['output']
+    else:
+        stages = analysis_desc['stages']
+        for snum in range(len(stages)):
+            crnt = stages[snum]
+            if crnt['id'] == 'last':
+                return stages[snum]['execution']['output']
+        raise Exception("Analysis for test {} does not have stage 'last'".format(tname))
 
-def run_workflow_subset(project, workflows, test_folder, delay_workspace_destruction, no_wait, locked):
+def run_workflow_subset(project, workflows, test_folder, delay_workspace_destruction, no_wait):
     # Run the workflows
     test_analyses=[]
     for tname, wfid in workflows.iteritems():
@@ -268,8 +274,10 @@ def run_workflow_subset(project, workflows, test_folder, delay_workspace_destruc
     for analysis in test_analyses:
         analysis_desc = analysis.describe()
         tname = find_test_from_analysis(analysis)
+        if tname in test_failing:
+            continue
         test_desc = test_files[tname]
-        anl_outputs = extract_outputs(tname, analysis_desc, locked)
+        anl_outputs = extract_outputs(tname, analysis_desc)
         shouldbe = read_json_file_maybe_empty(test_desc.results)
         correct = True
         print("Checking results for workflow {}".format(test_desc.wf_name))
@@ -332,6 +340,8 @@ def build_dirs(project):
 def compiler_per_test_flags(tname):
     flags = []
     desc = test_files[tname]
+    if tname in test_locked:
+        flags.append("-locked")
     if tname in test_reorg:
         flags.append("-reorg")
     if tname in test_defaults:
@@ -375,6 +385,7 @@ def native_call_setup(project, applet_folder, version_id):
 ######################################################################
 ## Program entry point
 def main():
+    global test_locked
     argparser = argparse.ArgumentParser(description="Run WDL compiler tests on the platform")
     argparser.add_argument("--archive", help="Archive old applets",
                            action="store_true", default=False)
@@ -389,6 +400,8 @@ def main():
     argparser.add_argument("--lazy", help="Only compile workflows that are unbuilt",
                            action="store_true", default=False)
     argparser.add_argument("--locked", help="Generate locked-down workflows",
+                           action="store_true", default=False)
+    argparser.add_argument("--regular", help="Generate only regular workflows",
                            action="store_true", default=False)
     argparser.add_argument("--no-wait", help="Exit immediately after launching tests",
                            action="store_true", default=False)
@@ -430,9 +443,15 @@ def main():
         home_ad = util.build(project, applet_folder, version_id, top_dir)
         jar_path = util.build_final_jar(version_id, top_dir, [home_ad])
 
+    if args.regular:
+        # Disable all locked workflows
+        args.locked = False
+        test_locked = []
+
     compiler_flags = []
     if args.locked:
         compiler_flags.append("-locked")
+        test_locked += test_names
     if args.archive:
         compiler_flags.append("-archive")
     if args.compile_mode:
@@ -459,7 +478,7 @@ def main():
             print("workflow({}) = {}".format(tname, wfid))
         if not args.compile_only:
             run_workflow_subset(project, workflows, test_folder, args.delay_workspace_destruction,
-                                args.no_wait, args.locked)
+                                args.no_wait)
     finally:
         print("Test complete")
 

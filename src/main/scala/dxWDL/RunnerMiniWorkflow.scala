@@ -48,7 +48,7 @@ import com.dnanexus._
 import java.nio.file.{Path, Paths, Files}
 import scala.collection.mutable.HashMap
 import spray.json._
-import Utils.{AppletLinkInfo, appletLog, callUniqueName, transformVarName}
+import Utils.{AppletLinkInfo, appletLog, callUniqueName, DXIOParam, transformVarName}
 import wdl4s.wdl._
 import wdl4s.wdl.expression._
 import wdl4s.parser.WdlParser.{Ast, Terminal}
@@ -93,7 +93,7 @@ case class RunnerMiniWorkflow(exportVars: Set[String],
     }
 
     private def wdlValueFromWVL(wvl: WdlVarLinks) : WdlValue =
-        WdlVarLinks.eval(wvl, false, IODirection.Zero)
+        WdlVarLinks.eval(wvl, IOMode.Remote, IODirection.Zero)
 
     private def wdlValueToWVL(t:WdlType, wdlValue:WdlValue) : WdlVarLinks =
         WdlVarLinks.importFromWDL(t, DeclAttrs.empty, wdlValue, IODirection.Zero)
@@ -212,7 +212,8 @@ case class RunnerMiniWorkflow(exportVars: Set[String],
             case (accu, (varName, None)) =>
                 accu
         }
-        JsObject(m)
+        val mNonNull = m.filter{ case (key, value) => value != null && value != JsNull}
+        JsObject(mNonNull)
     }
 
     // Create a mapping from the job output variables to json values. These
@@ -373,7 +374,7 @@ case class RunnerMiniWorkflow(exportVars: Set[String],
         appletLog(s"evalIf")
 
         // Evaluate condition
-        val condValue:WdlValue = WdlVarLinks.eval(condition, true, IODirection.Download)
+        val condValue:WdlValue = WdlVarLinks.eval(condition, IOMode.Remote, IODirection.Zero)
         val b = condValue match {
             case WdlBoolean(b) => b
             case _ => throw new AppInternalException("conditional expression is not boolean")
@@ -533,8 +534,8 @@ case class RunnerMiniWorkflow(exportVars: Set[String],
 
 object RunnerMiniWorkflow {
     def apply(wf: WdlWorkflow,
-              inputSpec: Map[String, IOClass],
-              outputSpec: Map[String, IOClass],
+              inputSpec: Map[String, DXIOParam],
+              outputSpec: Map[String, DXIOParam],
               inputs: Map[String, WdlVarLinks],
               orgInputs: JsValue,
               collectSubjob: Boolean) : Map[String, JsValue] = {

@@ -1,5 +1,5 @@
 /**
-An applets that gathers outputs from scatter jobs. This is necessary when
+An applet that gathers outputs from scatter jobs. This is necessary when
 the output is a non-native DNAx type. For example, the math workflow
 below calls a scatter where each job returns an array of files. The
 GenFiles.result is a ragged array of files (Array[Array[File]]). The
@@ -76,12 +76,12 @@ workflow math {
 package dxWDL
 
 // DX bindings
-import com.dnanexus.{DXAPI, DXEnvironment, DXJob, DXSearch, IOClass}
+import com.dnanexus.{DXAPI, DXEnvironment, DXJob, DXSearch}
 import com.fasterxml.jackson.databind.JsonNode
 import scala.collection.JavaConverters._
 import scala.collection.mutable.HashMap
 import spray.json._
-import Utils.{callUniqueName, jsonNodeOfJsValue, jsValueOfJsonNode}
+import Utils.{callUniqueName, DXIOParam, jsonNodeOfJsValue, jsValueOfJsonNode}
 import wdl4s.wdl.{WdlCall, WdlWorkflow}
 import wdl4s.wdl.types._
 
@@ -160,24 +160,25 @@ object RunnerCollect {
     // Collect all the values of a field from a group of jobs. Convert
     // into the correct WDL type.
     //
-    // Assumptions: the jobs have already completed, and their files are closed.
+    // Note: the type could be optional, in which case the output field
+    // will be generated only from a subset of the jobs.
     def collect(fieldName: String,
                 wdlType: WdlType,
                 jobDescs:Vector[ChildJobDesc]) : (String, WdlVarLinks) = {
-        // TODO:
-        // The type could be optional, in which case the output field
-        // will be generated only from a subset of the jobs.
-
         // Sort the results by ascending sequence number
         val jobsInLaunchOrder = jobDescs.sortWith(_.seqNum < _.seqNum)
-        val jsVec = jobsInLaunchOrder.map{ case desc =>
-            desc.outputs.asJsObject.fields.get(fieldName) match {
-                case None =>
-                    throw new Exception(s"missing field ${fieldName} from child job ${desc.job}}")
-                case Some(x) => x
-            }
+        val jsVec = jobsInLaunchOrder.map{
+            case desc =>
+                val fields = desc.outputs.asJsObject.fields
+                (wdlType, fields.get(fieldName)) match {
+                    case (WdlOptionalType(t),None) => JsNull
+                    case (WdlMaybeEmptyArrayType(t),None) => JsArray(Vector.empty[JsValue])
+                    case (_,Some(x)) => x
+                    case _ =>
+                        throw new Exception(s"missing field ${fieldName} from child job ${desc.job}}")
+                }
         }
-        val wvl = WdlVarLinks(wdlType, DeclAttrs.empty, DxlValue(JsArray(jsVec)))
+        val wvl = WdlVarLinks(WdlArrayType(wdlType), DeclAttrs.empty, DxlValue(JsArray(jsVec)))
         (fieldName, wvl)
     }
 
@@ -187,7 +188,7 @@ object RunnerCollect {
                            retvals: Vector[ChildJobDesc]) : Map[String,JsValue] = {
         val wvlOutputs: Vector[(String, WdlVarLinks)] =
             call.outputs.map { caOut =>
-                collect(caOut.unqualifiedName, WdlArrayType(caOut.wdlType), retvals)
+                collect(caOut.unqualifiedName, caOut.wdlType, retvals)
             }.toVector
         val outputs:Map[String, JsValue] = wvlOutputs.foldLeft(Map.empty[String, JsValue]) {
             case (accu, (varName, wvl)) =>
@@ -202,8 +203,8 @@ object RunnerCollect {
     }
 
     def apply(wf: WdlWorkflow,
-              inputSpec: Map[String, IOClass],
-              outputSpec: Map[String, IOClass],
+              inputSpec: Map[String, DXIOParam],
+              outputSpec: Map[String, DXIOParam],
               inputs: Map[String, WdlVarLinks]) : Map[String, JsValue] = {
         // We cannot change the input fields, because this is a sub-job with the same
         // input/output spec as the parent scatter. Therefore, we need to computationally

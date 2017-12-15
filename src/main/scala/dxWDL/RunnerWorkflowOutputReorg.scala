@@ -7,13 +7,13 @@ package dxWDL
 
 // DX bindings
 import com.dnanexus.{DXAnalysis, DXAPI, DXContainer, DXDataObject,
-    DXEnvironment, DXJSON, DXFile, DXProject, DXSearch, IOClass}
+    DXEnvironment, DXJSON, DXFile, DXProject, DXSearch}
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.node.ObjectNode
 import net.jcazevedo.moultingyaml._
 import scala.collection.JavaConverters._
 import spray.json._
-import Utils.{appletLog, INTERMEDIATE_RESULTS_FOLDER}
+import Utils.{appletLog, DXIOParam, INTERMEDIATE_RESULTS_FOLDER}
 import wdl4s.wdl.WdlWorkflow
 import WdlVarLinks.yaml
 
@@ -95,7 +95,7 @@ object RunnerWorkflowOutputReorg {
         val dxProjDesc = dxProject.describe
         val dxAnalysis = dxEnv.getJob.describe.getAnalysis
         val outFolder = dxAnalysis.describe.getFolder
-        val intermFolder = outFolder + "/" + Utils.INTERMEDIATE_RESULTS_FOLDER
+        val intermFolder = outFolder + "/" + INTERMEDIATE_RESULTS_FOLDER
         appletLog(s"proj=${dxProjDesc.getName} outFolder=${outFolder}")
 
         // find all analysis output files
@@ -119,7 +119,7 @@ object RunnerWorkflowOutputReorg {
         val folderContents:DXContainer.FolderContents = dxProject.listFolder(outFolder)
         val subFolders: List[String] = folderContents.getSubfolders().asScala.toList
         appletLog(s"subfolders=${subFolders}")
-        if (!(subFolders contains INTERMEDIATE_RESULTS_FOLDER)) {
+        if (!(subFolders contains intermFolder)) {
             appletLog(s"Creating intermediate results sub-folder ${intermFolder}")
             dxProject.newFolder(intermFolder)
         } else {
@@ -140,8 +140,8 @@ object RunnerWorkflowOutputReorg {
     // The variables are passed through, so that workflow will
     // complete only after file movements are complete.
     def apply(wf: WdlWorkflow,
-              inputSpec: Map[String, IOClass],
-              outputSpec: Map[String, IOClass],
+              inputSpec: Map[String, DXIOParam],
+              outputSpec: Map[String, DXIOParam],
               wfInputs: Map[String, WdlVarLinks]) : Map[String, JsValue] = {
         appletLog(s"Initial inputs=\n${prettyPrint(wfInputs)}")
 

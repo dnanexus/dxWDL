@@ -92,9 +92,11 @@ case class CompilerSimplifyExpr(wf: WdlWorkflow,
         }
     }
 
-    // Return true if an expression is a constant or a variable
-    def isConstOrVar(expr: WdlExpression) : Boolean = {
-        expr.ast match {
+    // Return true if an expression is a variable
+    def isVar(expr: WdlExpression) : Boolean = {
+        if (Utils.isExpressionConst(expr)) {
+            false
+        } else expr.ast match {
             case t: Terminal if nonInterpolation(t) => true
             case _ => false
         }
@@ -182,7 +184,7 @@ case class CompilerSimplifyExpr(wf: WdlWorkflow,
             .flatten
         // Figure out the expression type for a collection we loop over in a scatter
         val collType : WdlType = evalType(ssc.collection, ssc)
-        if (isConstOrVar(ssc.collection)) {
+        if (isVar(ssc.collection)) {
             // The collection is a simple variable, there is no need
             // to create an additional declaration
             val ssc1 = WdlRewrite.scatter(ssc, children)
@@ -207,7 +209,7 @@ case class CompilerSimplifyExpr(wf: WdlWorkflow,
 
         // Figure out the expression type for a collection we loop over in a scatter
         val exprType : WdlType = evalType(cond.condition, cond)
-        if (isConstOrVar(cond.condition)) {
+        if (isVar(cond.condition)) {
             // The condition is a simple variable, there is no need
             // to create an additional declaration
             Vector(WdlRewrite.cond(cond, children, cond.condition))
@@ -349,10 +351,20 @@ object CompilerSimplifyExpr {
         }
     }
 
+    private def validateTask(task: WdlTask, verbose: Verbose) : Unit = {
+        // validate runtime attributes
+        val validAttrNames:Set[String] = Set(Utils.DX_INSTANCE_TYPE_ATTR, "memory", "disks", "cpu", "docker")
+        task.runtimeAttributes.attrs.foreach{ case (attrName,_) =>
+            if (!(validAttrNames contains attrName))
+                warning(verbose, s"Runtime attribute ${attrName} for task ${task.name} is unknown")
+        }
+    }
+
     def apply(ns: WdlNamespace, verbose: Verbose) : WdlNamespace = {
         trace(verbose.on, "simplifying workflow expressions")
         val cef = new CompilerErrorFormatter(ns.terminalMap)
         checkReservedWords(ns, cef)
+        ns.tasks.foreach(t => validateTask(t, verbose))
 
         // Process the original WDL file,
         // Do not modify the tasks

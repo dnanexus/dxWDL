@@ -137,3 +137,12 @@ task ArrayLength {
         Int result = length(ai)
     }
 }
+
+task MaybeInt {
+    Int? a
+    command {
+    }
+    output {
+        Int? result = a
+    }
+}

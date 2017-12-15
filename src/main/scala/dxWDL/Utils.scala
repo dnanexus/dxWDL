@@ -34,6 +34,14 @@ class UnboundVariableException private(ex: RuntimeException) extends RuntimeExce
     def this(varName: String) = this(new RuntimeException(s"Variable ${varName} is unbound"))
 }
 
+// Mode of file data transfer
+//   Data: download of upload the entire file
+//   Remote: leave the file on the platform
+//   Stream: stream download/upload the file
+object IOMode extends Enumeration {
+    val Data, Remote, Stream = Value
+}
+
 object Utils {
     class VariableAccessException private(ex: Exception) extends RuntimeException(ex) {
         def this() = this(new RuntimeException("Variable access in supposed constant"))
@@ -58,6 +66,10 @@ object Utils {
                          "outputField" -> JsString(outputName)))
         }
     }
+
+    // An equivalent for the InputParmater/OutputParameter types
+    case class DXIOParam(ioClass: IOClass,
+                         optional: Boolean)
 
     // Encapsulation of verbosity flags.
     //  on --       is the overall setting true/false
@@ -136,9 +148,14 @@ object Utils {
         Utils.safeMkdir(p)
         p
     }
+
+    // This directory has to reside under the user home directory. If
+    // a task runs under docker, the container will need access to
+    // temporary files created with stdlib calls like "write_lines".
     lazy val tmpDirPath : Path = {
-        val p = Paths.get("/tmp/dxWDL_Runner/job_scratch_space")
-        safeMkdir(p)
+        val currentDir = System.getProperty("user.dir")
+        val p = Paths.get(currentDir, "job_scratch_space")
+        Utils.safeMkdir(p)
         p
     }
     lazy val appCompileDirPath : Path = {
@@ -254,16 +271,16 @@ object Utils {
     val objMapper : ObjectMapper = new ObjectMapper()
 
     // Get the dx:classes for inputs and outputs
-    def loadExecInfo : (Map[String, IOClass], Map[String, IOClass]) = {
+    def loadExecInfo : (Map[String, DXIOParam], Map[String, DXIOParam]) = {
         val dxapp : DXApplet = dxEnv.getJob().describe().getApplet()
         val desc : DXApplet.Describe = dxapp.describe()
         val inputSpecRaw: List[InputParameter] = desc.getInputSpecification().asScala.toList
-        val inputSpec:Map[String, IOClass] = inputSpecRaw.map(
-            iSpec => iSpec.getName -> iSpec.getIOClass
+        val inputSpec:Map[String, DXIOParam] = inputSpecRaw.map(
+            iSpec => iSpec.getName -> DXIOParam(iSpec.getIOClass, iSpec.isOptional)
         ).toMap
         val outputSpecRaw: List[OutputParameter] = desc.getOutputSpecification().asScala.toList
-        val outputSpec:Map[String, IOClass] = outputSpecRaw.map(
-            iSpec => iSpec.getName -> iSpec.getIOClass
+        val outputSpec:Map[String, DXIOParam] = outputSpecRaw.map(
+            iSpec => iSpec.getName -> DXIOParam(iSpec.getIOClass, iSpec.isOptional)
         ).toMap
 
         // remove auxiliary fields
@@ -735,21 +752,6 @@ object Utils {
         if (verbose.quiet)
             return;
         System.err.println(msg)
-    }
-
-    // coerce a WDL value to the required type (if needed)
-    def cast(wdlType: WdlType, v: WdlValue, varName: String) : WdlValue = {
-        val retVal =
-            if (v.wdlType != wdlType) {
-                // we need to convert types
-                //System.err.println(s"Casting variable ${varName} from ${v.wdlType} to ${wdlType}")
-                wdlType.coerceRawValue(v).get
-            } else {
-                // no need to change types
-                v
-            }
-        assert(retVal.wdlType == wdlType)
-        retVal
     }
 
     // This code is based on the lookupType method in the WdlNamespace trait

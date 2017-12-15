@@ -1,5 +1,5 @@
 {
-  "files.diff1_result" : 0,
+  "files.write_lines_bug_result" : "/home/dnanexus/execution/inputs/fileB\n/home/dnanexus/execution/inputs/fileC\n/home/dnanexus/execution/inputs/1/fileC",
   "files.diff2_result" : 281,
   "files.colocation_result" : "False",
   "files.FileArraySize_result" : [4, 6],

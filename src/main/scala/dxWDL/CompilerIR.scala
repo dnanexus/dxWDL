@@ -5,7 +5,7 @@ package dxWDL
 import IR.{CVar, LinkedVar, SArg}
 import net.jcazevedo.moultingyaml._
 import scala.util.{Failure, Success, Try}
-import Utils.{DXWorkflowStage, DX_URL_PREFIX, LAST_STAGE, isNativeDxType, trace, warning}
+import Utils.{DXWorkflowStage, DX_URL_PREFIX, LAST_STAGE, ifConstEval, isNativeDxType, trace, warning}
 import wdl4s.wdl._
 import wdl4s.wdl.AstTools
 import wdl4s.wdl.AstTools.EnhancedAstNode
@@ -459,14 +459,31 @@ workflow w {
         //
         // According to the WDL specification, in fact, all task declarations
         // are potential inputs. However, that does not make that much sense.
+        //
+        // if the declaration is set to a constant, we need to make it a default
+        // value
         val inputVars : Vector[CVar] =  task.declarations.map{ decl =>
-            if (Utils.declarationIsInput(decl))
-                Some(CVar(decl.unqualifiedName,
-                             decl.wdlType,
-                             DeclAttrs.get(task, decl.unqualifiedName, cef),
-                             decl.ast))
-            else
+            if (Utils.declarationIsInput(decl))  {
+                val taskAttrs = DeclAttrs.get(task, decl.unqualifiedName, Some(cef))
+                val attrs = decl.expression match {
+                    case None => taskAttrs
+                    case Some(expr) =>
+                        ifConstEval(expr) match {
+                            case None => taskAttrs
+                            case Some(wdlConst) =>
+                                // the constant is a default value.
+                                val wvl = WdlVarLinks.importFromWDL(decl.wdlType,
+                                                                    DeclAttrs.empty,
+                                                                    wdlConst,
+                                                                    IODirection.Zero)
+                                val jsv = WdlVarLinks.getRawJsValue(wvl)
+                                taskAttrs.setDefault(jsv)
+                        }
+                }
+                Some(CVar(decl.unqualifiedName, decl.wdlType, attrs, decl.ast))
+            } else {
                 None
+            }
         }.flatten.toVector
         val outputVars : Vector[CVar] = task.outputs.map{ tso =>
             CVar(tso.unqualifiedName, tso.wdlType, DeclAttrs.empty, tso.ast)

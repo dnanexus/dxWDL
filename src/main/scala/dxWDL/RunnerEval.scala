@@ -20,9 +20,8 @@
 package dxWDL
 
 // DX bindings
-import com.dnanexus.IOClass
 import spray.json._
-import Utils.appletLog
+import Utils.{appletLog, DXIOParam}
 import wdl4s.wdl.{Declaration, DeclarationInterface, WdlExpression, WdlWorkflow, WorkflowOutput}
 import wdl4s.wdl.types._
 import wdl4s.wdl.values._
@@ -54,11 +53,25 @@ object RunnerEval {
                 }
         }
 
+        // coerce a WDL value to the required type (if needed)
+        def cast(wdlType: WdlType, v: WdlValue, varName: String) : WdlValue = {
+            val retVal =
+                if (v.wdlType != wdlType) {
+                    // we need to convert types
+                    appletLog(s"casting ${v.wdlType} to ${wdlType}")
+                    wdlType.coerceRawValue(v).get
+                } else {
+                    // no need to change types
+                    v
+                }
+            retVal
+        }
+
         def evalAndCache(decl:DeclarationInterface,
                          expr:WdlExpression) : WdlValue = {
-            appletLog(s"evaluating ${decl}")
             val vRaw : WdlValue = expr.evaluate(lookup, DxFunctions).get
-            val w: WdlValue = Utils.cast(decl.wdlType, vRaw, decl.unqualifiedName)
+            appletLog(s"evaluating ${decl} -> ${vRaw}")
+            val w: WdlValue = cast(decl.wdlType, vRaw, decl.unqualifiedName)
             env = env + (decl.unqualifiedName -> w)
             w
         }
@@ -103,8 +116,8 @@ object RunnerEval {
 
 
     def apply(wf: WdlWorkflow,
-              inputSpec: Map[String, IOClass],
-              outputSpec: Map[String, IOClass],
+              inputSpec: Map[String, DXIOParam],
+              outputSpec: Map[String, DXIOParam],
               inputs: Map[String, WdlVarLinks]) : Map[String, JsValue] = {
         appletLog(s"Initial inputs=${inputs}")
 
@@ -116,7 +129,7 @@ object RunnerEval {
         }.flatten
 
         val envInput: Map[String, WdlValue] = inputs.map{ case (key, wvl) =>
-            val w:WdlValue = WdlVarLinks.eval(wvl, false, IODirection.Zero)
+            val w:WdlValue = WdlVarLinks.eval(wvl, IOMode.Remote, IODirection.Zero)
             key -> w
         }
         val outputs : Map[DeclarationInterface, WdlValue] = evalDeclarations(decls, envInput)

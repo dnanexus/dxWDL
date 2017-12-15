@@ -43,7 +43,7 @@ object DeclAttrs {
     // annotations.
     def get(task:WdlTask,
             varName: String,
-            cef: CompilerErrorFormatter) : DeclAttrs = {
+            cefOpt: Option[CompilerErrorFormatter]) : DeclAttrs = {
         val attr:Option[(String,String)] = task.parameterMeta.find{ case (k,v) =>  k == varName }
         val m:Map[String, JsValue] = attr match {
             case None => Map.empty
@@ -56,9 +56,15 @@ object DeclAttrs {
                     case Some(x) => x
                 }
                 if (Utils.stripOptional(decl.wdlType) != WdlFileType) {
-                    val msg = cef.onlyFilesCanBeStreamed(decl.ast)
-                    System.err.println(s"Warning: ${msg}")
-                    Map.empty
+                    cefOpt match {
+                        case Some(cef) =>
+                            val msg = cef.onlyFilesCanBeStreamed(decl.ast)
+                            System.err.println(s"Warning: ${msg}")
+                            Map.empty
+                        case None =>
+                            System.err.println(s"Warning: only files can be streamed ${varName} type=${decl.wdlType}")
+                            Map.empty
+                    }
                 } else {
                     Map("stream" -> JsBoolean(true))
                 }

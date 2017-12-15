@@ -102,6 +102,15 @@ class UtilsTest extends FlatSpec with Matchers {
         Utils.ifConstEval(expr) should equal(None)
     }
 
+    ignore should "coerce arrays" in {
+        val v = WdlArray(
+            WdlArrayType(WdlStringType),
+            List(WdlString("one"), WdlString("two"), WdlString("three"), WdlString("four")))
+        val wdlType =  WdlNonEmptyArrayType(WdlStringType)
+        val v2 = wdlType.coerceRawValue(v).get
+        v2.wdlType should equal(wdlType)
+    }
+
     "SprayJs" should "marshal optionals" in {
         def marshal(name: String, dxType: String) : JsValue =  {
             s"""{ "name" : "${name}", "class" : "${dxType}" }""".parseJson
