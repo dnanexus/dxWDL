@@ -18,7 +18,8 @@ workflow conditionals {
     scatter (i in powers10) {
         call lib.MaybeInt { input: a=i }
     }
+    Array[Int] r =select_all(MaybeInt.result)
     output {
-        MaybeInt.result
+        Array[Int] results = r
     }
 }

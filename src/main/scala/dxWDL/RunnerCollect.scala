@@ -1,5 +1,5 @@
 /**
-An applets that gathers outputs from scatter jobs. This is necessary when
+An applet that gathers outputs from scatter jobs. This is necessary when
 the output is a non-native DNAx type. For example, the math workflow
 below calls a scatter where each job returns an array of files. The
 GenFiles.result is a ragged array of files (Array[Array[File]]). The
@@ -178,7 +178,7 @@ object RunnerCollect {
                         throw new Exception(s"missing field ${fieldName} from child job ${desc.job}}")
                 }
         }
-        val wvl = WdlVarLinks(wdlType, DeclAttrs.empty, DxlValue(JsArray(jsVec)))
+        val wvl = WdlVarLinks(WdlArrayType(wdlType), DeclAttrs.empty, DxlValue(JsArray(jsVec)))
         (fieldName, wvl)
     }
 
@@ -188,7 +188,7 @@ object RunnerCollect {
                            retvals: Vector[ChildJobDesc]) : Map[String,JsValue] = {
         val wvlOutputs: Vector[(String, WdlVarLinks)] =
             call.outputs.map { caOut =>
-                collect(caOut.unqualifiedName, WdlArrayType(caOut.wdlType), retvals)
+                collect(caOut.unqualifiedName, caOut.wdlType, retvals)
             }.toVector
         val outputs:Map[String, JsValue] = wvlOutputs.foldLeft(Map.empty[String, JsValue]) {
             case (accu, (varName, wvl)) =>

@@ -21,7 +21,12 @@ class RunnerTaskTest extends FlatSpec with Matchers {
                      List(WdlString("r"), WdlString("l"))),
 
             WdlOptionalValue(WdlStringType, Some(WdlString("french horm"))),
-            WdlOptionalValue(WdlStringType, None)
+            WdlOptionalValue(WdlStringType, None),
+
+            WdlArray(WdlArrayType(WdlOptionalType(WdlIntegerType)),
+                     List(WdlOptionalValue(WdlIntegerType, Some(WdlInteger(1))),
+                          WdlOptionalValue(WdlIntegerType, None),
+                          WdlOptionalValue(WdlIntegerType, Some(WdlInteger(2)))))
         )
 
         wdlValues.foreach{ w =>

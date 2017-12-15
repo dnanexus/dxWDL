@@ -55,8 +55,8 @@ medium_test_list = [
 test_reorg=["files", "math"]
 test_defaults=["files", "math"]
 
-#test_locked=["math", "conditionals", "advanced", "bad_status", "bad_status2",
-#             "instance_types", "dict"]
+test_locked=["math", "conditionals", "advanced", "bad_status", "bad_status2",
+             "instance_types", "dict"]
 
 TestDesc = namedtuple('TestDesc', 'wf_name wdl_source wdl_input dx_input results')
 
@@ -87,6 +87,7 @@ def get_workflow_name(filename):
 
 # Register a test name, find its inputs and expected results files.
 def register_test(tname):
+    global test_files
     if tname in reserved_test_names:
         raise Exception("Test name {} is reserved".format(tname))
     wdl_file = os.path.join(test_dir, tname + ".wdl")
@@ -400,6 +401,8 @@ def main():
                            action="store_true", default=False)
     argparser.add_argument("--locked", help="Generate locked-down workflows",
                            action="store_true", default=False)
+    argparser.add_argument("--regular", help="Generate only regular workflows",
+                           action="store_true", default=False)
     argparser.add_argument("--no-wait", help="Exit immediately after launching tests",
                            action="store_true", default=False)
     argparser.add_argument("--project", help="DNAnexus project ID",
@@ -439,6 +442,11 @@ def main():
     if args.folder is None:
         home_ad = util.build(project, applet_folder, version_id, top_dir)
         jar_path = util.build_final_jar(version_id, top_dir, [home_ad])
+
+    if args.regular:
+        # Disable all locked workflows
+        args.locked = False
+        test_locked = []
 
     compiler_flags = []
     if args.locked:

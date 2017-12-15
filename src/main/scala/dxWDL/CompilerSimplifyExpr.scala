@@ -353,7 +353,7 @@ object CompilerSimplifyExpr {
 
     private def validateTask(task: WdlTask, verbose: Verbose) : Unit = {
         // validate runtime attributes
-        val validAttrNames:Set[String] = Set(Utils.DX_INSTANCE_TYPE_ATTR, "memory", "disks", "cpu")
+        val validAttrNames:Set[String] = Set(Utils.DX_INSTANCE_TYPE_ATTR, "memory", "disks", "cpu", "docker")
         task.runtimeAttributes.attrs.foreach{ case (attrName,_) =>
             if (!(validAttrNames contains attrName))
                 warning(verbose, s"Runtime attribute ${attrName} for task ${task.name} is unknown")
