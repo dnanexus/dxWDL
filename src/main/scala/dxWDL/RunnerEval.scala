@@ -53,12 +53,25 @@ object RunnerEval {
                 }
         }
 
+        // coerce a WDL value to the required type (if needed)
+        def cast(wdlType: WdlType, v: WdlValue, varName: String) : WdlValue = {
+            val retVal =
+                if (v.wdlType != wdlType) {
+                    // we need to convert types
+                    appletLog(s"casting ${v.wdlType} to ${wdlType}")
+                    wdlType.coerceRawValue(v).get
+                } else {
+                    // no need to change types
+                    v
+                }
+            retVal
+        }
+
         def evalAndCache(decl:DeclarationInterface,
                          expr:WdlExpression) : WdlValue = {
-            appletLog(s"evaluating ${decl}")
             val vRaw : WdlValue = expr.evaluate(lookup, DxFunctions).get
-            appletLog(s"casting ${vRaw.wdlType} to ${decl.wdlType}")
-            val w: WdlValue = Utils.cast(decl.wdlType, vRaw, decl.unqualifiedName)
+            appletLog(s"evaluating ${decl} -> ${vRaw}")
+            val w: WdlValue = cast(decl.wdlType, vRaw, decl.unqualifiedName)
             env = env + (decl.unqualifiedName -> w)
             w
         }

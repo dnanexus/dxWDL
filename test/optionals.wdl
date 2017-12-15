@@ -43,9 +43,6 @@ workflow optionals {
     call ppp_set_def as set_def
     call ppp_unused_args as unused_args { input: a=1}
 
-    # TODO: how is null represented in wdl4s?
-    #call ppp_unused_args as unused_args_a { input: a=1, ignore=null}
-
     scatter (x in integers) {
         call ppp_unused_args as unused_args_b { input: a=x }
         call ppp_unused_args as unused_args_c { input: a=x*2, ignore=["pitch"] }

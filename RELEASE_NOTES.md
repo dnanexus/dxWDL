@@ -1,5 +1,10 @@
 # Release Notes
 
+## 0.55
+- Improved support for conditionals and optional values
+- Automated tests for both locked and regular workflows
+- Various minor bug fixes
+
 ## 0.54
 - More accurate detection of the IO classes in dx:applets.
 - Improved handling of WDL constants. For example, multi word

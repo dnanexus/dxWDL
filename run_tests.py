@@ -54,8 +54,9 @@ medium_test_list = [
 # Tests with the reorg flags
 test_reorg=["files", "math"]
 test_defaults=["files", "math"]
-test_locked=["math", "strings", "conditionals", "advanced", "bad_status", "bad_status2",
-             "instance_types", "dict"]
+
+#test_locked=["math", "conditionals", "advanced", "bad_status", "bad_status2",
+#             "instance_types", "dict"]
 
 TestDesc = namedtuple('TestDesc', 'wf_name wdl_source wdl_input dx_input results')
 
@@ -240,17 +241,19 @@ def run_workflow(project, test_folder, tname, wfId, delay_workspace_destruction)
         time.sleep(5)
     raise ("Error running workflow")
 
-def extract_outputs(tname, analysis_desc, locked):
+def extract_outputs(tname, analysis_desc):
+    locked = tname in test_locked
     if locked:
-        return analysis_desc["output"]
-    stages = analysis_desc['stages']
-    for snum in range(len(stages)):
-        crnt = stages[snum]
-        if crnt['id'] == 'last':
-            return stages[snum]['execution']['output']
-    raise Exception("Analysis for test {} does not have stage 'last'".format(tname))
+        return analysis_desc['output']
+    else:
+        stages = analysis_desc['stages']
+        for snum in range(len(stages)):
+            crnt = stages[snum]
+            if crnt['id'] == 'last':
+                return stages[snum]['execution']['output']
+        raise Exception("Analysis for test {} does not have stage 'last'".format(tname))
 
-def run_workflow_subset(project, workflows, test_folder, delay_workspace_destruction, no_wait, locked):
+def run_workflow_subset(project, workflows, test_folder, delay_workspace_destruction, no_wait):
     # Run the workflows
     test_analyses=[]
     for tname, wfid in workflows.iteritems():
@@ -270,8 +273,10 @@ def run_workflow_subset(project, workflows, test_folder, delay_workspace_destruc
     for analysis in test_analyses:
         analysis_desc = analysis.describe()
         tname = find_test_from_analysis(analysis)
+        if tname in test_failing:
+            continue
         test_desc = test_files[tname]
-        anl_outputs = extract_outputs(tname, analysis_desc, locked)
+        anl_outputs = extract_outputs(tname, analysis_desc)
         shouldbe = read_json_file_maybe_empty(test_desc.results)
         correct = True
         print("Checking results for workflow {}".format(test_desc.wf_name))
@@ -379,6 +384,7 @@ def native_call_setup(project, applet_folder, version_id):
 ######################################################################
 ## Program entry point
 def main():
+    global test_locked
     argparser = argparse.ArgumentParser(description="Run WDL compiler tests on the platform")
     argparser.add_argument("--archive", help="Archive old applets",
                            action="store_true", default=False)
@@ -437,6 +443,7 @@ def main():
     compiler_flags = []
     if args.locked:
         compiler_flags.append("-locked")
+        test_locked += test_names
     if args.archive:
         compiler_flags.append("-archive")
     if args.compile_mode:
@@ -463,7 +470,7 @@ def main():
             print("workflow({}) = {}".format(tname, wfid))
         if not args.compile_only:
             run_workflow_subset(project, workflows, test_folder, args.delay_workspace_destruction,
-                                args.no_wait, args.locked)
+                                args.no_wait)
     finally:
         print("Test complete")
 

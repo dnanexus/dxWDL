@@ -11,6 +11,7 @@ workflow conditionals {
     if (true) {
         Int i3 = 100
     }
+
     Array[Int?] powers10 = [i1, i2, i3]
 
     # scatter that returns an optional type

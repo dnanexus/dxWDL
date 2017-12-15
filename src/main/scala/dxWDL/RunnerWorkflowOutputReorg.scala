@@ -95,7 +95,7 @@ object RunnerWorkflowOutputReorg {
         val dxProjDesc = dxProject.describe
         val dxAnalysis = dxEnv.getJob.describe.getAnalysis
         val outFolder = dxAnalysis.describe.getFolder
-        val intermFolder = outFolder + "/" + Utils.INTERMEDIATE_RESULTS_FOLDER
+        val intermFolder = outFolder + "/" + INTERMEDIATE_RESULTS_FOLDER
         appletLog(s"proj=${dxProjDesc.getName} outFolder=${outFolder}")
 
         // find all analysis output files
@@ -119,7 +119,7 @@ object RunnerWorkflowOutputReorg {
         val folderContents:DXContainer.FolderContents = dxProject.listFolder(outFolder)
         val subFolders: List[String] = folderContents.getSubfolders().asScala.toList
         appletLog(s"subfolders=${subFolders}")
-        if (!(subFolders contains INTERMEDIATE_RESULTS_FOLDER)) {
+        if (!(subFolders contains intermFolder)) {
             appletLog(s"Creating intermediate results sub-folder ${intermFolder}")
             dxProject.newFolder(intermFolder)
         } else {

@@ -754,23 +754,6 @@ object Utils {
         System.err.println(msg)
     }
 
-    // coerce a WDL value to the required type (if needed)
-    def cast(wdlType: WdlType, v: WdlValue, varName: String) : WdlValue = {
-        val retVal =
-            if (v.wdlType != wdlType) {
-                // we need to convert types
-                //System.err.println(s"Casting variable ${varName} from ${v.wdlType} to ${wdlType}")
-                wdlType.coerceRawValue(v).get
-            } else {
-                // no need to change types
-                v
-            }
-/*        if (retVal.wdlType != wdlType) {
-            System.err.println(s"Warning: type of ${v.toWdlString} not converted into ${retVal.wdlType}")
-        }*/
-        retVal
-    }
-
     // This code is based on the lookupType method in the WdlNamespace trait
     //   https://github.com/broadinstitute/wdl4s/blob/develop/wom/src/main/scala/wdl/WdlNamespace.scala
     //

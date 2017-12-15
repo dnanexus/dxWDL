@@ -27,7 +27,7 @@ import wdl4s.wdl.{Declaration, DeclarationInterface, WdlExpression, WdlTask}
 import wdl4s.wdl.values._
 import wdl4s.wdl.types._
 
-private object RunnerTaskSerialization {
+private [dxWDL] object RunnerTaskSerialization {
     // Serialization of a WDL value to JSON
     private def wdlToJSON(t:WdlType, w:WdlValue) : JsValue = {
         (t, w)  match {
@@ -61,7 +61,7 @@ private object RunnerTaskSerialization {
                              k -> wdlToJSON(valueType, v)
                          case (k,_) =>
                              throw new Exception(s"key ${k.toWdlString} should be a WdlStringType")
-                     }.toMap)
+                    }.toMap)
 
             // general case, the keys are not strings.
             case (WdlMapType(keyType, valueType), WdlMap(_, m)) =>
@@ -164,7 +164,7 @@ private object RunnerTaskSerialization {
             case (WdlOptionalType(t), JsNull) =>
                 WdlOptionalValue(t, None)
             case (WdlOptionalType(t), _) =>
-                wdlFromJSON(t, jsv)
+                WdlOptionalValue(wdlFromJSON(t, jsv))
 
             case _ =>
                 throw new AppInternalException(

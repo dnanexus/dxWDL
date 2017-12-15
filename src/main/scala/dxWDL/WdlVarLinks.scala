@@ -114,7 +114,7 @@ object WdlVarLinks {
     // those as a vector.
     def findDxFiles(jsValue: JsValue) : Vector[DXFile] = {
         jsValue match {
-            case JsBoolean(_) | JsNumber(_) | JsString(_) | JsNull | null =>
+            case JsBoolean(_) | JsNumber(_) | JsString(_) | JsNull =>
                 Vector.empty[DXFile]
             case JsObject(_) if isDxFile(jsValue) =>
                 Vector(dxFileFromJsValue(jsValue))
@@ -327,7 +327,7 @@ object WdlVarLinks {
                 val right = evalCore(rType, fields("right"), ioMode, ioDir)
                 WdlPair(left, right)
 
-            case (WdlOptionalType(t), (null|JsNull)) =>
+            case (WdlOptionalType(t), JsNull) =>
                 WdlOptionalValue(t, None)
             case (WdlOptionalType(t), jsv) =>
                 evalCore(t, jsv, ioMode, ioDir)
@@ -425,8 +425,8 @@ object WdlVarLinks {
     // 2. In memory we have a, potentially very large, JSON value. This can be handled pretty
     //    well by the platform as a dx:hash.
     private def jsFromWdlValue(wdlType: WdlType,
-                                    wdlValue: WdlValue,
-                                    ioDir: IODirection.Value) : JsValue = {
+                               wdlValue: WdlValue,
+                               ioDir: IODirection.Value) : JsValue = {
         def handleFile(path:String) : JsValue = ioDir match {
             case IODirection.Upload =>
                 LocalDxFiles.upload(Paths.get(path))
@@ -510,9 +510,6 @@ object WdlVarLinks {
             case (t, WdlOptionalValue(_,Some(w))) =>
                 jsFromWdlValue(t, w, ioDir)
 
-            // If the value is none then, it is a missing value
-            // What if the value is null?
-
             case (_,_) => throw new Exception(
                 s"""|Unsupported combination type=(${wdlType.toWdlString},${wdlType})
                     |value=(${wdlValue.toWdlString}, ${wdlValue})"""
@@ -585,7 +582,6 @@ object WdlVarLinks {
     private [dxWDL] def importFromDxExec(ioParam:DXIOParam,
                                          attrs:DeclAttrs,
                                          jsValue: JsValue) : WdlVarLinks = {
-        //appletLog(s"importFromDxExec ioClass=${ioClass} js=${jsValue}")
         if (ioParam.ioClass == IOClass.HASH) {
             val (t, v) = unmarshalHash(jsValue)
             if (ioParam.optional)
