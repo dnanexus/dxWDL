@@ -5,7 +5,8 @@ package dxWDL
 import IR.{CVar, LinkedVar, SArg}
 import net.jcazevedo.moultingyaml._
 import scala.util.{Failure, Success, Try}
-import Utils.{DXWorkflowStage, DX_URL_PREFIX, LAST_STAGE, ifConstEval, isNativeDxType, trace, warning}
+import Utils.{DXWorkflowStage, DX_URL_PREFIX, LAST_STAGE, ifConstEval, isOptional,
+    isNativeDxType, trace, warning}
 import wdl4s.wdl._
 import wdl4s.wdl.AstTools
 import wdl4s.wdl.AstTools.EnhancedAstNode
@@ -19,7 +20,7 @@ case class CompilerIR(destination: String,
                       instanceTypeDB: InstanceTypeDB,
                       cef: CompilerErrorFormatter,
                       reorg: Boolean,
-                      lockedWf: Boolean,
+                      locked: Boolean,
                       verbose: Utils.Verbose) {
     class DynamicInstanceTypesException private(ex: Exception) extends RuntimeException(ex) {
         def this() = this(new RuntimeException("Runtime instance type calculation required"))
@@ -560,18 +561,20 @@ workflow w {
         // Extract the input values/links from the environment
         val inputs: Vector[SArg] = callee.inputs.map{ cVar =>
             findInputByName(call, cVar) match {
-                case None =>
-                    // input is unbound; the workflow does not provide it.
-                    if (Utils.isOptional(cVar.wdlType)) {
-                        // This is an applet optional input, we don't have to supply it
+                case None if (!isOptional(cVar.wdlType)) =>
+                    // A missing compulsory input. In an unlocked workflow it can be
+                    // provided as an input. In a locked workflow, that
+                    // is not possible.
+                    val msg = s"""|Workflow doesn't supply required input ${cVar.name}
+                                  |to call ${call.unqualifiedName}
+                                  |""".stripMargin.replaceAll("\n", " ")
+                    if (locked) {
+                        throw new Exception(cef.missingCallArgument(call.ast, msg))
                     } else {
-                        // A missing compulsory input, it may be provided on the command
-                        // line.
-                        val msg = s"""|Workflow doesn't supply required input ${cVar.name}
-                                      |to call ${call.unqualifiedName}
-                                      |""".stripMargin.replaceAll("\n", " ")
-                        warning(verbose, cef.missingCallArgument(call.ast, msg))
+                        warning(verbose, msg)
+                        IR.SArgEmpty
                     }
+                case None =>
                     IR.SArgEmpty
                 case Some((_,e)) => e.ast match {
                     case t: Terminal if t.getTerminalStr == "identifier" =>
@@ -740,6 +743,37 @@ workflow w {
         preVars ++ outputVars
     }
 
+    // Check for each task input, if it is unbound. Make a list, and
+    // prefix each variable with the call name. This makes it unique
+    // as a scatter input.
+    def unspecifiedInputs(call: WdlCall,
+                          taskApplets: Map[String, (IR.Applet, Vector[IR.CVar])])
+            : Vector[IR.CVar] = {
+        val task = taskOfCall(call)
+        val (callee, _) = taskApplets(task.name)
+        callee.inputs.map{ cVar =>
+            val input = findInputByName(call, cVar)
+            input match {
+                case None =>
+                    // unbound input; the workflow does not provide it.
+                    if (!Utils.isOptional(cVar.wdlType)) {
+                        // A compulsory input. Print a warning, the user may wish to supply
+                        // it at runtime.
+                        warning(verbose, s"""|Note: workflow doesn't supply required
+                                             |input ${cVar.name} to call ${call.unqualifiedName};
+                                             |which is in a scatter.
+                                             |Propagating input to applet.
+                                             |""".stripMargin.replaceAll("\n", " "))
+                    }
+                    Some(IR.CVar(s"${call.unqualifiedName}_${cVar.name}", cVar.wdlType,
+                                 cVar.attrs, cVar.ast))
+                case Some(_) =>
+                    // input is provided
+                    None
+            }
+        }.flatten
+    }
+
     // Modify all the expressions used inside a block
     def blockTransform(preDecls: Vector[Declaration],
                        scope: Scope,
@@ -848,6 +882,16 @@ workflow w {
                                                topDecls,
                                                calls,
                                                env)
+        // Collect unbound inputs. We we want to allow
+        // the user to provide them on the command line.
+        val extraTaskInputVars: Vector[IR.CVar] =
+            if (locked) {
+                calls.map { call =>
+                    unspecifiedInputs(call, taskApplets)
+                }.flatten.toVector
+            } else {
+                Vector.empty
+            }
 
         val outputVars = blockOutputs(preDecls, scatter, scatter.children)
         val wdlCode = blockGenWorklow(preDecls, scatter, taskApplets, inputVars, outputVars)
@@ -859,7 +903,7 @@ workflow w {
             if (allNative) IR.AppletKindScatter(callDict)
             else IR.AppletKindScatterCollect(callDict)
         val applet = IR.Applet(wfUnqualifiedName ++ "_" ++ stageName,
-                               inputVars,
+                               inputVars ++ extraTaskInputVars,
                                outputVars,
                                calcInstanceType(None),
                                IR.DockerImageNone,
@@ -1220,7 +1264,7 @@ workflow w {
         val subBlocks = splitIntoBlocks(wfProper)
 
         val (allStageInfo_i, wfOutputs) =
-            if (lockedWf)
+            if (locked)
                 compileWorkflowLocked(wf, wfInputs, subBlocks, taskApplets)
             else
                 compileWorkflowRegular(wf, wfInputs, subBlocks, taskApplets)
@@ -1240,7 +1284,7 @@ workflow w {
                 .flatten
                 .map(apl => apl.name -> apl).toMap
 
-        val irwf = IR.Workflow(wf.unqualifiedName, wfInputs, wfOutputs, stages, lockedWf)
+        val irwf = IR.Workflow(wf.unqualifiedName, wfInputs, wfOutputs, stages, locked)
         IR.Namespace(Some(irwf), tApplets ++ aApplets)
     }
 

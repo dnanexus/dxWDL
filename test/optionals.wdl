@@ -7,8 +7,6 @@ workflow optionals {
     Array[Int]+ integers
     Int? rain = 13
     Int? snow = 34
-    Int a
-    Int b
     Boolean? flag
     Array[String] foodArray = ["our", "own", "peanut", "butter"]
 
@@ -17,8 +15,7 @@ workflow optionals {
 #        call isLargeInt { input: a=i }
 #    }
 
-    # Missing compulsory argument, should be added as
-    # an artifical workflow input
+    # Missing compulsory argument
     call lib.Inc as inc
 
     call lib_str.ConcatArray as concatArr {
@@ -49,7 +46,10 @@ workflow optionals {
 
         # verify that unbound compulsory arguments are provided as scatter
         # inputs
-        call lib.Add as add2 { input: a=x, b=8 }
+        call lib.Add as add2 { input: a=x }
+
+        # we need to pass {a, b}
+        call lib.Add as add3
 
         Array[Int] series=[x,1]
     }
@@ -65,6 +65,7 @@ workflow optionals {
         set_def.result
         unused_args.result
         add2.result
+        add3.result
         series
     }
 }

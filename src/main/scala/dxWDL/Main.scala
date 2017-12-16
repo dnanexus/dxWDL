@@ -55,7 +55,7 @@ object Main extends App {
                                compileMode: CompilerFlag.Value,
                                defaults: Option[Path],
                                dxWDLrtId: String,
-                               lockedWf: Boolean,
+                               locked: Boolean,
                                inputs: List[Path],
                                region: String,
                                reorg: Boolean,
@@ -519,7 +519,7 @@ object Main extends App {
         // unmodified.
         val cef = new CompilerErrorFormatter(ns.terminalMap)
         var irNs = CompilerIR(bOpt.folder, instanceTypeDB, cef,
-                              cOpt.reorg, cOpt.lockedWf, bOpt.verbose).apply(ns)
+                              cOpt.reorg, cOpt.locked, bOpt.verbose).apply(ns)
 
         irNs = cOpt.defaults match {
             case Some(path) =>
@@ -555,7 +555,7 @@ object Main extends App {
                 val (wf, _) =
                     CompilerNative(cOpt.dxWDLrtId, bOpt.dxProject, instanceTypeDB,
                                    bOpt.folder, cef,
-                                   bOpt.force, cOpt.archive, cOpt.lockedWf, bOpt.verbose).apply(irNs)
+                                   bOpt.force, cOpt.archive, cOpt.locked, bOpt.verbose).apply(irNs)
                 wf
             case CompilerFlag.IR =>
                 None
