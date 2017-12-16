@@ -147,9 +147,13 @@ case class InputFile(verbose: Utils.Verbose) {
                 }
 
                 // add defaults to workflow inputs
-                val inputs = addDefaultsToWorkflowInputs(wf.inputs, wf.name)
-
-                val wfWithDefaults = wf.copy(inputs = inputs, stages = stages)
+                val wfWithDefaults =
+                    if (wf.isLockedDown) {
+                        val inputs = addDefaultsToWorkflowInputs(wf.inputs, wf.name)
+                        wf.copy(inputs = inputs, stages = stages)
+                    } else {
+                        wf.copy(stages = stages)
+                    }
                 IR.Namespace(Some(wfWithDefaults), applets)
 
             case None =>
@@ -204,6 +208,22 @@ case class InputFile(verbose: Utils.Verbose) {
                     inputFields -= fqn
             }
         }
+
+        // This works for calls inside an if/scatter block. The naming is:
+        //  STAGE_ID.CALL_VARNAME
+        def compoundCalls(stage:IR.Stage,
+                          calls:Map[String, String]) : Unit = {
+            calls.foreach{ case (callName, appletName) =>
+                val callee:IR.Applet = ns.applets(appletName)
+                callee.inputs.zipWithIndex.foreach{
+                    case (cVar,idx) =>
+                        val fqn = s"${wf.name}.${callName}.${cVar.name}"
+                        val dxName = s"${stage.id.getId}.${callName}_${cVar.name}"
+                        checkAndBind(fqn, dxName, cVar)
+                }
+            }
+        }
+
         // make a pass on all the stages
         wf.stages.foreach{ stage =>
             val callee:IR.Applet = ns.applets(stage.appletName)
@@ -229,15 +249,30 @@ case class InputFile(verbose: Utils.Verbose) {
                         checkAndBind(fqn, dxName, cVar)
                     }
             }
-        }
 
-        wf.inputs.foreach { case (cVar, sArg) =>
-            val fqn = sArg match {
-                case IR.SArgWorkflowInput(_,Some(orgName)) => s"${wf.name}.${orgName}"
-                case _ =>  s"${wf.name}.${cVar.name}"
+            if (wf.isLockedDown) {
+                // Locked workflow. A user can set workflow level
+                // inputs; nothing else.
+                wf.inputs.foreach { case (cVar, sArg) =>
+                    val fqn = sArg match {
+                        case IR.SArgWorkflowInput(_,Some(orgName)) => s"${wf.name}.${orgName}"
+                        case _ =>  s"${wf.name}.${cVar.name}"
+                    }
+                    val dxName = s"${cVar.name}"
+                    checkAndBind(fqn, dxName, cVar)
+                }
+            } else {
+                // Unlocked workflow.
+                //
+                // compound stages, for example if blocks, or scatters.
+                // They contain calls to applets.
+                callee.kind match {
+                    case IR.AppletKindIf(calls) => compoundCalls(stage, calls)
+                    case IR.AppletKindScatter(calls) => compoundCalls(stage, calls)
+                    case IR.AppletKindScatterCollect(calls) => compoundCalls(stage, calls)
+                    case _ => ()
+                }
             }
-            val dxName = s"${cVar.name}"
-            checkAndBind(fqn, dxName, cVar)
         }
 
         if (!inputFields.isEmpty) {
