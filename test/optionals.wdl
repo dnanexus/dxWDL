@@ -33,16 +33,16 @@ workflow optionals {
     call lib.MaybeInt as mi1 { input: a=rain }
     call lib.MaybeInt as mi2 { input: a=mi1.result}
     call lib.MaybeInt as mi3 { input: a=snow}
-    call MaybeString as ms1
-    call MaybeString as ms2 { input: instrument="flute" }
+    call lib_str.MaybeString as ms1
+    call lib_str.MaybeString as ms2 { input: instrument="flute" }
 
     call lib.Twice as mul2 { input: i=arg1 }
     call ppp_set_def as set_def
-    call ppp_unused_args as unused_args { input: a=1}
+    call UnusedArgs as unused_args { input: a=1}
 
     scatter (x in integers) {
-        call ppp_unused_args as unused_args_b { input: a=x }
-        call ppp_unused_args as unused_args_c { input: a=x*2, ignore=["pitch"] }
+        call UnusedArgs as unused_args_b { input: a=x }
+        call UnusedArgs as unused_args_c { input: a=x*2, ignore=["pitch"] }
 
         # verify that unbound compulsory arguments are provided as scatter
         # inputs
@@ -53,6 +53,12 @@ workflow optionals {
 
         Array[Int] series=[x,1]
     }
+
+    if (true) {
+        # Missing argument [i]
+        call lib.Inc as inc2
+    }
+
     output {
         inc.result
         concatArr.result
@@ -67,6 +73,7 @@ workflow optionals {
         add2.result
         add3.result
         series
+        inc2.result
     }
 }
 
@@ -82,7 +89,7 @@ task ppp_set_def {
 }
 
 # A task that does not use its input arguments.
-task ppp_unused_args {
+task UnusedArgs {
     Int a
     Int? b
     Array[String]? ignore
@@ -92,16 +99,6 @@ task ppp_unused_args {
     }
     output {
         String result = read_string(stdout())
-    }
-}
-
-# A task that sets a default for an optional input
-task MaybeString {
-    String? instrument = "french horn"
-    command {
-    }
-    output {
-        String? result = instrument
     }
 }
 

@@ -22,3 +22,13 @@ task ConcatArray {
       String result = read_string(stdout())
     }
 }
+
+# A task that sets a default for an optional input
+task MaybeString {
+    String? instrument = "french horn"
+    command {
+    }
+    output {
+        String? result = instrument
+    }
+}

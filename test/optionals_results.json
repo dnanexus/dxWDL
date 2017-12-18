@@ -6,6 +6,7 @@
   "optionals.ms1_result" : "french horn",
   "optionals.ms2_result" : "flute",
   "optionals.mul2_result" : 20,
-  "optionals_outputs.add2_result": [9, 10],
-  "optionals_outputs.add3_result": [34, 34]
+  "optionals.add2_result": [9, 10],
+  "optionals.add3_result": [34, 34],
+  "optionals.inc2_result": 108
 }

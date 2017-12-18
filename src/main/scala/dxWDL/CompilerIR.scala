@@ -26,6 +26,8 @@ case class CompilerIR(destination: String,
         def this() = this(new RuntimeException("Runtime instance type calculation required"))
     }
 
+    case class ArtificialVar(cVar: CVar, originalName: String)
+
     // Environment (scope) where a call is made
     type CallEnv = Map[String, LinkedVar]
 
@@ -743,12 +745,15 @@ workflow w {
         preVars ++ outputVars
     }
 
+    // Prerequisit: this method is only used with unlocked workflows.
+    //
     // Check for each task input, if it is unbound. Make a list, and
     // prefix each variable with the call name. This makes it unique
     // as a scatter input.
     def unspecifiedInputs(call: WdlCall,
                           taskApplets: Map[String, (IR.Applet, Vector[IR.CVar])])
-            : Vector[IR.CVar] = {
+            : Vector[ArtificialVar] = {
+        assert(!locked)
         val task = taskOfCall(call)
         val (callee, _) = taskApplets(task.name)
         callee.inputs.map{ cVar =>
@@ -759,14 +764,14 @@ workflow w {
                     if (!Utils.isOptional(cVar.wdlType)) {
                         // A compulsory input. Print a warning, the user may wish to supply
                         // it at runtime.
-                        warning(verbose, s"""|Note: workflow doesn't supply required
-                                             |input ${cVar.name} to call ${call.unqualifiedName};
-                                             |which is in a scatter.
+                        warning(verbose, s"""|Note: workflow does not supply required
+                                             |input ${cVar.name} to call ${call.unqualifiedName}.
                                              |Propagating input to applet.
                                              |""".stripMargin.replaceAll("\n", " "))
                     }
-                    Some(IR.CVar(s"${call.unqualifiedName}_${cVar.name}", cVar.wdlType,
-                                 cVar.attrs, cVar.ast))
+                    val cVar2 = IR.CVar(s"${call.unqualifiedName}_${cVar.name}", cVar.wdlType,
+                                        cVar.attrs, cVar.ast)
+                    Some(ArtificialVar(cVar2, cVar.name))
                 case Some(_) =>
                     // input is provided
                     None
@@ -861,6 +866,36 @@ workflow w {
         WdlRewrite.namespace(wf, tasks)
     }
 
+    // Collect unbound inputs. In unlocked workflows we want to allow
+    // the user to provide them on the command line.
+    private def accessToUnboundInputs(calls: Seq[WdlCall],
+                                      taskApplets: Map[String, (IR.Applet, Vector[CVar])],
+                                      existingInputVars: Vector[CVar]) : Vector[CVar] = {
+        if (locked) {
+            // Locked workflow: no access to internal variables
+            return Vector.empty
+        }
+
+        val existingVarNames : Set[String] = existingInputVars.map{ _.name}.toSet
+        calls.map { call =>
+            val unbound:Vector[ArtificialVar] = unspecifiedInputs(call, taskApplets)
+
+            // remove variables that cause name collisions
+            val unboundNoCollisions = unbound.filter{ artifVar =>
+                if (existingVarNames contains artifVar.cVar.name) {
+                    warning(verbose,
+                            s"""|Variables ${artifVar.cVar.name} already exists, cannot
+                                |use it to expose parameter ${artifVar.originalName}
+                                |to call ${call.unqualifiedName}.
+                                |""".stripMargin.replaceAll("\n", " "))
+                    false
+                } else {
+                    true
+                }
+            }
+            unboundNoCollisions.map{ artifVar => artifVar.cVar }
+        }.flatten.toVector
+    }
 
     // Compile a scatter block. This includes the block of declarations that
     // come before it [preDecls]. Since we are creating a special applet for this, we might as
@@ -882,17 +917,7 @@ workflow w {
                                                topDecls,
                                                calls,
                                                env)
-        // Collect unbound inputs. We we want to allow
-        // the user to provide them on the command line.
-        val extraTaskInputVars: Vector[IR.CVar] =
-            if (locked) {
-                calls.map { call =>
-                    unspecifiedInputs(call, taskApplets)
-                }.flatten.toVector
-            } else {
-                Vector.empty
-            }
-
+        val extraTaskInputVars =  accessToUnboundInputs(calls, taskApplets, inputVars)
         val outputVars = blockOutputs(preDecls, scatter, scatter.children)
         val wdlCode = blockGenWorklow(preDecls, scatter, taskApplets, inputVars, outputVars)
         val callDict = calls.map(c => c.unqualifiedName -> Utils.taskOfCall(c).name).toMap
@@ -938,11 +963,12 @@ workflow w {
                                                calls,
                                                env)
 
+        val extraTaskInputVars =  accessToUnboundInputs(calls, taskApplets, inputVars)
         val outputVars = blockOutputs(preDecls, cond, cond.children)
         val wdlCode = blockGenWorklow(preDecls, cond, taskApplets, inputVars, outputVars)
         val callDict = calls.map(c => c.unqualifiedName -> Utils.taskOfCall(c).name).toMap
         val applet = IR.Applet(wfUnqualifiedName ++ "_" ++ stageName,
-                               inputVars,
+                               inputVars ++ extraTaskInputVars,
                                outputVars,
                                calcInstanceType(None),
                                IR.DockerImageNone,
