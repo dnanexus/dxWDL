@@ -13,6 +13,9 @@ workflow files {
 #        input: a=f, b=f
 #    }
 
+    # Create an applet that ignores every input file
+    call IgnoreAll
+
     call write_lines_bug {
         input: files = [f, f1, f2]
     }
@@ -235,4 +238,11 @@ task FileArraySize {
     output {
         Int result = read_int(stdout())
     }
+}
+
+# Ignore all the input files
+task IgnoreAll {
+    Array[File] files
+    command {}
+    output {}
 }

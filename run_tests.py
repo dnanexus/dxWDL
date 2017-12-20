@@ -72,7 +72,7 @@ def verify_json_file(path):
     try:
         read_json_file(path)
     except:
-        raise Exception("Error verifying JSON file {}".format(path))
+        raise RuntimeError("Error verifying JSON file {}".format(path))
 
 # Search a WDL file with a python regular expression.
 # Note this is not 100% accurate.
@@ -83,13 +83,13 @@ def get_workflow_name(filename):
             m = re.match(wf_pattern_re, line)
             if m is not None:
                 return m.group(3)
-    raise Exception("Workflow name not found")
+    raise RuntimeError("Workflow name not found")
 
 # Register a test name, find its inputs and expected results files.
 def register_test(tname):
     global test_files
     if tname in reserved_test_names:
-        raise Exception("Test name {} is reserved".format(tname))
+        raise RuntimeError("Test name {} is reserved".format(tname))
     wdl_file = os.path.join(test_dir, tname + ".wdl")
     wf_name = get_workflow_name(wdl_file)
     desc = TestDesc(wf_name = wf_name,
@@ -99,7 +99,7 @@ def register_test(tname):
                     results= os.path.join(test_dir, tname + "_results.json"))
     for path in [desc.wdl_source, desc.wdl_input]:
         if not os.path.exists(path):
-            raise Exception("Test file {} does not exist".format(path))
+            raise RuntimeError("Test file {} does not exist".format(path))
 
     # Verify the validity of the JSON files
     for path in [desc.wdl_input, desc.dx_input, desc.results]:
@@ -123,7 +123,7 @@ def find_test_from_analysis(analysis):
     for tname, desc in test_files.iteritems():
         if desc.wf_name == wf_name:
             return tname
-    raise Exception("Test for workflow {} not found".format(wf_name))
+    raise RuntimeError("Test for workflow {} not found".format(wf_name))
 
 # Check that a workflow returned the expected result for
 # a [key]
@@ -134,7 +134,7 @@ def validate_result(tname, anl_outputs, key, expected_val):
     wf_name = key.split('.')[0]
     field_name = key.split('.')[1]
     if wf_name != tname:
-        raise Exception("Key {} is invalid, must start with workflow name".format(key))
+        raise RuntimeError("Key {} is invalid, must start with workflow name".format(key))
     try:
         # get the actual results
         if field_name not in anl_outputs:
@@ -204,7 +204,7 @@ def wait_for_completion(test_analyses):
                 tname = find_test_from_analysis(anls)
                 desc = test_files[tname]
                 if tname not in test_failing:
-                    raise Exception("Analysis {} failed".format(desc.wf_name))
+                    raise RuntimeError("Analysis {} failed".format(desc.wf_name))
                 else:
                     print("Analysis {} failed as expected".format(desc.wf_name))
     finally:
@@ -250,9 +250,9 @@ def extract_outputs(tname, analysis_desc):
         stages = analysis_desc['stages']
         for snum in range(len(stages)):
             crnt = stages[snum]
-            if crnt['id'] == 'last':
+            if crnt['id'] == 'stage-last':
                 return stages[snum]['execution']['output']
-        raise Exception("Analysis for test {} does not have stage 'last'".format(tname))
+        raise RuntimeError("Analysis for test {} does not have stage 'last'".format(tname))
 
 def run_workflow_subset(project, workflows, test_folder, delay_workspace_destruction, no_wait):
     # Run the workflows
@@ -305,9 +305,9 @@ def choose_tests(test_name):
     # Accept it if there is exactly a single match.
     matches = [key for key in test_files.keys() if key.startswith(test_name)]
     if len(matches) > 1:
-        raise Exception("Too many matches for test prefix {} -> {}".format(test_name, matches))
+        raise RuntimeError("Too many matches for test prefix {} -> {}".format(test_name, matches))
     if len(matches) == 0:
-        raise Exception("Test prefix {} is unknown".format(test_name))
+        raise RuntimeError("Test prefix {} is unknown".format(test_name))
     return matches
 
 # Find all the WDL test files, these are located in the 'test'

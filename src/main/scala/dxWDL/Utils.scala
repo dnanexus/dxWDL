@@ -129,6 +129,7 @@ object Utils {
     val MAX_STRING_LEN = 8 * 1024     // Long strings cause problems with bash and the UI
     val MAX_NUM_FILES_MOVE_LIMIT = 1000
     val OUTPUT_SECTION = "outputs"
+    val REORG = "reorg"
     val SCATTER = "scatter"
     val RUNNER_TASK_ENV_FILE = "taskEnv.json"
     val TMP_VAR_NAME_PREFIX = "xtmp"

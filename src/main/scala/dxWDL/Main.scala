@@ -520,6 +520,7 @@ object Main extends App {
         val cef = new CompilerErrorFormatter(ns.terminalMap)
         var irNs = CompilerIR(bOpt.folder, instanceTypeDB, cef,
                               cOpt.reorg, cOpt.locked, bOpt.verbose).apply(ns)
+        val allStageNames = irNs.workflow.get.stages.map{ stg => stg.name }.toVector
 
         irNs = cOpt.defaults match {
             case Some(path) =>
@@ -527,6 +528,10 @@ object Main extends App {
                 InputFile(bOpt.verbose).embedDefaults(irNs, path)
             case _ => irNs
         }
+
+        // make sure the stage order hasn't changed
+        val embedAllStageNames = irNs.workflow.get.stages.map{ stg => stg.name }.toVector
+        assert(allStageNames == embedAllStageNames)
 
         // Write out the intermediate representation
         prettyPrintIR(wdlSourceFile, irNs, bOpt.verbose.on)
