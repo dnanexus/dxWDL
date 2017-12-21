@@ -32,6 +32,8 @@ install:
   - pwd
   - git clone https://github.com/dnanexus/dx-toolkit.git
   - make -C dx-toolkit python java
+  - source dx-toolkit/environment
+  - dx login --token ${DX_AUTH_TOKEN} --noprojects
 
   # Clone dxWDL into a new directory,
   - pwd
