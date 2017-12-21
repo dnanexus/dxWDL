@@ -48,8 +48,7 @@ before_script:
 script:
   - pwd
   - source dx-toolkit/environment
-  - dx login --token ${DX_AUTH_TOKEN}
-  - dx select dxWDL_playground
+  - dx login --token ${DX_AUTH_TOKEN} --noprojects
   - java -version
   - cd dxWDL && sbt version && ./build_jar.py --multi-region
   - pwd
