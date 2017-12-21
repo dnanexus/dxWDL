@@ -6,6 +6,8 @@ workflow files {
     File f
     File f1
     File f2
+    File fruit_list
+    Array[String] fruits_available = read_lines(fruit_list)
 
     # This isn't legal, because you can't stream
     # the same file twice.
@@ -105,6 +107,7 @@ workflow files {
        mk_arr.result
        head.result
        TsvReadTable.result
+       Array[String] fruits = fruits_available
    }
 }
 

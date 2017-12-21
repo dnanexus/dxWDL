@@ -1,72 +1,91 @@
 package dxWDL
 
+import java.nio.file.{Path, Paths, Files}
+import java.nio.charset.StandardCharsets
 import org.scalatest.{FlatSpec, Matchers}
 import wdl4s.wdl._
 
 class CompilerUnitTest extends FlatSpec with Matchers {
+    lazy val testPath:Path = Paths.get("/tmp/dxWDL_TestFiles")
 
-    // Look for a call inside a namespace.
-/*    private def getCallFromNamespace(ns : WdlNamespaceWithWorkflow, callName : String ) : WdlCall = {
-        val wf: WdlWorkflow = ns.workflow
-        wf.findCallByName(callName) match {
-            case None => throw new AppInternalException(s"Call ${callName} not found in WDL file")
-            case Some(call) => call
-        }
-    }*/
+    lazy val tmpTestDir:Path = {
+        if (!Files.exists(testPath))
+            Files.createDirectories(testPath)
+        testPath
+    }
 
-    // TODO
-    //
+    // Create a file from a string
+    private def writeTestFile(testName:String, wdlCode : String) : Path = {
+        val path = tmpTestDir.resolve(testName + ".wdl")
+        Files.write(path, wdlCode.getBytes(StandardCharsets.UTF_8))
+        path
+    }
+
     // These tests require compilation -without- access to the platform.
     // We need to split the compiler into front/back-ends to be able to
     // do this.
-    /*"Compiler" should "Allow adding unbound argument" in {
-        val wdl = """|task mul2 {
-                     |    Int i
-                     |
-                     |    command {
-                     |        python -c "print(${i} + ${i})"
-                     |    }
-                     |    output {
-                     |        Int result = read_int(stdout())
-                     |    }
-                     |}
-                     |
-                     |workflow optionals {
-                     |    Int arg1
-                     |
-                     |    # A call missing a compulsory argument
-                     |    call mul2
-                     |    output {
-                     |        mul2.result
-                     |    }
-                     |}""".stripMargin.trim
+    it should "Allow adding unbound argument" in {
+        val wdlCode =
+            """|
+               |task mul2 {
+               |    Int i
+               |
+               |    command {
+               |        python -c "print(${i} + ${i})"
+               |    }
+               |    output {
+               |        Int result = read_int(stdout())
+               |    }
+               |}
+               |
+               |workflow unbound_arg {
+               |    Int arg1
+               |
+               |    # A call missing a compulsory argument
+               |    call mul2
+               |    output {
+               |        mul2.result
+               |    }
+               |}
+               |""".stripMargin.trim
 
-        val ns = WdlNamespaceWithWorkflow.load(wdl)
-        val call : Call = getCallFromNamespace(ns, "mul2")
-        val inputs : Map[String,WdlValue] = Map("i" -> WdlInteger(3))
-        val outputs : Seq[(String, WdlType, WdlValue)] = evalCall(call, inputs)
-    }*/
+        val path = writeTestFile("unbound_arg", wdlCode)
+        Main.compile(
+            List(path.toString, "--compileMode", "ir", "-quiet")
+        ) should equal(Main.SuccessfulTermination(""))
+    }
 
-    /*
-    "Compiler" should "Report a useful error for a missing reference" in {
-        val wdl = """|task mul2 {
-                     |    Int i
-                     |
-                     |    command {
-                     |        python -c "print(${i} + ${i})"
-                     |    }
-                     |    output {
-                     |        Int result = read_int(stdout())
-                     |    }
-                     |}
-                     |
-                     |workflow ngs {
-                     |    Int A
-                     |    Int B
-                     |    call mul2 { input: i=C }
-                     |}
-                     |""".stripMargin.trim
-    }*/
+    it should "Report a useful error for a missing reference" in {
+        val wdlCode =
+            """|task mul2 {
+               |    Int i
+               |
+               |    command {
+               |        python -c "print(${i} + ${i})"
+               |    }
+               |    output {
+               |        Int result = read_int(stdout())
+               |    }
+               |}
+               |
+               |workflow ngs {
+               |    Int A
+               |    Int B
+               |    call mul2 { input: i=C }
+               |}
+               |""".stripMargin.trim
+
+        val path = writeTestFile("ngs", wdlCode)
+        val retval = Main.compile(
+            List(path.toString, "--compileMode", "ir", "--locked", "--quiet")
+        )
+        retval match  {
+            case Main.UnsuccessfulTermination(errMsg) =>
+                errMsg should include ("Could not resolve")
+            case _ =>
+                true should equal(false)
+        }
+    }
 
 /*    it should "Handle array access" in {
         val wdl = """|task diff {

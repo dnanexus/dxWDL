@@ -54,7 +54,6 @@ object Main extends App {
                                billTo: String,
                                compileMode: CompilerFlag.Value,
                                defaults: Option[Path],
-                               dxWDLrtId: String,
                                locked: Boolean,
                                inputs: List[Path],
                                region: String,
@@ -424,7 +423,6 @@ object Main extends App {
     private def compilerOptions(options: OptionsMap, bOpt: BaseOptions) : CompilerOptions = {
         // get billTo and region from the project
         val (billTo, region) = Utils.projectDescribeExtraInfo(bOpt.dxProject)
-        val dxWDLrtId = getAssetId(region)
         val compileMode: CompilerFlag.Value = options.get("compilemode") match {
             case None => CompilerFlag.Default
             case Some(List(x)) if (x.toLowerCase == "ir") => CompilerFlag.IR
@@ -449,7 +447,6 @@ object Main extends App {
                         billTo,
                         compileMode,
                         defaults,
-                        dxWDLrtId,
                         options contains "locked",
                         inputs,
                         region,
@@ -557,8 +554,9 @@ object Main extends App {
         val wf:Option[DXWorkflow] = cOpt.compileMode match {
             case CompilerFlag.Default =>
                 // Generate dx:applets and dx:workflow from the IR
+                val dxWDLrtId = getAssetId(cOpt.region)
                 val (wf, _) =
-                    CompilerNative(cOpt.dxWDLrtId, bOpt.dxProject, instanceTypeDB,
+                    CompilerNative(dxWDLrtId, bOpt.dxProject, instanceTypeDB,
                                    bOpt.folder, cef,
                                    bOpt.force, cOpt.archive, cOpt.locked, bOpt.verbose).apply(irNs)
                 wf
