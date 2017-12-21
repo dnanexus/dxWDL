@@ -9,7 +9,7 @@ import scala.collection.JavaConverters._
 import scala.collection.mutable.HashMap
 import spray.json._
 import Utils.{dxFileFromJsValue, downloadFile, getMetaDirPath, jsValueOfJsonNode,
-    DX_FUNCTIONS_FILES, readFileContent, writeFileContent}
+    DX_FUNCTIONS_FILES, DX_URL_PREFIX, readFileContent, writeFileContent}
 import wdl4s.wdl.expression.WdlStandardLibraryFunctions
 import wdl4s.wdl.TsvSerializable
 import wdl4s.wdl.values._
@@ -149,10 +149,16 @@ object DxFunctions extends WdlStandardLibraryFunctions {
     }
 
     override def readFile(path: String): String = {
-        handleRemoteFile(path)
+        if (path.startsWith(DX_URL_PREFIX)) {
+            // A non localized file
+            val dxFile = DxPath.lookupDxURLFile(path)
+            Utils.downloadString(dxFile)
+        } else {
+            handleRemoteFile(path)
 
-        // The file is on the local disk, we can read it with regular IO
-        Utils.readFileContent(Paths.get(path))
+            // The file is on the local disk, we can read it with regular IO
+            Utils.readFileContent(Paths.get(path))
+        }
     }
 
     override def writeTempFile(path: String,

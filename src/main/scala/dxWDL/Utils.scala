@@ -568,6 +568,13 @@ object Utils {
     }
 
 
+    // Download platform file contents directly into an in-memory string.
+    // This makes sense for small files.
+    def downloadString(dxfile: DXFile) : String = {
+        val bytes = dxfile.downloadBytes()
+        new String(bytes, StandardCharsets.UTF_8)
+    }
+
     // download a file from the platform to a path on the local disk.
     //
     // Note: this function assumes that the target path does not exist yet
