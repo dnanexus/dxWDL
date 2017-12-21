@@ -22,7 +22,7 @@ case class CompilerNative(dxWDLrtId: String,
                           cef: CompilerErrorFormatter,
                           force: Boolean,
                           archive: Boolean,
-                          lockedWf: Boolean,
+                          locked: Boolean,
                           verbose: Utils.Verbose) {
     val verbose2:Boolean = verbose.keywords contains "compilernative"
     lazy val runtimeLibrary:JsValue = getRuntimeLibrary()
@@ -740,7 +740,7 @@ case class CompilerNative(dxWDLrtId: String,
                             "tags" -> JsArray(JsString("dxWDL")))
 
         val wfInputOutput: Map[String, JsValue] =
-            if (wf.isLockedDown) {
+            if (wf.locked) {
                 // Locked workflows have well defined inputs and outputs
                 val wfInputSpec:Vector[JsValue] = wf.inputs.map{ case (cVar,sArg) =>
                     buildWorkflowInputSpec(cVar, sArg, stageDict)

@@ -6,12 +6,17 @@ workflow files {
     File f
     File f1
     File f2
+    File fruit_list
+    Array[String] fruits_available = read_lines(fruit_list)
 
     # This isn't legal, because you can't stream
     # the same file twice.
 #    call lib.diff as diff1 {
 #        input: a=f, b=f
 #    }
+
+    # Create an applet that ignores every input file
+    call IgnoreAll
 
     call write_lines_bug {
         input: files = [f, f1, f2]
@@ -102,6 +107,7 @@ workflow files {
        mk_arr.result
        head.result
        TsvReadTable.result
+       Array[String] fruits = fruits_available
    }
 }
 
@@ -235,4 +241,11 @@ task FileArraySize {
     output {
         Int result = read_int(stdout())
     }
+}
+
+# Ignore all the input files
+task IgnoreAll {
+    Array[File] files
+    command {}
+    output {}
 }

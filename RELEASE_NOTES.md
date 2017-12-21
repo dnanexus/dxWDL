@@ -1,5 +1,33 @@
 # Release Notes
 
+## 0.56
+- Access to arguments in calls inside scatters. This
+feature was lost while supporting locked-down workflows.
+
+```
+task Add {
+    Int a
+    Int b
+    command {}
+    output {
+        Int result = a + b
+    }
+}
+
+workflow w {
+    scatter (i in [1, 10, 100]) {
+        call Add { input: a=i }
+    }
+}
+```
+
+For example, in workflow `w`, argument `b` is missing from the `Add`
+call. It is now possible to set it it from the command line with `dx
+run w -iscatter_1.Add_b=3`. With an inputs file, the syntax is:
+`w.Add.b = 3`.
+
+- Fixed bad interaction with the UI, where default values were omitted.
+
 ## 0.55
 - Improved support for conditionals and optional values
 - Automated tests for both locked and regular workflows

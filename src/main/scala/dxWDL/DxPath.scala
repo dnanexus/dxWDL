@@ -59,7 +59,7 @@ object DxPath {
     }
 
 
-    private def lookupObject(dxProject: Option[DXProject],
+    private def lookupObject(dxProject: DXProject,
                              objName: String): DXDataObject = {
         if (objName.startsWith("applet-")) {
             return DXApplet.getInstance(objName)
@@ -87,25 +87,14 @@ object DxPath {
                 folder = "/" + folder
         }
         val baseName = fullPath.getFileName.toString
-        val proj = dxProject match  {
-            case Some(p) => p
-            case None => throw new Exception("Object lookup requires project context")
-        }
         val found:List[DXDataObject] =
             DXSearch.findDataObjects().nameMatchesExactly(baseName)
-                .inFolder(proj, folder).execute().asList().asScala.toList
+                .inFolder(dxProject, folder).execute().asList().asScala.toList
         if (found.length == 0)
-            throw new Exception(s"Object ${objName} not found in path ${proj.getId}:${folder}")
+            throw new Exception(s"Object ${objName} not found in path ${dxProject.getId}:${folder}")
         if (found.length > 1)
-            throw new Exception(s"Found more than one dx:object named ${objName} in path ${proj.getId}:${folder}")
+            throw new Exception(s"Found more than one dx:object named ${objName} in path ${dxProject.getId}:${folder}")
         return found(0)
-    }
-
-    def lookupFile(dxProject: Option[DXProject], fileName: String): DXFile = {
-        val dxObj:DXDataObject = lookupObject(dxProject, fileName)
-        if (!dxObj.isInstanceOf[DXFile])
-            throw new Exception(s"Found dx:object of the wrong type ${dxObj}")
-        dxObj.asInstanceOf[DXFile]
     }
 
     private def lookupDxPath(dxPath: String) : DXDataObject = {
@@ -116,10 +105,11 @@ object DxPath {
             val projName = components(0)
             val objName = components(1)
             val dxProject = lookupProject(projName)
-            lookupObject(Some(dxProject), objName)
+            lookupObject(dxProject, objName)
         } else if (components.length == 1) {
             val objName = components(0)
-            lookupObject(None, objName)
+            val crntProj = Utils.dxEnv.getProjectContext()
+            lookupObject(crntProj, objName)
         } else {
             throw new Exception(s"Path ${dxPath} is invalid")
         }

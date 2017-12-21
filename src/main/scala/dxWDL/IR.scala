@@ -137,7 +137,7 @@ object IR {
                         inputs: Vector[(CVar,SArg)],
                         outputs: Vector[(CVar,SArg)],
                         stages: Vector[Stage],
-                        isLockedDown: Boolean)
+                        locked: Boolean)
 
     case class Namespace(workflow: Option[Workflow],
                          applets: Map[String, Applet])

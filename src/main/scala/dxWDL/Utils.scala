@@ -129,6 +129,7 @@ object Utils {
     val MAX_STRING_LEN = 8 * 1024     // Long strings cause problems with bash and the UI
     val MAX_NUM_FILES_MOVE_LIMIT = 1000
     val OUTPUT_SECTION = "outputs"
+    val REORG = "reorg"
     val SCATTER = "scatter"
     val RUNNER_TASK_ENV_FILE = "taskEnv.json"
     val TMP_VAR_NAME_PREFIX = "xtmp"
@@ -566,6 +567,13 @@ object Utils {
         (outStream.toString(), errStream.toString())
     }
 
+
+    // Download platform file contents directly into an in-memory string.
+    // This makes sense for small files.
+    def downloadString(dxfile: DXFile) : String = {
+        val bytes = dxfile.downloadBytes()
+        new String(bytes, StandardCharsets.UTF_8)
+    }
 
     // download a file from the platform to a path on the local disk.
     //
