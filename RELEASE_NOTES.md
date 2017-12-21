@@ -26,6 +26,7 @@ call. It is now possible to set it it from the command line with `dx
 run w -iscatter_1.Add_b=3`. With an inputs file, the syntax is:
 `w.Add.b = 3`.
 
+- Fixed bad interaction with the UI, where default values were omitted.
 
 ## 0.55
 - Improved support for conditionals and optional values
