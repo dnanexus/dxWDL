@@ -10,9 +10,11 @@ import scala.collection.mutable.HashMap
 import spray.json._
 import Utils.{dxFileFromJsValue, downloadFile, getMetaDirPath, jsValueOfJsonNode,
     DX_FUNCTIONS_FILES, DX_URL_PREFIX, readFileContent, writeFileContent}
+import wdl4s.parser.MemoryUnit
 import wdl4s.wdl.expression.WdlStandardLibraryFunctions
 import wdl4s.wdl.TsvSerializable
 import wdl4s.wdl.values._
+import wdl4s.wdl.types._
 
 
 object DxFunctions extends WdlStandardLibraryFunctions {
@@ -200,39 +202,54 @@ object DxFunctions extends WdlStandardLibraryFunctions {
         Failure(new NotImplementedError(s"write_json()"))
 
     override def size(params: Seq[Try[WdlValue]]): Try[WdlFloat] = {
-        // Extract the filename/path argument
-        try {
-            val fileName:String = params match {
-                case _ if params.length == 1 =>
-                    params.head.get match {
-                        case WdlSingleFile(s) => s
-                        case WdlString(s) => s
-                        case x => throw new AppException(s"size operator cannot be applied to ${x.toWdlString}")
-                    }
-                case _ =>
-                    throw new IllegalArgumentException(
-                        s"""|Invalid number of parameters for engine function size: ${params.length}.
-                            |size takes one parameter.""".stripMargin.trim)
-            }
+        // Inner function: is this a file type, or an optional containing a file type?
+        def isOptionalOfFileType(wdlType: WdlType): Boolean = wdlType match {
+            case f if WdlFileType.isCoerceableFrom(f) => true
+            case WdlOptionalType(inner) => isOptionalOfFileType(inner)
+            case _ => false
+        }
 
-            // If this is not an absolute path, we assume the file
-            // is located in the DX home directory
-            val path:String =
-                if (fileName.startsWith("/")) fileName
-                else dxHomeDir.resolve(fileName).toString
-            val fSize:Long = remoteFiles.get(path) match {
-                case Some(dxFile) =>
-                    // File has not been downloaded yet.
-                    // Query the platform how big it is; do not download it.
-                    dxFile.describe().getSize()
-                case None =>
-                    // File is local
-                    val p = Paths.get(fileName)
-                    p.toFile.length
+        // Inner function: Get the file size, allowing for unpacking of optionals
+        def optionalSafeFileSize(value: WdlValue): Double = value match {
+            case f if f.isInstanceOf[WdlFile] || WdlFileType.isCoerceableFrom(f.wdlType) =>
+                // If this is not an absolute path, we assume the file
+                // is located in the DX home directory
+                val fileName = f.valueString
+                val path:String =
+                    if (fileName.startsWith("/")) fileName
+                    else dxHomeDir.resolve(fileName).toString
+                val fSize:Long = remoteFiles.get(path) match {
+                    case Some(dxFile) =>
+                        // File has not been downloaded yet.
+                        // Query the platform how big it is; do not download it.
+                        dxFile.describe().getSize()
+                    case None =>
+                        // File is local
+                        val p = Paths.get(fileName)
+                        p.toFile.length
+                }
+                fSize.toDouble
+            case WdlOptionalValue(_, Some(o)) => optionalSafeFileSize(o)
+            case WdlOptionalValue(f, None) if isOptionalOfFileType(f) => 0d
+            case _ => throw new Exception(
+                s"The 'size' method expects a 'File' or 'File?' argument but instead got ${value.wdlType}.")
+        }
+
+        Try {
+            params match {
+                case _ if params.length == 1 =>
+                    val fileSize = optionalSafeFileSize(params.head.get)
+                    WdlFloat(fileSize)
+                case _ if params.length == 2 =>
+                    val fileSize:Double = optionalSafeFileSize(params.head.get)
+                    val unit:Double = params.tail.head match {
+                        case Success(WdlString(suffix)) =>
+                            MemoryUnit.fromSuffix(suffix).bytes.toDouble
+                        case other => throw new IllegalArgumentException(s"The unit must a string type ${other}")
+                    }
+                    WdlFloat((fileSize/unit).toFloat)
+                case _ => throw new UnsupportedOperationException(s"Expected one or two parameters but got ${params.length} instead.")
             }
-            Success(WdlFloat(fSize.toFloat))
-        } catch {
-            case e : Throwable => Failure(e)
         }
     }
 

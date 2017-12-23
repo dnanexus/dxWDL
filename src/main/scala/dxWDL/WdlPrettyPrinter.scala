@@ -25,6 +25,16 @@ case class WdlPrettyPrinter(fqnFlag: Boolean, workflowOutputs: Option[Seq[Workfl
         s"${" " * n}"
     }
 
+    private def escapeChars(buf: String) : String = {
+        // TODO: this global search-replace will not work for
+        // all expressions.
+        buf.replaceAll("""\\""", """\\\\""")
+    }
+
+    private def orgExpression(expr: WdlExpression) : String = {
+        escapeChars(expr.toWdlString)
+    }
+
     // indent a line by [level] steps
     def indentLine(line: String, indentLevel: Int) = {
         if (line == "\n") {
@@ -107,14 +117,14 @@ case class WdlPrettyPrinter(fqnFlag: Boolean, workflowOutputs: Option[Seq[Workfl
     def apply(decl: Declaration, level: Int) : Vector[String] = {
         val exprStr = decl.expression match {
             case None => ""
-            case Some(x) => " = " ++ x.toWdlString
+            case Some(x) => " = " ++ orgExpression(x)
         }
         val ln = s"${decl.wdlType.toWdlString} ${decl.unqualifiedName} ${exprStr}"
         Vector(indentLine(ln, level))
     }
 
     def apply(cond: If, level: Int) : Vector[String] = {
-        val top: String = s"if (${cond.condition.toWdlString})"
+        val top: String = s"if (${orgExpression(cond.condition)})"
         val children = cond.children.map(x =>
             apply(x, level + 1)
         ).flatten.toVector
@@ -122,7 +132,7 @@ case class WdlPrettyPrinter(fqnFlag: Boolean, workflowOutputs: Option[Seq[Workfl
     }
 
     def apply(ssc: Scatter, level: Int) : Vector[String] = {
-        val top: String = s"scatter (${ssc.item} in ${ssc.collection.toWdlString})"
+        val top: String = s"scatter (${ssc.item} in ${orgExpression(ssc.collection)})"
         val children = ssc.children.map(x =>
             apply(x, level + 1)
         ).flatten.toVector
@@ -142,7 +152,7 @@ case class WdlPrettyPrinter(fqnFlag: Boolean, workflowOutputs: Option[Seq[Workfl
 
     def apply(tso: TaskOutput, level: Int): Vector[String] = {
         val ln = s"""|${tso.wdlType.toWdlString} ${tso.unqualifiedName} =
-                     |${tso.requiredExpression.toWdlString}"""
+                     |${orgExpression(tso.requiredExpression)}"""
             .stripMargin.replaceAll("\n", " ").trim
         Vector(indentLine(ln, level))
     }
@@ -150,7 +160,7 @@ case class WdlPrettyPrinter(fqnFlag: Boolean, workflowOutputs: Option[Seq[Workfl
     def apply(task: WdlTask, level:Int) : Vector[String] = {
         val decls = task.declarations.map(x => apply(x, level + 1)).flatten.toVector
         val runtime = task.runtimeAttributes.attrs.map{ case (key, expr) =>
-            indentLine(s"${key}: ${expr.toWdlString}", level + 2)
+            indentLine(s"${key}: ${orgExpression(expr)}", level + 2)
         }.toVector
         val outputs = task.outputs.map(x => apply(x, level + 2)).flatten.toVector
         val paramMeta = task.parameterMeta.map{ case (x,y) =>

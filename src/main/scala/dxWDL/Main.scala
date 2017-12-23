@@ -316,11 +316,11 @@ object Main extends App {
         val lines: String = WdlPrettyPrinter(true, wfOutputs)
             .apply(rewrittenNs, 0)
             .mkString("\n")
+        if (cState.verbose.on)
+            writeToFile(cState.wdlSourceFile, "." + suffix, lines)
         val cleanNs = WdlNamespace.loadUsingSource(
             lines, None, Some(List(cState.resolver))
         ).get
-        if (cState.verbose.on)
-            writeToFile(cState.wdlSourceFile, "." + suffix, lines)
         cleanNs
     }
 

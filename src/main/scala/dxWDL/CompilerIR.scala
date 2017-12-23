@@ -150,7 +150,13 @@ task Add {
             task.runtimeAttributes.attrs.get(attrName) match {
                 case None => None
                 case Some(expr) =>
-                    Some(expr.evaluate(lookup, NoFunctions).get)
+                    try {
+                        Some(expr.evaluate(lookup, PureStandardLibraryFunctions).get)
+                    } catch {
+                        case e : Exception =>
+                            // The expression can only be evaluated at runtime
+                            throw new DynamicInstanceTypesException
+                    }
             }
         }
 
