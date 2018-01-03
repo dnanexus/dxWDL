@@ -46,7 +46,10 @@ object IR {
       */
     sealed trait InstanceType
     case object InstanceTypeDefault extends InstanceType
-    case class InstanceTypeConst(name: String) extends InstanceType
+    case class InstanceTypeConst(
+        dxInstaceType: Option[String],
+        memoryMB: Option[Int], diskGB: Option[Int], cpu: Option[Int]
+    ) extends InstanceType
     case object InstanceTypeRuntime extends InstanceType
 
     // A task may specify a docker image to run under. There are three
@@ -82,7 +85,6 @@ object IR {
       * @param output        WDL output arguments
       * @param instaceType   a platform instance name
       * @param docker        is docker used? if so, what image
-      * @param destination   folder path on the platform
       * @param kind          Kind of applet: task, scatter, ...
       * @param ns            WDL namespace
       */
@@ -91,7 +93,6 @@ object IR {
                       outputs: Vector[CVar],
                       instanceType: InstanceType,
                       docker: DockerImage,
-                      destination: String,
                       kind: AppletKind,
                       ns: WdlNamespace)
 
@@ -145,21 +146,22 @@ object IR {
 
     // Automatic conversion to/from Yaml
     object IrInternalYamlProtocol extends DefaultYamlProtocol {
+        implicit val InstanceTypeConstFormat = yamlFormat4(InstanceTypeConst)
+
         implicit object InstanceTypeYamlFormat extends YamlFormat[InstanceType] {
             def write(it: InstanceType) =
                 it match {
                     case InstanceTypeDefault =>
                         YamlString("Default")
-                    case InstanceTypeConst(name) =>
-                        // we assume the name is not one of the other options
-                        YamlString(name)
+                    case InstanceTypeConst(_,_,_,_) =>
+                        it.toYaml
                     case InstanceTypeRuntime =>
                         YamlString("Runtime")
                 }
             def read(value: YamlValue) = value match {
                 case YamlString("Default") => InstanceTypeDefault
                 case YamlString("Runtime") => InstanceTypeRuntime
-                case YamlString(name) => InstanceTypeConst(name)
+                case YamlObject(_) => value.convertTo[InstanceTypeConst]
                 case unrecognized => throw new Exception(s"InstanceType expected ${unrecognized}")
             }
         }
@@ -377,7 +379,6 @@ object IR {
                     YamlString("outputs") -> applet.outputs.toYaml,
                     YamlString("instanceType") -> applet.instanceType.toYaml,
                     YamlString("docker") -> applet.docker.toYaml,
-                    YamlString("destination") -> YamlString(applet.destination),
                     YamlString("kind") -> applet.kind.toYaml,
                     YamlString("ns") -> YamlString(wdlCode))
             }
@@ -391,7 +392,6 @@ object IR {
                             YamlString("outputs"),
                             YamlString("instanceType"),
                             YamlString("docker"),
-                            YamlString("destination"),
                             YamlString("kind"),
                             YamlString("ns")) match {
                             case Seq(
@@ -400,7 +400,6 @@ object IR {
                                 outputs,
                                 instanceType,
                                 docker,
-                                YamlString(destination),
                                 kind,
                                 YamlString(wdlCode)) =>
                                 Applet(name,
@@ -408,7 +407,6 @@ object IR {
                                        outputs.convertTo[Vector[CVar]],
                                        instanceType.convertTo[InstanceType],
                                        docker.convertTo[DockerImage],
-                                       destination,
                                        kind.convertTo[AppletKind],
                                        WdlNamespace.loadUsingSource(wdlCode, None, None).get)
                         }

@@ -109,10 +109,10 @@ workflow PairedEndSingleSampleWorkflow {
   scatter (unmapped_bam in flowcell_unmapped_bams) {
 
     Float unmapped_bam_size = size(unmapped_bam, "GB")
-
-    String sub_strip_path = "gs://.*/"
     String sub_strip_unmapped = unmapped_bam_suffix + "$"
-    String sub_sub = sub(sub(unmapped_bam, sub_strip_path, ""), sub_strip_unmapped, "")
+    String sub_sub = sub(basename(unmapped_bam), sub_strip_unmapped, "")
+    Float disk_size_samToFastq = unmapped_bam_size + bwa_ref_size + (bwa_disk_multiplier * unmapped_bam_size) + additional_disk
+    Float mapped_bam_size = unmapped_bam_size
 
     # QC the unmapped BAM
     call CollectQualityYieldMetrics {
@@ -141,12 +141,13 @@ workflow PairedEndSingleSampleWorkflow {
         bwa_version = GetBwaVersion.version,
         # The merged bam can be bigger than only the aligned bam,
         # so account for the output size by multiplying the input size by 2.75.
-        disk_size = unmapped_bam_size + bwa_ref_size + (bwa_disk_multiplier * unmapped_bam_size) + additional_disk,
+        disk_size = disk_size_samToFastq,
         compression_level = compression_level,
         preemptible_tries = preemptible_tries
     }
 
-    Float mapped_bam_size = size(SamToFastqAndBwaMemAndMba.output_bam, "GB")
+    # This is not supported by dxWDL right now
+    # Float mapped_bam_size = size(SamToFastqAndBwaMemAndMba.output_bam, "GB")
 
     # QC the aligned but unsorted readgroup BAM
     # no reference as the input here is unsorted, providing a reference would cause an error
@@ -198,8 +199,8 @@ workflow PairedEndSingleSampleWorkflow {
     # Check identity of fingerprints across readgroups
     call CrossCheckFingerprints {
       input:
-        input_bams = SortSampleBam.output_bam,
-        input_bam_indexes = SortSampleBam.output_bam_index,
+        input_bams = [SortSampleBam.output_bam],
+        input_bam_indexes = [SortSampleBam.output_bam_index],
         haplotype_database_file = haplotype_database_file,
         metrics_filename = base_file_name + ".crosscheck",
         disk_size = agg_bam_size + additional_disk,
@@ -240,9 +241,11 @@ workflow PairedEndSingleSampleWorkflow {
   # Perform Base Quality Score Recalibration (BQSR) on the sorted BAM in parallel
   scatter (subgroup in CreateSequenceGroupingTSV.sequence_grouping) {
     # Generate the recalibration model by interval
-    call BaseRecalibrator {
+      Float bam_size = size(SortSampleBam.output_bam, "GB")
+      call BaseRecalibrator {
       input:
         input_bam = SortSampleBam.output_bam,
+        input_bai = SortSampleBam.output_bam_index,
         recalibration_report_filename = base_file_name + ".recal_data.csv",
         sequence_group_interval = subgroup,
         dbSNP_vcf = dbSNP_vcf,
@@ -253,7 +256,7 @@ workflow PairedEndSingleSampleWorkflow {
         ref_fasta = ref_fasta,
         ref_fasta_index = ref_fasta_index,
         # We need disk to localize the sharded bam due to the scatter.
-        disk_size = (agg_bam_size / bqsr_divisor) + ref_size + dbsnp_size + additional_disk,
+        disk_size = (agg_bam_size / bqsr_divisor) + ref_size + dbsnp_size + additional_disk + bam_size,
         preemptible_tries = agg_preemptible_tries
     }
   }
@@ -570,6 +573,7 @@ task CollectQualityYieldMetrics {
       OUTPUT=${metrics_filename}
   }
   runtime {
+    docker: "broadinstitute/genomes-in-the-cloud:2.3.1-1512499786"
     disks: "local-disk " + sub(disk_size, "\\..*", "") + " HDD"
     memory: "3 GB"
     preemptible: preemptible_tries
@@ -589,6 +593,7 @@ task GetBwaVersion {
     sed 's/Version: //'
   }
   runtime {
+    docker: "broadinstitute/genomes-in-the-cloud:2.3.1-1512499786"
     memory: "1 GB"
   }
   output {
@@ -672,6 +677,7 @@ task SamToFastqAndBwaMemAndMba {
     fi
   >>>
   runtime {
+    docker: "broadinstitute/genomes-in-the-cloud:2.3.1-1512499786"
     preemptible: preemptible_tries
     memory: "14 GB"
     cpu: "16"
@@ -702,12 +708,13 @@ task SortSam {
       MAX_RECORDS_IN_RAM=300000
 
   }
-  runtime {
-    disks: "local-disk " + sub(disk_size, "\\..*", "") + " HDD"
-    cpu: "1"
-    memory: "5000 MB"
-    preemptible: preemptible_tries
-  }
+    runtime {
+      docker: "broadinstitute/genomes-in-the-cloud:2.3.1-1512499786"
+      disks: "local-disk " + sub(disk_size, "\\..*", "") + " HDD"
+      cpu: "1"
+      memory: "5000 MB"
+      preemptible: preemptible_tries
+    }
   output {
     File output_bam = "${output_bam_basename}.bam"
     File output_bam_index = "${output_bam_basename}.bai"
@@ -740,6 +747,7 @@ task CollectUnsortedReadgroupBamQualityMetrics {
     touch ${output_bam_prefix}.insert_size_histogram.pdf
   }
   runtime {
+    docker: "broadinstitute/genomes-in-the-cloud:2.3.1-1512499786"
     memory: "7 GB"
     disks: "local-disk " + sub(disk_size, "\\..*", "") + " HDD"
     preemptible: preemptible_tries
@@ -781,6 +789,7 @@ task CollectReadgroupBamQualityMetrics {
       METRIC_ACCUMULATION_LEVEL="READ_GROUP"
   }
   runtime {
+    docker: "broadinstitute/genomes-in-the-cloud:2.3.1-1512499786"
     memory: "7 GB"
     disks: "local-disk " + sub(disk_size, "\\..*", "") + " HDD"
     preemptible: preemptible_tries
@@ -825,6 +834,7 @@ task CollectAggregationMetrics {
     touch ${output_bam_prefix}.insert_size_histogram.pdf
   }
   runtime {
+    docker: "broadinstitute/genomes-in-the-cloud:2.3.1-1512499786"
     memory: "7 GB"
     disks: "local-disk " + sub(disk_size, "\\..*", "") + " HDD"
     preemptible: preemptible_tries
@@ -866,6 +876,7 @@ task CrossCheckFingerprints {
       LOD_THRESHOLD=-20.0
   >>>
   runtime {
+    docker: "broadinstitute/genomes-in-the-cloud:2.3.1-1512499786"
     preemptible: preemptible_tries
     memory: "2 GB"
     disks: "local-disk " + sub(disk_size, "\\..*", "") + " HDD"
@@ -900,6 +911,7 @@ task CheckFingerprint {
 
   >>>
  runtime {
+    docker: "broadinstitute/genomes-in-the-cloud:2.3.1-1512499786"
     preemptible: preemptible_tries
     memory: "1 GB"
     disks: "local-disk " + sub(disk_size, "\\..*", "") + " HDD"
@@ -941,6 +953,7 @@ task MarkDuplicates {
       ADD_PG_TAG_TO_READS=false
   }
   runtime {
+    docker: "broadinstitute/genomes-in-the-cloud:2.3.1-1512499786"
     preemptible: preemptible_tries
     memory: "7 GB"
     disks: "local-disk " + sub(disk_size, "\\..*", "") + " HDD"
@@ -1008,7 +1021,8 @@ task CreateSequenceGroupingTSV {
 
 # Generate Base Quality Score Recalibration (BQSR) model
 task BaseRecalibrator {
-  String input_bam
+  File input_bam
+  File input_bai
   String recalibration_report_filename
   Array[String] sequence_group_interval
   File dbSNP_vcf
@@ -1035,6 +1049,7 @@ task BaseRecalibrator {
       -L ${sep=" -L " sequence_group_interval}
   }
   runtime {
+    docker: "broadinstitute/genomes-in-the-cloud:2.3.1-1512499786"
     preemptible: preemptible_tries
     memory: "6 GB"
     disks: "local-disk " + sub(disk_size, "\\..*", "") + " HDD"
@@ -1046,7 +1061,7 @@ task BaseRecalibrator {
 
 # Apply Base Quality Score Recalibration (BQSR) model
 task ApplyBQSR {
-  String input_bam
+  File input_bam
   String output_bam_basename
   File recalibration_report
   Array[String] sequence_group_interval
@@ -1057,6 +1072,9 @@ task ApplyBQSR {
   Int compression_level
   Int preemptible_tries
 
+  parameter_meta {
+     input_bam : "stream"
+  }
   command {
     /usr/gitc/gatk4/gatk-launch --javaOptions "-XX:+PrintFlagsFinal -XX:+PrintGCTimeStamps -XX:+PrintGCDateStamps \
       -XX:+PrintGCDetails -Xloggc:gc_log.log \
@@ -1073,6 +1091,7 @@ task ApplyBQSR {
       -L ${sep=" -L " sequence_group_interval}
   }
   runtime {
+    docker: "broadinstitute/genomes-in-the-cloud:2.3.1-1512499786"
     preemptible: preemptible_tries
     memory: "3500 MB"
     disks: "local-disk " + sub(disk_size, "\\..*", "") + " HDD"
@@ -1097,6 +1116,7 @@ task GatherBqsrReports {
       -O ${output_report_filename}
     }
   runtime {
+    docker: "broadinstitute/genomes-in-the-cloud:2.3.1-1512499786"
     preemptible: preemptible_tries
     memory: "3500 MB"
     disks: "local-disk " + disk_size + " HDD"
@@ -1123,6 +1143,7 @@ task GatherBamFiles {
       CREATE_MD5_FILE=true
     }
   runtime {
+    docker: "broadinstitute/genomes-in-the-cloud:2.3.1-1512499786"
     preemptible: preemptible_tries
     memory: "3 GB"
     disks: "local-disk " + sub(disk_size, "\\..*", "") + " HDD"
@@ -1421,13 +1442,14 @@ task ScatterIntervalList {
     Int interval_count = read_int(stdout())
   }
   runtime {
-    memory: "2 GB"
+      memory: "2 GB"
+      docker: "broadinstitute/genomes-in-the-cloud:2.3.1-1512499786"
   }
 }
 
 # Call variants on a single sample with HaplotypeCaller to produce a GVCF
 task HaplotypeCaller {
-  String input_bam
+  File input_bam
   File interval_list
   String gvcf_basename
   File ref_dict
@@ -1436,6 +1458,10 @@ task HaplotypeCaller {
   Float? contamination
   Float disk_size
   Int preemptible_tries
+
+  parameter_meta {
+     input_bam : "stream"
+  }
 
   # We use interval_padding 500 below to make sure that the HaplotypeCaller has context on both sides around
   # the interval because the assembly uses them.
@@ -1465,6 +1491,7 @@ task HaplotypeCaller {
       --read_filter OverclippedRead
   }
   runtime {
+    docker: "broadinstitute/genomes-in-the-cloud:2.3.1-1512499786"
     preemptible: preemptible_tries
     memory: "10 GB"
     cpu: "1"
@@ -1493,6 +1520,7 @@ task MergeVCFs {
       OUTPUT=${output_vcf_name}
   }
   runtime {
+    docker: "broadinstitute/genomes-in-the-cloud:2.3.1-1512499786"
     preemptible: preemptible_tries
     memory: "3 GB"
     disks: "local-disk " + disk_size + " HDD"
@@ -1527,6 +1555,7 @@ task ValidateGVCF {
       --dbsnp ${dbSNP_vcf}
   }
   runtime {
+    docker: "broadinstitute/genomes-in-the-cloud:2.3.1-1512499786"
     preemptible: preemptible_tries
     memory: "3500 MB"
     disks: "local-disk " + sub(disk_size, "\\..*", "") + " HDD"
@@ -1556,6 +1585,7 @@ task CollectGvcfCallingMetrics {
       GVCF_INPUT=true
   }
   runtime {
+    docker: "broadinstitute/genomes-in-the-cloud:2.3.1-1512499786"
     preemptible: preemptible_tries
     memory: "3 GB"
     disks: "local-disk " + sub(disk_size, "\\..*", "") + " HDD"
@@ -1592,6 +1622,7 @@ task ConvertToCram {
     samtools index ${output_basename}.cram
   >>>
   runtime {
+    docker: "broadinstitute/genomes-in-the-cloud:2.3.1-1512499786"
     preemptible: preemptible_tries
     memory: "3 GB"
     cpu: "1"

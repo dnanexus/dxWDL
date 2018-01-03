@@ -24,7 +24,7 @@ class CompilerUnitTest extends FlatSpec with Matchers {
     // These tests require compilation -without- access to the platform.
     // We need to split the compiler into front/back-ends to be able to
     // do this.
-    ignore should "Allow adding unbound argument" in {
+    it should "Allow adding unbound argument" in {
         val wdlCode =
             """|
                |task mul2 {
@@ -55,7 +55,7 @@ class CompilerUnitTest extends FlatSpec with Matchers {
         ) should equal(Main.SuccessfulTermination(""))
     }
 
-    ignore should "Report a useful error for a missing reference" in {
+    it should "Report a useful error for a missing reference" in {
         val wdlCode =
             """|task mul2 {
                |    Int i

@@ -16,9 +16,7 @@ import wdl4s.wdl.types._
 import wdl4s.wdl.values._
 import wdl4s.wdl.WdlExpression.AstForExpressions
 
-case class CompilerIR(destination: String,
-                      instanceTypeDB: InstanceTypeDB,
-                      cef: CompilerErrorFormatter,
+case class CompilerIR(cef: CompilerErrorFormatter,
                       reorg: Boolean,
                       locked: Boolean,
                       verbose: Utils.Verbose) {
@@ -173,8 +171,7 @@ task Add {
                     val memory = evalAttr(task, "memory")
                     val diskSpace = evalAttr(task, "disks")
                     val cores = evalAttr(task, "cpu")
-                    IR.InstanceTypeConst(
-                        instanceTypeDB.apply(dxInstaceType, memory, diskSpace, cores))
+                    InstanceTypeDB.parse(dxInstaceType, memory, diskSpace, cores)
             }
         } catch {
             case e : DynamicInstanceTypesException =>
@@ -405,7 +402,6 @@ workflow w {
                                outputVars,
                                calcInstanceType(None),
                                IR.DockerImageNone,
-                               destination,
                                IR.AppletKindEval,
                                WdlRewrite.namespace(code, Seq.empty))
         verifyWdlCodeIsLegal(applet.ns)
@@ -544,7 +540,6 @@ workflow w {
                                outputVars,
                                calcInstanceType(Some(task)),
                                docker,
-                               destination,
                                kind,
                                WdlRewrite.namespace(taskCleaned))
         verifyWdlCodeIsLegal(applet.ns)
@@ -944,7 +939,6 @@ workflow w {
                                outputVars,
                                calcInstanceType(None),
                                IR.DockerImageNone,
-                               destination,
                                aKind,
                                wdlCode)
         verifyWdlCodeIsLegal(applet.ns)
@@ -984,7 +978,6 @@ workflow w {
                                outputVars,
                                calcInstanceType(None),
                                IR.DockerImageNone,
-                               destination,
                                IR.AppletKindIf(callDict),
                                wdlCode)
         verifyWdlCodeIsLegal(applet.ns)
@@ -1021,7 +1014,6 @@ workflow w {
                                outputVars,
                                calcInstanceType(None),
                                IR.DockerImageNone,
-                               destination,
                                IR.AppletKindWorkflowOutputReorg,
                                WdlRewrite.namespace(code, Seq.empty))
         verifyWdlCodeIsLegal(applet.ns)
@@ -1154,7 +1146,6 @@ workflow w {
                                outputVars,
                                calcInstanceType(None),
                                IR.DockerImageNone,
-                               destination,
                                IR.AppletKindEval,
                                WdlRewrite.namespace(code, Seq.empty))
         verifyWdlCodeIsLegal(applet.ns)
@@ -1213,7 +1204,6 @@ workflow w {
                                outputVars,
                                calcInstanceType(None),
                                IR.DockerImageNone,
-                               destination,
                                IR.AppletKindEval,
                                WdlRewrite.namespace(code, Seq.empty))
         verifyWdlCodeIsLegal(applet.ns)

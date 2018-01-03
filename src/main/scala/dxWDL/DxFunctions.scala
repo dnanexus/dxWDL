@@ -191,7 +191,7 @@ object DxFunctions extends WdlStandardLibraryFunctions {
     override def write_lines(params: Seq[Try[WdlValue]]): Try[WdlFile] =
         writeToTsv(params, classOf[WdlArray])
     override def write_map(params: Seq[Try[WdlValue]]): Try[WdlFile] =
-        writeToTsv(params, classOf[WdlMap])
+       writeToTsv(params, classOf[WdlMap])
     override def write_object(params: Seq[Try[WdlValue]]): Try[WdlFile] =
         writeToTsv(params, classOf[WdlObject])
     override def write_objects(params: Seq[Try[WdlValue]]): Try[WdlFile] =
@@ -252,42 +252,4 @@ object DxFunctions extends WdlStandardLibraryFunctions {
             }
         }
     }
-
-
-    private def stringOf(x: WdlValue) : String = {
-        x match {
-            case WdlString(s) => s
-            case WdlSingleFile(path) => path
-            case _ => throw new Exception(s"Not file/string type ${x.typeName} ${x.toWdlString}")
-        }
-    }
-
-    private def stringOf(p: Try[WdlValue]) : String = {
-        p match {
-            case Success(x) => x.toWdlString
-            case Failure(e) => s"Failure ${Utils.exceptionToString(e)}"
-        }
-    }
-
-    override def sub(params: Seq[Try[WdlValue]]): Try[WdlString] =
-        params.size match {
-            case 3 => (params(0), params(1), params(2)) match {
-                case (Success(x), Success(y), Success(z)) =>
-                    try {
-                        val (str, pattern, replace) = (stringOf(x), stringOf(y), stringOf(z))
-                        Success(WdlString(pattern.r.replaceAllIn(str, replace)))
-                    } catch {
-                        case e : Throwable =>
-                            val msg = Utils.exceptionToString(e)
-                            Failure(new Exception(s"sub requires three file/string arguments, ${msg}"))
-                    }
-                case _ =>
-                    val (p0,p1,p2) = (stringOf(params(0)), stringOf(params(1)), stringOf(params(2)))
-                    Failure(new Exception(s"sub requires three valid arguments, got (${p0}, ${p1}, ${p2})"))
-            }
-            case n => Failure(
-                new IllegalArgumentException(
-                    s"""|Invalid number of parameters for engine function sub: $n.
-                        |sub takes exactly 3 parameters.""".stripMargin.trim))
-        }
 }
