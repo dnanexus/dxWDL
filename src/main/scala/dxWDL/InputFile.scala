@@ -117,7 +117,7 @@ case class InputFile(verbose: Utils.Verbose) {
                     case Some(dflt:JsValue) =>
                         val wvl = translateValue(cVar, dflt)
                         val w = WdlVarLinks.eval(wvl, IOMode.Remote, IODirection.Zero)
-                            IR.SArgConst(w)
+                        IR.SArgConst(w)
                 }
         }
         stg.copy(inputs = inputsWithDefaults)

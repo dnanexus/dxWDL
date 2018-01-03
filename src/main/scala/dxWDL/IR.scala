@@ -153,8 +153,8 @@ object IR {
                 it match {
                     case InstanceTypeDefault =>
                         YamlString("Default")
-                    case InstanceTypeConst(_,_,_,_) =>
-                        it.toYaml
+                    case itc : InstanceTypeConst =>
+                        itc.toYaml
                     case InstanceTypeRuntime =>
                         YamlString("Runtime")
                 }

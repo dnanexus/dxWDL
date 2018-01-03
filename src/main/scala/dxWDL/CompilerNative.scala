@@ -16,10 +16,9 @@ import Utils.{AppletLinkInfo, base64Encode, CHECKSUM_PROP, dxFileFromJsValue, DX
 import wdl4s.wdl.types._
 
 case class CompilerNative(dxWDLrtId: String,
+                          folder: String,
                           dxProject: DXProject,
                           instanceTypeDB: InstanceTypeDB,
-                          folder: String,
-                          cef: CompilerErrorFormatter,
                           force: Boolean,
                           archive: Boolean,
                           locked: Boolean,
@@ -276,7 +275,7 @@ case class CompilerNative(dxWDLrtId: String,
                 throw new Exception("Sanity: generating a bash script for a native applet")
             case IR.AppletKindTask =>
                 instanceType match {
-                    case IR.InstanceTypeDefault | IR.InstanceTypeConst(_) =>
+                    case IR.InstanceTypeDefault | IR.InstanceTypeConst(_,_,_,_) =>
                         s"""|main() {
                             |${genBashScriptTaskBody()}
                             |}""".stripMargin
@@ -463,7 +462,8 @@ case class CompilerNative(dxWDLrtId: String,
                     docker: IR.DockerImage) : JsValue = {
         // find the dxWDL asset
         val instanceType:String = iType match {
-            case IR.InstanceTypeConst(x) => x
+            case x : IR.InstanceTypeConst =>
+                instanceTypeDB.apply(x)
             case IR.InstanceTypeDefault | IR.InstanceTypeRuntime =>
                 instanceTypeDB.defaultInstanceType
         }

@@ -1,6 +1,6 @@
 package dxWDL
 
-import com.dnanexus.{DXProject, DXWorkflow}
+import com.dnanexus.{DXProject}
 import com.typesafe.config._
 import java.io.{FileWriter, PrintWriter}
 import java.nio.file.{Path, Paths}
@@ -559,8 +559,7 @@ object Main extends App {
 
         // Generate dx:applets and dx:workflow from the IR
         val (wf, _) =
-            CompilerNative(dxWDLrtId, dxProject, instanceTypeDB,
-                           folder, cef,
+            CompilerNative(dxWDLrtId, folder, dxProject, instanceTypeDB,
                            bOpt.force, cOpt.archive, cOpt.locked, bOpt.verbose).apply(irNs)
         wf match {
             case Some(dxwfl) => dxwfl.getId
@@ -599,7 +598,7 @@ object Main extends App {
                     // (1) the instance price list and database
                     // (2) the output location of applets and workflows
                     val (dxProject, folder) = pathOptions(bOpt.verbose, options)
-                    val dxc = compileNative(irNs, cOpt, bOpt, dxProject, folder)
+                    val dxc = compileNative(irNs, cOpt, bOpt, folder, dxProject)
                     SuccessfulTermination(dxc)
                 case CompilerFlag.IR =>
                     SuccessfulTermination("")
@@ -620,11 +619,11 @@ object Main extends App {
             }
         if (options contains "help")
             return BadUsageTermination("")
-        val (bOpt, dOpt, dxProject, folder): (BaseOptions, DxniOptions, PathOptions) =
+        val (bOpt, dOpt, dxProject, folder) =
             try {
-                val (dxProject, folder) = pathOptions(options)
                 val bOpt = baseOptions(options)
                 val dnxiOpt = dnxiOptions(options)
+                val (dxProject, folder) = pathOptions(bOpt.verbose, options)
                 (bOpt, dnxiOpt, dxProject, folder)
             } catch {
                 case e: Throwable =>
@@ -642,7 +641,7 @@ object Main extends App {
             dxProject.listFolder(folder)
         } catch {
             case e : Throwable =>
-                return UnsuccessfulTermination(s"Folder ${bOpt.folder} is invalid")
+                return UnsuccessfulTermination(s"Folder ${folder} is invalid")
         }
 
         try {
