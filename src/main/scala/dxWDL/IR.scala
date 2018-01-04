@@ -22,10 +22,15 @@ object IR {
     //
     // The attributes are used to encode DNAx applet input/output
     // specification fields, such as {help, suggestions, patterns}.
+    //
+    // The [originalFqn] is for a special case where a required call input
+    // was unspecified in the workflow. It can still be provided
+    // at the command line, or from an input file.
     case class CVar(name: String,
                     wdlType: WdlType,
                     attrs: DeclAttrs,
-                    ast: wdl4s.parser.WdlParser.Ast) {
+                    ast: wdl4s.parser.WdlParser.Ast,
+                    originalFqn: Option[String] = None) {
         // dx does not allow dots in variable names, so we
         // convert them to underscores.
         //
@@ -104,18 +109,11 @@ object IR {
     case object SArgEmpty extends SArg
     case class SArgConst(wdlValue: WdlValue) extends SArg
     case class SArgLink(stageName: String, argName: CVar) extends SArg
-
-    // The [fqn] is for a special case where a required call input
-    // was unspecified in the workflow. It can still be provided
-    // at the command line, or from an input file.
-    //
-    // fqn: the original name in the workflow
-    case class SArgWorkflowInput(argName: CVar,
-                                 fqn: Option[String] = None) extends SArg
+    case class SArgWorkflowInput(argName: CVar) extends SArg
 
     // Linking between a variable, and which stage we got
     // it from.
-    case class LinkedVar(cVar: IR.CVar, sArg: IR.SArg) {
+    case class LinkedVar(cVar: CVar, sArg: SArg) {
         def yaml : YamlObject = {
             YamlObject(
                 YamlString("cVar") -> IR.yaml(cVar),
@@ -286,7 +284,8 @@ object IR {
                 val m : Map[YamlValue, YamlValue] = Map(
                     YamlString("type") -> YamlString(cVar.wdlType.toWdlString),
                     YamlString("name") -> YamlString(cVar.name),
-                    YamlString("attributes") -> cVar.attrs.toYaml
+                    YamlString("attributes") -> cVar.attrs.toYaml,
+                    YamlString("originalFqn") -> cVar.originalFqn.toYaml
                 )
                 YamlObject(m)
             }
@@ -294,12 +293,14 @@ object IR {
             def read(value: YamlValue) = {
                 value.asYamlObject.getFields(YamlString("type"),
                                              YamlString("name"),
-                                             YamlString("attributes")) match {
-                    case Seq(YamlString(wdlType), YamlString(name), attrs) =>
+                                             YamlString("attributes"),
+                                             YamlString("originalFqn")) match {
+                    case Seq(YamlString(wdlType), YamlString(name), attrs, originalFqn) =>
                         new CVar(name,
                                  WdlType.fromWdlString(wdlType),
                                  attrs.convertTo[DeclAttrs],
-                                 WdlRewrite.INVALID_AST)
+                                 WdlRewrite.INVALID_AST,
+                                 originalFqn.convertTo[Option[String]])
                     case unrecognized =>
                         throw new Exception(s"CVar expected ${unrecognized}")
                 }
@@ -319,10 +320,9 @@ object IR {
                         YamlObject(YamlString("kind") -> YamlString("link"),
                                    YamlString("stageName") -> YamlString(stageName),
                                    YamlString("cVar") -> cVar.toYaml)
-                    case SArgWorkflowInput(cVar, fqn) =>
+                    case SArgWorkflowInput(cVar) =>
                         YamlObject(YamlString("kind") -> YamlString("workflow_input"),
-                                   YamlString("cVar") -> cVar.toYaml,
-                                   YamlString("fqn") -> fqn.toYaml)
+                                   YamlString("cVar") -> cVar.toYaml)
                 }
             }
 
@@ -351,9 +351,9 @@ object IR {
                                     case _ => throw new Exception("SArg malformed link")
                                 }
                             case Seq(YamlString("workflow_input")) =>
-                                yo.getFields(YamlString("cVar"), YamlString("fqn")) match {
-                                    case Seq(cVar, fqn) =>
-                                        SArgWorkflowInput(cVar.convertTo[CVar], fqn.convertTo[Option[String]])
+                                yo.getFields(YamlString("cVar")) match {
+                                    case Seq(cVar) =>
+                                        SArgWorkflowInput(cVar.convertTo[CVar])
                                     case _ => throw new Exception("SArg malformed link")
                                 }
                             case unrecognized =>

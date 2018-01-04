@@ -9,7 +9,6 @@
   "math.sum": 151,
   "math.div": 4,
   "math.sum2" : 15,
-  "math.ai_inc_maybe" : 3,
-  "math.fibo2" : 8,
-  "math.cond_inc_result" : 17
+  "math.ai_inc_maybe" : 18,
+  "math.fibo2" : 8
 }

@@ -434,7 +434,7 @@ case class CompilerNative(dxWDLrtId: String,
                     aplLinks.map{ case (key, (irApplet, dxApplet)) =>
                         // Reduce the information to what will be needed for runtime linking.
                         val appInputDefs: Map[String, WdlType] = irApplet.inputs.map{
-                            case CVar(name, wdlType, _, _) => (name -> wdlType)
+                            case CVar(name, wdlType, _, _, _) => (name -> wdlType)
                         }.toMap
                         val ali = AppletLinkInfo(appInputDefs, dxApplet)
                         key -> AppletLinkInfo.writeJson(ali)
@@ -625,7 +625,7 @@ case class CompilerNative(dxWDLrtId: String,
                                               DxlStage(dxStage, IORef.Output, argName.dxVarName))
                         val fields = WdlVarLinks.genFields(wvl, cVar.dxVarName)
                         m ++ fields.toMap
-                    case IR.SArgWorkflowInput(argName, _) =>
+                    case IR.SArgWorkflowInput(argName) =>
                         val wvl = WdlVarLinks(cVar.wdlType,
                                               cVar.attrs,
                                               DxlWorkflowInput(argName.dxVarName))
@@ -646,7 +646,7 @@ case class CompilerNative(dxWDLrtId: String,
                                stageDict: Map[String, DXWorkflowStage]): Vector[JsValue] = {
         // deal with default values
         val attrs:DeclAttrs = sArg match {
-            case IR.SArgWorkflowInput(_, _) =>
+            case IR.SArgWorkflowInput(_) =>
                 // input is provided by the user
                 DeclAttrs.empty
             case IR.SArgConst(wdlValue) =>
@@ -690,7 +690,7 @@ case class CompilerNative(dxWDLrtId: String,
                                       cVar.attrs,
                                       DxlStage(dxStage, IORef.Output, argName.dxVarName))
                 WdlVarLinks.genFields(wvl, cVar.dxVarName)
-            case IR.SArgWorkflowInput(argName: CVar, _) =>
+            case IR.SArgWorkflowInput(argName: CVar) =>
                 val wvl = WdlVarLinks(cVar.wdlType,
                                       cVar.attrs,
                                       DxlWorkflowInput(argName.dxVarName))

@@ -46,7 +46,7 @@ case class CompilerSimplifyExpr(wf: WdlWorkflow,
                             Some(parent)).evaluate(expr.ast) match {
             case Success(wdlType) => wdlType
             case Failure(f) =>
-                System.err.println(cef.couldNotEvaluateType(expr))
+                warning(verbose, cef.couldNotEvaluateType(expr))
                 throw f
         }
     }

@@ -258,9 +258,14 @@ object Main extends App {
 
 
     def prettyPrintIR(wdlSourceFile : Path,
+                      extraSuffix: Option[String],
                       irNs: IR.Namespace,
                       verbose: Boolean) : Unit = {
-        val trgName: String = Utils.replaceFileSuffix(wdlSourceFile, ".ir.yaml")
+        val suffix = extraSuffix match {
+            case None => ".ir.yaml"
+            case Some(x) => x + ".ir.yaml"
+        }
+        val trgName: String = Utils.replaceFileSuffix(wdlSourceFile, suffix)
         val trgPath = Utils.appCompileDirPath.resolve(trgName).toFile
         val yo = IR.yaml(irNs)
         val humanReadable = IR.prettyPrint(yo)
@@ -507,29 +512,32 @@ object Main extends App {
         // mangles the outputs, which is why we pass the originals
         // unmodified.
         val cef = new CompilerErrorFormatter(ns.terminalMap)
-        var irNs = CompilerIR(cef, cOpt.reorg, cOpt.locked, bOpt.verbose).apply(ns)
-        val allStageNames = irNs.workflow.get.stages.map{ stg => stg.name }.toVector
+        val irNs1 = CompilerIR(cef, cOpt.reorg, cOpt.locked, bOpt.verbose).apply(ns)
+        val allStageNames = irNs1.workflow.get.stages.map{ stg => stg.name }.toVector
 
-        irNs = cOpt.defaults match {
-            case Some(path) =>
+        // Write out the intermediate representation
+        prettyPrintIR(wdlSourceFile, Some(".proto"), irNs1, bOpt.verbose.on)
+
+        val irNs2 = (cOpt.defaults, irNs1.workflow) match {
+            case (Some(path), Some(irWf)) =>
                 // embed the defaults into the IR
-                InputFile(bOpt.verbose).embedDefaults(irNs, path)
-            case _ => irNs
+                InputFile(bOpt.verbose).embedDefaults(irNs1, irWf, path)
+            case (_,_) => irNs1
         }
 
         // make sure the stage order hasn't changed
-        val embedAllStageNames = irNs.workflow.get.stages.map{ stg => stg.name }.toVector
+        val embedAllStageNames = irNs2.workflow.get.stages.map{ stg => stg.name }.toVector
         assert(allStageNames == embedAllStageNames)
 
         // Write out the intermediate representation
-        prettyPrintIR(wdlSourceFile, irNs, bOpt.verbose.on)
+        prettyPrintIR(wdlSourceFile, None, irNs2, bOpt.verbose.on)
 
         // generate dx inputs from the Cromwell-style input specification.
-        irNs.workflow match {
+        irNs2.workflow match {
             case None => ()
             case Some(irwf) =>
                 cOpt.inputs.foreach{ path =>
-                    val dxInputs = InputFile(bOpt.verbose).dxFromCromwell(irNs, irwf, path)
+                    val dxInputs = InputFile(bOpt.verbose).dxFromCromwell(irNs2, irwf, path)
                     // write back out as xxxx.dx.json
                     val filename = Utils.replaceFileSuffix(path, ".dx.json")
                     val parent = path.getParent
@@ -540,7 +548,7 @@ object Main extends App {
                     Utils.trace(bOpt.verbose.on, s"Wrote dx JSON input file ${dxInputFile}")
                 }
         }
-        irNs
+        irNs2
     }
 
 

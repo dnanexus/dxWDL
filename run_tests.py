@@ -55,7 +55,7 @@ medium_test_list = [
 test_reorg=["files", "math"]
 test_defaults=["files", "math"]
 
-test_locked=["math", "conditionals", "advanced", "bad_status", "bad_status2",
+test_locked=["conditionals", "advanced", "bad_status", "bad_status2",
              "instance_types", "dict"]
 
 TestDesc = namedtuple('TestDesc', 'wf_name wdl_source wdl_input dx_input results')
