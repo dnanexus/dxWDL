@@ -4,7 +4,7 @@
 - Make sure regression tests pass
 - Update release notes and README
 - Make sure the version number in `ref.conf` is correct
-- Merge onto master branch, make sure travis tests pass
+- Merge onto master branch, make sure [travis tests](https://travis-ci.org/dnanexus/dxWDL) pass
 - Tag git with the release version
 - Build new externally visible release
   * run `build_jar.py --release`
