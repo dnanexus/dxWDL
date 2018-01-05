@@ -241,7 +241,6 @@ workflow PairedEndSingleSampleWorkflow {
   # Perform Base Quality Score Recalibration (BQSR) on the sorted BAM in parallel
   scatter (subgroup in CreateSequenceGroupingTSV.sequence_grouping) {
     # Generate the recalibration model by interval
-      Float bam_size = size(SortSampleBam.output_bam, "GB")
       call BaseRecalibrator {
       input:
         input_bam = SortSampleBam.output_bam,
@@ -256,7 +255,8 @@ workflow PairedEndSingleSampleWorkflow {
         ref_fasta = ref_fasta,
         ref_fasta_index = ref_fasta_index,
         # We need disk to localize the sharded bam due to the scatter.
-        disk_size = (agg_bam_size / bqsr_divisor) + ref_size + dbsnp_size + additional_disk + bam_size,
+        disk_size = (agg_bam_size / bqsr_divisor) + ref_size + dbsnp_size + additional_disk +
+          size(SortSampleBam.output_bam, "GB"),
         preemptible_tries = agg_preemptible_tries
     }
   }
@@ -276,6 +276,7 @@ workflow PairedEndSingleSampleWorkflow {
     call ApplyBQSR {
       input:
         input_bam = SortSampleBam.output_bam,
+        input_bai = SortSampleBam.output_bam_index,
         output_bam_basename = recalibrated_bam_basename,
         recalibration_report = GatherBqsrReports.output_bqsr_report,
         sequence_group_interval = subgroup,
@@ -283,7 +284,8 @@ workflow PairedEndSingleSampleWorkflow {
         ref_fasta = ref_fasta,
         ref_fasta_index = ref_fasta_index,
         # We need disk to localize the sharded bam and the sharded output due to the scatter.
-        disk_size = ((agg_bam_size * 3) / bqsr_divisor) + ref_size + additional_disk,
+        disk_size = ((agg_bam_size * 3) / bqsr_divisor) + ref_size + additional_disk +
+            size(SortSampleBam.output_bam, "GB"),
         compression_level = compression_level,
         preemptible_tries = agg_preemptible_tries
     }
@@ -443,13 +445,15 @@ workflow PairedEndSingleSampleWorkflow {
       input:
         contamination = CheckContamination.contamination,
         input_bam = GatherBamFiles.output_bam,
+        input_bai = GatherBamFiles.output_bam_index,
         interval_list = ScatterIntervalList.out[index],
         gvcf_basename = base_file_name,
         ref_dict = ref_dict,
         ref_fasta = ref_fasta,
         ref_fasta_index = ref_fasta_index,
         # Divide the total output GVCF size and the input bam size to account for the smaller scattered input and output.
-        disk_size = ((binned_qual_bam_size + GVCF_disk_size) / hc_divisor) + ref_size + additional_disk,
+        disk_size = ((binned_qual_bam_size + GVCF_disk_size) / hc_divisor) + ref_size + additional_disk +
+          size(GatherBamFiles.output_bam, "GB"),
         preemptible_tries = agg_preemptible_tries
      }
   }
@@ -1062,6 +1066,7 @@ task BaseRecalibrator {
 # Apply Base Quality Score Recalibration (BQSR) model
 task ApplyBQSR {
   File input_bam
+  File input_bai
   String output_bam_basename
   File recalibration_report
   Array[String] sequence_group_interval
@@ -1072,9 +1077,6 @@ task ApplyBQSR {
   Int compression_level
   Int preemptible_tries
 
-  parameter_meta {
-     input_bam : "stream"
-  }
   command {
     /usr/gitc/gatk4/gatk-launch --javaOptions "-XX:+PrintFlagsFinal -XX:+PrintGCTimeStamps -XX:+PrintGCDateStamps \
       -XX:+PrintGCDetails -Xloggc:gc_log.log \
@@ -1227,6 +1229,7 @@ task ValidateSamFile {
       IS_BISULFITE_SEQUENCED=false
   }
   runtime {
+    docker: "broadinstitute/genomes-in-the-cloud:2.3.1-1512499786"
     preemptible: preemptible_tries
     memory: "7 GB"
     disks: "local-disk " + sub(disk_size, "\\..*", "") + " HDD"
@@ -1295,6 +1298,7 @@ task CollectRawWgsMetrics {
       READ_LENGTH=${read_length}
   }
   runtime {
+    docker: "broadinstitute/genomes-in-the-cloud:2.3.1-1512499786"
     preemptible: preemptible_tries
     memory: "3 GB"
     disks: "local-disk " + sub(disk_size, "\\..*", "") + " HDD"
@@ -1319,6 +1323,7 @@ task CalculateReadGroupChecksum {
       OUTPUT=${read_group_md5_filename}
   }
   runtime {
+    docker: "broadinstitute/genomes-in-the-cloud:2.3.1-1512499786"
     preemptible: preemptible_tries
     memory: "2 GB"
     disks: "local-disk " + sub(disk_size, "\\..*", "") + " HDD"
@@ -1397,7 +1402,7 @@ task CheckContamination {
     preemptible: preemptible_tries
     memory: "2 GB"
     disks: "local-disk " + sub(disk_size, "\\..*", "") + " HDD"
-    docker: "us.gcr.io/broad-gotc-prod/verify-bam-id:c8a66425c312e5f8be46ab0c41f8d7a1942b6e16-1500298351"
+    docker: "dx://dxWDL:/contrib/dockerImages/verify-bam-id"
   }
   output {
     File selfSM = "${output_prefix}.selfSM"
@@ -1450,6 +1455,7 @@ task ScatterIntervalList {
 # Call variants on a single sample with HaplotypeCaller to produce a GVCF
 task HaplotypeCaller {
   File input_bam
+  File input_bai
   File interval_list
   String gvcf_basename
   File ref_dict
@@ -1458,10 +1464,6 @@ task HaplotypeCaller {
   Float? contamination
   Float disk_size
   Int preemptible_tries
-
-  parameter_meta {
-     input_bam : "stream"
-  }
 
   # We use interval_padding 500 below to make sure that the HaplotypeCaller has context on both sides around
   # the interval because the assembly uses them.

@@ -910,17 +910,23 @@ workflow w {
         extraVars
     }
 
-    // Compile a scatter block. This includes the block of declarations that
+
     // come before it [preDecls]. Since we are creating a special applet for this, we might as
     // well evaluate those expressions as well.
     //
     // Note: the front end pass ensures that the scatter collection is a variable.
     private def compileScatter(wfUnqualifiedName : String,
-                               stageName: String,
+                               stagePrefix: String,
                                preDecls: Vector[Declaration],
                                scatter: Scatter,
                                taskApplets: Map[String, (IR.Applet, Vector[CVar])],
                                env : CallEnv) : (IR.Stage, IR.Applet) = {
+        // create a memorable name
+        val firstCall = scatter.children.find{ scope => scope.isInstanceOf[WdlCall] }
+        val stageName = firstCall match {
+            case None => stagePrefix ++ "_" ++ scatter.collection.toWdlString
+            case Some(call) => stagePrefix ++ "_" ++ call.unqualifiedName
+        }
         trace(verbose.on, s"compiling scatter ${stageName}")
         val (topDecls, calls) = blockSplit(scatter.children.toVector)
 
@@ -961,11 +967,16 @@ workflow w {
     //
     // Note: the front end pass ensures that the if condition is a variable.
     private def compileIf(wfUnqualifiedName : String,
-                          stageName: String,
+                          stagePrefix: String,
                           preDecls: Vector[Declaration],
                           cond: If,
                           taskApplets: Map[String, (IR.Applet, Vector[CVar])],
                           env : CallEnv) : (IR.Stage, IR.Applet) = {
+        val firstCall = cond.children.find{ scope => scope.isInstanceOf[WdlCall] }
+        val stageName = firstCall match {
+            case None => stagePrefix ++ "_" ++ cond.condition.toWdlString
+            case Some(call) => stagePrefix ++ "_" ++ call.unqualifiedName
+        }
         trace(verbose.on, s"compiling If block ${stageName}")
         val (topDecls, calls) = blockSplit(cond.children.toVector)
 
@@ -1095,14 +1106,14 @@ workflow w {
                     (stage, Some(applet))
                 case BlockIf(preDecls, cond) =>
                     condNum += 1
-                    val stageName = Utils.IF ++ condNum.toString
-                    val (stage, applet) = compileIf(wf.unqualifiedName, stageName, preDecls,
+                    val stagePrefix = Utils.IF ++ condNum.toString
+                    val (stage, applet) = compileIf(wf.unqualifiedName, stagePrefix, preDecls,
                                                     cond, taskApplets, env)
                     (stage, Some(applet))
                 case BlockScatter(preDecls, scatter) =>
                     scatterNum += 1
-                    val stageName = Utils.SCATTER ++ scatterNum.toString
-                    val (stage, applet) = compileScatter(wf.unqualifiedName, stageName, preDecls,
+                    val stagePrefix = Utils.SCATTER ++ scatterNum.toString
+                    val (stage, applet) = compileScatter(wf.unqualifiedName, stagePrefix, preDecls,
                                                          scatter, taskApplets, env)
                     (stage, Some(applet))
                 case BlockScope(call: WdlCall) =>

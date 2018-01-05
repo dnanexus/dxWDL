@@ -3,7 +3,7 @@
 ## 0.57
 - Fixed bug in setting workflow defaults from JSON file
 - Improved behavior of the `sub` and `size` stdlib functions
-
+- Improved naming convention for scatter/if workflow stages.
 
 ## 0.56
 - Access to arguments in calls inside scatters. This
