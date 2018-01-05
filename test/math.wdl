@@ -26,12 +26,12 @@ workflow math {
 
     # Conversion from Array[Int] to Array[Array[Int]]
     scatter (k in [2,3,5]) {
-        call lib.RangeFromInt as rfi { input: len=k }
+        call lib.RangeFromInt as rfi
     }
 
     # simple If block
     if (ai < 10) {
-        call lib.Inc as cond_inc { input: i=ai}
+        call lib.Inc as cond_inc
     }
 
     if (12 < 10) {

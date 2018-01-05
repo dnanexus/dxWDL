@@ -22,10 +22,15 @@ object IR {
     //
     // The attributes are used to encode DNAx applet input/output
     // specification fields, such as {help, suggestions, patterns}.
+    //
+    // The [originalFqn] is for a special case where a required call input
+    // was unspecified in the workflow. It can still be provided
+    // at the command line, or from an input file.
     case class CVar(name: String,
                     wdlType: WdlType,
                     attrs: DeclAttrs,
-                    ast: wdl4s.parser.WdlParser.Ast) {
+                    ast: wdl4s.parser.WdlParser.Ast,
+                    originalFqn: Option[String] = None) {
         // dx does not allow dots in variable names, so we
         // convert them to underscores.
         //
@@ -46,7 +51,10 @@ object IR {
       */
     sealed trait InstanceType
     case object InstanceTypeDefault extends InstanceType
-    case class InstanceTypeConst(name: String) extends InstanceType
+    case class InstanceTypeConst(
+        dxInstaceType: Option[String],
+        memoryMB: Option[Int], diskGB: Option[Int], cpu: Option[Int]
+    ) extends InstanceType
     case object InstanceTypeRuntime extends InstanceType
 
     // A task may specify a docker image to run under. There are three
@@ -82,7 +90,6 @@ object IR {
       * @param output        WDL output arguments
       * @param instaceType   a platform instance name
       * @param docker        is docker used? if so, what image
-      * @param destination   folder path on the platform
       * @param kind          Kind of applet: task, scatter, ...
       * @param ns            WDL namespace
       */
@@ -91,7 +98,6 @@ object IR {
                       outputs: Vector[CVar],
                       instanceType: InstanceType,
                       docker: DockerImage,
-                      destination: String,
                       kind: AppletKind,
                       ns: WdlNamespace)
 
@@ -103,18 +109,11 @@ object IR {
     case object SArgEmpty extends SArg
     case class SArgConst(wdlValue: WdlValue) extends SArg
     case class SArgLink(stageName: String, argName: CVar) extends SArg
-
-    // The [fqn] is for a special case where a required call input
-    // was unspecified in the workflow. It can still be provided
-    // at the command line, or from an input file.
-    //
-    // fqn: the original name in the workflow
-    case class SArgWorkflowInput(argName: CVar,
-                                 fqn: Option[String] = None) extends SArg
+    case class SArgWorkflowInput(argName: CVar) extends SArg
 
     // Linking between a variable, and which stage we got
     // it from.
-    case class LinkedVar(cVar: IR.CVar, sArg: IR.SArg) {
+    case class LinkedVar(cVar: CVar, sArg: SArg) {
         def yaml : YamlObject = {
             YamlObject(
                 YamlString("cVar") -> IR.yaml(cVar),
@@ -145,21 +144,22 @@ object IR {
 
     // Automatic conversion to/from Yaml
     object IrInternalYamlProtocol extends DefaultYamlProtocol {
+        implicit val InstanceTypeConstFormat = yamlFormat4(InstanceTypeConst)
+
         implicit object InstanceTypeYamlFormat extends YamlFormat[InstanceType] {
             def write(it: InstanceType) =
                 it match {
                     case InstanceTypeDefault =>
                         YamlString("Default")
-                    case InstanceTypeConst(name) =>
-                        // we assume the name is not one of the other options
-                        YamlString(name)
+                    case itc : InstanceTypeConst =>
+                        itc.toYaml
                     case InstanceTypeRuntime =>
                         YamlString("Runtime")
                 }
             def read(value: YamlValue) = value match {
                 case YamlString("Default") => InstanceTypeDefault
                 case YamlString("Runtime") => InstanceTypeRuntime
-                case YamlString(name) => InstanceTypeConst(name)
+                case YamlObject(_) => value.convertTo[InstanceTypeConst]
                 case unrecognized => throw new Exception(s"InstanceType expected ${unrecognized}")
             }
         }
@@ -284,7 +284,8 @@ object IR {
                 val m : Map[YamlValue, YamlValue] = Map(
                     YamlString("type") -> YamlString(cVar.wdlType.toWdlString),
                     YamlString("name") -> YamlString(cVar.name),
-                    YamlString("attributes") -> cVar.attrs.toYaml
+                    YamlString("attributes") -> cVar.attrs.toYaml,
+                    YamlString("originalFqn") -> cVar.originalFqn.toYaml
                 )
                 YamlObject(m)
             }
@@ -292,12 +293,14 @@ object IR {
             def read(value: YamlValue) = {
                 value.asYamlObject.getFields(YamlString("type"),
                                              YamlString("name"),
-                                             YamlString("attributes")) match {
-                    case Seq(YamlString(wdlType), YamlString(name), attrs) =>
+                                             YamlString("attributes"),
+                                             YamlString("originalFqn")) match {
+                    case Seq(YamlString(wdlType), YamlString(name), attrs, originalFqn) =>
                         new CVar(name,
                                  WdlType.fromWdlString(wdlType),
                                  attrs.convertTo[DeclAttrs],
-                                 WdlRewrite.INVALID_AST)
+                                 WdlRewrite.INVALID_AST,
+                                 originalFqn.convertTo[Option[String]])
                     case unrecognized =>
                         throw new Exception(s"CVar expected ${unrecognized}")
                 }
@@ -317,10 +320,9 @@ object IR {
                         YamlObject(YamlString("kind") -> YamlString("link"),
                                    YamlString("stageName") -> YamlString(stageName),
                                    YamlString("cVar") -> cVar.toYaml)
-                    case SArgWorkflowInput(cVar, fqn) =>
+                    case SArgWorkflowInput(cVar) =>
                         YamlObject(YamlString("kind") -> YamlString("workflow_input"),
-                                   YamlString("cVar") -> cVar.toYaml,
-                                   YamlString("fqn") -> fqn.toYaml)
+                                   YamlString("cVar") -> cVar.toYaml)
                 }
             }
 
@@ -349,9 +351,9 @@ object IR {
                                     case _ => throw new Exception("SArg malformed link")
                                 }
                             case Seq(YamlString("workflow_input")) =>
-                                yo.getFields(YamlString("cVar"), YamlString("fqn")) match {
-                                    case Seq(cVar, fqn) =>
-                                        SArgWorkflowInput(cVar.convertTo[CVar], fqn.convertTo[Option[String]])
+                                yo.getFields(YamlString("cVar")) match {
+                                    case Seq(cVar) =>
+                                        SArgWorkflowInput(cVar.convertTo[CVar])
                                     case _ => throw new Exception("SArg malformed link")
                                 }
                             case unrecognized =>
@@ -377,7 +379,6 @@ object IR {
                     YamlString("outputs") -> applet.outputs.toYaml,
                     YamlString("instanceType") -> applet.instanceType.toYaml,
                     YamlString("docker") -> applet.docker.toYaml,
-                    YamlString("destination") -> YamlString(applet.destination),
                     YamlString("kind") -> applet.kind.toYaml,
                     YamlString("ns") -> YamlString(wdlCode))
             }
@@ -391,7 +392,6 @@ object IR {
                             YamlString("outputs"),
                             YamlString("instanceType"),
                             YamlString("docker"),
-                            YamlString("destination"),
                             YamlString("kind"),
                             YamlString("ns")) match {
                             case Seq(
@@ -400,7 +400,6 @@ object IR {
                                 outputs,
                                 instanceType,
                                 docker,
-                                YamlString(destination),
                                 kind,
                                 YamlString(wdlCode)) =>
                                 Applet(name,
@@ -408,7 +407,6 @@ object IR {
                                        outputs.convertTo[Vector[CVar]],
                                        instanceType.convertTo[InstanceType],
                                        docker.convertTo[DockerImage],
-                                       destination,
                                        kind.convertTo[AppletKind],
                                        WdlNamespace.loadUsingSource(wdlCode, None, None).get)
                         }

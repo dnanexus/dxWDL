@@ -10,9 +10,11 @@ import scala.collection.mutable.HashMap
 import spray.json._
 import Utils.{dxFileFromJsValue, downloadFile, getMetaDirPath, jsValueOfJsonNode,
     DX_FUNCTIONS_FILES, DX_URL_PREFIX, readFileContent, writeFileContent}
+import wdl4s.parser.MemoryUnit
 import wdl4s.wdl.expression.WdlStandardLibraryFunctions
 import wdl4s.wdl.TsvSerializable
 import wdl4s.wdl.values._
+import wdl4s.wdl.types._
 
 
 object DxFunctions extends WdlStandardLibraryFunctions {
@@ -189,7 +191,7 @@ object DxFunctions extends WdlStandardLibraryFunctions {
     override def write_lines(params: Seq[Try[WdlValue]]): Try[WdlFile] =
         writeToTsv(params, classOf[WdlArray])
     override def write_map(params: Seq[Try[WdlValue]]): Try[WdlFile] =
-        writeToTsv(params, classOf[WdlMap])
+       writeToTsv(params, classOf[WdlMap])
     override def write_object(params: Seq[Try[WdlValue]]): Try[WdlFile] =
         writeToTsv(params, classOf[WdlObject])
     override def write_objects(params: Seq[Try[WdlValue]]): Try[WdlFile] =
@@ -200,77 +202,54 @@ object DxFunctions extends WdlStandardLibraryFunctions {
         Failure(new NotImplementedError(s"write_json()"))
 
     override def size(params: Seq[Try[WdlValue]]): Try[WdlFloat] = {
-        // Extract the filename/path argument
-        try {
-            val fileName:String = params match {
+        // Inner function: is this a file type, or an optional containing a file type?
+        def isOptionalOfFileType(wdlType: WdlType): Boolean = wdlType match {
+            case f if WdlFileType.isCoerceableFrom(f) => true
+            case WdlOptionalType(inner) => isOptionalOfFileType(inner)
+            case _ => false
+        }
+
+        // Inner function: Get the file size, allowing for unpacking of optionals
+        def optionalSafeFileSize(value: WdlValue): Double = value match {
+            case f if f.isInstanceOf[WdlFile] || WdlFileType.isCoerceableFrom(f.wdlType) =>
+                // If this is not an absolute path, we assume the file
+                // is located in the DX home directory
+                val fileName = f.valueString
+                val path:String =
+                    if (fileName.startsWith("/")) fileName
+                    else dxHomeDir.resolve(fileName).toString
+                val fSize:Long = remoteFiles.get(path) match {
+                    case Some(dxFile) =>
+                        // File has not been downloaded yet.
+                        // Query the platform how big it is; do not download it.
+                        dxFile.describe().getSize()
+                    case None =>
+                        // File is local
+                        val p = Paths.get(fileName)
+                        p.toFile.length
+                }
+                fSize.toDouble
+            case WdlOptionalValue(_, Some(o)) => optionalSafeFileSize(o)
+            case WdlOptionalValue(f, None) if isOptionalOfFileType(f) => 0d
+            case _ => throw new Exception(
+                s"The 'size' method expects a 'File' or 'File?' argument but instead got ${value.wdlType}.")
+        }
+
+        Try {
+            params match {
                 case _ if params.length == 1 =>
-                    params.head.get match {
-                        case WdlSingleFile(s) => s
-                        case WdlString(s) => s
-                        case x => throw new AppException(s"size operator cannot be applied to ${x.toWdlString}")
+                    val fileSize = optionalSafeFileSize(params.head.get)
+                    WdlFloat(fileSize)
+                case _ if params.length == 2 =>
+                    val fileSize:Double = optionalSafeFileSize(params.head.get)
+                    val unit:Double = params.tail.head match {
+                        case Success(WdlString(suffix)) =>
+                            MemoryUnit.fromSuffix(suffix).bytes.toDouble
+                        case other => throw new IllegalArgumentException(s"The unit must a string type ${other}")
                     }
-                case _ =>
-                    throw new IllegalArgumentException(
-                        s"""|Invalid number of parameters for engine function size: ${params.length}.
-                            |size takes one parameter.""".stripMargin.trim)
+                    WdlFloat((fileSize/unit).toFloat)
+                case _ => throw new UnsupportedOperationException(s"Expected one or two parameters but got ${params.length} instead.")
             }
-
-            // If this is not an absolute path, we assume the file
-            // is located in the DX home directory
-            val path:String =
-                if (fileName.startsWith("/")) fileName
-                else dxHomeDir.resolve(fileName).toString
-            val fSize:Long = remoteFiles.get(path) match {
-                case Some(dxFile) =>
-                    // File has not been downloaded yet.
-                    // Query the platform how big it is; do not download it.
-                    dxFile.describe().getSize()
-                case None =>
-                    // File is local
-                    val p = Paths.get(fileName)
-                    p.toFile.length
-            }
-            Success(WdlFloat(fSize.toFloat))
-        } catch {
-            case e : Throwable => Failure(e)
         }
     }
-
-
-    private def stringOf(x: WdlValue) : String = {
-        x match {
-            case WdlString(s) => s
-            case WdlSingleFile(path) => path
-            case _ => throw new Exception(s"Not file/string type ${x.typeName} ${x.toWdlString}")
-        }
-    }
-
-    private def stringOf(p: Try[WdlValue]) : String = {
-        p match {
-            case Success(x) => x.toWdlString
-            case Failure(e) => s"Failure ${Utils.exceptionToString(e)}"
-        }
-    }
-
-    override def sub(params: Seq[Try[WdlValue]]): Try[WdlString] =
-        params.size match {
-            case 3 => (params(0), params(1), params(2)) match {
-                case (Success(x), Success(y), Success(z)) =>
-                    try {
-                        val (str, pattern, replace) = (stringOf(x), stringOf(y), stringOf(z))
-                        Success(WdlString(pattern.r.replaceAllIn(str, replace)))
-                    } catch {
-                        case e : Throwable =>
-                            val msg = Utils.exceptionToString(e)
-                            Failure(new Exception(s"sub requires three file/string arguments, ${msg}"))
-                    }
-                case _ =>
-                    val (p0,p1,p2) = (stringOf(params(0)), stringOf(params(1)), stringOf(params(2)))
-                    Failure(new Exception(s"sub requires three valid arguments, got (${p0}, ${p1}, ${p2})"))
-            }
-            case n => Failure(
-                new IllegalArgumentException(
-                    s"""|Invalid number of parameters for engine function sub: $n.
-                        |sub takes exactly 3 parameters.""".stripMargin.trim))
-        }
 }

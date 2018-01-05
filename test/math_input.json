@@ -4,5 +4,7 @@
   "math.x_di" : 1000,
   "math.ai": 2,
   "math.bi": 3,
-  "math.numbers" : [2,3,5]
+  "math.numbers" : [2,3,5],
+  "math.rfi.len" : 4,
+  "math.cond_inc.i" : 17
 }

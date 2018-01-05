@@ -3,7 +3,7 @@
 ## Release check list
 - Make sure regression tests pass
 - Update release notes and README
-- Make sure the version number in `reference.conf` is correct
+- Make sure the version number in `ref.conf` is correct
 - Merge onto master branch, make sure travis tests pass
 - Tag git with the release version
 - Build new externally visible release

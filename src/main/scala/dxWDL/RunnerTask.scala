@@ -502,7 +502,8 @@ case class RunnerTask(task:WdlTask,
         val memory = evalAttr("memory")
         val diskSpace = evalAttr("disks")
         val cores = evalAttr("cpu")
-        val iType = instanceTypeDB.apply(dxInstaceType, memory, diskSpace, cores)
+        val iTypeRaw = InstanceTypeDB.parse(dxInstaceType, memory, diskSpace, cores)
+        val iType = instanceTypeDB.apply(iTypeRaw)
         appletLog(s"""|calcInstanceType memory=${memory} disk=${diskSpace}
                       |cores=${cores} instancetype=${iType}"""
                       .stripMargin.replaceAll("\n", " "))

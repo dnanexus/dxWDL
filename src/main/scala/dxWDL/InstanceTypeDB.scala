@@ -160,16 +160,43 @@ case class InstanceTypeDB(instances: Vector[DxInstanceType]) {
         iType.name
     }
 
+    def apply(iType: IR.InstanceTypeConst) = {
+        iType.dxInstaceType match {
+            case None =>
+                choose3Attr(iType.memoryMB, iType.diskGB, iType.cpu)
+            case Some(dxIType) =>
+                // Shortcut the entire calculation, and provide the dx instance type directly
+                chooseShortcut(dxIType)
+        }
+    }
+
+    // sort the instances, and print them out
+    def prettyPrint() : String = {
+        var remain : Set[DxInstanceType] = instances.toSet
+        var sortediTypes : Vector[DxInstanceType] = Vector()
+        while (!remain.isEmpty) {
+            val smallest = calcMinimalInstanceType(remain)
+            sortediTypes = sortediTypes :+ smallest
+            remain = remain - smallest
+        }
+        sortediTypes.toJson.prettyPrint
+    }
+}
+
+object InstanceTypeDB extends DefaultJsonProtocol {
+    // support automatic conversion to/from JsValue
+    implicit val instanceTypeDBFormat = jsonFormat1(InstanceTypeDB.apply)
+
     // Currently, we support only constants.
-    def apply(dxInstaceType: Option[WdlValue],
+    def parse(dxInstaceType: Option[WdlValue],
               wdlMemoryMB: Option[WdlValue],
               wdlDiskGB: Option[WdlValue],
-              wdlCpu: Option[WdlValue]) : String = {
+              wdlCpu: Option[WdlValue]) : IR.InstanceTypeConst = {
         // Shortcut the entire calculation, and provide the dx instance type directly
         dxInstaceType match {
             case None => None
             case Some(WdlString(iType)) =>
-                return chooseShortcut(iType)
+                return IR.InstanceTypeConst(Some(iType), None, None, None)
             case Some(x) =>
                 throw new Exception(s"""|dxInstaceType has to evaluate to a
                                         |WdlString type ${x.toWdlString}"""
@@ -239,25 +266,8 @@ case class InstanceTypeDB(instances: Vector[DxInstanceType]) {
             case Some(WdlFloat(x)) => Some(x.toInt)
             case Some(x) => throw new Exception(s"Cpu has to evaluate to a numeric value ${x}")
         }
-        return choose3Attr(memoryMB, diskGB, cpu)
+        return IR.InstanceTypeConst(None, memoryMB, diskGB, cpu)
     }
-
-    // sort the instances, and print them out
-    def prettyPrint() : String = {
-        var remain : Set[DxInstanceType] = instances.toSet
-        var sortediTypes : Vector[DxInstanceType] = Vector()
-        while (!remain.isEmpty) {
-            val smallest = calcMinimalInstanceType(remain)
-            sortediTypes = sortediTypes :+ smallest
-            remain = remain - smallest
-        }
-        sortediTypes.toJson.prettyPrint
-    }
-}
-
-object InstanceTypeDB extends DefaultJsonProtocol {
-    // support automatic conversion to/from JsValue
-    implicit val instanceTypeDBFormat = jsonFormat1(InstanceTypeDB.apply)
 
     // Extract an integer fields from a JsObject
     private def getJsIntField(js: JsValue, fieldName:String) : Int = {
