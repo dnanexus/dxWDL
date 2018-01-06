@@ -213,7 +213,7 @@ object Utils {
 
     // Check if the WDL expression is a constant. If so, calculate and return it.
     // Otherwise, return None.
-    def ifConstEval(expr: WdlExpression) : Option[WdlValue] = {
+    private def ifConstEval(expr: WdlExpression) : Option[WdlValue] = {
         try {
             def lookup(x:String) : WdlValue = {
                 throw new VariableAccessException()
@@ -237,6 +237,13 @@ object Utils {
         }
     }
 
+    def evalConst(expr: WdlExpression) : WdlValue = {
+        ifConstEval(expr) match {
+            case None => throw new Exception(s"Expression ${expr} is not a WDL constant")
+            case Some(wdlValue) => wdlValue
+        }
+    }
+
     // Is a declaration of a task/workflow an input for the
     // compiled dx:applet/dx:workflow ?
     //
@@ -255,9 +262,7 @@ object Utils {
             case (None,_) => true
             case (Some(_), WdlOptionalType(_)) => true
             case (Some(expr), _) if isExpressionConst(expr) =>
-                //true
-                // This causes bugs that we will deal with later.
-                false
+                true
             case (_,_) => false
         }
     }

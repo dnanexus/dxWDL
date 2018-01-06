@@ -5,7 +5,8 @@ package dxWDL
 import IR.{CVar, LinkedVar, SArg}
 import net.jcazevedo.moultingyaml._
 import scala.util.{Failure, Success, Try}
-import Utils.{COMMON, DXWorkflowStage, DX_URL_PREFIX, LAST_STAGE, ifConstEval, isOptional,
+import Utils.{COMMON, DXWorkflowStage, DX_URL_PREFIX, LAST_STAGE,
+    isExpressionConst, evalConst, isOptional,
     isNativeDxType, OUTPUT_SECTION, REORG, trace, warning}
 import wdl4s.wdl._
 import wdl4s.wdl.AstTools
@@ -480,17 +481,16 @@ workflow w {
                 val attrs = decl.expression match {
                     case None => taskAttrs
                     case Some(expr) =>
-                        ifConstEval(expr) match {
-                            case None => taskAttrs
-                            case Some(wdlConst) =>
-                                // the constant is a default value.
-                                val wvl = WdlVarLinks.importFromWDL(decl.wdlType,
-                                                                    DeclAttrs.empty,
-                                                                    wdlConst,
-                                                                    IODirection.Zero)
-                                val jsv = WdlVarLinks.getRawJsValue(wvl)
-                                taskAttrs.setDefault(jsv)
-                        }
+                        // the constant is a default value
+                        if (!isExpressionConst(expr))
+                            throw new Exception(cef.taskInputDefaultMustBeConst(expr))
+                        val wdlConst:WdlValue = evalConst(expr)
+                        val wvl = WdlVarLinks.importFromWDL(decl.wdlType,
+                                                            DeclAttrs.empty,
+                                                            wdlConst,
+                                                            IODirection.Zero)
+                        val jsv = WdlVarLinks.getRawJsValue(wvl)
+                        taskAttrs.setDefault(jsv)
                 }
                 Some(CVar(decl.unqualifiedName, decl.wdlType, attrs, decl.ast))
             } else {
@@ -505,16 +505,20 @@ workflow w {
         val docker = task.runtimeAttributes.attrs.get("docker") match {
             case None =>
                 IR.DockerImageNone
-            case Some(expr) =>
-                Utils.ifConstEval(expr) match {
-                    case Some(WdlString(url)) if url.startsWith(DX_URL_PREFIX) =>
+            case Some(expr) if isExpressionConst(expr) =>
+                val wdlConst = evalConst(expr)
+                wdlConst match {
+                    case WdlString(url) if url.startsWith(DX_URL_PREFIX) =>
                         // A constant image specified with a DX URL
                         val dxRecord = DxPath.lookupDxURLRecord(url)
                         IR.DockerImageDxAsset(dxRecord)
                     case _ =>
-                        // Image will be downloaded from the network
+                        // Probably a public docker image
                         IR.DockerImageNetwork
                 }
+            case _ =>
+                // Image will be downloaded from the network
+                IR.DockerImageNetwork
         }
         // The docker container is on the platform, we need to remove
         // the dxURLs in the runtime section, to avoid a runtime
@@ -910,23 +914,16 @@ workflow w {
         extraVars
     }
 
-
     // come before it [preDecls]. Since we are creating a special applet for this, we might as
     // well evaluate those expressions as well.
     //
     // Note: the front end pass ensures that the scatter collection is a variable.
     private def compileScatter(wfUnqualifiedName : String,
-                               stagePrefix: String,
+                               stageName: String,
                                preDecls: Vector[Declaration],
                                scatter: Scatter,
                                taskApplets: Map[String, (IR.Applet, Vector[CVar])],
                                env : CallEnv) : (IR.Stage, IR.Applet) = {
-        // create a memorable name
-        val firstCall = scatter.children.find{ scope => scope.isInstanceOf[WdlCall] }
-        val stageName = firstCall match {
-            case None => stagePrefix ++ "_" ++ scatter.collection.toWdlString
-            case Some(call) => stagePrefix ++ "_" ++ call.unqualifiedName
-        }
         trace(verbose.on, s"compiling scatter ${stageName}")
         val (topDecls, calls) = blockSplit(scatter.children.toVector)
 
@@ -967,16 +964,11 @@ workflow w {
     //
     // Note: the front end pass ensures that the if condition is a variable.
     private def compileIf(wfUnqualifiedName : String,
-                          stagePrefix: String,
+                          stageName: String,
                           preDecls: Vector[Declaration],
                           cond: If,
                           taskApplets: Map[String, (IR.Applet, Vector[CVar])],
                           env : CallEnv) : (IR.Stage, IR.Applet) = {
-        val firstCall = cond.children.find{ scope => scope.isInstanceOf[WdlCall] }
-        val stageName = firstCall match {
-            case None => stagePrefix ++ "_" ++ cond.condition.toWdlString
-            case Some(call) => stagePrefix ++ "_" ++ call.unqualifiedName
-        }
         trace(verbose.on, s"compiling If block ${stageName}")
         val (topDecls, calls) = blockSplit(cond.children.toVector)
 
@@ -1061,27 +1053,34 @@ workflow w {
                         // A workflow input
                         (cVar, IR.SArgWorkflowInput(cVar))
                     case Some(expr) =>
-                        Utils.ifConstEval(expr) match {
-                            case Some(wdlConst) =>
-                                if (Utils.isOptional(decl.wdlType)) {
-                                    // the constant is a default value
-                                    val wvl = WdlVarLinks.importFromWDL(cVar.wdlType,
-                                                                        DeclAttrs.empty,
-                                                                        wdlConst,
-                                                                        IODirection.Zero)
-                                    val jsv = WdlVarLinks.getRawJsValue(wvl)
-                                    val attrs = DeclAttrs.empty.setDefault(jsv)
-                                    val cVarWithDflt = CVar(decl.unqualifiedName, decl.wdlType,
-                                                            attrs, decl.ast)
-                                    (cVarWithDflt, IR.SArgWorkflowInput(cVar))
-                                } else {
-                                    (cVar, IR.SArgConst(wdlConst))
-                                }
-                            case None =>
-                                throw new Exception(cef.workflowInputDefaultMustBeConst(expr))
-                        }
+                        // the constant is a default value
+                        if (!isExpressionConst(expr))
+                            throw new Exception(cef.workflowInputDefaultMustBeConst(expr))
+                        val wdlConst:WdlValue = evalConst(expr)
+                        val wvl = WdlVarLinks.importFromWDL(cVar.wdlType,
+                                                            DeclAttrs.empty,
+                                                            wdlConst,
+                                                            IODirection.Zero)
+                        val jsv = WdlVarLinks.getRawJsValue(wvl)
+                        val attrs = DeclAttrs.empty.setDefault(jsv)
+                        val cVarWithDflt = CVar(decl.unqualifiedName, decl.wdlType,
+                                                attrs, decl.ast)
+                        (cVarWithDflt, IR.SArgWorkflowInput(cVar))
                 }
         }.toVector
+    }
+
+    // create a human readable name for a stage. Use
+    // the name of the first call in the block, unless there are
+    // no calls at all.
+    private def humanReadableStageName(stagePrefix: String,
+                                       block: Scope,
+                                       backExpr: WdlExpression) : String = {
+        val firstCall = block.children.find{ scope => scope.isInstanceOf[WdlCall] }
+        firstCall match {
+            case None => stagePrefix ++ "_" ++ backExpr.toWdlString
+            case Some(call) => stagePrefix ++ "_" ++ call.unqualifiedName
+        }
     }
 
     private def buildWorkflowBackbone(
@@ -1106,14 +1105,18 @@ workflow w {
                     (stage, Some(applet))
                 case BlockIf(preDecls, cond) =>
                     condNum += 1
-                    val stagePrefix = Utils.IF ++ condNum.toString
-                    val (stage, applet) = compileIf(wf.unqualifiedName, stagePrefix, preDecls,
+                    val stageName = humanReadableStageName(Utils.IF ++ condNum.toString,
+                                                           cond,
+                                                           cond.condition)
+                    val (stage, applet) = compileIf(wf.unqualifiedName, stageName, preDecls,
                                                     cond, taskApplets, env)
                     (stage, Some(applet))
                 case BlockScatter(preDecls, scatter) =>
                     scatterNum += 1
-                    val stagePrefix = Utils.SCATTER ++ scatterNum.toString
-                    val (stage, applet) = compileScatter(wf.unqualifiedName, stagePrefix, preDecls,
+                    val stageName = humanReadableStageName(Utils.SCATTER ++ scatterNum.toString,
+                                                           scatter,
+                                                           scatter.collection)
+                    val (stage, applet) = compileScatter(wf.unqualifiedName, stageName, preDecls,
                                                          scatter, taskApplets, env)
                     (stage, Some(applet))
                 case BlockScope(call: WdlCall) =>
@@ -1298,15 +1301,15 @@ workflow w {
         // Only a subset of the workflow declarations are considered inputs.
         // Limit the search to the top block of declarations. Those that come at the very
         // beginning of the workflow.
-        val (topDeclBlock, wfProperBlocks) = Utils.splitBlockDeclarations(children.toList)
-        val (wfInputDecls, topDeclNonInputs) = topDeclBlock.partition{
+        val (wfInputDecls, wfProper) = children.toList.partition{
             case decl:Declaration =>
                 Utils.declarationIsInput(decl) &&
                 !Utils.isGeneratedVar(decl.unqualifiedName)
             case _ => false
         }
-        val wfProper = topDeclNonInputs ++ wfProperBlocks
-        val wfInputs:Vector[(CVar, SArg)] = buildWorkflowInputs(wfInputDecls)
+        val wfInputs:Vector[(CVar, SArg)] = buildWorkflowInputs(
+            wfInputDecls.map{ _.asInstanceOf[Declaration]}
+        )
 
         // Create a stage per call/scatter-block/declaration-block
         val subBlocks = splitIntoBlocks(wfProper)

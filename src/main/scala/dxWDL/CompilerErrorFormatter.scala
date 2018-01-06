@@ -33,14 +33,6 @@ case class CompilerErrorFormatter(terminalMap: Map[Terminal, WorkflowSource]) {
 
     }
 
-    def workflowInputDefaultMustBeConst(expr: WdlExpression) = {
-        val t: Terminal = AstTools.findTerminals(expr.ast).head
-        s"""|Workflow input expression ${expr.toWdlString} must be const or variable
-            |
-            |${pointToSource(t)}
-            |""".stripMargin
-    }
-
     def expressionMustBeConstOrVar(expr: WdlExpression) : String = {
         val t: Terminal = AstTools.findTerminals(expr.ast).head
         s"""|Expression ${expr.toWdlString} must be const or variable
@@ -120,6 +112,14 @@ case class CompilerErrorFormatter(terminalMap: Map[Terminal, WorkflowSource]) {
             |""".stripMargin
     }
 
+    def taskInputDefaultMustBeConst(expr: WdlExpression) = {
+        val t: Terminal = AstTools.findTerminals(expr.ast).head
+        s"""|Task input expression ${expr.toWdlString} must be const or variable
+            |
+            |${pointToSource(t)}
+            |""".stripMargin
+    }
+
     // debugging
     def traceExpression(ast: Ast) : String = {
         val t: Terminal = AstTools.findTerminals(ast).head
@@ -151,6 +151,14 @@ case class CompilerErrorFormatter(terminalMap: Map[Terminal, WorkflowSource]) {
         s"""|Undefined member access (${fqn})
             |
             |${pointToSource(lhsAst)}
+            |""".stripMargin
+    }
+
+    def workflowInputDefaultMustBeConst(expr: WdlExpression) = {
+        val t: Terminal = AstTools.findTerminals(expr.ast).head
+        s"""|Workflow input expression ${expr.toWdlString} must be const or variable
+            |
+            |${pointToSource(t)}
             |""".stripMargin
     }
 }

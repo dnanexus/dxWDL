@@ -1264,6 +1264,7 @@ task CollectWgsMetrics {
       READ_LENGTH=${read_length}
   }
   runtime {
+    docker: "broadinstitute/genomes-in-the-cloud:2.3.1-1512499786"
     preemptible: preemptible_tries
     memory: "3 GB"
     disks: "local-disk " + sub(disk_size, "\\..*", "") + " HDD"
@@ -1399,10 +1400,10 @@ task CheckContamination {
     CODE
   >>>
   runtime {
+    docker: "dx://dxWDL:/contrib/dockerImages/verify-bam-id"
     preemptible: preemptible_tries
     memory: "2 GB"
     disks: "local-disk " + sub(disk_size, "\\..*", "") + " HDD"
-    docker: "dx://dxWDL:/contrib/dockerImages/verify-bam-id"
   }
   output {
     File selfSM = "${output_prefix}.selfSM"
@@ -1447,8 +1448,8 @@ task ScatterIntervalList {
     Int interval_count = read_int(stdout())
   }
   runtime {
-      memory: "2 GB"
       docker: "broadinstitute/genomes-in-the-cloud:2.3.1-1512499786"
+      memory: "2 GB"
   }
 }
 

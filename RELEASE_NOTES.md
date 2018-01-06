@@ -1,5 +1,11 @@
 # Release Notes
 
+## 0.58
+- Adhering to WDL spec: a declaration set to a constant is
+treated as an input. For example:
+```
+```
+
 ## 0.57
 - Fixed bug in setting workflow defaults from JSON file
 - Improved behavior of the `sub` and `size` stdlib functions
