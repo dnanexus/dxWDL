@@ -85,7 +85,7 @@ workflow math {
     }
 
     call lib.Sum as inc_sum {input: ints = inc2.result}
-#    Pair[Float,Int] p = (1.0, 19)
+    Pair[Float,Int] p = (1.0, 19)
 
     output {
         Int incA_result = incA.result
@@ -106,6 +106,6 @@ workflow math {
 
         # Expressions in output section
         Int expr1 = ai + bi
-#        Float z = p.left
+        Float z = p.left
     }
 }
