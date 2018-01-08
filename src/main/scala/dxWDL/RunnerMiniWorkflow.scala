@@ -332,6 +332,7 @@ case class RunnerMiniWorkflow(exportVars: Set[String],
                 val dxJob : DXJob = apLinkInfo.dxApplet
                     .newRun()
                     .setRawInput(Utils.jsonNodeOfJsValue(inputs))
+                    .setName(callUnqName)
                     .putProperty("call", callUnqName)
                     .putProperty("seq_number", launchSeqNum.toString)
                     .run()
@@ -403,9 +404,11 @@ case class RunnerMiniWorkflow(exportVars: Set[String],
         // iterate over the calls
         calls.foreach { case (call,apLinkInfo) =>
             val inputs : JsValue = buildAppletInputs(call, apLinkInfo, innerEnv)
-            appletLog(s"call=${callUniqueName(call)} inputs=${inputs}")
+            val callUnqName = callUniqueName(call)
+            appletLog(s"call=${callUnqName} inputs=${inputs}")
             val dxJob: DXJob = apLinkInfo.dxApplet
                 .newRun()
+                .setName(callUnqName)
                 .setRawInput(Utils.jsonNodeOfJsValue(inputs))
                 .run()
             val jobOutputs: Env = jobOutputEnv(call, dxJob)

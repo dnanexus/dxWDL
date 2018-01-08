@@ -127,6 +127,7 @@ object Utils {
     val LOCAL_DX_FILES_CHECKPOINT_FILE = "localized_files.json"
     val LINK_INFO_FILENAME = "linking.json"
     val MAX_STRING_LEN = 8 * 1024     // Long strings cause problems with bash and the UI
+    val MAX_STAGE_NAME_LEN = 60       // maximal length of a workflow stage name
     val MAX_NUM_FILES_MOVE_LIMIT = 1000
     val OUTPUT_SECTION = "outputs"
     val REORG = "reorg"

@@ -2,9 +2,17 @@
 
 ## 0.58
 - Adhering to WDL spec: a declaration set to a constant is
-treated as an input. For example:
+treated as an input. In the example, `contamination` is compiled to
+a workflow input with a default of `0.75`.
+
 ```
+workflow w {
+  Float contamination = 0.75
+}
 ```
+
+- Improving naming of workflow stages, and how their appear in the UI.
+
 
 ## 0.57
 - Fixed bug in setting workflow defaults from JSON file

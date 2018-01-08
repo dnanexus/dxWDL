@@ -7,7 +7,8 @@ import net.jcazevedo.moultingyaml._
 import scala.util.{Failure, Success, Try}
 import Utils.{COMMON, DXWorkflowStage, DX_URL_PREFIX, LAST_STAGE,
     isExpressionConst, evalConst, isOptional,
-    isNativeDxType, OUTPUT_SECTION, REORG, trace, warning}
+    isNativeDxType, MAX_STAGE_NAME_LEN, OUTPUT_SECTION, REORG,
+    trace, warning}
 import wdl4s.wdl._
 import wdl4s.wdl.AstTools
 import wdl4s.wdl.AstTools.EnhancedAstNode
@@ -1070,17 +1071,31 @@ workflow w {
         }.toVector
     }
 
-    // create a human readable name for a stage. Use
-    // the name of the first call in the block, unless there are
-    // no calls at all.
+    // create a human readable name for a stage. If there
+    // are no calls, use the iteration expression. Otherwise,
+    // concatenate call names, while limiting total string length.
     private def humanReadableStageName(stagePrefix: String,
                                        block: Scope,
                                        backExpr: WdlExpression) : String = {
-        val firstCall = block.children.find{ scope => scope.isInstanceOf[WdlCall] }
-        firstCall match {
-            case None => stagePrefix ++ "_" ++ backExpr.toWdlString
-            case Some(call) => stagePrefix ++ "_" ++ call.unqualifiedName
+        val callNames: Vector[String] = block.children.collect{
+            case call: WdlCall => call.unqualifiedName
+        }.toVector
+        if (callNames.isEmpty)
+            return stagePrefix ++ "_" ++ backExpr.toWdlString
+        val readableName = callNames.foldLeft(stagePrefix){
+            case (accu, cName) =>
+                if (accu.length >= MAX_STAGE_NAME_LEN)
+                    accu
+                else
+                    accu + "_" + cName
         }
+        // The name could still end up too long, so we limit
+        // it.
+        val absMax = MAX_STAGE_NAME_LEN + 20
+        if (readableName.length > absMax)
+            readableName.substring(0, absMax)
+        else
+            readableName
     }
 
     private def buildWorkflowBackbone(
