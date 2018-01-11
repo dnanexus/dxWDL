@@ -60,80 +60,81 @@ case class CompilerNative(dxWDLrtId: String,
     // by passing a JSON structure and a vector of dx:files.
     def cVarToSpec(cVar: CVar) : Vector[JsValue] = {
         val name = Utils.encodeAppletVarName(cVar.dxVarName)
-        val defaultVal:Map[String, JsValue] = cVar.attrs.getDefault match {
+        val defaultVals:Map[String, JsValue] = cVar.attrs.getDefault match {
             case None => Map.empty
             case Some(wdlValue) =>
                 val wvl = WdlVarLinks.importFromWDL(cVar.wdlType,
                                                     DeclAttrs.empty,
                                                     wdlValue,
                                                     IODirection.Zero)
-                val l: List[(String,JsValue)] = WdlVarLinks.genFields(wvl, name)
-                val l2 = l.filter{ case (fieldName,_) => !fieldName.endsWith(FLAT_FILES_SUFFIX) }
-                val (_, jsv) = l2.head
-                Map("default" -> jsv)
+                WdlVarLinks.genFields(wvl, name).toMap
         }
-        def mkPrimitive(dxType: String) : Vector[Map[String, JsValue]] = {
-            Vector(Map("name" -> JsString(name),
-                       "class" -> JsString(dxType))
-                       ++ defaultVal)
+        def jsMapFromDefault(name: String) : Map[String, JsValue] = {
+            defaultVals.get(name) match {
+                case None => Map.empty
+                case Some(jsv) => Map("default" -> jsv)
+            }
         }
-        def mkPrimitiveArray(dxType: String, maybeEmpty:Boolean) : Vector[Map[String, JsValue]] = {
-            val m = Map("name" -> JsString(name),
-                        "class" -> JsString("array:" ++ dxType))
-            val opt = if (maybeEmpty) {
+        def jsMapFromOptional(optional: Boolean) : Map[String, JsValue] = {
+            if (optional) {
                 Map("optional" -> JsBoolean(true))
             } else {
                 Map.empty[String, JsValue]
             }
-            Vector(m ++ opt ++ defaultVal)
         }
-        def mkComplex() : Vector[Map[String,JsValue]] = {
+        def mkPrimitive(dxType: String, optional: Boolean) : Vector[JsValue] = {
+            Vector(JsObject(Map("name" -> JsString(name),
+                                "class" -> JsString(dxType))
+                                ++ jsMapFromOptional(optional)
+                                ++ jsMapFromDefault(name)))
+        }
+        def mkPrimitiveArray(dxType: String, optional:Boolean) : Vector[JsValue] = {
+            Vector(JsObject(Map("name" -> JsString(name),
+                                "class" -> JsString("array:" ++ dxType))
+                                ++ jsMapFromOptional(optional)
+                                ++ jsMapFromDefault(name)))
+        }
+        def mkComplex(optional: Boolean) : Vector[JsValue] = {
             // A large JSON structure passed as a hash, and a
             // vector of platform files.
-            Vector(Map("name" -> JsString(name),
-                       "class" -> JsString("hash"))
-                       ++ defaultVal,
-                   Map("name" -> JsString(name + Utils.FLAT_FILES_SUFFIX),
-                       "class" -> JsString("array:file"),
-                       "optional" -> JsBoolean(true)))
+            Vector(JsObject(Map("name" -> JsString(name),
+                                "class" -> JsString("hash"))
+                                ++ jsMapFromOptional(optional)
+                                ++ jsMapFromDefault(name)),
+                   JsObject(Map("name" -> JsString(name + FLAT_FILES_SUFFIX),
+                                "class" -> JsString("array:file"),
+                                "optional" -> JsBoolean(true))
+                                ++ jsMapFromDefault(name + FLAT_FILES_SUFFIX)))
         }
-        def isPotentiallyEmpty(t: WdlType) : Boolean = t match {
-            case WdlMaybeEmptyArrayType(_) => true
-            case _ => false
-        }
-        def nonOptional(t : WdlType) : Vector[Map[String, JsValue]] = {
-            t match {
+        def handleType(wdlType: WdlType,
+                       optional: Boolean) : Vector[JsValue] = {
+            wdlType match {
                 // primitive types
-                case WdlBooleanType => mkPrimitive("boolean")
-                case WdlIntegerType => mkPrimitive("int")
-                case WdlFloatType => mkPrimitive("float")
-                case WdlStringType =>mkPrimitive("string")
-                case WdlFileType => mkPrimitive("file")
+                case WdlBooleanType => mkPrimitive("boolean", false || optional)
+                case WdlIntegerType => mkPrimitive("int", false || optional)
+                case WdlFloatType => mkPrimitive("float", false || optional)
+                case WdlStringType =>mkPrimitive("string", false || optional)
+                case WdlFileType => mkPrimitive("file", false || optional)
 
                 // single dimension arrays of primitive types
-                case WdlArrayType(WdlBooleanType) =>
-                    mkPrimitiveArray("boolean", isPotentiallyEmpty(t))
-                case WdlArrayType(WdlIntegerType) =>
-                    mkPrimitiveArray("int", isPotentiallyEmpty(t))
-                case WdlArrayType(WdlFloatType) =>
-                    mkPrimitiveArray("float", isPotentiallyEmpty(t))
-                case WdlArrayType(WdlStringType) =>
-                    mkPrimitiveArray("string", isPotentiallyEmpty(t))
-                case WdlArrayType(WdlFileType) =>
-                    mkPrimitiveArray("file", isPotentiallyEmpty(t))
+                case WdlNonEmptyArrayType(WdlBooleanType) => mkPrimitiveArray("boolean", false || optional)
+                case WdlNonEmptyArrayType(WdlIntegerType) => mkPrimitiveArray("int", false || optional)
+                case WdlNonEmptyArrayType(WdlFloatType) => mkPrimitiveArray("float", false || optional)
+                case WdlNonEmptyArrayType(WdlStringType) => mkPrimitiveArray("string", false || optional)
+                case WdlNonEmptyArrayType(WdlFileType) => mkPrimitiveArray("file", false || optional)
+                case WdlMaybeEmptyArrayType(WdlBooleanType) => mkPrimitiveArray("boolean", true)
+                case WdlMaybeEmptyArrayType(WdlIntegerType) => mkPrimitiveArray("int", true)
+                case WdlMaybeEmptyArrayType(WdlFloatType) => mkPrimitiveArray("float", true)
+                case WdlMaybeEmptyArrayType(WdlStringType) => mkPrimitiveArray("string", true)
+                case WdlMaybeEmptyArrayType(WdlFileType) => mkPrimitiveArray("file", true)
 
-                // complex types, that may contains files
-                case _ => mkComplex()
+                // complex type, that may contains files
+                case _ => mkComplex(optional)
             }
         }
-
-        val vec: Vector[Map[String,JsValue]] = nonOptional(Utils.stripOptional(cVar.wdlType))
         cVar.wdlType match {
-            case WdlOptionalType(t) =>
-                // An optional variable, make it an optional dx input/output
-                vec.map{ m => JsObject(m + ("optional" -> JsBoolean(true))) }
-            case _ =>
-                vec.map{ m => JsObject(m)}
+            case WdlOptionalType(t) => handleType(t, true)
+            case t => handleType(t, false)
         }
     }
 
