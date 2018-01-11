@@ -11,8 +11,8 @@ import IR.{CVar, SArg}
 import scala.collection.JavaConverters._
 import spray.json._
 import Utils.{AppletLinkInfo, base64Encode, CHECKSUM_PROP, dxFileFromJsValue, DXWorkflowStage,
-    INSTANCE_TYPE_DB_FILENAME, jsValueOfJsonNode, jsonNodeOfJsValue, LINK_INFO_FILENAME, trace,
-    warning}
+    FLAT_FILES_SUFFIX, INSTANCE_TYPE_DB_FILENAME, jsValueOfJsonNode, jsonNodeOfJsValue,
+    LINK_INFO_FILENAME, trace, warning}
 import wdl4s.wdl.types._
 
 case class CompilerNative(dxWDLrtId: String,
@@ -62,7 +62,15 @@ case class CompilerNative(dxWDLrtId: String,
         val name = Utils.encodeAppletVarName(cVar.dxVarName)
         val defaultVal:Map[String, JsValue] = cVar.attrs.getDefault match {
             case None => Map.empty
-            case Some(v) => Map("default" -> v)
+            case Some(wdlValue) =>
+                val wvl = WdlVarLinks.importFromWDL(cVar.wdlType,
+                                                    DeclAttrs.empty,
+                                                    wdlValue,
+                                                    IODirection.Zero)
+                val l: List[(String,JsValue)] = WdlVarLinks.genFields(wvl, name)
+                val l2 = l.filter{ case (fieldName,_) => !fieldName.endsWith(FLAT_FILES_SUFFIX) }
+                val (_, jsv) = l2.head
+                Map("default" -> jsv)
         }
         def mkPrimitive(dxType: String) : Vector[Map[String, JsValue]] = {
             Vector(Map("name" -> JsString(name),
@@ -650,12 +658,7 @@ case class CompilerNative(dxWDLrtId: String,
                 // input is provided by the user
                 DeclAttrs.empty
             case IR.SArgConst(wdlValue) =>
-                val wvl = WdlVarLinks.importFromWDL(cVar.wdlType,
-                                                    DeclAttrs.empty,
-                                                    wdlValue,
-                                                    IODirection.Zero)
-                val jsv = WdlVarLinks.getRawJsValue(wvl)
-                DeclAttrs.empty.setDefault(jsv)
+                DeclAttrs.empty.setDefault(wdlValue)
             case other =>
                 throw new Exception(s"Bad value for sArg ${other}")
         }

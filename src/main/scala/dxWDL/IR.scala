@@ -259,21 +259,34 @@ object IR {
         implicit object DeclAttrsYamlFormat extends YamlFormat[DeclAttrs] {
             def write(dAttrs: DeclAttrs) : YamlValue = {
                 val yAttrs:Map[YamlValue, YamlValue] = dAttrs.m.map{
-                    case (key,value) =>
-                        YamlString(key) -> YamlString(value.prettyPrint)
+                    case (key,wVal) =>
+                        YamlString(key) -> YamlObject(
+                            YamlString("wdlType") -> YamlString(wVal.wdlType.toWdlString),
+                            YamlString("value") ->  YamlString(wVal.toWdlString))
+
                 }.toMap
                 YamlObject(yAttrs)
             }
             def read(value: YamlValue) : DeclAttrs = {
-                val m:Map[String, JsValue] = value match {
+                val m:Map[String, WdlValue] = value match {
                     case YamlObject(fields) =>
                         fields.map{
-                            case (YamlString(key),YamlString(value)) =>
-                                key -> value.parseJson
+                            case (YamlString(key), obj) =>
+                                val yo:YamlObject = obj.asYamlObject
+                                yo.getFields(YamlString("wdlType"),
+                                             YamlString("value")) match {
+                                    case Seq(YamlString(wdlType), YamlString(value)) =>
+                                        val t:WdlType = WdlType.fromWdlString(wdlType)
+                                        val v:WdlValue = t.fromWdlString(value)
+                                        key -> v
+                                    case _ =>
+                                        throw new Exception(s"Malformed attributes ${key} ${yo.prettyPrint}")
+                                }
                             case _ =>
-                                throw new Exception("invalid")
+                                throw new Exception(s"Malformed attributes ${value}")
                         }
-                    case _ => throw new Exception("invalid")
+                    case _ =>
+                        throw new Exception(s"Malformed attributes ${value}")
                 }
                 DeclAttrs(m)
             }

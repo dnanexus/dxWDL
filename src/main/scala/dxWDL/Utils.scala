@@ -207,10 +207,12 @@ object Utils {
     //   "${filename}.vcf.gz"
     // Interpolation requires evaluation. This check is an approximation,
     // it may cause us to create an unnecessary declaration.
-    def nonInterpolation(t: Terminal) : Boolean = {
-        !(t.getSourceString contains "${")
+    def isInterpolation(s: String) : Boolean = {
+        s contains "${"
     }
-
+    def nonInterpolation(t: Terminal) : Boolean = {
+        !isInterpolation(t.getSourceString)
+    }
 
     // Check if the WDL expression is a constant. If so, calculate and return it.
     // Otherwise, return None.

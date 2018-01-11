@@ -4,8 +4,9 @@ package dxWDL
 import spray.json._
 import wdl4s.wdl.{Declaration, WdlTask}
 import wdl4s.wdl.types._
+import wdl4s.wdl.values._
 
-case class DeclAttrs(m: Map[String, JsValue]) {
+case class DeclAttrs(m: Map[String, WdlValue]) {
     lazy val stream : Boolean = {
         m.get("stream") match {
             case Some(JsBoolean(true)) => true
@@ -13,16 +14,16 @@ case class DeclAttrs(m: Map[String, JsValue]) {
         }
     }
 
-    def getDefault: Option[JsValue] = {
+    def getDefault: Option[WdlValue] = {
         m.get("default")
     }
 
     // add another attribute
-    def add(key:String, value:JsValue) : DeclAttrs = {
+    def add(key:String, value:WdlValue) : DeclAttrs = {
         DeclAttrs(m + (key -> value))
     }
 
-    def setDefault(value:JsValue) : DeclAttrs = {
+    def setDefault(value:WdlValue) : DeclAttrs = {
         add("default", value)
     }
 
@@ -45,7 +46,7 @@ object DeclAttrs {
             varName: String,
             cefOpt: Option[CompilerErrorFormatter]) : DeclAttrs = {
         val attr:Option[(String,String)] = task.parameterMeta.find{ case (k,v) =>  k == varName }
-        val m:Map[String, JsValue] = attr match {
+        val m:Map[String, WdlValue] = attr match {
             case None => Map.empty
             case Some((_,"stream")) =>
                 // Only files can be streamed
@@ -66,7 +67,7 @@ object DeclAttrs {
                             Map.empty
                     }
                 } else {
-                    Map("stream" -> JsBoolean(true))
+                    Map("stream" -> WdlBoolean(true))
                 }
             case Some((_,x)) =>
                 // ignoring other attributes
