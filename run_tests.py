@@ -58,7 +58,8 @@ test_defaults=["files", "math"]
 test_locked=["conditionals", "advanced", "bad_status", "bad_status2",
              "instance_types", "dict"]
 
-TestDesc = namedtuple('TestDesc', 'wf_name wdl_source wdl_input dx_input results')
+TestMetaData = namedtuple('TestMetaData', 'name kind')
+TestDesc = namedtuple('TestDesc', 'name kind wdl_source wdl_input dx_input results')
 
 ######################################################################
 # Read a JSON file
@@ -76,14 +77,33 @@ def verify_json_file(path):
 
 # Search a WDL file with a python regular expression.
 # Note this is not 100% accurate.
+#
+# Look for all tasks and workflows. If there is exactly
+# one workflow, this is a WORKFLOW. If there are no
+# workflows and exactly one task, this is an APPLET.
+task_pattern_re = re.compile(r"^(task)(\s+)(\w+)(\s+){")
 wf_pattern_re = re.compile(r"^(workflow)(\s+)(\w+)(\s+){")
-def get_workflow_name(filename):
+def get_metadata(filename):
+    workflows = []
+    tasks = []
     with open(filename, 'r') as fd:
         for line in fd:
             m = re.match(wf_pattern_re, line)
             if m is not None:
-                return m.group(3)
-    raise RuntimeError("Workflow name not found")
+                workflows.append(m.group(3))
+            m = re.match(task_pattern_re, line)
+            if m is not None:
+                tasks.append(m.group(3))
+    if len(workflows) > 1:
+        raise RuntimeError("WDL file {} has multiple workflows".format(filename))
+    if len(workflows) == 1:
+        return TestMetaData(name = workflows[0],
+                            kind = "workflow")
+    assert(len(workflows) == 0)
+    if len(tasks) == 1:
+        return TestMetaData(name = tasks[0],
+                            kind = "applet")
+    raise RuntimeError("{} is not a valid WDL test, #tasks={}".format(filename, len(tasks)))
 
 # Register a test name, find its inputs and expected results files.
 def register_test(tname):
@@ -91,8 +111,9 @@ def register_test(tname):
     if tname in reserved_test_names:
         raise RuntimeError("Test name {} is reserved".format(tname))
     wdl_file = os.path.join(test_dir, tname + ".wdl")
-    wf_name = get_workflow_name(wdl_file)
-    desc = TestDesc(wf_name = wf_name,
+    metadata = get_metadata(wdl_file)
+    desc = TestDesc(name = metadata.name,
+                    kind = metadata.kind,
                     wdl_source= wdl_file,
                     wdl_input= os.path.join(test_dir, tname + "_input.json"),
                     dx_input= os.path.join(test_dir, tname + "_input.dx.json"),
@@ -117,30 +138,31 @@ def read_json_file_maybe_empty(path):
     else:
         return read_json_file(path)
 
-def find_test_from_analysis(analysis):
-    anl_desc = analysis.describe()
-    wf_name = anl_desc["name"].split(' ')[0]
+def find_test_from_exec(exec_obj):
+    dx_desc = exec_obj.describe()
+    exec_name = dx_desc["name"].split(' ')[0]
     for tname, desc in test_files.iteritems():
-        if desc.wf_name == wf_name:
+        if desc.name == exec_name:
             return tname
-    raise RuntimeError("Test for workflow {} not found".format(wf_name))
+    raise RuntimeError("Test for {} {} not found".format(exec_obj, exec_name))
 
 # Check that a workflow returned the expected result for
 # a [key]
-def validate_result(tname, anl_outputs, key, expected_val):
+def validate_result(tname, exec_outputs, key, expected_val):
+    desc = test_files[tname]
     # Extract the key. For example, for workflow "math" returning
     # output "count":
     #    'math.count' -> count
-    wf_name = key.split('.')[0]
+    exec_name = key.split('.')[0]
     field_name = key.split('.')[1]
-    if wf_name != tname:
-        raise RuntimeError("Key {} is invalid, must start with workflow name".format(key))
+    if exec_name != tname:
+        raise RuntimeError("Key {} is invalid, must start with {} name".format(key, desc.kind))
     try:
         # get the actual results
-        if field_name not in anl_outputs:
-            print("field {} missing from workflow results {}".format(field_name, anl_outputs))
+        if field_name not in exec_outputs:
+            print("field {} missing from executable results {}".format(field_name, exec_outputs))
             return False
-        result = anl_outputs[field_name]
+        result = exec_outputs[field_name]
         if ((type(result) is list) and
             (type(expected_val) is list)):
             result.sort()
@@ -155,16 +177,16 @@ def validate_result(tname, anl_outputs, key, expected_val):
         return False
 
 
-def lookup_workflow(tname, project, folder):
+def lookup_dataobj(tname, project, folder):
     desc = test_files[tname]
-    wfgen = dxpy.bindings.search.find_data_objects(classname="workflow",
-                                                   name=desc.wf_name,
-                                                   folder=folder,
-                                                   project=project.get_id(),
-                                                   limit=1)
-    wf = [item for item in wfgen]
-    if len(wf) > 0:
-        return wf[0]['id']
+    wfgen = dxpy.bindings.search.find_data_objects(classname= desc.kind,
+                                                   name= desc.name,
+                                                   folder= folder,
+                                                   project= project.get_id(),
+                                                   limit= 1)
+    objs = [item for item in wfgen]
+    if len(objs) > 0:
+        return objs[0]['id']
     return None
 
 # Build a workflow.
@@ -172,10 +194,10 @@ def lookup_workflow(tname, project, folder):
 # wf             workflow name
 # classpath      java classpath needed for running compilation
 # folder         destination folder on the platform
-def build_workflow(tname, project, folder, version_id, compiler_flags):
+def build_test(tname, project, folder, version_id, compiler_flags):
     desc = test_files[tname]
-    print("build workflow {}".format(desc.wf_name))
-    print("Compiling {} to a workflow".format(desc.wdl_source))
+    print("build {} {}".format(desc.kind, desc.name))
+    print("Compiling {} to a {}".format(desc.wdl_source, desc.kind))
     cmdline = [ "java", "-jar",
                 os.path.join(top_dir, "dxWDL-{}.jar".format(version_id)),
                 "compile",
@@ -185,35 +207,35 @@ def build_workflow(tname, project, folder, version_id, compiler_flags):
     cmdline += compiler_flags
     print(" ".join(cmdline))
     subprocess.check_output(cmdline)
-    return lookup_workflow(tname, project, folder)
+    return lookup_dataobj(tname, project, folder)
 
 def ensure_dir(path):
     print("making sure that {} exists".format(path))
     if not os.path.exists(path):
         os.makedirs(path)
 
-def wait_for_completion(test_analyses):
+def wait_for_completion(test_exec_objs):
     print("awaiting completion ...")
     # wait for analysis to finish while working around Travis 10m console inactivity timeout
     noise = subprocess.Popen(["/bin/bash", "-c", "while true; do sleep 60; date; done"])
     try:
-        for anls in test_analyses:
+        for exec_obj in test_exec_objs:
             try:
-                anls.wait_on_done()
+                exec_obj.wait_on_done()
             except DXJobFailureError:
-                tname = find_test_from_analysis(anls)
+                tname = find_test_from_exec(exec_obj)
                 desc = test_files[tname]
                 if tname not in test_failing:
-                    raise RuntimeError("Analysis {} failed".format(desc.wf_name))
+                    raise RuntimeError("Executable {} failed".format(desc.name))
                 else:
-                    print("Analysis {} failed as expected".format(desc.wf_name))
+                    print("Executable {} failed as expected".format(desc.name))
     finally:
         noise.kill()
     print("done")
 
 
 # Run [workflow] on several inputs, return the analysis ID.
-def run_workflow(project, test_folder, tname, wfId, delay_workspace_destruction):
+def run_executable(project, test_folder, tname, oid, delay_workspace_destruction):
     def once():
         try:
             desc = test_files[tname]
@@ -221,15 +243,19 @@ def run_workflow(project, test_folder, tname, wfId, delay_workspace_destruction)
                 inputs = {}
             else:
                 inputs = read_json_file_maybe_empty(desc.dx_input)
-            workflow = dxpy.DXWorkflow(project=project.get_id(), dxid=wfId)
             project.new_folder(test_folder, parents=True)
-            analysis = workflow.run(inputs,
-                                    project=project.get_id(),
-                                    folder=test_folder,
-                                    name="{} {}".format(desc.wf_name, git_revision),
-                                    delay_workspace_destruction=delay_workspace_destruction,
-                                    instance_type="mem1_ssd1_x4")
-            return analysis
+            if desc.kind == "workflow":
+                exec_obj = dxpy.DXWorkflow(project=project.get_id(), dxid=oid)
+            elif desc.kind == "applet":
+                exec_obj = dxpy.DXApplet(project=project.get_id(), dxid=oid)
+            else:
+                raise RuntimeError("Unknown kind {}".format(desc.kind))
+            return exec_obj.run(inputs,
+                                project=project.get_id(),
+                                folder=test_folder,
+                                name="{} {}".format(desc.name, git_revision),
+                                delay_workspace_destruction=delay_workspace_destruction,
+                                instance_type="mem1_ssd1_x4")
         except Exception, e:
             print("exception message={}".format(e))
             return None
@@ -240,50 +266,56 @@ def run_workflow(project, test_folder, tname, wfId, delay_workspace_destruction)
             return retval
         print("Sleeping for 5 seconds before trying again")
         time.sleep(5)
-    raise ("Error running workflow")
+    raise RuntimeError("running workflow")
 
-def extract_outputs(tname, analysis_desc):
-    locked = tname in test_locked
-    if locked:
-        return analysis_desc['output']
+def extract_outputs(tname, exec_obj):
+    desc = test_files[tname]
+    if desc.kind == "workflow":
+        locked = tname in test_locked
+        if locked:
+            return exec_obj['output']
+        else:
+            stages = exec_obj['stages']
+            for snum in range(len(stages)):
+                crnt = stages[snum]
+                if crnt['id'] == 'stage-last':
+                    return stages[snum]['execution']['output']
+            raise RuntimeError("Analysis for test {} does not have stage 'last'".format(tname))
+    elif desc.kind == "applet":
+        return exec_obj['output']
     else:
-        stages = analysis_desc['stages']
-        for snum in range(len(stages)):
-            crnt = stages[snum]
-            if crnt['id'] == 'stage-last':
-                return stages[snum]['execution']['output']
-        raise RuntimeError("Analysis for test {} does not have stage 'last'".format(tname))
+        raise RuntimeError("Unknown kind {}".format(desc.kind))
 
-def run_workflow_subset(project, workflows, test_folder, delay_workspace_destruction, no_wait):
+def run_test_subset(project, runnable, test_folder, delay_workspace_destruction, no_wait):
     # Run the workflows
-    test_analyses=[]
-    for tname, wfid in workflows.iteritems():
+    test_exec_objs=[]
+    for tname, oid in runnable.iteritems():
         desc = test_files[tname]
-        print("Running workflow {} {}".format(desc.wf_name, wfid))
-        test_job = run_workflow(project, test_folder, tname, wfid, delay_workspace_destruction)
-        test_analyses.append(test_job)
-    print("test analyses: " + ", ".join([a.get_id() for a in test_analyses]))
+        print("Running {} {} {}".format(desc.kind, desc.name, oid))
+        anl = run_executable(project, test_folder, tname, oid, delay_workspace_destruction)
+        test_exec_objs.append(anl)
+    print("executables: " + ", ".join([a.get_id() for a in test_exec_objs]))
 
     if no_wait:
         return
 
     # Wait for completion
-    wait_for_completion(test_analyses)
+    wait_for_completion(test_exec_objs)
 
-    print("Verifying analysis results")
-    for analysis in test_analyses:
-        analysis_desc = analysis.describe()
-        tname = find_test_from_analysis(analysis)
+    print("Verifying results")
+    for exec_obj in test_exec_objs:
+        exec_desc = exec_obj.describe()
+        tname = find_test_from_exec(exec_obj)
         if tname in test_failing:
             continue
         test_desc = test_files[tname]
-        anl_outputs = extract_outputs(tname, analysis_desc)
+        exec_outputs = extract_outputs(tname, exec_desc)
         shouldbe = read_json_file_maybe_empty(test_desc.results)
         correct = True
-        print("Checking results for workflow {}".format(test_desc.wf_name))
+        print("Checking results for workflow {}".format(test_desc.name))
 
         for key, expected_val in shouldbe.iteritems():
-            correct = validate_result(tname, anl_outputs, key, expected_val)
+            correct = validate_result(tname, exec_outputs, key, expected_val)
         if correct:
             print("Analysis {} passed".format(tname))
 
@@ -465,20 +497,21 @@ def main():
         native_call_setup(project, applet_folder, version_id)
 
     try:
-        # Compile the WDL workflows
-        workflows = {}
+        # Compile the WDL files to dx:workflows and dx:applets
+        runnable = {}
         for tname in test_names:
-            wfid = None
+            oid = None
             if args.lazy:
-                wfid = lookup_workflow(tname, project, applet_folder)
-            if wfid is None:
+                oid = lookup_dataobj(tname, project, applet_folder)
+            if oid is None:
                 c_flags = compiler_flags[:] + compiler_per_test_flags(tname)
-                wfid = build_workflow(tname, project, applet_folder, version_id, c_flags)
-            workflows[tname] = wfid
-            print("workflow({}) = {}".format(tname, wfid))
+                oid = build_test(tname, project, applet_folder, version_id, c_flags)
+            runnable[tname] = oid
+            print("runnable({}) = {}".format(tname, oid))
         if not args.compile_only:
-            run_workflow_subset(project, workflows, test_folder, args.delay_workspace_destruction,
-                                args.no_wait)
+            run_test_subset(project, runnable, test_folder,
+                            args.delay_workspace_destruction,
+                            args.no_wait)
     finally:
         print("Test complete")
 
