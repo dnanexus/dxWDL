@@ -391,7 +391,8 @@ def native_call_setup(project, applet_folder, version_id):
     native_applets = ["native_concat",
                       "native_diff",
                       "native_mk_list",
-                      "native_sum"]
+                      "native_sum",
+                      "native_sum_012"]
     for napl in native_applets:
         try:
             cmdline = [ "dx", "build",

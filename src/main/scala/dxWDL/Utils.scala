@@ -114,6 +114,7 @@ object Utils {
     val CHECKSUM_PROP = "dxWDL_checksum"
     val COMMON = "common"
     val DEFAULT_INSTANCE_TYPE = "mem1_ssd1_x4"
+    val DEFAULT_COMMAND_BRACKETS = ("{", "}")
     val DOWNLOAD_RETRY_LIMIT = 3
     val DX_FUNCTIONS_FILES = "dx_functions_files.json"
     val DX_HOME = "/home/dnanexus"

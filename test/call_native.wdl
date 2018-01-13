@@ -7,6 +7,10 @@ workflow call_native {
     File fileA
     File fileB
 
+    call lib.native_sum_012 as sum_var1
+    call lib.native_sum_012 as sum_var2 { input: a=3 }
+    call lib.native_sum_012 as sum_var3 { input: a=3, b=10 }
+
     call lib.native_mk_list as mk_list {
         input: a=a, b=5
     }
@@ -28,6 +32,9 @@ workflow call_native {
     }
 
     output {
+        sum_var1.result
+        sum_var2.result
+        sum_var3.result
         mk_list.all
         concat.c
         mk_list2.all

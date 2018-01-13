@@ -12,7 +12,7 @@ workflow w {
 ```
 
 - Improving naming of workflow stages, and how their appear in the UI.
-
+- Fixed in compilation of stand-alone applets.
 
 ## 0.57
 - Fixed bug in setting workflow defaults from JSON file

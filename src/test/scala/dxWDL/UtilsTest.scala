@@ -146,5 +146,4 @@ class UtilsTest extends FlatSpec with Matchers {
         }.toMap
         assets("aws:us-east-1") should equal("record-F5gyyXj0P26p9Jx12q3XY0qV")
     }
-
 }

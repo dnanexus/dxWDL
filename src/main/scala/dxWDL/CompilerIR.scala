@@ -20,6 +20,7 @@ import wdl4s.wdl.values._
 import wdl4s.wdl.WdlExpression.AstForExpressions
 
 case class CompilerIR(cef: CompilerErrorFormatter,
+                      bracketSymbolsPerTask: Map[String, (String,String)],
                       reorg: Boolean,
                       locked: Boolean,
                       verbose: Utils.Verbose) {
@@ -352,7 +353,7 @@ task Add {
     // Make sure that the WDL code we generate is actually legal.
     private def verifyWdlCodeIsLegal(ns: WdlNamespace) : Unit = {
         // convert to a string
-        val wdlCode = WdlPrettyPrinter(false, None).apply(ns, 0).mkString("\n")
+        val wdlCode = WdlPrettyPrinter(false, None, bracketSymbolsPerTask).apply(ns, 0).mkString("\n")
         val nsTest:Try[WdlNamespace] = WdlNamespace.loadUsingSource(wdlCode, None, None)
         nsTest match {
             case Success(_) => ()

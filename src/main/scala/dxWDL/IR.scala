@@ -381,7 +381,7 @@ object IR {
         implicit object AppletFormat extends YamlFormat[Applet] {
             def write(applet: Applet) = {
                 // discard empty lines
-                val lines = WdlPrettyPrinter(false, None).apply(applet.ns, 0)
+                val lines = WdlPrettyPrinter(false, None, Map.empty).apply(applet.ns, 0)
                 val wdlCode = lines.map{ x =>
                     if (!x.trim.isEmpty) Some(x)
                     else None

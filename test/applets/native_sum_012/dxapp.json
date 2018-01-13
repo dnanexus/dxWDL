@@ -1,0 +1,33 @@
+{
+  "name": "native_sum_012",
+  "summary": "Sum zero, one, or two integers",
+  "dxapi": "1.0.0",
+  "version": "0.0.1",
+  "inputSpec": [
+    {
+      "name": "a",
+      "class": "int",
+      "optional": true,
+      "default": 100
+    },
+    {
+      "name": "b",
+      "class": "int",
+      "optional": true,
+      "default": 100
+    }
+  ],
+  "outputSpec": [
+    {
+      "name": "result",
+      "class": "int"
+    }
+  ],
+  "runSpec": {
+    "interpreter": "python2.7",
+    "file": "code.py",
+    "distribution": "Ubuntu",
+    "release": "14.04"
+  },
+  "authorizedUsers": []
+}
