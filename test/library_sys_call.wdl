@@ -28,13 +28,15 @@ task wc {
     parameter_meta {
         in_file : "stream"
     }
-    command {
-        cat ${in_file} | wc -l
-    }
+    command <<<
+    wc -l ${in_file} | awk '{print $1}' > line.count
+    >>>
+
     output {
-        Int count = read_int(stdout())
+        Int line_count = read_int("line.count")
     }
 }
+
 
 task head {
     File in_file

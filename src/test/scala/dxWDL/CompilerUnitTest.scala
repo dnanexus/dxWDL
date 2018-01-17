@@ -87,62 +87,40 @@ class CompilerUnitTest extends FlatSpec with Matchers {
         }
     }
 
-/*    it should "Handle array access" in {
-        val wdl = """|task diff {
-                     |  File A
-                     |  File B
-                     |  command {
-                     |    diff ${A} ${B} | wc -l
-                     |  }
-                     |  output {
-                     |    Int result = read_int(stdout())
-                     |  }
-                     |}
-                     |
-                     |workflow file_array {
-                     |  Array[File] fs
-                     |  call diff {
-                     |    input : A=fs[0], B=fs[1]
-                     |  }
-                     |  output {
-                     |    diff.result
-                     |  }
-                     |}""".stripMargin.trim
+    it should "Handle array access" in {
+        val wdlCode =
+            """|task diff {
+               |  File A
+               |  File B
+               |  command {
+               |    diff ${A} ${B} | wc -l
+               |  }
+               |  output {
+               |    Int result = read_int(stdout())
+               |  }
+               |}
+               |
+               |workflow file_array {
+               |  Array[File] fs
+               |  call diff {
+               |    input : A=fs[0], B=fs[1]
+               |  }
+               |  output {
+               |    diff.result
+               |  }
+               |}""".stripMargin.trim
 
-        val ns = WdlNamespaceWithWorkflow.load(wdl, Seq.empty).get
-        //val wf: WdlWorkflow = ns.workflow
-        val call : WdlCall = getCallFromNamespace(ns, "diff")
-
-        //var env : Compile.CallEnv = Map.empty[String, WdlVarLinks]
-/*        var closure = Map.empty[String, WdlVarLinks]
-        call.inputMappings.foreach { case (_, expr) =>
-            System.err.println(s"${expr} --> ${expr.ast}")
-            closure = Compile.updateClosure(wf, closure, env, expr, true)
-        }*/
-    } */
-
-    /*
-    it should "Provide proper error code for declarations inside scatters" in {
-        val wdl = """|task inc {
-                     | Int i
-                     | command <<<
-                     |    python -c "print(${i} + 1)"
-                     | >>>
-                     | output {
-                     |   Int result = read_int(stdout())
-                     | }
-                     |
-                     | workflow a1 {
-                     |   Array[Int] integers
-                     |
-                     |  scatter (i in integers) {
-                     |    call inc {input: i=i}
-                     |
-                     |    # declaration in the middle of a scatter should cause an exception
-                     |    String s = "abc"
-                     |    call inc as inc2 {input: i=i}
-                     |}"""
-    }*/
+        val path = writeTestFile("file_array", wdlCode)
+        val retval = Main.compile(
+            List(path.toString, "--compileMode", "ir", "--locked", "--quiet")
+        )
+        retval match  {
+            case Main.SuccessfulTermination(_) =>
+                true should equal(true)
+            case _ =>
+                true should equal(false)
+        }
+    }
 
     def compareIgnoreWhitespace(a: String, b:String): Boolean = {
         val retval = (a.replaceAll("\\s+", "") == b.replaceAll("\\s+", ""))
@@ -164,33 +142,21 @@ class CompilerUnitTest extends FlatSpec with Matchers {
         compareIgnoreWhitespace(strWdlCode, wdl) should be(true)
     }
 
-    /*
-    it should "Pretty print workflow" in {
+    it should "Pretty print task" in {
         val wdl = """|task inc {
-                     |  Int i
+                     |  File input_file
                      |
                      |  command <<<
-                     |     python -c "print(${i} + 1)"
+                     |     wc -l ${input_file} | awk '{print $1}' > line.count
                      |  >>>
+                     |
                      |  output {
-                     |    Int result = read_int(stdout())
-                     |  }
-                     |}
-                     |
-                     |workflow sg_sum3 {
-                     |  Array[Int] integers
-                     |
-                     |  scatter (k in integers) {
-                     |    call inc {input: i=k}
+                     |    Int line_count = read_int("line.count")
                      |  }
                      |}""".stripMargin.trim
 
         val ns = WdlNamespace.loadUsingSource(wdl, None, None).get
-        val wf = ns match {
-            case nswf: WdlNamespaceWithWorkflow => nswf.workflow
-            case _ => throw new Exception("WDL file contains no workflow")
-        }
-        val strWdlCode = WdlPrettyPrinter(true, None).apply(wf, 0).mkString("\n")
-        assert(compareIgnoreWhitespace(strWdlCode, wdl))
-    }*/
+        val task = ns.findTask("inc").get
+        WdlPrettyPrinter(false, None).commandBracketTaskSymbol(task) should be ("<<<",">>>")
+    }
 }

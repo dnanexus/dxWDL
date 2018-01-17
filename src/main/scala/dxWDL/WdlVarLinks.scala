@@ -85,7 +85,7 @@ object WdlVarLinks {
             YamlString(key) -> YamlString(value))
     }
 
-    def getRawJsValue(wvl: WdlVarLinks) : JsValue = {
+    private def getRawJsValue(wvl: WdlVarLinks) : JsValue = {
         wvl.dxlink match {
             case DxlValue(jsn) => jsn
             case _ =>

@@ -162,40 +162,35 @@ task fileSize {
 
 ## Task and workflow inputs
 
-WDL assumes all declarations to a task (also workflow) can be assigned
-by the caller. However, there are many of declarations that are, in
-essence, temporary variables that hold calculations. In order to
-compile a task to an applet, we limit the applet inputs to unassigned
-expressions.
+WDL assumes that a task declaration can be overriden
+by the caller, if it is unassigned, or assigned to a constant.
 
 ```
 task manipulate {
   Int x
   Int y = 6
-  Int? z = 17
-
+  Int z = y + x
   ...
 }
 ```
 
-In the `manipulate` task `x` is an input, `y` is not. But what about `z`?
-The declaration for `z` assigns it a default value. Can it be overridden by
-the caller?
+In the `manipulate` task `x` and `y` are compiled to applet inputs,
+where `y` has a default value (6). This allows the applet caller to
+override them. Declaration `z` is not considered an input, because it
+is assigned to an expression.
 
-We compile `z` to an applet input, with 17 as its default.
-
-In a workflow, the potential inputs are in the top block. A
-declaration is considered an input if it is unassigned or optional.
-For example, workflow `foo` has two inputs `ref_genome`
-and `num_bases`. Variable `coverage` is not compiled into an input
-because it is assigned, and is non optional. Declaration `config` is
-not considered a potential input, because it is not in the top block.
+In a workflow, similarly to a task, a declaration is considered an
+input if it is unassigned or or assigned to a constant. For example,
+workflow `foo` has three inputs: `ref_genome`, `min_coverage`, and
+`config`. Variable `max_coverage` is not compiled into an input
+because it is assigned to an expression. Note that `config` is an
+input, even though it is located in the middle of the workflow.
 
 ```
 workflow foo {
     File ref_genome
-    Int? numBases = 250
-    Float coverage = 0.8
+    Float min_coverage = 0.8
+    Float max_coverage = min_coverage + 0.1
 
     call GetVersion
     scatter (i in [1,2,3]) {

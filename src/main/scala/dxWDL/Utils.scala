@@ -112,6 +112,8 @@ object Utils {
 
     val APPLET_LOG_MSG_LIMIT = 1000
     val CHECKSUM_PROP = "dxWDL_checksum"
+    val COMMAND_DEFAULT_BRACKETS = ("{", "}")
+    val COMMAND_HEREDOC_BRACKETS = ("<<<", ">>>")
     val COMMON = "common"
     val DEFAULT_INSTANCE_TYPE = "mem1_ssd1_x4"
     val DOWNLOAD_RETRY_LIMIT = 3
@@ -127,6 +129,7 @@ object Utils {
     val LOCAL_DX_FILES_CHECKPOINT_FILE = "localized_files.json"
     val LINK_INFO_FILENAME = "linking.json"
     val MAX_STRING_LEN = 8 * 1024     // Long strings cause problems with bash and the UI
+    val MAX_STAGE_NAME_LEN = 60       // maximal length of a workflow stage name
     val MAX_NUM_FILES_MOVE_LIMIT = 1000
     val OUTPUT_SECTION = "outputs"
     val REORG = "reorg"
@@ -206,14 +209,16 @@ object Utils {
     //   "${filename}.vcf.gz"
     // Interpolation requires evaluation. This check is an approximation,
     // it may cause us to create an unnecessary declaration.
-    def nonInterpolation(t: Terminal) : Boolean = {
-        !(t.getSourceString contains "${")
+    def isInterpolation(s: String) : Boolean = {
+        s contains "${"
     }
-
+    def nonInterpolation(t: Terminal) : Boolean = {
+        !isInterpolation(t.getSourceString)
+    }
 
     // Check if the WDL expression is a constant. If so, calculate and return it.
     // Otherwise, return None.
-    def ifConstEval(expr: WdlExpression) : Option[WdlValue] = {
+    private def ifConstEval(expr: WdlExpression) : Option[WdlValue] = {
         try {
             def lookup(x:String) : WdlValue = {
                 throw new VariableAccessException()
@@ -237,6 +242,13 @@ object Utils {
         }
     }
 
+    def evalConst(expr: WdlExpression) : WdlValue = {
+        ifConstEval(expr) match {
+            case None => throw new Exception(s"Expression ${expr} is not a WDL constant")
+            case Some(wdlValue) => wdlValue
+        }
+    }
+
     // Is a declaration of a task/workflow an input for the
     // compiled dx:applet/dx:workflow ?
     //
@@ -255,9 +267,7 @@ object Utils {
             case (None,_) => true
             case (Some(_), WdlOptionalType(_)) => true
             case (Some(expr), _) if isExpressionConst(expr) =>
-                //true
-                // This causes bugs that we will deal with later.
-                false
+                true
             case (_,_) => false
         }
     }

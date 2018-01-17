@@ -1,5 +1,20 @@
 # Release Notes
 
+## 0.58
+- Adhering to WDL spec: a declaration set to a constant is
+treated as an input. In the example, `contamination` is compiled to
+a workflow input with a default of `0.75`.
+
+```
+workflow w {
+  Float contamination = 0.75
+}
+```
+
+- Improving naming of workflow stages, and how their appear in the UI.
+- Fixed regression in compilation of stand-alone applets.
+- Fixed bug when pretty-printing applets that use <<<,>>> instead of {,}
+
 ## 0.57
 - Fixed bug in setting workflow defaults from JSON file
 - Improved behavior of the `sub` and `size` stdlib functions

@@ -191,7 +191,6 @@ case class InputFile(verbose: Utils.Verbose) {
 
     // Build a dx input file, based on the JSON input file and the workflow
     def dxFromCromwell(ns: IR.Namespace,
-                       wf: IR.Workflow,
                        inputPath: Path) : JsObject = {
         trace(verbose.on, s"Translating WDL input file ${inputPath}")
 
@@ -224,65 +223,79 @@ case class InputFile(verbose: Utils.Verbose) {
 
         // This works for calls inside an if/scatter block. The naming is:
         //  STAGE_ID.CALL_VARNAME
-        def compoundCalls(stage:IR.Stage,
+        def compoundCalls(wfName: String,
+                          stage:IR.Stage,
                           calls:Map[String, String]) : Unit = {
             calls.foreach{ case (callName, appletName) =>
                 val callee:IR.Applet = ns.applets(appletName)
                 callee.inputs.zipWithIndex.foreach{
                     case (cVar,idx) =>
-                        val fqn = s"${wf.name}.${callName}.${cVar.name}"
+                        val fqn = s"${wfName}.${callName}.${cVar.name}"
                         val dxName = s"${stage.id.getId}.${callName}_${cVar.name}"
                         checkAndBind(fqn, dxName, cVar)
                 }
             }
         }
 
-        // make a pass on all the stages
-        wf.stages.foreach{ stage =>
-            val callee:IR.Applet = ns.applets(stage.appletName)
-            // make a pass on all call inputs
-            stage.inputs.zipWithIndex.foreach{
-                case (_,idx) =>
-                    val cVar = callee.inputs(idx)
-                    val fqn = s"${wf.name}.${stage.name}.${cVar.name}"
-                    val dxName = s"${stage.id.getId}.${cVar.name}"
-                    checkAndBind(fqn, dxName, cVar)
-            }
-            // check if the applet called from this stage has bindings
-            callee.kind match {
-                case IR.AppletKindTask =>
-                    // We aren't handling applet settings currently
-                    ()
-                case other =>
-                    // An applet generated from a piece of the workflow.
-                    // search for all the applet inputs
-                    callee.inputs.foreach{ cVar =>
-                        val fqn = s"${wf.name}.${cVar.name}"
+        def handleWorkflow(wf: IR.Workflow) : Unit = {
+            // make a pass on all the stages
+            wf.stages.foreach{ stage =>
+                val callee:IR.Applet = ns.applets(stage.appletName)
+                // make a pass on all call inputs
+                stage.inputs.zipWithIndex.foreach{
+                    case (_,idx) =>
+                        val cVar = callee.inputs(idx)
+                        val fqn = s"${wf.name}.${stage.name}.${cVar.name}"
                         val dxName = s"${stage.id.getId}.${cVar.name}"
                         checkAndBind(fqn, dxName, cVar)
-                    }
-            }
-
-            if (wf.locked) {
-                // Locked workflow. A user can set workflow level
-                // inputs; nothing else.
-                wf.inputs.foreach { case (cVar, sArg) =>
-                    val fqn = s"${wf.name}.${cVar.name}"
-                    val dxName = s"${cVar.name}"
-                    checkAndBind(fqn, dxName, cVar)
                 }
-            } else {
-                // Unlocked workflow.
-                //
-                // compound stages, for example if blocks, or scatters.
-                // They contain calls to applets.
+                // check if the applet called from this stage has bindings
                 callee.kind match {
-                    case IR.AppletKindIf(calls) => compoundCalls(stage, calls)
-                    case IR.AppletKindScatter(calls) => compoundCalls(stage, calls)
-                    case IR.AppletKindScatterCollect(calls) => compoundCalls(stage, calls)
-                    case _ => ()
+                    case IR.AppletKindTask =>
+                        // We aren't handling applet settings currently
+                        ()
+                    case other =>
+                        // An applet generated from a piece of the workflow.
+                        // search for all the applet inputs
+                        callee.inputs.foreach{ cVar =>
+                            val fqn = s"${wf.name}.${cVar.name}"
+                            val dxName = s"${stage.id.getId}.${cVar.name}"
+                            checkAndBind(fqn, dxName, cVar)
+                        }
+                }
+
+                if (wf.locked) {
+                    // Locked workflow. A user can set workflow level
+                    // inputs; nothing else.
+                    wf.inputs.foreach { case (cVar, sArg) =>
+                        val fqn = s"${wf.name}.${cVar.name}"
+                        val dxName = s"${cVar.name}"
+                        checkAndBind(fqn, dxName, cVar)
+                    }
+                } else {
+                    // Unlocked workflow.
+                    //
+                    // compound stages, for example if blocks, or scatters.
+                    // They contain calls to applets.
+                    callee.kind match {
+                        case IR.AppletKindIf(calls) => compoundCalls(wf.name, stage, calls)
+                        case IR.AppletKindScatter(calls) => compoundCalls(wf.name, stage, calls)
+                        case IR.AppletKindScatterCollect(calls) => compoundCalls(wf.name, stage, calls)
+                        case _ => ()
+                    }
                 }
             }
+        }
+        ns.applets.map{ case (aplName, applet) =>
+            applet.inputs.foreach { cVar =>
+                val fqn = s"${aplName}.${cVar.name}"
+                val dxName = s"${cVar.name}"
+                checkAndBind(fqn, dxName, cVar)
+            }
+        }
+        ns.workflow match {
+            case None => ()
+            case Some(wf) => handleWorkflow(wf)
         }
 
         if (!inputFields.isEmpty) {

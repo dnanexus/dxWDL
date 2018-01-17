@@ -89,17 +89,19 @@ class UtilsTest extends FlatSpec with Matchers {
         val expr = WdlExpression.fromString("[1, 2, 19]")
         val answer = WdlArray(WdlArrayType(WdlIntegerType),
                               List(WdlInteger(1), WdlInteger(2), WdlInteger(19)))
-        Utils.ifConstEval(expr) should equal(Some(answer))
+        Utils.isExpressionConst(expr) should equal(true)
+        Utils.evalConst(expr) should equal(answer)
     }
 
     it should "evaluate expressions with constants only" in {
         val expr = WdlExpression.fromString("3 + 8")
-        Utils.ifConstEval(expr) should equal(Some(WdlInteger(11)))
+        Utils.isExpressionConst(expr) should equal(true)
+        Utils.evalConst(expr) should equal(WdlInteger(11))
     }
 
     it should "identify non-constants" in {
         val expr = WdlExpression.fromString("i")
-        Utils.ifConstEval(expr) should equal(None)
+        Utils.isExpressionConst(expr) should equal(false)
     }
 
     ignore should "coerce arrays" in {
@@ -144,5 +146,4 @@ class UtilsTest extends FlatSpec with Matchers {
         }.toMap
         assets("aws:us-east-1") should equal("record-F5gyyXj0P26p9Jx12q3XY0qV")
     }
-
 }

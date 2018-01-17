@@ -93,7 +93,7 @@ workflow strings {
     call lib.ConcatArray as concat5 {
         input: words = [
             "Tamara likes ${fruit}s and ${ice}s",
-            "Whould you like some too?"
+            "Would you like some too?"
         ]
     }
 

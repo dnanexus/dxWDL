@@ -257,10 +257,10 @@ object Main extends App {
     }
 
 
-    def prettyPrintIR(wdlSourceFile : Path,
-                      extraSuffix: Option[String],
-                      irNs: IR.Namespace,
-                      verbose: Boolean) : Unit = {
+    private def prettyPrintIR(wdlSourceFile : Path,
+                              extraSuffix: Option[String],
+                              irNs: IR.Namespace,
+                              verbose: Boolean) : Unit = {
         val suffix = extraSuffix match {
             case None => ".ir.yaml"
             case Some(x) => x + ".ir.yaml"
@@ -314,9 +314,8 @@ object Main extends App {
                       suffix: String,
                       cState: State) : WdlNamespace = {
         val wfOutputs = getWorkflowOutputs(rewrittenNs, cState.verbose)
-        val lines: String = WdlPrettyPrinter(true, wfOutputs)
-            .apply(rewrittenNs, 0)
-            .mkString("\n")
+        val pp = WdlPrettyPrinter(true, wfOutputs)
+        val lines: String = pp.apply(rewrittenNs, 0).mkString("\n")
         if (cState.verbose.on)
             writeToFile(cState.wdlSourceFile, "." + suffix, lines)
         val cleanNs = WdlNamespace.loadUsingSource(
@@ -464,6 +463,22 @@ object Main extends App {
                     options contains "recursive")
     }
 
+
+    private def embedDefaults(irNs: IR.Namespace,
+                              irWf: IR.Workflow,
+                              path: Path,
+                              bOpt: BaseOptions) : IR.Namespace = {
+        val allStageNames = irWf.stages.map{ stg => stg.name }.toVector
+
+        // embed the defaults into the IR
+        val irNsEmb = InputFile(bOpt.verbose).embedDefaults(irNs, irWf, path)
+
+        // make sure the stage order hasn't changed
+        val embedAllStageNames = irNsEmb.workflow.get.stages.map{ stg => stg.name }.toVector
+        assert(allStageNames == embedAllStageNames)
+        irNsEmb
+    }
+
     def compileIR(wdlSourceFile : Path,
                   cOpt: CompilerOptions,
                   bOpt: BaseOptions) : IR.Namespace = {
@@ -513,40 +528,26 @@ object Main extends App {
         // unmodified.
         val cef = new CompilerErrorFormatter(ns.terminalMap)
         val irNs1 = CompilerIR(cef, cOpt.reorg, cOpt.locked, bOpt.verbose).apply(ns)
-        val allStageNames = irNs1.workflow.get.stages.map{ stg => stg.name }.toVector
-
-        // Write out the intermediate representation
-        prettyPrintIR(wdlSourceFile, Some(".proto"), irNs1, bOpt.verbose.on)
-
-        val irNs2 = (cOpt.defaults, irNs1.workflow) match {
+        val irNs2: IR.Namespace = (cOpt.defaults, irNs1.workflow) match {
             case (Some(path), Some(irWf)) =>
-                // embed the defaults into the IR
-                InputFile(bOpt.verbose).embedDefaults(irNs1, irWf, path)
+                embedDefaults(irNs1, irWf, path, bOpt)
             case (_,_) => irNs1
         }
-
-        // make sure the stage order hasn't changed
-        val embedAllStageNames = irNs2.workflow.get.stages.map{ stg => stg.name }.toVector
-        assert(allStageNames == embedAllStageNames)
 
         // Write out the intermediate representation
         prettyPrintIR(wdlSourceFile, None, irNs2, bOpt.verbose.on)
 
         // generate dx inputs from the Cromwell-style input specification.
-        irNs2.workflow match {
-            case None => ()
-            case Some(irwf) =>
-                cOpt.inputs.foreach{ path =>
-                    val dxInputs = InputFile(bOpt.verbose).dxFromCromwell(irNs2, irwf, path)
-                    // write back out as xxxx.dx.json
-                    val filename = Utils.replaceFileSuffix(path, ".dx.json")
-                    val parent = path.getParent
-                    val dxInputFile =
-                        if (parent != null) parent.resolve(filename)
-                        else Paths.get(filename)
-                    Utils.writeFileContent(dxInputFile, dxInputs.prettyPrint)
-                    Utils.trace(bOpt.verbose.on, s"Wrote dx JSON input file ${dxInputFile}")
-                }
+        cOpt.inputs.foreach{ path =>
+            val dxInputs = InputFile(bOpt.verbose).dxFromCromwell(irNs2, path)
+            // write back out as xxxx.dx.json
+            val filename = Utils.replaceFileSuffix(path, ".dx.json")
+            val parent = path.getParent
+            val dxInputFile =
+                if (parent != null) parent.resolve(filename)
+                else Paths.get(filename)
+            Utils.writeFileContent(dxInputFile, dxInputs.prettyPrint)
+            Utils.trace(bOpt.verbose.on, s"Wrote dx JSON input file ${dxInputFile}")
         }
         irNs2
     }

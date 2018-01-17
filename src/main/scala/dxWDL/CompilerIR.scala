@@ -5,13 +5,16 @@ package dxWDL
 import IR.{CVar, LinkedVar, SArg}
 import net.jcazevedo.moultingyaml._
 import scala.util.{Failure, Success, Try}
-import Utils.{COMMON, DXWorkflowStage, DX_URL_PREFIX, LAST_STAGE, ifConstEval, isOptional,
-    isNativeDxType, OUTPUT_SECTION, REORG, trace, warning}
+import Utils.{COMMON, DXWorkflowStage, DX_URL_PREFIX, LAST_STAGE,
+    evalConst, isOptional,
+    isExpressionConst, isInterpolation, isNativeDxType,
+    MAX_STAGE_NAME_LEN, OUTPUT_SECTION, REORG,
+    trace, warning}
 import wdl4s.wdl._
 import wdl4s.wdl.AstTools
 import wdl4s.wdl.AstTools.EnhancedAstNode
 import wdl4s.wdl.expression._
-import wdl4s.parser.WdlParser.{Ast, Terminal}
+import wdl4s.parser.WdlParser.{Ast, AstNode, Terminal}
 import wdl4s.wdl.types._
 import wdl4s.wdl.values._
 import wdl4s.wdl.WdlExpression.AstForExpressions
@@ -228,16 +231,106 @@ task Add {
 
     // Check if the environment has A.B.C, A.B, or A.
     private def trailSearch(env: CallEnv, ast: Ast) : Option[(String, LinkedVar)] = {
-        env.get(WdlExpression.toString(ast)) match {
+        val exprStr = WdlExpression.toString(ast)
+        env.get(exprStr) match {
             case None if !ast.isMemberAccess =>
                 None
             case None =>
                 ast.getAttribute("lhs") match {
-                    case lhs:Ast => trailSearch(env, lhs)
+                    case t: Terminal =>
+                        val srcStr = t.getSourceString
+                        t.getTerminalStr match {
+                            case "identifier" =>
+                                env.get(srcStr) match {
+                                    case Some(lVar) => Some(srcStr, lVar)
+                                    case None => None
+                                }
+                            case _ =>
+                                throw new Exception(s"Terminal `${srcStr}` is not an identifier")
+                        }
+                    case lhs: Ast => trailSearch(env, lhs)
                     case _ => None
                 }
             case Some(lVar) =>
-                Some(WdlExpression.toString(ast), lVar)
+                Some(exprStr, lVar)
+        }
+    }
+
+    // Figure out what an expression depends on from the environment
+    private def envDeps(env : CallEnv,
+                        aNode : AstNode) : Set[String] = {
+        // recurse into list of subexpressions
+        def subExpr(exprVec: Seq[AstNode]) : Set[String] = {
+            val setList = exprVec.map(a => envDeps(env, a))
+            setList.foldLeft(Set.empty[String]){case (accu, st) =>
+                accu ++ st
+            }
+        }
+        aNode match {
+            case t: Terminal =>
+                val srcStr = t.getSourceString
+                t.getTerminalStr match {
+                    case "identifier" =>
+                        env.get(srcStr) match {
+                            case Some(lVar) => Set(srcStr)
+                            case None => Set.empty
+                        }
+                    case "string" if isInterpolation(srcStr) =>
+                        // From a string like: "Tamara likes ${fruit}s and ${ice}s"
+                        // extract the variables {fruit, ice}. In general, they
+                        // could be full fledged expressions
+                        //
+                        // from: wdl4s.wdl.expression.ValueEvaluator.InterpolationTagPattern
+                        val iPattern = "\\$\\{\\s*([^\\}]*)\\s*\\}".r
+                        val subExprRefs: List[String] = iPattern.findAllIn(srcStr).toList
+                        val subAsts:List[AstNode] = subExprRefs.map{ tag =>
+                            // ${fruit} ---> fruit
+                            val expr = WdlExpression.fromString(tag.substring(2, tag.length - 1))
+                            expr.ast
+                        }
+                        subExpr(subAsts)
+                    case _ =>
+                        // A literal
+                        Set.empty
+                }
+            case a: Ast if a.isMemberAccess =>
+                // This is a case of accessing something like A.B.C.
+                trailSearch(env, a) match {
+                    case Some((varName, _)) => Set(varName)
+                    case None =>
+                        // The variable is declared locally, it is not
+                        // passed from the outside.
+                        Set.empty
+                }
+            case a: Ast if a.isBinaryOperator =>
+                val lhs = a.getAttribute("lhs")
+                val rhs = a.getAttribute("rhs")
+                subExpr(List(lhs, rhs))
+            case a: Ast if a.isUnaryOperator =>
+                val expression = a.getAttribute("expression")
+                envDeps(env, expression)
+            case TernaryIf(condition, ifTrue, ifFalse) =>
+                subExpr(List(condition, ifTrue, ifFalse))
+            case a: Ast if a.isArrayLiteral =>
+                subExpr(a.getAttribute("values").astListAsVector)
+            case a: Ast if a.isTupleLiteral =>
+                subExpr(a.getAttribute("values").astListAsVector)
+            case a: Ast if a.isMapLiteral =>
+                val kvMap = a.getAttribute("map").astListAsVector.map { kv =>
+                    val key = kv.asInstanceOf[Ast].getAttribute("key")
+                    val value = kv.asInstanceOf[Ast].getAttribute("value")
+                    key -> value
+                }.toMap
+                val elems: Vector[AstNode] = kvMap.keys.toVector ++ kvMap.values.toVector
+                subExpr(elems)
+            case a: Ast if a.isArrayOrMapLookup =>
+                val index = a.getAttribute("rhs")
+                val mapOrArray = a.getAttribute("lhs")
+                subExpr(List(index, mapOrArray))
+            case a: Ast if a.isFunctionCall =>
+                subExpr(a.params)
+            case _ =>
+                throw new Exception(s"unhandled expression ${aNode}")
         }
     }
 
@@ -251,52 +344,9 @@ task Add {
     private def updateClosure(closure : CallEnv,
                               env : CallEnv,
                               expr : WdlExpression) : CallEnv = {
-        expr.ast match {
-            case t: Terminal =>
-                val srcStr = t.getSourceString
-                t.getTerminalStr match {
-                    case "identifier" =>
-                        env.get(srcStr) match {
-                            case Some(lVar) =>
-                                val fqn = WdlExpression.toString(t)
-                                closure + (fqn -> lVar)
-                            case None => closure
-                        }
-                    case _ => closure
-                }
-
-            case a: Ast if a.isMemberAccess =>
-                // This is a case of accessing something like A.B.C.
-                trailSearch(env, a) match {
-                    case Some((varName, lVar)) =>
-                        closure + (varName -> lVar)
-                    case None =>
-                        // The variable is declared locally, it is not
-                        // passed from the outside.
-                        closure
-                }
-
-            case a: Ast =>
-                // Figure out which variables are needed to calculate this expression,
-                // and add bindings for them
-                val memberAccesses = a.findTopLevelMemberAccesses().map(
-                    // This is an expression like A.B.C
-                    varRef => WdlExpression.toString(varRef)
-                )
-                val variables = AstTools.findVariableReferences(a).map{
-                    varRef => varRef.terminal.getSourceString
-                }
-                val allDeps = (memberAccesses ++ variables).map{ fqn =>
-                    env.get(fqn) match {
-                        case Some(lVar) => Some(fqn -> lVar)
-                        // There are cases where
-                        // [findVariableReferences] gives us previous
-                        // call names. We still don't know how to get rid of those cases.
-                        case None => None
-                    }
-                }.flatten
-                closure ++ allDeps
-        }
+        val deps:Set[String] = envDeps(env, expr.ast)
+        trace(verbose2, s"updateClosure deps=${deps}  expr=${expr.toWdlString}")
+        closure ++ deps.map{ v => v -> env(v) }
     }
 
     // Make sure that the WDL code we generate is actually legal.
@@ -480,17 +530,11 @@ workflow w {
                 val attrs = decl.expression match {
                     case None => taskAttrs
                     case Some(expr) =>
-                        ifConstEval(expr) match {
-                            case None => taskAttrs
-                            case Some(wdlConst) =>
-                                // the constant is a default value.
-                                val wvl = WdlVarLinks.importFromWDL(decl.wdlType,
-                                                                    DeclAttrs.empty,
-                                                                    wdlConst,
-                                                                    IODirection.Zero)
-                                val jsv = WdlVarLinks.getRawJsValue(wvl)
-                                taskAttrs.setDefault(jsv)
-                        }
+                        // the constant is a default value
+                        if (!isExpressionConst(expr))
+                            throw new Exception(cef.taskInputDefaultMustBeConst(expr))
+                        val wdlConst:WdlValue = evalConst(expr)
+                        taskAttrs.setDefault(wdlConst)
                 }
                 Some(CVar(decl.unqualifiedName, decl.wdlType, attrs, decl.ast))
             } else {
@@ -505,16 +549,20 @@ workflow w {
         val docker = task.runtimeAttributes.attrs.get("docker") match {
             case None =>
                 IR.DockerImageNone
-            case Some(expr) =>
-                Utils.ifConstEval(expr) match {
-                    case Some(WdlString(url)) if url.startsWith(DX_URL_PREFIX) =>
+            case Some(expr) if isExpressionConst(expr) =>
+                val wdlConst = evalConst(expr)
+                wdlConst match {
+                    case WdlString(url) if url.startsWith(DX_URL_PREFIX) =>
                         // A constant image specified with a DX URL
                         val dxRecord = DxPath.lookupDxURLRecord(url)
                         IR.DockerImageDxAsset(dxRecord)
                     case _ =>
-                        // Image will be downloaded from the network
+                        // Probably a public docker image
                         IR.DockerImageNetwork
                 }
+            case _ =>
+                // Image will be downloaded from the network
+                IR.DockerImageNetwork
         }
         // The docker container is on the platform, we need to remove
         // the dxURLs in the runtime section, to avoid a runtime
@@ -910,23 +958,16 @@ workflow w {
         extraVars
     }
 
-
     // come before it [preDecls]. Since we are creating a special applet for this, we might as
     // well evaluate those expressions as well.
     //
     // Note: the front end pass ensures that the scatter collection is a variable.
     private def compileScatter(wfUnqualifiedName : String,
-                               stagePrefix: String,
+                               stageName: String,
                                preDecls: Vector[Declaration],
                                scatter: Scatter,
                                taskApplets: Map[String, (IR.Applet, Vector[CVar])],
                                env : CallEnv) : (IR.Stage, IR.Applet) = {
-        // create a memorable name
-        val firstCall = scatter.children.find{ scope => scope.isInstanceOf[WdlCall] }
-        val stageName = firstCall match {
-            case None => stagePrefix ++ "_" ++ scatter.collection.toWdlString
-            case Some(call) => stagePrefix ++ "_" ++ call.unqualifiedName
-        }
         trace(verbose.on, s"compiling scatter ${stageName}")
         val (topDecls, calls) = blockSplit(scatter.children.toVector)
 
@@ -967,16 +1008,11 @@ workflow w {
     //
     // Note: the front end pass ensures that the if condition is a variable.
     private def compileIf(wfUnqualifiedName : String,
-                          stagePrefix: String,
+                          stageName: String,
                           preDecls: Vector[Declaration],
                           cond: If,
                           taskApplets: Map[String, (IR.Applet, Vector[CVar])],
                           env : CallEnv) : (IR.Stage, IR.Applet) = {
-        val firstCall = cond.children.find{ scope => scope.isInstanceOf[WdlCall] }
-        val stageName = firstCall match {
-            case None => stagePrefix ++ "_" ++ cond.condition.toWdlString
-            case Some(call) => stagePrefix ++ "_" ++ call.unqualifiedName
-        }
         trace(verbose.on, s"compiling If block ${stageName}")
         val (topDecls, calls) = blockSplit(cond.children.toVector)
 
@@ -1061,27 +1097,43 @@ workflow w {
                         // A workflow input
                         (cVar, IR.SArgWorkflowInput(cVar))
                     case Some(expr) =>
-                        Utils.ifConstEval(expr) match {
-                            case Some(wdlConst) =>
-                                if (Utils.isOptional(decl.wdlType)) {
-                                    // the constant is a default value
-                                    val wvl = WdlVarLinks.importFromWDL(cVar.wdlType,
-                                                                        DeclAttrs.empty,
-                                                                        wdlConst,
-                                                                        IODirection.Zero)
-                                    val jsv = WdlVarLinks.getRawJsValue(wvl)
-                                    val attrs = DeclAttrs.empty.setDefault(jsv)
-                                    val cVarWithDflt = CVar(decl.unqualifiedName, decl.wdlType,
-                                                            attrs, decl.ast)
-                                    (cVarWithDflt, IR.SArgWorkflowInput(cVar))
-                                } else {
-                                    (cVar, IR.SArgConst(wdlConst))
-                                }
-                            case None =>
-                                throw new Exception(cef.workflowInputDefaultMustBeConst(expr))
-                        }
+                        // the constant is a default value
+                        if (!isExpressionConst(expr))
+                            throw new Exception(cef.workflowInputDefaultMustBeConst(expr))
+                        val wdlConst:WdlValue = evalConst(expr)
+                        val attrs = DeclAttrs.empty.setDefault(wdlConst)
+                        val cVarWithDflt = CVar(decl.unqualifiedName, decl.wdlType,
+                                                attrs, decl.ast)
+                        (cVarWithDflt, IR.SArgWorkflowInput(cVar))
                 }
         }.toVector
+    }
+
+    // create a human readable name for a stage. If there
+    // are no calls, use the iteration expression. Otherwise,
+    // concatenate call names, while limiting total string length.
+    private def humanReadableStageName(stagePrefix: String,
+                                       block: Scope,
+                                       backExpr: WdlExpression) : String = {
+        val callNames: Vector[String] = block.children.collect{
+            case call: WdlCall => call.unqualifiedName
+        }.toVector
+        if (callNames.isEmpty)
+            return stagePrefix ++ "_" ++ backExpr.toWdlString
+        val readableName = callNames.foldLeft(stagePrefix){
+            case (accu, cName) =>
+                if (accu.length >= MAX_STAGE_NAME_LEN)
+                    accu
+                else
+                    accu + "_" + cName
+        }
+        // The name could still end up too long, so we limit
+        // it.
+        val absMax = MAX_STAGE_NAME_LEN + 20
+        if (readableName.length > absMax)
+            readableName.substring(0, absMax)
+        else
+            readableName
     }
 
     private def buildWorkflowBackbone(
@@ -1106,14 +1158,18 @@ workflow w {
                     (stage, Some(applet))
                 case BlockIf(preDecls, cond) =>
                     condNum += 1
-                    val stagePrefix = Utils.IF ++ condNum.toString
-                    val (stage, applet) = compileIf(wf.unqualifiedName, stagePrefix, preDecls,
+                    val stageName = humanReadableStageName(Utils.IF ++ condNum.toString,
+                                                           cond,
+                                                           cond.condition)
+                    val (stage, applet) = compileIf(wf.unqualifiedName, stageName, preDecls,
                                                     cond, taskApplets, env)
                     (stage, Some(applet))
                 case BlockScatter(preDecls, scatter) =>
                     scatterNum += 1
-                    val stagePrefix = Utils.SCATTER ++ scatterNum.toString
-                    val (stage, applet) = compileScatter(wf.unqualifiedName, stagePrefix, preDecls,
+                    val stageName = humanReadableStageName(Utils.SCATTER ++ scatterNum.toString,
+                                                           scatter,
+                                                           scatter.collection)
+                    val (stage, applet) = compileScatter(wf.unqualifiedName, stageName, preDecls,
                                                          scatter, taskApplets, env)
                     (stage, Some(applet))
                 case BlockScope(call: WdlCall) =>
@@ -1298,15 +1354,15 @@ workflow w {
         // Only a subset of the workflow declarations are considered inputs.
         // Limit the search to the top block of declarations. Those that come at the very
         // beginning of the workflow.
-        val (topDeclBlock, wfProperBlocks) = Utils.splitBlockDeclarations(children.toList)
-        val (wfInputDecls, topDeclNonInputs) = topDeclBlock.partition{
+        val (wfInputDecls, wfProper) = children.toList.partition{
             case decl:Declaration =>
                 Utils.declarationIsInput(decl) &&
                 !Utils.isGeneratedVar(decl.unqualifiedName)
             case _ => false
         }
-        val wfProper = topDeclNonInputs ++ wfProperBlocks
-        val wfInputs:Vector[(CVar, SArg)] = buildWorkflowInputs(wfInputDecls)
+        val wfInputs:Vector[(CVar, SArg)] = buildWorkflowInputs(
+            wfInputDecls.map{ _.asInstanceOf[Declaration]}
+        )
 
         // Create a stage per call/scatter-block/declaration-block
         val subBlocks = splitIntoBlocks(wfProper)
