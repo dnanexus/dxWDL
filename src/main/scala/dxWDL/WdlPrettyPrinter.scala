@@ -13,13 +13,13 @@
   */
 package dxWDL
 
+import scala.util.{Failure, Success}
 import wdl4s.wdl._
 import wdl4s.wdl.command.{CommandPart, ParameterCommandPart, StringCommandPart}
-import Utils.DEFAULT_COMMAND_BRACKETS
+import Utils.{COMMAND_DEFAULT_BRACKETS, COMMAND_HEREDOC_BRACKETS}
 
 case class WdlPrettyPrinter(fqnFlag: Boolean,
-                            workflowOutputs: Option[Seq[WorkflowOutput]],
-                            bracketSymbolsPerTask: Map[String, (String,String)]) {
+                            workflowOutputs: Option[Seq[WorkflowOutput]]) {
 
     private val I_STEP = 4
 
@@ -158,9 +158,9 @@ case class WdlPrettyPrinter(fqnFlag: Boolean,
         Vector(indentLine(ln, level))
     }
 
-    def buildTaskWithBrackets(task: WdlTask,
-                              bracketSymbols: (String, String),
-                              level:Int) : Vector[String] = {
+    private def buildTaskWithBrackets(task: WdlTask,
+                                      bracketSymbols: (String, String),
+                                      level:Int) : Vector[String] = {
         val decls = task.declarations.map(x => apply(x, level + 1)).flatten.toVector
         val runtime = task.runtimeAttributes.attrs.map{ case (key, expr) =>
             indentLine(s"${key}: ${orgExpression(expr)}", level + 2)
@@ -182,11 +182,26 @@ case class WdlPrettyPrinter(fqnFlag: Boolean,
         buildBlock(s"task ${task.unqualifiedName}", body, level)
     }
 
-    def apply(task: WdlTask, level:Int) : Vector[String] = {
-        val bracketSymbols = bracketSymbolsPerTask.get(task.name) match {
-            case None => DEFAULT_COMMAND_BRACKETS
-            case Some(symPair) => symPair
+    // Figure out which symbol pair (<<<,>>>  or {,}) the task uses to
+    // enclose the command section.
+    def commandBracketTaskSymbol(task: WdlTask) : (String,String) = {
+        val taskWithCurlyBrackets:String =
+            buildTaskWithBrackets(task, COMMAND_DEFAULT_BRACKETS, 0).mkString("\n")
+        WdlNamespace.loadUsingSource(taskWithCurlyBrackets, None, None) match {
+            case Success(_) => return COMMAND_DEFAULT_BRACKETS
+            case Failure(_) => ()
         }
+        val taskHeredoc:String =
+            buildTaskWithBrackets(task, COMMAND_HEREDOC_BRACKETS, 0).mkString("\n")
+        WdlNamespace.loadUsingSource(taskHeredoc, None, None) match {
+            case Success(_) => return COMMAND_HEREDOC_BRACKETS
+            case Failure(_) =>
+                throw new Exception(s"Task ${task} cannot be pretty printed with any kind of brackets")
+        }
+    }
+
+    def apply(task: WdlTask, level:Int) : Vector[String] = {
+        val bracketSymbols = commandBracketTaskSymbol(task)
         buildTaskWithBrackets(task, bracketSymbols, level)
     }
 

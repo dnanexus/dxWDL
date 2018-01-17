@@ -41,7 +41,6 @@ object Main extends App {
     case class State(ns: WdlNamespace,
                      resolver: ImportResolver,
                      wdlSourceFile: Path,
-                     bracketSymbolsPerTask: Map[String, (String,String)],
                      verbose: Verbose)
 
     case class BaseOptions(force: Boolean,
@@ -315,7 +314,7 @@ object Main extends App {
                       suffix: String,
                       cState: State) : WdlNamespace = {
         val wfOutputs = getWorkflowOutputs(rewrittenNs, cState.verbose)
-        val pp = WdlPrettyPrinter(true, wfOutputs, cState.bracketSymbolsPerTask)
+        val pp = WdlPrettyPrinter(true, wfOutputs)
         val lines: String = pp.apply(rewrittenNs, 0).mkString("\n")
         if (cState.verbose.on)
             writeToFile(cState.wdlSourceFile, "." + suffix, lines)
@@ -480,19 +479,6 @@ object Main extends App {
         irNsEmb
     }
 
-    // Figure out which symbol pair (<<<,>>>  or {,}) the task uses to
-    // enclose the command section.
-    // Find the first symbol in the task, and look for the command section around it.
-    def commandBracketTaskSymbol(task: WdlTask) : (String,String) = {
-/*        val terminals: Seq[Terminal] = AstTools.findTerminals(task.ast)
-        if (terminals.isEmpty)
-            return DEFAULT_COMMAND_BRACKETS
-        val firstSymbol:Terminal = terminals.head
-        val lines = terminalMap.get(firstSymbol).get.split("\n")
- val bottomLine = firstSymbol.getLine - 1*/
-        throw new Exception("TODO")
-    }
-
     def compileIR(wdlSourceFile : Path,
                   cOpt: CompilerOptions,
                   bOpt: BaseOptions) : IR.Namespace = {
@@ -515,10 +501,7 @@ object Main extends App {
                     System.err.println("Error loading WDL source code")
                     throw f
             }
-        val bracketSymbolsPerTask:Map[String, (String,String)] = orgNs.tasks.map{ task =>
-            task.name -> commandBracketTaskSymbol(task)
-        }.toMap
-        val cState = State(orgNs, resolver, wdlSourceFile, bracketSymbolsPerTask, bOpt.verbose)
+        val cState = State(orgNs, resolver, wdlSourceFile, bOpt.verbose)
 
         // Topologically sort the WDL file so no forward references exist in
         // subsequent steps. Create new file to hold the result.
@@ -544,7 +527,7 @@ object Main extends App {
         // mangles the outputs, which is why we pass the originals
         // unmodified.
         val cef = new CompilerErrorFormatter(ns.terminalMap)
-        val irNs1 = CompilerIR(cef, bracketSymbolsPerTask, cOpt.reorg, cOpt.locked, bOpt.verbose).apply(ns)
+        val irNs1 = CompilerIR(cef, cOpt.reorg, cOpt.locked, bOpt.verbose).apply(ns)
         val irNs2: IR.Namespace = (cOpt.defaults, irNs1.workflow) match {
             case (Some(path), Some(irWf)) =>
                 embedDefaults(irNs1, irWf, path, bOpt)

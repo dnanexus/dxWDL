@@ -431,7 +431,7 @@ case class CompilerNative(dxWDLrtId: String,
     def genAppletScript(applet: IR.Applet,
                         aplLinks: Map[String, (IR.Applet, DXApplet)]) : String = {
         // generate the wdl source file
-        val wdlCode:String = WdlPrettyPrinter(false, None, Map.empty).apply(applet.ns, 0)
+        val wdlCode:String = WdlPrettyPrinter(false, None).apply(applet.ns, 0)
             .mkString("\n")
 
         // create linking information

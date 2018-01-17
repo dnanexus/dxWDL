@@ -138,28 +138,25 @@ class CompilerUnitTest extends FlatSpec with Matchers {
         val wdl = "Array[Int] integers"
         val ns = WdlNamespace.loadUsingSource(wdl, None, None).get
         val decl = ns.declarations.head
-        val strWdlCode = WdlPrettyPrinter(true, None, Map.empty).apply(decl, 0).mkString("\n")
+        val strWdlCode = WdlPrettyPrinter(true, None).apply(decl, 0).mkString("\n")
         compareIgnoreWhitespace(strWdlCode, wdl) should be(true)
     }
 
     it should "Pretty print task" in {
         val wdl = """|task inc {
-                     |  Int i
+                     |  File input_file
                      |
                      |  command <<<
-                     |     python -c "print(${i} + 1)"
+                     |     wc -l ${input_file} | awk '{print $1}' > line.count
                      |  >>>
+                     |
                      |  output {
-                     |    Int result = read_int(stdout())
+                     |    Int line_count = read_int("line.count")
                      |  }
                      |}""".stripMargin.trim
 
         val ns = WdlNamespace.loadUsingSource(wdl, None, None).get
         val task = ns.findTask("inc").get
-        Main.commandBracketTaskSymbol(task) should be ("<<<",">>>")
-
-        /*val pp = WdlPrettyPrinter(true, None)
-        val strWdlCode = pp.apply(task, 0).mkString("\n")
-        compareIgnoreWhitespace(strWdlCode, wdl) should be (true)*/
+        WdlPrettyPrinter(false, None).commandBracketTaskSymbol(task) should be ("<<<",">>>")
     }
 }

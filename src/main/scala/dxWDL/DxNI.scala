@@ -214,7 +214,7 @@ object DxNI {
         val projName = dxProject.describe.getName
 
         // pretty print into a buffer
-        val lines: String = WdlPrettyPrinter(false, None, Map.empty)
+        val lines: String = WdlPrettyPrinter(false, None)
             .apply(ns, 0)
             .mkString("\n")
         // add comment describing how the file was created
