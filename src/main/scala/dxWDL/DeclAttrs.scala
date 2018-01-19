@@ -1,7 +1,6 @@
 // Declaration attributes, an experimental extension
 package dxWDL
 
-import spray.json._
 import wdl4s.wdl.{Declaration, WdlTask}
 import wdl4s.wdl.types._
 import wdl4s.wdl.values._
@@ -9,7 +8,7 @@ import wdl4s.wdl.values._
 case class DeclAttrs(m: Map[String, WdlValue]) {
     lazy val stream : Boolean = {
         m.get("stream") match {
-            case Some(JsBoolean(true)) => true
+            case Some(WdlBoolean(true)) => true
             case _ => false
         }
     }
