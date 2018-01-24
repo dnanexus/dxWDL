@@ -609,11 +609,13 @@ specified in the `meta` section is called.
 
 There are tasks that choose an instance type at runtime. For such a
 task, the compiler generates an applet that includes a local file with
-the available instance types and their prices.  The applet can be
-downloaded and reverse engineering, exposing the price list, which is
+the available instance types and their prices. The applet can be
+downloaded and reverse engineered, exposing the price list, which is
 sensitive information. To mitigate this problem, while still allowing
 the task to make good choices, we replace the actual prices with
-equivalent numbers that do not reveal information. For example, if the price list is:
+equivalent numbers that do only reveal ordering. For example, if the
+price list is:
+
 ```
    mem1_ssd1_x2:  0.04$
    mem1_ssd1_x4:  0.08$
