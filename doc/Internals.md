@@ -603,3 +603,26 @@ task mk_int_list {
 In the same spirit as C external declarations, this is an empty task
 used to compile the WDL workflow. At runtime, the applet-id
 specified in the `meta` section is called.
+
+
+## Handling the instance price list
+
+There are tasks that choose an instance type at runtime. For such a
+task, the compiler generates an applet that includes a local file with
+the available instance types and their prices.  The applet can be
+downloaded and reverse engineering, exposing the price list, which is
+sensitive information. To mitigate this problem, while still allowing
+the task to make good choices, we replace the actual prices with
+equivalent numbers that do not reveal information. For example, if the price list is:
+```
+   mem1_ssd1_x2:  0.04$
+   mem1_ssd1_x4:  0.08$
+   mem3_ssd1_x8:  1.05$
+```
+
+We convert it into:
+```
+   mem1_ssd1_x2:  1$
+   mem1_ssd1_x4:  2$
+   mem3_ssd1_x8:  3$
+```

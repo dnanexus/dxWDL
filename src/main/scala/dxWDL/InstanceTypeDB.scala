@@ -30,6 +30,7 @@ package dxWDL
 import com.dnanexus.{DXAPI, DXJSON, DXProject}
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.node.ObjectNode
+//import scala.util.Sorting
 import spray.json._
 import Utils.{DEFAULT_INSTANCE_TYPE, Verbose, warning}
 import wdl4s.wdl.values._
@@ -45,7 +46,7 @@ case class DxInstanceType(name: String,
                           diskGB: Int,
                           cpu: Int,
                           price: Float,
-                          os: Vector[(String, String)]) {
+                          os: Vector[(String, String)]) extends Ordered[DxInstanceType] {
     // Does this instance satisfy the requirements?
     def satisfies(memReq: Option[Int],
                   diskReq: Option[Int],
@@ -75,16 +76,34 @@ case class DxInstanceType(name: String,
     // memory and disk sizes, to make the comparison insensitive to
     // minor differences.
     def lteq(that: DxInstanceType) : Boolean = {
+        compare(that) <= 0
+    }
+
+    def compare(that: DxInstanceType) : Int = {
         // compare by price
         if (this.price < that.price)
-            return true
+            return -1
         if (this.price > that.price)
-            return false
+            return 1
 
         // Prices are the same, compare based on resource sizes.
-        return ((this.memoryMB / 1024) <= (that.memoryMB / 1024) &&
-                    (this.diskGB / 16) <= (that.diskGB / 16) &&
-                    this.cpu <= that.cpu)
+        val memDelta = (this.memoryMB / 1024) - (that.memoryMB / 1024)
+        val diskDelta = (this.diskGB / 16) - (that.diskGB / 16)
+        val cpuDelta = this.cpu - that.cpu
+
+        if (memDelta == 0 &&
+                diskDelta == 0 &&
+                cpuDelta == 0)
+            return 0
+        if (memDelta <= 0 &&
+                diskDelta <= 0 &&
+                cpuDelta <= 0)
+            return -1
+        if (memDelta >= 0 &&
+                diskDelta >= 0 &&
+                cpuDelta >= 0)
+            return 1
+        return 0;
     }
 }
 
@@ -385,6 +404,8 @@ object InstanceTypeDB extends DefaultJsonProtocol {
     // Check if an instance type passes some basic criteria:
     // - Instance must support Ubuntu 14.04.
     // - Instance is not a GPU instance.
+    // - Instance does not have local HDD storage, this
+    //   means it is really old hardware.
     private def instanceCriteria(iType: DxInstanceType) : Boolean = {
         val osSupported = iType.os.foldLeft(false) {
             case (accu, (distribution, release)) =>
@@ -396,6 +417,8 @@ object InstanceTypeDB extends DefaultJsonProtocol {
         if (!osSupported)
             return false
         if (iType.name contains "gpu")
+            return false
+        if (iType.name contains "hdd")
             return false
         return true
     }
@@ -442,6 +465,36 @@ object InstanceTypeDB extends DefaultJsonProtocol {
                                     |""".stripMargin.replaceAll("\n", " "))
                 queryNoPrices(dxProject)
         }
+    }
+
+    // Remove exact price information. For example,
+    // if the price list is:
+    //   mem1_ssd1_x2:  0.04$
+    //   mem1_ssd1_x4:  0.08$
+    //   mem3_ssd1_x8:  1.05$
+    // convert it into:
+    //   mem1_ssd1_x2:  1$
+    //   mem1_ssd1_x4:  2$
+    //   mem3_ssd1_x8:  3$
+    //
+    // This is useful when exporting the price list to an applet, which can be reverse
+    // engineered. We do not want to risk disclosing the real price list. Leaking the
+    // relative ordering of instances, but not actual prices, is considered ok.
+    def opaquePrices(db: InstanceTypeDB) : InstanceTypeDB = {
+        if (db.instances.isEmpty)
+            return db
+        // check if all the prices are zero, there is nothing to do then
+        val all_prices_are_zero = db.instances.forall(it => it.price == 0)
+        if (all_prices_are_zero)
+            return db
+        // sorted the prices from low to high, and then replace
+        // with rank.
+        var crnt_price = 0
+        val opaque = db.instances.sorted.map{ it =>
+            crnt_price += 1
+            it.copy(price = crnt_price)
+        }
+        InstanceTypeDB(opaque)
     }
 
     // The original list is at:

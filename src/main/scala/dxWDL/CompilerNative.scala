@@ -451,10 +451,12 @@ case class CompilerNative(dxWDLrtId: String,
                 Some(linkInfo.prettyPrint)
             }
 
-        // Add the pricing model, if this will be needed
+        // Add the pricing model, if this will be needed. Make the prices
+        // opaque.
         val dbInstance =
             if (applet.instanceType == IR.InstanceTypeRuntime) {
-                Some(instanceTypeDB.toJson.prettyPrint)
+                val dbOpaque = InstanceTypeDB.opaquePrices(instanceTypeDB)
+                Some(dbOpaque.toJson.prettyPrint)
             } else {
                 None
             }

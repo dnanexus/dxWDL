@@ -12,9 +12,7 @@ class InstaceTypeDBTest extends FlatSpec with Matchers {
         db.choose3Attr(None, None, None) should equal("mem1_ssd1_x2")
     }
 
-    it should "Choose reasonable platform instance types" in {
-        // parameters are:          RAM,     disk,     cores
-        val db = InstanceTypeDB.genTestDB(true)
+    private def useDB(db: InstanceTypeDB) : Unit = {
         db.choose3Attr(None, None, None) should equal("mem1_ssd1_x2")
         db.choose3Attr(Some(3*1024), Some(100), Some(5)) should equal("mem1_ssd1_x8")
         db.choose3Attr(Some(2*1024), Some(20), None) should equal("mem1_ssd1_x2")
@@ -50,5 +48,17 @@ class InstaceTypeDBTest extends FlatSpec with Matchers {
                                       None,
                                       None,
                                       None)) should equal("mem3_ssd1_x32")
+    }
+
+    it should "Choose reasonable platform instance types" in {
+        // parameters are:          RAM,     disk,     cores
+        val db = InstanceTypeDB.genTestDB(true)
+        useDB(db)
+    }
+
+    it should "Work even with opaque prices" in {
+        val db = InstanceTypeDB.genTestDB(true)
+        val dbOpaque = InstanceTypeDB.opaquePrices(db)
+        useDB(dbOpaque)
     }
 }
