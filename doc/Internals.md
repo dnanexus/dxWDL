@@ -613,7 +613,7 @@ the available instance types and their prices. The applet can be
 downloaded and reverse engineered, exposing the price list, which is
 sensitive information. To mitigate this problem, while still allowing
 the task to make good choices, we replace the actual prices with
-equivalent numbers that do only reveal ordering. For example, if the
+equivalent numbers that reveal only price ranks. For example, if the
 price list is:
 
 ```
