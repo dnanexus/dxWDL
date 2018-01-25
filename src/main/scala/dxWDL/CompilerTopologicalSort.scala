@@ -1,7 +1,7 @@
 package dxWDL
 
 import Utils.{TopoMode, Verbose}
-import wdl4s.wdl.{Scatter, Scope, WdlNamespace, WdlNamespaceWithWorkflow, WdlGraphNode}
+import wdl.{Scatter, Scope, WdlNamespace, WdlNamespaceWithWorkflow, WdlGraphNode}
 
 case class CompilerTopologicalSort(cef: CompilerErrorFormatter,
                                    mode: TopoMode.Value,

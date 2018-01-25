@@ -33,7 +33,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode
 //import scala.util.Sorting
 import spray.json._
 import Utils.{DEFAULT_INSTANCE_TYPE, Verbose, warning}
-import wdl4s.wdl.values._
+import wom.values._
 
 // Instance Type on the platform. For example:
 // name:   mem1_ssd1_x4
@@ -207,10 +207,10 @@ object InstanceTypeDB extends DefaultJsonProtocol {
     implicit val instanceTypeDBFormat = jsonFormat1(InstanceTypeDB.apply)
 
     // Currently, we support only constants.
-    def parse(dxInstaceType: Option[WdlValue],
-              wdlMemoryMB: Option[WdlValue],
-              wdlDiskGB: Option[WdlValue],
-              wdlCpu: Option[WdlValue]) : IR.InstanceTypeConst = {
+    def parse(dxInstaceType: Option[WomValue],
+              wdlMemoryMB: Option[WomValue],
+              wdlDiskGB: Option[WomValue],
+              wdlCpu: Option[WomValue]) : IR.InstanceTypeConst = {
         // Shortcut the entire calculation, and provide the dx instance type directly
         dxInstaceType match {
             case None => None

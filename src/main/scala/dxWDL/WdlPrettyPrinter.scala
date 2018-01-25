@@ -14,8 +14,8 @@
 package dxWDL
 
 import scala.util.{Failure, Success}
-import wdl4s.wdl._
-import wdl4s.wdl.command.{CommandPart, ParameterCommandPart, StringCommandPart}
+import wdl._
+import wdl.command.{CommandPart, ParameterCommandPart, StringCommandPart}
 import Utils.{COMMAND_DEFAULT_BRACKETS, COMMAND_HEREDOC_BRACKETS}
 
 case class WdlPrettyPrinter(fqnFlag: Boolean,

@@ -11,10 +11,10 @@ import spray.json._
 import Utils.{dxFileFromJsValue, downloadFile, getMetaDirPath, jsValueOfJsonNode,
     DX_FUNCTIONS_FILES, DX_URL_PREFIX, readFileContent, writeFileContent}
 import wdl4s.parser.MemoryUnit
-import wdl4s.wdl.expression.WdlStandardLibraryFunctions
-import wdl4s.wdl.TsvSerializable
-import wdl4s.wdl.values._
-import wdl4s.wdl.types._
+import wdl.expression.WdlStandardLibraryFunctions
+import wom.TsvSerializable
+import wom.values._
+import wom.types._
 
 
 object DxFunctions extends WdlStandardLibraryFunctions {
@@ -107,14 +107,14 @@ object DxFunctions extends WdlStandardLibraryFunctions {
         metaDir
     }
 
-    private def writeContent(baseName: String, content: String): Try[WdlFile] = {
+    private def writeContent(baseName: String, content: String): Try[WomFile] = {
         val tmpFile = Utils.tmpDirPath.resolve(s"$baseName-${content.md5Sum}.tmp")
         Files.write(tmpFile, content.getBytes(StandardCharsets.UTF_8))
-        Success(WdlFile(tmpFile.toString))
+        Success(WomFile(tmpFile.toString))
     }
 
-    private def writeToTsv(params: Seq[Try[WdlValue]],
-                           wdlClass: Class[_ <: WdlValue with TsvSerializable]) = {
+    private def writeToTsv(params: Seq[Try[WomValue]],
+                           wdlClass: Class[_ <: WomValue with TsvSerializable]) = {
         for {
             singleArgument <- extractSingleArgument("writeToTsv", params)
             downcast <- Try(wdlClass.cast(singleArgument))
@@ -169,49 +169,49 @@ object DxFunctions extends WdlStandardLibraryFunctions {
                                content: String): String =
         throw new NotImplementedError()
 
-    override def stdout(params: Seq[Try[WdlValue]]): Try[WdlFile] = {
+    override def stdout(params: Seq[Try[WomValue]]): Try[WomFile] = {
         val stdoutPath = getMetaDir().resolve("stdout")
         if (!Files.exists(stdoutPath))
             Utils.writeFileContent(stdoutPath, "")
-        Success(WdlFile(stdoutPath.toString))
+        Success(WomFile(stdoutPath.toString))
     }
 
-    override def stderr(params: Seq[Try[WdlValue]]): Try[WdlFile] = {
+    override def stderr(params: Seq[Try[WomValue]]): Try[WomFile] = {
         val stderrPath = getMetaDir().resolve("stderr")
         if (!Files.exists(stderrPath))
             Utils.writeFileContent(stderrPath, "")
-        Success(WdlFile(stderrPath.toString))
+        Success(WomFile(stderrPath.toString))
     }
 
-    override def read_json(params: Seq[Try[WdlValue]]): Try[WdlValue] =
+    override def read_json(params: Seq[Try[WomValue]]): Try[WomValue] =
         Failure(new NotImplementedError())
 
     // Write functions: from Cromwell backend.
     // cromwell/backend/src/main/scala/cromwell/backend/wdl/WriteFunctions.scala
-    override def write_lines(params: Seq[Try[WdlValue]]): Try[WdlFile] =
-        writeToTsv(params, classOf[WdlArray])
-    override def write_map(params: Seq[Try[WdlValue]]): Try[WdlFile] =
-       writeToTsv(params, classOf[WdlMap])
-    override def write_object(params: Seq[Try[WdlValue]]): Try[WdlFile] =
-        writeToTsv(params, classOf[WdlObject])
-    override def write_objects(params: Seq[Try[WdlValue]]): Try[WdlFile] =
-        writeToTsv(params, classOf[WdlArray])
-    override def write_tsv(params: Seq[Try[WdlValue]]): Try[WdlFile] =
-        writeToTsv(params, classOf[WdlArray])
-    override def write_json(params: Seq[Try[WdlValue]]): Try[WdlFile] =
+    override def write_lines(params: Seq[Try[WomValue]]): Try[WomFile] =
+        writeToTsv(params, classOf[WomArray])
+    override def write_map(params: Seq[Try[WomValue]]): Try[WomFile] =
+       writeToTsv(params, classOf[WomMap])
+    override def write_object(params: Seq[Try[WomValue]]): Try[WomFile] =
+        writeToTsv(params, classOf[WomObject])
+    override def write_objects(params: Seq[Try[WomValue]]): Try[WomFile] =
+        writeToTsv(params, classOf[WomArray])
+    override def write_tsv(params: Seq[Try[WomValue]]): Try[WomFile] =
+        writeToTsv(params, classOf[WomArray])
+    override def write_json(params: Seq[Try[WomValue]]): Try[WomFile] =
         Failure(new NotImplementedError(s"write_json()"))
 
-    override def size(params: Seq[Try[WdlValue]]): Try[WdlFloat] = {
+    override def size(params: Seq[Try[WomValue]]): Try[WomFloat] = {
         // Inner function: is this a file type, or an optional containing a file type?
-        def isOptionalOfFileType(wdlType: WdlType): Boolean = wdlType match {
-            case f if WdlFileType.isCoerceableFrom(f) => true
-            case WdlOptionalType(inner) => isOptionalOfFileType(inner)
+        def isOptionalOfFileType(wdlType: WomType): Boolean = wdlType match {
+            case f if WomFileType.isCoerceableFrom(f) => true
+            case WomOptionalType(inner) => isOptionalOfFileType(inner)
             case _ => false
         }
 
         // Inner function: Get the file size, allowing for unpacking of optionals
-        def optionalSafeFileSize(value: WdlValue): Double = value match {
-            case f if f.isInstanceOf[WdlFile] || WdlFileType.isCoerceableFrom(f.wdlType) =>
+        def optionalSafeFileSize(value: WomValue): Double = value match {
+            case f if f.isInstanceOf[WomFile] || WomFileType.isCoerceableFrom(f.womType) =>
                 // If this is not an absolute path, we assume the file
                 // is located in the DX home directory
                 val fileName = f.valueString
@@ -229,25 +229,25 @@ object DxFunctions extends WdlStandardLibraryFunctions {
                         p.toFile.length
                 }
                 fSize.toDouble
-            case WdlOptionalValue(_, Some(o)) => optionalSafeFileSize(o)
-            case WdlOptionalValue(f, None) if isOptionalOfFileType(f) => 0d
+            case WomOptionalValue(_, Some(o)) => optionalSafeFileSize(o)
+            case WomOptionalValue(f, None) if isOptionalOfFileType(f) => 0d
             case _ => throw new Exception(
-                s"The 'size' method expects a 'File' or 'File?' argument but instead got ${value.wdlType}.")
+                s"The 'size' method expects a 'File' or 'File?' argument but instead got ${value.womType}.")
         }
 
         Try {
             params match {
                 case _ if params.length == 1 =>
                     val fileSize = optionalSafeFileSize(params.head.get)
-                    WdlFloat(fileSize)
+                    WomFloat(fileSize)
                 case _ if params.length == 2 =>
                     val fileSize:Double = optionalSafeFileSize(params.head.get)
                     val unit:Double = params.tail.head match {
-                        case Success(WdlString(suffix)) =>
+                        case Success(WomString(suffix)) =>
                             MemoryUnit.fromSuffix(suffix).bytes.toDouble
                         case other => throw new IllegalArgumentException(s"The unit must a string type ${other}")
                     }
-                    WdlFloat((fileSize/unit).toFloat)
+                    WomFloat((fileSize/unit).toFloat)
                 case _ => throw new UnsupportedOperationException(s"Expected one or two parameters but got ${params.length} instead.")
             }
         }

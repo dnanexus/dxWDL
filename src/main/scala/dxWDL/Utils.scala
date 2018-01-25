@@ -15,10 +15,10 @@ import ExecutionContext.Implicits.global
 import scala.sys.process._
 import spray.json._
 import wdl4s.parser.WdlParser.{Terminal}
-import wdl4s.wdl._
-import wdl4s.wdl.expression._
-import wdl4s.wdl.types._
-import wdl4s.wdl.values._
+import wdl._
+import wdl.expression._
+import wom.types._
+import wom.values._
 
 // Exception used for AppInternError
 class AppInternalException private(ex: RuntimeException) extends RuntimeException(ex) {
@@ -49,7 +49,7 @@ object Utils {
 
     // Information used to link applets that call other applets. For example, a scatter
     // applet calls applets that implement tasks.
-    case class AppletLinkInfo(inputs: Map[String, WdlType], dxApplet: DXApplet)
+    case class AppletLinkInfo(inputs: Map[String, WomType], dxApplet: DXApplet)
 
     // A stand in for the DXWorkflow.Stage inner class (we don't have a constructor for it)
     case class DXWorkflowStage(id: String) {
@@ -103,7 +103,7 @@ object Utils {
                 case _ => throw new Exception("Bad JSON")
             }
             val inputDefs = aplInfo.asJsObject.fields("inputs").asJsObject.fields.map{
-                case (key, JsString(wdlTypeStr)) => key -> WdlType.fromWdlString(wdlTypeStr)
+                case (key, JsString(wdlTypeStr)) => key -> WomType.fromWdlString(wdlTypeStr)
                 case _ => throw new Exception("Bad JSON")
             }.toMap
             AppletLinkInfo(inputDefs, dxApplet)
@@ -189,7 +189,7 @@ object Utils {
     }
 
     // Is this a WDL type that maps to a native DX type?
-    def isNativeDxType(wdlType: WdlType) : Boolean = {
+    def isNativeDxType(wdlType: WomType) : Boolean = {
         wdlType match {
             case WdlBooleanType | WdlIntegerType | WdlFloatType | WdlStringType | WdlFileType
                    | WdlArrayType(WdlBooleanType)
@@ -242,7 +242,7 @@ object Utils {
         }
     }
 
-    def evalConst(expr: WdlExpression) : WdlValue = {
+    def evalConst(expr: WdlExpression) : WomValue = {
         ifConstEval(expr) match {
             case None => throw new Exception(s"Expression ${expr} is not a WDL constant")
             case Some(wdlValue) => wdlValue
@@ -447,7 +447,7 @@ object Utils {
     //
     // We encode as base64, to remove special characters. This allows
     // embedding the resulting string as a field in a JSON document.
-    def marshal(v: WdlValue) : String = {
+    def marshal(v: WomValue) : String = {
         val js = JsArray(
             JsString(v.wdlType.toWdlString),
             JsString(v.toWdlString)
@@ -456,13 +456,13 @@ object Utils {
     }
 
     // reverse of [marshal]
-    def unmarshal(buf64 : String) : WdlValue = {
+    def unmarshal(buf64 : String) : WomValue = {
         val buf = base64Decode(buf64)
         buf.parseJson match {
             case JsArray(vec) if (vec.length == 2) =>
                 (vec(0), vec(1)) match {
                     case (JsString(wTypeStr), JsString(wValueStr)) =>
-                        val wType : WdlType = WdlType.fromWdlString(wTypeStr)
+                        val wType : WomType = WomType.fromWdlString(wTypeStr)
                         try {
                             wType.fromWdlString(wValueStr)
                         } catch {
@@ -706,7 +706,7 @@ object Utils {
     }
 
     // types
-    def isOptional(t: WdlType) : Boolean = {
+    def isOptional(t: WomType) : Boolean = {
         t match {
             case WdlOptionalType(_) => true
             case t => false
@@ -715,14 +715,14 @@ object Utils {
 
     // We need to deal with types like:
     //     Int??, Array[File]??
-    def stripOptional(t: WdlType) : WdlType = {
+    def stripOptional(t: WomType) : WomType = {
         t match {
             case WdlOptionalType(x) => stripOptional(x)
             case x => x
         }
     }
 
-    def stripArray(t: WdlType) : WdlType = {
+    def stripArray(t: WomType) : WomType = {
         t match {
             case WdlArrayType(x) => x
             case _ => throw new Exception(s"WDL type $t is not an array")
@@ -778,7 +778,7 @@ object Utils {
     // It handles the case where the scatter collection is not an
     // array.
     //
-    def lookupType(from: Scope)(n: String): WdlType = {
+    def lookupType(from: Scope)(n: String): WomType = {
         val resolved:Option[WdlGraphNode] = from.resolveVariable(n)
         //System.err.println(s"resolved=${resolved}")
         val wdlType = resolved match {

@@ -28,9 +28,9 @@ import net.jcazevedo.moultingyaml._
 import spray.json._
 import Utils.{appletLog, dxFileFromJsValue, dxFileToJsValue,
     DX_URL_PREFIX, DXIOParam, DXWorkflowStage, FLAT_FILES_SUFFIX, isNativeDxType}
-import wdl4s.wdl.{WdlTask}
-import wdl4s.wdl.types._
-import wdl4s.wdl.values._
+import wdl.{WdlTask}
+import wom.types._
+import wom.values._
 
 object IORef extends Enumeration {
     val Input, Output = Value
@@ -61,7 +61,7 @@ case class DxlWorkflowInput(varName: String) extends DxLink
 case class DxlJob(dxJob: DXJob, varName: String) extends DxLink
 case class DxlJobArray(dxJobVec: Vector[DXJob], varName: String) extends DxLink
 
-case class WdlVarLinks(wdlType: WdlType,
+case class WdlVarLinks(womType: WomType,
                        attrs: DeclAttrs,
                        dxlink: DxLink)
 
@@ -81,7 +81,7 @@ object WdlVarLinks {
                 "jobRefArray" -> varEncName
         }
         YamlObject(
-            YamlString("type") -> YamlString(wvl.wdlType.toWdlString),
+            YamlString("type") -> YamlString(wvl.womType.toDisplayString),
             YamlString(key) -> YamlString(value))
     }
 
@@ -132,7 +132,7 @@ object WdlVarLinks {
 
     // Get the file-id
     def getDxFile(wvl: WdlVarLinks) : DXFile = {
-        assert(Utils.stripOptional(wvl.wdlType) == WdlFileType)
+        assert(Utils.stripOptional(wvl.womType) == WdlFileType)
         wvl.dxlink match {
             case DxlValue(jsn) =>
                 val dxFiles = findDxFiles(jsn)
@@ -160,8 +160,8 @@ object WdlVarLinks {
     //    "pear" : "3$",
     //    "orange" : "2$"
     // }
-    private def marshalWdlMap(keyType:WdlType,
-                              valueType:WdlType,
+    private def marshalWdlMap(keyType:WomType,
+                              valueType:WomType,
                               m:Map[WdlValue, WdlValue],
                               ioDir: IODirection.Value) : JsValue = {
         if (keyType == WdlStringType) {
@@ -170,22 +170,22 @@ object WdlVarLinks {
                          case (WdlString(k), v) =>
                              k -> jsFromWdlValue(valueType, v, ioDir)
                          case (k,_) =>
-                             throw new Exception(s"key ${k.toWdlString} should be a WdlStringType")
+                             throw new Exception(s"key ${k.toDisplayString} should be a WdlStringType")
                      }.toMap)
         }
         else {
             // general case
             val keys:WdlValue = WdlArray(WdlArrayType(keyType), m.keys.toVector)
-            val kJs = jsFromWdlValue(keys.wdlType, keys, ioDir)
+            val kJs = jsFromWdlValue(keys.womType, keys, ioDir)
             val values:WdlValue = WdlArray(WdlArrayType(valueType), m.values.toVector)
-            val vJs = jsFromWdlValue(values.wdlType, values, ioDir)
+            val vJs = jsFromWdlValue(values.womType, values, ioDir)
             JsObject("keys" -> kJs, "values" -> vJs)
         }
     }
 
     // Unwrap only the top layers of the JSON map, do not dive in recursively.
-    private def shallowUnmarshalWdlMap(keyType: WdlType,
-                                       valueType: WdlType,
+    private def shallowUnmarshalWdlMap(keyType: WomType,
+                                       valueType: WomType,
                                        jsValue: JsValue) : Map[JsValue, JsValue] = {
         try {
             if (keyType == WdlStringType) {
@@ -218,23 +218,23 @@ object WdlVarLinks {
     private def marshalWdlObject(m: Map[String, WdlValue],
                                  ioDir: IODirection.Value) : JsValue = {
         val jsm:Map[String, JsValue] = m.map{ case (key, w:WdlValue) =>
-            key -> JsObject("type" -> JsString(w.wdlType.toWdlString),
-                            "value" -> jsFromWdlValue(w.wdlType, w, ioDir))
+            key -> JsObject("type" -> JsString(w.womType.toDisplayString),
+                            "value" -> jsFromWdlValue(w.womType, w, ioDir))
         }.toMap
         JsObject(jsm)
     }
 
-    private def unmarshalWdlObject(m:Map[String, JsValue]) : Map[String, (WdlType, JsValue)] = {
+    private def unmarshalWdlObject(m:Map[String, JsValue]) : Map[String, (WomType, JsValue)] = {
         m.map{
             case (key, JsObject(fields)) =>
                 if (!List("type", "value").forall(fields contains _))
                     throw new Exception(
                         s"JSON object ${JsObject(fields)} does not contain fields {type, value}")
-                val wdlType = fields("type") match {
-                    case JsString(s) => WdlType.fromWdlString(s)
+                val womType = fields("type") match {
+                    case JsString(s) => WdlFlavoredWomType.fromDisplayString(s)
                     case other  => throw new Exception(s"type field is not a string (${other})")
                 }
-                key -> (wdlType, fields("value"))
+                key -> (womType, fields("value"))
             case (key, other) =>
                 appletLog(s"Unmarshalling error for  JsObject=${JsObject(m)}")
                 throw new Exception(s"key=${key}, expecting ${other} to be a JsObject")
@@ -278,11 +278,11 @@ object WdlVarLinks {
         }
     }
 
-    private def evalCore(wdlType: WdlType,
+    private def evalCore(womType: WomType,
                          jsValue: JsValue,
                          ioMode: IOMode.Value,
                          ioDir: IODirection.Value) : WdlValue = {
-        (wdlType, jsValue)  match {
+        (womType, jsValue)  match {
             // base case: primitive types
             case (WdlBooleanType, JsBoolean(b)) => WdlBoolean(b.booleanValue)
             case (WdlIntegerType, JsNumber(bnm)) => WdlInteger(bnm.intValue)
@@ -314,7 +314,7 @@ object WdlVarLinks {
                 WdlMap(WdlMapType(keyType, valueType), m)
 
             case (WdlObjectType, JsObject(fields)) =>
-                val m:Map[String, (WdlType, JsValue)] = unmarshalWdlObject(fields)
+                val m:Map[String, (WomType, JsValue)] = unmarshalWdlObject(fields)
                 val m2 = m.map{
                     case (key, (t, v)) =>
                         key -> evalCore(t, v, ioMode, ioDir)
@@ -334,7 +334,7 @@ object WdlVarLinks {
 
             case _ =>
                 throw new AppInternalException(
-                    s"Unsupported combination ${wdlType.toWdlString} ${jsValue.prettyPrint}"
+                    s"Unsupported combination ${womType.toDisplayString} ${jsValue.prettyPrint}"
                 )
         }
     }
@@ -345,7 +345,7 @@ object WdlVarLinks {
              ioMode: IOMode.Value,
              ioDir: IODirection.Value) : WdlValue = {
         val jsValue = getRawJsValue(wvl)
-        evalCore(wvl.wdlType, jsValue, ioMode, ioDir)
+        evalCore(wvl.womType, jsValue, ioMode, ioDir)
     }
 
     // Download the dx:files in this wvl
@@ -359,37 +359,37 @@ object WdlVarLinks {
     // files, that may all have the same paths, causing collisions.
     def unpackWdlArray(wvl: WdlVarLinks) : Seq[WdlVarLinks] = {
         val jsn = getRawJsValue(wvl)
-        (wvl.wdlType, jsn) match {
+        (wvl.womType, jsn) match {
             case (WdlArrayType(t), JsArray(l)) =>
                 l.map(elem => WdlVarLinks(t, wvl.attrs, DxlValue(elem)))
 
             // Map. Convert into an array of WDL pairs.
             case (WdlMapType(keyType, valueType), _) =>
-                val wdlType = WdlPairType(keyType, valueType)
+                val womType = WdlPairType(keyType, valueType)
                 shallowUnmarshalWdlMap(keyType, valueType, jsn).map{
                     case (k:JsValue, v:JsValue) =>
                         val js:JsValue = JsObject("left" -> k, "right" -> v)
-                        WdlVarLinks(wdlType, wvl.attrs, DxlValue(js))
+                        WdlVarLinks(womType, wvl.attrs, DxlValue(js))
                 }.toVector
 
             // Strip optional type
             case (WdlOptionalType(t), _) =>
-                val wvl1 = wvl.copy(wdlType = t)
+                val wvl1 = wvl.copy(womType = t)
                 unpackWdlArray(wvl1)
 
             case (_,_) =>
                 // Error
-                throw new AppInternalException(s"Can't unpack ${wvl.wdlType.toWdlString} ${jsn}")
+                throw new AppInternalException(s"Can't unpack ${wvl.womType.toDisplayString} ${jsn}")
             }
     }
 
     // Access a field in a complex WDL type, such as Pair, Map, Object.
     private def memberAccessStep(wvl: WdlVarLinks, fieldName: String) : WdlVarLinks = {
         val jsValue = getRawJsValue(wvl)
-        (wvl.wdlType, jsValue) match {
+        (wvl.womType, jsValue) match {
             case (_:WdlObject, JsObject(m)) =>
                 unmarshalWdlObject(m).get(fieldName) match {
-                    case Some((wdlType,jsv)) => WdlVarLinks(wdlType, wvl.attrs, DxlValue(jsv))
+                    case Some((womType,jsv)) => WdlVarLinks(womType, wvl.attrs, DxlValue(jsv))
                     case None => throw new Exception(s"Unknown field ${fieldName} in object ${wvl}")
                 }
             case (WdlPairType(lType, rType), JsObject(fields))
@@ -397,7 +397,7 @@ object WdlVarLinks {
                 WdlVarLinks(lType, wvl.attrs, DxlValue(fields(fieldName)))
             case (WdlOptionalType(t), _) =>
                 // strip optional type
-                val wvl1 = wvl.copy(wdlType = t)
+                val wvl1 = wvl.copy(womType = t)
                 memberAccessStep(wvl1, fieldName)
 
             case _ =>
@@ -424,7 +424,7 @@ object WdlVarLinks {
     // 1. Make a pass on the object, upload any files, and keep an in-memory JSON representation
     // 2. In memory we have a, potentially very large, JSON value. This can be handled pretty
     //    well by the platform as a dx:hash.
-    private def jsFromWdlValue(wdlType: WdlType,
+    private def jsFromWdlValue(womType: WomType,
                                wdlValue: WdlValue,
                                ioDir: IODirection.Value) : JsValue = {
         def handleFile(path:String) : JsValue = ioDir match {
@@ -442,7 +442,7 @@ object WdlVarLinks {
                 dxFileToJsValue(dxFile)
         }
 
-        (wdlType, wdlValue) match {
+        (womType, wdlValue) match {
             // Base case: primitive types
             case (WdlFileType, WdlString(path)) => handleFile(path)
             case (WdlFileType, WdlSingleFile(path)) => handleFile(path)
@@ -511,19 +511,19 @@ object WdlVarLinks {
                 jsFromWdlValue(t, w, ioDir)
 
             case (_,_) => throw new Exception(
-                s"""|Unsupported combination type=(${wdlType.toWdlString},${wdlType})
-                    |value=(${wdlValue.toWdlString}, ${wdlValue})"""
+                s"""|Unsupported combination type=(${womType.toDisplayString},${womType})
+                    |value=(${wdlValue.toDisplayString}, ${wdlValue})"""
                     .stripMargin.replaceAll("\n", " "))
         }
     }
 
     // import a WDL value
-    def importFromWDL(wdlType: WdlType,
+    def importFromWDL(womType: WomType,
                       attrs: DeclAttrs,
-                      wdlValue: WdlValue,
+                      womValue: WomValue,
                       ioDir: IODirection.Value) : WdlVarLinks = {
-        val jsValue = jsFromWdlValue(wdlType, wdlValue, ioDir)
-        WdlVarLinks(wdlType, attrs, DxlValue(jsValue))
+        val jsValue = jsFromWdlValue(womType, wdlValue, ioDir)
+        WdlVarLinks(womType, attrs, DxlValue(jsValue))
     }
 
     def mkJborArray(dxJobVec: Vector[DXJob],
@@ -538,35 +538,35 @@ object WdlVarLinks {
 
     // Dx allows hashes as an input/output type. If the JSON value is
     // not a hash (js-object), we need to add an outer layer to it.
-    private def jsValueToDxHash(wdlType: WdlType, jsVal: JsValue) : JsValue = {
+    private def jsValueToDxHash(womType: WomType, jsVal: JsValue) : JsValue = {
         val m:Map[String, JsValue] = jsVal match {
             case JsObject(fields) =>
-                assert(!(fields contains "wdlType"))
+                assert(!(fields contains "womType"))
                 fields
             case _ =>
                 // Embed the value into a JSON object
                 Map("value" -> jsVal)
         }
-        val mWithType = m + ("wdlType" -> JsString(wdlType.toWdlString))
+        val mWithType = m + ("womType" -> JsString(womType.toDisplayString))
         JsObject(mWithType)
     }
 
-    private def unmarshalHash(jsv:JsValue) : (WdlType, JsValue) = {
+    private def unmarshalHash(jsv:JsValue) : (WomType, JsValue) = {
         jsv match {
             case JsObject(fields) =>
-                // An object, the type is embedded as a 'wdlType' field
-                fields.get("wdlType") match {
+                // An object, the type is embedded as a 'womType' field
+                fields.get("womType") match {
                     case Some(JsString(s)) =>
-                        val t = WdlType.fromWdlString(s)
+                        val t = WdlFlavoredWomType.fromDisplayString(s)
                         if (fields contains "value") {
                             // the value is encapsulated in the "value" field
                             (t, fields("value"))
                         } else {
-                            // strip the wdlType field
-                            (t, JsObject(fields - "wdlType"))
+                            // strip the womType field
+                            (t, JsObject(fields - "womType"))
                         }
                     case _ => throw new Exception(
-                        s"missing or malformed wdlType field in ${jsv}")
+                        s"missing or malformed womType field in ${jsv}")
                 }
             case other =>
                 throw new Exception(s"JSON ${jsv} does not match the marshalled WDL value")
@@ -590,7 +590,7 @@ object WdlVarLinks {
                 (t, v)
             WdlVarLinks(t, attrs, DxlValue(v))
         } else {
-            val wdlType =
+            val womType =
                 if (ioParam.optional) {
                     ioParam.ioClass match {
                         case IOClass.BOOLEAN => WdlOptionalType(WdlBooleanType)
@@ -620,7 +620,7 @@ object WdlVarLinks {
                         case other => throw new Exception(s"unhandled IO class ${other}")
                     }
                 }
-            WdlVarLinks(wdlType, attrs, DxlValue(jsValue))
+            WdlVarLinks(womType, attrs, DxlValue(jsValue))
         }
     }
 
@@ -634,9 +634,9 @@ object WdlVarLinks {
     // into WDL files in all cases.
     // 2) JSON maps and WDL maps are slighly different. WDL maps can have
     // keys of any type, where JSON maps can only have string keys.
-    private def importFromCromwell(wdlType: WdlType,
+    private def importFromCromwell(womType: WomType,
                                    jsv: JsValue) : JsValue = {
-        (wdlType, jsv) match {
+        (womType, jsv) match {
             // base case: primitive types
             case (WdlBooleanType, JsBoolean(_)) => jsv
             case (WdlIntegerType, JsNumber(_)) => jsv
@@ -672,23 +672,23 @@ object WdlVarLinks {
             case (WdlObjectType, _) =>
                 throw new Exception(
                     s"""|WDL Objects are not supported when converting from JSON inputs
-                        |type = ${wdlType.toWdlString}
+                        |type = ${womType.toDisplayString}
                         |value = ${jsv.prettyPrint}
                         |""".stripMargin.trim)
 
             case _ =>
                 throw new Exception(
                     s"""|Unsupported/Invalid type/JSON combination in input file
-                        |  wdlType= ${wdlType.toWdlString}
+                        |  womType= ${womType.toDisplayString}
                         |  JSON= ${jsv.prettyPrint}""".stripMargin.trim)
         }
     }
 
-    def importFromCromwellJSON(wdlType: WdlType,
+    def importFromCromwellJSON(womType: WomType,
                                attrs:DeclAttrs,
                                jsv: JsValue) : WdlVarLinks = {
-        val importedJs = importFromCromwell(wdlType, jsv)
-        WdlVarLinks(wdlType, attrs, DxlValue(importedJs))
+        val importedJs = importFromCromwell(womType, jsv)
+        WdlVarLinks(womType, attrs, DxlValue(importedJs))
     }
 
     // create input/output fields that bind the variable name [bindName] to
@@ -720,7 +720,7 @@ object WdlVarLinks {
             }
             (bindEncName, jsv)
         }
-        def mkComplex(wdlType: WdlType) : Map[String, JsValue] = {
+        def mkComplex(womType: WomType) : Map[String, JsValue] = {
             val bindEncName_F = bindEncName + FLAT_FILES_SUFFIX
             wvl.dxlink match {
                 case DxlValue(jsn) =>
@@ -728,7 +728,7 @@ object WdlVarLinks {
                     val dxFiles = findDxFiles(jsn)
                     val jsFiles = dxFiles.map(x => Utils.jsValueOfJsonNode(x.getLinkAsJson))
                     // convert the top level structure into a hash
-                    val hash = jsValueToDxHash(wdlType, jsn)
+                    val hash = jsValueToDxHash(womType, jsn)
                     Map(bindEncName -> hash,
                         bindEncName_F -> JsArray(jsFiles))
                 case DxlStage(dxStage, ioRef, varEncName) =>
@@ -764,14 +764,14 @@ object WdlVarLinks {
             }
         }
 
-        val wdlType = Utils.stripOptional(wvl.wdlType)
-        if (isNativeDxType(wdlType)) {
+        val womType = Utils.stripOptional(wvl.womType)
+        if (isNativeDxType(womType)) {
             // Types that are supported natively in DX
             List(mkSimple())
         } else {
             // General complex type requiring two fields: a JSON
             // structure, and a flat array of files.
-            mkComplex(wdlType).toList
+            mkComplex(womType).toList
         }
     }
 
@@ -820,7 +820,7 @@ object WdlVarLinks {
         if (vec.isEmpty)
             throw new Exception("Sanity: WVL array has to be non empty")
 
-        val wdlType = WdlArrayType(vec.head.wdlType)
+        val womType = WdlArrayType(vec.head.womType)
         val declAttrs = vec.head.attrs
         vec.head.dxlink match {
             case DxlValue(_) =>
@@ -830,7 +830,7 @@ object WdlVarLinks {
                         case _ => throw new Exception("Sanity")
                     }
                 }
-                WdlVarLinks(wdlType, declAttrs, DxlValue(JsArray(jsVec)))
+                WdlVarLinks(womType, declAttrs, DxlValue(JsArray(jsVec)))
 
             case DxlJob(_, varName) =>
                 val jobVec:Vector[DXJob] = vec.map{ wvl =>
@@ -841,7 +841,7 @@ object WdlVarLinks {
                         case _ => throw new Exception("Sanity")
                     }
                 }
-                WdlVarLinks(wdlType, declAttrs, DxlJobArray(jobVec, varName))
+                WdlVarLinks(womType, declAttrs, DxlJobArray(jobVec, varName))
             case _ => throw new Exception(s"Don't know how to merge WVL arrays of type ${vec.head}")
         }
     }

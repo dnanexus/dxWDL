@@ -13,7 +13,7 @@ import spray.json._
 import Utils.{AppletLinkInfo, base64Encode, CHECKSUM_PROP, dxFileFromJsValue, DXWorkflowStage,
     FLAT_FILES_SUFFIX, INSTANCE_TYPE_DB_FILENAME, jsValueOfJsonNode, jsonNodeOfJsValue,
     LINK_INFO_FILENAME, trace, warning}
-import wdl4s.wdl.types._
+import wom.types._
 
 case class CompilerNative(dxWDLrtId: String,
                           folder: String,
@@ -63,7 +63,7 @@ case class CompilerNative(dxWDLrtId: String,
         val defaultVals:Map[String, JsValue] = cVar.attrs.getDefault match {
             case None => Map.empty
             case Some(wdlValue) =>
-                val wvl = WdlVarLinks.importFromWDL(cVar.wdlType,
+                val wvl = WdlVarLinks.importFromWDL(cVar.womType,
                                                     DeclAttrs.empty,
                                                     wdlValue,
                                                     IODirection.Zero)
@@ -106,34 +106,34 @@ case class CompilerNative(dxWDLrtId: String,
                                 "optional" -> JsBoolean(true))
                                 ++ jsMapFromDefault(name + FLAT_FILES_SUFFIX)))
         }
-        def handleType(wdlType: WdlType,
+        def handleType(wdlType: WomType,
                        optional: Boolean) : Vector[JsValue] = {
             wdlType match {
                 // primitive types
-                case WdlBooleanType => mkPrimitive("boolean", false || optional)
-                case WdlIntegerType => mkPrimitive("int", false || optional)
-                case WdlFloatType => mkPrimitive("float", false || optional)
-                case WdlStringType =>mkPrimitive("string", false || optional)
-                case WdlFileType => mkPrimitive("file", false || optional)
+                case WomBooleanType => mkPrimitive("boolean", false || optional)
+                case WomIntegerType => mkPrimitive("int", false || optional)
+                case WomFloatType => mkPrimitive("float", false || optional)
+                case WomStringType =>mkPrimitive("string", false || optional)
+                case WomFileType => mkPrimitive("file", false || optional)
 
                 // single dimension arrays of primitive types
-                case WdlNonEmptyArrayType(WdlBooleanType) => mkPrimitiveArray("boolean", false || optional)
-                case WdlNonEmptyArrayType(WdlIntegerType) => mkPrimitiveArray("int", false || optional)
-                case WdlNonEmptyArrayType(WdlFloatType) => mkPrimitiveArray("float", false || optional)
-                case WdlNonEmptyArrayType(WdlStringType) => mkPrimitiveArray("string", false || optional)
-                case WdlNonEmptyArrayType(WdlFileType) => mkPrimitiveArray("file", false || optional)
-                case WdlMaybeEmptyArrayType(WdlBooleanType) => mkPrimitiveArray("boolean", true)
-                case WdlMaybeEmptyArrayType(WdlIntegerType) => mkPrimitiveArray("int", true)
-                case WdlMaybeEmptyArrayType(WdlFloatType) => mkPrimitiveArray("float", true)
-                case WdlMaybeEmptyArrayType(WdlStringType) => mkPrimitiveArray("string", true)
-                case WdlMaybeEmptyArrayType(WdlFileType) => mkPrimitiveArray("file", true)
+                case WomNonEmptyArrayType(WomBooleanType) => mkPrimitiveArray("boolean", false || optional)
+                case WomNonEmptyArrayType(WomIntegerType) => mkPrimitiveArray("int", false || optional)
+                case WomNonEmptyArrayType(WomFloatType) => mkPrimitiveArray("float", false || optional)
+                case WomNonEmptyArrayType(WomStringType) => mkPrimitiveArray("string", false || optional)
+                case WomNonEmptyArrayType(WomFileType) => mkPrimitiveArray("file", false || optional)
+                case WomMaybeEmptyArrayType(WomBooleanType) => mkPrimitiveArray("boolean", true)
+                case WomMaybeEmptyArrayType(WomIntegerType) => mkPrimitiveArray("int", true)
+                case WomMaybeEmptyArrayType(WomFloatType) => mkPrimitiveArray("float", true)
+                case WomMaybeEmptyArrayType(WomStringType) => mkPrimitiveArray("string", true)
+                case WomMaybeEmptyArrayType(WomFileType) => mkPrimitiveArray("file", true)
 
                 // complex type, that may contains files
                 case _ => mkComplex(optional)
             }
         }
-        cVar.wdlType match {
-            case WdlOptionalType(t) => handleType(t, true)
+        cVar.womType match {
+            case WomOptionalType(t) => handleType(t, true)
             case t => handleType(t, false)
         }
     }
@@ -442,7 +442,7 @@ case class CompilerNative(dxWDLrtId: String,
                 val linkInfo = JsObject(
                     aplLinks.map{ case (key, (irApplet, dxApplet)) =>
                         // Reduce the information to what will be needed for runtime linking.
-                        val appInputDefs: Map[String, WdlType] = irApplet.inputs.map{
+                        val appInputDefs: Map[String, WomType] = irApplet.inputs.map{
                             case CVar(name, wdlType, _, _, _) => (name -> wdlType)
                         }.toMap
                         val ali = AppletLinkInfo(appInputDefs, dxApplet)
@@ -614,7 +614,7 @@ case class CompilerNative(dxWDLrtId: String,
 
     // Calculate the stage inputs from the call closure
     //
-    // It comprises mappings from variable name to WdlType.
+    // It comprises mappings from variable name to WomType.
     def genStageInputs(inputs: Vector[(CVar, SArg)],
                        stageDict: Map[String, DXWorkflowStage]) : JsValue = {
         val jsInputs:Map[String, JsValue] = inputs.foldLeft(Map.empty[String, JsValue]){
@@ -626,18 +626,18 @@ case class CompilerNative(dxWDLrtId: String,
                         // in a value at runtime.
                         m
                     case IR.SArgConst(wValue) =>
-                        val wvl = WdlVarLinks.importFromWDL(cVar.wdlType, cVar.attrs, wValue, IODirection.Zero)
+                        val wvl = WdlVarLinks.importFromWDL(cVar.womType, cVar.attrs, wValue, IODirection.Zero)
                         val fields = WdlVarLinks.genFields(wvl, cVar.dxVarName)
                         m ++ fields.toMap
                     case IR.SArgLink(stageName, argName) =>
                         val dxStage = stageDict(stageName)
-                        val wvl = WdlVarLinks(cVar.wdlType,
+                        val wvl = WdlVarLinks(cVar.womType,
                                               cVar.attrs,
                                               DxlStage(dxStage, IORef.Output, argName.dxVarName))
                         val fields = WdlVarLinks.genFields(wvl, cVar.dxVarName)
                         m ++ fields.toMap
                     case IR.SArgWorkflowInput(argName) =>
-                        val wvl = WdlVarLinks(cVar.wdlType,
+                        val wvl = WdlVarLinks(cVar.womType,
                                               cVar.attrs,
                                               DxlWorkflowInput(argName.dxVarName))
                         val fields = WdlVarLinks.genFields(wvl, cVar.dxVarName)
@@ -692,12 +692,12 @@ case class CompilerNative(dxWDLrtId: String,
             case IR.SArgLink(stageName, argName: CVar) =>
                 // output is from an intermediate stage
                 val dxStage = stageDict(stageName)
-                val wvl = WdlVarLinks(cVar.wdlType,
+                val wvl = WdlVarLinks(cVar.womType,
                                       cVar.attrs,
                                       DxlStage(dxStage, IORef.Output, argName.dxVarName))
                 WdlVarLinks.genFields(wvl, cVar.dxVarName)
             case IR.SArgWorkflowInput(argName: CVar) =>
-                val wvl = WdlVarLinks(cVar.wdlType,
+                val wvl = WdlVarLinks(cVar.womType,
                                       cVar.attrs,
                                       DxlWorkflowInput(argName.dxVarName))
                 WdlVarLinks.genFields(wvl, cVar.dxVarName)

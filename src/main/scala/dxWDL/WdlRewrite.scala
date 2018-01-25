@@ -10,11 +10,12 @@
 package dxWDL
 
 import com.dnanexus.{DXRecord}
-import wdl4s.wdl._
-import wdl4s.wdl.AstTools
+import wdl._
+import wdl.AstTools
 import wdl4s.parser.WdlParser.{Ast, Terminal}
-import wdl4s.wdl.types._
-import wdl4s.wdl.values._
+import wdl.types._
+import wom.types.WomType
+import wom.values._
 
 object WdlRewrite {
     val INVALID_AST = AstTools.getAst("", "")
@@ -30,7 +31,7 @@ object WdlRewrite {
     }
 
     // Create a declaration.
-    def declaration(wdlType: WdlType,
+    def declaration(wdlType: WomType,
                     name: String,
                     expr: Option[WdlExpression]) : Declaration = {
         val textualRepr = expr match {
@@ -85,7 +86,7 @@ object WdlRewrite {
         task2
     }
 
-    private def genDefaultValueOfType(wdlType: WdlType) : WdlValue = {
+    private def genDefaultValueOfType(wdlType: WomType) : WomValue = {
         wdlType match {
             case WdlBooleanType => WdlBoolean(true)
             case WdlIntegerType => WdlInteger(0)
@@ -110,11 +111,11 @@ object WdlRewrite {
     }
 
 
-    def taskOutput(name: String, wdlType: WdlType, scope: Scope) = {
+    def taskOutput(name: String, wdlType: WomType, scope: Scope) = {
         // We need to provide a default value, in the form of a Wdl
         // expression
-        val defaultVal:WdlValue = genDefaultValueOfType(wdlType)
-        val defaultExpr:WdlExpression = WdlExpression.fromString(defaultVal.toWdlString)
+        val defaultVal:WomValue = genDefaultValueOfType(wdlType)
+        val defaultExpr:WdlExpression = WdlExpression.fromString(defaultVal.toWomString)
 
         new TaskOutput(name, wdlType, defaultExpr, INVALID_AST, Some(scope))
     }
@@ -142,7 +143,7 @@ object WdlRewrite {
     }
 
     def workflowOutput(varName: String,
-                       wdlType: WdlType,
+                       wdlType: WomType,
                        scope: Scope) = {
         new WorkflowOutput("out_" + varName,
                            wdlType,
@@ -152,7 +153,7 @@ object WdlRewrite {
     }
 
     def workflowOutput(varName: String,
-                       wdlType: WdlType,
+                       wdlType: WomType,
                        expr: WdlExpression) : WorkflowOutput = {
         new WorkflowOutput("out_" + varName,
                            wdlType,
