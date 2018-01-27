@@ -19,12 +19,14 @@ task Add {
 package dxWDL
 
 import com.dnanexus.{DXJob}
+import common.validation.Validation._
 import java.nio.file.{Path, Paths}
 import scala.collection.mutable.HashMap
 import spray.json._
 import Utils.{appletLog, DXIOParam, DX_URL_PREFIX, RUNNER_TASK_ENV_FILE}
 import wdl.{Declaration, DeclarationInterface, WdlExpression, WdlTask}
 import wdl.types.WdlFlavoredWomType
+import wom.InstantiatedCommand
 import wom.values._
 import wom.types._
 
@@ -318,10 +320,8 @@ case class RunnerTask(task:WdlTask,
                 }
                 decl -> wdlValue
         }.toMap
-        val shellCmd: String =  task.instantiateCommand(cmdEnv, DxFunctions) match {
-            case err: ErrorOr =>
-            case il [List[InstantiatedCommand]] =
-        }
+        val womInstantiation = task.instantiateCommand(cmdEnv, DxFunctions)
+        val InstantiatedCommand(shellCmd, _) = womInstantiation.toTry.get
 
         // This is based on Cromwell code from
         // [BackgroundAsyncJobExecutionActor.scala].  Generate a bash
