@@ -278,7 +278,8 @@ object IR {
                                              YamlString("value")) match {
                                     case Seq(YamlString(womType), YamlString(value)) =>
                                         val t:WomType = WdlFlavoredWomType.fromDisplayString(womType)
-                                        val v:WomValue = t.fromWomString(value)
+                                        val v:WomValue =
+                                            WdlFlavoredWomType.FromString(t).fromWorkflowSource(value)
                                         key -> v
                                     case _ =>
                                         throw new Exception(s"Malformed attributes ${key} ${yo.prettyPrint}")
@@ -296,7 +297,7 @@ object IR {
         implicit object CVarYamlFormat extends YamlFormat[CVar] {
             def write(cVar: CVar) = {
                 val m : Map[YamlValue, YamlValue] = Map(
-                    YamlString("type") -> YamlString(cVar.womType.toWdlString),
+                    YamlString("type") -> YamlString(cVar.womType.toDisplayString),
                     YamlString("name") -> YamlString(cVar.name),
                     YamlString("attributes") -> cVar.attrs.toYaml,
                     YamlString("originalFqn") -> cVar.originalFqn.toYaml
@@ -329,7 +330,7 @@ object IR {
                     case SArgConst(wVal) =>
                         YamlObject(YamlString("kind") -> YamlString("const"),
                                    YamlString("womType") -> YamlString(wVal.womType.toDisplayString),
-                                   YamlString("value") ->  YamlString(wVal.toWdlString))
+                                   YamlString("value") ->  YamlString(wVal.toWomString))
                     case SArgLink(stageName, cVar) =>
                         YamlObject(YamlString("kind") -> YamlString("link"),
                                    YamlString("stageName") -> YamlString(stageName),
@@ -352,7 +353,7 @@ object IR {
                                              YamlString("value")) match {
                                     case Seq(YamlString(womType), YamlString(value)) =>
                                         val t:WomType = WdlFlavoredWomType.fromDisplayString(womType)
-                                        val v = t.fromWdlString(value)
+                                        val v = WdlFlavoredWomType.FromString(t).fromWorkflowSource(value)
                                         SArgConst(v)
                                     case _ => throw new Exception("SArg malformed const")
                                 }

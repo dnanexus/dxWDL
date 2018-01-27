@@ -343,13 +343,13 @@ object WdlVarLinks {
     // any files included in the structure will be downloaded.
     def eval(wvl: WdlVarLinks,
              ioMode: IOMode.Value,
-             ioDir: IODirection.Value) : WdlValue = {
+             ioDir: IODirection.Value) : WomValue = {
         val jsValue = getRawJsValue(wvl)
         evalCore(wvl.womType, jsValue, ioMode, ioDir)
     }
 
     // Download the dx:files in this wvl
-    def localize(wvl:WdlVarLinks, ioMode:IOMode.Value) : WdlValue = {
+    def localize(wvl:WdlVarLinks, ioMode:IOMode.Value) : WomValue = {
         eval(wvl, ioMode, IODirection.Download)
     }
 
@@ -425,7 +425,7 @@ object WdlVarLinks {
     // 2. In memory we have a, potentially very large, JSON value. This can be handled pretty
     //    well by the platform as a dx:hash.
     private def jsFromWdlValue(womType: WomType,
-                               wdlValue: WdlValue,
+                               wdlValue: WomValue,
                                ioDir: IODirection.Value) : JsValue = {
         def handleFile(path:String) : JsValue = ioDir match {
             case IODirection.Upload =>
@@ -489,7 +489,7 @@ object WdlVarLinks {
 
             // keys are strings, requiring no conversion. Because objects
             // are not statically typed, we need to carry the types at runtime.
-            case (WdlObjectType, WdlObject(m: Map[String, WdlValue])) =>
+            case (WdlObjectType, WdlObject(m: Map[String, WomValue])) =>
                 marshalWdlObject(m, ioDir)
 
             case (WdlPairType(lType, rType), WdlPair(l,r)) =>

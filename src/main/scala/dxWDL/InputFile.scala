@@ -56,7 +56,7 @@ case class InputFile(verbose: Utils.Verbose) {
     private def translateValue(cVar: CVar,
                                jsv: JsValue) : WdlVarLinks = {
         val jsWithDxLinks = replaceURLsWithLinks(jsv)
-        WdlVarLinks.importFromCromwellJSON(cVar.wdlType, cVar.attrs, jsWithDxLinks)
+        WdlVarLinks.importFromCromwellJSON(cVar.womType, cVar.attrs, jsWithDxLinks)
     }
 
     private def preprocessInputs(obj: JsObject) : HashMap[String, JsValue] = {

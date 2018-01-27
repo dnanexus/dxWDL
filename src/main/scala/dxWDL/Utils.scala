@@ -17,6 +17,7 @@ import spray.json._
 import wdl4s.parser.WdlParser.{Terminal}
 import wdl._
 import wdl.expression._
+import wdl.types._
 import wom.types._
 import wom.values._
 
@@ -89,7 +90,7 @@ object Utils {
             // Serialize applet input definitions, so they could be used
             // at runtime.
             val appInputDefs: Map[String, JsString] = ali.inputs.map{
-                case (name, wdlType) => name -> JsString(wdlType.toWdlString)
+                case (name, womType) => name -> JsString(womType.toWomString)
             }.toMap
             JsObject(
                 "id" -> JsString(ali.dxApplet.getId()),
@@ -103,7 +104,7 @@ object Utils {
                 case _ => throw new Exception("Bad JSON")
             }
             val inputDefs = aplInfo.asJsObject.fields("inputs").asJsObject.fields.map{
-                case (key, JsString(wdlTypeStr)) => key -> WomType.fromWdlString(wdlTypeStr)
+                case (key, JsString(womTypeStr)) => key -> WdlFlavoredWomType.fromDisplayString(womTypeStr)
                 case _ => throw new Exception("Bad JSON")
             }.toMap
             AppletLinkInfo(inputDefs, dxApplet)

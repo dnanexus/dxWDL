@@ -22,22 +22,22 @@ package dxWDL
 // DX bindings
 import spray.json._
 import Utils.{appletLog, DXIOParam}
-import wdl4s.wdl.{Declaration, DeclarationInterface, WdlExpression, WdlWorkflow, WorkflowOutput}
-import wdl4s.wdl.types._
-import wdl4s.wdl.values._
+import wdl.{Declaration, DeclarationInterface, WdlExpression, WdlWorkflow, WorkflowOutput}
+import wom.types._
+import wom.values._
 
 object RunnerEval {
     def evalDeclarations(declarations: Seq[DeclarationInterface],
-                         envInputs : Map[String, WdlValue]) : Map[DeclarationInterface, WdlValue] = {
+                         envInputs : Map[String, WomValue]) : Map[DeclarationInterface, WomValue] = {
         // Environment that includes a cache for values that have
         // already been evaluated.  It is more efficient to make the
         // conversion once, however, that is not the main point
         // here. There are types that require special care, for
         // example files. We need to make sure we download files
         // exactly once, and later, we want to be able to delete them.
-        var env: Map[String, WdlValue] = envInputs
+        var env: Map[String, WomValue] = envInputs
 
-        def lookup(varName : String) : WdlValue = env.get(varName) match {
+        def lookup(varName : String) : WomValue = env.get(varName) match {
             case Some(v) => v
             case None =>
                 // A value for this variable has not been passed. Check if it
@@ -47,18 +47,18 @@ object RunnerEval {
                     case None => throw new Exception(
                         s"Cannot find declaration for variable ${varName}")
                 }
-                varDefinition.wdlType match {
-                    case WdlOptionalType(t) => WdlOptionalValue(t, None)
+                varDefinition.womType match {
+                    case WomOptionalType(t) => WomOptionalValue(t, None)
                     case _ =>  throw new UnboundVariableException(s"${varName}")
                 }
         }
 
         // coerce a WDL value to the required type (if needed)
-        def cast(wdlType: WdlType, v: WdlValue, varName: String) : WdlValue = {
+        def cast(wdlType: WomType, v: WomValue, varName: String) : WomValue = {
             val retVal =
-                if (v.wdlType != wdlType) {
+                if (v.womType != wdlType) {
                     // we need to convert types
-                    appletLog(s"casting ${v.wdlType} to ${wdlType}")
+                    appletLog(s"casting ${v.womType} to ${wdlType}")
                     wdlType.coerceRawValue(v).get
                 } else {
                     // no need to change types
@@ -68,20 +68,20 @@ object RunnerEval {
         }
 
         def evalAndCache(decl:DeclarationInterface,
-                         expr:WdlExpression) : WdlValue = {
-            val vRaw : WdlValue = expr.evaluate(lookup, DxFunctions).get
+                         expr:WdlExpression) : WomValue = {
+            val vRaw : WomValue = expr.evaluate(lookup, DxFunctions).get
             appletLog(s"evaluating ${decl} -> ${vRaw}")
-            val w: WdlValue = cast(decl.wdlType, vRaw, decl.unqualifiedName)
+            val w: WomValue = cast(decl.womType, vRaw, decl.unqualifiedName)
             env = env + (decl.unqualifiedName -> w)
             w
         }
 
-        def evalDecl(decl : DeclarationInterface) : WdlValue = {
-            (decl.wdlType, decl.expression) match {
+        def evalDecl(decl : DeclarationInterface) : WomValue = {
+            (decl.womType, decl.expression) match {
                 // optional input
-                case (WdlOptionalType(t), None) =>
+                case (WomOptionalType(t), None) =>
                     envInputs.get(decl.unqualifiedName) match {
-                        case None => WdlOptionalValue(t, None)
+                        case None => WomOptionalValue(t, None)
                         case Some(wdlValue) => wdlValue
                     }
 
@@ -128,17 +128,17 @@ object RunnerEval {
             case _ => throw new Exception("Eval workflow contains a non declaration")
         }.flatten
 
-        val envInput: Map[String, WdlValue] = inputs.map{ case (key, wvl) =>
-            val w:WdlValue = WdlVarLinks.eval(wvl, IOMode.Remote, IODirection.Zero)
+        val envInput: Map[String, WomValue] = inputs.map{ case (key, wvl) =>
+            val w:WomValue = WdlVarLinks.eval(wvl, IOMode.Remote, IODirection.Zero)
             key -> w
         }
-        val outputs : Map[DeclarationInterface, WdlValue] = evalDeclarations(decls, envInput)
+        val outputs : Map[DeclarationInterface, WomValue] = evalDeclarations(decls, envInput)
 
         // Keep only exported variables
         val exported = outputs.filter{ case (decl, _) => outputSpec contains decl.unqualifiedName }
         exported.map {
             case (decl, wdlValue) =>
-                val wvl = WdlVarLinks.importFromWDL(decl.wdlType,
+                val wvl = WdlVarLinks.importFromWDL(decl.womType,
                                                     DeclAttrs.empty, wdlValue, IODirection.Zero)
                 WdlVarLinks.genFields(wvl, decl.unqualifiedName)
         }.flatten.toMap

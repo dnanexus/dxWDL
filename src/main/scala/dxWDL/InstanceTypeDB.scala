@@ -214,18 +214,18 @@ object InstanceTypeDB extends DefaultJsonProtocol {
         // Shortcut the entire calculation, and provide the dx instance type directly
         dxInstaceType match {
             case None => None
-            case Some(WdlString(iType)) =>
+            case Some(WomString(iType)) =>
                 return IR.InstanceTypeConst(Some(iType), None, None, None)
             case Some(x) =>
                 throw new Exception(s"""|dxInstaceType has to evaluate to a
-                                        |WdlString type ${x.toWdlString}"""
+                                        |WomString type ${x.toWomString}"""
                                         .stripMargin.replaceAll("\n", " "))
         }
 
         // Examples for memory specification: "4000 MB", "1 GB"
         val memoryMB: Option[Int] = wdlMemoryMB match {
             case None => None
-            case Some(WdlString(buf)) =>
+            case Some(WomString(buf)) =>
                 // extract number
                 val numRex = """(\d+.?\d*)""".r
                 val numbers = numRex.findAllIn(buf).toList
@@ -251,13 +251,13 @@ object InstanceTypeDB extends DefaultJsonProtocol {
                 }
                 Some(mem.ceil.round)
             case Some(x) =>
-                throw new Exception(s"Memory has to evaluate to a WdlString type ${x.toWdlString}")
+                throw new Exception(s"Memory has to evaluate to a WomString type ${x.toWomString}")
         }
 
         // Examples: "local-disk 1024 HDD"
         val diskGB: Option[Int] = wdlDiskGB match {
             case None => None
-            case Some(WdlString(buf)) =>
+            case Some(WomString(buf)) =>
                 val components = buf.split("\\s+")
                 val ignoreWords = Set("local-disk", "hdd", "sdd")
                 val l = components.filter(x => !(ignoreWords contains x.toLowerCase))
@@ -269,20 +269,20 @@ object InstanceTypeDB extends DefaultJsonProtocol {
                 }
                 Some(i)
             case Some(x) =>
-                throw new Exception(s"Disk space has to evaluate to a WdlString type ${x.toWdlString}")
+                throw new Exception(s"Disk space has to evaluate to a WomString type ${x.toWomString}")
         }
 
         // Examples: "1", "12"
         val cpu: Option[Int] = wdlCpu match {
             case None => None
-            case Some(WdlString(buf)) =>
+            case Some(WomString(buf)) =>
                 val i:Int = try { buf.toInt } catch {
                     case e: Throwable =>
                         throw new Exception(s"Parse error for cpu specification ${buf}")
                 }
                 Some(i)
-            case Some(WdlInteger(i)) => Some(i)
-            case Some(WdlFloat(x)) => Some(x.toInt)
+            case Some(WomInteger(i)) => Some(i)
+            case Some(WomFloat(x)) => Some(x.toInt)
             case Some(x) => throw new Exception(s"Cpu has to evaluate to a numeric value ${x}")
         }
         return IR.InstanceTypeConst(None, memoryMB, diskGB, cpu)

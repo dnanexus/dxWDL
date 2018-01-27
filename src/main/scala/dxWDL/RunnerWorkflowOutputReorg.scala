@@ -14,7 +14,7 @@ import net.jcazevedo.moultingyaml._
 import scala.collection.JavaConverters._
 import spray.json._
 import Utils.{appletLog, DXIOParam, INTERMEDIATE_RESULTS_FOLDER}
-import wdl4s.wdl.WdlWorkflow
+import wdl.WdlWorkflow
 import WdlVarLinks.yaml
 
 object RunnerWorkflowOutputReorg {
