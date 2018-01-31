@@ -106,7 +106,7 @@ object WdlRewrite {
             case WomObjectType => WomObject(Map.empty)
             case WomPairType(lType, rType) => WomPair(genDefaultValueOfType(lType),
                                                       genDefaultValueOfType(rType))
-            case _ => throw new Exception(s"Unhandled type ${wdlType.toWomString}")
+            case _ => throw new Exception(s"Unhandled type ${wdlType.toDisplayString}")
         }
     }
 
@@ -190,7 +190,7 @@ object WdlRewrite {
     def cond [Child <: Scope] (old: If,
                                children: Seq[Child],
                                condition: WdlExpression): If = {
-        val fresh = wdl4s.wdl.If(old.index, condition, INVALID_AST)
+        val fresh = wdl.If(old.index, condition, INVALID_AST)
         fresh.children = children
         updateScope(old, fresh)
         fresh
@@ -202,7 +202,9 @@ object WdlRewrite {
                                      tasks,
                                      Map.empty,
                                      WdlRewrite.INVALID_ERR_FORMATTER,
-                                     WdlRewrite.INVALID_AST)
+                                     WdlRewrite.INVALID_AST,
+                                     "", // sourceString: What does this argument do?
+                                     None)
     }
 
     def namespace(old: WdlNamespaceWithWorkflow, wf: WdlWorkflow) : WdlNamespaceWithWorkflow = {
@@ -213,7 +215,9 @@ object WdlRewrite {
                                                  old.tasks,
                                                  Map.empty,
                                                  WdlRewrite.INVALID_ERR_FORMATTER,
-                                                 WdlRewrite.INVALID_AST)
+                                                 WdlRewrite.INVALID_AST,
+                                                 "", // sourceString: What does this argument do?
+                                                 None)
         updateScope(old, fresh)
         fresh
     }
@@ -224,7 +228,9 @@ object WdlRewrite {
                                         Vector.empty,
                                         Vector(task),
                                         Map.empty,
-                                        WdlRewrite.INVALID_AST)
+                                        WdlRewrite.INVALID_AST,
+                                        "", // sourceString: What does this argument do?
+                                        None)
     }
 
     def namespace(tasks:Vector[WdlTask]) : WdlNamespaceWithoutWorkflow = {
@@ -233,7 +239,9 @@ object WdlRewrite {
                                         Vector.empty,
                                         tasks,
                                         Map.empty,
-                                        WdlRewrite.INVALID_AST)
+                                        WdlRewrite.INVALID_AST,
+                                        "", // sourceString: What does this argument do?
+                                        None)
     }
 
     def namespaceEmpty() : WdlNamespaceWithoutWorkflow = {
@@ -242,7 +250,9 @@ object WdlRewrite {
                                         Vector.empty,
                                         Vector.empty,
                                         Map.empty,
-                                        WdlRewrite.INVALID_AST)
+                                        WdlRewrite.INVALID_AST,
+                                        "", // sourceString: What does this argument do?
+                                        None)
     }
 
 }
