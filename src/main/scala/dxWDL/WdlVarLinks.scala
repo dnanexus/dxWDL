@@ -29,6 +29,7 @@ import spray.json._
 import Utils.{appletLog, dxFileFromJsValue, dxFileToJsValue,
     DX_URL_PREFIX, DXIOParam, DXWorkflowStage, FLAT_FILES_SUFFIX, isNativeDxType}
 import wdl.{WdlTask}
+import wdl.types.WdlFlavoredWomType
 import wom.types._
 import wom.values._
 
@@ -132,7 +133,7 @@ object WdlVarLinks {
 
     // Get the file-id
     def getDxFile(wvl: WdlVarLinks) : DXFile = {
-        assert(Utils.stripOptional(wvl.womType) == WdlFileType)
+        assert(Utils.stripOptional(wvl.womType) == WomFileType)
         wvl.dxlink match {
             case DxlValue(jsn) =>
                 val dxFiles = findDxFiles(jsn)
@@ -162,22 +163,22 @@ object WdlVarLinks {
     // }
     private def marshalWdlMap(keyType:WomType,
                               valueType:WomType,
-                              m:Map[WdlValue, WdlValue],
+                              m:Map[WomValue, WomValue],
                               ioDir: IODirection.Value) : JsValue = {
-        if (keyType == WdlStringType) {
+        if (keyType == WomStringType) {
             // keys are strings
             JsObject(m.map{
-                         case (WdlString(k), v) =>
+                         case (WomString(k), v) =>
                              k -> jsFromWdlValue(valueType, v, ioDir)
                          case (k,_) =>
-                             throw new Exception(s"key ${k.toDisplayString} should be a WdlStringType")
+                             throw new Exception(s"key ${k.toWomString} should be a WdlString")
                      }.toMap)
         }
         else {
             // general case
-            val keys:WdlValue = WdlArray(WdlArrayType(keyType), m.keys.toVector)
+            val keys:WomValue = WomArray(WomArrayType(keyType), m.keys.toVector)
             val kJs = jsFromWdlValue(keys.womType, keys, ioDir)
-            val values:WdlValue = WdlArray(WdlArrayType(valueType), m.values.toVector)
+            val values:WomValue = WomArray(WomArrayType(valueType), m.values.toVector)
             val vJs = jsFromWdlValue(values.womType, values, ioDir)
             JsObject("keys" -> kJs, "values" -> vJs)
         }
@@ -188,7 +189,7 @@ object WdlVarLinks {
                                        valueType: WomType,
                                        jsValue: JsValue) : Map[JsValue, JsValue] = {
         try {
-            if (keyType == WdlStringType) {
+            if (keyType == WomStringType) {
                 // specialization for the case where keys are strings.
                 val fields = jsValue.asJsObject.fields
                 fields.map{ case (k:String, v:JsValue) =>
@@ -215,9 +216,9 @@ object WdlVarLinks {
         }
     }
 
-    private def marshalWdlObject(m: Map[String, WdlValue],
+    private def marshalWdlObject(m: Map[String, WomValue],
                                  ioDir: IODirection.Value) : JsValue = {
-        val jsm:Map[String, JsValue] = m.map{ case (key, w:WdlValue) =>
+        val jsm:Map[String, JsValue] = m.map{ case (key, w:WomValue) =>
             key -> JsObject("type" -> JsString(w.womType.toDisplayString),
                             "value" -> jsFromWdlValue(w.womType, w, ioDir))
         }.toMap
@@ -246,21 +247,21 @@ object WdlVarLinks {
 
     private def evalCoreHandleFile(jsv:JsValue,
                                    ioMode: IOMode.Value,
-                                   ioDir: IODirection.Value) : WdlValue = {
+                                   ioDir: IODirection.Value) : WomValue = {
         (ioDir,jsv) match {
             case (IODirection.Upload, JsString(path)) if isLocalPath(path) =>
                 // Local file that needs to be uploaded
                 LocalDxFiles.upload(Paths.get(path))
-                WdlSingleFile(path)
+                WomSingleFile(path)
             case (IODirection.Upload, JsObject(_)) =>
                 // We already downloaded this file. We need to get from the dx:link
-                // to a WdlValue.
+                // to a WomValue.
                 val dxFile = dxFileFromJsValue(jsv)
                 LocalDxFiles.get(dxFile) match {
                     case None =>
                         throw new AppInternalException(
                             s"dx:file ${jsv} is not found locally, it cannot be uploaded.")
-                    case Some(path) => WdlSingleFile(path.toString)
+                    case Some(path) => WomSingleFile(path.toString)
                 }
 
             case (IODirection.Download, _) =>
@@ -268,10 +269,10 @@ object WdlVarLinks {
 
             case (IODirection.Zero, JsString(path)) if path.startsWith(DX_URL_PREFIX) =>
                 val dxFile = DxPath.lookupDxURLFile(path)
-                WdlSingleFile(DxPath.dxFileToURL(dxFile))
+                WomSingleFile(DxPath.dxFileToURL(dxFile))
             case (IODirection.Zero, JsObject(_)) =>
                 val dxFile = dxFileFromJsValue(jsv)
-                WdlSingleFile(DxPath.dxFileToURL(dxFile))
+                WomSingleFile(DxPath.dxFileToURL(dxFile))
 
             case (_,_) =>
                 throw new Exception(s"Cannot transfer ${jsv} in context ${ioDir}")
@@ -281,55 +282,55 @@ object WdlVarLinks {
     private def evalCore(womType: WomType,
                          jsValue: JsValue,
                          ioMode: IOMode.Value,
-                         ioDir: IODirection.Value) : WdlValue = {
+                         ioDir: IODirection.Value) : WomValue = {
         (womType, jsValue)  match {
             // base case: primitive types
-            case (WdlBooleanType, JsBoolean(b)) => WdlBoolean(b.booleanValue)
-            case (WdlIntegerType, JsNumber(bnm)) => WdlInteger(bnm.intValue)
-            case (WdlFloatType, JsNumber(bnm)) => WdlFloat(bnm.doubleValue)
-            case (WdlStringType, JsString(s)) => WdlString(s)
-            case (WdlFileType, _) => evalCoreHandleFile(jsValue, ioMode, ioDir)
+            case (WomBooleanType, JsBoolean(b)) => WomBoolean(b.booleanValue)
+            case (WomIntegerType, JsNumber(bnm)) => WomInteger(bnm.intValue)
+            case (WomFloatType, JsNumber(bnm)) => WomFloat(bnm.doubleValue)
+            case (WomStringType, JsString(s)) => WomString(s)
+            case (WomFileType, _) => evalCoreHandleFile(jsValue, ioMode, ioDir)
 
             // empty array
-            case (WdlArrayType(t), JsNull) =>
-                WdlArray(WdlArrayType(t), List.empty[WdlValue])
+            case (WomArrayType(t), JsNull) =>
+                WomArray(WomArrayType(t), List.empty[WomValue])
 
             // array
-            case (WdlArrayType(t), JsArray(vec)) =>
-                val wVec: Seq[WdlValue] = vec.map{
+            case (WomArrayType(t), JsArray(vec)) =>
+                val wVec: Seq[WomValue] = vec.map{
                     elem:JsValue => evalCore(t, elem, ioMode, ioDir)
                 }
-                WdlArray(WdlArrayType(t), wVec)
+                WomArray(WomArrayType(t), wVec)
 
             // Maps. These are serialized as an object with a keys array and
             // a values array.
-            case (WdlMapType(keyType, valueType), _) =>
-                val m: Map[WdlValue, WdlValue] =
+            case (WomMapType(keyType, valueType), _) =>
+                val m: Map[WomValue, WomValue] =
                     shallowUnmarshalWdlMap(keyType, valueType, jsValue).map{
                         case (k:JsValue, v:JsValue) =>
                             val kWdl = evalCore(keyType, k, ioMode, ioDir)
                             val vWdl = evalCore(valueType, v, ioMode, ioDir)
                             kWdl -> vWdl
                     }.toMap
-                WdlMap(WdlMapType(keyType, valueType), m)
+                WomMap(WomMapType(keyType, valueType), m)
 
-            case (WdlObjectType, JsObject(fields)) =>
+            case (WomObjectType, JsObject(fields)) =>
                 val m:Map[String, (WomType, JsValue)] = unmarshalWdlObject(fields)
                 val m2 = m.map{
                     case (key, (t, v)) =>
                         key -> evalCore(t, v, ioMode, ioDir)
                 }.toMap
-                WdlObject(m2)
+                WomObject(m2)
 
-            case (WdlPairType(lType, rType), JsObject(fields))
+            case (WomPairType(lType, rType), JsObject(fields))
                     if (List("left", "right").forall(fields contains _)) =>
                 val left = evalCore(lType, fields("left"), ioMode, ioDir)
                 val right = evalCore(rType, fields("right"), ioMode, ioDir)
-                WdlPair(left, right)
+                WomPair(left, right)
 
-            case (WdlOptionalType(t), JsNull) =>
-                WdlOptionalValue(t, None)
-            case (WdlOptionalType(t), jsv) =>
+            case (WomOptionalType(t), JsNull) =>
+                WomOptionalValue(t, None)
+            case (WomOptionalType(t), jsv) =>
                 evalCore(t, jsv, ioMode, ioDir)
 
             case _ =>
@@ -360,12 +361,12 @@ object WdlVarLinks {
     def unpackWdlArray(wvl: WdlVarLinks) : Seq[WdlVarLinks] = {
         val jsn = getRawJsValue(wvl)
         (wvl.womType, jsn) match {
-            case (WdlArrayType(t), JsArray(l)) =>
+            case (WomArrayType(t), JsArray(l)) =>
                 l.map(elem => WdlVarLinks(t, wvl.attrs, DxlValue(elem)))
 
             // Map. Convert into an array of WDL pairs.
-            case (WdlMapType(keyType, valueType), _) =>
-                val womType = WdlPairType(keyType, valueType)
+            case (WomMapType(keyType, valueType), _) =>
+                val womType = WomPairType(keyType, valueType)
                 shallowUnmarshalWdlMap(keyType, valueType, jsn).map{
                     case (k:JsValue, v:JsValue) =>
                         val js:JsValue = JsObject("left" -> k, "right" -> v)
@@ -373,7 +374,7 @@ object WdlVarLinks {
                 }.toVector
 
             // Strip optional type
-            case (WdlOptionalType(t), _) =>
+            case (WomOptionalType(t), _) =>
                 val wvl1 = wvl.copy(womType = t)
                 unpackWdlArray(wvl1)
 
@@ -387,15 +388,15 @@ object WdlVarLinks {
     private def memberAccessStep(wvl: WdlVarLinks, fieldName: String) : WdlVarLinks = {
         val jsValue = getRawJsValue(wvl)
         (wvl.womType, jsValue) match {
-            case (_:WdlObject, JsObject(m)) =>
+            case (_:WomObject, JsObject(m)) =>
                 unmarshalWdlObject(m).get(fieldName) match {
                     case Some((womType,jsv)) => WdlVarLinks(womType, wvl.attrs, DxlValue(jsv))
                     case None => throw new Exception(s"Unknown field ${fieldName} in object ${wvl}")
                 }
-            case (WdlPairType(lType, rType), JsObject(fields))
+            case (WomPairType(lType, rType), JsObject(fields))
                     if (List("left", "right") contains fieldName) =>
                 WdlVarLinks(lType, wvl.attrs, DxlValue(fields(fieldName)))
-            case (WdlOptionalType(t), _) =>
+            case (WomOptionalType(t), _) =>
                 // strip optional type
                 val wvl1 = wvl.copy(womType = t)
                 memberAccessStep(wvl1, fieldName)
@@ -444,75 +445,75 @@ object WdlVarLinks {
 
         (womType, wdlValue) match {
             // Base case: primitive types
-            case (WdlFileType, WdlString(path)) => handleFile(path)
-            case (WdlFileType, WdlSingleFile(path)) => handleFile(path)
-            case (WdlStringType, WdlSingleFile(path)) => JsString(path)
-            case (WdlStringType, WdlString(buf)) =>
+            case (WomFileType, WomString(path)) => handleFile(path)
+            case (WomFileType, WomSingleFile(path)) => handleFile(path)
+            case (WomStringType, WomSingleFile(path)) => JsString(path)
+            case (WomStringType, WomString(buf)) =>
                 if (buf.length > Utils.MAX_STRING_LEN)
                     throw new AppInternalException(s"string is longer than ${Utils.MAX_STRING_LEN}")
                 JsString(buf)
-            case (WdlBooleanType,WdlBoolean(b)) => JsBoolean(b)
-            case (WdlBooleanType,WdlString("true")) => JsBoolean(true)
-            case (WdlBooleanType,WdlString("false")) => JsBoolean(false)
+            case (WomBooleanType,WomBoolean(b)) => JsBoolean(b)
+            case (WomBooleanType,WomString("true")) => JsBoolean(true)
+            case (WomBooleanType,WomString("false")) => JsBoolean(false)
 
             // Integer conversions
-            case (WdlIntegerType,WdlInteger(n)) => JsNumber(n)
-            case (WdlIntegerType,WdlString(s)) => JsNumber(s.toInt)
-            case (WdlIntegerType,WdlFloat(x)) => JsNumber(x.toInt)
+            case (WomIntegerType,WomInteger(n)) => JsNumber(n)
+            case (WomIntegerType,WomString(s)) => JsNumber(s.toInt)
+            case (WomIntegerType,WomFloat(x)) => JsNumber(x.toInt)
 
             // Float conversions
-            case (WdlFloatType, WdlFloat(x)) => JsNumber(x)
-            case (WdlFloatType, WdlInteger(n)) => JsNumber(n.toFloat)
-            case (WdlFloatType, WdlString(s)) => JsNumber(s.toFloat)
+            case (WomFloatType, WomFloat(x)) => JsNumber(x)
+            case (WomFloatType, WomInteger(n)) => JsNumber(n.toFloat)
+            case (WomFloatType, WomString(s)) => JsNumber(s.toFloat)
 
             // Base case: empty array
-            case (_, WdlArray(_, ar)) if ar.length == 0 =>
+            case (_, WomArray(_, ar)) if ar.length == 0 =>
                 JsArray(Vector.empty)
-            case (WdlArrayType(t), null) =>
+            case (WomArrayType(t), null) =>
                 JsArray(Vector.empty)
 
             // Non empty array
-            case (WdlArrayType(t), WdlArray(_, elems)) =>
+            case (WomArrayType(t), WomArray(_, elems)) =>
                 val jsVals = elems.map(e => jsFromWdlValue(t, e, ioDir))
                 JsArray(jsVals.toVector)
 
             // automatically cast an element from type T to Array[T]
-            case (WdlArrayType(t), elem) =>
+            case (WomArrayType(t), elem) =>
                 JsArray(jsFromWdlValue(t,elem, ioDir))
 
             // Maps. These are projections from a key to value, where
             // the key and value types are statically known. We
             // represent them in JSON as an array of keys, followed by
             // an array of values.
-            case (WdlMapType(keyType, valueType), WdlMap(_, m)) =>
+            case (WomMapType(keyType, valueType), WomMap(_, m)) =>
                 marshalWdlMap(keyType, valueType, m, ioDir)
 
             // keys are strings, requiring no conversion. Because objects
             // are not statically typed, we need to carry the types at runtime.
-            case (WdlObjectType, WdlObject(m: Map[String, WomValue])) =>
+            case (WomObjectType, WomObject(m: Map[String, WomValue])) =>
                 marshalWdlObject(m, ioDir)
 
-            case (WdlPairType(lType, rType), WdlPair(l,r)) =>
+            case (WomPairType(lType, rType), WomPair(l,r)) =>
                 val lJs = jsFromWdlValue(lType, l, ioDir)
                 val rJs = jsFromWdlValue(rType, r, ioDir)
                 JsObject("left" -> lJs, "right" -> rJs)
 
             // Strip optional type
-            case (WdlOptionalType(t), WdlOptionalValue(_,Some(WdlSingleFile(path)))) =>
+            case (WomOptionalType(t), WomOptionalValue(_,Some(WomSingleFile(path)))) =>
                 if (Files.exists(Paths.get(path))) handleFile(path)
                 else JsNull
-            case (WdlOptionalType(t), WdlOptionalValue(_,Some(w))) =>
+            case (WomOptionalType(t), WomOptionalValue(_,Some(w))) =>
                 jsFromWdlValue(t, w, ioDir)
-            case (WdlOptionalType(t), WdlOptionalValue(_,None)) =>
+            case (WomOptionalType(t), WomOptionalValue(_,None)) =>
                 JsNull
-            case (WdlOptionalType(t), w) =>
+            case (WomOptionalType(t), w) =>
                 jsFromWdlValue(t, w, ioDir)
-            case (t, WdlOptionalValue(_,Some(w))) =>
+            case (t, WomOptionalValue(_,Some(w))) =>
                 jsFromWdlValue(t, w, ioDir)
 
             case (_,_) => throw new Exception(
                 s"""|Unsupported combination type=(${womType.toDisplayString},${womType})
-                    |value=(${wdlValue.toDisplayString}, ${wdlValue})"""
+                    |value=(${wdlValue.toWomString}, ${wdlValue})"""
                     .stripMargin.replaceAll("\n", " "))
         }
     }
@@ -522,7 +523,7 @@ object WdlVarLinks {
                       attrs: DeclAttrs,
                       womValue: WomValue,
                       ioDir: IODirection.Value) : WdlVarLinks = {
-        val jsValue = jsFromWdlValue(womType, wdlValue, ioDir)
+        val jsValue = jsFromWdlValue(womType, womValue, ioDir)
         WdlVarLinks(womType, attrs, DxlValue(jsValue))
     }
 
@@ -585,7 +586,7 @@ object WdlVarLinks {
         if (ioParam.ioClass == IOClass.HASH) {
             val (t, v) = unmarshalHash(jsValue)
             if (ioParam.optional)
-                (WdlOptionalType(t), v)
+                (WomOptionalType(t), v)
             else
                 (t, v)
             WdlVarLinks(t, attrs, DxlValue(v))
@@ -593,30 +594,30 @@ object WdlVarLinks {
             val womType =
                 if (ioParam.optional) {
                     ioParam.ioClass match {
-                        case IOClass.BOOLEAN => WdlOptionalType(WdlBooleanType)
-                        case IOClass.INT => WdlOptionalType(WdlIntegerType)
-                        case IOClass.FLOAT => WdlOptionalType(WdlFloatType)
-                        case IOClass.STRING => WdlOptionalType(WdlStringType)
-                        case IOClass.FILE => WdlOptionalType(WdlFileType)
-                        case IOClass.ARRAY_OF_BOOLEANS => WdlMaybeEmptyArrayType(WdlBooleanType)
-                        case IOClass.ARRAY_OF_INTS => WdlMaybeEmptyArrayType(WdlIntegerType)
-                        case IOClass.ARRAY_OF_FLOATS => WdlMaybeEmptyArrayType(WdlFloatType)
-                        case IOClass.ARRAY_OF_STRINGS => WdlMaybeEmptyArrayType(WdlStringType)
-                        case IOClass.ARRAY_OF_FILES => WdlMaybeEmptyArrayType(WdlFileType)
+                        case IOClass.BOOLEAN => WomOptionalType(WomBooleanType)
+                        case IOClass.INT => WomOptionalType(WomIntegerType)
+                        case IOClass.FLOAT => WomOptionalType(WomFloatType)
+                        case IOClass.STRING => WomOptionalType(WomStringType)
+                        case IOClass.FILE => WomOptionalType(WomFileType)
+                        case IOClass.ARRAY_OF_BOOLEANS => WomMaybeEmptyArrayType(WomBooleanType)
+                        case IOClass.ARRAY_OF_INTS => WomMaybeEmptyArrayType(WomIntegerType)
+                        case IOClass.ARRAY_OF_FLOATS => WomMaybeEmptyArrayType(WomFloatType)
+                        case IOClass.ARRAY_OF_STRINGS => WomMaybeEmptyArrayType(WomStringType)
+                        case IOClass.ARRAY_OF_FILES => WomMaybeEmptyArrayType(WomFileType)
                         case other => throw new Exception(s"unhandled IO class ${other}")
                     }
                 } else {
                     ioParam.ioClass match {
-                        case IOClass.BOOLEAN => WdlBooleanType
-                        case IOClass.INT => WdlIntegerType
-                        case IOClass.FLOAT => WdlFloatType
-                        case IOClass.STRING => WdlStringType
-                        case IOClass.FILE => WdlFileType
-                        case IOClass.ARRAY_OF_BOOLEANS => WdlNonEmptyArrayType(WdlBooleanType)
-                        case IOClass.ARRAY_OF_INTS => WdlNonEmptyArrayType(WdlIntegerType)
-                        case IOClass.ARRAY_OF_FLOATS => WdlNonEmptyArrayType(WdlFloatType)
-                        case IOClass.ARRAY_OF_STRINGS => WdlNonEmptyArrayType(WdlStringType)
-                        case IOClass.ARRAY_OF_FILES => WdlNonEmptyArrayType(WdlFileType)
+                        case IOClass.BOOLEAN => WomBooleanType
+                        case IOClass.INT => WomIntegerType
+                        case IOClass.FLOAT => WomFloatType
+                        case IOClass.STRING => WomStringType
+                        case IOClass.FILE => WomFileType
+                        case IOClass.ARRAY_OF_BOOLEANS => WomNonEmptyArrayType(WomBooleanType)
+                        case IOClass.ARRAY_OF_INTS => WomNonEmptyArrayType(WomIntegerType)
+                        case IOClass.ARRAY_OF_FLOATS => WomNonEmptyArrayType(WomFloatType)
+                        case IOClass.ARRAY_OF_STRINGS => WomNonEmptyArrayType(WomStringType)
+                        case IOClass.ARRAY_OF_FILES => WomNonEmptyArrayType(WomFileType)
                         case other => throw new Exception(s"unhandled IO class ${other}")
                     }
                 }
@@ -638,38 +639,38 @@ object WdlVarLinks {
                                    jsv: JsValue) : JsValue = {
         (womType, jsv) match {
             // base case: primitive types
-            case (WdlBooleanType, JsBoolean(_)) => jsv
-            case (WdlIntegerType, JsNumber(_)) => jsv
-            case (WdlFloatType, JsNumber(_)) => jsv
-            case (WdlStringType, JsString(_)) => jsv
-            case (WdlFileType, JsObject(_)) => jsv
+            case (WomBooleanType, JsBoolean(_)) => jsv
+            case (WomIntegerType, JsNumber(_)) => jsv
+            case (WomFloatType, JsNumber(_)) => jsv
+            case (WomStringType, JsString(_)) => jsv
+            case (WomFileType, JsObject(_)) => jsv
 
             // optionals
-            case (WdlOptionalType(t), (null|JsNull)) => JsNull
-            case (WdlOptionalType(t), _) =>
+            case (WomOptionalType(t), (null|JsNull)) => JsNull
+            case (WomOptionalType(t), _) =>
                 importFromCromwell(t, jsv)
 
             // arrays
-            case (WdlArrayType(t), JsArray(vec)) =>
+            case (WomArrayType(t), JsArray(vec)) =>
                 JsArray(vec.map{
                     elem => importFromCromwell(t, elem)
                 })
 
             // Maps. Since these have string values, they are, essentially,
             // mapped to WDL maps of type Map[String, T].
-            case (WdlMapType(keyType, valueType), JsObject(fields)) =>
-                if (keyType != WdlStringType)
+            case (WomMapType(keyType, valueType), JsObject(fields)) =>
+                if (keyType != WomStringType)
                     throw new Exception("Importing a JSON object to a WDL map requires string keys")
                 JsObject(fields.map{ case (k,v) =>
                              k -> importFromCromwell(valueType, v)
                          })
 
-            case (WdlPairType(lType, rType), JsArray(Vector(l,r))) =>
+            case (WomPairType(lType, rType), JsArray(Vector(l,r))) =>
                 val lJs = importFromCromwell(lType, l)
                 val rJs = importFromCromwell(rType, r)
                 JsObject("left" -> lJs, "right" -> rJs)
 
-            case (WdlObjectType, _) =>
+            case (WomObjectType, _) =>
                 throw new Exception(
                     s"""|WDL Objects are not supported when converting from JSON inputs
                         |type = ${womType.toDisplayString}
@@ -820,7 +821,7 @@ object WdlVarLinks {
         if (vec.isEmpty)
             throw new Exception("Sanity: WVL array has to be non empty")
 
-        val womType = WdlArrayType(vec.head.womType)
+        val womType = WomArrayType(vec.head.womType)
         val declAttrs = vec.head.attrs
         vec.head.dxlink match {
             case DxlValue(_) =>
