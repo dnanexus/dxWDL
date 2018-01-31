@@ -13,8 +13,8 @@ import com.dnanexus.{DXRecord}
 import wdl._
 import wdl.AstTools
 import wdl4s.parser.WdlParser.{Ast, Terminal}
-import wdl.types._
-import wom.types.WomType
+import wom.core.WorkflowSource
+import wom.types._
 import wom.values._
 
 object WdlRewrite {
@@ -35,8 +35,8 @@ object WdlRewrite {
                     name: String,
                     expr: Option[WdlExpression]) : Declaration = {
         val textualRepr = expr match {
-            case None => s"${wdlType.toWdlString} ${name}"
-            case Some(e) => s"${wdlType.toWdlString} ${name} = ${e.toWdlString}"
+            case None => s"${wdlType.toDisplayString} ${name}"
+            case Some(e) => s"${wdlType.toDisplayString} ${name} = ${e.toWomString}"
         }
         val ast: Ast = AstTools.getAst(textualRepr, "")
         Declaration(wdlType, name, expr, None, ast)
@@ -57,7 +57,7 @@ object WdlRewrite {
                      scope: Scope) : WdlTask = {
         val task = new WdlTask(name,
                                Vector.empty,  // command Template
-                               new RuntimeAttributes(Map.empty[String,WdlExpression]),
+                               new WdlRuntimeAttributes(Map.empty[String,WdlExpression]),
                                meta,
                                Map.empty[String, String], // parameter meta
                                scope.ast)
@@ -77,7 +77,7 @@ object WdlRewrite {
         val cleaned = attrs + ("docker" -> urlExpr)
         val task2 = new WdlTask(task.name,
                                 task.commandTemplate,
-                                RuntimeAttributes(cleaned),
+                                WdlRuntimeAttributes(cleaned),
                                 task.meta,
                                 task.parameterMeta,
                                 INVALID_AST)
@@ -88,25 +88,25 @@ object WdlRewrite {
 
     private def genDefaultValueOfType(wdlType: WomType) : WomValue = {
         wdlType match {
-            case WdlBooleanType => WdlBoolean(true)
-            case WdlIntegerType => WdlInteger(0)
-            case WdlFloatType => WdlFloat(0.0)
-            case WdlStringType => WdlString("")
-            case WdlFileType => WdlFile("")
+            case WomBooleanType => WomBoolean(true)
+            case WomIntegerType => WomInteger(0)
+            case WomFloatType => WomFloat(0.0)
+            case WomStringType => WomString("")
+            case WomFileType => WomFile("")
 
-            case WdlOptionalType(t) => genDefaultValueOfType(t)
-            case WdlMaybeEmptyArrayType(t) =>
+            case WomOptionalType(t) => genDefaultValueOfType(t)
+            case WomMaybeEmptyArrayType(t) =>
                 // an empty array
-                WdlArray(WdlMaybeEmptyArrayType(t), List())
-            case WdlNonEmptyArrayType(t) =>
+                WomArray(WomMaybeEmptyArrayType(t), List())
+            case WomNonEmptyArrayType(t) =>
                 // Non empty array
-                WdlArray(WdlNonEmptyArrayType(t), List(genDefaultValueOfType(t)))
-            case WdlMapType(keyType, valueType) =>
-                WdlMap(WdlMapType(keyType, valueType), Map.empty)
-            case WdlObjectType => WdlObject(Map.empty)
-            case WdlPairType(lType, rType) => WdlPair(genDefaultValueOfType(lType),
+                WomArray(WomNonEmptyArrayType(t), List(genDefaultValueOfType(t)))
+            case WomMapType(keyType, valueType) =>
+                WomMap(WomMapType(keyType, valueType), Map.empty)
+            case WomObjectType => WomObject(Map.empty)
+            case WomPairType(lType, rType) => WomPair(genDefaultValueOfType(lType),
                                                       genDefaultValueOfType(rType))
-            case _ => throw new Exception(s"Unhandled type ${wdlType.toWdlString}")
+            case _ => throw new Exception(s"Unhandled type ${wdlType.toWomString}")
         }
     }
 

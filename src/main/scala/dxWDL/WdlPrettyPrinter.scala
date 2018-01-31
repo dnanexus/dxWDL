@@ -14,9 +14,9 @@
 package dxWDL
 
 import scala.util.{Failure, Success}
-import wdl._
-import wdl.command.{CommandPart, ParameterCommandPart, StringCommandPart}
 import Utils.{COMMAND_DEFAULT_BRACKETS, COMMAND_HEREDOC_BRACKETS}
+import wdl._
+import wdl.command.{WdlCommandPart, ParameterCommandPart, StringCommandPart}
 
 case class WdlPrettyPrinter(fqnFlag: Boolean,
                             workflowOutputs: Option[Seq[WorkflowOutput]]) {
@@ -35,7 +35,7 @@ case class WdlPrettyPrinter(fqnFlag: Boolean,
     }
 
     private def orgExpression(expr: WdlExpression) : String = {
-        escapeChars(expr.toWdlString)
+        escapeChars(expr.toWomString)
     }
 
     // indent a line by [level] steps
@@ -69,7 +69,7 @@ case class WdlPrettyPrinter(fqnFlag: Boolean,
     // faithfully preserved. There are shell commands that are
     // sensitive to white space and tabs.
     //
-    def buildCommandBlock(commandTemplate: Seq[CommandPart],
+    def buildCommandBlock(commandTemplate: Seq[WdlCommandPart],
                           bracketSymbols: (String,String),
                           level: Int) : Vector[String] = {
         val command: String = commandTemplate.map {part =>
@@ -120,7 +120,7 @@ case class WdlPrettyPrinter(fqnFlag: Boolean,
             case None => ""
             case Some(x) => " = " ++ orgExpression(x)
         }
-        val ln = s"${decl.wdlType.toWdlString} ${decl.unqualifiedName} ${exprStr}"
+        val ln = s"${decl.womType.toDisplayString} ${decl.unqualifiedName} ${exprStr}"
         Vector(indentLine(ln, level))
     }
 
@@ -152,7 +152,7 @@ case class WdlPrettyPrinter(fqnFlag: Boolean,
     }
 
     def apply(tso: TaskOutput, level: Int): Vector[String] = {
-        val ln = s"""|${tso.wdlType.toWdlString} ${tso.unqualifiedName} =
+        val ln = s"""|${tso.womType.toDisplayString} ${tso.unqualifiedName} =
                      |${orgExpression(tso.requiredExpression)}"""
             .stripMargin.replaceAll("\n", " ").trim
         Vector(indentLine(ln, level))
@@ -214,7 +214,7 @@ case class WdlPrettyPrinter(fqnFlag: Boolean,
      */
     def apply(wfo: WorkflowOutput, level: Int) : Vector[String] = {
         val ln =
-            if (wfo.unqualifiedName == wfo.requiredExpression.toWdlString)
+            if (wfo.unqualifiedName == wfo.requiredExpression.toWomString)
                 wfo.unqualifiedName
             else
                 wfo.toWdlString
