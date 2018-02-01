@@ -162,6 +162,9 @@ object DxFunctions extends WdlStandardLibraryFunctions {
     }
 
     override def writeFile(path: String, content: String): Try[WomFile] = {
+        if (path.startsWith(DX_URL_PREFIX)) {
+            return Failure(new Exception("Cannot write non local file"))
+        }
         try {
             Utils.writeFileContent(Paths.get(path), content)
             Success(WomSingleFile(path))

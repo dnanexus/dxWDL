@@ -102,7 +102,7 @@ class CompilerTopologicalSortTest extends FlatSpec with BeforeAndAfterEach {
             case e: Exception => true
         }
     }
-    it should "allow for a nested cycle using the 'relaxed' method" in {
+    ignore should "allow for a nested cycle using the 'relaxed' method" in {
         sortWorkflowHelper(nestedCycle, false)
     }
     it should "correctly sort a basic multi-level workflow" in {
