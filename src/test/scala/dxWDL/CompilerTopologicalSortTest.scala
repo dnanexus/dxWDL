@@ -2,7 +2,7 @@ package dxWDL
 
 import org.scalatest.{BeforeAndAfterEach, FlatSpec}
 import Utils.{TopoMode, Verbose}
-import wdl4s.wdl._
+import wdl._
 
 class CompilerTopologicalSortTest extends FlatSpec with BeforeAndAfterEach {
     val simpleWdl = """|task add {

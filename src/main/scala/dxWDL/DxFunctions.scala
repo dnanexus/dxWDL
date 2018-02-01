@@ -5,6 +5,7 @@ import java.io.PrintStream
 import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, FileSystems, Path, Paths, PathMatcher}
 import scala.util.{Try, Success, Failure}
+import scala.util.Sorting
 import scala.collection.JavaConverters._
 import scala.collection.mutable.HashMap
 import spray.json._
@@ -123,29 +124,26 @@ object DxFunctions extends WdlStandardLibraryFunctions {
         } yield file
     }
 
-    // This creates the [path] argument used in the [glob] method below.
-    override def globPath(pattern: String) : String = {
-        pattern
-    }
-
-    // Search for the pattern in the home directory. The
-    // [path] argument is unused, as in Cromwell (see
-    // cromwell/backend/src/main/scala/cromwell/backend/io/GlobFunctions.scala).
+    // Search for the pattern in the home directory.
+    // See Cromwell code base:
+    // cromwell/backend/src/main/scala/cromwell/backend/io/GlobFunctions.scala.
     //
-    override def glob(path: String, pattern: String): Seq[String] = {
+    override def globHelper(pattern: String): Seq[String] = {
         errStream.println(s"DxFunctions.glob(${pattern})")
         val baseDir: Path = dxHomeDir
         val matcher:PathMatcher = FileSystems.getDefault()
             .getPathMatcher(s"glob:${baseDir.toString}/${pattern}")
         val retval =
-            if (!Files.exists(baseDir))
-                Seq[String]()
-            else
-                Files.walk(baseDir).iterator().asScala
+            if (!Files.exists(baseDir)) {
+                Seq.empty[String]
+            } else {
+                val files = Files.walk(baseDir).iterator().asScala
                     .filter(Files.isRegularFile(_))
                     .filter(matcher.matches(_))
                     .map(_.toString)
                     .toSeq
+                files.sorted
+            }
         errStream.println(s"${retval}")
         retval
     }
@@ -163,11 +161,15 @@ object DxFunctions extends WdlStandardLibraryFunctions {
         }
     }
 
-    override def writeTempFile(path: String,
-                               prefix: String,
-                               suffix: String,
-                               content: String): String =
-        throw new NotImplementedError()
+    override def writeFile(path: String, content: String): Try[WomFile] = {
+        try {
+            Utils.writeFileContent(Paths.get(path), content)
+            Success(WomSingleFile(path))
+        } catch {
+            case e: Throwable =>
+                Failure(e)
+        }
+    }
 
     override def stdout(params: Seq[Try[WomValue]]): Try[WomFile] = {
         val stdoutPath = getMetaDir().resolve("stdout")

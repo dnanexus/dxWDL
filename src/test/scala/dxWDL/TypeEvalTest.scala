@@ -2,9 +2,9 @@ package dxWDL
 
 import org.scalatest.{FlatSpec, Matchers}
 import scala.util.{Failure, Success}
-import wdl4s.wdl._
-import wdl4s.wdl.expression._
-import wdl4s.wdl.types._
+import wdl._
+import wdl.expression._
+import wom.types._
 
 class TypeEvalTest extends FlatSpec with Matchers {
 
@@ -43,7 +43,7 @@ class TypeEvalTest extends FlatSpec with Matchers {
 
 
     // Figure out the type of an expression
-    def evalType(expr: WdlExpression, parent: Scope) : WdlType = {
+    def evalType(expr: WdlExpression, parent: Scope) : WomType = {
 /*        expr.evaluateType(Utils.lookupType(parent),
                           new WdlStandardLibraryFunctionsType,
                           Some(parent)) match {*/
@@ -52,7 +52,7 @@ class TypeEvalTest extends FlatSpec with Matchers {
                             Some(parent)).evaluate(expr.ast) match {
             case Success(wdlType) => wdlType
             case Failure(f) =>
-                System.err.println(s"could not evaluate type of expression ${expr.toWdlString}")
+                System.err.println(s"could not evaluate type of expression ${expr.toWomString}")
                 throw f
         }
     }
@@ -68,8 +68,8 @@ class TypeEvalTest extends FlatSpec with Matchers {
         val ssc:Scatter = wf.scatters.head
 
         call.inputMappings.foreach { case (_, expr) =>
-            val t:WdlType = evalType(expr, ssc)
-            t should equal(WdlIntegerType)
+            val t:WomType = evalType(expr, ssc)
+            t should equal(WomIntegerType)
         }
     }
 
@@ -113,11 +113,11 @@ class TypeEvalTest extends FlatSpec with Matchers {
 
         val e1 = copy2call.inputMappings("src")
         val t1 = evalType(e1, copy2call)
-        //System.err.println(s"type(${e1.toWdlString}) = ${t1.toWdlString}")
-        t1 should equal(WdlFileType)
+        //System.err.println(s"type(${e1.toWomString}) = ${t1.toWomString}")
+        t1 should equal(WomFileType)
 
         val e2 = copy2call.inputMappings("basename")
-        evalType(e2, copy2call) should equal(WdlStringType)
+        evalType(e2, copy2call) should equal(WomStringType)
     }
 
 
@@ -173,14 +173,14 @@ class TypeEvalTest extends FlatSpec with Matchers {
 
         val e1 = incCall.inputMappings("i")
         val t1 = evalType(e1, incCall)
-        //System.err.println(s"type(${e1.toWdlString}) = ${t1.toWdlString}")
-        t1 should equal(WdlIntegerType)
+        //System.err.println(s"type(${e1.toWomString}) = ${t1.toWomString}")
+        t1 should equal(WomIntegerType)
 
         val output = wf.outputs.head
         //System.err.println(output)
         val e2 = output.requiredExpression
         val t2 = evalType(e2, wf)
-        //System.err.println(s"type(${e2.toWdlString}) = ${t2.toWdlString}")
-        t2 should equal(WdlMaybeEmptyArrayType(WdlIntegerType))
+        //System.err.println(s"type(${e2.toWomString}) = ${t2.toWomString}")
+        t2 should equal(WomMaybeEmptyArrayType(WomIntegerType))
     }
 }

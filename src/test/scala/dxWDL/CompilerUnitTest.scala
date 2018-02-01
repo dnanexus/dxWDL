@@ -3,7 +3,7 @@ package dxWDL
 import java.nio.file.{Path, Paths, Files}
 import java.nio.charset.StandardCharsets
 import org.scalatest.{FlatSpec, Matchers}
-import wdl4s.wdl._
+import wdl._
 
 class CompilerUnitTest extends FlatSpec with Matchers {
     lazy val testPath:Path = Paths.get("/tmp/dxWDL_TestFiles")
