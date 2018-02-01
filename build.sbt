@@ -1,5 +1,6 @@
 //import com.typesafe.sbt.GitPlugin.autoImport._
 import sbt.Keys._
+import Merging.customMergeStrategy
 enablePlugins(GitVersioning)
 
 scalaVersion := "2.12.4"
@@ -51,10 +52,10 @@ scalacOptions ++= Seq(
 //    "-Xfatal-warnings"       // makes those warnings fatal.
 )
 
-// Assembly settings
 assemblyJarName in assembly := "dxWDL.jar"
 logLevel in assembly := Level.Info
 assemblyOutputPath in assembly := file("applet_resources/resources/dxWDL.jar")
+assemblyMergeStrategy in assembly := customMergeStrategy.value
 
 libraryDependencies ++= Seq(
     "org.broadinstitute" %% "cromwell-wdl" % "30.2",

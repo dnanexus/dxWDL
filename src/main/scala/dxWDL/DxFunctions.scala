@@ -5,7 +5,6 @@ import java.io.PrintStream
 import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, FileSystems, Path, Paths, PathMatcher}
 import scala.util.{Try, Success, Failure}
-import scala.util.Sorting
 import scala.collection.JavaConverters._
 import scala.collection.mutable.HashMap
 import spray.json._
