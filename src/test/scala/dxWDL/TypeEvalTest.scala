@@ -44,12 +44,12 @@ class TypeEvalTest extends FlatSpec with Matchers {
 
     // Figure out the type of an expression
     def evalType(expr: WdlExpression, parent: Scope) : WomType = {
-/*        expr.evaluateType(Utils.lookupType(parent),
+        expr.evaluateType(Utils.lookupType(parent),
                           new WdlStandardLibraryFunctionsType,
-                          Some(parent)) match {*/
-        dxWDL.TypeEvaluator(Utils.lookupType(parent),
+                          Some(parent)) match {
+/*        dxWDL.TypeEvaluator(Utils.lookupType(parent),
                             new WdlStandardLibraryFunctionsType,
-                            Some(parent)).evaluate(expr.ast) match {
+                            Some(parent)).evaluate(expr.ast) match { */
             case Success(wdlType) => wdlType
             case Failure(f) =>
                 System.err.println(s"could not evaluate type of expression ${expr.toWomString}")

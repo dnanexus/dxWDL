@@ -108,9 +108,9 @@ class UtilsTest extends FlatSpec with Matchers {
         val v = WomArray(
             WomArrayType(WomStringType),
             List(WomString("one"), WomString("two"), WomString("three"), WomString("four")))
-        val wdlType =  WomNonEmptyArrayType(WomStringType)
-        val v2 = wdlType.coerceRawValue(v).get
-        v2.wdlType should equal(wdlType)
+        val womType =  WomNonEmptyArrayType(WomStringType)
+        val v2 = womType.coerceRawValue(v).get
+        v2.womType should equal(womType)
     }
 
     "SprayJs" should "marshal optionals" in {
