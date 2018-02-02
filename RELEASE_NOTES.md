@@ -1,5 +1,10 @@
 # Release Notes
 
+## 0.59
+- Improved handling of pricing list
+- Upgraded to the new wdl4s library, that now lives in the cromwell
+  repository under cromwell-wdl. The cromwell version is 30.2.
+
 ## 0.58
 - Adhering to WDL spec: a declaration set to a constant is
 treated as an input. In the example, `contamination` is compiled to

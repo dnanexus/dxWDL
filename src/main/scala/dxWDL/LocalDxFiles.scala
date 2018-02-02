@@ -9,7 +9,7 @@ import scala.collection.mutable.HashMap
 import spray.json._
 import Utils.{dxFileFromJsValue, getMetaDirPath, jsValueOfJsonNode,
     LOCAL_DX_FILES_CHECKPOINT_FILE, readFileContent, writeFileContent}
-import wdl4s.wdl.values._
+import wom.values._
 
 object LocalDxFiles {
     // A file can be in three possible states
@@ -149,7 +149,7 @@ object LocalDxFiles {
         }
     }
 
-    def download(jsValue: JsValue, ioMode: IOMode.Value) : WdlValue = {
+    def download(jsValue: JsValue, ioMode: IOMode.Value) : WomValue = {
         // Download the file, and place it in a local file, with the
         // same name as the platform. All files have to be downloaded
         // into the same directory; the only exception we make is for
@@ -206,6 +206,6 @@ object LocalDxFiles {
                 reverseLookup(dxFile) = path
                 path
         }
-        WdlSingleFile(path.toString)
+        WomSingleFile(path.toString)
     }
 }

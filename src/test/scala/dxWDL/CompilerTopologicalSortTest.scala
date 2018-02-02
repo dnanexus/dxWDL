@@ -1,10 +1,10 @@
 package dxWDL
 
-import org.scalatest.{BeforeAndAfterEach, FlatSpec}
+import org.scalatest.{FlatSpec, Matchers}
 import Utils.{TopoMode, Verbose}
-import wdl4s.wdl._
+import wdl._
 
-class CompilerTopologicalSortTest extends FlatSpec with BeforeAndAfterEach {
+class CompilerTopologicalSortTest extends FlatSpec with Matchers {
     val simpleWdl = """|task add {
                        |    Int x
                        |    Int y
@@ -103,7 +103,12 @@ class CompilerTopologicalSortTest extends FlatSpec with BeforeAndAfterEach {
         }
     }
     it should "allow for a nested cycle using the 'relaxed' method" in {
-        sortWorkflowHelper(nestedCycle, false)
+        try {
+            sortWorkflowHelper(nestedCycle, false)
+            throw new Exception("Compiler did not throw an exception on a nested cycle")
+        } catch {
+            case e: Exception => true
+        }
     }
     it should "correctly sort a basic multi-level workflow" in {
         val multiLevelWdl = """|task add {

@@ -30,9 +30,10 @@ package dxWDL
 import com.dnanexus.{DXAPI, DXJSON, DXProject}
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.node.ObjectNode
+//import scala.util.Sorting
 import spray.json._
 import Utils.{DEFAULT_INSTANCE_TYPE, Verbose, warning}
-import wdl4s.wdl.values._
+import wom.values._
 
 // Instance Type on the platform. For example:
 // name:   mem1_ssd1_x4
@@ -45,7 +46,7 @@ case class DxInstanceType(name: String,
                           diskGB: Int,
                           cpu: Int,
                           price: Float,
-                          os: Vector[(String, String)]) {
+                          os: Vector[(String, String)]) extends Ordered[DxInstanceType] {
     // Does this instance satisfy the requirements?
     def satisfies(memReq: Option[Int],
                   diskReq: Option[Int],
@@ -75,16 +76,34 @@ case class DxInstanceType(name: String,
     // memory and disk sizes, to make the comparison insensitive to
     // minor differences.
     def lteq(that: DxInstanceType) : Boolean = {
+        compare(that) <= 0
+    }
+
+    def compare(that: DxInstanceType) : Int = {
         // compare by price
         if (this.price < that.price)
-            return true
+            return -1
         if (this.price > that.price)
-            return false
+            return 1
 
         // Prices are the same, compare based on resource sizes.
-        return ((this.memoryMB / 1024) <= (that.memoryMB / 1024) &&
-                    (this.diskGB / 16) <= (that.diskGB / 16) &&
-                    this.cpu <= that.cpu)
+        val memDelta = (this.memoryMB / 1024) - (that.memoryMB / 1024)
+        val diskDelta = (this.diskGB / 16) - (that.diskGB / 16)
+        val cpuDelta = this.cpu - that.cpu
+
+        if (memDelta == 0 &&
+                diskDelta == 0 &&
+                cpuDelta == 0)
+            return 0
+        if (memDelta <= 0 &&
+                diskDelta <= 0 &&
+                cpuDelta <= 0)
+            return -1
+        if (memDelta >= 0 &&
+                diskDelta >= 0 &&
+                cpuDelta >= 0)
+            return 1
+        return 0;
     }
 }
 
@@ -188,25 +207,25 @@ object InstanceTypeDB extends DefaultJsonProtocol {
     implicit val instanceTypeDBFormat = jsonFormat1(InstanceTypeDB.apply)
 
     // Currently, we support only constants.
-    def parse(dxInstaceType: Option[WdlValue],
-              wdlMemoryMB: Option[WdlValue],
-              wdlDiskGB: Option[WdlValue],
-              wdlCpu: Option[WdlValue]) : IR.InstanceTypeConst = {
+    def parse(dxInstaceType: Option[WomValue],
+              wdlMemoryMB: Option[WomValue],
+              wdlDiskGB: Option[WomValue],
+              wdlCpu: Option[WomValue]) : IR.InstanceTypeConst = {
         // Shortcut the entire calculation, and provide the dx instance type directly
         dxInstaceType match {
             case None => None
-            case Some(WdlString(iType)) =>
+            case Some(WomString(iType)) =>
                 return IR.InstanceTypeConst(Some(iType), None, None, None)
             case Some(x) =>
                 throw new Exception(s"""|dxInstaceType has to evaluate to a
-                                        |WdlString type ${x.toWdlString}"""
+                                        |WomString type ${x.toWomString}"""
                                         .stripMargin.replaceAll("\n", " "))
         }
 
         // Examples for memory specification: "4000 MB", "1 GB"
         val memoryMB: Option[Int] = wdlMemoryMB match {
             case None => None
-            case Some(WdlString(buf)) =>
+            case Some(WomString(buf)) =>
                 // extract number
                 val numRex = """(\d+.?\d*)""".r
                 val numbers = numRex.findAllIn(buf).toList
@@ -232,13 +251,13 @@ object InstanceTypeDB extends DefaultJsonProtocol {
                 }
                 Some(mem.ceil.round)
             case Some(x) =>
-                throw new Exception(s"Memory has to evaluate to a WdlString type ${x.toWdlString}")
+                throw new Exception(s"Memory has to evaluate to a WomString type ${x.toWomString}")
         }
 
         // Examples: "local-disk 1024 HDD"
         val diskGB: Option[Int] = wdlDiskGB match {
             case None => None
-            case Some(WdlString(buf)) =>
+            case Some(WomString(buf)) =>
                 val components = buf.split("\\s+")
                 val ignoreWords = Set("local-disk", "hdd", "sdd")
                 val l = components.filter(x => !(ignoreWords contains x.toLowerCase))
@@ -250,20 +269,20 @@ object InstanceTypeDB extends DefaultJsonProtocol {
                 }
                 Some(i)
             case Some(x) =>
-                throw new Exception(s"Disk space has to evaluate to a WdlString type ${x.toWdlString}")
+                throw new Exception(s"Disk space has to evaluate to a WomString type ${x.toWomString}")
         }
 
         // Examples: "1", "12"
         val cpu: Option[Int] = wdlCpu match {
             case None => None
-            case Some(WdlString(buf)) =>
+            case Some(WomString(buf)) =>
                 val i:Int = try { buf.toInt } catch {
                     case e: Throwable =>
                         throw new Exception(s"Parse error for cpu specification ${buf}")
                 }
                 Some(i)
-            case Some(WdlInteger(i)) => Some(i)
-            case Some(WdlFloat(x)) => Some(x.toInt)
+            case Some(WomInteger(i)) => Some(i)
+            case Some(WomFloat(x)) => Some(x.toInt)
             case Some(x) => throw new Exception(s"Cpu has to evaluate to a numeric value ${x}")
         }
         return IR.InstanceTypeConst(None, memoryMB, diskGB, cpu)
@@ -385,6 +404,8 @@ object InstanceTypeDB extends DefaultJsonProtocol {
     // Check if an instance type passes some basic criteria:
     // - Instance must support Ubuntu 14.04.
     // - Instance is not a GPU instance.
+    // - Instance does not have local HDD storage, this
+    //   means it is really old hardware.
     private def instanceCriteria(iType: DxInstanceType) : Boolean = {
         val osSupported = iType.os.foldLeft(false) {
             case (accu, (distribution, release)) =>
@@ -396,6 +417,8 @@ object InstanceTypeDB extends DefaultJsonProtocol {
         if (!osSupported)
             return false
         if (iType.name contains "gpu")
+            return false
+        if (iType.name contains "hdd")
             return false
         return true
     }
@@ -442,6 +465,36 @@ object InstanceTypeDB extends DefaultJsonProtocol {
                                     |""".stripMargin.replaceAll("\n", " "))
                 queryNoPrices(dxProject)
         }
+    }
+
+    // Remove exact price information. For example,
+    // if the price list is:
+    //   mem1_ssd1_x2:  0.04$
+    //   mem1_ssd1_x4:  0.08$
+    //   mem3_ssd1_x8:  1.05$
+    // convert it into:
+    //   mem1_ssd1_x2:  1$
+    //   mem1_ssd1_x4:  2$
+    //   mem3_ssd1_x8:  3$
+    //
+    // This is useful when exporting the price list to an applet, which can be reverse
+    // engineered. We do not want to risk disclosing the real price list. Leaking the
+    // relative ordering of instances, but not actual prices, is considered ok.
+    def opaquePrices(db: InstanceTypeDB) : InstanceTypeDB = {
+        if (db.instances.isEmpty)
+            return db
+        // check if all the prices are zero, there is nothing to do then
+        val all_prices_are_zero = db.instances.forall(it => it.price == 0)
+        if (all_prices_are_zero)
+            return db
+        // sorted the prices from low to high, and then replace
+        // with rank.
+        var crnt_price = 0
+        val opaque = db.instances.sorted.map{ it =>
+            crnt_price += 1
+            it.copy(price = crnt_price)
+        }
+        InstanceTypeDB(opaque)
     }
 
     // The original list is at:

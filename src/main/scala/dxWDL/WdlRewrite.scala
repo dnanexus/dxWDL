@@ -10,11 +10,12 @@
 package dxWDL
 
 import com.dnanexus.{DXRecord}
-import wdl4s.wdl._
-import wdl4s.wdl.AstTools
+import wdl._
+import wdl.AstTools
 import wdl4s.parser.WdlParser.{Ast, Terminal}
-import wdl4s.wdl.types._
-import wdl4s.wdl.values._
+import wom.core.WorkflowSource
+import wom.types._
+import wom.values._
 
 object WdlRewrite {
     val INVALID_AST = AstTools.getAst("", "")
@@ -30,12 +31,12 @@ object WdlRewrite {
     }
 
     // Create a declaration.
-    def declaration(wdlType: WdlType,
+    def declaration(wdlType: WomType,
                     name: String,
                     expr: Option[WdlExpression]) : Declaration = {
         val textualRepr = expr match {
-            case None => s"${wdlType.toWdlString} ${name}"
-            case Some(e) => s"${wdlType.toWdlString} ${name} = ${e.toWdlString}"
+            case None => s"${wdlType.toDisplayString} ${name}"
+            case Some(e) => s"${wdlType.toDisplayString} ${name} = ${e.toWomString}"
         }
         val ast: Ast = AstTools.getAst(textualRepr, "")
         Declaration(wdlType, name, expr, None, ast)
@@ -56,7 +57,7 @@ object WdlRewrite {
                      scope: Scope) : WdlTask = {
         val task = new WdlTask(name,
                                Vector.empty,  // command Template
-                               new RuntimeAttributes(Map.empty[String,WdlExpression]),
+                               new WdlRuntimeAttributes(Map.empty[String,WdlExpression]),
                                meta,
                                Map.empty[String, String], // parameter meta
                                scope.ast)
@@ -76,7 +77,7 @@ object WdlRewrite {
         val cleaned = attrs + ("docker" -> urlExpr)
         val task2 = new WdlTask(task.name,
                                 task.commandTemplate,
-                                RuntimeAttributes(cleaned),
+                                WdlRuntimeAttributes(cleaned),
                                 task.meta,
                                 task.parameterMeta,
                                 INVALID_AST)
@@ -85,36 +86,36 @@ object WdlRewrite {
         task2
     }
 
-    private def genDefaultValueOfType(wdlType: WdlType) : WdlValue = {
+    private def genDefaultValueOfType(wdlType: WomType) : WomValue = {
         wdlType match {
-            case WdlBooleanType => WdlBoolean(true)
-            case WdlIntegerType => WdlInteger(0)
-            case WdlFloatType => WdlFloat(0.0)
-            case WdlStringType => WdlString("")
-            case WdlFileType => WdlFile("")
+            case WomBooleanType => WomBoolean(true)
+            case WomIntegerType => WomInteger(0)
+            case WomFloatType => WomFloat(0.0)
+            case WomStringType => WomString("")
+            case WomFileType => WomFile("")
 
-            case WdlOptionalType(t) => genDefaultValueOfType(t)
-            case WdlMaybeEmptyArrayType(t) =>
+            case WomOptionalType(t) => genDefaultValueOfType(t)
+            case WomMaybeEmptyArrayType(t) =>
                 // an empty array
-                WdlArray(WdlMaybeEmptyArrayType(t), List())
-            case WdlNonEmptyArrayType(t) =>
+                WomArray(WomMaybeEmptyArrayType(t), List())
+            case WomNonEmptyArrayType(t) =>
                 // Non empty array
-                WdlArray(WdlNonEmptyArrayType(t), List(genDefaultValueOfType(t)))
-            case WdlMapType(keyType, valueType) =>
-                WdlMap(WdlMapType(keyType, valueType), Map.empty)
-            case WdlObjectType => WdlObject(Map.empty)
-            case WdlPairType(lType, rType) => WdlPair(genDefaultValueOfType(lType),
+                WomArray(WomNonEmptyArrayType(t), List(genDefaultValueOfType(t)))
+            case WomMapType(keyType, valueType) =>
+                WomMap(WomMapType(keyType, valueType), Map.empty)
+            case WomObjectType => WomObject(Map.empty)
+            case WomPairType(lType, rType) => WomPair(genDefaultValueOfType(lType),
                                                       genDefaultValueOfType(rType))
-            case _ => throw new Exception(s"Unhandled type ${wdlType.toWdlString}")
+            case _ => throw new Exception(s"Unhandled type ${wdlType.toDisplayString}")
         }
     }
 
 
-    def taskOutput(name: String, wdlType: WdlType, scope: Scope) = {
+    def taskOutput(name: String, wdlType: WomType, scope: Scope) = {
         // We need to provide a default value, in the form of a Wdl
         // expression
-        val defaultVal:WdlValue = genDefaultValueOfType(wdlType)
-        val defaultExpr:WdlExpression = WdlExpression.fromString(defaultVal.toWdlString)
+        val defaultVal:WomValue = genDefaultValueOfType(wdlType)
+        val defaultExpr:WdlExpression = WdlExpression.fromString(defaultVal.toWomString)
 
         new TaskOutput(name, wdlType, defaultExpr, INVALID_AST, Some(scope))
     }
@@ -142,7 +143,7 @@ object WdlRewrite {
     }
 
     def workflowOutput(varName: String,
-                       wdlType: WdlType,
+                       wdlType: WomType,
                        scope: Scope) = {
         new WorkflowOutput("out_" + varName,
                            wdlType,
@@ -152,7 +153,7 @@ object WdlRewrite {
     }
 
     def workflowOutput(varName: String,
-                       wdlType: WdlType,
+                       wdlType: WomType,
                        expr: WdlExpression) : WorkflowOutput = {
         new WorkflowOutput("out_" + varName,
                            wdlType,
@@ -189,7 +190,7 @@ object WdlRewrite {
     def cond [Child <: Scope] (old: If,
                                children: Seq[Child],
                                condition: WdlExpression): If = {
-        val fresh = wdl4s.wdl.If(old.index, condition, INVALID_AST)
+        val fresh = wdl.If(old.index, condition, INVALID_AST)
         fresh.children = children
         updateScope(old, fresh)
         fresh
@@ -201,7 +202,9 @@ object WdlRewrite {
                                      tasks,
                                      Map.empty,
                                      WdlRewrite.INVALID_ERR_FORMATTER,
-                                     WdlRewrite.INVALID_AST)
+                                     WdlRewrite.INVALID_AST,
+                                     "", // sourceString: What does this argument do?
+                                     None)
     }
 
     def namespace(old: WdlNamespaceWithWorkflow, wf: WdlWorkflow) : WdlNamespaceWithWorkflow = {
@@ -212,7 +215,9 @@ object WdlRewrite {
                                                  old.tasks,
                                                  Map.empty,
                                                  WdlRewrite.INVALID_ERR_FORMATTER,
-                                                 WdlRewrite.INVALID_AST)
+                                                 WdlRewrite.INVALID_AST,
+                                                 "", // sourceString: What does this argument do?
+                                                 None)
         updateScope(old, fresh)
         fresh
     }
@@ -223,7 +228,9 @@ object WdlRewrite {
                                         Vector.empty,
                                         Vector(task),
                                         Map.empty,
-                                        WdlRewrite.INVALID_AST)
+                                        WdlRewrite.INVALID_AST,
+                                        "", // sourceString: What does this argument do?
+                                        None)
     }
 
     def namespace(tasks:Vector[WdlTask]) : WdlNamespaceWithoutWorkflow = {
@@ -232,7 +239,9 @@ object WdlRewrite {
                                         Vector.empty,
                                         tasks,
                                         Map.empty,
-                                        WdlRewrite.INVALID_AST)
+                                        WdlRewrite.INVALID_AST,
+                                        "", // sourceString: What does this argument do?
+                                        None)
     }
 
     def namespaceEmpty() : WdlNamespaceWithoutWorkflow = {
@@ -241,7 +250,9 @@ object WdlRewrite {
                                         Vector.empty,
                                         Vector.empty,
                                         Map.empty,
-                                        WdlRewrite.INVALID_AST)
+                                        WdlRewrite.INVALID_AST,
+                                        "", // sourceString: What does this argument do?
+                                        None)
     }
 
 }

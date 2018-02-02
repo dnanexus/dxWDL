@@ -46,7 +46,7 @@ workflow PairedEndSingleSampleWorkflow {
   File wgs_calling_interval_list
   Int haplotype_scatter_count
   Int break_bands_at_multiples_of
-  Int? read_length
+  Int? read_length = 250
 
   File ref_fasta
   File ref_fasta_index

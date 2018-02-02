@@ -15,10 +15,11 @@ import ExecutionContext.Implicits.global
 import scala.sys.process._
 import spray.json._
 import wdl4s.parser.WdlParser.{Terminal}
-import wdl4s.wdl._
-import wdl4s.wdl.expression._
-import wdl4s.wdl.types._
-import wdl4s.wdl.values._
+import wdl._
+import wdl.expression._
+import wdl.types._
+import wom.types._
+import wom.values._
 
 // Exception used for AppInternError
 class AppInternalException private(ex: RuntimeException) extends RuntimeException(ex) {
@@ -49,7 +50,7 @@ object Utils {
 
     // Information used to link applets that call other applets. For example, a scatter
     // applet calls applets that implement tasks.
-    case class AppletLinkInfo(inputs: Map[String, WdlType], dxApplet: DXApplet)
+    case class AppletLinkInfo(inputs: Map[String, WomType], dxApplet: DXApplet)
 
     // A stand in for the DXWorkflow.Stage inner class (we don't have a constructor for it)
     case class DXWorkflowStage(id: String) {
@@ -89,7 +90,7 @@ object Utils {
             // Serialize applet input definitions, so they could be used
             // at runtime.
             val appInputDefs: Map[String, JsString] = ali.inputs.map{
-                case (name, wdlType) => name -> JsString(wdlType.toWdlString)
+                case (name, womType) => name -> JsString(womType.toDisplayString)
             }.toMap
             JsObject(
                 "id" -> JsString(ali.dxApplet.getId()),
@@ -103,7 +104,7 @@ object Utils {
                 case _ => throw new Exception("Bad JSON")
             }
             val inputDefs = aplInfo.asJsObject.fields("inputs").asJsObject.fields.map{
-                case (key, JsString(wdlTypeStr)) => key -> WdlType.fromWdlString(wdlTypeStr)
+                case (key, JsString(womTypeStr)) => key -> WdlFlavoredWomType.fromDisplayString(womTypeStr)
                 case _ => throw new Exception("Bad JSON")
             }.toMap
             AppletLinkInfo(inputDefs, dxApplet)
@@ -189,15 +190,15 @@ object Utils {
     }
 
     // Is this a WDL type that maps to a native DX type?
-    def isNativeDxType(wdlType: WdlType) : Boolean = {
+    def isNativeDxType(wdlType: WomType) : Boolean = {
         wdlType match {
-            case WdlBooleanType | WdlIntegerType | WdlFloatType | WdlStringType | WdlFileType
-                   | WdlArrayType(WdlBooleanType)
-                   | WdlArrayType(WdlIntegerType)
-                   | WdlArrayType(WdlFloatType)
-                   | WdlArrayType(WdlStringType)
-                   | WdlArrayType(WdlFileType) => true
-            case WdlOptionalType(t) => isNativeDxType(t)
+            case WomBooleanType | WomIntegerType | WomFloatType | WomStringType | WomFileType
+                   | WomArrayType(WomBooleanType)
+                   | WomArrayType(WomIntegerType)
+                   | WomArrayType(WomFloatType)
+                   | WomArrayType(WomStringType)
+                   | WomArrayType(WomFileType) => true
+            case WomOptionalType(t) => isNativeDxType(t)
             case _ => false
         }
     }
@@ -218,15 +219,15 @@ object Utils {
 
     // Check if the WDL expression is a constant. If so, calculate and return it.
     // Otherwise, return None.
-    private def ifConstEval(expr: WdlExpression) : Option[WdlValue] = {
+    private def ifConstEval(expr: WdlExpression) : Option[WomValue] = {
         try {
-            def lookup(x:String) : WdlValue = {
+            def lookup(x:String) : WomValue = {
                 throw new VariableAccessException()
             }
             val ve = ValueEvaluator(lookup, PureStandardLibraryFunctions)
             ve.evaluate(expr.ast) match {
                 case Failure(_) => None
-                case Success(wValue:WdlValue) => Some(wValue)
+                case Success(wValue:WomValue) => Some(wValue)
             }
         } catch {
             case e: VariableAccessException =>
@@ -242,7 +243,7 @@ object Utils {
         }
     }
 
-    def evalConst(expr: WdlExpression) : WdlValue = {
+    def evalConst(expr: WdlExpression) : WomValue = {
         ifConstEval(expr) match {
             case None => throw new Exception(s"Expression ${expr} is not a WDL constant")
             case Some(wdlValue) => wdlValue
@@ -263,9 +264,9 @@ object Utils {
     // pi -- calculated, non inputs
     // z - is an input with a default value
     def declarationIsInput(decl: Declaration) : Boolean = {
-        (decl.expression, decl.wdlType) match {
+        (decl.expression, decl.womType) match {
             case (None,_) => true
-            case (Some(_), WdlOptionalType(_)) => true
+            case (Some(_), WomOptionalType(_)) => true
             case (Some(expr), _) if isExpressionConst(expr) =>
                 true
             case (_,_) => false
@@ -447,32 +448,32 @@ object Utils {
     //
     // We encode as base64, to remove special characters. This allows
     // embedding the resulting string as a field in a JSON document.
-    def marshal(v: WdlValue) : String = {
+    def marshal(v: WomValue) : String = {
         val js = JsArray(
-            JsString(v.wdlType.toWdlString),
-            JsString(v.toWdlString)
+            JsString(v.womType.toDisplayString),
+            JsString(v.toWomString)
         )
         base64Encode(js.compactPrint)
     }
 
     // reverse of [marshal]
-    def unmarshal(buf64 : String) : WdlValue = {
+    def unmarshal(buf64 : String) : WomValue = {
         val buf = base64Decode(buf64)
         buf.parseJson match {
             case JsArray(vec) if (vec.length == 2) =>
                 (vec(0), vec(1)) match {
                     case (JsString(wTypeStr), JsString(wValueStr)) =>
-                        val wType : WdlType = WdlType.fromWdlString(wTypeStr)
+                        val t : WomType = WdlFlavoredWomType.fromDisplayString(wTypeStr)
                         try {
-                            wType.fromWdlString(wValueStr)
+                            WdlFlavoredWomType.FromString(t).fromWorkflowSource(wValueStr)
                         } catch {
                             case e: Throwable =>
-                                wType match {
-                                    case WdlOptionalType(t) =>
-                                        System.err.println(s"Error unmarshalling wdlType=${wType.toWdlString}")
+                                t match {
+                                    case WomOptionalType(t1) =>
+                                        System.err.println(s"Error unmarshalling wdlType=${t.toDisplayString}")
                                         System.err.println(s"Value=${wValueStr}")
-                                        System.err.println(s"Trying again with type=${t.toWdlString}")
-                                        t.fromWdlString(wValueStr)
+                                        System.err.println(s"Trying again with type=${t1.toDisplayString}")
+                                        WdlFlavoredWomType.FromString(t1).fromWorkflowSource(wValueStr)
                                     case _ =>
                                         throw e
                                 }
@@ -706,25 +707,25 @@ object Utils {
     }
 
     // types
-    def isOptional(t: WdlType) : Boolean = {
+    def isOptional(t: WomType) : Boolean = {
         t match {
-            case WdlOptionalType(_) => true
+            case WomOptionalType(_) => true
             case t => false
         }
     }
 
     // We need to deal with types like:
     //     Int??, Array[File]??
-    def stripOptional(t: WdlType) : WdlType = {
+    def stripOptional(t: WomType) : WomType = {
         t match {
-            case WdlOptionalType(x) => stripOptional(x)
+            case WomOptionalType(x) => stripOptional(x)
             case x => x
         }
     }
 
-    def stripArray(t: WdlType) : WdlType = {
+    def stripArray(t: WomType) : WomType = {
         t match {
-            case WdlArrayType(x) => x
+            case WomArrayType(x) => x
             case _ => throw new Exception(s"WDL type $t is not an array")
         }
     }
@@ -772,41 +773,26 @@ object Utils {
         System.err.println(msg)
     }
 
-    // This code is based on the lookupType method in the WdlNamespace trait
+    // This code is copied the lookupType method in the WdlNamespace trait
     //   https://github.com/broadinstitute/wdl4s/blob/develop/wom/src/main/scala/wdl/WdlNamespace.scala
     //
-    // It handles the case where the scatter collection is not an
-    // array.
+    // We should ask to make it public.
     //
-    def lookupType(from: Scope)(n: String): WdlType = {
-        val resolved:Option[WdlGraphNode] = from.resolveVariable(n)
-        //System.err.println(s"resolved=${resolved}")
-        val wdlType = resolved match {
+    def lookupType(from: Scope)(n: String): WomType = {
+        val resolved: Option[WdlGraphNode] = from.resolveVariable(n)
+        resolved match {
             case Some(d: DeclarationInterface) => d.relativeWdlType(from)
             case Some(c: WdlCall) => WdlCallOutputsObjectType(c)
             case Some(s: Scatter) => s.collection.evaluateType(lookupType(s),
                                                                new WdlStandardLibraryFunctionsType,
                                                                Option(from)) match {
-                case Success(a: WdlArrayType) =>
-                    // Collection is an array
-                    a.memberType
-                case Success(WdlMapType(kType,vType)) =>
-                    // Collection is a map
-                    WdlPairType(kType, vType)
-                case Success(other) =>
-                    throw new Exception(
-                        s"""|Variable $n references a scatter block ${s.fullyQualifiedName},
-                            |but the collection evaluates to ${other.toWdlString}"""
-                            .stripMargin.replaceAll("\n", " "))
-                case Failure(f) =>
-                    throw f
+                case Success(WomArrayType(aType)) => aType
+                // We don't need to check for a WOM map type, because
+                // of the custom unapply in object WomArrayType
+                case _ => throw new Exception(s"Variable $n references a scatter block ${s.fullyQualifiedName}, but the collection does not evaluate to an array")
             }
             case Some(_: WdlNamespace) => WdlNamespaceType
-
-            case _ =>
-                throw new Exception(s"Could not resolve $n from scope ${from.fullyQualifiedName}")
+            case _ => throw new Exception(s"Could not resolve $n from scope ${from.fullyQualifiedName}")
         }
-        //System.err.println(s"lookupType(${n}) = ${wdlType.toWdlString}")
-        wdlType
     }
 }

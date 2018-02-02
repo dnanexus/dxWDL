@@ -49,12 +49,12 @@ import java.nio.file.{Path, Paths, Files}
 import scala.collection.mutable.HashMap
 import spray.json._
 import Utils.{AppletLinkInfo, appletLog, callUniqueName, DXIOParam, transformVarName}
-import wdl4s.wdl._
-import wdl4s.wdl.expression._
+import wdl._
+import wdl.expression._
 import wdl4s.parser.WdlParser.{Ast, Terminal}
-import wdl4s.wdl.values._
-import wdl4s.wdl.types._
-import wdl4s.wdl.WdlExpression.AstForExpressions
+import wom.values._
+import wom.types._
+import wdl.WdlExpression.AstForExpressions
 
 case class RunnerMiniWorkflow(exportVars: Set[String],
                               cef: CompilerErrorFormatter,
@@ -92,21 +92,21 @@ case class RunnerMiniWorkflow(exportVars: Set[String],
         }.flatten
     }
 
-    private def wdlValueFromWVL(wvl: WdlVarLinks) : WdlValue =
+    private def wdlValueFromWVL(wvl: WdlVarLinks) : WomValue =
         WdlVarLinks.eval(wvl, IOMode.Remote, IODirection.Zero)
 
-    private def wdlValueToWVL(t:WdlType, wdlValue:WdlValue) : WdlVarLinks =
+    private def wdlValueToWVL(t:WomType, wdlValue:WomValue) : WdlVarLinks =
         WdlVarLinks.importFromWDL(t, DeclAttrs.empty, wdlValue, IODirection.Zero)
 
     private def evalDeclarationsWVL(declarations: Seq[DeclarationInterface],
                                     envInputs : Map[String, WdlVarLinks])
             : Map[String, WdlVarLinks] = {
-        val inputs:Map[String, WdlValue] = envInputs.map{
+        val inputs:Map[String, WomValue] = envInputs.map{
             case (key, wvl) => key -> wdlValueFromWVL(wvl)
         }.toMap
         val env = RunnerEval.evalDeclarations(declarations, inputs)
         env.map { case (decl, wdlValue) =>
-            decl.unqualifiedName -> wdlValueToWVL(decl.wdlType, wdlValue)
+            decl.unqualifiedName -> wdlValueToWVL(decl.womType, wdlValue)
         }.toMap
     }
 
@@ -127,11 +127,11 @@ case class RunnerMiniWorkflow(exportVars: Set[String],
                         }
                     case _ =>
                         // a constant
-                        def nullLookup(varName : String) : WdlValue = {
+                        def nullLookup(varName : String) : WomValue = {
                             throw new Exception(cef.expressionMustBeConstOrVar(expr))
                         }
                         val wdlValue = expr.evaluate(nullLookup, NoFunctions).get
-                        wdlValueToWVL(wdlValue.wdlType, wdlValue)
+                        wdlValueToWVL(wdlValue.womType, wdlValue)
                 }
 
             case a: Ast if a.isMemberAccess =>
@@ -224,7 +224,7 @@ case class RunnerMiniWorkflow(exportVars: Set[String],
         val task = Utils.taskOfCall(call)
         val retValues = task.outputs
             .map { tso => tso.unqualifiedName -> WdlVarLinks(
-                      tso.wdlType,
+                      tso.womType,
                       DeclAttrs.empty,
                       DxlJob(dxJob, tso.unqualifiedName)) }
             .toMap
@@ -276,7 +276,7 @@ case class RunnerMiniWorkflow(exportVars: Set[String],
             case (accu, call) =>
                 val prefix = callUniqueName(call)
                 val promiseMap = call.outputs.map{ cao =>
-                    val wvl = WdlVarLinks(cao.wdlType,
+                    val wvl = WdlVarLinks(cao.womType,
                                           DeclAttrs.empty,
                                           DxlJob(dxSubJob, prefix + "_" + cao.unqualifiedName))
                     (prefix + "." + cao.unqualifiedName) -> wvl
@@ -299,7 +299,7 @@ case class RunnerMiniWorkflow(exportVars: Set[String],
         // environment
         val (topDecls,_) = Utils.splitBlockDeclarations(scatter.children.toList)
 
-        val collElements : Seq[WdlVarLinks] = WdlVarLinks.unpackWdlArray(collection)
+        val collElements : Seq[WdlVarLinks] = WdlVarLinks.unpackWomArray(collection)
         var scJobOutputs = Vector.empty[Env]
         var scTopOutputs = Vector.empty[Env]
         var childJobs = Vector.empty[DXJob]
@@ -375,9 +375,9 @@ case class RunnerMiniWorkflow(exportVars: Set[String],
         appletLog(s"evalIf")
 
         // Evaluate condition
-        val condValue:WdlValue = WdlVarLinks.eval(condition, IOMode.Remote, IODirection.Zero)
+        val condValue:WomValue = WdlVarLinks.eval(condition, IOMode.Remote, IODirection.Zero)
         val b = condValue match {
-            case WdlBoolean(b) => b
+            case WomBoolean(b) => b
             case _ => throw new AppInternalException("conditional expression is not boolean")
         }
         if (!b)
@@ -510,11 +510,11 @@ case class RunnerMiniWorkflow(exportVars: Set[String],
         val blockOutputs : Map[String, WdlVarLinks] = scope match {
             case scatter:Scatter =>
                 // Lookup the array we are looping on, it is guarantied to be a variable.
-                val collection = lookup(outerEnv, scatter.collection.toWdlString)
+                val collection = lookup(outerEnv, scatter.collection.toWomString)
                 evalScatter(scatter, collection, applets, outerEnv)
             case cond:If =>
                 // Lookup the condition variable
-                val condition = lookup(outerEnv, cond.condition.toWdlString)
+                val condition = lookup(outerEnv, cond.condition.toWomString)
                 evalIf(cond, condition, applets, outerEnv)
             case x =>
                 throw new Exception(cef.notCurrentlySupported(x.ast, "scope element"))
@@ -542,7 +542,7 @@ object RunnerMiniWorkflow {
               inputs: Map[String, WdlVarLinks],
               orgInputs: JsValue,
               collectSubjob: Boolean) : Map[String, JsValue] = {
-        appletLog(s"WdlType mapping =${inputSpec}")
+        appletLog(s"WomType mapping =${inputSpec}")
         val exportVars = outputSpec.keys.toSet
         appletLog(s"exportVars=${exportVars}")
 

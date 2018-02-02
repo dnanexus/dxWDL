@@ -1,28 +1,30 @@
 // Declaration attributes, an experimental extension
 package dxWDL
 
-import wdl4s.wdl.{Declaration, WdlTask}
-import wdl4s.wdl.types._
-import wdl4s.wdl.values._
+import wdl.{Declaration, WdlTask}
+//import wdl.types._
+//import wdl.values._
+import wom.values._
+import wom.types._
 
-case class DeclAttrs(m: Map[String, WdlValue]) {
+case class DeclAttrs(m: Map[String, WomValue]) {
     lazy val stream : Boolean = {
         m.get("stream") match {
-            case Some(WdlBoolean(true)) => true
+            case Some(WomBoolean(true)) => true
             case _ => false
         }
     }
 
-    def getDefault: Option[WdlValue] = {
+    def getDefault: Option[WomValue] = {
         m.get("default")
     }
 
     // add another attribute
-    def add(key:String, value:WdlValue) : DeclAttrs = {
+    def add(key:String, value:WomValue) : DeclAttrs = {
         DeclAttrs(m + (key -> value))
     }
 
-    def setDefault(value:WdlValue) : DeclAttrs = {
+    def setDefault(value:WomValue) : DeclAttrs = {
         add("default", value)
     }
 
@@ -45,7 +47,7 @@ object DeclAttrs {
             varName: String,
             cefOpt: Option[CompilerErrorFormatter]) : DeclAttrs = {
         val attr:Option[(String,String)] = task.parameterMeta.find{ case (k,v) =>  k == varName }
-        val m:Map[String, WdlValue] = attr match {
+        val m:Map[String, WomValue] = attr match {
             case None => Map.empty
             case Some((_,"stream")) =>
                 // Only files can be streamed
@@ -55,18 +57,18 @@ object DeclAttrs {
                     case None => throw new Exception(s"No variable ${varName}")
                     case Some(x) => x
                 }
-                if (Utils.stripOptional(decl.wdlType) != WdlFileType) {
+                if (Utils.stripOptional(decl.womType) != WomFileType) {
                     cefOpt match {
                         case Some(cef) =>
                             val msg = cef.onlyFilesCanBeStreamed(decl.ast)
                             System.err.println(s"Warning: ${msg}")
                             Map.empty
                         case None =>
-                            System.err.println(s"Warning: only files can be streamed ${varName} type=${decl.wdlType}")
+                            System.err.println(s"Warning: only files can be streamed ${varName} type=${decl.womType.toDisplayString}")
                             Map.empty
                     }
                 } else {
-                    Map("stream" -> WdlBoolean(true))
+                    Map("stream" -> WomBoolean(true))
                 }
             case Some((_,x)) =>
                 // ignoring other attributes

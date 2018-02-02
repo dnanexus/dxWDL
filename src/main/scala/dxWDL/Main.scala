@@ -10,8 +10,9 @@ import scala.util.{Failure, Success}
 import spray.json._
 import spray.json.JsString
 import Utils.{TopoMode, Verbose}
-import wdl4s.wdl.{ImportResolver, WdlNamespace, WdlTask,
-    WdlNamespaceWithWorkflow, WdlWorkflow, WorkflowOutput, WorkflowSource}
+import wdl.{ImportResolver, WdlNamespace, WdlTask,
+    WdlNamespaceWithWorkflow, WdlWorkflow, WorkflowOutput}
+import wom.core.WorkflowSource
 
 object Main extends App {
     sealed trait Termination

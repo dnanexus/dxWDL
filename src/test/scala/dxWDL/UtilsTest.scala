@@ -5,12 +5,12 @@ import net.jcazevedo.moultingyaml._
 import org.scalatest.{FlatSpec, Matchers}
 import scala.collection.JavaConverters._
 import spray.json._
-import wdl4s.wdl._
-import wdl4s.wdl.types._
-import wdl4s.wdl.values._
+import wdl._
+import wom.types._
+import wom.values._
 
 class UtilsTest extends FlatSpec with Matchers {
-    private def checkMarshal(v : WdlValue) : Unit = {
+    private def checkMarshal(v : WomValue) : Unit = {
         val m = Utils.marshal(v)
         val u = Utils.unmarshal(m)
         v should equal(u)
@@ -18,21 +18,21 @@ class UtilsTest extends FlatSpec with Matchers {
 
 
     it should "marshal and unmarshal wdlValues" in {
-        checkMarshal(WdlString("hello"))
-        checkMarshal(WdlInteger(33))
-        checkMarshal(WdlArray(
-                  WdlArrayType(WdlStringType),
-                  List(WdlString("one"), WdlString("two"), WdlString("three"), WdlString("four"))))
-        checkMarshal(WdlArray(
-                  WdlArrayType(WdlIntegerType),
-                  List(WdlInteger(1), WdlInteger(2), WdlInteger(3), WdlInteger(4))))
+        checkMarshal(WomString("hello"))
+        checkMarshal(WomInteger(33))
+        checkMarshal(WomArray(
+                  WomArrayType(WomStringType),
+                  List(WomString("one"), WomString("two"), WomString("three"), WomString("four"))))
+        checkMarshal(WomArray(
+                  WomArrayType(WomIntegerType),
+                  List(WomInteger(1), WomInteger(2), WomInteger(3), WomInteger(4))))
 
         // Ragged array
-        def mkIntArray(l : List[Int]) : WdlValue = {
-            WdlArray(WdlArrayType(WdlIntegerType), l.map(x => WdlInteger(x)))
+        def mkIntArray(l : List[Int]) : WomValue = {
+            WomArray(WomArrayType(WomIntegerType), l.map(x => WomInteger(x)))
         }
-        val ra : WdlValue = WdlArray(
-            WdlArrayType(WdlArrayType(WdlIntegerType)),
+        val ra : WomValue = WomArray(
+            WomArrayType(WomArrayType(WomIntegerType)),
             List(mkIntArray(List(1,2)),
                  mkIntArray(List(3,5)),
                  mkIntArray(List(8)),
@@ -41,8 +41,8 @@ class UtilsTest extends FlatSpec with Matchers {
     }
 
     // This does not work with wdl4s version 0.7
-    ignore should "marshal and unmarshal WdlFloat without losing precision" in {
-        checkMarshal(WdlFloat(4.2))
+    ignore should "marshal and unmarshal WomFloat without losing precision" in {
+        checkMarshal(WomFloat(4.2))
     }
 
     it should "sanitize json strings" in {
@@ -52,9 +52,9 @@ class UtilsTest extends FlatSpec with Matchers {
         Utils.sanitize("{}\\//") should equal("     ")
     }
 
-    it should "print WdlBoolean in a human readable fashion" in {
-        val b = WdlBoolean(true)
-        b.toWdlString should equal("true")
+    it should "print WomBoolean in a human readable fashion" in {
+        val b = WomBoolean(true)
+        b.toWomString should equal("true")
     }
 
     it should "pretty print strings in IR with newlines" in {
@@ -87,8 +87,8 @@ class UtilsTest extends FlatSpec with Matchers {
 
     it should "evaluate constants" in {
         val expr = WdlExpression.fromString("[1, 2, 19]")
-        val answer = WdlArray(WdlArrayType(WdlIntegerType),
-                              List(WdlInteger(1), WdlInteger(2), WdlInteger(19)))
+        val answer = WomArray(WomArrayType(WomIntegerType),
+                              List(WomInteger(1), WomInteger(2), WomInteger(19)))
         Utils.isExpressionConst(expr) should equal(true)
         Utils.evalConst(expr) should equal(answer)
     }
@@ -96,7 +96,7 @@ class UtilsTest extends FlatSpec with Matchers {
     it should "evaluate expressions with constants only" in {
         val expr = WdlExpression.fromString("3 + 8")
         Utils.isExpressionConst(expr) should equal(true)
-        Utils.evalConst(expr) should equal(WdlInteger(11))
+        Utils.evalConst(expr) should equal(WomInteger(11))
     }
 
     it should "identify non-constants" in {
@@ -105,12 +105,12 @@ class UtilsTest extends FlatSpec with Matchers {
     }
 
     ignore should "coerce arrays" in {
-        val v = WdlArray(
-            WdlArrayType(WdlStringType),
-            List(WdlString("one"), WdlString("two"), WdlString("three"), WdlString("four")))
-        val wdlType =  WdlNonEmptyArrayType(WdlStringType)
-        val v2 = wdlType.coerceRawValue(v).get
-        v2.wdlType should equal(wdlType)
+        val v = WomArray(
+            WomArrayType(WomStringType),
+            List(WomString("one"), WomString("two"), WomString("three"), WomString("four")))
+        val womType =  WomNonEmptyArrayType(WomStringType)
+        val v2 = womType.coerceRawValue(v).get
+        v2.womType should equal(womType)
     }
 
     "SprayJs" should "marshal optionals" in {

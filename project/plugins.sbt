@@ -1,7 +1,7 @@
-addSbtPlugin("com.typesafe.sbt" % "sbt-git" % "0.8.5")
-addSbtPlugin("com.github.gseitz" % "sbt-release" % "1.0.3")
-addSbtPlugin("org.scoverage" % "sbt-scoverage" % "1.5.0")
-addSbtPlugin("org.scoverage" % "sbt-coveralls" % "1.1.0")
-addSbtPlugin("com.eed3si9n" % "sbt-assembly" % "0.14.4")
+addSbtPlugin("com.eed3si9n" % "sbt-assembly" % "0.14.5")
+addSbtPlugin("com.typesafe.sbt" % "sbt-git" % "0.9.3")
+addSbtPlugin("com.github.gseitz" % "sbt-release" % "1.0.6")
 
+// This prevents the SLF dialog from appearing when starting
+// an SBT session
 libraryDependencies += "org.slf4j" % "slf4j-nop" % "1.7.24"

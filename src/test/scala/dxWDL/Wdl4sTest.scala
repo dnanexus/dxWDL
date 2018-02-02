@@ -1,9 +1,9 @@
 package dxWDL
 
 import org.scalatest.{FlatSpec, Matchers}
-import wdl4s.wdl._
-import wdl4s.wdl.AstTools.EnhancedAstNode
-import wdl4s.wdl.types._
+import wdl._
+import wdl.AstTools.EnhancedAstNode
+import wdl.types.WdlCallOutputsObjectType
 
 class Wdl4sTest extends FlatSpec with Matchers {
 
@@ -13,20 +13,20 @@ class Wdl4sTest extends FlatSpec with Matchers {
     it should "serialize expressions without loss" in {
         val s = "5 * (1 + 1)"
         val expr : WdlExpression = WdlExpression.fromString(s)
-        val s2 = expr.toWdlString
+        val s2 = expr.toWomString
         s should equal(s2)
     }
 
     it should "convert string constants to expressions" in {
         val s = "\"dx://record-xxxx\""
         val expr = WdlExpression.fromString(s)
-        val s2 = expr.toWdlString
+        val s2 = expr.toWomString
         s should equal(s2)
     }
 
     it should "generate expression variable ID" in {
         val expr = WdlExpression.fromString("xxx")
-        expr.toWdlString should equal("xxx")
+        expr.toWomString should equal("xxx")
     }
 
     it should "retrieve source code for task" in {
@@ -52,8 +52,8 @@ class Wdl4sTest extends FlatSpec with Matchers {
             "a" should equal(ast.getAttribute("name").sourceString)
         }
 
-        // doesn't work, toWdlString is not implemented for values
-        //System.out.println(s"ns=${ns.toWdlString}")
+        // doesn't work, toWomString is not implemented for values
+        //System.out.println(s"ns=${ns.toWomString}")
     }
 
 
@@ -93,13 +93,13 @@ class Wdl4sTest extends FlatSpec with Matchers {
 
         // These should be call outputs
         List("Add", "Add3").foreach{ elem =>
-            val wdlType = WdlNamespace.lookupType(ns.workflow)(elem)
+            val wdlType = Utils.lookupType(ns.workflow)(elem)
             assert(wdlType.isInstanceOf[WdlCallOutputsObjectType])
         }
 
         // These should *not* be call outputs
         List("p").foreach{ elem =>
-            val wdlType = WdlNamespace.lookupType(ns.workflow)(elem)
+            val wdlType = Utils.lookupType(ns.workflow)(elem)
             assert(!wdlType.isInstanceOf[WdlCallOutputsObjectType])
         }
 
@@ -107,17 +107,9 @@ class Wdl4sTest extends FlatSpec with Matchers {
         // variable(s)
         val addCall:WdlCall = ns.workflow.findCallByName("Add").get
         addCall.inputMappings.foreach{ case (key,expr) =>
-            //System.err.println(s"key=${key} expr=${expr.toWdlString}")
-            //assert(expr.prerequisiteCallNames.isEmpty)
-            /*expr.prerequisiteCallNames.map{ fqn =>
-                val wdlType = WdlNamespace.lookupType(ns.workflow)(fqn)
-                System.err.println(s"fqn=${fqn} wdlType=${wdlType}")
-            }*/
-            val variables = AstTools.findVariableReferences(expr.ast).map{
+            val variables = AstTools.findVariableReferences(expr.ast, addCall).map{
                 varRef => varRef.terminal.getSourceString
             }
-            //System.err.println(s"dep vars(${expr.toWdlString}) = ${variables}")
-            //assert(expr.toWdlString == variables)
             variables should equal(List("p"))
         }
     }
@@ -224,12 +216,12 @@ class Wdl4sTest extends FlatSpec with Matchers {
 
         val ns = WdlNamespaceWithWorkflow.load(wdlCode, Seq.empty).get
         //val expr = WdlExpression.fromString("null")
-        //System.out.println(s"expr=${expr.toWdlString}")
+        //System.out.println(s"expr=${expr.toWomString}")
         //System.out.println(s"type=${expr.wdlType}")
 
         val call:WdlCall = ns.workflow.findCallByName("NullArray").get
         call.inputMappings.foreach{ case (key,expr) =>
-            //System.err.println(s"key=${key} expr=${expr.toWdlString}")
+            //System.err.println(s"key=${key} expr=${expr.toWomString}")
             //assert(expr.prerequisiteCallNames.isEmpty)
             /*expr.prerequisiteCallNames.map{ fqn =>
                 val wdlType = WdlNamespace.lookupType(ns.workflow)(fqn)

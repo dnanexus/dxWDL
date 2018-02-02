@@ -4,7 +4,7 @@
   */
 package dxWDL
 
-import wdl4s.wdl._
+import wdl._
 
 case class CompilerReorgDecl(ns: WdlNamespace, verbose: Utils.Verbose) {
     val MAX_NUM_COLLECT_ITER = 10
@@ -52,7 +52,7 @@ case class CompilerReorgDecl(ns: WdlNamespace, verbose: Utils.Verbose) {
         val memberAccesses:Set[String] = expr.topLevelMemberAccesses
             .map(ma => ma.lhs)
             .toSet
-        val vars:Set[String] = expr.variableReferences
+        val vars:Set[String] = expr.variableReferences(decl)
             .map(varRef => varRef.terminal.getSourceString)
             .toSet
         val refsWithPossibleDups:Set[String] = nodeRefs ++ memberAccesses ++ vars
@@ -70,7 +70,7 @@ case class CompilerReorgDecl(ns: WdlNamespace, verbose: Utils.Verbose) {
         // fully qualified, so try prefixing the FQN too.
         val fqn = decl.ancestry.head.fullyQualifiedName
         val retval = refs.forall{ x => definedVars contains x }
-        Utils.trace(verbose2, s"""|dependsOnlyOnVars ${expr.toWdlString}
+        Utils.trace(verbose2, s"""|dependsOnlyOnVars ${expr.toWomString}
                                   |  fqn = ${fqn}
                                   |  nodeRefs=${nodeRefs}
                                   |  upstream=${refs}

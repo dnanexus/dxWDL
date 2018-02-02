@@ -82,8 +82,8 @@ import scala.collection.JavaConverters._
 import scala.collection.mutable.HashMap
 import spray.json._
 import Utils.{callUniqueName, DXIOParam, jsonNodeOfJsValue, jsValueOfJsonNode}
-import wdl4s.wdl.{WdlCall, WdlWorkflow}
-import wdl4s.wdl.types._
+import wdl.{WdlCall, WdlWorkflow}
+import wom.types._
 
 object RunnerCollect {
 
@@ -163,7 +163,7 @@ object RunnerCollect {
     // Note: the type could be optional, in which case the output field
     // will be generated only from a subset of the jobs.
     def collect(fieldName: String,
-                wdlType: WdlType,
+                wdlType: WomType,
                 jobDescs:Vector[ChildJobDesc]) : (String, WdlVarLinks) = {
         // Sort the results by ascending sequence number
         val jobsInLaunchOrder = jobDescs.sortWith(_.seqNum < _.seqNum)
@@ -171,14 +171,14 @@ object RunnerCollect {
             case desc =>
                 val fields = desc.outputs.asJsObject.fields
                 (wdlType, fields.get(fieldName)) match {
-                    case (WdlOptionalType(t),None) => JsNull
-                    case (WdlMaybeEmptyArrayType(t),None) => JsArray(Vector.empty[JsValue])
+                    case (WomOptionalType(t),None) => JsNull
+                    case (WomMaybeEmptyArrayType(t),None) => JsArray(Vector.empty[JsValue])
                     case (_,Some(x)) => x
                     case _ =>
                         throw new Exception(s"missing field ${fieldName} from child job ${desc.job}}")
                 }
         }
-        val wvl = WdlVarLinks(WdlArrayType(wdlType), DeclAttrs.empty, DxlValue(JsArray(jsVec)))
+        val wvl = WdlVarLinks(WomArrayType(wdlType), DeclAttrs.empty, DxlValue(JsArray(jsVec)))
         (fieldName, wvl)
     }
 
@@ -188,7 +188,7 @@ object RunnerCollect {
                            retvals: Vector[ChildJobDesc]) : Map[String,JsValue] = {
         val wvlOutputs: Vector[(String, WdlVarLinks)] =
             call.outputs.map { caOut =>
-                collect(caOut.unqualifiedName, caOut.wdlType, retvals)
+                collect(caOut.unqualifiedName, caOut.womType, retvals)
             }.toVector
         val outputs:Map[String, JsValue] = wvlOutputs.foldLeft(Map.empty[String, JsValue]) {
             case (accu, (varName, wvl)) =>

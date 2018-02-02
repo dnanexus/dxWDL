@@ -9,18 +9,19 @@ package dxWDL
 import scala.collection.mutable.Queue
 import scala.util.{Failure, Success}
 import Utils.{genTmpVarName, nonInterpolation, trace, Verbose, warning}
-import wdl4s.wdl._
-import wdl4s.wdl.expression._
+import wdl._
+import wdl.expression._
+import wdl.types._
 import wdl4s.parser.WdlParser.{Ast, Terminal}
-import wdl4s.wdl.types._
+import wom.types._
 
 case class CompilerSimplifyExpr(wf: WdlWorkflow,
                                 cef: CompilerErrorFormatter,
                                 verbose: Verbose) {
     val verbose2:Boolean = verbose.keywords contains "simplify"
 
-    private def isMemberAccess(a: Ast) = {
-        wdl4s.wdl.WdlExpression.AstForExpressions(a).isMemberAccess
+    private def isMemberAccess(a: Ast) : Boolean = {
+        wdl.WdlExpression.AstForExpressions(a).isMemberAccess
     }
 
     // A member access expression such as [A.x]. Check if
@@ -40,10 +41,10 @@ case class CompilerSimplifyExpr(wf: WdlWorkflow,
     }
 
     // Figure out the type of an expression
-    private def evalType(expr: WdlExpression, parent: Scope) : WdlType = {
-        dxWDL.TypeEvaluator(Utils.lookupType(parent),
-                            new WdlStandardLibraryFunctionsType,
-                            Some(parent)).evaluate(expr.ast) match {
+    private def evalType(expr: WdlExpression, parent: Scope) : WomType = {
+        TypeEvaluator(Utils.lookupType(parent),
+                      new WdlStandardLibraryFunctionsType,
+                      Some(parent)).evaluate(expr.ast) match {
             case Success(wdlType) => wdlType
             case Failure(f) =>
                 warning(verbose, cef.couldNotEvaluateType(expr))
@@ -57,37 +58,37 @@ case class CompilerSimplifyExpr(wf: WdlWorkflow,
     //
     // For example, in wdl4s it is legal to coerce a String into a
     // File in workflow context. This is not possible in dxWDL.
-    private def typesMatch(srcType: WdlType, trgType: WdlType) : Boolean = {
+    private def typesMatch(srcType: WomType, trgType: WomType) : Boolean = {
         (srcType, trgType) match {
             // base cases
-            case (WdlBooleanType, WdlBooleanType) => true
-            case (WdlIntegerType, WdlIntegerType) => true
-            case (WdlFloatType, WdlFloatType) => true
-            case (WdlStringType, WdlStringType) => true
-            case (WdlFileType, WdlFileType) => true
+            case (WomBooleanType, WomBooleanType) => true
+            case (WomIntegerType, WomIntegerType) => true
+            case (WomFloatType, WomFloatType) => true
+            case (WomStringType, WomStringType) => true
+            case (WomFileType, WomFileType) => true
 
             // Files: it is legal to convert a file to a string, but not the other
             // way around.
-            //case (WdlFileType, WdlStringType) => true
+            //case (WomFileType, WomStringType) => true
 
             // array
-            case (WdlArrayType(WdlNothingType), WdlArrayType(_)) => true
-            case (WdlArrayType(s), WdlArrayType(t)) => typesMatch(s,t)
+            case (WomArrayType(WomNothingType), WomArrayType(_)) => true
+            case (WomArrayType(s), WomArrayType(t)) => typesMatch(s,t)
 
             // strip optionals
-            case (WdlOptionalType(s), WdlOptionalType(t)) => typesMatch(s,t)
-            case (WdlOptionalType(s), t) => typesMatch(s,t)
-            case (s, WdlOptionalType(t)) => typesMatch(s,t)
+            case (WomOptionalType(s), WomOptionalType(t)) => typesMatch(s,t)
+            case (WomOptionalType(s), t) => typesMatch(s,t)
+            case (s, WomOptionalType(t)) => typesMatch(s,t)
 
             // map
-            case (WdlMapType(sk, sv), WdlMapType(tk, tv)) =>
+            case (WomMapType(sk, sv), WomMapType(tk, tv)) =>
                 typesMatch(sk, tv) && typesMatch(sv, tv)
 
-            case (WdlPairType(sLeft, sRight), WdlPairType(tLeft, tRight)) =>
+            case (WomPairType(sLeft, sRight), WomPairType(tLeft, tRight)) =>
                 typesMatch(sLeft, tLeft) && typesMatch(sRight, tRight)
 
             // objects
-            case (WdlObjectType, WdlObjectType) => true
+            case (WomObjectType, WomObjectType) => true
             case (_,_) => false
         }
     }
@@ -120,7 +121,7 @@ case class CompilerSimplifyExpr(wf: WdlWorkflow,
         val tmpDecls = Queue[Scope]()
 
         // replace an expression with a temporary variable
-        def replaceWithTempVar(t: WdlType, expr: WdlExpression) : WdlExpression = {
+        def replaceWithTempVar(t: WomType, expr: WdlExpression) : WdlExpression = {
             val tmpVarName = genTmpVarName()
             tmpDecls += WdlRewrite.declaration(t, tmpVarName, Some(expr))
             WdlExpression.fromString(tmpVarName)
@@ -129,7 +130,7 @@ case class CompilerSimplifyExpr(wf: WdlWorkflow,
         val inputs: Map[String, WdlExpression]  = call.inputMappings.map { case (key, expr) =>
             val calleeDecl: Declaration =
                 call.declarations.find(decl => decl.unqualifiedName == key).get
-            val calleeType = calleeDecl.wdlType
+            val calleeType = calleeDecl.womType
             val callerType = evalType(expr, call)
             val rhs:WdlExpression = expr.ast match {
                 case _ if (!typesMatch(callerType, calleeType)) =>
@@ -183,7 +184,7 @@ case class CompilerSimplifyExpr(wf: WdlWorkflow,
             .toVector
             .flatten
         // Figure out the expression type for a collection we loop over in a scatter
-        val collType : WdlType = evalType(ssc.collection, ssc)
+        val collType : WomType = evalType(ssc.collection, ssc)
         if (isVar(ssc.collection)) {
             // The collection is a simple variable, there is no need
             // to create an additional declaration
@@ -208,7 +209,7 @@ case class CompilerSimplifyExpr(wf: WdlWorkflow,
             .flatten
 
         // Figure out the expression type for a collection we loop over in a scatter
-        val exprType : WdlType = evalType(cond.condition, cond)
+        val exprType : WomType = evalType(cond.condition, cond)
         if (isVar(cond.condition)) {
             // The condition is a simple variable, there is no need
             // to create an additional declaration
@@ -227,7 +228,7 @@ case class CompilerSimplifyExpr(wf: WdlWorkflow,
     // If the workflow output has a complex expression, split that into
     // a temporary variable.
     def simplifyWorkflowOutput(wot: WorkflowOutput) : (Option[Declaration], WorkflowOutput) = {
-        val wdlType = wot.wdlType
+        val wdlType = wot.womType
         val expr = wot.requiredExpression
         val maybeCoercion:Boolean =
             try {
@@ -257,12 +258,12 @@ case class CompilerSimplifyExpr(wf: WdlWorkflow,
                 true
         }
         if (tempVarRequired) {
-            trace(verbose.on, s"building temporary variable for ${wot.toWdlString}")
+            trace(verbose.on, s"building temporary variable for ${wot.unqualifiedName}")
 
             // separate declaration for expression
             val tmpVarName = genTmpVarName()
             val tmpDecl:Declaration = WdlRewrite.declaration(wdlType, tmpVarName, Some(expr))
-            val wot1 = new WorkflowOutput(wot.unqualifiedName, wot.wdlType,
+            val wot1 = new WorkflowOutput(wot.unqualifiedName, wot.womType,
                                           WdlExpression.fromString(tmpVarName),
                                           WdlRewrite.INVALID_AST,
                                           Some(wot))

@@ -1,9 +1,11 @@
 package dxWDL
 
-import wdl4s.wdl.AstTools
-import wdl4s.parser.WdlParser.{Ast, Terminal}
-import wdl4s.wdl._
-import wdl4s.wdl.types._
+import wdl4s.parser.WdlParser._
+import wdl.AstTools
+import wdl.WdlExpression
+import wdl.WdlCall
+import wom.core._
+import wom.types.WomType
 
 case class CompilerErrorFormatter(terminalMap: Map[Terminal, WorkflowSource]) {
     private def pointToSource(t: Terminal): String = s"${line(t)}\n${" " * (t.getColumn - 1)}^"
@@ -35,7 +37,7 @@ case class CompilerErrorFormatter(terminalMap: Map[Terminal, WorkflowSource]) {
 
     def expressionMustBeConstOrVar(expr: WdlExpression) : String = {
         val t: Terminal = AstTools.findTerminals(expr.ast).head
-        s"""|Expression ${expr.toWdlString} must be const or variable
+        s"""|Expression ${expr.toWomString} must be const or variable
             |
             |${pointToSource(t)}
             |""".stripMargin
@@ -114,7 +116,7 @@ case class CompilerErrorFormatter(terminalMap: Map[Terminal, WorkflowSource]) {
 
     def taskInputDefaultMustBeConst(expr: WdlExpression) = {
         val t: Terminal = AstTools.findTerminals(expr.ast).head
-        s"""|Task input expression ${expr.toWdlString} must be const or variable
+        s"""|Task input expression ${expr.toWomString} must be const or variable
             |
             |${pointToSource(t)}
             |""".stripMargin
@@ -130,15 +132,15 @@ case class CompilerErrorFormatter(terminalMap: Map[Terminal, WorkflowSource]) {
 
     def typeConversionRequired(expr: WdlExpression,
                                call: WdlCall,
-                               srcType: WdlType,
-                               trgType: WdlType) : String = {
+                               srcType: WomType,
+                               trgType: WomType) : String = {
         val termList: Seq[Terminal] = AstTools.findTerminals(expr.ast)
         val t:Terminal = termList match {
             case Nil => AstTools.findTerminals(call.ast).head
             case _ => AstTools.findTerminals(expr.ast).head
         }
-        s"""|Warning: expression <${expr.toWdlString}> is coerced from type ${srcType.toWdlString}
-            |to ${trgType.toWdlString}.
+        s"""|Warning: expression <${expr.toWomString}> is coerced from type ${srcType.toDisplayString}
+            |to ${trgType.toDisplayString}.
             |
             |${pointToSource(t)}
             |""".stripMargin
@@ -156,7 +158,7 @@ case class CompilerErrorFormatter(terminalMap: Map[Terminal, WorkflowSource]) {
 
     def workflowInputDefaultMustBeConst(expr: WdlExpression) = {
         val t: Terminal = AstTools.findTerminals(expr.ast).head
-        s"""|Workflow input expression ${expr.toWdlString} must be const or variable
+        s"""|Workflow input expression ${expr.toWomString} must be const or variable
             |
             |${pointToSource(t)}
             |""".stripMargin

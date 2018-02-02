@@ -49,43 +49,43 @@ import java.nio.file.{Files, Path}
 import scala.collection.JavaConverters._
 import scala.util.{Failure, Success}
 import Utils.{CHECKSUM_PROP, trace}
-import wdl4s.wdl.{WdlTask, WdlNamespace}
-import wdl4s.wdl.types._
+import wdl.{WdlTask, WdlNamespace}
+import wom.types._
 
 case class DxNI(ns: WdlNamespace, verbose: Utils.Verbose) {
 
     private def wdlTypeOfIOClass(appletName:String,
                                  argName: String,
                                  ioClass: IOClass,
-                                 isOptional: Boolean) : WdlType = {
+                                 isOptional: Boolean) : WomType = {
         if (isOptional) {
             ioClass match {
-            case IOClass.BOOLEAN => WdlOptionalType(WdlBooleanType)
-            case IOClass.INT => WdlOptionalType(WdlIntegerType)
-            case IOClass.FLOAT => WdlOptionalType(WdlFloatType)
-            case IOClass.STRING => WdlOptionalType(WdlStringType)
-            case IOClass.FILE => WdlOptionalType(WdlFileType)
-            case IOClass.ARRAY_OF_BOOLEANS => WdlMaybeEmptyArrayType(WdlBooleanType)
-            case IOClass.ARRAY_OF_INTS => WdlMaybeEmptyArrayType(WdlIntegerType)
-            case IOClass.ARRAY_OF_FLOATS => WdlMaybeEmptyArrayType(WdlFloatType)
-            case IOClass.ARRAY_OF_STRINGS => WdlMaybeEmptyArrayType(WdlStringType)
-            case IOClass.ARRAY_OF_FILES => WdlMaybeEmptyArrayType(WdlFileType)
+            case IOClass.BOOLEAN => WomOptionalType(WomBooleanType)
+            case IOClass.INT => WomOptionalType(WomIntegerType)
+            case IOClass.FLOAT => WomOptionalType(WomFloatType)
+            case IOClass.STRING => WomOptionalType(WomStringType)
+            case IOClass.FILE => WomOptionalType(WomFileType)
+            case IOClass.ARRAY_OF_BOOLEANS => WomMaybeEmptyArrayType(WomBooleanType)
+            case IOClass.ARRAY_OF_INTS => WomMaybeEmptyArrayType(WomIntegerType)
+            case IOClass.ARRAY_OF_FLOATS => WomMaybeEmptyArrayType(WomFloatType)
+            case IOClass.ARRAY_OF_STRINGS => WomMaybeEmptyArrayType(WomStringType)
+            case IOClass.ARRAY_OF_FILES => WomMaybeEmptyArrayType(WomFileType)
             case _ => throw new Exception(
                 s"""|Cannot call applet ${appletName} from WDL, argument ${argName}
                     |has IO class ${ioClass}""".stripMargin.replaceAll("\n", " "))
             }
         } else {
             ioClass match {
-                case IOClass.BOOLEAN => WdlBooleanType
-                case IOClass.INT => WdlIntegerType
-                case IOClass.FLOAT => WdlFloatType
-                case IOClass.STRING => WdlStringType
-                case IOClass.FILE => WdlFileType
-                case IOClass.ARRAY_OF_BOOLEANS => WdlNonEmptyArrayType(WdlBooleanType)
-                case IOClass.ARRAY_OF_INTS => WdlNonEmptyArrayType(WdlIntegerType)
-                case IOClass.ARRAY_OF_FLOATS => WdlNonEmptyArrayType(WdlFloatType)
-                case IOClass.ARRAY_OF_STRINGS => WdlNonEmptyArrayType(WdlStringType)
-                case IOClass.ARRAY_OF_FILES => WdlNonEmptyArrayType(WdlFileType)
+                case IOClass.BOOLEAN => WomBooleanType
+                case IOClass.INT => WomIntegerType
+                case IOClass.FLOAT => WomFloatType
+                case IOClass.STRING => WomStringType
+                case IOClass.FILE => WomFileType
+                case IOClass.ARRAY_OF_BOOLEANS => WomNonEmptyArrayType(WomBooleanType)
+                case IOClass.ARRAY_OF_INTS => WomNonEmptyArrayType(WomIntegerType)
+                case IOClass.ARRAY_OF_FLOATS => WomNonEmptyArrayType(WomFloatType)
+                case IOClass.ARRAY_OF_STRINGS => WomNonEmptyArrayType(WomStringType)
+                case IOClass.ARRAY_OF_FILES => WomNonEmptyArrayType(WomFileType)
                 case _ => throw new Exception(
                     s"""|Cannot call applet ${appletName} from WDL, argument ${argName}
                         |has IO class ${ioClass}""".stripMargin.replaceAll("\n", " "))
@@ -99,16 +99,16 @@ case class DxNI(ns: WdlNamespace, verbose: Utils.Verbose) {
     // be translated; applets that have them cannot be converted.
     private def wdlTypesOfDxApplet(aplName: String,
                                    desc: DXApplet.Describe) :
-            (Map[String, WdlType], Map[String, WdlType]) = {
+            (Map[String, WomType], Map[String, WomType]) = {
         trace(verbose.on, s"analyzing applet ${aplName}")
         val inputSpecRaw: List[InputParameter] = desc.getInputSpecification().asScala.toList
-        val inputSpec:Map[String, WdlType] =
+        val inputSpec:Map[String, WomType] =
             inputSpecRaw.map{ iSpec =>
                 iSpec.getName -> wdlTypeOfIOClass(aplName, iSpec.getName,
                                                   iSpec.getIOClass, iSpec.isOptional)
             }.toMap
         val outputSpecRaw: List[OutputParameter] = desc.getOutputSpecification().asScala.toList
-        val outputSpec:Map[String, WdlType] =
+        val outputSpec:Map[String, WomType] =
             outputSpecRaw.map{ iSpec =>
                 iSpec.getName -> wdlTypeOfIOClass(aplName, iSpec.getName,
                                                   iSpec.getIOClass, iSpec.isOptional)
@@ -118,8 +118,8 @@ case class DxNI(ns: WdlNamespace, verbose: Utils.Verbose) {
 
     private def genAppletStub(dxApplet: DXApplet,
                               appletName: String,
-                              inputSpec: Map[String, WdlType],
-                              outputSpec: Map[String, WdlType]) : WdlTask = {
+                              inputSpec: Map[String, WomType],
+                              outputSpec: Map[String, WomType]) : WdlTask = {
         val meta = Map("type" -> "native",
                        "id" -> dxApplet.getId)
         val task = WdlRewrite.taskGenEmpty(appletName, meta, ns)
