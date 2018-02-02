@@ -619,10 +619,11 @@ workflow w {
         // Extract the input values/links from the environment
         val inputs: Vector[SArg] = callee.inputs.map{ cVar =>
             findInputByName(call, cVar) match {
-                case None if (!isOptional(cVar.womType)) =>
-                    // A missing compulsory input. In an unlocked workflow it can be
-                    // provided as an input. In a locked workflow, that
-                    // is not possible.
+                case None if (!isOptional(cVar.womType) && cVar.attrs.getDefault == None) =>
+                    // A missing compulsory input, without a default
+                    // value. In an unlocked workflow it can be
+                    // provided as an input. In a locked workflow,
+                    // that is not possible.
                     val msg = s"""|Workflow doesn't supply required input ${cVar.name}
                                   |to call ${call.unqualifiedName}
                                   |""".stripMargin.replaceAll("\n", " ")
