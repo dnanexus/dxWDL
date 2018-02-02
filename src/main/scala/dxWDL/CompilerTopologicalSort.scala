@@ -27,7 +27,7 @@ case class CompilerTopologicalSort(cef: CompilerErrorFormatter,
                     // There are no nodes with no predecessors, but we still have nodes to process.
                     // Since every DAG contains a vertex with no incoming edges,
                     // there exists at least one directed cycle in the DAG.
-                    sys.error("ERROR: workflow contains at least one directed cycle.")
+                    throw new Exception("Workflow contains at least one directed cycle")
                 }
             } else {
                 // List of nodes with no predecessors
