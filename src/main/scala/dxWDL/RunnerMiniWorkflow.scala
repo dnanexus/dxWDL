@@ -299,7 +299,7 @@ case class RunnerMiniWorkflow(exportVars: Set[String],
         // environment
         val (topDecls,_) = Utils.splitBlockDeclarations(scatter.children.toList)
 
-        val collElements : Seq[WdlVarLinks] = WdlVarLinks.unpackWdlArray(collection)
+        val collElements : Seq[WdlVarLinks] = WdlVarLinks.unpackWomArray(collection)
         var scJobOutputs = Vector.empty[Env]
         var scTopOutputs = Vector.empty[Env]
         var childJobs = Vector.empty[DXJob]
