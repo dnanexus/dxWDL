@@ -1,16 +1,11 @@
-# dxWDL
-
-dxWDL takes a bioinformatics pipeline written in
-[Workflow Description Language (WDL)](http://www.openwdl.org/)
-and compiles it to an equivalent workflow on the DNAnexus platform.
-
-
-## Release status
 <a href="https://travis-ci.org/dnanexus/dxWDL"><img src="https://travis-ci.org/dnanexus/dxWDL.svg?branch=master"/></a>
 
-dxWDL provides a reasonably complete set of WDL features for beta
-testing. A few significant WDL features are not yet supported,
-and they are under development:
+dxWDL takes a bioinformatics pipeline written in the
+[Workflow Description Language (WDL)](http://www.openwdl.org/)
+and compiles it to an equivalent workflow on the DNAnexus platform.
+It provides a reasonably complete set of WDL features for beta
+testing. A few significant WDL features are under development, and
+not yet supported:
 
 - Nested workflows (sub-workflows)
 - Nested scatters, and conditionals nested in scatters
@@ -19,7 +14,8 @@ and they are under development:
  tool NOT covered by DNAnexus service and support agreements. We
  welcome feedback and provide assistance as time permits.
 
-## Getting started
+
+## Setup
 Prerequisites: DNAnexus platform account, dx-toolkit, java 8+, python 2.7.
 
 Make sure you've installed the dx-toolkit CLI, and initialized it with
@@ -27,7 +23,14 @@ Make sure you've installed the dx-toolkit CLI, and initialized it with
 [releases](https://github.com/dnanexus/dxWDL/releases) page.
 
 
-## Workflow
+## Example workflow
+
+The `bam_chrom_counter` workflow below is written in WDL. Task
+`slice_bam` splits a bam file into an array of sub-files. Task
+`count_bam` counts the number of alignments on a bam file. The
+workflow takes an input bam file, calls `slice_bam` to split it into chromosomes, and
+calls `count_bam` in parallel on each chromosome bam file. The result is an array of
+counts, and another array of index files.
 
 ```wdl
 workflow bam_chrom_counter {
@@ -83,6 +86,9 @@ task count_bam {
 }
 ```
 
+<< how this is broken down on the platform: One workflow, two independent applets, and some auxiliary applets >>
+
+<< Image of the runtime >>
 
 ## Compiling
 To compile a workflow:
