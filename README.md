@@ -101,11 +101,11 @@ then be run using `dx run`. For example:
 dx run bam_chrom_counter -i0.file=file-xxxx
 ```
 
-At runtime this looks like ![this](doc/bam_chrom_counter.png)
+At runtime this looks like this:
+![this](doc/bam_chrom_counter.png)
 
 
-# References and additional information
+# Additional information
 
-[advanced options](doc/ExpertOptions.md) explains additional compiler
-options. [Internals](doc/Internals.md) describes compiler internals in
-depth.
+- [advanced options](doc/ExpertOptions.md) explains additional compiler options
+- [Internals](doc/Internals.md) goes into compiler internals
