@@ -115,9 +115,9 @@ def register_test(dir_path, tname):
     desc = TestDesc(name = metadata.name,
                     kind = metadata.kind,
                     wdl_source= wdl_file,
-                    wdl_input= os.path.join(test_dir, tname + "_input.json"),
-                    dx_input= os.path.join(test_dir, tname + "_input.dx.json"),
-                    results= os.path.join(test_dir, tname + "_results.json"))
+                    wdl_input= os.path.join(dir_path, tname + "_input.json"),
+                    dx_input= os.path.join(dir_path, tname + "_input.dx.json"),
+                    results= os.path.join(dir_path, tname + "_results.json"))
     for path in [desc.wdl_source, desc.wdl_input]:
         if not os.path.exists(path):
             raise RuntimeError("Test file {} does not exist".format(path))
