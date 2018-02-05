@@ -1,4 +1,4 @@
-# Detailed options for the expert
+# Advanced options
 
 The reader is assumed to understand the
 [Workflow Description Language (WDL)](http://www.openwdl.org/), and have

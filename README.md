@@ -86,76 +86,26 @@ task count_bam {
 }
 ```
 
-On the DNAnexus platform, this is compiled into applets: `slice_bam`, `count_bam`, and workflow `bam_chrom_counter`.
-There are a fewn auxiliary applets that process workflow input, outputs, and launch the scatter.
-At runtime this looks like ![this](doc/bam_chrom_counter.png).
-
-## Compiling
-To compile a workflow:
+From the command line, we can compile the workflow to the DNAnexus platform using the dxWDL jar file.
 ```
-$ java -jar dxWDL-xxx.jar compile /path/to/foo.wdl
-```
-This compiles ```foo.wdl``` to platform workflow ```foo``` in dx's
-current project and folder. The generated workflow can then be run as
-usual using `dx run`. For example, if the workflow takes string
-argument ```X```, then: ``` dx run foo -i0.X="hello world" ```
-
-Compilation can be controled with several parameters, the most
-frequently used ones are described in the table below.
-
-| Option   |  Description |
-| ------   | ------------ |
-| force    | Overwrite existing applets/workflows if they have changed |
-| inputs   | A cromwell style inputs file |
-| verbose  | Print detailed progress information |
-
-The `-inputs` option allows specifying a Cromwell JSON
-[format](https://software.broadinstitute.org/wdl/documentation/inputs.php)
-inputs file. An equivalent DNAx format inputs file is generated from
-it. For example, workflow
-[files](https://github.com/dnanexus/dxWDL/blob/master/test/files.wdl)
-has input file
-```
-{
-  "files.f": "dx://file-F5gkKkQ0ZvgjG3g16xyFf7b1",
-  "files.f1": "dx://file-F5gkQ3Q0ZvgzxKZ28JX5YZjy",
-  "files.f2": "dx://file-F5gkPXQ0Zvgp2y4Q8GJFYZ8G"
-}
+$ java -jar dxWDL-0.59.jar compile bam_chrom_counter.wdl
 ```
 
-The command
+This compiles the source WDL file to several platform objects.
+- A workflow `bam_chrom_counter`
+- Two applets that can be called separately: `slice_bam`, and `count_bam`
+- A few auxiliary applets that process workflow inputs, outputs, and launch the scatter.
+These objects are all created in the current `dx` project and folder. The generated workflow can
+then be run using `dx run`. For example:
 ```
-java -jar dxWDL-0.44.jar compile test/files.wdl -inputs test/files_input.json
-```
-
-generates a `test/files_input.dx.json` file that looks like this:
-```
-{
-  "f": {
-    "$dnanexus_link": "file-F5gkKkQ0ZvgjG3g16xyFf7b1"
-  },
-  "f1": {
-    "$dnanexus_link": "file-F5gkQ3Q0ZvgzxKZ28JX5YZjy"
-  },
-  "f2": {
-    "$dnanexus_link": "file-F5gkPXQ0Zvgp2y4Q8GJFYZ8G"
-  }
-}
+dx run bam_chrom_counter -i0.file=file-xxxx
 ```
 
-The workflow can then be run with the command:
-```
-dx run files -f test/files_input.dx.json
-```
+At runtime this looks like ![this](doc/bam_chrom_counter.png)
 
-The `-defaults` option is similar to `-inputs`. It takes a JSON file with key-value pairs,
-and compiles them as defaults into the workflow. If the `files.wdl` worklow is compiled with
-`-defaults` instead of `-inputs`
-```
-java -jar dxWDL-0.44.jar compile test/files.wdl -defaults test/files_input.json
-```
 
-It can be run without parameters, for an equivalent execution.
-```
-dx run files
-```
+# References and additional information
+
+[advanced options](doc/ExpertOptions.md) explains additional compiler
+options. [Internals](doc/Internals.md) describes compiler internals in
+depth.
