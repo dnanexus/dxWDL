@@ -88,7 +88,7 @@ task count_bam {
 
 On the DNAnexus platform, this is compiled into applets: `slice_bam`, `count_bam`, and workflow `bam_chrom_counter`.
 There are a fewn auxiliary applets that process workflow input, outputs, and launch the scatter.
-At runtime this looks like ![this](bam_chrom_counter.png).
+At runtime this looks like ![this](doc/bam_chrom_counter.png).
 
 ## Compiling
 To compile a workflow:
