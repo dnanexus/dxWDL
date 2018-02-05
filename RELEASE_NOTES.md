@@ -1,5 +1,9 @@
 # Release Notes
 
+## 0.60
+- Split README into introduction, and advanced options. This should, hopefully, make
+  the top level text easier for the beginner.
+
 ## 0.59
 - Improved handling of pricing list
 - Upgraded to the new wdl4s library, that now lives in the cromwell

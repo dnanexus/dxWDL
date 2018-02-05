@@ -19,7 +19,7 @@ top_dir = os.path.dirname(sys.argv[0])
 test_dir = os.path.join(top_dir, "test")
 git_revision = subprocess.check_output(["git", "describe", "--always", "--dirty", "--tags"]).strip()
 test_files={}
-test_failing=set([])
+test_failing=set(["bad_status", "bad_status2", "missing_output"])
 reserved_test_names=['M', 'All', 'list']
 
 medium_test_list = [
@@ -106,11 +106,11 @@ def get_metadata(filename):
     raise RuntimeError("{} is not a valid WDL test, #tasks={}".format(filename, len(tasks)))
 
 # Register a test name, find its inputs and expected results files.
-def register_test(tname):
+def register_test(dir_path, tname):
     global test_files
     if tname in reserved_test_names:
         raise RuntimeError("Test name {} is reserved".format(tname))
-    wdl_file = os.path.join(test_dir, tname + ".wdl")
+    wdl_file = os.path.join(dir_path, tname + ".wdl")
     metadata = get_metadata(wdl_file)
     desc = TestDesc(name = metadata.name,
                     kind = metadata.kind,
@@ -345,19 +345,15 @@ def choose_tests(test_name):
 # Find all the WDL test files, these are located in the 'test'
 # directory. A test file must have some support files.
 def register_all_tests():
-    for t_file in os.listdir(test_dir):
-        if t_file.endswith(".wdl"):
-            base = os.path.basename(t_file)
-            fname = os.path.splitext(base)[0]
-            try:
-                register_test(fname)
-            except Exception, e:
-                print("Skipping WDL file {} error={}".format(fname, e))
-
-    # failing tests
-    test_failing.add("bad_status")
-    test_failing.add("bad_status2")
-    test_failing.add("missing_output")
+    for root, dirs, files in os.walk(test_dir):
+        for t_file in files:
+            if t_file.endswith(".wdl"):
+                base = os.path.basename(t_file)
+                fname = os.path.splitext(base)[0]
+                try:
+                    register_test(root, fname)
+                except Exception, e:
+                    print("Skipping WDL file {} error={}".format(fname, e))
 
 
 def build_dirs(project):
