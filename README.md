@@ -93,10 +93,11 @@ $ java -jar dxWDL-0.59.jar compile bam_chrom_counter.wdl
 
 This compiles the source WDL file to several platform objects.
 - A workflow `bam_chrom_counter`
-- Two applets that can be called separately: `slice_bam`, and `count_bam`
+- Two applets that can be called independently: `slice_bam`, and `count_bam`
 - A few auxiliary applets that process workflow inputs, outputs, and launch the scatter.
+
 These objects are all created in the current `dx` project and folder. The generated workflow can
-then be run using `dx run`. For example:
+be run using `dx run`. For example:
 ```
 dx run bam_chrom_counter -i0.file=file-xxxx
 ```
