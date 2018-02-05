@@ -25,11 +25,11 @@ Make sure you've installed the dx-toolkit CLI, and initialized it with
 
 ## Example workflow
 
-The `bam_chrom_counter` workflow below is written in WDL. Task
+The `bam_chrom_counter` workflow is written in WDL. Task
 `slice_bam` splits a bam file into an array of sub-files. Task
 `count_bam` counts the number of alignments on a bam file. The
 workflow takes an input bam file, calls `slice_bam` to split it into chromosomes, and
-calls `count_bam` in parallel on each chromosome bam file. The result is an array of
+calls `count_bam` in parallel on each chromosome. The result is an array of
 counts, and another array of index files.
 
 ```wdl
@@ -86,9 +86,9 @@ task count_bam {
 }
 ```
 
-<< how this is broken down on the platform: One workflow, two independent applets, and some auxiliary applets >>
-
-<< Image of the runtime >>
+On the DNAnexus platform, this is compiled into applets: `slice_bam`, `count_bam`, and workflow `bam_chrom_counter`.
+There are a fewn auxiliary applets that process workflow input, outputs, and launch the scatter.
+At runtime this looks like ![this](bam_chrom_counter.png).
 
 ## Compiling
 To compile a workflow:
