@@ -108,5 +108,5 @@ At runtime this looks like this:
 
 # Additional information
 
-- [advanced options](doc/ExpertOptions.md) explains additional compiler options
+- [Advanced options](doc/ExpertOptions.md) explains additional compiler options
 - [Internals](doc/Internals.md) goes into compiler internals
