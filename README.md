@@ -29,8 +29,8 @@ The `bam_chrom_counter` workflow is written in WDL. Task
 `slice_bam` splits a bam file into an array of sub-files. Task
 `count_bam` counts the number of alignments on a bam file. The
 workflow takes an input bam file, calls `slice_bam` to split it into chromosomes, and
-calls `count_bam` in parallel on each chromosome. The result is an array of chromosome bam files,
-array of index files, and an array of counter.
+calls `count_bam` in parallel on each chromosome. The results comprise a
+bam index file, and an array with the number of reads per chromosome.
 
 ```wdl
 workflow bam_chrom_counter {
@@ -48,7 +48,6 @@ workflow bam_chrom_counter {
     }
     output {
         slice_bam.bai
-        slice_bam.bam
         count_bam.count
     }
 }

@@ -3,7 +3,6 @@
 package dxWDL
 
 import IR.{CVar, LinkedVar, SArg}
-import net.jcazevedo.moultingyaml._
 import scala.util.{Failure, Success, Try}
 import Utils.{COMMON, DXWorkflowStage, DX_URL_PREFIX, LAST_STAGE,
     evalConst, isOptional,
@@ -34,7 +33,7 @@ case class CompilerIR(cef: CompilerErrorFormatter,
 
     // generate a stage Id
     var stageNum = 0
-    def genStageId(stageName: Option[String] = None) : DXWorkflowStage = {
+    private def genStageId(stageName: Option[String] = None) : DXWorkflowStage = {
         stageName match {
             case None =>
                 val retval = DXWorkflowStage(s"stage-${stageNum}")
@@ -45,18 +44,9 @@ case class CompilerIR(cef: CompilerErrorFormatter,
         }
     }
 
-    // Convert the environment to yaml, and then pretty
-    // print it.
-    def prettyPrint(env: CallEnv) : String = {
-        val m : Map[YamlValue, YamlValue] = env.map{ case (key, lVar) =>
-            YamlString(key) -> lVar.yaml
-        }.toMap
-        YamlObject(m).print()
-    }
-
     // Lookup for variables like x, A.x, A.B.x. The difficulty
     // is that A.x is interpreted in WDL as member access.
-    def lookupInEnv(env: CallEnv, expr: WdlExpression) : LinkedVar = {
+    private def lookupInEnv(env: CallEnv, expr: WdlExpression) : LinkedVar = {
         val fqn: String = expr.toWomString
         env.get(fqn) match {
             case Some(x) => x
@@ -90,7 +80,7 @@ task Add {
         Int result
     }
 */
-    def genAppletStub(applet: IR.Applet, scope: Scope) : WdlTask = {
+    private def genAppletStub(applet: IR.Applet, scope: Scope) : WdlTask = {
         val task = WdlRewrite.taskGenEmpty(applet.name, Map.empty, scope)
         val inputs = applet.inputs.map{ cVar =>
             WdlRewrite.declaration(cVar.womType, cVar.name, None)
@@ -108,8 +98,8 @@ task Add {
     // Here, we take a shortcut, and just replace strings, instead of
     // doing a recursive syntax analysis (see ValueEvaluator wdl4s
     // module).
-    def exprRenameVars(expr: WdlExpression,
-                       allVars: Vector[CVar]) : WdlExpression = {
+    private def exprRenameVars(expr: WdlExpression,
+                               allVars: Vector[CVar]) : WdlExpression = {
         var sExpr: String = expr.toWomString
         for (cVar <- allVars) {
             // A.x => A_x
@@ -118,11 +108,8 @@ task Add {
         WdlExpression.fromString(sExpr)
     }
 
-    def callUniqueName(call : WdlCall) = {
-        val nm = call.alias match {
-            case Some(x) => x
-            case None => Utils.taskOfCall(call).name
-        }
+    private def callUniqueName(call : WdlCall) : String = {
+        val nm = call.unqualifiedName
         Utils.reservedAppletPrefixes.foreach{ prefix =>
             if (nm.startsWith(prefix))
                 throw new Exception(cef.illegalCallName(call))
@@ -134,6 +121,13 @@ task Add {
         if (nm == LAST_STAGE)
             throw new Exception(cef.illegalCallName(call))
         nm
+    }
+
+    private def calleeName(call: WdlCall) : String = {
+        call match {
+            case tc: WdlTaskCall => tc.task.name
+            case wfc: WdlWorkflowCall => wfc.calledWorkflow.unqualifiedName
+        }
     }
 
     // Figure out which instance to use.
@@ -981,7 +975,9 @@ workflow w {
         val extraTaskInputVars = accessToUnboundInputs(calls, taskApplets, inputVars)
         val outputVars = blockOutputs(preDecls, scatter, scatter.children)
         val wdlCode = blockGenWorklow(preDecls, scatter, taskApplets, inputVars, outputVars)
-        val callDict = calls.map(c => c.unqualifiedName -> Utils.taskOfCall(c).name).toMap
+        val callDict = calls.map{ c =>
+            c.unqualifiedName -> calleeName(c)
+        }.toMap
 
         // If any of the return types is non native, we need a collect subjob.
         val allNative = outputVars.forall(cVar => isNativeDxType(cVar.womType))
@@ -1027,7 +1023,9 @@ workflow w {
         val extraTaskInputVars =  accessToUnboundInputs(calls, taskApplets, inputVars)
         val outputVars = blockOutputs(preDecls, cond, cond.children)
         val wdlCode = blockGenWorklow(preDecls, cond, taskApplets, inputVars, outputVars)
-        val callDict = calls.map(c => c.unqualifiedName -> Utils.taskOfCall(c).name).toMap
+        val callDict = calls.map{ c =>
+            c.unqualifiedName -> calleeName(c)
+        }.toMap
         val applet = IR.Applet(wfUnqualifiedName ++ "_" ++ stageName,
                                inputVars ++ extraTaskInputVars,
                                outputVars,

@@ -81,7 +81,7 @@ import com.fasterxml.jackson.databind.JsonNode
 import scala.collection.JavaConverters._
 import scala.collection.mutable.HashMap
 import spray.json._
-import Utils.{callUniqueName, DXIOParam, jsonNodeOfJsValue, jsValueOfJsonNode}
+import Utils.{DXIOParam, jsonNodeOfJsValue, jsValueOfJsonNode}
 import wdl.{WdlCall, WdlWorkflow}
 import wom.types._
 
@@ -221,7 +221,7 @@ object RunnerCollect {
 
         // Map call name to WDL call structure
         val callName2Call: Map[String, WdlCall] = wf.calls.map{ call =>
-            callUniqueName(call) -> call
+            call.unqualifiedName -> call
         }.toMap
         System.err.println(s"callName2Call=${callName2Call}")
 

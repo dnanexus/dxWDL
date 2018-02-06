@@ -156,7 +156,7 @@ case class CompilerSimplifyExpr(wf: WdlWorkflow,
 
         val callModifiedInputs = call match {
             case tc: WdlTaskCall => WdlRewrite.taskCall(tc, inputs)
-            case wfc: WdlWorkflowCall => throw new Exception(s"Unimplemented WorkflowCall")
+            case wfc: WdlWorkflowCall => WdlRewrite.workflowCall(wfc, inputs)
         }
         tmpDecls += callModifiedInputs
         tmpDecls.toVector

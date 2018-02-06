@@ -48,7 +48,7 @@ import com.dnanexus._
 import java.nio.file.{Path, Paths, Files}
 import scala.collection.mutable.HashMap
 import spray.json._
-import Utils.{AppletLinkInfo, appletLog, callUniqueName, DXIOParam, transformVarName}
+import Utils.{AppletLinkInfo, appletLog, DXIOParam, transformVarName}
 import wdl._
 import wdl.expression._
 import wdl4s.parser.WdlParser.{Ast, Terminal}
@@ -175,7 +175,7 @@ case class RunnerMiniWorkflow(exportVars: Set[String],
     private def buildAppletInputs(call: WdlCall,
                                   apLinkInfo: AppletLinkInfo,
                                   env : Env) : JsValue = {
-        val callName = callUniqueName(call)
+        val callName = call.unqualifiedName
         val appInputs: Map[String, Option[WdlVarLinks]] = apLinkInfo.inputs.map{
             case (varName, wdlType) =>
                 // The rhs is [k], the varName is [i]
@@ -220,9 +220,8 @@ case class RunnerMiniWorkflow(exportVars: Set[String],
     // are variables that can be referenced by other calls.
     private def jobOutputEnv(call: WdlCall,
                              dxJob: DXJob) : Env = {
-        val prefix = callUniqueName(call)
-        val task = Utils.taskOfCall(call)
-        val retValues = task.outputs
+        val prefix = call.unqualifiedName
+        val retValues = call.outputs
             .map { tso => tso.unqualifiedName -> WdlVarLinks(
                       tso.womType,
                       DeclAttrs.empty,
@@ -274,7 +273,7 @@ case class RunnerMiniWorkflow(exportVars: Set[String],
         // is exactly the same as the parent, we can immediately exit the parent job.
         calls.foldLeft(Map.empty[String, WdlVarLinks]) {
             case (accu, call) =>
-                val prefix = callUniqueName(call)
+                val prefix = call.unqualifiedName
                 val promiseMap = call.outputs.map{ cao =>
                     val wvl = WdlVarLinks(cao.womType,
                                           DeclAttrs.empty,
@@ -322,7 +321,7 @@ case class RunnerMiniWorkflow(exportVars: Set[String],
 
             calls.foreach { case (call,apLinkInfo) =>
                 val inputs : JsValue = buildAppletInputs(call, apLinkInfo, innerEnv)
-                val callUnqName = callUniqueName(call)
+                val callUnqName = call.unqualifiedName
                 appletLog(s"call=${callUnqName} inputs=${inputs}")
 
                 // We may need to run a collect subjob. Add the call
@@ -404,7 +403,7 @@ case class RunnerMiniWorkflow(exportVars: Set[String],
         // iterate over the calls
         calls.foreach { case (call,apLinkInfo) =>
             val inputs : JsValue = buildAppletInputs(call, apLinkInfo, innerEnv)
-            val callUnqName = callUniqueName(call)
+            val callUnqName = call.unqualifiedName
             appletLog(s"call=${callUnqName} inputs=${inputs}")
             val dxJob: DXJob = apLinkInfo.dxApplet
                 .newRun()

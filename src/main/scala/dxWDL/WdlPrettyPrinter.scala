@@ -93,7 +93,7 @@ case class WdlPrettyPrinter(fqnFlag: Boolean,
         firstLine +: nonEmptyLines :+ endLine
     }
 
-    def apply(call: WdlTaskCall, level: Int) : Vector[String] = {
+    def apply(call: WdlCall, level: Int) : Vector[String] = {
         val aliasStr = call.alias match {
             case None => ""
             case Some(nm) => " as " ++ nm
@@ -109,10 +109,10 @@ case class WdlPrettyPrinter(fqnFlag: Boolean,
                 val line = "input:  " + inputs.mkString(", ")
                 Vector(indentLine(line, level+1))
             }
-        val taskName =
-            if (fqnFlag) call.task.fullyQualifiedName
-            else call.task.name
-        buildBlock(s"call ${taskName} ${aliasStr}", inputsVec, level, true)
+        val callName =
+            if (fqnFlag) call.callable.fullyQualifiedName
+            else call.callable.unqualifiedName
+        buildBlock(s"call ${callName} ${aliasStr}", inputsVec, level, true)
     }
 
     def apply(decl: Declaration, level: Int) : Vector[String] = {
@@ -143,6 +143,7 @@ case class WdlPrettyPrinter(fqnFlag: Boolean,
     def apply(scope: Scope, level: Int) : Vector[String] = {
         scope match {
             case x:WdlTaskCall => apply(x, level)
+            case x:WdlWorkflowCall => apply(x, level)
             case x:Declaration => apply(x, level)
             case x:Scatter => apply(x, level)
             case x:If => apply(x, level)

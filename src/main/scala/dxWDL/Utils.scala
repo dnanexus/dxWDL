@@ -421,19 +421,6 @@ object Utils {
         }
     }
 
-    def taskOfCall(call : WdlCall) : WdlTask = {
-        call.callable match {
-            case task: WdlTask => task
-            case workflow: WdlWorkflow =>
-                throw new AppInternalException(s"Workflows are not support in calls ${call.callable}")
-        }
-    }
-
-    def callUniqueName(call : WdlCall) : String = {
-        call.unqualifiedName
-    }
-
-
     def base64Encode(buf: String) : String = {
         Base64.getEncoder.encodeToString(buf.getBytes(StandardCharsets.UTF_8))
     }

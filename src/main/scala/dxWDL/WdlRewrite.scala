@@ -1,4 +1,4 @@
-/** Utilities for modifying WDL classes, used in rewritting
+/** Utilities for modifying WDL classes, used in rewriting
   * WDL code.
   *
   * For example, there is no constructor for creating a new task from
@@ -44,11 +44,20 @@ object WdlRewrite {
 
     // Modify the inputs in a task-call
     def taskCall(tc: WdlTaskCall,
-                 inputMappings: Map[String, WdlExpression]) : WdlTaskCall = {
+             inputMappings: Map[String, WdlExpression]) : WdlTaskCall = {
         val tc1 = WdlTaskCall(tc.alias, tc.task, inputMappings, tc.ast)
         tc1.children = tc.children
         updateScope(tc, tc1)
         tc1
+    }
+
+    // Modify the inputs in a workflow-call
+    def workflowCall(wfc: WdlWorkflowCall,
+                     inputMappings: Map[String, WdlExpression]) : WdlWorkflowCall = {
+        val wfc1 = WdlWorkflowCall(wfc.alias, wfc.calledWorkflow, inputMappings, wfc.ast)
+        wfc1.children = wfc.children
+        updateScope(wfc, wfc1)
+        wfc1
     }
 
     // Create an empty task.
