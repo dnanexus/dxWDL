@@ -179,7 +179,7 @@ case class InputFile(verbose: Utils.Verbose) {
             }
         val wf2 = wf.copy(inputs = wfInputsWithDefaults,
                           stages = stagesWithDefaults)
-        val irNs = IR.Namespace(Some(wf2), ns.applets)
+        val irNs = IR.Namespace(Some(wf2), ns.subWorkflows, ns.applets)
 
         if (!defaultFields.isEmpty) {
             System.err.println("Could not map all default fields. These were left:")

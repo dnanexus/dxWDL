@@ -69,6 +69,16 @@ object IR {
     case object DockerImageNetwork extends DockerImage
     case class DockerImageDxAsset(asset: DXRecord) extends DockerImage
 
+    // A unified type representing a WDL workflow or a WDL applet.
+    // This is useful when compiling WDL workflows, because they can
+    // call other WDL workflows and applets. This is done using the
+    // same syntax.
+    sealed trait Callable {
+        def getName: String
+        def inputVars: Vector[CVar]
+        def outputVars: Vector[CVar]
+    }
+
     // There are several kinds of applets
     //   Eval:      evaluate WDL expressions, pure calculation
     //   If:        block for a conditional
@@ -100,7 +110,11 @@ object IR {
                       instanceType: InstanceType,
                       docker: DockerImage,
                       kind: AppletKind,
-                      ns: WdlNamespace)
+                      ns: WdlNamespace) extends Callable {
+        def getName = name
+        def inputVars = inputs
+        def outputVars = outputs
+    }
 
     /** An input to a stage. Could be empty, a wdl constant,
       * a link to an output variable from another stage,
@@ -129,7 +143,6 @@ object IR {
                      inputs: Vector[SArg],
                      outputs: Vector[CVar])
 
-
     /** A workflow output is linked to the stage that
       * generated it.
       */
@@ -137,9 +150,14 @@ object IR {
                         inputs: Vector[(CVar,SArg)],
                         outputs: Vector[(CVar,SArg)],
                         stages: Vector[Stage],
-                        locked: Boolean)
+                        locked: Boolean) extends Callable {
+        def getName = name
+        def inputVars = inputs.map{ case (cVar,_) => cVar }.toVector
+        def outputVars = outputs.map{ case (cVar,_) => cVar }.toVector
+    }
 
     case class Namespace(workflow: Option[Workflow],
+                         subWorkflows: Map[String, Workflow],
                          applets: Map[String, Applet])
 
 
@@ -434,7 +452,7 @@ object IR {
         implicit val dxWorkflowStageFormat = yamlFormat1(Utils.DXWorkflowStage)
         implicit val stageFormat = yamlFormat5(Stage)
         implicit val workflowFormat = yamlFormat5(Workflow)
-        implicit val namespaceFormat = yamlFormat2(Namespace)
+        implicit val namespaceFormat = yamlFormat3(Namespace)
     }
     import IrInternalYamlProtocol._
 
