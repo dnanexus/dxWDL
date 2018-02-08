@@ -6,9 +6,10 @@
 // ToplevelDir/[IntermediateForm.md].
 //
 // We use YAML as a human readable representation of the IR.
-package dxWDL
+package dxWDL.compiler
 
 import com.dnanexus.DXRecord
+import dxWDL.{DeclAttrs, Utils, WdlPrettyPrinter}
 import net.jcazevedo.moultingyaml._
 import spray.json._
 import wdl.WdlNamespace
@@ -55,7 +56,7 @@ object IR {
     sealed trait InstanceType
     case object InstanceTypeDefault extends InstanceType
     case class InstanceTypeConst(
-        dxInstaceType: Option[String],
+        dxInstanceType: Option[String],
         memoryMB: Option[Int], diskGB: Option[Int], cpu: Option[Int]
     ) extends InstanceType
     case object InstanceTypeRuntime extends InstanceType

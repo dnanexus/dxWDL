@@ -265,4 +265,30 @@ object WdlRewrite {
                                         None)
     }
 
+    def namespaceUpdateChildren(old: WdlNamespace,
+                                childNamespaces: Vector[WdlNamespace]) : WdlNamespace = {
+        // update the child namespaces field
+        old match {
+            case oldNs: WdlNamespaceWithWorkflow =>
+                new WdlNamespaceWithWorkflow(oldNs.importedAs,
+                                             oldNs.workflow,
+                                             oldNs.imports,
+                                             childNamespaces,
+                                             oldNs.tasks,
+                                             oldNs.terminalMap,
+                                             oldNs.wdlSyntaxErrorFormatter,
+                                             oldNs.ast,
+                                             oldNs.sourceString,
+                                             oldNs.importUri)
+            case _: WdlNamespaceWithoutWorkflow =>
+                new WdlNamespaceWithoutWorkflow(old.importedAs,
+                                                old.imports,
+                                                childNamespaces,
+                                                old.tasks,
+                                                old.terminalMap,
+                                                old.ast,
+                                                old.sourceString,
+                                                old.importUri)
+        }
+    }
 }

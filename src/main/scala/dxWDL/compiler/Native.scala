@@ -6,9 +6,7 @@ package dxWDL.compiler
 import com.fasterxml.jackson.databind.JsonNode
 import com.dnanexus.{DXApplet, DXAPI, DXDataObject, DXFile, DXProject, DXRecord, DXWorkflow}
 import dxWDL._
-import dxWDL.Utils.{AppletLinkInfo, base64Encode, CHECKSUM_PROP, dxFileFromJsValue, DXWorkflowStage,
-    FLAT_FILES_SUFFIX, INSTANCE_TYPE_DB_FILENAME, jsValueOfJsonNode, jsonNodeOfJsValue,
-    LINK_INFO_FILENAME, trace, Verbose, warning}
+import dxWDL.Utils._
 import java.security.MessageDigest
 import java.time.format.DateTimeFormatter
 import IR.{CVar, SArg}
@@ -475,7 +473,11 @@ case class Native(dxWDLrtId: String,
         // find the dxWDL asset
         val instanceType:String = iType match {
             case x : IR.InstanceTypeConst =>
-                instanceTypeDB.apply(x)
+                val xDesc = InstanceTypeReq(x.dxInstanceType,
+                                            x.memoryMB,
+                                            x.diskGB,
+                                            x.cpu)
+                instanceTypeDB.apply(xDesc)
             case IR.InstanceTypeDefault | IR.InstanceTypeRuntime =>
                 instanceTypeDB.defaultInstanceType
         }

@@ -2,13 +2,8 @@
   */
 package dxWDL.compiler
 
-import dxWDL.{CompilerErrorFormatter, DeclAttrs, DxPath, InstanceTypeDB, IR, WdlPrettyPrinter}
+import dxWDL.{CompilerErrorFormatter, DeclAttrs, DxPath, InstanceTypeDB, Verbose, WdlPrettyPrinter}
 import dxWDL.Utils
-import dxWDL.Utils.{COMMON, DXWorkflowStage, DX_URL_PREFIX, LAST_STAGE,
-    evalConst, isOptional,
-    isExpressionConst, isInterpolation, isNativeDxType,
-    MAX_STAGE_NAME_LEN, OUTPUT_SECTION, REORG,
-    trace, Verbose, warning}
 import IR.{CVar, LinkedVar, SArg}
 import scala.util.{Failure, Success, Try}
 import wdl._
@@ -35,14 +30,14 @@ case class GenerateIR(cef: CompilerErrorFormatter,
 
     // generate a stage Id
     private var stageNum = 0
-    private def genStageId(stageName: Option[String] = None) : DXWorkflowStage = {
+    private def genStageId(stageName: Option[String] = None) : Utils.DXWorkflowStage = {
         stageName match {
             case None =>
-                val retval = DXWorkflowStage(s"stage-${stageNum}")
+                val retval = Utils.DXWorkflowStage(s"stage-${stageNum}")
                 stageNum += 1
                 retval
             case Some(nm) =>
-                DXWorkflowStage(s"stage-${nm}")
+                Utils.DXWorkflowStage(s"stage-${nm}")
         }
     }
 
@@ -110,21 +105,6 @@ task Add {
         WdlExpression.fromString(sExpr)
     }
 
-    private def callUniqueName(call : WdlCall) : String = {
-        val nm = call.unqualifiedName
-        Utils.reservedAppletPrefixes.foreach{ prefix =>
-            if (nm.startsWith(prefix))
-                throw new Exception(cef.illegalCallName(call))
-        }
-        Utils.reservedSubstrings.foreach{ sb =>
-            if (nm contains sb)
-                throw new Exception(cef.illegalCallName(call))
-        }
-        if (nm == LAST_STAGE)
-            throw new Exception(cef.illegalCallName(call))
-        nm
-    }
-
     private def calleeName(call: WdlCall) : String = {
         call match {
             case tc: WdlTaskCall => tc.task.name
@@ -170,7 +150,11 @@ task Add {
                     val memory = evalAttr(task, "memory")
                     val diskSpace = evalAttr(task, "disks")
                     val cores = evalAttr(task, "cpu")
-                    InstanceTypeDB.parse(dxInstaceType, memory, diskSpace, cores)
+                    val iTypeDesc = InstanceTypeDB.parse(dxInstaceType, memory, diskSpace, cores)
+                    IR.InstanceTypeConst(iTypeDesc.dxInstanceType,
+                                         iTypeDesc.memoryMB,
+                                         iTypeDesc.diskGB,
+                                         iTypeDesc.cpu)
             }
         } catch {
             case e : DynamicInstanceTypesException =>
@@ -271,7 +255,7 @@ task Add {
                             case Some(lVar) => Set(srcStr)
                             case None => Set.empty
                         }
-                    case "string" if isInterpolation(srcStr) =>
+                    case "string" if Utils.isInterpolation(srcStr) =>
                         // From a string like: "Tamara likes ${fruit}s and ${ice}s"
                         // extract the variables {fruit, ice}. In general, they
                         // could be full fledged expressions
@@ -341,7 +325,7 @@ task Add {
                               env : CallEnv,
                               expr : WdlExpression) : CallEnv = {
         val deps:Set[String] = envDeps(env, expr.ast)
-        trace(verbose2, s"updateClosure deps=${deps}  expr=${expr.toWomString}")
+        Utils.trace(verbose2, s"updateClosure deps=${deps}  expr=${expr.toWomString}")
         closure ++ deps.map{ v => v -> env(v) }
     }
 
@@ -404,7 +388,7 @@ workflow w {
                                           declarations: Seq[Declaration],
                                           env: CallEnv) : (IR.Stage, IR.Applet) = {
         val appletFqn = wfUnqualifiedName ++ "_" ++ stageName
-        trace(verbose.on, s"Compiling evaluation applet ${appletFqn}")
+        Utils.trace(verbose.on, s"Compiling evaluation applet ${appletFqn}")
 
         // Figure out the closure
         var closure = Map.empty[String, LinkedVar]
@@ -509,7 +493,7 @@ workflow w {
 
     // Compile a WDL task into an applet
     private def compileTask(task : WdlTask) : (IR.Applet, Vector[CVar]) = {
-        trace(verbose.on, s"Compiling task ${task.name}")
+        Utils.trace(verbose.on, s"Compiling task ${task.name}")
 
         // The task inputs are declarations that:
         // 1) are unassigned (do not have an expression)
@@ -527,9 +511,9 @@ workflow w {
                     case None => taskAttrs
                     case Some(expr) =>
                         // the constant is a default value
-                        if (!isExpressionConst(expr))
+                        if (!Utils.isExpressionConst(expr))
                             throw new Exception(cef.taskInputDefaultMustBeConst(expr))
-                        val wdlConst:WomValue = evalConst(expr)
+                        val wdlConst:WomValue = Utils.evalConst(expr)
                         taskAttrs.setDefault(wdlConst)
                 }
                 Some(CVar(decl.unqualifiedName, decl.womType, attrs, decl.ast))
@@ -545,10 +529,10 @@ workflow w {
         val docker = task.runtimeAttributes.attrs.get("docker") match {
             case None =>
                 IR.DockerImageNone
-            case Some(expr) if isExpressionConst(expr) =>
-                val wdlConst = evalConst(expr)
+            case Some(expr) if Utils.isExpressionConst(expr) =>
+                val wdlConst = Utils.evalConst(expr)
                 wdlConst match {
-                    case WomString(url) if url.startsWith(DX_URL_PREFIX) =>
+                    case WomString(url) if url.startsWith(Utils.DX_URL_PREFIX) =>
                         // A constant image specified with a DX URL
                         val dxRecord = DxPath.lookupDxURLRecord(url)
                         IR.DockerImageDxAsset(dxRecord)
@@ -612,7 +596,7 @@ workflow w {
         // Extract the input values/links from the environment
         val inputs: Vector[SArg] = callee.inputVars.map{ cVar =>
             findInputByName(call, cVar) match {
-                case None if (!isOptional(cVar.womType) && cVar.attrs.getDefault == None) =>
+                case None if (!Utils.isOptional(cVar.womType) && cVar.attrs.getDefault == None) =>
                     // A missing compulsory input, without a default
                     // value. In an unlocked workflow it can be
                     // provided as an input. In a locked workflow,
@@ -623,7 +607,7 @@ workflow w {
                     if (locked) {
                         throw new Exception(cef.missingCallArgument(call.ast, msg))
                     } else {
-                        warning(verbose, msg)
+                        Utils.warning(verbose, msg)
                         IR.SArgEmpty
                     }
                 case None =>
@@ -652,7 +636,7 @@ workflow w {
             }
         }
 
-        val stageName = callUniqueName(call)
+        val stageName = call.unqualifiedName
         IR.Stage(stageName, genStageId(), callee.getName, inputs, callee.outputVars)
     }
 
@@ -778,7 +762,7 @@ workflow w {
             case call:WdlTaskCall =>
                 val task = taskOfCall(call)
                 task.outputs.map { tso =>
-                    val varName = callUniqueName(call) ++ "." ++ tso.unqualifiedName
+                    val varName = call.unqualifiedName ++ "." ++ tso.unqualifiedName
                     CVar(varName, outsideType(tso.womType), DeclAttrs.empty, tso.ast)
                 }
             case decl:Declaration if !isLocal(decl) =>
@@ -809,10 +793,10 @@ workflow w {
             input match {
                 case None =>
                     // unbound input; the workflow does not provide it.
-                    if (!isOptional(cVar.womType)) {
+                    if (!Utils.isOptional(cVar.womType)) {
                         // A compulsory input. Print a warning, the user may wish to supply
                         // it at runtime.
-                        warning(verbose, s"""|Note: workflow does not supply required
+                        Utils.warning(verbose, s"""|Note: workflow does not supply required
                                              |input ${cVar.name} to call ${call.unqualifiedName}.
                                              |Propagating input to applet.
                                              |""".stripMargin.replaceAll("\n", " "))
@@ -930,7 +914,7 @@ workflow w {
             // remove variables that cause name collisions
             unbound.filter{ artifVar =>
                 if (existingVarNames contains artifVar.name) {
-                    warning(verbose,
+                    Utils.warning(verbose,
                             s"""|Variables ${artifVar.name} already exists, cannot
                                 |use it to expose parameter ${artifVar.originalFqn}
                                 |""".stripMargin.replaceAll("\n", " "))
@@ -943,7 +927,7 @@ workflow w {
 
         if (!extraVars.isEmpty) {
             val extraVarNames = extraVars.map(x => x.originalFqn)
-            trace(verbose2, s"extra inputs=${extraVarNames}")
+            Utils.trace(verbose2, s"extra inputs=${extraVarNames}")
         }
         extraVars
     }
@@ -958,7 +942,7 @@ workflow w {
                                scatter: Scatter,
                                callables: Map[String, IR.Callable],
                                env : CallEnv) : (IR.Stage, IR.Applet) = {
-        trace(verbose.on, s"compiling scatter ${stageName}")
+        Utils.trace(verbose.on, s"compiling scatter ${stageName}")
         val (topDecls, calls) = blockSplit(scatter.children.toVector)
 
         // Figure out the input definitions
@@ -975,7 +959,7 @@ workflow w {
         }.toMap
 
         // If any of the return types is non native, we need a collect subjob.
-        val allNative = outputVars.forall(cVar => isNativeDxType(cVar.womType))
+        val allNative = outputVars.forall(cVar => Utils.isNativeDxType(cVar.womType))
         val aKind =
             if (allNative) IR.AppletKindScatter(callDict)
             else IR.AppletKindScatterCollect(callDict)
@@ -1005,7 +989,7 @@ workflow w {
                           cond: If,
                           callables: Map[String, IR.Callable],
                           env : CallEnv) : (IR.Stage, IR.Applet) = {
-        trace(verbose.on, s"compiling If block ${stageName}")
+        Utils.trace(verbose.on, s"compiling If block ${stageName}")
         val (topDecls, calls) = blockSplit(cond.children.toVector)
 
         // Figure out the input definitions
@@ -1045,7 +1029,7 @@ workflow w {
     private def createReorgApplet(wfUnqualifiedName: String,
                                   wfOutputs: Vector[(CVar, SArg)]) : (IR.Stage, IR.Applet) = {
         val appletName = wfUnqualifiedName ++ "_reorg"
-        trace(verbose.on, s"Compiling output reorganization applet ${appletName}")
+        Utils.trace(verbose.on, s"Compiling output reorganization applet ${appletName}")
 
         val inputVars: Vector[CVar] = wfOutputs.map{ case (cVar, _) => cVar }
         val outputVars= Vector.empty[CVar]
@@ -1070,7 +1054,7 @@ workflow w {
         // Link to the X.y original variables
         val inputs: Vector[IR.SArg] = wfOutputs.map{ case (_, sArg) => sArg }.toVector
 
-        (IR.Stage(REORG, genStageId(), appletName, inputs, outputVars),
+        (IR.Stage(Utils.REORG, genStageId(), appletName, inputs, outputVars),
          applet)
     }
 
@@ -1092,9 +1076,9 @@ workflow w {
                         (cVar, IR.SArgWorkflowInput(cVar))
                     case Some(expr) =>
                         // the constant is a default value
-                        if (!isExpressionConst(expr))
+                        if (!Utils.isExpressionConst(expr))
                             throw new Exception(cef.workflowInputDefaultMustBeConst(expr))
-                        val wdlConst:WomValue = evalConst(expr)
+                        val wdlConst:WomValue = Utils.evalConst(expr)
                         val attrs = DeclAttrs.empty.setDefault(wdlConst)
                         val cVarWithDflt = CVar(decl.unqualifiedName, decl.womType,
                                                 attrs, decl.ast)
@@ -1116,14 +1100,14 @@ workflow w {
             return stagePrefix ++ "_" ++ backExpr.toWomString
         val readableName = callNames.foldLeft(stagePrefix){
             case (accu, cName) =>
-                if (accu.length >= MAX_STAGE_NAME_LEN)
+                if (accu.length >= Utils.MAX_STAGE_NAME_LEN)
                     accu
                 else
                     accu + "_" + cName
         }
         // The name could still end up too long, so we limit
         // it.
-        val absMax = MAX_STAGE_NAME_LEN + 20
+        val absMax = Utils.MAX_STAGE_NAME_LEN + 20
         if (readableName.length > absMax)
             readableName.substring(0, absMax)
         else
@@ -1197,8 +1181,8 @@ workflow w {
     // used only in the absence of workflow-level inputs/outputs.
     def compileCommonApplet(wf: WdlWorkflow,
                             inputs: Vector[(CVar, SArg)]) : (IR.Stage, IR.Applet) = {
-        val appletName = wf.unqualifiedName ++ "_" ++ COMMON
-        trace(verbose.on, s"Compiling common applet ${appletName}")
+        val appletName = wf.unqualifiedName ++ "_" ++ Utils.COMMON
+        Utils.trace(verbose.on, s"Compiling common applet ${appletName}")
 
         val inputVars : Vector[CVar] = inputs.map{ case (cVar, _) => cVar }
         val outputVars: Vector[CVar] = inputVars
@@ -1220,7 +1204,7 @@ workflow w {
         verifyWdlCodeIsLegal(applet.ns)
 
         val sArgs: Vector[SArg] = inputs.map{ _ => IR.SArgEmpty}.toVector
-        (IR.Stage(COMMON, genStageId(), appletName, sArgs, outputVars),
+        (IR.Stage(Utils.COMMON, genStageId(), appletName, sArgs, outputVars),
          applet)
     }
 
@@ -1246,7 +1230,7 @@ workflow w {
     def compileOutputSection(appletName: String,
                              wfOutputs: Vector[(CVar, SArg)],
                              outputDecls: Seq[WorkflowOutput]) : (IR.Stage, IR.Applet) = {
-        trace(verbose.on, s"Compiling output section applet ${appletName}")
+        Utils.trace(verbose.on, s"Compiling output section applet ${appletName}")
 
         val inputVars: Vector[CVar] = wfOutputs.map{ case (cVar,_) => cVar }.toVector
         val inputDecls: Vector[Declaration] = wfOutputs.map{ case(cVar, _) =>
@@ -1281,7 +1265,11 @@ workflow w {
         // Link to the X.y original variables
         val inputs: Vector[IR.SArg] = wfOutputs.map{ case (_, sArg) => sArg }.toVector
 
-        (IR.Stage(OUTPUT_SECTION, genStageId(Some(LAST_STAGE)), appletName, inputs, outputVars),
+        (IR.Stage(Utils.OUTPUT_SECTION,
+                  genStageId(Some(Utils.LAST_STAGE)),
+                  appletName,
+                  inputs,
+                  outputVars),
          applet)
     }
 
@@ -1291,7 +1279,7 @@ workflow w {
                                       subBlocks: Vector[Block],
                                       callables: Map[String, IR.Callable]) :
             (Vector[(IR.Stage, Option[IR.Applet])], Vector[(CVar, SArg)]) = {
-        trace(verbose.on, "IR: compiling locked-down workflow")
+        Utils.trace(verbose.on, "IR: compiling locked-down workflow")
 
         // Locked-down workflow, we have workflow level inputs and outputs
         val initEnv : CallEnv = wfInputs.map { case (cVar,sArg) =>
@@ -1311,7 +1299,7 @@ workflow w {
                                        subBlocks: Vector[Block],
                                        callables: Map[String, IR.Callable]) :
             (Vector[(IR.Stage, Option[IR.Applet])], Vector[(CVar, SArg)]) = {
-        trace(verbose.on, "IR: compiling regular workflow")
+        Utils.trace(verbose.on, "IR: compiling regular workflow")
 
         // Create a preliminary stage to handle workflow inputs, and top-level
         // declarations.
@@ -1410,19 +1398,19 @@ workflow w {
 
     // compile the WDL source code into intermediate representation
     def apply(ns : WdlNamespace) : IR.Namespace = {
-        trace(verbose.on, "IR pass")
+        Utils.trace(verbose.on, "IR pass")
 
         // Load all accessed applets, local or imported
         val accessedTasks: Set[WdlTask] = loadImportedTasks(ns)
         val accessedTaskNames = accessedTasks.map(task => task.name)
-        trace(verbose.on, s"Accessed tasks = ${accessedTaskNames}")
+        Utils.trace(verbose.on, s"Accessed tasks = ${accessedTaskNames}")
 
         // Make sure all local tasks are included; we want to compile
         // them even if they are not accessed.
         val allTasks:Set[WdlTask] = accessedTasks ++ ns.tasks.toSet
 
         // compile all the tasks into applets
-        trace(verbose.on, "compiling tasks into dx:applets")
+        Utils.trace(verbose.on, "compiling tasks into dx:applets")
 
         val taskApplets: Map[String, IR.Applet] = allTasks.map{ task =>
             val (applet, _) = compileTask(task)

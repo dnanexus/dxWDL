@@ -1,6 +1,6 @@
 package dxWDL.compiler
 
-import dxWDL.{Utils, WdlPrettyPrinter}
+import dxWDL.{Utils, Verbose, WdlPrettyPrinter}
 import java.nio.file.{Path, Paths}
 import java.io.{FileWriter, PrintWriter}
 import wdl._
@@ -13,7 +13,7 @@ import wom.core.WorkflowSource
 // Note: by keeping the namespace in memory, instead of writing to
 // a temporary file on disk, we keep the resolver valid.
 case class WhitewashNamespace(wdlSourceFile: Path,
-                              verbose: Utils.Verbose)  {
+                              verbose: Verbose)  {
     // Resolving imports. Look for referenced files in the
     // source directory.
     private def resolver(filename: String) : WorkflowSource = {
@@ -55,7 +55,7 @@ case class WhitewashNamespace(wdlSourceFile: Path,
     }
 
     private def getWorkflowOutputs(ns: WdlNamespace,
-                                   verbose: Utils.Verbose) : Option[Seq[WorkflowOutput]] = {
+                                   verbose: Verbose) : Option[Seq[WorkflowOutput]] = {
         ns match {
             case nswf: WdlNamespaceWithWorkflow =>
                 val wf = nswf.workflow

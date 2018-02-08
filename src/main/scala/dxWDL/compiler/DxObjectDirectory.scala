@@ -2,7 +2,7 @@
   */
 package dxWDL.compiler
 
-import dxWDL.{IR, Utils}
+import dxWDL.{Utils, Verbose}
 import com.dnanexus.{DXApplet, DXDataObject, DXProject, DXSearch, DXWorkflow}
 import java.time.{LocalDateTime, ZoneId}
 import scala.collection.JavaConverters._
@@ -29,7 +29,7 @@ case class DxObjectInfo(name:String,
 case class DxObjectDirectory(ns: IR.Namespace,
                              dxProject:DXProject,
                              folder: String,
-                             verbose: Utils.Verbose) {
+                             verbose: Verbose) {
     private lazy val objDir : HashMap[String, Vector[DxObjectInfo]] = bulkLookup()
     private val folders = HashSet.empty[String]
 

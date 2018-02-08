@@ -45,14 +45,14 @@ package dxWDL.compiler
 
 import com.dnanexus.{DXApplet, DXDataObject, DXProject, DXSearch,
     IOClass, InputParameter, OutputParameter}
-import dxWDL.{Utils, WdlPrettyPrinter}
+import dxWDL.{Verbose, Utils, WdlPrettyPrinter}
 import java.nio.file.{Files, Path}
 import scala.collection.JavaConverters._
 import scala.util.{Failure, Success}
 import wdl.{WdlTask, WdlNamespace}
 import wom.types._
 
-case class DxNI(ns: WdlNamespace, verbose: Utils.Verbose) {
+case class DxNI(ns: WdlNamespace, verbose: Verbose) {
 
     private def wdlTypeOfIOClass(appletName:String,
                                  argName: String,
@@ -201,7 +201,7 @@ object DxNI {
               output: Path,
               recursive: Boolean,
               force: Boolean,
-              verbose: Utils.Verbose) : Unit = {
+              verbose: Verbose) : Unit = {
         val nsEmpty = WdlRewrite.namespaceEmpty()
         val dxni = DxNI(nsEmpty, verbose)
 

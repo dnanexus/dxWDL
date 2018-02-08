@@ -50,14 +50,6 @@ object Utils {
     case class DXIOParam(ioClass: IOClass,
                          optional: Boolean)
 
-    // Encapsulation of verbosity flags.
-    //  on --       is the overall setting true/false
-    //  keywords -- specific words to trace
-    //  quiet:      if true, do not print warnings and informational messages
-    case class Verbose(on: Boolean,
-                       quiet: Boolean,
-                       keywords: Set[String])
-
     object AppletLinkInfo {
         def writeJson(ali: AppletLinkInfo) : JsValue = {
             // Serialize applet input definitions, so they could be used
@@ -727,7 +719,7 @@ object Utils {
         System.err.println(msg)
     }
 
-    def warning(verbose:Verbose, msg:String) : Unit = {
+    def warning(verbose: Verbose, msg:String) : Unit = {
         if (verbose.quiet)
             return;
         System.err.println(msg)

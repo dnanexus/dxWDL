@@ -18,23 +18,24 @@ This is the dx JSON input:
   "stage-yyyy.b": 3
 }
   */
-package dxWDL
+package dxWDL.compiler
 
 import com.dnanexus.{DXDataObject, DXFile}
-import scala.collection.mutable.HashMap
+import dxWDL._
 import IR.{CVar, SArg}
+import scala.collection.mutable.HashMap
 import java.nio.file.Path
 import spray.json._
-import Utils.{DX_URL_PREFIX, readFileContent, isGeneratedVar, OUTPUT_SECTION, trace}
 
-case class InputFile(verbose: Utils.Verbose) {
+
+case class InputFile(verbose: Verbose) {
     val verbose2:Boolean = verbose.keywords contains "InputFile"
 
     // traverse the JSON structure, and replace file URLs with
     // dx-links.
     private def replaceURLsWithLinks(jsv: JsValue) : JsValue = {
         jsv match {
-            case JsString(s) if s.startsWith(DX_URL_PREFIX) =>
+            case JsString(s) if s.startsWith(Utils.DX_URL_PREFIX) =>
                 // Identify platform file paths by their prefix,
                 // do a lookup, and create a dxlink
                 val dxFile: DXDataObject = DxPath.lookupDxURLFile(s)
@@ -72,10 +73,10 @@ case class InputFile(verbose: Utils.Verbose) {
                                fqn: String) : Option[JsValue] = {
         fields.get(fqn) match {
             case None =>
-                trace(verbose2, s"getExactlyOnce ${fqn} => None")
+                Utils.trace(verbose2, s"getExactlyOnce ${fqn} => None")
                 None
             case Some(v:JsValue) =>
-                trace(verbose2, s"getExactlyOnce ${fqn} => Some(${v})")
+                Utils.trace(verbose2, s"getExactlyOnce ${fqn} => Some(${v})")
                 fields -= fqn
                 Some(v)
         }
@@ -87,7 +88,7 @@ case class InputFile(verbose: Utils.Verbose) {
                                    stg:IR.Stage,
                                    callee: IR.Applet,
                                    defaultFields: HashMap[String, JsValue]) : IR.Stage = {
-        trace(verbose2, s"addDefaultToStage ${stg.name}")
+        Utils.trace(verbose2, s"addDefaultToStage ${stg.name}")
         val inputsFull:Vector[(SArg,CVar)] = stg.inputs.zipWithIndex.map{
             case (sArg,idx) =>
                 val cVar = callee.inputs(idx)
@@ -99,16 +100,16 @@ case class InputFile(verbose: Utils.Verbose) {
             case _ => wf.name
         }
         val inputNames = inputsFull.map{ case (_,cVar) => cVar.name }
-        trace(verbose2, s"inputNames=${inputNames}  trail=${nameTrail}")
+        Utils.trace(verbose2, s"inputNames=${inputNames}  trail=${nameTrail}")
         val inputsWithDefaults: Vector[SArg] = inputsFull.map{ case (sArg, cVar) =>
-            if (isGeneratedVar(cVar.name)) {
+            if (Utils.isGeneratedVar(cVar.name)) {
                 // generated variables are not accessible to the user
                 sArg
             } else {
                 val fqn = cVar.originalFqn match {
                     case None => s"${nameTrail}.${cVar.name}"
                     case Some(fqn) =>
-                        trace(verbose2, s"original fqn=${fqn} cVar=${cVar.name}")
+                        Utils.trace(verbose2, s"original fqn=${fqn} cVar=${cVar.name}")
                         s"${wf.name}.${fqn}"
                 }
                 getExactlyOnce(defaultFields, fqn) match {
@@ -150,17 +151,17 @@ case class InputFile(verbose: Utils.Verbose) {
     def embedDefaults(ns: IR.Namespace,
                       wf: IR.Workflow,
                       defaultInputs: Path) : IR.Namespace = {
-        trace(verbose.on, s"Embedding defaults into the IR")
+        Utils.trace(verbose.on, s"Embedding defaults into the IR")
 
         // read the default inputs file (xxxx.json)
-        val wdlDefaults: JsObject = readFileContent(defaultInputs).parseJson.asJsObject
+        val wdlDefaults: JsObject = Utils.readFileContent(defaultInputs).parseJson.asJsObject
         val defaultFields:HashMap[String,JsValue] = preprocessInputs(wdlDefaults)
 
         val stagesWithDefaults = wf.stages.map{ stage =>
             val callee:IR.Applet = ns.applets(stage.appletName)
             val visible = callee.kind match {
                 case IR.AppletKindWorkflowOutputReorg => false
-                case _ if (stage.name == OUTPUT_SECTION) => false
+                case _ if (stage.name == Utils.OUTPUT_SECTION) => false
                 case _ => true
             }
             if (visible) {
@@ -192,11 +193,11 @@ case class InputFile(verbose: Utils.Verbose) {
     // Build a dx input file, based on the JSON input file and the workflow
     def dxFromCromwell(ns: IR.Namespace,
                        inputPath: Path) : JsObject = {
-        trace(verbose.on, s"Translating WDL input file ${inputPath}")
+        Utils.trace(verbose.on, s"Translating WDL input file ${inputPath}")
 
         // read the input file xxxx.json
         // skip comment lines, these start with ##.
-        val wdlInputs: JsObject = readFileContent(inputPath).parseJson.asJsObject
+        val wdlInputs: JsObject = Utils.readFileContent(inputPath).parseJson.asJsObject
         val inputFields:HashMap[String,JsValue] = preprocessInputs(wdlInputs)
 
         // The general idea here is to figure out the ancestry of each
@@ -214,7 +215,7 @@ case class InputFile(verbose: Utils.Verbose) {
                     // Do not assign the value to any later stages.
                     // We found the variable declaration, the others
                      // are variable uses.
-                    trace(verbose.on, s"${fqn} -> ${dxName}")
+                    Utils.trace(verbose.on, s"${fqn} -> ${dxName}")
                     val wvl = translateValue(cVar, jsv)
                     WdlVarLinks.genFields(wvl, dxName, encodeDots=false)
                         .foreach{ case (name, jsv) => workflowBindings(name) = jsv }
