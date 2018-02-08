@@ -4,11 +4,12 @@
   *  auxiliary variables, and call the task with values or variables
   *  (no expressions).
   */
-package dxWDL
+package dxWDL.compiler
 
+import dxWDL.{CompilerErrorFormatter, Utils}
+import java.nio.file.Path
 import scala.collection.mutable.Queue
 import scala.util.{Failure, Success}
-import Utils.{genTmpVarName, nonInterpolation, trace, Verbose, warning}
 import wdl._
 import wdl.expression._
 import wdl.types._
@@ -17,7 +18,7 @@ import wom.types._
 
 case class CompilerSimplifyExpr(wf: WdlWorkflow,
                                 cef: CompilerErrorFormatter,
-                                verbose: Verbose) {
+                                verbose: Utils.Verbose) {
     val verbose2:Boolean = verbose.keywords contains "simplify"
 
     private def isMemberAccess(a: Ast) : Boolean = {
@@ -47,7 +48,7 @@ case class CompilerSimplifyExpr(wf: WdlWorkflow,
                       Some(parent)).evaluate(expr.ast) match {
             case Success(wdlType) => wdlType
             case Failure(f) =>
-                warning(verbose, cef.couldNotEvaluateType(expr))
+                Utils.warning(verbose, cef.couldNotEvaluateType(expr))
                 throw f
         }
     }
@@ -98,7 +99,7 @@ case class CompilerSimplifyExpr(wf: WdlWorkflow,
         if (Utils.isExpressionConst(expr)) {
             false
         } else expr.ast match {
-            case t: Terminal if nonInterpolation(t) => true
+            case t: Terminal if Utils.nonInterpolation(t) => true
             case _ => false
         }
     }
@@ -122,7 +123,7 @@ case class CompilerSimplifyExpr(wf: WdlWorkflow,
 
         // replace an expression with a temporary variable
         def replaceWithTempVar(t: WomType, expr: WdlExpression) : WdlExpression = {
-            val tmpVarName = genTmpVarName()
+            val tmpVarName = Utils.genTmpVarName()
             tmpDecls += WdlRewrite.declaration(t, tmpVarName, Some(expr))
             WdlExpression.fromString(tmpVarName)
         }
@@ -136,10 +137,10 @@ case class CompilerSimplifyExpr(wf: WdlWorkflow,
                 case _ if (!typesMatch(callerType, calleeType)) =>
                     // A coercion is required to convert the expression to the expected
                     // type
-                    warning(verbose, cef.typeConversionRequired(expr, call,
-                                                                callerType, calleeType))
+                    Utils.warning(verbose, cef.typeConversionRequired(expr, call,
+                                                                      callerType, calleeType))
                     replaceWithTempVar(calleeType, expr)
-                case t: Terminal if nonInterpolation(t) => expr
+                case t: Terminal if Utils.nonInterpolation(t) => expr
                 case a: Ast if isCallOutputAccess(a) =>
                     // Accessing an expression like A.B.C
                     // The expression could be:
@@ -193,7 +194,7 @@ case class CompilerSimplifyExpr(wf: WdlWorkflow,
         } else {
             // separate declaration for collection expression
             val colDecl = WdlRewrite.declaration(collType,
-                                                 genTmpVarName(),
+                                                 Utils.genTmpVarName(),
                                                  Some(ssc.collection))
             val collVar = WdlExpression.fromString(colDecl.unqualifiedName)
             val ssc1 = WdlRewrite.scatter(ssc, children, collVar)
@@ -217,7 +218,7 @@ case class CompilerSimplifyExpr(wf: WdlWorkflow,
         } else {
             // separate declaration for condition expression
             val condDecl = WdlRewrite.declaration(exprType,
-                                                  genTmpVarName(),
+                                                  Utils.genTmpVarName(),
                                                   Some(cond.condition))
             val condVar = WdlExpression.fromString(condDecl.unqualifiedName)
             val cond1 = WdlRewrite.cond(cond, children, condVar)
@@ -245,7 +246,7 @@ case class CompilerSimplifyExpr(wf: WdlWorkflow,
             case _ if maybeCoercion =>
                 // Coercion maybe needed, this requires calculation
                 true
-            case t: Terminal if nonInterpolation(t) => false
+            case t: Terminal if Utils.nonInterpolation(t) => false
             case a: Ast if isCallOutputAccess(a) =>
                 // Accessing an expression like A.B.C
                 // The expression could be:
@@ -258,10 +259,10 @@ case class CompilerSimplifyExpr(wf: WdlWorkflow,
                 true
         }
         if (tempVarRequired) {
-            trace(verbose.on, s"building temporary variable for ${wot.unqualifiedName}")
+            Utils.trace(verbose.on, s"building temporary variable for ${wot.unqualifiedName}")
 
             // separate declaration for expression
-            val tmpVarName = genTmpVarName()
+            val tmpVarName = Utils.genTmpVarName()
             val tmpDecl:Declaration = WdlRewrite.declaration(wdlType, tmpVarName, Some(expr))
             val wot1 = new WorkflowOutput(wot.unqualifiedName, wot.womType,
                                           WdlExpression.fromString(tmpVarName),
@@ -352,29 +353,33 @@ object CompilerSimplifyExpr {
         }
     }
 
-    private def validateTask(task: WdlTask, verbose: Verbose) : Unit = {
+    private def validateTask(task: WdlTask, verbose: Utils.Verbose) : Unit = {
         // validate runtime attributes
         val validAttrNames:Set[String] = Set(Utils.DX_INSTANCE_TYPE_ATTR, "memory", "disks", "cpu", "docker")
         task.runtimeAttributes.attrs.foreach{ case (attrName,_) =>
             if (!(validAttrNames contains attrName))
-                warning(verbose, s"Runtime attribute ${attrName} for task ${task.name} is unknown")
+                Utils.warning(verbose, s"Runtime attribute ${attrName} for task ${task.name} is unknown")
         }
     }
 
-    def apply(ns: WdlNamespace, verbose: Verbose) : WdlNamespace = {
-        trace(verbose.on, "simplifying workflow expressions")
+    def apply(ns: WdlNamespace,
+              wdlSourceFile: Path,
+              verbose: Utils.Verbose) : WdlNamespace = {
+        Utils.trace(verbose.on, "simplifying workflow expressions")
         val cef = new CompilerErrorFormatter(ns.terminalMap)
         checkReservedWords(ns, cef)
         ns.tasks.foreach(t => validateTask(t, verbose))
 
         // Process the original WDL file,
         // Do not modify the tasks
-        ns match {
+        val nsFresh = ns match {
             case nswf : WdlNamespaceWithWorkflow =>
                 val cse = new CompilerSimplifyExpr(nswf.workflow, cef, verbose)
                 val wf2 = cse.simplifyWorkflow(nswf.workflow)
                 WdlRewrite.namespace(nswf, wf2)
             case _ => ns
         }
+
+        WhitewashNamespace(wdlSourceFile, verbose).apply(nsFresh, "simple")
     }
 }

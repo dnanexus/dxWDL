@@ -1,7 +1,8 @@
 /** Efficient lookup for dx:applets in a platform directory
   */
-package dxWDL
+package dxWDL.compiler
 
+import dxWDL.{IR, Utils}
 import com.dnanexus.{DXApplet, DXDataObject, DXProject, DXSearch, DXWorkflow}
 import java.time.{LocalDateTime, ZoneId}
 import scala.collection.JavaConverters._

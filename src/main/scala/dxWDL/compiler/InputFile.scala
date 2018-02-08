@@ -213,7 +213,7 @@ case class InputFile(verbose: Utils.Verbose) {
                 case Some(jsv) =>
                     // Do not assign the value to any later stages.
                     // We found the variable declaration, the others
-                    // are variable uses.
+                     // are variable uses.
                     trace(verbose.on, s"${fqn} -> ${dxName}")
                     val wvl = translateValue(cVar, jsv)
                     WdlVarLinks.genFields(wvl, dxName, encodeDots=false)

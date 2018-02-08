@@ -33,18 +33,6 @@ import wdl.types.WdlFlavoredWomType
 import wom.types._
 import wom.values._
 
-object IORef extends Enumeration {
-    val Input, Output = Value
-}
-
-// The direction of IO:
-//   Download: downloading files
-//   Upload:  uploading files
-//   Zero:    no upload or download should be attempted
-object IODirection extends Enumeration {
-    val Download, Upload, Zero = Value
-}
-
 // A union of all the different ways of building a value
 // from JSON passed by the platform.
 //

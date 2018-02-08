@@ -1,18 +1,19 @@
 /** Generate a dx:worflow and dx:applets from an intermediate representation.
   */
-package dxWDL
+package dxWDL.compiler
 
 // DX bindings
 import com.fasterxml.jackson.databind.JsonNode
 import com.dnanexus.{DXApplet, DXAPI, DXDataObject, DXFile, DXProject, DXRecord, DXWorkflow}
+import dxWDL._
+import dxWDL.Utils.{AppletLinkInfo, base64Encode, CHECKSUM_PROP, dxFileFromJsValue, DXWorkflowStage,
+    FLAT_FILES_SUFFIX, INSTANCE_TYPE_DB_FILENAME, jsValueOfJsonNode, jsonNodeOfJsValue,
+    LINK_INFO_FILENAME, trace, Verbose, warning}
 import java.security.MessageDigest
 import java.time.format.DateTimeFormatter
 import IR.{CVar, SArg}
 import scala.collection.JavaConverters._
 import spray.json._
-import Utils.{AppletLinkInfo, base64Encode, CHECKSUM_PROP, dxFileFromJsValue, DXWorkflowStage,
-    FLAT_FILES_SUFFIX, INSTANCE_TYPE_DB_FILENAME, jsValueOfJsonNode, jsonNodeOfJsValue,
-    LINK_INFO_FILENAME, trace, warning}
 import wom.types._
 
 case class CompilerNative(dxWDLrtId: String,
@@ -22,7 +23,7 @@ case class CompilerNative(dxWDLrtId: String,
                           force: Boolean,
                           archive: Boolean,
                           locked: Boolean,
-                          verbose: Utils.Verbose) {
+                          verbose: Verbose) {
     val verbose2:Boolean = verbose.keywords contains "compilernative"
     lazy val runtimeLibrary:JsValue = getRuntimeLibrary()
     lazy val projName = dxProject.describe().getName()

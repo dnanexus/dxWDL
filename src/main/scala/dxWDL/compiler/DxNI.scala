@@ -41,14 +41,14 @@ task mk_int_list {
 }
 
   */
-package dxWDL
+package dxWDL.compiler
 
 import com.dnanexus.{DXApplet, DXDataObject, DXProject, DXSearch,
     IOClass, InputParameter, OutputParameter}
+import dxWDL.{Utils, WdlPrettyPrinter}
 import java.nio.file.{Files, Path}
 import scala.collection.JavaConverters._
 import scala.util.{Failure, Success}
-import Utils.{CHECKSUM_PROP, trace}
 import wdl.{WdlTask, WdlNamespace}
 import wom.types._
 
@@ -100,7 +100,7 @@ case class DxNI(ns: WdlNamespace, verbose: Utils.Verbose) {
     private def wdlTypesOfDxApplet(aplName: String,
                                    desc: DXApplet.Describe) :
             (Map[String, WomType], Map[String, WomType]) = {
-        trace(verbose.on, s"analyzing applet ${aplName}")
+        Utils.trace(verbose.on, s"analyzing applet ${aplName}")
         val inputSpecRaw: List[InputParameter] = desc.getInputSpecification().asScala.toList
         val inputSpec:Map[String, WomType] =
             inputSpecRaw.map{ iSpec =>
@@ -161,7 +161,7 @@ case class DxNI(ns: WdlNamespace, verbose: Utils.Verbose) {
         val nativeApplets: Seq[DXApplet] = dxAppletsInFolder.map{ apl =>
             val desc = apl.getCachedDescribe()
             val props: Map[String, String] = desc.getProperties().asScala.toMap
-            props.get(CHECKSUM_PROP) match {
+            props.get(Utils.CHECKSUM_PROP) match {
                 case Some(_) => None
                 case None => Some(apl)
             }

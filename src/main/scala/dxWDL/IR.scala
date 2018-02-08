@@ -17,6 +17,8 @@ import wom.types.WomType
 import wom.values._
 
 object IR {
+    private val INVALID_AST = wdl.AstTools.getAst("", "")
+
     // Compile time representation of a variable. Used also as
     // an applet argument. We keep track of the syntax-tree, for error
     // reporting purposes.
@@ -156,10 +158,12 @@ object IR {
         def outputVars = outputs.map{ case (cVar,_) => cVar }.toVector
     }
 
+    /** A namespace comprises mappings from fully qualified names
+      * to applets and workflows.
+      */
     case class Namespace(workflow: Option[Workflow],
                          subWorkflows: Map[String, Workflow],
                          applets: Map[String, Applet])
-
 
     // Automatic conversion to/from Yaml
     object IrInternalYamlProtocol extends DefaultYamlProtocol {
@@ -332,7 +336,7 @@ object IR {
                         new CVar(name,
                                  WdlFlavoredWomType.fromDisplayString(womType),
                                  attrs.convertTo[DeclAttrs],
-                                 WdlRewrite.INVALID_AST,
+                                 INVALID_AST,
                                  originalFqn.convertTo[Option[String]])
                     case unrecognized =>
                         throw new Exception(s"CVar expected ${unrecognized}")

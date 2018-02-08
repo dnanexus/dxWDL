@@ -21,28 +21,6 @@ import wdl.types._
 import wom.types._
 import wom.values._
 
-// Exception used for AppInternError
-class AppInternalException private(ex: RuntimeException) extends RuntimeException(ex) {
-    def this(message:String) = this(new RuntimeException(message))
-}
-
-// Exception used for AppError
-class AppException private(ex: RuntimeException) extends RuntimeException(ex) {
-    def this(message:String) = this(new RuntimeException(message))
-}
-
-class UnboundVariableException private(ex: RuntimeException) extends RuntimeException(ex) {
-    def this(varName: String) = this(new RuntimeException(s"Variable ${varName} is unbound"))
-}
-
-// Mode of file data transfer
-//   Data: download of upload the entire file
-//   Remote: leave the file on the platform
-//   Stream: stream download/upload the file
-object IOMode extends Enumeration {
-    val Data, Remote, Stream = Value
-}
-
 object Utils {
     class VariableAccessException private(ex: Exception) extends RuntimeException(ex) {
         def this() = this(new RuntimeException("Variable access in supposed constant"))
@@ -79,11 +57,6 @@ object Utils {
     case class Verbose(on: Boolean,
                        quiet: Boolean,
                        keywords: Set[String])
-
-    // Topological sort mode of operation
-    object TopoMode extends Enumeration {
-        val Check, Sort, SortRelaxed = Value
-    }
 
     object AppletLinkInfo {
         def writeJson(ali: AppletLinkInfo) : JsValue = {

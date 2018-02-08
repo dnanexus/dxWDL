@@ -2,11 +2,14 @@
   *  Reorganize the WDL file. Move the declarations, where possible,
   *  to minimize the number of applets and workflow stages.
   */
-package dxWDL
+package dxWDL.compiler
 
+import dxWDL.{CompilerErrorFormatter, Utils}
+import java.nio.file.Path
 import wdl._
 
-case class CompilerReorgDecl(ns: WdlNamespace, verbose: Utils.Verbose) {
+case class CompilerReorgDecl(ns: WdlNamespace,
+                             verbose: Utils.Verbose) {
     val MAX_NUM_COLLECT_ITER = 10
     val cef = new CompilerErrorFormatter(ns.terminalMap)
     val verbose2:Boolean = verbose.keywords contains "reorg"
@@ -212,16 +215,18 @@ case class CompilerReorgDecl(ns: WdlNamespace, verbose: Utils.Verbose) {
         WdlRewrite.workflow(wf, blk.children ++ wfOutputs)
     }
 
-    def apply : WdlNamespace = {
+    def apply(wdlSourceFile: Path) : WdlNamespace = {
         Utils.trace(verbose.on, "Reorganizing declarations")
 
         // Process the original WDL file,
         // Do not modify the tasks
-        ns match {
+        val nsFresh = ns match {
             case nswf : WdlNamespaceWithWorkflow =>
                 val wf2 = reorgWorkflow(nswf.workflow)
                 WdlRewrite.namespace(nswf, wf2)
             case _ => ns
         }
+
+        WhitewashNamespace(wdlSourceFile, verbose).apply(nsFresh, "reorg")
     }
 }

@@ -7,8 +7,9 @@
   *
   * Caveat: the ASTs are incorrect for the resulting instances.
   */
-package dxWDL
+package dxWDL.compiler
 
+import dxWDL.Utils
 import com.dnanexus.{DXRecord}
 import wdl._
 import wdl.AstTools

@@ -9,9 +9,8 @@ import scala.collection.mutable.HashMap
 import scala.util.{Failure, Success}
 import spray.json._
 import spray.json.JsString
-import Utils.{TopoMode, Verbose}
-import wdl.{ImportResolver, WdlNamespace, WdlTask,
-    WdlNamespaceWithWorkflow, WdlWorkflow, WorkflowOutput}
+import Utils.Verbose
+import wdl.{WdlNamespace, WdlTask, WdlNamespaceWithWorkflow, WdlWorkflow}
 import wom.core.WorkflowSource
 
 object Main extends App {
@@ -37,13 +36,6 @@ object Main extends App {
         val Default, IR = Value
     }
 
-    // Compiler state.
-    // Packs common arguments passed between methods.
-    case class State(ns: WdlNamespace,
-                     resolver: ImportResolver,
-                     wdlSourceFile: Path,
-                     verbose: Verbose)
-
     case class BaseOptions(force: Boolean,
                            verbose: Verbose)
 
@@ -54,8 +46,8 @@ object Main extends App {
                                defaults: Option[Path],
                                locked: Boolean,
                                inputs: List[Path],
-                               reorg: Boolean,
-                               sortMode: TopoMode.Value)
+                               reorg: Boolean)
+
     // Packing of all compiler flags in an easy to digest
     // format
     case class DxniOptions(outputFile: Option[Path],
@@ -87,26 +79,6 @@ object Main extends App {
         assets.get(region) match {
             case None => throw new Exception(s"Region ${region} is currently unsupported")
             case Some(assetId) => assetId
-        }
-    }
-
-    def getWorkflowOutputs(ns: WdlNamespace, verbose:Verbose) : Option[Seq[WorkflowOutput]] = {
-        ns match {
-            case nswf: WdlNamespaceWithWorkflow =>
-                val wf = nswf.workflow
-                try {
-                    Some(wf.outputs)
-                } catch {
-                    case e: Throwable if (wf.hasEmptyOutputSection) =>
-                        throw new Exception(
-                            """|The workflow has an empty output section, the default WDL option
-                               |is to output everything, which is
-                               |currently not supported. please explicitly specify the outputs.
-                               |""".stripMargin.replaceAll("\n", " "))
-                    case e: Throwable =>
-                        throw e
-                }
-            case _ => None
         }
     }
 
@@ -278,53 +250,6 @@ object Main extends App {
         Utils.trace(verbose, s"Wrote intermediate representation to ${trgPath.toString}")
     }
 
-    // Add a suffix to a filename, before the regular suffix. For example:
-    //  xxx.wdl -> xxx.sorted.wdl
-    private def addFilenameSuffix(src: Path, secondSuffix: String) : String = {
-        val fName = src.toFile().getName()
-        val index = fName.lastIndexOf('.')
-        if (index == -1) {
-            fName + secondSuffix
-        } else {
-            val prefix = fName.substring(0, index)
-            val suffix = fName.substring(index)
-            prefix + secondSuffix + suffix
-        }
-    }
-
-    // Assuming the source file is xxx.wdl, the new name will
-    // be xxx.SUFFIX.wdl.
-    private def writeToFile(wdlSourceFile: Path, suffix: String, lines: String) : Unit = {
-        val trgName: String = addFilenameSuffix(wdlSourceFile, suffix)
-        val simpleWdl = Utils.appCompileDirPath.resolve(trgName).toFile
-        val fos = new FileWriter(simpleWdl)
-        val pw = new PrintWriter(fos)
-        pw.println(lines)
-        pw.flush()
-        pw.close()
-        System.err.println(s"Wrote WDL to ${simpleWdl.toString}")
-    }
-
-    // Convert a namespace to string representation and apply WDL
-    // parser again.  This fixes the ASTs, as well as any other
-    // imperfections in our WDL rewriting technology.
-    //
-    // Note: by keeping the namespace in memory, instead of writing to
-    // a temporary file on disk, we keep the resolver valid.
-    def washNamespace(rewrittenNs: WdlNamespace,
-                      suffix: String,
-                      cState: State) : WdlNamespace = {
-        val wfOutputs = getWorkflowOutputs(rewrittenNs, cState.verbose)
-        val pp = WdlPrettyPrinter(true, wfOutputs)
-        val lines: String = pp.apply(rewrittenNs, 0).mkString("\n")
-        if (cState.verbose.on)
-            writeToFile(cState.wdlSourceFile, "." + suffix, lines)
-        val cleanNs = WdlNamespace.loadUsingSource(
-            lines, None, Some(List(cState.resolver))
-        ).get
-        cleanNs
-    }
-
     // Get the project name.
     //
     // We use dxpy here, because there is some subtle difference
@@ -430,12 +355,6 @@ object Main extends App {
             case Some(List(x)) if (x.toLowerCase == "ir") => CompilerFlag.IR
             case Some(other) => throw new Exception(s"unrecognized compiler flag ${other}")
         }
-        val sortMode = options.get("sort") match {
-            case None => TopoMode.Check
-            case Some(List("normal")) => TopoMode.Sort
-            case Some(List("relaxed")) => TopoMode.SortRelaxed
-            case _ => throw new Exception("Sanity: bad sort mode")
-        }
         val defaults: Option[Path] = options.get("defaults") match {
             case None => None
             case Some(List(p)) => Some(Paths.get(p))
@@ -450,8 +369,7 @@ object Main extends App {
                         defaults,
                         options contains "locked",
                         inputs,
-                        options contains "reorg",
-                        sortMode)
+                        options contains "reorg")
     }
 
     private def dnxiOptions(options: OptionsMap) : DxniOptions = {
@@ -480,9 +398,9 @@ object Main extends App {
         irNsEmb
     }
 
-    def compileIR(wdlSourceFile : Path,
-                  cOpt: CompilerOptions,
-                  bOpt: BaseOptions) : IR.Namespace = {
+    private def compileIR(wdlSourceFile : Path,
+                          cOpt: CompilerOptions,
+                          bOpt: BaseOptions) : IR.Namespace = {
         // Resolving imports. Look for referenced files in the
         // source directory.
         def resolver(filename: String) : WorkflowSource = {
@@ -502,33 +420,25 @@ object Main extends App {
                     System.err.println("Error loading WDL source code")
                     throw f
             }
-        val cState = State(orgNs, resolver, wdlSourceFile, bOpt.verbose)
 
-        // Topologically sort the WDL file so no forward references exist in
-        // subsequent steps. Create new file to hold the result.
-        //
-        // Additionally perform check for cycles in the workflow
+        // Perform check for cycles in the workflow
         // Assuming the source file is xxx.wdl, the new name will
         // be xxx.sorted.wdl.
-        val nsSorted = CompilerTopologicalSort.apply(orgNs, cOpt.sortMode, bOpt.verbose)
-        val nsSorted1 = washNamespace(nsSorted, "sorted", cState)
+        //CompilerTopologicalSort.check(orgNs, bOpt.verbose)
 
         // Simplify the original workflow, for example,
         // convert call arguments from expressions to variables.
-        val nsExpr1 = CompilerSimplifyExpr.apply(nsSorted1, bOpt.verbose)
-        val nsExpr = washNamespace(nsExpr1, "simplified", cState)
+        val nsExpr = compiler.CompilerSimplifyExpr.apply(orgNs, wdlSourceFile, bOpt.verbose)
 
         // Reorganize the declarations, to minimize the number of
         // applets, stages, and jobs.
-        val ns1 = CompilerReorgDecl(nsExpr, bOpt.verbose).apply
-        val ns = washNamespace(ns1, "reorg", cState)
+        val ns = compiler.CompilerReorgDecl(nsExpr, bOpt.verbose).apply(wdlSourceFile)
 
         // Compile the WDL workflow into an Intermediate
         // Representation (IR) For some reason, the pretty printer
         // mangles the outputs, which is why we pass the originals
         // unmodified.
-        val cef = new CompilerErrorFormatter(ns.terminalMap)
-        val irNs1 = CompilerIR(cef, cOpt.reorg, cOpt.locked, bOpt.verbose).apply(ns)
+        val irNs1 = compiler.CompilerIR.apply(ns, cOpt.reorg, cOpt.locked, bOpt.verbose)
         val irNs2: IR.Namespace = (cOpt.defaults, irNs1.workflow) match {
             case (Some(path), Some(irWf)) =>
                 embedDefaults(irNs1, irWf, path, bOpt)
@@ -555,11 +465,11 @@ object Main extends App {
 
 
     // Backend compiler pass
-    def compileNative(irNs: IR.Namespace,
-                      cOpt: CompilerOptions,
-                      bOpt: BaseOptions,
-                      folder: String,
-                      dxProject: DXProject) : String = {
+    private def compileNative(irNs: IR.Namespace,
+                              cOpt: CompilerOptions,
+                              bOpt: BaseOptions,
+                              folder: String,
+                              dxProject: DXProject) : String = {
         // get billTo and region from the project
         val (billTo, region) = Utils.projectDescribeExtraInfo(dxProject)
         val dxWDLrtId = getAssetId(region)
@@ -569,8 +479,8 @@ object Main extends App {
 
         // Generate dx:applets and dx:workflow from the IR
         val (wf, _) =
-            CompilerNative(dxWDLrtId, folder, dxProject, instanceTypeDB,
-                           bOpt.force, cOpt.archive, cOpt.locked, bOpt.verbose).apply(irNs)
+            compiler.CompilerNative(dxWDLrtId, folder, dxProject, instanceTypeDB,
+                                    bOpt.force, cOpt.archive, cOpt.locked, bOpt.verbose).apply(irNs)
         wf match {
             case Some(dxwfl) => dxwfl.getId
             case None => ""
@@ -655,7 +565,7 @@ object Main extends App {
         }
 
         try {
-            DxNI.apply(dxProject, folder, output, dOpt.recursive, bOpt.force, bOpt.verbose)
+            compiler.DxNI.apply(dxProject, folder, output, dOpt.recursive, bOpt.force, bOpt.verbose)
             SuccessfulTermination("")
         } catch {
             case e : Throwable =>
@@ -799,7 +709,6 @@ object Main extends App {
             |      -inputs <string>      Path to Cromwell formatted input file
             |      -locked               Create a locked-down workflow (experimental)
             |      -reorg                Reorganize workflow output files
-            |      -sort [string]        Sort call graph, to avoid forward references
             |
             |  dxni
             |    Dx Native call Interface. Create stubs for calling dx

@@ -34,7 +34,6 @@ Compilation can be controled with several parameters.
 | force    | Overwrite existing applets/workflows if they have changed |
 | inputs   | A cromwell style inputs file |
 | locked   | Create a locked-down workflow (experimental) |
-| sort     | Sort call graph, to avoid forward references, used for CWL |
 | verbose  | Print detailed progress information |
 
 The `-inputs` option allows specifying a Cromwell JSON

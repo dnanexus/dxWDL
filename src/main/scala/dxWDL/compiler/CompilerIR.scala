@@ -1,14 +1,16 @@
 /** Generate intermediate representation from a WDL namespace.
   */
-package dxWDL
+package dxWDL.compiler
 
-import IR.{CVar, LinkedVar, SArg}
-import scala.util.{Failure, Success, Try}
-import Utils.{COMMON, DXWorkflowStage, DX_URL_PREFIX, LAST_STAGE,
+import dxWDL.{CompilerErrorFormatter, DeclAttrs, DxPath, InstanceTypeDB, IR, WdlPrettyPrinter}
+import dxWDL.Utils
+import dxWDL.Utils.{COMMON, DXWorkflowStage, DX_URL_PREFIX, LAST_STAGE,
     evalConst, isOptional,
     isExpressionConst, isInterpolation, isNativeDxType,
     MAX_STAGE_NAME_LEN, OUTPUT_SECTION, REORG,
-    trace, warning}
+    trace, Verbose, warning}
+import IR.{CVar, LinkedVar, SArg}
+import scala.util.{Failure, Success, Try}
 import wdl._
 import wdl.AstTools
 import wdl.AstTools.EnhancedAstNode
@@ -21,7 +23,7 @@ import wom.values._
 case class CompilerIR(cef: CompilerErrorFormatter,
                       reorg: Boolean,
                       locked: Boolean,
-                      verbose: Utils.Verbose) {
+                      verbose: Verbose) {
     private val verbose2:Boolean = verbose.keywords contains "CompilerIR"
 
     private class DynamicInstanceTypesException private(ex: Exception) extends RuntimeException(ex) {
@@ -807,7 +809,7 @@ workflow w {
             input match {
                 case None =>
                     // unbound input; the workflow does not provide it.
-                    if (!Utils.isOptional(cVar.womType)) {
+                    if (!isOptional(cVar.womType)) {
                         // A compulsory input. Print a warning, the user may wish to supply
                         // it at runtime.
                         warning(verbose, s"""|Note: workflow does not supply required
@@ -1439,5 +1441,16 @@ workflow w {
                 // is no workflow to compile.
                 IR.Namespace(None, Map.empty, taskApplets)
         }
+    }
+}
+
+object CompilerIR {
+    def apply(ns : WdlNamespace,
+              reorg: Boolean,
+              locked: Boolean,
+              verbose: Verbose) : IR.Namespace = {
+        val cef = new CompilerErrorFormatter(ns.terminalMap)
+        val cir = new CompilerIR(cef, reorg, locked, verbose)
+        cir.apply(ns)
     }
 }
