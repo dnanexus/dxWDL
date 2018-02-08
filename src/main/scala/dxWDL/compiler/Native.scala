@@ -16,14 +16,14 @@ import scala.collection.JavaConverters._
 import spray.json._
 import wom.types._
 
-case class CompilerNative(dxWDLrtId: String,
-                          folder: String,
-                          dxProject: DXProject,
-                          instanceTypeDB: InstanceTypeDB,
-                          force: Boolean,
-                          archive: Boolean,
-                          locked: Boolean,
-                          verbose: Verbose) {
+case class Native(dxWDLrtId: String,
+                  folder: String,
+                  dxProject: DXProject,
+                  instanceTypeDB: InstanceTypeDB,
+                  force: Boolean,
+                  archive: Boolean,
+                  locked: Boolean,
+                  verbose: Verbose) {
     val verbose2:Boolean = verbose.keywords contains "compilernative"
     lazy val runtimeLibrary:JsValue = getRuntimeLibrary()
     lazy val projName = dxProject.describe().getName()

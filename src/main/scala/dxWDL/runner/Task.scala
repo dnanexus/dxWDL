@@ -30,7 +30,7 @@ import wom.InstantiatedCommand
 import wom.values._
 import wom.types._
 
-private [dxWDL] object RunnerTaskSerialization {
+private [dxWDL] object TaskSerialization {
     // Serialization of a WDL value to JSON
     private def wdlToJSON(t:WomType, w:WomValue) : JsValue = {
         (t, w)  match {
@@ -193,8 +193,8 @@ private [dxWDL] object RunnerTaskSerialization {
 }
 
 
-case class RunnerTask(task:WdlTask,
-                      cef: CompilerErrorFormatter) {
+case class Task(task:WdlTask,
+                cef: CompilerErrorFormatter) {
     def getMetaDir() = {
         val metaDir = Utils.getMetaDirPath()
         Utils.safeMkdir(metaDir)
@@ -204,7 +204,7 @@ case class RunnerTask(task:WdlTask,
     // serialize the task inputs to json, and then write to a file.
     private def writeEnvToDisk(env: Map[String, WomValue]) : Unit = {
         val m : Map[String, JsValue] = env.map{ case(varName, v) =>
-            (varName, RunnerTaskSerialization.toJSON(v))
+            (varName, TaskSerialization.toJSON(v))
         }.toMap
         val buf = (JsObject(m)).prettyPrint
         Utils.writeFileContent(getMetaDir().resolve(Utils.RUNNER_TASK_ENV_FILE),
@@ -219,7 +219,7 @@ case class RunnerTask(task:WdlTask,
             case _ => throw new Exception("Malformed task declarations")
         }
         m.map { case (key, jsVal) =>
-            key -> RunnerTaskSerialization.fromJSON(jsVal)
+            key -> TaskSerialization.fromJSON(jsVal)
         }.toMap
     }
 
@@ -412,7 +412,7 @@ case class RunnerTask(task:WdlTask,
 
         // evaluate the declarations, and localize any files if necessary
         val env: Map[String, WomValue] =
-            RunnerEval.evalDeclarations(task.declarations, envInput)
+            Eval.evalDeclarations(task.declarations, envInput)
                 .map{ case (decl, v) => decl.unqualifiedName -> v}.toMap
         val docker = dockerImage(env)
 
@@ -457,7 +457,7 @@ case class RunnerTask(task:WdlTask,
         val env : Map[String, WomValue] = readEnvFromDisk()
 
         // evaluate the output declarations.
-        val outputs: Map[DeclarationInterface, WomValue] = RunnerEval.evalDeclarations(task.outputs, env)
+        val outputs: Map[DeclarationInterface, WomValue] = Eval.evalDeclarations(task.outputs, env)
 
         // Upload any output files to the platform.
         val wvlOutputs:Map[String, WdlVarLinks] = outputs.map{ case (decl, wdlValue) =>

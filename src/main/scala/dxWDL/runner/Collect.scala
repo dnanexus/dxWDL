@@ -85,7 +85,7 @@ import spray.json._
 import wdl.{WdlCall, WdlWorkflow}
 import wom.types._
 
-object RunnerCollect {
+object Collect {
 
     case class ChildJobDesc(execName: String,
                             unqCallName: String,

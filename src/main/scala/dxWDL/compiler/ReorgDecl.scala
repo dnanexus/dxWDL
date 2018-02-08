@@ -8,8 +8,8 @@ import dxWDL.{CompilerErrorFormatter, Utils}
 import java.nio.file.Path
 import wdl._
 
-case class CompilerReorgDecl(ns: WdlNamespace,
-                             verbose: Utils.Verbose) {
+case class ReorgDecl(ns: WdlNamespace,
+                     verbose: Utils.Verbose) {
     val MAX_NUM_COLLECT_ITER = 10
     val cef = new CompilerErrorFormatter(ns.terminalMap)
     val verbose2:Boolean = verbose.keywords contains "reorg"

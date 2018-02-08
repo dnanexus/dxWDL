@@ -20,7 +20,7 @@ import wdl.WdlExpression.AstForExpressions
 import wom.types._
 import wom.values._
 
-case class CompilerIR(cef: CompilerErrorFormatter,
+case class GenerateIR(cef: CompilerErrorFormatter,
                       reorg: Boolean,
                       locked: Boolean,
                       verbose: Verbose) {
@@ -1444,13 +1444,13 @@ workflow w {
     }
 }
 
-object CompilerIR {
+object GenerateIR {
     def apply(ns : WdlNamespace,
               reorg: Boolean,
               locked: Boolean,
               verbose: Verbose) : IR.Namespace = {
         val cef = new CompilerErrorFormatter(ns.terminalMap)
-        val cir = new CompilerIR(cef, reorg, locked, verbose)
+        val cir = new GenerateIR(cef, reorg, locked, verbose)
         cir.apply(ns)
     }
 }

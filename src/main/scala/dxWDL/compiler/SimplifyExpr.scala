@@ -16,9 +16,9 @@ import wdl.types._
 import wdl4s.parser.WdlParser.{Ast, Terminal}
 import wom.types._
 
-case class CompilerSimplifyExpr(wf: WdlWorkflow,
-                                cef: CompilerErrorFormatter,
-                                verbose: Utils.Verbose) {
+case class SimplifyExpr(wf: WdlWorkflow,
+                        cef: CompilerErrorFormatter,
+                        verbose: Utils.Verbose) {
     val verbose2:Boolean = verbose.keywords contains "simplify"
 
     private def isMemberAccess(a: Ast) : Boolean = {
@@ -319,7 +319,7 @@ case class CompilerSimplifyExpr(wf: WdlWorkflow,
     }
 }
 
-object CompilerSimplifyExpr {
+object SimplifyExpr {
 
     // Make a pass on all declarations, and make sure no reserved words or prefixes
     // are used.
@@ -374,7 +374,7 @@ object CompilerSimplifyExpr {
         // Do not modify the tasks
         val nsFresh = ns match {
             case nswf : WdlNamespaceWithWorkflow =>
-                val cse = new CompilerSimplifyExpr(nswf.workflow, cef, verbose)
+                val cse = new SimplifyExpr(nswf.workflow, cef, verbose)
                 val wf2 = cse.simplifyWorkflow(nswf.workflow)
                 WdlRewrite.namespace(nswf, wf2)
             case _ => ns

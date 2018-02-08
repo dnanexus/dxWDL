@@ -18,7 +18,7 @@ import spray.json._
 import wdl.WdlWorkflow
 
 
-object RunnerWorkflowOutputReorg {
+object WorkflowOutputReorg {
 
     // Efficiently get the names of many files. We
     // don't want to do a `describe` each one of them, instead,

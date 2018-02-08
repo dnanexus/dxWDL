@@ -26,7 +26,7 @@ import wdl.{Declaration, DeclarationInterface, WdlExpression, WdlWorkflow, Workf
 import wom.types._
 import wom.values._
 
-object RunnerEval {
+object Eval {
     def evalDeclarations(declarations: Seq[DeclarationInterface],
                          envInputs : Map[String, WomValue]) : Map[DeclarationInterface, WomValue] = {
         // Environment that includes a cache for values that have

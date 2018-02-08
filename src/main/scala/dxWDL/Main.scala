@@ -428,17 +428,17 @@ object Main extends App {
 
         // Simplify the original workflow, for example,
         // convert call arguments from expressions to variables.
-        val nsExpr = compiler.CompilerSimplifyExpr.apply(orgNs, wdlSourceFile, bOpt.verbose)
+        val nsExpr = compiler.SimplifyExpr.apply(orgNs, wdlSourceFile, bOpt.verbose)
 
         // Reorganize the declarations, to minimize the number of
         // applets, stages, and jobs.
-        val ns = compiler.CompilerReorgDecl(nsExpr, bOpt.verbose).apply(wdlSourceFile)
+        val ns = compiler.ReorgDecl(nsExpr, bOpt.verbose).apply(wdlSourceFile)
 
         // Compile the WDL workflow into an Intermediate
         // Representation (IR) For some reason, the pretty printer
         // mangles the outputs, which is why we pass the originals
         // unmodified.
-        val irNs1 = compiler.CompilerIR.apply(ns, cOpt.reorg, cOpt.locked, bOpt.verbose)
+        val irNs1 = compiler.GenerateIR.apply(ns, cOpt.reorg, cOpt.locked, bOpt.verbose)
         val irNs2: IR.Namespace = (cOpt.defaults, irNs1.workflow) match {
             case (Some(path), Some(irWf)) =>
                 embedDefaults(irNs1, irWf, path, bOpt)
@@ -479,8 +479,8 @@ object Main extends App {
 
         // Generate dx:applets and dx:workflow from the IR
         val (wf, _) =
-            compiler.CompilerNative(dxWDLrtId, folder, dxProject, instanceTypeDB,
-                                    bOpt.force, cOpt.archive, cOpt.locked, bOpt.verbose).apply(irNs)
+            compiler.Native(dxWDLrtId, folder, dxProject, instanceTypeDB,
+                            bOpt.force, cOpt.archive, cOpt.locked, bOpt.verbose).apply(irNs)
         wf match {
             case Some(dxwfl) => dxwfl.getId
             case None => ""
@@ -622,13 +622,13 @@ object Main extends App {
                     val inputs = WdlVarLinks.loadJobInputsAsLinks(inputLines, inputSpec, Some(task))
                     op match {
                         case InternalOp.TaskEpilog =>
-                            val r = runner.RunnerTask(task, cef)
+                            val r = runner.Task(task, cef)
                             r.epilog(inputSpec, outputSpec, inputs)
                         case InternalOp.TaskProlog =>
-                            val r = runner.RunnerTask(task, cef)
+                            val r = runner.Task(task, cef)
                             r.prolog(inputSpec, outputSpec, inputs)
                         case InternalOp.TaskRelaunch =>
-                            val r = runner.RunnerTask(task, cef)
+                            val r = runner.Task(task, cef)
                             r.relaunch(inputSpec, outputSpec, inputs)
                     }
                 } else {
@@ -636,17 +636,17 @@ object Main extends App {
                     val wf = workflowOfNamespace(ns)
                     op match {
                         case InternalOp.Collect =>
-                            runner.RunnerCollect.apply(wf , inputSpec, outputSpec, inputs)
+                            runner.Collect.apply(wf , inputSpec, outputSpec, inputs)
                         case InternalOp.Eval =>
-                            runner.RunnerEval.apply(wf, inputSpec, outputSpec, inputs)
+                            runner.Eval.apply(wf, inputSpec, outputSpec, inputs)
                         case InternalOp.MiniWorkflow =>
-                            runner.RunnerMiniWorkflow.apply(wf,
+                            runner.MiniWorkflow.apply(wf,
                                                      inputSpec, outputSpec, inputs, orgInputs, false)
                         case InternalOp.ScatterCollectSubjob =>
-                            runner.RunnerMiniWorkflow.apply(wf,
+                            runner.MiniWorkflow.apply(wf,
                                                      inputSpec, outputSpec, inputs, orgInputs, true)
                         case InternalOp.WorkflowOutputReorg =>
-                            runner.RunnerWorkflowOutputReorg.apply(wf, inputSpec, outputSpec, inputs)
+                            runner.WorkflowOutputReorg.apply(wf, inputSpec, outputSpec, inputs)
                     }
                 }
 

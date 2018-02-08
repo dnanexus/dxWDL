@@ -57,11 +57,11 @@ import wom.values._
 import wom.types._
 import wdl.WdlExpression.AstForExpressions
 
-case class RunnerMiniWorkflow(exportVars: Set[String],
-                              cef: CompilerErrorFormatter,
-                              orgInputs: JsValue,
-                              collectSubjob: Boolean,
-                              verbose: Boolean) {
+case class MiniWorkflow(exportVars: Set[String],
+                        cef: CompilerErrorFormatter,
+                        orgInputs: JsValue,
+                        collectSubjob: Boolean,
+                        verbose: Boolean) {
     // An environment element could be one of:
     // - top level value
     // - dictionary of values returned from a call
@@ -105,7 +105,7 @@ case class RunnerMiniWorkflow(exportVars: Set[String],
         val inputs:Map[String, WomValue] = envInputs.map{
             case (key, wvl) => key -> wdlValueFromWVL(wvl)
         }.toMap
-        val env = RunnerEval.evalDeclarations(declarations, inputs)
+        val env = Eval.evalDeclarations(declarations, inputs)
         env.map { case (decl, wdlValue) =>
             decl.unqualifiedName -> wdlValueToWVL(decl.womType, wdlValue)
         }.toMap
@@ -535,7 +535,7 @@ case class RunnerMiniWorkflow(exportVars: Set[String],
     }
 }
 
-object RunnerMiniWorkflow {
+object MiniWorkflow {
     def apply(wf: WdlWorkflow,
               inputSpec: Map[String, Utils.DXIOParam],
               outputSpec: Map[String, Utils.DXIOParam],
@@ -548,7 +548,7 @@ object RunnerMiniWorkflow {
 
         // Run the workflow
         val cef = new CompilerErrorFormatter(wf.wdlSyntaxErrorFormatter.terminalMap)
-        val r = RunnerMiniWorkflow(exportVars, cef, orgInputs, collectSubjob, false)
+        val r = MiniWorkflow(exportVars, cef, orgInputs, collectSubjob, false)
         val json = r.apply(wf, inputs)
         json.asJsObject.fields
     }
