@@ -73,15 +73,15 @@ workflow math {
 ```
 
   */
-package dxWDL
+package dxWDL.runner
 
 // DX bindings
 import com.dnanexus.{DXAPI, DXEnvironment, DXJob, DXSearch}
 import com.fasterxml.jackson.databind.JsonNode
+import dxWDL._
 import scala.collection.JavaConverters._
 import scala.collection.mutable.HashMap
 import spray.json._
-import Utils.{DXIOParam, jsonNodeOfJsValue, jsValueOfJsonNode}
 import wdl.{WdlCall, WdlWorkflow}
 import wom.types._
 
@@ -125,8 +125,8 @@ object RunnerCollect {
         val req = JsObject("executions" -> JsArray(jobInfoReq))
         System.err.println(s"bulk-describe request=${req}")
         val retval: JsValue =
-            jsValueOfJsonNode(
-                DXAPI.systemDescribeExecutions(jsonNodeOfJsValue(req), classOf[JsonNode]))
+            Utils.jsValueOfJsonNode(
+                DXAPI.systemDescribeExecutions(Utils.jsonNodeOfJsValue(req), classOf[JsonNode]))
         val results:Vector[JsValue] = retval.asJsObject.fields.get("results") match {
             case Some(JsArray(x)) => x.toVector
             case _ => throw new Exception(s"wrong type for executableName ${retval}")
@@ -203,8 +203,8 @@ object RunnerCollect {
     }
 
     def apply(wf: WdlWorkflow,
-              inputSpec: Map[String, DXIOParam],
-              outputSpec: Map[String, DXIOParam],
+              inputSpec: Map[String, Utils.DXIOParam],
+              outputSpec: Map[String, Utils.DXIOParam],
               inputs: Map[String, WdlVarLinks]) : Map[String, JsValue] = {
         // We cannot change the input fields, because this is a sub-job with the same
         // input/output spec as the parent scatter. Therefore, we need to computationally

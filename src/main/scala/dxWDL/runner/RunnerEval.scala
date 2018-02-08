@@ -17,11 +17,11 @@
        cmdline      String
 
   */
-package dxWDL
+package dxWDL.runner
 
 // DX bindings
 import spray.json._
-import Utils.{appletLog, DXIOParam}
+import dxWDL._
 import wdl.{Declaration, DeclarationInterface, WdlExpression, WdlWorkflow, WorkflowOutput}
 import wom.types._
 import wom.values._
@@ -58,7 +58,7 @@ object RunnerEval {
             val retVal =
                 if (v.womType != wdlType) {
                     // we need to convert types
-                    appletLog(s"casting ${v.womType} to ${wdlType}")
+                    Utils.appletLog(s"casting ${v.womType} to ${wdlType}")
                     wdlType.coerceRawValue(v).get
                 } else {
                     // no need to change types
@@ -70,7 +70,7 @@ object RunnerEval {
         def evalAndCache(decl:DeclarationInterface,
                          expr:WdlExpression) : WomValue = {
             val vRaw : WomValue = expr.evaluate(lookup, DxFunctions).get
-            appletLog(s"evaluating ${decl} -> ${vRaw}")
+            Utils.appletLog(s"evaluating ${decl} -> ${vRaw}")
             val w: WomValue = cast(decl.womType, vRaw, decl.unqualifiedName)
             env = env + (decl.unqualifiedName -> w)
             w
@@ -110,16 +110,16 @@ object RunnerEval {
         val results = declarations.map{ decl =>
             decl -> evalDecl(decl)
         }.toMap
-        appletLog(s"Eval env=${env}")
+        Utils.appletLog(s"Eval env=${env}")
         results
     }
 
 
     def apply(wf: WdlWorkflow,
-              inputSpec: Map[String, DXIOParam],
-              outputSpec: Map[String, DXIOParam],
+              inputSpec: Map[String, Utils.DXIOParam],
+              outputSpec: Map[String, Utils.DXIOParam],
               inputs: Map[String, WdlVarLinks]) : Map[String, JsValue] = {
-        appletLog(s"Initial inputs=${inputs}")
+        Utils.appletLog(s"Initial inputs=${inputs}")
 
         // make sure the workflow elements are all declarations
         val decls: Seq[Declaration] = wf.children.map {

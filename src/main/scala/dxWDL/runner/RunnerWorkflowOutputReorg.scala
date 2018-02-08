@@ -3,19 +3,20 @@
  * All the workflow variables are passed through, so that the workflow
  * will complete only after file movements are complete.
  */
-package dxWDL
+package dxWDL.runner
 
 // DX bindings
 import com.dnanexus.{DXAnalysis, DXAPI, DXContainer, DXDataObject,
     DXEnvironment, DXJSON, DXFile, DXProject, DXSearch}
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.node.ObjectNode
+import dxWDL.Utils
+import dxWDL.WdlVarLinks.yaml
 import net.jcazevedo.moultingyaml._
 import scala.collection.JavaConverters._
 import spray.json._
-import Utils.{appletLog, DXIOParam, INTERMEDIATE_RESULTS_FOLDER}
 import wdl.WdlWorkflow
-import WdlVarLinks.yaml
+
 
 object RunnerWorkflowOutputReorg {
 
@@ -65,13 +66,13 @@ object RunnerWorkflowOutputReorg {
         val fileOutputs : Set[DXFile] = WdlVarLinks.findDxFiles(outputs).toSet
         val fileInputs: Set[DXFile] = WdlVarLinks.findDxFiles(inputs).toSet
         val realOutputs:Set[DXFile] = fileOutputs.toSet -- fileInputs.toSet
-        appletLog(s"analysis has ${fileOutputs.size} output files")
-        appletLog(s"analysis has ${fileInputs.size} input files")
-        appletLog(s"analysis has ${realOutputs.size} real outputs")
+        Utils.appletLog(s"analysis has ${fileOutputs.size} output files")
+        Utils.appletLog(s"analysis has ${fileInputs.size} input files")
+        Utils.appletLog(s"analysis has ${realOutputs.size} real outputs")
 
-        appletLog("Checking timestamps")
+        Utils.appletLog("Checking timestamps")
         if (realOutputs.size > Utils.MAX_NUM_FILES_MOVE_LIMIT) {
-            appletLog(s"WARNING: Large number of outputs (${realOutputs.size}), not moving objects")
+            Utils.appletLog(s"WARNING: Large number of outputs (${realOutputs.size}), not moving objects")
             return Vector.empty
         }
         val anlCreateTs:java.util.Date = dxAnalysis.describe.getCreationDate()
@@ -83,7 +84,7 @@ object RunnerWorkflowOutputReorg {
         val outputFiles: Vector[DXFile] = realFreshOutputs.map(
             dxObj => DXFile.getInstance(dxObj.getId())
         ).toVector
-        appletLog(s"analysis has ${outputFiles.length} verified output files")
+        Utils.appletLog(s"analysis has ${outputFiles.length} verified output files")
 
         outputFiles
     }
@@ -95,8 +96,8 @@ object RunnerWorkflowOutputReorg {
         val dxProjDesc = dxProject.describe
         val dxAnalysis = dxEnv.getJob.describe.getAnalysis
         val outFolder = dxAnalysis.describe.getFolder
-        val intermFolder = outFolder + "/" + INTERMEDIATE_RESULTS_FOLDER
-        appletLog(s"proj=${dxProjDesc.getName} outFolder=${outFolder}")
+        val intermFolder = outFolder + "/" + Utils.INTERMEDIATE_RESULTS_FOLDER
+        Utils.appletLog(s"proj=${dxProjDesc.getName} outFolder=${outFolder}")
 
         // find all analysis output files
         val analysisFiles: Vector[DXFile] = analysisFileOutputs(dxProject, dxAnalysis)
@@ -105,12 +106,12 @@ object RunnerWorkflowOutputReorg {
 
         val exportIds:Set[String] = exportFiles.map(_.getId).toSet
         val exportNames:Seq[String] = bulkGetFilenames(exportFiles, dxProject)
-        appletLog(s"exportFiles=${exportNames}")
+        Utils.appletLog(s"exportFiles=${exportNames}")
 
         // Figure out which of the files should be kept
         val intermediateFiles = analysisFiles.filter(x => !(exportIds contains x.getId))
         val iNames:Seq[String] = bulkGetFilenames(intermediateFiles, dxProject)
-        appletLog(s"intermediate files=${iNames}")
+        Utils.appletLog(s"intermediate files=${iNames}")
         if (intermediateFiles.isEmpty)
             return
 
@@ -118,12 +119,12 @@ object RunnerWorkflowOutputReorg {
         // a single API call, to improve performance.
         val folderContents:DXContainer.FolderContents = dxProject.listFolder(outFolder)
         val subFolders: List[String] = folderContents.getSubfolders().asScala.toList
-        appletLog(s"subfolders=${subFolders}")
+        Utils.appletLog(s"subfolders=${subFolders}")
         if (!(subFolders contains intermFolder)) {
-            appletLog(s"Creating intermediate results sub-folder ${intermFolder}")
+            Utils.appletLog(s"Creating intermediate results sub-folder ${intermFolder}")
             dxProject.newFolder(intermFolder)
         } else {
-            appletLog(s"Intermediate results sub-folder ${intermFolder} already exists")
+            Utils.appletLog(s"Intermediate results sub-folder ${intermFolder} already exists")
         }
         dxProject.moveObjects(intermediateFiles.asJava, intermFolder)
     }
@@ -140,10 +141,10 @@ object RunnerWorkflowOutputReorg {
     // The variables are passed through, so that workflow will
     // complete only after file movements are complete.
     def apply(wf: WdlWorkflow,
-              inputSpec: Map[String, DXIOParam],
-              outputSpec: Map[String, DXIOParam],
+              inputSpec: Map[String, Utils.DXIOParam],
+              outputSpec: Map[String, Utils.DXIOParam],
               wfInputs: Map[String, WdlVarLinks]) : Map[String, JsValue] = {
-        appletLog(s"Initial inputs=\n${prettyPrint(wfInputs)}")
+        Utils.appletLog(s"Initial inputs=\n${prettyPrint(wfInputs)}")
 
         val wfOutputFiles: Vector[DXFile] = wfInputs.map{ case (_, wvl) =>
             WdlVarLinks.findDxFiles(wvl)

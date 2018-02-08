@@ -16,14 +16,14 @@ task Add {
 
   */
 
-package dxWDL
+package dxWDL.runner
 
 import com.dnanexus.{DXJob}
 import common.validation.Validation._
+import dxWDL._
 import java.nio.file.{Path, Paths}
 import scala.collection.mutable.HashMap
 import spray.json._
-import Utils.{appletLog, DXIOParam, DX_URL_PREFIX, RUNNER_TASK_ENV_FILE}
 import wdl.{Declaration, DeclarationInterface, WdlExpression, WdlTask}
 import wdl.types.WdlFlavoredWomType
 import wom.InstantiatedCommand
@@ -207,12 +207,12 @@ case class RunnerTask(task:WdlTask,
             (varName, RunnerTaskSerialization.toJSON(v))
         }.toMap
         val buf = (JsObject(m)).prettyPrint
-        Utils.writeFileContent(getMetaDir().resolve(RUNNER_TASK_ENV_FILE),
+        Utils.writeFileContent(getMetaDir().resolve(Utils.RUNNER_TASK_ENV_FILE),
                                buf)
     }
 
     private def readEnvFromDisk() : Map[String, WomValue] = {
-        val buf = Utils.readFileContent(getMetaDir().resolve(RUNNER_TASK_ENV_FILE))
+        val buf = Utils.readFileContent(getMetaDir().resolve(Utils.RUNNER_TASK_ENV_FILE))
         val json : JsValue = buf.parseJson
         val m = json match {
             case JsObject(m) => m
@@ -251,15 +251,15 @@ case class RunnerTask(task:WdlTask,
     private def dockerImage(env: Map[String, WomValue]) : Option[String] = {
         val dImg = dockerImageEval(env)
         dImg match {
-            case Some(url) if url.startsWith(DX_URL_PREFIX) =>
+            case Some(url) if url.startsWith(Utils.DX_URL_PREFIX) =>
                 // This is a record on the platform, created with
                 // dx-docker. Describe it with an API call, and get
                 // the docker image name.
-                appletLog(s"looking up dx:url ${url}")
+                Utils.appletLog(s"looking up dx:url ${url}")
                 val dxRecord = DxPath.lookupDxURLRecord(url)
-                appletLog(s"Found record ${dxRecord}")
+                Utils.appletLog(s"Found record ${dxRecord}")
                 val imageName = dxRecord.describe().getName
-                appletLog(s"Image name is ${imageName}")
+                Utils.appletLog(s"Image name is ${imageName}")
                 Some(imageName)
             case _ => dImg
         }
@@ -351,7 +351,7 @@ case class RunnerTask(task:WdlTask,
                     |echo $$? > ${rcPath}
                     |""".stripMargin.trim + "\n"
             }
-        appletLog(s"writing bash script to ${scriptPath}")
+        Utils.appletLog(s"writing bash script to ${scriptPath}")
         Utils.writeFileContent(scriptPath, script)
     }
 
@@ -374,15 +374,15 @@ case class RunnerTask(task:WdlTask,
         val dockerRunScript =
             s"""|#!/bin/bash -ex
                 |${dockerCmd}""".stripMargin
-        appletLog(s"writing docker run script to ${dockerRunPath}")
+        Utils.appletLog(s"writing docker run script to ${dockerRunPath}")
         Utils.writeFileContent(dockerRunPath, dockerRunScript)
         dockerRunPath.toFile.setExecutable(true)
     }
 
     // Calculate the input variables for the task, download the input files,
     // and build a shell script to run the command.
-    def prolog(inputSpec: Map[String, DXIOParam],
-               outputSpec: Map[String, DXIOParam],
+    def prolog(inputSpec: Map[String, Utils.DXIOParam],
+               outputSpec: Map[String, Utils.DXIOParam],
                inputWvls: Map[String, WdlVarLinks]) : Map[String, JsValue] = {
         val ioMode =
             if (task.commandTemplateString.trim.isEmpty) {
@@ -390,7 +390,7 @@ case class RunnerTask(task:WdlTask,
                 IOMode.Remote
             } else {
                 // default: download all input files
-                appletLog(s"Eagerly download input files")
+                Utils.appletLog(s"Eagerly download input files")
                 IOMode.Data
             }
 
@@ -420,7 +420,7 @@ case class RunnerTask(task:WdlTask,
         if (bashSnippetVec.size > 0) {
             // set up all the named pipes
             val path = getMetaDir().resolve("setup_streams")
-            appletLog(s"writing bash script for stream(s) set up to ${path}")
+            Utils.appletLog(s"writing bash script for stream(s) set up to ${path}")
             val snippet = bashSnippetVec.mkString("\n")
             Utils.writeFileContent(path, snippet)
             path.toFile.setExecutable(true)
@@ -447,8 +447,8 @@ case class RunnerTask(task:WdlTask,
         Map.empty
     }
 
-    def epilog(inputSpec: Map[String, DXIOParam],
-               outputSpec: Map[String, DXIOParam],
+    def epilog(inputSpec: Map[String, Utils.DXIOParam],
+               outputSpec: Map[String, Utils.DXIOParam],
                inputs: Map[String, WdlVarLinks]) : Map[String, JsValue] = {
         // Repopulate the localized file tables
         LocalDxFiles.unfreeze()
@@ -508,9 +508,9 @@ case class RunnerTask(task:WdlTask,
         val cores = evalAttr("cpu")
         val iTypeRaw = InstanceTypeDB.parse(dxInstaceType, memory, diskSpace, cores)
         val iType = instanceTypeDB.apply(iTypeRaw)
-        appletLog(s"""|calcInstanceType memory=${memory} disk=${diskSpace}
-                      |cores=${cores} instancetype=${iType}"""
-                      .stripMargin.replaceAll("\n", " "))
+        Utils.appletLog(s"""|calcInstanceType memory=${memory} disk=${diskSpace}
+                            |cores=${cores} instancetype=${iType}"""
+                            .stripMargin.replaceAll("\n", " "))
         iType
     }
 
@@ -526,8 +526,8 @@ case class RunnerTask(task:WdlTask,
     /** The runtime attributes need to be calculated at runtime. Evaluate them,
       *  determine the instance type [xxxx], and relaunch the job on [xxxx]
       */
-    def relaunch(inputSpec: Map[String, DXIOParam],
-                 outputSpec: Map[String, DXIOParam],
+    def relaunch(inputSpec: Map[String, Utils.DXIOParam],
+                 outputSpec: Map[String, Utils.DXIOParam],
                  inputWvls: Map[String, WdlVarLinks]) : Map[String, JsValue] = {
         // Figure out the available instance types, and their prices,
         // by reading the file
