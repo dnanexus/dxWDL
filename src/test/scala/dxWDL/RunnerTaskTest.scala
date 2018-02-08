@@ -30,8 +30,8 @@ class RunnerTaskTest extends FlatSpec with Matchers {
         )
 
         wdlValues.foreach{ w =>
-            val jsv:JsValue = RunnerTaskSerialization.toJSON(w)
-            val w2:WomValue = RunnerTaskSerialization.fromJSON(jsv)
+            val jsv:JsValue = runner.RunnerTaskSerialization.toJSON(w)
+            val w2:WomValue = runner.RunnerTaskSerialization.fromJSON(jsv)
             w2 should equal(w)
         }
     }

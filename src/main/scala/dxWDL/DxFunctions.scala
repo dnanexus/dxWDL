@@ -1,7 +1,6 @@
-package dxWDL.runner
+package dxWDL
 
 import com.dnanexus.DXFile
-import dxWDL.{DxPath, Utils}
 import java.io.PrintStream
 import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, FileSystems, Path, Paths, PathMatcher}

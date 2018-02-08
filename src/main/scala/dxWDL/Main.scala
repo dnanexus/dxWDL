@@ -622,31 +622,31 @@ object Main extends App {
                     val inputs = WdlVarLinks.loadJobInputsAsLinks(inputLines, inputSpec, Some(task))
                     op match {
                         case InternalOp.TaskEpilog =>
-                            val runner = RunnerTask(task, cef)
-                            runner.epilog(inputSpec, outputSpec, inputs)
+                            val r = runner.RunnerTask(task, cef)
+                            r.epilog(inputSpec, outputSpec, inputs)
                         case InternalOp.TaskProlog =>
-                            val runner = RunnerTask(task, cef)
-                            runner.prolog(inputSpec, outputSpec, inputs)
+                            val r = runner.RunnerTask(task, cef)
+                            r.prolog(inputSpec, outputSpec, inputs)
                         case InternalOp.TaskRelaunch =>
-                            val runner = RunnerTask(task, cef)
-                            runner.relaunch(inputSpec, outputSpec, inputs)
+                            val r = runner.RunnerTask(task, cef)
+                            r.relaunch(inputSpec, outputSpec, inputs)
                     }
                 } else {
                     val inputs = WdlVarLinks.loadJobInputsAsLinks(inputLines, inputSpec, None)
                     val wf = workflowOfNamespace(ns)
                     op match {
                         case InternalOp.Collect =>
-                            RunnerCollect.apply(wf , inputSpec, outputSpec, inputs)
+                            runner.RunnerCollect.apply(wf , inputSpec, outputSpec, inputs)
                         case InternalOp.Eval =>
-                            RunnerEval.apply(wf, inputSpec, outputSpec, inputs)
+                            runner.RunnerEval.apply(wf, inputSpec, outputSpec, inputs)
                         case InternalOp.MiniWorkflow =>
-                            RunnerMiniWorkflow.apply(wf,
+                            runner.RunnerMiniWorkflow.apply(wf,
                                                      inputSpec, outputSpec, inputs, orgInputs, false)
                         case InternalOp.ScatterCollectSubjob =>
-                            RunnerMiniWorkflow.apply(wf,
+                            runner.RunnerMiniWorkflow.apply(wf,
                                                      inputSpec, outputSpec, inputs, orgInputs, true)
                         case InternalOp.WorkflowOutputReorg =>
-                            RunnerWorkflowOutputReorg.apply(wf, inputSpec, outputSpec, inputs)
+                            runner.RunnerWorkflowOutputReorg.apply(wf, inputSpec, outputSpec, inputs)
                     }
                 }
 

@@ -10,7 +10,7 @@ import com.dnanexus.{DXAnalysis, DXAPI, DXContainer, DXDataObject,
     DXEnvironment, DXJSON, DXFile, DXProject, DXSearch}
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.node.ObjectNode
-import dxWDL.Utils
+import dxWDL._
 import dxWDL.WdlVarLinks.yaml
 import net.jcazevedo.moultingyaml._
 import scala.collection.JavaConverters._
