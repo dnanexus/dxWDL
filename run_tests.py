@@ -407,7 +407,7 @@ def native_call_setup(project, applet_folder, version_id):
                 "--verbose",
                 "--folder", applet_folder,
                 "--project", project.get_id(),
-                "--output", os.path.join(top_dir, "test/dx_extern.wdl")]
+                "--output", os.path.join(top_dir, "test/basic/dx_extern.wdl")]
     print(" ".join(cmdline))
     subprocess.check_output(cmdline)
 

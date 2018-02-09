@@ -77,7 +77,7 @@ object IR {
     // call other WDL workflows and applets. This is done using the
     // same syntax.
     sealed trait Callable {
-        def getName: String
+        def name: String
         def inputVars: Vector[CVar]
         def outputVars: Vector[CVar]
     }
@@ -114,7 +114,6 @@ object IR {
                       docker: DockerImage,
                       kind: AppletKind,
                       ns: WdlNamespace) extends Callable {
-        def getName = name
         def inputVars = inputs
         def outputVars = outputs
     }
@@ -154,14 +153,22 @@ object IR {
                         outputs: Vector[(CVar,SArg)],
                         stages: Vector[Stage],
                         locked: Boolean) extends Callable {
-        def getName = name
         def inputVars = inputs.map{ case (cVar,_) => cVar }.toVector
         def outputVars = outputs.map{ case (cVar,_) => cVar }.toVector
     }
 
-    /** A namespace comprises mappings from fully qualified names
-      * to applets and workflows.
+    /** The simplest form of namespace contains a library of tasks.
+      * Tasks do not call other tasks, and so they are standalone. A more complex
+      * namespace also contains a workflow.
+      *
+      * The most advanced namespace is one where the top level
+      * workflow imports other namespaces, and calls subworkflows and tasks.
       */
+    /*sealed trait Namespace
+    case class NamespaceLeaf(applets: Map[String, Applet])
+    case class NamespaceBranch(workflow: Workflow,
+                               applets: Map[String, Applet],
+                               children: Vector[Namespace])*/
     case class Namespace(workflow: Option[Workflow],
                          subWorkflows: Map[String, Workflow],
                          applets: Map[String, Applet])

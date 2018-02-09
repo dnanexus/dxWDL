@@ -78,7 +78,7 @@ task Add {
     }
 */
     private def genAppletStub(callable: IR.Callable, scope: Scope) : WdlTask = {
-        val task = WdlRewrite.taskGenEmpty(callable.getName, Map.empty, scope)
+        val task = WdlRewrite.taskGenEmpty(callable.name, Map.empty, scope)
         val inputs = callable.inputVars.map{ cVar =>
             WdlRewrite.declaration(cVar.womType, cVar.name, None)
         }.toVector
@@ -637,7 +637,7 @@ workflow w {
         }
 
         val stageName = call.unqualifiedName
-        IR.Stage(stageName, genStageId(), callee.getName, inputs, callee.outputVars)
+        IR.Stage(stageName, genStageId(), callee.name, inputs, callee.outputVars)
     }
 
     // Split a block (Scatter, If, ..) into the top declarations,
@@ -874,7 +874,7 @@ workflow w {
                     case None => throw new Exception(s"Calling undefined task/workflow ${name}")
                     case Some(x) => x
                 }
-                assert(name == callable.getName)
+                assert(name == callable.name)
                 if (accu contains name) {
                     // we have already created a stub for this call
                     accu
