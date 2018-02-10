@@ -112,12 +112,13 @@ class CompilerUnitTest extends FlatSpec with Matchers {
 
         val path = writeTestFile("file_array", wdlCode)
         val retval = Main.compile(
-            List(path.toString, "--compileMode", "ir", "--locked", "--quiet")
+            List(path.toString, "--compileMode", "ir", "--locked", "--verbose")
         )
         retval match  {
             case Main.SuccessfulTermination(_) =>
                 true should equal(true)
             case _ =>
+                print(retval)
                 true should equal(false)
         }
     }

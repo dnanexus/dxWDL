@@ -392,25 +392,22 @@ case class SimplifyExpr(cef: CompilerErrorFormatter,
             case _ => ns
         }
 
-        // Do we need to replace [wdlSourceFile] with [ns.importUri]
-        // for sub-workflows?
-        WhitewashNamespace(wdlSourceFile, verbose).apply(nsFresh, "simple")
     }
 }
 
 object SimplifyExpr {
-    def simplify(ns: WdlNamespace,
+    def apply(ns: WdlNamespace,
                  wdlSourceFile: Path,
                  verbose: Verbose) : WdlNamespace = {
-        // recurse into sub-namespaces
-        val childrenNs: Vector[WdlNamespace] = ns.namespaces.map{
-            childNs => simplify(childNs, wdlSourceFile, verbose)
-        }.toVector
-
-        // simplify the toplevel namespace, and merge
-        val cef = new CompilerErrorFormatter(ns.terminalMap)
-        val simp = SimplifyExpr(cef, verbose)
-        val ns1: WdlNamespace = simp.apply(ns, wdlSourceFile)
-        WdlRewrite.namespaceUpdateChildren(ns1, childrenNs)
+        val nst:NsTree = NsTree.load(ns, wdlSourceFile)
+        val nstSimple = nst.transform{ childNs =>
+            // simplify namespace
+            val cef = new CompilerErrorFormatter(ns.terminalMap)
+            val simp = SimplifyExpr(cef, verbose)
+            simp.apply(ns, wdlSourceFile)
+        }
+        if (verbose)
+            nsTree.prettyPrint("simple")
+        nsTree.toNamespace
     }
 }

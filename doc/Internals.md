@@ -1,7 +1,8 @@
 # Compiler internals
 
-The compiler is split into three passes
+The compiler is split into four passes
 - Simplify: simplify the original WDL code
+- Reorder: reoder declarations to reduce the number extra jobs require for pure calculation
 - IR: take simplified WDL, and generate Intermediate Code (IR)
 - Native: start with IR and generate platform applets and workflow
 
@@ -35,7 +36,7 @@ workflow math {
 }
 ```
 
-## Simplification step
+## Simplification and reordering step
 The preprocessor starts with the original WDL, and simplifies it,
 writing out a new WDL source file. A call that has subexpressions is
 rewritten into separate declarations and a call with variables and
@@ -541,9 +542,9 @@ making the execution dependent on the runtime system implementation.
 Sometimes, it is useful to be able to call existing DNAx applets. For example,
 an existing *dx:workflow* can be imported into WDL this way, without having
 to rewrite all the called applets. To achieve this, a compilation step called
-*Foreign Function Interface* (FFI) is implemented.
+*DX Native Interface* (DxNI) is implemented.
 
-FFI takes a platform path (project:folder) where the applets can be
+DxNI takes a platform path (project:folder) where the applets can be
 found. It generates a WDL header for each dx:applet, and writes
 these headers into a file. The WDL workflow imports this file, and can
 subsequentally call these applets.
@@ -584,7 +585,7 @@ The input/output declaration in the `dxapp.json` is:
   ]
 ```
 
-The FFI pass creates a WDL header that looks like this:
+The DxNI pass creates a WDL header that looks like this:
 ```
 task mk_int_list {
   Int a
@@ -628,3 +629,15 @@ We convert it into:
    mem1_ssd1_x4:  2$
    mem3_ssd1_x8:  3$
 ```
+
+## Handling imports and nested namespaces
+
+In WDL, each source file creates its own namespace. A WDL file can
+import other files, creating child namespaces. Tasks and workflows
+from children can be called from the top level script. To handle this,
+we follow the links and load all the source files into an in memory
+tree. The simplify and reorder steps are applied as transformations to
+this tree. To control what source gets loaded when following an
+import, we create a custom *resolver* that works hand-in-hand with the
+in-memory tree. Instead of following a URI to the original source, the
+resolver returns the modified source.
