@@ -74,7 +74,7 @@ object CompilerTop {
 
         // Simplify the original workflow, for example,
         // convert call arguments from expressions to variables.
-        val nsExpr = SimplifyExpr.simplify(orgNs, wdlSourceFile, cOpt.verbose)
+        val nsExpr = SimplifyExpr.apply(orgNs, wdlSourceFile, cOpt.verbose)
 
         // Reorganize the declarations, to minimize the number of
         // applets, stages, and jobs.

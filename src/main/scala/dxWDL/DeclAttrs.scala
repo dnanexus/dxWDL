@@ -2,8 +2,6 @@
 package dxWDL
 
 import wdl.{Declaration, WdlTask}
-//import wdl.types._
-//import wdl.values._
 import wom.values._
 import wom.types._
 

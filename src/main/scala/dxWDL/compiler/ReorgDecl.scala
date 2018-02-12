@@ -162,7 +162,7 @@ case class ReorgDecl(ns: WdlNamespace,
     //     Int xtmp2 = Add.result + 10
     //     call Multiply  { input: a=xtmp2, b=2 }
     // }
-    def collectDeclarations(drsInit:DeclReorgState) : Block = {
+    private def collectDeclarations(drsInit:DeclReorgState) : Block = {
         var drs = drsInit
         var numIter = 0
         val totNumElems = drs.bottom.length
@@ -181,13 +181,13 @@ case class ReorgDecl(ns: WdlNamespace,
 
     // Attempt to collect declarations at the block level, to reduce
     // the number of extra jobs required for calculations.
-    def reorgBlock(oldBlock:Scope, elems: Seq[Scope], definedVars: Set[String]) : Block  = {
+    private def reorgBlock(oldBlock:Scope, elems: Seq[Scope], definedVars: Set[String]) : Block  = {
         Utils.trace(verbose2, s"reorgBlock(${oldBlock.fullyQualifiedName})")
         val drs = DeclReorgState(definedVars, Vector.empty[Scope], elems.toVector)
         collectDeclarations(drs)
     }
 
-    def reorg(scope: Scope, definedVars: Set[String]): (Scope, Set[String]) = {
+    private def reorg(scope: Scope, definedVars: Set[String]): (Scope, Set[String]) = {
         scope match {
             case ssc:Scatter =>
                 val blk = reorgBlock(ssc, ssc.children, definedVars + ssc.item)
@@ -206,7 +206,7 @@ case class ReorgDecl(ns: WdlNamespace,
         }
     }
 
-    def reorgWorkflow(wf: WdlWorkflow) : WdlWorkflow = {
+    private def reorgWorkflow(wf: WdlWorkflow) : WdlWorkflow = {
         // split out the workflow outputs
         val wfProper = wf.children.filter(x => !x.isInstanceOf[WorkflowOutput])
         val wfOutputs :Vector[WorkflowOutput] = wf.outputs.toVector
@@ -217,16 +217,15 @@ case class ReorgDecl(ns: WdlNamespace,
 
     def apply(wdlSourceFile: Path) : WdlNamespace = {
         Utils.trace(verbose.on, "Reorganizing declarations")
+        val nsTreeOrg: NamespaceOps.Tree = NamespaceOps.load(ns, wdlSourceFile)
 
-        // Process the original WDL file,
-        // Do not modify the tasks
-        val nsFresh = ns match {
-            case nswf : WdlNamespaceWithWorkflow =>
-                val wf2 = reorgWorkflow(nswf.workflow)
-                WdlRewrite.namespace(nswf, wf2)
-            case _ => ns
+        // Process the original WDL file, rewrite all the workflows.
+        // Do not modify the tasks.
+        val nsTree = nsTreeOrg.transform{
+            wf:WdlWorkflow => reorgWorkflow(wf)
         }
-
-        WhitewashNamespace(wdlSourceFile, verbose).apply(nsFresh, "reorg")
+        if (verbose.on)
+            NamespaceOps.prettyPrint(wdlSourceFile, nsTree, "reorg", verbose)
+        nsTree.whitewash
     }
 }

@@ -295,7 +295,7 @@ case class SimplifyExpr(cef: CompilerErrorFormatter,
 
 
     // Convert complex expressions to independent declarations
-    def simplify(scope: Scope, wf: WdlWorkflow): Vector[Scope] = {
+    private def simplify(scope: Scope, wf: WdlWorkflow): Vector[Scope] = {
         scope match {
             case ssc:Scatter => simplifyScatter(ssc, wf)
             case call:WdlCall => simplifyCall(call, wf)
@@ -322,7 +322,7 @@ case class SimplifyExpr(cef: CompilerErrorFormatter,
 
     // Make a pass on all declarations amd calls. Make sure no reserved words or prefixes
     // are used.
-    private def checkReservedWords(ns: WdlNamespace, cef: CompilerErrorFormatter) : Unit = {
+    private def checkReservedWords(ns: WdlNamespace) : Unit = {
         def checkVarName(varName: String, ast: Ast) : Unit = {
             if (Utils.isGeneratedVar(varName))
                 throw new Exception(cef.illegalVariableName(ast))
@@ -378,36 +378,28 @@ case class SimplifyExpr(cef: CompilerErrorFormatter,
         }
     }
 
-    def apply(ns: WdlNamespace,
-              wdlSourceFile: Path) : WdlNamespace = {
-        checkReservedWords(ns, cef)
+    def validateNs(ns: WdlNamespace) : Unit = {
+        checkReservedWords(ns)
         ns.tasks.foreach(t => validateTask(t))
-
-        // Process the original WDL file,
-        // Do not modify the tasks
-        val nsFresh = ns match {
-            case nswf : WdlNamespaceWithWorkflow =>
-                val wf2 = simplifyWorkflow(nswf.workflow)
-                WdlRewrite.namespace(nswf, wf2)
-            case _ => ns
-        }
-
+        ns.namespaces.foreach(xNs => validateNs(xNs))
     }
 }
 
 object SimplifyExpr {
     def apply(ns: WdlNamespace,
-                 wdlSourceFile: Path,
-                 verbose: Verbose) : WdlNamespace = {
-        val nst:NsTree = NsTree.load(ns, wdlSourceFile)
-        val nstSimple = nst.transform{ childNs =>
-            // simplify namespace
-            val cef = new CompilerErrorFormatter(ns.terminalMap)
-            val simp = SimplifyExpr(cef, verbose)
-            simp.apply(ns, wdlSourceFile)
+              wdlSourceFile: Path,
+              verbose: Verbose) : WdlNamespace = {
+        // validate the namespace
+        val cef = new CompilerErrorFormatter(ns.terminalMap)
+        val simpExpr = new SimplifyExpr(cef, verbose)
+        simpExpr.validateNs(ns)
+
+        val nsTreeOrg: NamespaceOps.Tree = NamespaceOps.load(ns, wdlSourceFile)
+        val nsTree = nsTreeOrg.transform{ wf =>
+            simpExpr.simplifyWorkflow(wf)
         }
-        if (verbose)
-            nsTree.prettyPrint("simple")
-        nsTree.toNamespace
+        if (verbose.on)
+            NamespaceOps.prettyPrint(wdlSourceFile, nsTree, "simple", verbose)
+        nsTree.whitewash
     }
 }
