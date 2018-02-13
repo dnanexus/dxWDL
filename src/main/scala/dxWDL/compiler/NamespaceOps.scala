@@ -31,7 +31,7 @@ object NamespaceOps {
 
     // A namespace that is a library of tasks; it has no workflow
     case class TreeLeaf(importUri: Option[String],
-                        tasks: Map[String, WdlTask]) {
+                        tasks: Map[String, WdlTask]) extends Tree {
         private def toNamespace() =
             new WdlNamespaceWithoutWorkflow(
                 None,
@@ -50,7 +50,7 @@ object NamespaceOps {
 
         // There is nothing to do here, there is no workflow
         def transform(f: WdlWorkflow => WdlWorkflow) : Tree = {
-            this.asInstanceOf[Tree]
+            this
         }
 
         def whitewash : WdlNamespace = {
@@ -72,7 +72,7 @@ object NamespaceOps {
                         wdlSourceFile: Path,
                         workflow: WdlWorkflow,
                         tasks: Map[String, WdlTask],
-                        children: Vector[Tree]) {
+                        children: Vector[Tree]) extends Tree {
         // Resolving imports. Look for referenced files in the
         // source directory.
         private def resolver(filename: String) : WorkflowSource = {
@@ -103,7 +103,7 @@ object NamespaceOps {
         def prettyPrint : String = {
             val ns = toNamespace()
             val pp:WdlPrettyPrinter = WdlPrettyPrinter(true, Some(workflow.outputs))
-            val topNs = importUri + "\n" + pp.apply(ns, 0)
+            val topNs = importUri + "\n" + pp.apply(ns, 0).mkString("\n")
 
             val childrenStrings = children.map{ child =>
                 child.importUri + "\n" + child.prettyPrint
@@ -113,8 +113,7 @@ object NamespaceOps {
         }
 
         def transform(f: WdlWorkflow => WdlWorkflow) : Tree = {
-            val tn = TreeNode(importUri, imports, wdlSourceFile, f(workflow), tasks, children)
-            tn.asInstanceOf[Tree]
+            new TreeNode(importUri, imports, wdlSourceFile, f(workflow), tasks, children)
         }
 
         def whitewash : WdlNamespace = {
