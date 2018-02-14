@@ -1397,9 +1397,11 @@ workflow w {
     }
 
     // compile the WDL source code into intermediate representation
-    def apply(ns : WdlNamespace) : IR.Namespace = {
+    def apply(nsTree: NamespaceOps.Tree ) : IR.Namespace = {
         Utils.trace(verbose.on, "IR pass")
 
+        throw new Exception("TODO")
+        /*
         // Load all accessed applets, local or imported
         val accessedTasks: Set[WdlTask] = loadImportedTasks(ns)
         val accessedTaskNames = accessedTasks.map(task => task.name)
@@ -1428,17 +1430,16 @@ workflow w {
                 // The namespace contains only applets, there
                 // is no workflow to compile.
                 IR.Namespace(None, Map.empty, taskApplets)
-        }
+        } */
     }
 }
 
 object GenerateIR {
-    def apply(ns : WdlNamespace,
+    def apply(nsTree : NamespaceOps.Tree,
               reorg: Boolean,
               locked: Boolean,
               verbose: Verbose) : IR.Namespace = {
-        val cef = new CompilerErrorFormatter(ns.terminalMap)
-        val cir = new GenerateIR(cef, reorg, locked, verbose)
-        cir.apply(ns)
+        val cir = new GenerateIR(nsTree.cef, reorg, locked, verbose)
+        cir.apply(nsTree)
     }
 }

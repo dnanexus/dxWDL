@@ -320,86 +320,19 @@ case class SimplifyExpr(cef: CompilerErrorFormatter,
         WdlRewrite.workflow(wf, allChildren)
     }
 
-    // Make a pass on all declarations amd calls. Make sure no reserved words or prefixes
-    // are used.
-    private def checkReservedWords(ns: WdlNamespace) : Unit = {
-        def checkVarName(varName: String, ast: Ast) : Unit = {
-            if (Utils.isGeneratedVar(varName))
-                throw new Exception(cef.illegalVariableName(ast))
-            Utils.reservedSubstrings.foreach{ s =>
-                if (varName contains s)
-                    throw new Exception(cef.illegalVariableName(ast))
-            }
-        }
-        def checkCallName(call : WdlCall) : Unit = {
-            val nm = call.unqualifiedName
-            Utils.reservedAppletPrefixes.foreach{ prefix =>
-                if (nm.startsWith(prefix))
-                    throw new Exception(cef.illegalCallName(call))
-            }
-            Utils.reservedSubstrings.foreach{ sb =>
-                if (nm contains sb)
-                    throw new Exception(cef.illegalCallName(call))
-            }
-            if (nm == Utils.LAST_STAGE)
-                throw new Exception(cef.illegalCallName(call))
-        }
-        def deepCheck(children: Seq[Scope]) : Unit = {
-            children.foreach {
-                case ssc:Scatter =>
-                    checkVarName(ssc.item, ssc.ast)
-                    deepCheck(ssc.children)
-                case decl:DeclarationInterface =>
-                    checkVarName(decl.unqualifiedName, decl.ast)
-                case call:WdlCall =>
-                    checkCallName(call)
-                case _ => ()
-            }
-        }
-        ns match {
-            case nswf: WdlNamespaceWithWorkflow => deepCheck(nswf.workflow.children)
-            case _ => ()
-        }
-        ns.tasks.map{ task =>
-            // check task inputs and outputs
-            deepCheck(task.outputs)
-            deepCheck(task.declarations)
-        }
-    }
-
-    private def validateTask(task: WdlTask) : Unit = {
-        // validate runtime attributes
-        val validAttrNames:Set[String] = Set(Utils.DX_INSTANCE_TYPE_ATTR,
-                                             "memory", "disks", "cpu", "docker")
-        task.runtimeAttributes.attrs.foreach{ case (attrName,_) =>
-            if (!(validAttrNames contains attrName))
-                Utils.warning(verbose,
-                              s"Runtime attribute ${attrName} for task ${task.name} is unknown")
-        }
-    }
-
-    def validateNs(ns: WdlNamespace) : Unit = {
-        checkReservedWords(ns)
-        ns.tasks.foreach(t => validateTask(t))
-        ns.namespaces.foreach(xNs => validateNs(xNs))
-    }
 }
 
 object SimplifyExpr {
-    def apply(ns: WdlNamespace,
+    def apply(nsTree: NamespaceOps.Tree,
               wdlSourceFile: Path,
-              verbose: Verbose) : WdlNamespace = {
+              verbose: Verbose) : NamespaceOps.Tree = {
         // validate the namespace
-        val cef = new CompilerErrorFormatter(ns.terminalMap)
-        val simpExpr = new SimplifyExpr(cef, verbose)
-        simpExpr.validateNs(ns)
-
-        val nsTreeOrg: NamespaceOps.Tree = NamespaceOps.load(ns, wdlSourceFile)
-        val nsTree = nsTreeOrg.transform{ wf =>
+        val nsTree1 = nsTree.transform{ case (wf, cef) =>
+            val simpExpr = new SimplifyExpr(cef, verbose)
             simpExpr.simplifyWorkflow(wf)
         }
         if (verbose.on)
-            NamespaceOps.prettyPrint(wdlSourceFile, nsTree, "simple", verbose)
-        nsTree.whitewash
+            NamespaceOps.prettyPrint(wdlSourceFile, nsTree1, "simple", verbose)
+        nsTree1
     }
 }

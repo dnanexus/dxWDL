@@ -253,9 +253,10 @@ case class WdlPrettyPrinter(fqnFlag: Boolean,
             buildBlock("output", outputs, level + 1, force=true) ++
             buildBlock("parameter_meta", paramMeta, level + 1) ++
             buildBlock("meta", meta, level + 1)
-        val wfName =
+        /*val wfName =
             if (fqnFlag) wf.fullyQualifiedName
-            else wf.unqualifiedName
+            else wf.unqualifiedName*/
+        val wfName = wf.unqualifiedName
         buildBlock( s"workflow ${wfName}", lines, level)
     }
 

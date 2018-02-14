@@ -64,7 +64,7 @@ object CompilerTop {
             val p:Path = sourceDir.resolve(filename)
             Utils.readFileContent(p)
         }
-        val orgNs =
+        val ns =
             WdlNamespace.loadUsingPath(wdlSourceFile, None, Some(List(resolver))) match {
                 case Success(ns) => ns
                 case Failure(f) =>
@@ -72,19 +72,25 @@ object CompilerTop {
                     throw f
             }
 
+        // Make sure the namespace doesn't use names or substrings
+        // that will give us problems.
+        Validate.apply(ns, cOpt.verbose)
+
+        val nsTree: NamespaceOps.Tree = NamespaceOps.load(ns, wdlSourceFile)
+
         // Simplify the original workflow, for example,
         // convert call arguments from expressions to variables.
-        val nsExpr = SimplifyExpr.apply(orgNs, wdlSourceFile, cOpt.verbose)
+        val nsTreeSimple = SimplifyExpr.apply(nsTree, wdlSourceFile, cOpt.verbose)
 
         // Reorganize the declarations, to minimize the number of
         // applets, stages, and jobs.
-        val ns = ReorgDecl(nsExpr, cOpt.verbose).apply(wdlSourceFile)
+        val nsTreeReorg = ReorgDecl.apply(nsTreeSimple, wdlSourceFile, cOpt.verbose)
 
         // Compile the WDL workflow into an Intermediate
         // Representation (IR) For some reason, the pretty printer
         // mangles the outputs, which is why we pass the originals
         // unmodified.
-        val irNs1 = GenerateIR.apply(ns, cOpt.reorg, cOpt.locked, cOpt.verbose)
+        val irNs1 = GenerateIR.apply(nsTreeReorg, cOpt.reorg, cOpt.locked, cOpt.verbose)
         val irNs2: IR.Namespace = (cOpt.defaults, irNs1.workflow) match {
             case (Some(path), Some(irWf)) =>
                 embedDefaults(irNs1, irWf, path, cOpt)

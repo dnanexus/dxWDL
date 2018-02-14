@@ -112,7 +112,7 @@ class CompilerUnitTest extends FlatSpec with Matchers {
 
         val path = writeTestFile("file_array", wdlCode)
         val retval = Main.compile(
-            List(path.toString, "--compileMode", "ir", "--locked", "--verbose")
+            List(path.toString, "--compileMode", "ir", "--locked")
         )
         retval match  {
             case Main.SuccessfulTermination(_) =>

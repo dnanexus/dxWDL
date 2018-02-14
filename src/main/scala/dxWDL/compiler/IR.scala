@@ -42,7 +42,7 @@ object IR {
         def dxVarName : String = Utils.transformVarName(name)
     }
 
-    /** Secification of instance type.
+    /** Specification of instance type.
       *
       *  An instance could be:
       *  Default: the platform default, useful for auxiliary calculations.
@@ -164,14 +164,17 @@ object IR {
       * The most advanced namespace is one where the top level
       * workflow imports other namespaces, and calls subworkflows and tasks.
       */
-    /*sealed trait Namespace
-    case class NamespaceLeaf(applets: Map[String, Applet])
-    case class NamespaceBranch(workflow: Workflow,
+    sealed trait Namespace
+    case class NamespaceLeaf(name: String,
+                             applets: Map[String, Applet])
+    case class NamespaceBranch(name: String,
+                               workflow: Workflow,
                                applets: Map[String, Applet],
-                               children: Vector[Namespace])*/
-    case class Namespace(workflow: Option[Workflow],
-                         subWorkflows: Map[String, Workflow],
-                         applets: Map[String, Applet])
+                               children: Vector[Namespace])
+/*
+    class NamespaceDxReady(applets: Map[String, Applet],
+                           workflows: Map[String, Workflow],
+                           Map[String, String])*/
 
     // Automatic conversion to/from Yaml
     object IrInternalYamlProtocol extends DefaultYamlProtocol {
@@ -461,10 +464,53 @@ object IR {
             }
         }
 
+        implicit object NamespaceYamlFormat extends YamlFormat[Namespace] {
+            def write(ns: Namespace) = {
+                ns match {
+                    case NamespaceLeaf(name, applets) =>
+                        YamlObject(
+                            YamlString("kind") -> YamlString("Leaf"),
+                            YamlString("name") -> YamlString(name),
+                            YamlString("applets") -> applets.toYaml)
+                    case NamespaceBranch(name, workflow, applets, children) =>
+                        YamlObject(
+                            YamlString("kind") -> YamlString("Branch"),
+                            YamlString("name") -> YamlString(name),
+                            YamlString("applets") -> applets.toYaml,
+                            YamlString("children") -> children.toYaml)
+                }
+            }
+
+            def read(value: YamlValue) = {
+                val yo = value.asYamlObject
+                yo.getFields(YamlString("kind")) match {
+                    case Seq(YamlString("Leaf")) => readLeaf(yo)
+                    case Seq(YamlString("Branch")) => readBranch(yo)
+                    case other => throw Exception(s"unknown kind ${other}")
+                }
+            }
+
+            def readLeaf(yo: YamlObject) = {
+                yo.getFields(YamlString("name"), YamlString("applets")) match {
+                    case Seq(YamlString(name), applets) =>
+                        NamespaceLeaf(name, applets.convertTo[Map[String, Applet]])
+                }
+            }
+            def readBranch(yo: YamlObject) = {
+                yo.getFields(YamlString("name"),
+                             YamlString("applets"),
+                             YamlString("children")) match {
+                    case Seq(YamlString(name), applets, children) =>
+                        NamespaceBranch(name,
+                                        applets.convertTo[Map[String, Applet]],
+                                        children.convertTo[Vector[Namespace]])
+                }
+            }
+        }
+
         implicit val dxWorkflowStageFormat = yamlFormat1(Utils.DXWorkflowStage)
         implicit val stageFormat = yamlFormat5(Stage)
         implicit val workflowFormat = yamlFormat5(Workflow)
-        implicit val namespaceFormat = yamlFormat3(Namespace)
     }
     import IrInternalYamlProtocol._
 

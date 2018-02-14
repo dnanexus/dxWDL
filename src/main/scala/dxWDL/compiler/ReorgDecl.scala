@@ -8,10 +8,9 @@ import dxWDL.{CompilerErrorFormatter, Utils, Verbose}
 import java.nio.file.Path
 import wdl._
 
-case class ReorgDecl(ns: WdlNamespace,
+case class ReorgDecl(cef: CompilerErrorFormatter,
                      verbose: Verbose) {
     val MAX_NUM_COLLECT_ITER = 10
-    val cef = new CompilerErrorFormatter(ns.terminalMap)
     val verbose2:Boolean = verbose.keywords contains "reorg"
 
     case class DeclReorgState(definedVars: Set[String],
@@ -206,7 +205,7 @@ case class ReorgDecl(ns: WdlNamespace,
         }
     }
 
-    private def reorgWorkflow(wf: WdlWorkflow) : WdlWorkflow = {
+    def reorgWorkflow(wf: WdlWorkflow) : WdlWorkflow = {
         // split out the workflow outputs
         val wfProper = wf.children.filter(x => !x.isInstanceOf[WorkflowOutput])
         val wfOutputs :Vector[WorkflowOutput] = wf.outputs.toVector
@@ -214,18 +213,22 @@ case class ReorgDecl(ns: WdlNamespace,
         val blk = reorgBlock(wf, wfProper, Set.empty)
         WdlRewrite.workflow(wf, blk.children ++ wfOutputs)
     }
+}
 
-    def apply(wdlSourceFile: Path) : WdlNamespace = {
+object ReorgDecl {
+    def apply(nsTree: NamespaceOps.Tree,
+              wdlSourceFile: Path,
+              verbose: Verbose) : NamespaceOps.Tree = {
         Utils.trace(verbose.on, "Reorganizing declarations")
-        val nsTreeOrg: NamespaceOps.Tree = NamespaceOps.load(ns, wdlSourceFile)
 
         // Process the original WDL file, rewrite all the workflows.
         // Do not modify the tasks.
-        val nsTree = nsTreeOrg.transform{
-            wf:WdlWorkflow => reorgWorkflow(wf)
+        val nsTree1 = nsTree.transform{ case (wf, cef) =>
+            val rg = new ReorgDecl(cef, verbose)
+            rg.reorgWorkflow(wf)
         }
         if (verbose.on)
-            NamespaceOps.prettyPrint(wdlSourceFile, nsTree, "reorg", verbose)
-        nsTree.whitewash
+            NamespaceOps.prettyPrint(wdlSourceFile, nsTree1, "reorg", verbose)
+        nsTree1
     }
 }
