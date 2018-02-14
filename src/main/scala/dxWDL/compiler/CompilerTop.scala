@@ -17,7 +17,7 @@ object CompilerTop {
 
     private def prettyPrintIR(wdlSourceFile : Path,
                               extraSuffix: Option[String],
-                              irNs: IR.Namespace,
+                              irc: IR.NamespaceCompact,
                               verbose: Boolean) : Unit = {
         val suffix = extraSuffix match {
             case None => ".ir.yaml"
@@ -25,7 +25,7 @@ object CompilerTop {
         }
         val trgName: String = Utils.replaceFileSuffix(wdlSourceFile, suffix)
         val trgPath = Utils.appCompileDirPath.resolve(trgName).toFile
-        val yo = IR.yaml(irNs)
+        val yo = IR.yaml(irc)
         val humanReadable = IR.prettyPrint(yo)
         val fos = new FileWriter(trgPath)
         val pw = new PrintWriter(fos)
@@ -51,7 +51,7 @@ object CompilerTop {
     }
 
     private def compileIR(wdlSourceFile : Path,
-                          cOpt: CompilerOptions) : IR.Namespace = {
+                          cOpt: CompilerOptions) : IR.NamespaceCompact = {
         // Resolving imports. Look for referenced files in the
         // source directory.
         def resolver(filename: String) : WorkflowSource = {
@@ -87,18 +87,17 @@ object CompilerTop {
         val nsTreeReorg = ReorgDecl.apply(nsTreeSimple, wdlSourceFile, cOpt.verbose)
 
         // Compile the WDL workflow into an Intermediate
-        // Representation (IR) For some reason, the pretty printer
-        // mangles the outputs, which is why we pass the originals
-        // unmodified.
-        val irNs1 = GenerateIR.apply(nsTreeReorg, cOpt.reorg, cOpt.locked, cOpt.verbose)
-        val irNs2: IR.Namespace = (cOpt.defaults, irNs1.workflow) match {
+        // Representation (IR)
+        val irNs = GenerateIR.apply(nsTreeReorg, cOpt.reorg, cOpt.locked, cOpt.verbose)
+        val irCompact = CompactIR.apply(irNs, cOpt.verbose)
+        val irc: IR.NamespaceCompact = (cOpt.defaults, irCompact.workflow) match {
             case (Some(path), Some(irWf)) =>
-                embedDefaults(irNs1, irWf, path, cOpt)
-            case (_,_) => irNs1
+                embedDefaults(irCompact, irWf, path, cOpt)
+            case (_,_) => irCompact
         }
 
         // Write out the intermediate representation
-        prettyPrintIR(wdlSourceFile, None, irNs2, cOpt.verbose.on)
+        prettyPrintIR(wdlSourceFile, None, irc, cOpt.verbose.on)
 
         // generate dx inputs from the Cromwell-style input specification.
         cOpt.inputs.foreach{ path =>
@@ -112,7 +111,7 @@ object CompilerTop {
             Utils.writeFileContent(dxInputFile, dxInputs.prettyPrint)
             Utils.trace(cOpt.verbose.on, s"Wrote dx JSON input file ${dxInputFile}")
         }
-        irNs2
+        irc
     }
 
 
@@ -135,7 +134,7 @@ object CompilerTop {
     }
 
     // Backend compiler pass
-    private def compileNative(irNs: IR.Namespace,
+    private def compileNative(irc: IR.NamespaceCompact,
                               folder: String,
                               dxProject: DXProject,
                               cOpt: CompilerOptions) : String = {
@@ -149,7 +148,7 @@ object CompilerTop {
         // Generate dx:applets and dx:workflow from the IR
         val (wf, _) =
             Native(dxWDLrtId, folder, dxProject, instanceTypeDB,
-                   cOpt.force, cOpt.archive, cOpt.locked, cOpt.verbose).apply(irNs)
+                   cOpt.force, cOpt.archive, cOpt.locked, cOpt.verbose).apply(irc)
         wf match {
             case Some(dxwfl) => dxwfl.getId
             case None => ""

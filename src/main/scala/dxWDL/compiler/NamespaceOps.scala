@@ -1,5 +1,8 @@
 package dxWDL.compiler
 
+// An in-memory representation of a WDL namespace, with direct and
+// indirectly referenced namespaces.
+//
 import dxWDL.{CompilerErrorFormatter, Utils, Verbose, WdlPrettyPrinter}
 import java.nio.file.{Path, Paths}
 import java.io.{FileWriter, PrintWriter}

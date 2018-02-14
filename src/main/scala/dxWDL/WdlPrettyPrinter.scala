@@ -9,7 +9,7 @@
   *
   * TODO: for an unknown reason, the pretty printer mangles workflow
   * outputs. The work around is to pass the original workflow outputs
-  * unmodified. Fix this.
+  * unmodified.
   */
 package dxWDL
 

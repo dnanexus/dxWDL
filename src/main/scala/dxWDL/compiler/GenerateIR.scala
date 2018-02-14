@@ -105,10 +105,14 @@ task Add {
         WdlExpression.fromString(sExpr)
     }
 
-    private def calleeName(call: WdlCall) : String = {
+    private def calleeFQN(call: WdlCall) : String = {
         call match {
-            case tc: WdlTaskCall => tc.task.name
-            case wfc: WdlWorkflowCall => wfc.calledWorkflow.unqualifiedName
+            case tc: WdlTaskCall =>
+                //tc.task.name
+                tc.task.fullyQualifiedName
+            case wfc: WdlWorkflowCall =>
+                //wfc.calledWorkflow.unqualifiedName
+                wfc.calledWorkflow.fullyQualifiedName
         }
     }
 
@@ -590,7 +594,7 @@ workflow w {
                     callables: Map[String, IR.Callable],
                     env : CallEnv) : IR.Stage = {
         // Find the right applet
-        val cName = calleeName(call)
+        val cName = calleeFQN(call)
         val callee = callables(cName)
 
         // Extract the input values/links from the environment
@@ -786,7 +790,7 @@ workflow w {
     def unspecifiedInputs(call: WdlCall,
                           callables: Map[String, IR.Callable]) : Vector[CVar] = {
         assert(!locked)
-        val cName = calleeName(call)
+        val cName = calleeFQN(call)
         val callee = callables(cName)
         callee.inputVars.map{ cVar =>
             val input = findInputByName(call, cVar)
@@ -1329,7 +1333,8 @@ workflow w {
 
     // Compile a workflow, having compiled the independent tasks.
     def compileWorkflow(wf: WdlWorkflow,
-                        callables: Map[String, IR.Callable]) : IR.Namespace = {
+                        callables: Map[String, IR.Callable])
+            : (IR.Workflow, Map[String, Applet]) = {
         // Get rid of workflow output declarations
         val children = wf.children.filter(x => !x.isInstanceOf[WorkflowOutput])
 
@@ -1366,22 +1371,17 @@ workflow w {
             }
 
         val (stages, auxApplets) = allStageInfo.unzip
-        val subWorkflows: Map[String, IR.Workflow] = callables.collect{
-            case (key, subWf: IR.Workflow) => (key, subWf)
-        }
-        val tApplets: Map[String, IR.Applet] = callables.collect{
-            case (key, applet: IR.Applet) => (key, applet)
-        }
         val aApplets: Map[String, IR.Applet] =
             auxApplets
                 .flatten
                 .map(apl => apl.name -> apl).toMap
 
         val irwf = IR.Workflow(wf.unqualifiedName, wfInputs, wfOutputs, stages, locked)
-        IR.Namespace(Some(irwf),
-                     subWorkflows,
-                     tApplets ++ aApplets)
+        (irwf, aApplets)
     }
+}
+
+object GenerateIR {
 
     // Load imported tasks
     def loadImportedTasks(ns: WdlNamespace) : Set[WdlTask] = {
@@ -1396,50 +1396,42 @@ workflow w {
         }.toSet
     }
 
-    // compile the WDL source code into intermediate representation
-    def apply(nsTree: NamespaceOps.Tree ) : IR.Namespace = {
-        Utils.trace(verbose.on, "IR pass")
-
-        throw new Exception("TODO")
-        /*
-        // Load all accessed applets, local or imported
-        val accessedTasks: Set[WdlTask] = loadImportedTasks(ns)
-        val accessedTaskNames = accessedTasks.map(task => task.name)
-        Utils.trace(verbose.on, s"Accessed tasks = ${accessedTaskNames}")
-
-        // Make sure all local tasks are included; we want to compile
-        // them even if they are not accessed.
-        val allTasks:Set[WdlTask] = accessedTasks ++ ns.tasks.toSet
-
-        // compile all the tasks into applets
-        Utils.trace(verbose.on, "compiling tasks into dx:applets")
-
-        val taskApplets: Map[String, IR.Applet] = allTasks.map{ task =>
-            val (applet, _) = compileTask(task)
+    private def compileTasks(gir: GenerateIR,
+                             tasks: Map[String, WdlTask]) : Map[String, IR.Applet] = {
+        tasks.map{ task =>
+            val applet = gir.compileTask(task)
             task.name -> applet
         }.toMap
-        val callables:Map[String, IR.Callable] = taskApplets.map{
-            case (name,applet) => name -> applet.asInstanceOf[IR.Callable]
-        }
-        ns match {
-            case nswf : WdlNamespaceWithWorkflow =>
-                val wf = nswf.workflow
-                val irNs = compileWorkflow(wf, callables)
-                irNs
-            case _ =>
-                // The namespace contains only applets, there
-                // is no workflow to compile.
-                IR.Namespace(None, Map.empty, taskApplets)
-        } */
     }
-}
 
-object GenerateIR {
+    private def buildCallables() : Map[String, IR.Callable] = {
+    }
+
     def apply(nsTree : NamespaceOps.Tree,
               reorg: Boolean,
               locked: Boolean,
               verbose: Verbose) : IR.Namespace = {
-        val cir = new GenerateIR(nsTree.cef, reorg, locked, verbose)
-        cir.apply(nsTree)
+        Utils.trace(verbose.on, "IR pass")
+
+        // recursively generate IR for the entire tree
+        nsTree match {
+            case TreeLeaf(name, tasks, cef) =>
+                val gir = new GenerateIR(cef, reorg, locked, verbose)
+                val applets = compileTasks(tasks, cir)
+                IR.NamespaceLeaf(name, applets)
+
+            case TreeNode(name, _, _, workflow, tasks, children, cef) =>
+                // The reorg and locked flags only apply to the top level
+                // workflow. All other workflows are sub-workflows, and they do
+                // not reorganize the outputs.
+                val childrenIR: Vector[IR.Namespace] =
+                    children.map(c => apply(c, false, true, verbose)).toVector
+
+
+                val gir = new GenerateIR(cef, false, true, verbose)
+                val (irWf, auxApplets) = gir.compileWorkflow(workflow, callables)
+                val tApplets = compileTasks(tasks, cir)
+                IR.NamespaceNode(name, wfIR, auxApplets ++ tApplets, children)
+        }
     }
 }

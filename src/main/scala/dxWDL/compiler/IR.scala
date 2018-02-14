@@ -167,14 +167,28 @@ object IR {
     sealed trait Namespace
     case class NamespaceLeaf(name: String,
                              applets: Map[String, Applet])
-    case class NamespaceBranch(name: String,
-                               workflow: Workflow,
-                               applets: Map[String, Applet],
-                               children: Vector[Namespace])
-/*
-    class NamespaceDxReady(applets: Map[String, Applet],
-                           workflows: Map[String, Workflow],
-                           Map[String, String])*/
+    case class NamespaceNode(name: String,
+                             workflow: Workflow,
+                             applets: Map[String, Applet],
+                             children: Vector[Namespace])
+
+    // Compacting the namespace in preparation for native
+    // compilation.
+    //
+    // We need to map the WDL namespace hierarchy to a flat space of
+    // dx:applets and dx:workflows. A task (workflow) is compiled to a
+    // single dnanexus applet, however, it could have multiple fully
+    // qualified names, because it can be imported in several ways.
+    // To ensure it has exactly one target applet, the [fqnToName]
+    // structure maps FQNs to dx:applets and dx:workflows.
+    //
+    // If a task is defined in two different ways, a compilation error
+    // results.
+    class NamespaceCompact(
+        workflow: Option[Workflow],
+        fqnToName: Map[String, String],
+        applets: Map[String, Applet],
+        subWorkflows: Map[String, Workflow])
 
     // Automatic conversion to/from Yaml
     object IrInternalYamlProtocol extends DefaultYamlProtocol {
@@ -464,53 +478,10 @@ object IR {
             }
         }
 
-        implicit object NamespaceYamlFormat extends YamlFormat[Namespace] {
-            def write(ns: Namespace) = {
-                ns match {
-                    case NamespaceLeaf(name, applets) =>
-                        YamlObject(
-                            YamlString("kind") -> YamlString("Leaf"),
-                            YamlString("name") -> YamlString(name),
-                            YamlString("applets") -> applets.toYaml)
-                    case NamespaceBranch(name, workflow, applets, children) =>
-                        YamlObject(
-                            YamlString("kind") -> YamlString("Branch"),
-                            YamlString("name") -> YamlString(name),
-                            YamlString("applets") -> applets.toYaml,
-                            YamlString("children") -> children.toYaml)
-                }
-            }
-
-            def read(value: YamlValue) = {
-                val yo = value.asYamlObject
-                yo.getFields(YamlString("kind")) match {
-                    case Seq(YamlString("Leaf")) => readLeaf(yo)
-                    case Seq(YamlString("Branch")) => readBranch(yo)
-                    case other => throw Exception(s"unknown kind ${other}")
-                }
-            }
-
-            def readLeaf(yo: YamlObject) = {
-                yo.getFields(YamlString("name"), YamlString("applets")) match {
-                    case Seq(YamlString(name), applets) =>
-                        NamespaceLeaf(name, applets.convertTo[Map[String, Applet]])
-                }
-            }
-            def readBranch(yo: YamlObject) = {
-                yo.getFields(YamlString("name"),
-                             YamlString("applets"),
-                             YamlString("children")) match {
-                    case Seq(YamlString(name), applets, children) =>
-                        NamespaceBranch(name,
-                                        applets.convertTo[Map[String, Applet]],
-                                        children.convertTo[Vector[Namespace]])
-                }
-            }
-        }
-
         implicit val dxWorkflowStageFormat = yamlFormat1(Utils.DXWorkflowStage)
         implicit val stageFormat = yamlFormat5(Stage)
         implicit val workflowFormat = yamlFormat5(Workflow)
+        implicit val NamespaceCompactFormat = yamlFormat4(NamespaceCompact)
     }
     import IrInternalYamlProtocol._
 

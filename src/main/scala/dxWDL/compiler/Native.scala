@@ -846,7 +846,7 @@ case class Native(dxWDLrtId: String,
         sortedApplets
     }
 
-    def apply(ns: IR.Namespace) : (Option[DXWorkflow], Vector[DXApplet]) = {
+    def apply(ns: IR.NamespaceCompact) : (Option[DXWorkflow], Vector[DXApplet]) = {
         trace(verbose.on, "Backend pass")
 
         // Efficiently build a directory of the currently existing applets.
