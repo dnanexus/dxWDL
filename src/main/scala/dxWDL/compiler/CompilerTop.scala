@@ -17,7 +17,7 @@ object CompilerTop {
 
     private def prettyPrintIR(wdlSourceFile : Path,
                               extraSuffix: Option[String],
-                              irc: IR.NamespaceCompact,
+                              irc: IR.Namespace,
                               verbose: Boolean) : Unit = {
         val suffix = extraSuffix match {
             case None => ".ir.yaml"
@@ -51,7 +51,7 @@ object CompilerTop {
     }
 
     private def compileIR(wdlSourceFile : Path,
-                          cOpt: CompilerOptions) : IR.NamespaceCompact = {
+                          cOpt: CompilerOptions) : IR.Namespace = {
         // Resolving imports. Look for referenced files in the
         // source directory.
         def resolver(filename: String) : WorkflowSource = {
@@ -89,15 +89,14 @@ object CompilerTop {
         // Compile the WDL workflow into an Intermediate
         // Representation (IR)
         val irNs = GenerateIR.apply(nsTreeReorg, cOpt.reorg, cOpt.locked, cOpt.verbose)
-        val irCompact = CompactIR.apply(irNs, cOpt.verbose)
-        val irc: IR.NamespaceCompact = (cOpt.defaults, irCompact.workflow) match {
+        val irNs2: IR.Namespace = (cOpt.defaults, irNs.workflow) match {
             case (Some(path), Some(irWf)) =>
-                embedDefaults(irCompact, irWf, path, cOpt)
-            case (_,_) => irCompact
+                embedDefaults(irNs, irWf, path, cOpt)
+            case (_,_) => irNs
         }
 
         // Write out the intermediate representation
-        prettyPrintIR(wdlSourceFile, None, irc, cOpt.verbose.on)
+        prettyPrintIR(wdlSourceFile, None, irNs, cOpt.verbose.on)
 
         // generate dx inputs from the Cromwell-style input specification.
         cOpt.inputs.foreach{ path =>
@@ -134,7 +133,7 @@ object CompilerTop {
     }
 
     // Backend compiler pass
-    private def compileNative(irc: IR.NamespaceCompact,
+    private def compileNative(irNs: IR.Namespace,
                               folder: String,
                               dxProject: DXProject,
                               cOpt: CompilerOptions) : String = {
@@ -146,9 +145,9 @@ object CompilerTop {
         val instanceTypeDB = InstanceTypeDB.query(dxProject, cOpt.verbose)
 
         // Generate dx:applets and dx:workflow from the IR
-        val (wf, _) =
+        val (wf, _, _) =
             Native(dxWDLrtId, folder, dxProject, instanceTypeDB,
-                   cOpt.force, cOpt.archive, cOpt.locked, cOpt.verbose).apply(irc)
+                   cOpt.force, cOpt.archive, cOpt.locked, cOpt.verbose).apply(irNs)
         wf match {
             case Some(dxwfl) => dxwfl.getId
             case None => ""

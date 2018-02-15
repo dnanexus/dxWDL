@@ -28,7 +28,7 @@ case class Native(dxWDLrtId: String,
 
     // Open the archive
     // Extract the archive from the details field
-    def getRuntimeLibrary(): JsValue = {
+    private def getRuntimeLibrary(): JsValue = {
         val record = DXRecord.getInstance(dxWDLrtId)
         val descOptions = DXDataObject.DescribeOptions.get().inProject(dxProject).withDetails
         val details = jsValueOfJsonNode(
@@ -57,7 +57,7 @@ case class Native(dxWDLrtId: String,
     // Ragged arrays, maps, and objects, cannot be mapped in such a trivial way.
     // These are called "Complex Types", or "Complex". They are handled
     // by passing a JSON structure and a vector of dx:files.
-    def cVarToSpec(cVar: CVar) : Vector[JsValue] = {
+    private def cVarToSpec(cVar: CVar) : Vector[JsValue] = {
         val name = Utils.encodeAppletVarName(cVar.dxVarName)
         val defaultVals:Map[String, JsValue] = cVar.attrs.getDefault match {
             case None => Map.empty
@@ -137,7 +137,7 @@ case class Native(dxWDLrtId: String,
         }
     }
 
-    def genSourceFiles(wdlCode:String,
+    private def genSourceFiles(wdlCode:String,
                        linkInfo: Option[String],
                        dbInstance: Option[String]): String = {
         // UU64 encode the WDL script to avoid characters that interact
@@ -174,7 +174,7 @@ case class Native(dxWDLrtId: String,
         List(Some(part1), part2, part3).flatten.mkString("\n")
     }
 
-    def genBashScriptTaskBody(): String = {
+    private def genBashScriptTaskBody(): String = {
         s"""|    # Keep track of streaming files. Each such file
             |    # is converted into a fifo, and a 'dx cat' process
             |    # runs in the background.
@@ -251,13 +251,13 @@ case class Native(dxWDLrtId: String,
             |""".stripMargin.trim
     }
 
-    def genBashScriptNonTask(miniCmd:String) : String = {
+    private def genBashScriptNonTask(miniCmd:String) : String = {
         s"""|main() {
             |    java -jar $${DX_FS_ROOT}/dxWDL.jar internal ${miniCmd} $${DX_FS_ROOT}/source.wdl $${HOME}
             |}""".stripMargin.trim
     }
 
-    def genBashScriptScatterCollect() : String = {
+    private def genBashScriptScatterCollect() : String = {
         s"""|main() {
             |    java -jar $${DX_FS_ROOT}/dxWDL.jar internal scatterCollectSubjob $${DX_FS_ROOT}/source.wdl $${HOME}
             |}
@@ -267,11 +267,11 @@ case class Native(dxWDLrtId: String,
             |}""".stripMargin.trim
     }
 
-    def genBashScript(appKind: IR.AppletKind,
-                      instanceType: IR.InstanceType,
-                      wdlCode: String,
-                      linkInfo: Option[String],
-                      dbInstance: Option[String]) : String = {
+    private def genBashScript(appKind: IR.AppletKind,
+                              instanceType: IR.InstanceType,
+                              wdlCode: String,
+                              linkInfo: Option[String],
+                              dbInstance: Option[String]) : String = {
         val body:String = appKind match {
             case IR.AppletKindEval =>
                 genBashScriptNonTask("eval")
@@ -309,13 +309,13 @@ case class Native(dxWDLrtId: String,
     }
 
     // Calculate the MD5 checksum of a string
-    def chksum(s: String) : String = {
+    private def chksum(s: String) : String = {
         val digest = MessageDigest.getInstance("MD5").digest(s.getBytes)
         digest.map("%02X" format _).mkString
     }
 
     // Add a checksum to a request
-    def checksumReq(req: JsValue) : (String, JsValue) = {
+    private def checksumReq(req: JsValue) : (String, JsValue) = {
         val digest = chksum(req.prettyPrint)
         val props = Map("properties" ->
                             JsObject(CHECKSUM_PROP -> JsString(digest)))
@@ -338,8 +338,8 @@ case class Native(dxWDLrtId: String,
     //   GLnexus (Mon Mar  7 15:18:14 2016)
     //
     // Note: 'dx build' does not support workflow archiving at the moment.
-    def archiveDxObject(objInfo:DxObjectInfo,
-                        dxObjDir: DxObjectDirectory) : Unit = {
+    private def archiveDxObject(objInfo:DxObjectInfo,
+                                dxObjDir: DxObjectDirectory) : Unit = {
         trace(verbose.on, s"Archiving ${objInfo.name} ${objInfo.dxObj.getId}")
         val dxClass:String = objInfo.dxClass
         val destFolder = folder ++ "/." ++ dxClass + "_archive"
@@ -374,9 +374,9 @@ case class Native(dxWDLrtId: String,
     // Returns:
     //   None: build is required: None
     //   Some(dxobject) : the right object is already on the platform
-    def isBuildRequired(name: String,
-                        digest: String,
-                        dxObjDir: DxObjectDirectory) : Option[DXDataObject] = {
+    private def isBuildRequired(name: String,
+                                digest: String,
+                                dxObjDir: DxObjectDirectory) : Option[DXDataObject] = {
         val existingDxObjs = dxObjDir.lookup(name)
         val buildRequired:Boolean = existingDxObjs.size match {
             case 0 => true
@@ -427,8 +427,8 @@ case class Native(dxWDLrtId: String,
     // For applets that call other applets, we pass a directory
     // of the callees, so they could be found a runtime. This is
     // equivalent to linking, in a standard C compiler.
-    def genAppletScript(applet: IR.Applet,
-                        aplLinks: Map[String, (IR.Applet, DXApplet)]) : String = {
+    private def genAppletScript(applet: IR.Applet,
+                                aplLinks: Map[String, (IR.Applet, DXApplet)]) : String = {
         // generate the wdl source file
         val wdlCode:String = WdlPrettyPrinter(false, None).apply(applet.ns, 0)
             .mkString("\n")
@@ -467,9 +467,9 @@ case class Native(dxWDLrtId: String,
 
     // Set the run spec.
     //
-    def calcRunSpec(bashScript: String,
-                    iType: IR.InstanceType,
-                    docker: IR.DockerImage) : JsValue = {
+    private def calcRunSpec(bashScript: String,
+                            iType: IR.InstanceType,
+                            docker: IR.DockerImage) : JsValue = {
         // find the dxWDL asset
         val instanceType:String = iType match {
             case x : IR.InstanceTypeConst =>
@@ -518,9 +518,9 @@ case class Native(dxWDLrtId: String,
     }
 
     // Build an '/applet/new' request
-    def appletNewReq(applet: IR.Applet,
-                     bashScript: String,
-                     folder : String) : JsValue = {
+    private def appletNewReq(applet: IR.Applet,
+                             bashScript: String,
+                             folder : String) : JsValue = {
         trace(verbose.on, s"Building /applet/new request for ${applet.name}")
 
         val inputSpec : Vector[JsValue] = applet.inputs.map(cVar =>
@@ -559,7 +559,7 @@ case class Native(dxWDLrtId: String,
         )
     }
 
-    def apiParseReplyID(rep: JsonNode) : String = {
+    private def apiParseReplyID(rep: JsonNode) : String = {
         val repJs:JsValue = jsValueOfJsonNode(rep)
         repJs.asJsObject.fields.get("id") match {
             case None => throw new Exception("API call did not returnd an ID")
@@ -572,9 +572,9 @@ case class Native(dxWDLrtId: String,
     //
     // When [force] is true, always rebuild. Otherwise, rebuild only
     // if the WDL code has changed.
-    def buildAppletIfNeeded(applet: IR.Applet,
-                            appletDict: Map[String, (IR.Applet, DXApplet)],
-                            dxObjDir: DxObjectDirectory) : DXApplet = {
+    private def buildAppletIfNeeded(applet: IR.Applet,
+                                    appletDict: Map[String, (IR.Applet, DXApplet)],
+                                    dxObjDir: DxObjectDirectory) : DXApplet = {
         trace(verbose.on, s"Compiling applet ${applet.name}")
 
         // limit the applet dictionary, only to actual dependencies
@@ -618,8 +618,8 @@ case class Native(dxWDLrtId: String,
     // Calculate the stage inputs from the call closure
     //
     // It comprises mappings from variable name to WomType.
-    def genStageInputs(inputs: Vector[(CVar, SArg)],
-                       stageDict: Map[String, DXWorkflowStage]) : JsValue = {
+    private def genStageInputs(inputs: Vector[(CVar, SArg)],
+                               stageDict: Map[String, DXWorkflowStage]) : JsValue = {
         val jsInputs:Map[String, JsValue] = inputs.foldLeft(Map.empty[String, JsValue]){
             case (m, (cVar, sArg)) =>
                 sArg match {
@@ -655,9 +655,10 @@ case class Native(dxWDLrtId: String,
     // A WDL input can generate one or two DNAx inputs.  This requires
     // creating a vector of JSON values from each input.
     //
-    def buildWorkflowInputSpec(cVar:CVar,
-                               sArg:SArg,
-                               stageDict: Map[String, DXWorkflowStage]): Vector[JsValue] = {
+    private def buildWorkflowInputSpec(cVar:CVar,
+                                       sArg:SArg,
+                                       stageDict: Map[String, DXWorkflowStage])
+            : Vector[JsValue] = {
         // deal with default values
         val attrs:DeclAttrs = sArg match {
             case IR.SArgWorkflowInput(_) =>
@@ -674,9 +675,10 @@ case class Native(dxWDLrtId: String,
     }
 
     // Note: a single WDL output can generate one or two JSON outputs.
-    def buildWorkflowOutputSpec(cVar:CVar,
-                                sArg:SArg,
-                                stageDict: Map[String, DXWorkflowStage]): Vector[JsValue] = {
+    private def buildWorkflowOutputSpec(cVar:CVar,
+                                        sArg:SArg,
+                                        stageDict: Map[String, DXWorkflowStage])
+            : Vector[JsValue] = {
         val oSpec: Vector[JsValue] = cVarToSpec(cVar)
 
         // add the field names, to help index this structure
@@ -720,10 +722,10 @@ case class Native(dxWDLrtId: String,
     // - Prepare the list of stages, and the checksum in
     //   advance.
     //
-    def buildWorkflow(ns: IR.Namespace,
-                      wf: IR.Workflow,
-                      digest: String,
-                      appletDict: Map[String, (IR.Applet, DXApplet)]) : DXWorkflow = {
+    private def buildWorkflow(ns: IR.Namespace,
+                              wf: IR.Workflow,
+                              digest: String,
+                              appletDict: Map[String, (IR.Applet, DXApplet)]) : DXWorkflow = {
         val (stagesReq, stageDict) =
             wf.stages.foldLeft((Vector.empty[JsValue], Map.empty[String, DXWorkflowStage])) {
                 case ((stagesReq, stageDict), stg) =>
@@ -777,10 +779,10 @@ case class Native(dxWDLrtId: String,
     //
     // - Calculate the workflow checksum from the intermediate representation
     // - Do not rebuild the workflow if it has a correct checksum
-    def buildWorkflowIfNeeded(ns: IR.Namespace,
-                              wf: IR.Workflow,
-                              appletDict: Map[String, (IR.Applet, DXApplet)],
-                              dxObjDir: DxObjectDirectory) : DXWorkflow = {
+    private def buildWorkflowIfNeeded(ns: IR.Namespace,
+                                      wf: IR.Workflow,
+                                      appletDict: Map[String, (IR.Applet, DXApplet)],
+                                      dxObjDir: DxObjectDirectory) : DXWorkflow = {
         // the workflow digest depends on the IR and the applets
         val digest:String = chksum(
             List(IR.yaml(wf).prettyPrint,
@@ -801,7 +803,8 @@ case class Native(dxWDLrtId: String,
     // Sort the applets according to dependencies. The lowest
     // ones are tasks, because they depend on nothing else. Last come
     // generated applets like scatters and if-blocks.
-    def sortAppletsByDependencies(appletDict: Map[String, IR.Applet]) : Vector[IR.Applet] = {
+    private def sortAppletsByDependencies(appletDict: Map[String, IR.Applet])
+            : Vector[IR.Applet] = {
         def immediateDeps(apl: IR.Applet) :Vector[IR.Applet] = {
             val calls:Map[String, String] = apl.kind match {
                 case IR.AppletKindIf(calls) => calls
@@ -846,9 +849,7 @@ case class Native(dxWDLrtId: String,
         sortedApplets
     }
 
-    def apply(ns: IR.NamespaceCompact) : (Option[DXWorkflow], Vector[DXApplet]) = {
-        trace(verbose.on, "Backend pass")
-
+    def compileApplets(ns: IR.Namespace) : Vector[DXApplet] = {
         // Efficiently build a directory of the currently existing applets.
         // We don't want to build them if we don't have to.
         val dxObjDir = DxObjectDirectory(ns, dxProject, folder, verbose)
@@ -879,6 +880,28 @@ case class Native(dxWDLrtId: String,
             case Some(wf) =>
                 val dxwfl = buildWorkflowIfNeeded(ns, wf, appletDict, dxObjDir)
                 (Some(dxwfl), dxApplets)
+        }
+    }
+}
+
+object Native {
+    def apply(ns: IR.Namespace,
+              dxWDLrtId: String,
+              folder: String,
+              dxProject: DXProject,
+              instanceTypeDB: InstanceTypeDB,
+              force: Boolean,
+              archive: Boolean,
+              locked: Boolean,
+              verbose: Verbose) : CompiledNamespace = {
+        trace(verbose.on, "Native pass, generating dx:applets and dx:workflows")
+
+        val ntv = new Native(dxWDLrtId, folder, dxProject, instanceTypeDB,
+                             force, archive, locked, verbose)
+        ns match {
+            case NamespaceLeaf(name, applets) =>
+                compileLeaf(
+            case NamespaceNode(name, workflow, applets, children) =>
         }
     }
 }

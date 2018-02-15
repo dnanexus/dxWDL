@@ -172,24 +172,6 @@ object IR {
                              applets: Map[String, Applet],
                              children: Vector[Namespace])
 
-    // Compacting the namespace in preparation for native
-    // compilation.
-    //
-    // We need to map the WDL namespace hierarchy to a flat space of
-    // dx:applets and dx:workflows. A task (workflow) is compiled to a
-    // single dnanexus applet, however, it could have multiple fully
-    // qualified names, because it can be imported in several ways.
-    // To ensure it has exactly one target applet, the [fqnToName]
-    // structure maps FQNs to dx:applets and dx:workflows.
-    //
-    // If a task is defined in two different ways, a compilation error
-    // results.
-    class NamespaceCompact(
-        workflow: Option[Workflow],
-        fqnToName: Map[String, String],
-        applets: Map[String, Applet],
-        subWorkflows: Map[String, Workflow])
-
     // Automatic conversion to/from Yaml
     object IrInternalYamlProtocol extends DefaultYamlProtocol {
         implicit val InstanceTypeConstFormat = yamlFormat4(InstanceTypeConst)
@@ -481,7 +463,6 @@ object IR {
         implicit val dxWorkflowStageFormat = yamlFormat1(Utils.DXWorkflowStage)
         implicit val stageFormat = yamlFormat5(Stage)
         implicit val workflowFormat = yamlFormat5(Workflow)
-        implicit val NamespaceCompactFormat = yamlFormat4(NamespaceCompact)
     }
     import IrInternalYamlProtocol._
 

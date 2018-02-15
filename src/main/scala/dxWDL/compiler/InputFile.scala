@@ -148,9 +148,9 @@ case class InputFile(verbose: Verbose) {
     // Make a sequential pass on the IR, figure out the fully qualified names
     // of all CVar and SArgs. If they have a default value, add it as an attribute
     // (DeclAttrs).
-    def embedDefaults(ns: IR.Namespace,
+    def embedDefaults(ns: IR.NamespaceCompact,
                       wf: IR.Workflow,
-                      defaultInputs: Path) : IR.Namespace = {
+                      defaultInputs: Path) : IR.NamespaceCompact = {
         Utils.trace(verbose.on, s"Embedding defaults into the IR")
 
         // read the default inputs file (xxxx.json)
@@ -180,7 +180,7 @@ case class InputFile(verbose: Verbose) {
             }
         val wf2 = wf.copy(inputs = wfInputsWithDefaults,
                           stages = stagesWithDefaults)
-        val irNs = IR.Namespace(Some(wf2), ns.subWorkflows, ns.applets)
+        val irNs = ns.copy(workflow = Some(wf2))
 
         if (!defaultFields.isEmpty) {
             System.err.println("Could not map all default fields. These were left:")
