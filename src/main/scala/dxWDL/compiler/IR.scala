@@ -164,13 +164,16 @@ object IR {
       * The most advanced namespace is one where the top level
       * workflow imports other namespaces, and calls subworkflows and tasks.
       */
-    sealed trait Namespace
+    sealed trait Namespace {
+        def name : String
+        def applets: Map[String, Applet]
+    }
     case class NamespaceLeaf(name: String,
-                             applets: Map[String, Applet])
+                             applets: Map[String, Applet]) extends Namespace
     case class NamespaceNode(name: String,
-                             workflow: Workflow,
                              applets: Map[String, Applet],
-                             children: Vector[Namespace])
+                             workflow: Workflow,
+                             children: Vector[Namespace]) extends Namespace
 
     // Automatic conversion to/from Yaml
     object IrInternalYamlProtocol extends DefaultYamlProtocol {
@@ -456,6 +459,40 @@ object IR {
                         }
                     case unrecognized =>
                         throw new Exception(s"Applet expected ${unrecognized}")
+                }
+            }
+        }
+
+        implicit object NamespaceTypeYamlFormat extends YamlFormat[Namespace] {
+            def write(ns: Namespace) =
+                ns match {
+                    case leaf: NamespaceLeaf =>
+                        YamlObject(YamlString("kind") -> YamlString("Leaf"),
+                                   YamlString("name") -> YamlString(leaf.name),
+                                   YamlString("applets") -> leaf.applets.toYaml)
+                    case node: NamespaceNode =>
+                        YamlObject(YamlString("kind") -> YamlString("Node"),
+                                   YamlString("name") -> YamlString(node.name),
+                                   YamlString("applets") -> node.applets.toYaml,
+                                   YamlString("workflow") -> node.workflow.toYaml,
+                                   YamlString("children") -> node.children.toYaml)
+                }
+            def read(value: YamlValue) = {
+                val yo = value.asYamlObject
+                yo.getFields(YamlString("kind"), YamlString("name"), YamlString("applets")) match {
+                    case Seq(YamlString("Leaf"), YamlString(name), applets) =>
+                        NamespaceLeaf(name,
+                                      applets.convertTo[Map[String, Applet]])
+                    case Seq(YamlString("Node"), YamlString(name), applets) =>
+                        yo.getFields(YamlString("workflow"), YamlString("children")) match {
+                            case Seq(workflow, children) =>
+                                NamespaceNode(name,
+                                              applets.convertTo[Map[String, Applet]],
+                                              workflow.convertTo[Workflow],
+                                              children.convertTo[Vector[Namespace]])
+                            case other => throw new Exception(s"Malformed namespace ${other}")
+                        }
+                    case other => throw new Exception(s"Malformed namespace ${other}")
                 }
             }
         }

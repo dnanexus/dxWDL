@@ -352,12 +352,17 @@ object Main extends App {
             }
         try {
             val retval = compiler.CompilerTop.apply(wdlSourceFile, folder, dxProject, cOpt)
-            retval match {
-                case None =>
-                    SuccessfulTermination("")
-                case Some(desc) =>
-                    SuccessfulTermination(desc)
+            val desc = retval match {
+                case None => ""
+                case Some(dxWdlNs) =>
+                    dxWdlNs match {
+                        case DxWdlNamespaceLeaf(_,applets) =>
+                            applets.map{ case (_,apl) => apl.getId }.mkString(",")
+                        case DxWdlNamespaceNode(_,_,wf,_) =>
+                            wf.getId
+                    }
             }
+            SuccessfulTermination(desc)
         } catch {
             case e : Throwable =>
                 return UnsuccessfulTermination(Utils.exceptionToString(e))

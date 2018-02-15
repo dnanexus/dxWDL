@@ -2,7 +2,7 @@ package dxWDL.compiler
 
 import com.dnanexus.{DXProject}
 import com.typesafe.config._
-import dxWDL.{CompilerFlag, CompilerOptions, InstanceTypeDB, Utils}
+import dxWDL.{CompilerFlag, CompilerOptions, DxWdlNamespace, InstanceTypeDB, Utils}
 import java.nio.file.{Path, Paths}
 import java.io.{FileWriter, PrintWriter}
 import scala.collection.JavaConverters._
@@ -35,7 +35,7 @@ object CompilerTop {
         Utils.trace(verbose, s"Wrote intermediate representation to ${trgPath.toString}")
     }
 
-    private def embedDefaults(irNs: IR.Namespace,
+    private def embedDefaults(irNs: IR.NamespaceNode,
                               irWf: IR.Workflow,
                               path: Path,
                               cOpt: CompilerOptions) : IR.Namespace = {
@@ -45,8 +45,12 @@ object CompilerTop {
         val irNsEmb = InputFile(cOpt.verbose).embedDefaults(irNs, irWf, path)
 
         // make sure the stage order hasn't changed
-        val embedAllStageNames = irNsEmb.workflow.get.stages.map{ stg => stg.name }.toVector
-        assert(allStageNames == embedAllStageNames)
+        irNsEmb match {
+            case IR.NamespaceNode(_,_, workflow, _) =>
+                val embedAllStageNames = workflow.stages.map{ stg => stg.name }.toVector
+                assert(allStageNames == embedAllStageNames)
+            case _ => ()
+        }
         irNsEmb
     }
 
@@ -89,9 +93,10 @@ object CompilerTop {
         // Compile the WDL workflow into an Intermediate
         // Representation (IR)
         val irNs = GenerateIR.apply(nsTreeReorg, cOpt.reorg, cOpt.locked, cOpt.verbose)
-        val irNs2: IR.Namespace = (cOpt.defaults, irNs.workflow) match {
-            case (Some(path), Some(irWf)) =>
-                embedDefaults(irNs, irWf, path, cOpt)
+        val irNs2: IR.Namespace = (cOpt.defaults, irNs) match {
+            case (Some(path), IR.NamespaceNode(_,_,irWf,_)) =>
+                embedDefaults(irNs.asInstanceOf[IR.NamespaceNode],
+                              irWf, path, cOpt)
             case (_,_) => irNs
         }
 
@@ -110,7 +115,7 @@ object CompilerTop {
             Utils.writeFileContent(dxInputFile, dxInputs.prettyPrint)
             Utils.trace(cOpt.verbose.on, s"Wrote dx JSON input file ${dxInputFile}")
         }
-        irc
+        irNs2
     }
 
 
@@ -136,7 +141,7 @@ object CompilerTop {
     private def compileNative(irNs: IR.Namespace,
                               folder: String,
                               dxProject: DXProject,
-                              cOpt: CompilerOptions) : String = {
+                              cOpt: CompilerOptions) : DxWdlNamespace = {
         // get billTo and region from the project
         val (billTo, region) = Utils.projectDescribeExtraInfo(dxProject)
         val dxWDLrtId = getAssetId(region)
@@ -145,20 +150,16 @@ object CompilerTop {
         val instanceTypeDB = InstanceTypeDB.query(dxProject, cOpt.verbose)
 
         // Generate dx:applets and dx:workflow from the IR
-        val (wf, _, _) =
-            Native(dxWDLrtId, folder, dxProject, instanceTypeDB,
-                   cOpt.force, cOpt.archive, cOpt.locked, cOpt.verbose).apply(irNs)
-        wf match {
-            case Some(dxwfl) => dxwfl.getId
-            case None => ""
-        }
+        Native.apply(irNs,
+                     dxWDLrtId, folder, dxProject, instanceTypeDB,
+                     cOpt.force, cOpt.archive, cOpt.locked, cOpt.verbose)
     }
 
 
     def apply(wdlSourceFile: String,
               folder: String,
               dxProject: DXProject,
-              cOpt: CompilerOptions) : Option[String] = {
+              cOpt: CompilerOptions) : Option[DxWdlNamespace] = {
         val irNs = compileIR(Paths.get(wdlSourceFile), cOpt)
         cOpt.compileMode match {
             case CompilerFlag.IR =>
@@ -170,9 +171,8 @@ object CompilerTop {
                 // pass the dx:project is required to establish
                 // (1) the instance price list and database
                 // (2) the output location of applets and workflows
-                val dxc = compileNative(irNs, folder, dxProject, cOpt)
-                Some(dxc)
+                val ntn = compileNative(irNs, folder, dxProject, cOpt)
+                Some(ntn)
         }
     }
-
 }

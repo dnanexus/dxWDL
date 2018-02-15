@@ -959,7 +959,7 @@ workflow w {
         val outputVars = blockOutputs(preDecls, scatter, scatter.children)
         val wdlCode = blockGenWorklow(preDecls, scatter, callables, inputVars, outputVars)
         val callDict = calls.map{ c =>
-            c.unqualifiedName -> calleeName(c)
+            c.unqualifiedName -> calleeFQN(c)
         }.toMap
 
         // If any of the return types is non native, we need a collect subjob.
@@ -1007,7 +1007,7 @@ workflow w {
         val outputVars = blockOutputs(preDecls, cond, cond.children)
         val wdlCode = blockGenWorklow(preDecls, cond, callables, inputVars, outputVars)
         val callDict = calls.map{ c =>
-            c.unqualifiedName -> calleeName(c)
+            c.unqualifiedName -> calleeFQN(c)
         }.toMap
         val applet = IR.Applet(wfUnqualifiedName ++ "_" ++ stageName,
                                inputVars ++ extraTaskInputVars,
@@ -1334,7 +1334,7 @@ workflow w {
     // Compile a workflow, having compiled the independent tasks.
     def compileWorkflow(wf: WdlWorkflow,
                         callables: Map[String, IR.Callable])
-            : (IR.Workflow, Map[String, Applet]) = {
+            : (IR.Workflow, Map[String, IR.Applet]) = {
         // Get rid of workflow output declarations
         val children = wf.children.filter(x => !x.isInstanceOf[WorkflowOutput])
 
@@ -1386,7 +1386,7 @@ object GenerateIR {
     // compile all the [tasks] to dx:applets
     private def compileTasks(gir: GenerateIR,
                              tasks: Map[String, WdlTask]) : Map[String, IR.Applet] = {
-        tasks.map{ task =>
+        tasks.map{ case (_,task) =>
             val applet = gir.compileTask(task)
             task.name -> applet
         }.toMap
@@ -1396,15 +1396,15 @@ object GenerateIR {
     // called, if we import this namespace.
     private def buildCallables(irNs: IR.Namespace) : Map[String, IR.Callable] = {
         irNs match {
-            case NamespaceLeaf(name, applets) =>
+            case IR.NamespaceLeaf(name, applets) =>
                 applets.map {
-                    (aplName, apl) => s"${name}.${aplName}" -> apl
+                    case (aplName, apl) => s"${name}.${aplName}" -> apl
                 }.toMap
-            case NamespaceNode(name, wf, applets, _) =>
+            case IR.NamespaceNode(name, applets, wf, _) =>
                 val aplCallables = applets.map {
-                    (aplName, apl) => s"${name}.${aplName}" -> apl
+                    case (aplName, apl) => s"${name}.${aplName}" -> apl
                 }.toMap
-                aplCallables + (s"${name}.${wf.unqualifiedName}" -> wf)
+                aplCallables + (s"${name}.${wf.name}" -> wf)
         }
     }
 
@@ -1429,12 +1429,12 @@ object GenerateIR {
 
         // recursively generate IR for the entire tree
         val nsTree1 = nsTree match {
-            case TreeLeaf(name, tasks, cef) =>
+            case NamespaceOps.TreeLeaf(name, tasks, cef) =>
                 val gir = new GenerateIR(cef, reorg, locked, verbose)
-                val applets = compileTasks(tasks, cir)
+                val applets = compileTasks(gir, tasks)
                 IR.NamespaceLeaf(name, applets)
 
-            case TreeNode(name, _, _, workflow, tasks, children, cef) =>
+            case NamespaceOps.TreeNode(name, _, _, workflow, tasks, children, cef) =>
                 // The reorg and locked flags only apply to the top level
                 // workflow. All other workflows are sub-workflows, and they do
                 // not reorganize the outputs.
@@ -1443,16 +1443,16 @@ object GenerateIR {
 
                 // build a list of all the applets and workflows that can be
                 // called by importing any of the child namespaces
-                val callables = children.foldLeft(Map.empty[String, IR.Callable]){
-                    case (accu, nsTree) =>
-                        accu ++ buildCallables(nsTree)
+                val callables = childrenIR.foldLeft(Map.empty[String, IR.Callable]){
+                    case (accu, childIrNs) =>
+                        accu ++ buildCallables(childIrNs)
                 }
                 val gir = new GenerateIR(cef, false, true, verbose)
                 val (irWf, auxApplets) = gir.compileWorkflow(workflow, callables)
-                val tApplets = compileTasks(tasks, cir)
-                IR.NamespaceNode(name, wfIR, auxApplets ++ tApplets, children)
+                val tApplets = compileTasks(gir, tasks)
+                IR.NamespaceNode(name, auxApplets ++ tApplets, irWf, childrenIR)
         }
-        validateNamespace(nsTree1)
+        validateNamespace(nsTree1, verbose)
         nsTree1
     }
 }

@@ -4,7 +4,7 @@ package dxWDL.compiler
 
 // DX bindings
 import com.fasterxml.jackson.databind.JsonNode
-import com.dnanexus.{DXApplet, DXAPI, DXDataObject, DXFile, DXProject, DXRecord, DXWorkflow}
+import com.dnanexus._
 import dxWDL._
 import dxWDL.Utils._
 import java.security.MessageDigest
@@ -17,6 +17,7 @@ import wom.types._
 case class Native(dxWDLrtId: String,
                   folder: String,
                   dxProject: DXProject,
+                  dxObjDir: DxObjectDirectory,
                   instanceTypeDB: InstanceTypeDB,
                   force: Boolean,
                   archive: Boolean,
@@ -338,8 +339,7 @@ case class Native(dxWDLrtId: String,
     //   GLnexus (Mon Mar  7 15:18:14 2016)
     //
     // Note: 'dx build' does not support workflow archiving at the moment.
-    private def archiveDxObject(objInfo:DxObjectInfo,
-                                dxObjDir: DxObjectDirectory) : Unit = {
+    private def archiveDxObject(objInfo:DxObjectInfo) : Unit = {
         trace(verbose.on, s"Archiving ${objInfo.name} ${objInfo.dxObj.getId}")
         val dxClass:String = objInfo.dxClass
         val destFolder = folder ++ "/." ++ dxClass + "_archive"
@@ -375,8 +375,7 @@ case class Native(dxWDLrtId: String,
     //   None: build is required: None
     //   Some(dxobject) : the right object is already on the platform
     private def isBuildRequired(name: String,
-                                digest: String,
-                                dxObjDir: DxObjectDirectory) : Option[DXDataObject] = {
+                                digest: String) : Option[DXDataObject] = {
         val existingDxObjs = dxObjDir.lookup(name)
         val buildRequired:Boolean = existingDxObjs.size match {
             case 0 => true
@@ -402,7 +401,7 @@ case class Native(dxWDLrtId: String,
             if (existingDxObjs.size > 0) {
                 if (archive) {
                     // archive the applet/workflow(s)
-                    existingDxObjs.foreach(x => archiveDxObject(x, dxObjDir))
+                    existingDxObjs.foreach(x => archiveDxObject(x))
                 } else if (force) {
                     // the dx:object exists, and needs to be removed. There
                     // may be several versions, all are removed.
@@ -573,8 +572,7 @@ case class Native(dxWDLrtId: String,
     // When [force] is true, always rebuild. Otherwise, rebuild only
     // if the WDL code has changed.
     private def buildAppletIfNeeded(applet: IR.Applet,
-                                    appletDict: Map[String, (IR.Applet, DXApplet)],
-                                    dxObjDir: DxObjectDirectory) : DXApplet = {
+                                    appletDict: Map[String, (IR.Applet, DXApplet)]) : DXApplet = {
         trace(verbose.on, s"Compiling applet ${applet.name}")
 
         // limit the applet dictionary, only to actual dependencies
@@ -599,7 +597,7 @@ case class Native(dxWDLrtId: String,
             Utils.writeFileContent(trgPath, req.prettyPrint)
         }
 
-        val buildRequired = isBuildRequired(applet.name, digest, dxObjDir)
+        val buildRequired = isBuildRequired(applet.name, digest)
         buildRequired match {
             case None =>
                 // Compile a WDL snippet into an applet.
@@ -781,14 +779,13 @@ case class Native(dxWDLrtId: String,
     // - Do not rebuild the workflow if it has a correct checksum
     private def buildWorkflowIfNeeded(ns: IR.Namespace,
                                       wf: IR.Workflow,
-                                      appletDict: Map[String, (IR.Applet, DXApplet)],
-                                      dxObjDir: DxObjectDirectory) : DXWorkflow = {
+                                      appletDict: Map[String, (IR.Applet, DXApplet)]) : DXWorkflow = {
         // the workflow digest depends on the IR and the applets
         val digest:String = chksum(
             List(IR.yaml(wf).prettyPrint,
                  appletDict.toString).mkString("\n")
         )
-        val buildRequired = isBuildRequired(wf.name, digest, dxObjDir)
+        val buildRequired = isBuildRequired(wf.name, digest)
         buildRequired match {
             case None =>
                 val dxWorkflow = buildWorkflow(ns, wf, digest, appletDict)
@@ -849,13 +846,10 @@ case class Native(dxWDLrtId: String,
         sortedApplets
     }
 
-    def compileApplets(ns: IR.Namespace) : Vector[DXApplet] = {
-        // Efficiently build a directory of the currently existing applets.
-        // We don't want to build them if we don't have to.
-        val dxObjDir = DxObjectDirectory(ns, dxProject, folder, verbose)
-
+    private def compileApplets(appletDict: Map[String, IR.Applet])
+            : Map[String, (IR.Applet, DXApplet)] = {
         // Sort the applets according to dependencies.
-        val applets = sortAppletsByDependencies(ns.applets)
+        val applets = sortAppletsByDependencies(appletDict)
         val appletNames = applets.map(_.name)
         trace(verbose.on, s"compilation order=${appletNames}")
 
@@ -863,23 +857,35 @@ case class Native(dxWDLrtId: String,
         // the applets created, to be able to link calls. For example,
         // a scatter calls other applets; we need to pass the applet IDs
         // to the launcher at runtime.
-        val appletDict = applets.foldLeft(Map.empty[String, (IR.Applet, DXApplet)]) {
+        applets.foldLeft(Map.empty[String, (IR.Applet, DXApplet)]) {
             case (appletDict, apl) =>
                 val dxApplet = apl.kind match {
                     case IR.AppletKindNative(id) => DXApplet.getInstance(id)
-                    case _ => buildAppletIfNeeded(apl, appletDict, dxObjDir)
+                    case _ => buildAppletIfNeeded(apl, appletDict)
                 }
                 trace(verbose.on, s"Applet ${apl.name} = ${dxApplet.getId()}")
                 appletDict + (apl.name -> (apl, dxApplet))
         }.toMap
+    }
 
-        val dxApplets = appletDict.map{ case (_, (_,dxApl)) => dxApl }.toVector
-        ns.workflow match {
-            case None =>
-                (None, dxApplets)
-            case Some(wf) =>
-                val dxwfl = buildWorkflowIfNeeded(ns, wf, appletDict, dxObjDir)
-                (Some(dxwfl), dxApplets)
+    def compile(ns: IR.Namespace) : DxWdlNamespace = {
+        ns match {
+            case IR.NamespaceLeaf(name, applets) =>
+                val appletDict = compileApplets(applets)
+                val dxApplets = appletDict.map{
+                    case (name, (_,dxApl)) => name -> dxApl
+                }.toMap
+                DxWdlNamespaceLeaf(name, dxApplets)
+
+            case IR.NamespaceNode(name, applets, workflow, children) =>
+                // recursively compile the sub-namespaces
+                val childrenDxWdlNs = children.map{ compile(_) }
+                val appletDict = compileApplets(applets)
+                val dxApplets = appletDict.map{
+                    case (name, (_,dxApl)) => name -> dxApl
+                }.toMap
+                val dxwfl = buildWorkflowIfNeeded(ns, workflow, appletDict)
+                DxWdlNamespaceNode(name, dxApplets, dxwfl, childrenDxWdlNs)
         }
     }
 }
@@ -893,15 +899,14 @@ object Native {
               force: Boolean,
               archive: Boolean,
               locked: Boolean,
-              verbose: Verbose) : CompiledNamespace = {
+              verbose: Verbose) : DxWdlNamespace = {
         trace(verbose.on, "Native pass, generating dx:applets and dx:workflows")
 
-        val ntv = new Native(dxWDLrtId, folder, dxProject, instanceTypeDB,
+        // Efficiently build a directory of the currently existing applets.
+        // We don't want to build them if we don't have to.
+        val dxObjDir = DxObjectDirectory(ns, dxProject, folder, verbose)
+        val ntv = new Native(dxWDLrtId, folder, dxProject, dxObjDir, instanceTypeDB,
                              force, archive, locked, verbose)
-        ns match {
-            case NamespaceLeaf(name, applets) =>
-                compileLeaf(
-            case NamespaceNode(name, workflow, applets, children) =>
-        }
+        ntv.compile(ns)
     }
 }
