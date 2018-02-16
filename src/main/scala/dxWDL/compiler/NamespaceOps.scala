@@ -22,6 +22,8 @@ object NamespaceOps {
         // This namespace may be imported, if so, what name is used?
         def importedAs: Option[String]
 
+        def tasks: Map[String, WdlTask]
+
         // A debugging function, pretty prints the namespace
         // as one concatenated string.
         def prettyPrint : String
