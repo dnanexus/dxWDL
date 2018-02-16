@@ -294,7 +294,7 @@ case class InputFile(verbose: Verbose) {
             }
         }
         ns match {
-            case IR.NamespaceNode(_,_,wf,_) => handleWorkflow(wf)
+            case IR.NamespaceNode(_,_,_,wf,_) => handleWorkflow(wf)
             case _ => ()
         }
 

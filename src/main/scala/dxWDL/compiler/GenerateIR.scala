@@ -1393,31 +1393,63 @@ object GenerateIR {
     }
 
     // Make a list of all the workflows and applets that can be
-    // called, if we import this namespace.
+    // called, if we import this namespace. Index them by their
+    // fully qualified names.
     private def buildCallables(irNs: IR.Namespace) : Map[String, IR.Callable] = {
+        val prefix = irNs.importedAs match {
+            case None => ""
+            case Some(alias) => s"${alias}."
+        }
+        val aplCallables = irNs.applets.map {
+            case (aplName, apl) => s"${prefix}.${aplName}" -> apl
+        }.toMap
         irNs match {
-            case IR.NamespaceLeaf(name, applets) =>
-                applets.map {
-                    case (aplName, apl) => s"${name}.${aplName}" -> apl
-                }.toMap
-            case IR.NamespaceNode(name, applets, wf, _) =>
-                val aplCallables = applets.map {
-                    case (aplName, apl) => s"${name}.${aplName}" -> apl
-                }.toMap
-                aplCallables + (s"${name}.${wf.name}" -> wf)
+            case _: IR.NamespaceLeaf =>
+                aplCallables
+            case IR.NamespaceNode(_, importedAs, applets, wf, _) =>
+                aplCallables + (s"${prefix}.${wf.name}" -> wf)
         }
     }
 
     // We need to map the WDL namespace hierarchy to a flat space of
-    // dx:applets and dx:workflows. A task is compiled to a
-    // single dnanexus applet, however, it could have multiple fully
-    // qualified names, because it can be imported in several ways.
-    // The same goes for workflows. This method makes sure each
-    // applet and workflow are defined exactly once, by the unqualified
-    // name.
-    private def validateNamespace(irNs: IR.Namespace,
+    // dx:applets and dx:workflows in the project and folder.
+    //
+    // A task, similarly workflow, can be defined more than once in a
+    // complex namespace with imports. We choose to compile it to an
+    // applet with its unqualified name.
+    //
+    // This method makes sure each applet and workflow are
+    // defined exactly once, and is uniquely named by its
+    // unqualified name.
+    private def validateNamespace(ns: IR.Namespace,
                                   verbose: Verbose) : Unit = {
-        throw new Exception("not implemented")
+        // make sure unique names for applets (only)
+        val allAppletNames: Vector[String] = IR.listApplets(ns).map(_.name)
+        val aplCounts: Map[String, Int] = allAppletNames.groupBy(x => x).mapValues(_.size)
+        aplCounts.foreach{ case (aplName, nAppear) =>
+            if (nAppear > 1)
+                throw new Exception(s"""|Applet ${aplName} appears ${nAppear} times. It has to
+                                        |be unique in order to be compiled to a single
+                                        |dnanexus applet""".stripMargin.trim)
+        }
+
+        // make sure workflow names are unique
+        val allWorkflowNames: Vector[String] = IR.listWorkflows(ns).map(_.name)
+        val wfCounts: Map[String, Int] = allAppletNames.groupBy(x => x).mapValues(_.size)
+        wfCounts.foreach{ case (wfName, nAppear) =>
+            if (nAppear > 1)
+                throw new Exception(s"""|Workflow ${wfName} appears ${nAppear} times. It has to
+                                        |be unique in order to be compiled to a single
+                                        |dnanexus workflow""".stripMargin.trim)
+        }
+
+        // make sure there is no intersection between applet and workflow names
+        val allNames = allAppletNames ++ allWorkflowNames
+        val counts: Map[String, Int] = allNames.groupBy(x => x).mapValues(_.size)
+        counts.foreach{ case (name, nAppear) =>
+            if (nAppear > 1)
+                throw new Exception(s"Name ${name} is used for an applet and a workflow.")
+        }
     }
 
 
@@ -1429,12 +1461,12 @@ object GenerateIR {
 
         // recursively generate IR for the entire tree
         val nsTree1 = nsTree match {
-            case NamespaceOps.TreeLeaf(name, tasks, cef) =>
+            case NamespaceOps.TreeLeaf(name, importedAs, cef, tasks) =>
                 val gir = new GenerateIR(cef, reorg, locked, verbose)
                 val applets = compileTasks(gir, tasks)
-                IR.NamespaceLeaf(name, applets)
+                IR.NamespaceLeaf(name, importedAs, applets)
 
-            case NamespaceOps.TreeNode(name, _, _, workflow, tasks, children, cef) =>
+            case NamespaceOps.TreeNode(name, importedAs, cef, imports, _, workflow, tasks, children) =>
                 // The reorg and locked flags only apply to the top level
                 // workflow. All other workflows are sub-workflows, and they do
                 // not reorganize the outputs.
@@ -1450,7 +1482,7 @@ object GenerateIR {
                 val gir = new GenerateIR(cef, false, true, verbose)
                 val (irWf, auxApplets) = gir.compileWorkflow(workflow, callables)
                 val tApplets = compileTasks(gir, tasks)
-                IR.NamespaceNode(name, auxApplets ++ tApplets, irWf, childrenIR)
+                IR.NamespaceNode(name, importedAs, auxApplets ++ tApplets, irWf, childrenIR)
         }
         validateNamespace(nsTree1, verbose)
         nsTree1

@@ -17,6 +17,11 @@ object NamespaceOps {
         // a filesystem path.
         def name : String
 
+        def cef: CompilerErrorFormatter
+
+        // This namespace may be imported, if so, what name is used?
+        def importedAs: Option[String]
+
         // A debugging function, pretty prints the namespace
         // as one concatenated string.
         def prettyPrint : String
@@ -24,14 +29,13 @@ object NamespaceOps {
         // Apply a rewrite transformation to all the workflows in the
         // namespace
         def transform(f: (WdlWorkflow, CompilerErrorFormatter) => WdlWorkflow) : Tree
-
-        def cef: CompilerErrorFormatter
     }
 
     // A namespace that is a library of tasks; it has no workflow
     case class TreeLeaf(name: String,
-                        tasks: Map[String, WdlTask],
-                        cef: CompilerErrorFormatter) extends Tree {
+                        importedAs: Option[String],
+                        cef: CompilerErrorFormatter,
+                        tasks: Map[String, WdlTask]) extends Tree {
         private def toNamespace() =
             new WdlNamespaceWithoutWorkflow(
                 None,
@@ -60,12 +64,13 @@ object NamespaceOps {
     // may import other namespaces
     //
     case class TreeNode(name: String,
+                        importedAs: Option[String],
+                        cef: CompilerErrorFormatter,
                         imports: Seq[Import],
                         wdlSourceFile: Path,
                         workflow: WdlWorkflow,
                         tasks: Map[String, WdlTask],
-                        children: Vector[Tree],
-                        cef: CompilerErrorFormatter) extends Tree {
+                        children: Vector[Tree]) extends Tree {
         // Resolving imports. Look for referenced files in the
         // source directory.
         private def resolver(filename: String) : WorkflowSource = {
@@ -127,7 +132,9 @@ object NamespaceOps {
                 case _ => throw new Exception("sanity")
             }
             val cleanCef = new CompilerErrorFormatter(cleanNs.terminalMap)
-            new TreeNode(name, imports, wdlSourceFile, cleanWf, tasks, children, cleanCef)
+            //new TreeNode(name, imports, wdlSourceFile, cleanWf, tasks, children, cleanCef)
+            this.copy(workflow = cleanWf,
+                      cef = cleanCef)
         }
     }
 
@@ -141,7 +148,7 @@ object NamespaceOps {
         val cef = new CompilerErrorFormatter(ns.terminalMap)
         ns match {
             case _:WdlNamespaceWithoutWorkflow =>
-                new TreeLeaf(name, taskDict, cef)
+                new TreeLeaf(name, ns.importedAs, cef, taskDict)
 
             case nswf:WdlNamespaceWithWorkflow =>
                 // recurse into sub-namespaces
@@ -149,12 +156,13 @@ object NamespaceOps {
                     child => load(child, wdlSourceFile)
                 }.toVector
                 TreeNode(name,
+                         ns.importedAs,
+                         cef,
                          nswf.imports,
                          wdlSourceFile,
                          nswf.workflow,
                          taskDict,
-                         children,
-                         cef)
+                         children)
         }
     }
 

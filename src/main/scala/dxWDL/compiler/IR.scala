@@ -165,15 +165,41 @@ object IR {
       * workflow imports other namespaces, and calls subworkflows and tasks.
       */
     sealed trait Namespace {
-        def name : String
+        def name: String
+        def importedAs: Option[String]
         def applets: Map[String, Applet]
     }
     case class NamespaceLeaf(name: String,
+                             importedAs: Option[String],
                              applets: Map[String, Applet]) extends Namespace
     case class NamespaceNode(name: String,
+                             importedAs: Option[String],
                              applets: Map[String, Applet],
                              workflow: Workflow,
                              children: Vector[Namespace]) extends Namespace
+
+    // Make a list of all applets
+    def listApplets(ns: IR.Namespace) : Vector[Applet] = {
+        ns match {
+            case NamespaceLeaf(_,_, applets) =>
+                applets.map{ case (_,apl) => apl }.toVector
+            case NamespaceNode(_,_, applets,_,children) =>
+                val childApl = children.flatMap(listApplets(_)).toVector
+                val theseApl = applets.map{ case (_,apl) => apl }.toVector
+                theseApl ++ childApl
+        }
+    }
+
+    // Make a list of all workflows
+    def listWorkflows(ns: IR.Namespace) : Vector[Workflow] = {
+        ns match {
+            case NamespaceLeaf(_,_,applets) =>
+                Vector.empty
+            case NamespaceNode(_,_,_, workflow, children) =>
+                val childWf = children.flatMap(listWorkflows(_)).toVector
+                workflow +: childWf
+        }
+    }
 
     // Automatic conversion to/from Yaml
     object IrInternalYamlProtocol extends DefaultYamlProtocol {
@@ -469,24 +495,29 @@ object IR {
                     case leaf: NamespaceLeaf =>
                         YamlObject(YamlString("kind") -> YamlString("Leaf"),
                                    YamlString("name") -> YamlString(leaf.name),
+                                   YamlString("importedAs") -> leaf.importedAs.toYaml,
                                    YamlString("applets") -> leaf.applets.toYaml)
                     case node: NamespaceNode =>
                         YamlObject(YamlString("kind") -> YamlString("Node"),
                                    YamlString("name") -> YamlString(node.name),
+                                   YamlString("importedAs") -> node.importedAs.toYaml,
                                    YamlString("applets") -> node.applets.toYaml,
                                    YamlString("workflow") -> node.workflow.toYaml,
                                    YamlString("children") -> node.children.toYaml)
                 }
             def read(value: YamlValue) = {
                 val yo = value.asYamlObject
-                yo.getFields(YamlString("kind"), YamlString("name"), YamlString("applets")) match {
-                    case Seq(YamlString("Leaf"), YamlString(name), applets) =>
+                yo.getFields(YamlString("kind"), YamlString("name"),
+                             YamlString("applets"), YamlString("importedAs")) match {
+                    case Seq(YamlString("Leaf"), YamlString(name), applets, importedAs) =>
                         NamespaceLeaf(name,
+                                      importedAs.convertTo[Option[String]],
                                       applets.convertTo[Map[String, Applet]])
-                    case Seq(YamlString("Node"), YamlString(name), applets) =>
+                    case Seq(YamlString("Node"), YamlString(name), applets, importedAs) =>
                         yo.getFields(YamlString("workflow"), YamlString("children")) match {
                             case Seq(workflow, children) =>
                                 NamespaceNode(name,
+                                              importedAs.convertTo[Option[String]],
                                               applets.convertTo[Map[String, Applet]],
                                               workflow.convertTo[Workflow],
                                               children.convertTo[Vector[Namespace]])

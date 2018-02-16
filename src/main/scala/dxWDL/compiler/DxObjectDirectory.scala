@@ -33,36 +33,13 @@ case class DxObjectDirectory(ns: IR.Namespace,
     private lazy val objDir : HashMap[String, Vector[DxObjectInfo]] = bulkLookup()
     private val folders = HashSet.empty[String]
 
-    // Make a list of all applets
-    private def listApplets(ns: IR.Namespace) : Vector[IR.Applet] = {
-        ns match {
-            case IR.NamespaceLeaf(_,applets) =>
-                applets.map{ case (_,apl) => apl }.toVector
-            case IR.NamespaceNode(_,applets,_,children) =>
-                val childApl = children.flatMap(listApplets(_)).toVector
-                val theseApl = applets.map{ case (_,apl) => apl }.toVector
-                theseApl ++ childApl
-        }
-    }
-
-    // Make a list of all workflows
-    private def listWorkflows(ns: IR.Namespace) : Vector[IR.Workflow] = {
-        ns match {
-            case IR.NamespaceLeaf(_,applets) =>
-                Vector.empty
-            case IR.NamespaceNode(_,_, workflow, children) =>
-                val childWf = children.flatMap(listWorkflows(_)).toVector
-                workflow +: childWf
-        }
-    }
-
     // Instead of looking applets/workflows one by one, perform a bulk lookup, and
     // find all the objects in the target directory. Setup an easy to
     // use map with information on each name.
     private def bulkLookup() : HashMap[String, Vector[DxObjectInfo]] = {
         // make a list of all expected workflow and applet names
-        val allAppletNames: Set[String] = listApplets(ns).map(_.name).toSet
-        val allWorkflowNames: Set[String] = listWorkflows(ns).map(_.name).toSet
+        val allAppletNames: Set[String] = IR.listApplets(ns).map(_.name).toSet
+        val allWorkflowNames: Set[String] = IR.listWorkflows(ns).map(_.name).toSet
 
         val bothAplWf = allAppletNames.intersect(allWorkflowNames)
         if (!bothAplWf.isEmpty)

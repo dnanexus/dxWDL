@@ -870,14 +870,14 @@ case class Native(dxWDLrtId: String,
 
     def compile(ns: IR.Namespace) : DxWdlNamespace = {
         ns match {
-            case IR.NamespaceLeaf(name, applets) =>
+            case IR.NamespaceLeaf(name, _, applets) =>
                 val appletDict = compileApplets(applets)
                 val dxApplets = appletDict.map{
                     case (name, (_,dxApl)) => name -> dxApl
                 }.toMap
                 DxWdlNamespaceLeaf(name, dxApplets)
 
-            case IR.NamespaceNode(name, applets, workflow, children) =>
+            case IR.NamespaceNode(name, _, applets, workflow, children) =>
                 // recursively compile the sub-namespaces
                 val childrenDxWdlNs = children.map{ compile(_) }
                 val appletDict = compileApplets(applets)

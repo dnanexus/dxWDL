@@ -46,7 +46,7 @@ object CompilerTop {
 
         // make sure the stage order hasn't changed
         irNsEmb match {
-            case IR.NamespaceNode(_,_, workflow, _) =>
+            case IR.NamespaceNode(_,_,_, workflow, _) =>
                 val embedAllStageNames = workflow.stages.map{ stg => stg.name }.toVector
                 assert(allStageNames == embedAllStageNames)
             case _ => ()
@@ -94,7 +94,7 @@ object CompilerTop {
         // Representation (IR)
         val irNs = GenerateIR.apply(nsTreeReorg, cOpt.reorg, cOpt.locked, cOpt.verbose)
         val irNs2: IR.Namespace = (cOpt.defaults, irNs) match {
-            case (Some(path), IR.NamespaceNode(_,_,irWf,_)) =>
+            case (Some(path), IR.NamespaceNode(_,_,_,irWf,_)) =>
                 embedDefaults(irNs.asInstanceOf[IR.NamespaceNode],
                               irWf, path, cOpt)
             case (_,_) => irNs
