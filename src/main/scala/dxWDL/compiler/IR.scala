@@ -221,16 +221,21 @@ object IR {
 
         // build a list of all the applets and workflows that can be
         // called by importing any of the child namespaces
-        def callablesFromNamespace(ns: NamespaceNode) : Map[String, IR.Callable] = {
-            val childCallables = ns.children.foldLeft(Map.empty[String, IR.Callable]){
-                case (accu, childIrNs) =>
-                    accu ++ buildCallables(childIrNs)
-            }
-            val taskApplets =
+        def callablesFromNamespace(ns: Namespace) : Map[String, IR.Callable] = {
+/*            val taskApplets =
                 ns.applets.filter{ case (_,apl) => apl.kind == AppletKindTask }
                     .map{ case (name, apl) => name -> apl}
-                    .toMap
-            taskApplets ++ childCallables
+                    .toMap*/
+            val childCallables = ns match {
+                case _: NamespaceLeaf =>
+                    Map.empty
+                case node: NamespaceNode =>
+                    node.children.foldLeft(Map.empty[String, IR.Callable]){
+                        case (accu, child) =>
+                            accu ++ buildCallables(child)
+                    }
+            }
+            ns.applets ++ childCallables
         }
     }
 
