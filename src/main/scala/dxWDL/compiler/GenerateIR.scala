@@ -594,8 +594,8 @@ workflow w {
     def compileCall(call: WdlCall,
                     env : CallEnv) : IR.Stage = {
         // Find the right applet
-        val cName = calleeFQN(call)
-        val callee = callables(cName)
+        val calleeName = calleeFQN(call)
+        val callee = callables(calleeName)
 
         // Extract the input values/links from the environment
         val inputs: Vector[SArg] = callee.inputVars.map{ cVar =>
@@ -641,7 +641,7 @@ workflow w {
         }
 
         val stageName = call.unqualifiedName
-        IR.Stage(stageName, genStageId(), callee.name, inputs, callee.outputVars)
+        IR.Stage(stageName, genStageId(), calleeName, inputs, callee.outputVars)
     }
 
     // Split a block (Scatter, If, ..) into the top declarations,
@@ -1383,25 +1383,6 @@ object GenerateIR {
         }.toMap
     }
 
-    // Make a list of all the workflows and applets that can be
-    // called, if we import this namespace. Index them by their
-    // fully qualified names.
-    private def buildCallables(irNs: IR.Namespace) : Map[String, IR.Callable] = {
-        val prefix = irNs.importedAs match {
-            case None => ""
-            case Some(alias) => s"${alias}."
-        }
-        val aplCallables = irNs.applets.map {
-            case (aplName, apl) => s"${prefix}.${aplName}" -> apl
-        }.toMap
-        irNs match {
-            case _: IR.NamespaceLeaf =>
-                aplCallables
-            case IR.NamespaceNode(_, importedAs, applets, wf, _) =>
-                aplCallables + (s"${prefix}.${wf.name}" -> wf)
-        }
-    }
-
     // We need to map the WDL namespace hierarchy to a flat space of
     // dx:applets and dx:workflows in the project and folder.
     //
@@ -1415,7 +1396,7 @@ object GenerateIR {
     private def validateNamespace(ns: IR.Namespace,
                                   verbose: Verbose) : Unit = {
         // make sure unique names for applets (only)
-        val allAppletNames: Vector[String] = IR.listApplets(ns).map(_.name)
+        val allAppletNames: Vector[String] = IR.Namespace.listApplets(ns).map(_.name)
         val aplCounts: Map[String, Int] = allAppletNames.groupBy(x => x).mapValues(_.size)
         aplCounts.foreach{ case (aplName, nAppear) =>
             if (nAppear > 1)
@@ -1425,7 +1406,7 @@ object GenerateIR {
         }
 
         // make sure workflow names are unique
-        val allWorkflowNames: Vector[String] = IR.listWorkflows(ns).map(_.name)
+        val allWorkflowNames: Vector[String] = IR.Namespace.listWorkflows(ns).map(_.name)
         val wfCounts: Map[String, Int] = allAppletNames.groupBy(x => x).mapValues(_.size)
         wfCounts.foreach{ case (wfName, nAppear) =>
             if (nAppear > 1)
@@ -1469,12 +1450,13 @@ object GenerateIR {
                 // called by importing any of the child namespaces
                 var callables = childrenIR.foldLeft(Map.empty[String, IR.Callable]){
                     case (accu, childIrNs) =>
-                        accu ++ buildCallables(childIrNs)
+                        accu ++ IR.Namespace.buildCallables(childIrNs)
                 }
                 callables ++= taskApplets
-                System.err.println(s"callables=${callables}")
+                val callableNames = callables.map{ case (name,_) => name }
+                System.err.println(s"callables=${callableNames}")
 
-                val gir = new GenerateIR(callables, cef, false, true, verbose)
+                val gir = new GenerateIR(callables, cef, reorg, locked, verbose)
                 val (irWf, auxApplets) = gir.compileWorkflow(workflow)
                 IR.NamespaceNode(name, importedAs, auxApplets ++ taskApplets, irWf, childrenIR)
         }

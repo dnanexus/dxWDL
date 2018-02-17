@@ -86,18 +86,23 @@ case class InputFile(verbose: Verbose) {
     // can override it at runtime.
     private def addDefaultsToStage(wf: IR.Workflow,
                                    stg:IR.Stage,
-                                   callee: IR.Applet,
+                                   callee: IR.Callable,
                                    defaultFields: HashMap[String, JsValue]) : IR.Stage = {
         Utils.trace(verbose2, s"addDefaultToStage ${stg.name}")
         val inputsFull:Vector[(SArg,CVar)] = stg.inputs.zipWithIndex.map{
             case (sArg,idx) =>
-                val cVar = callee.inputs(idx)
+                val cVar = callee.inputVars(idx)
                 (sArg, cVar)
         }
-        val nameTrail = callee.kind match {
-            case IR.AppletKindNative(_) => s"${wf.name}.${stg.name}"
-            case IR.AppletKindTask => s"${wf.name}.${stg.name}"
-            case _ => wf.name
+        val nameTrail = callee match {
+            case applet: IR.Applet =>
+                applet.kind match {
+                    case IR.AppletKindNative(_) => s"${wf.name}.${stg.name}"
+                    case IR.AppletKindTask => s"${wf.name}.${stg.name}"
+                    case _ => wf.name
+                }
+            case workflow: IR.Workflow =>
+                wf.name
         }
         val inputNames = inputsFull.map{ case (_,cVar) => cVar.name }
         Utils.trace(verbose2, s"inputNames=${inputNames}  trail=${nameTrail}")
@@ -149,19 +154,23 @@ case class InputFile(verbose: Verbose) {
     // of all CVar and SArgs. If they have a default value, add it as an attribute
     // (DeclAttrs).
     def embedDefaults(ns: IR.NamespaceNode,
-                      wf: IR.Workflow,
                       defaultInputs: Path) : IR.Namespace = {
         Utils.trace(verbose.on, s"Embedding defaults into the IR")
+        val wf = ns.workflow
 
         // read the default inputs file (xxxx.json)
         val wdlDefaults: JsObject = Utils.readFileContent(defaultInputs).parseJson.asJsObject
         val defaultFields:HashMap[String,JsValue] = preprocessInputs(wdlDefaults)
-
+        val callables = IR.Namespace.callablesFromNamespace(ns)
         val stagesWithDefaults = wf.stages.map{ stage =>
-            val callee:IR.Applet = ns.applets(stage.appletName)
-            val visible = callee.kind match {
-                case IR.AppletKindWorkflowOutputReorg => false
-                case _ if (stage.name == Utils.OUTPUT_SECTION) => false
+            val callee:IR.Callable = callables(stage.calleeFQN)
+            val visible = callee match {
+                case applet: IR.Applet =>
+                    applet.kind match {
+                        case IR.AppletKindWorkflowOutputReorg => false
+                        case _ if (stage.name == Utils.OUTPUT_SECTION) => false
+                        case _ => true
+                    }
                 case _ => true
             }
             if (visible) {
@@ -238,9 +247,12 @@ case class InputFile(verbose: Verbose) {
         }
 
         def handleWorkflow(wf: IR.Workflow) : Unit = {
+            val appletNames = ns.applets.map{case (name,_) => name}.toVector
+            System.err.println(s"handleWorkflow = ${appletNames}")
+
             // make a pass on all the stages
             wf.stages.foreach{ stage =>
-                val callee:IR.Applet = ns.applets(stage.appletName)
+                val callee:IR.Applet = ns.applets(stage.calleeFQN)
                 // make a pass on all call inputs
                 stage.inputs.zipWithIndex.foreach{
                     case (_,idx) =>

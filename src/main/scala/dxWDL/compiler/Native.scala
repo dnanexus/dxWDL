@@ -110,18 +110,18 @@ case class Native(dxWDLrtId: String,
                        optional: Boolean) : Vector[JsValue] = {
             wdlType match {
                 // primitive types
-                case WomBooleanType => mkPrimitive("boolean", false || optional)
-                case WomIntegerType => mkPrimitive("int", false || optional)
-                case WomFloatType => mkPrimitive("float", false || optional)
-                case WomStringType =>mkPrimitive("string", false || optional)
-                case WomFileType => mkPrimitive("file", false || optional)
+                case WomBooleanType => mkPrimitive("boolean", optional)
+                case WomIntegerType => mkPrimitive("int", optional)
+                case WomFloatType => mkPrimitive("float", optional)
+                case WomStringType =>mkPrimitive("string", optional)
+                case WomFileType => mkPrimitive("file", optional)
 
                 // single dimension arrays of primitive types
-                case WomNonEmptyArrayType(WomBooleanType) => mkPrimitiveArray("boolean", false || optional)
-                case WomNonEmptyArrayType(WomIntegerType) => mkPrimitiveArray("int", false || optional)
-                case WomNonEmptyArrayType(WomFloatType) => mkPrimitiveArray("float", false || optional)
-                case WomNonEmptyArrayType(WomStringType) => mkPrimitiveArray("string", false || optional)
-                case WomNonEmptyArrayType(WomFileType) => mkPrimitiveArray("file", false || optional)
+                case WomNonEmptyArrayType(WomBooleanType) => mkPrimitiveArray("boolean", optional)
+                case WomNonEmptyArrayType(WomIntegerType) => mkPrimitiveArray("int", optional)
+                case WomNonEmptyArrayType(WomFloatType) => mkPrimitiveArray("float", optional)
+                case WomNonEmptyArrayType(WomStringType) => mkPrimitiveArray("string", optional)
+                case WomNonEmptyArrayType(WomFileType) => mkPrimitiveArray("file", optional)
                 case WomMaybeEmptyArrayType(WomBooleanType) => mkPrimitiveArray("boolean", true)
                 case WomMaybeEmptyArrayType(WomIntegerType) => mkPrimitiveArray("int", true)
                 case WomMaybeEmptyArrayType(WomFloatType) => mkPrimitiveArray("float", true)
@@ -723,17 +723,17 @@ case class Native(dxWDLrtId: String,
     private def buildWorkflow(ns: IR.Namespace,
                               wf: IR.Workflow,
                               digest: String,
-                              appletDict: Map[String, (IR.Applet, DXApplet)]) : DXWorkflow = {
+                              execDict: Map[String, (IR.Callable, DXDataObject)]) : DXWorkflow = {
         val (stagesReq, stageDict) =
             wf.stages.foldLeft((Vector.empty[JsValue], Map.empty[String, DXWorkflowStage])) {
                 case ((stagesReq, stageDict), stg) =>
-                    val (irApplet,dxApplet) = appletDict(stg.appletName)
-                    val linkedInputs : Vector[(CVar, SArg)] = irApplet.inputs zip stg.inputs
+                    val (irApplet,dxExec) = execDict(stg.calleeFQN)
+                    val linkedInputs : Vector[(CVar, SArg)] = irApplet.inputVars zip stg.inputs
                     val inputs = genStageInputs(linkedInputs, stageDict)
                     // convert the per-stage metadata into JSON
                     val stageReqDesc = JsObject(
                         "id" -> JsString(stg.id.getId),
-                        "executable" -> JsString(dxApplet.getId),
+                        "executable" -> JsString(dxExec.getId),
                         "name" -> JsString(stg.name),
                         "input" -> inputs)
                     (stagesReq :+ stageReqDesc,
@@ -779,16 +779,16 @@ case class Native(dxWDLrtId: String,
     // - Do not rebuild the workflow if it has a correct checksum
     private def buildWorkflowIfNeeded(ns: IR.Namespace,
                                       wf: IR.Workflow,
-                                      appletDict: Map[String, (IR.Applet, DXApplet)]) : DXWorkflow = {
+                                      execDict: Map[String, (IR.Callable, DXDataObject)]) : DXWorkflow = {
         // the workflow digest depends on the IR and the applets
         val digest:String = chksum(
             List(IR.yaml(wf).prettyPrint,
-                 appletDict.toString).mkString("\n")
+                 execDict.toString).mkString("\n")
         )
         val buildRequired = isBuildRequired(wf.name, digest)
         buildRequired match {
             case None =>
-                val dxWorkflow = buildWorkflow(ns, wf, digest, appletDict)
+                val dxWorkflow = buildWorkflow(ns, wf, digest, execDict)
                 dxObjDir.insert(wf.name, dxWorkflow, digest)
                 dxWorkflow
             case Some(dxObj) =>
@@ -868,24 +868,47 @@ case class Native(dxWDLrtId: String,
         }.toMap
     }
 
+    // Make a list of all the workflows and applets that can be
+    // called, if we import this namespace. Index them by their
+    // fully qualified names.
+    private def callablesFromNamespace(ns: DxWdlNamespace)
+            : Map[String, (IR.Callable, DXDataObject)] = {
+        val prefix = ns.importedAs.getOrElse("")
+        val aplCallables = ns.applets.map {
+            case (aplName, apl) => s"${prefix}.${aplName}" -> apl
+        }.toMap
+        ns match {
+            case _: DxWdlNamespaceLeaf =>
+                aplCallables
+            case DxWdlNamespaceNode(_, importedAs, applets, (wfIr,dxWf), _) =>
+                aplCallables + (s"${prefix}.${wfIr.name}" -> (wfIr,dxWf))
+        }
+    }
+
+    // build a mapping from fully qualified name to platform executable
+    private def buildExecDictionary(appletDict: Map[String, (IR.Applet, DXApplet)],
+                                    children: Vector[DxWdlNamespace])
+            : Map[String, (IR.Callable, DXDataObject)] = {
+        val callables = children.foldLeft(Map.empty[String, (IR.Callable, DXDataObject)]) {
+            case (accu, child) =>
+                accu ++ callablesFromNamespace(child)
+        }
+        callables ++ appletDict
+    }
+
     def compile(ns: IR.Namespace) : DxWdlNamespace = {
         ns match {
-            case IR.NamespaceLeaf(name, _, applets) =>
+            case IR.NamespaceLeaf(name, importedAs, applets) =>
                 val appletDict = compileApplets(applets)
-                val dxApplets = appletDict.map{
-                    case (name, (_,dxApl)) => name -> dxApl
-                }.toMap
-                DxWdlNamespaceLeaf(name, dxApplets)
+                DxWdlNamespaceLeaf(name, importedAs, appletDict)
 
-            case IR.NamespaceNode(name, _, applets, workflow, children) =>
+            case IR.NamespaceNode(name, importedAs, applets, workflow, childrenIr) =>
                 // recursively compile the sub-namespaces
-                val childrenDxWdlNs = children.map{ compile(_) }
+                val children = childrenIr.map{ compile(_) }
                 val appletDict = compileApplets(applets)
-                val dxApplets = appletDict.map{
-                    case (name, (_,dxApl)) => name -> dxApl
-                }.toMap
-                val dxwfl = buildWorkflowIfNeeded(ns, workflow, appletDict)
-                DxWdlNamespaceNode(name, dxApplets, dxwfl, childrenDxWdlNs)
+                val execDict = buildExecDictionary(appletDict, children)
+                val dxwfl = buildWorkflowIfNeeded(ns, workflow, execDict)
+                DxWdlNamespaceNode(name, importedAs, appletDict, (workflow, dxwfl), children)
         }
     }
 }

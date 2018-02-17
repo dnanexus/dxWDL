@@ -2,7 +2,7 @@ package dxWDL.compiler
 
 import com.dnanexus.{DXProject}
 import com.typesafe.config._
-import dxWDL.{CompilerFlag, CompilerOptions, DxWdlNamespace, InstanceTypeDB, Utils}
+import dxWDL.{CompilerFlag, CompilerOptions, InstanceTypeDB, Utils}
 import java.nio.file.{Path, Paths}
 import java.io.{FileWriter, PrintWriter}
 import scala.collection.JavaConverters._
@@ -36,17 +36,16 @@ object CompilerTop {
     }
 
     private def embedDefaults(irNs: IR.NamespaceNode,
-                              irWf: IR.Workflow,
                               path: Path,
                               cOpt: CompilerOptions) : IR.Namespace = {
-        val allStageNames = irWf.stages.map{ stg => stg.name }.toVector
+        val allStageNames = irNs.workflow.stages.map{ stg => stg.name }.toVector
 
         // embed the defaults into the IR
-        val irNsEmb = InputFile(cOpt.verbose).embedDefaults(irNs, irWf, path)
+        val irNsEmb = InputFile(cOpt.verbose).embedDefaults(irNs, path)
 
         // make sure the stage order hasn't changed
         irNsEmb match {
-            case IR.NamespaceNode(_,_,_, workflow, _) =>
+            case IR.NamespaceNode(_,_,_,workflow,_) =>
                 val embedAllStageNames = workflow.stages.map{ stg => stg.name }.toVector
                 assert(allStageNames == embedAllStageNames)
             case _ => ()
@@ -94,9 +93,8 @@ object CompilerTop {
         // Representation (IR)
         val irNs = GenerateIR.apply(nsTreeReorg, cOpt.reorg, cOpt.locked, cOpt.verbose)
         val irNs2: IR.Namespace = (cOpt.defaults, irNs) match {
-            case (Some(path), IR.NamespaceNode(_,_,_,irWf,_)) =>
-                embedDefaults(irNs.asInstanceOf[IR.NamespaceNode],
-                              irWf, path, cOpt)
+            case (Some(path), irNsNode: IR.NamespaceNode) =>
+                embedDefaults(irNsNode, path, cOpt)
             case (_,_) => irNs
         }
 
@@ -159,7 +157,7 @@ object CompilerTop {
     def apply(wdlSourceFile: String,
               folder: String,
               dxProject: DXProject,
-              cOpt: CompilerOptions) : Option[DxWdlNamespace] = {
+              cOpt: CompilerOptions) : Option[String] = {
         val irNs = compileIR(Paths.get(wdlSourceFile), cOpt)
         cOpt.compileMode match {
             case CompilerFlag.IR =>
@@ -171,8 +169,14 @@ object CompilerTop {
                 // pass the dx:project is required to establish
                 // (1) the instance price list and database
                 // (2) the output location of applets and workflows
-                val ntn = compileNative(irNs, folder, dxProject, cOpt)
-                Some(ntn)
+                val dxWdlNs = compileNative(irNs, folder, dxProject, cOpt)
+                val execIds = dxWdlNs match {
+                    case DxWdlNamespaceLeaf(_,_,applets) =>
+                        applets.map{ case (_,(_,apl)) => apl.getId }.mkString(",")
+                    case DxWdlNamespaceNode(_,_,_,(_,wf),_) =>
+                        wf.getId
+                }
+                Some(execIds)
         }
     }
 }

@@ -139,9 +139,10 @@ object IR {
         }
     }
 
+    // A stage can call an applet or a workflow
     case class Stage(name: String,
                      id: Utils.DXWorkflowStage,
-                     appletName: String,
+                     calleeFQN: String,
                      inputs: Vector[SArg],
                      outputs: Vector[CVar])
 
@@ -178,28 +179,61 @@ object IR {
                              workflow: Workflow,
                              children: Vector[Namespace]) extends Namespace
 
-    // Make a list of all applets
-    def listApplets(ns: IR.Namespace) : Vector[Applet] = {
-        ns match {
-            case NamespaceLeaf(_,_, applets) =>
-                applets.map{ case (_,apl) => apl }.toVector
-            case NamespaceNode(_,_, applets,_,children) =>
-                val childApl = children.flatMap(listApplets(_)).toVector
-                val theseApl = applets.map{ case (_,apl) => apl }.toVector
-                theseApl ++ childApl
+    object Namespace {
+        // Make a list of all applets
+        def listApplets(ns: Namespace) : Vector[Applet] = {
+            ns match {
+                case NamespaceLeaf(_,_, applets) =>
+                    applets.map{ case (_,apl) => apl }.toVector
+                case NamespaceNode(_,_, applets,_,children) =>
+                    val childApl = children.flatMap(listApplets(_)).toVector
+                    val theseApl = applets.map{ case (_,apl) => apl }.toVector
+                    theseApl ++ childApl
+            }
+        }
+
+        // Make a list of all workflows
+        def listWorkflows(ns: Namespace) : Vector[Workflow] = {
+            ns match {
+                case NamespaceLeaf(_,_,applets) =>
+                    Vector.empty
+                case NamespaceNode(_,_,_, workflow, children) =>
+                    val childWf = children.flatMap(listWorkflows(_)).toVector
+                    workflow +: childWf
+            }
+        }
+
+        // Make a list of all the workflows and applets that can be
+        // called, if we import this namespace. Index them by their
+        // fully qualified names.
+        def buildCallables(irNs: Namespace) : Map[String, Callable] = {
+            val prefix = irNs.importedAs.getOrElse("")
+            val aplCallables = irNs.applets.map {
+                case (aplName, apl) => s"${prefix}.${aplName}" -> apl
+            }.toMap
+            irNs match {
+                case _: NamespaceLeaf =>
+                    aplCallables
+                case IR.NamespaceNode(_,_,_,wf,_) =>
+                    aplCallables + (s"${prefix}.${wf.name}" -> wf)
+            }
+        }
+
+        // build a list of all the applets and workflows that can be
+        // called by importing any of the child namespaces
+        def callablesFromNamespace(ns: NamespaceNode) : Map[String, IR.Callable] = {
+            val childCallables = ns.children.foldLeft(Map.empty[String, IR.Callable]){
+                case (accu, childIrNs) =>
+                    accu ++ buildCallables(childIrNs)
+            }
+            val taskApplets =
+                ns.applets.filter{ case (_,apl) => apl.kind == AppletKindTask }
+                    .map{ case (name, apl) => name -> apl}
+                    .toMap
+            taskApplets ++ childCallables
         }
     }
 
-    // Make a list of all workflows
-    def listWorkflows(ns: IR.Namespace) : Vector[Workflow] = {
-        ns match {
-            case NamespaceLeaf(_,_,applets) =>
-                Vector.empty
-            case NamespaceNode(_,_,_, workflow, children) =>
-                val childWf = children.flatMap(listWorkflows(_)).toVector
-                workflow +: childWf
-        }
-    }
 
     // Automatic conversion to/from Yaml
     object IrInternalYamlProtocol extends DefaultYamlProtocol {

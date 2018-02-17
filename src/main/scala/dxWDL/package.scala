@@ -1,7 +1,5 @@
 package dxWDL
 
-import com.dnanexus.{DXApplet, DXWorkflow}
-
 // Exception used for AppInternError
 class AppInternalException private(ex: RuntimeException) extends RuntimeException(ex) {
     def this(message:String) = this(new RuntimeException(message))
@@ -66,12 +64,3 @@ case class CompilerOptions(archive: Boolean,
                            inputs: List[java.nio.file.Path],
                            reorg: Boolean,
                            verbose: Verbose)
-
-// WDL namespace, compiled to dnanexus
-sealed trait DxWdlNamespace
-case class DxWdlNamespaceLeaf(name: String,
-                              applets: Map[String, DXApplet]) extends DxWdlNamespace
-case class DxWdlNamespaceNode(name: String,
-                              applets: Map[String, DXApplet],
-                              workflow:DXWorkflow,
-                              children: Vector[DxWdlNamespace]) extends DxWdlNamespace
