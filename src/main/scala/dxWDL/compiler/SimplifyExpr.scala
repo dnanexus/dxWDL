@@ -309,7 +309,6 @@ case class SimplifyExpr(cef: CompilerErrorFormatter,
     }
 
     def simplifyWorkflow(wf: WdlWorkflow) : WdlWorkflow = {
-        Utils.trace(verbose.on, s"simplifying workflow ${wf.unqualifiedName}")
         val wfProper = wf.children.filter(x => !x.isInstanceOf[WorkflowOutput])
         val wfProperSmpl: Vector[Scope] = wfProper.map(x => simplify(x, wf)).toVector.flatten
 

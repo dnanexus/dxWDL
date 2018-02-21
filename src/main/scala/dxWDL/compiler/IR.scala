@@ -237,6 +237,45 @@ object IR {
             }
             ns.applets ++ childCallables
         }
+
+        // convert all fully qualified applet names to unqualified. We can do this, becase
+        // we know that there is exactly one version of each task and workflow.
+        def flatten(ns: Namespace) : Namespace = {
+            // "A.B.C" -> "C"
+            def getUnqualifiedName(fqn: String) : String = {
+                val index = fqn.lastIndexOfSlice(".")
+                fqn.substring(index+1)
+            }
+            def flattenCalls(calls: Map[String, String]) =
+                calls.map{ case (key, value) => key -> getUnqualifiedName(value) }
+            val flatApplets = ns.applets.map{ case (name, apl) =>
+                val kind = apl.kind match {
+                    case AppletKindIf(calls) =>
+                        AppletKindIf(flattenCalls(calls))
+                    case AppletKindScatter(calls) =>
+                        AppletKindScatter(flattenCalls(calls))
+                    case AppletKindScatterCollect(calls) =>
+                        AppletKindScatterCollect(flattenCalls(calls))
+                    case other => other
+                }
+                val appletUnqualifiedName = getUnqualifiedName(name)
+                appletUnqualifiedName -> apl.copy(kind = kind)
+            }.toMap
+            ns match {
+                case leaf: NamespaceLeaf =>
+                    leaf.copy(applets = flatApplets)
+                case node: NamespaceNode =>
+                    // recurse into children
+                    val flatChildren = node.children.map(flatten(_)).toVector
+                    val flatStages = node.workflow.stages.map{ stage =>
+                        stage.copy(calleeFQN = getUnqualifiedName(stage.calleeFQN))
+                    }
+                    val flatWorkflow = node.workflow.copy(stages = flatStages)
+                    node.copy(applets = flatApplets,
+                              workflow = flatWorkflow,
+                              children = flatChildren)
+            }
+        }
     }
 
 

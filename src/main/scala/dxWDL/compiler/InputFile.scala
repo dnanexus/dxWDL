@@ -163,7 +163,7 @@ case class InputFile(verbose: Verbose) {
         val defaultFields:HashMap[String,JsValue] = preprocessInputs(wdlDefaults)
         val callables = IR.Namespace.callablesFromNamespace(ns)
         val callableNames = callables.map{ case (name,_) => name }
-        System.err.println(s"callables=${callableNames}")
+        Utils.trace(verbose.on, s"callables=${callableNames}")
 
         val stagesWithDefaults = wf.stages.map{ stage =>
             val callee:IR.Callable = callables(stage.calleeFQN)

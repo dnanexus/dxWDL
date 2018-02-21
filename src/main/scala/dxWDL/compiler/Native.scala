@@ -800,15 +800,20 @@ case class Native(dxWDLrtId: String,
     // Sort the applets according to dependencies. The lowest
     // ones are tasks, because they depend on nothing else. Last come
     // generated applets like scatters and if-blocks.
-    private def sortAppletsByDependencies(appletDict: Map[String, IR.Applet])
+    private def sortAppletsByDependencies(appletDict: Map[String, IR.Applet],
+                                          compiledCallables: Set[String])
             : Vector[IR.Applet] = {
         def immediateDeps(apl: IR.Applet) :Vector[IR.Applet] = {
-            val calls:Map[String, String] = apl.kind match {
+            var calls:Map[String, String] = apl.kind match {
                 case IR.AppletKindIf(calls) => calls
                 case IR.AppletKindScatter(calls) => calls
                 case IR.AppletKindScatterCollect(calls) => calls
                 case _ => Map.empty
             }
+            // Prune dependencies that have already been satisfied
+            calls = calls.filter{ case (_, taskName) => !(compiledCallables contains taskName) }
+
+            // Sanity: make sure we have definitions of the dependencies
             calls.map{ case (_, taskName) =>
                 appletDict.get(taskName) match {
                     case None => throw new Exception(
@@ -846,10 +851,16 @@ case class Native(dxWDLrtId: String,
         sortedApplets
     }
 
-    private def compileApplets(appletDict: Map[String, IR.Applet])
+    // Compile a group of applets, given that the [compiledCallables] have
+    // already been compiled.
+    private def compileApplets(appletDict: Map[String, IR.Applet],
+                               compiledCallables: Set[String])
             : Map[String, (IR.Applet, DXApplet)] = {
+        val unsortedAppletNames = appletDict.map{ case (x,_) => x}.toVector
+        System.err.println(s"Compile applets, names = ${unsortedAppletNames}")
+
         // Sort the applets according to dependencies.
-        val applets = sortAppletsByDependencies(appletDict)
+        val applets = sortAppletsByDependencies(appletDict, compiledCallables)
         val appletNames = applets.map(_.name)
         trace(verbose.on, s"compilation order=${appletNames}")
 
@@ -896,16 +907,28 @@ case class Native(dxWDLrtId: String,
         callables ++ appletDict
     }
 
-    def compile(ns: IR.Namespace) : DxWdlNamespace = {
+    def compile(ns: IR.Namespace,
+                execDict: Map[String, IR.Callable]) :
+            (DxWdlNamespace, Map[String, (IR.Callable, DXDataObject)]) = {
         ns match {
             case IR.NamespaceLeaf(name, importedAs, applets) =>
-                val appletDict = compileApplets(applets)
-                DxWdlNamespaceLeaf(name, importedAs, appletDict)
+                val appletDict = compileApplets(applets, Set.empty)
+                val dxns = DxWdlNamespaceLeaf(name, importedAs, appletDict)
+                (dxns, appletDict)
 
             case IR.NamespaceNode(name, importedAs, applets, workflow, childrenIr) =>
                 // recursively compile the sub-namespaces
-                val children = childrenIr.map{ compile(_) }
-                val appletDict = compileApplets(applets)
+                val children,execDicts = childrenIr.map{
+                    child => compile(child, execDict)
+                }.unzip
+
+                // figure out all the callables in the sub-namespaces
+                val callableNames: Set[String] =
+                    children.foldLeft(Set.empty[String]) {
+                        case (accu, child) =>
+                            accu ++ DxWdlNamespace.flatCallables(child)
+                    }
+                val appletDict = compileApplets(applets, callableNames)
                 val execDict = buildExecDictionary(appletDict, children)
                 val dxwfl = buildWorkflowIfNeeded(ns, workflow, execDict)
                 DxWdlNamespaceNode(name, importedAs, appletDict, (workflow, dxwfl), children)

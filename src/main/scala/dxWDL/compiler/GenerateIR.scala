@@ -109,10 +109,8 @@ task Add {
     private def calleeFQN(call: WdlCall) : String = {
         call match {
             case tc: WdlTaskCall =>
-                //tc.task.name
                 tc.task.fullyQualifiedName
             case wfc: WdlWorkflowCall =>
-                //wfc.calledWorkflow.unqualifiedName
                 wfc.calledWorkflow.fullyQualifiedName
         }
     }
@@ -481,11 +479,9 @@ workflow w {
                     }
 
                 case a:Ast =>
-                    throw new Exception(s"Not currently supported: expressions in output section (${expr.toWomString})")
-                    // Not clear what the problem is here
-                    /*throw new Exception(cef.notCurrentlySupported(
-                     a,
-                     s"Expressions in output section (${expr.toWomString})"))*/
+                    throw new Exception(cef.notCurrentlySupported(
+                                            a,
+                                            s"Expressions in output section (${expr.toWomString})"))
             }
 
             (cVar, sArg)
@@ -860,14 +856,17 @@ workflow w {
     // Create a valid WDL workflow that runs a block (Scatter, If,
     // etc.) The main modification is renaming variables of the
     // form A.x to A_x.
+    //
+    // A workflow must have definitions for all the tasks it
+    // calls. However, a scatter calls tasks, that are missing from
+    // the WDL file we generate. To ameliorate this, we add stubs for
+    // called tasks. The generated tasks are named by their
+    // unqualified names, not their fully-qualified names. This works
+    // because the WDL workflow must be "flattenable".
     def blockGenWorklow(preDecls: Vector[Declaration],
                         scope: Scope,
                         inputVars: Vector[CVar],
                         outputVars: Vector[CVar]) : WdlNamespace = {
-        // A workflow must have definitions for all the tasks it
-        // calls. However, a scatter calls tasks, that are missing from
-        // the WDL file we generate. To ameliorate this, we add stubs
-        // for called tasks.
         val calls: Vector[WdlCall] = scope.calls.toVector
         val taskStubs: Map[String, WdlTask] =
             calls.foldLeft(Map.empty[String,WdlTask]) { case (accu, call) =>
@@ -876,7 +875,6 @@ workflow w {
                     case None => throw new Exception(s"Calling undefined task/workflow ${name}")
                     case Some(x) => x
                 }
-                assert(name == callable.name)
                 if (accu contains name) {
                     // we have already created a stub for this call
                     accu
@@ -1351,7 +1349,6 @@ workflow w {
             else
                 compileWorkflowRegular(wf, wfInputs, subBlocks)
 
-
         // Add a reorganization applet if requested
         val allStageInfo =
             if (reorg) {
@@ -1393,8 +1390,8 @@ object GenerateIR {
     // This method makes sure each applet and workflow are
     // defined exactly once, and is uniquely named by its
     // unqualified name.
-    private def validateNamespace(ns: IR.Namespace,
-                                  verbose: Verbose) : Unit = {
+    private def checkFlatNamespace(ns: IR.Namespace,
+                                   verbose: Verbose) : Unit = {
         // make sure unique names for applets (only)
         val allAppletNames: Vector[String] = IR.Namespace.listApplets(ns).map(_.name)
         val aplCounts: Map[String, Int] = allAppletNames.groupBy(x => x).mapValues(_.size)
@@ -1423,7 +1420,6 @@ object GenerateIR {
                 throw new Exception(s"Name ${name} is used for an applet and a workflow.")
         }
     }
-
 
     def apply(nsTree : NamespaceOps.Tree,
               reorg: Boolean,
@@ -1454,13 +1450,13 @@ object GenerateIR {
                 }
                 callables ++= taskApplets
                 val callableNames = callables.map{ case (name,_) => name }
-                System.err.println(s"callables=${callableNames}")
+                Utils.trace(verbose.on, s"callables=${callableNames}")
 
                 val gir = new GenerateIR(callables, cef, reorg, locked, verbose)
                 val (irWf, auxApplets) = gir.compileWorkflow(workflow)
                 IR.NamespaceNode(name, importedAs, auxApplets ++ taskApplets, irWf, childrenIR)
         }
-        validateNamespace(nsTree1, verbose)
+        checkFlatNamespace(nsTree1, verbose)
         nsTree1
     }
 }

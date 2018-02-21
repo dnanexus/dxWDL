@@ -124,7 +124,12 @@ object NamespaceOps {
             // imperfections in our WDL rewriting technology.
             val useFqn = imports.length > 0
             val ns = toNamespace(wfTr)
-            val pp = WdlPrettyPrinter(useFqn, Some(workflow.outputs))
+            val wfOutputs: Vector[WorkflowOutput] =
+                wfTr.children.filter(x => x.isInstanceOf[WorkflowOutput])
+                    .map(_.asInstanceOf[WorkflowOutput])
+                    .toVector
+
+            val pp = WdlPrettyPrinter(useFqn, Some(wfOutputs))
             val lines: String = pp.apply(ns, 0).mkString("\n")
             val cleanNs = WdlNamespace.loadUsingSource(
                 lines, None, Some(List(resolver))
@@ -134,7 +139,6 @@ object NamespaceOps {
                 case _ => throw new Exception("sanity")
             }
             val cleanCef = new CompilerErrorFormatter(cleanNs.terminalMap)
-            //new TreeNode(name, imports, wdlSourceFile, cleanWf, tasks, children, cleanCef)
             this.copy(workflow = cleanWf,
                       cef = cleanCef)
         }
