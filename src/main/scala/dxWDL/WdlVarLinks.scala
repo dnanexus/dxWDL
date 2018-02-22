@@ -22,7 +22,7 @@ not just lazy download.
   */
 package dxWDL
 
-import com.dnanexus.{DXFile, DXJob, IOClass}
+import com.dnanexus.{DXFile, DXExecution, IOClass}
 import java.nio.file.{Files, Paths}
 import net.jcazevedo.moultingyaml._
 import spray.json._
@@ -47,8 +47,8 @@ sealed trait DxLink
 case class DxlValue(jsn: JsValue) extends DxLink  // This may contain dx-files
 case class DxlStage(dxStage: DXWorkflowStage, ioRef: IORef.Value, varName: String) extends DxLink
 case class DxlWorkflowInput(varName: String) extends DxLink
-case class DxlJob(dxJob: DXJob, varName: String) extends DxLink
-case class DxlJobArray(dxJobVec: Vector[DXJob], varName: String) extends DxLink
+case class DxlExec(dxExec: DXExecution, varName: String) extends DxLink
+case class DxlExecArray(dxExecVec: Vector[DXExecution], varName: String) extends DxLink
 
 case class WdlVarLinks(womType: WomType,
                        attrs: DeclAttrs,
@@ -64,10 +64,10 @@ object WdlVarLinks {
                 "stageRef" -> varEncName
             case DxlWorkflowInput(varEncName) =>
                 "workflowInput" -> varEncName
-            case DxlJob(dxJob, varEncName) =>
-                "jobRef" -> varEncName
-            case DxlJobArray(dxJobVec, varEncName) =>
-                "jobRefArray" -> varEncName
+            case DxlExec(dxExec, varEncName) =>
+                "execRef" -> varEncName
+            case DxlExecArray(dxExecVec, varEncName) =>
+                "execRefArray" -> varEncName
         }
         YamlObject(
             YamlString("type") -> YamlString(wvl.womType.toDisplayString),
@@ -501,13 +501,12 @@ object WdlVarLinks {
         WdlVarLinks(womType, attrs, DxlValue(jsValue))
     }
 
-    def mkJborArray(dxJobVec: Vector[DXJob],
+    def mkEborArray(dxExecVec: Vector[DXExecution],
                     varName: String) : JsValue = {
-        val jbors: Vector[JsValue] = dxJobVec.map{ dxJob =>
-            val jobId : String = dxJob.getId()
-            Utils.makeJBOR(jobId, varName)
+        val ebors: Vector[JsValue] = dxExecVec.map{ dxJob =>
+            Utils.makeEBOR(dxJob, varName)
         }
-        JsArray(jbors)
+        JsArray(ebors)
     }
 
 
@@ -684,11 +683,10 @@ object WdlVarLinks {
                 case DxlWorkflowInput(varEncName) =>
                     JsObject("$dnanexus_link" -> JsObject(
                                  "workflowInputField" -> JsString(varEncName)))
-                case DxlJob(dxJob, varEncName) =>
-                    val jobId : String = dxJob.getId()
-                    Utils.makeJBOR(jobId, varEncName)
-                case DxlJobArray(dxJobVec, varEncName) =>
-                    mkJborArray(dxJobVec, varEncName)
+                case DxlExec(dxJob, varEncName) =>
+                    Utils.makeEBOR(dxJob, varEncName)
+                case DxlExecArray(dxJobVec, varEncName) =>
+                    mkEborArray(dxJobVec, varEncName)
             }
             (bindEncName, jsv)
         }
@@ -724,15 +722,14 @@ object WdlVarLinks {
                             JsObject("$dnanexus_link" -> JsObject(
                                          "workflowInputField" -> JsString(varEncName_F)))
                     )
-                case DxlJob(dxJob, varEncName) =>
+                case DxlExec(dxJob, varEncName) =>
                     val varEncName_F = varEncName + FLAT_FILES_SUFFIX
-                    val jobId : String = dxJob.getId()
-                    Map(bindEncName -> Utils.makeJBOR(jobId, varEncName),
-                        bindEncName_F -> Utils.makeJBOR(jobId, varEncName_F))
-                case DxlJobArray(dxJobVec, varEncName) =>
+                    Map(bindEncName -> Utils.makeEBOR(dxJob, varEncName),
+                        bindEncName_F -> Utils.makeEBOR(dxJob, varEncName_F))
+                case DxlExecArray(dxJobVec, varEncName) =>
                     val varEncName_F = varEncName + FLAT_FILES_SUFFIX
-                    Map(bindEncName -> mkJborArray(dxJobVec, varEncName),
-                        bindEncName_F -> mkJborArray(dxJobVec, varEncName_F))
+                    Map(bindEncName -> mkEborArray(dxJobVec, varEncName),
+                        bindEncName_F -> mkEborArray(dxJobVec, varEncName_F))
             }
         }
 
@@ -804,16 +801,16 @@ object WdlVarLinks {
                 }
                 WdlVarLinks(womType, declAttrs, DxlValue(JsArray(jsVec)))
 
-            case DxlJob(_, varName) =>
-                val jobVec:Vector[DXJob] = vec.map{ wvl =>
+            case DxlExec(_, varName) =>
+                val execVec:Vector[DXExecution] = vec.map{ wvl =>
                     wvl.dxlink match {
-                        case DxlJob(job,name) =>
+                        case DxlExec(exec, name) =>
                             assert(name == varName)
-                            job
+                            exec
                         case _ => throw new Exception("Sanity")
                     }
                 }
-                WdlVarLinks(womType, declAttrs, DxlJobArray(jobVec, varName))
+                WdlVarLinks(womType, declAttrs, DxlExecArray(execVec, varName))
             case _ => throw new Exception(s"Don't know how to merge WVL arrays of type ${vec.head}")
         }
     }

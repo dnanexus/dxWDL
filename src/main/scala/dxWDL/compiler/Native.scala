@@ -23,6 +23,9 @@ case class Native(dxWDLrtId: String,
                   archive: Boolean,
                   locked: Boolean,
                   verbose: Verbose) {
+    type ExecDict = Map[String, (IR.Callable, DXDataObject)]
+    val execDictEmpty = Map.empty[String, (IR.Callable, DXDataObject)]
+
     val verbose2:Boolean = verbose.keywords contains "compilernative"
     lazy val runtimeLibrary:JsValue = getRuntimeLibrary()
     lazy val projName = dxProject.describe().getName()
@@ -426,8 +429,7 @@ case class Native(dxWDLrtId: String,
     // For applets that call other applets, we pass a directory
     // of the callees, so they could be found a runtime. This is
     // equivalent to linking, in a standard C compiler.
-    private def genAppletScript(applet: IR.Applet,
-                                aplLinks: Map[String, (IR.Applet, DXApplet)]) : String = {
+    private def genAppletScript(applet: IR.Applet, aplLinks: ExecDict) : String = {
         // generate the wdl source file
         val wdlCode:String = WdlPrettyPrinter(false, None).apply(applet.ns, 0)
             .mkString("\n")
@@ -438,12 +440,12 @@ case class Native(dxWDLrtId: String,
                 None
             } else {
                 val linkInfo = JsObject(
-                    aplLinks.map{ case (key, (irApplet, dxApplet)) =>
+                    aplLinks.map{ case (key, (irCall, dxObj)) =>
                         // Reduce the information to what will be needed for runtime linking.
-                        val appInputDefs: Map[String, WomType] = irApplet.inputs.map{
+                        val callInputDefs: Map[String, WomType] = irCall.inputVars.map{
                             case CVar(name, wdlType, _, _, _) => (name -> wdlType)
                         }.toMap
-                        val ali = AppletLinkInfo(appInputDefs, dxApplet)
+                        val ali = AppletLinkInfo(callInputDefs, dxObj)
                         key -> AppletLinkInfo.writeJson(ali)
                     }.toMap)
                 Some(linkInfo.prettyPrint)
@@ -571,8 +573,7 @@ case class Native(dxWDLrtId: String,
     //
     // When [force] is true, always rebuild. Otherwise, rebuild only
     // if the WDL code has changed.
-    private def buildAppletIfNeeded(applet: IR.Applet,
-                                    appletDict: Map[String, (IR.Applet, DXApplet)]) : DXApplet = {
+    private def buildAppletIfNeeded(applet: IR.Applet, execDict: ExecDict) : DXApplet = {
         trace(verbose.on, s"Compiling applet ${applet.name}")
 
         // limit the applet dictionary, only to actual dependencies
@@ -582,7 +583,7 @@ case class Native(dxWDLrtId: String,
             case IR.AppletKindScatterCollect(calls) => calls
             case _ => Map.empty
         }
-        val aplLinks = calls.map{ case (_,tName) => tName -> appletDict(tName) }.toMap
+        val aplLinks = calls.map{ case (_,tName) => tName -> execDict(tName) }.toMap
 
         // Build an applet script
         val bashScript = genAppletScript(applet, aplLinks)
@@ -723,7 +724,7 @@ case class Native(dxWDLrtId: String,
     private def buildWorkflow(ns: IR.Namespace,
                               wf: IR.Workflow,
                               digest: String,
-                              execDict: Map[String, (IR.Callable, DXDataObject)]) : DXWorkflow = {
+                              execDict: ExecDict) : DXWorkflow = {
         val (stagesReq, stageDict) =
             wf.stages.foldLeft((Vector.empty[JsValue], Map.empty[String, DXWorkflowStage])) {
                 case ((stagesReq, stageDict), stg) =>
@@ -779,7 +780,7 @@ case class Native(dxWDLrtId: String,
     // - Do not rebuild the workflow if it has a correct checksum
     private def buildWorkflowIfNeeded(ns: IR.Namespace,
                                       wf: IR.Workflow,
-                                      execDict: Map[String, (IR.Callable, DXDataObject)]) : DXWorkflow = {
+                                      execDict: ExecDict) : DXWorkflow = {
         // the workflow digest depends on the IR and the applets
         val digest:String = chksum(
             List(IR.yaml(wf).prettyPrint,
@@ -801,7 +802,7 @@ case class Native(dxWDLrtId: String,
     // ones are tasks, because they depend on nothing else. Last come
     // generated applets like scatters and if-blocks.
     private def sortAppletsByDependencies(appletDict: Map[String, IR.Applet],
-                                          compiledCallables: Set[String])
+                                          execDict: ExecDict)
             : Vector[IR.Applet] = {
         def immediateDeps(apl: IR.Applet) :Vector[IR.Applet] = {
             var calls:Map[String, String] = apl.kind match {
@@ -811,7 +812,7 @@ case class Native(dxWDLrtId: String,
                 case _ => Map.empty
             }
             // Prune dependencies that have already been satisfied
-            calls = calls.filter{ case (_, taskName) => !(compiledCallables contains taskName) }
+            calls = calls.filter{ case (_, taskName) => !(execDict contains taskName) }
 
             // Sanity: make sure we have definitions of the dependencies
             calls.map{ case (_, taskName) =>
@@ -854,13 +855,12 @@ case class Native(dxWDLrtId: String,
     // Compile a group of applets, given that the [compiledCallables] have
     // already been compiled.
     private def compileApplets(appletDict: Map[String, IR.Applet],
-                               compiledCallables: Set[String])
-            : Map[String, (IR.Applet, DXApplet)] = {
+                               execDict: ExecDict) : Map[String, (IR.Applet, DXApplet)] = {
         val unsortedAppletNames = appletDict.map{ case (x,_) => x}.toVector
-        System.err.println(s"Compile applets, names = ${unsortedAppletNames}")
+        trace(verbose.on, s"Compile applets, names = ${unsortedAppletNames}")
 
         // Sort the applets according to dependencies.
-        val applets = sortAppletsByDependencies(appletDict, compiledCallables)
+        val applets = sortAppletsByDependencies(appletDict, execDict)
         val appletNames = applets.map(_.name)
         trace(verbose.on, s"compilation order=${appletNames}")
 
@@ -872,66 +872,39 @@ case class Native(dxWDLrtId: String,
             case (appletDict, apl) =>
                 val dxApplet = apl.kind match {
                     case IR.AppletKindNative(id) => DXApplet.getInstance(id)
-                    case _ => buildAppletIfNeeded(apl, appletDict)
+                    case _ => buildAppletIfNeeded(apl, appletDict ++ execDict)
                 }
                 trace(verbose.on, s"Applet ${apl.name} = ${dxApplet.getId()}")
                 appletDict + (apl.name -> (apl, dxApplet))
         }.toMap
     }
 
-    // Make a list of all the workflows and applets that can be
-    // called, if we import this namespace. Index them by their
-    // fully qualified names.
-    private def callablesFromNamespace(ns: DxWdlNamespace)
-            : Map[String, (IR.Callable, DXDataObject)] = {
-        val prefix = ns.importedAs.getOrElse("")
-        val aplCallables = ns.applets.map {
-            case (aplName, apl) => s"${prefix}.${aplName}" -> apl
-        }.toMap
-        ns match {
-            case _: DxWdlNamespaceLeaf =>
-                aplCallables
-            case DxWdlNamespaceNode(_, importedAs, applets, (wfIr,dxWf), _) =>
-                aplCallables + (s"${prefix}.${wfIr.name}" -> (wfIr,dxWf))
-        }
-    }
-
-    // build a mapping from fully qualified name to platform executable
-    private def buildExecDictionary(appletDict: Map[String, (IR.Applet, DXApplet)],
-                                    children: Vector[DxWdlNamespace])
-            : Map[String, (IR.Callable, DXDataObject)] = {
-        val callables = children.foldLeft(Map.empty[String, (IR.Callable, DXDataObject)]) {
-            case (accu, child) =>
-                accu ++ callablesFromNamespace(child)
-        }
-        callables ++ appletDict
-    }
-
-    def compile(ns: IR.Namespace,
-                execDict: Map[String, IR.Callable]) :
-            (DxWdlNamespace, Map[String, (IR.Callable, DXDataObject)]) = {
+    def compile(ns: IR.Namespace, execDict: ExecDict) : (DxWdlNamespace, ExecDict) = {
         ns match {
             case IR.NamespaceLeaf(name, importedAs, applets) =>
-                val appletDict = compileApplets(applets, Set.empty)
+                val appletDict = compileApplets(applets, execDictEmpty)
                 val dxns = DxWdlNamespaceLeaf(name, importedAs, appletDict)
                 (dxns, appletDict)
 
             case IR.NamespaceNode(name, importedAs, applets, workflow, childrenIr) =>
                 // recursively compile the sub-namespaces
-                val children,execDicts = childrenIr.map{
+                val (children, execDicts:Seq[ExecDict]) = childrenIr.map{
                     child => compile(child, execDict)
                 }.unzip
 
-                // figure out all the callables in the sub-namespaces
-                val callableNames: Set[String] =
-                    children.foldLeft(Set.empty[String]) {
-                        case (accu, child) =>
-                            accu ++ DxWdlNamespace.flatCallables(child)
-                    }
-                val appletDict = compileApplets(applets, callableNames)
-                val execDict = buildExecDictionary(appletDict, children)
-                val dxwfl = buildWorkflowIfNeeded(ns, workflow, execDict)
-                DxWdlNamespaceNode(name, importedAs, appletDict, (workflow, dxwfl), children)
+                // Merge all the sub-tables of callable tasks and workflows
+                val subExecDict = execDicts.foldLeft(execDictEmpty) {
+                    case (accu, exd) =>
+                        accu ++ exd
+                }
+                val appletDict = compileApplets(applets, subExecDict)
+                val execAll = appletDict ++ subExecDict
+                val dxwfl = buildWorkflowIfNeeded(ns, workflow, execAll)
+                val wfInfo = (workflow, dxwfl)
+
+                val ns1 = DxWdlNamespaceNode(name, importedAs, appletDict, wfInfo, children)
+                val execDict1 = execDict + (workflow.name -> wfInfo)
+                (ns1, execDict1)
         }
     }
 }
@@ -953,6 +926,7 @@ object Native {
         val dxObjDir = DxObjectDirectory(ns, dxProject, folder, verbose)
         val ntv = new Native(dxWDLrtId, folder, dxProject, dxObjDir, instanceTypeDB,
                              force, archive, locked, verbose)
-        ntv.compile(ns)
+        val (dxwdlns, _) = ntv.compile(ns, Map.empty[String, (IR.Callable, DXDataObject)])
+        dxwdlns
     }
 }

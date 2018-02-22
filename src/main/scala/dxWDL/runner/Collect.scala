@@ -48,7 +48,7 @@ For each field F:
 outputs: the merged value for each field.
 
 Larger context
-  The parent scatter returns jbors to each of the collect output fields. This
+  The parent scatter returns ebors to each of the collect output fields. This
 allows it to return immediately, and not wait for the child jobs to complete.
 Each scatter requires its own collect applet, because the output type is
 the same as the scatter output type.

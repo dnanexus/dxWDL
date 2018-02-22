@@ -220,13 +220,13 @@ case class MiniWorkflow(exportVars: Set[String],
     // Create a mapping from the job output variables to json values. These
     // are variables that can be referenced by other calls.
     private def jobOutputEnv(call: WdlCall,
-                             dxJob: DXJob) : Env = {
+                             dxExec: DXExecution) : Env = {
         val prefix = call.unqualifiedName
         val retValues = call.outputs
             .map { tso => tso.unqualifiedName -> WdlVarLinks(
                       tso.womType,
                       DeclAttrs.empty,
-                      DxlJob(dxJob, tso.unqualifiedName)) }
+                      DxlExec(dxExec, tso.unqualifiedName)) }
             .toMap
         Map(prefix -> ElemCall(retValues))
     }
@@ -259,7 +259,7 @@ case class MiniWorkflow(exportVars: Set[String],
     }
 
     // Launch a subjob to collect the outputs
-    private def launchCollectSubjob(childJobs: Vector[DXJob],
+    private def launchCollectSubjob(childJobs: Vector[DXExecution],
                                     calls: Vector[WdlCall]) : Map[String, WdlVarLinks] = {
         Utils.appletLog(s"""|launching collect subjob
                       |child jobs=${childJobs}""".stripMargin)
@@ -278,7 +278,7 @@ case class MiniWorkflow(exportVars: Set[String],
                 val promiseMap = call.outputs.map{ cao =>
                     val wvl = WdlVarLinks(cao.womType,
                                           DeclAttrs.empty,
-                                          DxlJob(dxSubJob, prefix + "_" + cao.unqualifiedName))
+                                          DxlExec(dxSubJob, prefix + "_" + cao.unqualifiedName))
                     (prefix + "." + cao.unqualifiedName) -> wvl
                 }
                 accu ++ promiseMap
@@ -302,7 +302,7 @@ case class MiniWorkflow(exportVars: Set[String],
         val collElements : Seq[WdlVarLinks] = WdlVarLinks.unpackWomArray(collection)
         var scJobOutputs = Vector.empty[Env]
         var scTopOutputs = Vector.empty[Env]
-        var childJobs = Vector.empty[DXJob]
+        var childExecs = Vector.empty[DXExecution]
         var launchSeqNum = 0
         collElements.foreach { case elem =>
             // Bind the iteration variable inside the loop
@@ -326,23 +326,38 @@ case class MiniWorkflow(exportVars: Set[String],
                 Utils.appletLog(s"call=${callUnqName} inputs=${inputs}")
 
                 // We may need to run a collect subjob. Add the call
-                // name, and the sequence number, to each applet run,
+                // name, and the sequence number, to each execution invocation,
                 // so the collect subjob will be able to put the
                 // results back together.
-                val dxJob : DXJob = apLinkInfo.dxApplet
-                    .newRun()
-                    .setRawInput(Utils.jsonNodeOfJsValue(inputs))
-                    .setName(callUnqName)
-                    .putProperty("call", callUnqName)
-                    .putProperty("seq_number", launchSeqNum.toString)
-                    .run()
-                val jobOutputs : Env = jobOutputEnv(call, dxJob)
+                val dxExec: DXExecution =
+                    if (apLinkInfo.dxExec.isInstanceOf[DXApplet]) {
+                        val applet = apLinkInfo.dxExec.asInstanceOf[DXApplet]
+                        val dxJob :DXJob = applet.newRun()
+                            .setRawInput(Utils.jsonNodeOfJsValue(inputs))
+                            .setName(callUnqName)
+                            .putProperty("call", callUnqName)
+                            .putProperty("seq_number", launchSeqNum.toString)
+                            .run()
+                        dxJob
+                    } else if (apLinkInfo.dxExec.isInstanceOf[DXWorkflow]) {
+                        val workflow = apLinkInfo.dxExec.asInstanceOf[DXWorkflow]
+                        val dxAnalysis :DXAnalysis = workflow.newRun()
+                            .setRawInput(Utils.jsonNodeOfJsValue(inputs))
+                            .setName(callUnqName)
+                            .putProperty("call", callUnqName)
+                            .putProperty("seq_number", launchSeqNum.toString)
+                            .run()
+                        dxAnalysis
+                    } else {
+                        throw new Exception(s"Unsupport execution ${apLinkInfo.dxExec}")
+                    }
+                val jobOutputs: Env = jobOutputEnv(call, dxExec)
 
                 // add the job outputs to the environment. This makes them available to the applets
                 // that come next.
                 innerEnv = innerEnv ++ jobOutputs
                 scJobOutputs = scJobOutputs :+ jobOutputs
-                childJobs = childJobs :+ dxJob
+                childExecs = childExecs :+ dxExec
                 launchSeqNum += 1
             }
         }
@@ -356,7 +371,7 @@ case class MiniWorkflow(exportVars: Set[String],
                 gatherOutputs(scJobOutputs)
             } else {
                 // The output types are complex, requiring a subjob.
-                launchCollectSubjob(childJobs,
+                launchCollectSubjob(childExecs,
                                     calls.map{case (x,_) => x}.toVector)
             }
         topVars ++ childJobVars
@@ -406,12 +421,25 @@ case class MiniWorkflow(exportVars: Set[String],
             val inputs : JsValue = buildAppletInputs(call, apLinkInfo, innerEnv)
             val callUnqName = call.unqualifiedName
             Utils.appletLog(s"call=${callUnqName} inputs=${inputs}")
-            val dxJob: DXJob = apLinkInfo.dxApplet
-                .newRun()
-                .setName(callUnqName)
-                .setRawInput(Utils.jsonNodeOfJsValue(inputs))
-                .run()
-            val jobOutputs: Env = jobOutputEnv(call, dxJob)
+            val dxExec: DXExecution =
+                if (apLinkInfo.dxExec.isInstanceOf[DXApplet]) {
+                    val applet = apLinkInfo.dxExec.asInstanceOf[DXApplet]
+                    val dxJob :DXJob = applet.newRun()
+                        .setName(callUnqName)
+                        .setRawInput(Utils.jsonNodeOfJsValue(inputs))
+                        .run()
+                    dxJob
+                } else if (apLinkInfo.dxExec.isInstanceOf[DXWorkflow]) {
+                    val workflow = apLinkInfo.dxExec.asInstanceOf[DXWorkflow]
+                    val dxAnalysis :DXAnalysis = workflow.newRun()
+                        .setName(callUnqName)
+                        .setRawInput(Utils.jsonNodeOfJsValue(inputs))
+                        .run()
+                    dxAnalysis
+                } else {
+                        throw new Exception(s"Unsupport execution ${apLinkInfo.dxExec}")
+                }
+            val jobOutputs: Env = jobOutputEnv(call, dxExec)
 
             // add the job outputs to the environment. This makes them available to the applets
             // that come next.

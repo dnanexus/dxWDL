@@ -1,7 +1,6 @@
 package dxWDL
 
-import com.dnanexus.{DXApplet, DXAPI, DXEnvironment, DXFile, DXJob, DXJSON, DXProject,
-    IOClass, InputParameter, OutputParameter}
+import com.dnanexus._
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.node.ObjectNode
@@ -28,7 +27,7 @@ object Utils {
 
     // Information used to link applets that call other applets. For example, a scatter
     // applet calls applets that implement tasks.
-    case class AppletLinkInfo(inputs: Map[String, WomType], dxApplet: DXApplet)
+    case class AppletLinkInfo(inputs: Map[String, WomType], dxExec: DXDataObject)
 
     // A stand in for the DXWorkflow.Stage inner class (we don't have a constructor for it)
     case class DXWorkflowStage(id: String) {
@@ -58,7 +57,7 @@ object Utils {
                 case (name, womType) => name -> JsString(womType.toDisplayString)
             }.toMap
             JsObject(
-                "id" -> JsString(ali.dxApplet.getId()),
+                "id" -> JsString(ali.dxExec.getId()),
                 "inputs" -> JsObject(appInputDefs)
             )
         }
@@ -298,10 +297,19 @@ object Utils {
         jsNode.toString().parseJson
     }
 
-    // Create a dx link to a field in a job.
-    def makeJBOR(jobId : String, fieldName :  String) : JsValue = {
+
+    // Create a dx link to a field in an execution. The execution could
+    // be a job or an analysis.
+    def makeEBOR(dxExec: DXExecution, fieldName: String) : JsValue = {
+        val dxid = dxExec.getId
         val oNode : ObjectNode =
-            DXJSON.getObjectBuilder().put("job", jobId).put("field", fieldName).build()
+            if (dxExec.isInstanceOf[DXJob]) {
+                DXJSON.getObjectBuilder().put("job", dxid).put("field", fieldName).build()
+            } else if (dxExec.isInstanceOf[DXAnalysis]) {
+                DXJSON.getObjectBuilder().put("analysis", dxid).put("field", fieldName).build()
+            } else {
+                throw new Exception(s"makeEBOR can't work with ${dxid}")
+            }
         // convert from ObjectNode to JsValue
         oNode.toString().parseJson
     }
@@ -309,7 +317,7 @@ object Utils {
     def runSubJob(entryPoint:String,
                   instanceType:Option[String],
                   inputs:JsValue,
-                  dependsOn: Vector[DXJob]) : DXJob = {
+                  dependsOn: Vector[DXExecution]) : DXJob = {
         val fields = Map(
             "function" -> JsString(entryPoint),
             "input" -> inputs
@@ -325,8 +333,8 @@ object Utils {
             if (dependsOn.isEmpty) {
                 Map.empty
             } else {
-                val jobIds = dependsOn.map{ dxJob => JsString(dxJob.getId) }.toVector
-                Map("dependsOn" -> JsArray(jobIds))
+                val execIds = dependsOn.map{ dxExec => JsString(dxExec.getId) }.toVector
+                Map("dependsOn" -> JsArray(execIds))
             }
         val req = JsObject(fields ++ instanceFields ++ dependsFields)
         System.err.println(s"subjob request=${req.prettyPrint}")

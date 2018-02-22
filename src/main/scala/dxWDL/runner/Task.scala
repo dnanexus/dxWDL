@@ -549,7 +549,7 @@ case class Task(task:WdlTask,
         val outputs: Map[String, JsValue] = task.outputs.map { tso =>
             val wvl = WdlVarLinks(tso.womType,
                                   DeclAttrs.empty,
-                                  DxlJob(dxSubJob, tso.unqualifiedName))
+                                  DxlExec(dxSubJob, tso.unqualifiedName))
             WdlVarLinks.genFields(wvl, tso.unqualifiedName)
         }.flatten.toMap
         outputs
