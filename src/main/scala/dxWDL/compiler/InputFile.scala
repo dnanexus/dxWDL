@@ -247,7 +247,7 @@ case class InputFile(verbose: Verbose) {
                                callables: Map[String, IR.Callable],
                                cif: CromwellInputFileState) : Unit = {
         val callableNames = callables.map{ case (name,_) => name }
-        System.err.println(s"handleWorkflow callables=${callableNames}")
+        Utils.trace(verbose.on, s"handleWorkflow callables=${callableNames}")
 
         // make a pass on all the stages
         wf.stages.foreach{ stage =>
@@ -264,8 +264,7 @@ case class InputFile(verbose: Verbose) {
             callee match {
                 case applet: IR.Applet =>
                     applet.kind match {
-                        case IR.AppletKindTask =>
-                            throw new Exception("Unimplemented: setting applet inputs")
+                        case IR.AppletKindTask => ()
                         case other =>
                             // An applet generated from a piece of the workflow.
                             // search for all the applet inputs
@@ -275,8 +274,7 @@ case class InputFile(verbose: Verbose) {
                                 cif.checkAndBind(fqn, dxName, cVar)
                             }
                     }
-                case workflow: IR.Workflow =>
-                    throw new Exception("Unimplemented: setting sub-workflow inputs")
+                case workflow: IR.Workflow => ()
             }
 
             if (wf.locked) {

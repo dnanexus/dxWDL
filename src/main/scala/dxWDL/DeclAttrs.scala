@@ -41,9 +41,7 @@ object DeclAttrs {
     // streaming, and it applies only to files. However, the
     // groundwork is being layed to support more complex
     // annotations.
-    def get(task:WdlTask,
-            varName: String,
-            cefOpt: Option[CompilerErrorFormatter]) : DeclAttrs = {
+    def get(task:WdlTask, varName: String) : DeclAttrs = {
         val attr:Option[(String,String)] = task.parameterMeta.find{ case (k,v) =>  k == varName }
         val m:Map[String, WomValue] = attr match {
             case None => Map.empty
@@ -56,15 +54,8 @@ object DeclAttrs {
                     case Some(x) => x
                 }
                 if (Utils.stripOptional(decl.womType) != WomFileType) {
-                    cefOpt match {
-                        case Some(cef) =>
-                            val msg = cef.onlyFilesCanBeStreamed(decl.ast)
-                            System.err.println(s"Warning: ${msg}")
-                            Map.empty
-                        case None =>
-                            System.err.println(s"Warning: only files can be streamed ${varName} type=${decl.womType.toDisplayString}")
-                            Map.empty
-                    }
+                    System.err.println(s"Warning: only files can be streamed ${varName} type=${decl.womType.toDisplayString}")
+                    Map.empty
                 } else {
                     Map("stream" -> WomBoolean(true))
                 }

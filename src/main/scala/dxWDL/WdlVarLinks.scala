@@ -776,7 +776,7 @@ object WdlVarLinks {
             // Attach attributes, if any
             val attrs = taskOpt match {
                 case None => DeclAttrs.empty
-                case Some(task) => DeclAttrs.get(task, key, None)
+                case Some(task) => DeclAttrs.get(task, key)
             }
             val wvl = importFromDxExec(ioParam, attrs, jsValue)
             key -> wvl

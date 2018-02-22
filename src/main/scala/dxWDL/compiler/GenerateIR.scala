@@ -507,7 +507,7 @@ workflow w {
         // value
         val inputVars : Vector[CVar] =  task.declarations.map{ decl =>
             if (Utils.declarationIsInput(decl))  {
-                val taskAttrs = DeclAttrs.get(task, decl.unqualifiedName, Some(cef))
+                val taskAttrs = DeclAttrs.get(task, decl.unqualifiedName)
                 val attrs = decl.expression match {
                     case None => taskAttrs
                     case Some(expr) =>
