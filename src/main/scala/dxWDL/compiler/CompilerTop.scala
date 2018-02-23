@@ -147,11 +147,8 @@ object CompilerTop {
         // get list of available instance types
         val instanceTypeDB = InstanceTypeDB.query(dxProject, cOpt.verbose)
 
-        // Convert the fully-qualified names to unaqulified.
-        val irNsFlat = IR.Namespace.flatten(irNs)
-
         // Generate dx:applets and dx:workflow from the IR
-        Native.apply(irNsFlat,
+        Native.apply(irNs,
                      dxWDLrtId, folder, dxProject, instanceTypeDB,
                      cOpt.force, cOpt.archive, cOpt.locked, cOpt.verbose)
     }

@@ -142,7 +142,7 @@ object IR {
     // A stage can call an applet or a workflow
     case class Stage(name: String,
                      id: Utils.DXWorkflowStage,
-                     calleeFQN: String,
+                     calleeName: String,
                      inputs: Vector[SArg],
                      outputs: Vector[CVar])
 
@@ -206,74 +206,15 @@ object IR {
         // Make a list of all the workflows and applets that can be
         // called, if we import this namespace. Index them by their
         // fully qualified names.
-        def buildCallables(irNs: Namespace) : Map[String, Callable] = {
-            val prefix = irNs.importedAs.getOrElse("")
+        def buildCallables(irNs: IR.Namespace) : Map[String, IR.Callable] = {
             val aplCallables = irNs.applets.map {
-                case (aplName, apl) => s"${prefix}.${aplName}" -> apl
+                case (aplName, apl) => aplName -> apl
             }.toMap
             irNs match {
-                case _: NamespaceLeaf =>
+                case _: IR.NamespaceLeaf =>
                     aplCallables
                 case IR.NamespaceNode(_,_,_,wf,_) =>
-                    aplCallables + (s"${prefix}.${wf.name}" -> wf)
-            }
-        }
-
-        // build a list of all the applets and workflows that can be
-        // called by importing any of the child namespaces
-        def callablesFromNamespace(ns: Namespace) : Map[String, IR.Callable] = {
-/*            val taskApplets =
-                ns.applets.filter{ case (_,apl) => apl.kind == AppletKindTask }
-                    .map{ case (name, apl) => name -> apl}
-                    .toMap*/
-            val childCallables = ns match {
-                case _: NamespaceLeaf =>
-                    Map.empty
-                case node: NamespaceNode =>
-                    node.children.foldLeft(Map.empty[String, IR.Callable]){
-                        case (accu, child) =>
-                            accu ++ buildCallables(child)
-                    }
-            }
-            ns.applets ++ childCallables
-        }
-
-        // convert all fully qualified applet names to unqualified. We can do this, becase
-        // we know that there is exactly one version of each task and workflow.
-        def flatten(ns: Namespace) : Namespace = {
-            // "A.B.C" -> "C"
-            def getUnqualifiedName(fqn: String) : String = {
-                val index = fqn.lastIndexOfSlice(".")
-                fqn.substring(index+1)
-            }
-            def flattenCalls(calls: Map[String, String]) =
-                calls.map{ case (key, value) => key -> getUnqualifiedName(value) }
-            val flatApplets = ns.applets.map{ case (name, apl) =>
-                val kind = apl.kind match {
-                    case AppletKindIf(calls) =>
-                        AppletKindIf(flattenCalls(calls))
-                    case AppletKindScatter(calls) =>
-                        AppletKindScatter(flattenCalls(calls))
-                    case AppletKindScatterCollect(calls) =>
-                        AppletKindScatterCollect(flattenCalls(calls))
-                    case other => other
-                }
-                val appletUnqualifiedName = getUnqualifiedName(name)
-                appletUnqualifiedName -> apl.copy(kind = kind)
-            }.toMap
-            ns match {
-                case leaf: NamespaceLeaf =>
-                    leaf.copy(applets = flatApplets)
-                case node: NamespaceNode =>
-                    // recurse into children
-                    val flatChildren = node.children.map(flatten(_)).toVector
-                    val flatStages = node.workflow.stages.map{ stage =>
-                        stage.copy(calleeFQN = getUnqualifiedName(stage.calleeFQN))
-                    }
-                    val flatWorkflow = node.workflow.copy(stages = flatStages)
-                    node.copy(applets = flatApplets,
-                              workflow = flatWorkflow,
-                              children = flatChildren)
+                    aplCallables + (wf.name -> wf)
             }
         }
     }

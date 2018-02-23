@@ -15,8 +15,7 @@ import wdl.WdlExpression.AstForExpressions
 import wom.types._
 import wom.values._
 
-case class GenerateIR(importedAs: Option[String],
-                      callables: Map[String, IR.Callable],
+case class GenerateIR(callables: Map[String, IR.Callable],
                       cef: CompilerErrorFormatter,
                       reorg: Boolean,
                       locked: Boolean,
@@ -107,32 +106,15 @@ task Add {
         WdlExpression.fromString(sExpr)
     }
 
+    // Here, we use the flat namespace assumption. We use
+    // unqualified names as Fully-Qualified-Names, because
+    // task and workflow names are unique.
     private def calleeFQN(call: WdlCall) : String = {
-        val fqn = call match {
+        call match {
             case tc: WdlTaskCall =>
-                tc.task.fullyQualifiedName
+                tc.task.unqualifiedName
             case wfc: WdlWorkflowCall =>
-                wfc.calledWorkflow.fullyQualifiedName
-        }
-
-        // Assume a workflow 'main' imported namespace 'lib'. Lib
-        // includes workflow 'review' that calls task 'rotten_tomatoes'.
-        //
-        // main: workflow
-        //     \
-        //      lib namespace
-        //      review: workflow
-        //      rotten_tomatoes: task
-        //
-        // When compiling 'review', the fqn for the task is 'lib.rotten_tomatoes'
-        // instead of just 'rotten_tomatoes'. The code below fixes this.
-        importedAs match {
-            case None => fqn
-            case Some(impName) =>
-                if (fqn.startsWith(impName + "."))
-                    fqn.substring(impName.length + 1)
-                else
-                    fqn
+                wfc.calledWorkflow.unqualifiedName
         }
     }
 
@@ -474,7 +456,6 @@ workflow w {
         env: CallEnv,
         wfOutputs: Seq[WorkflowOutput]) : Vector[(CVar, SArg)] =
     {
-        Utils.trace(verbose.on, s"prepareOutputSection ${wfOutputs}")
         wfOutputs.map { wot =>
             val cVar = CVar(wot.unqualifiedName, wot.womType, DeclAttrs.empty, wot.ast)
 
@@ -1394,52 +1375,11 @@ object GenerateIR {
                              reorg: Boolean,
                              locked: Boolean,
                              verbose: Verbose) : Map[String, IR.Applet] = {
-        val gir = new GenerateIR(nsTree.importedAs, Map.empty, nsTree.cef, reorg, locked, verbose)
+        val gir = new GenerateIR(Map.empty, nsTree.cef, reorg, locked, verbose)
         nsTree.tasks.map{ case (_,task) =>
             val applet = gir.compileTask(task)
             task.name -> applet
         }.toMap
-    }
-
-    // We need to map the WDL namespace hierarchy to a flat space of
-    // dx:applets and dx:workflows in the project and folder.
-    //
-    // A task, similarly workflow, can be defined more than once in a
-    // complex namespace with imports. We choose to compile it to an
-    // applet with its unqualified name.
-    //
-    // This method makes sure each applet and workflow are
-    // defined exactly once, and is uniquely named by its
-    // unqualified name.
-    private def checkFlatNamespace(ns: IR.Namespace,
-                                   verbose: Verbose) : Unit = {
-        // make sure unique names for applets (only)
-        val allAppletNames: Vector[String] = IR.Namespace.listApplets(ns).map(_.name)
-        val aplCounts: Map[String, Int] = allAppletNames.groupBy(x => x).mapValues(_.size)
-        aplCounts.foreach{ case (aplName, nAppear) =>
-            if (nAppear > 1)
-                throw new Exception(s"""|Applet ${aplName} appears ${nAppear} times. It has to
-                                        |be unique in order to be compiled to a single
-                                        |dnanexus applet""".stripMargin.trim)
-        }
-
-        // make sure workflow names are unique
-        val allWorkflowNames: Vector[String] = IR.Namespace.listWorkflows(ns).map(_.name)
-        val wfCounts: Map[String, Int] = allAppletNames.groupBy(x => x).mapValues(_.size)
-        wfCounts.foreach{ case (wfName, nAppear) =>
-            if (nAppear > 1)
-                throw new Exception(s"""|Workflow ${wfName} appears ${nAppear} times. It has to
-                                        |be unique in order to be compiled to a single
-                                        |dnanexus workflow""".stripMargin.trim)
-        }
-
-        // make sure there is no intersection between applet and workflow names
-        val allNames = allAppletNames ++ allWorkflowNames
-        val counts: Map[String, Int] = allNames.groupBy(x => x).mapValues(_.size)
-        counts.foreach{ case (name, nAppear) =>
-            if (nAppear > 1)
-                throw new Exception(s"Name ${name} is used for an applet and a workflow.")
-        }
     }
 
     def apply(nsTree : NamespaceOps.Tree,
@@ -1471,11 +1411,10 @@ object GenerateIR {
                 val callableNames = callables.map{ case (name,_) => name }
                 Utils.trace(verbose.on, s"callables=${callableNames}")
 
-                val gir = new GenerateIR(nsTree.importedAs, callables, cef, reorg, locked, verbose)
+                val gir = new GenerateIR(callables, cef, reorg, locked, verbose)
                 val (irWf, auxApplets) = gir.compileWorkflow(workflow)
                 IR.NamespaceNode(name, importedAs, auxApplets ++ taskApplets, irWf, childrenIR)
         }
-        checkFlatNamespace(nsTree1, verbose)
         nsTree1
     }
 }

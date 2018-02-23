@@ -728,7 +728,7 @@ case class Native(dxWDLrtId: String,
         val (stagesReq, stageDict) =
             wf.stages.foldLeft((Vector.empty[JsValue], Map.empty[String, DXWorkflowStage])) {
                 case ((stagesReq, stageDict), stg) =>
-                    val (irApplet,dxExec) = execDict(stg.calleeFQN)
+                    val (irApplet,dxExec) = execDict(stg.calleeName)
                     val linkedInputs : Vector[(CVar, SArg)] = irApplet.inputVars zip stg.inputs
                     val inputs = genStageInputs(linkedInputs, stageDict)
                     // convert the per-stage metadata into JSON

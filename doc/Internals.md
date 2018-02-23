@@ -632,12 +632,16 @@ We convert it into:
 
 ## Handling imports and nested namespaces
 
-In WDL, each source file creates its own namespace. A WDL file can
-import other files, creating child namespaces. Tasks and workflows
-from children can be called from the top level script. To handle this,
-we follow the links and load all the source files into an in memory
-tree. The simplify and reorder steps are applied as transformations to
-this tree. To control what source gets loaded when following an
-import, we create a custom *resolver* that works hand-in-hand with the
-in-memory tree. Instead of following a URI to the original source, the
-resolver returns the modified source.
+A WDL file creates its own namespace. It can also import other files,
+each inhabiting its own sub-namespaces. Tasks and workflows from
+children can be called with their fully-qualified-names. We map the
+WDL namespace hierarchy to a flat space of *dx:applets* and
+*dx:workflows* in the target project and folder. To do this, we
+make sure that tasks and workflows are uniquely named.
+
+In a complex namespace, a task/workflow can have several definitions. Such
+namespaces cannot be compiled by dxWDL.
+
+The implementation strategy in handling sub-namespaces, is to load all the
+WDL source files into an in memory tree. The simplify and reorder steps
+are applied as transformations to this tree.

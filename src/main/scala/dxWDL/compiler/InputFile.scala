@@ -83,6 +83,21 @@ case class InputFile(verbose: Verbose) {
         }
     }
 
+    // build a list of all the applets and workflows that can be
+    // called by importing any of the child namespaces
+    private def callablesFromNamespace(ns: IR.Namespace) : Map[String, IR.Callable] = {
+        val childCallables = ns match {
+            case _: IR.NamespaceLeaf =>
+                Map.empty
+            case node: IR.NamespaceNode =>
+                node.children.foldLeft(Map.empty[String, IR.Callable]){
+                    case (accu, child) =>
+                        accu ++ IR.Namespace.buildCallables(child)
+                }
+        }
+        ns.applets ++ childCallables
+    }
+
     // If a stage has defaults, set the SArg to a constant. The user
     // can override it at runtime.
     private def addDefaultsToStage(wf: IR.Workflow,
@@ -162,12 +177,12 @@ case class InputFile(verbose: Verbose) {
         // read the default inputs file (xxxx.json)
         val wdlDefaults: JsObject = Utils.readFileContent(defaultInputs).parseJson.asJsObject
         val defaultFields:HashMap[String,JsValue] = preprocessInputs(wdlDefaults)
-        val callables = IR.Namespace.callablesFromNamespace(ns)
+        val callables = callablesFromNamespace(ns)
         val callableNames = callables.map{ case (name,_) => name }
         Utils.trace(verbose.on, s"callables=${callableNames}")
 
         val stagesWithDefaults = wf.stages.map{ stage =>
-            val callee:IR.Callable = callables(stage.calleeFQN)
+            val callee:IR.Callable = callables(stage.calleeName)
             val visible = callee match {
                 case applet: IR.Applet =>
                     applet.kind match {
@@ -251,7 +266,7 @@ case class InputFile(verbose: Verbose) {
 
         // make a pass on all the stages
         wf.stages.foreach{ stage =>
-            val callee: IR.Callable = callables(stage.calleeFQN)
+            val callee: IR.Callable = callables(stage.calleeName)
             // make a pass on all call inputs
             stage.inputs.zipWithIndex.foreach{
                 case (_,idx) =>
@@ -331,7 +346,7 @@ case class InputFile(verbose: Verbose) {
         }
         ns match {
             case IR.NamespaceNode(_,_,_,wf,_) =>
-                val callables = IR.Namespace.callablesFromNamespace(ns)
+                val callables = callablesFromNamespace(ns)
                 handleWorkflow(wf, callables, cif)
             case _ => ()
         }

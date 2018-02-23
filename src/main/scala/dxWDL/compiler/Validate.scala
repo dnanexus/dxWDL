@@ -79,7 +79,55 @@ case class Validate(cef: CompilerErrorFormatter,
 }
 
 object Validate {
+    // We need to map the WDL namespace hierarchy to a flat space of
+    // dx:applets and dx:workflows in the project and folder.
+    //
+    // A task, similarly workflow, can be defined more than once in a
+    // complex namespace with imports. We choose to compile it to an
+    // applet with its unqualified name.
+    //
+    // This method makes sure each applet and workflow are
+    // defined exactly once, and is uniquely named by its
+    // unqualified name.
+    private def checkFlatNamespace(ns: WdlNamespace,
+                                   verbose: Verbose) : Unit = {
+        // make a flat list of all referenced namespaces and sub-namespaces
+        val allNs: Vector[WdlNamespace] = ns.allNamespacesRecursively.toVector
+
+        // make sure task names are unique
+        val allTasks: Vector[WdlTask] = allNs.map{ ns => ns.tasks }.flatten
+        val allTaskNames : Vector[String] = allTasks.map(_.unqualifiedName)
+        val taskCounts: Map[String, Int] = allTaskNames.groupBy(x => x).mapValues(_.size)
+        taskCounts.foreach{ case (taskName, nAppear) =>
+            if (nAppear > 1)
+                throw new Exception(s"""|Task ${taskName} appears ${nAppear} times. It has to
+                                        |be unique in order to be compiled to a single
+                                        |dnanexus applet""".stripMargin.trim)
+        }
+
+        // make sure workflow names are unique
+        val allWorkflows: Vector[WdlWorkflow] = allNs.map{ ns => ns.workflows }.flatten
+        val allWorkflowNames : Vector[String] = allWorkflows.map(_.unqualifiedName)
+        val wfCounts: Map[String, Int] = allWorkflowNames.groupBy(x => x).mapValues(_.size)
+        wfCounts.foreach{ case (wfName, nAppear) =>
+            if (nAppear > 1)
+                throw new Exception(s"""|Workflow ${wfName} appears ${nAppear} times. It has to
+                                        |be unique in order to be compiled to a single
+                                        |dnanexus workflow""".stripMargin.trim)
+        }
+
+        // make sure there is no intersection between applet and workflow names
+        val allNames = allTaskNames ++ allWorkflowNames
+        val counts: Map[String, Int] = allNames.groupBy(x => x).mapValues(_.size)
+        counts.foreach{ case (name, nAppear) =>
+            if (nAppear > 1)
+                throw new Exception(s"Name ${name} is used for an applet and a workflow.")
+        }
+    }
+
     def apply(ns: WdlNamespace, verbose: Verbose) : Unit = {
+        checkFlatNamespace(ns, verbose)
+
         val cef = new CompilerErrorFormatter(ns.terminalMap)
         val v = new Validate(cef, verbose)
         v.apply(ns)
