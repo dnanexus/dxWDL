@@ -1,5 +1,10 @@
 package dxWDL
 
+import com.dnanexus._
+import spray.json._
+import wdl.types._
+import wom.types._
+
 // Exception used for AppInternError
 class AppInternalException private(ex: RuntimeException) extends RuntimeException(ex) {
     def this(message:String) = this(new RuntimeException(message))
@@ -64,3 +69,40 @@ case class CompilerOptions(archive: Boolean,
                            inputs: List[java.nio.file.Path],
                            reorg: Boolean,
                            verbose: Verbose)
+
+// Information used to link applets that call other applets. For example, a scatter
+// applet calls applets that implement tasks.
+case class ExecLinkInfo(inputs: Map[String, WomType],
+                        dxExec: DXDataObject)
+
+object ExecLinkInfo {
+    def writeJson(ali: ExecLinkInfo) : JsValue = {
+            // Serialize applet input definitions, so they could be used
+            // at runtime.
+        val appInputDefs: Map[String, JsString] = ali.inputs.map{
+            case (name, womType) => name -> JsString(womType.toDisplayString)
+        }.toMap
+        JsObject(
+            "id" -> JsString(ali.dxExec.getId()),
+            "inputs" -> JsObject(appInputDefs)
+        )
+    }
+
+    def readJson(aplInfo: JsValue, dxProject: DXProject) = {
+        val dxExec = aplInfo.asJsObject.fields("id") match {
+            case JsString(execId) =>
+                if (execId.startsWith("applet-"))
+                    DXApplet.getInstance(execId, dxProject)
+                else if (execId.startsWith("workflow-"))
+                    DXWorkflow.getInstance(execId, dxProject)
+                else
+                    throw new Exception(s"${execId} is not an applet nor a workflow")
+            case _ => throw new Exception("Bad JSON")
+        }
+        val inputDefs = aplInfo.asJsObject.fields("inputs").asJsObject.fields.map{
+            case (key, JsString(womTypeStr)) => key -> WdlFlavoredWomType.fromDisplayString(womTypeStr)
+            case _ => throw new Exception("Bad JSON")
+        }.toMap
+        ExecLinkInfo(inputDefs, dxExec)
+    }
+}

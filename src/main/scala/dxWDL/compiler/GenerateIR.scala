@@ -15,7 +15,8 @@ import wdl.WdlExpression.AstForExpressions
 import wom.types._
 import wom.values._
 
-case class GenerateIR(callables: Map[String, IR.Callable],
+case class GenerateIR(importedAs: Option[String],
+                      callables: Map[String, IR.Callable],
                       cef: CompilerErrorFormatter,
                       reorg: Boolean,
                       locked: Boolean,
@@ -107,11 +108,31 @@ task Add {
     }
 
     private def calleeFQN(call: WdlCall) : String = {
-        call match {
+        val fqn = call match {
             case tc: WdlTaskCall =>
                 tc.task.fullyQualifiedName
             case wfc: WdlWorkflowCall =>
                 wfc.calledWorkflow.fullyQualifiedName
+        }
+
+        // Assume a workflow 'main' imported namespace 'lib'. Lib
+        // includes workflow 'review' that calls task 'rotten_tomatoes'.
+        //
+        // main: workflow
+        //     \
+        //      lib namespace
+        //      review: workflow
+        //      rotten_tomatoes: task
+        //
+        // When compiling 'review', the fqn for the task is 'lib.rotten_tomatoes'
+        // instead of just 'rotten_tomatoes'. The code below fixes this.
+        importedAs match {
+            case None => fqn
+            case Some(impName) =>
+                if (fqn.startsWith(impName + "."))
+                    fqn.substring(impName.length + 1)
+                else
+                    fqn
         }
     }
 
@@ -453,6 +474,7 @@ workflow w {
         env: CallEnv,
         wfOutputs: Seq[WorkflowOutput]) : Vector[(CVar, SArg)] =
     {
+        Utils.trace(verbose.on, s"prepareOutputSection ${wfOutputs}")
         wfOutputs.map { wot =>
             val cVar = CVar(wot.unqualifiedName, wot.womType, DeclAttrs.empty, wot.ast)
 
@@ -573,14 +595,6 @@ workflow w {
                                WdlRewrite.namespace(taskCleaned))
         verifyWdlCodeIsLegal(applet.ns)
         applet
-    }
-
-    def taskOfCall(call:WdlCall): WdlTask = {
-        call match {
-            case x:WdlTaskCall => x.task
-            case x:WdlWorkflowCall =>
-                throw new Exception(cef.notCurrentlySupported(call.ast, s"calling a workflow"))
-        }
     }
 
     private def findInputByName(call: WdlCall, cVar: CVar) : Option[(String,WdlExpression)] = {
@@ -759,11 +773,12 @@ workflow w {
             .map( decl => CVar(decl.unqualifiedName, decl.womType, DeclAttrs.empty, decl.ast) )
             .toVector
         val outputVars : Vector[CVar] = children.map {
-            case call:WdlTaskCall =>
-                val task = taskOfCall(call)
-                task.outputs.map { tso =>
-                    val varName = call.unqualifiedName ++ "." ++ tso.unqualifiedName
-                    CVar(varName, outsideType(tso.womType), DeclAttrs.empty, tso.ast)
+            case call:WdlCall =>
+                val calleeName = calleeFQN(call)
+                val callee = callables(calleeName)
+                callee.outputVars.map { cVar =>
+                    val varName = call.unqualifiedName ++ "." ++ cVar.name
+                    CVar(varName, outsideType(cVar.womType), DeclAttrs.empty, cVar.ast)
                 }
             case decl:Declaration if !isLocal(decl) =>
                 Vector(CVar(decl.unqualifiedName, outsideType(decl.womType),
@@ -833,6 +848,9 @@ workflow w {
                 case tc:WdlTaskCall =>
                     val inputs = tc.inputMappings.map{ case (k,expr) => (k, transform(expr)) }.toMap
                     WdlRewrite.taskCall(tc, inputs)
+                case wfc:WdlWorkflowCall =>
+                    val inputs = wfc.inputMappings.map{ case (k,expr) => (k, transform(expr)) }.toMap
+                    WdlRewrite.workflowCall(wfc, inputs)
                 case d:Declaration =>
                     new Declaration(d.womType, d.unqualifiedName,
                                     d.expression.map(transform), d.parent, d.ast)
@@ -1274,7 +1292,7 @@ workflow w {
                                       wfInputs: Vector[(CVar, SArg)],
                                       subBlocks: Vector[Block]) :
             (Vector[(IR.Stage, Option[IR.Applet])], Vector[(CVar, SArg)]) = {
-        Utils.trace(verbose.on, "IR: compiling locked-down workflow")
+        Utils.trace(verbose.on, s"IR: compiling locked-down workflow ${wf.unqualifiedName}")
 
         // Locked-down workflow, we have workflow level inputs and outputs
         val initEnv : CallEnv = wfInputs.map { case (cVar,sArg) =>
@@ -1293,7 +1311,7 @@ workflow w {
                                        wfInputs: Vector[(CVar, SArg)],
                                        subBlocks: Vector[Block]) :
             (Vector[(IR.Stage, Option[IR.Applet])], Vector[(CVar, SArg)]) = {
-        Utils.trace(verbose.on, "IR: compiling regular workflow")
+        Utils.trace(verbose.on, s"IR: compiling regular workflow ${wf.unqualifiedName}")
 
         // Create a preliminary stage to handle workflow inputs, and top-level
         // declarations.
@@ -1372,9 +1390,12 @@ workflow w {
 
 object GenerateIR {
     // compile all the [tasks] to dx:applets
-    private def compileTasks(gir: GenerateIR,
-                             tasks: Map[String, WdlTask]) : Map[String, IR.Applet] = {
-        tasks.map{ case (_,task) =>
+    private def compileTasks(nsTree: NamespaceOps.Tree,
+                             reorg: Boolean,
+                             locked: Boolean,
+                             verbose: Verbose) : Map[String, IR.Applet] = {
+        val gir = new GenerateIR(nsTree.importedAs, Map.empty, nsTree.cef, reorg, locked, verbose)
+        nsTree.tasks.map{ case (_,task) =>
             val applet = gir.compileTask(task)
             task.name -> applet
         }.toMap
@@ -1425,10 +1446,8 @@ object GenerateIR {
               reorg: Boolean,
               locked: Boolean,
               verbose: Verbose) : IR.Namespace = {
-        Utils.trace(verbose.on, "IR pass")
-
-        val girTasks = new GenerateIR(Map.empty, nsTree.cef, reorg, locked, verbose)
-        val taskApplets = compileTasks(girTasks, nsTree.tasks)
+        Utils.trace(verbose.on, s"IR pass on namespace ${nsTree.name}")
+        val taskApplets = compileTasks(nsTree, reorg, locked, verbose)
 
         // recursively generate IR for the entire tree
         val nsTree1 = nsTree match {
@@ -1452,7 +1471,7 @@ object GenerateIR {
                 val callableNames = callables.map{ case (name,_) => name }
                 Utils.trace(verbose.on, s"callables=${callableNames}")
 
-                val gir = new GenerateIR(callables, cef, reorg, locked, verbose)
+                val gir = new GenerateIR(nsTree.importedAs, callables, cef, reorg, locked, verbose)
                 val (irWf, auxApplets) = gir.compileWorkflow(workflow)
                 IR.NamespaceNode(name, importedAs, auxApplets ++ taskApplets, irWf, childrenIR)
         }

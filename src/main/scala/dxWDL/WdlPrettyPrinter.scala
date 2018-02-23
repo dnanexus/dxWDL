@@ -230,7 +230,7 @@ case class WdlPrettyPrinter(fqnFlag: Boolean,
             case _ => true
         }
         val children = wfChildren.map {
-            case call: WdlTaskCall => apply(call, level + 1)
+            case call: WdlCall => apply(call, level + 1)
             case sc: Scatter => apply(sc, level + 1)
             case decl: Declaration => apply(decl, level + 1)
             case cond: If  => apply(cond, level + 1)

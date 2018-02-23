@@ -46,7 +46,6 @@ package dxWDL.runner
 // DX bindings
 import com.dnanexus._
 import dxWDL._
-import dxWDL.Utils.AppletLinkInfo
 import java.nio.file.{Path, Paths, Files}
 import scala.collection.mutable.HashMap
 import spray.json._
@@ -77,8 +76,8 @@ case class MiniWorkflow(exportVars: Set[String],
     // find the sequence of applets inside the scatter block. In the example,
     // these are: [inc1, inc2]
     private def findApplets(scope: Scope,
-                            linkInfo: Map[String, AppletLinkInfo])
-            : Seq[(WdlCall, AppletLinkInfo)] = {
+                            linkInfo: Map[String, ExecLinkInfo])
+            : Seq[(WdlCall, ExecLinkInfo)] = {
         // Match each call with its dx:applet
         scope.children.map {
             case call: WdlTaskCall =>
@@ -174,7 +173,7 @@ case class MiniWorkflow(exportVars: Set[String],
     }
       */
     private def buildAppletInputs(call: WdlCall,
-                                  apLinkInfo: AppletLinkInfo,
+                                  apLinkInfo: ExecLinkInfo,
                                   env : Env) : JsValue = {
         val callName = call.unqualifiedName
         val appInputs: Map[String, Option[WdlVarLinks]] = apLinkInfo.inputs.map{
@@ -291,7 +290,7 @@ case class MiniWorkflow(exportVars: Set[String],
     // executions.  Return the variables calculated.
     private def evalScatter(scatter : Scatter,
                             collection : WdlVarLinks,
-                            calls : Seq[(WdlCall, AppletLinkInfo)],
+                            calls : Seq[(WdlCall, ExecLinkInfo)],
                             outerEnv : Map[String, WdlVarLinks]) : Map[String, WdlVarLinks] = {
         Utils.appletLog(s"evalScatter")
 
@@ -385,7 +384,7 @@ case class MiniWorkflow(exportVars: Set[String],
     // executions.
     private def evalIf(cond : If,
                        condition : WdlVarLinks,
-                       calls : Seq[(WdlCall, AppletLinkInfo)],
+                       calls : Seq[(WdlCall, ExecLinkInfo)],
                        outerEnv: Map[String, WdlVarLinks]) : Map[String, WdlVarLinks] = {
         Utils.appletLog(s"evalIf")
 
@@ -464,7 +463,7 @@ case class MiniWorkflow(exportVars: Set[String],
     // Load from disk a mapping of applet name to id. We
     // need this in order to call the right version of other
     // applets.
-    private def loadLinkInfo(dxProject: DXProject) : Map[String, AppletLinkInfo]= {
+    private def loadLinkInfo(dxProject: DXProject) : Map[String, ExecLinkInfo]= {
         Utils.appletLog(s"Loading link information")
         val linkSourceFile: Path = Paths.get("/" + Utils.LINK_INFO_FILENAME)
         if (!Files.exists(linkSourceFile)) {
@@ -474,7 +473,7 @@ case class MiniWorkflow(exportVars: Set[String],
             try {
                 info.parseJson.asJsObject.fields.map {
                     case (key:String, jso) =>
-                        key -> AppletLinkInfo.readJson(jso, dxProject)
+                        key -> ExecLinkInfo.readJson(jso, dxProject)
                     case _ =>
                         throw new AppInternalException(s"Bad JSON")
                 }.toMap
@@ -533,7 +532,7 @@ case class MiniWorkflow(exportVars: Set[String],
         val dxProject = dxEnv.getProjectContext()
         val linkInfo = loadLinkInfo(dxProject)
         Utils.appletLog(s"link info=${linkInfo}")
-        val applets : Seq[(WdlCall, AppletLinkInfo)] = findApplets(scope, linkInfo)
+        val applets : Seq[(WdlCall, ExecLinkInfo)] = findApplets(scope, linkInfo)
 
         val blockOutputs : Map[String, WdlVarLinks] = scope match {
             case scatter:Scatter =>

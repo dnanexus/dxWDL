@@ -25,10 +25,6 @@ object Utils {
         def this() = this(new RuntimeException("Variable access in supposed constant"))
     }
 
-    // Information used to link applets that call other applets. For example, a scatter
-    // applet calls applets that implement tasks.
-    case class AppletLinkInfo(inputs: Map[String, WomType], dxExec: DXDataObject)
-
     // A stand in for the DXWorkflow.Stage inner class (we don't have a constructor for it)
     case class DXWorkflowStage(id: String) {
         def getId() = id
@@ -48,32 +44,6 @@ object Utils {
     // An equivalent for the InputParmater/OutputParameter types
     case class DXIOParam(ioClass: IOClass,
                          optional: Boolean)
-
-    object AppletLinkInfo {
-        def writeJson(ali: AppletLinkInfo) : JsValue = {
-            // Serialize applet input definitions, so they could be used
-            // at runtime.
-            val appInputDefs: Map[String, JsString] = ali.inputs.map{
-                case (name, womType) => name -> JsString(womType.toDisplayString)
-            }.toMap
-            JsObject(
-                "id" -> JsString(ali.dxExec.getId()),
-                "inputs" -> JsObject(appInputDefs)
-            )
-        }
-
-        def readJson(aplInfo: JsValue, dxProject: DXProject) = {
-            val dxApplet = aplInfo.asJsObject.fields("id") match {
-                case JsString(appletId) => DXApplet.getInstance(appletId, dxProject)
-                case _ => throw new Exception("Bad JSON")
-            }
-            val inputDefs = aplInfo.asJsObject.fields("inputs").asJsObject.fields.map{
-                case (key, JsString(womTypeStr)) => key -> WdlFlavoredWomType.fromDisplayString(womTypeStr)
-                case _ => throw new Exception("Bad JSON")
-            }.toMap
-            AppletLinkInfo(inputDefs, dxApplet)
-        }
-    }
 
     val APPLET_LOG_MSG_LIMIT = 1000
     val CHECKSUM_PROP = "dxWDL_checksum"

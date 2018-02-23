@@ -445,8 +445,8 @@ case class Native(dxWDLrtId: String,
                         val callInputDefs: Map[String, WomType] = irCall.inputVars.map{
                             case CVar(name, wdlType, _, _, _) => (name -> wdlType)
                         }.toMap
-                        val ali = AppletLinkInfo(callInputDefs, dxObj)
-                        key -> AppletLinkInfo.writeJson(ali)
+                        val ali = ExecLinkInfo(callInputDefs, dxObj)
+                        key -> ExecLinkInfo.writeJson(ali)
                     }.toMap)
                 Some(linkInfo.prettyPrint)
             }
