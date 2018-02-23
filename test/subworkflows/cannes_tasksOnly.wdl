@@ -4,11 +4,12 @@ workflow cannes {
     Array[String] titles
 
     scatter (film in titles) {
-        call lib.review as review {
-            input: film=film
+        call lib.audience as audience {
+            input: film= film
         }
     }
+
     output {
-        review.score
+        audience.score
     }
 }

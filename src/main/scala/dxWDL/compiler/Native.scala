@@ -804,18 +804,21 @@ case class Native(dxWDLrtId: String,
     private def sortAppletsByDependencies(appletDict: Map[String, IR.Applet],
                                           execDict: ExecDict)
             : Vector[IR.Applet] = {
+        val alreadyCompiled = execDict.map{ case (key,_) => key }.toSet
+        Utils.trace(verbose.on, s"sortAppletsByDependencies, alreadyCompiled=${alreadyCompiled}")
+
         def immediateDeps(apl: IR.Applet) :Vector[IR.Applet] = {
-            var calls:Map[String, String] = apl.kind match {
+            val calls:Map[String, String] = apl.kind match {
                 case IR.AppletKindIf(calls) => calls
                 case IR.AppletKindScatter(calls) => calls
                 case IR.AppletKindScatterCollect(calls) => calls
                 case _ => Map.empty
             }
             // Prune dependencies that have already been satisfied
-            calls = calls.filter{ case (_, taskName) => !(execDict contains taskName) }
+            val callsToCompile = calls.filter{ case (_, execName) => !(alreadyCompiled contains execName) }
 
             // Sanity: make sure we have definitions of the dependencies
-            calls.map{ case (_, taskName) =>
+            callsToCompile.map{ case (_, taskName) =>
                 appletDict.get(taskName) match {
                     case None => throw new Exception(
                         s"Applet ${apl.name} depends on an unknown applet ${taskName}")
@@ -903,8 +906,8 @@ case class Native(dxWDLrtId: String,
                 val wfInfo = (workflow, dxwfl)
 
                 val ns1 = DxWdlNamespaceNode(name, importedAs, appletDict, wfInfo, children)
-                val execDict1 = execDict + (workflow.name -> wfInfo)
-                (ns1, execDict1)
+                val execAllWithWf = execAll + (workflow.name -> wfInfo)
+                (ns1, execAllWithWf)
         }
     }
 }
