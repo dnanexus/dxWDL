@@ -3,7 +3,7 @@ package dxWDL
 import com.dnanexus._
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.databind.JsonNode
-import com.fasterxml.jackson.databind.node.ObjectNode
+//import com.fasterxml.jackson.databind.node.ObjectNode
 import java.nio.charset.StandardCharsets
 import java.nio.file.{Path, Paths, Files}
 import java.util.Base64
@@ -84,7 +84,7 @@ object Utils {
     lazy val execDirPath : Path = {
         val currentDir = System.getProperty("user.dir")
         val p = Paths.get(currentDir, "execution")
-        Utils.safeMkdir(p)
+        safeMkdir(p)
         p
     }
 
@@ -94,7 +94,7 @@ object Utils {
     lazy val tmpDirPath : Path = {
         val currentDir = System.getProperty("user.dir")
         val p = Paths.get(currentDir, "job_scratch_space")
-        Utils.safeMkdir(p)
+        safeMkdir(p)
         p
     }
     lazy val appCompileDirPath : Path = {
@@ -271,17 +271,17 @@ object Utils {
     // Create a dx link to a field in an execution. The execution could
     // be a job or an analysis.
     def makeEBOR(dxExec: DXExecution, fieldName: String) : JsValue = {
-        val dxid = dxExec.getId
-        val oNode : ObjectNode =
-            if (dxExec.isInstanceOf[DXJob]) {
-                DXJSON.getObjectBuilder().put("job", dxid).put("field", fieldName).build()
-            } else if (dxExec.isInstanceOf[DXAnalysis]) {
-                DXJSON.getObjectBuilder().put("analysis", dxid).put("field", fieldName).build()
-            } else {
-                throw new Exception(s"makeEBOR can't work with ${dxid}")
-            }
-        // convert from ObjectNode to JsValue
-        oNode.toString().parseJson
+        if (dxExec.isInstanceOf[DXJob]) {
+            JsObject("$dnanexus_link" -> JsObject(
+                         "field" -> JsString(fieldName),
+                         "job" -> JsString(dxExec.getId)))
+        } else if (dxExec.isInstanceOf[DXAnalysis]) {
+            JsObject("$dnanexus_link" -> JsObject(
+                         "field" -> JsString(fieldName),
+                         "analysis" -> JsString(dxExec.getId)))
+        } else {
+            throw new Exception(s"makeEBOR can't work with ${dxid}")
+        }
     }
 
     def runSubJob(entryPoint:String,
@@ -309,7 +309,7 @@ object Utils {
         val req = JsObject(fields ++ instanceFields ++ dependsFields)
         System.err.println(s"subjob request=${req.prettyPrint}")
         val retval: JsonNode = DXAPI.jobNew(jsonNodeOfJsValue(req), classOf[JsonNode])
-        val info: JsValue =  Utils.jsValueOfJsonNode(retval)
+        val info: JsValue =  jsValueOfJsonNode(retval)
         val id:String = info.asJsObject.fields.get("id") match {
             case Some(JsString(x)) => x
             case _ => throw new AppInternalException(
@@ -459,7 +459,7 @@ object Utils {
     // through dxjava.
     def projectDescribeExtraInfo(dxProject: DXProject) : (String,String) = {
         val rep = DXAPI.projectDescribe(dxProject.getId(), classOf[JsonNode])
-        val jso:JsObject = Utils.jsValueOfJsonNode(rep).asJsObject
+        val jso:JsObject = jsValueOfJsonNode(rep).asJsObject
 
         val billTo = jso.fields.get("billTo") match {
             case Some(JsString(x)) => x
