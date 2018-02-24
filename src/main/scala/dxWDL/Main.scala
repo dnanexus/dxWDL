@@ -116,6 +116,9 @@ object Main extends App {
                     case "inputs" =>
                         checkNumberOfArguments(keyword, 1, subargs)
                         (keyword, subargs.head)
+                    case "imports" =>
+                        checkNumberOfArguments(keyword, 1, subargs)
+                        (keyword, subargs.head)
                     case "locked" =>
                         checkNumberOfArguments(keyword, 0, subargs)
                         (keyword, "")
@@ -294,6 +297,10 @@ object Main extends App {
             case None => List.empty
             case Some(pl) => pl.map(p => Paths.get(p))
         }
+        val imports: List[Path] = options.get("imports") match {
+            case None => List.empty
+            case Some(pl) => pl.map(p => Paths.get(p))
+        }
         val verboseKeys: Set[String] = options.get("verbose") match {
             case None => Set.empty
             case Some(modulesToTrace) => modulesToTrace.toSet
@@ -305,8 +312,9 @@ object Main extends App {
                         compileMode,
                         defaults,
                         options contains "force",
-                        options contains "locked",
+                        imports,
                         inputs,
+                        options contains "locked",
                         options contains "reorg",
                         verbose)
     }

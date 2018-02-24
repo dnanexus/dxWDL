@@ -1,6 +1,7 @@
 package dxWDL
 
 import com.dnanexus._
+import java.nio.file.Path
 import spray.json._
 import wdl.types._
 import wom.types._
@@ -63,10 +64,11 @@ case class Verbose(on: Boolean,
 // format
 case class CompilerOptions(archive: Boolean,
                            compileMode: CompilerFlag.Value,
-                           defaults: Option[java.nio.file.Path],
+                           defaults: Option[Path],
                            force: Boolean,
+                           imports: List[Path],
+                           inputs: List[Path],
                            locked: Boolean,
-                           inputs: List[java.nio.file.Path],
                            reorg: Boolean,
                            verbose: Verbose)
 

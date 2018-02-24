@@ -2,7 +2,8 @@
 
 ## 0.60
 - Split README into introduction, and advanced options. This should, hopefully, make
-  the top level text easier for the beginner.
+the top level text easier for the beginner.
+- Subworkflows: a workflow can now call another workflow.
 
 ## 0.59
 - Improved handling of pricing list

@@ -280,7 +280,7 @@ object Utils {
                          "field" -> JsString(fieldName),
                          "analysis" -> JsString(dxExec.getId)))
         } else {
-            throw new Exception(s"makeEBOR can't work with ${dxid}")
+            throw new Exception(s"makeEBOR can't work with ${dxExec.getId}")
         }
     }
 

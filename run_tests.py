@@ -48,7 +48,10 @@ medium_test_list = [
     "complex",
 
     # calling native dx applets
-    "call_native"
+    "call_native",
+
+    # subworkflows
+    "cannes"
 ]
 
 # Tests with the reorg flags

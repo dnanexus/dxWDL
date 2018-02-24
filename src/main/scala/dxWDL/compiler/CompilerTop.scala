@@ -3,12 +3,11 @@ package dxWDL.compiler
 import com.dnanexus.{DXProject}
 import com.typesafe.config._
 import dxWDL.{CompilerFlag, CompilerOptions, InstanceTypeDB, Utils}
-import java.nio.file.{Path, Paths}
+import java.nio.file.{Files, Path, Paths}
 import java.io.{FileWriter, PrintWriter}
 import scala.collection.JavaConverters._
 import scala.util.{Failure, Success}
-import wdl.WdlNamespace
-import wom.core.WorkflowSource
+import wdl.{WdlNamespace, ImportResolver}
 
 
 // Interface to the compilation tool chain. The methods here are the only ones
@@ -53,20 +52,32 @@ object CompilerTop {
         irNsEmb
     }
 
-    private def compileIR(wdlSourceFile : Path,
-                          cOpt: CompilerOptions) : IR.Namespace = {
-        // Resolving imports. Look for referenced files in the
-        // source directory.
-        def resolver(filename: String) : WorkflowSource = {
+    private def resolverFromImports(wdlSourceFile: Path,
+                                     imports: List[Path]) : ImportResolver = {
+        case filename =>
+            // Look in the base dir
             var sourceDir:Path = wdlSourceFile.getParent()
             if (sourceDir == null) {
                 // source file has no parent directory, use the
                 // current directory instead
                 sourceDir = Paths.get(System.getProperty("user.dir"))
             }
-            val p:Path = sourceDir.resolve(filename)
-            Utils.readFileContent(p)
-        }
+            val retval = (sourceDir :: imports).find{ dir =>
+                val p = dir.resolve(filename)
+                Files.exists(p)
+            }
+            retval match {
+                case None =>
+                    throw new Exception(s"Unable to find ${filename}")
+                case Some(dir) =>
+                    val p = dir.resolve(filename)
+                    Utils.readFileContent(p)
+            }
+    }
+
+    private def compileIR(wdlSourceFile : Path,
+                          cOpt: CompilerOptions) : IR.Namespace = {
+        val resolver = resolverFromImports(wdlSourceFile, cOpt.imports)
         val ns =
             WdlNamespace.loadUsingPath(wdlSourceFile, None, Some(List(resolver))) match {
                 case Success(ns) => ns

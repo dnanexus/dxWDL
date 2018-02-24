@@ -860,12 +860,12 @@ case class Native(dxWDLrtId: String,
     private def compileApplets(appletDict: Map[String, IR.Applet],
                                execDict: ExecDict) : Map[String, (IR.Applet, DXApplet)] = {
         val unsortedAppletNames = appletDict.map{ case (x,_) => x}.toVector
-        trace(verbose.on, s"Compile applets, names = ${unsortedAppletNames}")
+        trace(verbose2, s"Compile applets, names = ${unsortedAppletNames}")
 
         // Sort the applets according to dependencies.
         val applets = sortAppletsByDependencies(appletDict, execDict)
         val appletNames = applets.map(_.name)
-        trace(verbose.on, s"compilation order=${appletNames}")
+        trace(verbose2, s"compilation order=${appletNames}")
 
         // Build the individual applets. We need to keep track of
         // the applets created, to be able to link calls. For example,
@@ -877,7 +877,6 @@ case class Native(dxWDLrtId: String,
                     case IR.AppletKindNative(id) => DXApplet.getInstance(id)
                     case _ => buildAppletIfNeeded(apl, appletDict ++ execDict)
                 }
-                trace(verbose.on, s"Applet ${apl.name} = ${dxApplet.getId()}")
                 appletDict + (apl.name -> (apl, dxApplet))
         }.toMap
     }
