@@ -4,7 +4,7 @@ package dxWDL.compiler
 // indirectly referenced namespaces.
 //
 import dxWDL.{CompilerErrorFormatter, Utils, Verbose, WdlPrettyPrinter}
-import java.nio.file.{Path, Paths}
+import java.nio.file.Path
 import java.io.{FileWriter, PrintWriter}
 import wdl._
 import wdl4s.parser.WdlParser.{Terminal}
@@ -37,6 +37,7 @@ object NamespaceOps {
     case class TreeLeaf(name: String,
                         importedAs: Option[String],
                         cef: CompilerErrorFormatter,
+                        resolver: ImportResolver,
                         tasks: Map[String, WdlTask]) extends Tree {
         private def toNamespace() =
             new WdlNamespaceWithoutWorkflow(
@@ -68,24 +69,12 @@ object NamespaceOps {
     case class TreeNode(name: String,
                         importedAs: Option[String],
                         cef: CompilerErrorFormatter,
+                        resolver: ImportResolver,
                         imports: Seq[Import],
                         wdlSourceFile: Path,
                         workflow: WdlWorkflow,
                         tasks: Map[String, WdlTask],
                         children: Vector[Tree]) extends Tree {
-        // Resolving imports. Look for referenced files in the
-        // source directory.
-        private def resolver(filename: String) : WorkflowSource = {
-            var sourceDir:Path = wdlSourceFile.getParent()
-            if (sourceDir == null) {
-                // source file has no parent directory, use the
-                // current directory instead
-                sourceDir = Paths.get(System.getProperty("user.dir"))
-            }
-            val p:Path = sourceDir.resolve(filename)
-            Utils.readFileContent(p)
-        }
-
         private def toNamespace(wf: WdlWorkflow) =
             new WdlNamespaceWithWorkflow(
                 None,
@@ -117,8 +106,10 @@ object NamespaceOps {
         // Rewrite the workflow. Because the rewrite leaves the semantic
         // tree invalid, we re-parse it.
         def transform(f: (WdlWorkflow, CompilerErrorFormatter) => WdlWorkflow) : Tree = {
-            val wfTr = f(workflow, cef)
+            // recurse into children
+            val childrenTr = this.children.map(child => child.transform(f))
 
+            val wfTr = f(workflow, cef)
             // Convert a namespace to string representation and apply WDL
             // parser again. This fixes the ASTs, as well as any other
             // imperfections in our WDL rewriting technology.
@@ -138,32 +129,35 @@ object NamespaceOps {
                 case nswf: WdlNamespaceWithWorkflow => nswf.workflow
                 case _ => throw new Exception("sanity")
             }
-            val cleanCef = new CompilerErrorFormatter(cleanNs.terminalMap)
+            val cleanCef = new CompilerErrorFormatter(cef.sourceFile, cleanNs.terminalMap)
             this.copy(workflow = cleanWf,
-                      cef = cleanCef)
+                      cef = cleanCef,
+                      children = childrenTr)
         }
     }
 
     def load(ns: WdlNamespace,
-             wdlSourceFile: Path) : Tree = {
+             wdlSourceFile: Path,
+             resolver: ImportResolver) : Tree = {
         val name = ns.importUri match {
             case None => "Unknown namespace"
             case Some(x) => x
         }
         val taskDict = ns.tasks.map{ task => task.name -> task}.toMap
-        val cef = new CompilerErrorFormatter(ns.terminalMap)
+        val cef = new CompilerErrorFormatter(ns.resource, ns.terminalMap)
         ns match {
             case _:WdlNamespaceWithoutWorkflow =>
-                new TreeLeaf(name, ns.importedAs, cef, taskDict)
+                new TreeLeaf(name, ns.importedAs, cef, resolver, taskDict)
 
             case nswf:WdlNamespaceWithWorkflow =>
                 // recurse into sub-namespaces
                 val children:Vector[Tree] = nswf.namespaces.map{
-                    child => load(child, wdlSourceFile)
+                    child => load(child, wdlSourceFile, resolver)
                 }.toVector
                 TreeNode(name,
                          ns.importedAs,
                          cef,
+                         resolver,
                          nswf.imports,
                          wdlSourceFile,
                          nswf.workflow,

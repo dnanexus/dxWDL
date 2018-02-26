@@ -69,6 +69,7 @@ object Main extends App {
 
     // parse extra command line arguments
     def parseCmdlineOptions(arglist: List[String]) : OptionsMap = {
+        def keywordValueIsList = Set("inputs", "imports", "verbose")
         def normKeyword(word: String) : String = {
             // normalize a keyword, remove leading dashes, and convert
             // letters to lowercase.
@@ -156,12 +157,11 @@ object Main extends App {
                     case None =>
                         // first time
                         options(nKeyword) = List(value)
-                    case Some(x) if (nKeyword == "verbose") =>
+                    case Some(x) if (keywordValueIsList contains nKeyword) =>
                         // append to the already existing verbose flags
                         options(nKeyword) = value :: x
-                    case Some(x) if (nKeyword == "inputs") =>
-                        options(nKeyword) = value :: x
                     case Some(x) =>
+                        // overwrite the previous flag value
                         options(nKeyword) = List(value)
                 }
         }
@@ -443,7 +443,7 @@ object Main extends App {
         val (jobInputPath, jobOutputPath, jobErrorPath, jobInfoPath) =
             Utils.jobFilesOfHomeDir(homeDir)
         val ns = WdlNamespace.loadUsingPath(Paths.get(wdlDefPath), None, None).get
-        val cef = new CompilerErrorFormatter(ns.terminalMap)
+        val cef = new CompilerErrorFormatter(wdlDefPath, ns.terminalMap)
         try {
             // Figure out input/output types
             val (inputSpec, outputSpec) = Utils.loadExecInfo

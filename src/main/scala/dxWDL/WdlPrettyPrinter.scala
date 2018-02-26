@@ -110,8 +110,18 @@ case class WdlPrettyPrinter(fqnFlag: Boolean,
                 Vector(indentLine(line, level+1))
             }
         val callName =
-            if (fqnFlag) call.callable.fullyQualifiedName
-            else call.callable.unqualifiedName
+            if (fqnFlag) {
+                // Trim to the last two elements of the fully qualified name.
+                // For example, "A.B.C.D" --> "C.D"
+                val fqn = call.callable.fullyQualifiedName
+                val components = fqn.split("\\.")
+                val len = components.length
+                assert(len > 0)
+                val top2 = components.drop(len-2)
+                top2.mkString(".")
+            } else {
+                call.callable.unqualifiedName
+            }
         buildBlock(s"call ${callName} ${aliasStr}", inputsVec, level, true)
     }
 

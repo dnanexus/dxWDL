@@ -7,9 +7,15 @@ import wdl.WdlCall
 import wom.core._
 import wom.types.WomType
 
-case class CompilerErrorFormatter(terminalMap: Map[Terminal, WorkflowSource]) {
-    private def pointToSource(t: Terminal): String = s"${line(t)}\n${" " * (t.getColumn - 1)}^"
-    private def line(t:Terminal): String = terminalMap.get(t).get.split("\n")(t.getLine - 1)
+case class CompilerErrorFormatter(sourceFile: String,
+                                  terminalMap: Map[Terminal, WorkflowSource]) {
+    private def line(t:Terminal): String = {
+        terminalMap.get(t).get.split("\n")(t.getLine - 1)
+    }
+
+    private def pointToSource(t: Terminal): String = {
+        s"${sourceFile} ${line(t)}\n${" " * (t.getColumn - 1)}^"
+    }
 
     def cannotParseMemberAccess(ast: Ast) = {
         val t: Terminal = AstTools.findTerminals(ast).head

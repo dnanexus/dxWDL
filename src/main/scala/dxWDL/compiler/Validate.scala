@@ -94,9 +94,9 @@ object Validate {
         // make a flat list of all referenced namespaces and sub-namespaces
         val allNs: Vector[WdlNamespace] = ns.allNamespacesRecursively.toVector
 
-        // make sure task names are unique
-        val allTasks: Vector[WdlTask] = allNs.map{ ns => ns.tasks }.flatten
-        val allTaskNames : Vector[String] = allTasks.map(_.unqualifiedName)
+        // make sure tasks are unique
+        val allTasks: Set[WdlTask] = allNs.map{ ns => ns.tasks }.flatten.toSet
+        val allTaskNames : Set[String] = allTasks.map(_.unqualifiedName)
         val taskCounts: Map[String, Int] = allTaskNames.groupBy(x => x).mapValues(_.size)
         taskCounts.foreach{ case (taskName, nAppear) =>
             if (nAppear > 1)
@@ -125,10 +125,12 @@ object Validate {
         }
     }
 
-    def apply(ns: WdlNamespace, verbose: Verbose) : Unit = {
+    def apply(sourceFile: String,
+              ns: WdlNamespace,
+              verbose: Verbose) : Unit = {
         checkFlatNamespace(ns, verbose)
 
-        val cef = new CompilerErrorFormatter(ns.terminalMap)
+        val cef = new CompilerErrorFormatter(sourceFile, ns.terminalMap)
         val v = new Validate(cef, verbose)
         v.apply(ns)
     }

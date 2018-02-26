@@ -2,13 +2,12 @@ package dxWDL.compiler
 
 import com.dnanexus.{DXProject}
 import com.typesafe.config._
-import dxWDL.{CompilerFlag, CompilerOptions, InstanceTypeDB, Utils}
+import dxWDL.{CompilerFlag, CompilerOptions, InstanceTypeDB, Utils, Verbose}
 import java.nio.file.{Files, Path, Paths}
 import java.io.{FileWriter, PrintWriter}
 import scala.collection.JavaConverters._
 import scala.util.{Failure, Success}
 import wdl.{WdlNamespace, ImportResolver}
-
 
 // Interface to the compilation tool chain. The methods here are the only ones
 // that should be called to perform compilation.
@@ -52,32 +51,66 @@ object CompilerTop {
         irNsEmb
     }
 
-    private def resolverFromImports(wdlSourceFile: Path,
-                                     imports: List[Path]) : ImportResolver = {
-        case filename =>
-            // Look in the base dir
-            var sourceDir:Path = wdlSourceFile.getParent()
-            if (sourceDir == null) {
-                // source file has no parent directory, use the
-                // current directory instead
-                sourceDir = Paths.get(System.getProperty("user.dir"))
+    private def findSourcesInImports(wdlSourceFile: Path,
+                                     imports: List[Path],
+                                     verbose: Verbose) : Map[String, Path] = {
+        System.err.println(s"import directories:  ${imports.toVector}")
+
+        // Find all the WDL files under a directory.
+        def getListOfFiles(dir: Path) : Map[String, Path] = {
+            if (Files.exists(dir) && Files.isDirectory(dir)) {
+                val files: List[Path] =
+                    Files.list(dir).iterator().asScala
+                        .filter(Files.isRegularFile(_))
+                        .filter(_.toString.endsWith(".wdl"))
+                        .toList
+                files.map{ path =>  path.toFile.getName -> path}.toMap
+            } else {
+                Map.empty
             }
-            val retval = (sourceDir :: imports).find{ dir =>
-                val p = dir.resolve(filename)
-                Files.exists(p)
+        }
+
+        // Add the directory where the source file is in to the
+        // search path
+        def buildDirList : List[Path] = {
+            val parent:Path = wdlSourceFile.getParent()
+            val sourceDir =
+                if (parent == null) {
+                    // source file has no parent directory, use the
+                    // current directory instead
+                    Paths.get(System.getProperty("user.dir"))
+                } else {
+                    parent
+                }
+            sourceDir :: imports
+        }
+
+        val allWdlSourceFiles: Map[String, Path] =
+            buildDirList.foldLeft(Map.empty[String,Path]) {
+                case (accu, d) =>
+                    accu ++ getListOfFiles(d)
             }
-            retval match {
-                case None =>
-                    throw new Exception(s"Unable to find ${filename}")
-                case Some(dir) =>
-                    val p = dir.resolve(filename)
-                    Utils.readFileContent(p)
-            }
+
+        val wdlFileNames = allWdlSourceFiles.keys.mkString(", ")
+        Utils.trace(verbose.on, s"Files in search path=${wdlFileNames}")
+        allWdlSourceFiles
+    }
+
+
+    def makeResolver(allWdlSourceFiles: Map[String, Path]) : ImportResolver = {
+        filename =>
+        allWdlSourceFiles.get(filename) match {
+            case None =>
+                throw new Exception(s"Unable to find ${filename}")
+            case Some(path) =>
+                Utils.readFileContent(path)
+        }
     }
 
     private def compileIR(wdlSourceFile : Path,
                           cOpt: CompilerOptions) : IR.Namespace = {
-        val resolver = resolverFromImports(wdlSourceFile, cOpt.imports)
+        val allWdlSourceFiles = findSourcesInImports(wdlSourceFile, cOpt.imports, cOpt.verbose)
+        val resolver = makeResolver(allWdlSourceFiles)
         val ns =
             WdlNamespace.loadUsingPath(wdlSourceFile, None, Some(List(resolver))) match {
                 case Success(ns) => ns
@@ -88,9 +121,9 @@ object CompilerTop {
 
         // Make sure the namespace doesn't use names or substrings
         // that will give us problems.
-        Validate.apply(ns, cOpt.verbose)
+        Validate.apply(wdlSourceFile.toString, ns, cOpt.verbose)
 
-        val nsTree: NamespaceOps.Tree = NamespaceOps.load(ns, wdlSourceFile)
+        val nsTree: NamespaceOps.Tree = NamespaceOps.load(ns, wdlSourceFile, resolver)
 
         // Simplify the original workflow, for example,
         // convert call arguments from expressions to variables.

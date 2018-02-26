@@ -574,7 +574,7 @@ object MiniWorkflow {
         Utils.appletLog(s"exportVars=${exportVars}")
 
         // Run the workflow
-        val cef = new CompilerErrorFormatter(wf.wdlSyntaxErrorFormatter.terminalMap)
+        val cef = new CompilerErrorFormatter("", wf.wdlSyntaxErrorFormatter.terminalMap)
         val r = MiniWorkflow(exportVars, cef, orgInputs, collectSubjob, false)
         val json = r.apply(wf, inputs)
         json.asJsObject.fields

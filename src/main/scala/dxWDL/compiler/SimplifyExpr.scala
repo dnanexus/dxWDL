@@ -325,7 +325,6 @@ object SimplifyExpr {
     def apply(nsTree: NamespaceOps.Tree,
               wdlSourceFile: Path,
               verbose: Verbose) : NamespaceOps.Tree = {
-        // validate the namespace
         val nsTree1 = nsTree.transform{ case (wf, cef) =>
             val simpExpr = new SimplifyExpr(cef, verbose)
             simpExpr.simplifyWorkflow(wf)
