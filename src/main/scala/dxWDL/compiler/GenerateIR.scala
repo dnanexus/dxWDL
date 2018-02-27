@@ -1394,7 +1394,7 @@ object GenerateIR {
             case NamespaceOps.TreeLeaf(name, importedAs, cef, _, tasks) =>
                 IR.NamespaceLeaf(name, importedAs, taskApplets)
 
-            case NamespaceOps.TreeNode(name, importedAs, cef, _, imports, _, workflow, tasks, children) =>
+            case NamespaceOps.TreeNode(name, importedAs, cef, _, imports, workflow, tasks, children) =>
                 // The reorg and locked flags only apply to the top level
                 // workflow. All other workflows are sub-workflows, and they do
                 // not reorganize the outputs.

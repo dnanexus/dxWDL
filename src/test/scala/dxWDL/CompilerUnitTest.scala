@@ -21,6 +21,19 @@ class CompilerUnitTest extends FlatSpec with Matchers {
         path
     }
 
+    private def compareIgnoreWhitespace(a: String, b:String): Boolean = {
+        val retval = (a.replaceAll("\\s+", "") == b.replaceAll("\\s+", ""))
+        if (!retval) {
+            System.err.println("--- String comparison failed ---")
+            System.err.println(s"${a}")
+            System.err.println("---")
+            System.err.println(s"${b}")
+            System.err.println("---")
+        }
+        retval
+    }
+
+
     // These tests require compilation -without- access to the platform.
     // We need to split the compiler into front/back-ends to be able to
     // do this.
@@ -123,18 +136,6 @@ class CompilerUnitTest extends FlatSpec with Matchers {
         }
     }
 
-    def compareIgnoreWhitespace(a: String, b:String): Boolean = {
-        val retval = (a.replaceAll("\\s+", "") == b.replaceAll("\\s+", ""))
-        if (!retval) {
-            System.err.println("--- String comparison failed ---")
-            System.err.println(s"${a}")
-            System.err.println("---")
-            System.err.println(s"${b}")
-            System.err.println("---")
-        }
-        retval
-    }
-
     it should "Pretty print declaration" in {
         val wdl = "Array[Int] integers"
         val ns = WdlNamespace.loadUsingSource(wdl, None, None).get
@@ -160,4 +161,42 @@ class CompilerUnitTest extends FlatSpec with Matchers {
         val task = ns.findTask("inc").get
         WdlPrettyPrinter(false, None).commandBracketTaskSymbol(task) should be ("<<<",">>>")
     }
+
+    it should "Report a useful error for an invalid call name" in {
+        val wdlCode =
+            """|
+               |task review {
+               |  String film
+               |  command {}
+               |  output {
+               |    Float score = 4.3
+               |  }
+               |}
+               |
+               |workflow cannes {
+               |  Array[String] titles
+               |
+               |    scatter (film in titles) {
+               |        call review as review___two {
+               |            input: film=film
+               |        }
+               |    }
+               |    output {
+               |        review___two.score
+               |    }
+               |}
+               |""".stripMargin.trim
+
+        val path = writeTestFile("cannes", wdlCode)
+        val retval = Main.compile(
+            List(path.toString, "--compileMode", "ir", "--locked", "--quiet")
+        )
+        retval match  {
+            case Main.UnsuccessfulTermination(errMsg) =>
+                errMsg should include ("Illegal call name")
+            case _ =>
+                true should equal(false)
+        }
+    }
+
 }

@@ -117,7 +117,7 @@ object Main extends App {
                     case "inputs" =>
                         checkNumberOfArguments(keyword, 1, subargs)
                         (keyword, subargs.head)
-                    case "imports" =>
+                    case ("imports"|"p") =>
                         checkNumberOfArguments(keyword, 1, subargs)
                         (keyword, subargs.head)
                     case "locked" =>
@@ -540,13 +540,14 @@ object Main extends App {
             |    platform. If a WDL inputs files is specified, a dx JSON
             |    inputs file is generated from it.
             |    options
-            |      -archive              Archive older versions of applets
-            |      -compileMode <string> Compilation mode, a debugging flag
-            |      -defaults <string>    Path to Cromwell formatted default values file
-            |      -destination <string> Output path on the platform for workflow
-            |      -inputs <string>      Path to Cromwell formatted input file
-            |      -locked               Create a locked-down workflow (experimental)
-            |      -reorg                Reorganize workflow output files
+            |      -archive               Archive older versions of applets
+            |      -compileMode <string>  Compilation mode, a debugging flag
+            |      -defaults <string>     Path to Cromwell formatted default values file
+            |      -destination <string>  Output path on the platform for workflow
+            |      -inputs <string>       Path to Cromwell formatted input file
+            |      -p | -imports <string> Directory to search for imported WDL files
+            |      -locked                Create a locked-down workflow
+            |      -reorg                 Reorganize workflow output files
             |
             |  dxni
             |    Dx Native call Interface. Create stubs for calling dx

@@ -54,7 +54,7 @@ object CompilerTop {
     private def findSourcesInImports(wdlSourceFile: Path,
                                      imports: List[Path],
                                      verbose: Verbose) : Map[String, Path] = {
-        System.err.println(s"import directories:  ${imports.toVector}")
+        Utils.trace(verbose.on, s"WDL import directories:  ${imports.toVector}")
 
         // Find all the WDL files under a directory.
         def getListOfFiles(dir: Path) : Map[String, Path] = {
@@ -91,7 +91,7 @@ object CompilerTop {
                     accu ++ getListOfFiles(d)
             }
 
-        val wdlFileNames = allWdlSourceFiles.keys.mkString(", ")
+        val wdlFileNames = "{" + allWdlSourceFiles.keys.mkString(", ") + "}"
         Utils.trace(verbose.on, s"Files in search path=${wdlFileNames}")
         allWdlSourceFiles
     }
@@ -121,9 +121,9 @@ object CompilerTop {
 
         // Make sure the namespace doesn't use names or substrings
         // that will give us problems.
-        Validate.apply(wdlSourceFile.toString, ns, cOpt.verbose)
+        Validate.apply(ns, cOpt.verbose)
 
-        val nsTree: NamespaceOps.Tree = NamespaceOps.load(ns, wdlSourceFile, resolver)
+        val nsTree: NamespaceOps.Tree = NamespaceOps.load(ns, resolver)
 
         // Simplify the original workflow, for example,
         // convert call arguments from expressions to variables.

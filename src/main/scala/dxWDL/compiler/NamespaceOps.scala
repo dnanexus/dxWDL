@@ -71,7 +71,6 @@ object NamespaceOps {
                         cef: CompilerErrorFormatter,
                         resolver: ImportResolver,
                         imports: Seq[Import],
-                        wdlSourceFile: Path,
                         workflow: WdlWorkflow,
                         tasks: Map[String, WdlTask],
                         children: Vector[Tree]) extends Tree {
@@ -129,7 +128,7 @@ object NamespaceOps {
                 case nswf: WdlNamespaceWithWorkflow => nswf.workflow
                 case _ => throw new Exception("sanity")
             }
-            val cleanCef = new CompilerErrorFormatter(cef.sourceFile, cleanNs.terminalMap)
+            val cleanCef = new CompilerErrorFormatter(cef.resource, cleanNs.terminalMap)
             this.copy(workflow = cleanWf,
                       cef = cleanCef,
                       children = childrenTr)
@@ -137,7 +136,6 @@ object NamespaceOps {
     }
 
     def load(ns: WdlNamespace,
-             wdlSourceFile: Path,
              resolver: ImportResolver) : Tree = {
         val name = ns.importUri match {
             case None => "Unknown namespace"
@@ -152,14 +150,13 @@ object NamespaceOps {
             case nswf:WdlNamespaceWithWorkflow =>
                 // recurse into sub-namespaces
                 val children:Vector[Tree] = nswf.namespaces.map{
-                    child => load(child, wdlSourceFile, resolver)
+                    child => load(child, resolver)
                 }.toVector
                 TreeNode(name,
                          ns.importedAs,
                          cef,
                          resolver,
                          nswf.imports,
-                         wdlSourceFile,
                          nswf.workflow,
                          taskDict,
                          children)

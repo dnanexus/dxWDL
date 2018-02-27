@@ -72,9 +72,6 @@ case class Validate(cef: CompilerErrorFormatter,
     def apply(ns: WdlNamespace) : Unit = {
         checkReservedWords(ns)
         ns.tasks.foreach(t => validateTask(t))
-
-        // recurse into all the sub-namespaces
-        ns.namespaces.foreach(xNs => apply(xNs))
     }
 }
 
@@ -125,13 +122,20 @@ object Validate {
         }
     }
 
-    def apply(sourceFile: String,
-              ns: WdlNamespace,
-              verbose: Verbose) : Unit = {
-        checkFlatNamespace(ns, verbose)
-
-        val cef = new CompilerErrorFormatter(sourceFile, ns.terminalMap)
+    def validateNamespace(ns: WdlNamespace,
+                          verbose: Verbose) : Unit = {
+        // check this namespace
+        val cef = new CompilerErrorFormatter(ns.resource, ns.terminalMap)
         val v = new Validate(cef, verbose)
         v.apply(ns)
+
+        // recurse into all the sub-namespaces
+        ns.namespaces.foreach(xNs => validateNamespace(xNs, verbose))
+    }
+
+    def apply(ns: WdlNamespace,
+              verbose: Verbose) : Unit = {
+        checkFlatNamespace(ns, verbose)
+        validateNamespace(ns, verbose)
     }
 }
