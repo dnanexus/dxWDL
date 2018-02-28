@@ -108,3 +108,8 @@ object ExecLinkInfo {
         ExecLinkInfo(inputDefs, dxExec)
     }
 }
+
+// The end result of the compiler
+case class CompilationResults(entrypoint: Option[DXWorkflow],
+                              subWorkflows: Map[String, DXWorkflow],
+                              applets: Map[String, DXApplet])

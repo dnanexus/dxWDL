@@ -51,7 +51,7 @@ medium_test_list = [
     "call_native",
 
     # subworkflows
-    "cannes"
+    "cannes", "modulo"
 ]
 
 # Tests with the reorg flags

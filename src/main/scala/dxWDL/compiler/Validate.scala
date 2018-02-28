@@ -103,8 +103,8 @@ object Validate {
         }
 
         // make sure workflow names are unique
-        val allWorkflows: Vector[WdlWorkflow] = allNs.map{ ns => ns.workflows }.flatten
-        val allWorkflowNames : Vector[String] = allWorkflows.map(_.unqualifiedName)
+        val allWorkflows: Set[WdlWorkflow] = allNs.map{ ns => ns.workflows }.flatten.toSet
+        val allWorkflowNames : Set[String] = allWorkflows.map(_.unqualifiedName)
         val wfCounts: Map[String, Int] = allWorkflowNames.groupBy(x => x).mapValues(_.size)
         wfCounts.foreach{ case (wfName, nAppear) =>
             if (nAppear > 1)

@@ -881,14 +881,17 @@ case class Native(dxWDLrtId: String,
         }.toMap
     }
 
-    def compile(ns: IR.Namespace, execDict: ExecDict) : (DxWdlNamespace, ExecDict) = {
+    def compile(ns: IR.Namespace, execDict: ExecDict) : (CompilationResults, ExecDict) = {
         ns match {
-            case IR.NamespaceLeaf(name, importedAs, applets) =>
+            case IR.NamespaceLeaf(_, _, applets) =>
                 val appletDict = compileApplets(applets, execDictEmpty)
-                val dxns = DxWdlNamespaceLeaf(name, importedAs, appletDict)
-                (dxns, appletDict)
+                val cResults = CompilationResults(
+                    None,
+                    Map.empty,
+                    appletDict.map{ case (name, (_,dxapl)) => name -> dxapl}.toMap)
+                (cResults, appletDict)
 
-            case IR.NamespaceNode(name, importedAs, applets, workflow, childrenIr) =>
+            case IR.NamespaceNode(_, _, applets, workflow, childrenIr) =>
                 // recursively compile the sub-namespaces
                 val (children, execDicts:Seq[ExecDict]) = childrenIr.map{
                     child => compile(child, execDict)
@@ -903,10 +906,16 @@ case class Native(dxWDLrtId: String,
                 val execAll = appletDict ++ subExecDict
                 val dxwfl = buildWorkflowIfNeeded(ns, workflow, execAll)
                 val wfInfo = (workflow, dxwfl)
-
-                val ns1 = DxWdlNamespaceNode(name, importedAs, appletDict, wfInfo, children)
                 val execAllWithWf = execAll + (workflow.name -> wfInfo)
-                (ns1, execAllWithWf)
+
+                val dxSubWorkflows = execAll
+                    .filter{case (name, (_,exec)) => exec.isInstanceOf[DXWorkflow]}
+                    .map{case (name, (_,exec)) => name -> exec.asInstanceOf[DXWorkflow]}.toMap
+                val dxApplets = execAll
+                    .filter{case (name, (_,exec)) => exec.isInstanceOf[DXApplet]}
+                    .map{case (name, (_,exec)) => name -> exec.asInstanceOf[DXApplet]}.toMap
+                val cResults = CompilationResults(Some(dxwfl), dxSubWorkflows, dxApplets)
+                (cResults, execAllWithWf)
         }
     }
 }
@@ -920,8 +929,8 @@ object Native {
               force: Boolean,
               archive: Boolean,
               locked: Boolean,
-              verbose: Verbose) : DxWdlNamespace = {
-        trace(verbose.on, "Native pass, generating dx:applets and dx:workflows")
+              verbose: Verbose) : CompilationResults = {
+        trace(verbose.on, "Native pass, generate dx:applets and dx:workflows")
 
         // Efficiently build a directory of the currently existing applets.
         // We don't want to build them if we don't have to.

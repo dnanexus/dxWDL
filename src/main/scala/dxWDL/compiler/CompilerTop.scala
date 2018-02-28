@@ -2,7 +2,7 @@ package dxWDL.compiler
 
 import com.dnanexus.{DXProject}
 import com.typesafe.config._
-import dxWDL.{CompilerFlag, CompilerOptions, InstanceTypeDB, Utils, Verbose}
+import dxWDL.{CompilerFlag, CompilerOptions, CompilationResults, InstanceTypeDB, Utils, Verbose}
 import java.nio.file.{Files, Path, Paths}
 import java.io.{FileWriter, PrintWriter}
 import scala.collection.JavaConverters._
@@ -183,7 +183,7 @@ object CompilerTop {
     private def compileNative(irNs: IR.Namespace,
                               folder: String,
                               dxProject: DXProject,
-                              cOpt: CompilerOptions) : DxWdlNamespace = {
+                              cOpt: CompilerOptions) : CompilationResults = {
         // get billTo and region from the project
         val (billTo, region) = Utils.projectDescribeExtraInfo(dxProject)
         val dxWDLrtId = getAssetId(region)
@@ -213,11 +213,11 @@ object CompilerTop {
                 // pass the dx:project is required to establish
                 // (1) the instance price list and database
                 // (2) the output location of applets and workflows
-                val dxWdlNs = compileNative(irNs, folder, dxProject, cOpt)
-                val execIds = dxWdlNs match {
-                    case DxWdlNamespaceLeaf(_,_,applets) =>
-                        applets.map{ case (_,(_,apl)) => apl.getId }.mkString(",")
-                    case DxWdlNamespaceNode(_,_,_,(_,wf),_) =>
+                val cResults = compileNative(irNs, folder, dxProject, cOpt)
+                val execIds = cResults.entrypoint match {
+                    case None =>
+                        cResults.applets.map{ case (_, apl) => apl.getId }.mkString(",")
+                    case Some(wf) =>
                         wf.getId
                 }
                 Some(execIds)

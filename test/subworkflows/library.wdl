@@ -4,11 +4,11 @@ workflow review {
     call audience {
         input: film = film
     }
-    call rotten_tomatoes as rt___X {
+    call rotten_tomatoes {
         input: film = film
     }
 
-    Float avg_score = (audience.score + rt___X.score)/2
+    Float avg_score = (audience.score + rotten_tomatoes.score)/2
     output {
         Float score = avg_score
     }
