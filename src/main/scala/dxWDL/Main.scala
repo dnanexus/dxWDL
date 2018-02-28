@@ -349,19 +349,19 @@ object Main extends App {
             }
         if (options contains "help")
             return BadUsageTermination("")
-        val (cOpt, folder, dxProject): (CompilerOptions, String, DXProject) =
-            try {
-                val cOpt = compilerOptions(options)
-                val (dxProject, folder) = pathOptions(options, cOpt.verbose)
-                (cOpt, folder, dxProject)
-            } catch {
-                case e: Throwable =>
-                    return BadUsageTermination(Utils.exceptionToString(e))
-            }
         try {
-            val retval = compiler.CompilerTop.apply(wdlSourceFile, folder, dxProject, cOpt)
-            val desc = retval.getOrElse("")
-            SuccessfulTermination(desc)
+            val cOpt = compilerOptions(options)
+            cOpt.compileMode match {
+                case CompilerFlag.IR =>
+                    compiler.CompilerTop.applyOnlyIR(wdlSourceFile, cOpt)
+                    SuccessfulTermination("")
+
+                case CompilerFlag.Default =>
+                    val (dxProject, folder) = pathOptions(options, cOpt.verbose)
+                    val retval = compiler.CompilerTop.apply(wdlSourceFile, folder, dxProject, cOpt)
+                    val desc = retval.getOrElse("")
+                    SuccessfulTermination(desc)
+            }
         } catch {
             case e : Throwable =>
                 return UnsuccessfulTermination(Utils.exceptionToString(e))

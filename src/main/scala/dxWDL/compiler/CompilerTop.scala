@@ -2,7 +2,7 @@ package dxWDL.compiler
 
 import com.dnanexus.{DXProject}
 import com.typesafe.config._
-import dxWDL.{CompilerFlag, CompilerOptions, CompilationResults, InstanceTypeDB, Utils, Verbose}
+import dxWDL.{CompilerOptions, CompilationResults, InstanceTypeDB, Utils, Verbose}
 import java.nio.file.{Files, Path, Paths}
 import java.io.{FileWriter, PrintWriter}
 import scala.collection.JavaConverters._
@@ -198,29 +198,32 @@ object CompilerTop {
     }
 
 
+    // Compile IR only
+    def applyOnlyIR(wdlSourceFile: String,
+                    cOpt: CompilerOptions) : Unit = {
+        compileIR(Paths.get(wdlSourceFile), cOpt)
+    }
+
+    // Compile up to native dx applets and workflows
     def apply(wdlSourceFile: String,
               folder: String,
               dxProject: DXProject,
               cOpt: CompilerOptions) : Option[String] = {
         val irNs = compileIR(Paths.get(wdlSourceFile), cOpt)
-        cOpt.compileMode match {
-            case CompilerFlag.IR =>
-                None
-            case CompilerFlag.Default =>
-                // Up to this point, compilation does not require
-                // the dx:project. This allows unit testing without
-                // being logged in to the platform. For the native
-                // pass the dx:project is required to establish
-                // (1) the instance price list and database
-                // (2) the output location of applets and workflows
-                val cResults = compileNative(irNs, folder, dxProject, cOpt)
-                val execIds = cResults.entrypoint match {
-                    case None =>
-                        cResults.applets.map{ case (_, apl) => apl.getId }.mkString(",")
-                    case Some(wf) =>
-                        wf.getId
-                }
-                Some(execIds)
+
+        // Up to this point, compilation does not require
+        // the dx:project. This allows unit testing without
+        // being logged in to the platform. For the native
+        // pass the dx:project is required to establish
+        // (1) the instance price list and database
+        // (2) the output location of applets and workflows
+        val cResults = compileNative(irNs, folder, dxProject, cOpt)
+        val execIds = cResults.entrypoint match {
+            case None =>
+                cResults.applets.map{ case (_, apl) => apl.getId }.mkString(",")
+            case Some(wf) =>
+                wf.getId
         }
+        Some(execIds)
     }
 }
