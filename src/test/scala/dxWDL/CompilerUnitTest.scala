@@ -1,24 +1,13 @@
 package dxWDL
 
-import java.nio.file.{Path, Paths, Files}
-import java.nio.charset.StandardCharsets
+import java.nio.file.{Path, Paths}
 import org.scalatest.{FlatSpec, Matchers}
 import wdl._
 
 class CompilerUnitTest extends FlatSpec with Matchers {
-    lazy val testPath:Path = Paths.get("/tmp/dxWDL_TestFiles")
-
-    lazy val tmpTestDir:Path = {
-        if (!Files.exists(testPath))
-            Files.createDirectories(testPath)
-        testPath
-    }
-
-    // Create a file from a string
-    private def writeTestFile(testName:String, wdlCode : String) : Path = {
-        val path = tmpTestDir.resolve(testName + ".wdl")
-        Files.write(path, wdlCode.getBytes(StandardCharsets.UTF_8))
-        path
+    lazy val currentWorkDir:Path = Paths.get(System.getProperty("user.dir"))
+    private def pathFromBasename(basename: String) : Path = {
+        currentWorkDir.resolve(s"src/test/resources/${basename}")
     }
 
     private def compareIgnoreWhitespace(a: String, b:String): Boolean = {
@@ -38,57 +27,14 @@ class CompilerUnitTest extends FlatSpec with Matchers {
     // We need to split the compiler into front/back-ends to be able to
     // do this.
     it should "Allow adding unbound argument" in {
-        val wdlCode =
-            """|
-               |task mul2 {
-               |    Int i
-               |
-               |    command {
-               |        python -c "print(${i} + ${i})"
-               |    }
-               |    output {
-               |        Int result = read_int(stdout())
-               |    }
-               |}
-               |
-               |workflow unbound_arg {
-               |    Int arg1
-               |
-               |    # A call missing a compulsory argument
-               |    call mul2
-               |    output {
-               |        mul2.result
-               |    }
-               |}
-               |""".stripMargin.trim
-
-        val path = writeTestFile("unbound_arg", wdlCode)
+        val path = pathFromBasename("unbound_arg.wdl")
         Main.compile(
             List(path.toString, "--compileMode", "ir", "-quiet")
         ) should equal(Main.SuccessfulTermination(""))
     }
 
     it should "Report a useful error for a missing reference" in {
-        val wdlCode =
-            """|task mul2 {
-               |    Int i
-               |
-               |    command {
-               |        python -c "print(${i} + ${i})"
-               |    }
-               |    output {
-               |        Int result = read_int(stdout())
-               |    }
-               |}
-               |
-               |workflow ngs {
-               |    Int A
-               |    Int B
-               |    call mul2 { input: i=C }
-               |}
-               |""".stripMargin.trim
-
-        val path = writeTestFile("ngs", wdlCode)
+        val path = pathFromBasename("ngs.wdl")
         val retval = Main.compile(
             List(path.toString, "--compileMode", "ir", "--locked", "--quiet")
         )
@@ -101,29 +47,7 @@ class CompilerUnitTest extends FlatSpec with Matchers {
     }
 
     it should "Handle array access" in {
-        val wdlCode =
-            """|task diff {
-               |  File A
-               |  File B
-               |  command {
-               |    diff ${A} ${B} | wc -l
-               |  }
-               |  output {
-               |    Int result = read_int(stdout())
-               |  }
-               |}
-               |
-               |workflow file_array {
-               |  Array[File] fs
-               |  call diff {
-               |    input : A=fs[0], B=fs[1]
-               |  }
-               |  output {
-               |    diff.result
-               |  }
-               |}""".stripMargin.trim
-
-        val path = writeTestFile("file_array", wdlCode)
+        val path = pathFromBasename("file_array.wdl")
         val retval = Main.compile(
             List(path.toString, "--compileMode", "ir", "--locked")
         )
@@ -163,31 +87,7 @@ class CompilerUnitTest extends FlatSpec with Matchers {
     }
 
     it should "Report a useful error for an invalid call name" in {
-        val wdlCode =
-            """|
-               |task review {
-               |  String film
-               |  command {}
-               |  output {
-               |    Float score = 4.3
-               |  }
-               |}
-               |
-               |workflow cannes {
-               |  Array[String] titles
-               |
-               |    scatter (film in titles) {
-               |        call review as review___two {
-               |            input: film=film
-               |        }
-               |    }
-               |    output {
-               |        review___two.score
-               |    }
-               |}
-               |""".stripMargin.trim
-
-        val path = writeTestFile("cannes", wdlCode)
+        val path = pathFromBasename("illegal_call_name.wdl")
         val retval = Main.compile(
             List(path.toString, "--compileMode", "ir", "--locked", "--quiet")
         )

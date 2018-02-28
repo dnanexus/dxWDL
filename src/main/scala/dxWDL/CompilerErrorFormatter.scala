@@ -24,15 +24,6 @@ case class CompilerErrorFormatter(resource: String,
         s"${resource}, line ${lineNum}"
     }
 
-    def cannotParseMemberAccess(ast: Ast) = {
-        val t: Terminal = AstTools.findTerminals(ast).head
-        s"""|Error parsing expression, which is supposed to be a member access
-            |
-            |${textualSource(t)}
-            |${pointToSource(t)}
-            |""".stripMargin
-    }
-
     def couldNotEvaluateType(expr: WdlExpression) : String = {
         val t: Terminal = AstTools.findTerminals(expr.ast).head
         s"""|Could not evaluate the WDL type for expression
@@ -105,14 +96,6 @@ case class CompilerErrorFormatter(resource: String,
             |""".stripMargin
     }
 
-    def missingScatterCollection(t: Terminal) : String = {
-        s"""|Scatter collection variable missing
-            |
-            |${textualSource(t)}
-            |${pointToSource(t)}
-            |""".stripMargin
-    }
-
     def notCurrentlySupported(ast: Ast, featureName: String) : String = {
         val t: Terminal = AstTools.findTerminals(ast).head
         s"""|Not currently supported: ${featureName}
@@ -125,15 +108,6 @@ case class CompilerErrorFormatter(resource: String,
     def onlyFilesCanBeStreamed(ast: Ast) : String = {
         val t: Terminal = AstTools.findTerminals(ast).head
         s"""|Only files can be streamed
-            |
-            |${textualSource(t)}
-            |${pointToSource(t)}
-            |""".stripMargin
-    }
-
-    def rightSideMustBeIdentifer(ast: Ast) : String = {
-        val t: Terminal = ast.getAttribute("name").asInstanceOf[Terminal]
-        s"""|Right-hand side of expression must be an identifier
             |
             |${textualSource(t)}
             |${pointToSource(t)}
