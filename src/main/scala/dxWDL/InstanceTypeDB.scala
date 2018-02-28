@@ -30,9 +30,8 @@ package dxWDL
 import com.dnanexus.{DXAPI, DXJSON, DXProject}
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.node.ObjectNode
-//import scala.util.Sorting
 import spray.json._
-import Utils.{DEFAULT_INSTANCE_TYPE, Verbose, warning}
+import Utils.{DEFAULT_INSTANCE_TYPE, warning}
 import wom.values._
 
 // Instance Type on the platform. For example:
@@ -112,6 +111,7 @@ object DxInstanceType extends DefaultJsonProtocol {
     implicit val dxInstanceTypeFormat = jsonFormat6(DxInstanceType.apply)
 }
 
+
 case class InstanceTypeDB(instances: Vector[DxInstanceType]) {
     // Calculate the dx instance type that fits best, based on
     // runtime specifications.
@@ -179,8 +179,8 @@ case class InstanceTypeDB(instances: Vector[DxInstanceType]) {
         iType.name
     }
 
-    def apply(iType: IR.InstanceTypeConst) = {
-        iType.dxInstaceType match {
+    def apply(iType: InstanceTypeReq) = {
+        iType.dxInstanceType match {
             case None =>
                 choose3Attr(iType.memoryMB, iType.diskGB, iType.cpu)
             case Some(dxIType) =>
@@ -207,15 +207,15 @@ object InstanceTypeDB extends DefaultJsonProtocol {
     implicit val instanceTypeDBFormat = jsonFormat1(InstanceTypeDB.apply)
 
     // Currently, we support only constants.
-    def parse(dxInstaceType: Option[WomValue],
+    def parse(dxInstanceType: Option[WomValue],
               wdlMemoryMB: Option[WomValue],
               wdlDiskGB: Option[WomValue],
-              wdlCpu: Option[WomValue]) : IR.InstanceTypeConst = {
+              wdlCpu: Option[WomValue]) : InstanceTypeReq = {
         // Shortcut the entire calculation, and provide the dx instance type directly
-        dxInstaceType match {
+        dxInstanceType match {
             case None => None
             case Some(WomString(iType)) =>
-                return IR.InstanceTypeConst(Some(iType), None, None, None)
+                return InstanceTypeReq(Some(iType), None, None, None)
             case Some(x) =>
                 throw new Exception(s"""|dxInstaceType has to evaluate to a
                                         |WomString type ${x.toWomString}"""
@@ -285,7 +285,7 @@ object InstanceTypeDB extends DefaultJsonProtocol {
             case Some(WomFloat(x)) => Some(x.toInt)
             case Some(x) => throw new Exception(s"Cpu has to evaluate to a numeric value ${x}")
         }
-        return IR.InstanceTypeConst(None, memoryMB, diskGB, cpu)
+        return InstanceTypeReq(None, memoryMB, diskGB, cpu)
     }
 
     // Extract an integer fields from a JsObject

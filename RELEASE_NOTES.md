@@ -1,5 +1,13 @@
 # Release Notes
 
+## 0.60
+- Split README into introduction, and advanced options. This should, hopefully, make
+the top level text easier for the beginner.
+- A workflow can call another workflow (subworkflow). Currently,
+  the UI support for this feature is undergoing improvements.
+- The search path for import can be extended by using the `--imports` command line argument.
+This is useful when the source WDL files are spread across several directories.
+
 ## 0.59
 - Improved handling of pricing list
 - Upgraded to the new wdl4s library, that now lives in the cromwell

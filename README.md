@@ -7,7 +7,6 @@ It provides a reasonably complete set of WDL features for beta
 testing. A few significant WDL features are under development, and
 not yet supported:
 
-- Nested workflows (sub-workflows)
 - Nested scatters, and conditionals nested in scatters
 
 *Use at your own risk:* for the time being, dxWDL is an exploratory
@@ -29,8 +28,8 @@ The `bam_chrom_counter` workflow is written in WDL. Task
 `slice_bam` splits a bam file into an array of sub-files. Task
 `count_bam` counts the number of alignments on a bam file. The
 workflow takes an input bam file, calls `slice_bam` to split it into chromosomes, and
-calls `count_bam` in parallel on each chromosome. The result is an array of
-counts, and another array of index files.
+calls `count_bam` in parallel on each chromosome. The results comprise a
+bam index file, and an array with the number of reads per chromosome.
 
 ```wdl
 workflow bam_chrom_counter {

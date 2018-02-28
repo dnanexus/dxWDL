@@ -33,8 +33,8 @@ Compilation can be controled with several parameters.
 | destination | Set the output folder on the platform |
 | force    | Overwrite existing applets/workflows if they have changed |
 | inputs   | A cromwell style inputs file |
+| imports  | Directory to search for imported WDL files |
 | locked   | Create a locked-down workflow (experimental) |
-| sort     | Sort call graph, to avoid forward references, used for CWL |
 | verbose  | Print detailed progress information |
 
 The `-inputs` option allows specifying a Cromwell JSON

@@ -7,8 +7,6 @@ import com.dnanexus.DXFile
 import java.nio.file.{Files, Path, Paths}
 import scala.collection.mutable.HashMap
 import spray.json._
-import Utils.{dxFileFromJsValue, getMetaDirPath, jsValueOfJsonNode,
-    LOCAL_DX_FILES_CHECKPOINT_FILE, readFileContent, writeFileContent}
 import wom.values._
 
 object LocalDxFiles {
@@ -32,7 +30,7 @@ object LocalDxFiles {
         def toJSON(fInfo: FileInfo) : JsValue = {
             JsObject(
                 "state" -> JsString(fInfo.state.toString),
-                "dxFile" -> jsValueOfJsonNode(fInfo.dxFile.getLinkAsJson)
+                "dxFile" -> Utils.jsValueOfJsonNode(fInfo.dxFile.getLinkAsJson)
             )
         }
 
@@ -44,7 +42,7 @@ object LocalDxFiles {
                         case None => throw new Exception(s"Could not unmarshal ${jsv}")
                         case Some(x) => x
                     }
-                    FileInfo(state2, dxFileFromJsValue(dxLink))
+                    FileInfo(state2, Utils.dxFileFromJsValue(dxLink))
                 case _ =>
                     throw new Exception(s"malformed FileInfo structure ${jsv}")
             }
@@ -70,14 +68,14 @@ object LocalDxFiles {
             path.toString -> FileInfo.toJSON(fInfo)
         }.toMap
         val buf = JsObject(m).prettyPrint
-        val path = getMetaDirPath().resolve(LOCAL_DX_FILES_CHECKPOINT_FILE)
-        writeFileContent(path, buf)
+        val path = Utils.getMetaDirPath().resolve(Utils.LOCAL_DX_FILES_CHECKPOINT_FILE)
+        Utils.writeFileContent(path, buf)
     }
 
     // Read the checkpoint, and repopulate the tables
     def unfreeze() : Unit = {
-        val path = getMetaDirPath().resolve(LOCAL_DX_FILES_CHECKPOINT_FILE)
-        val buf = readFileContent(path)
+        val path = Utils.getMetaDirPath().resolve(Utils.LOCAL_DX_FILES_CHECKPOINT_FILE)
+        val buf = Utils.readFileContent(path)
         val m: Map[String, FileInfo] = buf.parseJson match {
             case JsObject(fields) =>
                 fields.map{
@@ -109,7 +107,7 @@ object LocalDxFiles {
                 // Upload a local file to the cloud. This is
                 // not a file we downloaded previously.
                 val jsv:JsValue = Utils.uploadFile(path)
-                val dxFile = dxFileFromJsValue(jsv)
+                val dxFile = Utils.dxFileFromJsValue(jsv)
                 val fInfo = FileInfo(FileState.Local, dxFile)
                 localized(path) = fInfo
                 reverseLookup(dxFile) = path
@@ -117,7 +115,7 @@ object LocalDxFiles {
             case Some(FileInfo(_,dxFile)) =>
                 // The file already exists in the cloud, there
                 // is no need to upload again.
-                jsValueOfJsonNode(dxFile.getLinkAsJson)
+                Utils.jsValueOfJsonNode(dxFile.getLinkAsJson)
         }
     }
 
@@ -154,7 +152,7 @@ object LocalDxFiles {
         // same name as the platform. All files have to be downloaded
         // into the same directory; the only exception we make is for
         // disambiguation purposes.
-        val dxFile = dxFileFromJsValue(jsValue)
+        val dxFile = Utils.dxFileFromJsValue(jsValue)
 
         val path = reverseLookup.get(dxFile) match {
             case Some(path) =>

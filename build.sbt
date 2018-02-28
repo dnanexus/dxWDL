@@ -48,8 +48,8 @@ scalacOptions ++= Seq(
     "-Ywarn-unused:implicits",
     "-Ywarn-unused:privates",
     "-Ywarn-unused:locals",
-    "-Ywarn-unused:imports" // warns about every unused import on every command.
-//    "-Xfatal-warnings"       // makes those warnings fatal.
+    "-Ywarn-unused:imports", // warns about every unused import on every command.
+    "-Xfatal-warnings"       // makes those warnings fatal.
 )
 
 assemblyJarName in assembly := "dxWDL.jar"

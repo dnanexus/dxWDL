@@ -1,10 +1,9 @@
 package dxWDL
 
-import com.dnanexus.{DXApplet, DXAPI, DXEnvironment, DXFile, DXJob, DXJSON, DXProject,
-    IOClass, InputParameter, OutputParameter}
+import com.dnanexus._
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.databind.JsonNode
-import com.fasterxml.jackson.databind.node.ObjectNode
+//import com.fasterxml.jackson.databind.node.ObjectNode
 import java.nio.charset.StandardCharsets
 import java.nio.file.{Path, Paths, Files}
 import java.util.Base64
@@ -21,36 +20,10 @@ import wdl.types._
 import wom.types._
 import wom.values._
 
-// Exception used for AppInternError
-class AppInternalException private(ex: RuntimeException) extends RuntimeException(ex) {
-    def this(message:String) = this(new RuntimeException(message))
-}
-
-// Exception used for AppError
-class AppException private(ex: RuntimeException) extends RuntimeException(ex) {
-    def this(message:String) = this(new RuntimeException(message))
-}
-
-class UnboundVariableException private(ex: RuntimeException) extends RuntimeException(ex) {
-    def this(varName: String) = this(new RuntimeException(s"Variable ${varName} is unbound"))
-}
-
-// Mode of file data transfer
-//   Data: download of upload the entire file
-//   Remote: leave the file on the platform
-//   Stream: stream download/upload the file
-object IOMode extends Enumeration {
-    val Data, Remote, Stream = Value
-}
-
 object Utils {
     class VariableAccessException private(ex: Exception) extends RuntimeException(ex) {
         def this() = this(new RuntimeException("Variable access in supposed constant"))
     }
-
-    // Information used to link applets that call other applets. For example, a scatter
-    // applet calls applets that implement tasks.
-    case class AppletLinkInfo(inputs: Map[String, WomType], dxApplet: DXApplet)
 
     // A stand in for the DXWorkflow.Stage inner class (we don't have a constructor for it)
     case class DXWorkflowStage(id: String) {
@@ -71,45 +44,6 @@ object Utils {
     // An equivalent for the InputParmater/OutputParameter types
     case class DXIOParam(ioClass: IOClass,
                          optional: Boolean)
-
-    // Encapsulation of verbosity flags.
-    //  on --       is the overall setting true/false
-    //  keywords -- specific words to trace
-    //  quiet:      if true, do not print warnings and informational messages
-    case class Verbose(on: Boolean,
-                       quiet: Boolean,
-                       keywords: Set[String])
-
-    // Topological sort mode of operation
-    object TopoMode extends Enumeration {
-        val Check, Sort, SortRelaxed = Value
-    }
-
-    object AppletLinkInfo {
-        def writeJson(ali: AppletLinkInfo) : JsValue = {
-            // Serialize applet input definitions, so they could be used
-            // at runtime.
-            val appInputDefs: Map[String, JsString] = ali.inputs.map{
-                case (name, womType) => name -> JsString(womType.toDisplayString)
-            }.toMap
-            JsObject(
-                "id" -> JsString(ali.dxApplet.getId()),
-                "inputs" -> JsObject(appInputDefs)
-            )
-        }
-
-        def readJson(aplInfo: JsValue, dxProject: DXProject) = {
-            val dxApplet = aplInfo.asJsObject.fields("id") match {
-                case JsString(appletId) => DXApplet.getInstance(appletId, dxProject)
-                case _ => throw new Exception("Bad JSON")
-            }
-            val inputDefs = aplInfo.asJsObject.fields("inputs").asJsObject.fields.map{
-                case (key, JsString(womTypeStr)) => key -> WdlFlavoredWomType.fromDisplayString(womTypeStr)
-                case _ => throw new Exception("Bad JSON")
-            }.toMap
-            AppletLinkInfo(inputDefs, dxApplet)
-        }
-    }
 
     val APPLET_LOG_MSG_LIMIT = 1000
     val CHECKSUM_PROP = "dxWDL_checksum"
@@ -150,7 +84,7 @@ object Utils {
     lazy val execDirPath : Path = {
         val currentDir = System.getProperty("user.dir")
         val p = Paths.get(currentDir, "execution")
-        Utils.safeMkdir(p)
+        safeMkdir(p)
         p
     }
 
@@ -160,7 +94,7 @@ object Utils {
     lazy val tmpDirPath : Path = {
         val currentDir = System.getProperty("user.dir")
         val p = Paths.get(currentDir, "job_scratch_space")
-        Utils.safeMkdir(p)
+        safeMkdir(p)
         p
     }
     lazy val appCompileDirPath : Path = {
@@ -333,18 +267,27 @@ object Utils {
         jsNode.toString().parseJson
     }
 
-    // Create a dx link to a field in a job.
-    def makeJBOR(jobId : String, fieldName :  String) : JsValue = {
-        val oNode : ObjectNode =
-            DXJSON.getObjectBuilder().put("job", jobId).put("field", fieldName).build()
-        // convert from ObjectNode to JsValue
-        oNode.toString().parseJson
+
+    // Create a dx link to a field in an execution. The execution could
+    // be a job or an analysis.
+    def makeEBOR(dxExec: DXExecution, fieldName: String) : JsValue = {
+        if (dxExec.isInstanceOf[DXJob]) {
+            JsObject("$dnanexus_link" -> JsObject(
+                         "field" -> JsString(fieldName),
+                         "job" -> JsString(dxExec.getId)))
+        } else if (dxExec.isInstanceOf[DXAnalysis]) {
+            JsObject("$dnanexus_link" -> JsObject(
+                         "field" -> JsString(fieldName),
+                         "analysis" -> JsString(dxExec.getId)))
+        } else {
+            throw new Exception(s"makeEBOR can't work with ${dxExec.getId}")
+        }
     }
 
     def runSubJob(entryPoint:String,
                   instanceType:Option[String],
                   inputs:JsValue,
-                  dependsOn: Vector[DXJob]) : DXJob = {
+                  dependsOn: Vector[DXExecution]) : DXJob = {
         val fields = Map(
             "function" -> JsString(entryPoint),
             "input" -> inputs
@@ -360,13 +303,13 @@ object Utils {
             if (dependsOn.isEmpty) {
                 Map.empty
             } else {
-                val jobIds = dependsOn.map{ dxJob => JsString(dxJob.getId) }.toVector
-                Map("dependsOn" -> JsArray(jobIds))
+                val execIds = dependsOn.map{ dxExec => JsString(dxExec.getId) }.toVector
+                Map("dependsOn" -> JsArray(execIds))
             }
         val req = JsObject(fields ++ instanceFields ++ dependsFields)
         System.err.println(s"subjob request=${req.prettyPrint}")
         val retval: JsonNode = DXAPI.jobNew(jsonNodeOfJsValue(req), classOf[JsonNode])
-        val info: JsValue =  Utils.jsValueOfJsonNode(retval)
+        val info: JsValue =  jsValueOfJsonNode(retval)
         val id:String = info.asJsObject.fields.get("id") match {
             case Some(JsString(x)) => x
             case _ => throw new AppInternalException(
@@ -420,19 +363,6 @@ object Utils {
             prefix + suffix
         }
     }
-
-    def taskOfCall(call : WdlCall) : WdlTask = {
-        call.callable match {
-            case task: WdlTask => task
-            case workflow: WdlWorkflow =>
-                throw new AppInternalException(s"Workflows are not support in calls ${call.callable}")
-        }
-    }
-
-    def callUniqueName(call : WdlCall) : String = {
-        call.unqualifiedName
-    }
-
 
     def base64Encode(buf: String) : String = {
         Base64.getEncoder.encodeToString(buf.getBytes(StandardCharsets.UTF_8))
@@ -529,7 +459,7 @@ object Utils {
     // through dxjava.
     def projectDescribeExtraInfo(dxProject: DXProject) : (String,String) = {
         val rep = DXAPI.projectDescribe(dxProject.getId(), classOf[JsonNode])
-        val jso:JsObject = Utils.jsValueOfJsonNode(rep).asJsObject
+        val jso:JsObject = jsValueOfJsonNode(rep).asJsObject
 
         val billTo = jso.fields.get("billTo") match {
             case Some(JsString(x)) => x
@@ -767,7 +697,7 @@ object Utils {
         System.err.println(msg)
     }
 
-    def warning(verbose:Verbose, msg:String) : Unit = {
+    def warning(verbose: Verbose, msg:String) : Unit = {
         if (verbose.quiet)
             return;
         System.err.println(msg)

@@ -9,7 +9,7 @@
   *
   * TODO: for an unknown reason, the pretty printer mangles workflow
   * outputs. The work around is to pass the original workflow outputs
-  * unmodified. Fix this.
+  * unmodified.
   */
 package dxWDL
 
@@ -93,7 +93,7 @@ case class WdlPrettyPrinter(fqnFlag: Boolean,
         firstLine +: nonEmptyLines :+ endLine
     }
 
-    def apply(call: WdlTaskCall, level: Int) : Vector[String] = {
+    def apply(call: WdlCall, level: Int) : Vector[String] = {
         val aliasStr = call.alias match {
             case None => ""
             case Some(nm) => " as " ++ nm
@@ -109,10 +109,20 @@ case class WdlPrettyPrinter(fqnFlag: Boolean,
                 val line = "input:  " + inputs.mkString(", ")
                 Vector(indentLine(line, level+1))
             }
-        val taskName =
-            if (fqnFlag) call.task.fullyQualifiedName
-            else call.task.name
-        buildBlock(s"call ${taskName} ${aliasStr}", inputsVec, level, true)
+        val callName =
+            if (fqnFlag) {
+                // Trim to the last two elements of the fully qualified name.
+                // For example, "A.B.C.D" --> "C.D"
+                val fqn = call.callable.fullyQualifiedName
+                val components = fqn.split("\\.")
+                val len = components.length
+                assert(len > 0)
+                val top2 = components.drop(len-2)
+                top2.mkString(".")
+            } else {
+                call.callable.unqualifiedName
+            }
+        buildBlock(s"call ${callName} ${aliasStr}", inputsVec, level, true)
     }
 
     def apply(decl: Declaration, level: Int) : Vector[String] = {
@@ -143,6 +153,7 @@ case class WdlPrettyPrinter(fqnFlag: Boolean,
     def apply(scope: Scope, level: Int) : Vector[String] = {
         scope match {
             case x:WdlTaskCall => apply(x, level)
+            case x:WdlWorkflowCall => apply(x, level)
             case x:Declaration => apply(x, level)
             case x:Scatter => apply(x, level)
             case x:If => apply(x, level)
@@ -229,7 +240,7 @@ case class WdlPrettyPrinter(fqnFlag: Boolean,
             case _ => true
         }
         val children = wfChildren.map {
-            case call: WdlTaskCall => apply(call, level + 1)
+            case call: WdlCall => apply(call, level + 1)
             case sc: Scatter => apply(sc, level + 1)
             case decl: Declaration => apply(decl, level + 1)
             case cond: If  => apply(cond, level + 1)
@@ -252,9 +263,10 @@ case class WdlPrettyPrinter(fqnFlag: Boolean,
             buildBlock("output", outputs, level + 1, force=true) ++
             buildBlock("parameter_meta", paramMeta, level + 1) ++
             buildBlock("meta", meta, level + 1)
-        val wfName =
+        /*val wfName =
             if (fqnFlag) wf.fullyQualifiedName
-            else wf.unqualifiedName
+            else wf.unqualifiedName*/
+        val wfName = wf.unqualifiedName
         buildBlock( s"workflow ${wfName}", lines, level)
     }
 

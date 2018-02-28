@@ -8,8 +8,6 @@ import scala.util.{Try, Success, Failure}
 import scala.collection.JavaConverters._
 import scala.collection.mutable.HashMap
 import spray.json._
-import Utils.{dxFileFromJsValue, downloadFile, getMetaDirPath, jsValueOfJsonNode,
-    DX_FUNCTIONS_FILES, DX_URL_PREFIX, readFileContent, writeFileContent}
 import wdl4s.parser.MemoryUnit
 import wdl.expression.WdlStandardLibraryFunctions
 import wom.TsvSerializable
@@ -44,21 +42,21 @@ object DxFunctions extends WdlStandardLibraryFunctions {
     // out to a checkpoint file.
     def freeze() : Unit = {
         val m:Map[String, JsValue] = remoteFiles.map{ case (path, dxFile) =>
-            path.toString -> jsValueOfJsonNode(dxFile.getLinkAsJson)
+            path.toString -> Utils.jsValueOfJsonNode(dxFile.getLinkAsJson)
         }.toMap
         val buf = JsObject(m).prettyPrint
-        val path = getMetaDirPath().resolve(DX_FUNCTIONS_FILES)
-        writeFileContent(path, buf)
+        val path = Utils.getMetaDirPath().resolve(Utils.DX_FUNCTIONS_FILES)
+        Utils.writeFileContent(path, buf)
     }
 
     // Read the checkpoint, and repopulate the table
     def unfreeze() : Unit = {
-        val path = getMetaDirPath().resolve(DX_FUNCTIONS_FILES)
-        val buf = readFileContent(path)
+        val path = Utils.getMetaDirPath().resolve(Utils.DX_FUNCTIONS_FILES)
+        val buf = Utils.readFileContent(path)
         val m: Map[String, DXFile] = buf.parseJson match {
             case JsObject(fields) =>
                 fields.map{
-                    case (k,vJs) => k -> dxFileFromJsValue(vJs)
+                    case (k,vJs) => k -> Utils.dxFileFromJsValue(vJs)
                 }.toMap
             case other =>
                 throw new Exception(s"Deserialization error, checkpoint=${other.prettyPrint}")
@@ -95,7 +93,7 @@ object DxFunctions extends WdlStandardLibraryFunctions {
                     // real file.
                     Files.delete(p)
                 }
-                downloadFile(p, dxFile)
+                Utils.downloadFile(p, dxFile)
                 remoteFiles.remove(path)
             case None => ()
         }
@@ -148,7 +146,7 @@ object DxFunctions extends WdlStandardLibraryFunctions {
     }
 
     override def readFile(path: String): String = {
-        if (path.startsWith(DX_URL_PREFIX)) {
+        if (path.startsWith(Utils.DX_URL_PREFIX)) {
             // A non localized file
             val dxFile = DxPath.lookupDxURLFile(path)
             Utils.downloadString(dxFile)
@@ -161,7 +159,7 @@ object DxFunctions extends WdlStandardLibraryFunctions {
     }
 
     override def writeFile(path: String, content: String): Try[WomFile] = {
-        if (path.startsWith(DX_URL_PREFIX)) {
+        if (path.startsWith(Utils.DX_URL_PREFIX)) {
             return Failure(new Exception("Cannot write non local file"))
         }
         try {
