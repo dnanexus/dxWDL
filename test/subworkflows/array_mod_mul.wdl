@@ -1,5 +1,7 @@
 import "library_modulo_math.wdl" as mod
 
+# With arithmetic in the [mod n] multiplicative group, calculate:
+# [a, a^2, a^3, ..., a^n]
 workflow array_mod_mul {
     Int n
     Int a
