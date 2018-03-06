@@ -2,6 +2,7 @@ task add_modulo {
     Int n
     Int a
     Int b
+    String compulsory_input
 
     command <<<
         python -c "print((${a} + ${b}) % ${n})"

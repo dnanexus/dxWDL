@@ -15,6 +15,6 @@ workflow unbound_arg {
     # A call missing a compulsory argument
     call mul2
     output {
-        mul2.result
+        Int result = mul2.result
     }
 }

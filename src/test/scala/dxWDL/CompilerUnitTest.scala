@@ -33,6 +33,19 @@ class CompilerUnitTest extends FlatSpec with Matchers {
         ) should equal(Main.SuccessfulTermination(""))
     }
 
+    it should "Can't have unbound arguments from a subworkflow" in {
+        val path = pathFromBasename("toplevel_unbound_arg.wdl")
+        val retval = Main.compile(
+            List(path.toString, "--compileMode", "ir", "-quiet")
+        )
+        retval match  {
+            case Main.UnsuccessfulTermination(errMsg) =>
+                errMsg should include ("Call is missing a compulsory argument")
+            case _ =>
+                true should equal(false)
+        }
+    }
+
     it should "Report a useful error for a missing reference" in {
         val path = pathFromBasename("ngs.wdl")
         val retval = Main.compile(

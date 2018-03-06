@@ -38,8 +38,8 @@ case class DxObjectDirectory(ns: IR.Namespace,
     // use map with information on each name.
     private def bulkLookup() : HashMap[String, Vector[DxObjectInfo]] = {
         // make a list of all expected workflow and applet names
-        val allAppletNames: Set[String] = IR.Namespace.listApplets(ns).map(_.name).toSet
-        val allWorkflowNames: Set[String] = IR.Namespace.listWorkflows(ns).map(_.name).toSet
+        val allAppletNames: Set[String] = ns.applets.keys.toSet
+        val allWorkflowNames: Set[String] = ns.listWorkflows.map(_.name).toSet
 
         val bothAplWf = allAppletNames.intersect(allWorkflowNames)
         if (!bothAplWf.isEmpty)

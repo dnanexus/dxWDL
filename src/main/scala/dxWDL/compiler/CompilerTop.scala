@@ -33,21 +33,20 @@ object CompilerTop {
         Utils.trace(verbose, s"Wrote intermediate representation to ${trgPath.toString}")
     }
 
-    private def embedDefaults(irNs: IR.NamespaceNode,
+    private def embedDefaults(wf: IR.Workflow,
+                              irNs: IR.Namespace,
                               path: Path,
                               cOpt: CompilerOptions) : IR.Namespace = {
-        val allStageNames = irNs.workflow.stages.map{ stg => stg.name }.toVector
+        val allStageNames = wf.stages.map{ stg => stg.name }.toVector
 
         // embed the defaults into the IR
-        val irNsEmb = InputFile(cOpt.verbose).embedDefaults(irNs, path)
+        val irNsEmb = InputFile(cOpt.verbose).embedDefaults(wf, irNs, path)
 
         // make sure the stage order hasn't changed
-        irNsEmb match {
-            case IR.NamespaceNode(_,_,_,workflow,_) =>
-                val embedAllStageNames = workflow.stages.map{ stg => stg.name }.toVector
-                assert(allStageNames == embedAllStageNames)
-            case _ => ()
-        }
+        val workflow1: IR.Workflow = irNsEmb.entrypoint.get
+        val embedAllStageNames = workflow1.stages.map{ stg => stg.name }.toVector
+        assert(allStageNames == embedAllStageNames)
+
         irNsEmb
     }
 
@@ -136,9 +135,9 @@ object CompilerTop {
         // Compile the WDL workflow into an Intermediate
         // Representation (IR)
         val irNs = GenerateIR.apply(nsTreeReorg, cOpt.reorg, cOpt.locked, cOpt.verbose)
-        val irNs2: IR.Namespace = (cOpt.defaults, irNs) match {
-            case (Some(path), irNsNode: IR.NamespaceNode) =>
-                embedDefaults(irNsNode, path, cOpt)
+        val irNs2: IR.Namespace = (cOpt.defaults, irNs.entrypoint) match {
+            case (Some(path), Some(wf)) =>
+                embedDefaults(wf, irNs, path, cOpt)
             case (_,_) => irNs
         }
 

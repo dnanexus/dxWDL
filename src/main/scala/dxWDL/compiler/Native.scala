@@ -721,8 +721,7 @@ case class Native(dxWDLrtId: String,
     // - Prepare the list of stages, and the checksum in
     //   advance.
     //
-    private def buildWorkflow(ns: IR.Namespace,
-                              wf: IR.Workflow,
+    private def buildWorkflow(wf: IR.Workflow,
                               digest: String,
                               execDict: ExecDict) : DXWorkflow = {
         val (stagesReq, stageDict) =
@@ -778,8 +777,7 @@ case class Native(dxWDLrtId: String,
     //
     // - Calculate the workflow checksum from the intermediate representation
     // - Do not rebuild the workflow if it has a correct checksum
-    private def buildWorkflowIfNeeded(ns: IR.Namespace,
-                                      wf: IR.Workflow,
+    private def buildWorkflowIfNeeded(wf: IR.Workflow,
                                       execDict: ExecDict) : DXWorkflow = {
         // the workflow digest depends on the IR and the applets
         val digest:String = chksum(
@@ -789,7 +787,7 @@ case class Native(dxWDLrtId: String,
         val buildRequired = isBuildRequired(wf.name, digest)
         buildRequired match {
             case None =>
-                val dxWorkflow = buildWorkflow(ns, wf, digest, execDict)
+                val dxWorkflow = buildWorkflow(wf, digest, execDict)
                 dxObjDir.insert(wf.name, dxWorkflow, digest)
                 dxWorkflow
             case Some(dxObj) =>
@@ -881,42 +879,21 @@ case class Native(dxWDLrtId: String,
         }.toMap
     }
 
-    def compile(ns: IR.Namespace, execDict: ExecDict) : (CompilationResults, ExecDict) = {
-        ns match {
-            case IR.NamespaceLeaf(_, _, applets) =>
-                val appletDict = compileApplets(applets, execDictEmpty)
-                val cResults = CompilationResults(
-                    None,
-                    Map.empty,
-                    appletDict.map{ case (name, (_,dxapl)) => name -> dxapl}.toMap)
-                (cResults, appletDict)
-
-            case IR.NamespaceNode(_, _, applets, workflow, childrenIr) =>
-                // recursively compile the sub-namespaces
-                val (children, execDicts:Seq[ExecDict]) = childrenIr.map{
-                    child => compile(child, execDict)
-                }.unzip
-
-                // Merge all the sub-tables of callable tasks and workflows
-                val subExecDict = execDicts.foldLeft(execDictEmpty) {
-                    case (accu, exd) =>
-                        accu ++ exd
-                }
-                val appletDict = compileApplets(applets, subExecDict)
-                val execAll = appletDict ++ subExecDict
-                val dxwfl = buildWorkflowIfNeeded(ns, workflow, execAll)
-                val wfInfo = (workflow, dxwfl)
-                val execAllWithWf = execAll + (workflow.name -> wfInfo)
-
-                val dxSubWorkflows = execAll
-                    .filter{case (name, (_,exec)) => exec.isInstanceOf[DXWorkflow]}
-                    .map{case (name, (_,exec)) => name -> exec.asInstanceOf[DXWorkflow]}.toMap
-                val dxApplets = execAll
-                    .filter{case (name, (_,exec)) => exec.isInstanceOf[DXApplet]}
-                    .map{case (name, (_,exec)) => name -> exec.asInstanceOf[DXApplet]}.toMap
-                val cResults = CompilationResults(Some(dxwfl), dxSubWorkflows, dxApplets)
-                (cResults, execAllWithWf)
+    def compile(ns: IR.Namespace) : CompilationResults = {
+        val appletDict = compileApplets(ns.applets, execDictEmpty)
+        val subWorkflows =
+            ns.subWorkflows.foldLeft(Map.empty[String, (IR.Workflow, DXWorkflow)]) {
+                case (accu, (name, irSubWf)) =>
+                    val dxwfl = buildWorkflowIfNeeded(irSubWf, accu ++ appletDict)
+                    accu + (name -> (irSubWf, dxwfl))
+            }
+        val entrypoint = ns.entrypoint.map{ wf =>
+            buildWorkflowIfNeeded(wf, subWorkflows ++ appletDict)
         }
+
+        val dxApplets = appletDict.map{ case (name, (_, dxApplet)) => name -> dxApplet }.toMap
+        val dxSubWorkflows = subWorkflows.map{ case (name, (irWf, dxWf)) => name -> dxWf }.toMap
+        CompilationResults(entrypoint, dxSubWorkflows, dxApplets)
     }
 }
 
@@ -937,7 +914,6 @@ object Native {
         val dxObjDir = DxObjectDirectory(ns, dxProject, folder, verbose)
         val ntv = new Native(dxWDLrtId, folder, dxProject, dxObjDir, instanceTypeDB,
                              force, archive, locked, verbose)
-        val (dxwdlns, _) = ntv.compile(ns, Map.empty[String, (IR.Callable, DXDataObject)])
-        dxwdlns
+        ntv.compile(ns)
     }
 }
