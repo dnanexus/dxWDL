@@ -1,5 +1,8 @@
 # Release Notes
 
+## 0.60.2
+- Minor bug fixes
+
 ## 0.60.1
 - Bug fix release
 
