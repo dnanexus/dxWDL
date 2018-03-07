@@ -1,8 +1,8 @@
-task add_modulo {
+# library of math module N
+task add {
     Int n
     Int a
     Int b
-    String compulsory_input
 
     command <<<
         python -c "print((${a} + ${b}) % ${n})"
@@ -12,7 +12,7 @@ task add_modulo {
     }
 }
 
-task mul_modulo {
+task mul {
     Int n
     Int a
     Int b

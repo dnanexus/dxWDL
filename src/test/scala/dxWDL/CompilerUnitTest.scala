@@ -2,6 +2,7 @@ package dxWDL
 
 import java.nio.file.{Path, Paths}
 import org.scalatest.{FlatSpec, Matchers}
+import org.scalatest.Inside._
 import wdl._
 
 class CompilerUnitTest extends FlatSpec with Matchers {
@@ -38,11 +39,9 @@ class CompilerUnitTest extends FlatSpec with Matchers {
         val retval = Main.compile(
             List(path.toString, "--compileMode", "ir", "-quiet")
         )
-        retval match  {
+        inside(retval) {
             case Main.UnsuccessfulTermination(errMsg) =>
                 errMsg should include ("Call is missing a compulsory argument")
-            case _ =>
-                true should equal(false)
         }
     }
 
@@ -51,11 +50,9 @@ class CompilerUnitTest extends FlatSpec with Matchers {
         val retval = Main.compile(
             List(path.toString, "--compileMode", "ir", "--locked", "--quiet")
         )
-        retval match  {
+        inside(retval) {
             case Main.UnsuccessfulTermination(errMsg) =>
                 errMsg should include ("Could not resolve")
-            case _ =>
-                true should equal(false)
         }
     }
 
@@ -64,12 +61,8 @@ class CompilerUnitTest extends FlatSpec with Matchers {
         val retval = Main.compile(
             List(path.toString, "--compileMode", "ir", "--locked")
         )
-        retval match  {
-            case Main.SuccessfulTermination(_) =>
-                true should equal(true)
-            case _ =>
-                print(retval)
-                true should equal(false)
+        inside(retval) {
+            case Main.SuccessfulTermination(_) => true
         }
     }
 

@@ -170,7 +170,7 @@ task Add {
     }
 
     // split a block of statements into sub-blocks with contiguous declarations.
-    // Scatters are special, because they can also hold declarations that come
+    // Scatters (and ifs) are special, because they can also hold declarations that come
     // before them
     // Example:
     //
@@ -180,13 +180,14 @@ task Add {
     //   call y
     //   call z
     //   String buf
+    //   Float x
     //   scatter ssc
     //  =>
     //   [call x]
     //   [Int a, Int b]
     //   [call y]
     //   [call z]
-    //   [String buf, scatter ssc]
+    //   [String buf, Float x, scatter ssc]
     //
     sealed trait Block
     case class BlockDecl(decls: Vector[Declaration]) extends Block
@@ -579,22 +580,19 @@ workflow w {
     }
 
     private def findInputByName(call: WdlCall, cVar: CVar) : Option[(String,WdlExpression)] = {
-        val retval = call.inputMappings.find{ case (k,v) => k == cVar.name }
-        System.err.println(s"findInputByName ${call.unqualifiedName} ${cVar.name} -> ${retval}")
-        retval
+        call.inputMappings.find{ case (k,v) => k == cVar.name }
     }
 
-    def compileCall(call: WdlCall,
-                    env : CallEnv) : IR.Stage = {
-        // Find the right applet
+    // validate that the call is providing all the necessary arguments
+    // to the callee (task/workflow)
+    private def validateCall(call: WdlCall) : Unit = {
+        // Find the callee
         val calleeName = calleeGetName(call)
         val callee = callables(calleeName)
-
         val inputVarNames = callee.inputVars.map(_.name).toVector
-        System.err.println(s"callee=${calleeName}  inputVars=${inputVarNames}")
+        Utils.trace(verbose2, s"callee=${calleeName}  inputVars=${inputVarNames}")
 
-        // Extract the input values/links from the environment
-        val inputs: Vector[SArg] = callee.inputVars.map{ cVar =>
+        callee.inputVars.map{ cVar =>
             findInputByName(call, cVar) match {
                 case None if (!Utils.isOptional(cVar.womType) && cVar.attrs.getDefault == None) =>
                     // A missing compulsory input, without a default
@@ -604,6 +602,34 @@ workflow w {
                     val msg = s"""|Workflow doesn't supply required input ${cVar.name}
                                   |to call ${call.unqualifiedName}
                                   |""".stripMargin.replaceAll("\n", " ")
+                    if (locked) {
+                        throw new Exception(cef.missingCallArgument(call.ast, msg))
+                    } else {
+                        Utils.warning(verbose, msg)
+                    }
+                case _ => ()
+            }
+        }
+    }
+
+    // compile a call into a stage in an IR.Workflow
+    def compileCall(call: WdlCall,
+                    env : CallEnv) : IR.Stage = {
+        // Find the callee
+        val calleeName = calleeGetName(call)
+        val callee = callables(calleeName)
+
+        // Extract the input values/links from the environment
+        val inputs: Vector[SArg] = callee.inputVars.map{ cVar =>
+            findInputByName(call, cVar) match {
+                case None if (!Utils.isOptional(cVar.womType) && cVar.attrs.getDefault == None) =>
+                    // A missing compulsory input, without a default
+                    // value. In an unlocked workflow it can be
+                    // provided as an input. In a locked workflow,
+                    // that is not possible.
+                                        val msg = s"""|Workflow doesn't supply required input ${cVar.name}
+                                  |to call ${call.unqualifiedName}
+                                                      |""".stripMargin.replaceAll("\n", " ")
                     if (locked) {
                         throw new Exception(cef.missingCallArgument(call.ast, msg))
                     } else {
@@ -642,7 +668,7 @@ workflow w {
 
     // Split a block (Scatter, If, ..) into the top declarations,
     // the and the bottom calls.
-    def blockSplit(children: Vector[Scope]) : (Vector[Declaration], Vector[WdlCall]) = {
+    private def blockSplit(children: Vector[Scope]) : (Vector[Declaration], Vector[WdlCall]) = {
         val (topDecls, rest) = Utils.splitBlockDeclarations(children.toList)
         val calls : Seq[WdlCall] = rest.map {
             case call: WdlCall => call
@@ -944,8 +970,11 @@ workflow w {
                                preDecls: Vector[Declaration],
                                scatter: Scatter,
                                env : CallEnv) : (IR.Stage, IR.Applet) = {
-        Utils.trace(verbose.on, s"compiling scatter ${stageName}")
+        Utils.trace(verbose.on, s"Compiling scatter ${stageName}")
         val (topDecls, calls) = blockSplit(scatter.children.toVector)
+
+        // validate all the calls
+        calls.foreach{ validateCall(_) }
 
         // Figure out the input definitions
         val (closure, inputVars) = blockInputs(preDecls,
@@ -990,8 +1019,11 @@ workflow w {
                           preDecls: Vector[Declaration],
                           cond: If,
                           env : CallEnv) : (IR.Stage, IR.Applet) = {
-        Utils.trace(verbose.on, s"compiling If block ${stageName}")
+        Utils.trace(verbose.on, s"Compiling If block ${stageName}")
         val (topDecls, calls) = blockSplit(cond.children.toVector)
+
+        // validate all the calls
+        calls.foreach{ validateCall(_) }
 
         // Figure out the input definitions
         val (closure, inputVars) = blockInputs(preDecls,
@@ -1278,7 +1310,7 @@ workflow w {
                                       wfInputs: Vector[(CVar, SArg)],
                                       subBlocks: Vector[Block]) :
             (Vector[(IR.Stage, Option[IR.Applet])], Vector[(CVar, SArg)]) = {
-        Utils.trace(verbose.on, s"IR: compiling locked-down workflow ${wf.unqualifiedName}")
+        Utils.trace(verbose.on, s"Compiling locked-down workflow ${wf.unqualifiedName}")
 
         // Locked-down workflow, we have workflow level inputs and outputs
         val initEnv : CallEnv = wfInputs.map { case (cVar,sArg) =>
@@ -1297,7 +1329,7 @@ workflow w {
                                        wfInputs: Vector[(CVar, SArg)],
                                        subBlocks: Vector[Block]) :
             (Vector[(IR.Stage, Option[IR.Applet])], Vector[(CVar, SArg)]) = {
-        Utils.trace(verbose.on, s"IR: compiling regular workflow ${wf.unqualifiedName}")
+        Utils.trace(verbose.on, s"Compiling regular workflow ${wf.unqualifiedName}")
 
         // Create a preliminary stage to handle workflow inputs, and top-level
         // declarations.
@@ -1415,35 +1447,29 @@ object GenerateIR {
                          reorg: Boolean,
                          locked: Boolean,
                          verbose: Verbose) : IR.Namespace = {
-        Utils.trace(verbose.on, s"IR pass on namespace ${nsTree.name}")
-        val taskApplets = compileTasks(nsTree, callables, reorg, locked, verbose)
-
         // recursively generate IR for the entire tree
         val nsTree1 = nsTree match {
             case NamespaceOps.TreeLeaf(name, importedAs, cef, _, tasks) =>
+                val taskApplets = compileTasks(nsTree, callables, reorg, locked, verbose)
                 makeNamespace(name, importedAs, None, callables ++ taskApplets)
 
-            case NamespaceOps.TreeNode(name, importedAs, cef, _, imports, workflow, tasks, children) =>
+            case NamespaceOps.TreeNode(name, importedAs, cef, _, _, workflow, tasks, children) =>
+                // Recurse into the children.
+                //
                 // The reorg and locked flags only apply to the top level
                 // workflow. All other workflows are sub-workflows, and they do
                 // not reorganize the outputs.
-                val childrenIR: Vector[IR.Namespace] =
-                    children.map(c => applyRec(c, callables, false, true, verbose)).toVector
-
-                // build a list of all the applets and workflows that can be
-                // called by importing any of the child namespaces. Add all the
-                // existing callables.
-                val allCallables = childrenIR.foldLeft(callables ++ taskApplets){
-                    case (accu, child: IR.Namespace) =>
-                        accu ++ child.applets ++ child.subWorkflows ++ child.entrypoint.map(wf => wf.name -> wf)
+                val childCallables = children.foldLeft(callables){
+                    case (accu, child) =>
+                        val childIr = applyRec(child, accu, false, true, verbose)
+                        accu ++ childIr.buildCallables
                 }
-                val callableNames = allCallables.map{ case (name,_) => name }
-                Utils.trace(verbose.on, s"callables=${callableNames}")
+                val taskApplets = compileTasks(nsTree, childCallables, reorg, locked, verbose)
+                val allCallables = childCallables ++ taskApplets
 
                 val gir = new GenerateIR(allCallables, cef, reorg, locked, verbose)
                 val (irWf, auxApplets) = gir.compileWorkflow(workflow)
-
-                makeNamespace(name, importedAs, Some(irWf), allCallables)
+                makeNamespace(name, importedAs, Some(irWf), allCallables ++ auxApplets)
         }
         nsTree1
     }
@@ -1453,6 +1479,7 @@ object GenerateIR {
               reorg: Boolean,
               locked: Boolean,
               verbose: Verbose) : IR.Namespace = {
+        Utils.trace(verbose.on, s"IR pass")
         applyRec(nsTree, Map.empty, reorg, locked, verbose)
     }
 }
