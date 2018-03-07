@@ -1,4 +1,5 @@
-task add_modulo {
+# library of math module N
+task add {
     Int n
     Int a
     Int b
@@ -11,7 +12,7 @@ task add_modulo {
     }
 }
 
-task mul_modulo {
+task mul {
     Int n
     Int a
     Int b

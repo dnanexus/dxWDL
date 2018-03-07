@@ -13,8 +13,10 @@ workflow unbound_arg {
     Int arg1
 
     # A call missing a compulsory argument
-    call mul2
+    scatter (i in range(3)) {
+        call mul2
+    }
     output {
-        mul2.result
+        Array[Int] result = mul2.result
     }
 }

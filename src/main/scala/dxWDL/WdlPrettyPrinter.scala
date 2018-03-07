@@ -19,7 +19,8 @@ import wdl._
 import wdl.command.{WdlCommandPart, ParameterCommandPart, StringCommandPart}
 
 case class WdlPrettyPrinter(fqnFlag: Boolean,
-                            workflowOutputs: Option[Seq[WorkflowOutput]]) {
+                            workflowOutputs: Option[Seq[WorkflowOutput]],
+                            importedAs: Option[String] = None) {
 
     private val I_STEP = 4
 
@@ -118,7 +119,14 @@ case class WdlPrettyPrinter(fqnFlag: Boolean,
                 val len = components.length
                 assert(len > 0)
                 val top2 = components.drop(len-2)
-                top2.mkString(".")
+                importedAs match {
+                    case Some(nm) if nm == top2(0) =>
+                        // Calling a task/workflow in the same imported namespace.
+                        // Call "D" instead of "C.D"
+                        top2(1)
+                    case _ =>
+                        top2.mkString(".")
+                }
             } else {
                 call.callable.unqualifiedName
             }
@@ -263,9 +271,6 @@ case class WdlPrettyPrinter(fqnFlag: Boolean,
             buildBlock("output", outputs, level + 1, force=true) ++
             buildBlock("parameter_meta", paramMeta, level + 1) ++
             buildBlock("meta", meta, level + 1)
-        /*val wfName =
-            if (fqnFlag) wf.fullyQualifiedName
-            else wf.unqualifiedName*/
         val wfName = wf.unqualifiedName
         buildBlock( s"workflow ${wfName}", lines, level)
     }

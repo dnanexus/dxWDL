@@ -721,8 +721,7 @@ case class Native(dxWDLrtId: String,
     // - Prepare the list of stages, and the checksum in
     //   advance.
     //
-    private def buildWorkflow(ns: IR.Namespace,
-                              wf: IR.Workflow,
+    private def buildWorkflow(wf: IR.Workflow,
                               digest: String,
                               execDict: ExecDict) : DXWorkflow = {
         val (stagesReq, stageDict) =
@@ -778,8 +777,7 @@ case class Native(dxWDLrtId: String,
     //
     // - Calculate the workflow checksum from the intermediate representation
     // - Do not rebuild the workflow if it has a correct checksum
-    private def buildWorkflowIfNeeded(ns: IR.Namespace,
-                                      wf: IR.Workflow,
+    private def buildWorkflowIfNeeded(wf: IR.Workflow,
                                       execDict: ExecDict) : DXWorkflow = {
         // the workflow digest depends on the IR and the applets
         val digest:String = chksum(
@@ -789,7 +787,7 @@ case class Native(dxWDLrtId: String,
         val buildRequired = isBuildRequired(wf.name, digest)
         buildRequired match {
             case None =>
-                val dxWorkflow = buildWorkflow(ns, wf, digest, execDict)
+                val dxWorkflow = buildWorkflow(wf, digest, execDict)
                 dxObjDir.insert(wf.name, dxWorkflow, digest)
                 dxWorkflow
             case Some(dxObj) =>
@@ -798,125 +796,93 @@ case class Native(dxWDLrtId: String,
         }
     }
 
-    // Sort the applets according to dependencies. The lowest
-    // ones are tasks, because they depend on nothing else. Last come
-    // generated applets like scatters and if-blocks.
-    private def sortAppletsByDependencies(appletDict: Map[String, IR.Applet],
-                                          execDict: ExecDict)
-            : Vector[IR.Applet] = {
-        val alreadyCompiled = execDict.map{ case (key,_) => key }.toSet
-        Utils.trace(verbose.on, s"sortAppletsByDependencies, alreadyCompiled=${alreadyCompiled}")
+    // Sort the executables according to dependencies. The lowest
+    // ones are tasks, because they depend on nothing else. Higher up
+    // are workflows and generated applets like scatters.
+    private def sortByDependencies(allExecs: Vector[IR.Callable]) : Vector[IR.Callable] = {
+        val allExecNames = allExecs.map(_.name).toSet
 
-        def immediateDeps(apl: IR.Applet) :Vector[IR.Applet] = {
-            val calls:Map[String, String] = apl.kind match {
-                case IR.AppletKindIf(calls) => calls
-                case IR.AppletKindScatter(calls) => calls
-                case IR.AppletKindScatterCollect(calls) => calls
-                case _ => Map.empty
-            }
-            // Prune dependencies that have already been satisfied
-            val callsToCompile = calls.filter{ case (_, execName) => !(alreadyCompiled contains execName) }
-
-            // Sanity: make sure we have definitions of the dependencies
-            callsToCompile.map{ case (_, taskName) =>
-                appletDict.get(taskName) match {
-                    case None => throw new Exception(
-                        s"Applet ${apl.name} depends on an unknown applet ${taskName}")
-                    case Some(x) => x
-                }
-            }.toVector
-        }
-        def transitiveDeps(apl: IR.Applet) :Vector[IR.Applet] = {
-            val nextLevel:Vector[IR.Applet] = immediateDeps(apl)
-            if (nextLevel.isEmpty) {
-                Vector(apl)
-            } else {
-                val lowerLevels:Vector[IR.Applet] =
-                    nextLevel
-                        .map(apl => transitiveDeps(apl))
-                        .flatten
-                lowerLevels ++ nextLevel ++ Vector(apl)
-            }
-        }
-
-        val (_,sortedApplets:Vector[IR.Applet]) =
-            appletDict.foldLeft(Set.empty[String], Vector.empty[IR.Applet]) {
-                case ((sortedNames, sortedApplets), (_,apl)) =>
-                    if (sortedNames contains apl.name) {
-                        (sortedNames, sortedApplets)
-                    } else {
-                        val next:Vector[IR.Applet] = transitiveDeps(apl)
-                            // prune applets we have already seen
-                            .filter(x => !(sortedNames contains x.name))
-                        val nextNames:Set[String] = next.map(_.name).toSet
-                        (sortedNames ++ nextNames, sortedApplets ++ next)
+        // Figure out the immediate dependencies for this executable
+        def immediateDeps(exec: IR.Callable) :Set[String] = {
+            val depsRaw = exec match {
+                case apl: IR.Applet =>
+                    // A generated applet requires all the executables it calls
+                    apl.kind match {
+                        case IR.AppletKindIf(calls) => calls.values
+                        case IR.AppletKindScatter(calls) => calls.values
+                        case IR.AppletKindScatterCollect(calls) => calls.values
+                        case _ => Vector.empty
                     }
+                case wf: IR.Workflow =>
+                    // A workflow depends on all the executables it calls
+                    wf.stages.map{ _.calleeName}
             }
-        sortedApplets
-    }
+            val deps: Set[String] = depsRaw.toSet
 
-    // Compile a group of applets, given that the [compiledCallables] have
-    // already been compiled.
-    private def compileApplets(appletDict: Map[String, IR.Applet],
-                               execDict: ExecDict) : Map[String, (IR.Applet, DXApplet)] = {
-        val unsortedAppletNames = appletDict.map{ case (x,_) => x}.toVector
-        trace(verbose2, s"Compile applets, names = ${unsortedAppletNames}")
-
-        // Sort the applets according to dependencies.
-        val applets = sortAppletsByDependencies(appletDict, execDict)
-        val appletNames = applets.map(_.name)
-        trace(verbose2, s"compilation order=${appletNames}")
-
-        // Build the individual applets. We need to keep track of
-        // the applets created, to be able to link calls. For example,
-        // a scatter calls other applets; we need to pass the applet IDs
-        // to the launcher at runtime.
-        applets.foldLeft(Map.empty[String, (IR.Applet, DXApplet)]) {
-            case (appletDict, apl) =>
-                val dxApplet = apl.kind match {
-                    case IR.AppletKindNative(id) => DXApplet.getInstance(id)
-                    case _ => buildAppletIfNeeded(apl, appletDict ++ execDict)
-                }
-                appletDict + (apl.name -> (apl, dxApplet))
-        }.toMap
-    }
-
-    def compile(ns: IR.Namespace, execDict: ExecDict) : (CompilationResults, ExecDict) = {
-        ns match {
-            case IR.NamespaceLeaf(_, _, applets) =>
-                val appletDict = compileApplets(applets, execDictEmpty)
-                val cResults = CompilationResults(
-                    None,
-                    Map.empty,
-                    appletDict.map{ case (name, (_,dxapl)) => name -> dxapl}.toMap)
-                (cResults, appletDict)
-
-            case IR.NamespaceNode(_, _, applets, workflow, childrenIr) =>
-                // recursively compile the sub-namespaces
-                val (children, execDicts:Seq[ExecDict]) = childrenIr.map{
-                    child => compile(child, execDict)
-                }.unzip
-
-                // Merge all the sub-tables of callable tasks and workflows
-                val subExecDict = execDicts.foldLeft(execDictEmpty) {
-                    case (accu, exd) =>
-                        accu ++ exd
-                }
-                val appletDict = compileApplets(applets, subExecDict)
-                val execAll = appletDict ++ subExecDict
-                val dxwfl = buildWorkflowIfNeeded(ns, workflow, execAll)
-                val wfInfo = (workflow, dxwfl)
-                val execAllWithWf = execAll + (workflow.name -> wfInfo)
-
-                val dxSubWorkflows = execAll
-                    .filter{case (name, (_,exec)) => exec.isInstanceOf[DXWorkflow]}
-                    .map{case (name, (_,exec)) => name -> exec.asInstanceOf[DXWorkflow]}.toMap
-                val dxApplets = execAll
-                    .filter{case (name, (_,exec)) => exec.isInstanceOf[DXApplet]}
-                    .map{case (name, (_,exec)) => name -> exec.asInstanceOf[DXApplet]}.toMap
-                val cResults = CompilationResults(Some(dxwfl), dxSubWorkflows, dxApplets)
-                (cResults, execAllWithWf)
+            // Make sure all the dependencies are actually exist
+            assert(deps.subsetOf(allExecNames))
+            deps
         }
+
+        // Find executables such that all of their dependencies are
+        // satisfied. These can be compiled.
+        def next(execs: Vector[IR.Callable],
+                 ready: Vector[IR.Callable]) : Vector[IR.Callable] = {
+            val readyNames = ready.map(_.name).toSet
+            val satisfiedExecs = execs.filter{ e =>
+                val deps = immediateDeps(e)
+                deps.subsetOf(readyNames)
+            }
+            if (satisfiedExecs.isEmpty)
+                throw new Exception("Sanity: cannot find the next executable to compile.")
+            satisfiedExecs
+        }
+
+        var accu = Vector.empty[IR.Callable]
+        var crnt = allExecs
+        while (!crnt.isEmpty) {
+            val execsToCompile = next(crnt, accu)
+            accu = accu ++ execsToCompile
+            val alreadyCompiled: Set[String] = accu.map(_.name).toSet
+            crnt = crnt.filter{ exec => !(alreadyCompiled contains exec.name) }
+        }
+        assert(accu.length == allExecs.length)
+        accu
+    }
+
+    def compile(ns: IR.Namespace) : CompilationResults = {
+        // sort the applets and subworkflows by dependencies
+        val executables = sortByDependencies((ns.applets ++ ns.subWorkflows).values.toVector)
+
+        // build applets and workflows if they aren't on the platform already
+        val execDict = executables.foldLeft(execDictEmpty) {
+            case (accu, execIr) =>
+                execIr match {
+                    case irwf: IR.Workflow =>
+                        val dxwfl = buildWorkflowIfNeeded(irwf, accu)
+                        accu + (irwf.name -> (irwf, dxwfl))
+                    case irapl: IR.Applet =>
+                        val dxApplet = irapl.kind match {
+                            case IR.AppletKindNative(id) => DXApplet.getInstance(id)
+                            case _ => buildAppletIfNeeded(irapl, accu)
+                        }
+                        accu + (irapl.name -> (irapl, dxApplet))
+                }
+        }
+
+        // build the toplevel workflow, if it is defined
+        val entrypoint = ns.entrypoint.map{ wf =>
+            buildWorkflowIfNeeded(wf, execDict)
+        }
+
+        // split into dx:applets and dx:workflows
+        val dxSubWorkflows = execDict
+            .filter{ case (name, (_, exec)) => exec.isInstanceOf[DXWorkflow]}
+            .map{ case (name, (_, exec)) => name -> exec.asInstanceOf[DXWorkflow]}.toMap
+        val dxApplets = execDict
+            .filter{ case (name, (_, exec)) => exec.isInstanceOf[DXApplet]}
+            .map{ case (name, (_, exec)) => name -> exec.asInstanceOf[DXApplet]}.toMap
+        CompilationResults(entrypoint, dxSubWorkflows, dxApplets)
     }
 }
 
@@ -937,7 +903,6 @@ object Native {
         val dxObjDir = DxObjectDirectory(ns, dxProject, folder, verbose)
         val ntv = new Native(dxWDLrtId, folder, dxProject, dxObjDir, instanceTypeDB,
                              force, archive, locked, verbose)
-        val (dxwdlns, _) = ntv.compile(ns, Map.empty[String, (IR.Callable, DXDataObject)])
-        dxwdlns
+        ntv.compile(ns)
     }
 }

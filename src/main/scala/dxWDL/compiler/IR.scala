@@ -165,57 +165,22 @@ object IR {
       * The most advanced namespace is one where the top level
       * workflow imports other namespaces, and calls subworkflows and tasks.
       */
-    sealed trait Namespace {
-        def name: String
-        def importedAs: Option[String]
-        def applets: Map[String, Applet]
-    }
-    case class NamespaceLeaf(name: String,
-                             importedAs: Option[String],
-                             applets: Map[String, Applet]) extends Namespace
-    case class NamespaceNode(name: String,
-                             importedAs: Option[String],
-                             applets: Map[String, Applet],
-                             workflow: Workflow,
-                             children: Vector[Namespace]) extends Namespace
-
-    object Namespace {
-        // Make a list of all applets
-        def listApplets(ns: Namespace) : Vector[Applet] = {
-            ns match {
-                case NamespaceLeaf(_,_, applets) =>
-                    applets.map{ case (_,apl) => apl }.toVector
-                case NamespaceNode(_,_, applets,_,children) =>
-                    val childApl = children.flatMap(listApplets(_)).toVector
-                    val theseApl = applets.map{ case (_,apl) => apl }.toVector
-                    theseApl ++ childApl
-            }
-        }
-
+    case class Namespace(name: String,
+                         importedAs: Option[String],
+                         entrypoint: Option[Workflow],
+                         subWorkflows: Map[String, Workflow],
+                         applets: Map[String, Applet]) {
         // Make a list of all workflows
-        def listWorkflows(ns: Namespace) : Vector[Workflow] = {
-            ns match {
-                case NamespaceLeaf(_,_,applets) =>
-                    Vector.empty
-                case NamespaceNode(_,_,_, workflow, children) =>
-                    val childWf = children.flatMap(listWorkflows(_)).toVector
-                    workflow +: childWf
-            }
+        def listWorkflows : Vector[Workflow] = {
+            val subWf : Vector[Workflow] = subWorkflows.map{ case (_, wf) => wf}.toVector
+            entrypoint.toVector ++ subWf
         }
 
         // Make a list of all the workflows and applets that can be
         // called, if we import this namespace. Index them by their
-        // fully qualified names.
-        def buildCallables(irNs: IR.Namespace) : Map[String, IR.Callable] = {
-            val aplCallables = irNs.applets.map {
-                case (aplName, apl) => aplName -> apl
-            }.toMap
-            irNs match {
-                case _: IR.NamespaceLeaf =>
-                    aplCallables
-                case IR.NamespaceNode(_,_,_,wf,_) =>
-                    aplCallables + (wf.name -> wf)
-            }
+        // unqualified name.
+        def buildCallables: Map[String, IR.Callable] = {
+            applets ++ subWorkflows ++ entrypoint.map(wf => wf.name -> wf)
         }
     }
 
@@ -508,48 +473,10 @@ object IR {
             }
         }
 
-        implicit object NamespaceTypeYamlFormat extends YamlFormat[Namespace] {
-            def write(ns: Namespace) =
-                ns match {
-                    case leaf: NamespaceLeaf =>
-                        YamlObject(YamlString("kind") -> YamlString("Leaf"),
-                                   YamlString("name") -> YamlString(leaf.name),
-                                   YamlString("importedAs") -> leaf.importedAs.toYaml,
-                                   YamlString("applets") -> leaf.applets.toYaml)
-                    case node: NamespaceNode =>
-                        YamlObject(YamlString("kind") -> YamlString("Node"),
-                                   YamlString("name") -> YamlString(node.name),
-                                   YamlString("importedAs") -> node.importedAs.toYaml,
-                                   YamlString("applets") -> node.applets.toYaml,
-                                   YamlString("workflow") -> node.workflow.toYaml,
-                                   YamlString("children") -> node.children.toYaml)
-                }
-            def read(value: YamlValue) = {
-                val yo = value.asYamlObject
-                yo.getFields(YamlString("kind"), YamlString("name"),
-                             YamlString("applets"), YamlString("importedAs")) match {
-                    case Seq(YamlString("Leaf"), YamlString(name), applets, importedAs) =>
-                        NamespaceLeaf(name,
-                                      importedAs.convertTo[Option[String]],
-                                      applets.convertTo[Map[String, Applet]])
-                    case Seq(YamlString("Node"), YamlString(name), applets, importedAs) =>
-                        yo.getFields(YamlString("workflow"), YamlString("children")) match {
-                            case Seq(workflow, children) =>
-                                NamespaceNode(name,
-                                              importedAs.convertTo[Option[String]],
-                                              applets.convertTo[Map[String, Applet]],
-                                              workflow.convertTo[Workflow],
-                                              children.convertTo[Vector[Namespace]])
-                            case other => throw new Exception(s"Malformed namespace ${other}")
-                        }
-                    case other => throw new Exception(s"Malformed namespace ${other}")
-                }
-            }
-        }
-
         implicit val dxWorkflowStageFormat = yamlFormat1(Utils.DXWorkflowStage)
         implicit val stageFormat = yamlFormat5(Stage)
         implicit val workflowFormat = yamlFormat5(Workflow)
+        implicit val namespaceFormat = yamlFormat5(Namespace)
     }
     import IrInternalYamlProtocol._
 

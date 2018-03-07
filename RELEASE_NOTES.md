@@ -1,5 +1,8 @@
 # Release Notes
 
+## 0.60.1
+- Bug fix release
+
 ## 0.60
 - Split README into introduction, and advanced options. This should, hopefully, make
 the top level text easier for the beginner.

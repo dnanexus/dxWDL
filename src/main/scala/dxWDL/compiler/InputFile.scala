@@ -83,21 +83,6 @@ case class InputFile(verbose: Verbose) {
         }
     }
 
-    // build a list of all the applets and workflows that can be
-    // called by importing any of the child namespaces
-    private def callablesFromNamespace(ns: IR.Namespace) : Map[String, IR.Callable] = {
-        val childCallables = ns match {
-            case _: IR.NamespaceLeaf =>
-                Map.empty
-            case node: IR.NamespaceNode =>
-                node.children.foldLeft(Map.empty[String, IR.Callable]){
-                    case (accu, child) =>
-                        accu ++ IR.Namespace.buildCallables(child)
-                }
-        }
-        ns.applets ++ childCallables
-    }
-
     // If a stage has defaults, set the SArg to a constant. The user
     // can override it at runtime.
     private def addDefaultsToStage(wf: IR.Workflow,
@@ -169,15 +154,15 @@ case class InputFile(verbose: Verbose) {
     // Make a sequential pass on the IR, figure out the fully qualified names
     // of all CVar and SArgs. If they have a default value, add it as an attribute
     // (DeclAttrs).
-    def embedDefaults(ns: IR.NamespaceNode,
+    def embedDefaults(wf: IR.Workflow,
+                      ns: IR.Namespace,
                       defaultInputs: Path) : IR.Namespace = {
         Utils.trace(verbose.on, s"Embedding defaults into the IR")
-        val wf = ns.workflow
 
         // read the default inputs file (xxxx.json)
         val wdlDefaults: JsObject = Utils.readFileContent(defaultInputs).parseJson.asJsObject
         val defaultFields:HashMap[String,JsValue] = preprocessInputs(wdlDefaults)
-        val callables = callablesFromNamespace(ns)
+        val callables = ns.buildCallables
         val callableNames = callables.map{ case (name,_) => name }
         Utils.trace(verbose.on, s"callables=${callableNames}")
 
@@ -208,7 +193,7 @@ case class InputFile(verbose: Verbose) {
             }
         val wf2 = wf.copy(inputs = wfInputsWithDefaults,
                           stages = stagesWithDefaults)
-        val irNs = ns.copy(workflow = wf2)
+        val irNs = ns.copy(entrypoint = Some(wf2))
         if (!defaultFields.isEmpty) {
             System.err.println("Could not map all default fields. These were left:")
             System.err.println(s"${defaultFields}")
@@ -344,11 +329,11 @@ case class InputFile(verbose: Verbose) {
                 cif.checkAndBind(fqn, dxName, cVar)
             }
         }
-        ns match {
-            case IR.NamespaceNode(_,_,_,wf,_) =>
-                val callables = callablesFromNamespace(ns)
+        ns.entrypoint match {
+            case None => ()
+            case Some(wf) =>
+                val callables = ns.buildCallables
                 handleWorkflow(wf, callables, cif)
-            case _ => ()
         }
         if (!inputFields.isEmpty) {
             System.err.println("Could not map all the input fields. These were left:")
