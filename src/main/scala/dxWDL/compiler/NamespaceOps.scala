@@ -52,7 +52,7 @@ object NamespaceOps {
 
         def prettyPrint : String = {
             val ns = toNamespace()
-            val lines: Vector[String] = WdlPrettyPrinter(false, None, Some(name)).apply(ns, 0)
+            val lines: Vector[String] = WdlPrettyPrinter(false, None).apply(ns, 0)
             val desc = s"### Namespace  ${name}"
             (desc +: lines).mkString("\n")
         }
@@ -90,7 +90,7 @@ object NamespaceOps {
 
         def prettyPrint : String = {
             val ns = toNamespace(workflow)
-            val lines = WdlPrettyPrinter(true, Some(workflow.outputs), importedAs).apply(ns, 0)
+            val lines = WdlPrettyPrinter(true, Some(workflow.outputs)).apply(ns, 0)
             val desc = s"### Namespace  ${name}"
             val top = (desc +: lines).mkString("\n")
 
@@ -119,7 +119,7 @@ object NamespaceOps {
                     .map(_.asInstanceOf[WorkflowOutput])
                     .toVector
 
-            val pp = WdlPrettyPrinter(useFqn, Some(wfOutputs), importedAs)
+            val pp = WdlPrettyPrinter(useFqn, Some(wfOutputs))
             val lines: String = pp.apply(ns, 0).mkString("\n")
             val cleanNs = WdlNamespace.loadUsingSource(
                 lines, None, Some(List(resolver))

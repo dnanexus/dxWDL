@@ -16,11 +16,11 @@ package dxWDL
 import scala.util.{Failure, Success}
 import Utils.{COMMAND_DEFAULT_BRACKETS, COMMAND_HEREDOC_BRACKETS}
 import wdl._
+import wdl.AstTools.EnhancedAstNode
 import wdl.command.{WdlCommandPart, ParameterCommandPart, StringCommandPart}
 
 case class WdlPrettyPrinter(fqnFlag: Boolean,
-                            workflowOutputs: Option[Seq[WorkflowOutput]],
-                            importedAs: Option[String] = None) {
+                            workflowOutputs: Option[Seq[WorkflowOutput]]) {
 
     private val I_STEP = 4
 
@@ -112,21 +112,9 @@ case class WdlPrettyPrinter(fqnFlag: Boolean,
             }
         val callName =
             if (fqnFlag) {
-                // Trim to the last two elements of the fully qualified name.
-                // For example, "A.B.C.D" --> "C.D"
-                val fqn = call.callable.fullyQualifiedName
-                val components = fqn.split("\\.")
-                val len = components.length
-                assert(len > 0)
-                val top2 = components.drop(len-2)
-                importedAs match {
-                    case Some(nm) if nm == top2(0) =>
-                        // Calling a task/workflow in the same imported namespace.
-                        // Call "D" instead of "C.D"
-                        top2(1)
-                    case _ =>
-                        top2.mkString(".")
-                }
+                // Figure out the original call, this will probably require
+                // an uplift with the next cromwell code release.
+                call.ast.getAttribute("task").sourceString
             } else {
                 call.callable.unqualifiedName
             }

@@ -1,5 +1,5 @@
-import "unbound_arg.wdl" as unbound_arg
+import "unbound_arg.wdl" as sub
 
 workflow toplevel_unbound_arg {
-    call unbound_arg.unbound_arg { input: arg1 = 3 }
+    call sub.unbound_arg { input: arg1 = 3 }
 }

@@ -105,4 +105,10 @@ class CompilerUnitTest extends FlatSpec with Matchers {
         }
     }
 
+    it should "Allow using the same import name twice" in {
+        val path = pathFromBasename("three_levels/top.wdl")
+        Main.compile(
+            List(path.toString, "--compileMode", "ir", "--locked", "--verbose")
+        ) should equal(Main.SuccessfulTermination(""))
+    }
 }
