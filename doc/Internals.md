@@ -645,3 +645,51 @@ namespaces cannot be compiled by dxWDL.
 The implementation strategy in handling sub-namespaces, is to load all the
 WDL source files into an in memory tree. The simplify and reorder steps
 are applied as transformations to this tree.
+
+
+## Nested blocks
+
+Workflows allow `scatter` and `if` blocks, which can be arbitrarily
+nested. A few examples are shown in workflow `w`.
+
+```
+workflow w {
+   Int n
+   Int m
+
+   # (A) scatter inside if
+   if (n > 3 && m < 5) {
+      scatter (i in range(n)) {
+         call mul { input: a=i, a=i }
+      }
+   }
+
+   # (B) if inside scatter
+   scatter (i in range(n+m)) {
+      if (i == 0) {
+         call add { input: a=10, b=1}
+      }
+      if (i == 1) {
+         call add { input: a=100, b=1}
+      }
+      if (i == 2) {
+         call add { input: a=1000, b=1}
+      }
+   }
+
+   # (C) scatter inside scatter
+   scatter (i in range(n)) {
+      scatter (j in range(m)) {
+         call add { input: a=i, b=j }
+         call sub { input: a=i, b=j }
+         call mul { input: a=i, b=j }
+      }
+   }
+}
+```
+
+A `scatter` (also `if`) block is compiled into an auxiliary applet
+that performs the strait line code in the block. If the inner code
+requires more than one call or applet, it is recursively compiled into
+a sub-workflow. Blocks _B_ and _C_ are compiled into subworkflows,
+while _A_ is not.
