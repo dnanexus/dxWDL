@@ -166,7 +166,6 @@ object IR {
       * workflow imports other namespaces, and calls subworkflows and tasks.
       */
     case class Namespace(name: String,
-                         importedAs: Option[String],
                          entrypoint: Option[Workflow],
                          subWorkflows: Map[String, Workflow],
                          applets: Map[String, Applet]) {
@@ -476,7 +475,7 @@ object IR {
         implicit val dxWorkflowStageFormat = yamlFormat1(Utils.DXWorkflowStage)
         implicit val stageFormat = yamlFormat5(Stage)
         implicit val workflowFormat = yamlFormat5(Workflow)
-        implicit val namespaceFormat = yamlFormat5(Namespace)
+        implicit val namespaceFormat = yamlFormat4(Namespace)
     }
     import IrInternalYamlProtocol._
 

@@ -691,5 +691,9 @@ workflow w {
 A `scatter` (also `if`) block is compiled into an auxiliary applet
 that performs the strait line code in the block. If the inner code
 requires more than one call or applet, it is recursively compiled into
-a sub-workflow. Blocks _B_ and _C_ are compiled into subworkflows,
-while _A_ is not.
+a sub-workflow. For example, blocks _B_ and _C_ are compiled into
+subworkflows, while _A_ is not.
+
+In practical terms, this is achieved with a two step process:
+(1) Simplify the workflow source files, by extracting all the tasks
+(2) Decompose the workflows into subworkflows

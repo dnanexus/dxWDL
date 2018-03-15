@@ -96,20 +96,20 @@ object CompilerTop {
     }
 
 
-    def makeResolver(allWdlSourceFiles: Map[String, Path]) : ImportResolver = {
-        filename =>
-        allWdlSourceFiles.get(filename) match {
-            case None =>
-                throw new Exception(s"Unable to find ${filename}")
-            case Some(path) =>
-                Utils.readFileContent(path)
+    def makeResolver(allWdlSources: Map[String, String]) : ImportResolver = {
+        filename => allWdlSources.get(filename) match {
+            case None => throw new Exception(s"Unable to find ${filename}")
+            case Some(content) => content
         }
     }
 
     private def compileIR(wdlSourceFile : Path,
                           cOpt: CompilerOptions) : IR.Namespace = {
         val allWdlSourceFiles = findSourcesInImports(wdlSourceFile, cOpt.imports, cOpt.verbose)
-        val resolver = makeResolver(allWdlSourceFiles)
+        val allWdlSources: Map[String, String] = allWdlSourceFiles.map{
+            case (name, path) => name -> Utils.readFileContent(path)
+        }.toMap
+        val resolver = makeResolver(allWdlSources)
         val ns =
             WdlNamespace.loadUsingPath(wdlSourceFile, None, Some(List(resolver))) match {
                 case Success(ns) => ns
@@ -122,7 +122,7 @@ object CompilerTop {
         // that will give us problems.
         Validate.apply(ns, cOpt.verbose)
 
-        val nsTree: NamespaceOps.Tree = NamespaceOps.load(ns, resolver)
+        val nsTree: NamespaceOps.Tree = NamespaceOps.load(ns, allWdlSources, cOpt.verbose)
 
         // Simplify the original workflow, for example,
         // convert call arguments from expressions to variables.

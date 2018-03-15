@@ -19,9 +19,14 @@ import wdl._
 import wdl.AstTools.EnhancedAstNode
 import wdl.command.{WdlCommandPart, ParameterCommandPart, StringCommandPart}
 
-case class WdlPrettyPrinter(fqnFlag: Boolean,
-                            workflowOutputs: Option[Seq[WorkflowOutput]]) {
 
+// The callablesMovedToLibrary:
+//   There are cases where we want to move workflows and tasks to a separate
+//   library. The values are then:
+//       (libPath, libName, calleeNames)
+case class WdlPrettyPrinter(fqnFlag: Boolean,
+                            workflowOutputs: Option[Seq[WorkflowOutput]],
+                            callablesMovedToLibrary: Option[(String, String, Set[String])] = None) {
     private val I_STEP = 4
 
     // Create an indentation of [n] spaces
@@ -110,14 +115,21 @@ case class WdlPrettyPrinter(fqnFlag: Boolean,
                 val line = "input:  " + inputs.mkString(", ")
                 Vector(indentLine(line, level+1))
             }
-        val callName =
-            if (fqnFlag) {
-                // Figure out the original call, this will probably require
-                // an uplift with the next cromwell code release.
-                call.ast.getAttribute("task").sourceString
-            } else {
-                call.callable.unqualifiedName
-            }
+        val callName = callablesMovedToLibrary match {
+            case Some((_, libName, calleeNames))
+                    if (calleeNames contains call.callable.unqualifiedName) =>
+                // We are moving this task/workflow to a separate library.
+                // Prefix the call with the library name
+                s"${libName}.${call.callable.unqualifiedName}"
+            case _ =>
+                if (fqnFlag) {
+                    // Figure out the original call, this will probably require
+                    // an uplift with the next cromwell code release.
+                    call.ast.getAttribute("task").sourceString
+                } else {
+                    call.callable.unqualifiedName
+                }
+        }
         buildBlock(s"call ${callName} ${aliasStr}", inputsVec, level, true)
     }
 
@@ -285,7 +297,16 @@ case class WdlPrettyPrinter(fqnFlag: Boolean,
             case _ => Vector()
         }
 
-        val allLines = importLines ++ taskLines ++ wfLines
+        val allLines = callablesMovedToLibrary match {
+            case None =>
+                importLines ++ taskLines ++ wfLines
+
+            case Some((libPath, libName, _)) =>
+                // Remove the tasks, they are in a separate file
+                val taskLibImport = s"""import "${libPath}" as ${libName} """
+                (taskLibImport +: importLines) ++ wfLines
+        }
+
         allLines.map(x => indentLine(x, level))
     }
 }
