@@ -24,14 +24,9 @@ object NamespaceOps {
         def prettyPrint : String
 
         // Apply a rewrite transformation to all the workflows in the
-        // namespace.
-        def transform(f: (WdlWorkflow, CompilerErrorFormatter) => WdlWorkflow) : Tree =
-            this
-
-        // Apply a rewrite transformation to all the workflows in the
-        // namespace. The transformation returns a rewrite of the workflow,
+        // namespace. The transformation returns a rewrite of the original workflow,
         // and, potentially, a list of sub-workflows.
-        def transform2(f: (WdlWorkflow, CompilerErrorFormatter) =>
+        def transform(f: (WdlWorkflow, CompilerErrorFormatter) =>
             (WdlWorkflow, Vector[WdlWorkflow])) : Tree =
             this
     }
@@ -57,7 +52,7 @@ object NamespaceOps {
                 tasks.map{ case(_,task) => task }.toVector,
                 Map.empty[Terminal, WorkflowSource],
                 WdlRewrite.INVALID_AST,
-                "",
+                name,
                 Some(name))
 
         def prettyPrint : String = {
@@ -98,6 +93,42 @@ object NamespaceOps {
                 Some(name)
             )
 
+        // Convert a workflow to string representation and apply WDL
+        // parser again. This fixes the ASTs, as well as any other
+        // imperfections in our WDL rewriting technology.
+        //
+        // extraImports: additional WDL libraries to import
+        // wdlSources:   all the WDL source files, so we can parse the
+        //               rewritten source workflow code.
+        private def whiteWashWorkflow(wf: WdlWorkflow,
+                                      wdlSources: Map[String, String],
+                                      extraImports: Vector[String] = Vector.empty) :
+                (TreeNode, String, String) = {
+            val ns = toNamespace(wf)
+            val wfOutputs: Vector[WorkflowOutput] =
+                wf.children.filter(x => x.isInstanceOf[WorkflowOutput])
+                    .map(_.asInstanceOf[WorkflowOutput])
+                    .toVector
+            val extraImportsText = extraImports.map{ libName =>
+                s"""import "${libName}" as ${libName} """
+            }
+            val lines = WdlPrettyPrinter(true, Some(wfOutputs)).apply(ns, 0)
+            val cleanWdlSrc = (extraImportsText ++ lines).mkString("\n")
+            val resolver = makeResolver(wdlSources)
+            val cleanNs = WdlNamespace.loadUsingSource(
+                cleanWdlSrc, None, Some(List(resolver))
+            ).get
+            val cleanCef = new CompilerErrorFormatter(cef.resource, cleanNs.terminalMap)
+            val node = TreeNode(wf.unqualifiedName,
+                                cleanCef,
+                                wdlSources + (wf.unqualifiedName -> cleanWdlSrc),
+                                cleanNs.imports,
+                                cleanNs.asInstanceOf[WdlNamespaceWithWorkflow].workflow,
+                                Vector.empty) // children
+            (node, wf.unqualifiedName, cleanWdlSrc)
+        }
+
+
         def prettyPrint : String = {
             val ns = toNamespace(workflow)
             val lines = WdlPrettyPrinter(true, Some(workflow.outputs)).apply(ns, 0)
@@ -111,39 +142,28 @@ object NamespaceOps {
             (top +: childrenStrings).mkString("\n\n")
         }
 
-
         // Rewrite the workflow. Because the rewrite leaves the semantic
         // tree invalid, we re-parse it.
-        override def transform(f: (WdlWorkflow, CompilerErrorFormatter) => WdlWorkflow) : Tree = {
+        override def transform(f: (WdlWorkflow, CompilerErrorFormatter) =>
+            (WdlWorkflow, Vector[WdlWorkflow])) : Tree = {
             // recurse into children
             val childrenTr = this.children.map(child => child.transform(f))
+            val (wfTr,subWorkflows) = f(workflow, cef)
 
-            val wfTr = f(workflow, cef)
-            // Convert a namespace to string representation and apply WDL
-            // parser again. This fixes the ASTs, as well as any other
-            // imperfections in our WDL rewriting technology.
-            val ns = toNamespace(wfTr)
-            val wfOutputs: Vector[WorkflowOutput] =
-                wfTr.children.filter(x => x.isInstanceOf[WorkflowOutput])
-                    .map(_.asInstanceOf[WorkflowOutput])
-                    .toVector
-
-            val pp = WdlPrettyPrinter(true, Some(wfOutputs))
-            val lines: String = pp.apply(ns, 0).mkString("\n")
-            val resolver = makeResolver(allWdlSources)
-            val cleanNs = WdlNamespace.loadUsingSource(
-                lines, None, Some(List(resolver))
-            ).get
-            val cleanWf = cleanNs match {
-                case nswf: WdlNamespaceWithWorkflow => nswf.workflow
-                case _ => throw new Exception("sanity")
+            // white wash the sub-workflows, broken out from the top level
+            val subWfChildren = subWorkflows.map{ subWf =>
+                whiteWashWorkflow(subWf, allWdlSources)
             }
-            val cleanCef = new CompilerErrorFormatter(cef.resource, cleanNs.terminalMap)
-            this.copy(workflow = cleanWf,
-                      cef = cleanCef,
-                      children = childrenTr)
-        }
+            val subTreeNodes = subWfChildren.map{ case (x,_,_) => x }.toVector
+            val newWdlSources = subWfChildren.map{ case (_, name, wdlSrc) => name -> wdlSrc }.toMap
 
+            // white wash the top level workflow
+            val (wf2Node, _, _) = whiteWashWorkflow(wfTr,
+                                                    allWdlSources ++ newWdlSources,
+                                                    newWdlSources.keys.toVector)
+            wf2Node.copy(allWdlSources = allWdlSources ++ newWdlSources,
+                         children = childrenTr ++ subTreeNodes)
+        }
     }
 
 

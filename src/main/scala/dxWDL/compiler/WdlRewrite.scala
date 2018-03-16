@@ -211,8 +211,8 @@ object WdlRewrite {
                                      Vector.empty, Vector.empty,
                                      tasks,
                                      Map.empty,
-                                     WdlRewrite.INVALID_ERR_FORMATTER,
-                                     WdlRewrite.INVALID_AST,
+                                     INVALID_ERR_FORMATTER,
+                                     INVALID_AST,
                                      "", // sourceString: What does this argument do?
                                      None)
     }
@@ -224,8 +224,8 @@ object WdlRewrite {
                                                  old.namespaces,
                                                  old.tasks,
                                                  Map.empty,
-                                                 WdlRewrite.INVALID_ERR_FORMATTER,
-                                                 WdlRewrite.INVALID_AST,
+                                                 INVALID_ERR_FORMATTER,
+                                                 INVALID_AST,
                                                  "", // sourceString: What does this argument do?
                                                  None)
         updateScope(old, fresh)
@@ -238,7 +238,7 @@ object WdlRewrite {
                                         Vector.empty,
                                         Vector(task),
                                         Map.empty,
-                                        WdlRewrite.INVALID_AST,
+                                        INVALID_AST,
                                         "", // sourceString: What does this argument do?
                                         None)
     }
@@ -249,7 +249,7 @@ object WdlRewrite {
                                         Vector.empty,
                                         tasks,
                                         Map.empty,
-                                        WdlRewrite.INVALID_AST,
+                                        INVALID_AST,
                                         "", // sourceString: What does this argument do?
                                         None)
     }
@@ -260,7 +260,7 @@ object WdlRewrite {
                                         Vector.empty,
                                         Vector.empty,
                                         Map.empty,
-                                        WdlRewrite.INVALID_AST,
+                                        INVALID_AST,
                                         "", // sourceString: What does this argument do?
                                         None)
     }

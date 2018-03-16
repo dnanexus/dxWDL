@@ -139,6 +139,9 @@ object IR {
         }
     }
 
+    // Environment (scope) where a call is made
+    type CallEnv = Map[String, LinkedVar]
+
     // A stage can call an applet or a workflow
     case class Stage(name: String,
                      id: Utils.DXWorkflowStage,

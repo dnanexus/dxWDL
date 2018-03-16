@@ -111,11 +111,4 @@ class CompilerUnitTest extends FlatSpec with Matchers {
             List(path.toString, "--compileMode", "ir", "--locked", "--quiet")
         ) should equal(Main.SuccessfulTermination(""))
     }
-
-    ignore should "Compile subblocks into subworkflows" in {
-        val path = pathFromBasename("subblocks_as_subworkflows/example1.wdl")
-        Main.compile(
-            List(path.toString, "--compileMode", "ir", "--locked", "--verbose")
-        ) should equal(Main.SuccessfulTermination(""))
-    }
 }

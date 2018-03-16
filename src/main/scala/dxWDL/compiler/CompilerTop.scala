@@ -103,8 +103,8 @@ object CompilerTop {
         }
     }
 
-    private def compileIR(wdlSourceFile : Path,
-                          cOpt: CompilerOptions) : IR.Namespace = {
+    private def compileNamespaceOpsTree(wdlSourceFile : Path,
+                                        cOpt: CompilerOptions) : NamespaceOps.Tree = {
         val allWdlSourceFiles = findSourcesInImports(wdlSourceFile, cOpt.imports, cOpt.verbose)
         val allWdlSources: Map[String, String] = allWdlSourceFiles.map{
             case (name, path) => name -> Utils.readFileContent(path)
@@ -132,9 +132,17 @@ object CompilerTop {
         // applets, stages, and jobs.
         val nsTreeReorg = ReorgDecl.apply(nsTreeSimple, wdlSourceFile, cOpt.verbose)
 
+        // Convert large sub-blocks to sub-workflows
+        //SubblockWorkflow.apply(nsTreeReorg, wdlSourceFile, cOpt.verbose)
+        nsTreeReorg
+    }
+
+    private def compileIR(wdlSourceFile : Path,
+                          nsTree: NamespaceOps.Tree,
+                          cOpt: CompilerOptions) : IR.Namespace = {
         // Compile the WDL workflow into an Intermediate
         // Representation (IR)
-        val irNs = GenerateIR.apply(nsTreeReorg, cOpt.reorg, cOpt.locked, cOpt.verbose)
+        val irNs = GenerateIR.apply(nsTree, cOpt.reorg, cOpt.locked, cOpt.verbose)
         val irNs2: IR.Namespace = (cOpt.defaults, irNs.entrypoint) match {
             case (Some(path), Some(wf)) =>
                 embedDefaults(wf, irNs, path, cOpt)
@@ -200,7 +208,9 @@ object CompilerTop {
     // Compile IR only
     def applyOnlyIR(wdlSourceFile: String,
                     cOpt: CompilerOptions) : Unit = {
-        compileIR(Paths.get(wdlSourceFile), cOpt)
+        val path = Paths.get(wdlSourceFile)
+        val nsTree = compileNamespaceOpsTree(path, cOpt)
+        compileIR(path, nsTree, cOpt)
     }
 
     // Compile up to native dx applets and workflows
@@ -208,7 +218,9 @@ object CompilerTop {
               folder: String,
               dxProject: DXProject,
               cOpt: CompilerOptions) : Option[String] = {
-        val irNs = compileIR(Paths.get(wdlSourceFile), cOpt)
+        val path = Paths.get(wdlSourceFile)
+        val nsTree = compileNamespaceOpsTree(path, cOpt)
+        val irNs = compileIR(path, nsTree, cOpt)
 
         // Up to this point, compilation does not require
         // the dx:project. This allows unit testing without

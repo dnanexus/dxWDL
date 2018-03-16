@@ -225,7 +225,8 @@ object ReorgDecl {
         // Do not modify the tasks.
         val nsTree1 = nsTree.transform{ case (wf, cef) =>
             val rg = new ReorgDecl(cef, verbose)
-            rg.reorgWorkflow(wf)
+            val wf2 = rg.reorgWorkflow(wf)
+            (wf2, Vector.empty)
         }
         if (verbose.on)
             NamespaceOps.prettyPrint(wdlSourceFile, nsTree1, "reorg", verbose)
