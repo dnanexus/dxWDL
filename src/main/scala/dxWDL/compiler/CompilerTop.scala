@@ -133,8 +133,8 @@ object CompilerTop {
         val nsTreeReorg = ReorgDecl.apply(nsTreeSimple, wdlSourceFile, cOpt.verbose)
 
         // Convert large sub-blocks to sub-workflows
-        //SubblockWorkflow.apply(nsTreeReorg, wdlSourceFile, cOpt.verbose)
-        nsTreeReorg
+         DecomposeBlocks.apply(nsTreeReorg, wdlSourceFile, cOpt.verbose)
+        //nsTreeReorg
     }
 
     private def compileIR(wdlSourceFile : Path,
