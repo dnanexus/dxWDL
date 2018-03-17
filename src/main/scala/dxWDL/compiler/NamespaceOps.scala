@@ -25,9 +25,9 @@ object NamespaceOps {
 
         // Apply a rewrite transformation to all the workflows in the
         // namespace. The transformation returns a rewrite of the original workflow,
-        // and, potentially, a list of sub-workflows.
+        // and, potentially, a sub-workflow.
         def transform(f: (WdlWorkflow, CompilerErrorFormatter) =>
-            (WdlWorkflow, Vector[WdlWorkflow])) : Tree =
+            (WdlWorkflow, Option[WdlWorkflow])) : Tree =
             this
     }
 
@@ -145,26 +145,30 @@ object NamespaceOps {
         // Rewrite the workflow. Because the rewrite leaves the semantic
         // tree invalid, we re-parse it.
         override def transform(f: (WdlWorkflow, CompilerErrorFormatter) =>
-            (WdlWorkflow, Vector[WdlWorkflow])) : Tree = {
+            (WdlWorkflow, Option[WdlWorkflow])) : Tree = {
             // recurse into children
             val childrenTr = this.children.map(child => child.transform(f))
-            val (wfTr,subWorkflows) = f(workflow, cef)
+            val (wfTr,subWorkflow) = f(workflow, cef)
 
-            // white wash the sub-workflows, broken out from the top level
-            val subWfChildren = subWorkflows.map{ subWf =>
-                whiteWashWorkflow(subWf, allWdlSources)
+            // white wash the sub-workflow, broken out from the top level
+            subWorkflow match {
+                case None =>
+                    // white wash the top level workflow
+                    val (wf2Node, _, _) = whiteWashWorkflow(wfTr, allWdlSources)
+                    wf2Node.copy(children = childrenTr)
+
+                case Some(subWf) =>
+                    val (subWf2, subWfName2, subWdlSrc2) = whiteWashWorkflow(subWf, allWdlSources)
+
+                    // white wash the top level workflow
+                    val allWdlSources2 = allWdlSources :+ (subWfName2 => subWdlSrc2)
+                    val (wf2Node, _, _) = whiteWashWorkflow(
+                        wfTr, allWdlSources2, allWdlSources2.keys.toVector
+                    )
+                    wf2Node.copy(allWdlSources = allWdlSources2,
+                                 children = childrenTr ++ subTreeNodes)
             }
-            val subTreeNodes = subWfChildren.map{ case (x,_,_) => x }.toVector
-            val newWdlSources = subWfChildren.map{ case (_, name, wdlSrc) => name -> wdlSrc }.toMap
-
-            // white wash the top level workflow
-            val (wf2Node, _, _) = whiteWashWorkflow(wfTr,
-                                                    allWdlSources ++ newWdlSources,
-                                                    newWdlSources.keys.toVector)
-            wf2Node.copy(allWdlSources = allWdlSources ++ newWdlSources,
-                         children = childrenTr ++ subTreeNodes)
         }
-    }
 
 
     // Extract all the tasks from the workflow, assume they are placed

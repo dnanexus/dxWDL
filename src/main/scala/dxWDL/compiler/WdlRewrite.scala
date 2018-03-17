@@ -45,7 +45,7 @@ object WdlRewrite {
 
     // Modify the inputs in a task-call
     def taskCall(tc: WdlTaskCall,
-             inputMappings: Map[String, WdlExpression]) : WdlTaskCall = {
+                 inputMappings: Map[String, WdlExpression]) : WdlTaskCall = {
         val tc1 = WdlTaskCall(tc.alias, tc.task, inputMappings, tc.ast)
         tc1.children = tc.children
         updateScope(tc, tc1)

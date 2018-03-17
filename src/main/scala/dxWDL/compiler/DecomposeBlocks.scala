@@ -3,6 +3,24 @@
  * a large subblock is one that has more than two calls. For example
  * the scatter below is "large".
  *
+ * task add {
+ *    Int a
+ *    Int b
+ *    command {}
+ *    output {
+ *       Int result = a + b
+ *    }
+ * }
+ *
+ * task pow {
+ *    Int a
+ *    Int n
+ *    command {}
+ *    output {
+ *       Int result = a ** b
+ *    }
+ * }
+ *
  * scatter (x in ax) {
  *   Int y = x + 4
  *   call add { input: a=y, b=x }
@@ -15,17 +33,21 @@
  *
  * scatter (x in ax) {
  *   Int y = x + 4
- *   call wf_add_pow { x=x, y=y }
+ *   call subWf_add { x=x, y=y }
  * }
  *
- * workflow wf_add_pow {
+ * workflow subWf_add {
  *   Int x
  *   Int y
+ *
  *   call add { input: a=y, b=x }
  *   Int base = add.result
  *   call pow { input: a=base, n=x}
+ *
  *   output {
- *     ...
+ *     Int out_add_result = add.result
+ *     Int out_base = base
+ *     Int out_pow_result = pow.result
  *   }
  * }
  */
@@ -230,8 +252,55 @@ case class DecomposeBlocks(cef: CompilerErrorFormatter,
         }.flatten
     }
 
+    // Rename member accesses inside an expression, from the form A.x
+    // to A_x. This is used inside an applet of WDL generated code.
+    //
+    // Here, we take a shortcut, and just replace strings, instead of
+    // doing a recursive syntax analysis (see ValueEvaluator wdl4s
+    // module).
+    private def exprRenameVars(expr: WdlExpression,
+                               allVars: Vector[DVar]) : WdlExpression = {
+        var sExpr: String = expr.toWomString
+        for (dVar <- allVars) {
+            // A.x => A_x
+            val normName = Utils.transformVarName(dVar.name)
+            sExpr = sExpr.replaceAll(dVar.name, normName)
+        }
+        WdlExpression.fromString(sExpr)
+    }
+
+    // rename all the variables from [allVars] used inside a statement
+    private def statmentRenameVars(stmt: Scope,
+                                   allVars: Vector[DVar]) : Scope = {
+        scope match {
+            case decl:Declaration =>
+                WdlRewrite.Declaration(decl.womType,
+                                       decl.unqualifiedName,
+                                       decl.expression.map(exprRenameVars, inputs))
+
+            case tc:WdlTaskCall =>
+                val inputsRn = tc.inputMapping.map{
+                    case (name, expr) =>  name -> exprRenameVars(expr, inputs)
+                }.toMap
+                WdlRewrite.taskCall(tc, inputsRn)
+
+            case wfc:WdlWorkflowCall =>
+                val inputsRn = wfc.inputMapping.map{
+                    case (name, expr) =>  name -> exprRenameVars(expr, inputs)
+                }.toMap
+                WdlRewrite.workflowCall(tc, inputsRn)
+
+            case x =>
+                throw new Exception(cef.notCurrentlySupported(
+                                        x.ast,
+                                        s"Unimplemented workflow element"))
+        }
+    }
+
     // Build a valid WDL workflow with [inputs] and [outputs].
     // The body is made up of [statements].
+    // 1) Rename the input variables (A.B -> A_B)
+    // 2) Setup the output variables
     private def buildSubWorkflow(subWfName: String,
                                  inputs: Vector[DVar],
                                  outputs: Vector[DVar],
@@ -242,20 +311,43 @@ case class DecomposeBlocks(cef: CompilerErrorFormatter,
             WdlRewrite.declaration(dVar.womType, normalizedName, None)
         }
 
+        // rename usages of the input variables in the statment block
+        val statementsRn = statements.map{
+            case stmt => statmentRenameVars(stmt, inputs)
+        }.flatten
+
+        // output variables.
+        val outputDecls = outputs.map { dVar =>
+            val normalizedName = Utils.transformVarName(dVar.name)
+            val srcExpr = WdlExpression.fromString(dVar.name)
+            WorkflowOutput(normalizedName, dVar.womType, Some(srcExpr))
+        }
         WdlRewrite.workflow(emptyWf,
-                            inputDecls ++ statements)
+                            inputDecls ++ statementsRn ++ outputDecls)
     }
 
+    // Replace the bottom statments with a call to the subworkflow in
+    // the original block.
     private def rewriteBlock(oldStmt, topDecls, subWf, inputs) : Scope = {
-        val inputMapping = inputs.map{ dVar =>
+        val subWfInputs = inputs.map{ dVar =>
             Utils.transformVarName(dVar.name) -> WdlExpression.fromString(dVar.name)
         }
         val wfc = WdlWorkflowCall(None,
                                   subWf,
-                                  inputMapping,
+                                  subWfInputs,
                                   WdlRewrite.INVALID_AST)
         val children = topDecls :+ wfc
-        oldStmt.copy(children = children)
+
+        oldStmt match {
+            case ssc: Scatter =>
+                WdlRewrite.scatter(ssc, children)
+            case cond: If =>
+                WdlRewrite.cond(cond, children, cond.condition)
+            case x =>
+                throw new Exception(cef.notCurrentlySupported(
+                                        x.ast,
+                                        s"Unimplemented workflow element"))
+        }
     }
 
     private def decompose(scope: Scope, wf: WdlWorkflow) : (Scope, WdlWorkflow) = {
@@ -272,7 +364,7 @@ case class DecomposeBlocks(cef: CompilerErrorFormatter,
         val subWfName = "subWf_" ++ scope.fullyQualifiedName
         val subWf = buildSubWorkflow(subWfName, btmInputs, btmOutputs, bottom)
 
-        // replace the bottom statmenets with a call to the subworkflow
+        // replace the bottom statements with a call to the subworkflow
         val scope2 = rewriteBlock(scope, topDecls, subWf, btmInputs)
         (scope2, subWf)
     }
