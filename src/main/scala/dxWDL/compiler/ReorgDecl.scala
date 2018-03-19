@@ -226,7 +226,7 @@ object ReorgDecl {
         val nsTree1 = nsTree.transform{ case (wf, cef) =>
             val rg = new ReorgDecl(cef, verbose)
             val wf2 = rg.reorgWorkflow(wf)
-            (wf2, Vector.empty)
+            (wf2, None)
         }
         if (verbose.on)
             NamespaceOps.prettyPrint(wdlSourceFile, nsTree1, "reorg", verbose)

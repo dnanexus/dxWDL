@@ -13,6 +13,7 @@ import dxWDL.Utils
 import com.dnanexus.{DXRecord}
 import wdl._
 import wdl.AstTools
+import wdl.AstTools._
 import wdl4s.parser.WdlParser.{Ast, Terminal}
 import wom.core.WorkflowSource
 import wom.types._
@@ -59,6 +60,26 @@ object WdlRewrite {
         wfc1.children = wfc.children
         updateScope(wfc, wfc1)
         wfc1
+    }
+
+    // Create a workflow call, with a valid AST
+    def workflowCall(wf: WdlWorkflow,
+                     inputMappings: Map[String, WdlExpression]) : WdlWorkflowCall = {
+        val inputs = inputMappings.map{ case (key, expr) => s"${key}=${expr.toWomString}" }
+        val inputsString = inputs.mkString(", ")
+        val callFqn = s"${wf.unqualifiedName}.${wf.unqualifiedName}"
+
+        // To make the WDL parser happy, we need to wrap the call with a workflow.
+        val sourceString =
+            s"""|workflow w {
+                |   call ${callFqn} { input: ${inputsString} }
+                |}
+                |""".stripMargin
+        val ast = AstTools.getAst(sourceString, "")
+
+        // Strip away the outer workflow, and get the call AST
+        val callAst = ast.findAsts(AstNodeName.Call).head
+        WdlWorkflowCall(Some(wf.unqualifiedName), wf, inputMappings, callAst)
     }
 
     // Create an empty task.

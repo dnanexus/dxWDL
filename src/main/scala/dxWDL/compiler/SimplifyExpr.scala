@@ -328,7 +328,7 @@ object SimplifyExpr {
         val nsTree1 = nsTree.transform{ case (wf, cef) =>
             val simpExpr = new SimplifyExpr(cef, verbose)
             val wf2 = simpExpr.simplifyWorkflow(wf)
-            (wf2, Vector.empty)
+            (wf2, None)
         }
         if (verbose.on)
             NamespaceOps.prettyPrint(wdlSourceFile, nsTree1, "simple", verbose)

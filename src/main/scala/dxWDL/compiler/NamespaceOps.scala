@@ -39,6 +39,9 @@ object NamespaceOps {
         }
     }
 
+    case class CleanWf(node: TreeNode,
+                       name: String,
+                       wdlSource: String)
 
     // A namespace that is a library of tasks; it has no workflow
     case class TreeLeaf(name: String,
@@ -79,7 +82,7 @@ object NamespaceOps {
                         imports: Seq[Import],
                         workflow: WdlWorkflow,
                         children: Vector[Tree]) extends Tree {
-        private def toNamespace(wf: WdlWorkflow) =
+        private def toNamespace(wf: WdlWorkflow) : WdlNamespaceWithWorkflow = {
             new WdlNamespaceWithWorkflow(
                 None,
                 wf,
@@ -92,6 +95,7 @@ object NamespaceOps {
                 "",
                 Some(name)
             )
+        }
 
         // Convert a workflow to string representation and apply WDL
         // parser again. This fixes the ASTs, as well as any other
@@ -102,8 +106,7 @@ object NamespaceOps {
         //               rewritten source workflow code.
         private def whiteWashWorkflow(wf: WdlWorkflow,
                                       wdlSources: Map[String, String],
-                                      extraImports: Vector[String] = Vector.empty) :
-                (TreeNode, String, String) = {
+                                      extraImports: Vector[String]) : CleanWf = {
             val ns = toNamespace(wf)
             val wfOutputs: Vector[WorkflowOutput] =
                 wf.children.filter(x => x.isInstanceOf[WorkflowOutput])
@@ -125,7 +128,7 @@ object NamespaceOps {
                                 cleanNs.imports,
                                 cleanNs.asInstanceOf[WdlNamespaceWithWorkflow].workflow,
                                 Vector.empty) // children
-            (node, wf.unqualifiedName, cleanWdlSrc)
+            CleanWf(node, wf.unqualifiedName, cleanWdlSrc)
         }
 
 
@@ -150,26 +153,28 @@ object NamespaceOps {
             val childrenTr = this.children.map(child => child.transform(f))
             val (wfTr,subWorkflow) = f(workflow, cef)
 
-            // white wash the sub-workflow, broken out from the top level
             subWorkflow match {
                 case None =>
-                    // white wash the top level workflow
-                    val (wf2Node, _, _) = whiteWashWorkflow(wfTr, allWdlSources)
+                    // The workflow was rewritten
+                    val CleanWf(wf2Node, _, _) = whiteWashWorkflow(wfTr, allWdlSources, Vector.empty)
                     wf2Node.copy(children = childrenTr)
 
                 case Some(subWf) =>
-                    val (subWf2, subWfName2, subWdlSrc2) = whiteWashWorkflow(subWf, allWdlSources)
+                    // The workflow was broken down into a subworkflow, called from
+                    // a toplevel workflow.
+                    val CleanWf(subWf2, subWfName2, subWdlSrc2) =
+                        whiteWashWorkflow(subWf, allWdlSources, Vector.empty)
 
                     // white wash the top level workflow
-                    val allWdlSources2 = allWdlSources :+ (subWfName2 => subWdlSrc2)
-                    val (wf2Node, _, _) = whiteWashWorkflow(
-                        wfTr, allWdlSources2, allWdlSources2.keys.toVector
+                    val allWdlSources2 = allWdlSources + (subWfName2 -> subWdlSrc2)
+                    val CleanWf(wf2Node, _, _) = whiteWashWorkflow(
+                        wfTr, allWdlSources2, Vector(subWfName2)
                     )
                     wf2Node.copy(allWdlSources = allWdlSources2,
-                                 children = childrenTr ++ subTreeNodes)
+                                 children = childrenTr :+ subWf2)
             }
         }
-
+    }
 
     // Extract all the tasks from the workflow, assume they are placed
     // in library [libName]. Rewrite the calls appropriately.
@@ -180,8 +185,7 @@ object NamespaceOps {
                                             libPath: String,
                                             libName: String,
                                             taskNames: Set[String],
-                                            wdlSources: Map[String, String])
-            : WdlNamespaceWithWorkflow  = {
+                                            wdlSources: Map[String, String]) : WdlNamespaceWithWorkflow  = {
         val wfOutputs: Vector[WorkflowOutput] =
             nswf.workflow.children.filter(x => x.isInstanceOf[WorkflowOutput])
                 .map(_.asInstanceOf[WorkflowOutput])
