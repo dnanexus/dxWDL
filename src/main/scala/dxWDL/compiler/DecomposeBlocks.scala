@@ -299,10 +299,32 @@ case class DecomposeBlocks(cef: CompilerErrorFormatter,
                 }.toMap
                 WdlRewrite.workflowCall(wfc, inputsRn)
 
+            case ssc:Scatter =>
+                val children = ssc.children.map {
+                    case child:Scope => statementRenameVars(child, allVars)
+                }.toVector
+                WdlRewrite.scatter(ssc,
+                                   children,
+                                   exprRenameVars(ssc.collection, allVars))
+
+            case cond:If =>
+                val children = cond.children.map {
+                    case child:Scope => statementRenameVars(child, allVars)
+                }.toVector
+                WdlRewrite.cond(cond,
+                                children,
+                                exprRenameVars(cond.condition, allVars))
+
+            case wo:WorkflowOutput =>
+                new WorkflowOutput(wo.unqualifiedName,
+                                   wo.womType,
+                                   exprRenameVars(wo.requiredExpression, allVars),
+                                   wo.ast,
+                                   wo.parent)
             case x =>
                 throw new Exception(cef.notCurrentlySupported(
                                         x.ast,
-                                        s"Unimplemented workflow element"))
+                                        "Unimplemented workflow element"))
         }
     }
 
@@ -369,6 +391,7 @@ case class DecomposeBlocks(cef: CompilerErrorFormatter,
     private def decompose(scope: Scope, subWfNamePrefix: String) : (Scope, WdlWorkflow, Vector[DVar]) = {
         val (topDecls, bottom: Seq[Scope]) = Utils.splitBlockDeclarations(scope.children.toList)
         assert(bottom.length > 1)
+        System.err.println(s"split scope=${scope.fullyQualifiedName}  #topDecl=${topDecls.length} numBottom=${bottom.length}")
 
         // Figure out the free variables in [bottom]
         val btmInputs = freeVars(bottom)
@@ -401,11 +424,10 @@ case class DecomposeBlocks(cef: CompilerErrorFormatter,
 
     private def splitWithLargeBlockAsPivot(wf: WdlWorkflow) : Partition = {
         var before = Vector.empty[Scope]
-        var after = Vector.empty[Scope]
         var lrgBlock: Option[Scope] = None
-        val children = wf.children.toVector
+        var after = Vector.empty[Scope]
 
-        for (stmt <- children) {
+        for (stmt <- wf.children) {
             lrgBlock match {
                 case None =>
                     if (isLargeSubBlock(stmt))
@@ -416,6 +438,7 @@ case class DecomposeBlocks(cef: CompilerErrorFormatter,
                     after = after :+ stmt
             }
         }
+        assert (before.length + lrgBlock.size + after.length == wf.children.length)
         Partition(before, lrgBlock, after)
     }
 
@@ -456,7 +479,10 @@ object DecomposeBlocks {
         // contain one call (at most).
         var done = false
         var tree = nsTree
+        var iter = 0
         while (!done) {
+            System.err.println(s"Decompose iteration ${iter}")
+            iter = iter + 1
             tree = tree.transform{ case (wf, cef) =>
                 val sbw = new DecomposeBlocks(cef, verbose)
                 val (wf2, subWf) = sbw.apply(wf)
