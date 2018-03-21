@@ -9,6 +9,6 @@ workflow cannes {
         }
     }
     output {
-        review.score
+        Array[Float] score = review.score
     }
 }

@@ -31,7 +31,7 @@ workflow long_block {
     }
 
     output {
-        add.result
-        sub.result
+        Array[Int] add_result = add.result
+        Array[Int] sub_result = sub.result
     }
 }

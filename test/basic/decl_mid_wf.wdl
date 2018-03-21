@@ -29,8 +29,8 @@ workflow decl_mid_wf {
     }
 
     output {
-        add.result
-        add2.result
-        concat.result
+        Int add_result = add.result
+        Int add2_result = add2.result
+        String concat_result = concat.result
     }
 }

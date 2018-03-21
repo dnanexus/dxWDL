@@ -124,11 +124,11 @@ workflow instance_types {
     call RuntimeDockerChoice2 { input: imageName="python:2.7" }
     call Shortcut
     output {
-        MemorySpec.retval
-        DiskSpaceSpec.retval
-        NumCoresSpec.retval
-        RuntimeDockerChoice.retval
-        RuntimeDockerChoice2.retval
-        Shortcut.retval
+        String MemorySpec_retval = MemorySpec.retval
+        String DiskSpaceSpec_retval = DiskSpaceSpec.retval
+        String NumCoresSpec_retval = NumCoresSpec.retval
+        String RuntimeDockerChoice_retval = RuntimeDockerChoice.retval
+        String RuntimeDockerChoice2_retval = RuntimeDockerChoice2.retval
+        String Shortcut_retval = Shortcut.retval
     }
 }

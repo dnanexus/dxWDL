@@ -176,6 +176,23 @@ object NamespaceOps {
         }
     }
 
+
+    // Make sure we don't have partial output expressions like:
+    //   output {
+    //     Add.result
+    //   }
+    //
+    // We only deal with fully specified outputs, like:
+    //   output {
+    //     File Add_result = Add.result
+    //   }
+    private def validateWorkflowOutput(wot: WorkflowOutput,
+                                       cef: CompilerErrorFormatter) : Unit = {
+        if (wot.unqualifiedName == wot.requiredExpression.toWomString) {
+            throw new Exception(cef.workflowOutputIsPartial(wot))
+        }
+    }
+
     // Extract all the tasks from the workflow, assume they are placed
     // in library [libName]. Rewrite the calls appropriately.
     //
@@ -186,10 +203,7 @@ object NamespaceOps {
                                             libName: String,
                                             taskNames: Set[String],
                                             wdlSources: Map[String, String]) : WdlNamespaceWithWorkflow  = {
-        val wfOutputs: Vector[WorkflowOutput] =
-            nswf.workflow.children.filter(x => x.isInstanceOf[WorkflowOutput])
-                .map(_.asInstanceOf[WorkflowOutput])
-                .toVector
+        val wfOutputs: Vector[WorkflowOutput] = nswf.workflow.outputs.toVector
 
         // Modify the workflow: add an import, and rename task calls.
         val pp = WdlPrettyPrinter(true, Some(wfOutputs), Some((libPath, libName, taskNames)))
@@ -247,12 +261,15 @@ object NamespaceOps {
                 new TreeLeaf(name, cef, taskDict)
 
             case nswf:WdlNamespaceWithWorkflow =>
+                // validate all workflow outputs
+                val cef = new CompilerErrorFormatter(nswf.resource, nswf.terminalMap)
+                nswf.workflow.outputs.foreach{ wot => validateWorkflowOutput(wot, cef) }
+
                 // recurse into sub-namespaces
                 val children:Vector[Tree] = nswf.namespaces.map{
                     child => load(child, allWdlSources, verbose)
                 }.toVector
                 if (ns.tasks.isEmpty) {
-                    val cef = new CompilerErrorFormatter(ns.resource, ns.terminalMap)
                     TreeNode(name,
                              cef,
                              allWdlSources,
@@ -273,12 +290,13 @@ object NamespaceOps {
 
                     val child: TreeLeaf = genLeaf(tasksLibName, taskDict)
                     val wdlSourcesWithTaskLib = allWdlSources + (tasksLibPath -> child.genWdlSource)
+
                     val nswf2 = rewriteWorkflowExtractTasks(
                         nswf, tasksLibPath, tasksLibName,
                         taskDict.keys.toSet, wdlSourcesWithTaskLib)
-                    val cef = new CompilerErrorFormatter(nswf2.resource, nswf2.terminalMap)
+                    val cef2 = new CompilerErrorFormatter(nswf2.resource, nswf2.terminalMap)
                     TreeNode(name,
-                             cef,
+                             cef2,
                              wdlSourcesWithTaskLib,
                              nswf2.imports,
                              nswf2.workflow,

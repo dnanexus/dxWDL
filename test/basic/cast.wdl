@@ -66,9 +66,9 @@ workflow cast {
     }
 
     output {
-        Add.result
-        SumArray.result
-        SumArray2.result
-        JoinMisc.result
+        Int Add_result = Add.result
+        Int SumArray_result = SumArray.result
+        Int SumArray2_result = SumArray2.result
+        String JoinMisc_result = JoinMisc.result
     }
 }
