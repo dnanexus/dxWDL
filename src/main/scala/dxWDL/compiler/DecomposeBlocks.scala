@@ -74,6 +74,8 @@ case class DecomposeBlocks(cef: CompilerErrorFormatter,
                     womType: WomType,
                     sanitizedName: String)
     object DVar {
+        // An additional default constructor. Normally,
+        // the sanitized name is built by replacing dots with underscores.
         def apply(name: String, womType: WomType) : DVar =
             new DVar(name, womType, Utils.transformVarName(name))
     }
@@ -206,7 +208,7 @@ case class DecomposeBlocks(cef: CompilerErrorFormatter,
         val variables = dependencies(expr.ast)
         variables.map{ varName =>
             val womType = Utils.lookupType(scope)(varName)
-            DVar(varName, womType, Utils.transformVarName(varName))
+            DVar(varName, womType)
         }.toVector
     }
 
@@ -270,12 +272,10 @@ case class DecomposeBlocks(cef: CompilerErrorFormatter,
     // module).
     private def exprRenameVars(expr: WdlExpression,
                                allVars: Vector[DVar]) : WdlExpression = {
-        var sExpr: String = expr.toWomString
-        for (dVar <- allVars) {
-            // A.x => A_x
-            sExpr = sExpr.replaceAll(dVar.name, dVar.sanitizedName)
-        }
-        WdlExpression.fromString(sExpr)
+        val dict = allVars.map{ dVar =>
+            dVar.name -> dVar.sanitizedName
+        }.toMap
+        ExpressionRenameVars(dict, verbose).apply(expr)
     }
 
     // rename all the variables from [allVars] used inside a statement
@@ -370,7 +370,7 @@ case class DecomposeBlocks(cef: CompilerErrorFormatter,
                              subWf: WdlWorkflow,
                              inputs: Vector[DVar]) : Scope = {
         val subWfInputs = inputs.map{ dVar =>
-            Utils.transformVarName(dVar.name) -> WdlExpression.fromString(dVar.name)
+            dVar.sanitizedName -> WdlExpression.fromString(dVar.name)
         }.toMap
         val wfc = WdlRewrite.workflowCall(subWf,
                                           subWfInputs)
@@ -391,10 +391,22 @@ case class DecomposeBlocks(cef: CompilerErrorFormatter,
     private def decompose(scope: Scope, subWfNamePrefix: String) : (Scope, WdlWorkflow, Vector[DVar]) = {
         val (topDecls, bottom: Seq[Scope]) = Utils.splitBlockDeclarations(scope.children.toList)
         assert(bottom.length > 1)
-        System.err.println(s"split scope=${scope.fullyQualifiedName}  #topDecl=${topDecls.length} numBottom=${bottom.length}")
+        Utils.trace(verbose.on, s"""|decompose scope=${scope.fullyQualifiedName}
+                                    |#topDecl=${topDecls.length} numBottom=${bottom.length}"""
+                        .stripMargin)
 
         // Figure out the free variables in [bottom]
-        val btmInputs = freeVars(bottom)
+        val btmInputs0 = freeVars(bottom)
+
+        // Some of the bottom variables are temporary. There is downstream code
+        // thet gets confused by such a variable being also a workflow input.
+        // Change these names.
+        val btmInputs = btmInputs0.map{ dVar =>
+            if (Utils.isGeneratedVar(dVar.name))
+                DVar(dVar.name, dVar.womType, "in_" + dVar.name)
+            else
+                dVar
+        }
 
         // Figure out the outputs from the [bottom] statements
         val btmOutputs: Vector[DVar] = blockOutputs(bottom.toVector)
@@ -408,11 +420,6 @@ case class DecomposeBlocks(cef: CompilerErrorFormatter,
 
         // replace the bottom statements with a call to the subworkflow
         val scope2 = rewriteBlock(scope, topDecls, subWf, btmInputs)
-/*        System.err.println(s"decompose, convert:")
-        System.err.println(WdlPrettyPrinter(true, None, None).apply(scope, 0).mkString("\n"))
-        System.err.println(s"decompose, into:")
-        System.err.println(WdlPrettyPrinter(true, None, None).apply(scope2, 0).mkString("\n"))
-        System.err.println() */
         (scope2, subWf, xtrnVarRefs)
     }
 
@@ -481,7 +488,7 @@ object DecomposeBlocks {
         var tree = nsTree
         var iter = 0
         while (!done) {
-            System.err.println(s"Decompose iteration ${iter}")
+            Utils.trace(verbose.on, s"Decompose iteration ${iter}")
             iter = iter + 1
             tree = tree.transform{ case (wf, cef) =>
                 val sbw = new DecomposeBlocks(cef, verbose)

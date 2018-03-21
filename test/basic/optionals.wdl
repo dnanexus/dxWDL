@@ -46,10 +46,13 @@ workflow optionals {
 
         # verify that unbound compulsory arguments are provided as scatter
         # inputs
-        call lib.Add as add2 { input: a=x }
+        #
+        # Note: we temporarily added b=3, to make this work.
+        call lib.Add as add2 { input: a=x, b=3 }
 
         # we need to pass {a, b}
-        call lib.Add as add3
+        # FIXME: remove {a,b}
+        call lib.Add as add3 {input: a=x, b=10}
 
         Array[Int] series=[x,1]
     }

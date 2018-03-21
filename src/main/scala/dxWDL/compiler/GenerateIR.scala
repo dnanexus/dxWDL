@@ -78,8 +78,13 @@ task Add {
         Int result
     }
 */
-    private def genAppletStub(callable: IR.Callable, scope: Scope) : WdlTask = {
-        val task = WdlRewrite.taskGenEmpty(callable.name, Map.empty, scope)
+    private def genAppletStub(callable: IR.Callable) : WdlTask = {
+        Utils.trace(verbose.on,
+                    s"""|genAppletStub  callable=${callable.name}
+                        |inputs= ${callable.inputVars.map(_.name)}
+                        |outputs= ${callable.outputVars.map(_.name)}"""
+                        .stripMargin)
+        val task = WdlRewrite.taskGenEmpty(callable.name)
         val inputs = callable.inputVars.map{ cVar =>
             WdlRewrite.declaration(cVar.womType, cVar.name, None)
         }.toVector
@@ -910,7 +915,7 @@ workflow w {
                     accu
                 } else {
                     // no existing stub, create it
-                    val task = genAppletStub(callable, scope)
+                    val task = genAppletStub(callable)
                     accu + (name -> task)
                 }
             }
@@ -1360,6 +1365,8 @@ workflow w {
     // Compile a workflow, having compiled the independent tasks.
     def compileWorkflow(wf: WdlWorkflow)
             : (IR.Workflow, Map[String, IR.Applet]) = {
+        Utils.trace(verbose.on, s"compiling workflow ${wf.unqualifiedName}")
+
         // Get rid of workflow output declarations
         val children = wf.children.filter(x => !x.isInstanceOf[WorkflowOutput])
 
@@ -1401,6 +1408,13 @@ workflow w {
                 .map(apl => apl.name -> apl).toMap
 
         val irwf = IR.Workflow(wf.unqualifiedName, wfInputs, wfOutputs, stages, locked)
+
+        val wfInputNames = wfInputs.map{ case (cVar,_) => cVar.name }.toVector
+        val wfOutputNames = wfOutputs.map{ case (cVar,_) => cVar.name }.toVector
+        System.err.println(s"""|${wf.unqualifiedName}
+                               |  wfInputs=${wfInputNames}
+                               |  wfOutputs=${wfOutputNames}
+                               |""".stripMargin)
         (irwf, aApplets)
     }
 }

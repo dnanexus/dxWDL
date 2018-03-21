@@ -83,6 +83,14 @@ object WdlRewrite {
     }
 
     // Create an empty task.
+    def taskGenEmpty(name: String) : WdlTask = {
+        new WdlTask(name,
+                    Vector.empty,  // command Template
+                    new WdlRuntimeAttributes(Map.empty[String,WdlExpression]),
+                    Map.empty, // meta
+                    Map.empty[String, String], // parameter meta
+                    INVALID_AST)
+    }
     def taskGenEmpty(name: String,
                      meta: Map[String, String],
                      scope: Scope) : WdlTask = {
