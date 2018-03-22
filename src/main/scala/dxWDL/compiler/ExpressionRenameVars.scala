@@ -67,13 +67,23 @@ case class ExpressionRenameVars(dict: Map[String, String],
 
         val translatedParts = parts.map {
             case Fqn(fqn) =>
-                dict.get(fqn) match {
+                // if the identifer is of the form A.x or A,
+                // where A is in the traslation list, then convert into:
+                // F(A).x
+                val translation = dict.find{
+                    case (org,_) =>
+                        if (!fqn.startsWith(org)) false
+                        else if (fqn.length == org.length) true
+                        else (fqn(org.length) == '.')
+                }
+                translation match {
                     case None =>
                         // no need to replace this FQN
                         fqn
-                    case Some(replacement) =>
-                        // we want to replace this identifier
-                        replacement
+                    case Some((org, replacement)) =>
+                        // we want to replace the beginning of this identifier
+                        val ending = fqn.substring(org.length)
+                        replacement + ending
                 }
             case Symbols(sym) => sym
         }

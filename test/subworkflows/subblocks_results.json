@@ -1,0 +1,5 @@
+{
+  "subblocks.mul_a": [2, 4, 6, 1],
+  "subblocks.add_a": [2, 3, 4, 5],
+  "subblocks.sub_a": [1, 2, 3, 4]
+}
