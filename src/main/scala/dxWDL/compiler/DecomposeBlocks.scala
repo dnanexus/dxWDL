@@ -1,57 +1,57 @@
 /*
- * Break large sub-blocks into separate sub-workflows. Simplistically,
- * a large subblock is one that has more than two calls. For example
- * the scatter below is "large".
- *
- * task add {
- *    Int a
- *    Int b
- *    command {}
- *    output {
- *       Int result = a + b
- *    }
- * }
- *
- * task mul {
- *    Int a
- *    Int n
- *    command {}
- *    output {
- *       Int result = a ** b
- *    }
- * }
- *
- * scatter (x in ax) {
- *   Int y = x + 4
- *   call add { input: a=y, b=x }
- *   Int base = add.result
- *   call mul { input: a=base, n=x}
- * }
- *
- *
- * It will be broken into a subworkflow, and a scatter that calls it.
- *
- * scatter (x in ax) {
- *   Int y = x + 4
- *   call foobar_add { x=x, y=y }
- * }
- *
- * workflow foobar_add {
- *   Int x
- *   Int y
- *
- *   call add { input: a=y, b=x }
- *   Int base = add.result
- *   call mul { input: a=base, n=x}
- *
- *   output {
- *     Int add_result = add.result
- *     Int out_base = base
- *     Int mul_result = mul.result
- *   }
- * }
- *
- * Downstream references to 'add.result' will be renamed: foobar_add.add_result
+ Break large sub-blocks into separate sub-workflows. Simplistically,
+ a large subblock is one that has more than two calls. For example
+ the scatter below is "large".
+
+ task add {
+   Int a
+   Int b
+   command {}
+   output {
+     Int result = a + b
+   }
+ }
+
+ task mul {
+   Int a
+   Int n
+   command {}
+   output {
+     Int result = a ** b
+   }
+ }
+
+ scatter (x in ax) {
+   Int y = x + 4
+   call add { input: a=y, b=x }
+   Int base = add.result
+   call mul { input: a=base, n=x}
+ }
+
+
+ It will be broken into a subworkflow, and a scatter that calls it.
+
+ scatter (x in ax) {
+   Int y = x + 4
+   call foobar_add { x=x, y=y }
+ }
+
+ workflow foobar_add {
+   Int x
+   Int y
+
+   call add { input: a=y, b=x }
+   Int base = add.result
+   call mul { input: a=base, n=x}
+
+   output {
+     Int add_result = add.result
+     Int out_base = base
+     Int mul_result = mul.result
+   }
+ }
+
+ Downstream references to 'add.result' will be renamed: foobar_add.add_result
  */
 
 package dxWDL.compiler
