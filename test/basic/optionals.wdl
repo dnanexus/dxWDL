@@ -48,11 +48,11 @@ workflow optionals {
         # inputs
         #
         # Note: we temporarily added b=3, to make this work.
-        call lib.Add as add2 { input: a=x, b=3 }
+        call lib.Add as add2 { input: a=x, b=8 }
 
         # we need to pass {a, b}
         # FIXME: remove {a,b}
-        call lib.Add as add3 {input: a=x, b=10}
+        call lib.Add as add3 {input: a=13, b=21}
 
         Array[Int] series=[x,1]
     }

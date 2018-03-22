@@ -94,7 +94,7 @@ workflow files {
        Int diff2_result = diff2.result
        Array[File] FindFiles_texts = FindFiles.texts
        File? FindFiles_missing = FindFiles.missing
-       Boolean colocation_result = colocation.result
+       String colocation_result = colocation.result
        Array[Int] FileArraySize_result = FileArraySize.result
        Array[String] head_result = head.result
        Array[Array[String]] TsvReadTable_result = TsvReadTable.result
