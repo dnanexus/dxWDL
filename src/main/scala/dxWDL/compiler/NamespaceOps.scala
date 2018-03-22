@@ -202,7 +202,9 @@ object NamespaceOps {
                                             libPath: String,
                                             libName: String,
                                             taskNames: Set[String],
-                                            wdlSources: Map[String, String]) : WdlNamespaceWithWorkflow  = {
+                                            wdlSources: Map[String, String],
+                                            resource: String)
+            : (WdlNamespaceWithWorkflow, CompilerErrorFormatter)  = {
         val wfOutputs: Vector[WorkflowOutput] = nswf.workflow.outputs.toVector
 
         // Modify the workflow: add an import, and rename task calls.
@@ -212,7 +214,9 @@ object NamespaceOps {
         val cleanNs = WdlNamespace.loadUsingSource(
             lines, None, Some(List(resolver))
         ).get
-        cleanNs.asInstanceOf[WdlNamespaceWithWorkflow]
+        val nswf2 = cleanNs.asInstanceOf[WdlNamespaceWithWorkflow]
+        val cef = new CompilerErrorFormatter(resource, nswf2.terminalMap)
+        (nswf2, cef)
     }
 
 
@@ -228,6 +232,7 @@ object NamespaceOps {
 
     // Create a leaf node from a name and a bunch of tasks
     private def genLeaf(tasksLibName: String,
+                        resource: String,
                         taskDict: Map[String, WdlTask]) : TreeLeaf = {
         val tasks = taskDict.map{ case (_, task) => task }.toVector
         val wf = new WdlNamespaceWithoutWorkflow(
@@ -243,7 +248,7 @@ object NamespaceOps {
         val cleanNs = WdlNamespace.loadUsingSource(
             lines, None, None
         ).get
-        val cef = new CompilerErrorFormatter(cleanNs.resource, cleanNs.terminalMap)
+        val cef = new CompilerErrorFormatter(resource, cleanNs.terminalMap)
         TreeLeaf(tasksLibName, cef, taskDict)
     }
 
@@ -288,13 +293,12 @@ object NamespaceOps {
                                                 |path=${tasksLibPath}  name=${tasksLibName}"""
                                     .stripMargin)
 
-                    val child: TreeLeaf = genLeaf(tasksLibName, taskDict)
+                    val child: TreeLeaf = genLeaf(tasksLibName, tasksLibPath, taskDict)
                     val wdlSourcesWithTaskLib = allWdlSources + (tasksLibPath -> child.genWdlSource)
 
-                    val nswf2 = rewriteWorkflowExtractTasks(
+                    val (nswf2, cef2) = rewriteWorkflowExtractTasks(
                         nswf, tasksLibPath, tasksLibName,
-                        taskDict.keys.toSet, wdlSourcesWithTaskLib)
-                    val cef2 = new CompilerErrorFormatter(nswf2.resource, nswf2.terminalMap)
+                        taskDict.keys.toSet, wdlSourcesWithTaskLib, nswf.resource)
                     TreeNode(name,
                              cef2,
                              wdlSourcesWithTaskLib,

@@ -632,9 +632,9 @@ workflow w {
                     // value. In an unlocked workflow it can be
                     // provided as an input. In a locked workflow,
                     // that is not possible.
-                                        val msg = s"""|Workflow doesn't supply required input ${cVar.name}
+                    val msg = s"""|Workflow doesn't supply required input ${cVar.name}
                                   |to call ${call.unqualifiedName}
-                                                      |""".stripMargin.replaceAll("\n", " ")
+                                  |""".stripMargin.replaceAll("\n", " ")
                     if (locked) {
                         throw new Exception(cef.missingCallArgument(call.ast, msg))
                     } else {
@@ -1409,12 +1409,12 @@ workflow w {
 
         val irwf = IR.Workflow(wf.unqualifiedName, wfInputs, wfOutputs, stages, locked)
 
-        val wfInputNames = wfInputs.map{ case (cVar,_) => cVar.name }.toVector
+        /*val wfInputNames = wfInputs.map{ case (cVar,_) => cVar.name }.toVector
         val wfOutputNames = wfOutputs.map{ case (cVar,_) => cVar.name }.toVector
         System.err.println(s"""|${wf.unqualifiedName}
                                |  wfInputs=${wfInputNames}
                                |  wfOutputs=${wfOutputNames}
-                               |""".stripMargin)
+                               |""".stripMargin)*/
         (irwf, aApplets)
     }
 }

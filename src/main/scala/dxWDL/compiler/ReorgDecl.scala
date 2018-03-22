@@ -166,11 +166,6 @@ case class ReorgDecl(cef: CompilerErrorFormatter,
         var numIter = 0
         val totNumElems = drs.bottom.length
         while (!drs.bottom.isEmpty && numIter < MAX_NUM_COLLECT_ITER) {
-/*            System.err.println(
-                s"""|collectDeclaration ${numIter}
-                    |size(defs)=${drs.definedVars.size} len(top)=${drs.top.length}
-                    |len(bottom)=${drs.bottom.length}""".stripMargin.replaceAll("\n", " ")
-            )*/
             drs = declMoveUp(drs)
             assert(totNumElems == drs.top.length + drs.bottom.length)
             numIter += 1
