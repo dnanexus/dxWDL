@@ -13,6 +13,7 @@ import dxWDL.Utils
 import com.dnanexus.{DXRecord}
 import wdl._
 import wdl.AstTools
+import wdl.AstTools._
 import wdl4s.parser.WdlParser.{Ast, Terminal}
 import wom.core.WorkflowSource
 import wom.types._
@@ -45,7 +46,7 @@ object WdlRewrite {
 
     // Modify the inputs in a task-call
     def taskCall(tc: WdlTaskCall,
-             inputMappings: Map[String, WdlExpression]) : WdlTaskCall = {
+                 inputMappings: Map[String, WdlExpression]) : WdlTaskCall = {
         val tc1 = WdlTaskCall(tc.alias, tc.task, inputMappings, tc.ast)
         tc1.children = tc.children
         updateScope(tc, tc1)
@@ -61,7 +62,35 @@ object WdlRewrite {
         wfc1
     }
 
+    // Create a workflow call, with a valid AST
+    def workflowCall(wf: WdlWorkflow,
+                     inputMappings: Map[String, WdlExpression]) : WdlWorkflowCall = {
+        val inputs = inputMappings.map{ case (key, expr) => s"${key}=${expr.toWomString}" }
+        val inputsString = inputs.mkString(", ")
+        val callFqn = s"${wf.unqualifiedName}.${wf.unqualifiedName}"
+
+        // To make the WDL parser happy, we need to wrap the call with a workflow.
+        val sourceString =
+            s"""|workflow w {
+                |   call ${callFqn} { input: ${inputsString} }
+                |}
+                |""".stripMargin
+        val ast = AstTools.getAst(sourceString, "")
+
+        // Strip away the outer workflow, and get the call AST
+        val callAst = ast.findAsts(AstNodeName.Call).head
+        WdlWorkflowCall(Some(wf.unqualifiedName), wf, inputMappings, callAst)
+    }
+
     // Create an empty task.
+    def taskGenEmpty(name: String) : WdlTask = {
+        new WdlTask(name,
+                    Vector.empty,  // command Template
+                    new WdlRuntimeAttributes(Map.empty[String,WdlExpression]),
+                    Map.empty, // meta
+                    Map.empty[String, String], // parameter meta
+                    INVALID_AST)
+    }
     def taskGenEmpty(name: String,
                      meta: Map[String, String],
                      scope: Scope) : WdlTask = {
@@ -211,8 +240,8 @@ object WdlRewrite {
                                      Vector.empty, Vector.empty,
                                      tasks,
                                      Map.empty,
-                                     WdlRewrite.INVALID_ERR_FORMATTER,
-                                     WdlRewrite.INVALID_AST,
+                                     INVALID_ERR_FORMATTER,
+                                     INVALID_AST,
                                      "", // sourceString: What does this argument do?
                                      None)
     }
@@ -224,9 +253,9 @@ object WdlRewrite {
                                                  old.namespaces,
                                                  old.tasks,
                                                  Map.empty,
-                                                 WdlRewrite.INVALID_ERR_FORMATTER,
-                                                 WdlRewrite.INVALID_AST,
-                                                 "", // sourceString: What does this argument do?
+                                                 INVALID_ERR_FORMATTER,
+                                                 INVALID_AST,
+                                                 old.resource,
                                                  None)
         updateScope(old, fresh)
         fresh
@@ -238,8 +267,8 @@ object WdlRewrite {
                                         Vector.empty,
                                         Vector(task),
                                         Map.empty,
-                                        WdlRewrite.INVALID_AST,
-                                        "", // sourceString: What does this argument do?
+                                        INVALID_AST,
+                                        "", // sourceString
                                         None)
     }
 
@@ -249,46 +278,19 @@ object WdlRewrite {
                                         Vector.empty,
                                         tasks,
                                         Map.empty,
-                                        WdlRewrite.INVALID_AST,
-                                        "", // sourceString: What does this argument do?
+                                        INVALID_AST,
+                                        "", // sourceString
                                         None)
     }
 
-    def namespaceEmpty() : WdlNamespaceWithoutWorkflow = {
+    def namespaceEmpty : WdlNamespaceWithoutWorkflow = {
         new WdlNamespaceWithoutWorkflow(None,
                                         Vector.empty,
                                         Vector.empty,
                                         Vector.empty,
                                         Map.empty,
-                                        WdlRewrite.INVALID_AST,
-                                        "", // sourceString: What does this argument do?
+                                        INVALID_AST,
+                                        "", // sourceString
                                         None)
-    }
-
-    def namespaceUpdateChildren(old: WdlNamespace,
-                                childNamespaces: Vector[WdlNamespace]) : WdlNamespace = {
-        // update the child namespaces field
-        old match {
-            case oldNs: WdlNamespaceWithWorkflow =>
-                new WdlNamespaceWithWorkflow(oldNs.importedAs,
-                                             oldNs.workflow,
-                                             oldNs.imports,
-                                             childNamespaces,
-                                             oldNs.tasks,
-                                             oldNs.terminalMap,
-                                             oldNs.wdlSyntaxErrorFormatter,
-                                             oldNs.ast,
-                                             oldNs.sourceString,
-                                             oldNs.importUri)
-            case _: WdlNamespaceWithoutWorkflow =>
-                new WdlNamespaceWithoutWorkflow(old.importedAs,
-                                                old.imports,
-                                                childNamespaces,
-                                                old.tasks,
-                                                old.terminalMap,
-                                                old.ast,
-                                                old.sourceString,
-                                                old.importUri)
-        }
     }
 }

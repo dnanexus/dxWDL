@@ -2,7 +2,7 @@ package dxWDL
 
 import wdl4s.parser.WdlParser._
 import wdl.AstTools
-import wdl.{WdlExpression, WdlCall}
+import wdl.{WdlExpression, WdlCall, WorkflowOutput}
 import wom.core._
 import wom.types.WomType
 
@@ -166,6 +166,14 @@ case class CompilerErrorFormatter(resource: String,
             |
             |${textualSource(t)}
             |${pointToSource(t)}
+            |""".stripMargin
+    }
+
+    def workflowOutputIsPartial(wot: WorkflowOutput) = {
+        s"""|Workflow output must have a name, type, and value
+            |
+            | ${resource}
+            | ${wot.toWdlString}
             |""".stripMargin
     }
 }

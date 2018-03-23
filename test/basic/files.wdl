@@ -89,24 +89,15 @@ workflow files {
     }
 
    output {
-       write_lines_bug.result
-       diff1.result
-       diff2.result
-       Copy2.outf_sorted
-       FindFiles.texts
-       FindFiles.hotels
-       FindFiles.missing
-       FindFiles2.elements
-#       FindFiles2.emptyFiles
-       FileSize.num_bytes
-       colocation.result
-       ident.result
-       FileArraySize.result
-       false_branch
-       Copy3.outf
-       mk_arr.result
-       head.result
-       TsvReadTable.result
+       String write_lines_bug_result = write_lines_bug.result
+       Int diff1_result = diff1.result
+       Int diff2_result = diff2.result
+       Array[File] FindFiles_texts = FindFiles.texts
+       File? FindFiles_missing = FindFiles.missing
+       String colocation_result = colocation.result
+       Array[Int] FileArraySize_result = FileArraySize.result
+       Array[String] head_result = head.result
+       Array[Array[String]] TsvReadTable_result = TsvReadTable.result
        Array[String] fruits = fruits_available
    }
 }

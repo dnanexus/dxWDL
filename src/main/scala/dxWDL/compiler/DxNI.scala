@@ -202,7 +202,7 @@ object DxNI {
               recursive: Boolean,
               force: Boolean,
               verbose: Verbose) : Unit = {
-        val nsEmpty = WdlRewrite.namespaceEmpty()
+        val nsEmpty = WdlRewrite.namespaceEmpty
         val dxni = DxNI(nsEmpty, verbose)
 
         val dxNativeTasks: Vector[WdlTask] = dxni.search(dxProject, folder, recursive)

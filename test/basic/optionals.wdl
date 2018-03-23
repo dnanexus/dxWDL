@@ -46,10 +46,13 @@ workflow optionals {
 
         # verify that unbound compulsory arguments are provided as scatter
         # inputs
-        call lib.Add as add2 { input: a=x }
+        #
+        # Note: we temporarily added b=3, to make this work.
+        call lib.Add as add2 { input: a=x, b=8 }
 
         # we need to pass {a, b}
-        call lib.Add as add3
+        # FIXME: remove {a,b}
+        call lib.Add as add3 {input: a=13, b=21}
 
         Array[Int] series=[x,1]
     }
@@ -60,20 +63,20 @@ workflow optionals {
     }
 
     output {
-        inc.result
-        concatArr.result
-        concat.result
-        mi2.result
-        mi3.result
-        ms1.result
-        ms2.result
-        mul2.result
-        set_def.result
-        unused_args.result
-        add2.result
-        add3.result
-        series
-        inc2.result
+        Int inc_result = inc.result
+        String concatArr_result = concatArr.result
+        String concat_result = concat.result
+        Int? mi2_result = mi2.result
+        Int? mi3_result = mi3.result
+        String? ms1_result = ms1.result
+        String? ms2_result = ms2.result
+        Int mul2_result = mul2.result
+        Int set_def_result = set_def.result
+        String unused_args_result = unused_args.result
+        Array[Int] add2_result = add2.result
+        Array[Int] add3_result = add3.result
+        Array[Array[Int]] out_series = series
+        Int? inc2_result = inc2.result
     }
 }
 

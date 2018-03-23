@@ -13,6 +13,6 @@ task BadCommand {
 workflow bad_status {
     call BadCommand
     output {
-        BadCommand.rc
+        Int rc = BadCommand.rc
     }
 }

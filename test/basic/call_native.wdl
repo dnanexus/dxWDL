@@ -32,14 +32,14 @@ workflow call_native {
     }
 
     output {
-        sum_var1.result
-        sum_var2.result
-        sum_var3.result
-        mk_list.all
-        concat.c
-        mk_list2.all
-        sum.result
-        sum2.result
-        diff.equality
+        Int sum_var1_result = sum_var1.result
+        Int sum_var2_result = sum_var2.result
+        Int sum_var3_result = sum_var3.result
+        Array[Int] mk_list_all = mk_list.all
+        String concat_c = concat.c
+        Array[Int]+? mk_list2_all = mk_list2.all
+        Array[Int] sum_result = sum.result
+        Array[Int] sum2_result = sum2.result
+        Boolean diff_equality = diff.equality
     }
 }

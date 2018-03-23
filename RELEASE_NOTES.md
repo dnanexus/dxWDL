@@ -1,5 +1,93 @@
 # Release Notes
 
+## 0.61
+
+- Decomposing a large block into a sub-workflow, and a call. For
+example, workflow `foobar` has a complex scatter block, one that has
+more than one call. It is broken down into the top-level workflow
+(`foobar`), and a subworkflow (`foobar_add`) that encapsulates the
+inner block.
+
+```
+workflow foobar {
+  Array[Int] ax
+
+  scatter (x in ax) {
+    Int y = x + 4
+    call add { input: a=y, b=x }
+    Int base = add.result
+    call mul { input: a=base, n=x}
+  }
+  output {
+    Array[Int] result = mul.result
+  }
+}
+
+task add {
+  Int a
+  Int b
+  command {}
+  output {
+    Int result = a + b
+  }
+}
+
+task mul {
+  Int a
+  Int n
+  command {}
+  output {
+    Int result = a ** b
+  }
+}
+```
+
+Two pieces are together equivalent to the original workflow.
+```
+workflow foobar {
+  Array[Int] ax
+  scatter (x in ax) {
+    Int y = x + 4
+    call foobar_add { x=x, y=y }
+  }
+  output {
+    Array[Int] result = foobar_add.mul_result
+  }
+}
+
+workflow foobar_add {
+  Int x
+  Int y
+
+  call add { input: a=y, b=x }
+  Int base = add.result
+  call mul { input: a=base, n=x}
+
+  output {
+     Int add_result = add.result
+     Int out_base = base
+     Int mul_result = mul.result
+   }
+ }
+```
+
+- A current limitation is that subworkflows, created in this way, give errors
+for missing variables.
+- The allowed syntax for workflow outputs has been tightened. An output
+declaration must have a type and and a value. For example, this is legal:
+```
+output {
+   Int add_result = add.result
+}
+```
+
+but this is not:
+```
+output {
+   add.result
+}
+```
+
 ## 0.60.2
 - Minor bug fixes
 

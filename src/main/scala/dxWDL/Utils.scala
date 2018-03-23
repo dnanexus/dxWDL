@@ -75,6 +75,10 @@ object Utils {
 
     lazy val dxEnv = DXEnvironment.create()
 
+    // Ignore a value. This is useful for avoiding warnings/errors
+    // on unused variables.
+    def ignore[A](value: A) : Unit = {}
+
     // Substrings used by the compiler for encoding purposes
     val reservedSubstrings = List("___")
 

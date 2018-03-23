@@ -15,6 +15,6 @@ workflow file_array {
         input : A=fs[0], B=fs[1]
     }
     output {
-        diff.result
+        Int result = diff.result
     }
 }

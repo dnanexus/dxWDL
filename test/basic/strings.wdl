@@ -110,12 +110,12 @@ workflow strings {
     }
 
     output {
-        cond_c2.result
-        concat1.result
-        concat2.result
-        concat3.result
-        concat4.result
-        concat5.result
-        collect.result
+        String? cond_c2_result = cond_c2.result
+        String concat1_result = concat1.result
+        String concat2_result = concat2.result
+        String concat3_result = concat3.result
+        String concat4_result = concat4.result
+        String concat5_result = concat5.result
+        Array[String] collect_result = collect.result
     }
 }

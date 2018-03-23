@@ -13,4 +13,7 @@ workflow ngs {
     Int A
     Int B
     call mul2 { input: i=C }
+    output {
+        Int result = mul2.result
+    }
 }

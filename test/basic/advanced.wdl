@@ -76,9 +76,9 @@ workflow advanced {
     }
 
     output {
-        cgrep.count
-        str_animals.result
-        str_animals.family
-        BroadGenomicsDocker.version
+        Array[Int] cgrep_count = cgrep.count
+        String str_animals_result = str_animals.result
+        String str_animals_family = str_animals.family
+        String BroadGenomicsDocker_version = BroadGenomicsDocker.version
     }
 }
