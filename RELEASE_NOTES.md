@@ -43,7 +43,6 @@ task mul {
 ```
 
 Two pieces are together equivalent to the original workflow.
-
 ```
 workflow foobar {
   Array[Int] ax
@@ -74,7 +73,20 @@ workflow foobar_add {
 
 - A current limitation is that subworkflows, created in this way, give errors
 for missing variables.
+- The allowed syntax for workflow outputs has been tightened. An output
+declaration must have a type and and a value. For example, this is legal:
+```
+output {
+   Int add_result = add.result
+}
+```
 
+but this is not:
+```
+output {
+   add.result
+}
+```
 
 ## 0.60.2
 - Minor bug fixes
