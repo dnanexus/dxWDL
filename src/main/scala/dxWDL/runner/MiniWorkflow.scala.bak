@@ -1,7 +1,12 @@
-/*
-Execute a limitied WDL workflow on the platform. The workflow can
-contain declarations, if blocks, scatter blocks, and one call
-location. A simple example is `wf_scat`.
+/** Execute a small workflow on the platform. Such a workflow
+(1) starts with declarations
+(2) has exactly one block command (scatter, if, etc.)
+(3) ends with an output section.
+
+Workflow wf_scat shows a scatter example. The scatter block has two
+calls, and it iterates over the "numbers" array. It is legal to have
+declarations requiring evaluation at the top of the block, and, inside
+the scatter block.
 
 workflow wf_scat {
     String pattern
@@ -9,28 +14,32 @@ workflow wf_scat {
     Array[Int] index = range(length(numbers))
 
     scatter (i in index) {
-        call inc {input: i=numbers[i]}
+        call inc as inc1 {input: i=numbers[i]}
+        call inc as inc2 {input: i=inc1.incremented}
     }
 
   output {
     Array[Int] inc1_result = inc1.result
+    Array[Int] inc2_result = inc2.result
   }
 }
 
-A nested example:
+A workflow with a conditional block is wf_cond.
 
 workflow wf_cond {
    Int x
+   Int y
 
    if (x > 10) {
-      scatter (b in [1, 3, 5, 7])
-          call add {input: a=x, b=b}
+      call Add {input: a=x, b=y}
+      call Mul {input: a=Add.result, b=3}
    }
    output {
-      Array[Int]? add_result = add.result
+      Add.result
+      Mul.result
    }
 }
-*/
+  */
 
 package dxWDL.runner
 
@@ -52,19 +61,18 @@ case class MiniWorkflow(exportVars: Set[String],
                         orgInputs: JsValue,
                         collectSubjob: Boolean,
                         verbose: Boolean) {
-    // A runtime representation of a WDL variable
-    case class RVar(name: String,
-                    womType: WomType,
-                    value: WomValue)
-
-    // An environment where WDL expressions can be evalulated
-    type Env = Map[String, RVar]
+    // An environment element could be one of:
+    // - top level value
+    // - dictionary of values returned from a call
+    sealed trait Elem
+    case class ElemTop(wvl: WdlVarLinks) extends Elem
+    case class ElemCall(outputs: Map[String, WdlVarLinks]) extends Elem
+    type Env = Map[String, Elem]
 
     // check if a variable should be exported from this applet
     private def isExported(varName: String) : Boolean = {
         exportVars contains (Utils.transformVarName(varName))
     }
-
     // find the sequence of applets inside the scatter block. In the example,
     // these are: [inc1, inc2]
     private def findApplets(scope: Scope,
