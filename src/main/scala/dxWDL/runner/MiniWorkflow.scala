@@ -61,6 +61,12 @@ case class MiniWorkflow(exportVars: Set[String],
     // An environment where WDL expressions can be evaluated
     type Env = Map[String, RVar]
 
+    // A call made to an applet or workflow (runtime call)
+    case class RCall(call: WdlCall, dxExec: DXExecution)
+
+    // Accumulator for the evaluation
+    case class Accu(env: Env, calls: Vector[RCall])
+
     // check if a variable should be exported from this applet
     private def isExported(varName: String) : Boolean = {
         exportVars contains (Utils.transformVarName(varName))
@@ -168,7 +174,7 @@ case class MiniWorkflow(exportVars: Set[String],
         }
     }
 
-    private def evalStatement(scope, env: Env) : Env {
+    private def evalStatement(stmt: Scope, env: Env) : (Env, Option[RCall]) {
     }
 
     def apply(wf: WdlWorkflow,
@@ -191,7 +197,9 @@ case class MiniWorkflow(exportVars: Set[String],
         }.toMap
 
         // evaluate each of the statements in the workflow
-        val envEnd = wf.children.foldLeft(envBgn) {
+        val envEnd = wf.children.foldLeft(Accu(envBgn, Vector.empty)) {
+            case (Accu(env,rCalls), stmt) =>
+                val (env2, rCallOpt) = evalStatement(stmt, env)
         }
 
         val blockOutputs : Map[String, WdlVarLinks] = scope match {
