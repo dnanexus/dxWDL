@@ -199,14 +199,13 @@ object NamespaceOps {
     // import "libName" as xxxx_lib
     //    call  foo    ->   call xxxx_lib.foo
     private def rewriteWorkflowExtractTasks(nswf: WdlNamespaceWithWorkflow,
+                                            wfOutputs: Vector[WorkflowOutput],
                                             libPath: String,
                                             libName: String,
                                             taskNames: Set[String],
                                             wdlSources: Map[String, String],
                                             resource: String)
             : (WdlNamespaceWithWorkflow, CompilerErrorFormatter)  = {
-        val wfOutputs: Vector[WorkflowOutput] = nswf.workflow.outputs.toVector
-
         // Modify the workflow: add an import, and rename task calls.
         val pp = WdlPrettyPrinter(true, Some(wfOutputs), Some((libPath, libName, taskNames)))
         val lines: String = pp.apply(nswf, 0).mkString("\n")
@@ -266,9 +265,20 @@ object NamespaceOps {
                 new TreeLeaf(name, cef, taskDict)
 
             case nswf:WdlNamespaceWithWorkflow =>
-                // validate all workflow outputs
+
                 val cef = new CompilerErrorFormatter(nswf.resource, nswf.terminalMap)
-                nswf.workflow.outputs.foreach{ wot => validateWorkflowOutput(wot, cef) }
+                val wfOutputs =
+                    if (nswf.workflow.noWorkflowOutputs) {
+                        // Empty output section. Unlike Cromwell, we generate no outputs
+                        Utils.warning(verbose, "Empty output section, not outputs will be generated")
+                        Vector.empty
+                    } else {
+                        // validate all workflow outputs
+                        nswf.workflow.outputs.map{ wot =>
+                            validateWorkflowOutput(wot, cef)
+                            wot
+                        }.toVector
+                    }
 
                 // recurse into sub-namespaces
                 val children:Vector[Tree] = nswf.namespaces.map{
@@ -297,7 +307,7 @@ object NamespaceOps {
                     val wdlSourcesWithTaskLib = allWdlSources + (tasksLibPath -> child.genWdlSource)
 
                     val (nswf2, cef2) = rewriteWorkflowExtractTasks(
-                        nswf, tasksLibPath, tasksLibName,
+                        nswf, wfOutputs, tasksLibPath, tasksLibName,
                         taskDict.keys.toSet, wdlSourcesWithTaskLib, nswf.resource)
                     TreeNode(name,
                              cef2,
