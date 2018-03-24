@@ -1,5 +1,9 @@
 # Release Notes
 
+## 0.61.1
+
+- When a WDL workflow has an empty outputs section, no outputs will be generated.
+
 ## 0.61
 
 - Decomposing a large block into a sub-workflow, and a call. For
