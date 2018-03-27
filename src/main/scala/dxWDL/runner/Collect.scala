@@ -183,8 +183,8 @@ object Collect {
     }
 
     def apply(wf: WdlWorkflow,
-              inputSpec: Map[String, Utils.DXIOParam],
-              outputSpec: Map[String, Utils.DXIOParam],
+              inputSpec: Map[String, DXIOParam],
+              outputSpec: Map[String, DXIOParam],
               inputs: Map[String, WdlVarLinks]) : Map[String, JsValue] = {
         if (wf.calls.size != 1)
             throw new Exception(

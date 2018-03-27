@@ -381,8 +381,8 @@ case class Task(task:WdlTask,
 
     // Calculate the input variables for the task, download the input files,
     // and build a shell script to run the command.
-    def prolog(inputSpec: Map[String, Utils.DXIOParam],
-               outputSpec: Map[String, Utils.DXIOParam],
+    def prolog(inputSpec: Map[String, DXIOParam],
+               outputSpec: Map[String, DXIOParam],
                inputWvls: Map[String, WdlVarLinks]) : Map[String, JsValue] = {
         val ioMode =
             if (task.commandTemplateString.trim.isEmpty) {
@@ -447,8 +447,8 @@ case class Task(task:WdlTask,
         Map.empty
     }
 
-    def epilog(inputSpec: Map[String, Utils.DXIOParam],
-               outputSpec: Map[String, Utils.DXIOParam],
+    def epilog(inputSpec: Map[String, DXIOParam],
+               outputSpec: Map[String, DXIOParam],
                inputs: Map[String, WdlVarLinks]) : Map[String, JsValue] = {
         // Repopulate the localized file tables
         LocalDxFiles.unfreeze()
@@ -526,8 +526,8 @@ case class Task(task:WdlTask,
     /** The runtime attributes need to be calculated at runtime. Evaluate them,
       *  determine the instance type [xxxx], and relaunch the job on [xxxx]
       */
-    def relaunch(inputSpec: Map[String, Utils.DXIOParam],
-                 outputSpec: Map[String, Utils.DXIOParam],
+    def relaunch(inputSpec: Map[String, DXIOParam],
+                 outputSpec: Map[String, DXIOParam],
                  inputWvls: Map[String, WdlVarLinks]) : Map[String, JsValue] = {
         // Figure out the available instance types, and their prices,
         // by reading the file

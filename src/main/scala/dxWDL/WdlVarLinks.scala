@@ -27,7 +27,7 @@ import java.nio.file.{Files, Paths}
 import net.jcazevedo.moultingyaml._
 import spray.json._
 import Utils.{appletLog, dxFileFromJsValue, dxFileToJsValue,
-    DX_URL_PREFIX, DXIOParam, DXWorkflowStage, FLAT_FILES_SUFFIX, isNativeDxType}
+    DX_URL_PREFIX, DXWorkflowStage, FLAT_FILES_SUFFIX, isNativeDxType}
 import wdl.{WdlTask}
 import wdl.types.WdlFlavoredWomType
 import wom.types._

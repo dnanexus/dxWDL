@@ -116,8 +116,8 @@ object Eval {
 
 
     def apply(wf: WdlWorkflow,
-              inputSpec: Map[String, Utils.DXIOParam],
-              outputSpec: Map[String, Utils.DXIOParam],
+              inputSpec: Map[String, DXIOParam],
+              outputSpec: Map[String, DXIOParam],
               inputs: Map[String, WdlVarLinks]) : Map[String, JsValue] = {
         Utils.appletLog(s"Initial inputs=${inputs}")
 

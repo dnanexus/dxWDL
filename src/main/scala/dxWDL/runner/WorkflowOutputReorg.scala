@@ -141,8 +141,8 @@ object WorkflowOutputReorg {
     // The variables are passed through, so that workflow will
     // complete only after file movements are complete.
     def apply(wf: WdlWorkflow,
-              inputSpec: Map[String, Utils.DXIOParam],
-              outputSpec: Map[String, Utils.DXIOParam],
+              inputSpec: Map[String, DXIOParam],
+              outputSpec: Map[String, DXIOParam],
               wfInputs: Map[String, WdlVarLinks]) : Map[String, JsValue] = {
         Utils.appletLog(s"Initial inputs=\n${prettyPrint(wfInputs)}")
 

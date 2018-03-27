@@ -3,7 +3,6 @@ package dxWDL
 import com.dnanexus._
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.databind.JsonNode
-//import com.fasterxml.jackson.databind.node.ObjectNode
 import java.nio.charset.StandardCharsets
 import java.nio.file.{Path, Paths, Files}
 import java.util.Base64
@@ -40,10 +39,6 @@ object Utils {
                          "outputField" -> JsString(outputName)))
         }
     }
-
-    // An equivalent for the InputParmater/OutputParameter types
-    case class DXIOParam(ioClass: IOClass,
-                         optional: Boolean)
 
     val APPLET_LOG_MSG_LIMIT = 1000
     val CHECKSUM_PROP = "dxWDL_checksum"
