@@ -39,9 +39,10 @@ package dxWDL.runner
 import com.dnanexus._
 import dxWDL._
 import java.nio.file.{Path, Paths, Files}
-import scala.collections.mutable.HashMap
 import spray.json._
 import wdl._
+import wdl.types.WdlCallOutputsObjectType
+import wdl.values.WdlCallOutputsObject
 import wom.values._
 import wom.types._
 
@@ -52,19 +53,18 @@ case class MiniWorkflow(execLinkInfo: Map[String, ExecLinkInfo],
                         orgInputs: JsValue,
                         collectSubjob: Boolean,
                         verbose: Boolean) {
-    sealed trait RElem
-
-    // A runtime representation of a WDL variable
-    case class RElemVar(name: String,
-                        womType: WomType,
-                        value: WomValue) extends RElem
-
-    // Calls made to an applet or workflow (runtime call)
-    case class RElemCall(call: WdlCall, dxExec: Vector[DXExecution]) extends RElem
-
+    // A runtime representation of a WDL variable, or a call.
+    //
+    // A call has the type WdlCallOutputsObjectType, and the value
+    // WdlCallOutputsObject. Calling a dx:executable will take
+    // a while to complete, so we store in the WdlCallOutputsObject
+    // map the executable-id.
+    case class RtmElem(name: String,
+                       womType: WomType,
+                       value: WomValue)
 
     // An environment where WDL expressions and calls are evaluated
-    type Env = Map[String, RElem]
+    type Env = Map[String, RtmElem]
 
     var seqNum = 0
     private def launchSeqNum : Int = {
@@ -95,12 +95,12 @@ case class MiniWorkflow(execLinkInfo: Map[String, ExecLinkInfo],
     private def buildAppletInputs(call: WdlCall,
                                   linkInfo: ExecLinkInfo,
                                   env : Env) : JsValue = {
-        val inputs: Map[String, RElemVar] = linkInfo.inputs.flatMap{
+        val inputs: Map[String, RtmElem] = linkInfo.inputs.flatMap{
             case (varName, wdlType) =>
                 // The rhs is [k], the varName is [i]
                 val rhs: Option[(String,WdlExpression)] =
                     call.inputMappings.find{ case(key, expr) => key == varName }
-                val rElem:Option[RElemVar] = rhs match {
+                val rElem:Option[RtmElem] = rhs match {
                     case None =>
                         // No binding for this input. It might be optional.
                         wdlType match {
@@ -118,11 +118,7 @@ case class MiniWorkflow(execLinkInfo: Map[String, ExecLinkInfo],
                                 throw new AppInternalException(
                                     s"""|In call ${call.unqualifiedName}, variable ${varName} is set
                                         |to ${varRef}, which is unbound.""".stripMargin.trim)
-                            case Some(rElem: RElemVar) => Some(rElem)
-                            case _ =>
-                                throw new AppInternalException(
-                                    s"""|In call ${call.unqualifiedName}, variable ${varName} uses
-                                        |results from another call.""".stripMargin.trim)
+                            case Some(rElem) => Some(rElem)
                         }
                 }
                 rElem match {
@@ -144,7 +140,7 @@ case class MiniWorkflow(execLinkInfo: Map[String, ExecLinkInfo],
 
     private def lookupInEnv(env: Env)(varName : String) : WomValue =
         env.get(varName) match {
-            case Some(RElemVar(_,_,value)) => value
+            case Some(RtmElem(_,_,value)) => value
             case _ =>  throw new UnboundVariableException(s"${varName}")
         }
 
@@ -200,64 +196,68 @@ case class MiniWorkflow(execLinkInfo: Map[String, ExecLinkInfo],
     }
 
 
-    // Merge environments that are the result of a scatter.
-    private def scatterMergeEnvs(statements: Vector[Scope],
-                                 sEnvs: Vector[Env]) : Env = {
-        val types = statementsToTypes(ssc.children)
-
-        var mEnv = HashMap[String, RElem]
-        sEnvs.foreach{
-            env.foreach{
-                case RElemVar(name, womType, value) =>
-                    mEnv.get(name) {
-                        case None =>
-                            mEnv(name) = RElemVar(name, WomArrayType(womType), Vector(value))
-                        case Some(RElemVar(_,_,valueVec)) =>
-                            // append the values to a vector
-                            mEnv(name) = rElem.copy(value = valueVec :+ value)
-                        case _ =>
-                            throw new Exception("Sanity")
-                    }
-                case RElemCall(wdlCall, dxExec) =>
-                    mEnv.get(name) {
-                        case None =>
-                            mEnv(name) = RElemCall(wdlCall, dxExec)
-                        case Some(RElemCall(_,dxExecVec)) =>
-                            mEnv(name) = RElemCall(wdlCall, dxExecVec ++ dxExec)
-                        case _ =>
-                            throw new Exception("Sanity")
-                    }
-            }
-        }
-        mEnv.toMap
-    }
-
     // Analyze a block of statements, return the types for all declarations
     private def statementsToTypes(statements: Seq[Scope]) : Map[String, WomType] = {
-        statments.foldLeft(Map.empty[String, WomType]){
+        statements.foldLeft(Map.empty[String, WomType]){
             case (accu, decl:Declaration) =>
                 // base case: a declaration
-                env + (decl.unqualifiedName -> decl.womType)
+                accu + (decl.unqualifiedName -> decl.womType)
 
             case (accu, call:WdlCall) =>
-                // ignore calls
-                env
+                // calls are presented as an object type
+                accu + (call.unqualifiedName -> WdlCallOutputsObjectType(call))
 
             case (accu, ssc:Scatter) =>
                 // In a scatter, each variable becomes an array
                 val innerEnv = statementsToTypes(ssc.children)
                 val outerEnv = innerEnv.map{ case (name, t) => name -> WomArrayType(t) }
-                env ++ outerEnv
+                accu ++ outerEnv
 
             case (accu, ifStmt:If) =>
                 // In a wdl.If, each variables becomes an option
                 val innerEnv = statementsToTypes(ifStmt.children)
                 val outerEnv = innerEnv.map{ case (name, t) => name -> WomOptionalType(t) }
-                env ++ outerEnv
+                accu ++ outerEnv
 
             case (_, other) =>
                 throw new Exception(cef.notCurrentlySupported(
-                                        stmt.ast,s"element ${other.getClass.getName}"))
+                                        other.ast,s"element ${other.getClass.getName}"))
+        }
+    }
+
+    // Merge environments that are the result of a scatter.
+    private def scatterMergeEnvs(typeMap: Map[String, WomType],
+                                 childEnvs: Seq[Env]) : Env = {
+        // Start with an enviroment with an empty array for each
+        // variable.
+        val emptyEnv:Env = typeMap.map{ case (varName, t) =>
+            varName -> RtmElem(varName,
+                               WomArrayType(t),
+                               WomArray(WomArrayType(t), Vector.empty))
+        }.toMap
+
+        // Merge two environments
+        def mergeTwo(envMajor: Env, envChild: Env) : Env = {
+            envChild.foldLeft(envMajor) {
+                case (envAccu, (_, RtmElem(name, t, valueChild))) =>
+                    val rElem = envAccu.get(name) match {
+                        case None =>
+                            throw new Exception(s"variable ${name} is unbound ")
+                        case Some(RtmElem(_, tArray, WomArray(_, arrValues))) =>
+                            // append the values to a vector
+                            assert(tArray == WomArrayType(t))
+                            RtmElem(name,
+                                    WomArrayType(t),
+                                    WomArray(WomArrayType(t), arrValues.toVector :+ valueChild))
+                        case Some(other) =>
+                            throw new Exception(s"variable ${name} is bound to an incorrect value ${other}")
+                    }
+                    envAccu + (name -> rElem)
+            }
+        }
+        childEnvs.foldLeft(emptyEnv) {
+            case (accuEnv, childEnv) =>
+                mergeTwo(accuEnv, childEnv)
         }
     }
 
@@ -265,33 +265,55 @@ case class MiniWorkflow(execLinkInfo: Map[String, ExecLinkInfo],
     private def evalScatter(ssc:Scatter,
                             envBgn: Env,
                             collectionType: WomType,
-                            collectionValues: WomValue) : Vector[Env] = {
+                            collection: WomValue) : Env = {
+        val collectionArr:WomArray = collection match {
+            case _:WomArray => collection.asInstanceOf[WomArray]
+            case other => throw new Exception(s"Bad value ${other} for scatter collection")
+        }
         val itemType:WomType = collectionType match {
             case WomArrayType(t) => t
             case _ => throw new Exception("Sanity")
         }
-        collectionValues.value.map{ itemVal =>
-            val item = RElemVar(ssc.item, itemType, itemVal)
+        val sscEnvs: Seq[Env] = collectionArr.value.map{ itemVal =>
+            val item = RtmElem(ssc.item, itemType, itemVal)
             val innerEnv = envBgn + (ssc.item -> item)
             ssc.children.foldLeft(innerEnv) {
                 case (env2, stmt2) => evalStatement(stmt2, env2)
             }
         }
+        val typeMap = statementsToTypes(ssc.children)
+        scatterMergeEnvs(typeMap, sscEnvs)
     }
 
     // The compiler ensures that the condition is a simple variable
     private def evalIf(ifStmt: If, env: Env) : Env = {
         val exprVar = ifStmt.condition.toWomString
         val condValue = env.get(exprVar) match {
-            case Some(RElemVar(_, WomBooleanType, value)) =>
-                value
-            case _ =>
-                throw new Exception("sanity")
+            case Some(RtmElem(_, WomBooleanType, WomBoolean(value))) => value
+            case other => throw new Exception(
+                s"environment has non boolean value ${other} for variable ${exprVar}")
         }
-        condValue match {
-            case WomBoolean(true) =>
-            case WomBoolean(false) =>
+        val childEnv: Env = if (condValue) {
+            // Condition is true, evaluate the sub block
+            ifStmt.children.foldLeft(env) {
+                case (env2, stmt2) => evalStatement(stmt2, env2)
+            }
+        } else {
+            Map.empty
         }
+
+        // Add the optional modifier to all elements
+        val s2t = statementsToTypes(ifStmt.children)
+        s2t.map{ case (name, t: WomType) =>
+            val rElem = childEnv.get(name) match {
+                case None =>
+                    RtmElem(name, WomOptionalType(t), WomOptionalValue(t, None))
+                case Some(RtmElem(_,t2, value)) =>
+                    assert(t == t2)
+                    RtmElem(name, WomOptionalType(t), WomOptionalValue(t, Some(value)))
+            }
+            name -> rElem
+        }.toMap
     }
 
     private def evalStatement(stmt: Scope, env: Env) : Env = {
@@ -308,12 +330,18 @@ case class MiniWorkflow(execLinkInfo: Map[String, ExecLinkInfo],
                         val vRaw : WomValue = expr.evaluate(lookup, DxFunctions).get
                         cast(decl.womType, vRaw, decl.unqualifiedName)
                 }
-                val elem = RElemVar(decl.unqualifiedName, decl.womType, wValue)
+                val elem = RtmElem(decl.unqualifiedName, decl.womType, wValue)
                 env + (decl.unqualifiedName -> elem)
 
             case call:WdlCall =>
                 val dxExec = execCall(call, env)
-                env + (call.unqualifiedName -> RElemCall(call, Vector(dxExec)))
+                // Embed the execution-id into the call object. This allows
+                // referencing the job/analysis results later on.
+                val rElem = RtmElem(call.unqualifiedName,
+                                    WdlCallOutputsObjectType(call),
+                                    WdlCallOutputsObject(call,
+                                                         Map("dxExec" -> WomString(dxExec.getId))))
+                env + (call.unqualifiedName -> rElem)
 
             case ssc:Scatter =>
                 // Evaluate the collection, and iterate on the inner block N times.
@@ -321,13 +349,8 @@ case class MiniWorkflow(execLinkInfo: Map[String, ExecLinkInfo],
                 //
                 // Note: The compiler ensures that the collection is a simple variable.
                 val collectionVarName = ssc.collection.toWomString
-                val womType = Utils.lookupType(stmt)(collectionVarName)
-                val values:WomValue = env(collectionVarName)
-                val sscEnvs: Vector[Env] = evalScatter(collection,
-                                                       env
-                                                       womType,
-                                                       values)
-                scatterMergeEnvs(ssc.children, sscEnvs)
+                val RtmElem(_, womType, value) = env(collectionVarName)
+                evalScatter(ssc, env, womType, value)
 
             case cond:If =>
                 // Evaluate the condition, and then the body of the block.
@@ -345,10 +368,10 @@ case class MiniWorkflow(execLinkInfo: Map[String, ExecLinkInfo],
         Utils.appletLog(s"inputs=${inputs}")
 
         // build the environment from the dx:applet inputs
-        val envBgn: Map[String, RElem] = inputs.map{
+        val envBgn: Map[String, RtmElem] = inputs.map{
             case (varName, wvl) =>
                 val wdlValue = wdlValueFromWVL(wvl)
-                val rVar = RElemVar(varName, wvl.womType, wdlValue)
+                val rVar = RtmElem(varName, wvl.womType, wdlValue)
                 varName -> rVar
         }.toMap
 
@@ -360,7 +383,7 @@ case class MiniWorkflow(execLinkInfo: Map[String, ExecLinkInfo],
         // Collect output variables, and convert to JSON
         val wvlVarOutputs: Map[String, WdlVarLinks] =
             envEnd.flatMap{
-                case (varName, RElemVar(_,womType, value)) if (isExported(varName)) =>
+                case (varName, RtmElem(_,womType, value)) if (isExported(varName)) =>
                     Some(varName -> wdlValueToWVL(womType, value))
                 case _ =>
                     None
