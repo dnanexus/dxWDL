@@ -1,4 +1,4 @@
-# Nested elements, no calls
+# Nested scatter
 
 workflow C {
     Array[String] streetNames = ["leghorn", "independence", "blossom"]

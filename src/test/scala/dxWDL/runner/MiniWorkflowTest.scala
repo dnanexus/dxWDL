@@ -18,6 +18,13 @@ class MiniWorkflowTest extends FlatSpec with Matchers {
     private def wdlValueFromWVL(wvl: WdlVarLinks) : WomValue =
         WdlVarLinks.eval(wvl, IOMode.Remote, IODirection.Zero)
 
+    private def makeOptional(value: WomValue) : WomValue = {
+        WomOptionalValue(WomOptionalType(value.womType), Some(value))
+    }
+    private def makeOptionalNone(t: WomType) : WomValue = {
+        WomOptionalValue(WomOptionalType(t), None)
+    }
+
     private def evalWorkflow(filename: String) : Map[String, WomValue] = {
         val srcPath = pathFromBasename(filename)
         val wdlCode = Utils.readFileContent(srcPath)
@@ -56,14 +63,7 @@ class MiniWorkflowTest extends FlatSpec with Matchers {
                                                    Some(WomString("hello class of 2017"))))
     }
 
-    private def makeOptional(value: WomValue) : WomValue = {
-        WomOptionalValue(WomOptionalType(value.womType), Some(value))
-    }
-    private def makeOptionalNone(t: WomType) : WomValue = {
-        WomOptionalValue(WomOptionalType(t), None)
-    }
-
-    it should "evaluate workflow B" in {
+    it should "evaluate conditional inside scatter" in {
         val results: Map[String, WomValue] = evalWorkflow("B.wdl")
 
         results.keys.toVector should contain("square")
@@ -80,7 +80,7 @@ class MiniWorkflowTest extends FlatSpec with Matchers {
                                                               makeOptional(WomString("pear_3")))))
     }
 
-    it should "evaluate workflow nested scatter" in {
+    it should "evaluate nested scatters" in {
         val results: Map[String, WomValue] = evalWorkflow("C.wdl")
 
         results.keys.toVector should contain("numberedStreets")
@@ -97,5 +97,34 @@ class MiniWorkflowTest extends FlatSpec with Matchers {
 
         results("numberedStreets") should equal(WomArray(WomArrayType(WomArrayType(WomStringType)),
                                                          Vector(a1, a2, a3)))
+    }
+
+    it should "evaluate nested ifs without creating a double optional " in {
+        val results: Map[String, WomValue] = evalWorkflow("D.wdl")
+
+        results.keys.toVector should contain("chosen")
+
+        val noneInt: WomValue = makeOptionalNone(WomIntegerType)
+        results("chosen") should equal (WomArray(WomArrayType(WomOptionalType(WomIntegerType)),
+                                                 Vector(noneInt,
+                                                        makeOptional(WomInteger(2)), makeOptional(WomInteger(3)),
+                                                        noneInt, noneInt)))
+    }
+
+    it should "evaluate scatter inside a conditional" in {
+        val results: Map[String, WomValue] = evalWorkflow("E.wdl")
+
+        results.keys.toVector should contain("cube")
+        results.keys.toVector should contain("square")
+
+        val cube: WomValue = (WomArray(WomArrayType(WomIntegerType),
+                                       Vector(WomInteger(1),
+                                              WomInteger(8),
+                                              WomInteger(27),
+                                              WomInteger(125))))
+        results("cube") should equal(makeOptional(cube))
+
+        val nn = makeOptionalNone(WomArrayType(WomIntegerType))
+        results("square") should equal(nn)
     }
 }

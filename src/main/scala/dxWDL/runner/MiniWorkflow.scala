@@ -221,9 +221,13 @@ case class MiniWorkflow(execLinkInfo: Map[String, ExecLinkInfo],
                 accu ++ outerEnv
 
             case (accu, ifStmt:If) =>
-                // In a wdl.If, each variables becomes an option
+                // In a conditional, each variable becomes an option.
+                // Do not create Optional[Optional] types.
                 val innerEnv = statementsToTypes(ifStmt.children)
-                val outerEnv = innerEnv.map{ case (name, t) => name -> WomOptionalType(t) }
+                val outerEnv = innerEnv.map{
+                    case (name, WomOptionalType(t)) => name -> WomOptionalType(t)
+                    case (name, t) => name -> WomOptionalType(t)
+                }.toMap
                 accu ++ outerEnv
 
             case (_, other) =>
@@ -320,17 +324,30 @@ case class MiniWorkflow(execLinkInfo: Map[String, ExecLinkInfo],
                 Map.empty
             }
 
-        // Add the optional modifier to all elements
+        // Add the optional modifier to all elements.
+        // If the inner type is already Optional, do not make it an Optional[Optional].
         val s2t = statementsToTypes(ifStmt.children)
-        val envIfBlock:Env = s2t.map{ case (name, t: WomType) =>
-            val rElem = childEnv.get(name) match {
-                case None =>
-                    RtmElem(name, WomOptionalType(t), WomOptionalValue(t, None))
-                case Some(RtmElem(_,t2, value)) =>
-                    assert(t == t2)
-                    RtmElem(name, WomOptionalType(t), WomOptionalValue(t, Some(value)))
-            }
-            name -> rElem
+        val envIfBlock:Env = s2t.map{
+            case (name, WomOptionalType(t)) =>
+                // The inner block type is already optional
+                val rElem = childEnv.get(name) match {
+                    case None =>
+                        RtmElem(name, WomOptionalType(t), WomOptionalValue(WomOptionalType(t), None))
+                    case Some(RtmElem(_, _, value)) =>
+                        RtmElem(name, WomOptionalType(t), WomOptionalValue(WomOptionalType(t), Some(value)))
+                }
+                name -> rElem
+
+            case (name, t) =>
+                // The inner block type is NOT optional, add an optional modifier
+                // on top.
+                val rElem = childEnv.get(name) match {
+                    case None =>
+                        RtmElem(name, WomOptionalType(t), WomOptionalValue(WomOptionalType(t), None))
+                    case Some(RtmElem(_,_, value)) =>
+                        RtmElem(name, WomOptionalType(t), WomOptionalValue(WomOptionalType(t), Some(value)))
+                }
+                name -> rElem
         }.toMap
         env ++ envIfBlock
     }

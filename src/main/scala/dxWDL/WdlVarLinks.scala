@@ -286,7 +286,7 @@ object WdlVarLinks {
                 WomArray(WomArrayType(t), wVec)
 
             case (WomOptionalType(t), JsNull) =>
-                WomOptionalValue(t, None)
+                WomOptionalValue(WomOptionalType(t), None)
             case (WomOptionalType(t), jsv) =>
                 val value = evalCore(t, jsv, ioMode, ioDir)
                 WomOptionalValue(WomOptionalType(t),
