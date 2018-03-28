@@ -288,7 +288,9 @@ object WdlVarLinks {
             case (WomOptionalType(t), JsNull) =>
                 WomOptionalValue(t, None)
             case (WomOptionalType(t), jsv) =>
-                evalCore(t, jsv, ioMode, ioDir)
+                val value = evalCore(t, jsv, ioMode, ioDir)
+                WomOptionalValue(WomOptionalType(t),
+                                 Some(value))
 
             case _ =>
                 throw new AppInternalException(

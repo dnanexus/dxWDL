@@ -2,8 +2,6 @@ package dxWDL
 
 import java.nio.file.{Path, Paths}
 import org.scalatest.{FlatSpec, Matchers}
-//import org.scalatest.Inside._
-//import wdl._
 
 class SubblocksTest extends FlatSpec with Matchers {
     lazy val currentWorkDir:Path = Paths.get(System.getProperty("user.dir"))

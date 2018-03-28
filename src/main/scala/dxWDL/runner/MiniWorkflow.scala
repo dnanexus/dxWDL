@@ -48,7 +48,7 @@ import wom.types._
 
 
 case class MiniWorkflow(execLinkInfo: Map[String, ExecLinkInfo],
-                        exportVars: Set[String],
+                        exportVars: Option[Set[String]],
                         cef: CompilerErrorFormatter,
                         orgInputs: JsValue,
                         collectSubjob: Boolean,
@@ -74,15 +74,22 @@ case class MiniWorkflow(execLinkInfo: Map[String, ExecLinkInfo],
 
     // check if a variable should be exported from this applet
     private def isExported(varName: String) : Boolean = {
-        exportVars contains (Utils.transformVarName(varName))
+        exportVars match {
+            case None =>
+                // export everything
+                true
+            case Some(ev) =>
+                // export only select fields
+                ev contains (Utils.transformVarName(varName))
+        }
     }
 
     private def wdlValueFromWVL(wvl: WdlVarLinks) : WomValue =
         WdlVarLinks.eval(wvl, IOMode.Remote, IODirection.Zero)
 
-    private def wdlValueToWVL(t:WomType, wdlValue:WomValue) : WdlVarLinks =
+    private def wdlValueToWVL(t:WomType, wdlValue:WomValue) : WdlVarLinks = {
         WdlVarLinks.importFromWDL(t, DeclAttrs.empty, wdlValue, IODirection.Zero)
-
+    }
 
     /**
       In the workflow below, we want to correctly pass the [k] value
@@ -149,7 +156,7 @@ case class MiniWorkflow(execLinkInfo: Map[String, ExecLinkInfo],
         val retVal =
             if (v.womType != wdlType) {
                 // we need to convert types
-                Utils.appletLog(s"casting ${v.womType} to ${wdlType}")
+                //Utils.appletLog(s"casting ${v.womType} to ${wdlType}")
                 wdlType.coerceRawValue(v).get
             } else {
                 // no need to change types
@@ -225,6 +232,11 @@ case class MiniWorkflow(execLinkInfo: Map[String, ExecLinkInfo],
         }
     }
 
+    // Remove all the bindings of environment [b] from [a]
+    private def envRemoveKeys(env: Env, keys: Set[String]) = {
+        env.filter{ case (k, _) => !(keys contains k) }
+    }
+
     // Merge environments that are the result of a scatter.
     private def scatterMergeEnvs(typeMap: Map[String, WomType],
                                  childEnvs: Seq[Env]) : Env = {
@@ -276,13 +288,16 @@ case class MiniWorkflow(execLinkInfo: Map[String, ExecLinkInfo],
         }
         val sscEnvs: Seq[Env] = collectionArr.value.map{ itemVal =>
             val item = RtmElem(ssc.item, itemType, itemVal)
-            val innerEnv = envBgn + (ssc.item -> item)
-            ssc.children.foldLeft(innerEnv) {
+            val envInner = envBgn + (ssc.item -> item)
+            val envEnd = ssc.children.foldLeft(envInner) {
                 case (env2, stmt2) => evalStatement(stmt2, env2)
             }
+            // We don't want to duplicate the environment we
+            // started with.
+            envRemoveKeys(envEnd, (envBgn.keys.toSet + ssc.item))
         }
         val typeMap = statementsToTypes(ssc.children)
-        scatterMergeEnvs(typeMap, sscEnvs)
+        envBgn ++ scatterMergeEnvs(typeMap, sscEnvs)
     }
 
     // The compiler ensures that the condition is a simple variable
@@ -293,18 +308,21 @@ case class MiniWorkflow(execLinkInfo: Map[String, ExecLinkInfo],
             case other => throw new Exception(
                 s"environment has non boolean value ${other} for variable ${exprVar}")
         }
-        val childEnv: Env = if (condValue) {
-            // Condition is true, evaluate the sub block
-            ifStmt.children.foldLeft(env) {
-                case (env2, stmt2) => evalStatement(stmt2, env2)
+        val childEnv: Env =
+            if (condValue) {
+                // Condition is true, evaluate the sub block
+                val envEnd = ifStmt.children.foldLeft(env) {
+                    case (env2, stmt2) => evalStatement(stmt2, env2)
+                }
+                // don't duplicate the top environment
+                envRemoveKeys(envEnd, env.keys.toSet)
+            } else {
+                Map.empty
             }
-        } else {
-            Map.empty
-        }
 
         // Add the optional modifier to all elements
         val s2t = statementsToTypes(ifStmt.children)
-        s2t.map{ case (name, t: WomType) =>
+        val envIfBlock:Env = s2t.map{ case (name, t: WomType) =>
             val rElem = childEnv.get(name) match {
                 case None =>
                     RtmElem(name, WomOptionalType(t), WomOptionalValue(t, None))
@@ -314,6 +332,7 @@ case class MiniWorkflow(execLinkInfo: Map[String, ExecLinkInfo],
             }
             name -> rElem
         }.toMap
+        env ++ envIfBlock
     }
 
     private def evalStatement(stmt: Scope, env: Env) : Env = {
@@ -357,6 +376,10 @@ case class MiniWorkflow(execLinkInfo: Map[String, ExecLinkInfo],
                 // Add the None/Some type to all the resulting types/values.
                 evalIf(cond, env)
 
+            case _:WorkflowOutput =>
+                // ignore workflow outputs
+                env
+
             case other =>
                 throw new Exception(cef.notCurrentlySupported(
                                         stmt.ast,s"element ${other.getClass.getName}"))
@@ -364,9 +387,7 @@ case class MiniWorkflow(execLinkInfo: Map[String, ExecLinkInfo],
     }
 
     def apply(wf: WdlWorkflow,
-              inputs: Map[String, WdlVarLinks]) : JsValue = {
-        Utils.appletLog(s"inputs=${inputs}")
-
+              inputs: Map[String, WdlVarLinks]) : Map[String, WdlVarLinks] = {
         // build the environment from the dx:applet inputs
         val envBgn: Map[String, RtmElem] = inputs.map{
             case (varName, wvl) =>
@@ -384,18 +405,12 @@ case class MiniWorkflow(execLinkInfo: Map[String, ExecLinkInfo],
         val wvlVarOutputs: Map[String, WdlVarLinks] =
             envEnd.flatMap{
                 case (varName, RtmElem(_,womType, value)) if (isExported(varName)) =>
+                    // an exported  variable
                     Some(varName -> wdlValueToWVL(womType, value))
                 case _ =>
                     None
             }
-        val jsVarOutputs: Map[String, JsValue] =
-            wvlVarOutputs.foldLeft(Map.empty[String, JsValue]) {
-                case (accu, (varName, wvl)) =>
-                    val fields = WdlVarLinks.genFields(wvl, varName)
-                    accu ++ fields.toMap
-            }
-
-        JsObject(jsVarOutputs)
+        wvlVarOutputs
     }
 }
 
@@ -476,11 +491,20 @@ object MiniWorkflow {
         // Add unbound arguments that are optional. We can use None as
         // values.
         val allInputs = addUnboundOptionals(wf, inputSpec, inputs)
+        Utils.appletLog(s"inputs=${allInputs}")
 
         // Run the workflow
         val cef = new CompilerErrorFormatter("", wf.wdlSyntaxErrorFormatter.terminalMap)
-        val r = MiniWorkflow(execLinkInfo, exportVars, cef, orgInputs, collectSubjob, false)
-        val json = r.apply(wf, allInputs)
-        json.asJsObject.fields
+        val r = MiniWorkflow(execLinkInfo, Some(exportVars), cef, orgInputs, collectSubjob, false)
+        val wvlVarOutputs = r.apply(wf, allInputs)
+
+        // convert from WVL to JSON
+        val jsVarOutputs: Map[String, JsValue] =
+            wvlVarOutputs.foldLeft(Map.empty[String, JsValue]) {
+                case (accu, (varName, wvl)) =>
+                    val fields = WdlVarLinks.genFields(wvl, varName)
+                    accu ++ fields.toMap
+            }
+        jsVarOutputs
     }
 }
