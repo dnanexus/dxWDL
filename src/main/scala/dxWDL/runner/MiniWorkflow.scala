@@ -51,7 +51,7 @@ case class MiniWorkflow(execLinkInfo: Map[String, ExecLinkInfo],
                         exportVars: Option[Set[String]],
                         cef: CompilerErrorFormatter,
                         orgInputs: JsValue,
-                        collectSubjob: Boolean,
+                        runMode: RunnerMiniWorkflowMode.Value,
                         verbose: Boolean) {
     // A runtime representation of a WDL variable, or a call.
     //
@@ -397,7 +397,7 @@ case class MiniWorkflow(execLinkInfo: Map[String, ExecLinkInfo],
     private def launchCollectSubjob(childJobs: Vector[DXExecution],
                                     calls: Vector[WdlCall]) : Map[String, WdlVarLinks] = {
         Utils.appletLog(s"""|launching collect subjob
-                      |child jobs=${childJobs}""".stripMargin)
+                            |child jobs=${childJobs}""".stripMargin)
         if (childJobs.isEmpty)
             return Map.empty
 
@@ -435,16 +435,36 @@ case class MiniWorkflow(execLinkInfo: Map[String, ExecLinkInfo],
             case (env, stmt) => evalStatement(stmt, env)
         }
 
-        // Collect output variables, and convert to JSON
-        val wvlVarOutputs: Map[String, WdlVarLinks] =
-            envEnd.flatMap{
-                case (varName, RtmElem(_,womType, value)) if (isExported(varName)) =>
-                    // an exported  variable
-                    Some(varName -> wdlValueToWVL(womType, value))
-                case _ =>
-                    None
-            }
-        wvlVarOutputs
+        val declOutputs: Map[String, WdlVarLinks] = envEnd.flatMap{
+            case (varName, RtmElem(_,womType, value)) if (isExported(varName)) =>
+                // an exported  variable
+                Some(varName -> wdlValueToWVL(womType, value))
+            case (_, RmtElem(_, _ WdlCallOutputsObject(_, _))) =>
+                None
+            case _ =>
+                // An internal variable
+                None
+        }
+
+        runMode match {
+            case RunnerMiniWorkflowMode.ZeroCalls =>
+                // There are no calls, we can return the results immediately
+                declOutputs
+
+            case RunnerMiniWorkflowMode.Launch =>
+                // Launch a subjob to collect and marshal the results.
+                //
+                // Future optimization: there are cases where we can return promises directly.
+                val (childJobs, calls) = envEnd.flatMap{
+                    case (_, RmtElem(_, _ WdlCallOutputsObject(call, attrs))) =>
+                        val WomString(dxExecId) = attrs("dxExec")
+                        Some((call, dxExecId))
+                    case _ => None
+                }.unzip
+                val promises = launchCollectSubjob(childJobs, calls)
+                declOutputs ++ promises
+
+            case RunnerMiniWorkflowMode.Collect =>
     }
 }
 
@@ -474,44 +494,12 @@ object MiniWorkflow {
     }
 
 
-    // Represent unbound optional inputs as None
-    private def addUnboundOptionals(wf: WdlWorkflow,
-                                    inputSpec: Map[String, DXIOParam],
-                                    inputs: Map[String, WdlVarLinks]) : Map[String, WdlVarLinks] = {
-        val (topDecls,_) = Utils.splitBlockDeclarations(wf.children.toList)
-        inputSpec.map{ case (name, _) =>
-            val wvl = inputs.get(name) match {
-                case Some(wvl) =>
-                    // The argument is already bound
-                    wvl
-                case None =>
-                    // unbound argument
-                    val decl = topDecls.find(_.unqualifiedName == name)
-                    decl match {
-                        case None =>
-                            throw new Exception(s"cannot find declaration for input argument ${name}")
-                        case Some(d) => d.womType match {
-                            case WomOptionalType(t) =>
-                                val wdlValue = WomOptionalValue(t, None)
-                                WdlVarLinks.importFromWDL(d.womType,
-                                                          DeclAttrs.empty,
-                                                          wdlValue,
-                                                          IODirection.Zero)
-                            case _ =>
-                                throw new Exception(s"Unbound compulsory argument ${name}")
-                        }
-                    }
-            }
-            name -> wvl
-        }.toMap
-    }
-
     def apply(wf: WdlWorkflow,
               inputSpec: Map[String, DXIOParam],
               outputSpec: Map[String, DXIOParam],
               inputs: Map[String, WdlVarLinks],
               orgInputs: JsValue,
-              collectSubjob: Boolean) : Map[String, JsValue] = {
+              runMode: RunnerMiniWorkflowMode.Value) : Map[String, JsValue] = {
         Utils.appletLog(s"WomType mapping =${inputSpec}")
         val exportVars = outputSpec.keys.toSet
         Utils.appletLog(s"exportVars=${exportVars}")
@@ -522,15 +510,10 @@ object MiniWorkflow {
         val execLinkInfo = loadLinkInfo(dxProject)
         Utils.appletLog(s"link info=${execLinkInfo}")
 
-        // Add unbound arguments that are optional. We can use None as
-        // values.
-        val allInputs = addUnboundOptionals(wf, inputSpec, inputs)
-        Utils.appletLog(s"inputs=${allInputs}")
-
         // Run the workflow
         val cef = new CompilerErrorFormatter("", wf.wdlSyntaxErrorFormatter.terminalMap)
         val r = MiniWorkflow(execLinkInfo, Some(exportVars), cef, orgInputs, collectSubjob, false)
-        val wvlVarOutputs = r.apply(wf, allInputs)
+        val wvlVarOutputs = r.apply(wf, inputs)
 
         // convert from WVL to JSON
         val jsVarOutputs: Map[String, JsValue] =

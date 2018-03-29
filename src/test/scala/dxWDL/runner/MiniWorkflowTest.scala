@@ -36,8 +36,9 @@ class MiniWorkflowTest extends FlatSpec with Matchers {
                                   None,
                                   cef,
                                   JsNull,
-                                  false,
+                                  RunnerMiniWorkflowMode.ZeroCalls,
                                   false)
+
         val wf = ns match {
             case nswf:WdlNamespaceWithWorkflow => nswf.workflow
             case _ => throw new Exception("sanity")

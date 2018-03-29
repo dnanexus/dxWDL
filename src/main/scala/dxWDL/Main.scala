@@ -474,15 +474,18 @@ object Main extends App {
                     val wf = workflowOfNamespace(ns)
                     op match {
                         case InternalOp.Collect =>
-                            runner.Collect.apply(wf , inputSpec, outputSpec, inputs)
+                            runner.MiniWorkflow.apply(wf , inputSpec, outputSpec, inputs,
+                                                      RunnerMiniWorkflowMode.Collect)
                         case InternalOp.Eval =>
                             runner.Eval.apply(wf, inputSpec, outputSpec, inputs)
                         case InternalOp.MiniWorkflow =>
                             runner.MiniWorkflow.apply(wf,
-                                                     inputSpec, outputSpec, inputs, orgInputs, false)
+                                                      inputSpec, outputSpec, inputs, orgInputs,
+                                                      RunnerMiniWorkflowMode.ZeroCalls)
                         case InternalOp.ScatterCollectSubjob =>
                             runner.MiniWorkflow.apply(wf,
-                                                     inputSpec, outputSpec, inputs, orgInputs, true)
+                                                      inputSpec, outputSpec, inputs, orgInputs,
+                                                      RunnerMiniWorkflowMode.Launch)
                         case InternalOp.WorkflowOutputReorg =>
                             runner.WorkflowOutputReorg.apply(wf, inputSpec, outputSpec, inputs)
                     }
