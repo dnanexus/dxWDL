@@ -359,13 +359,21 @@ case class MiniWorkflow(execLinkInfo: Map[String, ExecLinkInfo],
                 env + (decl.unqualifiedName -> elem)
 
             case call:WdlCall =>
-                val dxExec = execCall(call, env)
-                // Embed the execution-id into the call object. This allows
-                // referencing the job/analysis results later on.
-                val rElem = RtmElem(call.unqualifiedName,
-                                    WdlCallOutputsObjectType(call),
-                                    WdlCallOutputsObject(call,
-                                                         Map("dxExec" -> WomString(dxExec.getId))))
+                val rElem = runMode match {
+                    case RunnerMiniWorkflowMode.Launch =>
+                        val dxExec = execCall(call, env)
+                        // Embed the execution-id into the call object. This allows
+                        // referencing the job/analysis results later on.
+                        RtmElem(call.unqualifiedName,
+                                WdlCallOutputsObjectType(call),
+                                WdlCallOutputsObject(call,
+                                                     Map("dxExec" -> WomString(dxExec.getId))))
+                    case RunnerMiniWorkflowMode.Collect =>
+                        RtmElem(call.unqualifiedName,
+                                WdlCallOutputsObjectType(call),
+                                WdlCallOutputsObject(call,
+                                                     Map("seqNum" -> WomInteger(launchSeqNum))))
+                }
                 env + (call.unqualifiedName -> rElem)
 
             case ssc:Scatter =>
@@ -393,30 +401,29 @@ case class MiniWorkflow(execLinkInfo: Map[String, ExecLinkInfo],
     }
 
 
+    // Create a mapping from the job output variables to json values. These
+    // are variables that can be referenced by other calls.
+    private def execOutputs(call: WdlCall,
+                            dxExec: DXExecution) : Map[String, WdlVarLinks] = {
+        call.outputs.map{ tso =>
+            val fullName = s"${call.unqualifiedName}.${tso.unqualifiedName}"
+            fullName -> WdlVarLinks(
+                tso.womType,
+                DeclAttrs.empty,
+                DxlExec(dxExec, tso.unqualifiedName))
+        }.toMap
+    }
+
     // Launch a subjob to collect the outputs
     private def launchCollectSubjob(childJobs: Vector[DXExecution],
-                                    calls: Vector[WdlCall]) : Map[String, WdlVarLinks] = {
+                                    calls: Vector[WdlCall]) : Unit = {
         Utils.appletLog(s"""|launching collect subjob
                             |child jobs=${childJobs}""".stripMargin)
-        if (childJobs.isEmpty)
-            return Map.empty
-
-        // Run a sub-job with the "collect" entry point.
-        // We need to provide the exact same inputs.
-        val dxSubJob : DXJob = Utils.runSubJob("collect", None, orgInputs, childJobs)
-
-        // Return promises (JBORs) for all the outputs. Since the signature of the sub-job
-        // is exactly the same as the parent, we can immediately exit the parent job.
-        calls.foldLeft(Map.empty[String, WdlVarLinks]) {
-            case (accu, call) =>
-                val prefix = call.unqualifiedName
-                val promiseMap = call.outputs.map{ cao =>
-                    val wvl = WdlVarLinks(cao.womType,
-                                          DeclAttrs.empty,
-                                          DxlExec(dxSubJob, prefix + "_" + cao.unqualifiedName))
-                    (prefix + "." + cao.unqualifiedName) -> wvl
-                }
-                accu ++ promiseMap
+        if (!childJobs.isEmpty) {
+            // Run a sub-job with the "collect" entry point.
+            // We need to provide the exact same inputs.
+            val dxSubJob : DXJob = Utils.runSubJob("collect", None, orgInputs, childJobs)
+            Utils.ignore(dxSubJob)
         }
     }
 
@@ -439,7 +446,7 @@ case class MiniWorkflow(execLinkInfo: Map[String, ExecLinkInfo],
             case (varName, RtmElem(_,womType, value)) if (isExported(varName)) =>
                 // an exported  variable
                 Some(varName -> wdlValueToWVL(womType, value))
-            case (_, RmtElem(_, _ WdlCallOutputsObject(_, _))) =>
+            case (_, RtmElem(_, _, WdlCallOutputsObject(_, _))) =>
                 None
             case _ =>
                 // An internal variable
@@ -456,15 +463,39 @@ case class MiniWorkflow(execLinkInfo: Map[String, ExecLinkInfo],
                 //
                 // Future optimization: there are cases where we can return promises directly.
                 val (childJobs, calls) = envEnd.flatMap{
-                    case (_, RmtElem(_, _ WdlCallOutputsObject(call, attrs))) =>
-                        val WomString(dxExecId) = attrs("dxExec")
-                        Some((call, dxExecId))
+                    case (_, RtmElem(_, _, WdlCallOutputsObject(call, callOutputs))) =>
+                        val dxExec: DXExecution = callOutputs.get("dxExec") match {
+                            case Some(WomString(dxExecId)) =>  DXExecution.getInstance(dxExecId)
+                            case other => throw new Exception(s"bad value ${other} for field dxExec")
+                        }
+                        Some((dxExec, call))
                     case _ => None
                 }.unzip
-                val promises = launchCollectSubjob(childJobs, calls)
-                declOutputs ++ promises
+                launchCollectSubjob(childJobs.toVector, calls.toVector)
+                Map.empty
 
             case RunnerMiniWorkflowMode.Collect =>
+                // Convert the sequence numbers to dx:executables
+                val execSeqMap: Map[Int, DXExecution] = Collect.executableFromSeqNum
+                val executions = envEnd.flatMap{
+                    case (_, RtmElem(_, _, WdlCallOutputsObject(call, callOutputs))) =>
+                        val seqNum:Int = callOutputs.get("seqNum") match {
+                            case Some(WomInteger(x)) => x
+                            case other => throw new Exception("Could not extract seqNum field")
+                        }
+                        val dxExec:DXExecution = execSeqMap.get(seqNum) match {
+                            case Some(dxExec) =>  dxExec
+                            case _ => throw new Exception(s"seqNum ${seqNum} has no matching executable")
+                        }
+                        Some((call, dxExec))
+                    case _ => None
+                }
+                val callResults = executions.foldLeft(Map.empty[String, WdlVarLinks]) {
+                    case (accu, (call, dxExec)) =>
+                        accu ++ execOutputs(call, dxExec)
+                }
+                declOutputs ++ callResults
+        }
     }
 }
 
@@ -512,7 +543,7 @@ object MiniWorkflow {
 
         // Run the workflow
         val cef = new CompilerErrorFormatter("", wf.wdlSyntaxErrorFormatter.terminalMap)
-        val r = MiniWorkflow(execLinkInfo, Some(exportVars), cef, orgInputs, collectSubjob, false)
+        val r = MiniWorkflow(execLinkInfo, Some(exportVars), cef, orgInputs, runMode, false)
         val wvlVarOutputs = r.apply(wf, inputs)
 
         // convert from WVL to JSON

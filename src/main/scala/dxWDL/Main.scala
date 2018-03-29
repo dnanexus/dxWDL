@@ -474,7 +474,8 @@ object Main extends App {
                     val wf = workflowOfNamespace(ns)
                     op match {
                         case InternalOp.Collect =>
-                            runner.MiniWorkflow.apply(wf , inputSpec, outputSpec, inputs,
+                            runner.MiniWorkflow.apply(wf ,
+                                                      inputSpec, outputSpec, inputs, orgInputs,
                                                       RunnerMiniWorkflowMode.Collect)
                         case InternalOp.Eval =>
                             runner.Eval.apply(wf, inputSpec, outputSpec, inputs)
