@@ -244,14 +244,6 @@ case class MiniWorkflow(execLinkInfo: Map[String, ExecLinkInfo],
     // Merge environments that are the result of a scatter.
     private def scatterMergeEnvs(typeMap: Map[String, WomType],
                                  childEnvs: Seq[Env]) : Env = {
-        // Start with an enviroment with an empty array for each
-        // variable.
-        val emptyEnv:Env = typeMap.map{ case (varName, t) =>
-            varName -> RtmElem(varName,
-                               WomArrayType(t),
-                               WomArray(WomArrayType(t), Vector.empty))
-        }.toMap
-
         // Merge two environments
         def mergeTwo(envMajor: Env, envChild: Env) : Env = {
             envChild.foldLeft(envMajor) {
@@ -271,6 +263,14 @@ case class MiniWorkflow(execLinkInfo: Map[String, ExecLinkInfo],
                     envAccu + (name -> rElem)
             }
         }
+
+        // Start with an enviroment with an empty array for each
+        // variable.
+        val emptyEnv:Env = typeMap.map{ case (varName, t) =>
+            varName -> RtmElem(varName,
+                               WomArrayType(t),
+                               WomArray(WomArrayType(t), Vector.empty))
+        }.toMap
         childEnvs.foldLeft(emptyEnv) {
             case (accuEnv, childEnv) =>
                 mergeTwo(accuEnv, childEnv)
@@ -328,19 +328,8 @@ case class MiniWorkflow(execLinkInfo: Map[String, ExecLinkInfo],
         // If the inner type is already Optional, do not make it an Optional[Optional].
         val s2t = statementsToTypes(ifStmt.children)
         val envIfBlock:Env = s2t.map{
-            case (name, WomOptionalType(t)) =>
-                // The inner block type is already optional
-                val rElem = childEnv.get(name) match {
-                    case None =>
-                        RtmElem(name, WomOptionalType(t), WomOptionalValue(WomOptionalType(t), None))
-                    case Some(RtmElem(_, _, value)) =>
-                        RtmElem(name, WomOptionalType(t), WomOptionalValue(WomOptionalType(t), Some(value)))
-                }
-                name -> rElem
-
-            case (name, t) =>
-                // The inner block type is NOT optional, add an optional modifier
-                // on top.
+            case (name, tFull) =>
+                val t = Utils.stripOptional(tFull)
                 val rElem = childEnv.get(name) match {
                     case None =>
                         RtmElem(name, WomOptionalType(t), WomOptionalValue(WomOptionalType(t), None))
@@ -400,6 +389,34 @@ case class MiniWorkflow(execLinkInfo: Map[String, ExecLinkInfo],
             case other =>
                 throw new Exception(cef.notCurrentlySupported(
                                         stmt.ast,s"element ${other.getClass.getName}"))
+        }
+    }
+
+
+    // Launch a subjob to collect the outputs
+    private def launchCollectSubjob(childJobs: Vector[DXExecution],
+                                    calls: Vector[WdlCall]) : Map[String, WdlVarLinks] = {
+        Utils.appletLog(s"""|launching collect subjob
+                      |child jobs=${childJobs}""".stripMargin)
+        if (childJobs.isEmpty)
+            return Map.empty
+
+        // Run a sub-job with the "collect" entry point.
+        // We need to provide the exact same inputs.
+        val dxSubJob : DXJob = Utils.runSubJob("collect", None, orgInputs, childJobs)
+
+        // Return promises (JBORs) for all the outputs. Since the signature of the sub-job
+        // is exactly the same as the parent, we can immediately exit the parent job.
+        calls.foldLeft(Map.empty[String, WdlVarLinks]) {
+            case (accu, call) =>
+                val prefix = call.unqualifiedName
+                val promiseMap = call.outputs.map{ cao =>
+                    val wvl = WdlVarLinks(cao.womType,
+                                          DeclAttrs.empty,
+                                          DxlExec(dxSubJob, prefix + "_" + cao.unqualifiedName))
+                    (prefix + "." + cao.unqualifiedName) -> wvl
+                }
+                accu ++ promiseMap
         }
     }
 

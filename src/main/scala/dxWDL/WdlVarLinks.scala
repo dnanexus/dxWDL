@@ -48,7 +48,6 @@ case class DxlValue(jsn: JsValue) extends DxLink  // This may contain dx-files
 case class DxlStage(dxStage: DXWorkflowStage, ioRef: IORef.Value, varName: String) extends DxLink
 case class DxlWorkflowInput(varName: String) extends DxLink
 case class DxlExec(dxExec: DXExecution, varName: String) extends DxLink
-case class DxlExecArray(dxExecVec: Vector[DXExecution], varName: String) extends DxLink
 
 case class WdlVarLinks(womType: WomType,
                        attrs: DeclAttrs,
@@ -66,8 +65,6 @@ object WdlVarLinks {
                 "workflowInput" -> varEncName
             case DxlExec(dxExec, varEncName) =>
                 "execRef" -> varEncName
-            case DxlExecArray(dxExecVec, varEncName) =>
-                "execRefArray" -> varEncName
         }
         YamlObject(
             YamlString("type") -> YamlString(wvl.womType.toDisplayString),
@@ -314,35 +311,6 @@ object WdlVarLinks {
     }
 
 
-    // The reason we need a special method for unpacking an array (or a map),
-    // is because we DO NOT want to evaluate the sub-structures. The trouble is
-    // files, that may all have the same paths, causing collisions.
-    def unpackWomArray(wvl: WdlVarLinks) : Seq[WdlVarLinks] = {
-        val jsn = getRawJsValue(wvl)
-        (wvl.womType, jsn) match {
-            // Map. Convert into an array of WDL pairs.
-            case (WomMapType(keyType, valueType), _) =>
-                val womType = WomPairType(keyType, valueType)
-                shallowUnmarshalWomMap(keyType, valueType, jsn).map{
-                    case (k:JsValue, v:JsValue) =>
-                        val js:JsValue = JsObject("left" -> k, "right" -> v)
-                        WdlVarLinks(womType, wvl.attrs, DxlValue(js))
-                }.toVector
-
-            case (WomArrayType(t), JsArray(l)) =>
-                l.map(elem => WdlVarLinks(t, wvl.attrs, DxlValue(elem)))
-
-            // Strip optional type
-            case (WomOptionalType(t), _) =>
-                val wvl1 = wvl.copy(womType = t)
-                unpackWomArray(wvl1)
-
-            case (_,_) =>
-                // Error
-                throw new AppInternalException(s"Can't unpack ${wvl.womType.toDisplayString} ${jsn}")
-            }
-    }
-
     // Access a field in a complex WDL type, such as Pair, Map, Object.
     private def memberAccessStep(wvl: WdlVarLinks, fieldName: String) : WdlVarLinks = {
         val jsValue = getRawJsValue(wvl)
@@ -501,14 +469,6 @@ object WdlVarLinks {
                       ioDir: IODirection.Value) : WdlVarLinks = {
         val jsValue = jsFromWomValue(womType, womValue, ioDir)
         WdlVarLinks(womType, attrs, DxlValue(jsValue))
-    }
-
-    def mkEborArray(dxExecVec: Vector[DXExecution],
-                    varName: String) : JsValue = {
-        val ebors: Vector[JsValue] = dxExecVec.map{ dxJob =>
-            Utils.makeEBOR(dxJob, varName)
-        }
-        JsArray(ebors)
     }
 
 
@@ -687,8 +647,6 @@ object WdlVarLinks {
                                  "workflowInputField" -> JsString(varEncName)))
                 case DxlExec(dxJob, varEncName) =>
                     Utils.makeEBOR(dxJob, varEncName)
-                case DxlExecArray(dxJobVec, varEncName) =>
-                    mkEborArray(dxJobVec, varEncName)
             }
             (bindEncName, jsv)
         }
@@ -728,10 +686,6 @@ object WdlVarLinks {
                     val varEncName_F = varEncName + FLAT_FILES_SUFFIX
                     Map(bindEncName -> Utils.makeEBOR(dxJob, varEncName),
                         bindEncName_F -> Utils.makeEBOR(dxJob, varEncName_F))
-                case DxlExecArray(dxJobVec, varEncName) =>
-                    val varEncName_F = varEncName + FLAT_FILES_SUFFIX
-                    Map(bindEncName -> mkEborArray(dxJobVec, varEncName),
-                        bindEncName_F -> mkEborArray(dxJobVec, varEncName_F))
             }
         }
 
@@ -783,37 +737,5 @@ object WdlVarLinks {
             val wvl = importFromDxExec(ioParam, attrs, jsValue)
             key -> wvl
         }.toMap
-    }
-
-    // Merge an array of links into one. All the links
-    // have to be of the same dxlink type.
-    def merge(vec: Vector[WdlVarLinks]) : WdlVarLinks = {
-        if (vec.isEmpty)
-            throw new Exception("Sanity: WVL array has to be non empty")
-
-        val womType = WomArrayType(vec.head.womType)
-        val declAttrs = vec.head.attrs
-        vec.head.dxlink match {
-            case DxlValue(_) =>
-                val jsVec:Vector[JsValue] = vec.map{ wvl =>
-                    wvl.dxlink match {
-                        case DxlValue(jsv) => jsv
-                        case _ => throw new Exception("Sanity")
-                    }
-                }
-                WdlVarLinks(womType, declAttrs, DxlValue(JsArray(jsVec)))
-
-            case DxlExec(_, varName) =>
-                val execVec:Vector[DXExecution] = vec.map{ wvl =>
-                    wvl.dxlink match {
-                        case DxlExec(exec, name) =>
-                            assert(name == varName)
-                            exec
-                        case _ => throw new Exception("Sanity")
-                    }
-                }
-                WdlVarLinks(womType, declAttrs, DxlExecArray(execVec, varName))
-            case _ => throw new Exception(s"Don't know how to merge WVL arrays of type ${vec.head}")
-        }
     }
 }
