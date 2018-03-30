@@ -1,10 +1,8 @@
 workflow A {
-    Array[Int] numbers = [1, 2, 3]
-    scatter (i in numbers) {
+    scatter (i in [1, 2, 3]) {
         Int k = i * 2
     }
-    Boolean alwaysTrue = true
-    if (alwaysTrue) {
+    if (true) {
         String s = "hello class of 2017"
     }
     output {

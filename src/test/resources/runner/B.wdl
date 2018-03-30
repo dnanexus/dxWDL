@@ -2,9 +2,8 @@
 
 workflow B {
     Array[String] fruit = ["apple", "cherry", "mango", "pear"]
-    Array[Int] numbers = range(length(fruit))
 
-    scatter (i in numbers) {
+    scatter (i in range(length(fruit))) {
         Int square = i * i
         Boolean cond = i > 1
         if (cond) {

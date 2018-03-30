@@ -124,5 +124,5 @@ case class CompilationResults(entrypoint: Option[DXWorkflow],
 //   Launch:     there are WDL calls, lanuch the dx:executables.
 //   Collect:    the dx:exucutables are done, collect the results.
 object RunnerMiniWorkflowMode extends Enumeration {
-    val ZeroCalls, Launch, Collect = Value
+    val Launch, Collect = Value
 }

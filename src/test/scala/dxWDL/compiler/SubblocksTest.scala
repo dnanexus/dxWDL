@@ -1,5 +1,6 @@
-package dxWDL
+package dxWDL.compiler
 
+import dxWDL.Main
 import java.nio.file.{Path, Paths}
 import org.scalatest.{FlatSpec, Matchers}
 

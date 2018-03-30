@@ -36,7 +36,7 @@ class MiniWorkflowTest extends FlatSpec with Matchers {
                                   None,
                                   cef,
                                   JsNull,
-                                  RunnerMiniWorkflowMode.ZeroCalls,
+                                  RunnerMiniWorkflowMode.Launch,
                                   false)
 
         val wf = ns match {

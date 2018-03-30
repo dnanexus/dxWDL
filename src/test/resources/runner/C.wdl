@@ -1,11 +1,8 @@
 # Nested scatter
 
 workflow C {
-    Array[String] streetNames = ["leghorn", "independence", "blossom"]
-    Array[Int] numbers = [1, 2]
-
-    scatter (sName in streetNames) {
-        scatter (i in numbers) {
+    scatter (sName in ["leghorn", "independence", "blossom"]) {
+        scatter (i in [1, 2]) {
             String numberedStreets = sName + "_" + i
         }
     }

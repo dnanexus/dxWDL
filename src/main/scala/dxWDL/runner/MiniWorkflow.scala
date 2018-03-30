@@ -39,6 +39,7 @@ package dxWDL.runner
 import com.dnanexus._
 import dxWDL._
 import java.nio.file.{Path, Paths, Files}
+import scala.util.{Failure, Success}
 import spray.json._
 import wdl._
 import wdl.types.WdlCallOutputsObjectType
@@ -279,18 +280,20 @@ case class MiniWorkflow(execLinkInfo: Map[String, ExecLinkInfo],
 
     // For each element in the collection, perform all the
     private def evalScatter(ssc:Scatter,
-                            envBgn: Env,
-                            collectionType: WomType,
-                            collection: WomValue) : Env = {
-        val collectionArr:WomArray = collection match {
-            case _:WomArray => collection.asInstanceOf[WomArray]
-            case other => throw new Exception(s"Bad value ${other} for scatter collection")
+                            envBgn: Env) : Env = {
+        def lookup = lookupInEnv(envBgn)(_)
+        val collection:WomArray = ssc.collection.evaluate(lookup, DxFunctions) match {
+            case Success(a: WomArray) => a
+            case Success(other) => throw new Exception(s"scatter collection is not an array, it is: ${other}")
+            case Failure(f) =>
+                System.err.println(s"Failed to evaluate scatter collection ${ssc.collection.toWomString}")
+                throw f
         }
-        val itemType:WomType = collectionType match {
+        val itemType = collection.womType match {
             case WomArrayType(t) => t
-            case _ => throw new Exception("Sanity")
+            case other => throw new Exception(s"collection does not have an array type ${other}")
         }
-        val sscEnvs: Seq[Env] = collectionArr.value.map{ itemVal =>
+        val sscEnvs: Seq[Env] = collection.value.map{ itemVal =>
             val item = RtmElem(ssc.item, itemType, itemVal)
             val envInner = envBgn + (ssc.item -> item)
             val envEnd = ssc.children.foldLeft(envInner) {
@@ -304,13 +307,15 @@ case class MiniWorkflow(execLinkInfo: Map[String, ExecLinkInfo],
         envBgn ++ scatterMergeEnvs(typeMap, sscEnvs)
     }
 
-    // The compiler ensures that the condition is a simple variable
     private def evalIf(ifStmt: If, env: Env) : Env = {
-        val exprVar = ifStmt.condition.toWomString
-        val condValue = env.get(exprVar) match {
-            case Some(RtmElem(_, WomBooleanType, WomBoolean(value))) => value
-            case other => throw new Exception(
-                s"environment has non boolean value ${other} for variable ${exprVar}")
+        // evaluate the condition
+        def lookup = lookupInEnv(env)(_)
+        val condValue = ifStmt.condition.evaluate(lookup, DxFunctions) match {
+            case Success(WomBoolean(value)) => value
+            case Success(other) => throw new Exception(s"condition has non boolean value ${other}")
+            case Failure(f) =>
+                System.err.println(s"Failed to evaluate condition ${ifStmt.condition.toWomString}")
+                throw f
         }
         val childEnv: Env =
             if (condValue) {
@@ -321,6 +326,7 @@ case class MiniWorkflow(execLinkInfo: Map[String, ExecLinkInfo],
                 // don't duplicate the top environment
                 envRemoveKeys(envEnd, env.keys.toSet)
             } else {
+                // condition is false
                 Map.empty
             }
 
@@ -379,11 +385,7 @@ case class MiniWorkflow(execLinkInfo: Map[String, ExecLinkInfo],
             case ssc:Scatter =>
                 // Evaluate the collection, and iterate on the inner block N times.
                 // This results in N environments that need to be merged.
-                //
-                // Note: The compiler ensures that the collection is a simple variable.
-                val collectionVarName = ssc.collection.toWomString
-                val RtmElem(_, womType, value) = env(collectionVarName)
-                evalScatter(ssc, env, womType, value)
+                evalScatter(ssc, env)
 
             case cond:If =>
                 // Evaluate the condition, and then the body of the block.
@@ -427,6 +429,13 @@ case class MiniWorkflow(execLinkInfo: Map[String, ExecLinkInfo],
         }
     }
 
+    // Check if all the return types from a call are native dx types. This
+    // means we won't need to unmarshal/marshal the results when the call
+    // returns.
+    private def callOutputTypesAreDxNative(call: WdlCall) : Boolean = {
+        call.callable.outputs.forall( o => Utils.isNativeDxType(o.womType))
+    }
+
     def apply(wf: WdlWorkflow,
               inputs: Map[String, WdlVarLinks]) : Map[String, WdlVarLinks] = {
         // build the environment from the dx:applet inputs
@@ -454,14 +463,7 @@ case class MiniWorkflow(execLinkInfo: Map[String, ExecLinkInfo],
         }
 
         runMode match {
-            case RunnerMiniWorkflowMode.ZeroCalls =>
-                // There are no calls, we can return the results immediately
-                declOutputs
-
             case RunnerMiniWorkflowMode.Launch =>
-                // Launch a subjob to collect and marshal the results.
-                //
-                // Future optimization: there are cases where we can return promises directly.
                 val (childJobs, calls) = envEnd.flatMap{
                     case (_, RtmElem(_, _, WdlCallOutputsObject(call, callOutputs))) =>
                         val dxExec: DXExecution = callOutputs.get("dxExec") match {
@@ -471,8 +473,29 @@ case class MiniWorkflow(execLinkInfo: Map[String, ExecLinkInfo],
                         Some((dxExec, call))
                     case _ => None
                 }.unzip
-                launchCollectSubjob(childJobs.toVector, calls.toVector)
-                Map.empty
+                if (calls.isEmpty) {
+                    // There are no calls, we can return the results immediately
+                    declOutputs
+                } else if (calls.size == 1 &&
+                               childJobs.size == 1 &&
+                               callOutputTypesAreDxNative(calls.head)) {
+                    // There is:
+                    // * one child job,
+                    // * no need to marshal the call outputs.
+                    // Return promises to the call outputs.
+                    //
+                    val promises = execOutputs(calls.head, childJobs.head)
+                    declOutputs ++ promises
+                } else {
+                    // Launch a subjob to collect and marshal the results.
+                    //
+                    // There is one more case that can be optimized; where there
+                    // are many child jobs, but the results can be aggregated without
+                    // marshalling. For example, each job returns a file, and the overall
+                    // result is a file-array.
+                    launchCollectSubjob(childJobs.toVector, calls.toVector)
+                    Map.empty
+                }
 
             case RunnerMiniWorkflowMode.Collect =>
                 // Convert the sequence numbers to dx:executables

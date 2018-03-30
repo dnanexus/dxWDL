@@ -2,15 +2,13 @@
 
 workflow E {
     Array[Int] primes = [1, 2, 3, 5]
-    Boolean alwaysTrue = true
-    Boolean alwaysFalse = false
 
-    if (alwaysTrue) {
+    if (true) {
         scatter (p in primes) {
             Int cube = p * p * p
         }
     }
-    if (alwaysFalse) {
+    if (false) {
         scatter (p in primes) {
             Int square = p * p
         }
