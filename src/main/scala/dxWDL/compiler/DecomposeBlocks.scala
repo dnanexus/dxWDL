@@ -1,6 +1,6 @@
 /*
  Break large sub-blocks into separate sub-workflows. Simplistically,
- a large subblock is one that has more than two calls. For example
+ a large subblock is one that has two calls or more. For example
  the scatter below is "large".
 
  task add {

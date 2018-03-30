@@ -570,6 +570,26 @@ task Add {
     }
 
 
+    // figure out if a variable is used only inside
+    // the block (scatter, if, ...)
+    def isLocal(decl: Declaration): Boolean = {
+        try {
+            // find all dependent nodes
+            val dNodes:Set[WdlGraphNode] = decl.downstream
+            val declParent:Scope = decl.parent.get
+
+            // figure out if these downstream nodes are in the same scope.
+            val dnScopes:Set[WdlGraphNode] = dNodes.filter{ node =>
+                node.parent.get.fullyQualifiedName != declParent.fullyQualifiedName
+            }
+            dnScopes.isEmpty
+        } catch {
+            // sometimes, we can't calculate the downstream nodes.
+            case e: Throwable =>
+                false
+        }
+    }
+
     // Figure out the closure for a block, and then build the input
     // definitions.
     //
@@ -635,6 +655,10 @@ task Add {
                     CVar(varName, cVar.womType, DeclAttrs.empty, cVar.ast)
                 }
                 accu ++ callOutputs
+
+            case (accu, decl:Declaration) if isLocal(decl) =>
+                // local declaration, do not export
+                accu
 
             case (accu, decl:Declaration) =>
                 val cVar = CVar(decl.unqualifiedName, decl.womType,
@@ -880,8 +904,7 @@ task Add {
         val allStageInfo = subBlocks.foldLeft(accu) {
             case (accu, block) =>
                 val stageName = humanReadableStageName(block)
-                val (stage, applet) = compileWfFragment(wf.unqualifiedName, stageName,
-                                                        block, env)
+                val (stage, applet) = compileWfFragment(wf.unqualifiedName, stageName, block, env)
 
                 // Add bindings for the output variables. This allows later calls to refer
                 // to these results.
@@ -889,7 +912,7 @@ task Add {
                     env = env + (cVar.name ->
                                      LinkedVar(cVar, IR.SArgLink(stage.name, cVar)))
                 }
-                accu :+ (stage,Some(applet))
+                accu :+ (stage, Some(applet))
         }
         (allStageInfo, env)
     }
@@ -906,7 +929,7 @@ task Add {
                 WdlRewrite.declaration(cVar.womType, cVar.name, None)
         }
         val env = inputs.map{
-            case (cVar, sArg) => cVar.name -> LinkedVar(cVar, IR.SArgEmpty)
+            case (cVar, sArg) => cVar.name -> LinkedVar(cVar, sArg)
         }.toMap
 
         compileWfFragment(wf.unqualifiedName,

@@ -48,11 +48,11 @@ import wom.values._
 import wom.types._
 
 
-case class MiniWorkflow(execLinkInfo: Map[String, ExecLinkInfo],
+case class WfFragment(execLinkInfo: Map[String, ExecLinkInfo],
                         exportVars: Option[Set[String]],
                         cef: CompilerErrorFormatter,
                         orgInputs: JsValue,
-                        runMode: RunnerMiniWorkflowMode.Value,
+                        runMode: RunnerWfFragmentMode.Value,
                         verbose: Boolean) {
     // A runtime representation of a WDL variable, or a call.
     //
@@ -366,7 +366,7 @@ case class MiniWorkflow(execLinkInfo: Map[String, ExecLinkInfo],
 
             case call:WdlCall =>
                 val rElem = runMode match {
-                    case RunnerMiniWorkflowMode.Launch =>
+                    case RunnerWfFragmentMode.Launch =>
                         val dxExec = execCall(call, env)
                         // Embed the execution-id into the call object. This allows
                         // referencing the job/analysis results later on.
@@ -374,7 +374,7 @@ case class MiniWorkflow(execLinkInfo: Map[String, ExecLinkInfo],
                                 WdlCallOutputsObjectType(call),
                                 WdlCallOutputsObject(call,
                                                      Map("dxExec" -> WomString(dxExec.getId))))
-                    case RunnerMiniWorkflowMode.Collect =>
+                    case RunnerWfFragmentMode.Collect =>
                         RtmElem(call.unqualifiedName,
                                 WdlCallOutputsObjectType(call),
                                 WdlCallOutputsObject(call,
@@ -463,7 +463,7 @@ case class MiniWorkflow(execLinkInfo: Map[String, ExecLinkInfo],
         }
 
         runMode match {
-            case RunnerMiniWorkflowMode.Launch =>
+            case RunnerWfFragmentMode.Launch =>
                 val (childJobs, calls) = envEnd.flatMap{
                     case (_, RtmElem(_, _, WdlCallOutputsObject(call, callOutputs))) =>
                         val dxExec: DXExecution = callOutputs.get("dxExec") match {
@@ -497,7 +497,7 @@ case class MiniWorkflow(execLinkInfo: Map[String, ExecLinkInfo],
                     Map.empty
                 }
 
-            case RunnerMiniWorkflowMode.Collect =>
+            case RunnerWfFragmentMode.Collect =>
                 // Convert the sequence numbers to dx:executables
                 val execSeqMap: Map[Int, DXExecution] = Collect.executableFromSeqNum
                 val executions = envEnd.flatMap{
@@ -522,7 +522,7 @@ case class MiniWorkflow(execLinkInfo: Map[String, ExecLinkInfo],
     }
 }
 
-object MiniWorkflow {
+object WfFragment {
     // Load from disk a mapping of applet name to id. We
     // need this in order to call the right version of other
     // applets.
@@ -553,8 +553,13 @@ object MiniWorkflow {
               outputSpec: Map[String, DXIOParam],
               inputs: Map[String, WdlVarLinks],
               orgInputs: JsValue,
-              runMode: RunnerMiniWorkflowMode.Value) : Map[String, JsValue] = {
-        Utils.appletLog(s"WomType mapping =${inputSpec}")
+              runMode: RunnerWfFragmentMode.Value) : Map[String, JsValue] = {
+        val wdlCode: String = WdlPrettyPrinter(false, None, None).apply(wf, 4).mkString("\n")
+        Utils.appletLog(s"Workflow source code:")
+        Utils.appletLog(wdlCode)
+        Utils.appletLog(s"Input spec: ${inputSpec}")
+        Utils.appletLog(s"Inputs: ${inputs}")
+
         val exportVars = outputSpec.keys.toSet
         Utils.appletLog(s"exportVars=${exportVars}")
 
@@ -566,7 +571,7 @@ object MiniWorkflow {
 
         // Run the workflow
         val cef = new CompilerErrorFormatter("", wf.wdlSyntaxErrorFormatter.terminalMap)
-        val r = MiniWorkflow(execLinkInfo, Some(exportVars), cef, orgInputs, runMode, false)
+        val r = WfFragment(execLinkInfo, Some(exportVars), cef, orgInputs, runMode, false)
         val wvlVarOutputs = r.apply(wf, inputs)
 
         // convert from WVL to JSON

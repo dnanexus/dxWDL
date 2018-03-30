@@ -8,7 +8,7 @@ import wdl._
 import wom.types._
 import wom.values._
 
-class MiniWorkflowTest extends FlatSpec with Matchers {
+class WfFragmentTest extends FlatSpec with Matchers {
 
     lazy val currentWorkDir:Path = Paths.get(System.getProperty("user.dir"))
     private def pathFromBasename(basename: String) : Path = {
@@ -32,11 +32,11 @@ class MiniWorkflowTest extends FlatSpec with Matchers {
             wdlCode, None, None
         ).get
         val cef = new CompilerErrorFormatter(srcPath.toString, ns.terminalMap)
-        val mw = new MiniWorkflow(Map.empty,
+        val mw = new WfFragment(Map.empty,
                                   None,
                                   cef,
                                   JsNull,
-                                  RunnerMiniWorkflowMode.Launch,
+                                  RunnerWfFragmentMode.Launch,
                                   false)
 
         val wf = ns match {

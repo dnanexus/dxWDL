@@ -472,13 +472,13 @@ object Main extends App {
                     val wf = workflowOfNamespace(ns)
                     op match {
                         case InternalOp.Collect =>
-                            runner.MiniWorkflow.apply(wf ,
+                            runner.WfFragment.apply(wf ,
                                                       inputSpec, outputSpec, inputs, orgInputs,
-                                                      RunnerMiniWorkflowMode.Collect)
+                                                      RunnerWfFragmentMode.Collect)
                         case InternalOp.WfFragment =>
-                            runner.MiniWorkflow.apply(wf,
+                            runner.WfFragment.apply(wf,
                                                       inputSpec, outputSpec, inputs, orgInputs,
-                                                      RunnerMiniWorkflowMode.Launch)
+                                                      RunnerWfFragmentMode.Launch)
                         case InternalOp.WorkflowOutputReorg =>
                             runner.WorkflowOutputReorg.apply(wf, inputSpec, outputSpec, inputs)
                     }
