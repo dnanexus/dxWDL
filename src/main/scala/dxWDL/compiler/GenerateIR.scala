@@ -42,6 +42,12 @@ case class GenerateIR(callables: Map[String, IR.Callable],
         }
     }
 
+    private var fragNum = 0
+    private def genFragId() : String = {
+        fragNum += 1
+        fragNum.toString
+    }
+
     // Lookup for variables like x, A.x, A.B.x. The difficulty
     // is that A.x is interpreted in WDL as member access.
     private def lookupInEnv(env: CallEnv, expr: WdlExpression) : LinkedVar = {
@@ -572,59 +578,6 @@ task Add {
         }
     }
 
-    // compile a call into a stage in an IR.Workflow
-    private def compileCall(call: WdlCall,
-                            env : CallEnv) : IR.Stage = {
-        // Find the callee
-        val calleeName = calleeGetName(call)
-        val callee = callables(calleeName)
-
-        // Extract the input values/links from the environment
-        val inputs: Vector[SArg] = callee.inputVars.map{ cVar =>
-            findInputByName(call, cVar) match {
-                case None if (!Utils.isOptional(cVar.womType) && cVar.attrs.getDefault == None) =>
-                    // A missing compulsory input, without a default
-                    // value. In an unlocked workflow it can be
-                    // provided as an input. In a locked workflow,
-                    // that is not possible.
-                    val msg = s"""|Workflow doesn't supply required input ${cVar.name}
-                                  |to call ${call.unqualifiedName}
-                                  |""".stripMargin.replaceAll("\n", " ")
-                    if (locked) {
-                        throw new Exception(cef.missingCallArgument(call.ast, msg))
-                    } else {
-                        Utils.warning(verbose, msg)
-                        IR.SArgEmpty
-                    }
-                case None =>
-                    IR.SArgEmpty
-                case Some((_,e)) => e.ast match {
-                    case t: Terminal if t.getTerminalStr == "identifier" =>
-                        val lVar = env.get(t.getSourceString) match {
-                            case Some(x) => x
-                            case None => throw new Exception(cef.missingVarRef(t))
-                        }
-                        lVar.sArg
-                    case t: Terminal =>
-                        def lookup(x:String) : WomValue = {
-                            throw new Exception(cef.evaluatingTerminal(t, x))
-                        }
-                        val ve = ValueEvaluator(lookup, PureStandardLibraryFunctions)
-                        val wValue: WomValue = ve.evaluate(e.ast).get
-                        IR.SArgConst(wValue)
-                    case a: Ast if a.isMemberAccess =>
-                        // An expression like A.B.C, or A.x
-                        val lVar = lookupInEnv(env, e)
-                        lVar.sArg
-                    case _:Ast =>
-                        throw new Exception(cef.expressionMustBeConstOrVar(e))
-                }
-            }
-        }
-
-        val stageName = call.unqualifiedName
-        IR.Stage(stageName, genStageId(), calleeName, inputs, callee.outputVars)
-    }
 
     // Figure out the closure for a block, and then build the input
     // definitions.
@@ -806,7 +759,7 @@ task Add {
     def blockGenWorklow(statements: Vector[Scope],
                         inputVars: Vector[CVar],
                         outputVars: Vector[CVar]) : WdlNamespace = {
-        val calls: Vector[WdlCall] = scope.calls.toVector
+        val calls: Vector[WdlCall] = findCalls(statement)
         val taskStubs: Map[String, WdlTask] =
             calls.foldLeft(Map.empty[String,WdlTask]) { case (accu, call) =>
                 val name = calleeGetName(call)
@@ -823,14 +776,14 @@ task Add {
                     accu + (name -> task)
                 }
             }
-        val (trPreDecls, trScope) = blockTransform(preDecls, scope, inputVars)
+        val statements2 = blockTransform(statements, inputVars)
         val decls: Vector[Declaration]  = inputVars.map{ cVar =>
             WdlRewrite.declaration(cVar.womType, cVar.dxVarName, None)
         }
 
         // Create new workflow that includes only this block
         val wf = WdlRewrite.workflowGenEmpty("w")
-        wf.children = decls ++ trPreDecls :+ trScope
+        wf.children = decls ++ statements2
         val tasks = taskStubs.map{ case (_,x) => x}.toVector
         // namespace that includes the task stubs, and the workflow
         WdlRewrite.namespace(wf, tasks)
@@ -941,28 +894,19 @@ task Add {
     // create a human readable name for a stage. If there
     // are no calls, use the iteration expression. Otherwise,
     // concatenate call names, while limiting total string length.
-    private def humanReadableStageName(stagePrefix: String,
-                                       block: Scope,
-                                       backExpr: WdlExpression) : String = {
-        val callNames: Vector[String] = block.children.collect{
-            case call: WdlCall => call.unqualifiedName
-        }.toVector
-        if (callNames.isEmpty)
-            return stagePrefix ++ "_" ++ backExpr.toWomString
-        val readableName = callNames.foldLeft(stagePrefix){
-            case (accu, cName) =>
-                if (accu.length >= Utils.MAX_STAGE_NAME_LEN)
-                    accu
-                else
-                    accu + "_" + cName
-        }
-        // The name could still end up too long, so we limit
-        // it.
-        val absMax = Utils.MAX_STAGE_NAME_LEN + 20
-        if (readableName.length > absMax)
-            readableName.substring(0, absMax)
+    private def humanReadableStageName(prefix: String,
+                                       statements: Vector[Scope]) : String = {
+        val calls: Vector[WdlCall] = findCalls(statements)
+        val cName =
+            if (calls.isEmpty) {
+                prefix
+            } else {
+                "${prefix}_${calls.head.unqualifiedName}"
+            }
+        if (cName.length > Utils.MAX_STAGE_NAME_LEN)
+            cName.substring(0, Utils.MAX_STAGE_NAME_LEN)
         else
-            readableName
+            cName
     }
 
     private def buildWorkflowBackbone(
@@ -972,25 +916,12 @@ task Add {
         env_i: CallEnv)
             : (Vector[(IR.Stage, Option[IR.Applet])], CallEnv) = {
         var env = env_i
-        var fragNum = 0
 
         val allStageInfo = subBlocks.foldLeft(accu) {
-            (accu, child) =>
-            val (stage, appletOpt) = child match {
-                case BlockWfFragment(decls, stmt) =>
-                    fragNum += 1
-                    val stageName = humanReadableStageName(Utils.WfFragment ++ fragNum.toString,
-                                                           stmt)
-                    val (stage, applet) = compileScatter(wf.unqualifiedName, stageName, preDecls,
-                                                         scatter, env)
-                    (stage, Some(applet))
-                case BlockScope(call: WdlCall) =>
-                    val stage = compileCall(call, env)
-                    (stage, None)
-                case BlockScope(x) =>
-                    throw new Exception(cef.notCurrentlySupported(
-                                            x.ast, s"Workflow element type=${x}"))
-            }
+            (accu, Block(statements)) =>
+            val stageName = humanReadableStageName("WfFragment", statements)
+            val (stage, applet) = compileScatter(wf.unqualifiedName, stageName, preDecls,
+                                                 scatter, env)
 
             // Add bindings for the output variables. This allows later calls to refer
             // to these results. In case of scatters, there is no block name to reference.
