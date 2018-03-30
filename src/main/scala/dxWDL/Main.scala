@@ -21,9 +21,7 @@ object Main extends App {
     }
     object InternalOp extends Enumeration {
         val Collect,
-            Eval,
-            MiniWorkflow,
-            ScatterCollectSubjob,
+            WfFragment,
             TaskEpilog, TaskProlog, TaskRelaunch,
             WorkflowOutputReorg = Value
     }
@@ -477,13 +475,7 @@ object Main extends App {
                             runner.MiniWorkflow.apply(wf ,
                                                       inputSpec, outputSpec, inputs, orgInputs,
                                                       RunnerMiniWorkflowMode.Collect)
-                        case InternalOp.Eval =>
-                            runner.Eval.apply(wf, inputSpec, outputSpec, inputs)
-                        case InternalOp.MiniWorkflow =>
-                            runner.MiniWorkflow.apply(wf,
-                                                      inputSpec, outputSpec, inputs, orgInputs,
-                                                      RunnerMiniWorkflowMode.ZeroCalls)
-                        case InternalOp.ScatterCollectSubjob =>
+                        case InternalOp.WfFragment =>
                             runner.MiniWorkflow.apply(wf,
                                                       inputSpec, outputSpec, inputs, orgInputs,
                                                       RunnerMiniWorkflowMode.Launch)

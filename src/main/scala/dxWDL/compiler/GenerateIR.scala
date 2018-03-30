@@ -7,7 +7,6 @@ import dxWDL.Utils
 import IR.{CVar, LinkedVar, SArg}
 import scala.util.{Failure, Success, Try}
 import wdl._
-import wdl.AstTools
 import wdl.AstTools.EnhancedAstNode
 import wdl.expression._
 import wdl4s.parser.WdlParser.{Ast, AstNode, Terminal}
@@ -46,18 +45,6 @@ case class GenerateIR(callables: Map[String, IR.Callable],
     private def genFragId() : String = {
         fragNum += 1
         fragNum.toString
-    }
-
-    // Lookup for variables like x, A.x, A.B.x. The difficulty
-    // is that A.x is interpreted in WDL as member access.
-    private def lookupInEnv(env: CallEnv, expr: WdlExpression) : LinkedVar = {
-        val fqn: String = expr.toWomString
-        env.get(fqn) match {
-            case Some(x) => x
-            case None =>
-                val t: Terminal = AstTools.findTerminals(expr.ast).head
-                throw new Exception(cef.missingVarRef(t))
-        }
     }
 
     /** Create a stub for an applet. This is an empty task
@@ -206,9 +193,13 @@ task Add {
      [call z]
      [String buf, Float x, scatter]
      */
+    // Find all the calls inside a statement block
     case class Block(statements: Vector[Scope]) {
         def append(stmt: Scope) : Block =
             Block(statements :+ stmt)
+
+        def append(block2: Block) : Block =
+            Block(statements ++ block2.statements)
 
         // Check if one of the statements is a scatter/if block
         def hasSubBlock : Boolean = {
@@ -218,26 +209,27 @@ task Add {
                 case (accu, _) => accu
             }
         }
-    }
 
-    // Find all the calls inside a statement block
-    private def findCalls(statments: Vector[Scope]) : Vector[WdlCall] = {
-        statements.foldLeft(Vector.empty[WdlCall]) {
-            case (accu, call:WdlCall) =>
-                accu :+ call
-            case (accu, ssc:Scatter) =>
-                accu ++ findCalls(ssc.children)
-            case ifStmt:If =>
-                accu ++ findCalls(ifStmt.children)
-            case x =>
-                accu
+        private def _findCalls(statements1: Seq[Scope]) : Vector[WdlCall] = {
+            statements1.foldLeft(Vector.empty[WdlCall]) {
+                case (accu, call:WdlCall) =>
+                    accu :+ call
+                case (accu, ssc:Scatter) =>
+                    accu ++ _findCalls(ssc.children)
+                case (accu, ifStmt:If) =>
+                    accu ++ _findCalls(ifStmt.children)
+                case (accu, _) =>
+                    accu
+            }.toVector
         }
-    }
 
-    // Count how many calls (task or workflow) there are in a series
-    // of statements.
-    private def countCalls(statements: Vector[Scope]) : Int = {
-        findCalls(statments).length
+        def findCalls: Vector[WdlCall] =
+            _findCalls(statements)
+
+        // Count how many calls (task or workflow) there are in a series
+        // of statements.
+        def countCalls : Int =
+            findCalls.length
     }
 
     private def splitIntoBlocks(children: Vector[Scope]) : Vector[Block] = {
@@ -253,30 +245,29 @@ task Add {
         val allBlocksButLast = blocks.dropRight(1)
 
         val lastBlock = blocks.last
-        val lastChild = children.last
-        val trailing: Vector[Block] = (countCalls(lastBlock), countCalls(lsatChild)) match {
+        val lastChild = Block(Vector(children.last))
+        val trailing: Vector[Block] = (lastBlock.countCalls, lastChild.countCalls) match {
             case (0, (0|1)) => Vector(lastBlock.append(lastChild))
             case (1, 0) =>
                 if (lastBlock.hasSubBlock) {
                     // Existing block already includes an if/scatter block.
                     // Don't merge
-                    Vector(lastBlock, Block(lastChild))
+                    Vector(lastBlock, lastChild)
                 } else {
                     // We can merge the child into the existing block
                     Vector(lastBlock.append(lastChild))
                 }
-            case (1, 1) => Vector(lastBlock, Block(lastChild))
-            case (x,y) =>
+            case (1, 1) => Vector(lastBlock, lastChild)
+            case (x ,y) =>
                 if (x > 1) {
-                    Sytem.err.println("GenerateIR, block:")
-                    Sytem.err.println(lastBlock)
+                    System.err.println("GenerateIR, block:")
+                    System.err.println(lastBlock)
                     throw new Exception(s"block has ${x} calls")
                 }
-                if (y > 1) {
-                    Sytem.err.println("GenerateIR, child:")
-                    Sytem.err.println(lastChild)
-                    throw new Exception(s"child has ${y} calls")
-                }
+                assert(y > 1)
+                System.err.println("GenerateIR, child:")
+                System.err.println(lastChild)
+                throw new Exception(s"child has ${y} calls")
         }
         allBlocksButLast ++ trailing
     }
@@ -648,20 +639,16 @@ task Add {
     //   For example, 'Int x' declared inside a scatter, is
     //   'Array[Int] x' outside the scatter.
     private def blockOutputs(statements: Vector[Scope]) : Vector[CVar] = {
-        def outsideType(t: WomType) : WomType = {
-            scope match {
-                case _:Scatter => WomArrayType(t)
-                case _:If => t match {
-                    // If the type is already optional, don't make it
-                    // double optional.
-                    case WomOptionalType(_) => t
-                    case _ => WomOptionalType(t)
-                }
-                case _ => t
+        def makeOptional(t: WomType) : WomType = {
+            t match {
+                // If the type is already optional, don't make it
+                // double optional.
+                case WomOptionalType(_) => t
+                case _ => WomOptionalType(t)
             }
         }
 
-        statements.foldLeft(Vector.empty[CVar]) {
+        val outputVars: Vector[CVar] = statements.foldLeft(Vector.empty[CVar]) {
             case (accu, call:WdlCall) =>
                 val calleeName = calleeGetName(call)
                 val callee = callables(calleeName)
@@ -683,29 +670,29 @@ task Add {
             case (accu, ssc:Scatter) =>
                 // recurse into the scatter, then add an array on top
                 // of the types
-                val sscOutputs = blockOutputs(ssc)
+                val sscOutputs = blockOutputs(ssc.children.toVector)
                 val sscOutputs2 =  sscOutputs.map{
-                    cVar => cVar.copy(womType = outsideType(cVar.womType))
+                    cVar => cVar.copy(womType = WomArrayType(cVar.womType))
                 }
                 accu ++ sscOutputs2
 
-            case ifStmt:If =>
+            case (accu, ifStmt:If) =>
                 // recurse into the if block, and amend the type.
-                val ifStmtOutputs = blockOutputs(ifStmt)
+                val ifStmtOutputs = blockOutputs(Vector(ifStmt))
                 val ifStmtOutputs2 = ifStmtOutputs.map{
-                    cVar => cVar.copy(womType = outsideType(cVar.womType))
+                    cVar => cVar.copy(womType = makeOptional(cVar.womType))
                 }
                 accu ++ ifStmtOutputs2
 
-            case x =>
+            case (accu, other) =>
                 throw new Exception(cef.notCurrentlySupported(
-                                        x.ast, s"Unimplemented scatter element"))
-        }.flatten.toVector
+                                        other.ast, s"Unimplemented workflow element"))
+        }
         outputVars
     }
 
     // Modify all the expressions used inside a block
-    def blockTransform(statements: Vector[Scope],
+    def blockTransform(statements: Seq[Scope],
                        inputVars: Vector[CVar]) : (Vector[Scope]) = {
         // Rename the variables we got from the input.
         def transform(expr: WdlExpression) : WdlExpression =
@@ -734,15 +721,15 @@ task Add {
                 val ssc2 = WdlRewrite.scatter(ssc, children, transform(ssc.collection))
                 accu :+ ssc2
 
-            case ifStmt:If =>
+            case (accu, ifStmt:If) =>
                 // recurse into the if block
                 val children = blockTransform(ifStmt.children, inputVars)
-                val ifStmt2 = WdlRewrite.cond(cond, children, transform(cond.condition))
+                val ifStmt2 = WdlRewrite.cond(ifStmt, children, transform(ifStmt.condition))
                 accu :+ ifStmt2
 
-            case x =>
+            case (accu, other) =>
                 throw new Exception(cef.notCurrentlySupported(
-                                        x.ast, s"Unimplemented scatter element"))
+                                        other.ast, s"Unimplemented workflow element"))
         }
     }
 
@@ -756,10 +743,10 @@ task Add {
     // called tasks. The generated tasks are named by their
     // unqualified names, not their fully-qualified names. This works
     // because the WDL workflow must be "flattenable".
-    def blockGenWorklow(statements: Vector[Scope],
+    def blockGenWorklow(block: Block,
                         inputVars: Vector[CVar],
                         outputVars: Vector[CVar]) : WdlNamespace = {
-        val calls: Vector[WdlCall] = findCalls(statement)
+        val calls: Vector[WdlCall] = block.findCalls
         val taskStubs: Map[String, WdlTask] =
             calls.foldLeft(Map.empty[String,WdlTask]) { case (accu, call) =>
                 val name = calleeGetName(call)
@@ -776,7 +763,7 @@ task Add {
                     accu + (name -> task)
                 }
             }
-        val statements2 = blockTransform(statements, inputVars)
+        val statements2 = blockTransform(block.statements, inputVars)
         val decls: Vector[Declaration]  = inputVars.map{ cVar =>
             WdlRewrite.declaration(cVar.womType, cVar.dxVarName, None)
         }
@@ -793,19 +780,19 @@ task Add {
     // Build an applet to evaluate a WDL workflow fragment
     private def compileWfFragment(wfUnqualifiedName : String,
                                   stageName: String,
-                                  statements: Vector[Scope],
+                                  block: Block,
                                   env : CallEnv) : (IR.Stage, IR.Applet) = {
         Utils.trace(verbose.on, s"Compiling wfFragment ${stageName}")
 
         // validate all the calls -- this should be moved to a
         // separate module. Preferably, check in the validate step.
-        val calls = findCalls(statments)
+        val calls = block.findCalls
         calls.foreach{ validateCall(_) }
 
         // Figure out the input definitions
-        val (closure, inputVars) = blockInputs(statements, env)
-        val outputVars = blockOutputs(statements)
-        val wdlCode = blockGenWorklow(statements, inputVars, outputVars)
+        val (closure, inputVars) = blockInputs(block.statements, env)
+        val outputVars = blockOutputs(block.statements)
+        val wdlCode = blockGenWorklow(block, inputVars, outputVars)
         val callDict = calls.map{ c =>
             c.unqualifiedName -> calleeGetName(c)
         }.toMap
@@ -894,14 +881,13 @@ task Add {
     // create a human readable name for a stage. If there
     // are no calls, use the iteration expression. Otherwise,
     // concatenate call names, while limiting total string length.
-    private def humanReadableStageName(prefix: String,
-                                       statements: Vector[Scope]) : String = {
-        val calls: Vector[WdlCall] = findCalls(statements)
+    private def humanReadableStageName(block: Block) : String = {
+        val calls: Vector[WdlCall] = block.findCalls
         val cName =
             if (calls.isEmpty) {
-                prefix
+                "eval_" + genFragId()
             } else {
-                "${prefix}_${calls.head.unqualifiedName}"
+                calls.head.unqualifiedName
             }
         if (cName.length > Utils.MAX_STAGE_NAME_LEN)
             cName.substring(0, Utils.MAX_STAGE_NAME_LEN)
@@ -918,25 +904,18 @@ task Add {
         var env = env_i
 
         val allStageInfo = subBlocks.foldLeft(accu) {
-            (accu, Block(statements)) =>
-            val stageName = humanReadableStageName("WfFragment", statements)
-            val (stage, applet) = compileScatter(wf.unqualifiedName, stageName, preDecls,
-                                                 scatter, env)
+            case (accu, block) =>
+                val stageName = humanReadableStageName(block)
+                val (stage, applet) = compileWfFragment(wf.unqualifiedName, stageName,
+                                                        block, env)
 
-            // Add bindings for the output variables. This allows later calls to refer
-            // to these results. In case of scatters, there is no block name to reference.
-            for (cVar <- stage.outputs) {
-                val fqVarName : String = child match {
-                    case BlockDecl(decls) => cVar.name
-                    case BlockIf(_, _) => cVar.name
-                    case BlockScatter(_, _) => cVar.name
-                    case BlockScope(call : WdlCall) => stage.name ++ "." ++ cVar.name
-                    case _ => throw new Exception("Sanity")
+                // Add bindings for the output variables. This allows later calls to refer
+                // to these results.
+                for (cVar <- stage.outputs) {
+                    env = env + (cVar.name ->
+                                     LinkedVar(cVar, IR.SArgLink(stage.name, cVar)))
                 }
-                env = env + (fqVarName ->
-                                 LinkedVar(cVar, IR.SArgLink(stage.name, cVar)))
-            }
-            accu :+ (stage,appletOpt)
+                accu :+ (stage,Some(applet))
         }
         (allStageInfo, env)
     }
@@ -946,31 +925,20 @@ task Add {
     // used only in the absence of workflow-level inputs/outputs.
     def compileCommonApplet(wf: WdlWorkflow,
                             inputs: Vector[(CVar, SArg)]) : (IR.Stage, IR.Applet) = {
-        val appletName = wf.unqualifiedName ++ "_" ++ Utils.COMMON
-        Utils.trace(verbose.on, s"Compiling common applet ${appletName}")
+        Utils.trace(verbose.on, s"Compiling common applet")
 
-        val inputVars : Vector[CVar] = inputs.map{ case (cVar, _) => cVar }
-        val outputVars: Vector[CVar] = inputVars
-        val declarations: Seq[Declaration] = inputs.map { case (cVar,_) =>
-            WdlRewrite.declaration(cVar.womType, cVar.name, None)
+        val declarations: Seq[Declaration] = inputs.map {
+            case (cVar,_) =>
+                WdlRewrite.declaration(cVar.womType, cVar.name, None)
         }
-        val code:WdlWorkflow = genEvalWorkflowFromDeclarations(appletName,
-                                                               declarations,
-                                                               outputVars)
+        val env = inputs.map{
+            case (cVar, sArg) => cVar.name -> LinkedVar(cVar, IR.SArgEmpty)
+        }.toMap
 
-        // We need minimal compute resources, use the default instance type
-        val applet = IR.Applet(appletName,
-                               inputVars,
-                               outputVars,
-                               calcInstanceType(None),
-                               IR.DockerImageNone,
-                               IR.AppletKindEval,
-                               WdlRewrite.namespace(code, Seq.empty))
-        verifyWdlCodeIsLegal(applet.ns)
-
-        val sArgs: Vector[SArg] = inputs.map{ _ => IR.SArgEmpty}.toVector
-        (IR.Stage(Utils.COMMON, genStageId(), appletName, sArgs, outputVars),
-         applet)
+        compileWfFragment(wf.unqualifiedName,
+                          Utils.COMMON,
+                          Block(declarations.toVector),
+                          env)
     }
 
     // 1. The output variable name must not have dots, these
@@ -1023,7 +991,7 @@ task Add {
                                outputVars,
                                calcInstanceType(None),
                                IR.DockerImageNone,
-                               IR.AppletKindEval,
+                               IR.AppletKindWfFragment(Map.empty),
                                WdlRewrite.namespace(code, Seq.empty))
         verifyWdlCodeIsLegal(applet.ns)
 
@@ -1112,7 +1080,7 @@ task Add {
         )
 
         // Create a stage per call/scatter-block/declaration-block
-        val subBlocks = splitIntoBlocks(wfProper)
+        val subBlocks = splitIntoBlocks(wfProper.toVector)
 
         val (allStageInfo_i, wfOutputs) =
             if (locked)

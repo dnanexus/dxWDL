@@ -293,9 +293,7 @@ case class InputFile(verbose: Verbose) {
                 callee match {
                     case applet: IR.Applet =>
                         val callOpt = applet.kind match {
-                            case IR.AppletKindIf(calls) => Some(calls)
-                            case IR.AppletKindScatter(calls) => Some(calls)
-                            case IR.AppletKindScatterCollect(calls) => Some(calls)
+                            case IR.AppletKindWfFragment(calls) => Some(calls)
                             case _ => None
                         }
                         callOpt.map{ calls =>

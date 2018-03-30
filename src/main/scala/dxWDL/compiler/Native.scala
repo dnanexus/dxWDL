@@ -261,9 +261,9 @@ case class Native(dxWDLrtId: String,
             |}""".stripMargin.trim
     }
 
-    private def genBashScriptScatterCollect() : String = {
+    private def genBashScriptWfFragment() : String = {
         s"""|main() {
-            |    java -jar $${DX_FS_ROOT}/dxWDL.jar internal scatterCollectSubjob $${DX_FS_ROOT}/source.wdl $${HOME}
+            |    java -jar $${DX_FS_ROOT}/dxWDL.jar internal wfFragment $${DX_FS_ROOT}/source.wdl $${HOME}
             |}
             |
             |collect() {
@@ -277,14 +277,10 @@ case class Native(dxWDLrtId: String,
                               linkInfo: Option[String],
                               dbInstance: Option[String]) : String = {
         val body:String = appKind match {
-            case IR.AppletKindEval =>
-                genBashScriptNonTask("eval")
-            case (IR.AppletKindIf(_) | IR.AppletKindScatter(_)) =>
-                genBashScriptNonTask("miniWorkflow")
-            case (IR.AppletKindScatterCollect(_)) =>
-                genBashScriptScatterCollect()
             case IR.AppletKindNative(_) =>
                 throw new Exception("Sanity: generating a bash script for a native applet")
+            case IR.AppletKindWfFragment(_) =>
+                genBashScriptWfFragment()
             case IR.AppletKindTask =>
                 instanceType match {
                     case IR.InstanceTypeDefault | IR.InstanceTypeConst(_,_,_,_) =>
@@ -578,9 +574,7 @@ case class Native(dxWDLrtId: String,
 
         // limit the applet dictionary, only to actual dependencies
         val calls:Map[String, String] = applet.kind match {
-            case IR.AppletKindIf(calls) => calls
-            case IR.AppletKindScatter(calls) => calls
-            case IR.AppletKindScatterCollect(calls) => calls
+            case IR.AppletKindWfFragment(calls) => calls
             case _ => Map.empty
         }
         val aplLinks = calls.map{ case (_,tName) => tName -> execDict(tName) }.toMap
@@ -808,9 +802,7 @@ case class Native(dxWDLrtId: String,
                 case apl: IR.Applet =>
                     // A generated applet requires all the executables it calls
                     apl.kind match {
-                        case IR.AppletKindIf(calls) => calls.values
-                        case IR.AppletKindScatter(calls) => calls.values
-                        case IR.AppletKindScatterCollect(calls) => calls.values
+                        case IR.AppletKindWfFragment(calls) => calls.values
                         case _ => Vector.empty
                     }
                 case wf: IR.Workflow =>
