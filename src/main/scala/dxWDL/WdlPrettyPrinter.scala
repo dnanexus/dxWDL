@@ -264,8 +264,8 @@ case class WdlPrettyPrinter(fqnFlag: Boolean,
             case Some(outputs) => outputs
         }
         val outputs = wos.map(apply(_, level + 2)).flatten.toVector
-        val paramMeta = wf.parameterMeta.map{ case (x,y) =>  s"${x}: ${y}" }.toVector
-        val meta = wf.meta.map{ case (x,y) =>  s"${x}: ${y}" }.toVector
+        val paramMeta = wf.parameterMeta.map{ case (x,y) =>  s"""${x}: "${y}" """ }.toVector
+        val meta = wf.meta.map{ case (x,y) =>  s"""${x}: "${y}" """ }.toVector
 
         val lines = children ++
             buildBlock("output", outputs, level + 1, force=true) ++
