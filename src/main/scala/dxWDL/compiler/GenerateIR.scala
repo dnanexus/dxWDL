@@ -104,18 +104,6 @@ task Add {
         WdlExpression.fromString(sExpr)
     }
 
-    // Here, we use the flat namespace assumption. We use
-    // unqualified names as Fully-Qualified-Names, because
-    // task and workflow names are unique.
-    private def calleeGetName(call: WdlCall) : String = {
-        call match {
-            case tc: WdlTaskCall =>
-                tc.task.unqualifiedName
-            case wfc: WdlWorkflowCall =>
-                wfc.calledWorkflow.unqualifiedName
-        }
-    }
-
     // Figure out which instance to use.
     //
     // Extract three fields from the task:
@@ -544,7 +532,7 @@ task Add {
     // to the callee (task/workflow)
     private def validateCall(call: WdlCall) : Unit = {
         // Find the callee
-        val calleeName = calleeGetName(call)
+        val calleeName = Utils.calleeGetName(call)
         val callee = callables(calleeName)
         val inputVarNames = callee.inputVars.map(_.name).toVector
         Utils.trace(verbose2, s"callee=${calleeName}  inputVars=${inputVarNames}")
@@ -631,7 +619,7 @@ task Add {
         else
             statements.foldLeft(Vector.empty[CVar]) {
                 case (accu, call:WdlCall) =>
-                    val calleeName = calleeGetName(call)
+                    val calleeName = Utils.calleeGetName(call)
                     val callee = callables(calleeName)
                     val callOutputs = callee.outputVars.map { cVar =>
                         val varName = call.unqualifiedName ++ "." ++ cVar.name
@@ -725,7 +713,7 @@ task Add {
         val calls: Vector[WdlCall] = block.findCalls
         val taskStubs: Map[String, WdlTask] =
             calls.foldLeft(Map.empty[String,WdlTask]) { case (accu, call) =>
-                val name = calleeGetName(call)
+                val name = Utils.calleeGetName(call)
                 val callable = callables.get(name) match {
                     case None => throw new Exception(s"Calling undefined task/workflow ${name}")
                     case Some(x) => x
@@ -770,7 +758,7 @@ task Add {
         val outputVars = blockOutputs(block.statements)
         val wdlCode = blockGenWorklow(block, inputVars, outputVars)
         val callDict = calls.map{ c =>
-            c.unqualifiedName -> calleeGetName(c)
+            c.unqualifiedName -> Utils.calleeGetName(c)
         }.toMap
 
         val applet = IR.Applet(wfUnqualifiedName ++ "_" ++ stageName,

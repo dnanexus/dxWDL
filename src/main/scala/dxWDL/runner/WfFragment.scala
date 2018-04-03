@@ -48,27 +48,29 @@ import wom.values._
 import wom.types._
 
 
-case class WfFragment(execLinkInfo: Map[String, ExecLinkInfo],
-                        exportVars: Option[Set[String]],
-                        cef: CompilerErrorFormatter,
-                        orgInputs: JsValue,
-                        runMode: RunnerWfFragmentMode.Value,
-                        verbose: Boolean) {
+case class WfFragment(execSeqMap: Map[Int, ChildExecDesc],
+                      execLinkInfo: Map[String, ExecLinkInfo],
+                      exportVars: Option[Set[String]],
+                      cef: CompilerErrorFormatter,
+                      orgInputs: JsValue,
+                      runMode: RunnerWfFragmentMode.Value,
+                      verbose: Boolean) {
     // A runtime representation of a WDL variable, or a call.
     //
-    // A call has the type WdlCallOutputsObjectType, and the value
-    // WdlCallOutputsObject. Calling a dx:executable will take
-    // a while to complete, so we store in the WdlCallOutputsObject
-    // map the executable-id.
-    case class RtmElem(name: String,
-                       womType: WomType,
-                       value: WomValue)
+    // We store the sequence number and exec-id for each call.
+    case class RtmElem( name: String,
+                        womType: WomType,
+                        value: WomValue )
+
+    // All the call names
+    val callNames = execLinkInfo.keys.toSet
+    var callsLaunched = Map.empty[Int, (WdlCall, DXExecution)]
 
     // An environment where WDL expressions and calls are evaluated
     type Env = Map[String, RtmElem]
 
     var seqNum = 0
-    private def launchSeqNum : Int = {
+    private def launchSeqNum() : Int = {
         seqNum += 1
         seqNum
     }
@@ -94,8 +96,12 @@ case class WfFragment(execLinkInfo: Map[String, ExecLinkInfo],
 
     private def lookupInEnv(env: Env)(varName : String) : WomValue =
         env.get(varName) match {
-            case Some(RtmElem(_,_,value)) => value
-            case _ =>  throw new UnboundVariableException(s"${varName}")
+            case Some(RtmElemCall(_, WdlCallOutputsObjectType(_) ,_)) =>
+                throw new Exception(s"Illegal access to results of WdlCall ${varName}")
+            case Some(RtmElem(_,_,value)) =>
+                value
+            case _ =>
+                throw new UnboundVariableException(s"${varName}")
         }
 
     /**
@@ -136,11 +142,6 @@ case class WfFragment(execLinkInfo: Map[String, ExecLinkInfo],
                 }
         }
 
-        Utils.appletLog(s"building applet inputs for call ${call.unqualifiedName}")
-        inputs.foreach { case (name, womValue) =>
-            Utils.appletLog(s"  ${name} -> ${womValue.toWomString}")
-        }
-
         val wvlInputs = inputs.map{ case (name, womValue) =>
             val womType = linkInfo.inputs(name)
             name -> wdlValueToWVL(womType, womValue)
@@ -169,7 +170,6 @@ case class WfFragment(execLinkInfo: Map[String, ExecLinkInfo],
         val retVal =
             if (v.womType != wdlType) {
                 // we need to convert types
-                //Utils.appletLog(s"casting ${v.womType} to ${wdlType}")
                 wdlType.coerceRawValue(v).get
             } else {
                 // no need to change types
@@ -200,33 +200,37 @@ case class WfFragment(execLinkInfo: Map[String, ExecLinkInfo],
             case Some(eInfo) => eInfo
         }
         val callInputs:JsValue = buildAppletInputs(call, eInfo, env)
-        System.err.println(s"Call ${call.unqualifiedName}   inputs = ${callInputs}")
+        Utils.appletLog(s"Call ${call.unqualifiedName}   inputs = ${callInputs}")
 
         // We may need to run a collect subjob. Add the call
         // name, and the sequence number, to each execution invocation,
         // so the collect subjob will be able to put the
         // results back together.
-        if (eInfo.dxExec.isInstanceOf[DXApplet]) {
-            val applet = eInfo.dxExec.asInstanceOf[DXApplet]
-            val dxJob :DXJob = applet.newRun()
-                .setRawInput(Utils.jsonNodeOfJsValue(callInputs))
-                .setName(call.unqualifiedName)
-                .putProperty("call", call.unqualifiedName)
-                .putProperty("seq_number", launchSeqNum.toString)
-                .run()
-            dxJob
-        } else if (eInfo.dxExec.isInstanceOf[DXWorkflow]) {
-            val workflow = eInfo.dxExec.asInstanceOf[DXWorkflow]
-            val dxAnalysis :DXAnalysis = workflow.newRun()
-                .setRawInput(Utils.jsonNodeOfJsValue(callInputs))
-                .setName(call.unqualifiedName)
-                .putProperty("call", call.unqualifiedName)
-                .putProperty("seq_number", launchSeqNum.toString)
-                .run()
-            dxAnalysis
-        } else {
-            throw new Exception(s"Unsupported execution ${eInfo.dxExec}")
-        }
+        val seqNum: Int = launchSeqNum()
+        val dxExec =
+            if (eInfo.dxExec.isInstanceOf[DXApplet]) {
+                val applet = eInfo.dxExec.asInstanceOf[DXApplet]
+                val dxJob :DXJob = applet.newRun()
+                    .setRawInput(Utils.jsonNodeOfJsValue(callInputs))
+                    .setName(call.unqualifiedName)
+                    .putProperty("call", call.unqualifiedName)
+                    .putProperty("seq_number", seqNum.toString)
+                    .run()
+                dxJob
+            } else if (eInfo.dxExec.isInstanceOf[DXWorkflow]) {
+                val workflow = eInfo.dxExec.asInstanceOf[DXWorkflow]
+                val dxAnalysis :DXAnalysis = workflow.newRun()
+                    .setRawInput(Utils.jsonNodeOfJsValue(callInputs))
+                    .setName(call.unqualifiedName)
+                    .putProperty("call", call.unqualifiedName)
+                    .putProperty("seq_number", seqNum.toString)
+                    .run()
+                dxAnalysis
+            } else {
+                throw new Exception(s"Unsupported execution ${eInfo.dxExec}")
+            }
+        callsLaunched = callsLaunched + (seqNum -> (call, dxExec))
+        dxExec
     }
 
 
@@ -308,6 +312,7 @@ case class WfFragment(execLinkInfo: Map[String, ExecLinkInfo],
     private def evalScatter(ssc:Scatter,
                             envBgn: Env) : Env = {
         def lookup = lookupInEnv(envBgn)(_)
+
         val collection:WomArray = ssc.collection.evaluate(lookup, DxFunctions) match {
             case Success(a: WomArray) => a
             case Success(other) => throw new Exception(s"scatter collection is not an array, it is: ${other}")
@@ -329,6 +334,7 @@ case class WfFragment(execLinkInfo: Map[String, ExecLinkInfo],
             // started with.
             envRemoveKeys(envEnd, (envBgn.keys.toSet + ssc.item))
         }
+        Utils.appletLog(s"evalScatter sscEnvs=${sscEnvs}")
         val typeMap = statementsToTypes(ssc.children)
         envBgn ++ scatterMergeEnvs(typeMap, sscEnvs)
     }
@@ -402,13 +408,15 @@ case class WfFragment(execLinkInfo: Map[String, ExecLinkInfo],
                         // referencing the job/analysis results later on.
                         RtmElem(call.unqualifiedName,
                                 WdlCallOutputsObjectType(call),
-                                WdlCallOutputsObject(call,
-                                                     Map("dxExec" -> WomString(dxExec.getId))))
+                                WomString(dxExec.getId))
                     case RunnerWfFragmentMode.Collect =>
+                        // Deterministically find the launch sequence number,
+                        // and retrieve the job-id
+                        val seqNum:Int = launchSeqNum()
+                        val childInfo = execSeqMap.get(seqNum)
                         RtmElem(call.unqualifiedName,
                                 WdlCallOutputsObjectType(call),
-                                WdlCallOutputsObject(call,
-                                                     Map("seqNum" -> WomInteger(launchSeqNum))))
+                                WomString(childInfo.dxExec.getId))
                 }
                 env + (call.unqualifiedName -> rElem)
 
@@ -472,13 +480,6 @@ case class WfFragment(execLinkInfo: Map[String, ExecLinkInfo],
         }
     }
 
-    // Check if all the return types from a call are native dx types. This
-    // means we won't need to unmarshal/marshal the results when the call
-    // returns.
-    private def callOutputTypesAreDxNative(call: WdlCall) : Boolean = {
-        call.callable.outputs.forall( o => Utils.isNativeDxType(o.womType))
-    }
-
     def apply(wf: WdlWorkflow,
               inputs: Map[String, WdlVarLinks]) : Map[String, WdlVarLinks] = {
         // build the environment from the dx:applet inputs
@@ -494,75 +495,41 @@ case class WfFragment(execLinkInfo: Map[String, ExecLinkInfo],
         val envEnd = wf.children.foldLeft(envBgn) {
             case (env, stmt) => evalStatement(stmt, env)
         }
-
-        val declOutputs: Map[String, WdlVarLinks] = envEnd.flatMap{
-            case (varName, RtmElem(_,womType, value)) if (isExported(varName)) =>
-                // an exported  variable
-                Some(varName -> wdlValueToWVL(womType, value))
-            case (_, RtmElem(_, _, WdlCallOutputsObject(_, _))) =>
-                None
-            case _ =>
-                // An internal variable
-                None
-        }
+        Utils.appletLog(s"envEnd = ${envEnd}")
+        Utils.appletLog(s"runMode=${runMode}")
 
         runMode match {
             case RunnerWfFragmentMode.Launch =>
-                val (childJobs, calls) = envEnd.flatMap{
-                    case (_, RtmElem(_, _, WdlCallOutputsObject(call, callOutputs))) =>
-                        val dxExec: DXExecution = callOutputs.get("dxExec") match {
-                            case Some(WomString(dxExecId)) =>  DXExecution.getInstance(dxExecId)
-                            case other => throw new Exception(s"bad value ${other} for field dxExec")
-                        }
-                        Some((dxExec, call))
-                    case _ => None
-                }.unzip
-                if (calls.isEmpty || childJobs.isEmpty) {
+                val (calls, childJobs) = callsLaunched.unzip
+                Utils.appletLog(s"childJobs=${childJobs}")
+
+                // Collect all the pure declarations (no calls inside the data structure)
+                val declOutputs: Map[String, WdlVarLinks] = envEnd.flatMap{
+                    case (varName, RtmElem(_,womType, value)) =>
+                        if (isExported(varName) &&
+                                !(callNames contains varName)) {
+                            Some(varName -> wdlValueToWVL(womType, value))
+                        } else
+                            None
+                    case (_, _) => None
+                }.toMap
+
+                if (childJobs.isEmpty) {
                     // There are no calls, we can return the results immediately
                     declOutputs
-                } else if (calls.size == 1 &&
-                               childJobs.size == 1 &&
-                               callOutputTypesAreDxNative(calls.head)) {
-                    // There is:
-                    // * one child job,
-                    // * no need to marshal the call outputs.
-                    // Return promises to the call outputs.
-                    //
-                    // TODO: the type check should be on the final workflow output,
-                    // not just on the call outputs themselves.
-                    val promises = execOutputs(calls.head, childJobs.head)
-                    declOutputs ++ promises
                 } else {
                     // Launch a subjob to collect and marshal the results.
                     //
-                    // There is one more case that can be optimized; where there
-                    // are many child jobs, but the results can be aggregated without
-                    // marshalling. For example, each job returns a file, and the overall
-                    // result is a file-array.
-                    launchCollectSubjob(childJobs.toVector, calls.toVector)
+                    declOutputs ++ launchCollectSubjob(childJobs.toVector, calls.toVector)
                 }
 
             case RunnerWfFragmentMode.Collect =>
-                // Convert the sequence numbers to dx:executables
-                val execSeqMap: Map[Int, DXExecution] = Collect.executableFromSeqNum
-                val executions = envEnd.flatMap{
-                    case (_, RtmElem(_, _, WdlCallOutputsObject(call, callOutputs))) =>
-                        val seqNum:Int = callOutputs.get("seqNum") match {
-                            case Some(WomInteger(x)) => x
-                            case other => throw new Exception("Could not extract seqNum field")
-                        }
-                        val dxExec:DXExecution = execSeqMap.get(seqNum) match {
-                            case Some(dxExec) =>  dxExec
-                            case _ => throw new Exception(s"seqNum ${seqNum} has no matching executable")
-                        }
-                        Some((call, dxExec))
-                    case _ => None
-                }
+                val executions = execSeqMap.map{ case (seqNum, childInfo) => childInfo.dxExec }
                 val callResults = executions.foldLeft(Map.empty[String, WdlVarLinks]) {
                     case (accu, (call, dxExec)) =>
                         accu ++ execOutputs(call, dxExec)
                 }
-                declOutputs ++ callResults
+                callResults
         }
     }
 }
@@ -614,9 +581,16 @@ object WfFragment {
         val execLinkInfo = loadLinkInfo(dxProject)
         Utils.appletLog(s"link info=${execLinkInfo}")
 
+        val execSeqMap: Map[Int, ChildExecDesc] = runMode match {
+            case Launch =>
+                Map.empty
+            case Collect =>
+                Collect.executableFromSeqNum()
+        }
+
         // Run the workflow
         val cef = new CompilerErrorFormatter("", wf.wdlSyntaxErrorFormatter.terminalMap)
-        val r = WfFragment(execLinkInfo, Some(exportVars), cef, orgInputs, runMode, false)
+        val r = WfFragment(execSeqMap, execLinkInfo, Some(exportVars), cef, orgInputs, runMode, false)
         val wvlVarOutputs = r.apply(wf, inputs)
 
         // convert from WVL to JSON

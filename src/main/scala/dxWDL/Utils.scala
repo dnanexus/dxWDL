@@ -724,4 +724,16 @@ object Utils {
             case _ => throw new Exception(s"Could not resolve $n from scope ${from.fullyQualifiedName}")
         }
     }
+
+    // Here, we use the flat namespace assumption. We use
+    // unqualified names as Fully-Qualified-Names, because
+    // task and workflow names are unique.
+    def calleeGetName(call: WdlCall) : String = {
+        call match {
+            case tc: WdlTaskCall =>
+                tc.task.unqualifiedName
+            case wfc: WdlWorkflowCall =>
+                wfc.calledWorkflow.unqualifiedName
+        }
+    }
 }

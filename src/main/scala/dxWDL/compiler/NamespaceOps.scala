@@ -265,7 +265,6 @@ object NamespaceOps {
                 new TreeLeaf(name, cef, taskDict)
 
             case nswf:WdlNamespaceWithWorkflow =>
-
                 val cef = new CompilerErrorFormatter(nswf.resource, nswf.terminalMap)
                 val wfOutputs =
                     if (nswf.workflow.noWorkflowOutputs) {
@@ -316,6 +315,71 @@ object NamespaceOps {
                              nswf2.workflow,
                              children :+ child)
                 }
+        }
+    }
+
+
+    private def calledFromNode(tree: Tree) : Set[String] = {
+        tree match {
+            case node: TreeNode =>
+                node.workflow.calls.map{
+                    call => Utils.calleeGetName(call)
+                }.toSet
+            case leaf: TreeLeaf =>
+                Set.empty
+        }
+    }
+
+    // collect the names of all directly and indirectly accessed
+    // tasks/workflows.
+    private def collectRefs(tree: Tree,
+                            accessed: Set[String]): Set[String] = {
+        tree match {
+            case node:TreeNode if (accessed contains node.workflow.unqualifiedName) =>
+                // This workflow is accessed from the top level
+                val allAccessed = calledFromNode(node) ++ accessed
+                node.children.foldLeft(allAccessed) {
+                    case (accu, leaf: TreeLeaf) =>
+                        accu
+                    case (accu, child: TreeNode) =>
+                        accu ++ collectRefs(child, accu)
+                }
+
+            case _ =>
+                accessed
+        }
+    }
+
+    // remove from a tree all the tasks/workflows in the named set.
+    private def filter(tree: Tree,
+                       taskWfNames: Set[String]) : Tree = {
+        tree match {
+            case leaf: TreeLeaf =>
+                val accessedTasks = leaf.tasks.filter{
+                    case (_, task) => taskWfNames contains task.unqualifiedName
+                }.toMap
+                leaf.copy(tasks = accessedTasks)
+            case node: TreeNode if (taskWfNames contains node.workflow.unqualifiedName) =>
+                val children = node.children.map{ child => filter(child, taskWfNames) }
+                node.copy(children = children)
+            case _ =>
+                TreeLeaf("pruned", tree.cef, Map.empty)
+        }
+    }
+
+    // Remove tasks and workflows that are not reachable from the top level
+    // workflow.
+    //
+    // If the entire tree is one leaf, do nothing.
+    // The user may be trying to compile standalone tasks as
+    // applets.
+    def prune(tree: Tree) : Tree = {
+        tree match {
+            case leaf: TreeLeaf =>
+                leaf
+            case node: TreeNode =>
+                val taskWfNames = collectRefs(node, Set(node.workflow.unqualifiedName))
+                filter(node, taskWfNames)
         }
     }
 

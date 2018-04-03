@@ -135,7 +135,7 @@ object Collect {
         }.toVector
     }
 
-    def executableFromSeqNum : Map[Int, DXExecution] = {
+    def executableFromSeqNum() : Map[Int, ChildExecDesc] = {
         // We cannot change the input fields, because this is a sub-job with the same
         // input/output spec as the parent scatter. Therefore, we need to computationally
         // figure out:
@@ -150,7 +150,7 @@ object Collect {
         System.err.println(s"execDescs=${execDescs}")
 
         execDescs.map{ desc =>
-            desc.seqNum -> desc.exec
+            desc.seqNum -> desc
         }.toMap
     }
 }
