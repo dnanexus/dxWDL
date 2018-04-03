@@ -570,26 +570,6 @@ task Add {
     }
 
 
-    // figure out if a variable is used only inside
-    // the block (scatter, if, ...)
-    def isLocal(decl: Declaration): Boolean = {
-        try {
-            // find all dependent nodes
-            val dNodes:Set[WdlGraphNode] = decl.downstream
-            val declParent:Scope = decl.parent.get
-
-            // figure out if these downstream nodes are in the same scope.
-            val dnScopes:Set[WdlGraphNode] = dNodes.filter{ node =>
-                node.parent.get.fullyQualifiedName != declParent.fullyQualifiedName
-            }
-            dnScopes.isEmpty
-        } catch {
-            // sometimes, we can't calculate the downstream nodes.
-            case e: Throwable =>
-                false
-        }
-    }
-
     // Figure out the closure for a block, and then build the input
     // definitions.
     //
@@ -617,10 +597,19 @@ task Add {
             case (varName, LinkedVar(cVar, _)) =>
                 // a variable that must be passed to the scatter applet
                 assert(env contains varName)
-                Some(CVar(varName, cVar.womType, DeclAttrs.empty, cVar.ast))
+                Some(cVar)
         }.flatten.toVector
 
         (closure, inputVars)
+    }
+
+    private def makeOptional(t: WomType) : WomType = {
+        t match {
+            // If the type is already optional, don't make it
+            // double optional.
+            case WomOptionalType(_) => t
+            case _ => WomOptionalType(t)
+        }
     }
 
     // Construct block outputs (scatter, conditional, ...), these are
@@ -637,56 +626,45 @@ task Add {
     //   For example, 'Int x' declared inside a scatter, is
     //   'Array[Int] x' outside the scatter.
     private def blockOutputs(statements: Vector[Scope]) : Vector[CVar] = {
-        def makeOptional(t: WomType) : WomType = {
-            t match {
-                // If the type is already optional, don't make it
-                // double optional.
-                case WomOptionalType(_) => t
-                case _ => WomOptionalType(t)
+        if (statements.isEmpty)
+            Vector.empty[CVar]
+        else
+            statements.foldLeft(Vector.empty[CVar]) {
+                case (accu, call:WdlCall) =>
+                    val calleeName = calleeGetName(call)
+                    val callee = callables(calleeName)
+                    val callOutputs = callee.outputVars.map { cVar =>
+                        val varName = call.unqualifiedName ++ "." ++ cVar.name
+                        CVar(varName, cVar.womType, DeclAttrs.empty, cVar.ast)
+                    }
+                    accu ++ callOutputs
+
+                case (accu, decl:Declaration) =>
+                    val cVar = CVar(decl.unqualifiedName, decl.womType,
+                                    DeclAttrs.empty, decl.ast)
+                    accu :+ cVar
+
+                case (accu, ssc:Scatter) =>
+                    // recurse into the scatter, then add an array on top
+                    // of the types
+                    val sscOutputs = blockOutputs(ssc.children.toVector)
+                    val sscOutputs2 =  sscOutputs.map{
+                        cVar => cVar.copy(womType = WomArrayType(cVar.womType))
+                    }
+                    accu ++ sscOutputs2
+
+                case (accu, ifStmt:If) =>
+                    // recurse into the if block, and amend the type.
+                    val ifStmtOutputs = blockOutputs(ifStmt.children.toVector)
+                    val ifStmtOutputs2 = ifStmtOutputs.map{
+                        cVar => cVar.copy(womType = makeOptional(cVar.womType))
+                    }
+                    accu ++ ifStmtOutputs2
+
+                case (accu, other) =>
+                    throw new Exception(cef.notCurrentlySupported(
+                                            other.ast, s"Unimplemented workflow element"))
             }
-        }
-
-        val outputVars: Vector[CVar] = statements.foldLeft(Vector.empty[CVar]) {
-            case (accu, call:WdlCall) =>
-                val calleeName = calleeGetName(call)
-                val callee = callables(calleeName)
-                val callOutputs = callee.outputVars.map { cVar =>
-                    val varName = call.unqualifiedName ++ "." ++ cVar.name
-                    CVar(varName, cVar.womType, DeclAttrs.empty, cVar.ast)
-                }
-                accu ++ callOutputs
-
-            case (accu, decl:Declaration) if isLocal(decl) =>
-                // local declaration, do not export
-                accu
-
-            case (accu, decl:Declaration) =>
-                val cVar = CVar(decl.unqualifiedName, decl.womType,
-                                DeclAttrs.empty, decl.ast)
-                accu :+ cVar
-
-            case (accu, ssc:Scatter) =>
-                // recurse into the scatter, then add an array on top
-                // of the types
-                val sscOutputs = blockOutputs(ssc.children.toVector)
-                val sscOutputs2 =  sscOutputs.map{
-                    cVar => cVar.copy(womType = WomArrayType(cVar.womType))
-                }
-                accu ++ sscOutputs2
-
-            case (accu, ifStmt:If) =>
-                // recurse into the if block, and amend the type.
-                val ifStmtOutputs = blockOutputs(Vector(ifStmt))
-                val ifStmtOutputs2 = ifStmtOutputs.map{
-                    cVar => cVar.copy(womType = makeOptional(cVar.womType))
-                }
-                accu ++ ifStmtOutputs2
-
-            case (accu, other) =>
-                throw new Exception(cef.notCurrentlySupported(
-                                        other.ast, s"Unimplemented workflow element"))
-        }
-        outputVars
     }
 
     // Modify all the expressions used inside a block
@@ -920,23 +898,36 @@ task Add {
 
     // Create a preliminary applet to handle workflow input/outputs. This is
     // used only in the absence of workflow-level inputs/outputs.
-    def compileCommonApplet(wf: WdlWorkflow,
+    def compileCommonApplet(wfUnqualifiedName: String,
                             inputs: Vector[(CVar, SArg)]) : (IR.Stage, IR.Applet) = {
-        Utils.trace(verbose.on, s"Compiling common applet")
+        val appletName = wfUnqualifiedName + "_" + Utils.COMMON
+        Utils.trace(verbose.on, s"Compiling common applet ${appletName}")
 
-        val declarations: Seq[Declaration] = inputs.map {
-            case (cVar,_) =>
-                WdlRewrite.declaration(cVar.womType, cVar.name, None)
+        val inputVars : Vector[CVar] = inputs.map{ case (cVar, _) => cVar }
+        val outputVars: Vector[CVar] = inputVars
+        val declarations: Seq[Declaration] = inputs.map { case (cVar,_) =>
+            WdlRewrite.declaration(cVar.womType, cVar.name, None)
         }
-        val env = inputs.map{
-            case (cVar, sArg) => cVar.name -> LinkedVar(cVar, sArg)
-        }.toMap
 
-        compileWfFragment(wf.unqualifiedName,
-                          Utils.COMMON,
-                          Block(declarations.toVector),
-                          env)
+        val wf = WdlRewrite.workflowGenEmpty("w")
+        wf.children = declarations
+        val wdlCode = WdlRewrite.namespace(wf, Vector.empty)
+
+        // We need minimal compute resources, use the default instance type
+        val applet = IR.Applet(appletName,
+                               inputVars,
+                               outputVars,
+                               calcInstanceType(None),
+                               IR.DockerImageNone,
+                               IR.AppletKindWfFragment(Map.empty),
+                               wdlCode)
+        verifyWdlCodeIsLegal(applet.ns)
+
+        val sArgs: Vector[SArg] = inputs.map{ _ => IR.SArgEmpty}.toVector
+        (IR.Stage(Utils.COMMON, genStageId(), appletName, sArgs, outputVars),
+         applet)
     }
+
 
     // 1. The output variable name must not have dots, these
     //    are illegal in dx.
@@ -1031,7 +1022,8 @@ task Add {
 
         // Create a preliminary stage to handle workflow inputs, and top-level
         // declarations.
-        val (inputStage, inputApplet) = compileCommonApplet(wf, wfInputs)
+        val (inputStage, inputApplet) = compileCommonApplet(wf.unqualifiedName, wfInputs)
+
 
         // An environment where variables are defined
         val initEnv : CallEnv = inputStage.outputs.map { cVar =>

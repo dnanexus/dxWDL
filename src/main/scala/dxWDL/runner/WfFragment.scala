@@ -92,6 +92,12 @@ case class WfFragment(execLinkInfo: Map[String, ExecLinkInfo],
         WdlVarLinks.importFromWDL(t, DeclAttrs.empty, wdlValue, IODirection.Zero)
     }
 
+    private def lookupInEnv(env: Env)(varName : String) : WomValue =
+        env.get(varName) match {
+            case Some(RtmElem(_,_,value)) => value
+            case _ =>  throw new UnboundVariableException(s"${varName}")
+        }
+
     /**
       In the workflow below, we want to correctly pass the [k] value
       to each [inc] Task invocation.
@@ -103,12 +109,13 @@ case class WfFragment(execLinkInfo: Map[String, ExecLinkInfo],
     private def buildAppletInputs(call: WdlCall,
                                   linkInfo: ExecLinkInfo,
                                   env : Env) : JsValue = {
-        val inputs: Map[String, RtmElem] = linkInfo.inputs.flatMap{
+        def lookup = lookupInEnv(env)(_)
+        val inputs: Map[String, WomValue] = linkInfo.inputs.flatMap{
             case (varName, wdlType) =>
                 // The rhs is [k], the varName is [i]
                 val rhs: Option[(String,WdlExpression)] =
                     call.inputMappings.find{ case(key, expr) => key == varName }
-                val rElem:Option[RtmElem] = rhs match {
+                rhs match {
                     case None =>
                         // No binding for this input. It might be optional.
                         wdlType match {
@@ -119,38 +126,43 @@ case class WfFragment(execLinkInfo: Map[String, ExecLinkInfo],
                                         |variable ${varName}.""".stripMargin.trim)
                         }
                     case Some((_, expr)) =>
-                        // The value must be a simple variable
-                        val varRef = expr.toWomString
-                        env.get(varRef) match {
-                            case None =>
-                                throw new AppInternalException(
-                                    s"""|In call ${call.unqualifiedName}, variable ${varName} is set
-                                        |to ${varRef}, which is unbound.""".stripMargin.trim)
-                            case Some(rElem) => Some(rElem)
+                        expr.evaluate(lookup, DxFunctions) match {
+                            case Success(womValue) => Some(varName -> womValue)
+                            case Failure(f) =>
+                                System.err.println(s"Failed to evaluate expression ${expr.toWomString}")
+                                throw f
                         }
-                }
-                rElem match {
-                    case None => None
-                    case Some(r) => Some(varName -> r)
+
                 }
         }
-        val wvlInputs = inputs.map{ case (name, rElem) =>
-            name -> wdlValueToWVL(rElem.womType, rElem.value)
+
+        Utils.appletLog(s"building applet inputs for call ${call.unqualifiedName}")
+        inputs.foreach { case (name, womValue) =>
+            Utils.appletLog(s"  ${name} -> ${womValue.toWomString}")
+        }
+
+        val wvlInputs = inputs.map{ case (name, womValue) =>
+            val womType = linkInfo.inputs(name)
+            name -> wdlValueToWVL(womType, womValue)
         }.toMap
         val m = wvlInputs.foldLeft(Map.empty[String, JsValue]) {
             case (accu, (varName, wvl)) =>
                 val fields = WdlVarLinks.genFields(wvl, varName)
                 accu ++ fields.toMap
         }
-        val mNonNull = m.filter{ case (key, value) => value != null && value != JsNull}
+        val mNonNull = m.filter{
+            case (key, value) =>
+                if (value == null) false
+                else if (value == JsNull) false
+                else if (value.isInstanceOf[JsArray]) {
+                    val jsa = value.asInstanceOf[JsArray]
+                    if (jsa.elements.length == 0) false
+                    else true
+                } else
+                    true
+        }
         JsObject(mNonNull)
     }
-
-    private def lookupInEnv(env: Env)(varName : String) : WomValue =
-        env.get(varName) match {
-            case Some(RtmElem(_,_,value)) => value
-            case _ =>  throw new UnboundVariableException(s"${varName}")
-        }
 
         // coerce a WDL value to the required type (if needed)
     private def cast(wdlType: WomType, v: WomValue, varName: String) : WomValue = {
@@ -167,14 +179,28 @@ case class WfFragment(execLinkInfo: Map[String, ExecLinkInfo],
     }
 
 
+    // Here, we use the flat namespace assumption. We use
+    // unqualified names as Fully-Qualified-Names, because
+    // task and workflow names are unique.
+    private def calleeGetName(call: WdlCall) : String = {
+        call match {
+            case tc: WdlTaskCall =>
+                tc.task.unqualifiedName
+            case wfc: WdlWorkflowCall =>
+                wfc.calledWorkflow.unqualifiedName
+        }
+    }
+
     private def execCall(call: WdlCall, env: Env) : DXExecution = {
-        val eInfo = execLinkInfo.get(call.unqualifiedName) match {
+        val calleeName = calleeGetName(call)
+        val eInfo = execLinkInfo.get(calleeName) match {
             case None =>
                 throw new AppInternalException(
                     s"Could not find linking information for ${call.unqualifiedName}")
             case Some(eInfo) => eInfo
         }
         val callInputs:JsValue = buildAppletInputs(call, eInfo, env)
+        System.err.println(s"Call ${call.unqualifiedName}   inputs = ${callInputs}")
 
         // We may need to run a collect subjob. Add the call
         // name, and the sequence number, to each execution invocation,
@@ -352,6 +378,10 @@ case class WfFragment(execLinkInfo: Map[String, ExecLinkInfo],
         stmt match {
             case decl:Declaration =>
                 val wValue = decl.expression match {
+                    case None if (env contains decl.unqualifiedName) =>
+                        // An input variable, read it from the environment
+                        val elem = env(decl.unqualifiedName)
+                        elem.value
                     case None =>
                         // A declaration with no value, such as:
                         //   String buffer
@@ -418,14 +448,27 @@ case class WfFragment(execLinkInfo: Map[String, ExecLinkInfo],
 
     // Launch a subjob to collect the outputs
     private def launchCollectSubjob(childJobs: Vector[DXExecution],
-                                    calls: Vector[WdlCall]) : Unit = {
+                                    calls: Vector[WdlCall]) : Map[String, WdlVarLinks] = {
+        assert(!childJobs.isEmpty)
         Utils.appletLog(s"""|launching collect subjob
                             |child jobs=${childJobs}""".stripMargin)
-        if (!childJobs.isEmpty) {
-            // Run a sub-job with the "collect" entry point.
-            // We need to provide the exact same inputs.
-            val dxSubJob : DXJob = Utils.runSubJob("collect", None, orgInputs, childJobs)
-            Utils.ignore(dxSubJob)
+
+        // Run a sub-job with the "collect" entry point.
+        // We need to provide the exact same inputs.
+        val dxSubJob : DXJob = Utils.runSubJob("collect", None, orgInputs, childJobs)
+
+        // Return promises (JBORs) for all the outputs. Since the signature of the sub-job
+        // is exactly the same as the parent, we can immediately exit the parent job.
+        calls.foldLeft(Map.empty[String, WdlVarLinks]) {
+            case (accu, call) =>
+                val prefix = call.unqualifiedName
+                val promiseMap = call.outputs.map{ cao =>
+                    val wvl = WdlVarLinks(cao.womType,
+                                          DeclAttrs.empty,
+                                          DxlExec(dxSubJob, prefix + "_" + cao.unqualifiedName))
+                    (prefix + "." + cao.unqualifiedName) -> wvl
+                }
+                accu ++ promiseMap
         }
     }
 
@@ -445,6 +488,7 @@ case class WfFragment(execLinkInfo: Map[String, ExecLinkInfo],
                 val rVar = RtmElem(varName, wvl.womType, wdlValue)
                 varName -> rVar
         }.toMap
+        Utils.appletLog(s"env = ${envBgn}")
 
         // evaluate each of the statements in the workflow
         val envEnd = wf.children.foldLeft(envBgn) {
@@ -473,7 +517,7 @@ case class WfFragment(execLinkInfo: Map[String, ExecLinkInfo],
                         Some((dxExec, call))
                     case _ => None
                 }.unzip
-                if (calls.isEmpty) {
+                if (calls.isEmpty || childJobs.isEmpty) {
                     // There are no calls, we can return the results immediately
                     declOutputs
                 } else if (calls.size == 1 &&
@@ -484,6 +528,8 @@ case class WfFragment(execLinkInfo: Map[String, ExecLinkInfo],
                     // * no need to marshal the call outputs.
                     // Return promises to the call outputs.
                     //
+                    // TODO: the type check should be on the final workflow output,
+                    // not just on the call outputs themselves.
                     val promises = execOutputs(calls.head, childJobs.head)
                     declOutputs ++ promises
                 } else {
@@ -494,7 +540,6 @@ case class WfFragment(execLinkInfo: Map[String, ExecLinkInfo],
                     // marshalling. For example, each job returns a file, and the overall
                     // result is a file-array.
                     launchCollectSubjob(childJobs.toVector, calls.toVector)
-                    Map.empty
                 }
 
             case RunnerWfFragmentMode.Collect =>
@@ -554,7 +599,7 @@ object WfFragment {
               inputs: Map[String, WdlVarLinks],
               orgInputs: JsValue,
               runMode: RunnerWfFragmentMode.Value) : Map[String, JsValue] = {
-        val wdlCode: String = WdlPrettyPrinter(false, None, None).apply(wf, 4).mkString("\n")
+        val wdlCode: String = WdlPrettyPrinter(false, None, None).apply(wf, 0).mkString("\n")
         Utils.appletLog(s"Workflow source code:")
         Utils.appletLog(wdlCode)
         Utils.appletLog(s"Input spec: ${inputSpec}")
@@ -581,6 +626,9 @@ object WfFragment {
                     val fields = WdlVarLinks.genFields(wvl, varName)
                     accu ++ fields.toMap
             }
+
+        Utils.appletLog(s"outputSpec= ${outputSpec}")
+        Utils.appletLog(s"jsVarOutputs= ${jsVarOutputs}")
         jsVarOutputs
     }
 }

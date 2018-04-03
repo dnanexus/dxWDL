@@ -455,10 +455,20 @@ object WdlVarLinks {
             case (t, WomOptionalValue(_,Some(w))) =>
                 jsFromWomValue(t, w, ioDir)
 
-            case (_,_) => throw new Exception(
-                s"""|Unsupported combination:
-                    |type=(${womType.toDisplayString},${womType})
-                    |value=(${womValue.toWomString}, ${womValue})""".stripMargin)
+            case (_,_) =>
+                val womTypeStr =
+                    if (womType == null)
+                        "null"
+                    else
+                        womType.toDisplayString
+                val womValueStr =
+                    if (womValue == null)
+                        "null"
+                    else
+                        womValue.toWomString
+                throw new Exception(s"""|Unsupported combination:
+                                        |    womType:  ${womTypeStr}
+                                        |    womValue: ${womValueStr}""".stripMargin)
         }
     }
 
