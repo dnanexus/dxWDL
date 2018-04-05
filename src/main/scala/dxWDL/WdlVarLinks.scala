@@ -525,9 +525,9 @@ object WdlVarLinks {
     // Note: we need to represent dx-files as local paths, even if we
     // do not download them. This is because accessing these files
     // later on will cause a WDL failure.
-    private [dxWDL] def importFromDxExec(ioParam:DXIOParam,
-                                         attrs:DeclAttrs,
-                                         jsValue: JsValue) : WdlVarLinks = {
+    def importFromDxExec(ioParam:DXIOParam,
+                         attrs:DeclAttrs,
+                         jsValue: JsValue) : WdlVarLinks = {
         if (ioParam.ioClass == IOClass.HASH) {
             val (t, v) = unmarshalHash(jsValue)
             if (ioParam.optional)
@@ -568,6 +568,43 @@ object WdlVarLinks {
                 }
             WdlVarLinks(womType, attrs, DxlValue(jsValue))
         }
+    }
+
+    // Import a value we got as an output from a dx:executable. In this case,
+    // we don't have the dx:specification, but we do have the WomType.
+    def importFromDxExec(womType:WomType,
+                         attrs:DeclAttrs,
+                         jsValue: JsValue) : WdlVarLinks = {
+        val ioParam = womType match {
+            // optional dx:native types
+            case WomOptionalType(WomBooleanType) => DXIOParam(IOClass.BOOLEAN, true)
+            case WomOptionalType(WomIntegerType) => DXIOParam(IOClass.INT, true)
+            case WomOptionalType(WomFloatType) => DXIOParam(IOClass.FLOAT, true)
+            case WomOptionalType(WomStringType) => DXIOParam(IOClass.STRING, true)
+            case WomOptionalType(WomFileType) => DXIOParam(IOClass.FILE, true)
+            case WomMaybeEmptyArrayType(WomBooleanType) => DXIOParam(IOClass.ARRAY_OF_BOOLEANS, true)
+            case WomMaybeEmptyArrayType(WomIntegerType) => DXIOParam(IOClass.ARRAY_OF_INTS, true)
+            case WomMaybeEmptyArrayType(WomFloatType) => DXIOParam(IOClass.ARRAY_OF_FLOATS, true)
+            case WomMaybeEmptyArrayType(WomStringType) => DXIOParam(IOClass.ARRAY_OF_STRINGS, true)
+            case WomMaybeEmptyArrayType(WomFileType) => DXIOParam(IOClass.ARRAY_OF_FILES, true)
+
+            // compulsory dx:native types
+            case WomBooleanType => DXIOParam(IOClass.BOOLEAN, false)
+            case WomIntegerType => DXIOParam(IOClass.INT, false)
+            case WomFloatType => DXIOParam(IOClass.FLOAT, false)
+            case WomStringType => DXIOParam(IOClass.STRING, false)
+            case WomFileType => DXIOParam(IOClass.FILE, false)
+            case WomNonEmptyArrayType(WomBooleanType) => DXIOParam(IOClass.ARRAY_OF_BOOLEANS, false)
+            case WomNonEmptyArrayType(WomIntegerType) => DXIOParam(IOClass.ARRAY_OF_INTS, false)
+            case WomNonEmptyArrayType(WomFloatType) => DXIOParam(IOClass.ARRAY_OF_FLOATS, false)
+            case WomNonEmptyArrayType(WomStringType) => DXIOParam(IOClass.ARRAY_OF_STRINGS, false)
+            case WomNonEmptyArrayType(WomFileType) => DXIOParam(IOClass.ARRAY_OF_FILES, false)
+
+            // non dx:native types, thse are converted to hashes
+            case WomOptionalType(_) => DXIOParam(IOClass.HASH, true)
+            case _ => DXIOParam(IOClass.HASH, false)
+        }
+        importFromDxExec(ioParam, attrs, jsValue)
     }
 
     // Import a value specified in a Cromwell style JSON input

@@ -34,7 +34,6 @@ class WfFragmentTest extends FlatSpec with Matchers {
         val cef = new CompilerErrorFormatter(srcPath.toString, ns.terminalMap)
         val mw = new WfFragment(Map.empty,
                                 Map.empty,
-                                Set.empty,
                                 cef,
                                 JsNull,
                                 RunnerWfFragmentMode.Launch,

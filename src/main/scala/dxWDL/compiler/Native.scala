@@ -420,6 +420,20 @@ case class Native(dxWDLrtId: String,
         }
     }
 
+    // Create linking information for a dx:executable
+    private def genLinkInfo(irCall: IR.Callable,
+                            dxObj: DXDataObject) : ExecLinkInfo = {
+        val callInputDefs: Map[String, WomType] = irCall.inputVars.map{
+            case CVar(name, wdlType, _, _, _) => (name -> wdlType)
+        }.toMap
+        val callOutputDefs: Map[String, WomType] = irCall.outputVars.map{
+            case CVar(name, wdlType, _, _, _) => (name -> wdlType)
+        }.toMap
+        ExecLinkInfo(callInputDefs,
+                     callOutputDefs,
+                     dxObj)
+    }
+
     // Bundle all the applet code into one bash script.
     //
     // For applets that call other applets, we pass a directory
@@ -438,10 +452,7 @@ case class Native(dxWDLrtId: String,
                 val linkInfo = JsObject(
                     aplLinks.map{ case (key, (irCall, dxObj)) =>
                         // Reduce the information to what will be needed for runtime linking.
-                        val callInputDefs: Map[String, WomType] = irCall.inputVars.map{
-                            case CVar(name, wdlType, _, _, _) => (name -> wdlType)
-                        }.toMap
-                        val ali = ExecLinkInfo(callInputDefs, dxObj)
+                        val ali = genLinkInfo(irCall, dxObj)
                         key -> ExecLinkInfo.writeJson(ali)
                     }.toMap)
                 Some(linkInfo.prettyPrint)
