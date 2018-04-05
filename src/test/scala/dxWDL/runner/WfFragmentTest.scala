@@ -33,11 +33,12 @@ class WfFragmentTest extends FlatSpec with Matchers {
         ).get
         val cef = new CompilerErrorFormatter(srcPath.toString, ns.terminalMap)
         val mw = new WfFragment(Map.empty,
-                                  None,
-                                  cef,
-                                  JsNull,
-                                  RunnerWfFragmentMode.Launch,
-                                  false)
+                                Map.empty,
+                                Set.empty,
+                                cef,
+                                JsNull,
+                                RunnerWfFragmentMode.Launch,
+                                false)
 
         val wf = ns match {
             case nswf:WdlNamespaceWithWorkflow => nswf.workflow

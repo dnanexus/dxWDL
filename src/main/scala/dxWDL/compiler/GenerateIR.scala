@@ -731,10 +731,15 @@ task Add {
         val decls: Vector[Declaration]  = inputVars.map{ cVar =>
             WdlRewrite.declaration(cVar.womType, cVar.dxVarName, None)
         }
+        val wfOutputs: Vector[WorkflowOutput] = outputVars.map{ cVar =>
+            WdlRewrite.workflowOutput(cVar.dxVarName,
+                                      cVar.womType,
+                                      WdlExpression.fromString(cVar.name))
+        }
 
         // Create new workflow that includes only this block
         val wf = WdlRewrite.workflowGenEmpty("w")
-        wf.children = decls ++ statements2
+        wf.children = decls ++ statements2 ++ wfOutputs
         val tasks = taskStubs.map{ case (_,x) => x}.toVector
         // namespace that includes the task stubs, and the workflow
         WdlRewrite.namespace(wf, tasks)
