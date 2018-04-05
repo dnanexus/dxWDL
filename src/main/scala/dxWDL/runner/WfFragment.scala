@@ -146,20 +146,20 @@ case class WfFragment(execSeqMap: Map[Int, ChildExecDesc],
 
             // regular declaration
             val decls = varTypes.flatMap{
-                case (varName, t) if !(callNames contains varName) =>
+                case (varName, WomArrayType(t)) if !(callNames contains varName) =>
                     Some(varName -> ElemWom(varName,
-                                            t,
-                                            WomArray(t, Vector.empty)))
+                                            WomArrayType(t),
+                                            WomArray(WomArrayType(t), Vector.empty)))
                 case (_,_) => None
             }.toMap
 
-            Env(Map.empty, declsm, calls)
+            Env(Map.empty, decls, calls)
         }
 
         // Environment with a None value for each variable.
         def emptyOptionals(varTypes: Map[String, WomType]) : Env = {
             val calls = varTypes.flatMap{
-                case (varName, t) if (callNames contains name) =>
+                case (varName, t) if (callNames contains varName) =>
                     // a task/workflow call
                     Some(varName -> AggrCallOption(None))
                 case (_,_) => None
@@ -167,7 +167,7 @@ case class WfFragment(execSeqMap: Map[Int, ChildExecDesc],
 
             // regular declarations
             val decls = varTypes.flatMap{
-                case (varName, t) if !(callNames contains name) =>
+                case (varName, t) if !(callNames contains varName) =>
                     Some(varName -> ElemWom(varName,
                                             WomOptionalType(t),
                                             WomOptionalValue(WomOptionalType(t), None)))
@@ -181,29 +181,34 @@ case class WfFragment(execSeqMap: Map[Int, ChildExecDesc],
                                   varTypes: Map[String, WomType]) : Env = {
             val emptyEnv = emptyOptionals(varTypes)
 
-            val calls = envEmpty.calls.map{
+            val calls = emptyEnv.calls.map{
                 case (name, defaultVal) =>
-                    val aggr = env.get(name) match {
+                    val aggr = env.calls.get(name) match {
                         case None =>
                             defaultVal
                         case Some(aggr) =>
-                            val t:WomType = varTypes(name)
-                            ElemCallOption(name, WomOptionalType(t), Some(aggr))
+                            AggrCallOption(Some(aggr))
                     }
                     name -> aggr
             }
 
-            val decls = envEmpty.decls.map {
+            val decls = emptyEnv.decls.map {
                 case (name, ElemWom(_, t, value)) =>
-                    val elemWom = env.get(name) match {
+                    val elemWom = env.decls.get(name) match {
                         case None =>
                             ElemWom(name, t, value)
                         case Some(elem) =>
-                            ElemWom(name, t, Some(elem.value))
+                            ElemWom(name, t, WomOptionalValue(t, Some(elem.value)))
                     }
                     name -> elemWom
             }
             Env(env.launched, decls, calls)
+        }
+
+        def concat(envA: Env, envB: Env) : Env = {
+            Env(envA.launched ++ envB.launched,
+                envA.decls ++ envB.decls,
+                envA.calls ++ envB.calls)
         }
     }
 
@@ -432,17 +437,18 @@ case class WfFragment(execSeqMap: Map[Int, ChildExecDesc],
         }
         val sscEnvs: Seq[Env] = collection.value.map{ itemVal =>
             val item = ElemWom(ssc.item, itemType, itemVal)
-            val envInner = envBgn + (ssc.item -> item)
+            val envInner = envBgn.copy(decls = envBgn.decls + (ssc.item -> item))
             val envEnd = ssc.children.foldLeft(envInner) {
                 case (env2, stmt2) => evalStatement(stmt2, env2)
             }
             // We don't want to duplicate the environment we
             // started with.
-            Env.removeKeys(envEnd, (envBgn.keys.toSet + ssc.item))
+            Env.removeKeys(envEnd, (envBgn.decls.keys.toSet + ssc.item))
         }
         //Utils.appletLog(s"evalScatter sscEnvs=${sscEnvs}")
         val typeMap = statementsToTypes(ssc.children)
-        envBgn ++ scatterMergeEnvs(typeMap, sscEnvs)
+        val sme = scatterMergeEnvs(typeMap, sscEnvs)
+        Env.concat(envBgn, sme)
     }
 
     private def evalIf(ifStmt: If, env: Env) : Env = {
@@ -462,7 +468,7 @@ case class WfFragment(execSeqMap: Map[Int, ChildExecDesc],
                     case (env2, stmt2) => evalStatement(stmt2, env2)
                 }
                 // don't duplicate the top environment
-                Env.removeKeys(envEnd, env.keys.toSet)
+                Env.removeKeys(envEnd, env.decls.keys.toSet)
             } else {
                 // condition is false
                 Env.empty
@@ -475,7 +481,7 @@ case class WfFragment(execSeqMap: Map[Int, ChildExecDesc],
         // add optional modifiers to the environment
         val env2 = Env.applyOptionalModifier(childEnv, s2t)
 
-        env ++ env2
+        Env.concat(env, env2)
     }
 
     private def evalStatement(stmt: Scope, env: Env) : Env = {
@@ -483,9 +489,9 @@ case class WfFragment(execSeqMap: Map[Int, ChildExecDesc],
         stmt match {
             case decl:Declaration =>
                 val wValue = decl.expression match {
-                    case None if (env contains decl.unqualifiedName) =>
+                    case None if (env.decls contains decl.unqualifiedName) =>
                         // An input variable, read it from the environment
-                        val elem = env(decl.unqualifiedName)
+                        val elem = env.decls(decl.unqualifiedName)
                         elem.value
                     case None =>
                         // A declaration with no value, such as:
@@ -497,7 +503,7 @@ case class WfFragment(execSeqMap: Map[Int, ChildExecDesc],
                         cast(decl.womType, vRaw, decl.unqualifiedName)
                 }
                 val elem = ElemWom(decl.unqualifiedName, decl.womType, wValue)
-                env + (decl.unqualifiedName -> elem)
+                env.copy(decls = env.decls + (decl.unqualifiedName -> elem))
 
             case call:WdlCall =>
                 val (rElem,env2) = runMode match {
@@ -515,7 +521,7 @@ case class WfFragment(execSeqMap: Map[Int, ChildExecDesc],
                         val elem = AggrCall(call.unqualifiedName, seqNum, childInfo.exec)
                         (elem, env)
                 }
-                env2 + (call.unqualifiedName -> rElem)
+                env2.copy(calls = env2.calls + (call.unqualifiedName -> rElem))
 
             case ssc:Scatter =>
                 // Evaluate the collection, and iterate on the inner block N times.
