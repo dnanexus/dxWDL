@@ -32,25 +32,52 @@ case class StatementRenameVars(wordTranslations: Map[String, String],
     case class Accu(tokens: Vector[Part],  // tokens found so far
                     pos: Int)   // position in the string
 
-    private val fqnRegex = raw"""[a-zA-Z][a-zA-Z0-9_.]+""".r
+    private val fqnRegex = raw"""[a-zA-Z][a-zA-Z0-9_.]*""".r
+
+    private def isIdentifer(m: Match) : Boolean = {
+        // check that there are no quotation marks before and after the token
+        //System.err.println(s"isIdentifer ${m}")
+        if (m.before != null) {
+            val before = m.before.toString
+            if (!before.isEmpty &&
+                    before.last == '"')
+                return false
+        }
+        if (m.after != null) {
+            val after = m.after.toString
+            if (!after.isEmpty &&
+                    after.head == '"')
+                return false
+        }
+        return true
+    }
+
     private def split(exprStr: String) : Vector[Part] = {
         val matches: List[Match] = fqnRegex.findAllMatchIn(exprStr).toList
         if (matches.isEmpty)
             return Vector(Symbols(exprStr))
 
+        //System.err.println(s"matches = ${matches}")
+
         // convert every match to a FQN. Add the region between it
         // and the previous FQN as a symbol.
         val accu = matches.foldLeft(Accu(Vector.empty, 0)){
             case (accu, m) =>
-                val fqn = Fqn(m.toString)
-                val tokens =
-                    if (m.start > accu.pos) {
-                        val symb = Symbols(exprStr.substring(accu.pos, m.start))
-                        Vector (symb, fqn)
-                    } else {
-                        Vector(fqn)
-                    }
-                Accu(accu.tokens ++ tokens, m.end)
+                if (isIdentifer(m)) {
+                    val fqn = Fqn(m.toString)
+                    val tokens =
+                        if (m.start > accu.pos) {
+                            val symb = Symbols(exprStr.substring(accu.pos, m.start))
+                            Vector (symb, fqn)
+                        } else {
+                            Vector(fqn)
+                        }
+                    Accu(accu.tokens ++ tokens, m.end)
+                } else {
+                    // This is not an ID, even though there is a match
+                    val symb = Symbols(exprStr.substring(accu.pos, m.end))
+                    Accu(accu.tokens :+ symb, m.end)
+                }
         }
 
         // handle the symbols after the last match
@@ -94,7 +121,7 @@ case class StatementRenameVars(wordTranslations: Map[String, String],
     }
 
 
-    // rename all the variables from used inside a statement
+    // rename all the variables defined in the dictionary
     def apply(stmt: Scope) : Scope = {
         stmt match {
             case decl:Declaration =>
@@ -144,9 +171,11 @@ case class StatementRenameVars(wordTranslations: Map[String, String],
     }
 
 
-    private def findInExpr(expr: WdlExpression) : Set[String] = {
+    private def findInExpr(expr: WdlExpression,
+                           reportAll: Boolean): Set[String] = {
         val parts = split(expr.toWomString)
         parts.flatMap {
+            case Fqn(fqn) if reportAll => Some(fqn)
             case Fqn(fqn) =>
                 // if the identifer is of the form A.x or A,
                 // where A is in the traslation list, then convert into:
@@ -167,39 +196,40 @@ case class StatementRenameVars(wordTranslations: Map[String, String],
 
 
 
-    // Find all the references to the
-    def find(stmt: Scope) : Set[String] = {
+    // Find all variable references
+    def find(stmt: Scope,
+             reportAll: Boolean) : Set[String] = {
         stmt match {
             case decl:Declaration =>
                 decl.expression match  {
                     case None => Set.empty
-                    case Some(e) => findInExpr(e)
+                    case Some(e) => findInExpr(e, reportAll)
                 }
 
             case tc:WdlTaskCall =>
                 tc.inputMappings.map{
-                    case (_, expr) =>  findInExpr(expr)
+                    case (_, expr) =>  findInExpr(expr, reportAll)
                 }.toSet.flatten
 
             case wfc:WdlWorkflowCall =>
                 wfc.inputMappings.map{
-                    case (_, expr) =>  findInExpr(expr)
+                    case (_, expr) =>  findInExpr(expr, reportAll)
                 }.toSet.flatten
 
             case ssc:Scatter =>
                 val s1 = ssc.children.flatMap {
-                    case child:Scope => find(child)
+                    case child:Scope => find(child, reportAll)
                 }.toSet
-                s1 ++ findInExpr(ssc.collection)
+                s1 ++ findInExpr(ssc.collection, reportAll)
 
             case cond:If =>
                 val s1 = cond.children.flatMap {
-                    case child:Scope => find(child)
+                    case child:Scope => find(child, reportAll)
                 }.toSet
-                s1 ++ findInExpr(cond.condition)
+                s1 ++ findInExpr(cond.condition, reportAll)
 
             case wot:WorkflowOutput =>
-                findInExpr(wot.requiredExpression)
+                findInExpr(wot.requiredExpression, reportAll)
 
             case x =>
                 throw new Exception(cef.notCurrentlySupported(

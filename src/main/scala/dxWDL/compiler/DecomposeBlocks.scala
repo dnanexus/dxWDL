@@ -278,7 +278,7 @@ case class DecomposeBlocks(cef: CompilerErrorFormatter,
         }.toMap
         val erv = StatementRenameVars(dict, cef, verbose)
         val xtrnRefs: Set[String] = after.map{
-            case stmt => erv.find(stmt)
+            case stmt => erv.find(stmt, false)
         }.toSet.flatten
 
         // Keep only externally referenced variables. All the rest

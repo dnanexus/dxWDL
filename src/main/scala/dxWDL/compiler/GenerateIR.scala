@@ -7,9 +7,8 @@ import dxWDL.Utils
 import IR.{CVar, LinkedVar, SArg}
 import scala.util.{Failure, Success, Try}
 import wdl._
-import wdl.AstTools.EnhancedAstNode
 import wdl.expression._
-import wdl4s.parser.WdlParser.{Ast, AstNode, Terminal}
+import wdl4s.parser.WdlParser.{Ast, Terminal}
 import wdl.WdlExpression.AstForExpressions
 import wom.types._
 import wom.values._
@@ -19,7 +18,7 @@ case class GenerateIR(callables: Map[String, IR.Callable],
                       reorg: Boolean,
                       locked: Boolean,
                       verbose: Verbose) {
-    private val verbose2:Boolean = verbose.keywords contains "CompilerIR"
+    private val verbose2:Boolean = verbose.keywords contains "GenerateIR"
 
     private class DynamicInstanceTypesException private(ex: Exception) extends RuntimeException(ex) {
         def this() = this(new RuntimeException("Runtime instance type calculation required"))
@@ -86,22 +85,6 @@ task Add {
         }.toVector
         task.children = inputs ++ outputs
         task
-    }
-
-    // Rename member accesses inside an expression, from the form A.x
-    // to A_x. This is used inside an applet of WDL generated code.
-    //
-    // Here, we take a shortcut, and just replace strings, instead of
-    // doing a recursive syntax analysis (see ValueEvaluator wdl4s
-    // module).
-    private def exprRenameVars(expr: WdlExpression,
-                               allVars: Vector[CVar]) : WdlExpression = {
-        var sExpr: String = expr.toWomString
-        for (cVar <- allVars) {
-            // A.x => A_x
-            sExpr = sExpr.replaceAll(cVar.name, cVar.dxVarName)
-        }
-        WdlExpression.fromString(sExpr)
     }
 
     // Figure out which instance to use.
@@ -242,17 +225,11 @@ task Add {
         val lastBlock = blocks.last
         val lastChild = Block(Vector(children.last))
         val trailing: Vector[Block] = (lastBlock.countCalls, lastChild.countCalls) match {
-            case (0, (0|1)) => Vector(lastBlock.append(lastChild))
-            case (1, 0) =>
-                if (lastBlock.hasSubBlock) {
-                    // Existing block already includes an if/scatter block.
-                    // Don't merge
-                    Vector(lastBlock, lastChild)
-                } else {
-                    // We can merge the child into the existing block
-                    Vector(lastBlock.append(lastChild))
-                }
-            case (1, 1) => Vector(lastBlock, lastChild)
+            case (0, (0|1)) =>
+                Vector(lastBlock.append(lastChild))
+            case (1, (0|1)) =>
+                // The last block already contains a call, start a new block
+                Vector(lastBlock, lastChild)
             case (x ,y) =>
                 if (x > 1) {
                     System.err.println("GenerateIR, block:")
@@ -295,121 +272,23 @@ task Add {
         }
     }
 
-    // Figure out what an expression depends on from the environment
-    private def envDeps(env : CallEnv,
-                        aNode : AstNode) : Set[String] = {
-        // recurse into list of subexpressions
-        def subExpr(exprVec: Seq[AstNode]) : Set[String] = {
-            val setList = exprVec.map(a => envDeps(env, a))
-            setList.foldLeft(Set.empty[String]){case (accu, st) =>
-                accu ++ st
-            }
-        }
-        aNode match {
-            case t: Terminal =>
-                val srcStr = t.getSourceString
-                t.getTerminalStr match {
-                    case "identifier" =>
-                        env.get(srcStr) match {
-                            case Some(lVar) => Set(srcStr)
-                            case None => Set.empty
-                        }
-                    case "string" if Utils.isInterpolation(srcStr) =>
-                        // From a string like: "Tamara likes ${fruit}s and ${ice}s"
-                        // extract the variables {fruit, ice}. In general, they
-                        // could be full fledged expressions
-                        //
-                        // from: wdl4s.wdl.expression.ValueEvaluator.InterpolationTagPattern
-                        val iPattern = "\\$\\{\\s*([^\\}]*)\\s*\\}".r
-                        val subExprRefs: List[String] = iPattern.findAllIn(srcStr).toList
-                        val subAsts:List[AstNode] = subExprRefs.map{ tag =>
-                            // ${fruit} ---> fruit
-                            val expr = WdlExpression.fromString(tag.substring(2, tag.length - 1))
-                            expr.ast
-                        }
-                        subExpr(subAsts)
-                    case _ =>
-                        // A literal
-                        Set.empty
-                }
-            case a: Ast if a.isMemberAccess =>
-                // This is a case of accessing something like A.B.C.
-                trailSearch(env, a) match {
-                    case Some((varName, _)) => Set(varName)
-                    case None =>
-                        // The variable is declared locally, it is not
-                        // passed from the outside.
-                        Set.empty
-                }
-            case a: Ast if a.isBinaryOperator =>
-                val lhs = a.getAttribute("lhs")
-                val rhs = a.getAttribute("rhs")
-                subExpr(List(lhs, rhs))
-            case a: Ast if a.isUnaryOperator =>
-                val expression = a.getAttribute("expression")
-                envDeps(env, expression)
-            case TernaryIf(condition, ifTrue, ifFalse) =>
-                subExpr(List(condition, ifTrue, ifFalse))
-            case a: Ast if a.isArrayLiteral =>
-                subExpr(a.getAttribute("values").astListAsVector)
-            case a: Ast if a.isTupleLiteral =>
-                subExpr(a.getAttribute("values").astListAsVector)
-            case a: Ast if a.isMapLiteral =>
-                val kvMap = a.getAttribute("map").astListAsVector.map { kv =>
-                    val key = kv.asInstanceOf[Ast].getAttribute("key")
-                    val value = kv.asInstanceOf[Ast].getAttribute("value")
-                    key -> value
-                }.toMap
-                val elems: Vector[AstNode] = kvMap.keys.toVector ++ kvMap.values.toVector
-                subExpr(elems)
-            case a: Ast if a.isArrayOrMapLookup =>
-                val index = a.getAttribute("rhs")
-                val mapOrArray = a.getAttribute("lhs")
-                subExpr(List(index, mapOrArray))
-            case a: Ast if a.isFunctionCall =>
-                subExpr(a.params)
-            case _ =>
-                throw new Exception(s"unhandled expression ${aNode}")
-        }
-    }
 
-    // Update a closure with all the variables required
-    // for an expression. Ignore variable accesses outside the environment;
-    // it is assumed that these are accesses to local variables.
-    //
-    // @param  closure   call closure
-    // @param  env       mapping from fully qualified WDL name to a dxlink
-    // @param  expr      expression as it appears in source WDL
-    private def exprClosure(env : CallEnv,
-                            expr : WdlExpression) : CallEnv = {
-        val deps:Set[String] = envDeps(env, expr.ast)
-        deps.map{ v => v -> env(v) }.toMap
-    }
-
-    // Figure out the closure for a block.
-    //
+    // Find the closure of a block. All the variables defined earlier,
+    // that need to be pased the Find all the variables outside this block
     private def blockClosure(statements: Vector[Scope],
-                             env : CallEnv) : CallEnv = {
-        statements.foldLeft(Map.empty[String, LinkedVar]) {
-            case (closure, decl:Declaration) =>
-                decl.expression match {
-                    case Some(expr) => closure ++ exprClosure(env, expr)
-                    case None => closure
-                }
-            case (closure, call:WdlCall) =>
-                call.inputMappings.foldLeft(closure){
-                    case (closure2, (_,expr)) =>
-                        closure2 ++ exprClosure(env, expr)
-                }
-            case (closure, ssc:Scatter) =>
-                val collClosure = exprClosure(env, ssc.collection)
-                closure ++ collClosure ++ blockClosure(ssc.children.toVector, env)
-            case (closure, ifStmt:If) =>
-                val condClosure = exprClosure(env, ifStmt.condition)
-                closure ++ condClosure ++ blockClosure(ifStmt.children.toVector, env)
-            case (closure, _) =>
-                closure
-        }
+                             env : CallEnv,
+                             dbg: String) : CallEnv = {
+        val srv = StatementRenameVars(Map.empty, cef, verbose)
+        val xtrnRefs: Set[String] = statements.map{
+            case stmt => srv.find(stmt, true)
+        }.toSet.flatten
+        Utils.trace(verbose2, s"closure: ${dbg}\n  xtrnRefs: ${xtrnRefs}\n  env: ${env.keys}\n")
+        xtrnRefs.flatMap {
+            varName => env.get(varName) match {
+                case None => None
+                case Some(lVar) => Some(varName -> lVar)
+            }
+        }.toMap
     }
 
 
@@ -632,28 +511,8 @@ task Add {
                     lVar.sArg
             }
         }
-        val outputVars = blockOutputs(Vector(call))
-
         val stageName = call.unqualifiedName
-        IR.Stage(stageName, genStageId(), calleeName, inputs, outputVars)
-    }
-
-    private def blockInputs(statements: Vector[Scope],
-                            env : CallEnv) : (Map[String, LinkedVar], Vector[CVar]) = {
-        // Figure out the closure required for this block, out of the
-        // environment
-        val closure = blockClosure(statements, env)
-        Utils.trace(verbose2, s"block closure= ${closure.keys}")
-
-        // create input variable definitions
-        val inputVars: Vector[CVar] = closure.map {
-            case (varName, LinkedVar(cVar, _)) =>
-                // a variable that must be passed to the scatter applet
-                assert(env contains varName)
-                Some(cVar)
-        }.flatten.toVector
-
-        (closure, inputVars)
+        IR.Stage(stageName, genStageId(), calleeName, inputs, callee.outputVars)
     }
 
     private def makeOptional(t: WomType) : WomType = {
@@ -679,82 +538,37 @@ task Add {
     //   For example, 'Int x' declared inside a scatter, is
     //   'Array[Int] x' outside the scatter.
     private def blockOutputs(statements: Vector[Scope]) : Vector[CVar] = {
-        if (statements.isEmpty)
-            Vector.empty[CVar]
-        else
-            statements.foldLeft(Vector.empty[CVar]) {
-                case (accu, call:WdlCall) =>
-                    val calleeName = Utils.calleeGetName(call)
-                    val callee = callables(calleeName)
-                    val callOutputs = callee.outputVars.map { cVar =>
-                        val varName = call.unqualifiedName ++ "." ++ cVar.name
-                        CVar(varName, cVar.womType, DeclAttrs.empty, cVar.ast)
-                    }
-                    accu ++ callOutputs
-
-                case (accu, decl:Declaration) =>
-                    val cVar = CVar(decl.unqualifiedName, decl.womType,
-                                    DeclAttrs.empty, decl.ast)
-                    accu :+ cVar
-
-                case (accu, ssc:Scatter) =>
-                    // recurse into the scatter, then add an array on top
-                    // of the types
-                    val sscOutputs = blockOutputs(ssc.children.toVector)
-                    val sscOutputs2 =  sscOutputs.map{
-                        cVar => cVar.copy(womType = WomArrayType(cVar.womType))
-                    }
-                    accu ++ sscOutputs2
-
-                case (accu, ifStmt:If) =>
-                    // recurse into the if block, and amend the type.
-                    val ifStmtOutputs = blockOutputs(ifStmt.children.toVector)
-                    val ifStmtOutputs2 = ifStmtOutputs.map{
-                        cVar => cVar.copy(womType = makeOptional(cVar.womType))
-                    }
-                    accu ++ ifStmtOutputs2
-
-                case (accu, other) =>
-                    throw new Exception(cef.notCurrentlySupported(
-                                            other.ast, s"Unimplemented workflow element"))
-            }
-    }
-
-    // Modify all the expressions used inside a block
-    def blockTransform(statements: Seq[Scope],
-                       inputVars: Vector[CVar]) : (Vector[Scope]) = {
-        // Rename the variables we got from the input.
-        def transform(expr: WdlExpression) : WdlExpression =
-            exprRenameVars(expr, inputVars)
-
-        statements.foldLeft(Vector.empty[Scope]) {
-            case (accu, tc:WdlTaskCall) =>
-                val inputs = tc.inputMappings.map{ case (k,expr) => (k, transform(expr)) }.toMap
-                val stmt2 = WdlRewrite.taskCall(tc, inputs)
-                accu :+ stmt2
-
-            case (accu, wfc:WdlWorkflowCall) =>
-                val inputs = wfc.inputMappings.map{ case (k,expr) => (k, transform(expr)) }.toMap
-                val stmt2 = WdlRewrite.workflowCall(wfc, inputs)
-                accu :+ stmt2
+        statements.foldLeft(Vector.empty[CVar]) {
+            case (accu, call:WdlCall) =>
+                val calleeName = Utils.calleeGetName(call)
+                val callee = callables(calleeName)
+                val callOutputs = callee.outputVars.map { cVar =>
+                    val varName = call.unqualifiedName ++ "." ++ cVar.name
+                    CVar(varName, cVar.womType, DeclAttrs.empty, cVar.ast)
+                }
+                accu ++ callOutputs
 
             case (accu, decl:Declaration) =>
-                val decl2 = new Declaration(decl.womType, decl.unqualifiedName,
-                                            decl.expression.map(transform), decl.parent,
-                                            decl.ast)
-                accu :+ decl2
+                val cVar = CVar(decl.unqualifiedName, decl.womType,
+                                DeclAttrs.empty, decl.ast)
+                accu :+ cVar
 
             case (accu, ssc:Scatter) =>
-                // recurse into the scatter
-                val children = blockTransform(ssc.children, inputVars)
-                val ssc2 = WdlRewrite.scatter(ssc, children, transform(ssc.collection))
-                accu :+ ssc2
+                // recurse into the scatter, then add an array on top
+                // of the types
+                val sscOutputs = blockOutputs(ssc.children.toVector)
+                val sscOutputs2 =  sscOutputs.map{
+                    cVar => cVar.copy(womType = WomArrayType(cVar.womType))
+                }
+                accu ++ sscOutputs2
 
             case (accu, ifStmt:If) =>
-                // recurse into the if block
-                val children = blockTransform(ifStmt.children, inputVars)
-                val ifStmt2 = WdlRewrite.cond(ifStmt, children, transform(ifStmt.condition))
-                accu :+ ifStmt2
+                // recurse into the if block, and amend the type.
+                val ifStmtOutputs = blockOutputs(ifStmt.children.toVector)
+                val ifStmtOutputs2 = ifStmtOutputs.map{
+                    cVar => cVar.copy(womType = makeOptional(cVar.womType))
+                }
+                accu ++ ifStmtOutputs2
 
             case (accu, other) =>
                 throw new Exception(cef.notCurrentlySupported(
@@ -792,7 +606,16 @@ task Add {
                     accu + (name -> task)
                 }
             }
-        val statements2 = blockTransform(block.statements, inputVars)
+
+        // rename usages of the input variables in the statment block
+        val wordTranslations = inputVars.map{ cVar =>
+            cVar.name -> cVar.dxVarName
+        }.toMap
+        val erv = StatementRenameVars(wordTranslations, cef, verbose)
+        val statements2 = block.statements.map{
+            case stmt => erv.apply(stmt)
+        }.toVector
+
         val decls: Vector[Declaration]  = inputVars.map{ cVar =>
             WdlRewrite.declaration(cVar.womType, cVar.dxVarName, None)
         }
@@ -823,8 +646,16 @@ task Add {
         val calls = block.findCalls
         calls.foreach{ validateCall(_) }
 
-        // Figure out the input definitions
-        val (closure, inputVars) = blockInputs(block.statements, env)
+        // Figure out the closure required for this block, out of the
+        // environment
+        val closure = blockClosure(block.statements, env, stageName)
+
+        // create input variable definitions
+        val inputVars: Vector[CVar] = closure.map {
+            case (fqn, LinkedVar(cVar, _)) =>
+                cVar.copy(name = fqn)
+        }.toVector
+
         val outputVars = blockOutputs(block.statements)
         val wdlCode = blockGenWorklow(block, inputVars, outputVars)
         val callDict = calls.map{ c =>
@@ -949,30 +780,31 @@ task Add {
         var env = env_i
 
         val allStageInfo = subBlocks.foldLeft(accu) {
-            case (accu, block) =>
-                val (stage, appletOpt) =
-                    if (isSignletonBlock(block, env)) {
-                        // The block contains exactly one call, with no extra declarations.
-                        // All the variables are already in the environment, so there
-                        // is no need to do any extra work. Compile directly into a workflow
-                        // stage.
-                        val call = block.head.asInstanceOf[WdlCall]
-                        val stage = compileCall(call, env)
-                        (stage, None)
-                    } else {
-                        // General case
-                        val stageName = humanReadableStageName(block)
-                        val (stage, apl) = compileWfFragment(wf.unqualifiedName, stageName, block, env)
-                        (stage, Some(apl))
-                    }
+            case (accu, block) if isSignletonBlock(block, env) =>
+                // The block contains exactly one call, with no extra declarations.
+                // All the variables are already in the environment, so there
+                // is no need to do any extra work. Compile directly into a workflow
+                // stage.
+                val call = block.head.asInstanceOf[WdlCall]
+                val stage = compileCall(call, env)
 
                 // Add bindings for the output variables. This allows later calls to refer
                 // to these results.
                 for (cVar <- stage.outputs) {
+                    env = env + (call.unqualifiedName ++ "." + cVar.name ->
+                                     LinkedVar(cVar, IR.SArgLink(stage.name, cVar)))
+                }
+                accu :+ (stage, None)
+
+            case (accu, block) =>
+                // General case
+                val stageName = humanReadableStageName(block)
+                val (stage, apl) = compileWfFragment(wf.unqualifiedName, stageName, block, env)
+                for (cVar <- stage.outputs) {
                     env = env + (cVar.name ->
                                      LinkedVar(cVar, IR.SArgLink(stage.name, cVar)))
                 }
-                accu :+ (stage, appletOpt)
+                accu :+ (stage, Some(apl))
         }
         (allStageInfo, env)
     }
@@ -1175,13 +1007,6 @@ task Add {
                 .map(apl => apl.name -> apl).toMap
 
         val irwf = IR.Workflow(wf.unqualifiedName, wfInputs, wfOutputs, stages, locked)
-
-        /*val wfInputNames = wfInputs.map{ case (cVar,_) => cVar.name }.toVector
-        val wfOutputNames = wfOutputs.map{ case (cVar,_) => cVar.name }.toVector
-        System.err.println(s"""|${wf.unqualifiedName}
-                               |  wfInputs=${wfInputNames}
-                               |  wfOutputs=${wfOutputNames}
-                               |""".stripMargin)*/
         (irwf, aApplets)
     }
 }

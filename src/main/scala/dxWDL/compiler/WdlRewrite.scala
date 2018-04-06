@@ -134,15 +134,28 @@ object WdlRewrite {
             case WomFileType => WomFile("")
 
             case WomOptionalType(t) => genDefaultValueOfType(t)
-            case WomMaybeEmptyArrayType(t) =>
-                // an empty array
-                WomArray(WomMaybeEmptyArrayType(t), List())
-            case WomNonEmptyArrayType(t) =>
-                // Non empty array
-                WomArray(WomNonEmptyArrayType(t), List(genDefaultValueOfType(t)))
+
+            case WomObjectType =>
+                // This fails when trying to do a 'toWomString'
+                // operation.
+                WomObject(Map.empty)
+
+            // The WomMap type HAS to appear before the array types, because
+            // otherwise it is coerced into an array. The map has to
+            // contain at least one key-value pair, otherwise you get a type error.
             case WomMapType(keyType, valueType) =>
-                WomMap(WomMapType(keyType, valueType), Map.empty)
-            case WomObjectType => WomObject(Map.empty)
+                val k = genDefaultValueOfType(keyType)
+                val v = genDefaultValueOfType(valueType)
+                WomMap(WomMapType(keyType, valueType), Map(k -> v))
+
+            // an empty array
+            case WomMaybeEmptyArrayType(t) =>
+                WomArray(WomMaybeEmptyArrayType(t), List())
+
+            // Non empty array
+            case WomNonEmptyArrayType(t) =>
+                WomArray(WomNonEmptyArrayType(t), List(genDefaultValueOfType(t)))
+
             case WomPairType(lType, rType) => WomPair(genDefaultValueOfType(lType),
                                                       genDefaultValueOfType(rType))
             case _ => throw new Exception(s"Unhandled type ${wdlType.toDisplayString}")
@@ -153,9 +166,24 @@ object WdlRewrite {
     def taskOutput(name: String, wdlType: WomType, scope: Scope) = {
         // We need to provide a default value, in the form of a Wdl
         // expression
+        /*if (wdlType == WomObject) {
+            // Using WomObject(Map.empty) fails when doing a 'toWomString'
+            // operation. This is a workaround, that applies only to
+            // the case of a single object.
+            val sourceString =
+                s"""|task t {
+                    |  command {}
+                    |  outputs {
+                    |    Object ${name} = read_object(stdout())
+                    |  }
+                    |}
+                    |"""
+            val ns:WdlNamespace = WdlNamespace.loadUsingSource(sourceString, None, None).get
+            val task = ns.tasks.head
+            task.outputs.head
+        } else {*/
         val defaultVal:WomValue = genDefaultValueOfType(wdlType)
         val defaultExpr:WdlExpression = WdlExpression.fromString(defaultVal.toWomString)
-
         new TaskOutput(name, wdlType, defaultExpr, INVALID_AST, Some(scope))
     }
 
