@@ -183,6 +183,12 @@ task Add {
      */
     // Find all the calls inside a statement block
     case class Block(statements: Vector[Scope]) {
+        def head : Scope =
+            statements.head
+
+        def size : Int =
+            statements.size
+
         def append(stmt: Scope) : Block =
             Block(statements :+ stmt)
 
@@ -218,6 +224,7 @@ task Add {
         // of statements.
         def countCalls : Int =
             findCalls.length
+
     }
 
     private def splitIntoBlocks(children: Vector[Scope]) : Vector[Block] = {
@@ -373,13 +380,38 @@ task Add {
     // @param  closure   call closure
     // @param  env       mapping from fully qualified WDL name to a dxlink
     // @param  expr      expression as it appears in source WDL
-    private def updateClosure(closure : CallEnv,
-                              env : CallEnv,
-                              expr : WdlExpression) : CallEnv = {
+    private def exprClosure(env : CallEnv,
+                            expr : WdlExpression) : CallEnv = {
         val deps:Set[String] = envDeps(env, expr.ast)
-        Utils.trace(verbose2, s"updateClosure deps=${deps}  expr=${expr.toWomString}")
-        closure ++ deps.map{ v => v -> env(v) }
+        deps.map{ v => v -> env(v) }.toMap
     }
+
+    // Figure out the closure for a block.
+    //
+    private def blockClosure(statements: Vector[Scope],
+                             env : CallEnv) : CallEnv = {
+        statements.foldLeft(Map.empty[String, LinkedVar]) {
+            case (closure, decl:Declaration) =>
+                decl.expression match {
+                    case Some(expr) => closure ++ exprClosure(env, expr)
+                    case None => closure
+                }
+            case (closure, call:WdlCall) =>
+                call.inputMappings.foldLeft(closure){
+                    case (closure2, (_,expr)) =>
+                        closure2 ++ exprClosure(env, expr)
+                }
+            case (closure, ssc:Scatter) =>
+                val collClosure = exprClosure(env, ssc.collection)
+                closure ++ collClosure ++ blockClosure(ssc.children.toVector, env)
+            case (closure, ifStmt:If) =>
+                val condClosure = exprClosure(env, ifStmt.condition)
+                closure ++ condClosure ++ blockClosure(ifStmt.children.toVector, env)
+            case (closure, _) =>
+                closure
+        }
+    }
+
 
     // Make sure that the WDL code we generate is actually legal.
     private def verifyWdlCodeIsLegal(ns: WdlNamespace) : Unit = {
@@ -558,29 +590,62 @@ task Add {
     }
 
 
-    // Figure out the closure for a block, and then build the input
-    // definitions.
+    // Can a call be compiled directly to a workflow stage?
     //
+    // The requirement is that all call arguments are already in the environment.
+    def canCompileCallDirectly(call: WdlCall,
+                               env : CallEnv) : Boolean = {
+        // Find the callee
+        val calleeName = Utils.calleeGetName(call)
+        val callee = callables(calleeName)
+
+        // Extract the input values/links from the environment
+        val envAllKeys: Set[String] = env.keys.toSet
+        callee.inputVars.forall{ cVar =>
+            findInputByName(call, cVar) match {
+                case None =>
+                    // unbound variable
+                    true
+                case Some((_,expr)) =>
+                    // check if expression exists in the environment
+                    val exprSourceString = expr.toWomString
+                    envAllKeys contains exprSourceString
+            }
+        }
+    }
+
+    // compile a call into a stage in an IR.Workflow
+    def compileCall(call: WdlCall,
+                    env : CallEnv) : IR.Stage = {
+        // Find the callee
+        val calleeName = Utils.calleeGetName(call)
+        val callee = callables(calleeName)
+
+        // Extract the input values/links from the environment
+        val inputs: Vector[SArg] = callee.inputVars.map{ cVar =>
+            findInputByName(call, cVar) match {
+                case None =>
+                    IR.SArgEmpty
+                case Some((_,expr)) =>
+                    val exprSourceString = expr.toWomString
+                    val lVar = env(exprSourceString)
+                    lVar.sArg
+            }
+        }
+        val outputVars = blockOutputs(Vector(call))
+
+        val stageName = call.unqualifiedName
+        IR.Stage(stageName, genStageId(), calleeName, inputs, outputVars)
+    }
+
     private def blockInputs(statements: Vector[Scope],
                             env : CallEnv) : (Map[String, LinkedVar], Vector[CVar]) = {
-        var closure = Map.empty[String, LinkedVar]
-        statements.foreach {
-            case decl:Declaration =>
-                decl.expression match {
-                    case Some(expr) =>
-                        closure = updateClosure(closure, env, expr)
-                    case None => ()
-                }
-            case call:WdlCall =>
-                call.inputMappings.foreach { case (_, expr) =>
-                    closure = updateClosure(closure, env, expr)
-                }
-            case ssc:Scatter =>
-                closure = updateClosure(closure, env, ssc.collection)
-            case ifStmt:If =>
-                closure = updateClosure(closure, env, ifStmt.condition)
-            case _ => ()
-        }
+        // Figure out the closure required for this block, out of the
+        // environment
+        val closure = blockClosure(statements, env)
+        Utils.trace(verbose2, s"block closure= ${closure.keys}")
+
+        // create input variable definitions
         val inputVars: Vector[CVar] = closure.map {
             case (varName, LinkedVar(cVar, _)) =>
                 // a variable that must be passed to the scatter applet
@@ -864,6 +929,17 @@ task Add {
             cName
     }
 
+    // Is this a very simple block, that can be compiled directly
+    // to a stage
+    private def isSignletonBlock(block: Block, env: CallEnv) : Boolean = {
+        if (block.size == 1 &&
+                block.head.isInstanceOf[WdlCall]) {
+            val call: WdlCall = block.head.asInstanceOf[WdlCall]
+            canCompileCallDirectly(call, env)
+        } else
+            false
+    }
+
     private def buildWorkflowBackbone(
         wf: WdlWorkflow,
         subBlocks: Vector[Block],
@@ -874,8 +950,21 @@ task Add {
 
         val allStageInfo = subBlocks.foldLeft(accu) {
             case (accu, block) =>
-                val stageName = humanReadableStageName(block)
-                val (stage, applet) = compileWfFragment(wf.unqualifiedName, stageName, block, env)
+                val (stage, appletOpt) =
+                    if (isSignletonBlock(block, env)) {
+                        // The block contains exactly one call, with no extra declarations.
+                        // All the variables are already in the environment, so there
+                        // is no need to do any extra work. Compile directly into a workflow
+                        // stage.
+                        val call = block.head.asInstanceOf[WdlCall]
+                        val stage = compileCall(call, env)
+                        (stage, None)
+                    } else {
+                        // General case
+                        val stageName = humanReadableStageName(block)
+                        val (stage, apl) = compileWfFragment(wf.unqualifiedName, stageName, block, env)
+                        (stage, Some(apl))
+                    }
 
                 // Add bindings for the output variables. This allows later calls to refer
                 // to these results.
@@ -883,7 +972,7 @@ task Add {
                     env = env + (cVar.name ->
                                      LinkedVar(cVar, IR.SArgLink(stage.name, cVar)))
                 }
-                accu :+ (stage, Some(applet))
+                accu :+ (stage, appletOpt)
         }
         (allStageInfo, env)
     }

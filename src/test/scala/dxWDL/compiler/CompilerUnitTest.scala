@@ -112,4 +112,19 @@ class CompilerUnitTest extends FlatSpec with Matchers {
             List(path.toString, "--compileMode", "ir", "--locked", "--quiet")
         ) should equal(Main.SuccessfulTermination(""))
     }
+
+    it should "handle closures across code blocks" in {
+        val path = pathFromBasename("closure1.wdl")
+        Main.compile(
+            List(path.toString, "--compileMode", "ir", "--locked", "--quiet")
+        ) should equal(Main.SuccessfulTermination(""))
+    }
+
+    it should "handle a call closure " in {
+        val path = pathFromBasename("closure2.wdl")
+        Main.compile(
+            List(path.toString, "--compileMode", "ir", "--locked", "--quiet")
+        ) should equal(Main.SuccessfulTermination(""))
+    }
+
 }
