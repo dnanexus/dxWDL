@@ -282,13 +282,22 @@ task Add {
         val xtrnRefs: Set[String] = statements.map{
             case stmt => srv.find(stmt, true)
         }.toSet.flatten
-        Utils.trace(verbose2, s"closure: ${dbg}\n  xtrnRefs: ${xtrnRefs}\n  env: ${env.keys}\n")
-        xtrnRefs.flatMap {
-            varName => env.get(varName) match {
+        val closure = xtrnRefs.flatMap { fqn =>
+            // Find full or partial matches. For example,
+            // fqn=p.left, and the environment contains a pair "p".
+            val retval = env.find{ case (varName, _) => fqn.startsWith(varName) }
+            retval match {
                 case None => None
-                case Some(lVar) => Some(varName -> lVar)
+                case Some((varName, lVar)) => Some(varName -> lVar)
             }
         }.toMap
+        Utils.trace(verbose2,
+                    s"""|blockClosure
+                        |   stage: ${dbg}
+                        |   xtrnRefs: ${xtrnRefs}
+                        |   env: ${env.keys}
+                        |   found: ${closure.keys}""".stripMargin)
+        closure
     }
 
 

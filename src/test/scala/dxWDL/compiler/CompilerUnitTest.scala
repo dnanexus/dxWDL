@@ -141,4 +141,11 @@ class CompilerUnitTest extends FlatSpec with Matchers {
         ) should equal(Main.SuccessfulTermination(""))
     }
 
+    it should "handle pair left/right" in {
+        val path = pathFromBasename("pairs.wdl")
+        Main.compile(
+            List(path.toString, "--compileMode", "ir", "--locked", "--quiet")
+        ) should equal(Main.SuccessfulTermination(""))
+    }
+
 }
