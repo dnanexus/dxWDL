@@ -147,5 +147,4 @@ class CompilerUnitTest extends FlatSpec with Matchers {
             List(path.toString, "--compileMode", "ir", "--locked", "--quiet")
         ) should equal(Main.SuccessfulTermination(""))
     }
-
 }

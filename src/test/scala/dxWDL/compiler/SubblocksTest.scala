@@ -17,4 +17,11 @@ class SubblocksTest extends FlatSpec with Matchers {
             List(path.toString, "--compileMode", "ir", "--locked", "--quiet")
         ) should equal(Main.SuccessfulTermination(""))
     }
+
+    it should "recognize references to blocks compiled into sub-workflows" in {
+        val path = pathFromBasename("decompose_blocks/long_refs.wdl")
+        Main.compile(
+            List(path.toString, "--compileMode", "ir", "--locked", "--quiet")
+        ) should equal(Main.SuccessfulTermination(""))
+    }
 }

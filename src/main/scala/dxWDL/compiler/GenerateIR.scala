@@ -283,12 +283,21 @@ task Add {
             case stmt => srv.find(stmt, true)
         }.toSet.flatten
         val closure = xtrnRefs.flatMap { fqn =>
-            // Find full or partial matches. For example,
-            // fqn=p.left, and the environment contains a pair "p".
-            val retval = env.find{ case (varName, _) => fqn.startsWith(varName) }
-            retval match {
-                case None => None
-                case Some((varName, lVar)) => Some(varName -> lVar)
+            if (env contains fqn) {
+                // exact match
+                Some(fqn -> env(fqn))
+            } else {
+                // Partial match. For example,
+                // fqn="p.left" and the environment contains a pair "p".
+                val retval = env.find{ case (varName, _) =>
+                    fqn.startsWith(varName) &&
+                    fqn.length > varName.length &&
+                    fqn(varName.length) == '.'
+                }
+                retval match {
+                    case None => None
+                    case Some((varName, lVar)) => Some(varName -> lVar)
+                }
             }
         }.toMap
         Utils.trace(verbose2,
