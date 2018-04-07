@@ -59,7 +59,7 @@ workflow optionals {
 
     if (true) {
         # Missing argument [i]
-        call lib.Inc as inc2
+        call lib.Inc as inc2 { input: i=107 }
     }
 
     output {
