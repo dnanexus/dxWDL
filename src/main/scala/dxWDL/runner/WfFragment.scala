@@ -447,6 +447,7 @@ case class WfFragment(execSeqMap: Map[Int, ChildExecDesc],
 
         val collection:WomArray = ssc.collection.evaluate(lookup, DxFunctions) match {
             case Success(a: WomArray) => a
+            case Success(m: WomMap) => m.asArray
             case Success(other) => throw new Exception(s"scatter collection is not an array, it is: ${other}")
             case Failure(f) =>
                 System.err.println(s"Failed to evaluate scatter collection ${ssc.collection.toWomString}")
@@ -659,8 +660,10 @@ case class WfFragment(execSeqMap: Map[Int, ChildExecDesc],
                 if (childJobs.isEmpty) {
                     // There are no calls, we can return the results immediately
                     envEnd.decls.flatMap{
-                        case (varName, ElemWom(_,womType, value)) =>
+                        case (varName, ElemWom(_,womType, value)) if exportTypes contains varName =>
                             Some(varName -> wdlValueToWVL(womType, value))
+                        case (_,_) =>
+                            None
                     }.toMap
                 } else {
                     // Launch a subjob to collect and marshal the results.

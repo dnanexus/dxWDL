@@ -64,7 +64,7 @@ task Add {
 
 task Add {
     Int a
-    Int b
+     Int b
 
     output {
         Int result
@@ -244,34 +244,27 @@ task Add {
         allBlocksButLast ++ trailing
     }
 
-
-    // Check if the environment has A.B.C, A.B, or A.
-    private def trailSearch(env: CallEnv, ast: Ast) : Option[(String, LinkedVar)] = {
-        val exprStr = WdlExpression.toString(ast)
-        env.get(exprStr) match {
-            case None if !ast.isMemberAccess =>
-                None
-            case None =>
-                ast.getAttribute("lhs") match {
-                    case t: Terminal =>
-                        val srcStr = t.getSourceString
-                        t.getTerminalStr match {
-                            case "identifier" =>
-                                env.get(srcStr) match {
-                                    case Some(lVar) => Some(srcStr, lVar)
-                                    case None => None
-                                }
-                            case _ =>
-                                throw new Exception(s"Terminal `${srcStr}` is not an identifier")
-                        }
-                    case lhs: Ast => trailSearch(env, lhs)
-                    case _ => None
-                }
-            case Some(lVar) =>
-                Some(exprStr, lVar)
+    // Check if the environment has a variable with a binding for
+    // a fully-qualified name. For example, if fqn is "A.B.C", then
+    // look for "A.B.C", "A.B", or "A", in that order.
+    //
+    // If the environment has a pair "p", then we want to be able to
+    // to return "p" when looking for "p.left" or "p.right".
+    //
+    def lookupInEnv(fqn: String, env: CallEnv) : Option[(String, LinkedVar)] = {
+        if (env contains fqn) {
+            // exact match
+            Some(fqn, env(fqn))
+        } else {
+            // A.B.C --> A.B
+            val pos = fqn.lastIndexOf(".")
+            if (pos < 0) None
+            else {
+                val lhs = fqn.substring(0, pos)
+                lookupInEnv(lhs, env)
+            }
         }
     }
-
 
     // Find the closure of a block. All the variables defined earlier,
     // that need to be pased the Find all the variables outside this block
@@ -283,22 +276,7 @@ task Add {
             case stmt => srv.find(stmt, true)
         }.toSet.flatten
         val closure = xtrnRefs.flatMap { fqn =>
-            if (env contains fqn) {
-                // exact match
-                Some(fqn -> env(fqn))
-            } else {
-                // Partial match. For example,
-                // fqn="p.left" and the environment contains a pair "p".
-                val retval = env.find{ case (varName, _) =>
-                    fqn.startsWith(varName) &&
-                    fqn.length > varName.length &&
-                    fqn(varName.length) == '.'
-                }
-                retval match {
-                    case None => None
-                    case Some((varName, lVar)) => Some(varName -> lVar)
-                }
-            }
+            lookupInEnv(fqn, env)
         }.toMap
         Utils.trace(verbose2,
                     s"""|blockClosure
@@ -333,29 +311,21 @@ task Add {
     {
         wfOutputs.map { wot =>
             val cVar = CVar(wot.unqualifiedName, wot.womType, DeclAttrs.empty, wot.ast)
-
-            // we only want to deal with expressions that do
-            // not require calculation.
             val expr = wot.requiredExpression
+
+            // we only deal with expressions that do not require calculation.
             val sArg = expr.ast match {
                 case t: Terminal =>
-                    val srcStr = t.getSourceString
-                    t.getTerminalStr match {
-                        case "identifier" =>
-                            env.get(srcStr) match {
-                                case Some(lVar) => lVar.sArg
-                                case None => throw new Exception(cef.missingVarRef(t))
-                            }
-                        case _ => throw new Exception(cef.missingVarRef(t))
+                    lookupInEnv(expr.toWomString, env) match {
+                        case Some((_, lVar)) => lVar.sArg
+                        case None => throw new Exception(cef.missingVarRef(t))
                     }
-
                 case a: Ast if a.isMemberAccess =>
                     // This is a case of accessing something like A.B.C.
-                    trailSearch(env, a) match {
+                    lookupInEnv(expr.toWomString, env) match {
                         case Some((_, lVar)) => lVar.sArg
                         case None => throw new Exception(cef.missingVarRef(a))
                     }
-
                 case a:Ast =>
                     throw new Exception(cef.notCurrentlySupported(
                                             a,
@@ -840,9 +810,14 @@ task Add {
         val declarations: Seq[Declaration] = inputs.map { case (cVar,_) =>
             WdlRewrite.declaration(cVar.womType, cVar.name, None)
         }
+        val wfOutputs: Vector[WorkflowOutput] = outputVars.map{ cVar =>
+            WdlRewrite.workflowOutput(cVar.dxVarName,
+                                      cVar.womType,
+                                      WdlExpression.fromString(cVar.name))
+        }
 
         val wf = WdlRewrite.workflowGenEmpty("w")
-        wf.children = declarations
+        wf.children = declarations ++ wfOutputs
         val wdlCode = WdlRewrite.namespace(wf, Vector.empty)
 
         // We need minimal compute resources, use the default instance type

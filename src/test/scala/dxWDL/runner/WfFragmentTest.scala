@@ -128,4 +128,14 @@ class WfFragmentTest extends FlatSpec with Matchers {
         val nn = makeOptionalNone(WomArrayType(WomIntegerType))
         results("square") should equal(nn)
     }
+
+    it should "handle missing values inside select_first and defined" in {
+        val results: Map[String, WomValue] = evalWorkflow("select.wdl")
+
+//        results.keys.toVector should contain("x")
+        results.keys.toVector should contain("y")
+
+//        results("x") should equal(WomString("FAIL"))
+        results("y") should equal(WomString("FAIL"))
+    }
 }
