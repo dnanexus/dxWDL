@@ -59,6 +59,8 @@ assemblyMergeStrategy in assembly := customMergeStrategy.value
 
 libraryDependencies ++= Seq(
     "org.broadinstitute" %% "cromwell-wdl" % "30.2",
+//    "org.broadinstitute" %% "cromwell-wdl-model-draft2" % "31-39223b8",
+
     "io.spray" %% "spray-json" % "1.3.2",
     "net.jcazevedo" %% "moultingyaml" % "0.4.0",
     "com.typesafe" % "config" % "1.3.1",
