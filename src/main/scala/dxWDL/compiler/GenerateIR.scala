@@ -428,15 +428,16 @@ task Add {
     }
 
     // validate that the call is providing all the necessary arguments
-    // to the callee (task/workflow)
-    private def validateCall(call: WdlCall) : Unit = {
+    // to the callee (task/workflow). Return a list of missing arguments,
+    // if the user can pass them post compilation.
+    private def validateCall(call: WdlCall) : CallEnv = {
         // Find the callee
         val calleeName = Utils.calleeGetName(call)
         val callee = callables(calleeName)
         val inputVarNames = callee.inputVars.map(_.name).toVector
         Utils.trace(verbose2, s"callee=${calleeName}  inputVars=${inputVarNames}")
 
-        callee.inputVars.map{ cVar =>
+        val missingCallArgs = callee.inputVars.flatMap{ cVar =>
             findInputByName(call, cVar) match {
                 case None if (!Utils.isOptional(cVar.womType) && cVar.attrs.getDefault == None) =>
                     // A missing compulsory input, without a default
@@ -450,10 +451,14 @@ task Add {
                         throw new Exception(cef.missingCallArgument(call.ast, msg))
                     } else {
                         Utils.warning(verbose, msg)
+                        val fqn = s"${call.unqualifiedName}_${cVar.name}"
+                        Some(fqn -> LinkedVar(cVar, IR.SArgEmpty))
                     }
-                case _ => ()
+                case _ =>
+                    None
             }
         }
+        missingCallArgs.toMap
     }
 
 
@@ -623,11 +628,15 @@ task Add {
         // validate all the calls -- this should be moved to a
         // separate module. Preferably, check in the validate step.
         val calls = block.findCalls
-        calls.foreach{ validateCall(_) }
+        val missingCallArgs = calls.foldLeft(Map.empty[String, LinkedVar]){
+            case (accu, call) =>  validateCall(call) ++ accu
+        }
+        if (!missingCallArgs.isEmpty)
+            Utils.trace(verbose.on, s"missingCallArgs = ${missingCallArgs.keys}")
 
         // Figure out the closure required for this block, out of the
         // environment
-        val closure = blockClosure(block.statements, env, stageName)
+        val closure = blockClosure(block.statements, env, stageName) ++ missingCallArgs
 
         // create input variable definitions
         val inputVars: Vector[CVar] = closure.map {

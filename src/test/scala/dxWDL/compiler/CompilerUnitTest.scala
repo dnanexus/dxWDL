@@ -28,7 +28,7 @@ class CompilerUnitTest extends FlatSpec with Matchers {
     // These tests require compilation -without- access to the platform.
     // We need to split the compiler into front/back-ends to be able to
     // do this.
-    ignore should "Allow adding unbound argument" in {
+    it should "Allow adding unbound argument" in {
         val path = pathFromBasename("unbound_arg.wdl")
         Main.compile(
             List(path.toString, "--compileMode", "ir", "-quiet")

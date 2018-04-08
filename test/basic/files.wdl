@@ -16,7 +16,7 @@ workflow files {
 #    }
 
     # Create an applet that ignores every input file
-#    call IgnoreAll
+    call IgnoreAll
 
     call write_lines_bug {
         input: files = [f, f1, f2]

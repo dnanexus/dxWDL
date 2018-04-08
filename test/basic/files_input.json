@@ -2,7 +2,7 @@
   "files.f": "dx://file-F5gkKkQ0ZvgjG3g16xyFf7b1",
   "files.f1": "dx://file-F5gkQ3Q0ZvgzxKZ28JX5YZjy",
   "files.f2": "dx://file-F5gkPXQ0Zvgp2y4Q8GJFYZ8G",
-  "##files.IgnoreAll.files" : [ "dx://file-F5gkQ3Q0ZvgzxKZ28JX5YZjy",
+  "files.IgnoreAll.files" : [ "dx://file-F5gkQ3Q0ZvgzxKZ28JX5YZjy",
                               "dx://file-F5gkPXQ0Zvgp2y4Q8GJFYZ8G"],
   "files.fruit_list": "dx://dxWDL_playground:/test_data/fruit_list.txt"
 }
