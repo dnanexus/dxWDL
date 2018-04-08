@@ -18,6 +18,9 @@ class WfFragmentTest extends FlatSpec with Matchers {
     private def wdlValueFromWVL(wvl: WdlVarLinks) : WomValue =
         WdlVarLinks.eval(wvl, IOMode.Remote, IODirection.Zero)
 
+    private def wdlValueToWVL(value: WomValue) : WdlVarLinks =
+        WdlVarLinks.importFromWDL(value.womType, DeclAttrs.empty, value, IODirection.Zero)
+
     private def makeOptional(value: WomValue) : WomValue = {
         WomOptionalValue(WomOptionalType(value.womType), Some(value))
     }
@@ -25,7 +28,8 @@ class WfFragmentTest extends FlatSpec with Matchers {
         WomOptionalValue(WomOptionalType(t), None)
     }
 
-    private def evalWorkflow(filename: String) : Map[String, WomValue] = {
+    private def evalWorkflow(filename: String,
+                             inputs: Map[String, WdlVarLinks]) : Map[String, WomValue] = {
         val srcPath = pathFromBasename(filename)
         val wdlCode = Utils.readFileContent(srcPath)
         val ns = WdlNamespace.loadUsingSource(
@@ -43,7 +47,7 @@ class WfFragmentTest extends FlatSpec with Matchers {
             case nswf:WdlNamespaceWithWorkflow => nswf.workflow
             case _ => throw new Exception("sanity")
         }
-        val wvlOutputVars = mw.apply(wf, Map.empty)
+        val wvlOutputVars = mw.apply(wf, inputs)
         val results: Map[String, WomValue] = wvlOutputVars.map{
             case (name, wvl) =>
                 name -> wdlValueFromWVL(wvl)
@@ -52,7 +56,7 @@ class WfFragmentTest extends FlatSpec with Matchers {
     }
 
     it should "evaluate workflow A" in {
-        val results: Map[String, WomValue] = evalWorkflow("A.wdl")
+        val results: Map[String, WomValue] = evalWorkflow("A.wdl", Map.empty)
 
         // result validation
         results.keys.toVector should contain("k")
@@ -65,7 +69,7 @@ class WfFragmentTest extends FlatSpec with Matchers {
     }
 
     it should "evaluate conditional inside scatter" in {
-        val results: Map[String, WomValue] = evalWorkflow("B.wdl")
+        val results: Map[String, WomValue] = evalWorkflow("B.wdl", Map.empty)
 
         results.keys.toVector should contain("square")
         results.keys.toVector should contain("numberedFruit")
@@ -82,7 +86,7 @@ class WfFragmentTest extends FlatSpec with Matchers {
     }
 
     it should "evaluate nested scatters" in {
-        val results: Map[String, WomValue] = evalWorkflow("C.wdl")
+        val results: Map[String, WomValue] = evalWorkflow("C.wdl", Map.empty)
 
         results.keys.toVector should contain("numberedStreets")
 
@@ -101,7 +105,7 @@ class WfFragmentTest extends FlatSpec with Matchers {
     }
 
     it should "evaluate nested ifs without creating a double optional " in {
-        val results: Map[String, WomValue] = evalWorkflow("D.wdl")
+        val results: Map[String, WomValue] = evalWorkflow("D.wdl", Map.empty)
 
         results.keys.toVector should contain("chosen")
 
@@ -113,7 +117,7 @@ class WfFragmentTest extends FlatSpec with Matchers {
     }
 
     it should "evaluate scatter inside a conditional" in {
-        val results: Map[String, WomValue] = evalWorkflow("E.wdl")
+        val results: Map[String, WomValue] = evalWorkflow("E.wdl", Map.empty)
 
         results.keys.toVector should contain("cube")
         results.keys.toVector should contain("square")
@@ -129,13 +133,15 @@ class WfFragmentTest extends FlatSpec with Matchers {
         results("square") should equal(nn)
     }
 
-    it should "handle missing values inside select_first and defined" in {
-        val results: Map[String, WomValue] = evalWorkflow("select.wdl")
+    ignore should "handle missing values inside select_first and defined" in {
+        val inputs = Map("flag" ->
+                             wdlValueToWVL(makeOptionalNone(WomBooleanType)))
+        val results: Map[String, WomValue] = evalWorkflow("select.wdl", inputs)
 
-//        results.keys.toVector should contain("x")
+        results.keys.toVector should contain("x")
         results.keys.toVector should contain("y")
 
-//        results("x") should equal(WomString("FAIL"))
+        results("x") should equal(WomString("FAIL"))
         results("y") should equal(WomString("FAIL"))
     }
 }

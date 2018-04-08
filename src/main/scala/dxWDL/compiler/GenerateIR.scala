@@ -503,15 +503,6 @@ task Add {
         IR.Stage(stageName, genStageId(), calleeName, inputs, callee.outputVars)
     }
 
-    private def makeOptional(t: WomType) : WomType = {
-        t match {
-            // If the type is already optional, don't make it
-            // double optional.
-            case WomOptionalType(_) => t
-            case _ => WomOptionalType(t)
-        }
-    }
-
     // Construct block outputs (scatter, conditional, ...), these are
     // made up of several categories:
     // 1. All the preamble variables, these could potentially be accessed
@@ -554,7 +545,7 @@ task Add {
                 // recurse into the if block, and amend the type.
                 val ifStmtOutputs = blockOutputs(ifStmt.children.toVector)
                 val ifStmtOutputs2 = ifStmtOutputs.map{
-                    cVar => cVar.copy(womType = makeOptional(cVar.womType))
+                    cVar => cVar.copy(womType = Utils.makeOptional(cVar.womType))
                 }
                 accu ++ ifStmtOutputs2
 

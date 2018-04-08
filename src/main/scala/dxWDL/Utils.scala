@@ -652,6 +652,16 @@ object Utils {
         }
     }
 
+    def makeOptional(t: WomType) : WomType = {
+        t match {
+            // If the type is already optional, don't make it
+            // double optional.
+            case WomOptionalType(_) => t
+            case _ => WomOptionalType(t)
+        }
+    }
+
+
     def stripArray(t: WomType) : WomType = {
         t match {
             case WomArrayType(x) => x

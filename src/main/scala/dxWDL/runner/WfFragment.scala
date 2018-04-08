@@ -81,11 +81,6 @@ case class WfFragment(execSeqMap: Map[Int, ChildExecDesc],
         // Merge two environments. The Major parameter should
         // have all the declarations already defined.
         def mergeTwo(envMajor: Env, envChild: Env) : Env = {
-            /*System.err.println("== mergeTwo ==")
-            System.err.println(s"envMajor: ${envMajor}")
-            System.err.println(s"envChild: ${envChild}")
-            System.err.println()*/
-
             // merge the declarations
             val mrgDecls = envChild.decls.foldLeft(envMajor.decls) {
                 case (accu, (name, elem)) =>
@@ -229,13 +224,16 @@ case class WfFragment(execSeqMap: Map[Int, ChildExecDesc],
         WdlVarLinks.importFromWDL(t, DeclAttrs.empty, wdlValue, IODirection.Zero)
     }
 
-    private def lookupInEnv(env: Env)(varName : String) : WomValue =
-        env.decls.get(varName) match {
+    private def lookupInEnv(env: Env)(varName : String) : WomValue = {
+        val retval = env.decls.get(varName) match {
             case Some(ElemWom(_,_,value)) =>
                 value
             case _ =>
                 throw new UnboundVariableException(s"${varName}")
         }
+        //System.err.println(s"lookupInEnv ${varName}  -> ${retval}")
+        retval
+    }
 
     /**
       In the workflow below, we want to correctly pass the [k] value
@@ -388,8 +386,7 @@ case class WfFragment(execSeqMap: Map[Int, ChildExecDesc],
                 // Do not create Optional[Optional[_]] types.
                 val innerEnv = statementsToTypes(ifStmt.children)
                 val outerEnv = innerEnv.map{
-                    case (name, WomOptionalType(t)) => name -> WomOptionalType(t)
-                    case (name, t) => name -> WomOptionalType(t)
+                    case (name, t) => name -> Utils.makeOptional(t)
                 }.toMap
                 accu ++ outerEnv
 
@@ -509,6 +506,7 @@ case class WfFragment(execSeqMap: Map[Int, ChildExecDesc],
     }
 
     private def evalStatement(stmt: Scope, env: Env) : Env = {
+        //System.err.println(s"evalStatement ${stmt.getClass.getName}:  env=${env.decls.keys}")
         def lookup = lookupInEnv(env)(_)
         stmt match {
             case decl:Declaration =>
@@ -517,6 +515,9 @@ case class WfFragment(execSeqMap: Map[Int, ChildExecDesc],
                         // An input variable, read it from the environment
                         val elem = env.decls(decl.unqualifiedName)
                         elem.value
+                    case None if Utils.isOptional(decl.womType) =>
+                        // An optional input, make it None
+                        WomOptionalValue(WomOptionalType(decl.womType), None)
                     case None =>
                         // A declaration with no value, such as:
                         //   String buffer
@@ -634,6 +635,36 @@ case class WfFragment(execSeqMap: Map[Int, ChildExecDesc],
         }
     }
 
+    // The WDL workflow has no scatters or if blocks.
+    private def isSimpleCode(wf: WdlWorkflow) : Boolean = {
+        wf.children.forall{
+            case _:Declaration => true
+            case _:WdlCall => true
+            case _:Scatter => false
+            case _:If => false
+            case _:WorkflowOutput => true
+            case other =>
+                throw new Exception(cef.notCurrentlySupported(
+                                        other.ast,
+                                        s"element ${other.getClass.getName}"))
+        }
+    }
+
+    // create promises to this call. This allows returning
+    // from the parent job immediately.
+    private def genPromisesForCall(call: WdlCall,
+                                   dxExec: DXExecution,
+                                   exportTypes: Map[String, WomType]) : Map[String, WdlVarLinks] = {
+        call.outputs.map{ cot =>
+            val eVarName = cot.unqualifiedName
+            val oName = s"${call.unqualifiedName}_${eVarName}"
+            assert(exportTypes contains oName)
+            oName -> WdlVarLinks(cot.womType,
+                                 DeclAttrs.empty,
+                                 DxlExec(dxExec, eVarName))
+        }.toMap
+    }
+
     def apply(wf: WdlWorkflow,
               inputs: Map[String, WdlVarLinks]) : Map[String, WdlVarLinks] = {
         // build the environment from the dx:applet inputs
@@ -657,14 +688,23 @@ case class WfFragment(execSeqMap: Map[Int, ChildExecDesc],
                 val (calls, childJobs) = envEnd.launched.values.unzip
                 Utils.appletLog(s"childJobs=${childJobs}")
 
+                val declOutputs = envEnd.decls.flatMap{
+                    case (varName, ElemWom(_,womType, value)) if exportTypes contains varName =>
+                        Some(varName -> wdlValueToWVL(womType, value))
+                    case (_,_) =>
+                        None
+                }.toMap
+
                 if (childJobs.isEmpty) {
                     // There are no calls, we can return the results immediately
-                    envEnd.decls.flatMap{
-                        case (varName, ElemWom(_,womType, value)) if exportTypes contains varName =>
-                            Some(varName -> wdlValueToWVL(womType, value))
-                        case (_,_) =>
-                            None
-                    }.toMap
+                    declOutputs
+                } else if (childJobs.size == 1 && isSimpleCode(wf)) {
+                    // The WDL workflow has no scatters or if blocks. We can return
+                    // promises to the calls.
+                    val promises = envEnd.launched.values.map{
+                        case (call, dxJob) => genPromisesForCall(call, dxJob, exportTypes)
+                    }.flatten
+                    declOutputs ++ promises
                 } else {
                     // Launch a subjob to collect and marshal the results.
                     //
