@@ -696,4 +696,96 @@ subworkflows, while _A_ is not.
 
 In practical terms, this is achieved with a two step process:
 (1) Simplify the workflow source files, by extracting all the tasks
-(2) Decompose the workflows into subworkflows
+(2) Decompose the workflow into subworkflows
+
+There are workflows that require several decomposition steps. For example,
+workflow _twoStep_ below is simplified to _twoStepV2_ and then _twoStepV3_.
+
+```
+workflow twoStep {
+    Int i
+    Array[Int] xa
+
+    if (i >= 0) {
+      if (i == 2) {
+        scatter (x in xa)
+          call inc { input : a=x}
+      }
+      if (i == 3) {
+        scatter (x in xa)
+          call add { input: a=x, b=3 }
+      }
+    }
+}
+```
+
+```
+workflow twoStepV2 {
+    Int i
+    Array[Int] xa
+
+    if (i >= 0) {
+      call twoStep_inc { input: i=i, xa=xa }
+      call twoStep_add { input: i=i, xa=xa }
+    }
+}
+
+workflow twoStep_inc {
+    Int i
+    Array[Int] xa
+
+    if (i == 2) {
+      scatter (x in xa)
+        call inc { input : a=x}
+    }
+}
+
+workflow twoStep_add {
+    Int i
+    Array[Int] xa
+
+    if (i == 3) {
+      scatter (x in xa)
+        call add { input: a=x, b=3 }
+    }
+ }
+ ```
+
+```
+workflow twoStepV3 {
+    Int i
+    Array[Int] xa
+
+    if (i >= 0) {
+      call twoStepV3_inner { input: i=i, xa=xa }
+    }
+}
+
+workflow twoStepV3_inner {
+    Int i
+    Array[Int] xa
+
+    call twoStep_inc { input: i=i, xa=xa }
+    call twoStep_add { input: i=i, xa=xa }
+}
+
+workflow twoStep_inc {
+    Int i
+    Array[Int] xa
+
+    if (i == 2) {
+      scatter (x in xa)
+        call inc { input : a=x}
+    }
+}
+
+workflow twoStep_add {
+    Int i
+    Array[Int] xa
+
+    if (i == 3) {
+      scatter (x in xa)
+        call add { input: a=x, b=3 }
+    }
+ }
+ ```

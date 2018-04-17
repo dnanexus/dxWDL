@@ -1,57 +1,96 @@
 /*
- Break large sub-blocks into separate sub-workflows. Simplistically,
- a large subblock is one that has two calls or more. For example
- the scatter below is "large".
+Break large sub-blocks into separate sub-workflows. Simplistically,
+a large subblock is one that has two calls or more. For example
+the scatter below is "large".
 
- task add {
-   Int a
-   Int b
-   command {}
-   output {
-     Int result = a + b
-   }
- }
+task add { ... }
+task mul { ... }
 
- task mul {
-   Int a
-   Int n
-   command {}
-   output {
-     Int result = a ** b
-   }
- }
+workflow w {
+  scatter (x in ax) {
+    Int y = x + 4
+    call add { input: a=y, b=x }
+    Int base = add.result
+    call mul { input: a=base, n=x}
+  }
+}
 
- scatter (x in ax) {
-   Int y = x + 4
-   call add { input: a=y, b=x }
-   Int base = add.result
-   call mul { input: a=base, n=x}
- }
+It will be broken into a subworkflow, and a scatter that calls it.
 
+workflow w {
+  scatter (x in ax) {
+    Int y = x + 4
+    call foobar_add { x=x, y=y }
+  }
+}
 
- It will be broken into a subworkflow, and a scatter that calls it.
+workflow foobar_add {
+  Int x
+  Int y
 
- scatter (x in ax) {
-   Int y = x + 4
-   call foobar_add { x=x, y=y }
- }
+  call add { input: a=y, b=x }
+  Int base = add.result
+  call mul { input: a=base, n=x}
 
- workflow foobar_add {
-   Int x
-   Int y
-
-   call add { input: a=y, b=x }
-   Int base = add.result
-   call mul { input: a=base, n=x}
-
-   output {
-     Int add_result = add.result
-     Int out_base = base
-     Int mul_result = mul.result
-   }
- }
+  output {
+    Int add_result = add.result
+    Int out_base = base
+    Int mul_result = mul.result
+  }
+}
 
  Downstream references to 'add.result' will be renamed: foobar_add.add_result
+ */
+
+/*
+The workflow below requires two decomposition steps, the first is shown below, from w to w2.
+
+workflow w {
+    Int i
+    Array[Int] xa
+
+    if (i >= 0) {
+      if (i == 2) {
+        scatter (x in xa)
+          call inc { input : a=x}
+      }
+      if (i == 3) {
+        scatter (x in xa)
+          call add { input: a=x, b=3 }
+      }
+    }
+}
+
+workflow w2 {
+    Int i
+    Array[Int] xa
+
+    if (i >= 0) {
+      call w2_inc { input: i=i, xa=xa }
+      call w2_inc { input: i=i, xa=xa }
+    }
+}
+
+workflow w2_inc {
+    Int i
+    Array[Int] xa
+
+    if (i == 2) {
+      scatter (x in xa)
+        call inc { input : a=x}
+    }
+}
+
+workflow w2_add {
+    Int i
+    Array[Int] xa
+
+    if (i == 3) {
+      scatter (x in xa)
+        call add { input: a=x, b=3 }
+    }
+ }
+
  */
 
 package dxWDL.compiler

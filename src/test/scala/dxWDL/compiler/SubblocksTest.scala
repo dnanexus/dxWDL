@@ -24,4 +24,11 @@ class SubblocksTest extends FlatSpec with Matchers {
             List(path.toString, "--compileMode", "ir", "--locked", "--quiet")
         ) should equal(Main.SuccessfulTermination(""))
     }
+
+    it should "handle wide and deep nesting" in {
+        val path = pathFromBasename("decompose_blocks/two_phase.wdl")
+        Main.compile(
+            List(path.toString, "--compileMode", "ir", "--locked", "--quiet")
+        ) should equal(Main.SuccessfulTermination(""))
+    }
 }
