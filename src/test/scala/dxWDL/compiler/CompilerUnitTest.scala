@@ -6,6 +6,8 @@ import org.scalatest.{FlatSpec, Matchers}
 import org.scalatest.Inside._
 import wdl._
 
+// These tests involve compilation -without- access to the platform.
+//
 class CompilerUnitTest extends FlatSpec with Matchers {
     lazy val currentWorkDir:Path = Paths.get(System.getProperty("user.dir"))
     private def pathFromBasename(basename: String) : Path = {
@@ -25,9 +27,6 @@ class CompilerUnitTest extends FlatSpec with Matchers {
     }
 
 
-    // These tests require compilation -without- access to the platform.
-    // We need to split the compiler into front/back-ends to be able to
-    // do this.
     it should "Allow adding unbound argument" in {
         val path = pathFromBasename("unbound_arg.wdl")
         Main.compile(

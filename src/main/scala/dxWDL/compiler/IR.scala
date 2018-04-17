@@ -27,14 +27,10 @@ object IR {
     // The attributes are used to encode DNAx applet input/output
     // specification fields, such as {help, suggestions, patterns}.
     //
-    // The [originalFqn] is for a special case where a required call input
-    // was unspecified in the workflow. It can still be provided
-    // at the command line, or from an input file.
     case class CVar(name: String,
                     womType: WomType,
                     attrs: DeclAttrs,
-                    ast: wdl4s.parser.WdlParser.Ast,
-                    originalFqn: Option[String] = None) {
+                    ast: wdl4s.parser.WdlParser.Ast) {
         // dx does not allow dots in variable names, so we
         // convert them to underscores.
         //
@@ -312,8 +308,7 @@ object IR {
                 val m : Map[YamlValue, YamlValue] = Map(
                     YamlString("type") -> YamlString(cVar.womType.toDisplayString),
                     YamlString("name") -> YamlString(cVar.name),
-                    YamlString("attributes") -> cVar.attrs.toYaml,
-                    YamlString("originalFqn") -> cVar.originalFqn.toYaml
+                    YamlString("attributes") -> cVar.attrs.toYaml
                 )
                 YamlObject(m)
             }
@@ -321,14 +316,12 @@ object IR {
             def read(value: YamlValue) = {
                 value.asYamlObject.getFields(YamlString("type"),
                                              YamlString("name"),
-                                             YamlString("attributes"),
-                                             YamlString("originalFqn")) match {
-                    case Seq(YamlString(womType), YamlString(name), attrs, originalFqn) =>
+                                             YamlString("attributes")) match {
+                    case Seq(YamlString(womType), YamlString(name), attrs) =>
                         new CVar(name,
                                  WdlFlavoredWomType.fromDisplayString(womType),
                                  attrs.convertTo[DeclAttrs],
-                                 INVALID_AST,
-                                 originalFqn.convertTo[Option[String]])
+                                 INVALID_AST)
                     case unrecognized =>
                         throw new Exception(s"CVar expected ${unrecognized}")
                 }

@@ -112,12 +112,7 @@ case class InputFile(verbose: Verbose) {
                 // generated variables are not accessible to the user
                 sArg
             } else {
-                val fqn = cVar.originalFqn match {
-                    case None => s"${nameTrail}.${cVar.name}"
-                    case Some(fqn) =>
-                        Utils.trace(verbose2, s"original fqn=${fqn} cVar=${cVar.name}")
-                        s"${wf.name}.${fqn}"
-                }
+                val fqn = s"${nameTrail}.${cVar.name}"
                 getExactlyOnce(defaultFields, fqn) match {
                     case None => sArg
                     case Some(dflt:JsValue) =>
