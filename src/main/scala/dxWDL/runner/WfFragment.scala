@@ -331,7 +331,7 @@ case class WfFragment(execSeqMap: Map[Int, ChildExecDesc],
             case Some(eInfo) => eInfo
         }
         val callInputs:JsValue = buildAppletInputs(call, eInfo, env)
-        Utils.appletLog(s"Call ${call.unqualifiedName}   inputs = ${callInputs}")
+        Utils.appletLog(verbose, s"Call ${call.unqualifiedName}   inputs = ${callInputs}")
 
         // We may need to run a collect subjob. Add the call
         // name, and the sequence number, to each execution invocation,
@@ -574,8 +574,8 @@ case class WfFragment(execSeqMap: Map[Int, ChildExecDesc],
                                     calls: Vector[WdlCall],
                                     exportTypes: Map[String, WomType]) : Map[String, WdlVarLinks] = {
         assert(!childJobs.isEmpty)
-        Utils.appletLog(s"""|launching collect subjob
-                            |child jobs=${childJobs}""".stripMargin)
+        Utils.appletLog(verbose, s"""|launching collect subjob
+                                     |child jobs=${childJobs}""".stripMargin)
 
         // Run a sub-job with the "collect" entry point.
         // We need to provide the exact same inputs.
@@ -675,7 +675,7 @@ case class WfFragment(execSeqMap: Map[Int, ChildExecDesc],
                 varName -> rVar
         }.toMap
         val envBgn = Env(Map.empty, inputDecls, Map.empty)
-        Utils.appletLog(s"envBgn = ${envBgn.decls}")
+        Utils.appletLog(verbose, s"envBgn = ${envBgn.decls}")
 
         // evaluate each of the statements in the workflow
         val envEnd = wf.children.foldLeft(envBgn) {
@@ -686,7 +686,7 @@ case class WfFragment(execSeqMap: Map[Int, ChildExecDesc],
         runMode match {
             case RunnerWfFragmentMode.Launch =>
                 val (calls, childJobs) = envEnd.launched.values.unzip
-                Utils.appletLog(s"childJobs=${childJobs}")
+                Utils.appletLog(verbose, s"childJobs=${childJobs}")
 
                 val declOutputs = envEnd.decls.flatMap{
                     case (varName, ElemWom(_,womType, value)) if exportTypes contains varName =>
@@ -740,8 +740,9 @@ object WfFragment {
     // Load from disk a mapping of applet name to id. We
     // need this in order to call the right version of other
     // applets.
-    private def loadLinkInfo(dxProject: DXProject) : Map[String, ExecLinkInfo] = {
-        Utils.appletLog(s"Loading link information")
+    private def loadLinkInfo(dxProject: DXProject,
+                             verbose: Boolean) : Map[String, ExecLinkInfo] = {
+        Utils.appletLog(verbose, s"Loading link information")
         val linkSourceFile: Path = Paths.get("/" + Utils.LINK_INFO_FILENAME)
         if (!Files.exists(linkSourceFile)) {
             Map.empty
@@ -767,19 +768,20 @@ object WfFragment {
               outputSpec: Map[String, DXIOParam],
               inputs: Map[String, WdlVarLinks],
               orgInputs: JsValue,
-              runMode: RunnerWfFragmentMode.Value) : Map[String, JsValue] = {
+              runMode: RunnerWfFragmentMode.Value,
+              verbose: Boolean) : Map[String, JsValue] = {
         val wdlCode: String = WdlPrettyPrinter(false, None, None).apply(wf, 0).mkString("\n")
-        Utils.appletLog(s"Workflow source code:")
-        Utils.appletLog(wdlCode)
-        Utils.appletLog(s"Input spec: ${inputSpec}")
-        Utils.appletLog(s"Inputs: ${inputs}")
-        Utils.appletLog(s"runMode=${runMode}")
+        Utils.appletLog(verbose, s"Workflow source code:")
+        Utils.appletLog(verbose, wdlCode)
+        Utils.appletLog(verbose, s"Input spec: ${inputSpec}")
+        Utils.appletLog(verbose, s"Inputs: ${inputs}")
+        Utils.appletLog(verbose, s"runMode=${runMode}")
 
         // Get handles for the referenced dx:applets
         val dxEnv = DXEnvironment.create()
         val dxProject = dxEnv.getProjectContext()
-        val execLinkInfo = loadLinkInfo(dxProject)
-        Utils.appletLog(s"link info=${execLinkInfo}")
+        val execLinkInfo = loadLinkInfo(dxProject, verbose)
+        Utils.appletLog(verbose, s"link info=${execLinkInfo}")
 
         val execSeqMap: Map[Int, ChildExecDesc] = runMode match {
             case RunnerWfFragmentMode.Launch =>
@@ -801,8 +803,8 @@ object WfFragment {
                     accu ++ fields.toMap
             }
 
-        Utils.appletLog(s"outputSpec= ${outputSpec}")
-        Utils.appletLog(s"jsVarOutputs= ${jsVarOutputs}")
+        Utils.appletLog(verbose, s"outputSpec= ${outputSpec}")
+        Utils.appletLog(verbose, s"jsVarOutputs= ${jsVarOutputs}")
         jsVarOutputs
     }
 }

@@ -75,6 +75,12 @@ case class Block(statements: Vector[Scope]) {
 }
 
 object Block {
+    def countCalls(statments: Seq[Scope]) : Int =
+        Block(statments.toVector).countCalls
+
+    def findCalls(statments: Seq[Scope]) : Int =
+        Block(statments.toVector).findCalls
+
     def splitIntoBlocks(children: Vector[Scope]) : Vector[Block] = {
         // base cases: zero and one children
         if (children.isEmpty)
@@ -111,7 +117,7 @@ object Block {
 
 
     case class Partition(before: Vector[Scope],
-                         lrgBlock: Option[Scope],
+                         lrgBlock: Scope,
                          after: Vector[Scope])
 
     // Is this a subblock? Declarations aren't subblocks, scatters and if's are.
@@ -134,7 +140,7 @@ object Block {
 
 
     // Look for the first if/scatter block that has two calls or more.
-    def findFirstLargeSubBlock(statements: Vector[Scope]) : Partition = {
+    def findFirstLargeSubBlock(statements: Vector[Scope]) : Option[Partition] = {
         var before = Vector.empty[Scope]
         var lrgBlock: Option[Scope] = None
         var after = Vector.empty[Scope]
@@ -151,17 +157,78 @@ object Block {
             }
         }
         assert (before.length + lrgBlock.size + after.length == statements.length)
-        Partition(before, lrgBlock, after)
+        lrgBlock match {
+            case None => None
+            case Some(blk) => Some(Partition(before, blk, after))
+        }
     }
 
-    // These statements can be compiled into a single dx:workflow. This means that:
-    //    Either there are no if/scatter blocks,
-    //    or, the remaining blocks contain a single call
-    def isSingleDxWorkflow(statements: Vector[Scope]) : Boolean = {
-        val partition = findFirstLargeSubBlock(statements)
-        partition.lrgBlock match {
-            case None => false
-            case Some(_) => true
+    // In a block, split off the beginning declarations, from the rest.
+    // For example, the scatter block below, will be split into
+    // the top two declarations, and the other calls.
+    // scatter (unmapped_bam in flowcell_unmapped_bams) {
+    //    String sub_strip_path = "gs://.*/"
+    //    String sub_strip_unmapped = unmapped_bam_suffix + "$"
+    //    call SamToFastqAndBwaMem {..}
+    //    call MergeBamAlignment {..}
+    // }
+    def splitBlockDeclarations(children: List[Scope]) :
+            (List[Declaration], List[Scope]) = {
+        def collect(topDecls: List[Declaration],
+                    rest: List[Scope]) : (List[Declaration], List[Scope]) = {
+            rest match {
+                case hd::tl =>
+                    hd match {
+                        case decl: Declaration =>
+                            collect(decl :: topDecls, tl)
+                        // Next element is not a declaration
+                        case _ => (topDecls, rest)
+                    }
+                // Got to the end of the children list
+                case Nil => (topDecls, rest)
+            }
+        }
+
+        val (decls, rest) = collect(Nil, children)
+        (decls.reverse, rest)
+    }
+
+    // Checks if an if/scatter block contains only calls, and they are all
+    // in the same block or sub-block.
+    //
+    // a) calls are inside the same block
+    //     if (cond) {
+    //       call A
+    //       call B
+    //     }
+    //
+    // a1) same as (a), but the nesting could be deep
+    //    if (cond) {
+    //      scatter (x in xs) {
+    //        call A
+    //        call B
+    //      }
+    //    }
+    //
+    // Declarations can be placed anywhere, but not after or between
+    // the calls.
+    case class Accu(firstCall: Boolean, mixed: Boolean)
+
+    def callsInSameLevel(statments: Vector[Scope]) : Accu = {
+        statments.foldLeft(Accu(false, false)) {
+            case (accu, _:Declaration) =>
+                if (accu.firstCall) Accu(true, true)
+                else Accu(false, false)
+            case (accu, _:WdlCall) =>
+                Accu(true, accu.mixed)
+            case (accu, stmt:If) =>
+                val retval = callsInSameLevel(stmt.children.toVector)
+                Accu(accu.firstCall || retval.firstCall,
+                     accu.mixed || retval.mixed)
+            case (accu, stmt:Scatter) =>
+                val retval = callsInSameLevel(stmt.children.toVector)
+                Accu(accu.firstCall || retval.firstCall,
+                     accu.mixed || retval.mixed)
         }
     }
 }

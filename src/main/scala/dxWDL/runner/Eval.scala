@@ -27,6 +27,8 @@ import wom.types._
 import wom.values._
 
 object Eval {
+    val verbose = true
+
     def evalDeclarations(declarations: Seq[DeclarationInterface],
                          envInputs : Map[String, WomValue]) : Map[DeclarationInterface, WomValue] = {
         // Environment that includes a cache for values that have
@@ -58,7 +60,7 @@ object Eval {
             val retVal =
                 if (v.womType != wdlType) {
                     // we need to convert types
-                    Utils.appletLog(s"casting ${v.womType} to ${wdlType}")
+                    Utils.appletLog(verbose, s"casting ${v.womType} to ${wdlType}")
                     wdlType.coerceRawValue(v).get
                 } else {
                     // no need to change types
@@ -70,7 +72,7 @@ object Eval {
         def evalAndCache(decl:DeclarationInterface,
                          expr:WdlExpression) : WomValue = {
             val vRaw : WomValue = expr.evaluate(lookup, DxFunctions).get
-            Utils.appletLog(s"evaluating ${decl} -> ${vRaw}")
+            Utils.appletLog(verbose, s"evaluating ${decl} -> ${vRaw}")
             val w: WomValue = cast(decl.womType, vRaw, decl.unqualifiedName)
             env = env + (decl.unqualifiedName -> w)
             w
@@ -110,7 +112,7 @@ object Eval {
         val results = declarations.map{ decl =>
             decl -> evalDecl(decl)
         }.toMap
-        Utils.appletLog(s"Eval env=${env}")
+        Utils.appletLog(verbose, s"Eval env=${env}")
         results
     }
 
@@ -119,7 +121,7 @@ object Eval {
               inputSpec: Map[String, DXIOParam],
               outputSpec: Map[String, DXIOParam],
               inputs: Map[String, WdlVarLinks]) : Map[String, JsValue] = {
-        Utils.appletLog(s"Initial inputs=${inputs}")
+        Utils.appletLog(verbose, s"Initial inputs=${inputs}")
 
         // make sure the workflow elements are all declarations
         val decls: Seq[Declaration] = wf.children.map {

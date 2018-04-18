@@ -190,8 +190,8 @@ case class InputFile(verbose: Verbose) {
                           stages = stagesWithDefaults)
         val irNs = ns.copy(entrypoint = Some(wf2))
         if (!defaultFields.isEmpty) {
-            System.err.println("Could not map all default fields. These were left:")
-            System.err.println(s"${defaultFields}")
+            Utils.warning(verbose, s"""|Could not map all default fields.
+                                       |These were left: ${defaultFields}""".stripMargin)
             throw new Exception("Failed to map all default fields")
         }
         irNs
@@ -329,8 +329,8 @@ case class InputFile(verbose: Verbose) {
                 handleWorkflow(wf, callables, cif)
         }
         if (!inputFields.isEmpty) {
-            System.err.println("Could not map all the input fields. These were left:")
-            System.err.println(s"${inputFields}")
+            Utils.warning(verbose, s"""|Could not map all default fields.
+                                       |These were left: ${inputFields}""".stripMargin)
             throw new Exception("Failed to map all input fields")
         }
         JsObject(cif.workflowBindings.toMap)

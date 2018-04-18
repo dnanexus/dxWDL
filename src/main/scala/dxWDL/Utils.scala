@@ -423,37 +423,6 @@ object Utils {
         (jobInputPath, jobOutputPath, jobErrorPath, jobInfoPath)
     }
 
-    // In a block, split off the beginning declarations, from the rest.
-    // For example, the scatter block below, will be split into
-    // the top two declarations, and the other calls.
-    // scatter (unmapped_bam in flowcell_unmapped_bams) {
-    //    String sub_strip_path = "gs://.*/"
-    //    String sub_strip_unmapped = unmapped_bam_suffix + "$"
-    //    call SamToFastqAndBwaMem {..}
-    //    call MergeBamAlignment {..}
-    // }
-    def splitBlockDeclarations(children: List[Scope]) :
-            (List[Declaration], List[Scope]) = {
-        def collect(topDecls: List[Declaration],
-                    rest: List[Scope]) : (List[Declaration], List[Scope]) = {
-            rest match {
-                case hd::tl =>
-                    hd match {
-                        case decl: Declaration =>
-                            collect(decl :: topDecls, tl)
-                        // Next element is not a declaration
-                        case _ => (topDecls, rest)
-                    }
-                // Got to the end of the children list
-                case Nil => (topDecls, rest)
-            }
-        }
-
-        val (decls, rest) = collect(Nil, children)
-        (decls.reverse, rest)
-    }
-
-
     // describe a project, and extract fields that not currently available
     // through dxjava.
     def projectDescribeExtraInfo(dxProject: DXProject) : (String,String) = {
@@ -690,13 +659,15 @@ object Utils {
     }
 
     // Logging output for applets at runtime
-    def appletLog(msg:String) : Unit = {
-        val shortMsg =
-            if (msg.length > APPLET_LOG_MSG_LIMIT)
-                "Message is too long for logging"
-            else
-                msg
-        System.err.println(shortMsg)
+    def appletLog(verbose: Boolean, msg:String) : Unit = {
+        if (verbose) {
+            val shortMsg =
+                if (msg.length > APPLET_LOG_MSG_LIMIT)
+                    "Message is too long for logging"
+                else
+                    msg
+            System.err.println(shortMsg)
+        }
     }
 
     // Used by the compiler to provide more information to the user

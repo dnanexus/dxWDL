@@ -458,13 +458,13 @@ object Main extends App {
                     val inputs = WdlVarLinks.loadJobInputsAsLinks(inputLines, inputSpec, Some(task))
                     op match {
                         case InternalOp.TaskEpilog =>
-                            val r = runner.Task(task, cef)
+                            val r = runner.Task(task, cef, true)
                             r.epilog(inputSpec, outputSpec, inputs)
                         case InternalOp.TaskProlog =>
-                            val r = runner.Task(task, cef)
+                            val r = runner.Task(task, cef, true)
                             r.prolog(inputSpec, outputSpec, inputs)
                         case InternalOp.TaskRelaunch =>
-                            val r = runner.Task(task, cef)
+                            val r = runner.Task(task, cef, true)
                             r.relaunch(inputSpec, outputSpec, inputs)
                     }
                 } else {
@@ -474,13 +474,13 @@ object Main extends App {
                         case InternalOp.Collect =>
                             runner.WfFragment.apply(wf ,
                                                       inputSpec, outputSpec, inputs, orgInputs,
-                                                      RunnerWfFragmentMode.Collect)
+                                                      RunnerWfFragmentMode.Collect, true)
                         case InternalOp.WfFragment =>
                             runner.WfFragment.apply(wf,
                                                       inputSpec, outputSpec, inputs, orgInputs,
-                                                      RunnerWfFragmentMode.Launch)
+                                                      RunnerWfFragmentMode.Launch, true)
                         case InternalOp.WorkflowOutputReorg =>
-                            runner.WorkflowOutputReorg.apply(wf, inputSpec, outputSpec, inputs)
+                            runner.WorkflowOutputReorg(true).apply(wf, inputSpec, outputSpec, inputs)
                     }
                 }
 

@@ -191,7 +191,7 @@ object WdlVarLinks {
                 }
                 key -> (womType, fields("value"))
             case (key, other) =>
-                appletLog(s"Unmarshalling error for  JsObject=${JsObject(m)}")
+                appletLog(true, s"Unmarshalling error for  JsObject=${JsObject(m)}")
                 throw new Exception(s"key=${key}, expecting ${other} to be a JsObject")
         }.toMap
     }

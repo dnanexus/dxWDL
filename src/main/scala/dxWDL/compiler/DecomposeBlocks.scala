@@ -358,18 +358,9 @@ case class DecomposeBlocks(cef: CompilerErrorFormatter,
         (wf, xtrnRefs)
     }
 
-    // Replace the bottom statments with a call to a subworkflow
-    private def rewriteBlock(oldStmt: Scope,
-                             topDecls: Seq[Declaration],
-                             subWf: WdlWorkflow,
-                             inputs: Vector[DVar]) : Scope = {
-        val subWfInputs = inputs.map{ dVar =>
-            dVar.sanitizedName -> WdlExpression.fromString(dVar.name)
-        }.toMap
-        val wfc = WdlRewrite.workflowCall(subWf,
-                                          subWfInputs)
-        val children = topDecls :+ wfc
-
+    // In a same-level situation, replace the calls sequence with a single call to
+    // a subworkflow
+    private def sameLevelRewriteBlock(oldStmt: Scope, wfc: WdlWorkflowCall) : Scope = {
         oldStmt match {
             case ssc: Scatter =>
                 WdlRewrite.scatter(ssc, children)
@@ -380,46 +371,97 @@ case class DecomposeBlocks(cef: CompilerErrorFormatter,
                                         x.ast,
                                         s"Unimplemented workflow element"))
         }
-    }
 
-    private def decompose(scope: Scope,
-                          subWfNamePrefix: String,
-                          afterStmts: Vector[Scope]) : (Scope, WdlWorkflow, Vector[DVar]) = {
-        val (topDecls, bottom: Seq[Scope]) = Utils.splitBlockDeclarations(scope.children.toList)
-        assert(bottom.length > 1)
-        Utils.trace(verbose.on, s"""|decompose scope=${scope.fullyQualifiedName}
-                                    |#topDecl=${topDecls.length} numBottom=${bottom.length}"""
-                        .stripMargin)
 
-        // Figure out the free variables in [bottom]
-        val btmInputs0 = freeVars(bottom)
-
-        // Some of the bottom variables are temporary. There is downstream code
-        // thet gets confused by such a variable being also a workflow input.
-        // Change these names.
-        val btmInputs = btmInputs0.map{ dVar =>
-            if (Utils.isGeneratedVar(dVar.name))
-                DVar(dVar.name, dVar.womType, "in_" + dVar.name)
-            else
-                dVar
+        val children = scope.children.foldLeft(Vector.empty[Scope]) {
+            case (accu, ssc: Scatter) if Block.countCalls(ssc) >=2 =>
+                if (ssc.children.length > 1)
+            case (accu, cond: If) if Block.countCalls(cond) >=2 =>
+            case (accu, stmt) =>
+                assert(Block.countCalls(stmt) == 0)
+                accu :+ stmt
         }
 
-        // Figure out the outputs from the [bottom] statements
-        val btmOutputs: Vector[DVar] = blockOutputs(bottom.toVector, afterStmts)
+    }
 
-        // create a subworkflow from the bottom statements. Name
-        // it based on the first call.
-        var subWfName = s"${subWfNamePrefix}_${bottom.head.unqualifiedName}"
-        if (subWfName.length > Utils.MAX_STAGE_NAME_LEN)
-            subWfName = subWfName.substring(0, Utils.MAX_STAGE_NAME_LEN)
-        val (subWf,xtrnVarRefs) = buildSubWorkflow(subWfName, btmInputs, btmOutputs, bottom.toVector)
+    // The workflow contains calls that are at the exact same nesting level. Declarations
+    // could be spread anywhere, except in between or after calls.
+    //
+    // a) calls are inside the same block
+    //     if (cond) {
+    //       call A
+    //       call B
+    //     }
+    //
+    // a1) same as (a), but the nesting could be deep
+    //    if (cond) {
+    //      scatter (x in xs) {
+    //        call A
+    //        call B
+    //      }
+    //    }
+    //
+    private def sameLevel(stmt: Scope,
+                          subWfNamePrefix: String,
+                          afterStmts: Vector[Scope]) : (Scope, WdlWorkflow, Vector[DVar]) = {
+        val calls = Block.findCalls(scope.children)
+        Utils.trace(verbose.on, s"""|decompose scope=${stmt.fullyQualifiedName} with ${calls.size}
+                                    |calls at the same level""".stripMargin)
 
-        // replace the bottom statements with a call to the subworkflow
-        val scope2 = rewriteBlock(scope, topDecls, subWf, btmInputs)
-        (scope2, subWf, xtrnVarRefs)
+        // Figure out the free variables
+        val inputs = freeVars(calls)
+
+        // Figure out the outputs from the calls
+        val outputs: Vector[DVar] = blockOutputs(calls, afterStmts)
+
+        // create a subworkflow from the sequence of calls. Name
+        // it by concatenating the call names.
+        val allCallNames = calls.map(_.unqualifiedName).mkString("_")
+        val subWfName = s"${subWfNamePrefix}_${allCallNames}".take(Utils.MAX_STAGE_NAME_LEN)
+        val (subWf, xtrnVarRefs) = buildSubWorkflow(subWfName, inputs, outputs, calls)
+
+        // replace the call sequence with a single call to the subworkflow
+        val subWfInputs = inputs.map{ dVar =>
+            dVar.sanitizedName -> WdlExpression.fromString(dVar.name)
+        }.toMap
+        val wfc = WdlRewrite.workflowCall(subWf, subWfInputs)
+        val stmt2 = sameLevelRewriteBlock(stmt, wfc)
+        (stmt2, subWf, xtrnVarRefs)
     }
 
 
+    // Calls are not inside the same block. For example:
+    //
+    // workflow w
+    //    if (cond) {
+    //       if (cond2) {
+    //         call A
+    //       }
+    //       if (cond3) {
+    //         call B
+    //       }
+    //    }
+    //
+    // Will be decomposed into:
+    // workflow w
+    //   if (cond) {
+    //      wf_A
+    //      wf_B
+    //   }
+    //
+    //  workflow wf_A
+    //    if (cond2) {
+    //      call A
+    //    }
+    //
+    //  workflow wf_B
+    //    if (cond3) {
+    //      call B
+    //     }
+    //
+    private def uneven(scope: Scope,
+                       subWfNamePrefix: String,
+                       afterStmts: Vector[Scope]) : (Scope, WdlWorkflow, Vector[DVar]) = ???
 
     //  1) Find the first a large scatter/if block, If none exists, we are done.
     //  2) Split the children to those before and after the large-block.
@@ -428,25 +470,23 @@ case class DecomposeBlocks(cef: CompilerErrorFormatter,
     //  4) The largeBlock is decomposed into a sub-workflow and small block
     //  5) All references in afterList to results from the sub-workflow are
     //     renamed.
-    def apply(wf: WdlWorkflow) : (WdlWorkflow, WdlWorkflow) = {
-        // There is at least one large block.
-        val Block.Partition(before, lrgBlock, after) = Block.findFirstLargeSubBlock(wf.children.toVector)
-        lrgBlock match {
-            case None =>
-                // All blocks are small, there is nothing to do
-                throw new Exception("did not find a large subblock to decompose")
-
-            case Some(scope) =>
-                val (scope2, scope2SubWf, xtrnVarRefs) = decompose(scope, wf.unqualifiedName, after)
-                val xtrnUsageDict = xtrnVarRefs.map{ dVar =>
-                    dVar.name -> dVar.sanitizedName
-                }.toMap
-                val erv = StatementRenameVars(xtrnUsageDict, cef, verbose)
-                val afterRn = after.map{ stmt => erv.apply(stmt) }
-                val wf2 : WdlWorkflow = WdlRewrite.workflow(wf,
-                                                            (before :+ scope2) ++ afterRn)
-                (wf2, scope2SubWf)
-        }
+    def apply(wf: WdlWorkflow,
+              partition: Block.Partition) : (WdlWorkflow, WdlWorkflow) = {
+        val accuSL = Block.callsInSameLevel(scope)
+        val (scope2, subWf, xtrnVarRefs) =
+            if (accuSL.mixed) {
+                uneven(partition.lrgBlock, wf.unqualifiedName, partition.after)
+            } else {
+                sameLevel(partition.lrgBlock, wf.unqualifiedName, partition.after)
+            }
+        val xtrnUsageDict = xtrnVarRefs.map{ dVar =>
+            dVar.name -> dVar.sanitizedName
+        }.toMap
+        val erv = StatementRenameVars(xtrnUsageDict, cef, verbose)
+        val afterRn = partition.after.map{ stmt => erv.apply(stmt) }
+        val wf2 : WdlWorkflow = WdlRewrite.workflow(wf,
+                                                    (partition.before :+ scope2) ++ afterRn)
+        (wf2, subWf)
     }
 }
 
@@ -456,14 +496,6 @@ case class DecomposeBlocks(cef: CompilerErrorFormatter,
 //    or, the remaining blocks contain a single call
 //
 object DecomposeBlocks {
-
-    private def shouldBeDecomposed(tree: NamespaceOps.Tree) : Boolean = {
-        tree match {
-            case _: NamespaceOps.TreeLeaf => true
-            case node: NamespaceOps.TreeNode =>
-                Block.isSingleDxWorkflow(node.workflow.children.toVector)
-        }
-    }
 
     def apply(nsTree: NamespaceOps.Tree,
               wdlSourceFile: Path,
@@ -475,13 +507,23 @@ object DecomposeBlocks {
         // contain one call (at most).
         var tree = nsTree
         var iter = 0
-        while (shouldBeDecomposed(tree)) {
-            Utils.trace(verbose.on, s"Decompose iteration ${iter}")
-            iter = iter + 1
-            tree = tree.transform{ case (wf, cef) =>
-                val sbw = new DecomposeBlocks(cef, verbose)
-                val (wf2, subWf) = sbw.apply(wf)
-                (wf2, Some(subWf))
+        var done = false
+        while (!done) {
+            done = tree match {
+                case _: NamespaceOps.TreeLeaf => true
+                case node: NamespaceOps.TreeNode =>
+                    Block.findFirstLargeSubBlock(node.workflow.children.toVector) match {
+                        case None => true
+                        case Some(partition) =>
+                            Utils.trace(verbose.on, s"Decompose iteration ${iter}")
+                            iter = iter + 1
+                            tree = tree.transform{ case (wf, cef) =>
+                                val sbw = new DecomposeBlocks(cef, verbose)
+                                val (wf2, subWf) = sbw.apply(wf, partition)
+                                (wf2, Some(subWf))
+                            }
+                            false
+                    }
             }
         }
         if (verbose.on)
