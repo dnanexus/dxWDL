@@ -7,26 +7,34 @@ import org.scalatest.{FlatSpec, Matchers}
 class SubblocksTest extends FlatSpec with Matchers {
     lazy val currentWorkDir:Path = Paths.get(System.getProperty("user.dir"))
     private def pathFromBasename(basename: String) : Path = {
-        currentWorkDir.resolve(s"src/test/resources/${basename}")
+        currentWorkDir.resolve(s"src/test/resources/decompose_blocks/${basename}")
     }
 
 
     it should "Compile subblocks into subworkflows" in {
-        val path = pathFromBasename("decompose_blocks/long_block.wdl")
+        val path = pathFromBasename("long_block.wdl")
         Main.compile(
             List(path.toString, "--compileMode", "ir", "--locked", "--quiet")
         ) should equal(Main.SuccessfulTermination(""))
     }
 
     it should "recognize references to blocks compiled into sub-workflows" in {
-        val path = pathFromBasename("decompose_blocks/long_refs.wdl")
+        val path = pathFromBasename("long_refs.wdl")
         Main.compile(
             List(path.toString, "--compileMode", "ir", "--locked", "--quiet")
         ) should equal(Main.SuccessfulTermination(""))
     }
 
-    it should "handle wide and deep nesting" in {
-        val path = pathFromBasename("decompose_blocks/two_phase.wdl")
+    ignore should "handle wide and deep nesting" in {
+        val path = pathFromBasename("two_phase.wdl")
+        Main.compile(
+            List(path.toString, "--compileMode", "ir", "--locked", "--quiet")
+        ) should equal(Main.SuccessfulTermination(""))
+    }
+
+
+    it should "recognize dependencies inside an interpolation" in {
+        val path = pathFromBasename("interpolation.wdl")
         Main.compile(
             List(path.toString, "--compileMode", "ir", "--locked", "--quiet")
         ) should equal(Main.SuccessfulTermination(""))

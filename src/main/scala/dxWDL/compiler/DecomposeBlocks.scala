@@ -151,27 +151,6 @@ case class DecomposeBlocks(cef: CompilerErrorFormatter,
         val empty = VarTracker(Map.empty, Map.empty)
     }
 
-    // Is this a subblock? Declarations aren't subblocks, scatters and if's are.
-    private def isSubBlock(scope:Scope) : Boolean = {
-        scope match {
-            case _:Scatter => true
-            case _:If => true
-            case _ => false
-        }
-    }
-
-    // A block is large if it has more than a bunch of declarations, followed by
-    // at most one call.
-    private def isLargeSubBlock(scope: Scope) : Boolean = {
-        if (isSubBlock(scope)) {
-            val (topDecls, rest) = Utils.splitBlockDeclarations(scope.children.toList)
-            (rest.length >= 2)
-        } else {
-            false
-        }
-    }
-
-
     // Figure out all the variables used to calculate this expression.
     private def dependencies(aNode : AstNode) : Set[String] = {
         // recurse into list of subexpressions
@@ -317,7 +296,7 @@ case class DecomposeBlocks(cef: CompilerErrorFormatter,
         }.toMap
         val erv = StatementRenameVars(dict, cef, verbose)
         val xtrnRefs: Set[String] = after.map{
-            case stmt => erv.find(stmt, false)
+            case stmt => erv.find(stmt)
         }.toSet.flatten
 
         // Keep only externally referenced variables. All the rest
@@ -442,31 +421,6 @@ case class DecomposeBlocks(cef: CompilerErrorFormatter,
 
 
 
-    case class Partition(before: Vector[Scope],
-                         lrgBlock: Option[Scope],
-                         after: Vector[Scope])
-
-    private def splitWithLargeBlockAsPivot(wf: WdlWorkflow) : Partition = {
-        var before = Vector.empty[Scope]
-        var lrgBlock: Option[Scope] = None
-        var after = Vector.empty[Scope]
-
-        for (stmt <- wf.children) {
-            lrgBlock match {
-                case None =>
-                    if (isLargeSubBlock(stmt))
-                        lrgBlock = Some(stmt)
-                    else
-                        before = before :+ stmt
-                case Some(blk) =>
-                    after = after :+ stmt
-            }
-        }
-        assert (before.length + lrgBlock.size + after.length == wf.children.length)
-        Partition(before, lrgBlock, after)
-    }
-
-    // Iterate through the workflow children.
     //  1) Find the first a large scatter/if block, If none exists, we are done.
     //  2) Split the children to those before and after the large-block.
     //     (beforeList, largeBlock, afterList)
@@ -474,13 +428,13 @@ case class DecomposeBlocks(cef: CompilerErrorFormatter,
     //  4) The largeBlock is decomposed into a sub-workflow and small block
     //  5) All references in afterList to results from the sub-workflow are
     //     renamed.
-    def apply(wf: WdlWorkflow) : (WdlWorkflow, Option[WdlWorkflow]) = {
+    def apply(wf: WdlWorkflow) : (WdlWorkflow, WdlWorkflow) = {
         // There is at least one large block.
-        val Partition(before, lrgBlock, after) = splitWithLargeBlockAsPivot(wf)
+        val Block.Partition(before, lrgBlock, after) = Block.findFirstLargeSubBlock(wf.children.toVector)
         lrgBlock match {
             case None =>
                 // All blocks are small, there is nothing to do
-                (wf, None)
+                throw new Exception("did not find a large subblock to decompose")
 
             case Some(scope) =>
                 val (scope2, scope2SubWf, xtrnVarRefs) = decompose(scope, wf.unqualifiedName, after)
@@ -491,12 +445,26 @@ case class DecomposeBlocks(cef: CompilerErrorFormatter,
                 val afterRn = after.map{ stmt => erv.apply(stmt) }
                 val wf2 : WdlWorkflow = WdlRewrite.workflow(wf,
                                                             (before :+ scope2) ++ afterRn)
-                (wf2, Some(scope2SubWf))
+                (wf2, scope2SubWf)
         }
     }
 }
 
+// Iterate through the workflow children, and find subtrees to break off
+// into subworkflows. The stopping conditions is:
+//    Either there are no if/scatter blocks,
+//    or, the remaining blocks contain a single call
+//
 object DecomposeBlocks {
+
+    private def shouldBeDecomposed(tree: NamespaceOps.Tree) : Boolean = {
+        tree match {
+            case _: NamespaceOps.TreeLeaf => true
+            case node: NamespaceOps.TreeNode =>
+                Block.isSingleDxWorkflow(node.workflow.children.toVector)
+        }
+    }
+
     def apply(nsTree: NamespaceOps.Tree,
               wdlSourceFile: Path,
               verbose: Verbose) : NamespaceOps.Tree = {
@@ -505,20 +473,15 @@ object DecomposeBlocks {
         // Process the original WDL files. Break all large
         // blocks into sub-workflows. Continue until all blocks
         // contain one call (at most).
-        var done = false
         var tree = nsTree
         var iter = 0
-        while (!done) {
+        while (shouldBeDecomposed(tree)) {
             Utils.trace(verbose.on, s"Decompose iteration ${iter}")
             iter = iter + 1
             tree = tree.transform{ case (wf, cef) =>
                 val sbw = new DecomposeBlocks(cef, verbose)
                 val (wf2, subWf) = sbw.apply(wf)
-                subWf match {
-                    case None => done = true
-                    case _ => done = false
-                }
-                (wf2, subWf)
+                (wf2, Some(subWf))
             }
         }
         if (verbose.on)

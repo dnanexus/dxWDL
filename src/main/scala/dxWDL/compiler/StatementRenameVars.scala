@@ -171,11 +171,9 @@ case class StatementRenameVars(wordTranslations: Map[String, String],
     }
 
 
-    private def findInExpr(expr: WdlExpression,
-                           reportAll: Boolean): Set[String] = {
+    private def findInExpr(expr: WdlExpression): Set[String] = {
         val parts = split(expr.toWomString)
         parts.flatMap {
-            case Fqn(fqn) if reportAll => Some(fqn)
             case Fqn(fqn) =>
                 // if the identifer is of the form A.x or A,
                 // where A is in the traslation list, then convert into:
@@ -194,42 +192,39 @@ case class StatementRenameVars(wordTranslations: Map[String, String],
         }.toSet
     }
 
-
-
-    // Find all variable references
-    def find(stmt: Scope,
-             reportAll: Boolean) : Set[String] = {
+    // Find only variable references inside the dictionary
+    def find(stmt: Scope) : Set[String] = {
         stmt match {
             case decl:Declaration =>
                 decl.expression match  {
                     case None => Set.empty
-                    case Some(e) => findInExpr(e, reportAll)
+                    case Some(e) => findInExpr(e)
                 }
 
             case tc:WdlTaskCall =>
                 tc.inputMappings.map{
-                    case (_, expr) =>  findInExpr(expr, reportAll)
+                    case (_, expr) =>  findInExpr(expr)
                 }.toSet.flatten
 
             case wfc:WdlWorkflowCall =>
                 wfc.inputMappings.map{
-                    case (_, expr) =>  findInExpr(expr, reportAll)
+                    case (_, expr) =>  findInExpr(expr)
                 }.toSet.flatten
 
             case ssc:Scatter =>
                 val s1 = ssc.children.flatMap {
-                    case child:Scope => find(child, reportAll)
+                    case child:Scope => find(child)
                 }.toSet
-                s1 ++ findInExpr(ssc.collection, reportAll)
+                s1 ++ findInExpr(ssc.collection)
 
             case cond:If =>
                 val s1 = cond.children.flatMap {
-                    case child:Scope => find(child, reportAll)
+                    case child:Scope => find(child)
                 }.toSet
-                s1 ++ findInExpr(cond.condition, reportAll)
+                s1 ++ findInExpr(cond.condition)
 
             case wot:WorkflowOutput =>
-                findInExpr(wot.requiredExpression, reportAll)
+                findInExpr(wot.requiredExpression)
 
             case x =>
                 throw new Exception(cef.notCurrentlySupported(
@@ -237,4 +232,54 @@ case class StatementRenameVars(wordTranslations: Map[String, String],
                                         "Unimplemented workflow element"))
         }
     }
+
+    def findAllInExpr(expr: WdlExpression): Set[String] = {
+        val parts = split(expr.toWomString)
+        parts.flatMap {
+            case Fqn(fqn) => Some(fqn)
+            case Symbols(sym) => None
+        }.toSet
+    }
+
+    // Find all variable references
+    def findAll(stmt: Scope) : Set[String] = {
+        stmt match {
+            case decl:Declaration =>
+                decl.expression match  {
+                    case None => Set.empty
+                    case Some(e) => findAllInExpr(e)
+                }
+
+            case tc:WdlTaskCall =>
+                tc.inputMappings.map{
+                    case (_, expr) =>  findAllInExpr(expr)
+                }.toSet.flatten
+
+            case wfc:WdlWorkflowCall =>
+                wfc.inputMappings.map{
+                    case (_, expr) =>  findAllInExpr(expr)
+                }.toSet.flatten
+
+            case ssc:Scatter =>
+                val s1 = ssc.children.flatMap {
+                    case child:Scope => findAll(child)
+                }.toSet
+                s1 ++ findAllInExpr(ssc.collection)
+
+            case cond:If =>
+                val s1 = cond.children.flatMap {
+                    case child:Scope => findAll(child)
+                }.toSet
+                s1 ++ findAllInExpr(cond.condition)
+
+            case wot:WorkflowOutput =>
+                findAllInExpr(wot.requiredExpression)
+
+            case x =>
+                throw new Exception(cef.notCurrentlySupported(
+                                        x.ast,
+                                        "Unimplemented workflow element"))
+        }
+    }
+
 }
