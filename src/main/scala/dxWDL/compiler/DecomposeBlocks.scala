@@ -358,30 +358,46 @@ case class DecomposeBlocks(cef: CompilerErrorFormatter,
         (wf, xtrnRefs)
     }
 
+    // Check if this is the base case, in which we have a linear code sequence
+    // which calls at the end. There are no scatter/if subblocks.
+    //
+    //   Int z = x+y
+    //   String s = "hello_wolf"
+    //   call A
+    //   call B
+    def sameLevelBaseCase(stmt: Scope) : Boolean = {
+        val accu: Option[Int] = stmt.children.foldLeft(Option(0)) {
+            case (Some(cnt), _:Declaration) => Some(cnt)
+            case (Some(cnt), _:WdlCall) => Some(cnt + 1)
+            case (_, _) => None
+        }
+        accu match {
+            case None => false
+            case Some(numCalls) => numCalls >= 2
+        }
+    }
+
     // In a same-level situation, replace the calls sequence with a single call to
     // a subworkflow
     private def sameLevelRewriteBlock(oldStmt: Scope, wfc: WdlWorkflowCall) : Scope = {
+        val children =
+            if (sameLevelBaseCase(oldStmt)) {
+                val decls = oldStmt.children.collect{ case decl:Declaration => decl }
+                decls :+ wfc
+            } else {
+                // Not the base case, recurse into the children
+                oldStmt.children.map{ stmt => sameLevelRewriteBlock(stmt, wfc) }
+            }
         oldStmt match {
             case ssc: Scatter =>
                 WdlRewrite.scatter(ssc, children)
             case cond: If =>
                 WdlRewrite.cond(cond, children, cond.condition)
             case x =>
-                throw new Exception(cef.notCurrentlySupported(
+                throw new Exception(cef.compilerInternalError(
                                         x.ast,
-                                        s"Unimplemented workflow element"))
+                                        s"${oldStmt.getClass.getSimpleName}"))
         }
-
-
-        val children = scope.children.foldLeft(Vector.empty[Scope]) {
-            case (accu, ssc: Scatter) if Block.countCalls(ssc) >=2 =>
-                if (ssc.children.length > 1)
-            case (accu, cond: If) if Block.countCalls(cond) >=2 =>
-            case (accu, stmt) =>
-                assert(Block.countCalls(stmt) == 0)
-                accu :+ stmt
-        }
-
     }
 
     // The workflow contains calls that are at the exact same nesting level. Declarations
@@ -404,7 +420,7 @@ case class DecomposeBlocks(cef: CompilerErrorFormatter,
     private def sameLevel(stmt: Scope,
                           subWfNamePrefix: String,
                           afterStmts: Vector[Scope]) : (Scope, WdlWorkflow, Vector[DVar]) = {
-        val calls = Block.findCalls(scope.children)
+        val calls = Block.findCalls(stmt.children)
         Utils.trace(verbose.on, s"""|decompose scope=${stmt.fullyQualifiedName} with ${calls.size}
                                     |calls at the same level""".stripMargin)
 
@@ -472,7 +488,7 @@ case class DecomposeBlocks(cef: CompilerErrorFormatter,
     //     renamed.
     def apply(wf: WdlWorkflow,
               partition: Block.Partition) : (WdlWorkflow, WdlWorkflow) = {
-        val accuSL = Block.callsInSameLevel(scope)
+        val accuSL = Block.callsInSameLevel(partition.lrgBlock.children.toVector, cef)
         val (scope2, subWf, xtrnVarRefs) =
             if (accuSL.mixed) {
                 uneven(partition.lrgBlock, wf.unqualifiedName, partition.after)

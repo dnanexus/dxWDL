@@ -24,31 +24,22 @@ case class CompilerErrorFormatter(resource: String,
         s"${resource}, line ${lineNum}"
     }
 
+    def compilerInternalError(ast: Ast, featureName: String) : String = {
+        val t: Terminal = AstTools.findTerminals(ast).head
+        s"""|Should not reach this point in the code: ${featureName}
+            |
+            |${textualSource(t)}
+            |${pointToSource(t)}
+            |""".stripMargin
+    }
+
     def couldNotEvaluateType(expr: WdlExpression) : String = {
         val t: Terminal = AstTools.findTerminals(expr.ast).head
-        s"""|Could not evaluate the WDL type for expression
+                s"""|Could not evaluate the WDL type for expression
             |
             |${textualSource(t)}
             |${pointToSource(t)}
-            |""".stripMargin
-    }
-
-    def evaluatingTerminal(t: Terminal, x: String) = {
-        s"""|Looking up string ${x}, while evaluating terminal
-            |
-            |${textualSource(t)}
-            |${pointToSource(t)}
-            |""".stripMargin
-
-    }
-
-    def expressionMustBeConstOrVar(expr: WdlExpression) : String = {
-        val t: Terminal = AstTools.findTerminals(expr.ast).head
-        s"""|Expression ${expr.toWomString} must be const or variable
-            |
-            |${textualSource(t)}
-            |${pointToSource(t)}
-            |""".stripMargin
+                    |""".stripMargin
     }
 
     def illegalCallName(call: WdlCall) : String = {
@@ -149,16 +140,6 @@ case class CompilerErrorFormatter(resource: String,
             |""".stripMargin
     }
 
-
-    def undefinedMemberAccess(ast: Ast): String = {
-        val lhsAst = ast.getAttribute("lhs").asInstanceOf[Terminal]
-        val fqn = WdlExpression.toString(ast)
-        s"""|Undefined member access (${fqn})
-            |
-            |${textualSource(lhsAst)}
-            |${pointToSource(lhsAst)}
-            |""".stripMargin
-    }
 
     def workflowInputDefaultMustBeConst(expr: WdlExpression) = {
         val t: Terminal = AstTools.findTerminals(expr.ast).head

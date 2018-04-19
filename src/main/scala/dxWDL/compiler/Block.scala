@@ -28,6 +28,7 @@
 package dxWDL.compiler
 
 import wdl._
+import dxWDL.{CompilerErrorFormatter}
 
 // Find all the calls inside a statement block
 case class Block(statements: Vector[Scope]) {
@@ -78,7 +79,7 @@ object Block {
     def countCalls(statments: Seq[Scope]) : Int =
         Block(statments.toVector).countCalls
 
-    def findCalls(statments: Seq[Scope]) : Int =
+    def findCalls(statments: Seq[Scope]) : Vector[WdlCall] =
         Block(statments.toVector).findCalls
 
     def splitIntoBlocks(children: Vector[Scope]) : Vector[Block] = {
@@ -214,21 +215,30 @@ object Block {
     // the calls.
     case class Accu(firstCall: Boolean, mixed: Boolean)
 
-    def callsInSameLevel(statments: Vector[Scope]) : Accu = {
+    def callsInSameLevel(statments: Vector[Scope],
+                         cef: CompilerErrorFormatter) : Accu = {
         statments.foldLeft(Accu(false, false)) {
             case (accu, _:Declaration) =>
                 if (accu.firstCall) Accu(true, true)
                 else Accu(false, false)
+
             case (accu, _:WdlCall) =>
                 Accu(true, accu.mixed)
+
             case (accu, stmt:If) =>
-                val retval = callsInSameLevel(stmt.children.toVector)
+                val retval = callsInSameLevel(stmt.children.toVector, cef)
                 Accu(accu.firstCall || retval.firstCall,
                      accu.mixed || retval.mixed)
+
             case (accu, stmt:Scatter) =>
-                val retval = callsInSameLevel(stmt.children.toVector)
+                val retval = callsInSameLevel(stmt.children.toVector, cef)
                 Accu(accu.firstCall || retval.firstCall,
                      accu.mixed || retval.mixed)
+
+            case (accu, x) =>
+                throw new Exception(cef.compilerInternalError(
+                                        x.ast,
+                                        s"${x.getClass.getSimpleName}"))
         }
     }
 }
