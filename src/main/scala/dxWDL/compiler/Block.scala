@@ -28,7 +28,6 @@
 package dxWDL.compiler
 
 import wdl._
-import dxWDL.{CompilerErrorFormatter}
 
 // Find all the calls inside a statement block
 case class Block(statements: Vector[Scope]) {
@@ -76,11 +75,37 @@ case class Block(statements: Vector[Scope]) {
 }
 
 object Block {
-    def countCalls(statments: Seq[Scope]) : Int =
-        Block(statments.toVector).countCalls
+    //
+    // call line example:
+    // if (cond) {
+    //   call A
+    //   call B
+    //   call C
+    // }
+    //
+    // a fragment example:
+    // if (cond)
+    //    if (cond2)
+    //       scatter(x in xs)
+    //         call A
+    //
+    object Kind extends Enumeration {
+        val CallLine, Fragment = Value
+    }
 
-    def findCalls(statments: Seq[Scope]) : Vector[WdlCall] =
-        Block(statments.toVector).findCalls
+    case class ReducibleChild(scope: Scope, kind: Kind.Value)
+
+    def countCalls(statements: Seq[Scope]) : Int =
+        Block(statements.toVector).countCalls
+
+    def countCalls(statement: Scope) : Int =
+        Block(Vector(statement)).countCalls
+
+    def findCalls(statements: Seq[Scope]) : Vector[WdlCall] =
+        Block(statements.toVector).findCalls
+
+    def findCalls(statement: Scope) : Vector[WdlCall] =
+        Block(Vector(statement)).findCalls
 
     def splitIntoBlocks(children: Vector[Scope]) : Vector[Block] = {
         // base cases: zero and one children
@@ -117,10 +142,6 @@ object Block {
     }
 
 
-    case class Partition(before: Vector[Scope],
-                         lrgBlock: Scope,
-                         after: Vector[Scope])
-
     // Is this a subblock? Declarations aren't subblocks, scatters and if's are.
     private def isSubBlock(scope:Scope) : Boolean = {
         scope match {
@@ -131,114 +152,77 @@ object Block {
     }
 
     // A block is large if it has two calls or more
-    private def isLargeSubBlock(scope: Scope) : Boolean = {
+    private def isReducible(scope: Scope) : Boolean = {
         if (isSubBlock(scope)) {
-            Block(scope.children.toVector).countCalls >= 2
+            Block(scope.children.toVector).countCalls >= 1
         } else {
             false
         }
     }
 
-
-    // Look for the first if/scatter block that has two calls or more.
-    def findFirstLargeSubBlock(statements: Vector[Scope]) : Option[Partition] = {
-        var before = Vector.empty[Scope]
-        var lrgBlock: Option[Scope] = None
-        var after = Vector.empty[Scope]
-
-        for (stmt <- statements) {
-            lrgBlock match {
-                case None =>
-                    if (isLargeSubBlock(stmt))
-                        lrgBlock = Some(stmt)
-                    else
-                        before = before :+ stmt
-                case Some(blk) =>
-                    after = after :+ stmt
-            }
+    // A block that looks like this:
+    //
+    //  if (cond) {
+    //      call A
+    //      call B
+    //  }
+    private def isLeafBlock(scope: Scope) : Boolean = {
+        if (!isSubBlock(scope))
+            return false
+        val numCalls = countCalls(Vector(scope))
+        val numTopLevelCalls = scope.children.foldLeft(0) {
+            case (accu, call:WdlCall) =>
+                accu + 1
+            case (accu, _) =>
+                accu
         }
-        assert (before.length + lrgBlock.size + after.length == statements.length)
-        lrgBlock match {
+        numCalls == numTopLevelCalls
+    }
+
+    // There is a separable workflow in here, either
+    // a fragment with one call, or a call-line with multiple calls.
+    //
+    // call line example:
+    //   call A
+    //   call B
+    //   call C
+    //
+    private def findReducibleChild(statements: Seq[Scope]) : Option[ReducibleChild] = {
+        val child = statements.find{
+            case stmt => isReducible(stmt)
+        }
+        child match {
+            case None =>
+                // There is nothing to reduce here. This can happen for a sequence like:
+                // workflow w
+                //    call C
+                //    call D
+                //    String s = C.result
+                None
+            case Some(stmt) if (countCalls(stmt) == 1) =>
+                // This is a fragment, we can stop here.
+                Some(ReducibleChild(stmt, Kind.Fragment))
+            case Some(stmt) if isLeafBlock(stmt) =>
+                // this is a call-line
+                Some(ReducibleChild(stmt, Kind.CallLine))
+            case Some(stmt) =>
+                // dig deeper, one of the children is reducible
+                val retval = findReducibleChild(stmt.children)
+                assert(retval != None)
+                retval
+        }
+    }
+
+    def findOneReducibleChild(statements: Vector[Scope]) : Option[ReducibleChild] = {
+        val child = statements.find{
+            case stmt => isReducible(stmt)
+        }
+        child match {
             case None => None
-            case Some(blk) => Some(Partition(before, blk, after))
-        }
-    }
-
-    // In a block, split off the beginning declarations, from the rest.
-    // For example, the scatter block below, will be split into
-    // the top two declarations, and the other calls.
-    // scatter (unmapped_bam in flowcell_unmapped_bams) {
-    //    String sub_strip_path = "gs://.*/"
-    //    String sub_strip_unmapped = unmapped_bam_suffix + "$"
-    //    call SamToFastqAndBwaMem {..}
-    //    call MergeBamAlignment {..}
-    // }
-    def splitBlockDeclarations(children: List[Scope]) :
-            (List[Declaration], List[Scope]) = {
-        def collect(topDecls: List[Declaration],
-                    rest: List[Scope]) : (List[Declaration], List[Scope]) = {
-            rest match {
-                case hd::tl =>
-                    hd match {
-                        case decl: Declaration =>
-                            collect(decl :: topDecls, tl)
-                        // Next element is not a declaration
-                        case _ => (topDecls, rest)
-                    }
-                // Got to the end of the children list
-                case Nil => (topDecls, rest)
-            }
-        }
-
-        val (decls, rest) = collect(Nil, children)
-        (decls.reverse, rest)
-    }
-
-    // Checks if an if/scatter block contains only calls, and they are all
-    // in the same block or sub-block.
-    //
-    // a) calls are inside the same block
-    //     if (cond) {
-    //       call A
-    //       call B
-    //     }
-    //
-    // a1) same as (a), but the nesting could be deep
-    //    if (cond) {
-    //      scatter (x in xs) {
-    //        call A
-    //        call B
-    //      }
-    //    }
-    //
-    // Declarations can be placed anywhere, but not after or between
-    // the calls.
-    case class Accu(firstCall: Boolean, mixed: Boolean)
-
-    def callsInSameLevel(statments: Vector[Scope],
-                         cef: CompilerErrorFormatter) : Accu = {
-        statments.foldLeft(Accu(false, false)) {
-            case (accu, _:Declaration) =>
-                if (accu.firstCall) Accu(true, true)
-                else Accu(false, false)
-
-            case (accu, _:WdlCall) =>
-                Accu(true, accu.mixed)
-
-            case (accu, stmt:If) =>
-                val retval = callsInSameLevel(stmt.children.toVector, cef)
-                Accu(accu.firstCall || retval.firstCall,
-                     accu.mixed || retval.mixed)
-
-            case (accu, stmt:Scatter) =>
-                val retval = callsInSameLevel(stmt.children.toVector, cef)
-                Accu(accu.firstCall || retval.firstCall,
-                     accu.mixed || retval.mixed)
-
-            case (accu, x) =>
-                throw new Exception(cef.compilerInternalError(
-                                        x.ast,
-                                        s"${x.getClass.getSimpleName}"))
+            case Some(c) =>
+                // This child has more than one call. It either holds
+                // a fragment or a call-line.
+                findReducibleChild(Seq(c))
         }
     }
 }

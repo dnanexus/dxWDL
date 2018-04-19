@@ -163,6 +163,13 @@ case class StatementRenameVars(wordTranslations: Map[String, String],
                                    exprRenameVars(wo.requiredExpression),
                                    wo.ast,
                                    wo.parent)
+
+            case wf:WdlWorkflow =>
+                val children = wf.children.map {
+                    case child:Scope => apply(child)
+                }.toVector
+                WdlRewrite.workflow(wf, children)
+
             case x =>
                 throw new Exception(cef.notCurrentlySupported(
                                         x.ast,

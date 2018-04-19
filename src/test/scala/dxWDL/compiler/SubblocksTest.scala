@@ -11,7 +11,7 @@ class SubblocksTest extends FlatSpec with Matchers {
     }
 
 
-    ignore should "Compile subblocks into subworkflows" in {
+    it should "Compile subblocks into subworkflows" in {
         val path = pathFromBasename("long_block.wdl")
         Main.compile(
             List(path.toString, "--compileMode", "ir", "--locked", "--quiet")
@@ -25,7 +25,7 @@ class SubblocksTest extends FlatSpec with Matchers {
         ) should equal(Main.SuccessfulTermination(""))
     }
 
-    it should "handle wide and deep nesting" in {
+    ignore should "handle wide and deep nesting" in {
         val path = pathFromBasename("two_phase.wdl")
         Main.compile(
             List(path.toString, "--compileMode", "ir", "--locked", "--verbose")
