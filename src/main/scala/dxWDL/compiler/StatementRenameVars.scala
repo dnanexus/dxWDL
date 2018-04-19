@@ -18,7 +18,8 @@ import wdl._
 
 // dict: variables to rename. ("Add.result" -> "subwf_Add.out_result")
 //
-case class StatementRenameVars(wordTranslations: Map[String, String],
+case class StatementRenameVars(doNotModify: Set[Scope],
+                               wordTranslations: Map[String, String],
                                cef: CompilerErrorFormatter,
                                verbose: Verbose) {
 
@@ -123,6 +124,8 @@ case class StatementRenameVars(wordTranslations: Map[String, String],
 
     // rename all the variables defined in the dictionary
     def apply(stmt: Scope) : Scope = {
+        if (doNotModify contains stmt)
+            return stmt
         stmt match {
             case decl:Declaration =>
                 WdlRewrite.declaration(decl.womType,

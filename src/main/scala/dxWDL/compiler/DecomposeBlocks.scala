@@ -134,13 +134,15 @@ workflow w2_add {
 
 package dxWDL.compiler
 
-import dxWDL.{CompilerErrorFormatter, Utils, Verbose}
+import dxWDL.{CompilerErrorFormatter, Utils, Verbose, WdlPrettyPrinter}
 import java.nio.file.Path
-import wom.types.WomType
+import scala.util.{Failure, Success}
 import wdl._
+import wdl.expression._
 import wdl.AstTools.EnhancedAstNode
 import wdl.WdlExpression.AstForExpressions
 import wdl4s.parser.WdlParser.{Ast, AstNode, Terminal}
+import wom.types._
 
 case class DecomposeBlocks(subWorkflowPrefix: String,
                            cef: CompilerErrorFormatter,
@@ -270,6 +272,18 @@ case class DecomposeBlocks(subWorkflowPrefix: String,
         }.toVector
     }
 
+    // Figure out the type of an expression
+    private def evalType(expr: WdlExpression, parent: Scope) : WomType = {
+        TypeEvaluator(Utils.lookupType(parent),
+                      new WdlStandardLibraryFunctionsType,
+                      Some(parent)).evaluate(expr.ast) match {
+            case Success(wdlType) => wdlType
+            case Failure(f) =>
+                Utils.warning(verbose, cef.couldNotEvaluateType(expr))
+                throw f
+        }
+    }
+
     // Find all the free variables in a block of statements. For example,
     // for the following block:
     //
@@ -279,8 +293,8 @@ case class DecomposeBlocks(subWorkflowPrefix: String,
     //
     // The free variables are {x, y}.
     //
-    private def freeVars(statements: Seq[Scope]) : Vector[DVar] = {
-        val varTracker = statements.foldLeft(VarTracker.empty) {
+    private def freeVarsAccu(statements: Seq[Scope], accu: VarTracker) : VarTracker = {
+        statements.foldLeft(accu) {
             case (accu, decl:Declaration) =>
                 val xtrnVars = decl.expression match {
                     case None => Vector.empty
@@ -298,11 +312,32 @@ case class DecomposeBlocks(subWorkflowPrefix: String,
                 }
                 accu.findNewIn(xtrnVars).addLocal(callOutputs)
 
+            case (accu, ssc:Scatter) =>
+                // Update the tracker based on the scatter collection,
+                // then recurse into the children.
+                val xtrnVars = exprDeps(ssc.collection, ssc)
+                val collectionType = evalType(ssc.collection, ssc)
+                val item = DVar(ssc.item,
+                                Utils.stripArray(collectionType))
+                val accu2 = accu.findNewIn(xtrnVars).addLocal(item)
+                freeVarsAccu(ssc.children, accu2)
+
+            case (accu, condStmt:If) =>
+                // add any free variables in the condition expression,
+                // then recurse into the children.
+                val xtrnVars = exprDeps(condStmt.condition, condStmt)
+                val accu2 = accu.findNewIn(xtrnVars)
+                freeVarsAccu(condStmt.children, accu2)
+
             case (_, x) =>
                 throw new Exception(cef.notCurrentlySupported(
                                         x.ast,
                                         s"Unimplemented workflow element"))
         }
+    }
+
+    private def freeVars(statements: Seq[Scope]) : Vector[DVar] = {
+        val varTracker = freeVarsAccu(statements, VarTracker.empty)
         varTracker.outside.values.toVector
     }
 
@@ -315,6 +350,13 @@ case class DecomposeBlocks(subWorkflowPrefix: String,
                 call.outputs.map { cOut: CallOutput =>
                     DVar(call.unqualifiedName + "." ++ cOut.unqualifiedName, cOut.womType)
                 }
+            case ssc:Scatter =>
+                val innerVars = blockOutputsAll(ssc.children.toVector)
+                innerVars.map{ dVar => dVar.copy(womType = WomArrayType(dVar.womType)) }
+            case condStmt:If =>
+                val innerVars = blockOutputsAll(condStmt.children.toVector)
+                innerVars.map{ dVar => dVar.copy(womType = WomOptionalType(dVar.womType)) }
+
             case x =>
                 throw new Exception(cef.notCurrentlySupported(
                                         x.ast,
@@ -364,7 +406,7 @@ case class DecomposeBlocks(subWorkflowPrefix: String,
         val wordTranslations = inputs.map{ dVar =>
             dVar.name -> dVar.sanitizedName
         }.toMap
-        val erv = StatementRenameVars(wordTranslations, cef, verbose)
+        val erv = StatementRenameVars(Set.empty, wordTranslations, cef, verbose)
         val statementsRn = statements.map{
             case stmt => erv.apply(stmt)
         }.toVector
@@ -416,8 +458,7 @@ case class DecomposeBlocks(subWorkflowPrefix: String,
     //  y1  y'
     //     / \
     //    z1  z'
-    private def replaceStatement(wf: WdlWorkflow,
-                                 orgStmt: Scope,
+    private def replaceStatement(orgStmt: Scope,
                                  freshStmt: Scope) : WdlWorkflow = {
         val parent = orgStmt.parent match {
             case None =>
@@ -426,28 +467,25 @@ case class DecomposeBlocks(subWorkflowPrefix: String,
                                         s"statement without a parent"))
             case Some(x) => x
         }
-        val children = parent.children.map{
+        // Leave all the children intact, except the one we wish to replace
+        val children2 = parent.children.map{
             case stmt if (stmt == orgStmt) => freshStmt
             case stmt => stmt
         }
 
-        if (parent == wf) {
-            // base case: the subtree is a direct decendent
-            // of the workflow.
-            WdlRewrite.workflow(wf, children)
-        } else {
-            // rewrite the parent, and continue up the trail
-            val freshParent = parent match {
-                case ssc: Scatter =>
-                    WdlRewrite.scatter(ssc, children)
-                case cond: If =>
-                    WdlRewrite.cond(cond, children, cond.condition)
-                case x =>
-                    throw new Exception(cef.compilerInternalError(
-                                            x.ast,
-                                            s"unexpected workflow element ${x.getClass.getSimpleName}"))
-            }
-            replaceStatement(wf, parent, freshParent)
+        // rewrite the parent, and continue up the trail. Stop
+        // when reaching the top workflow.
+        parent match {
+            case ssc: Scatter =>
+                val ssc2 = WdlRewrite.scatter(ssc, children2)
+                replaceStatement(parent, ssc2)
+            case condStmt: If =>
+                val condStmt2 = WdlRewrite.cond(condStmt, children2, condStmt.condition)
+                replaceStatement(parent, condStmt2)
+            case wf: WdlWorkflow =>
+                WdlRewrite.workflow(wf, children2)
+            case x =>
+                throw new Exception(s"unexpected workflow element ${x.getClass.getSimpleName}")
         }
     }
 
@@ -462,7 +500,8 @@ case class DecomposeBlocks(subWorkflowPrefix: String,
     //   if (cond)
     //      call subwf_A_B_C
     private def decomposeCallLine(wf: WdlWorkflow,
-                                  subtree: Scope) : (WdlWorkflow, WdlWorkflow, Vector[DVar]) = {
+                                  subtree: Scope)
+            : (WdlWorkflow, WdlWorkflow, WdlWorkflowCall, Vector[DVar]) = {
         // Figure out the free variables in the subtree
         val sbtInputs0 = freeVars(subtree.children)
 
@@ -503,13 +542,14 @@ case class DecomposeBlocks(subWorkflowPrefix: String,
                                         x.ast,
                                         s"unexpected workflow element ${x.getClass.getSimpleName}"))
         }
-        val wf2 = replaceStatement(wf, subtree, freshSubtree)
-        (wf2, subWf, xtrnVarRefs)
+        val wf2 = replaceStatement(subtree, freshSubtree)
+        (wf2, subWf, wfc, xtrnVarRefs)
     }
 
     // Extract [subTree] from a workflow, make a subworkflow out of it
     private def decomposeFragment(wf: WdlWorkflow,
-                                  subtree: Scope) : (WdlWorkflow, WdlWorkflow, Vector[DVar]) = {
+                                  subtree: Scope)
+            : (WdlWorkflow, WdlWorkflow, WdlWorkflowCall, Vector[DVar]) = {
         // Figure out the free variables in the subtree
         val sbtInputs0 = freeVars(Seq(subtree))
 
@@ -539,8 +579,8 @@ case class DecomposeBlocks(subWorkflowPrefix: String,
             dVar.sanitizedName -> WdlExpression.fromString(dVar.name)
         }.toMap
         val wfc = WdlRewrite.workflowCall(subWf, subWfInputs)
-        val wf2 = replaceStatement(wf, subtree, wfc)
-        (wf2, subWf, xtrnVarRefs)
+        val wf2 = replaceStatement(subtree, wfc)
+        (wf2, subWf, wfc, xtrnVarRefs)
     }
 
     // Replace [child], which is a subtree of the workflow, with a call to
@@ -548,12 +588,17 @@ case class DecomposeBlocks(subWorkflowPrefix: String,
     // newly created sub-workflow.
     def apply(wf: WdlWorkflow,
               child: Block.ReducibleChild) : (WdlWorkflow, WdlWorkflow) = {
-        val (topWf, subWf, xtrnVarRefs) = child.kind match {
+        val (topWf, subWf, wfc, xtrnVarRefs) = child.kind match {
             case Block.Kind.CallLine =>
                 decomposeCallLine(wf, child.scope)
             case Block.Kind.Fragment =>
                 decomposeFragment(wf, child.scope)
         }
+
+        val lines = WdlPrettyPrinter(true, None).apply(subWf, 0).mkString("\n")
+        Utils.trace(verbose2, s"subwf = ${lines}")
+        val topWfLines = WdlPrettyPrinter(true, None).apply(topWf, 0).mkString("\n")
+        Utils.trace(verbose2, s"topWf = ${topWfLines}")
 
         // Note: we are apply renaming to the entire toplevel workflow, including
         // the parts before the subtree that was actually rewritten. This is legal
@@ -562,7 +607,8 @@ case class DecomposeBlocks(subWorkflowPrefix: String,
         val xtrnUsageDict = xtrnVarRefs.map{ dVar =>
             dVar.name -> dVar.sanitizedName
         }.toMap
-        val topWf2 = StatementRenameVars(xtrnUsageDict, cef, verbose).apply(topWf)
+        Utils.trace(verbose2, s"Renaming variable uses")
+        val topWf2 = StatementRenameVars(Set(wfc), xtrnUsageDict, cef, verbose).apply(topWf)
         (topWf2.asInstanceOf[WdlWorkflow], subWf)
     }
 }

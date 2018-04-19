@@ -165,7 +165,7 @@ task Add {
     private def blockClosure(statements: Vector[Scope],
                              env : CallEnv,
                              dbg: String) : CallEnv = {
-        val srv = StatementRenameVars(Map.empty, cef, verbose)
+        val srv = StatementRenameVars(Set.empty, Map.empty, cef, verbose)
         val xtrnRefs: Set[String] = statements.map{
             case stmt => srv.findAll(stmt)
         }.toSet.flatten
@@ -489,7 +489,7 @@ task Add {
         val wordTranslations = inputVars.map{ cVar =>
             cVar.name -> cVar.dxVarName
         }.toMap
-        val erv = StatementRenameVars(wordTranslations, cef, verbose)
+        val erv = StatementRenameVars(Set.empty, wordTranslations, cef, verbose)
         val statements2 = block.statements.map{
             case stmt => erv.apply(stmt)
         }.toVector

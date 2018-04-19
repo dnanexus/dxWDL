@@ -29,9 +29,13 @@ class CompilerUnitTest extends FlatSpec with Matchers {
 
     it should "Allow adding unbound argument" in {
         val path = pathFromBasename("unbound_arg.wdl")
-        Main.compile(
+        val retval = Main.compile(
             List(path.toString, "--compileMode", "ir", "-quiet")
-        ) should equal(Main.SuccessfulTermination(""))
+        )
+        inside(retval) {
+            case Main.UnsuccessfulTermination(errMsg) =>
+                errMsg should include ("Call is missing a compulsory argument")
+        }
     }
 
     it should "Can't have unbound arguments from a subworkflow" in {
