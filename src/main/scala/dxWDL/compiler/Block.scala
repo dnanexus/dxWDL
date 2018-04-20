@@ -166,17 +166,18 @@ object Block {
     //      call A
     //      call B
     //  }
-    private def isLeafBlock(scope: Scope) : Boolean = {
-        if (!isSubBlock(scope))
-            return false
-        val numCalls = countCalls(Vector(scope))
-        val numTopLevelCalls = scope.children.foldLeft(0) {
-            case (accu, call:WdlCall) =>
-                accu + 1
-            case (accu, _) =>
-                accu
+    private def isLeafBlock(numCalls: Int, scope: Scope) : Boolean = {
+        if (isSubBlock(scope)) {
+            val numTopLevelCalls = scope.children.foldLeft(0) {
+                case (accu, call:WdlCall) =>
+                    accu + 1
+                case (accu, _) =>
+                    accu
+            }
+            numCalls == numTopLevelCalls
+        } else {
+            false
         }
-        numCalls == numTopLevelCalls
     }
 
     // There is a separable workflow in here, either
@@ -187,7 +188,7 @@ object Block {
     //   call B
     //   call C
     //
-    private def findReducibleChild(statements: Seq[Scope]) : Option[ReducibleChild] = {
+    def findReducibleChild(statements: Seq[Scope]) : Option[ReducibleChild] = {
         val child = statements.find{
             case stmt => isReducible(stmt)
         }
@@ -199,30 +200,25 @@ object Block {
                 //    call D
                 //    String s = C.result
                 None
-            case Some(stmt) if (countCalls(stmt) == 1) =>
-                // This is a fragment, we can stop here.
-                Some(ReducibleChild(stmt, Kind.Fragment))
-            case Some(stmt) if isLeafBlock(stmt) =>
-                // this is a call-line
-                Some(ReducibleChild(stmt, Kind.CallLine))
             case Some(stmt) =>
-                // dig deeper, one of the children is reducible
-                val retval = findReducibleChild(stmt.children)
-                assert(retval != None)
-                retval
-        }
-    }
-
-    def findOneReducibleChild(statements: Vector[Scope]) : Option[ReducibleChild] = {
-        val child = statements.find{
-            case stmt => isReducible(stmt)
-        }
-        child match {
-            case None => None
-            case Some(c) =>
-                // This child has more than one call. It either holds
-                // a fragment or a call-line.
-                findReducibleChild(Seq(c))
+                val numCalls = countCalls(stmt)
+                if (numCalls == 0) {
+                    throw new Exception("Sanity: zero calls in a reducible workflow")
+                } else if (numCalls == 1) {
+                    // This is a fragment
+                    Some(ReducibleChild(stmt, Kind.Fragment))
+                } else {
+                    assert(numCalls >= 2)
+                    if (isLeafBlock(numCalls, stmt)) {
+                        // this is a call-line
+                        Some(ReducibleChild(stmt, Kind.CallLine))
+                    } else {
+                        // dig deeper, one of the children is reducible
+                        val retval = findReducibleChild(stmt.children)
+                        assert(retval != None)
+                        retval
+                    }
+                }
         }
     }
 }

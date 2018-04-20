@@ -124,8 +124,12 @@ case class StatementRenameVars(doNotModify: Set[Scope],
 
     // rename all the variables defined in the dictionary
     def apply(stmt: Scope) : Scope = {
-        if (doNotModify contains stmt)
+        if (doNotModify contains stmt) {
+            // These are statements whose ASTs are not entirely
+            // valid. We do not want to risk applying WDL
+            // code to them.
             return stmt
+        }
         stmt match {
             case decl:Declaration =>
                 WdlRewrite.declaration(decl.womType,

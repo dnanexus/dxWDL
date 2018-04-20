@@ -595,10 +595,12 @@ case class DecomposeBlocks(subWorkflowPrefix: String,
                 decomposeFragment(wf, child.scope)
         }
 
-        val lines = WdlPrettyPrinter(true, None).apply(subWf, 0).mkString("\n")
-        Utils.trace(verbose2, s"subwf = ${lines}")
-        val topWfLines = WdlPrettyPrinter(true, None).apply(topWf, 0).mkString("\n")
-        Utils.trace(verbose2, s"topWf = ${topWfLines}")
+        if (verbose2) {
+            val lines = WdlPrettyPrinter(true, None).apply(subWf, 0).mkString("\n")
+            Utils.trace(verbose2, s"subwf = ${lines}")
+            val topWfLines = WdlPrettyPrinter(true, None).apply(topWf, 0).mkString("\n")
+            Utils.trace(verbose2, s"topWf = ${topWfLines}")
+        }
 
         // Note: we are apply renaming to the entire toplevel workflow, including
         // the parts before the subtree that was actually rewritten. This is legal
@@ -643,7 +645,7 @@ object DecomposeBlocks {
                     //  4) The largeBlock is decomposed into a sub-workflow and small block
                     //  5) All references in afterList to results from the sub-workflow are
                     //     renamed.
-                    Block.findOneReducibleChild(node.workflow.children.toVector) match {
+                    Block.findReducibleChild(node.workflow.children.toVector) match {
                         case None => true
                         case Some(child) =>
                             Utils.trace(verbose.on, s"Decompose iteration ${iter}")
