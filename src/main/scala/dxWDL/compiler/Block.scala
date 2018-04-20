@@ -27,6 +27,7 @@
 
 package dxWDL.compiler
 
+import dxWDL.{Verbose, WdlPrettyPrinter}
 import wdl._
 
 // Find all the calls inside a statement block
@@ -188,7 +189,8 @@ object Block {
     //   call B
     //   call C
     //
-    def findReducibleChild(statements: Seq[Scope]) : Option[ReducibleChild] = {
+    def findReducibleChild(statements: Seq[Scope],
+                           verbose: Verbose) : Option[ReducibleChild] = {
         val child = statements.find{
             case stmt => isReducible(stmt)
         }
@@ -202,6 +204,12 @@ object Block {
                 None
             case Some(stmt) =>
                 val numCalls = countCalls(stmt)
+                if (verbose.on) {
+                    val lines = WdlPrettyPrinter(true, None).apply(stmt, 0).mkString("\n")
+                    System.err.println(s"isReducible numCalls = ${numCalls}")
+                    System.err.println(lines)
+                    System.err.println()
+                }
                 if (numCalls == 0) {
                     throw new Exception("Sanity: zero calls in a reducible workflow")
                 } else if (numCalls == 1) {
@@ -214,7 +222,7 @@ object Block {
                         Some(ReducibleChild(stmt, Kind.CallLine))
                     } else {
                         // dig deeper, one of the children is reducible
-                        val retval = findReducibleChild(stmt.children)
+                        val retval = findReducibleChild(stmt.children, verbose)
                         assert(retval != None)
                         retval
                     }

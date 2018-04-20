@@ -14,27 +14,26 @@ class SubblocksTest extends FlatSpec with Matchers {
     it should "Compile subblocks into subworkflows" in {
         val path = pathFromBasename("long_block.wdl")
         Main.compile(
-            List(path.toString, "--compileMode", "ir", "--locked",
-                 "--verbose", "subwf")
+            List(path.toString, "--compileMode", "ir", "--locked", "--quiet")
         ) should equal(Main.SuccessfulTermination(""))
     }
 
-    ignore should "recognize references to blocks compiled into sub-workflows" in {
+    it should "recognize references to blocks compiled into sub-workflows" in {
         val path = pathFromBasename("long_refs.wdl")
         Main.compile(
             List(path.toString, "--compileMode", "ir", "--locked", "--quiet")
         ) should equal(Main.SuccessfulTermination(""))
     }
 
-    ignore should "handle wide and deep nesting" in {
+    it should "handle wide and deep nesting" in {
         val path = pathFromBasename("two_phase.wdl")
         Main.compile(
-            List(path.toString, "--compileMode", "ir", "--locked", "--verbose")
+            List(path.toString, "--compileMode", "ir", "--locked", "--quiet")
         ) should equal(Main.SuccessfulTermination(""))
     }
 
 
-    ignore should "recognize dependencies inside an interpolation" in {
+    it should "recognize dependencies inside an interpolation" in {
         val path = pathFromBasename("interpolation.wdl")
         Main.compile(
             List(path.toString, "--compileMode", "ir", "--locked", "--quiet")

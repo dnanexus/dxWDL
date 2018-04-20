@@ -636,8 +636,7 @@ object DecomposeBlocks {
         var done = false
         while (!done) {
             done = tree match {
-                case _: NamespaceOps.TreeLeaf => true
-                case node: NamespaceOps.TreeNode =>
+                case node: NamespaceOps.TreeNode if Block.countCalls(node.workflow.children) >= 2 =>
                     //  1) Find the first reducible scatter/if block, If none exists, we are done.
                     //  2) Split the children to those before and after the large-block.
                     //     (beforeList, largeBlock, afterList)
@@ -645,7 +644,7 @@ object DecomposeBlocks {
                     //  4) The largeBlock is decomposed into a sub-workflow and small block
                     //  5) All references in afterList to results from the sub-workflow are
                     //     renamed.
-                    Block.findReducibleChild(node.workflow.children.toVector) match {
+                    Block.findReducibleChild(node.workflow.children.toVector, verbose) match {
                         case None => true
                         case Some(child) =>
                             Utils.trace(verbose.on, s"Decompose iteration ${iter}")
@@ -657,6 +656,7 @@ object DecomposeBlocks {
                             }
                             false
                     }
+                case _ => true
             }
         }
         if (verbose.on)
