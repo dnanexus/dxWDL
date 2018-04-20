@@ -147,7 +147,7 @@ import wom.types._
 case class DecomposeBlocks(subWorkflowPrefix: String,
                            cef: CompilerErrorFormatter,
                            verbose: Verbose) {
-    val verbose2:Boolean = verbose.keywords contains "subwf"
+    val verbose2:Boolean = verbose.keywords contains "decompose"
 
     // The name field can include dots ("add.result", "mul.result").
     // The sanitized name has no dots, and can be placed in a WDL script (or dx).
@@ -342,19 +342,24 @@ case class DecomposeBlocks(subWorkflowPrefix: String,
     }
 
     // Figure out all the outputs from a block of statements
-    private def blockOutputsAll(statements: Vector[Scope]) : Vector[DVar] = {
+    private def blockOutputsAll(statements: Vector[Scope],
+                                kind: Block.Kind.Value) : Vector[DVar] = {
         statements.map{
             case decl:Declaration =>
                 Vector(DVar(decl.unqualifiedName, decl.womType))
             case call:WdlCall =>
                 call.outputs.map { cOut: CallOutput =>
+/*                    if (kind == Block.Kind.CallLine)
+                        DVar(call.unqualifiedName + "." ++ cOut.unqualifiedName, cOut.womType)
+                    else
+ DVar(cOut.unqualifiedName, cOut.womType)*/
                     DVar(call.unqualifiedName + "." ++ cOut.unqualifiedName, cOut.womType)
                 }
             case ssc:Scatter =>
-                val innerVars = blockOutputsAll(ssc.children.toVector)
+                val innerVars = blockOutputsAll(ssc.children.toVector, kind)
                 innerVars.map{ dVar => dVar.copy(womType = WomArrayType(dVar.womType)) }
             case condStmt:If =>
-                val innerVars = blockOutputsAll(condStmt.children.toVector)
+                val innerVars = blockOutputsAll(condStmt.children.toVector, kind)
                 innerVars.map{ dVar => dVar.copy(womType = WomOptionalType(dVar.womType)) }
 
             case x =>
@@ -363,29 +368,6 @@ case class DecomposeBlocks(subWorkflowPrefix: String,
                                         s"Unimplemented workflow element"))
         }.flatten
     }
-
-    // Find the outputs actually used from a block of statements.
-    //   statements: block we are interested in
-    //   afterStmts: the code that comes after our block. Search it for
-    //     variables used.
-/*    private def blockOutputs(statements: Vector[Scope],
-                             after: Vector[Scope]) : Vector[DVar] = {
-        val outputs: Vector[DVar] = blockOutputsAll(statements)
-
-        // Find all the output variables referenced after the block
-        val dict = outputs.map{ dVar =>
-            dVar.name -> dVar.sanitizedName
-        }.toMap
-        val xtrnRefs = StatementRenameVars(dict, cef, verbose).find(
-        val xtrnRefs: Set[String] = after.map{
-            case stmt => erv.find(stmt)
-        }.toSet.flatten
-
-        // Keep only externally referenced variables. All the rest
-        // can remain local.
-        outputs.filter(dVar => xtrnRefs contains dVar.name)
-    }
- */
 
     // Build a valid WDL workflow with [inputs] and [outputs].
     // The body is made up of [statements].
@@ -489,6 +471,21 @@ case class DecomposeBlocks(subWorkflowPrefix: String,
         }
     }
 
+    private def giveNameToCallLineSubworkflow(subtree: Scope) : String = {
+        def sanitize(name:String) :String =
+            if (name.startsWith(subWorkflowPrefix))
+                name.substring(subWorkflowPrefix.length + 1)
+            else
+                name
+
+        val calls = Block.findCalls(subtree)
+        assert(calls.length >= 2)
+        val hd = sanitize(calls.head.unqualifiedName)
+        val tl = sanitize(calls.last.unqualifiedName)
+        val fullName = s"${subWorkflowPrefix}_${hd}_${tl}"
+        fullName.take(Utils.MAX_STAGE_NAME_LEN)
+    }
+
     // The subtree looks like this:
     //   if (cond) {
     //      call A
@@ -500,7 +497,8 @@ case class DecomposeBlocks(subWorkflowPrefix: String,
     //   if (cond)
     //      call subwf_A_B_C
     private def decomposeCallLine(wf: WdlWorkflow,
-                                  subtree: Scope)
+                                  subtree: Scope,
+                                  kind: Block.Kind.Value)
             : (WdlWorkflow, WdlWorkflow, WdlWorkflowCall, Vector[DVar]) = {
         // Figure out the free variables in the subtree
         val sbtInputs0 = freeVars(subtree.children)
@@ -516,13 +514,11 @@ case class DecomposeBlocks(subWorkflowPrefix: String,
         }
 
         // Figure out the outputs from the subtree
-        val sbtOutputs: Vector[DVar] = blockOutputsAll(subtree.children.toVector)
+        val sbtOutputs: Vector[DVar] = blockOutputsAll(subtree.children.toVector, kind)
 
         // create a separate subworkflow from the subtree. Name
         // it by concatenating the call names.
-        val sbtCalls = Block.findCalls(subtree)
-        val allCallNames = sbtCalls.map(_.unqualifiedName).mkString("_")
-        val subWfName = s"${subWorkflowPrefix}_${allCallNames}".take(Utils.MAX_STAGE_NAME_LEN)
+        val subWfName = giveNameToCallLineSubworkflow(subtree)
         val (subWf, xtrnVarRefs) = buildSubWorkflow(subWfName,
                                                     sbtInputs, sbtOutputs,
                                                     subtree.children.toVector)
@@ -548,7 +544,8 @@ case class DecomposeBlocks(subWorkflowPrefix: String,
 
     // Extract [subTree] from a workflow, make a subworkflow out of it
     private def decomposeFragment(wf: WdlWorkflow,
-                                  subtree: Scope)
+                                  subtree: Scope,
+                                  kind: Block.Kind.Value)
             : (WdlWorkflow, WdlWorkflow, WdlWorkflowCall, Vector[DVar]) = {
         // Figure out the free variables in the subtree
         val sbtInputs0 = freeVars(Seq(subtree))
@@ -564,13 +561,30 @@ case class DecomposeBlocks(subWorkflowPrefix: String,
         }
 
         // Figure out the outputs from the subtree
-        val sbtOutputs: Vector[DVar] = blockOutputsAll(Vector(subtree))
+        val sbtOutputs: Vector[DVar] = blockOutputsAll(Vector(subtree), kind)
 
-        // create a separate subworkflow from the subtree. Name
-        // it by concatenating the call names.
+        // create a separate subworkflow from the subtree. Create
+        // a human readable name.
         val sbtCalls = Block.findCalls(subtree)
-        val allCallNames = sbtCalls.map(_.unqualifiedName).mkString("_")
-        val subWfName = s"${subWorkflowPrefix}_${allCallNames}".take(Utils.MAX_STAGE_NAME_LEN)
+        assert(sbtCalls.length == 1)
+        var subWfName = sbtCalls.head.unqualifiedName
+        if (subWfName.startsWith(subWorkflowPrefix)) {
+            // We are calling a generated sub-workflow
+            //  1) strip the prefix (we are going to add it below)
+            //  2) add short description of this new sub-workflow.
+            subWfName = subWfName.substring(subWorkflowPrefix.length + 1)
+            val summary = subtree match {
+                case _:Scatter => "scatter"
+                case _:If => "if"
+                case _ => "frag"
+            }
+            subWfName = s"${summary}_${subWfName}"
+        }
+
+        // prefix the name, and make sure it doesn't go beyond a certain limit
+        subWfName = s"${subWorkflowPrefix}_${subWfName}"
+        subWfName = subWfName.take(Utils.MAX_STAGE_NAME_LEN)
+
         val (subWf, xtrnVarRefs) = buildSubWorkflow(subWfName,
                                                     sbtInputs, sbtOutputs, Vector(subtree))
 
@@ -590,9 +604,9 @@ case class DecomposeBlocks(subWorkflowPrefix: String,
               child: Block.ReducibleChild) : (WdlWorkflow, WdlWorkflow) = {
         val (topWf, subWf, wfc, xtrnVarRefs) = child.kind match {
             case Block.Kind.CallLine =>
-                decomposeCallLine(wf, child.scope)
+                decomposeCallLine(wf, child.scope, child.kind)
             case Block.Kind.Fragment =>
-                decomposeFragment(wf, child.scope)
+                decomposeFragment(wf, child.scope, child.kind)
         }
 
         if (verbose2) {
@@ -609,7 +623,7 @@ case class DecomposeBlocks(subWorkflowPrefix: String,
         val xtrnUsageDict = xtrnVarRefs.map{ dVar =>
             dVar.name -> dVar.sanitizedName
         }.toMap
-        Utils.trace(verbose2, s"Renaming variable uses")
+        //Utils.trace(verbose2, s"Renaming variable uses")
         val topWf2 = StatementRenameVars(Set(wfc), xtrnUsageDict, cef, verbose).apply(topWf)
         (topWf2.asInstanceOf[WdlWorkflow], subWf)
     }
@@ -631,6 +645,10 @@ object DecomposeBlocks {
               verbose: Verbose) : NamespaceOps.Tree = {
         Utils.trace(verbose.on, "Breaking sub-blocks into sub-workflows")
 
+        // Prefix all the generated subworkflows with a consistent
+        // string
+        val subwfPrefix = nsTree.name
+
         var tree = nsTree
         var iter = 0
         var done = false
@@ -650,7 +668,7 @@ object DecomposeBlocks {
                             Utils.trace(verbose.on, s"Decompose iteration ${iter}")
                             iter = iter + 1
                             tree = tree.transform{ case (wf, cef) =>
-                                val sbw = new DecomposeBlocks(wf.unqualifiedName, cef, verbose)
+                                val sbw = new DecomposeBlocks(subwfPrefix, cef, verbose)
                                 val (wf2, subWf) = sbw.apply(wf, child)
                                 (wf2, Some(subWf))
                             }

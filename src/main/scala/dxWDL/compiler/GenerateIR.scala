@@ -923,7 +923,7 @@ object GenerateIR {
                          verbose: Verbose) : IR.Namespace = {
         // recursively generate IR for the entire tree
         val nsTree1 = nsTree match {
-            case NamespaceOps.TreeLeaf(name, cef, tasks) =>
+            case NamespaceOps.TreeLeaf(name, cef, _, tasks) =>
                 // compile all the [tasks], that have not been already compiled, to IR.Applet
                 val gir = new GenerateIR(Map.empty, nsTree.cef, reorg, locked, verbose)
                 val alreadyCompiledNames: Set[String] = callables.keys.toSet
@@ -937,7 +937,7 @@ object GenerateIR {
                 }.toMap
                 makeNamespace(name, None, callables ++ taskApplets)
 
-            case NamespaceOps.TreeNode(name, cef, _, _, workflow, children) =>
+            case NamespaceOps.TreeNode(name, cef, _, _, _, workflow, children) =>
                 // Recurse into the children.
                 //
                 // The reorg and locked flags only apply to the top level

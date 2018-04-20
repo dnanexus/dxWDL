@@ -58,8 +58,6 @@ case class StatementRenameVars(doNotModify: Set[Scope],
         if (matches.isEmpty)
             return Vector(Symbols(exprStr))
 
-        //System.err.println(s"matches = ${matches}")
-
         // convert every match to a FQN. Add the region between it
         // and the previous FQN as a symbol.
         val accu = matches.foldLeft(Accu(Vector.empty, 0)){

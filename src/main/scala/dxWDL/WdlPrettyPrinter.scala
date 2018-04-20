@@ -101,8 +101,8 @@ case class WdlPrettyPrinter(fqnFlag: Boolean,
 
     def apply(call: WdlCall, level: Int) : Vector[String] = {
         val aliasStr = call.alias match {
-            case None => ""
-            case Some(nm) => " as " ++ nm
+            case Some(nm) if nm != call.callable.unqualifiedName => " as " ++ nm
+            case _ => ""
         }
         val inputs: Seq[String] = call.inputMappings.map { case (key, expr) =>
             val rhs = WdlExpression.toString(expr.ast)

@@ -123,14 +123,21 @@ object CompilerTop {
         Validate.apply(ns, cOpt.verbose)
 
         val nsTree: NamespaceOps.Tree = NamespaceOps.load(ns, allWdlSources, cOpt.verbose)
-        val nsTreePruned = NamespaceOps.prune(nsTree)
+        val nsTreePruned = NamespaceOps.prune(nsTree, cOpt.verbose)
+        nsTreePruned match {
+            case node:NamespaceOps.TreeNode =>
+                System.err.println(s"pruned sources = ${node.allWdlSources.keys}")
+            case _ => ()
+        }
+        System.err.println(s"nsTreePruned sources=${nsTreePruned.getAllWdlSourceFiles}")
 
         // Simplify the original workflow, for example,
         // convert call arguments from expressions to variables.
         val nsTreeSimple = SimplifyExpr.apply(nsTreePruned, wdlSourceFile, cOpt.verbose)
+        System.err.println(s"nsTreeSimple sources=${nsTreeSimple.getAllWdlSourceFiles}")
 
         // Convert large sub-blocks to sub-workflows
-         DecomposeBlocks.apply(nsTreeSimple, wdlSourceFile, cOpt.verbose)
+        DecomposeBlocks.apply(nsTreeSimple, wdlSourceFile, cOpt.verbose)
     }
 
     private def compileIR(wdlSourceFile : Path,

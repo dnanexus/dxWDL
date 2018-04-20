@@ -27,7 +27,7 @@
 
 package dxWDL.compiler
 
-import dxWDL.{Verbose, WdlPrettyPrinter}
+import dxWDL.{Verbose}
 import wdl._
 
 // Find all the calls inside a statement block
@@ -204,12 +204,6 @@ object Block {
                 None
             case Some(stmt) =>
                 val numCalls = countCalls(stmt)
-                if (verbose.on) {
-                    val lines = WdlPrettyPrinter(true, None).apply(stmt, 0).mkString("\n")
-                    System.err.println(s"isReducible numCalls = ${numCalls}")
-                    System.err.println(lines)
-                    System.err.println()
-                }
                 if (numCalls == 0) {
                     throw new Exception("Sanity: zero calls in a reducible workflow")
                 } else if (numCalls == 1) {
