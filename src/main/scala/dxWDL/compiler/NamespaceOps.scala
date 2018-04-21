@@ -87,6 +87,7 @@ object NamespaceOps {
                         imports: Seq[Import],
                         workflow: WdlWorkflow,
                         children: Vector[Tree]) extends Tree {
+        private val verbose2:Boolean = verbose.keywords contains "NamespaceOps"
 
         private def toNamespace(wf: WdlWorkflow) : WdlNamespaceWithWorkflow = {
             new WdlNamespaceWithWorkflow(
@@ -126,10 +127,12 @@ object NamespaceOps {
             }
             val lines = WdlPrettyPrinter(true, Some(wfOutputs)).apply(ns, 0)
             val cleanWdlSrc = (extraImportsText ++ lines).mkString("\n")
-            Utils.trace(verbose.on, s"""|whitewash
-                                        |  wdlSources= ${wdlSources.keys.toList.sorted}
-                                        |  extraImports=${extraImports}  dedup=${extraImportsDedup}
-                                        |${cleanWdlSrc}""".stripMargin)
+            if (verbose2) {
+                Utils.trace(verbose2, s"""|whitewash
+                                          |  wdlSources= ${wdlSources.keys.toList.sorted}
+                                          |  extraImports=${extraImports}  dedup=${extraImportsDedup}
+                                          |${cleanWdlSrc}""".stripMargin)
+            }
 
             val resolver = makeResolver(wdlSources)
             val cleanNs = WdlNamespace.loadUsingSource(
@@ -318,7 +321,7 @@ object NamespaceOps {
                     if (allWdlSources contains tasksLibPath)
                         throw new Exception(s"Module name collision, ${tasksLibPath} already exists")
                     Utils.trace(verbose.on, s"""|Splitting out tasks into separate source file
-                                                |path=${tasksLibPath}  name=${tasksLibName}"""
+                                              |path=${tasksLibPath}  name=${tasksLibName}"""
                                     .stripMargin)
 
                     val child: TreeLeaf = genLeaf(tasksLibName, tasksLibPath, taskDict, verbose)
