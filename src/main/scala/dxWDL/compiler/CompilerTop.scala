@@ -122,7 +122,7 @@ object CompilerTop {
         // that will give us problems.
         Validate.apply(ns, cOpt.verbose)
 
-        val ctx: NamespaceOps.Context = NamespaceOps.makeContext(allWdlSources, cOpt.verbose)
+        val ctx: NamespaceOps.Context = NamespaceOps.makeContext(allWdlSources, wdlSourceFile, cOpt.verbose)
         val nsTree: NamespaceOps.Tree = NamespaceOps.load(ns, ctx)
         val nsTreePruned = NamespaceOps.prune(nsTree, ctx)
 

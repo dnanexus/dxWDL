@@ -38,7 +38,7 @@ class CompilerUnitTest extends FlatSpec with Matchers {
         }
     }
 
-    ignore should "Can't have unbound arguments from a subworkflow" in {
+    it should "Can't have unbound arguments from a subworkflow" in {
         val path = pathFromBasename("toplevel_unbound_arg.wdl")
         val retval = Main.compile(
             List(path.toString, "--compileMode", "ir", "-quiet")
@@ -60,7 +60,7 @@ class CompilerUnitTest extends FlatSpec with Matchers {
         }
     }
 
-    ignore should "Handle array access" in {
+    it should "Handle array access" in {
         val path = pathFromBasename("file_array.wdl")
         val retval = Main.compile(
             List(path.toString, "--compileMode", "ir", "--locked")
@@ -70,7 +70,7 @@ class CompilerUnitTest extends FlatSpec with Matchers {
         }
     }
 
-    ignore should "Pretty print declaration" in {
+    it should "Pretty print declaration" in {
         val wdl = "Array[Int] integers"
         val ns = WdlNamespace.loadUsingSource(wdl, None, None).get
         val decl = ns.declarations.head
@@ -78,7 +78,7 @@ class CompilerUnitTest extends FlatSpec with Matchers {
         compareIgnoreWhitespace(strWdlCode, wdl) should be(true)
     }
 
-    ignore should "Pretty print task" in {
+    it should "Pretty print task" in {
         val wdl = """|task inc {
                      |  File input_file
                      |
@@ -96,7 +96,7 @@ class CompilerUnitTest extends FlatSpec with Matchers {
         WdlPrettyPrinter(false, None).commandBracketTaskSymbol(task) should be ("<<<",">>>")
     }
 
-    ignore should "Report a useful error for an invalid call name" in {
+    it should "Report a useful error for an invalid call name" in {
         val path = pathFromBasename("illegal_call_name.wdl")
         val retval = Main.compile(
             List(path.toString, "--compileMode", "ir", "--locked", "--quiet")
@@ -116,7 +116,7 @@ class CompilerUnitTest extends FlatSpec with Matchers {
         ) should equal(Main.SuccessfulTermination(""))
     }
 
-    ignore should "handle closures across code blocks" in {
+    it should "handle closures across code blocks" in {
         val path = pathFromBasename("closure1.wdl")
         Main.compile(
             List(path.toString, "--compileMode", "ir", "--locked", "--quiet")
@@ -126,25 +126,25 @@ class CompilerUnitTest extends FlatSpec with Matchers {
     it should "handle a call closure " in {
         val path = pathFromBasename("closure2.wdl")
         Main.compile(
-            List(path.toString, "--compileMode", "ir", "--locked", "--verbose", "GenerateIR")
+            List(path.toString, "--compileMode", "ir", "--locked", "--quiet")
         ) should equal(Main.SuccessfulTermination(""))
     }
 
-    ignore should "handle weird tasks " in {
+    it should "handle weird tasks " in {
         val path = pathFromBasename("task_bug.wdl")
         Main.compile(
             List(path.toString, "--compileMode", "ir", "--locked", "--quiet")
         ) should equal(Main.SuccessfulTermination(""))
     }
 
-    ignore should "pass workflow input to task call" in {
+    it should "pass workflow input to task call" in {
         val path = pathFromBasename("closure3.wdl")
         Main.compile(
             List(path.toString, "--compileMode", "ir", "--locked", "--quiet")
         ) should equal(Main.SuccessfulTermination(""))
     }
 
-    ignore should "handle pair left/right" in {
+    it should "handle pair left/right" in {
         val path = pathFromBasename("pairs.wdl")
         Main.compile(
             List(path.toString, "--compileMode", "ir", "--locked", "--quiet")

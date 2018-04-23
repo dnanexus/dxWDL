@@ -15,14 +15,15 @@ import wom.core.WorkflowSource
 object NamespaceOps {
 
     case class Context(
-        verbose: Verbose,
-        wdlSourceFiles: HashMap[String, String]) {
+        allSourceFiles: HashMap[String, String],
+        toplevelWdlSourceFile: Path,
+        verbose: Verbose) {
         val verbose2:Boolean = verbose.keywords contains "NamespaceOps"
 
         def makeResolver: ImportResolver = {
             // Make an immutable copy of the source files, to avoid buggy
             // behavior.
-            val allSources = wdlSourceFiles.foldLeft(Map.empty[String,String]) {
+            val allSources = allSourceFiles.foldLeft(Map.empty[String,String]) {
                 case (accu, (k,v)) => accu + (k -> v)
             }.toMap
             filename => allSources.get(filename) match {
@@ -32,13 +33,18 @@ object NamespaceOps {
         }
 
         def addWdlSourceFile(name: String, sourceCode: String) : Unit = {
-            wdlSourceFiles(name) = sourceCode
+            allSourceFiles(name) = sourceCode
+        }
+
+        def setWdlSourceFiles(filename:String, wdlSourceCode:String) : Unit = {
+            allSourceFiles.clear
+            allSourceFiles(filename) = wdlSourceCode
         }
 
         // prune files that have nothing we want to use
         def filterUnusedFiles(taskWfNames: Set[String]) : Unit = {
             val resolver = makeResolver
-            val accessed:Map[String, Boolean] = wdlSourceFiles.map{
+            val accessed:Map[String, Boolean] = allSourceFiles.map{
                 case (filename, wdlSourceCode) =>
                     WdlNamespace.loadUsingSource(wdlSourceCode,
                                                  None, Some(List(resolver))) match {
@@ -57,7 +63,7 @@ object NamespaceOps {
                     }
             }.toMap
             accessed.foreach{
-                case (filename, false) => wdlSourceFiles.remove(filename)
+                case (filename, false) => allSourceFiles.remove(filename)
                 case (_,_) => ()
             }
         }
@@ -164,7 +170,7 @@ object NamespaceOps {
             val cleanWdlSrc = (extraImportsText ++ lines).mkString("\n")
             if (ctx.verbose2) {
                 Utils.trace(ctx.verbose2, s"""|whitewash
-                                              |  wdlSources= ${ctx.wdlSourceFiles.keys.toList.sorted}
+                                              |  wdlSources= ${ctx.allSourceFiles.keys.toList.sorted}
                                               |  extraImports=${extraImports}  dedup=${extraImportsDedup}
                                               |${cleanWdlSrc}""".stripMargin)
             }
@@ -218,14 +224,14 @@ object NamespaceOps {
                     // The workflow was broken down into a subworkflow, called from
                     // a toplevel workflow. The sub-workflow needs to have access to
                     // all the original imports.
-                    val lines = WdlPrettyPrinter(true, None).apply(subWf, 0).mkString("\n")
-                    val topLevelLines = WdlPrettyPrinter(true, None).apply(wfTr, 0).mkString("\n")
+                    /*val lines = WdlPrettyPrinter(true, None).apply(subWf, 0).mkString("\n")
+                    val toplevelLines = WdlPrettyPrinter(true, None).apply(wfTr, 0).mkString("\n")
                     System.err.println(s"""|transform, with a subworkflow
                                            |subworkflow:
                                            |  ${lines}
                                            |Top level:
-                                           |  ${topLevelLines}
-                                           |""".stripMargin)
+                                           |  ${toplevelLines}
+                                           |""".stripMargin)*/
 
                     val CleanWf(subWf2, subWfName2, subWdlSrc2) =
                         whiteWashWorkflow(subWf, imports.map{_.namespaceName}.toVector, ctx)
@@ -315,10 +321,11 @@ object NamespaceOps {
     }
 
     def makeContext(allWdlSources: Map[String, String],
+                    toplevelWdlSourceFile: Path,
                     verbose: Verbose) : Context = {
         val hm = HashMap.empty[String, String]
         allWdlSources.foreach{ case (name, src) => hm(name) = src}
-        new Context(verbose, hm)
+        new Context(hm, toplevelWdlSourceFile, verbose)
     }
 
     def load(ns: WdlNamespace,
@@ -364,7 +371,7 @@ object NamespaceOps {
                     val taskDict = ns.tasks.map{ task => task.name -> task}.toMap
                     val tasksLibPath = stripFileSuffix(Paths.get(name)) + "_task_lib.wdl"
                     val tasksLibName = stripFileSuffix(Paths.get(tasksLibPath))
-                    if (ctx.wdlSourceFiles contains tasksLibPath)
+                    if (ctx.allSourceFiles contains tasksLibPath)
                         throw new Exception(s"Module name collision, ${tasksLibPath} already exists")
                     Utils.trace(ctx.verbose.on, s"""|Splitting out tasks into separate source file
                                                     |path=${tasksLibPath}  name=${tasksLibName}"""
@@ -448,19 +455,26 @@ object NamespaceOps {
     // If the entire tree is one leaf, do nothing.
     // The user may be trying to compile standalone tasks as
     // applets.
-    def prune(tree: Tree, ctx: Context) : Tree = {
+    def prune(tree: Tree,
+              ctx: Context) : Tree = {
         tree match {
             case leaf: TreeLeaf =>
                 leaf
             case node: TreeNode =>
                 val taskWfNames = collectRefs(node, Set(node.workflow.unqualifiedName))
-                val tree2 = filter(node, taskWfNames) match {
-                    case None => throw new Exception("Nothing to compile")
-                    case Some(x) => x
+                filter(node, taskWfNames) match {
+                    case None =>
+                        // The workflow doesn't call any tasks or sub-workflows
+                        val node2 = node.copy(children= Vector.empty)
+                        val topWdlFilename: String = ctx.toplevelWdlSourceFile.toString
+                        val topWdlSource = Utils.readFileContent(ctx.toplevelWdlSourceFile)
+                        ctx.setWdlSourceFiles(topWdlFilename, topWdlSource)
+                        node2
+                    case Some(tree2) =>
+                        ctx.filterUnusedFiles(taskWfNames)
+                        Utils.trace(ctx.verbose.on, s"pruned sources = ${ctx.allSourceFiles.keys}")
+                        tree2
                 }
-                ctx.filterUnusedFiles(taskWfNames)
-                Utils.trace(ctx.verbose.on, s"pruned sources = ${ctx.wdlSourceFiles.keys}")
-                tree2
         }
     }
 
