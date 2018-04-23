@@ -642,6 +642,7 @@ object DecomposeBlocks {
 
     def apply(nsTree: NamespaceOps.Tree,
               wdlSourceFile: Path,
+              ctx: NamespaceOps.Context,
               verbose: Verbose) : NamespaceOps.Tree = {
         Utils.trace(verbose.on, "Breaking sub-blocks into sub-workflows")
 
@@ -667,11 +668,14 @@ object DecomposeBlocks {
                         case Some(child) =>
                             Utils.trace(verbose.on, s"Decompose iteration ${iter}")
                             iter = iter + 1
-                            tree = tree.transform{ case (wf, cef) =>
+                            def decomposeOp(wf: WdlWorkflow,
+                                            cef: CompilerErrorFormatter,
+                                            ctx: NamespaceOps.Context) = {
                                 val sbw = new DecomposeBlocks(subwfPrefix, cef, verbose)
                                 val (wf2, subWf) = sbw.apply(wf, child)
                                 (wf2, Some(subWf))
                             }
+                            tree = tree.transform(decomposeOp, ctx)
                             false
                     }
                 case _ => true

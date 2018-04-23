@@ -325,12 +325,14 @@ case class SimplifyExpr(cef: CompilerErrorFormatter,
 object SimplifyExpr {
     def apply(nsTree: NamespaceOps.Tree,
               wdlSourceFile: Path,
+              ctx: NamespaceOps.Context,
               verbose: Verbose) : NamespaceOps.Tree = {
-        val nsTree1 = nsTree.transform{ case (wf, cef) =>
+        def simplifyOp(wf: WdlWorkflow, cef: CompilerErrorFormatter, ctx: NamespaceOps.Context) = {
             val simpExpr = new SimplifyExpr(cef, verbose)
             val wf2 = simpExpr.simplifyWorkflow(wf)
             (wf2, None)
         }
+        val nsTree1 = nsTree.transform(simplifyOp, ctx)
         if (verbose.on)
             NamespaceOps.prettyPrint(wdlSourceFile, nsTree1, "simple", verbose)
         nsTree1

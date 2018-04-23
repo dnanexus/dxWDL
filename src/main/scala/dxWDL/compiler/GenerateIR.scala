@@ -923,7 +923,7 @@ object GenerateIR {
                          verbose: Verbose) : IR.Namespace = {
         // recursively generate IR for the entire tree
         val nsTree1 = nsTree match {
-            case NamespaceOps.TreeLeaf(name, cef, _, tasks) =>
+            case NamespaceOps.TreeLeaf(name, cef, tasks) =>
                 // compile all the [tasks], that have not been already compiled, to IR.Applet
                 val gir = new GenerateIR(Map.empty, nsTree.cef, reorg, locked, verbose)
                 val alreadyCompiledNames: Set[String] = callables.keys.toSet
@@ -935,9 +935,12 @@ object GenerateIR {
                     val applet = gir.compileTask(task)
                     task.name -> applet
                 }.toMap
-                makeNamespace(name, None, callables ++ taskApplets)
 
-            case NamespaceOps.TreeNode(name, cef, _, _, _, workflow, children) =>
+                val allCallables = callables ++ taskApplets
+                Utils.trace(verbose.on, s"leaf: callables = ${allCallables.keys}")
+                makeNamespace(name, None, allCallables)
+
+            case NamespaceOps.TreeNode(name, cef, _, workflow, children) =>
                 // Recurse into the children.
                 //
                 // The reorg and locked flags only apply to the top level
@@ -948,9 +951,13 @@ object GenerateIR {
                         val childIr = applyRec(child, accu, false, true, verbose)
                         accu ++ childIr.buildCallables
                 }
+                Utils.trace(verbose.on, s"node: ${childCallables.keys}")
+
                 val gir = new GenerateIR(childCallables, cef, reorg, locked, verbose)
                 val (irWf, auxApplets) = gir.compileWorkflow(workflow)
-                makeNamespace(name, Some(irWf), childCallables ++ auxApplets)
+                val allCallables = childCallables ++ auxApplets
+                Utils.trace(verbose.on, s"node: callables = ${allCallables.keys}")
+                makeNamespace(name, Some(irWf), allCallables)
         }
         nsTree1
     }

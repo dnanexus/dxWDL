@@ -7,19 +7,67 @@ import dxWDL.{CompilerErrorFormatter, Utils, Verbose, WdlPrettyPrinter}
 import java.nio.file.{Path, Paths}
 import java.io.{FileWriter, PrintWriter}
 import scala.util.{Failure, Success}
+import scala.collection.mutable.HashMap
 import wdl._
 import wdl4s.parser.WdlParser.{Terminal}
 import wom.core.WorkflowSource
 
 object NamespaceOps {
 
+    case class Context(
+        verbose: Verbose,
+        wdlSourceFiles: HashMap[String, String]) {
+        val verbose2:Boolean = verbose.keywords contains "NamespaceOps"
+
+        def makeResolver: ImportResolver = {
+            // Make an immutable copy of the source files, to avoid buggy
+            // behavior.
+            val allSources = wdlSourceFiles.foldLeft(Map.empty[String,String]) {
+                case (accu, (k,v)) => accu + (k -> v)
+            }.toMap
+            filename => allSources.get(filename) match {
+                case None => throw new Exception(s"Unable to find ${filename}")
+                case Some(content) => content
+            }
+        }
+
+        def addWdlSourceFile(name: String, sourceCode: String) : Unit = {
+            wdlSourceFiles(name) = sourceCode
+        }
+
+        // prune files that have nothing we want to use
+        def filterUnusedFiles(taskWfNames: Set[String]) : Unit = {
+            val resolver = makeResolver
+            val accessed:Map[String, Boolean] = wdlSourceFiles.map{
+                case (filename, wdlSourceCode) =>
+                    WdlNamespace.loadUsingSource(wdlSourceCode,
+                                                 None, Some(List(resolver))) match {
+                        case Failure(_) =>
+                            // the WDL source does not parse, drop it
+                            filename -> false
+                        case Success(ns) =>
+                            val taskNames = ns.tasks.map(_.unqualifiedName).toSet
+                            val definedTasksAndWorkflows: Set[String] = ns match {
+                                case nswf:WdlNamespaceWithWorkflow =>
+                                    taskNames + nswf.workflow.unqualifiedName
+                                case _ => taskNames
+                            }
+                            val retval = (taskWfNames intersect definedTasksAndWorkflows).size > 0
+                            filename -> retval
+                    }
+            }.toMap
+            accessed.foreach{
+                case (filename, false) => wdlSourceFiles.remove(filename)
+                case (_,_) => ()
+            }
+        }
+    }
+
     sealed trait Tree {
         // The URI from which this namespace was loaded. Typically,
         // a filesystem path.
         def name : String
         def cef: CompilerErrorFormatter
-        def verbose : Verbose
-        def getAllWdlSourceFiles: Vector[String]
 
         // A debugging function, pretty prints the namespace
         // as one concatenated string.
@@ -28,18 +76,12 @@ object NamespaceOps {
         // Apply a rewrite transformation to all the workflows in the
         // namespace. The transformation returns a rewrite of the original workflow,
         // and, potentially, a sub-workflow.
-        def transform(f: (WdlWorkflow, CompilerErrorFormatter) =>
-            (WdlWorkflow, Option[WdlWorkflow])) : Tree =
-            this
+        def transform(
+            f: (WdlWorkflow, CompilerErrorFormatter, Context) => (WdlWorkflow, Option[WdlWorkflow]),
+            ctx:Context) : Tree
+        = this
     }
 
-
-    private def makeResolver(allWdlSources: Map[String, String]) : ImportResolver = {
-        filename => allWdlSources.get(filename) match {
-            case None => throw new Exception(s"Unable to find ${filename}")
-            case Some(content) => content
-        }
-    }
 
     case class CleanWf(node: TreeNode,
                        name: String,
@@ -48,7 +90,6 @@ object NamespaceOps {
     // A namespace that is a library of tasks; it has no workflow
     case class TreeLeaf(name: String,
                         cef: CompilerErrorFormatter,
-                        verbose: Verbose,
                         tasks: Map[String, WdlTask]) extends Tree {
         private def toNamespace =
             new WdlNamespaceWithoutWorkflow(
@@ -73,8 +114,6 @@ object NamespaceOps {
             val lines: Vector[String] = WdlPrettyPrinter(false, None).apply(ns, 0)
             lines.mkString("\n")
         }
-
-        def getAllWdlSourceFiles = Vector(name)
     }
 
     // A branch in the namespace tree, includes a workflow, and
@@ -82,13 +121,9 @@ object NamespaceOps {
     //
     case class TreeNode(name: String,
                         cef: CompilerErrorFormatter,
-                        verbose: Verbose,
-                        allWdlSources: Map[String, String],
                         imports: Seq[Import],
                         workflow: WdlWorkflow,
                         children: Vector[Tree]) extends Tree {
-        private val verbose2:Boolean = verbose.keywords contains "NamespaceOps"
-
         private def toNamespace(wf: WdlWorkflow) : WdlNamespaceWithWorkflow = {
             new WdlNamespaceWithWorkflow(
                 None,
@@ -112,8 +147,8 @@ object NamespaceOps {
         // wdlSources:   all the WDL source files, so we can parse the
         //               rewritten source workflow code.
         private def whiteWashWorkflow(wf: WdlWorkflow,
-                                      wdlSources: Map[String, String],
-                                      extraImports: Vector[String]) : CleanWf = {
+                                      extraImports: Vector[String],
+                                      ctx: Context) : CleanWf = {
             val ns = toNamespace(wf)
             val wfOutputs: Vector[WorkflowOutput] =
                 wf.children.filter(x => x.isInstanceOf[WorkflowOutput])
@@ -127,22 +162,22 @@ object NamespaceOps {
             }
             val lines = WdlPrettyPrinter(true, Some(wfOutputs)).apply(ns, 0)
             val cleanWdlSrc = (extraImportsText ++ lines).mkString("\n")
-            if (verbose2) {
-                Utils.trace(verbose2, s"""|whitewash
-                                          |  wdlSources= ${wdlSources.keys.toList.sorted}
-                                          |  extraImports=${extraImports}  dedup=${extraImportsDedup}
-                                          |${cleanWdlSrc}""".stripMargin)
+            if (ctx.verbose2) {
+                Utils.trace(ctx.verbose2, s"""|whitewash
+                                              |  wdlSources= ${ctx.wdlSourceFiles.keys.toList.sorted}
+                                              |  extraImports=${extraImports}  dedup=${extraImportsDedup}
+                                              |${cleanWdlSrc}""".stripMargin)
             }
 
-            val resolver = makeResolver(wdlSources)
+            ctx.addWdlSourceFile(wf.unqualifiedName + ".wdl", cleanWdlSrc)
+            val resolver = ctx.makeResolver
             val cleanNs = WdlNamespace.loadUsingSource(
                 cleanWdlSrc, None, Some(List(resolver))
             ).get
             val cleanCef = new CompilerErrorFormatter(cef.resource, cleanNs.terminalMap)
+
             val node = TreeNode(wf.unqualifiedName,
                                 cleanCef,
-                                verbose,
-                                wdlSources + (wf.unqualifiedName + ".wdl" -> cleanWdlSrc),
                                 cleanNs.imports,
                                 cleanNs.asInstanceOf[WdlNamespaceWithWorkflow].workflow,
                                 Vector.empty) // children
@@ -165,35 +200,43 @@ object NamespaceOps {
 
         // Rewrite the workflow. Because the rewrite leaves the semantic
         // tree invalid, we re-parse it.
-        override def transform(f: (WdlWorkflow, CompilerErrorFormatter) =>
-            (WdlWorkflow, Option[WdlWorkflow])) : Tree = {
+        override def transform(
+            f: (WdlWorkflow, CompilerErrorFormatter, Context) => (WdlWorkflow, Option[WdlWorkflow]),
+            ctx: Context)
+                : Tree = {
             // recurse into children
-            val childrenTr = this.children.map(child => child.transform(f))
-            val (wfTr,subWorkflow) = f(workflow, cef)
+            val childrenTr = this.children.map(child => child.transform(f, ctx))
+            val (wfTr,subWorkflow) = f(workflow, cef, ctx)
 
             subWorkflow match {
                 case None =>
                     // The workflow was rewritten
-                    val CleanWf(wf2Node, _, _) = whiteWashWorkflow(wfTr, allWdlSources, Vector.empty)
+                    val CleanWf(wf2Node, _, _) = whiteWashWorkflow(wfTr, Vector.empty, ctx)
                     wf2Node.copy(children = childrenTr)
 
                 case Some(subWf) =>
                     // The workflow was broken down into a subworkflow, called from
                     // a toplevel workflow. The sub-workflow needs to have access to
                     // all the original imports.
+                    val lines = WdlPrettyPrinter(true, None).apply(subWf, 0).mkString("\n")
+                    val topLevelLines = WdlPrettyPrinter(true, None).apply(wfTr, 0).mkString("\n")
+                    System.err.println(s"""|transform, with a subworkflow
+                                           |subworkflow:
+                                           |  ${lines}
+                                           |Top level:
+                                           |  ${topLevelLines}
+                                           |""".stripMargin)
+
                     val CleanWf(subWf2, subWfName2, subWdlSrc2) =
-                        whiteWashWorkflow(subWf, allWdlSources, imports.map{_.namespaceName}.toVector )
+                        whiteWashWorkflow(subWf, imports.map{_.namespaceName}.toVector, ctx)
 
                     // white wash the top level workflow
-                    val allWdlSources2 = allWdlSources + (subWfName2 + ".wdl" -> subWdlSrc2)
-                    val CleanWf(wf2Node, _, _) = whiteWashWorkflow(
-                        wfTr, allWdlSources2, Vector(subWfName2)
-                    )
-                    wf2Node
+                    ctx.addWdlSourceFile(subWfName2 + ".wdl", subWdlSrc2)
+                    val CleanWf(wf2Node, _, _) = whiteWashWorkflow(wfTr, Vector(subWfName2), ctx)
+                    wf2Node.copy(children = childrenTr :+ subWf2)
             }
         }
 
-        def getAllWdlSourceFiles = allWdlSources.keys.toVector.sorted
     }
 
 
@@ -223,13 +266,13 @@ object NamespaceOps {
                                             libPath: String,
                                             libName: String,
                                             taskNames: Set[String],
-                                            wdlSources: Map[String, String],
-                                            resource: String)
+                                            resource: String,
+                                            ctx: Context)
             : (WdlNamespaceWithWorkflow, CompilerErrorFormatter)  = {
         // Modify the workflow: add an import, and rename task calls.
         val pp = WdlPrettyPrinter(true, Some(wfOutputs), Some((libPath, libName, taskNames)))
         val lines: String = pp.apply(nswf, 0).mkString("\n")
-        val resolver = makeResolver(wdlSources)
+        val resolver = ctx.makeResolver
         val cleanNs = WdlNamespace.loadUsingSource(
             lines, None, Some(List(resolver))
         ).get
@@ -252,8 +295,7 @@ object NamespaceOps {
     // Create a leaf node from a name and a bunch of tasks
     private def genLeaf(tasksLibName: String,
                         resource: String,
-                        taskDict: Map[String, WdlTask],
-                        verbose: Verbose) : TreeLeaf = {
+                        taskDict: Map[String, WdlTask]) : TreeLeaf = {
         val tasks = taskDict.map{ case (_, task) => task }.toVector
         val wf = new WdlNamespaceWithoutWorkflow(
             None,
@@ -269,12 +311,18 @@ object NamespaceOps {
             lines, None, None
         ).get
         val cef = new CompilerErrorFormatter(resource, cleanNs.terminalMap)
-        TreeLeaf(tasksLibName, cef, verbose, taskDict)
+        TreeLeaf(tasksLibName, cef, taskDict)
+    }
+
+    def makeContext(allWdlSources: Map[String, String],
+                    verbose: Verbose) : Context = {
+        val hm = HashMap.empty[String, String]
+        allWdlSources.foreach{ case (name, src) => hm(name) = src}
+        new Context(verbose, hm)
     }
 
     def load(ns: WdlNamespace,
-             allWdlSources: Map[String, String],
-             verbose: Verbose) : Tree = {
+             ctx: Context) : Tree = {
         val name = ns.importUri match {
             case None => "Unknown namespace"
             case Some(x) => x
@@ -283,14 +331,14 @@ object NamespaceOps {
             case _:WdlNamespaceWithoutWorkflow =>
                 val cef = new CompilerErrorFormatter(ns.resource, ns.terminalMap)
                 val taskDict = ns.tasks.map{ task => task.name -> task}.toMap
-                new TreeLeaf(name, cef, verbose, taskDict)
+                new TreeLeaf(name, cef, taskDict)
 
             case nswf:WdlNamespaceWithWorkflow =>
                 val cef = new CompilerErrorFormatter(nswf.resource, nswf.terminalMap)
                 val wfOutputs =
                     if (nswf.workflow.noWorkflowOutputs) {
                         // Empty output section. Unlike Cromwell, we generate no outputs
-                        Utils.warning(verbose, "Empty output section, no outputs will be generated")
+                        Utils.warning(ctx.verbose, "Empty output section, no outputs will be generated")
                         Vector.empty
                     } else {
                         // validate all workflow outputs
@@ -302,13 +350,11 @@ object NamespaceOps {
 
                 // recurse into sub-namespaces
                 val children:Vector[Tree] = nswf.namespaces.map{
-                    child => load(child, allWdlSources, verbose)
+                    child => load(child, ctx)
                 }.toVector
                 if (ns.tasks.isEmpty) {
                     TreeNode(name,
                              cef,
-                             verbose,
-                             allWdlSources,
                              nswf.imports,
                              nswf.workflow,
                              children)
@@ -318,22 +364,20 @@ object NamespaceOps {
                     val taskDict = ns.tasks.map{ task => task.name -> task}.toMap
                     val tasksLibPath = stripFileSuffix(Paths.get(name)) + "_task_lib.wdl"
                     val tasksLibName = stripFileSuffix(Paths.get(tasksLibPath))
-                    if (allWdlSources contains tasksLibPath)
+                    if (ctx.wdlSourceFiles contains tasksLibPath)
                         throw new Exception(s"Module name collision, ${tasksLibPath} already exists")
-                    Utils.trace(verbose.on, s"""|Splitting out tasks into separate source file
-                                              |path=${tasksLibPath}  name=${tasksLibName}"""
+                    Utils.trace(ctx.verbose.on, s"""|Splitting out tasks into separate source file
+                                                    |path=${tasksLibPath}  name=${tasksLibName}"""
                                     .stripMargin)
 
-                    val child: TreeLeaf = genLeaf(tasksLibName, tasksLibPath, taskDict, verbose)
-                    val wdlSourcesWithTaskLib = allWdlSources + (tasksLibPath -> child.genWdlSource)
+                    val child: TreeLeaf = genLeaf(tasksLibName, tasksLibPath, taskDict)
+                    ctx.addWdlSourceFile(tasksLibPath, child.genWdlSource)
 
                     val (nswf2, cef2) = rewriteWorkflowExtractTasks(
                         nswf, wfOutputs, tasksLibPath, tasksLibName,
-                        taskDict.keys.toSet, wdlSourcesWithTaskLib, nswf.resource)
+                        taskDict.keys.toSet, nswf.resource, ctx)
                     TreeNode(name,
                              cef2,
-                             verbose,
-                             wdlSourcesWithTaskLib,
                              nswf2.imports,
                              nswf2.workflow,
                              children :+ child)
@@ -375,8 +419,7 @@ object NamespaceOps {
 
     // remove from a tree all the tasks/workflows not in the named set.
     private def filter(tree: Tree,
-                       taskWfNames: Set[String],
-                       verbose: Verbose) : Option[Tree] = {
+                       taskWfNames: Set[String]) : Option[Tree] = {
         tree match {
             case leaf: TreeLeaf =>
                 val accessedTasks = leaf.tasks.filter{
@@ -388,7 +431,7 @@ object NamespaceOps {
                     Some(leaf.copy(tasks = accessedTasks))
 
             case node: TreeNode if (taskWfNames contains node.workflow.unqualifiedName) =>
-                val children = node.children.flatMap{ child => filter(child, taskWfNames, verbose) }
+                val children = node.children.flatMap{ child => filter(child, taskWfNames) }
                 if (children.isEmpty)
                     None
                 else
@@ -399,53 +442,25 @@ object NamespaceOps {
         }
     }
 
-    // prune files that have nothing we want to use
-    private def filterUnusedFiles(tree: Tree,
-                                  taskWfNames: Set[String],
-                                  verbose: Verbose) : Tree = {
-        System.err.println(s"taskWfNames = ${taskWfNames.toList.sorted}")
-        tree match {
-            case leaf:TreeLeaf => leaf
-            case node:TreeNode =>
-                val allWdlSources = node.allWdlSources.filter{
-                    case (filename, wdlSourceCode) =>
-                        val resolver = makeResolver(node.allWdlSources)
-                        WdlNamespace.loadUsingSource(wdlSourceCode,
-                                                     None, Some(List(resolver))) match {
-                            case Failure(_) =>
-                                // the WDL source does not parse, drop it
-                                false
-                            case Success(ns) =>
-                                val taskNames = ns.tasks.map(_.unqualifiedName).toSet
-                                val definedTasksAndWorkflows: Set[String] = ns match {
-                                    case nswf:WdlNamespaceWithWorkflow =>
-                                        taskNames + nswf.workflow.unqualifiedName
-                                    case _ => taskNames
-                                }
-                                !((taskWfNames intersect definedTasksAndWorkflows).isEmpty)
-                        }
-                }
-                node.copy(allWdlSources = allWdlSources)
-        }
-    }
-
     // Remove tasks and workflows that are not reachable from the top level
     // workflow.
     //
     // If the entire tree is one leaf, do nothing.
     // The user may be trying to compile standalone tasks as
     // applets.
-    def prune(tree: Tree, verbose: Verbose) : Tree = {
+    def prune(tree: Tree, ctx: Context) : Tree = {
         tree match {
             case leaf: TreeLeaf =>
                 leaf
             case node: TreeNode =>
                 val taskWfNames = collectRefs(node, Set(node.workflow.unqualifiedName))
-                val tree2 = filter(node, taskWfNames, verbose) match {
+                val tree2 = filter(node, taskWfNames) match {
                     case None => throw new Exception("Nothing to compile")
                     case Some(x) => x
                 }
-                filterUnusedFiles(tree2, taskWfNames, verbose)
+                ctx.filterUnusedFiles(taskWfNames)
+                Utils.trace(ctx.verbose.on, s"pruned sources = ${ctx.wdlSourceFiles.keys}")
+                tree2
         }
     }
 
