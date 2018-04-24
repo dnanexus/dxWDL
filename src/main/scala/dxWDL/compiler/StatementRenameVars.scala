@@ -22,6 +22,24 @@ case class StatementRenameVars(doNotModify: Set[Scope],
                                wordTranslations: Map[String, String],
                                cef: CompilerErrorFormatter,
                                verbose: Verbose) {
+    // All the words defined in the WDL language, and NOT to be confused
+    // with identifiers.
+    private val reservedWords:Set[String] = Set(
+        "stdout", "stderr",
+
+        "read_lines", "read_tsv", "read_map",
+        "read_object", "read_objects", "read_json",
+        "read_int", "read_string", "read_float", "read_boolean",
+
+        "write_lines", "write_tsv", "write_map",
+        "write_object", "write_objects", "write_json",
+        "write_int", "write_string", "write_float", "write_boolean",
+
+        "size", "sub", "range",
+        "transpose", "zip", "cross", "length", "flatten", "prefix",
+        "select_first", "select_all", "defined", "basename",
+        "floor", "ceil", "round"
+    )
 
     // split into a list of fully qualified names (A.B.C), separated
     // by expression symbols (+, -, /, ...).
@@ -50,9 +68,15 @@ case class StatementRenameVars(doNotModify: Set[Scope],
                     after.head == '"')
                 return false
         }
+
+        if (reservedWords contains m.toString)
+            return false
         return true
     }
 
+    // TODO: support interpolation. Split the expression into strings, ids, and
+    // anything else.
+    //
     private def split(exprStr: String) : Vector[Part] = {
         val matches: List[Match] = fqnRegex.findAllMatchIn(exprStr).toList
         if (matches.isEmpty)

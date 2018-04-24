@@ -4,7 +4,7 @@ package dxWDL.compiler
 // indirectly referenced namespaces.
 //
 import dxWDL.{CompilerErrorFormatter, Utils, Verbose, WdlPrettyPrinter}
-import java.nio.file.{Path, Paths}
+import java.nio.file.{Path}
 import java.io.{FileWriter, PrintWriter}
 import scala.util.{Failure, Success}
 import scala.collection.mutable.HashMap
@@ -78,14 +78,6 @@ object NamespaceOps {
         // A debugging function, pretty prints the namespace
         // as one concatenated string.
         def prettyPrint : String
-
-        // Apply a rewrite transformation to all the workflows in the
-        // namespace. The transformation returns a rewrite of the original workflow,
-        // and, potentially, a sub-workflow.
-        def transform(
-            f: (WdlWorkflow, CompilerErrorFormatter, Context) => (WdlWorkflow, Option[WdlWorkflow]),
-            ctx:Context) : Tree
-        = this
     }
 
 
@@ -169,10 +161,11 @@ object NamespaceOps {
             val lines = WdlPrettyPrinter(true, Some(wfOutputs)).apply(ns, 0)
             val cleanWdlSrc = (extraImportsText ++ lines).mkString("\n")
             if (ctx.verbose2) {
-                Utils.trace(ctx.verbose2, s"""|whitewash
+                Utils.trace(ctx.verbose2, s"""|=== whitewash
                                               |  wdlSources= ${ctx.allSourceFiles.keys.toList.sorted}
                                               |  extraImports=${extraImports}  dedup=${extraImportsDedup}
-                                              |${cleanWdlSrc}""".stripMargin)
+                                              |${cleanWdlSrc}
+                                              |===""".stripMargin)
             }
 
             ctx.addWdlSourceFile(wf.unqualifiedName + ".wdl", cleanWdlSrc)
@@ -204,45 +197,33 @@ object NamespaceOps {
             (top +: childrenStrings).mkString("\n\n")
         }
 
-        // Rewrite the workflow. Because the rewrite leaves the semantic
-        // tree invalid, we re-parse it.
-        override def transform(
-            f: (WdlWorkflow, CompilerErrorFormatter, Context) => (WdlWorkflow, Option[WdlWorkflow]),
-            ctx: Context)
-                : Tree = {
-            // recurse into children
-            val childrenTr = this.children.map(child => child.transform(f, ctx))
-            val (wfTr,subWorkflow) = f(workflow, cef, ctx)
+        // The workflow was split into a toplevel workflow, and a
+        // sub-workflow. Because the rewrite leaves the semantic tree
+        // invalid, we re-parse it.
+        //
+        // The workflow was broken down into a subworkflow, called from
+        // a toplevel workflow. The sub-workflow needs to have access to
+        // all the original imports.
+        def cleanAfterRewrite( topwf: WdlWorkflow,
+                               subWf: WdlWorkflow,
+                               ctx: Context) : TreeNode = {
+            /*val lines = WdlPrettyPrinter(true, None).apply(subWf, 0).mkString("\n")
+             val toplevelLines = WdlPrettyPrinter(true, None).apply(wfTr, 0).mkString("\n")
+             System.err.println(s"""|transform, with a subworkflow
+             |subworkflow:
+             |  ${lines}
+             |Top level:
+             |  ${toplevelLines}
+             |""".stripMargin)*/
 
-            subWorkflow match {
-                case None =>
-                    // The workflow was rewritten
-                    val CleanWf(wf2Node, _, _) = whiteWashWorkflow(wfTr, Vector.empty, ctx)
-                    wf2Node.copy(children = childrenTr)
+            val CleanWf(subWf2, subWfName2, subWdlSrc2) =
+                whiteWashWorkflow(subWf, imports.map{_.namespaceName}.toVector, ctx)
 
-                case Some(subWf) =>
-                    // The workflow was broken down into a subworkflow, called from
-                    // a toplevel workflow. The sub-workflow needs to have access to
-                    // all the original imports.
-                    /*val lines = WdlPrettyPrinter(true, None).apply(subWf, 0).mkString("\n")
-                    val toplevelLines = WdlPrettyPrinter(true, None).apply(wfTr, 0).mkString("\n")
-                    System.err.println(s"""|transform, with a subworkflow
-                                           |subworkflow:
-                                           |  ${lines}
-                                           |Top level:
-                                           |  ${toplevelLines}
-                                           |""".stripMargin)*/
-
-                    val CleanWf(subWf2, subWfName2, subWdlSrc2) =
-                        whiteWashWorkflow(subWf, imports.map{_.namespaceName}.toVector, ctx)
-
-                    // white wash the top level workflow
-                    ctx.addWdlSourceFile(subWfName2 + ".wdl", subWdlSrc2)
-                    val CleanWf(wf2Node, _, _) = whiteWashWorkflow(wfTr, Vector(subWfName2), ctx)
-                    wf2Node.copy(children = childrenTr :+ subWf2)
-            }
+            // white wash the top level workflow
+            ctx.addWdlSourceFile(subWfName2 + ".wdl", subWdlSrc2)
+            val CleanWf(topwf2, _, _) = whiteWashWorkflow(topwf, Vector(subWfName2), ctx)
+            topwf2.copy(children = this.children :+ subWf2)
         }
-
     }
 
 
@@ -288,16 +269,6 @@ object NamespaceOps {
     }
 
 
-    //  /A/B/C/xxx.wdl -> xxx
-    private def stripFileSuffix(src: Path) : String = {
-        val fName = src.toFile().getName()
-        val index = fName.lastIndexOf('.')
-        if (index == -1)
-            fName
-        else
-            fName.substring(0, index)
-    }
-
     // Create a leaf node from a name and a bunch of tasks
     private def genLeaf(tasksLibName: String,
                         resource: String,
@@ -330,14 +301,14 @@ object NamespaceOps {
 
     def load(ns: WdlNamespace,
              ctx: Context) : Tree = {
-        val name = ns.importUri match {
-            case None => "Unknown namespace"
-            case Some(x) => x
-        }
         ns match {
             case _:WdlNamespaceWithoutWorkflow =>
                 val cef = new CompilerErrorFormatter(ns.resource, ns.terminalMap)
                 val taskDict = ns.tasks.map{ task => task.name -> task}.toMap
+                val name = ns.importUri match {
+                    case None => "Unknown"
+                    case Some(x) => x
+                }
                 new TreeLeaf(name, cef, taskDict)
 
             case nswf:WdlNamespaceWithWorkflow =>
@@ -360,7 +331,7 @@ object NamespaceOps {
                     child => load(child, ctx)
                 }.toVector
                 if (ns.tasks.isEmpty) {
-                    TreeNode(name,
+                    TreeNode(nswf.workflow.unqualifiedName,
                              cef,
                              nswf.imports,
                              nswf.workflow,
@@ -369,8 +340,8 @@ object NamespaceOps {
                     // The workflow has tasks, split into a separate node,
                     // and update the imports and file-list,
                     val taskDict = ns.tasks.map{ task => task.name -> task}.toMap
-                    val tasksLibPath = stripFileSuffix(Paths.get(name)) + "_task_lib.wdl"
-                    val tasksLibName = stripFileSuffix(Paths.get(tasksLibPath))
+                    val tasksLibName = nswf.workflow.unqualifiedName + "_task_lib"
+                    val tasksLibPath = tasksLibName + ".wdl"
                     if (ctx.allSourceFiles contains tasksLibPath)
                         throw new Exception(s"Module name collision, ${tasksLibPath} already exists")
                     Utils.trace(ctx.verbose.on, s"""|Splitting out tasks into separate source file
@@ -383,7 +354,7 @@ object NamespaceOps {
                     val (nswf2, cef2) = rewriteWorkflowExtractTasks(
                         nswf, wfOutputs, tasksLibPath, tasksLibName,
                         taskDict.keys.toSet, nswf.resource, ctx)
-                    TreeNode(name,
+                    TreeNode(nswf.workflow.unqualifiedName,
                              cef2,
                              nswf2.imports,
                              nswf2.workflow,

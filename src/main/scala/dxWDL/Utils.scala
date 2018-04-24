@@ -65,7 +65,6 @@ object Utils {
     val REORG = "reorg"
     val SCATTER = "scatter"
     val RUNNER_TASK_ENV_FILE = "taskEnv.json"
-    val TMP_VAR_NAME_PREFIX = "xtmp"
     val UPLOAD_RETRY_LIMIT = DOWNLOAD_RETRY_LIMIT
 
     lazy val dxEnv = DXEnvironment.create()
@@ -108,18 +107,6 @@ object Utils {
         val p = execDirPath.resolve("inputs")
         safeMkdir(p)
         p
-    }
-
-    var tmpVarCnt = 0
-    def genTmpVarName() : String = {
-        val tmpVarName: String = s"${TMP_VAR_NAME_PREFIX}${tmpVarCnt}"
-        tmpVarCnt = tmpVarCnt + 1
-        tmpVarName
-    }
-
-
-    def isGeneratedVar(varName: String) : Boolean = {
-        varName.startsWith(TMP_VAR_NAME_PREFIX)
     }
 
     // Is this a WDL type that maps to a native DX type?

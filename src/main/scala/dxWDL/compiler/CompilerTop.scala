@@ -128,12 +128,8 @@ object CompilerTop {
 
         NamespaceOps.prettyPrint(wdlSourceFile, nsTreePruned, "pruned", cOpt.verbose)
 
-        // Simplify the original workflow, for example,
-        // convert call arguments from expressions to variables.
-        val nsTreeSimple = SimplifyExpr.apply(nsTreePruned, wdlSourceFile, ctx, cOpt.verbose)
-
         // Convert large sub-blocks to sub-workflows
-        DecomposeBlocks.apply(nsTreeSimple, wdlSourceFile, ctx, cOpt.verbose)
+        DecomposeBlocks.apply(nsTreePruned, wdlSourceFile, ctx, cOpt.verbose)
     }
 
     private def compileIR(wdlSourceFile : Path,

@@ -108,18 +108,13 @@ case class InputFile(verbose: Verbose) {
         val inputNames = inputsFull.map{ case (_,cVar) => cVar.name }
         Utils.trace(verbose2, s"inputNames=${inputNames}  trail=${nameTrail}")
         val inputsWithDefaults: Vector[SArg] = inputsFull.map{ case (sArg, cVar) =>
-            if (Utils.isGeneratedVar(cVar.name)) {
-                // generated variables are not accessible to the user
-                sArg
-            } else {
-                val fqn = s"${nameTrail}.${cVar.name}"
-                getExactlyOnce(defaultFields, fqn) match {
-                    case None => sArg
-                    case Some(dflt:JsValue) =>
-                        val wvl = translateValue(cVar, dflt)
-                        val w = WdlVarLinks.eval(wvl, IOMode.Remote, IODirection.Zero)
-                        IR.SArgConst(w)
-                }
+            val fqn = s"${nameTrail}.${cVar.name}"
+            getExactlyOnce(defaultFields, fqn) match {
+                case None => sArg
+                case Some(dflt:JsValue) =>
+                    val wvl = translateValue(cVar, dflt)
+                    val w = WdlVarLinks.eval(wvl, IOMode.Remote, IODirection.Zero)
+                    IR.SArgConst(w)
             }
         }
         stg.copy(inputs = inputsWithDefaults)

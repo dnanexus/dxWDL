@@ -860,9 +860,7 @@ task Add {
         // Limit the search to the top block of declarations. Those that come at the very
         // beginning of the workflow.
         val (wfInputDecls, wfProper) = children.toList.partition{
-            case decl:Declaration =>
-                Utils.declarationIsInput(decl) &&
-                !Utils.isGeneratedVar(decl.unqualifiedName)
+            case decl:Declaration => Utils.declarationIsInput(decl)
             case _ => false
         }
         val wfInputs:Vector[(CVar, SArg)] = buildWorkflowInputs(

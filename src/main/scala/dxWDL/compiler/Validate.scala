@@ -15,8 +15,6 @@ case class Validate(cef: CompilerErrorFormatter,
     // are used.
     private def checkReservedWords(ns: WdlNamespace) : Unit = {
         def checkVarName(varName: String, ast: Ast) : Unit = {
-            if (Utils.isGeneratedVar(varName))
-                throw new Exception(cef.illegalVariableName(ast))
             Utils.reservedSubstrings.foreach{ s =>
                 if (varName contains s)
                     throw new Exception(cef.illegalVariableName(ast))
