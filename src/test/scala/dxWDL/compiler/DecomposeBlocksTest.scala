@@ -22,7 +22,7 @@ class DecomposeBlocksTest extends FlatSpec with Matchers {
         val path = pathFromBasename("long_refs.wdl")
         Main.compile(
             List(path.toString, "--compileMode", "ir", "--locked",
-                 "--verbose", "decompose", "--verbose", "NamespaceOps")
+                 "--verbose", "decompose")
         ) should equal(Main.SuccessfulTermination(""))
     }
 

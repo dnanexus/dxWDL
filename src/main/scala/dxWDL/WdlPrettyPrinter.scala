@@ -236,11 +236,12 @@ case class WdlPrettyPrinter(fqnFlag: Boolean,
         Add.sum
      */
     def apply(wfo: WorkflowOutput, level: Int) : Vector[String] = {
-        val ln =
+/*        val ln =
             if (wfo.unqualifiedName == wfo.requiredExpression.toWomString)
                 wfo.unqualifiedName
             else
-                wfo.toWdlString
+ wfo.toWdlString*/
+        val ln = wfo.toWdlString
         Vector(indentLine(ln, level))
     }
 

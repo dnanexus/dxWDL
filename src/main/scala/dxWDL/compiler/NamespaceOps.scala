@@ -207,15 +207,6 @@ object NamespaceOps {
         def cleanAfterRewrite( topwf: WdlWorkflow,
                                subWf: WdlWorkflow,
                                ctx: Context) : TreeNode = {
-            /*val lines = WdlPrettyPrinter(true, None).apply(subWf, 0).mkString("\n")
-             val toplevelLines = WdlPrettyPrinter(true, None).apply(wfTr, 0).mkString("\n")
-             System.err.println(s"""|transform, with a subworkflow
-             |subworkflow:
-             |  ${lines}
-             |Top level:
-             |  ${toplevelLines}
-             |""".stripMargin)*/
-
             val CleanWf(subWf2, subWfName2, subWdlSrc2) =
                 whiteWashWorkflow(subWf, imports.map{_.namespaceName}.toVector, ctx)
 
