@@ -25,7 +25,6 @@ import wdl.command.{WdlCommandPart, ParameterCommandPart, StringCommandPart}
 //   library. The values are then:
 //       (libPath, libName, calleeNames)
 case class WdlPrettyPrinter(fqnFlag: Boolean,
-                            workflowOutputs: Option[Seq[WorkflowOutput]],
                             callablesMovedToLibrary: Option[(String, String, Set[String])] = None) {
     private val I_STEP = 4
 
@@ -228,20 +227,15 @@ case class WdlPrettyPrinter(fqnFlag: Boolean,
         buildTaskWithBrackets(task, bracketSymbols, level)
     }
 
-    /* There are several legal formats
-
-    output {
-        Array[String] keys = value
-        bam_file
-        Add.sum
-     */
     def apply(wfo: WorkflowOutput, level: Int) : Vector[String] = {
-/*        val ln =
-            if (wfo.unqualifiedName == wfo.requiredExpression.toWomString)
-                wfo.unqualifiedName
-            else
- wfo.toWdlString*/
-        val ln = wfo.toWdlString
+        // Make absolutely sure that we are using the unqualified name
+        var shortName = wfo.unqualifiedName
+        val index = shortName.lastIndexOf('.')
+        if (index != -1)
+            shortName = shortName.substring(index + 1)
+        val ln = s"""|${wfo.womType.toDisplayString} ${shortName} =
+                     |${orgExpression(wfo.requiredExpression)}"""
+            .stripMargin.replaceAll("\n", " ").trim
         Vector(indentLine(ln, level))
     }
 
@@ -264,10 +258,7 @@ case class WdlPrettyPrinter(fqnFlag: Boolean,
         // An error occurs in wdl4s if we use the wf.outputs method,
         // where there are no outputs.  We use the explicit output
         // list instead.
-        val wos: Seq[WorkflowOutput] = workflowOutputs match {
-            case None => wfOutputs.map(x => x.asInstanceOf[WorkflowOutput])
-            case Some(outputs) => outputs
-        }
+        val wos: Seq[WorkflowOutput] = wfOutputs.map(x => x.asInstanceOf[WorkflowOutput])
         val outputs = wos.map(apply(_, level + 2)).flatten.toVector
         val paramMeta = wf.parameterMeta.map{ case (x,y) =>  s"${x}: ${y}" }.toVector
         val meta = wf.meta.map{ case (x,y) =>  s"${x}: ${y}" }.toVector

@@ -102,14 +102,14 @@ object NamespaceOps {
 
         def prettyPrint : String = {
             val ns = this.toNamespace
-            val lines: Vector[String] = WdlPrettyPrinter(false, None).apply(ns, 0)
+            val lines: Vector[String] = WdlPrettyPrinter(false).apply(ns, 0)
             val desc = s"### Namespace  ${name}"
             (desc +: lines).mkString("\n")
         }
 
         def genWdlSource : String = {
             val ns = this.toNamespace
-            val lines: Vector[String] = WdlPrettyPrinter(false, None).apply(ns, 0)
+            val lines: Vector[String] = WdlPrettyPrinter(false).apply(ns, 0)
             lines.mkString("\n")
         }
     }
@@ -148,17 +148,13 @@ object NamespaceOps {
                                       extraImports: Vector[String],
                                       ctx: Context) : CleanWf = {
             val ns = toNamespace(wf)
-            val wfOutputs: Vector[WorkflowOutput] =
-                wf.children.filter(x => x.isInstanceOf[WorkflowOutput])
-                    .map(_.asInstanceOf[WorkflowOutput])
-                    .toVector
             // make sure not to duplicate imports.
             val crntImports = imports.map{_.namespaceName}.toSet
             val extraImportsDedup = extraImports.filter{i => !(crntImports contains i)}
             val extraImportsText = extraImportsDedup.map{ libName =>
                 s"""import "${libName}.wdl" as ${libName}"""
             }
-            val lines = WdlPrettyPrinter(true, Some(wfOutputs)).apply(ns, 0)
+            val lines = WdlPrettyPrinter(true).apply(ns, 0)
             val cleanWdlSrc = (extraImportsText ++ lines).mkString("\n")
             if (ctx.verbose2) {
                 Utils.trace(ctx.verbose2, s"""|=== whitewash
@@ -186,7 +182,7 @@ object NamespaceOps {
 
         def prettyPrint : String = {
             val ns = toNamespace(workflow)
-            val lines = WdlPrettyPrinter(true, Some(workflow.outputs)).apply(ns, 0)
+            val lines = WdlPrettyPrinter(true).apply(ns, 0)
             val desc = s"### Namespace  ${name}"
             val top = (desc +: lines).mkString("\n")
 
@@ -218,29 +214,12 @@ object NamespaceOps {
     }
 
 
-    // Make sure we don't have partial output expressions like:
-    //   output {
-    //     Add.result
-    //   }
-    //
-    // We only deal with fully specified outputs, like:
-    //   output {
-    //     File Add_result = Add.result
-    //   }
-    private def validateWorkflowOutput(wot: WorkflowOutput,
-                                       cef: CompilerErrorFormatter) : Unit = {
-        if (wot.unqualifiedName == wot.requiredExpression.toWomString) {
-            throw new Exception(cef.workflowOutputIsPartial(wot))
-        }
-    }
-
     // Extract all the tasks from the workflow, assume they are placed
     // in library [libName]. Rewrite the calls appropriately.
     //
     // import "libName" as xxxx_lib
     //    call  foo    ->   call xxxx_lib.foo
     private def rewriteWorkflowExtractTasks(nswf: WdlNamespaceWithWorkflow,
-                                            wfOutputs: Vector[WorkflowOutput],
                                             libPath: String,
                                             libName: String,
                                             taskNames: Set[String],
@@ -248,7 +227,7 @@ object NamespaceOps {
                                             ctx: Context)
             : (WdlNamespaceWithWorkflow, CompilerErrorFormatter)  = {
         // Modify the workflow: add an import, and rename task calls.
-        val pp = WdlPrettyPrinter(true, Some(wfOutputs), Some((libPath, libName, taskNames)))
+        val pp = WdlPrettyPrinter(true, Some((libPath, libName, taskNames)))
         val lines: String = pp.apply(nswf, 0).mkString("\n")
         val resolver = ctx.makeResolver
         val cleanNs = WdlNamespace.loadUsingSource(
@@ -274,7 +253,7 @@ object NamespaceOps {
             WdlRewrite.INVALID_AST,
             tasksLibName,
             None)
-        val lines = WdlPrettyPrinter(true, None, None).apply(wf, 0).mkString("\n")
+        val lines = WdlPrettyPrinter(true, None).apply(wf, 0).mkString("\n")
         val cleanNs = WdlNamespace.loadUsingSource(
             lines, None, None
         ).get
@@ -304,18 +283,6 @@ object NamespaceOps {
 
             case nswf:WdlNamespaceWithWorkflow =>
                 val cef = new CompilerErrorFormatter(nswf.resource, nswf.terminalMap)
-                val wfOutputs =
-                    if (nswf.workflow.noWorkflowOutputs) {
-                        // Empty output section. Unlike Cromwell, we generate no outputs
-                        Utils.warning(ctx.verbose, "Empty output section, no outputs will be generated")
-                        Vector.empty
-                    } else {
-                        // validate all workflow outputs
-                        nswf.workflow.outputs.map{ wot =>
-                            validateWorkflowOutput(wot, cef)
-                            wot
-                        }.toVector
-                    }
 
                 // recurse into sub-namespaces
                 val children:Vector[Tree] = nswf.namespaces.map{
@@ -343,7 +310,7 @@ object NamespaceOps {
                     ctx.addWdlSourceFile(tasksLibPath, child.genWdlSource)
 
                     val (nswf2, cef2) = rewriteWorkflowExtractTasks(
-                        nswf, wfOutputs, tasksLibPath, tasksLibName,
+                        nswf, tasksLibPath, tasksLibName,
                         taskDict.keys.toSet, nswf.resource, ctx)
                     TreeNode(nswf.workflow.unqualifiedName,
                              cef2,

@@ -16,6 +16,13 @@ workflow long_refs {
              aF = sub(filename, prefix, "") + suffix
         }
     }
+
+    output {
+        Array[File] out = GenFile.out
+        Array[String] result = head.result
+        Array[Int] line_count = wc.line_count
+        Array[File] result2 = FileIdent.result
+    }
 }
 
 # Create a file with several lines.

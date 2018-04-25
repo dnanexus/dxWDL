@@ -12,7 +12,8 @@ and rename the variables. For example, examine the expression:
 
 package dxWDL.compiler
 
-import dxWDL.{CompilerErrorFormatter, Verbose}
+import dxWDL.{CompilerErrorFormatter, Utils, Verbose}
+import scala.util.matching.Regex
 import scala.util.matching.Regex.Match
 import wdl._
 
@@ -41,81 +42,95 @@ case class StatementRenameVars(doNotModify: Set[Scope],
         "floor", "ceil", "round"
     )
 
-    // split into a list of fully qualified names (A.B.C), separated
-    // by expression symbols (+, -, /, ...).
+    case class Accu(tokens: Vector[String],  // tokens found so far
+                    pos: Int)   // position in the string
+
+    // Split a a string by a regular expression into tokens. Include
+    // the extents in between matches as individual tokens.
+    private def splitWithRangesAsTokens(buf: String, regex: Regex) : Vector[String] = {
+        val matches: List[Match] = regex.findAllMatchIn(buf).toList
+        if (matches.isEmpty) {
+            return Vector(buf)
+        }
+
+        // Add the extents between matches.
+        val accu = matches.foldLeft(Accu(Vector.empty, 0)){
+            case (accu, m) =>
+                val tokens =
+                    if (m.start > accu.pos) {
+                        val before = buf.substring(accu.pos, m.start)
+                        Vector (before, m.toString)
+                    } else {
+                        Vector(m.toString)
+                    }
+                Accu(accu.tokens ++ tokens, m.end)
+        }
+
+        // handle the symbols after the last match
+        if (matches.last.end < buf.length) {
+            val last = matches.last
+            val lastToken =  buf.substring(last.end, buf.length)
+            accu.tokens :+ lastToken
+        } else {
+            accu.tokens
+        }
+    }
+
+    // split into a list of three kinds of elements:
+    //  1) fully qualified names (A.B.C)
+    //  2) expression symbols (+, -, /, ...).
+    //  3) quoted strings ("Tamara likes ${fruit}s and ${ice}")
     //
+    // A string can contain an interpolation
     sealed trait Part
     case class Fqn(value: String) extends Part
     case class Symbols(value: String) extends Part
 
-    case class Accu(tokens: Vector[Part],  // tokens found so far
-                    pos: Int)   // position in the string
-
     private val fqnRegex = raw"""[a-zA-Z][a-zA-Z0-9_.]*""".r
+    private val quotedStringRegex = raw""""([^"]*)"""".r
 
-    private def isIdentifer(m: Match) : Boolean = {
-        // check that there are no quotation marks before and after the token
-        //System.err.println(s"isIdentifer ${m}")
-        if (m.before != null) {
-            val before = m.before.toString
-            if (!before.isEmpty &&
-                    before.last == '"')
-                return false
-        }
-        if (m.after != null) {
-            val after = m.after.toString
-            if (!after.isEmpty &&
-                    after.head == '"')
-                return false
-        }
+    // From a string like: "Tamara likes ${fruit}s and ${ice}s"
+    // extract the variables {fruit, ice}. In general, they
+    // could be full fledged expressions
+    //
+    // from: wdl4s.wdl.expression.ValueEvaluator.InterpolationTagPattern
+    private val interpolationRegex = "\\$\\{\\s*([^\\}]*)\\s*\\}".r
 
-        if (reservedWords contains m.toString)
+    private def isIdentifer(token: String) : Boolean = {
+        if (token contains '"')
+            return false
+        if (!fqnRegex.pattern.matcher(token).matches)
+            return false
+        if (reservedWords contains token)
             return false
         return true
     }
 
-    // TODO: support interpolation. Split the expression into strings, ids, and
-    // anything else.
-    //
-    private def split(exprStr: String) : Vector[Part] = {
-        val matches: List[Match] = fqnRegex.findAllMatchIn(exprStr).toList
-        if (matches.isEmpty)
-            return Vector(Symbols(exprStr))
+    private def split(buf: String) : Vector[Part] = {
+        // split into sub-strings
+        val v1 = splitWithRangesAsTokens(buf, quotedStringRegex)
+        val v3 = v1.map{ token =>
+            if (token(0) == '"' &&
+                    token(token.length - 1) == '"')
+                // look for ${...} elements inside the string
+                splitWithRangesAsTokens(token, interpolationRegex)
+            else
+                splitWithRangesAsTokens(token, fqnRegex)
+        }.flatten
 
-        // convert every match to a FQN. Add the region between it
-        // and the previous FQN as a symbol.
-        val accu = matches.foldLeft(Accu(Vector.empty, 0)){
-            case (accu, m) =>
-                if (isIdentifer(m)) {
-                    val fqn = Fqn(m.toString)
-                    val tokens =
-                        if (m.start > accu.pos) {
-                            val symb = Symbols(exprStr.substring(accu.pos, m.start))
-                            Vector (symb, fqn)
-                        } else {
-                            Vector(fqn)
-                        }
-                    Accu(accu.tokens ++ tokens, m.end)
-                } else {
-                    // This is not an ID, even though there is a match
-                    val symb = Symbols(exprStr.substring(accu.pos, m.end))
-                    Accu(accu.tokens :+ symb, m.end)
-                }
+        // identify each sub-string; which kind of token is it?
+        v3.map{ token =>
+            if (isIdentifer(token))
+                Fqn(token)
+            else
+                Symbols(token)
         }
-
-        // handle the symbols after the last match
-        if (matches.last.end < exprStr.length) {
-            val last = matches.last
-            val lastSym =  Symbols(exprStr.substring(last.end, exprStr.length))
-            accu.tokens :+ lastSym
-        } else
-            accu.tokens
     }
 
     private def exprRenameVars(expr: WdlExpression) : WdlExpression = {
         val parts = split(expr.toWomString)
-//        Utils.trace(verbose.on,
-//                    s"expr=${expr.toWomString}    parts=${parts}")
+        Utils.trace(verbose.on,
+                    s"expr=${expr.toWomString}    parts=${parts}")
 
         val translatedParts = parts.map {
             case Fqn(fqn) =>

@@ -244,16 +244,6 @@ case class DecomposeBlocks(subWorkflowPrefix: String,
         val empty = VarTracker(Map.empty, Map.empty)
     }
 
-    private def exprDeps(erv: StatementRenameVars,
-                         expr: WdlExpression,
-                         scope: Scope): Vector[DVar] = {
-        val variables = erv.findAllInExpr(expr)
-        variables.map{ varName =>
-            val womType = Utils.lookupType(scope)(varName)
-            DVar(varName, womType)
-        }.toVector
-    }
-
     // Figure out the type of an expression
     private def evalType(expr: WdlExpression, parent: Scope) : WomType = {
         TypeEvaluator(Utils.lookupType(parent),
@@ -264,6 +254,24 @@ case class DecomposeBlocks(subWorkflowPrefix: String,
                 Utils.warning(verbose, cef.couldNotEvaluateType(expr))
                 throw f
         }
+    }
+
+    private def exprDeps(erv: StatementRenameVars,
+                         expr: WdlExpression,
+                         scope: Scope): Vector[DVar] = {
+        val variables = erv.findAllInExpr(expr)
+        variables.map{ varName =>
+            val womType =
+                try {
+                    Utils.lookupType(scope)(varName)
+                } catch {
+                    case e: Throwable if (varName contains '.') =>
+                        // This is a member access, or a reference to a call output.
+                        // Try evaluating the type.
+                        evalType(expr, scope)
+                }
+            DVar(varName, womType)
+        }.toVector
     }
 
     // Find all the free variables in a block of statements. For example,
@@ -347,22 +355,53 @@ case class DecomposeBlocks(subWorkflowPrefix: String,
         }.flatten
     }
 
+    private def findAllDeclarations(statements: Vector[Scope]) : Vector[Declaration] = {
+        statements.foldLeft(Vector.empty[Declaration]) {
+            case (accu, decl:Declaration) =>
+                accu :+ decl
+            case (accu, call:WdlCall) =>
+                accu
+            case (accu, ssc:Scatter) =>
+                accu ++ findAllDeclarations(ssc.children.toVector)
+            case (accu, condStmt:If) =>
+                accu ++ findAllDeclarations(condStmt.children.toVector)
+            case (accu, x) =>
+                throw new Exception(cef.notCurrentlySupported(
+                                        x.ast,
+                                        s"Unimplemented workflow element"))
+        }
+    }
+
+    private def pickUnusedName(originalName: String,
+                               alreadyUsedNames: Set[String]) : String = {
+        // Try the original name
+        if (!(alreadyUsedNames contains originalName))
+            return originalName
+
+        // Add [1,2,3 ...] to the original name, until finding
+        // an unused variable name
+        for (i <- 1 to Utils.DECOMPOSE_MAX_NUM_RENAME_TRIES) {
+            val tentative = s"${originalName}${i}"
+            if (!(alreadyUsedNames contains tentative))
+                return tentative
+        }
+        throw new Exception(s"Could not find a unique name for variable ${originalName}")
+    }
+
     // Choose good names for the variables. The names:
     // 1) must be unique within this scope
     // 2) should be as close to the original WDL as possible
     // 3) should be succinct, and human readable
-    private def chooseConciseNames(dVars: Vector[DVar]) : Vector[DVarHr] = {
-        val (allUsedNames, dvhrVec) = dVars.foldLeft((Set.empty[String], Vector.empty[DVarHr])) {
+    private def chooseConciseNames(dVars: Vector[DVar],
+                                   alreadyUsedNames: Set[String]) : Vector[DVarHr] = {
+        val (allUsedNames, dvhrVec) = dVars.foldLeft((alreadyUsedNames, Vector.empty[DVarHr])) {
             case ((alreadyUsedNames, dvhrVec), dVar) =>
-                val unqualifiedName = dVar.unqualifiedName
-                var conciseName =
-                    if (alreadyUsedNames contains unqualifiedName) {
-                        dVar.fullyQualifiedName
-                    } else {
-                        unqualifiedName
-                    }
-                conciseName = Utils.transformVarName(conciseName)
+                val sanitizedName = Utils.transformVarName(dVar.unqualifiedName)
+                val conciseName = pickUnusedName(sanitizedName, alreadyUsedNames)
+
                 assert(!(alreadyUsedNames contains conciseName))
+                assert(conciseName.indexOf('.') == -1)
+
                 val dvhr = DVarHr(dVar.fullyQualifiedName,
                                   dVar.womType,
                                   WdlExpression.fromString(dVar.fullyQualifiedName),
@@ -512,12 +551,13 @@ case class DecomposeBlocks(subWorkflowPrefix: String,
 
         // Figure out the free variables in the subtree
         val sbtInputs = freeVars(body)
-        val sbtInputsHr = chooseConciseNames(sbtInputs)
+        val sbtInputsHr = chooseConciseNames(sbtInputs, Set.empty)
 
         // Figure out the outputs from the subtree
         val sbtOutputs: Vector[DVar] = blockOutputsAll(body)
-        System.err.println(s"decompose  sbtOutputs=${sbtOutputs}")
-        val sbtOutputsHr = chooseConciseNames(sbtOutputs)
+        val namesToAvoid =
+            sbtInputs.map(_.fullyQualifiedName) ++ findAllDeclarations(body).map(_.unqualifiedName)
+        val sbtOutputsHr = chooseConciseNames(sbtOutputs, namesToAvoid.toSet)
 
         // create a separate subworkflow from the subtree.
         val subWfName = createNameForSubWorkflow(subtree, kind)
@@ -566,13 +606,26 @@ case class DecomposeBlocks(subWorkflowPrefix: String,
     // newly created sub-workflow.
     def apply(wf: WdlWorkflow,
               child: Block.ReducibleChild) : (WdlWorkflow, WdlWorkflow) = {
+        if (verbose2) {
+            val childLines = WdlPrettyPrinter(true, None).apply(child.scope, 0).mkString("\n")
+            val wfLines = WdlPrettyPrinter(true, None).apply(wf, 0).mkString("\n")
+            Utils.trace(verbose2,
+                        s"""|=== apply1
+                            |  topWf = ${wfLines}
+                            |  child = ${childLines}
+                            |""".stripMargin)
+        }
+
         val (topWf, subWf, wfc, xtrnVarRefs) = decompose(wf, child.scope, child.kind)
 
         if (verbose2) {
             val lines = WdlPrettyPrinter(true, None).apply(subWf, 0).mkString("\n")
-            Utils.trace(verbose2, s"subwf = ${lines}")
             val topWfLines = WdlPrettyPrinter(true, None).apply(topWf, 0).mkString("\n")
-            Utils.trace(verbose2, s"topWf = ${topWfLines}")
+            Utils.trace(verbose2,
+                        s"""|=== apply2
+                            |  topWf = ${topWfLines}
+                            |  subwf = ${lines}
+                            |""".stripMargin)
         }
 
         // Note: we are apply renaming to the entire toplevel workflow, including

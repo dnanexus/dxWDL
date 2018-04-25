@@ -67,9 +67,43 @@ case class Validate(cef: CompilerErrorFormatter,
         }
     }
 
+    // Make sure we don't have partial output expressions like:
+    //   output {
+    //     Add.result
+    //   }
+    //
+    // We only deal with fully specified outputs, like:
+    //   output {
+    //     File Add_result = Add.result
+    //   }
+    private def validateWorkflowOutputs(workflow: WdlWorkflow) : Unit = {
+        if (workflow.noWorkflowOutputs) {
+            // Empty output section. Unlike Cromwell, we generate no outputs
+            Utils.warning(verbose, "Empty output section, no outputs will be generated")
+        } else {
+            val wfOutputs: Vector[WorkflowOutput] =
+                workflow.children.filter(x => x.isInstanceOf[WorkflowOutput])
+                    .map(_.asInstanceOf[WorkflowOutput])
+                    .toVector
+
+            // validate all workflow outputs
+            wfOutputs.foreach{ wot =>
+                if (wot.unqualifiedName == wot.requiredExpression.toWomString)
+                    throw new Exception(cef.workflowOutputIsPartial(wot))
+            }
+        }
+    }
+
     def apply(ns: WdlNamespace) : Unit = {
         checkReservedWords(ns)
         ns.tasks.foreach(t => validateTask(t))
+
+        // Make sure there are well defined outputs
+        ns match {
+            case nswf:WdlNamespaceWithWorkflow =>
+                validateWorkflowOutputs(nswf.workflow)
+            case _ => ()
+        }
     }
 }
 

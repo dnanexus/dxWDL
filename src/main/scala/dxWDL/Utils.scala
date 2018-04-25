@@ -66,6 +66,7 @@ object Utils {
     val SCATTER = "scatter"
     val RUNNER_TASK_ENV_FILE = "taskEnv.json"
     val UPLOAD_RETRY_LIMIT = DOWNLOAD_RETRY_LIMIT
+    val DECOMPOSE_MAX_NUM_RENAME_TRIES = 100
 
     lazy val dxEnv = DXEnvironment.create()
 
