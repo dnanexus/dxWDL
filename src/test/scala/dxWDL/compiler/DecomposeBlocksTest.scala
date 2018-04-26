@@ -39,4 +39,12 @@ class DecomposeBlocksTest extends FlatSpec with Matchers {
             List(path.toString, "--compileMode", "ir", "--locked", "--quiet")
         ) should equal(Main.SuccessfulTermination(""))
     }
+
+    it should "avoid giving the same name to scatters with similar items" in {
+        val path = pathFromBasename("naming_scatters.wdl")
+        Main.compile(
+            List(path.toString, "--compileMode", "ir", "--locked", "--quiet")
+        ) should equal(Main.SuccessfulTermination(""))
+    }
+
 }

@@ -12,7 +12,7 @@ and rename the variables. For example, examine the expression:
 
 package dxWDL.compiler
 
-import dxWDL.{CompilerErrorFormatter, Utils, Verbose}
+import dxWDL.{CompilerErrorFormatter, Verbose}
 import scala.util.matching.Regex
 import scala.util.matching.Regex.Match
 import wdl._
@@ -129,8 +129,8 @@ case class StatementRenameVars(doNotModify: Set[Scope],
 
     private def exprRenameVars(expr: WdlExpression) : WdlExpression = {
         val parts = split(expr.toWomString)
-        Utils.trace(verbose.on,
-                    s"expr=${expr.toWomString}    parts=${parts}")
+        /*Utils.trace(verbose.on,
+                    s"expr=${expr.toWomString}    parts=${parts}")*/
 
         val translatedParts = parts.map {
             case Fqn(fqn) =>

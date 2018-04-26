@@ -184,10 +184,10 @@ import wdl.expression._
 import wom.types._
 
 case class DecomposeBlocks(subWorkflowPrefix: String,
+                           subwfNames: Set[String],
                            cef: CompilerErrorFormatter,
                            verbose: Verbose) {
     val verbose2:Boolean = verbose.keywords contains "decompose"
-    var subwfNamesGenerated = Set.empty[String]
 
     // The WDL source variable with a fully qualified name. It can include for example,
     // "add.result", "mul.result".
@@ -513,7 +513,11 @@ case class DecomposeBlocks(subWorkflowPrefix: String,
             case ssc: Scatter =>
                 s"scatter_${ssc.item}"
             case cond: If =>
-                s"if_${cond.condition.toWomString}"
+                val condRawString = cond.condition.toWomString
+                // Leave only identifiers
+                val fqnRegex = raw"""[a-zA-Z][a-zA-Z0-9_.]*""".r
+                val matches: List[Match] = fqnRegex.findAllMatchIn(condRawString).toList
+                matches.map{ _.toString}.mkString("_")
             case x =>
                 throw new Exception(cef.compilerInternalError(
                                         x.ast,
@@ -523,22 +527,21 @@ case class DecomposeBlocks(subWorkflowPrefix: String,
             case Block.Kind.CallLine => "_body"
             case Block.Kind.Fragment => ""
         }
-        val fullName = s"${subWorkflowPrefix}_${shortBlockDesc}${suffix}"
+        val longName = s"${subWorkflowPrefix}_${shortBlockDesc}${suffix}"
+        val baseName = longName.take(Utils.MAX_STAGE_NAME_LEN)
 
-        // Leave only identifiers
-        val fqnRegex = raw"""[a-zA-Z][a-zA-Z0-9_.]*""".r
-        val matches: List[Match] = fqnRegex.findAllMatchIn(fullName).toList
-        val ids = matches.map{ x => x.toString}.toList
-        val sanName = ids.mkString("_").take(Utils.MAX_STAGE_NAME_LEN)
+        if (!(subwfNames contains baseName))
+            return baseName
 
-        // Make sure this name is not already used
-        if (subwfNamesGenerated contains sanName)
-            throw new Exception(s"The sanitized sub-workflow name ${sanName} is already in use")
-        subwfNamesGenerated += sanName
-
-        sanName
+        // Add [1,2,3 ...] to the original name, until finding
+        // an unused variable name
+        for (i <- 1 to Utils.DECOMPOSE_MAX_NUM_RENAME_TRIES) {
+            val tentative = s"${baseName}${i}"
+            if (!(subwfNames contains tentative))
+                return tentative
+        }
+        throw new Exception(s"Could not find a unique name for sub-workflow ${baseName}")
     }
-
 
     private def decompose(wf: WdlWorkflow,
                           subtree: Scope,
@@ -668,6 +671,7 @@ object DecomposeBlocks {
         var tree = nsTree
         var iter = 0
         var done = false
+        var subwfNames = Set.empty[String]
         while (!done) {
             done = tree match {
                 case node: NamespaceOps.TreeNode if Block.countCalls(node.workflow.children) >= 2 =>
@@ -682,12 +686,13 @@ object DecomposeBlocks {
                         case None => true
                         case Some(child) =>
                             Utils.trace(verbose.on, s"Decompose iteration ${iter}")
-                            val sbw = new DecomposeBlocks(subwfPrefix, node.cef, verbose)
+                            val sbw = new DecomposeBlocks(subwfPrefix, subwfNames, node.cef, verbose)
                             val (wf2, subWf) = sbw.apply(node.workflow, child)
                             tree = node.cleanAfterRewrite(wf2, subWf, ctx)
                             if (verbose2)
                                 NamespaceOps.prettyPrint(wdlSourceFile, tree, s"subblocks_${iter}", verbose)
                             iter = iter + 1
+                            subwfNames += subWf.unqualifiedName
                             false
                     }
                 case _ => true
