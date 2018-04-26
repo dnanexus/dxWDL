@@ -37,14 +37,14 @@ object CompilerTop {
                               irNs: IR.Namespace,
                               path: Path,
                               cOpt: CompilerOptions) : IR.Namespace = {
-        val allStageNames = wf.stages.map{ stg => stg.name }.toVector
+        val allStageNames = wf.stages.map{ stg => stg.stageName }.toVector
 
         // embed the defaults into the IR
         val irNsEmb = InputFile(cOpt.verbose).embedDefaults(wf, irNs, path)
 
         // make sure the stage order hasn't changed
         val workflow1: IR.Workflow = irNsEmb.entrypoint.get
-        val embedAllStageNames = workflow1.stages.map{ stg => stg.name }.toVector
+        val embedAllStageNames = workflow1.stages.map{ stg => stg.stageName }.toVector
         assert(allStageNames == embedAllStageNames)
 
         irNsEmb

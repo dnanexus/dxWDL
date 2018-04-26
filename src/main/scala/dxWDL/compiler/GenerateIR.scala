@@ -674,7 +674,7 @@ task Add {
                 // to these results.
                 for (cVar <- stage.outputs) {
                     env = env + (call.unqualifiedName ++ "." + cVar.name ->
-                                     LinkedVar(cVar, IR.SArgLink(stage.name, cVar)))
+                                     LinkedVar(cVar, IR.SArgLink(stage.stageName, cVar)))
                 }
                 accu :+ (stage, None)
 
@@ -684,7 +684,7 @@ task Add {
                 val (stage, apl) = compileWfFragment(wf.unqualifiedName, stageName, block, env)
                 for (cVar <- stage.outputs) {
                     env = env + (cVar.name ->
-                                     LinkedVar(cVar, IR.SArgLink(stage.name, cVar)))
+                                     LinkedVar(cVar, IR.SArgLink(stage.stageName, cVar)))
                 }
                 accu :+ (stage, Some(apl))
         }
@@ -828,7 +828,7 @@ task Add {
 
         // An environment where variables are defined
         val initEnv : CallEnv = inputStage.outputs.map { cVar =>
-            cVar.name -> LinkedVar(cVar, IR.SArgLink(inputStage.name, cVar))
+            cVar.name -> LinkedVar(cVar, IR.SArgLink(inputStage.stageName, cVar))
         }.toMap
 
         val initAccu : (Vector[(IR.Stage, Option[IR.Applet])]) =
@@ -935,7 +935,7 @@ object GenerateIR {
                 }.toMap
 
                 val allCallables = callables ++ taskApplets
-                Utils.trace(verbose.on, s"leaf: callables = ${allCallables.keys}")
+                //Utils.trace(verbose.on, s"leaf: callables = ${allCallables.keys}")
                 makeNamespace(name, None, allCallables)
 
             case NamespaceOps.TreeNode(name, cef, _, workflow, children) =>
@@ -949,12 +949,12 @@ object GenerateIR {
                         val childIr = applyRec(child, accu, false, true, verbose)
                         accu ++ childIr.buildCallables
                 }
-                Utils.trace(verbose.on, s"node: ${childCallables.keys}")
+                //Utils.trace(verbose.on, s"node: ${childCallables.keys}")
 
                 val gir = new GenerateIR(childCallables, cef, reorg, locked, verbose)
                 val (irWf, auxApplets) = gir.compileWorkflow(workflow)
                 val allCallables = childCallables ++ auxApplets
-                Utils.trace(verbose.on, s"node: callables = ${allCallables.keys}")
+                //Utils.trace(verbose.on, s"node: callables = ${allCallables.keys}")
                 makeNamespace(name, Some(irWf), allCallables)
         }
         nsTree1

@@ -739,10 +739,10 @@ case class Native(dxWDLrtId: String,
                     val stageReqDesc = JsObject(
                         "id" -> JsString(stg.id.getId),
                         "executable" -> JsString(dxExec.getId),
-                        "name" -> JsString(stg.name),
+                        "name" -> JsString(stg.stageName),
                         "input" -> inputs)
                     (stagesReq :+ stageReqDesc,
-                     stageDict ++ Map(stg.name -> stg.id))
+                     stageDict ++ Map(stg.stageName -> stg.id))
             }
 
         // pack all the arguments into a single API call

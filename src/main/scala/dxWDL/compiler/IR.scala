@@ -130,7 +130,7 @@ object IR {
     }
 
     // A stage can call an applet or a workflow
-    case class Stage(name: String,
+    case class Stage(stageName: String,
                      id: Utils.DXWorkflowStage,
                      calleeName: String,
                      inputs: Vector[SArg],
@@ -232,21 +232,21 @@ object IR {
                 aKind match {
                     case AppletKindWfFragment(calls) =>
                         YamlObject(
-                            YamlString("aKind") -> YamlString("WfFragment"),
+                            YamlString("appletKind") -> YamlString("WfFragment"),
                             YamlString("calls") -> calls.toYaml)
                     case AppletKindNative(id) =>
                         YamlObject(
-                            YamlString("aKind") -> YamlString("Native"),
+                            YamlString("appletKind") -> YamlString("Native"),
                             YamlString("id") -> YamlString(id))
                     case AppletKindTask =>
-                        YamlObject(YamlString("aKind") -> YamlString("Task"))
+                        YamlObject(YamlString("appletKind") -> YamlString("Task"))
                     case AppletKindWorkflowOutputReorg =>
-                        YamlObject(YamlString("aKind") -> YamlString("WorkflowOutputReorg"))
+                        YamlObject(YamlString("appletKind") -> YamlString("WorkflowOutputReorg"))
                 }
             def read(value: YamlValue) = value match {
                 case YamlObject(_) =>
                     val yo = value.asYamlObject
-                    yo.getFields(YamlString("aKind")) match {
+                    yo.getFields(YamlString("appletKind")) match {
                         case Seq(YamlString("Native")) =>
                             yo.getFields(YamlString("id")) match {
                                 case Seq(YamlString(id)) =>

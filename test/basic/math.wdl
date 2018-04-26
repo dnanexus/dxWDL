@@ -105,7 +105,7 @@ workflow math {
         Array[Array[Int]] rra = rfi.result
 
         # Expressions in output section
-        Int expr1 = ai + bi
-        Float z = p.left
+#        Int expr1 = ai + bi
+#        Float z = p.left
     }
 }
