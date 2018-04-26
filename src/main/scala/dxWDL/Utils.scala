@@ -52,7 +52,6 @@ object Utils {
     val DX_INSTANCE_TYPE_ATTR = "dx_instance_type"
     val DX_URL_PREFIX = "dx://"
     val FLAT_FILES_SUFFIX = "___dxfiles"
-    val IF = "if"
     val INSTANCE_TYPE_DB_FILENAME = "instanceTypeDB.json"
     val INTERMEDIATE_RESULTS_FOLDER = "intermediate"
     val LAST_STAGE = "last"
@@ -63,7 +62,6 @@ object Utils {
     val MAX_NUM_FILES_MOVE_LIMIT = 1000
     val OUTPUT_SECTION = "outputs"
     val REORG = "reorg"
-    val SCATTER = "scatter"
     val RUNNER_TASK_ENV_FILE = "taskEnv.json"
     val UPLOAD_RETRY_LIMIT = DOWNLOAD_RETRY_LIMIT
     val DECOMPOSE_MAX_NUM_RENAME_TRIES = 100
@@ -75,10 +73,7 @@ object Utils {
     def ignore[A](value: A) : Unit = {}
 
     // Substrings used by the compiler for encoding purposes
-    val reservedSubstrings = List("___")
-
-    // Prefixes used for generated applets
-    val reservedAppletPrefixes = List(SCATTER, IF)
+    val reservedSubstrings = List("___", LAST_STAGE)
 
     lazy val execDirPath : Path = {
         val currentDir = System.getProperty("user.dir")
@@ -691,6 +686,21 @@ object Utils {
             }
             case Some(_: WdlNamespace) => WdlNamespaceType
             case _ => throw new Exception(s"Could not resolve $n from scope ${from.fullyQualifiedName}")
+        }
+    }
+
+    // Figure out the type of an expression
+    def evalType(expr: WdlExpression,
+                 parent: Scope,
+                 cef: CompilerErrorFormatter,
+                 verbose: Verbose) : WomType = {
+        TypeEvaluator(lookupType(parent),
+                      new WdlStandardLibraryFunctionsType,
+                      Some(parent)).evaluate(expr.ast) match {
+            case Success(wdlType) => wdlType
+            case Failure(f) =>
+                warning(verbose, cef.couldNotEvaluateType(expr))
+                throw f
         }
     }
 

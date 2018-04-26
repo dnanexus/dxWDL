@@ -352,13 +352,13 @@ object Main extends App {
             cOpt.compileMode match {
                 case CompilerFlag.IR =>
                     compiler.CompilerTop.applyOnlyIR(wdlSourceFile, cOpt)
-                    SuccessfulTermination("")
+                    return SuccessfulTermination("")
 
                 case CompilerFlag.Default =>
                     val (dxProject, folder) = pathOptions(options, cOpt.verbose)
                     val retval = compiler.CompilerTop.apply(wdlSourceFile, folder, dxProject, cOpt)
                     val desc = retval.getOrElse("")
-                    SuccessfulTermination(desc)
+                    return SuccessfulTermination(desc)
             }
         } catch {
             case e : Throwable =>

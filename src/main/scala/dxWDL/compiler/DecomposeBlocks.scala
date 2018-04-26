@@ -177,10 +177,8 @@ package dxWDL.compiler
 
 import dxWDL.{CompilerErrorFormatter, Utils, Verbose, WdlPrettyPrinter}
 import java.nio.file.Path
-import scala.util.{Failure, Success}
 import scala.util.matching.Regex.Match
 import wdl._
-import wdl.expression._
 import wom.types._
 
 case class DecomposeBlocks(subWorkflowPrefix: String,
@@ -244,19 +242,7 @@ case class DecomposeBlocks(subWorkflowPrefix: String,
         val empty = VarTracker(Map.empty, Map.empty)
     }
 
-    // Figure out the type of an expression
-    private def evalType(expr: WdlExpression, parent: Scope) : WomType = {
-        TypeEvaluator(Utils.lookupType(parent),
-                      new WdlStandardLibraryFunctionsType,
-                      Some(parent)).evaluate(expr.ast) match {
-            case Success(wdlType) => wdlType
-            case Failure(f) =>
-                Utils.warning(verbose, cef.couldNotEvaluateType(expr))
-                throw f
-        }
-    }
-
-    private def exprDeps(erv: StatementRenameVars,
+    private def exprDeps(erv: VarAnalysis,
                          expr: WdlExpression,
                          scope: Scope): Vector[DVar] = {
         val variables = erv.findAllInExpr(expr)
@@ -268,7 +254,7 @@ case class DecomposeBlocks(subWorkflowPrefix: String,
                     case e: Throwable if (varName contains '.') =>
                         // This is a member access, or a reference to a call output.
                         // Try evaluating the type.
-                        evalType(expr, scope)
+                        Utils.evalType(expr, scope, cef, verbose)
                 }
             DVar(varName, womType)
         }.toVector
@@ -284,7 +270,7 @@ case class DecomposeBlocks(subWorkflowPrefix: String,
     // The free variables are {x, y}.
     //
     private def freeVarsAccu(statements: Seq[Scope], accu: VarTracker) : VarTracker = {
-        val erv = StatementRenameVars(Set.empty, Map.empty, cef, verbose)
+        val erv = VarAnalysis(Set.empty, Map.empty, cef, verbose)
         statements.foldLeft(accu) {
             case (accu, decl:Declaration) =>
                 val xtrnVars = decl.expression match {
@@ -307,7 +293,7 @@ case class DecomposeBlocks(subWorkflowPrefix: String,
                 // Update the tracker based on the scatter collection,
                 // then recurse into the children.
                 val xtrnVars = exprDeps(erv, ssc.collection, ssc)
-                val collectionType = evalType(ssc.collection, ssc)
+                val collectionType = Utils.evalType(ssc.collection, ssc, cef, verbose)
                 val item = DVar(ssc.item,
                                 Utils.stripArray(collectionType))
                 val accu2 = accu.findNewIn(xtrnVars).addLocal(item)
@@ -432,9 +418,9 @@ case class DecomposeBlocks(subWorkflowPrefix: String,
         val wordTranslations = inputs.map{ dvhr =>
             dvhr.fullyQualifiedName -> dvhr.conciseName
         }.toMap
-        val erv = StatementRenameVars(Set.empty, wordTranslations, cef, verbose)
+        val erv = VarAnalysis(Set.empty, wordTranslations, cef, verbose)
         val statementsRn = statements.map{
-            case stmt => erv.apply(stmt)
+            case stmt => erv.rename(stmt)
         }.toVector
 
         // output variables, and how to reference them outside this workflow.
@@ -638,7 +624,7 @@ case class DecomposeBlocks(subWorkflowPrefix: String,
         val xtrnUsageDict = xtrnVarRefs.map{ dVar =>
             dVar.fullyQualifiedName -> dVar.conciseName
         }.toMap
-        val topWf2 = StatementRenameVars(Set(wfc), xtrnUsageDict, cef, verbose).apply(topWf)
+        val topWf2 = VarAnalysis(Set(wfc), xtrnUsageDict, cef, verbose).rename(topWf)
         (topWf2.asInstanceOf[WdlWorkflow], subWf)
     }
 }

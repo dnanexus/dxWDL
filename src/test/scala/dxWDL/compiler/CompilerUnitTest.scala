@@ -27,7 +27,7 @@ class CompilerUnitTest extends FlatSpec with Matchers {
     }
 
 
-    ignore should "Allow adding unbound argument" in {
+    it should "disallow call with missing compulsory arguments" in {
         val path = pathFromBasename("unbound_arg.wdl")
         val retval = Main.compile(
             List(path.toString, "--compileMode", "ir", "-quiet")
@@ -38,7 +38,7 @@ class CompilerUnitTest extends FlatSpec with Matchers {
         }
     }
 
-    it should "Can't have unbound arguments from a subworkflow" in {
+    it should "disallow unbound arguments in a subworkflow" in {
         val path = pathFromBasename("toplevel_unbound_arg.wdl")
         val retval = Main.compile(
             List(path.toString, "--compileMode", "ir", "-quiet")
@@ -49,6 +49,7 @@ class CompilerUnitTest extends FlatSpec with Matchers {
         }
     }
 
+    // This should be supported natively by WDL!
     ignore should "Report a useful error for a missing reference" in {
         val path = pathFromBasename("ngs.wdl")
         val retval = Main.compile(
@@ -109,7 +110,7 @@ class CompilerUnitTest extends FlatSpec with Matchers {
         }
     }
 
-    ignore should "Allow using the same import name twice" in {
+    it should "Allow using the same import name twice" in {
         val path = pathFromBasename("three_levels/top.wdl")
         Main.compile(
             List(path.toString, "--compileMode", "ir", "--locked", "--quiet")

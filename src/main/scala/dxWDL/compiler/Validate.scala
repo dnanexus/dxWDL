@@ -7,9 +7,11 @@ package dxWDL.compiler
 import dxWDL.{CompilerErrorFormatter, Utils, Verbose}
 import wdl._
 import wdl4s.parser.WdlParser.Ast
+import wom.types._
 
 case class Validate(cef: CompilerErrorFormatter,
                     verbose: Verbose) {
+    val verbose2:Boolean = verbose.keywords contains "validate"
 
     // Make a pass on all declarations amd calls. Make sure no reserved words or prefixes
     // are used.
@@ -21,27 +23,23 @@ case class Validate(cef: CompilerErrorFormatter,
             }
         }
         def checkCallName(call : WdlCall) : Unit = {
-            val nm = call.unqualifiedName
-            Utils.reservedAppletPrefixes.foreach{ prefix =>
-                if (nm.startsWith(prefix))
+            for (sb <- Utils.reservedSubstrings) {
+                if (call.unqualifiedName contains sb) {
                     throw new Exception(cef.illegalCallName(call))
+                }
             }
-            Utils.reservedSubstrings.foreach{ sb =>
-                if (nm contains sb)
-                    throw new Exception(cef.illegalCallName(call))
-            }
-            if (nm == Utils.LAST_STAGE)
-                throw new Exception(cef.illegalCallName(call))
         }
         def deepCheck(children: Seq[Scope]) : Unit = {
             children.foreach {
-                case ssc:Scatter =>
-                    checkVarName(ssc.item, ssc.ast)
-                    deepCheck(ssc.children)
                 case decl:DeclarationInterface =>
                     checkVarName(decl.unqualifiedName, decl.ast)
                 case call:WdlCall =>
                     checkCallName(call)
+                case ssc:Scatter =>
+                    checkVarName(ssc.item, ssc.ast)
+                    deepCheck(ssc.children)
+                case ifStmt:If =>
+                    deepCheck(ifStmt.children)
                 case _ => ()
             }
         }
@@ -67,6 +65,17 @@ case class Validate(cef: CompilerErrorFormatter,
         }
     }
 
+    // A trivial expression is a variable id, or a fully-qualified name.
+    // For examples {a, b, a.b.c}. These are not trivial: {a+b, a-b, sub(x,y,z) }.
+    //
+    private def isTrivialExpression(expr: WdlExpression,
+                                    van: VarAnalysis) : Boolean = {
+        val ids: Set[String] = van.findAllInExpr(expr)
+        if (ids.size != 1)
+            return false
+        ids.head == expr.toWomString
+    }
+
     // Make sure we don't have partial output expressions like:
     //   output {
     //     Add.result
@@ -80,17 +89,82 @@ case class Validate(cef: CompilerErrorFormatter,
         if (workflow.noWorkflowOutputs) {
             // Empty output section. Unlike Cromwell, we generate no outputs
             Utils.warning(verbose, "Empty output section, no outputs will be generated")
-        } else {
-            val wfOutputs: Vector[WorkflowOutput] =
-                workflow.children.filter(x => x.isInstanceOf[WorkflowOutput])
-                    .map(_.asInstanceOf[WorkflowOutput])
-                    .toVector
+            return
+        }
 
-            // validate all workflow outputs
-            wfOutputs.foreach{ wot =>
-                if (wot.unqualifiedName == wot.requiredExpression.toWomString)
-                    throw new Exception(cef.workflowOutputIsPartial(wot))
+        val wfOutputs: Vector[WorkflowOutput] =
+            workflow.children.filter(x => x.isInstanceOf[WorkflowOutput])
+                .map(_.asInstanceOf[WorkflowOutput])
+                .toVector
+
+        // check for duplicate names. WDL is supposed to check for this, but this
+        // did not work in Cromwell 30.2.
+        val names = wfOutputs.map(_.unqualifiedName)
+        if (names.toSet.size != names.toVector.size)
+            throw new Exception("Duplicate names in the workflow output section")
+
+        // Only trivial expressions are supposed
+        val van = VarAnalysis(Set.empty, Map.empty, cef, verbose)
+        wfOutputs.foreach{ wot =>
+            if (!isTrivialExpression(wot.requiredExpression, van)) {
+                throw new Exception(cef.notCurrentlySupported(
+                                        wot.ast,
+                                        "expressions in the output section"))
             }
+
+            // check if a cast is needed, that requires a job.
+            if (wot.womType !=
+                    Utils.evalType(wot.requiredExpression, workflow, cef, verbose)) {
+                throw new Exception(cef.notCurrentlySupported(
+                                        wot.ast,
+                                        "coercion in the output section"))
+            }
+        }
+    }
+
+
+    // validate that the call is providing all the compulsory arguments
+    // to the callee (task/workflow).
+    private def validateCall(call: WdlCall) : Unit = {
+        val calleeInputs: Seq[Declaration] = call match {
+            case tc: WdlTaskCall => tc.task.declarations
+            case wfc: WdlWorkflowCall => wfc.calledWorkflow.declarations.filter(_.upstream.isEmpty)
+        }
+        val compulsoryInputs = calleeInputs.filter{ decl =>
+            decl.womType match {
+                case WomOptionalType(_) => false
+                case _ => true
+            }
+        }
+        compulsoryInputs.foreach{ decl =>
+            val inputOpt = call.inputMappings.find{
+                case (iName, _) => iName == decl.unqualifiedName
+            }
+            inputOpt match {
+                case None =>
+                    val msg = s"""|Workflow doesn't supply required input ${decl.unqualifiedName}
+                                  |to call ${call.unqualifiedName}
+                                  |""".stripMargin.replaceAll("\n", " ")
+                    throw new Exception(cef.missingCallArgument(call.ast, msg))
+                case _ => ()
+            }
+        }
+    }
+
+    // A calls must specify all the compulsory arguments. Check
+    // that this is true for all calls
+    //
+    private def checkMissingArguments(statements: Seq[Scope]) : Unit = {
+        statements.foreach{
+            case decl:Declaration => ()
+            case call:WdlCall => validateCall(call)
+            case ssc:Scatter => checkMissingArguments(ssc.children)
+            case ifStmt:If => checkMissingArguments(ifStmt.children)
+            case _:WorkflowOutput => ()
+            case x =>
+                throw new Exception(cef.notCurrentlySupported(
+                                        x.ast,
+                                        s"unimplemented workflow element"))
         }
     }
 
@@ -102,6 +176,7 @@ case class Validate(cef: CompilerErrorFormatter,
         ns match {
             case nswf:WdlNamespaceWithWorkflow =>
                 validateWorkflowOutputs(nswf.workflow)
+                checkMissingArguments(nswf.workflow.children)
             case _ => ()
         }
     }

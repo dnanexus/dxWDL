@@ -19,10 +19,10 @@ import wdl._
 
 // dict: variables to rename. ("Add.result" -> "subwf_Add.out_result")
 //
-case class StatementRenameVars(doNotModify: Set[Scope],
-                               wordTranslations: Map[String, String],
-                               cef: CompilerErrorFormatter,
-                               verbose: Verbose) {
+case class VarAnalysis(doNotModify: Set[Scope],
+                       wordTranslations: Map[String, String],
+                       cef: CompilerErrorFormatter,
+                       verbose: Verbose) {
     // All the words defined in the WDL language, and NOT to be confused
     // with identifiers.
     private val reservedWords:Set[String] = Set(
@@ -160,7 +160,7 @@ case class StatementRenameVars(doNotModify: Set[Scope],
 
 
     // rename all the variables defined in the dictionary
-    def apply(stmt: Scope) : Scope = {
+    def rename(stmt: Scope) : Scope = {
         if (doNotModify contains stmt) {
             // These are statements whose ASTs are not entirely
             // valid. We do not want to risk applying WDL
@@ -187,7 +187,7 @@ case class StatementRenameVars(doNotModify: Set[Scope],
 
             case ssc:Scatter =>
                 val children = ssc.children.map {
-                    case child:Scope => apply(child)
+                    case child:Scope => rename(child)
                 }.toVector
                 WdlRewrite.scatter(ssc,
                                    children,
@@ -195,7 +195,7 @@ case class StatementRenameVars(doNotModify: Set[Scope],
 
             case cond:If =>
                 val children = cond.children.map {
-                    case child:Scope => apply(child)
+                    case child:Scope => rename(child)
                 }.toVector
                 WdlRewrite.cond(cond,
                                 children,
@@ -210,7 +210,7 @@ case class StatementRenameVars(doNotModify: Set[Scope],
 
             case wf:WdlWorkflow =>
                 val children = wf.children.map {
-                    case child:Scope => apply(child)
+                    case child:Scope => rename(child)
                 }.toVector
                 WdlRewrite.workflow(wf, children)
 

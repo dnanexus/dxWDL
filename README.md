@@ -4,10 +4,9 @@ dxWDL takes a bioinformatics pipeline written in the
 [Workflow Description Language (WDL)](http://www.openwdl.org/)
 and compiles it to an equivalent workflow on the DNAnexus platform.
 It provides a reasonably complete set of WDL features for beta
-testing. A few significant WDL features are under development, and
-not yet supported:
-
-- Nested scatters, and conditionals nested in scatters
+testing. WDL draft-2 is supported, with a few exceptions:
+* Expressions in the output section are not supported
+* Calls with missing compulsory arguments are not allowed
 
 *Use at your own risk:* for the time being, dxWDL is an exploratory
  tool NOT covered by DNAnexus service and support agreements. We
