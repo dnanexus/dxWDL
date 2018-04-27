@@ -169,11 +169,21 @@ object NamespaceOps {
 
             ctx.addWdlSourceFile(wf.unqualifiedName + ".wdl", cleanWdlSrc)
             val resolver = ctx.makeResolver
-            val cleanNs = WdlNamespace.loadUsingSource(
-                cleanWdlSrc, None, Some(List(resolver))
-            ).get
-            val cleanCef = new CompilerErrorFormatter(cef.resource, cleanNs.terminalMap)
+            val cleanNs =
+                WdlNamespace.loadUsingSource(cleanWdlSrc, None, Some(List(resolver))) match {
+                    case Success(x) => x
+                    case Failure(f) =>
+                        val lines = WdlPrettyPrinter(true).apply(ns, 0).mkString("\n")
+                        System.err.println(
+                            s"""|=== NamespaceOps ===
+                                |Generated an invalid WDL namespace
+                                |
+                                |${lines}
+                                |====================""".stripMargin)
+                        throw f
+                }
 
+            val cleanCef = new CompilerErrorFormatter(cef.resource, cleanNs.terminalMap)
             val node = TreeNode(wf.unqualifiedName,
                                 cleanCef,
                                 cleanNs.imports,

@@ -4,7 +4,7 @@ import dxWDL.Main
 import java.nio.file.{Path, Paths}
 import org.scalatest.{FlatSpec, Matchers}
 
-class DecomposeBlocksTest extends FlatSpec with Matchers {
+class DecomposeTest extends FlatSpec with Matchers {
     lazy val currentWorkDir:Path = Paths.get(System.getProperty("user.dir"))
     private def pathFromBasename(basename: String) : Path = {
         currentWorkDir.resolve(s"src/test/resources/decompose_blocks/${basename}")
@@ -47,4 +47,10 @@ class DecomposeBlocksTest extends FlatSpec with Matchers {
         ) should equal(Main.SuccessfulTermination(""))
     }
 
+    it should "recogonize member accesses when calculating free variables" in {
+        val path = pathFromBasename("map.wdl")
+        Main.compile(
+            List(path.toString, "--compileMode", "ir", "--locked", "--quiet")
+        ) should equal(Main.SuccessfulTermination(""))
+    }
 }

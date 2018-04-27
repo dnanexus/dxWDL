@@ -12,7 +12,7 @@ and rename the variables. For example, examine the expression:
 
 package dxWDL.compiler
 
-import dxWDL.{CompilerErrorFormatter, Verbose}
+import dxWDL.{CompilerErrorFormatter, Utils, Verbose}
 import scala.util.matching.Regex
 import scala.util.matching.Regex.Match
 import wdl._
@@ -23,26 +23,6 @@ case class VarAnalysis(doNotModify: Set[Scope],
                        wordTranslations: Map[String, String],
                        cef: CompilerErrorFormatter,
                        verbose: Verbose) {
-    // All the words defined in the WDL language, and NOT to be confused
-    // with identifiers.
-    private val reservedWords:Set[String] = Set(
-        "stdout", "stderr",
-        "true", "false",
-
-        "read_lines", "read_tsv", "read_map",
-        "read_object", "read_objects", "read_json",
-        "read_int", "read_string", "read_float", "read_boolean",
-
-        "write_lines", "write_tsv", "write_map",
-        "write_object", "write_objects", "write_json",
-        "write_int", "write_string", "write_float", "write_boolean",
-
-        "size", "sub", "range",
-        "transpose", "zip", "cross", "length", "flatten", "prefix",
-        "select_first", "select_all", "defined", "basename",
-        "floor", "ceil", "round"
-    )
-
     case class Accu(tokens: Vector[String],  // tokens found so far
                     pos: Int)   // position in the string
 
@@ -102,7 +82,7 @@ case class VarAnalysis(doNotModify: Set[Scope],
             return false
         if (!fqnRegex.pattern.matcher(token).matches)
             return false
-        if (reservedWords contains token)
+        if (Utils.RESERVED_WORDS contains token)
             return false
         return true
     }

@@ -24,8 +24,7 @@ reserved_test_names=['M', 'All', 'list']
 
 medium_test_list = [
     # Basics
-    "cast", "math", "files",
-    # "strings"
+    "cast", "math", "strings", "files",
 
     # various advanced features
     "advanced", "conditionals",
@@ -43,10 +42,10 @@ medium_test_list = [
     "instance_types",
 
     # Maps and pairs.
-#    "dict",
+    "dict",
 
     # objects
-    #"complex",
+#    "complex",
 
     # calling native dx applets
     "call_native",

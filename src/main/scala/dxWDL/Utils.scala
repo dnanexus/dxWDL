@@ -45,6 +45,7 @@ object Utils {
     val COMMAND_HEREDOC_BRACKETS = ("<<<", ">>>")
     val COMMON = "common"
     val DEFAULT_INSTANCE_TYPE = "mem1_ssd1_x4"
+    val DECOMPOSE_MAX_NUM_RENAME_TRIES = 100
     val DOWNLOAD_RETRY_LIMIT = 3
     val DX_FUNCTIONS_FILES = "dx_functions_files.json"
     val DX_HOME = "/home/dnanexus"
@@ -61,9 +62,31 @@ object Utils {
     val MAX_NUM_FILES_MOVE_LIMIT = 1000
     val OUTPUT_SECTION = "outputs"
     val REORG = "reorg"
+
+    // All the words defined in the WDL language, and NOT to be confused
+    // with identifiers.
+    val RESERVED_WORDS: Set[String] = Set(
+        "stdout", "stderr",
+        "true", "false",
+
+        "read_lines", "read_tsv", "read_map",
+        "read_object", "read_objects", "read_json",
+        "read_int", "read_string", "read_float", "read_boolean",
+
+        "write_lines", "write_tsv", "write_map",
+        "write_object", "write_objects", "write_json",
+        "write_int", "write_string", "write_float", "write_boolean",
+
+        "size", "sub", "range",
+        "transpose", "zip", "cross", "length", "flatten", "prefix",
+        "select_first", "select_all", "defined", "basename",
+        "floor", "ceil", "round",
+
+        "left", "right"
+    )
+
     val RUNNER_TASK_ENV_FILE = "taskEnv.json"
     val UPLOAD_RETRY_LIMIT = DOWNLOAD_RETRY_LIMIT
-    val DECOMPOSE_MAX_NUM_RENAME_TRIES = 100
 
     lazy val dxEnv = DXEnvironment.create()
 

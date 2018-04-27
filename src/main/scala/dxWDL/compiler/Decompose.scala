@@ -215,12 +215,38 @@ case class Decompose(subWorkflowPrefix: String,
     case class VarTracker(local: Map[String, DVar],   // defined inside the block
                           outside: Map[String, DVar])  // defined outside the block
     {
+        // We want to check if a variable usage is local, or if an external variable
+        // is required.
+        //
+        // For example, if the locally defined variables are:
+        //   {A, B, C},
+        //
+        // {E, F} are external
+        // {A, B.left, B.right} are local
+        private def isLocal(fqn: String,
+                            localVarNames: Set[String]) : Boolean = {
+            if (localVarNames contains fqn) {
+                // exact match
+                true
+            } else {
+                // "xx.yy.zz" is not is not locally defined. Check "xx.yy".
+                val pos = fqn.lastIndexOf(".")
+                if (pos < 0) {
+                    false
+                } else {
+                    val lhs = fqn.substring(0, pos)
+                    isLocal(lhs, localVarNames)
+                }
+            }
+        }
+
         // A statmement accessed a bunch of variables. Add any newly
         // discovered outside variables.
         def findNewIn(refs: Seq[DVar]) : VarTracker = {
             val localVarNames = local.keys.toSet
             val discovered =
-                refs.filter{ dVar => (!(localVarNames contains dVar.fullyQualifiedName)) }
+                refs
+                    .filter{ dVar => !isLocal(dVar.fullyQualifiedName, localVarNames) }
                     .map{ dVar => dVar.fullyQualifiedName -> dVar}.toMap
             VarTracker(local,
                        outside ++ discovered)
@@ -359,7 +385,9 @@ case class Decompose(subWorkflowPrefix: String,
     }
 
     private def pickUnusedName(originalName: String,
-                               alreadyUsedNames: Set[String]) : String = {
+                               _alreadyUsedNames: Set[String]) : String = {
+        val alreadyUsedNames = Utils.RESERVED_WORDS ++ _alreadyUsedNames
+
         // Try the original name
         if (!(alreadyUsedNames contains originalName))
             return originalName
@@ -545,7 +573,9 @@ case class Decompose(subWorkflowPrefix: String,
         // Figure out the outputs from the subtree
         val sbtOutputs: Vector[DVar] = blockOutputsAll(body)
         val namesToAvoid =
-            sbtInputs.map(_.fullyQualifiedName) ++ findAllDeclarations(body).map(_.unqualifiedName)
+            sbtInputsHr.map(_.conciseName) ++
+                sbtInputsHr.map(_.fullyQualifiedName) ++
+                findAllDeclarations(body).map(_.unqualifiedName)
         val sbtOutputsHr = chooseConciseNames(sbtOutputs, namesToAvoid.toSet)
 
         // create a separate subworkflow from the subtree.
