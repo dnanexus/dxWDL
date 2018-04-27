@@ -12,7 +12,6 @@ import scala.util.{Failure, Success}
 import ExecutionContext.Implicits.global
 import scala.sys.process._
 import spray.json._
-import wdl4s.parser.WdlParser.{Terminal}
 import wdl._
 import wdl.expression._
 import wdl.types._
@@ -105,6 +104,13 @@ object Utils {
         p
     }
 
+    // where script files are placed and generated
+    def getMetaDirPath() : Path = {
+        val p = execDirPath.resolve("meta")
+        p
+    }
+
+
     // Is this a WDL type that maps to a native DX type?
     def isNativeDxType(wdlType: WomType) : Boolean = {
         wdlType match {
@@ -119,19 +125,6 @@ object Utils {
         }
     }
 
-
-    // Return true if we are certain there is no interpolation in this string.
-    //
-    // A literal can include an interpolation expression, for example:
-    //   "${filename}.vcf.gz"
-    // Interpolation requires evaluation. This check is an approximation,
-    // it may cause us to create an unnecessary declaration.
-    def isInterpolation(s: String) : Boolean = {
-        s contains "${"
-    }
-    def nonInterpolation(t: Terminal) : Boolean = {
-        !isInterpolation(t.getSourceString)
-    }
 
     // Check if the WDL expression is a constant. If so, calculate and return it.
     // Otherwise, return None.
@@ -164,35 +157,6 @@ object Utils {
             case None => throw new Exception(s"Expression ${expr} is not a WDL constant")
             case Some(wdlValue) => wdlValue
         }
-    }
-
-    // Is a declaration of a task/workflow an input for the
-    // compiled dx:applet/dx:workflow ?
-    //
-    // Examples:
-    //   File x
-    //   String y = "abc"
-    //   Float pi = 3 + .14
-    //   Int? z = 3
-    //
-    // x - must be provided as an applet input
-    // y - can be overriden, so is an input
-    // pi -- calculated, non inputs
-    // z - is an input with a default value
-    def declarationIsInput(decl: Declaration) : Boolean = {
-        (decl.expression, decl.womType) match {
-            case (None,_) => true
-            case (Some(_), WomOptionalType(_)) => true
-            case (Some(expr), _) if isExpressionConst(expr) =>
-                true
-            case (_,_) => false
-        }
-    }
-
-    // where script files are placed and generated
-    def getMetaDirPath() : Path = {
-        val p = execDirPath.resolve("meta")
-        p
     }
 
     // Used to convert into the JSON datatype used by dxjava

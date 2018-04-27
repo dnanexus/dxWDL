@@ -131,9 +131,16 @@ case class Validate(cef: CompilerErrorFormatter,
             case wfc: WdlWorkflowCall => wfc.calledWorkflow.declarations.filter(_.upstream.isEmpty)
         }
         val compulsoryInputs = calleeInputs.filter{ decl =>
-            decl.womType match {
-                case WomOptionalType(_) => false
-                case _ => true
+            (decl.womType, decl.expression) match {
+                case (WomOptionalType(_), _) =>
+                    // optional value
+                    false
+                case (_, Some(expr)) =>
+                    // input has a default, caller does not need to specify it
+                    false
+                case (_,_) =>
+                    // compulsory input with no default
+                    true
             }
         }
         compulsoryInputs.foreach{ decl =>

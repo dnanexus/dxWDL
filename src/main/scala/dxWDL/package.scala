@@ -129,7 +129,6 @@ case class CompilationResults(entrypoint: Option[DXWorkflow],
                               applets: Map[String, DXApplet])
 
 // Different ways of using the mini-workflow runner.
-//   ZeroCalls:  the WDL fragment has no calls.
 //   Launch:     there are WDL calls, lanuch the dx:executables.
 //   Collect:    the dx:exucutables are done, collect the results.
 object RunnerWfFragmentMode extends Enumeration {

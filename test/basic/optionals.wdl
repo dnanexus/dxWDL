@@ -16,7 +16,7 @@ workflow optionals {
 #    }
 
     # Missing compulsory argument
-    call lib.Inc as inc
+    call lib.Inc as inc { input: i=106 }
 
     call lib_str.ConcatArray as concatArr {
         input: words = sa

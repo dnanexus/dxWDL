@@ -90,8 +90,10 @@ object Block {
     //       scatter(x in xs)
     //         call A
     //
+    // A toplevel fragment is the initial workflow we started with, minus
+    // whatever was replaced or rewritten.
     object Kind extends Enumeration {
-        val CallLine, Fragment = Value
+        val TopLevel, CallLine, Fragment = Value
     }
 
     case class ReducibleChild(scope: Scope, kind: Kind.Value)

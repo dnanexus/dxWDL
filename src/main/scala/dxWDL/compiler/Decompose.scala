@@ -181,10 +181,10 @@ import scala.util.matching.Regex.Match
 import wdl._
 import wom.types._
 
-case class DecomposeBlocks(subWorkflowPrefix: String,
-                           subwfNames: Set[String],
-                           cef: CompilerErrorFormatter,
-                           verbose: Verbose) {
+case class Decompose(subWorkflowPrefix: String,
+                     subwfNames: Set[String],
+                     cef: CompilerErrorFormatter,
+                     verbose: Verbose) {
     val verbose2:Boolean = verbose.keywords contains "decompose"
 
     // The WDL source variable with a fully qualified name. It can include for example,
@@ -638,7 +638,7 @@ case class DecomposeBlocks(subWorkflowPrefix: String,
 //    Either there are no if/scatter blocks,
 //    or, the remaining blocks contain a single call
 //
-object DecomposeBlocks {
+object Decompose {
 
     def apply(nsTree: NamespaceOps.Tree,
               wdlSourceFile: Path,
@@ -672,9 +672,9 @@ object DecomposeBlocks {
                         case None => true
                         case Some(child) =>
                             Utils.trace(verbose.on, s"Decompose iteration ${iter}")
-                            val sbw = new DecomposeBlocks(subwfPrefix, subwfNames, node.cef, verbose)
+                            val sbw = new Decompose(subwfPrefix, subwfNames, node.cef, verbose)
                             val (wf2, subWf) = sbw.apply(node.workflow, child)
-                            tree = node.cleanAfterRewrite(wf2, subWf, ctx)
+                            tree = node.cleanAfterRewrite(wf2, subWf, ctx, child.kind)
                             if (verbose2)
                                 NamespaceOps.prettyPrint(wdlSourceFile, tree, s"subblocks_${iter}", verbose)
                             iter = iter + 1

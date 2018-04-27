@@ -129,7 +129,7 @@ object CompilerTop {
         NamespaceOps.prettyPrint(wdlSourceFile, nsTreePruned, "pruned", cOpt.verbose)
 
         // Convert large sub-blocks to sub-workflows
-        DecomposeBlocks.apply(nsTreePruned, wdlSourceFile, ctx, cOpt.verbose)
+        Decompose.apply(nsTreePruned, wdlSourceFile, ctx, cOpt.verbose)
     }
 
     private def compileIR(wdlSourceFile : Path,

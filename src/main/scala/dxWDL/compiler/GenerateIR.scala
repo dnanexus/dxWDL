@@ -17,6 +17,7 @@ case class GenerateIR(callables: Map[String, IR.Callable],
                       cef: CompilerErrorFormatter,
                       reorg: Boolean,
                       locked: Boolean,
+                      blockKind: Block.Kind.Value,
                       verbose: Verbose) {
     private val verbose2:Boolean = verbose.keywords contains "GenerateIR"
 
@@ -44,6 +45,38 @@ case class GenerateIR(callables: Map[String, IR.Callable],
     private def genFragId() : String = {
         fragNum += 1
         fragNum.toString
+    }
+
+    // Is a declaration of a task/workflow an input for the
+    // compiled dx:applet/dx:workflow ?
+    //
+    // Examples:
+    //   File x
+    //   String y = "abc"
+    //   Float pi = 3 + .14
+    //   Int? z = 3
+    //
+    // x - must be provided as an applet input
+    // y - can be overriden, so is an input
+    // pi -- calculated, non inputs
+    // z - is an input with a default value
+    private def declarationIsInput(decl: Declaration) : Boolean = {
+        if (blockKind != Block.Kind.TopLevel) {
+            // This is a generated workflow, the only inputs
+            // are free variables.
+            decl.expression match {
+                case None => true
+                case Some(_) => false
+            }
+        } else {
+            (decl.expression, decl.womType) match {
+                case (None,_) => true
+                case (Some(_), WomOptionalType(_)) => true
+                case (Some(expr), _) if Utils.isExpressionConst(expr) =>
+                    true
+                case (_,_) => false
+            }
+        }
     }
 
     /** Create a stub for an applet. This is an empty task
@@ -231,10 +264,10 @@ task Add {
     }
 
 
-    // Check if a task is a real WDL task, or if it is a wrapper for a
+    // Compile a WDL task into an applet.
+    //
+    // Note: check if a task is a real WDL task, or if it is a wrapper for a
     // native applet.
-
-    // Compile a WDL task into an applet
     private def compileTask(task : WdlTask) : IR.Applet = {
         Utils.trace(verbose.on, s"Compiling task ${task.name}")
 
@@ -248,7 +281,7 @@ task Add {
         // if the declaration is set to a constant, we need to make it a default
         // value
         val inputVars : Vector[CVar] =  task.declarations.map{ decl =>
-            if (Utils.declarationIsInput(decl))  {
+            if (declarationIsInput(decl))  {
                 val taskAttrs = DeclAttrs.get(task, decl.unqualifiedName)
                 val attrs = decl.expression match {
                     case None => taskAttrs
@@ -367,19 +400,11 @@ task Add {
         IR.Stage(stageName, genStageId(), calleeName, inputs, callee.outputVars)
     }
 
-    // Construct block outputs (scatter, conditional, ...), these are
-    // made up of several categories:
-    // 1. All the preamble variables, these could potentially be accessed
-    // outside the scatter block.
-    // 2. Individual call outputs. Each applet output becomes an array of
-    // that type. For example, an Int becomes an Array[Int].
-    // 3. Variables defined in the scatter block.
+    // Figure out all the outputs from a sequence of WDL statements.
     //
-    // Notes:
-    // - exclude variables used only inside the block
-    // - The type outside a block is *different* than the type in the block.
-    //   For example, 'Int x' declared inside a scatter, is
-    //   'Array[Int] x' outside the scatter.
+    // Note: The type outside a block is *different* than the type in
+    // the block.  For example, 'Int x' declared inside a scatter, is
+    // 'Array[Int] x' outside the scatter.
     private def blockOutputs(statements: Vector[Scope]) : Vector[CVar] = {
         statements.foldLeft(Vector.empty[CVar]) {
             case (accu, call:WdlCall) =>
@@ -478,14 +503,14 @@ task Add {
 
 
     // Build an applet to evaluate a WDL workflow fragment
+    //
+    // Note: all the calls have the compulsory arguments, this has
+    // been checked in the Validate step.
     private def compileWfFragment(wfUnqualifiedName : String,
                                   stageName: String,
                                   block: Block,
                                   env : CallEnv) : (IR.Stage, IR.Applet) = {
         Utils.trace(verbose.on, s"Compiling wfFragment ${stageName}")
-
-        // validate all the calls -- this should be moved to a
-        // separate module. Preferably, check in the validate step.
         val calls = block.findCalls
 
         // Figure out the closure required for this block, out of the
@@ -596,10 +621,7 @@ task Add {
             } else {
                 calls.head.unqualifiedName
             }
-        if (cName.length > Utils.MAX_STAGE_NAME_LEN)
-            cName.substring(0, Utils.MAX_STAGE_NAME_LEN)
-        else
-            cName
+        cName.take(Utils.MAX_STAGE_NAME_LEN)
     }
 
     // Is this a very simple block, that can be compiled directly
@@ -820,7 +842,7 @@ task Add {
         // Limit the search to the top block of declarations. Those that come at the very
         // beginning of the workflow.
         val (wfInputDecls, wfProper) = children.toList.partition{
-            case decl:Declaration => Utils.declarationIsInput(decl)
+            case decl:Declaration => declarationIsInput(decl)
             case _ => false
         }
         val wfInputs:Vector[(CVar, SArg)] = buildWorkflowInputs(
@@ -883,7 +905,7 @@ object GenerateIR {
         val nsTree1 = nsTree match {
             case NamespaceOps.TreeLeaf(name, cef, tasks) =>
                 // compile all the [tasks], that have not been already compiled, to IR.Applet
-                val gir = new GenerateIR(Map.empty, nsTree.cef, reorg, locked, verbose)
+                val gir = new GenerateIR(Map.empty, nsTree.cef, reorg, locked, Block.Kind.TopLevel, verbose)
                 val alreadyCompiledNames: Set[String] = callables.keys.toSet
                 val tasksNotCompiled = tasks.filter{
                     case (taskName,_) =>
@@ -898,7 +920,14 @@ object GenerateIR {
                 //Utils.trace(verbose.on, s"leaf: callables = ${allCallables.keys}")
                 makeNamespace(name, None, allCallables)
 
-            case NamespaceOps.TreeNode(name, cef, _, workflow, children) =>
+                // TODO
+            /*case NamespaceOps.TreeNode(name, cef, _, workflow, children, WfFragment) =>
+                // The entire workflow can be compiled into a single applet.
+                // This is an important optimization for sub-workflows generated by
+                // the decompose step.
+             */
+
+            case NamespaceOps.TreeNode(name, cef, _, workflow, children, blockKind) =>
                 // Recurse into the children.
                 //
                 // The reorg and locked flags only apply to the top level
@@ -910,8 +939,10 @@ object GenerateIR {
                         accu ++ childIr.buildCallables
                 }
                 //Utils.trace(verbose.on, s"node: ${childCallables.keys}")
-
-                val gir = new GenerateIR(childCallables, cef, reorg, locked, verbose)
+                val locked2 =
+                    if (blockKind != Block.Kind.TopLevel) true
+                    else locked
+                val gir = new GenerateIR(childCallables, cef, reorg, locked2, blockKind, verbose)
                 val (irWf, auxApplets) = gir.compileWorkflow(workflow)
                 val allCallables = childCallables ++ auxApplets
                 //Utils.trace(verbose.on, s"node: callables = ${allCallables.keys}")

@@ -27,6 +27,7 @@ case class VarAnalysis(doNotModify: Set[Scope],
     // with identifiers.
     private val reservedWords:Set[String] = Set(
         "stdout", "stderr",
+        "true", "false",
 
         "read_lines", "read_tsv", "read_map",
         "read_object", "read_objects", "read_json",

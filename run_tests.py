@@ -24,7 +24,8 @@ reserved_test_names=['M', 'All', 'list']
 
 medium_test_list = [
     # Basics
-    "cast", "math", "strings", "files",
+    "cast", "math", "files",
+    # "strings"
 
     # various advanced features
     "advanced", "conditionals",
@@ -42,7 +43,7 @@ medium_test_list = [
     "instance_types",
 
     # Maps and pairs.
-    "dict",
+#    "dict",
 
     # objects
     #"complex",
