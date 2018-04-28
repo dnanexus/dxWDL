@@ -20,6 +20,7 @@ case class GenerateIR(callables: Map[String, IR.Callable],
                       blockKind: Block.Kind.Value,
                       verbose: Verbose) {
     private val verbose2:Boolean = verbose.keywords contains "GenerateIR"
+    private val freeVarAnalysis = new FreeVarAnalysis(cef, verbose)
 
     private class DynamicInstanceTypesException private(ex: Exception) extends RuntimeException(ex) {
         def this() = this(new RuntimeException("Runtime instance type calculation required"))
@@ -198,12 +199,9 @@ task Add {
     private def blockClosure(statements: Vector[Scope],
                              env : CallEnv,
                              dbg: String) : CallEnv = {
-        val srv = VarAnalysis(Set.empty, Map.empty, cef, verbose)
-        val xtrnRefs: Set[String] = statements.map{
-            case stmt => srv.findAll(stmt)
-        }.toSet.flatten
-        val closure = xtrnRefs.flatMap { fqn =>
-            lookupInEnv(fqn, env)
+        val xtrnRefs: Vector[DVar] = freeVarAnalysis.apply(statements)
+        val closure = xtrnRefs.flatMap { dVar =>
+            lookupInEnv(dVar.fullyQualifiedName, env)
         }.toMap
         Utils.trace(verbose2,
                     s"""|blockClosure
@@ -370,6 +368,10 @@ task Add {
                 case None =>
                     // unbound variable
                     true
+                case Some((_,expr)) if Utils.isExpressionConst(expr) =>
+                    // constant expression, there is no need to look
+                    // in the environment
+                    true
                 case Some((_,expr)) =>
                     // check if expression exists in the environment
                     val exprSourceString = expr.toWomString
@@ -390,6 +392,8 @@ task Add {
             findInputByName(call, cVar) match {
                 case None =>
                     IR.SArgEmpty
+                case Some((_,expr)) if Utils.isExpressionConst(expr) =>
+                    IR.SArgConst(Utils.evalConst(expr))
                 case Some((_,expr)) =>
                     val exprSourceString = expr.toWomString
                     val lVar = env(exprSourceString)

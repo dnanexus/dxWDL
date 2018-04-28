@@ -7,11 +7,11 @@ workflow atac {
 	String pipeline_type  		# atac or dnase
 
 	# input files (choose one of the input types)
-	Array[Array[Array[String]]]? fastqs 
+	Array[Array[Array[String]]]? fastqs
 								# [rep_id][merge_id][end_id] if starting from fastqs
-								# 	after merging, it will reduce to 
-								# 	[rep_id][end_id]	
-	Array[String]? bams 		# [rep_id] if starting from bams	
+								# 	after merging, it will reduce to
+								# 	[rep_id][end_id]
+	Array[String]? bams 		# [rep_id] if starting from bams
 	Array[String]? nodup_bams 	# [rep_id] if starting from filtered bams
 	Array[String]? tas 			# [rep_id] if starting from tag-aligns
 
@@ -26,9 +26,9 @@ workflow atac {
 	# if there are no adapters to be trimmed, do not define
 	# you can selectively trim adapter for each fastq
 	#  by keeping the same structure as "fastqs" and only fill in known adapters
-	# activate "atac.trim_adapter.auto_detect_adapter" 
+	# activate "atac.trim_adapter.auto_detect_adapter"
 	#  if you want auto adapter detection/removal for non-empty entries in "adapters"
-	Array[Array[Array[String]]]? adapters 
+	Array[Array[Array[String]]]? adapters
 								# [rep_id][merge_id][end_id]
 
 	# mandatory genome param
@@ -46,7 +46,7 @@ workflow atac {
 	Int? multimapping 		# multimapping reads
 
 	# task-specific variables but defined in workflow level (limit of WDL)
-	# optional for MACS2 
+	# optional for MACS2
 	Int? cap_num_peak 		# cap number of raw peaks called from MACS2
 	Float? pval_thresh 		# p.value threshold
 	Int? smooth_win 		# size of smoothing window
@@ -67,7 +67,7 @@ workflow atac {
 	# read genome data and paths
 	call read_genome_tsv { input: genome_tsv = genome_tsv }	# For Google JES backend
 	String bowtie2_idx_tar = read_genome_tsv.genome['bowtie2_idx_tar']
-	String? blacklist = if read_genome_tsv.genome['blacklist']=='/dev/null' then null 
+	String? blacklist = if read_genome_tsv.genome['blacklist']=='/dev/null' then null
 					else read_genome_tsv.genome['blacklist']
 	String chrsz = read_genome_tsv.genome['chrsz']
 	String gensz = read_genome_tsv.genome['gensz']
@@ -160,7 +160,7 @@ workflow atac {
 						ta = ta,
 						paired_end = paired_end,
 					}
-					# call peaks on 1st pseudo replicated tagalign 
+					# call peaks on 1st pseudo replicated tagalign
 					call macs2 as macs2_pr1 { input :
 						ta = spr.ta_pr1,
 						gensz = gensz,
@@ -173,7 +173,7 @@ workflow atac {
 						disks = macs2_disks,
 						time_hr = macs2_time_hr,
 					}
-					# call peaks on 2nd pseudo replicated tagalign 
+					# call peaks on 2nd pseudo replicated tagalign
 					call macs2 as macs2_pr2 { input :
 						ta = spr.ta_pr2,
 						gensz = gensz,
@@ -185,7 +185,7 @@ workflow atac {
 						mem_mb = macs2_mem_mb,
 						disks = macs2_disks,
 						time_hr = macs2_time_hr,
-					}				
+					}
 				}
 			}
 			if ( tas_len>1 ) {
@@ -277,7 +277,7 @@ workflow atac {
 			if ( enable_idr_ ) {
 				# IDR on every pair of true replicates
 				scatter( pair in pair_gen.pairs ) {
-					call idr { input : 
+					call idr { input :
 						prefix = "rep"+(pair[0]+1)+"-rep"+(pair[1]+1),
 						peak1 = peaks_[(pair[0])],
 						peak2 = peaks_[(pair[1])],
@@ -294,7 +294,7 @@ workflow atac {
 		if ( !true_rep_only_ ) {
 			# Naive overlap on pseduo replicates
 			scatter( i in range(num_rep) ) {
-				call overlap as overlap_pr { input : 
+				call overlap as overlap_pr { input :
 					prefix = "rep"+(i+1)+"-pr",
 					peak1 = peaks_pr1_[i],
 					peak2 = peaks_pr2_[i],
@@ -307,7 +307,7 @@ workflow atac {
 			if ( enable_idr_ ) {
 				# IDR on pseduo replicates
 				scatter( i in range(num_rep) ) {
-					call idr as idr_pr { input : 
+					call idr as idr_pr { input :
 						prefix = "rep"+(i+1)+"-pr",
 						peak1 = peaks_pr1_[i],
 						peak2 = peaks_pr2_[i],
@@ -322,7 +322,7 @@ workflow atac {
 			}
 			if ( num_rep>1 ) {
 				# Naive overlap on pooled pseudo replicates
-				call overlap as overlap_ppr { input : 
+				call overlap as overlap_ppr { input :
 					prefix = "ppr",
 					peak1 = peak_ppr1_,
 					peak2 = peak_ppr2_,
@@ -333,7 +333,7 @@ workflow atac {
 				}
 				if ( enable_idr_ ) {
 					# IDR on pooled pseduo replicates
-					call idr as idr_ppr { input : 
+					call idr as idr_ppr { input :
 						prefix = "ppr",
 						peak1 = peak_ppr1_,
 						peak2 = peak_ppr2_,
@@ -393,9 +393,9 @@ workflow atac {
 		frip_overlap_qcs = select_first([overlap.frip_qc, []]),
 		frip_overlap_qcs_pr = select_first([overlap_pr.frip_qc, []]),
 		frip_overlap_qc_ppr = if defined(overlap_ppr.frip_qc) then overlap_ppr.frip_qc else null,
-		idr_reproducibility_qc = if defined(reproducibility_idr.reproducibility_qc) 
+		idr_reproducibility_qc = if defined(reproducibility_idr.reproducibility_qc)
 								then reproducibility_idr.reproducibility_qc else null,
-		overlap_reproducibility_qc = if defined(reproducibility_overlap.reproducibility_qc) 
+		overlap_reproducibility_qc = if defined(reproducibility_overlap.reproducibility_qc)
 								then reproducibility_overlap.reproducibility_qc else null,
 	}
 }
@@ -408,11 +408,11 @@ task trim_adapter { # trim adapters and merge trimmed fastqs
 	Array[Array[String]] adapters 	# [merge_id][end_id]
 	Boolean paired_end
 	# mandatory
-	Boolean auto_detect_adapter		# automatically detect/trim adapters
+	Boolean auto_detect_adapter = false		# automatically detect/trim adapters
 	# optional
 	Int? min_trim_len 		# minimum trim length for cutadapt -m
-	Float? err_rate			# Maximum allowed adapter error rate 
-							# for cutadapt -e	
+	Float? err_rate			# Maximum allowed adapter error rate
+							# for cutadapt -e
 	# resource
 	Int? cpu
 	Int? mem_mb
@@ -495,7 +495,7 @@ task xcor {
 						# will not affect any downstream analysis
 	# resource
 	Int? cpu
-	Int? mem_mb	
+	Int? mem_mb
 	Int? time_hr
 	String? disks
 
@@ -524,7 +524,7 @@ task xcor {
 task macs2 {
 	# parameters from workflow
 	File ta
-	String gensz		# Genome size (sum of entries in 2nd column of 
+	String gensz		# Genome size (sum of entries in 2nd column of
                         # chr. sizes file, or hs for human, ms for mouse)
 	File chrsz			# 2-col chromosome sizes file
 	Int? cap_num_peak	# cap number of raw peaks called from MACS2
@@ -549,13 +549,13 @@ task macs2 {
 			${"--smooth-win "+ smooth_win} \
 			${if select_first([make_signal,false]) then "--make-signal" else ""} \
 			${"--blacklist "+ blacklist}
-		
+
 		# ugly part to deal with optional outputs with Google JES backend
-		${if select_first([make_signal,false]) then "" 
+		${if select_first([make_signal,false]) then ""
 			else "touch null.pval.signal.bigwig null.fc.signal.bigwig"}
-		${if defined(blacklist) then "" 
+		${if defined(blacklist) then ""
 			else "touch null.bfilt."+peak_type+".gz"}
-		touch null 
+		touch null
 	}
 	output {
 		File npeak = glob("*[!.][!b][!f][!i][!l][!t]."+peak_type+".gz")[0]
@@ -577,13 +577,13 @@ task filter {
 	Boolean paired_end
 	Int? multimapping
 	# optional
-	String? dup_marker 			# picard.jar MarkDuplicates (picard) or 
+	String? dup_marker 			# picard.jar MarkDuplicates (picard) or
 								# sambamba markdup (sambamba)
 	Int? mapq_thresh			# threshold for low MAPQ reads removal
 	Boolean? no_dup_removal 	# no dupe reads removal when filtering BAM
 								# dup.qc and pbc.qc will be emptry files
-								# and nodup_bam in the output is 
-	# resource					# filtered bam with dupes	
+								# and nodup_bam in the output is
+	# resource					# filtered bam with dupes
 	Int? cpu
 	Int? mem_mb
 	Int? time_hr
@@ -621,7 +621,7 @@ task bam2ta {
 	Boolean paired_end
 	Boolean disable_tn5_shift 	# no tn5 shifting (it's for dnase-seq)
 	# optional
-	String? regex_grep_v_ta 	# Perl-style regular expression pattern 
+	String? regex_grep_v_ta 	# Perl-style regular expression pattern
                         		# to remove matching reads from TAGALIGN
 	Int? subsample 				# number of reads to subsample TAGALIGN
 								# this affects all downstream analysis
@@ -689,7 +689,7 @@ task pool_ta {
 task idr {
 	# parameters from workflow
 	String? prefix 		# prefix for IDR output file
-	File? peak1 			
+	File? peak1
 	File? peak2
 	File? peak_pooled
 	Float? idr_thresh
@@ -714,15 +714,15 @@ task idr {
 			${"--ta " + ta}
 
 		# ugly part to deal with optional outputs with Google backend
-		${if defined(blacklist) then "" 
+		${if defined(blacklist) then ""
 			else "touch null.bfilt."+peak_type+".gz"}
-		${if defined(ta) then "" 
-			else "touch null.frip.qc"}			
-		touch null 
+		${if defined(ta) then ""
+			else "touch null.frip.qc"}
+		touch null
 	}
 	output {
 		File idr_peak = glob("*[!.][!b][!f][!i][!l][!t]."+peak_type+".gz")[0]
-		File bfilt_idr_peak = if defined(blacklist) then 
+		File bfilt_idr_peak = if defined(blacklist) then
 							glob("*.bfilt."+peak_type+".gz")[0] else idr_peak
 		File idr_plot = glob("*.txt.png")[0]
 		File idr_unthresholded_peak = glob("*.txt.gz")[0]
@@ -755,15 +755,15 @@ task overlap {
 			${"--ta " + ta}
 
 		# ugly part to deal with optional outputs with Google backend
-		${if defined(blacklist) then "" 
+		${if defined(blacklist) then ""
 			else "touch null.bfilt."+peak_type+".gz"}
-		${if defined(ta) then "" 
-			else "touch null.frip.qc"}			
-		touch null 
+		${if defined(ta) then ""
+			else "touch null.frip.qc"}
+		touch null
 	}
 	output {
 		File overlap_peak = glob("*[!.][!b][!f][!i][!l][!t]."+peak_type+".gz")[0]
-		File bfilt_overlap_peak = if defined(blacklist) then 
+		File bfilt_overlap_peak = if defined(blacklist) then
 							glob("*.bfilt."+peak_type+".gz")[0] else overlap_peak
 		File frip_qc = if defined(ta) then glob("*.frip.qc")[0] else glob("null")[0]
 	}
@@ -791,7 +791,7 @@ task reproducibility {
 	}
 }
 
-# gather all outputs and generate 
+# gather all outputs and generate
 # - qc.html		: organized final HTML report
 # - qc.json		: all QCs
 task qc_report {
@@ -818,11 +818,11 @@ task qc_report {
 	Array[File?] frip_qcs_pr1
 	Array[File?] frip_qcs_pr2
 	File? frip_qc_pooled
-	File? frip_qc_ppr1 
-	File? frip_qc_ppr2 
+	File? frip_qc_ppr1
+	File? frip_qc_ppr2
 	Array[File?] frip_idr_qcs
 	Array[File?] frip_idr_qcs_pr
-	File? frip_idr_qc_ppr 
+	File? frip_idr_qc_ppr
 	Array[File?] frip_overlap_qcs
 	Array[File?] frip_overlap_qcs_pr
 	File? frip_overlap_qc_ppr

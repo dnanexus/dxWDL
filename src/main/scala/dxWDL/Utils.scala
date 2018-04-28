@@ -68,6 +68,8 @@ object Utils {
     val RESERVED_WORDS: Set[String] = Set(
         "stdout", "stderr",
         "true", "false",
+        "left", "right",
+        "if", "scatter", "else", "then",
 
         "read_lines", "read_tsv", "read_map",
         "read_object", "read_objects", "read_json",
@@ -81,8 +83,6 @@ object Utils {
         "transpose", "zip", "cross", "length", "flatten", "prefix",
         "select_first", "select_all", "defined", "basename",
         "floor", "ceil", "round",
-
-        "left", "right"
     )
 
     val RUNNER_TASK_ENV_FILE = "taskEnv.json"
