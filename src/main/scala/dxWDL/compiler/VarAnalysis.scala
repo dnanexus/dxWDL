@@ -87,25 +87,38 @@ case class VarAnalysis(doNotModify: Set[Scope],
         return true
     }
 
+    private def isInterpolation(token: String) : Boolean = {
+        if (token.length <= 3)
+            return false
+        if (!interpolationRegex.pattern.matcher(token).matches)
+            return false
+        return true
+    }
+
     private def split(buf: String) : Vector[Part] = {
         // split into sub-strings
-        val v1 = splitWithRangesAsTokens(buf, quotedStringRegex)
-        val v3 = v1.map{ token =>
+        val ranges = splitWithRangesAsTokens(buf, quotedStringRegex)
+        val ranges2 = ranges.map{ token =>
             if (token(0) == '"' &&
                     token(token.length - 1) == '"')
                 // look for ${...} elements inside the string
                 splitWithRangesAsTokens(token, interpolationRegex)
             else
+                // Look for a fully qualified names
                 splitWithRangesAsTokens(token, fqnRegex)
         }.flatten
 
         // identify each sub-string; which kind of token is it?
-        v3.map{ token =>
+        ranges2.map{ token =>
             if (isIdentifer(token))
-                Fqn(token)
+                Vector(Fqn(token))
+            else if (isInterpolation(token))
+                Vector(Symbols("${"),
+                       Fqn(token.substring(2, token.length - 1)),
+                       Symbols("}"))
             else
-                Symbols(token)
-        }
+                Vector(Symbols(token))
+        }.flatten.toVector
     }
 
     private def exprRenameVars(expr: WdlExpression) : WdlExpression = {
