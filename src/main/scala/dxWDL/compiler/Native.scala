@@ -26,7 +26,7 @@ case class Native(dxWDLrtId: String,
     type ExecDict = Map[String, (IR.Callable, DXDataObject)]
     val execDictEmpty = Map.empty[String, (IR.Callable, DXDataObject)]
 
-    val verbose2:Boolean = verbose.keywords contains "compilernative"
+    val verbose2:Boolean = verbose.keywords contains "native"
     lazy val runtimeLibrary:JsValue = getRuntimeLibrary()
     lazy val projName = dxProject.describe().getName()
 
@@ -900,19 +900,6 @@ object Native {
               locked: Boolean,
               verbose: Verbose) : CompilationResults = {
         trace(verbose.on, "Native pass, generate dx:applets and dx:workflows")
-
-        Utils.trace(verbose.on, s"applets = ${ns.applets.keys}")
-        Utils.trace(verbose.on, s"subWorkflows = ${ns.subWorkflows.keys}")
-        val uniqueApplets = ns.applets.keys.toSet
-        val uniqueSubWorkflows = ns.subWorkflows.keys.toSet
-        if (uniqueApplets.size < ns.applets.size)
-            throw new Exception("Non unique applets names")
-        if (uniqueSubWorkflows.size < ns.subWorkflows.size)
-            throw new Exception("Non unique subworkflow names")
-        val both = uniqueApplets.intersect(uniqueSubWorkflows)
-        if (!both.isEmpty) {
-            throw new Exception(s"Both applet and subworkflow: ${both}")
-        }
 
         // Efficiently build a directory of the currently existing applets.
         // We don't want to build them if we don't have to.

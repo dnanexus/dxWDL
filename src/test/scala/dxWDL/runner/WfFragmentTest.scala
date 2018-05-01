@@ -22,10 +22,10 @@ class WfFragmentTest extends FlatSpec with Matchers {
         WdlVarLinks.importFromWDL(value.womType, DeclAttrs.empty, value, IODirection.Zero)
 
     private def makeOptional(value: WomValue) : WomValue = {
-        WomOptionalValue(WomOptionalType(value.womType), Some(value))
+        WomOptionalValue(value.womType, Some(value))
     }
     private def makeOptionalNone(t: WomType) : WomValue = {
-        WomOptionalValue(WomOptionalType(t), None)
+        WomOptionalValue(t, None)
     }
 
     private def evalWorkflow(filename: String,
@@ -55,7 +55,7 @@ class WfFragmentTest extends FlatSpec with Matchers {
         results
     }
 
-    ignore should "evaluate workflow A" in {
+    it should "evaluate workflow A" in {
         val results: Map[String, WomValue] = evalWorkflow("A.wdl", Map.empty)
 
         // result validation
@@ -64,11 +64,11 @@ class WfFragmentTest extends FlatSpec with Matchers {
         results("k") should equal(WomArray(
                                       WomArrayType(WomIntegerType),
                                       Vector(WomInteger(2), WomInteger(4), WomInteger(6))))
-        results("s") should equal(WomOptionalValue(WomOptionalType(WomStringType),
+        results("s") should equal(WomOptionalValue(WomStringType,
                                                    Some(WomString("hello class of 2017"))))
     }
 
-    ignore should "evaluate conditional inside scatter" in {
+    it should "evaluate conditional inside scatter" in {
         val results: Map[String, WomValue] = evalWorkflow("B.wdl", Map.empty)
 
         results.keys.toVector should contain("square")
@@ -85,7 +85,7 @@ class WfFragmentTest extends FlatSpec with Matchers {
                                                               makeOptional(WomString("pear_3")))))
     }
 
-    ignore should "evaluate nested scatters" in {
+    it should "evaluate nested scatters" in {
         val results: Map[String, WomValue] = evalWorkflow("C.wdl", Map.empty)
 
         results.keys.toVector should contain("numberedStreets")
@@ -104,7 +104,7 @@ class WfFragmentTest extends FlatSpec with Matchers {
                                                          Vector(a1, a2, a3)))
     }
 
-    ignore should "evaluate nested ifs without creating a double optional " in {
+    it should "evaluate nested ifs without creating a double optional " in {
         val results: Map[String, WomValue] = evalWorkflow("D.wdl", Map.empty)
 
         results.keys.toVector should contain("chosen")
@@ -116,7 +116,7 @@ class WfFragmentTest extends FlatSpec with Matchers {
                                                         noneInt, noneInt)))
     }
 
-    ignore should "evaluate scatter inside a conditional" in {
+    it should "evaluate scatter inside a conditional" in {
         val results: Map[String, WomValue] = evalWorkflow("E.wdl", Map.empty)
 
         results.keys.toVector should contain("cube")
@@ -133,7 +133,7 @@ class WfFragmentTest extends FlatSpec with Matchers {
         results("square") should equal(nn)
     }
 
-    ignore should "handle missing values in select_first/defined" in {
+    it should "handle missing values in select_first/defined" in {
         val inputs = Map("flag" ->
                              wdlValueToWVL(makeOptionalNone(WomBooleanType)))
         val results: Map[String, WomValue] = evalWorkflow("select.wdl", inputs)
@@ -152,6 +152,6 @@ class WfFragmentTest extends FlatSpec with Matchers {
 
         results.keys.toVector should contain("y")
 
-        results("y") should equal(WomString("20"))
+        results("y") should equal(WomInteger(20))
     }
 }

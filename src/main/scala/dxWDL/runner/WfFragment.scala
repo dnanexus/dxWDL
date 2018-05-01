@@ -301,7 +301,6 @@ case class WfFragment(execSeqMap: Map[Int, ChildExecDesc],
 
         // coerce a WDL value to the required type (if needed)
     private def cast(wdlType: WomType, v: WomValue, varName: String) : WomValue = {
-        System.err.println(s"cast type=${wdlType.toDisplayString} value=${v.toWomString} varName=${varName}")
         val retVal =
             if (v.womType != wdlType) {
                 // we need to convert types
@@ -510,8 +509,6 @@ case class WfFragment(execSeqMap: Map[Int, ChildExecDesc],
     }
 
     private def evalStatement(stmt: Scope, env: Env) : Env = {
-        //val envDbg = env.decls.map(_.toString)
-        System.err.println(s"evalStatement ${stmt.getClass.getName}:  env=${env.decls}")
         def lookup = lookupInEnv(env)(_)
         stmt match {
             case decl:Declaration =>
