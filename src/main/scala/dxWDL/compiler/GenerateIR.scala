@@ -646,7 +646,7 @@ task Add {
 
     // Is this a very simple block, that can be compiled directly
     // to a stage
-    private def isSignletonBlock(block: Block, env: CallEnv) : Boolean = {
+    private def isSingletonBlock(block: Block, env: CallEnv) : Boolean = {
         if (block.size == 1 &&
                 block.head.isInstanceOf[WdlCall]) {
             val call: WdlCall = block.head.asInstanceOf[WdlCall]
@@ -664,7 +664,7 @@ task Add {
         var env = env_i
 
         val allStageInfo = subBlocks.foldLeft(accu) {
-            case (accu, block) if isSignletonBlock(block, env) =>
+            case (accu, block) if isSingletonBlock(block, env) =>
                 // The block contains exactly one call, with no extra declarations.
                 // All the variables are already in the environment, so there
                 // is no need to do any extra work. Compile directly into a workflow
@@ -941,7 +941,7 @@ object GenerateIR {
                 //case NamespaceOps.TreeNode(name, cef, _, workflow, children, Block.Kind.WfFragment) =>
                 // This sub-workflow can be compiled into a single applet.
 
-            case NamespaceOps.TreeNode(name, cef, _, workflow, children, blockKind) =>
+            case NamespaceOps.TreeNode(name, cef, _, workflow, children, blockKind, originalWorkflowName) =>
                 // Recurse into the children.
                 //
                 // The reorg and locked flags only apply to the top level
@@ -957,7 +957,7 @@ object GenerateIR {
                     if (blockKind != Block.Kind.TopLevel) true
                     else locked
                 val gir = new GenerateIR(childCallables, reorg, locked2, blockKind,
-                                         workflow.unqualifiedName + "_", execNameBox, cef, verbose)
+                                         s"${originalWorkflowName}_", execNameBox, cef, verbose)
                 val (irWf, auxApplets) = gir.compileWorkflow(workflow)
                 val allCallables = childCallables ++ auxApplets
                 //Utils.trace(verbose.on, s"node: callables = ${allCallables.keys}")

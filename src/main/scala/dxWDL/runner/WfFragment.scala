@@ -57,7 +57,10 @@ case class WfFragment(execSeqMap: Map[Int, ChildExecDesc],
     // the aggregated values of a declaration
     case class ElemWom( name: String,
                         womType: WomType,
-                        value: WomValue )
+                        value: WomValue ) {
+        override def toString =
+            s"${name}  ${womType.toDisplayString}  ${value.toWomString}"
+    }
 
     // The aggregated values of a declaration.
     // The core problem is that we can't use the wdl.values.WdlCallOutputObject. It
@@ -298,6 +301,7 @@ case class WfFragment(execSeqMap: Map[Int, ChildExecDesc],
 
         // coerce a WDL value to the required type (if needed)
     private def cast(wdlType: WomType, v: WomValue, varName: String) : WomValue = {
+        System.err.println(s"cast type=${wdlType.toDisplayString} value=${v.toWomString} varName=${varName}")
         val retVal =
             if (v.womType != wdlType) {
                 // we need to convert types
@@ -506,7 +510,8 @@ case class WfFragment(execSeqMap: Map[Int, ChildExecDesc],
     }
 
     private def evalStatement(stmt: Scope, env: Env) : Env = {
-        //System.err.println(s"evalStatement ${stmt.getClass.getName}:  env=${env.decls.keys}")
+        //val envDbg = env.decls.map(_.toString)
+        System.err.println(s"evalStatement ${stmt.getClass.getName}:  env=${env.decls}")
         def lookup = lookupInEnv(env)(_)
         stmt match {
             case decl:Declaration =>

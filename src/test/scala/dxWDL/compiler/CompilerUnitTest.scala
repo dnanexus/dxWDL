@@ -50,7 +50,7 @@ class CompilerUnitTest extends FlatSpec with Matchers {
     }
 
     // This should be supported natively by WDL!
-    ignore should "Report a useful error for a missing reference" in {
+    it should "Report a useful error for a missing reference" in {
         val path = pathFromBasename("ngs.wdl")
         val retval = Main.compile(
             List(path.toString, "--compileMode", "ir", "--locked", "--quiet")

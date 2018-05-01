@@ -123,7 +123,8 @@ object NamespaceOps {
                         imports: Seq[Import],
                         workflow: WdlWorkflow,
                         children: Vector[Tree],
-                        kind: Block.Kind.Value) extends Tree {
+                        kind: Block.Kind.Value,
+                        originalWorkflowName: String) extends Tree {
         private def toNamespace(wf: WdlWorkflow) : WdlNamespaceWithWorkflow = {
             new WdlNamespaceWithWorkflow(
                 None,
@@ -189,7 +190,8 @@ object NamespaceOps {
                                 cleanNs.imports,
                                 cleanNs.asInstanceOf[WdlNamespaceWithWorkflow].workflow,
                                 Vector.empty, // children
-                                blockKind)
+                                blockKind,
+                                originalWorkflowName)
             CleanWf(node, wf.unqualifiedName, cleanWdlSrc)
         }
 
@@ -311,7 +313,8 @@ object NamespaceOps {
                              nswf.imports,
                              nswf.workflow,
                              children,
-                             Block.Kind.TopLevel)
+                             Block.Kind.TopLevel,
+                             nswf.workflow.unqualifiedName)
                 } else {
                     // The workflow has tasks, split into a separate node,
                     // and update the imports and file-list,
@@ -335,7 +338,8 @@ object NamespaceOps {
                              nswf2.imports,
                              nswf2.workflow,
                              children :+ child,
-                             Block.Kind.TopLevel)
+                             Block.Kind.TopLevel,
+                             nswf.workflow.unqualifiedName)
                 }
         }
     }
