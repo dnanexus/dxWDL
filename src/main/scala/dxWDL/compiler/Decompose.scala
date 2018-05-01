@@ -182,7 +182,7 @@ import wdl._
 import wom.types._
 
 case class Decompose(subWorkflowPrefix: String,
-                     subwfNames: Set[String],
+                     subwfNames: NameBox,
                      cef: CompilerErrorFormatter,
                      verbose: Verbose) {
     private val verbose2:Boolean = verbose.keywords contains "decompose"
@@ -395,20 +395,8 @@ case class Decompose(subWorkflowPrefix: String,
             case Block.Kind.CallLine => "_body"
             case Block.Kind.Fragment => ""
         }
-        val longName = s"${subWorkflowPrefix}_${shortBlockDesc}${suffix}"
-        val baseName = longName.take(Utils.MAX_STAGE_NAME_LEN)
-
-        if (!(subwfNames contains baseName))
-            return baseName
-
-        // Add [1,2,3 ...] to the original name, until finding
-        // an unused variable name
-        for (i <- 1 to Utils.DECOMPOSE_MAX_NUM_RENAME_TRIES) {
-            val tentative = s"${baseName}${i}"
-            if (!(subwfNames contains tentative))
-                return tentative
-        }
-        throw new Exception(s"Could not find a unique name for sub-workflow ${baseName}")
+        val baseName = s"${subWorkflowPrefix}_${shortBlockDesc}${suffix}"
+        subwfNames.chooseUniqueName(baseName)
     }
 
     private def decompose(wf: WdlWorkflow,
@@ -541,7 +529,7 @@ object Decompose {
         var tree = nsTree
         var iter = 0
         var done = false
-        var subwfNames = Set.empty[String]
+        val subwfNames = new NameBox(verbose)
         while (!done) {
             done = tree match {
                 case node: NamespaceOps.TreeNode if Block.countCalls(node.workflow.children) >= 2 =>
@@ -556,13 +544,12 @@ object Decompose {
                         case None => true
                         case Some(child) =>
                             Utils.trace(verbose.on, s"Decompose iteration ${iter}")
-                            val sbw = new Decompose(subwfPrefix, subwfNames, node.cef, verbose)
+                            val sbw = new Decompose(subwfPrefix + "_subwf", subwfNames, node.cef, verbose)
                             val (wf2, subWf) = sbw.apply(node.workflow, child)
                             tree = node.cleanAfterRewrite(wf2, subWf, ctx, child.kind)
                             if (verbose2)
                                 NamespaceOps.prettyPrint(wdlSourceFile, tree, s"subblocks_${iter}", verbose)
                             iter = iter + 1
-                            subwfNames += subWf.unqualifiedName
                             false
                     }
                 case _ => true

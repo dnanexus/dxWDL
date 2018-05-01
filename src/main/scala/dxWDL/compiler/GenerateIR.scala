@@ -6,6 +6,7 @@ import dxWDL.{CompilerErrorFormatter, DeclAttrs, DxPath, InstanceTypeDB, Verbose
 import dxWDL.Utils
 import IR.{CVar, LinkedVar, SArg}
 import scala.util.{Failure, Success, Try}
+import scala.util.matching.Regex.Match
 import wdl._
 import wdl.expression._
 import wdl4s.parser.WdlParser.{Ast, Terminal}
@@ -14,13 +15,18 @@ import wom.types._
 import wom.values._
 
 case class GenerateIR(callables: Map[String, IR.Callable],
-                      cef: CompilerErrorFormatter,
                       reorg: Boolean,
                       locked: Boolean,
                       blockKind: Block.Kind.Value,
+                      appletNamePrefix : String,
+                      execNameBox: NameBox,
+                      cef: CompilerErrorFormatter,
                       verbose: Verbose) {
     private val verbose2:Boolean = verbose.keywords contains "GenerateIR"
     private val freeVarAnalysis = new FreeVarAnalysis(cef, verbose)
+
+    // regular expression for fully-qualified identifiers ("A", "A.B", "A.B.C")
+    private val fqnRegex = raw"""[a-zA-Z][a-zA-Z0-9_.]*""".r
 
     private class DynamicInstanceTypesException private(ex: Exception) extends RuntimeException(ex) {
         def this() = this(new RuntimeException("Runtime instance type calculation required"))
@@ -506,16 +512,41 @@ task Add {
     }
 
 
+    // Create a human readable name for a block of statements
+    //
+    // 1. Ignore all declarations
+    // 2. If there is a scatter/if, use that
+    // 3. Otherwise, there must be at least one call. Use the first one.
+    private def createBlockName(block: Block) : String = {
+        val coreStmts = block.statements.filter(x => !x.isInstanceOf[DeclarationInterface])
+        if (coreStmts.isEmpty)
+            s"eval_${genFragId()}"
+        else
+            coreStmts.head match {
+                case ssc:Scatter =>
+                    s"scatter_${ssc.item}"
+                case ifStmt:If =>
+                    val condRawString = ifStmt.condition.toWomString
+                    // Leave only identifiers
+                    val matches: List[Match] = fqnRegex.findAllMatchIn(condRawString).toList
+                    val ids = matches.map{ _.toString}
+                    // limit the number of identifiers, and concatenate
+                    val name = ids.take(4).mkString("_")
+                    s"if_${name}"
+                case call:WdlCall =>
+                    call.unqualifiedName
+            }
+    }
+
     // Build an applet to evaluate a WDL workflow fragment
     //
     // Note: all the calls have the compulsory arguments, this has
     // been checked in the Validate step.
-    private def compileWfFragment(wfUnqualifiedName : String,
-                                  stageName: String,
-                                  block: Block,
+    private def compileWfFragment(block: Block,
                                   env : CallEnv) : (IR.Stage, IR.Applet) = {
+        val baseName = createBlockName(block)
+        val stageName = execNameBox.chooseUniqueName(baseName)
         Utils.trace(verbose.on, s"Compiling wfFragment ${stageName}")
-        val calls = block.findCalls
 
         // Figure out the closure required for this block, out of the
         // environment
@@ -529,11 +560,11 @@ task Add {
 
         val outputVars = blockOutputs(block.statements)
         val wdlCode = blockGenWorklow(block, inputVars, outputVars)
-        val callDict = calls.map{ c =>
+        val callDict = block.findCalls.map{ c =>
             c.unqualifiedName -> Utils.calleeGetName(c)
         }.toMap
 
-        val applet = IR.Applet(wfUnqualifiedName ++ "_" ++ stageName,
+        val applet = IR.Applet(appletNamePrefix ++ stageName,
                                inputVars,
                                outputVars,
                                calcInstanceType(None),
@@ -553,9 +584,8 @@ task Add {
     // move the intermediate results to a subdirectory.  The applet
     // needs to process all the workflow outputs, to find the files
     // that belong to the final results.
-    private def createReorgApplet(wfUnqualifiedName: String,
-                                  wfOutputs: Vector[(CVar, SArg)]) : (IR.Stage, IR.Applet) = {
-        val appletName = wfUnqualifiedName ++ "_reorg"
+    private def createReorgApplet(wfOutputs: Vector[(CVar, SArg)]) : (IR.Stage, IR.Applet) = {
+        val appletName = execNameBox.chooseUniqueName("reorg")
         Utils.trace(verbose.on, s"Compiling output reorganization applet ${appletName}")
 
         val inputVars: Vector[CVar] = wfOutputs.map{ case (cVar, _) => cVar }
@@ -569,7 +599,7 @@ task Add {
         code.children = inputDecls
 
         // We need minimal compute resources, use the default instance type
-        val applet = IR.Applet(appletName,
+        val applet = IR.Applet(appletNamePrefix ++ appletName,
                                inputVars,
                                outputVars,
                                calcInstanceType(None),
@@ -581,7 +611,7 @@ task Add {
         // Link to the X.y original variables
         val inputs: Vector[IR.SArg] = wfOutputs.map{ case (_, sArg) => sArg }.toVector
 
-        (IR.Stage(Utils.REORG, genStageId(), appletName, inputs, outputVars),
+        (IR.Stage(Utils.REORG, genStageId(), applet.name, inputs, outputVars),
          applet)
     }
 
@@ -612,20 +642,6 @@ task Add {
                         (cVarWithDflt, IR.SArgWorkflowInput(cVar))
                 }
         }.toVector
-    }
-
-    // create a human readable name for a stage. If there
-    // are no calls, use the iteration expression. Otherwise,
-    // concatenate call names, while limiting total string length.
-    private def humanReadableStageName(block: Block) : String = {
-        val calls: Vector[WdlCall] = block.findCalls
-        val cName =
-            if (calls.isEmpty) {
-                "eval_" + genFragId()
-            } else {
-                calls.head.unqualifiedName
-            }
-        cName.take(Utils.MAX_STAGE_NAME_LEN)
     }
 
     // Is this a very simple block, that can be compiled directly
@@ -666,8 +682,7 @@ task Add {
 
             case (accu, block) =>
                 // General case
-                val stageName = humanReadableStageName(block)
-                val (stage, apl) = compileWfFragment(wf.unqualifiedName, stageName, block, env)
+                val (stage, apl) = compileWfFragment(block, env)
                 for (cVar <- stage.outputs) {
                     env = env + (cVar.name ->
                                      LinkedVar(cVar, IR.SArgLink(stage.stageName, cVar)))
@@ -680,9 +695,8 @@ task Add {
 
     // Create a preliminary applet to handle workflow input/outputs. This is
     // used only in the absence of workflow-level inputs/outputs.
-    def compileCommonApplet(wfUnqualifiedName: String,
-                            inputs: Vector[(CVar, SArg)]) : (IR.Stage, IR.Applet) = {
-        val appletName = wfUnqualifiedName + "_" + Utils.COMMON
+    def compileCommonApplet(inputs: Vector[(CVar, SArg)]) : (IR.Stage, IR.Applet) = {
+        val appletName = execNameBox.chooseUniqueName(Utils.COMMON)
         Utils.trace(verbose.on, s"Compiling common applet ${appletName}")
 
         val inputVars : Vector[CVar] = inputs.map{ case (cVar, _) => cVar }
@@ -701,7 +715,7 @@ task Add {
         val wdlCode = WdlRewrite.namespace(wf, Vector.empty)
 
         // We need minimal compute resources, use the default instance type
-        val applet = IR.Applet(appletName,
+        val applet = IR.Applet(appletNamePrefix ++ appletName,
                                inputVars,
                                outputVars,
                                calcInstanceType(None),
@@ -711,7 +725,7 @@ task Add {
         verifyWdlCodeIsLegal(applet.ns)
 
         val sArgs: Vector[SArg] = inputs.map{ _ => IR.SArgEmpty}.toVector
-        (IR.Stage(Utils.COMMON, genStageId(), appletName, sArgs, outputVars),
+        (IR.Stage(Utils.COMMON, genStageId(), applet.name, sArgs, outputVars),
          applet)
     }
 
@@ -735,9 +749,9 @@ task Add {
     //     Int count = mutec_count
     //     File ref = genome_ref
     // }
-    def compileOutputSection(appletName: String,
-                             wfOutputs: Vector[(CVar, SArg)],
+    def compileOutputSection(wfOutputs: Vector[(CVar, SArg)],
                              outputDecls: Seq[WorkflowOutput]) : (IR.Stage, IR.Applet) = {
+        val appletName = execNameBox.chooseUniqueName(Utils.OUTPUT_SECTION)
         Utils.trace(verbose.on, s"Compiling output section applet ${appletName}")
 
         val inputVars: Vector[CVar] = wfOutputs.map{ case (cVar,_) => cVar }.toVector
@@ -761,7 +775,7 @@ task Add {
         code.children = inputDecls ++ outputs
 
         // We need minimal compute resources, use the default instance type
-        val applet = IR.Applet(appletName,
+        val applet = IR.Applet(appletNamePrefix ++ appletName,
                                inputVars,
                                outputVars,
                                calcInstanceType(None),
@@ -775,7 +789,7 @@ task Add {
 
         (IR.Stage(Utils.OUTPUT_SECTION,
                   genStageId(Some(Utils.LAST_STAGE)),
-                  appletName,
+                  applet.name,
                   inputs,
                   outputVars),
          applet)
@@ -809,8 +823,7 @@ task Add {
 
         // Create a preliminary stage to handle workflow inputs, and top-level
         // declarations.
-        val (inputStage, inputApplet) = compileCommonApplet(wf.unqualifiedName, wfInputs)
-
+        val (inputStage, inputApplet) = compileCommonApplet(wfInputs)
 
         // An environment where variables are defined
         val initEnv : CallEnv = inputStage.outputs.map { cVar =>
@@ -826,9 +839,7 @@ task Add {
 
         // output section is non empty, keep only those files
         // at the destination directory
-        val (outputStage, outputApplet) = compileOutputSection(
-            wf.unqualifiedName ++ "_" ++ Utils.OUTPUT_SECTION,
-            wfOutputs, wf.outputs)
+        val (outputStage, outputApplet) = compileOutputSection(wfOutputs, wf.outputs)
 
         (allStageInfo :+ (outputStage, Some(outputApplet)),
          wfOutputs)
@@ -865,7 +876,7 @@ task Add {
         // Add a reorganization applet if requested
         val allStageInfo =
             if (reorg) {
-                val (rStage, rApl) = createReorgApplet(wf.unqualifiedName, wfOutputs)
+                val (rStage, rApl) = createReorgApplet(wfOutputs)
                 allStageInfo_i :+ (rStage, Some(rApl))
             } else {
                 allStageInfo_i
@@ -878,6 +889,7 @@ task Add {
                 .map(apl => apl.name -> apl).toMap
 
         val irwf = IR.Workflow(wf.unqualifiedName, wfInputs, wfOutputs, stages, locked)
+        execNameBox.add(wf.unqualifiedName)
         (irwf, aApplets)
     }
 }
@@ -904,12 +916,14 @@ object GenerateIR {
                          callables: Map[String, IR.Callable],
                          reorg: Boolean,
                          locked: Boolean,
+                         execNameBox: NameBox,
                          verbose: Verbose) : IR.Namespace = {
         // recursively generate IR for the entire tree
         val nsTree1 = nsTree match {
             case NamespaceOps.TreeLeaf(name, cef, tasks) =>
                 // compile all the [tasks], that have not been already compiled, to IR.Applet
-                val gir = new GenerateIR(Map.empty, nsTree.cef, reorg, locked, Block.Kind.TopLevel, verbose)
+                val gir = new GenerateIR(Map.empty, reorg, locked, Block.Kind.TopLevel,
+                                         "", execNameBox, nsTree.cef, verbose)
                 val alreadyCompiledNames: Set[String] = callables.keys.toSet
                 val tasksNotCompiled = tasks.filter{
                     case (taskName,_) =>
@@ -924,12 +938,8 @@ object GenerateIR {
                 //Utils.trace(verbose.on, s"leaf: callables = ${allCallables.keys}")
                 makeNamespace(name, None, allCallables)
 
-                // TODO
-            /*case NamespaceOps.TreeNode(name, cef, _, workflow, children, WfFragment) =>
-                // The entire workflow can be compiled into a single applet.
-                // This is an important optimization for sub-workflows generated by
-                // the decompose step.
-             */
+                //case NamespaceOps.TreeNode(name, cef, _, workflow, children, Block.Kind.WfFragment) =>
+                // This sub-workflow can be compiled into a single applet.
 
             case NamespaceOps.TreeNode(name, cef, _, workflow, children, blockKind) =>
                 // Recurse into the children.
@@ -939,14 +949,15 @@ object GenerateIR {
                 // not reorganize the outputs.
                 val childCallables = children.foldLeft(callables){
                     case (accu, child) =>
-                        val childIr = applyRec(child, accu, false, true, verbose)
+                        val childIr = applyRec(child, accu, false, true, execNameBox, verbose)
                         accu ++ childIr.buildCallables
                 }
                 //Utils.trace(verbose.on, s"node: ${childCallables.keys}")
                 val locked2 =
                     if (blockKind != Block.Kind.TopLevel) true
                     else locked
-                val gir = new GenerateIR(childCallables, cef, reorg, locked2, blockKind, verbose)
+                val gir = new GenerateIR(childCallables, reorg, locked2, blockKind,
+                                         workflow.unqualifiedName + "_", execNameBox, cef, verbose)
                 val (irWf, auxApplets) = gir.compileWorkflow(workflow)
                 val allCallables = childCallables ++ auxApplets
                 //Utils.trace(verbose.on, s"node: callables = ${allCallables.keys}")
@@ -961,6 +972,7 @@ object GenerateIR {
               locked: Boolean,
               verbose: Verbose) : IR.Namespace = {
         Utils.trace(verbose.on, s"IR pass")
-        applyRec(nsTree, Map.empty, reorg, locked, verbose)
+        val execNameBox = new NameBox(verbose)
+        applyRec(nsTree, Map.empty, reorg, locked, execNameBox, verbose)
     }
 }
