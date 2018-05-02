@@ -151,6 +151,7 @@ object NamespaceOps {
                                       extraImports: Vector[String],
                                       ctx: Context,
                                       blockKind: Block.Kind.Value) : CleanWf = {
+            Utils.trace(ctx.verbose.on, s"    NamespaceOps.whiteWashWorkflow[")
             val ns = toNamespace(wf)
             // make sure not to duplicate imports.
             val crntImports = imports.map{_.namespaceName}.toSet
@@ -164,12 +165,13 @@ object NamespaceOps {
                 Utils.trace(ctx.verbose2, s"""|=== whitewash
                                               |  wdlSources= ${ctx.allSourceFiles.keys.toList.sorted}
                                               |  extraImports=${extraImports}  dedup=${extraImportsDedup}
-                                              |${cleanWdlSrc}
                                               |===""".stripMargin)
             }
 
             ctx.addWdlSourceFile(wf.unqualifiedName + ".wdl", cleanWdlSrc)
             val resolver = ctx.makeResolver
+
+            Utils.trace(ctx.verbose.on, s"      loadUsingSource<")
             val cleanNs =
                 WdlNamespace.loadUsingSource(cleanWdlSrc, None, Some(List(resolver))) match {
                     case Success(x) => x
@@ -183,6 +185,7 @@ object NamespaceOps {
                                 |====================""".stripMargin)
                         throw f
                 }
+            Utils.trace(ctx.verbose.on, s"      >")
 
             val cleanCef = new CompilerErrorFormatter(cef.resource, cleanNs.terminalMap)
             val node = TreeNode(wf.unqualifiedName,
@@ -192,6 +195,7 @@ object NamespaceOps {
                                 Vector.empty, // children
                                 blockKind,
                                 originalWorkflowName)
+            Utils.trace(ctx.verbose.on, s"    ]")
             CleanWf(node, wf.unqualifiedName, cleanWdlSrc)
         }
 

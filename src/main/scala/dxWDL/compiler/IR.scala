@@ -129,8 +129,12 @@ object IR {
         }
     }
 
-    // A stage can call an applet or a workflow
+    // A stage can call an applet or a workflow.
+    //
+    // Note: the description may concatin dots, parentheses, and other special
+    // symbols. It is shown to the user on the UI.
     case class Stage(stageName: String,
+                     description: Option[String],
                      id: Utils.DXWorkflowStage,
                      calleeName: String,
                      inputs: Vector[SArg],
@@ -438,7 +442,7 @@ object IR {
         }
 
         implicit val dxWorkflowStageFormat = yamlFormat1(Utils.DXWorkflowStage)
-        implicit val stageFormat = yamlFormat5(Stage)
+        implicit val stageFormat = yamlFormat6(Stage)
         implicit val workflowFormat = yamlFormat5(Workflow)
         implicit val namespaceFormat = yamlFormat4(Namespace)
     }

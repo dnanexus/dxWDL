@@ -467,6 +467,7 @@ case class Decompose(subWorkflowPrefix: String,
     // newly created sub-workflow.
     def apply(wf: WdlWorkflow,
               child: Block.ReducibleChild) : (WdlWorkflow, WdlWorkflow) = {
+        Utils.trace(verbose.on, s"  Decompose.apply[")
         if (verbose2) {
             val childLines = WdlPrettyPrinter(true, None).apply(child.scope, 0).mkString("\n")
             val wfLines = WdlPrettyPrinter(true, None).apply(wf, 0).mkString("\n")
@@ -477,7 +478,9 @@ case class Decompose(subWorkflowPrefix: String,
                             |""".stripMargin)
         }
 
+        Utils.trace(verbose.on, s"    decompose(")
         val (topWf, subWf, wfc, xtrnVarRefs) = decompose(wf, child.scope, child.kind)
+        Utils.trace(verbose.on, s"    )")
 
         if (verbose2) {
             val lines = WdlPrettyPrinter(true, None).apply(subWf, 0).mkString("\n")
@@ -493,10 +496,14 @@ case class Decompose(subWorkflowPrefix: String,
         // the parts before the subtree that was actually rewritten. This is legal
         // because renamed elements only appear -after- the subtree. Nothing will
         // be renmaed -before- it.
+
+        Utils.trace(verbose.on, s"    VarAnalysis[")
         val xtrnUsageDict = xtrnVarRefs.map{ dVar =>
             dVar.fullyQualifiedName -> dVar.conciseName
         }.toMap
         val topWf2 = VarAnalysis(Set(wfc), xtrnUsageDict, cef, verbose).rename(topWf)
+        Utils.trace(verbose.on, s"    ]")
+        Utils.trace(verbose.on, s"  ]")
         (topWf2.asInstanceOf[WdlWorkflow], subWf)
     }
 }
@@ -543,12 +550,13 @@ object Decompose {
                     Block.findReducibleChild(node.workflow.children.toVector, verbose) match {
                         case None => true
                         case Some(child) =>
-                            Utils.trace(verbose.on, s"Decompose iteration ${iter}")
+                            Utils.trace(verbose.on, s"Decompose iteration ${iter} [")
                             val sbw = new Decompose(subwfPrefix + "_subwf", subwfNames, node.cef, verbose)
                             val (wf2, subWf) = sbw.apply(node.workflow, child)
                             tree = node.cleanAfterRewrite(wf2, subWf, ctx, child.kind)
                             if (verbose2)
                                 NamespaceOps.prettyPrint(wdlSourceFile, tree, s"subblocks_${iter}", verbose)
+                            Utils.trace(verbose.on, s"]")
                             iter = iter + 1
                             false
                     }

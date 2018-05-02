@@ -106,12 +106,12 @@ case class WdlPrettyPrinter(fqnFlag: Boolean,
         val inputs: Seq[String] = call.inputMappings.map { case (key, expr) =>
             val rhs = WdlExpression.toString(expr.ast)
             s"${key}=${rhs}"
-        }.toList
+        }.toVector
         val inputsVec: Vector[String] =
             if (inputs.isEmpty) {
                 Vector.empty
             } else {
-                val line = "input:  " + inputs.mkString(", ")
+                val line = "input:  " ++ inputs.mkString(",\n" ++ genNSpaces((level+1) * I_STEP))
                 Vector(indentLine(line, level+1))
             }
         val callName = callablesMovedToLibrary match {

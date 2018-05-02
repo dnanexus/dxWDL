@@ -407,7 +407,7 @@ task Add {
             }
         }
         val stageName = call.unqualifiedName
-        IR.Stage(stageName, genStageId(), calleeName, inputs, callee.outputVars)
+        IR.Stage(stageName, None, genStageId(), calleeName, inputs, callee.outputVars)
     }
 
     // Figure out all the outputs from a sequence of WDL statements.
@@ -538,6 +538,21 @@ task Add {
             }
     }
 
+    private def genBlockDescription(block: Block) : String = {
+        val coreStmts = block.statements.filter(x => !x.isInstanceOf[DeclarationInterface])
+        if (coreStmts.isEmpty)
+            "declarations"
+        else
+            coreStmts.head match {
+                case ssc:Scatter =>
+                    s"scatter (${ssc.item} in ${ssc.collection.toWomString})"
+                case ifStmt:If =>
+                    s"if (${ifStmt.condition.toWomString})"
+                case call:WdlCall =>
+                    call.unqualifiedName
+            }
+    }
+
     // Build an applet to evaluate a WDL workflow fragment
     //
     // Note: all the calls have the compulsory arguments, this has
@@ -576,7 +591,9 @@ task Add {
         val sargs : Vector[SArg] = closure.map {
             case (_, LinkedVar(_, sArg)) => sArg
         }.toVector
-        (IR.Stage(stageName, genStageId(), applet.name, sargs, outputVars),
+        (IR.Stage(stageName,
+                  Some(genBlockDescription(block)),
+                  genStageId(), applet.name, sargs, outputVars),
          applet)
     }
 
@@ -611,7 +628,7 @@ task Add {
         // Link to the X.y original variables
         val inputs: Vector[IR.SArg] = wfOutputs.map{ case (_, sArg) => sArg }.toVector
 
-        (IR.Stage(Utils.REORG, genStageId(), applet.name, inputs, outputVars),
+        (IR.Stage(Utils.REORG, None, genStageId(), applet.name, inputs, outputVars),
          applet)
     }
 
@@ -725,7 +742,7 @@ task Add {
         verifyWdlCodeIsLegal(applet.ns)
 
         val sArgs: Vector[SArg] = inputs.map{ _ => IR.SArgEmpty}.toVector
-        (IR.Stage(Utils.COMMON, genStageId(), applet.name, sArgs, outputVars),
+        (IR.Stage(Utils.COMMON, None, genStageId(), applet.name, sArgs, outputVars),
          applet)
     }
 
@@ -788,6 +805,7 @@ task Add {
         val inputs: Vector[IR.SArg] = wfOutputs.map{ case (_, sArg) => sArg }.toVector
 
         (IR.Stage(Utils.OUTPUT_SECTION,
+                  None,
                   genStageId(Some(Utils.LAST_STAGE)),
                   applet.name,
                   inputs,
