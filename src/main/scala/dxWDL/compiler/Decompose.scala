@@ -1,8 +1,10 @@
 /*
-Break large sub-blocks into separate sub-workflows. Simplistically,
-a large subblock is one that has two calls or more. For example
-the scatter below is "large". Schematically, the main cases are as
-follows:
+Break large sub-blocks into separate sub-workflows. See more details
+in doc/Internals.md.
+
+Simplistically, a large subblock is one that has two calls or
+more. For example the scatter below is "large". Schematically, the
+main cases are as follows:
 
 a) calls are inside the same block. This sitaution is termed *CallLine*.
     if (cond) {
@@ -31,20 +33,20 @@ workflow w
 Will be decomposed into:
 workflow w
   if (cond) {
-     wf_A
-     wf_B
+     wf2
   }
-workflow wf_A
+
+workflow wf2
   if (cond2) {
      call A
   }
-workflow wf_B
   if (cond3) {
     call B
-}
+  }
 
 
-Here are more detailed examples:
+The next example also shows variable renaming. Workflow *w* below,
+is broken into a subworkflow, and a scatter that calls it.
 
 workflow w {
   scatter (x in ax) {
@@ -55,12 +57,11 @@ workflow w {
   }
 }
 
-*w* will be broken into a subworkflow, and a scatter that calls it.
 
 workflow w {
   scatter (x in ax) {
     Int y = x + 4
-    call wf_add { x=x, y=y }
+    call w_scatter_x_body { x=x, y=y }
   }
 }
 
@@ -80,97 +81,6 @@ workflow w_scatter_x_body {
 }
 
 Downstream references to 'add.result' will be renamed: w_scatter_x_body.add_result
-
-
-The workflow below requires two decomposition steps, the first is from w to w2.
-
-workflow w {
-    Int i
-    Array[Int] xa
-
-    if (i >= 0) {
-      if (i == 2) {
-        scatter (x in xa)
-          call inc { input : a=x}
-      }
-      if (i == 3) {
-        scatter (x in xa)
-          call add { input: a=x, b=3 }
-      }
-    }
-}
-
-==  Iteration 1
-workflow w2 {
-    Int i
-    Array[Int] xa
-
-    if (i >= 0) {
-      call w_if_i_2 { input: i=i, xa=xa }
-      call w_if_i_3 { input: i=i, xa=xa }
-    }
-    output {
-       Array[Int] inc_result = w_if_i_2.inc_result
-       Array[Int] add_result = w_if_i_3.add_result
-    }
-}
-
-workflow w_if_i_2 {
-    Int i
-    Array[Int] xa
-
-    if (i == 2) {
-      scatter (x in xa)
-        call inc { input : a=x}
-    }
-    output {
-      Array[Int] inc_result = inc.result
-    }
-}
-
-workflow w_if_i_3 {
-    Int i
-    Array[Int] xa
-
-    if (i == 3) {
-      scatter (x in xa)
-        call add { input: a=x, b=3 }
-    }
-    output {
-      Array[Int] add_result = inc.result
-    }
- }
-
-
-The next step is from w2 to w3.
-
-==  Iteration 2
-workflow w3 {
-    Int i
-    Array[Int] xa
-
-    if (i >= 0) {
-      call w_if_i_0_body { input: i=i, xa=xa}
-    }
-    output {
-       Array[Int]? inc_result = w_if_i_0_body.inc_result
-       Array[Int]? add_result = w_if_i_0_body.add_result
-    }
-}
-
-
-workflow w_if_i_0_body {
-    Int i
-    Array[Int] xa
-
-    call w_if_i_2 { input: i=i, xa=xa }
-    call w_if_i_3 { input: i=i, xa=xa }
-    output {
-       Array[Int] inc_result = w_if_i_2.inc_result
-       Array[Int] add_result = w_if_i_3.add_result
-    }
-}
-
  */
 
 package dxWDL.compiler
