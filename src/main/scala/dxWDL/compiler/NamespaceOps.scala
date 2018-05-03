@@ -125,6 +125,31 @@ object NamespaceOps {
                         children: Vector[Tree],
                         kind: Block.Kind.Value,
                         originalWorkflowName: String) extends Tree {
+
+        private def calcUsedImports(wf: WdlWorkflow,
+                                    allImports: Seq[Import],
+                                    ctx: Context) : Vector[Import] = {
+            val wfCalls = Block.findCalls(Vector(wf))
+            val accessedNamespaces: Set[String] = wfCalls.map{
+                case taskCall:WdlTaskCall =>
+                    taskCall.task.namespace.unqualifiedName
+                case wfc:WdlWorkflowCall =>
+                    wfc.calledWorkflow.namespace.unqualifiedName
+            }.toSet
+            val accessed = allImports.filter{ imp =>
+                accessedNamespaces contains imp.namespaceName
+            }.toVector
+            /*Utils.trace(ctx.verbose.on,
+                        s"""|calcUsedImports
+                            |    original = ${allImports.map(_.namespaceName)}
+                            |    accessed = ${accessed.map(_.namespaceName)}
+                            |""".stripMargin)*/
+            Utils.trace(ctx.verbose.on,
+                        s"calcUsedImports  ${allImports.size}  -> ${accessed.size}")
+            accessed
+        }
+
+        // prune unused imports, and create a namespace from a workflow
         private def toNamespace(wf: WdlWorkflow) : WdlNamespaceWithWorkflow = {
             new WdlNamespaceWithWorkflow(
                 None,
@@ -151,27 +176,16 @@ object NamespaceOps {
                                       extraImports: Vector[String],
                                       ctx: Context,
                                       blockKind: Block.Kind.Value) : CleanWf = {
-            Utils.trace(ctx.verbose.on, s"    NamespaceOps.whiteWashWorkflow[")
             val ns = toNamespace(wf)
-            // make sure not to duplicate imports.
-            val crntImports = imports.map{_.namespaceName}.toSet
-            val extraImportsDedup = extraImports.filter{i => !(crntImports contains i)}
-            val extraImportsText = extraImportsDedup.map{ libName =>
+            val extraImportsText = extraImports.map{ libName =>
                 s"""import "${libName}.wdl" as ${libName}"""
             }
             val lines = WdlPrettyPrinter(true).apply(ns, 0)
             val cleanWdlSrc = (extraImportsText ++ lines).mkString("\n")
-            if (ctx.verbose2) {
-                Utils.trace(ctx.verbose2, s"""|=== whitewash
-                                              |  wdlSources= ${ctx.allSourceFiles.keys.toList.sorted}
-                                              |  extraImports=${extraImports}  dedup=${extraImportsDedup}
-                                              |===""".stripMargin)
-            }
-
             ctx.addWdlSourceFile(wf.unqualifiedName + ".wdl", cleanWdlSrc)
             val resolver = ctx.makeResolver
 
-            Utils.trace(ctx.verbose.on, s"      loadUsingSource<")
+            Utils.trace(ctx.verbose.on, s"loadUsingSource[")
             val cleanNs =
                 WdlNamespace.loadUsingSource(cleanWdlSrc, None, Some(List(resolver))) match {
                     case Success(x) => x
@@ -185,17 +199,19 @@ object NamespaceOps {
                                 |====================""".stripMargin)
                         throw f
                 }
-            Utils.trace(ctx.verbose.on, s"      >")
+            Utils.trace(ctx.verbose.on, s"]")
 
+            // Clean up the new workflow. Remove unused imports.
             val cleanCef = new CompilerErrorFormatter(cef.resource, cleanNs.terminalMap)
+            val cleanWf = cleanNs.asInstanceOf[WdlNamespaceWithWorkflow].workflow
+            val usedImports = calcUsedImports(cleanWf, cleanNs.imports, ctx)
             val node = TreeNode(wf.unqualifiedName,
                                 cleanCef,
-                                cleanNs.imports,
-                                cleanNs.asInstanceOf[WdlNamespaceWithWorkflow].workflow,
+                                usedImports,
+                                cleanWf,
                                 Vector.empty, // children
                                 blockKind,
                                 originalWorkflowName)
-            Utils.trace(ctx.verbose.on, s"    ]")
             CleanWf(node, wf.unqualifiedName, cleanWdlSrc)
         }
 
@@ -225,7 +241,7 @@ object NamespaceOps {
                                ctx: Context,
                                kind: Block.Kind.Value) : TreeNode = {
             val CleanWf(subWf2, subWfName2, subWdlSrc2) =
-                whiteWashWorkflow(subWf, imports.map{_.namespaceName}.toVector, ctx, kind)
+                whiteWashWorkflow(subWf, Vector.empty, ctx, kind)
 
             // white wash the top level workflow
             ctx.addWdlSourceFile(subWfName2 + ".wdl", subWdlSrc2)

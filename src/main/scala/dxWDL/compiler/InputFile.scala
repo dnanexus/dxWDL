@@ -236,8 +236,8 @@ case class InputFile(verbose: Verbose) {
     private def handleWorkflow(wf: IR.Workflow,
                                callables: Map[String, IR.Callable],
                                cif: CromwellInputFileState) : Unit = {
-        val callableNames = callables.map{ case (name,_) => name }
-        Utils.trace(verbose.on, s"handleWorkflow callables=${callableNames}")
+        //val callableNames = callables.map{ case (name,_) => name }
+        //Utils.trace(verbose.on, s"InputFile callables=${callableNames}")
 
         // make a pass on all the stages
         wf.stages.foreach{ stage =>

@@ -61,6 +61,8 @@ case class Block(statements: Vector[Scope]) {
                 accu ++ _findCalls(ssc.children)
             case (accu, ifStmt:If) =>
                 accu ++ _findCalls(ifStmt.children)
+            case (accu, wf:WdlWorkflow) =>
+                accu ++ _findCalls(wf.children)
             case (accu, _) =>
                 accu
         }.toVector
