@@ -1,5 +1,12 @@
 # Release Notes
 
+## 0.62
+
+* Nested scatters and if blocks
+* Support for missing arguments has been removed, the compiler will generate
+an error in such cases.
+
+
 ## 0.61.1
 
 - When a WDL workflow has an empty outputs section, no outputs will be generated.
