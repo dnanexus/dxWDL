@@ -17,7 +17,7 @@ import wom.values._
 case class GenerateIR(callables: Map[String, IR.Callable],
                       reorg: Boolean,
                       locked: Boolean,
-                      blockKind: Block.Kind.Value,
+                      blockKind: NamespaceOps.Kind.Value,
                       appletNamePrefix : String,
                       execNameBox: NameBox,
                       cef: CompilerErrorFormatter,
@@ -68,7 +68,7 @@ case class GenerateIR(callables: Map[String, IR.Callable],
     // pi -- calculated, non inputs
     // z - is an input with a default value
     private def declarationIsInput(decl: Declaration) : Boolean = {
-        if (blockKind != Block.Kind.TopLevel) {
+        if (blockKind != NamespaceOps.Kind.TopLevel) {
             // This is a generated workflow, the only inputs
             // are free variables.
             decl.expression match {
@@ -940,7 +940,7 @@ object GenerateIR {
         val nsTree1 = nsTree match {
             case NamespaceOps.TreeLeaf(name, cef, tasks) =>
                 // compile all the [tasks], that have not been already compiled, to IR.Applet
-                val gir = new GenerateIR(Map.empty, reorg, locked, Block.Kind.TopLevel,
+                val gir = new GenerateIR(Map.empty, reorg, locked, NamespaceOps.Kind.TopLevel,
                                          "", execNameBox, nsTree.cef, verbose)
                 val alreadyCompiledNames: Set[String] = callables.keys.toSet
                 val tasksNotCompiled = tasks.filter{
@@ -956,10 +956,7 @@ object GenerateIR {
                 //Utils.trace(verbose.on, s"leaf: callables = ${allCallables.keys}")
                 makeNamespace(name, None, allCallables)
 
-                //case NamespaceOps.TreeNode(name, cef, _, workflow, children, Block.Kind.WfFragment) =>
-                // This sub-workflow can be compiled into a single applet.
-
-            case NamespaceOps.TreeNode(name, cef, _, workflow, children, blockKind, originalWorkflowName) =>
+            case NamespaceOps.TreeNode(name, cef, _, workflow, children, blockKind, true, originalWorkflowName) =>
                 // Recurse into the children.
                 //
                 // The reorg and locked flags only apply to the top level
@@ -972,7 +969,7 @@ object GenerateIR {
                 }
                 //Utils.trace(verbose.on, s"node: ${childCallables.keys}")
                 val locked2 =
-                    if (blockKind != Block.Kind.TopLevel) true
+                    if (blockKind != NamespaceOps.Kind.TopLevel) true
                     else locked
                 val gir = new GenerateIR(childCallables, reorg, locked2, blockKind,
                                          s"${originalWorkflowName}_", execNameBox, cef, verbose)
@@ -980,6 +977,9 @@ object GenerateIR {
                 val allCallables = childCallables ++ auxApplets
                 //Utils.trace(verbose.on, s"node: callables = ${allCallables.keys}")
                 makeNamespace(name, Some(irWf), allCallables)
+
+            case NamespaceOps.TreeNode(_, _, _, _, _, _, false, _) =>
+                throw new Exception("Tree is not fully reduced")
         }
         nsTree1
     }

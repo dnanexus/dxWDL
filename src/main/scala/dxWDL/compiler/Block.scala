@@ -78,28 +78,6 @@ case class Block(statements: Vector[Scope]) {
 }
 
 object Block {
-    //
-    // call line example:
-    // if (cond) {
-    //   call A
-    //   call B
-    //   call C
-    // }
-    //
-    // a fragment example:
-    // if (cond)
-    //    if (cond2)
-    //       scatter(x in xs)
-    //         call A
-    //
-    // A toplevel fragment is the initial workflow we started with, minus
-    // whatever was replaced or rewritten.
-    object Kind extends Enumeration {
-        val TopLevel, CallLine, Fragment = Value
-    }
-
-    case class ReducibleChild(scope: Scope, kind: Kind.Value)
-
     def countCalls(statements: Seq[Scope]) : Int =
         Block(statements.toVector).countCalls
 
@@ -158,30 +136,25 @@ object Block {
 
     // A block is large if it has two calls or more
     private def isReducible(scope: Scope) : Boolean = {
-        if (isSubBlock(scope)) {
-            Block(scope.children.toVector).countCalls >= 1
-        } else {
-            false
-        }
+        (isSubBlock(scope) &&
+             Block(scope.children.toVector).countCalls >= 2)
     }
 
-    // A block that looks like this:
+
+    // In a tree like:
+    //    if ()
+    //      if ()
+    //        scatter ()
+    //           Int i
+    //           call A
+    //           call B
     //
-    //  if (cond) {
-    //      call A
-    //      call B
-    //  }
-    private def isLeafBlock(numCalls: Int, scope: Scope) : Boolean = {
-        if (isSubBlock(scope)) {
-            val numTopLevelCalls = scope.children.foldLeft(0) {
-                case (accu, call:WdlCall) =>
-                    accu + 1
-                case (accu, _) =>
-                    accu
-            }
-            numCalls == numTopLevelCalls
-        } else {
-            false
+    // The scatter node is the end of the trunk.
+    def findTrunkTop(stmt: Scope) : Scope = {
+        stmt.children.size match {
+            case 0 => throw new Exception("findTrunkTop on an empty tree")
+            case 1 =>  findTrunkTop(stmt.children.head)
+            case _ => stmt
         }
     }
 
@@ -189,12 +162,20 @@ object Block {
     // a fragment with one call, or a call-line with multiple calls.
     //
     // call line example:
+    // if (cond) {
     //   call A
     //   call B
     //   call C
+    // }
+    //
+    // a fragment example:
+    // if (cond)
+    //    if (cond2)
+    //       scatter(x in xs)
+    //         call A
     //
     def findReducibleChild(statements: Seq[Scope],
-                           verbose: Verbose) : Option[ReducibleChild] = {
+                           verbose: Verbose) : Option[Scope] = {
         val child = statements.find{
             case stmt => isReducible(stmt)
         }
@@ -207,24 +188,7 @@ object Block {
                 //    String s = C.result
                 None
             case Some(stmt) =>
-                val numCalls = countCalls(stmt)
-                if (numCalls == 0) {
-                    throw new Exception("Sanity: zero calls in a reducible workflow")
-                } else if (numCalls == 1) {
-                    // This is a fragment
-                    Some(ReducibleChild(stmt, Kind.Fragment))
-                } else {
-                    assert(numCalls >= 2)
-                    if (isLeafBlock(numCalls, stmt)) {
-                        // this is a call-line
-                        Some(ReducibleChild(stmt, Kind.CallLine))
-                    } else {
-                        // dig deeper, one of the children is reducible
-                        val retval = findReducibleChild(stmt.children, verbose)
-                        assert(retval != None)
-                        retval
-                    }
-                }
+                Some(findTrunkTop(stmt))
         }
     }
 }

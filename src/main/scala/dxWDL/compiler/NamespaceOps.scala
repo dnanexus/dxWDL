@@ -14,6 +14,12 @@ import wom.core.WorkflowSource
 
 object NamespaceOps {
 
+    // A toplevel fragment is the initial workflow we started with, minus
+    // whatever was replaced or rewritten.
+    object Kind extends Enumeration {
+        val TopLevel, Sub  = Value
+    }
+
     case class Context(
         allSourceFiles: HashMap[String, String],
         toplevelWdlSourceFile: Path,
@@ -123,7 +129,8 @@ object NamespaceOps {
                         imports: Seq[Import],
                         workflow: WdlWorkflow,
                         children: Vector[Tree],
-                        kind: Block.Kind.Value,
+                        kind: Kind.Value,
+                        fullyReduced: Boolean,
                         originalWorkflowName: String) extends Tree {
 
         private def calcUsedImports(wf: WdlWorkflow,
@@ -175,7 +182,7 @@ object NamespaceOps {
         private def whiteWashWorkflow(wf: WdlWorkflow,
                                       extraImports: Vector[String],
                                       ctx: Context,
-                                      blockKind: Block.Kind.Value) : CleanWf = {
+                                      blockKind: Kind.Value) : CleanWf = {
             val ns = toNamespace(wf)
             val extraImportsText = extraImports.map{ libName =>
                 s"""import "${libName}.wdl" as ${libName}"""
@@ -211,6 +218,7 @@ object NamespaceOps {
                                 cleanWf,
                                 Vector.empty, // children
                                 blockKind,
+                                false,
                                 originalWorkflowName)
             CleanWf(node, wf.unqualifiedName, cleanWdlSrc)
         }
@@ -239,13 +247,13 @@ object NamespaceOps {
         def cleanAfterRewrite( topwf: WdlWorkflow,
                                subWf: WdlWorkflow,
                                ctx: Context,
-                               kind: Block.Kind.Value) : TreeNode = {
+                               kind: Kind.Value) : TreeNode = {
             val CleanWf(subWf2, subWfName2, subWdlSrc2) =
-                whiteWashWorkflow(subWf, Vector.empty, ctx, kind)
+                whiteWashWorkflow(subWf, Vector.empty, ctx, Kind.Sub)
 
             // white wash the top level workflow
             ctx.addWdlSourceFile(subWfName2 + ".wdl", subWdlSrc2)
-            val CleanWf(topwf2, _, _) = whiteWashWorkflow(topwf, Vector(subWfName2), ctx, Block.Kind.TopLevel)
+            val CleanWf(topwf2, _, _) = whiteWashWorkflow(topwf, Vector(subWfName2), ctx, kind)
             topwf2.copy(children = this.children :+ subWf2)
         }
     }
@@ -333,7 +341,8 @@ object NamespaceOps {
                              nswf.imports,
                              nswf.workflow,
                              children,
-                             Block.Kind.TopLevel,
+                             Kind.TopLevel,
+                             false,
                              nswf.workflow.unqualifiedName)
                 } else {
                     // The workflow has tasks, split into a separate node,
@@ -358,7 +367,8 @@ object NamespaceOps {
                              nswf2.imports,
                              nswf2.workflow,
                              children :+ child,
-                             Block.Kind.TopLevel,
+                             Kind.TopLevel,
+                             false,
                              nswf.workflow.unqualifiedName)
                 }
         }

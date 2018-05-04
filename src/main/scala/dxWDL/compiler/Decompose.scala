@@ -285,8 +285,7 @@ case class Decompose(subWorkflowPrefix: String,
         }
     }
 
-    private def createNameForSubWorkflow(subtree: Scope,
-                                         kind: Block.Kind.Value) : String = {
+    private def createNameForSubWorkflow(subtree: Scope) : String = {
         val shortBlockDesc = subtree match {
             case ssc: Scatter =>
                 s"scatter_${ssc.item}"
@@ -301,22 +300,24 @@ case class Decompose(subWorkflowPrefix: String,
                                         x.ast,
                                         s"unexpected workflow element ${x.getClass.getSimpleName}"))
         }
-        val suffix = kind match {
-            case Block.Kind.CallLine => "_body"
-            case Block.Kind.Fragment => ""
-        }
-        val baseName = s"${subWorkflowPrefix}_${shortBlockDesc}${suffix}"
+        val baseName = s"${subWorkflowPrefix}_${shortBlockDesc}_body"
         subwfNames.chooseUniqueName(baseName)
     }
 
+    // The subtree looks like this:
+    //   if (cond) {
+    //      call A
+    //      call B
+    //      call C
+    //   }
+    //
+    // Rewrite it as:
+    //   if (cond)
+    //      call subwf_A_B_C
     private def decompose(wf: WdlWorkflow,
-                          subtree: Scope,
-                          kind: Block.Kind.Value)
+                          subtree: Scope)
             : (WdlWorkflow, WdlWorkflow, WdlWorkflowCall, Vector[DVarHr]) = {
-        val body = kind match {
-            case Block.Kind.CallLine => subtree.children.toVector
-            case Block.Kind.Fragment => Vector(subtree)
-        }
+        val body = subtree.children.toVector
 
         // Figure out the free variables in the subtree
         val sbtInputs = freeVarAnalysis.apply(body)
@@ -331,7 +332,7 @@ case class Decompose(subWorkflowPrefix: String,
         val sbtOutputsHr = chooseConciseNames(sbtOutputs, namesToAvoid.toSet)
 
         // create a separate subworkflow from the subtree.
-        val subWfName = createNameForSubWorkflow(subtree, kind)
+        val subWfName = createNameForSubWorkflow(subtree)
         val (subWf, xtrnVarRefs) =
             buildSubWorkflow(subWfName, sbtInputsHr, sbtOutputsHr, body)
 
@@ -341,44 +342,26 @@ case class Decompose(subWorkflowPrefix: String,
         }.toMap
         val wfc = WdlRewrite.workflowCall(subWf, subWfInputs)
 
-        val wf2 = kind match {
-            case Block.Kind.CallLine =>
-                // The subtree looks like this:
-                //   if (cond) {
-                //      call A
-                //      call B
-                //      call C
-                //   }
-                //
-                // Rewrite it as:
-                //   if (cond)
-                //      call subwf_A_B_C
-                val freshSubtree = subtree match {
-                    case ssc: Scatter =>
-                        WdlRewrite.scatter(ssc, Vector(wfc))
-                    case cond: If =>
-                        WdlRewrite.cond(cond, Vector(wfc), cond.condition)
-                    case x =>
-                        throw new Exception(cef.compilerInternalError(
-                                                x.ast,
-                                                s"unexpected workflow element ${x.getClass.getSimpleName}"))
-                }
-                replaceStatement(subtree, freshSubtree)
-
-            case Block.Kind.Fragment =>
-                // Extract [subTree] from a workflow, make a subworkflow out of it
-                replaceStatement(subtree, wfc)
+        val freshSubtree = subtree match {
+            case ssc: Scatter =>
+                WdlRewrite.scatter(ssc, Vector(wfc))
+            case cond: If =>
+                WdlRewrite.cond(cond, Vector(wfc), cond.condition)
+            case x =>
+                throw new Exception(cef.compilerInternalError(
+                                        x.ast,
+                                        s"unexpected workflow element ${x.getClass.getSimpleName}"))
         }
+        val wf2 = replaceStatement(subtree, freshSubtree)
         (wf2, subWf, wfc, xtrnVarRefs)
     }
 
     // Replace [child], which is a subtree of the workflow, with a call to
     // a subworkflow. Rename usages of variables calculated inside the
     // newly created sub-workflow.
-    def apply(wf: WdlWorkflow,
-              child: Block.ReducibleChild) : (WdlWorkflow, WdlWorkflow) = {
+    def apply(wf: WdlWorkflow, child: Scope) : (WdlWorkflow, WdlWorkflow) = {
         if (verbose2) {
-            val childLines = WdlPrettyPrinter(true, None).apply(child.scope, 0).mkString("\n")
+            val childLines = WdlPrettyPrinter(true, None).apply(child, 0).mkString("\n")
             val wfLines = WdlPrettyPrinter(true, None).apply(wf, 0).mkString("\n")
             Utils.trace(verbose2,
                         s"""|=== apply1
@@ -387,7 +370,7 @@ case class Decompose(subWorkflowPrefix: String,
                             |""".stripMargin)
         }
 
-        val (topWf, subWf, wfc, xtrnVarRefs) = decompose(wf, child.scope, child.kind)
+        val (topWf, subWf, wfc, xtrnVarRefs) = decompose(wf, child)
 
         if (verbose2) {
             val lines = WdlPrettyPrinter(true, None).apply(subWf, 0).mkString("\n")
@@ -443,7 +426,8 @@ object Decompose {
         val subwfNames = new NameBox(verbose)
         while (!done) {
             done = tree match {
-                case node: NamespaceOps.TreeNode if Block.countCalls(node.workflow.children) >= 2 =>
+                case leaf: NamespaceOps.TreeLeaf => true
+                case node: NamespaceOps.TreeNode =>
                     //  1) Find the first reducible scatter/if block, If none exists, we are done.
                     //  2) Split the children to those before and after the large-block.
                     //     (beforeList, largeBlock, afterList)
@@ -457,17 +441,21 @@ object Decompose {
                             Utils.trace(verbose.on, s"Decompose iteration ${iter}")
                             val sbw = new Decompose(subwfPrefix + "_subwf", subwfNames, node.cef, verbose)
                             val (wf2, subWf) = sbw.apply(node.workflow, child)
-                            tree = node.cleanAfterRewrite(wf2, subWf, ctx, child.kind)
+                            tree = node.cleanAfterRewrite(wf2, subWf, ctx, node.kind)
                             if (verbose2)
                                 NamespaceOps.prettyPrint(wdlSourceFile, tree, s"subblocks_${iter}", verbose)
                             iter = iter + 1
                             false
                     }
-                case _ => true
             }
         }
         if (verbose.on)
             NamespaceOps.prettyPrint(wdlSourceFile, tree, "subblocks", verbose)
-        tree
+
+        // Mark the node as fully-reduced, so we do not try to reduce it again
+        tree match {
+            case leaf: NamespaceOps.TreeLeaf => leaf
+            case node: NamespaceOps.TreeNode => node.copy(fullyReduced = true)
+        }
     }
 }
