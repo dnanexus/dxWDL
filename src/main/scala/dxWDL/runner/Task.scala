@@ -194,7 +194,8 @@ private [dxWDL] object TaskSerialization {
 
 
 case class Task(task:WdlTask,
-                cef: CompilerErrorFormatter) {
+                cef: CompilerErrorFormatter,
+                verbose: Boolean) {
     def getMetaDir() = {
         val metaDir = Utils.getMetaDirPath()
         Utils.safeMkdir(metaDir)
@@ -255,11 +256,11 @@ case class Task(task:WdlTask,
                 // This is a record on the platform, created with
                 // dx-docker. Describe it with an API call, and get
                 // the docker image name.
-                Utils.appletLog(s"looking up dx:url ${url}")
+                Utils.appletLog(verbose, s"looking up dx:url ${url}")
                 val dxRecord = DxPath.lookupDxURLRecord(url)
-                Utils.appletLog(s"Found record ${dxRecord}")
+                Utils.appletLog(verbose, s"Found record ${dxRecord}")
                 val imageName = dxRecord.describe().getName
-                Utils.appletLog(s"Image name is ${imageName}")
+                Utils.appletLog(verbose, s"Image name is ${imageName}")
                 Some(imageName)
             case _ => dImg
         }
@@ -351,7 +352,7 @@ case class Task(task:WdlTask,
                     |echo $$? > ${rcPath}
                     |""".stripMargin.trim + "\n"
             }
-        Utils.appletLog(s"writing bash script to ${scriptPath}")
+        Utils.appletLog(verbose, s"writing bash script to ${scriptPath}")
         Utils.writeFileContent(scriptPath, script)
     }
 
@@ -374,15 +375,15 @@ case class Task(task:WdlTask,
         val dockerRunScript =
             s"""|#!/bin/bash -ex
                 |${dockerCmd}""".stripMargin
-        Utils.appletLog(s"writing docker run script to ${dockerRunPath}")
+        Utils.appletLog(verbose, s"writing docker run script to ${dockerRunPath}")
         Utils.writeFileContent(dockerRunPath, dockerRunScript)
         dockerRunPath.toFile.setExecutable(true)
     }
 
     // Calculate the input variables for the task, download the input files,
     // and build a shell script to run the command.
-    def prolog(inputSpec: Map[String, Utils.DXIOParam],
-               outputSpec: Map[String, Utils.DXIOParam],
+    def prolog(inputSpec: Map[String, DXIOParam],
+               outputSpec: Map[String, DXIOParam],
                inputWvls: Map[String, WdlVarLinks]) : Map[String, JsValue] = {
         val ioMode =
             if (task.commandTemplateString.trim.isEmpty) {
@@ -390,7 +391,7 @@ case class Task(task:WdlTask,
                 IOMode.Remote
             } else {
                 // default: download all input files
-                Utils.appletLog(s"Eagerly download input files")
+                Utils.appletLog(verbose, s"Eagerly download input files")
                 IOMode.Data
             }
 
@@ -420,7 +421,7 @@ case class Task(task:WdlTask,
         if (bashSnippetVec.size > 0) {
             // set up all the named pipes
             val path = getMetaDir().resolve("setup_streams")
-            Utils.appletLog(s"writing bash script for stream(s) set up to ${path}")
+            Utils.appletLog(verbose, s"writing bash script for stream(s) set up to ${path}")
             val snippet = bashSnippetVec.mkString("\n")
             Utils.writeFileContent(path, snippet)
             path.toFile.setExecutable(true)
@@ -447,8 +448,8 @@ case class Task(task:WdlTask,
         Map.empty
     }
 
-    def epilog(inputSpec: Map[String, Utils.DXIOParam],
-               outputSpec: Map[String, Utils.DXIOParam],
+    def epilog(inputSpec: Map[String, DXIOParam],
+               outputSpec: Map[String, DXIOParam],
                inputs: Map[String, WdlVarLinks]) : Map[String, JsValue] = {
         // Repopulate the localized file tables
         LocalDxFiles.unfreeze()
@@ -508,8 +509,8 @@ case class Task(task:WdlTask,
         val cores = evalAttr("cpu")
         val iTypeRaw = InstanceTypeDB.parse(dxInstaceType, memory, diskSpace, cores)
         val iType = instanceTypeDB.apply(iTypeRaw)
-        Utils.appletLog(s"""|calcInstanceType memory=${memory} disk=${diskSpace}
-                            |cores=${cores} instancetype=${iType}"""
+        Utils.appletLog(verbose, s"""|calcInstanceType memory=${memory} disk=${diskSpace}
+                                     |cores=${cores} instancetype=${iType}"""
                             .stripMargin.replaceAll("\n", " "))
         iType
     }
@@ -526,8 +527,8 @@ case class Task(task:WdlTask,
     /** The runtime attributes need to be calculated at runtime. Evaluate them,
       *  determine the instance type [xxxx], and relaunch the job on [xxxx]
       */
-    def relaunch(inputSpec: Map[String, Utils.DXIOParam],
-                 outputSpec: Map[String, Utils.DXIOParam],
+    def relaunch(inputSpec: Map[String, DXIOParam],
+                 outputSpec: Map[String, DXIOParam],
                  inputWvls: Map[String, WdlVarLinks]) : Map[String, JsValue] = {
         // Figure out the available instance types, and their prices,
         // by reading the file

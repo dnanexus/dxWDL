@@ -21,9 +21,7 @@ object Main extends App {
     }
     object InternalOp extends Enumeration {
         val Collect,
-            Eval,
-            MiniWorkflow,
-            ScatterCollectSubjob,
+            WfFragment,
             TaskEpilog, TaskProlog, TaskRelaunch,
             WorkflowOutputReorg = Value
     }
@@ -354,13 +352,13 @@ object Main extends App {
             cOpt.compileMode match {
                 case CompilerFlag.IR =>
                     compiler.CompilerTop.applyOnlyIR(wdlSourceFile, cOpt)
-                    SuccessfulTermination("")
+                    return SuccessfulTermination("")
 
                 case CompilerFlag.Default =>
                     val (dxProject, folder) = pathOptions(options, cOpt.verbose)
                     val retval = compiler.CompilerTop.apply(wdlSourceFile, folder, dxProject, cOpt)
                     val desc = retval.getOrElse("")
-                    SuccessfulTermination(desc)
+                    return SuccessfulTermination(desc)
             }
         } catch {
             case e : Throwable =>
@@ -460,13 +458,13 @@ object Main extends App {
                     val inputs = WdlVarLinks.loadJobInputsAsLinks(inputLines, inputSpec, Some(task))
                     op match {
                         case InternalOp.TaskEpilog =>
-                            val r = runner.Task(task, cef)
+                            val r = runner.Task(task, cef, true)
                             r.epilog(inputSpec, outputSpec, inputs)
                         case InternalOp.TaskProlog =>
-                            val r = runner.Task(task, cef)
+                            val r = runner.Task(task, cef, true)
                             r.prolog(inputSpec, outputSpec, inputs)
                         case InternalOp.TaskRelaunch =>
-                            val r = runner.Task(task, cef)
+                            val r = runner.Task(task, cef, true)
                             r.relaunch(inputSpec, outputSpec, inputs)
                     }
                 } else {
@@ -474,17 +472,15 @@ object Main extends App {
                     val wf = workflowOfNamespace(ns)
                     op match {
                         case InternalOp.Collect =>
-                            runner.Collect.apply(wf , inputSpec, outputSpec, inputs)
-                        case InternalOp.Eval =>
-                            runner.Eval.apply(wf, inputSpec, outputSpec, inputs)
-                        case InternalOp.MiniWorkflow =>
-                            runner.MiniWorkflow.apply(wf,
-                                                     inputSpec, outputSpec, inputs, orgInputs, false)
-                        case InternalOp.ScatterCollectSubjob =>
-                            runner.MiniWorkflow.apply(wf,
-                                                     inputSpec, outputSpec, inputs, orgInputs, true)
+                            runner.WfFragment.apply(wf ,
+                                                      inputSpec, outputSpec, inputs, orgInputs,
+                                                      RunnerWfFragmentMode.Collect, true)
+                        case InternalOp.WfFragment =>
+                            runner.WfFragment.apply(wf,
+                                                      inputSpec, outputSpec, inputs, orgInputs,
+                                                      RunnerWfFragmentMode.Launch, true)
                         case InternalOp.WorkflowOutputReorg =>
-                            runner.WorkflowOutputReorg.apply(wf, inputSpec, outputSpec, inputs)
+                            runner.WorkflowOutputReorg(true).apply(wf, inputSpec, outputSpec, inputs)
                     }
                 }
 

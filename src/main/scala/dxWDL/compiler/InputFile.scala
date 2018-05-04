@@ -89,7 +89,7 @@ case class InputFile(verbose: Verbose) {
                                    stg:IR.Stage,
                                    callee: IR.Callable,
                                    defaultFields: HashMap[String, JsValue]) : IR.Stage = {
-        Utils.trace(verbose2, s"addDefaultToStage ${stg.name}")
+        Utils.trace(verbose2, s"addDefaultToStage ${stg.stageName}")
         val inputsFull:Vector[(SArg,CVar)] = stg.inputs.zipWithIndex.map{
             case (sArg,idx) =>
                 val cVar = callee.inputVars(idx)
@@ -98,8 +98,8 @@ case class InputFile(verbose: Verbose) {
         val nameTrail = callee match {
             case applet: IR.Applet =>
                 applet.kind match {
-                    case IR.AppletKindNative(_) => s"${wf.name}.${stg.name}"
-                    case IR.AppletKindTask => s"${wf.name}.${stg.name}"
+                    case IR.AppletKindNative(_) => s"${wf.name}.${stg.stageName}"
+                    case IR.AppletKindTask => s"${wf.name}.${stg.stageName}"
                     case _ => wf.name
                 }
             case workflow: IR.Workflow =>
@@ -108,23 +108,13 @@ case class InputFile(verbose: Verbose) {
         val inputNames = inputsFull.map{ case (_,cVar) => cVar.name }
         Utils.trace(verbose2, s"inputNames=${inputNames}  trail=${nameTrail}")
         val inputsWithDefaults: Vector[SArg] = inputsFull.map{ case (sArg, cVar) =>
-            if (Utils.isGeneratedVar(cVar.name)) {
-                // generated variables are not accessible to the user
-                sArg
-            } else {
-                val fqn = cVar.originalFqn match {
-                    case None => s"${nameTrail}.${cVar.name}"
-                    case Some(fqn) =>
-                        Utils.trace(verbose2, s"original fqn=${fqn} cVar=${cVar.name}")
-                        s"${wf.name}.${fqn}"
-                }
-                getExactlyOnce(defaultFields, fqn) match {
-                    case None => sArg
-                    case Some(dflt:JsValue) =>
-                        val wvl = translateValue(cVar, dflt)
-                        val w = WdlVarLinks.eval(wvl, IOMode.Remote, IODirection.Zero)
-                        IR.SArgConst(w)
-                }
+            val fqn = s"${nameTrail}.${cVar.name}"
+            getExactlyOnce(defaultFields, fqn) match {
+                case None => sArg
+                case Some(dflt:JsValue) =>
+                    val wvl = translateValue(cVar, dflt)
+                    val w = WdlVarLinks.eval(wvl, IOMode.Remote, IODirection.Zero)
+                    IR.SArgConst(w)
             }
         }
         stg.copy(inputs = inputsWithDefaults)
@@ -172,7 +162,7 @@ case class InputFile(verbose: Verbose) {
                 case applet: IR.Applet =>
                     applet.kind match {
                         case IR.AppletKindWorkflowOutputReorg => false
-                        case _ if (stage.name == Utils.OUTPUT_SECTION) => false
+                        case _ if (stage.stageName == Utils.OUTPUT_SECTION) => false
                         case _ => true
                     }
                 case _ => true
@@ -195,8 +185,8 @@ case class InputFile(verbose: Verbose) {
                           stages = stagesWithDefaults)
         val irNs = ns.copy(entrypoint = Some(wf2))
         if (!defaultFields.isEmpty) {
-            System.err.println("Could not map all default fields. These were left:")
-            System.err.println(s"${defaultFields}")
+            Utils.warning(verbose, s"""|Could not map all default fields.
+                                       |These were left: ${defaultFields}""".stripMargin)
             throw new Exception("Failed to map all default fields")
         }
         irNs
@@ -246,8 +236,8 @@ case class InputFile(verbose: Verbose) {
     private def handleWorkflow(wf: IR.Workflow,
                                callables: Map[String, IR.Callable],
                                cif: CromwellInputFileState) : Unit = {
-        val callableNames = callables.map{ case (name,_) => name }
-        Utils.trace(verbose.on, s"handleWorkflow callables=${callableNames}")
+        //val callableNames = callables.map{ case (name,_) => name }
+        //Utils.trace(verbose.on, s"InputFile callables=${callableNames}")
 
         // make a pass on all the stages
         wf.stages.foreach{ stage =>
@@ -256,7 +246,7 @@ case class InputFile(verbose: Verbose) {
             stage.inputs.zipWithIndex.foreach{
                 case (_,idx) =>
                     val cVar = callee.inputVars(idx)
-                    val fqn = s"${wf.name}.${stage.name}.${cVar.name}"
+                    val fqn = s"${wf.name}.${stage.stageName}.${cVar.name}"
                     val dxName = s"${stage.id.getId}.${cVar.name}"
                     cif.checkAndBind(fqn, dxName, cVar)
             }
@@ -293,9 +283,7 @@ case class InputFile(verbose: Verbose) {
                 callee match {
                     case applet: IR.Applet =>
                         val callOpt = applet.kind match {
-                            case IR.AppletKindIf(calls) => Some(calls)
-                            case IR.AppletKindScatter(calls) => Some(calls)
-                            case IR.AppletKindScatterCollect(calls) => Some(calls)
+                            case IR.AppletKindWfFragment(calls) => Some(calls)
                             case _ => None
                         }
                         callOpt.map{ calls =>
@@ -336,8 +324,8 @@ case class InputFile(verbose: Verbose) {
                 handleWorkflow(wf, callables, cif)
         }
         if (!inputFields.isEmpty) {
-            System.err.println("Could not map all the input fields. These were left:")
-            System.err.println(s"${inputFields}")
+            Utils.warning(verbose, s"""|Could not map all default fields.
+                                       |These were left: ${inputFields}""".stripMargin)
             throw new Exception("Failed to map all input fields")
         }
         JsObject(cif.workflowBindings.toMap)

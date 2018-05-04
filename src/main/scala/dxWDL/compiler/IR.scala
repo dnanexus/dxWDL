@@ -27,14 +27,10 @@ object IR {
     // The attributes are used to encode DNAx applet input/output
     // specification fields, such as {help, suggestions, patterns}.
     //
-    // The [originalFqn] is for a special case where a required call input
-    // was unspecified in the workflow. It can still be provided
-    // at the command line, or from an input file.
     case class CVar(name: String,
                     womType: WomType,
                     attrs: DeclAttrs,
-                    ast: wdl4s.parser.WdlParser.Ast,
-                    originalFqn: Option[String] = None) {
+                    ast: wdl4s.parser.WdlParser.Ast) {
         // dx does not allow dots in variable names, so we
         // convert them to underscores.
         //
@@ -83,19 +79,13 @@ object IR {
     }
 
     // There are several kinds of applets
-    //   Eval:      evaluate WDL expressions, pure calculation
-    //   If:        block for a conditional
-    //   Native:    a native platform applet
-    //   Scatter:   utility block for scatter/gather
-    //   ScatterCollect: utility block for scatter, with a gather subjob.
-    //   Task:      call a task, execute a shell command (usually)
+    //   Native:     a native platform applet
+    //   WfFragment: WDL workflow fragment, can included nested if/scatter blocks
+    //   Task:       call a task, execute a shell command (usually)
     //   WorkflowOutputReorg: move intermediate result files to a subdirectory.
     sealed trait AppletKind
-    case object AppletKindEval extends AppletKind
-    case class  AppletKindIf(calls: Map[String, String]) extends AppletKind
     case class  AppletKindNative(id: String) extends AppletKind
-    case class  AppletKindScatter(calls: Map[String, String]) extends AppletKind
-    case class  AppletKindScatterCollect(calls: Map[String, String]) extends AppletKind
+    case class  AppletKindWfFragment(calls: Map[String, String]) extends AppletKind
     case object AppletKindTask extends AppletKind
     case object AppletKindWorkflowOutputReorg extends AppletKind
 
@@ -139,8 +129,12 @@ object IR {
         }
     }
 
-    // A stage can call an applet or a workflow
-    case class Stage(name: String,
+    // A stage can call an applet or a workflow.
+    //
+    // Note: the description may concatin dots, parentheses, and other special
+    // symbols. It is shown to the user on the UI.
+    case class Stage(stageName: String,
+                     description: Option[String],
                      id: Utils.DXWorkflowStage,
                      calleeName: String,
                      inputs: Vector[SArg],
@@ -240,35 +234,23 @@ object IR {
         implicit object AppletKindYamlFormat  extends YamlFormat[AppletKind] {
             def write(aKind: AppletKind) =
                 aKind match {
-                    case AppletKindEval =>
-                        YamlObject(YamlString("aKind") -> YamlString("Eval"))
-                    case AppletKindIf(calls) =>
+                    case AppletKindWfFragment(calls) =>
                         YamlObject(
-                            YamlString("aKind") -> YamlString("If"),
+                            YamlString("appletKind") -> YamlString("WfFragment"),
                             YamlString("calls") -> calls.toYaml)
                     case AppletKindNative(id) =>
                         YamlObject(
-                            YamlString("aKind") -> YamlString("Native"),
+                            YamlString("appletKind") -> YamlString("Native"),
                             YamlString("id") -> YamlString(id))
-                    case AppletKindScatter(calls) =>
-                        YamlObject(
-                            YamlString("aKind") -> YamlString("Scatter"),
-                            YamlString("calls") -> calls.toYaml)
-                    case AppletKindScatterCollect(calls) =>
-                        YamlObject(
-                            YamlString("aKind") -> YamlString("ScatterCollect"),
-                            YamlString("calls") -> calls.toYaml)
                     case AppletKindTask =>
-                        YamlObject(YamlString("aKind") -> YamlString("Task"))
+                        YamlObject(YamlString("appletKind") -> YamlString("Task"))
                     case AppletKindWorkflowOutputReorg =>
-                        YamlObject(YamlString("aKind") -> YamlString("WorkflowOutputReorg"))
+                        YamlObject(YamlString("appletKind") -> YamlString("WorkflowOutputReorg"))
                 }
             def read(value: YamlValue) = value match {
                 case YamlObject(_) =>
                     val yo = value.asYamlObject
-                    yo.getFields(YamlString("aKind")) match {
-                        case Seq(YamlString("Eval")) =>
-                            AppletKindEval
+                    yo.getFields(YamlString("appletKind")) match {
                         case Seq(YamlString("Native")) =>
                             yo.getFields(YamlString("id")) match {
                                 case Seq(YamlString(id)) =>
@@ -278,20 +260,10 @@ object IR {
                             AppletKindTask
                         case Seq(YamlString("WorkflowOutputReorg")) =>
                             AppletKindWorkflowOutputReorg
-                        case Seq(YamlString("If")) =>
+                        case Seq(YamlString("WfFragment")) =>
                             yo.getFields(YamlString("calls")) match {
                                 case Seq(calls) =>
-                                    AppletKindIf(calls.convertTo[Map[String, String]])
-                            }
-                        case Seq(YamlString("Scatter")) =>
-                            yo.getFields(YamlString("calls")) match {
-                                case Seq(calls) =>
-                                    AppletKindScatter(calls.convertTo[Map[String, String]])
-                            }
-                        case Seq(YamlString("ScatterCollect")) =>
-                            yo.getFields(YamlString("calls")) match {
-                                case Seq(calls) =>
-                                    AppletKindScatterCollect(calls.convertTo[Map[String, String]])
+                                    AppletKindWfFragment(calls.convertTo[Map[String, String]])
                             }
                     }
                 case unrecognized => throw new Exception(s"AppletKind expected ${unrecognized}")
@@ -340,8 +312,7 @@ object IR {
                 val m : Map[YamlValue, YamlValue] = Map(
                     YamlString("type") -> YamlString(cVar.womType.toDisplayString),
                     YamlString("name") -> YamlString(cVar.name),
-                    YamlString("attributes") -> cVar.attrs.toYaml,
-                    YamlString("originalFqn") -> cVar.originalFqn.toYaml
+                    YamlString("attributes") -> cVar.attrs.toYaml
                 )
                 YamlObject(m)
             }
@@ -349,14 +320,12 @@ object IR {
             def read(value: YamlValue) = {
                 value.asYamlObject.getFields(YamlString("type"),
                                              YamlString("name"),
-                                             YamlString("attributes"),
-                                             YamlString("originalFqn")) match {
-                    case Seq(YamlString(womType), YamlString(name), attrs, originalFqn) =>
+                                             YamlString("attributes")) match {
+                    case Seq(YamlString(womType), YamlString(name), attrs) =>
                         new CVar(name,
                                  WdlFlavoredWomType.fromDisplayString(womType),
                                  attrs.convertTo[DeclAttrs],
-                                 INVALID_AST,
-                                 originalFqn.convertTo[Option[String]])
+                                 INVALID_AST)
                     case unrecognized =>
                         throw new Exception(s"CVar expected ${unrecognized}")
                 }
@@ -473,7 +442,7 @@ object IR {
         }
 
         implicit val dxWorkflowStageFormat = yamlFormat1(Utils.DXWorkflowStage)
-        implicit val stageFormat = yamlFormat5(Stage)
+        implicit val stageFormat = yamlFormat6(Stage)
         implicit val workflowFormat = yamlFormat5(Workflow)
         implicit val namespaceFormat = yamlFormat4(Namespace)
     }

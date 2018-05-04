@@ -1,10 +1,5 @@
 {
-  "optionals.inc.i" : 106,
   "optionals.rain" : 17,
   "optionals.arg1": 10,
-  "optionals.integers": [1,2],
-  "##optionals.add2.b" : 8,
-  "##optionals.add3.a" : 13,
-  "##optionals.add3.b" : 21,
-  "optionals.inc2.i" : 107
+  "optionals.integers": [1,2]
 }

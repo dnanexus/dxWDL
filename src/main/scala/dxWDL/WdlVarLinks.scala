@@ -27,7 +27,7 @@ import java.nio.file.{Files, Paths}
 import net.jcazevedo.moultingyaml._
 import spray.json._
 import Utils.{appletLog, dxFileFromJsValue, dxFileToJsValue,
-    DX_URL_PREFIX, DXIOParam, DXWorkflowStage, FLAT_FILES_SUFFIX, isNativeDxType}
+    DX_URL_PREFIX, DXWorkflowStage, FLAT_FILES_SUFFIX, isNativeDxType}
 import wdl.{WdlTask}
 import wdl.types.WdlFlavoredWomType
 import wom.types._
@@ -48,7 +48,6 @@ case class DxlValue(jsn: JsValue) extends DxLink  // This may contain dx-files
 case class DxlStage(dxStage: DXWorkflowStage, ioRef: IORef.Value, varName: String) extends DxLink
 case class DxlWorkflowInput(varName: String) extends DxLink
 case class DxlExec(dxExec: DXExecution, varName: String) extends DxLink
-case class DxlExecArray(dxExecVec: Vector[DXExecution], varName: String) extends DxLink
 
 case class WdlVarLinks(womType: WomType,
                        attrs: DeclAttrs,
@@ -66,8 +65,6 @@ object WdlVarLinks {
                 "workflowInput" -> varEncName
             case DxlExec(dxExec, varEncName) =>
                 "execRef" -> varEncName
-            case DxlExecArray(dxExecVec, varEncName) =>
-                "execRefArray" -> varEncName
         }
         YamlObject(
             YamlString("type") -> YamlString(wvl.womType.toDisplayString),
@@ -194,7 +191,7 @@ object WdlVarLinks {
                 }
                 key -> (womType, fields("value"))
             case (key, other) =>
-                appletLog(s"Unmarshalling error for  JsObject=${JsObject(m)}")
+                appletLog(true, s"Unmarshalling error for  JsObject=${JsObject(m)}")
                 throw new Exception(s"key=${key}, expecting ${other} to be a JsObject")
         }.toMap
     }
@@ -288,7 +285,8 @@ object WdlVarLinks {
             case (WomOptionalType(t), JsNull) =>
                 WomOptionalValue(t, None)
             case (WomOptionalType(t), jsv) =>
-                evalCore(t, jsv, ioMode, ioDir)
+                val value = evalCore(t, jsv, ioMode, ioDir)
+                WomOptionalValue(t, Some(value))
 
             case _ =>
                 throw new AppInternalException(
@@ -311,35 +309,6 @@ object WdlVarLinks {
         eval(wvl, ioMode, IODirection.Download)
     }
 
-
-    // The reason we need a special method for unpacking an array (or a map),
-    // is because we DO NOT want to evaluate the sub-structures. The trouble is
-    // files, that may all have the same paths, causing collisions.
-    def unpackWomArray(wvl: WdlVarLinks) : Seq[WdlVarLinks] = {
-        val jsn = getRawJsValue(wvl)
-        (wvl.womType, jsn) match {
-            // Map. Convert into an array of WDL pairs.
-            case (WomMapType(keyType, valueType), _) =>
-                val womType = WomPairType(keyType, valueType)
-                shallowUnmarshalWomMap(keyType, valueType, jsn).map{
-                    case (k:JsValue, v:JsValue) =>
-                        val js:JsValue = JsObject("left" -> k, "right" -> v)
-                        WdlVarLinks(womType, wvl.attrs, DxlValue(js))
-                }.toVector
-
-            case (WomArrayType(t), JsArray(l)) =>
-                l.map(elem => WdlVarLinks(t, wvl.attrs, DxlValue(elem)))
-
-            // Strip optional type
-            case (WomOptionalType(t), _) =>
-                val wvl1 = wvl.copy(womType = t)
-                unpackWomArray(wvl1)
-
-            case (_,_) =>
-                // Error
-                throw new AppInternalException(s"Can't unpack ${wvl.womType.toDisplayString} ${jsn}")
-            }
-    }
 
     // Access a field in a complex WDL type, such as Pair, Map, Object.
     private def memberAccessStep(wvl: WdlVarLinks, fieldName: String) : WdlVarLinks = {
@@ -485,10 +454,20 @@ object WdlVarLinks {
             case (t, WomOptionalValue(_,Some(w))) =>
                 jsFromWomValue(t, w, ioDir)
 
-            case (_,_) => throw new Exception(
-                s"""|Unsupported combination:
-                    |type=(${womType.toDisplayString},${womType})
-                    |value=(${womValue.toWomString}, ${womValue})""".stripMargin)
+            case (_,_) =>
+                val womTypeStr =
+                    if (womType == null)
+                        "null"
+                    else
+                        womType.toDisplayString
+                val womValueStr =
+                    if (womValue == null)
+                        "null"
+                    else
+                        womValue.toWomString
+                throw new Exception(s"""|Unsupported combination:
+                                        |    womType:  ${womTypeStr}
+                                        |    womValue: ${womValueStr}""".stripMargin)
         }
     }
 
@@ -499,14 +478,6 @@ object WdlVarLinks {
                       ioDir: IODirection.Value) : WdlVarLinks = {
         val jsValue = jsFromWomValue(womType, womValue, ioDir)
         WdlVarLinks(womType, attrs, DxlValue(jsValue))
-    }
-
-    def mkEborArray(dxExecVec: Vector[DXExecution],
-                    varName: String) : JsValue = {
-        val ebors: Vector[JsValue] = dxExecVec.map{ dxJob =>
-            Utils.makeEBOR(dxJob, varName)
-        }
-        JsArray(ebors)
     }
 
 
@@ -553,9 +524,9 @@ object WdlVarLinks {
     // Note: we need to represent dx-files as local paths, even if we
     // do not download them. This is because accessing these files
     // later on will cause a WDL failure.
-    private [dxWDL] def importFromDxExec(ioParam:DXIOParam,
-                                         attrs:DeclAttrs,
-                                         jsValue: JsValue) : WdlVarLinks = {
+    def importFromDxExec(ioParam:DXIOParam,
+                         attrs:DeclAttrs,
+                         jsValue: JsValue) : WdlVarLinks = {
         if (ioParam.ioClass == IOClass.HASH) {
             val (t, v) = unmarshalHash(jsValue)
             if (ioParam.optional)
@@ -596,6 +567,43 @@ object WdlVarLinks {
                 }
             WdlVarLinks(womType, attrs, DxlValue(jsValue))
         }
+    }
+
+    // Import a value we got as an output from a dx:executable. In this case,
+    // we don't have the dx:specification, but we do have the WomType.
+    def importFromDxExec(womType:WomType,
+                         attrs:DeclAttrs,
+                         jsValue: JsValue) : WdlVarLinks = {
+        val ioParam = womType match {
+            // optional dx:native types
+            case WomOptionalType(WomBooleanType) => DXIOParam(IOClass.BOOLEAN, true)
+            case WomOptionalType(WomIntegerType) => DXIOParam(IOClass.INT, true)
+            case WomOptionalType(WomFloatType) => DXIOParam(IOClass.FLOAT, true)
+            case WomOptionalType(WomStringType) => DXIOParam(IOClass.STRING, true)
+            case WomOptionalType(WomFileType) => DXIOParam(IOClass.FILE, true)
+            case WomMaybeEmptyArrayType(WomBooleanType) => DXIOParam(IOClass.ARRAY_OF_BOOLEANS, true)
+            case WomMaybeEmptyArrayType(WomIntegerType) => DXIOParam(IOClass.ARRAY_OF_INTS, true)
+            case WomMaybeEmptyArrayType(WomFloatType) => DXIOParam(IOClass.ARRAY_OF_FLOATS, true)
+            case WomMaybeEmptyArrayType(WomStringType) => DXIOParam(IOClass.ARRAY_OF_STRINGS, true)
+            case WomMaybeEmptyArrayType(WomFileType) => DXIOParam(IOClass.ARRAY_OF_FILES, true)
+
+            // compulsory dx:native types
+            case WomBooleanType => DXIOParam(IOClass.BOOLEAN, false)
+            case WomIntegerType => DXIOParam(IOClass.INT, false)
+            case WomFloatType => DXIOParam(IOClass.FLOAT, false)
+            case WomStringType => DXIOParam(IOClass.STRING, false)
+            case WomFileType => DXIOParam(IOClass.FILE, false)
+            case WomNonEmptyArrayType(WomBooleanType) => DXIOParam(IOClass.ARRAY_OF_BOOLEANS, false)
+            case WomNonEmptyArrayType(WomIntegerType) => DXIOParam(IOClass.ARRAY_OF_INTS, false)
+            case WomNonEmptyArrayType(WomFloatType) => DXIOParam(IOClass.ARRAY_OF_FLOATS, false)
+            case WomNonEmptyArrayType(WomStringType) => DXIOParam(IOClass.ARRAY_OF_STRINGS, false)
+            case WomNonEmptyArrayType(WomFileType) => DXIOParam(IOClass.ARRAY_OF_FILES, false)
+
+            // non dx:native types, thse are converted to hashes
+            case WomOptionalType(_) => DXIOParam(IOClass.HASH, true)
+            case _ => DXIOParam(IOClass.HASH, false)
+        }
+        importFromDxExec(ioParam, attrs, jsValue)
     }
 
     // Import a value specified in a Cromwell style JSON input
@@ -685,8 +693,6 @@ object WdlVarLinks {
                                  "workflowInputField" -> JsString(varEncName)))
                 case DxlExec(dxJob, varEncName) =>
                     Utils.makeEBOR(dxJob, varEncName)
-                case DxlExecArray(dxJobVec, varEncName) =>
-                    mkEborArray(dxJobVec, varEncName)
             }
             (bindEncName, jsv)
         }
@@ -726,10 +732,6 @@ object WdlVarLinks {
                     val varEncName_F = varEncName + FLAT_FILES_SUFFIX
                     Map(bindEncName -> Utils.makeEBOR(dxJob, varEncName),
                         bindEncName_F -> Utils.makeEBOR(dxJob, varEncName_F))
-                case DxlExecArray(dxJobVec, varEncName) =>
-                    val varEncName_F = varEncName + FLAT_FILES_SUFFIX
-                    Map(bindEncName -> mkEborArray(dxJobVec, varEncName),
-                        bindEncName_F -> mkEborArray(dxJobVec, varEncName_F))
             }
         }
 
@@ -781,37 +783,5 @@ object WdlVarLinks {
             val wvl = importFromDxExec(ioParam, attrs, jsValue)
             key -> wvl
         }.toMap
-    }
-
-    // Merge an array of links into one. All the links
-    // have to be of the same dxlink type.
-    def merge(vec: Vector[WdlVarLinks]) : WdlVarLinks = {
-        if (vec.isEmpty)
-            throw new Exception("Sanity: WVL array has to be non empty")
-
-        val womType = WomArrayType(vec.head.womType)
-        val declAttrs = vec.head.attrs
-        vec.head.dxlink match {
-            case DxlValue(_) =>
-                val jsVec:Vector[JsValue] = vec.map{ wvl =>
-                    wvl.dxlink match {
-                        case DxlValue(jsv) => jsv
-                        case _ => throw new Exception("Sanity")
-                    }
-                }
-                WdlVarLinks(womType, declAttrs, DxlValue(JsArray(jsVec)))
-
-            case DxlExec(_, varName) =>
-                val execVec:Vector[DXExecution] = vec.map{ wvl =>
-                    wvl.dxlink match {
-                        case DxlExec(exec, name) =>
-                            assert(name == varName)
-                            exec
-                        case _ => throw new Exception("Sanity")
-                    }
-                }
-                WdlVarLinks(womType, declAttrs, DxlExecArray(execVec, varName))
-            case _ => throw new Exception(s"Don't know how to merge WVL arrays of type ${vec.head}")
-        }
     }
 }

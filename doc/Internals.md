@@ -1,8 +1,7 @@
 # Compiler internals
 
-The compiler is split into four passes
-- Simplify: simplify the original WDL code
-- Reorder: reoder declarations to reduce the number extra jobs require for pure calculation
+The compiler is split into three passes
+  Decompose: split the WDL workflow into pieces that can be run by the WDL runner
 - IR: take simplified WDL, and generate Intermediate Code (IR)
 - Native: start with IR and generate platform applets and workflow
 
@@ -36,40 +35,166 @@ workflow math {
 }
 ```
 
-## Simplification and reordering step
-The preprocessor starts with the original WDL, and simplifies it,
-writing out a new WDL source file. A call that has subexpressions is
-rewritten into separate declarations and a call with variables and
-constants only. Declarations are collected to reduce the number of
-jobs needed for evaluation.
 
-The output of the preprocessor for the `math` workflow is:
+## Handling imports and nested namespaces
+
+A WDL file creates its own namespace. It can also import other files,
+each inhabiting its own sub-namespaces. Tasks and workflows from
+children can be called with their fully-qualified-names. We map the
+WDL namespace hierarchy to a flat space of *dx:applets* and
+*dx:workflows* in the target project and folder. To do this, we
+make sure that tasks and workflows are uniquely named.
+
+In a complex namespace, a task/workflow can have several definitions. Such
+namespaces cannot be compiled by dxWDL.
+
+The implementation strategy in handling sub-namespaces, is to load all the
+WDL source files into an in memory tree. The simplify and reorder steps
+are applied as transformations to this tree.
+
+
+## Decompose into subblocks
+
+Workflows allow `scatter` and `if` blocks, which can be arbitrarily
+nested. A few examples are shown in workflow `w`.
+
 ```
-workflow math {
+workflow w {
+   Int n
+   Int m
+
+   # (A) scatter inside if
+   if (n > 3 && m < 5) {
+      scatter (i in range(n)) {
+         call mul { input: a=i, a=i }
+      }
+   }
+
+   # (B) if inside scatter
+   scatter (i in range(n+m)) {
+      if (i == 0) {
+         call add { input: a=10, b=1}
+      }
+      if (i == 1) {
+         call add { input: a=100, b=1}
+      }
+      if (i == 2) {
+         call add { input: a=1000, b=1}
+      }
+   }
+
+   # (C) scatter inside scatter
+   scatter (i in range(n)) {
+      scatter (j in range(m)) {
+         call add { input: a=i, b=j }
+         call sub { input: a=i, b=j }
+         call mul { input: a=i, b=j }
+      }
+   }
+}
+```
+
+A `scatter` (also `if`) block is compiled into an auxiliary applet
+that performs the strait line code in the block. If the inner code
+requires more than one call or applet, it is recursively compiled into
+a sub-workflow. For example, blocks _B_ and _C_ are compiled into
+subworkflows, while _A_ is not.
+
+In practical terms, this is achieved with a two step process:
+(1) Simplify the workflow source files, by extracting all the tasks
+(2) Decompose the workflow into subworkflows
+
+There are workflows that require several decomposition steps. For example,
+workflow _twoStep_ below is simplified to _twoStepV2_ and then _twoStepV3_.
+
+```
+workflow twoStep {
     Int i
-    Int k
-    Int xtmp1 = k+4
-    Int xtmp2 = i*2
-    Int xtmp3 = (k*2) + 5
+    Array[Int] xa
 
-    call Add {
-         input: a = xtmp2, b = xtmp1
-    }
-
-    Int xtmp4 = Add.result + 10
-    call Add as Add2 {
-         input: a = xtmp4, b = xtmp3
-    }
-
-    output {
-        Add2.result
+    if (i >= 0) {
+      if (i == 2) {
+        scatter (x in xa)
+          call inc { input : a=x}
+      }
+      if (i == 3) {
+        scatter (x in xa)
+          call add { input: a=x, b=3 }
+      }
     }
 }
 ```
 
-In this case, the top four declarations will be calculated with one
-job, and xtmp3 will require an additional job. This pass allows
-mapping calls to platform workflow stages, which do not support subexpressions.
+```
+workflow twoStepV2 {
+    Int i
+    Array[Int] xa
+
+    if (i >= 0) {
+      call twoStep_inc { input: i=i, xa=xa }
+      call twoStep_add { input: i=i, xa=xa }
+    }
+}
+
+workflow twoStep_inc {
+    Int i
+    Array[Int] xa
+
+    if (i == 2) {
+      scatter (x in xa)
+        call inc { input : a=x}
+    }
+}
+
+workflow twoStep_add {
+    Int i
+    Array[Int] xa
+
+    if (i == 3) {
+      scatter (x in xa)
+        call add { input: a=x, b=3 }
+    }
+ }
+ ```
+
+```
+workflow twoStepV3 {
+    Int i
+    Array[Int] xa
+
+    if (i >= 0) {
+      call twoStepV3_inner { input: i=i, xa=xa }
+    }
+}
+
+workflow twoStepV3_inner {
+    Int i
+    Array[Int] xa
+
+    call twoStep_inc { input: i=i, xa=xa }
+    call twoStep_add { input: i=i, xa=xa }
+}
+
+workflow twoStep_inc {
+    Int i
+    Array[Int] xa
+
+    if (i == 2) {
+      scatter (x in xa)
+        call inc { input : a=x}
+    }
+}
+
+workflow twoStep_add {
+    Int i
+    Array[Int] xa
+
+    if (i == 3) {
+      scatter (x in xa)
+        call add { input: a=x, b=3 }
+    }
+ }
+ ```
 
 ## Generating intermediate representation
 The IR stage takes the simplified WDL workflow, and generates a
@@ -629,71 +754,3 @@ We convert it into:
    mem1_ssd1_x4:  2$
    mem3_ssd1_x8:  3$
 ```
-
-## Handling imports and nested namespaces
-
-A WDL file creates its own namespace. It can also import other files,
-each inhabiting its own sub-namespaces. Tasks and workflows from
-children can be called with their fully-qualified-names. We map the
-WDL namespace hierarchy to a flat space of *dx:applets* and
-*dx:workflows* in the target project and folder. To do this, we
-make sure that tasks and workflows are uniquely named.
-
-In a complex namespace, a task/workflow can have several definitions. Such
-namespaces cannot be compiled by dxWDL.
-
-The implementation strategy in handling sub-namespaces, is to load all the
-WDL source files into an in memory tree. The simplify and reorder steps
-are applied as transformations to this tree.
-
-
-## Nested blocks
-
-Workflows allow `scatter` and `if` blocks, which can be arbitrarily
-nested. A few examples are shown in workflow `w`.
-
-```
-workflow w {
-   Int n
-   Int m
-
-   # (A) scatter inside if
-   if (n > 3 && m < 5) {
-      scatter (i in range(n)) {
-         call mul { input: a=i, a=i }
-      }
-   }
-
-   # (B) if inside scatter
-   scatter (i in range(n+m)) {
-      if (i == 0) {
-         call add { input: a=10, b=1}
-      }
-      if (i == 1) {
-         call add { input: a=100, b=1}
-      }
-      if (i == 2) {
-         call add { input: a=1000, b=1}
-      }
-   }
-
-   # (C) scatter inside scatter
-   scatter (i in range(n)) {
-      scatter (j in range(m)) {
-         call add { input: a=i, b=j }
-         call sub { input: a=i, b=j }
-         call mul { input: a=i, b=j }
-      }
-   }
-}
-```
-
-A `scatter` (also `if`) block is compiled into an auxiliary applet
-that performs the strait line code in the block. If the inner code
-requires more than one call or applet, it is recursively compiled into
-a sub-workflow. For example, blocks _B_ and _C_ are compiled into
-subworkflows, while _A_ is not.
-
-In practical terms, this is achieved with a two step process:
-(1) Simplify the workflow source files, by extracting all the tasks
-(2) Decompose the workflows into subworkflows

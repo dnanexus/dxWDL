@@ -181,11 +181,7 @@ class Wdl4sTest extends FlatSpec with Matchers {
             case _ => throw new Exception("sanity")
         }
 
-        val (topDecls, rest) = Utils.splitBlockDeclarations(wf.children.toList)
-        val scatter = rest.head match {
-            case ssc:Scatter => ssc
-            case _ => throw new Exception("sanity")
-        }
+        val scatter = wf.children.find{ stmt => stmt.isInstanceOf[Scatter] }.get
         val wfOutputs:Seq[WorkflowOutput] = wf.outputs
 
         val decls: List[String] =

@@ -3,7 +3,6 @@ package dxWDL
 import com.dnanexus._
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.databind.JsonNode
-//import com.fasterxml.jackson.databind.node.ObjectNode
 import java.nio.charset.StandardCharsets
 import java.nio.file.{Path, Paths, Files}
 import java.util.Base64
@@ -13,7 +12,6 @@ import scala.util.{Failure, Success}
 import ExecutionContext.Implicits.global
 import scala.sys.process._
 import spray.json._
-import wdl4s.parser.WdlParser.{Terminal}
 import wdl._
 import wdl.expression._
 import wdl.types._
@@ -41,36 +39,54 @@ object Utils {
         }
     }
 
-    // An equivalent for the InputParmater/OutputParameter types
-    case class DXIOParam(ioClass: IOClass,
-                         optional: Boolean)
-
     val APPLET_LOG_MSG_LIMIT = 1000
     val CHECKSUM_PROP = "dxWDL_checksum"
     val COMMAND_DEFAULT_BRACKETS = ("{", "}")
     val COMMAND_HEREDOC_BRACKETS = ("<<<", ">>>")
     val COMMON = "common"
     val DEFAULT_INSTANCE_TYPE = "mem1_ssd1_x4"
+    val DECOMPOSE_MAX_NUM_RENAME_TRIES = 100
     val DOWNLOAD_RETRY_LIMIT = 3
     val DX_FUNCTIONS_FILES = "dx_functions_files.json"
     val DX_HOME = "/home/dnanexus"
     val DX_INSTANCE_TYPE_ATTR = "dx_instance_type"
     val DX_URL_PREFIX = "dx://"
     val FLAT_FILES_SUFFIX = "___dxfiles"
-    val IF = "if"
     val INSTANCE_TYPE_DB_FILENAME = "instanceTypeDB.json"
     val INTERMEDIATE_RESULTS_FOLDER = "intermediate"
     val LAST_STAGE = "last"
     val LOCAL_DX_FILES_CHECKPOINT_FILE = "localized_files.json"
     val LINK_INFO_FILENAME = "linking.json"
+    val MAX_NUM_REDUCE_ITERATIONS = 100
     val MAX_STRING_LEN = 8 * 1024     // Long strings cause problems with bash and the UI
     val MAX_STAGE_NAME_LEN = 60       // maximal length of a workflow stage name
     val MAX_NUM_FILES_MOVE_LIMIT = 1000
     val OUTPUT_SECTION = "outputs"
     val REORG = "reorg"
-    val SCATTER = "scatter"
+
+    // All the words defined in the WDL language, and NOT to be confused
+    // with identifiers.
+    val RESERVED_WORDS: Set[String] = Set(
+        "stdout", "stderr",
+        "true", "false",
+        "left", "right",
+        "if", "scatter", "else", "then",
+
+        "read_lines", "read_tsv", "read_map",
+        "read_object", "read_objects", "read_json",
+        "read_int", "read_string", "read_float", "read_boolean",
+
+        "write_lines", "write_tsv", "write_map",
+        "write_object", "write_objects", "write_json",
+        "write_int", "write_string", "write_float", "write_boolean",
+
+        "size", "sub", "range",
+        "transpose", "zip", "cross", "length", "flatten", "prefix",
+        "select_first", "select_all", "defined", "basename",
+        "floor", "ceil", "round",
+    )
+
     val RUNNER_TASK_ENV_FILE = "taskEnv.json"
-    val TMP_VAR_NAME_PREFIX = "xtmp"
     val UPLOAD_RETRY_LIMIT = DOWNLOAD_RETRY_LIMIT
 
     lazy val dxEnv = DXEnvironment.create()
@@ -80,10 +96,7 @@ object Utils {
     def ignore[A](value: A) : Unit = {}
 
     // Substrings used by the compiler for encoding purposes
-    val reservedSubstrings = List("___")
-
-    // Prefixes used for generated applets
-    val reservedAppletPrefixes = List(SCATTER, IF)
+    val reservedSubstrings = List("___", LAST_STAGE)
 
     lazy val execDirPath : Path = {
         val currentDir = System.getProperty("user.dir")
@@ -115,17 +128,12 @@ object Utils {
         p
     }
 
-    var tmpVarCnt = 0
-    def genTmpVarName() : String = {
-        val tmpVarName: String = s"${TMP_VAR_NAME_PREFIX}${tmpVarCnt}"
-        tmpVarCnt = tmpVarCnt + 1
-        tmpVarName
+    // where script files are placed and generated
+    def getMetaDirPath() : Path = {
+        val p = execDirPath.resolve("meta")
+        p
     }
 
-
-    def isGeneratedVar(varName: String) : Boolean = {
-        varName.startsWith(TMP_VAR_NAME_PREFIX)
-    }
 
     // Is this a WDL type that maps to a native DX type?
     def isNativeDxType(wdlType: WomType) : Boolean = {
@@ -141,19 +149,6 @@ object Utils {
         }
     }
 
-
-    // Return true if we are certain there is no interpolation in this string.
-    //
-    // A literal can include an interpolation expression, for example:
-    //   "${filename}.vcf.gz"
-    // Interpolation requires evaluation. This check is an approximation,
-    // it may cause us to create an unnecessary declaration.
-    def isInterpolation(s: String) : Boolean = {
-        s contains "${"
-    }
-    def nonInterpolation(t: Terminal) : Boolean = {
-        !isInterpolation(t.getSourceString)
-    }
 
     // Check if the WDL expression is a constant. If so, calculate and return it.
     // Otherwise, return None.
@@ -186,35 +181,6 @@ object Utils {
             case None => throw new Exception(s"Expression ${expr} is not a WDL constant")
             case Some(wdlValue) => wdlValue
         }
-    }
-
-    // Is a declaration of a task/workflow an input for the
-    // compiled dx:applet/dx:workflow ?
-    //
-    // Examples:
-    //   File x
-    //   String y = "abc"
-    //   Float pi = 3 + .14
-    //   Int? z = 3
-    //
-    // x - must be provided as an applet input
-    // y - can be overriden, so is an input
-    // pi -- calculated, non inputs
-    // z - is an input with a default value
-    def declarationIsInput(decl: Declaration) : Boolean = {
-        (decl.expression, decl.womType) match {
-            case (None,_) => true
-            case (Some(_), WomOptionalType(_)) => true
-            case (Some(expr), _) if isExpressionConst(expr) =>
-                true
-            case (_,_) => false
-        }
-    }
-
-    // where script files are placed and generated
-    def getMetaDirPath() : Path = {
-        val p = execDirPath.resolve("meta")
-        p
     }
 
     // Used to convert into the JSON datatype used by dxjava
@@ -428,37 +394,6 @@ object Utils {
         (jobInputPath, jobOutputPath, jobErrorPath, jobInfoPath)
     }
 
-    // In a block, split off the beginning declarations, from the rest.
-    // For example, the scatter block below, will be split into
-    // the top two declarations, and the other calls.
-    // scatter (unmapped_bam in flowcell_unmapped_bams) {
-    //    String sub_strip_path = "gs://.*/"
-    //    String sub_strip_unmapped = unmapped_bam_suffix + "$"
-    //    call SamToFastqAndBwaMem {..}
-    //    call MergeBamAlignment {..}
-    // }
-    def splitBlockDeclarations(children: List[Scope]) :
-            (List[Declaration], List[Scope]) = {
-        def collect(topDecls: List[Declaration],
-                    rest: List[Scope]) : (List[Declaration], List[Scope]) = {
-            rest match {
-                case hd::tl =>
-                    hd match {
-                        case decl: Declaration =>
-                            collect(decl :: topDecls, tl)
-                        // Next element is not a declaration
-                        case _ => (topDecls, rest)
-                    }
-                // Got to the end of the children list
-                case Nil => (topDecls, rest)
-            }
-        }
-
-        val (decls, rest) = collect(Nil, children)
-        (decls.reverse, rest)
-    }
-
-
     // describe a project, and extract fields that not currently available
     // through dxjava.
     def projectDescribeExtraInfo(dxProject: DXProject) : (String,String) = {
@@ -657,6 +592,16 @@ object Utils {
         }
     }
 
+    def makeOptional(t: WomType) : WomType = {
+        t match {
+            // If the type is already optional, don't make it
+            // double optional.
+            case WomOptionalType(_) => t
+            case _ => WomOptionalType(t)
+        }
+    }
+
+
     def stripArray(t: WomType) : WomType = {
         t match {
             case WomArrayType(x) => x
@@ -685,13 +630,15 @@ object Utils {
     }
 
     // Logging output for applets at runtime
-    def appletLog(msg:String) : Unit = {
-        val shortMsg =
-            if (msg.length > APPLET_LOG_MSG_LIMIT)
-                "Message is too long for logging"
-            else
-                msg
-        System.err.println(shortMsg)
+    def appletLog(verbose: Boolean, msg:String) : Unit = {
+        if (verbose) {
+            val shortMsg =
+                if (msg.length > APPLET_LOG_MSG_LIMIT)
+                    "Message is too long for logging"
+                else
+                    msg
+            System.err.println(shortMsg)
+        }
     }
 
     // Used by the compiler to provide more information to the user
@@ -727,6 +674,33 @@ object Utils {
             }
             case Some(_: WdlNamespace) => WdlNamespaceType
             case _ => throw new Exception(s"Could not resolve $n from scope ${from.fullyQualifiedName}")
+        }
+    }
+
+    // Figure out the type of an expression
+    def evalType(expr: WdlExpression,
+                 parent: Scope,
+                 cef: CompilerErrorFormatter,
+                 verbose: Verbose) : WomType = {
+        TypeEvaluator(lookupType(parent),
+                      new WdlStandardLibraryFunctionsType,
+                      Some(parent)).evaluate(expr.ast) match {
+            case Success(wdlType) => wdlType
+            case Failure(f) =>
+                warning(verbose, cef.couldNotEvaluateType(expr))
+                throw f
+        }
+    }
+
+    // Here, we use the flat namespace assumption. We use
+    // unqualified names as Fully-Qualified-Names, because
+    // task and workflow names are unique.
+    def calleeGetName(call: WdlCall) : String = {
+        call match {
+            case tc: WdlTaskCall =>
+                tc.task.unqualifiedName
+            case wfc: WdlWorkflowCall =>
+                wfc.calledWorkflow.unqualifiedName
         }
     }
 }

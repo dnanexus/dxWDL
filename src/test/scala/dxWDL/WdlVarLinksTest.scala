@@ -2,7 +2,6 @@ package dxWDL
 
 import com.dnanexus.{IOClass}
 import org.scalatest.{FlatSpec, Matchers}
-import Utils.{DXIOParam}
 import spray.json._
 import wom.types._
 

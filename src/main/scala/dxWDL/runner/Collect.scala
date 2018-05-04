@@ -63,8 +63,6 @@ import com.fasterxml.jackson.databind.JsonNode
 import dxWDL._
 import scala.collection.JavaConverters._
 import spray.json._
-import wdl.{WdlCall, WdlWorkflow}
-import wom.types._
 
 object Collect {
 
@@ -137,59 +135,7 @@ object Collect {
         }.toVector
     }
 
-    // Collect all the values of a field from a group of jobs. Convert
-    // into the correct WDL type.
-    //
-    // Note: the type could be optional, in which case the output field
-    // will be generated only from a subset of the jobs.
-    def collect(fieldName: String,
-                wdlType: WomType,
-                execDescs:Vector[ChildExecDesc]) : (String, WdlVarLinks) = {
-        // Sort the results by ascending sequence number
-        val execsInLaunchOrder = execDescs.sortWith(_.seqNum < _.seqNum)
-        val jsVec = execsInLaunchOrder.map{
-            case desc =>
-                val fields = desc.outputs.asJsObject.fields
-                (wdlType, fields.get(fieldName)) match {
-                    case (WomOptionalType(t),None) => JsNull
-                    case (WomMaybeEmptyArrayType(t),None) => JsArray(Vector.empty[JsValue])
-                    case (_,Some(x)) => x
-                    case _ =>
-                        throw new Exception(s"missing field ${fieldName} from child execution ${desc.exec}}")
-                }
-        }
-        val wvl = WdlVarLinks(WomArrayType(wdlType), DeclAttrs.empty, DxlValue(JsArray(jsVec)))
-        (fieldName, wvl)
-    }
-
-    // Collect all outputs for a call. All the output types go from T
-    // to Array[T].
-    def collectCallOutputs(call: WdlCall,
-                           retvals: Vector[ChildExecDesc]) : Map[String,JsValue] = {
-        val wvlOutputs: Vector[(String, WdlVarLinks)] =
-            call.outputs.map { caOut =>
-                collect(caOut.unqualifiedName, caOut.womType, retvals)
-            }.toVector
-        val outputs:Map[String, JsValue] = wvlOutputs.foldLeft(Map.empty[String, JsValue]) {
-            case (accu, (varName, wvl)) =>
-                val fields = WdlVarLinks.genFields(wvl, varName)
-                accu ++ fields.toMap
-        }
-
-        // Add the call name as a prefix to all output names
-        outputs.map{ case (varName, jsv) =>
-            s"${call.unqualifiedName}_${varName}" -> jsv
-        }.toMap
-    }
-
-    def apply(wf: WdlWorkflow,
-              inputSpec: Map[String, Utils.DXIOParam],
-              outputSpec: Map[String, Utils.DXIOParam],
-              inputs: Map[String, WdlVarLinks]) : Map[String, JsValue] = {
-        if (wf.calls.size != 1)
-            throw new Exception(
-                s"Collect: workflow has ${wf.calls.size} calls, instead of exactly one")
-
+    def executableFromSeqNum() : Map[Int, ChildExecDesc] = {
         // We cannot change the input fields, because this is a sub-job with the same
         // input/output spec as the parent scatter. Therefore, we need to computationally
         // figure out:
@@ -203,10 +149,8 @@ object Collect {
         val execDescs:Vector[ChildExecDesc] = describeChildExecs(childExecs)
         System.err.println(s"execDescs=${execDescs}")
 
-        val call = wf.calls.head
-        System.err.println(s"call=${call.unqualifiedName}")
-
-        // collect call results
-        collectCallOutputs(call, execDescs)
+        execDescs.map{ desc =>
+            desc.seqNum -> desc
+        }.toMap
     }
 }

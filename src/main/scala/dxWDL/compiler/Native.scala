@@ -26,7 +26,7 @@ case class Native(dxWDLrtId: String,
     type ExecDict = Map[String, (IR.Callable, DXDataObject)]
     val execDictEmpty = Map.empty[String, (IR.Callable, DXDataObject)]
 
-    val verbose2:Boolean = verbose.keywords contains "compilernative"
+    val verbose2:Boolean = verbose.keywords contains "native"
     lazy val runtimeLibrary:JsValue = getRuntimeLibrary()
     lazy val projName = dxProject.describe().getName()
 
@@ -261,9 +261,9 @@ case class Native(dxWDLrtId: String,
             |}""".stripMargin.trim
     }
 
-    private def genBashScriptScatterCollect() : String = {
+    private def genBashScriptWfFragment() : String = {
         s"""|main() {
-            |    java -jar $${DX_FS_ROOT}/dxWDL.jar internal scatterCollectSubjob $${DX_FS_ROOT}/source.wdl $${HOME}
+            |    java -jar $${DX_FS_ROOT}/dxWDL.jar internal wfFragment $${DX_FS_ROOT}/source.wdl $${HOME}
             |}
             |
             |collect() {
@@ -277,14 +277,10 @@ case class Native(dxWDLrtId: String,
                               linkInfo: Option[String],
                               dbInstance: Option[String]) : String = {
         val body:String = appKind match {
-            case IR.AppletKindEval =>
-                genBashScriptNonTask("eval")
-            case (IR.AppletKindIf(_) | IR.AppletKindScatter(_)) =>
-                genBashScriptNonTask("miniWorkflow")
-            case (IR.AppletKindScatterCollect(_)) =>
-                genBashScriptScatterCollect()
             case IR.AppletKindNative(_) =>
                 throw new Exception("Sanity: generating a bash script for a native applet")
+            case IR.AppletKindWfFragment(_) =>
+                genBashScriptWfFragment()
             case IR.AppletKindTask =>
                 instanceType match {
                     case IR.InstanceTypeDefault | IR.InstanceTypeConst(_,_,_,_) =>
@@ -424,6 +420,20 @@ case class Native(dxWDLrtId: String,
         }
     }
 
+    // Create linking information for a dx:executable
+    private def genLinkInfo(irCall: IR.Callable,
+                            dxObj: DXDataObject) : ExecLinkInfo = {
+        val callInputDefs: Map[String, WomType] = irCall.inputVars.map{
+            case CVar(name, wdlType, _, _) => (name -> wdlType)
+        }.toMap
+        val callOutputDefs: Map[String, WomType] = irCall.outputVars.map{
+            case CVar(name, wdlType, _, _) => (name -> wdlType)
+        }.toMap
+        ExecLinkInfo(callInputDefs,
+                     callOutputDefs,
+                     dxObj)
+    }
+
     // Bundle all the applet code into one bash script.
     //
     // For applets that call other applets, we pass a directory
@@ -442,10 +452,7 @@ case class Native(dxWDLrtId: String,
                 val linkInfo = JsObject(
                     aplLinks.map{ case (key, (irCall, dxObj)) =>
                         // Reduce the information to what will be needed for runtime linking.
-                        val callInputDefs: Map[String, WomType] = irCall.inputVars.map{
-                            case CVar(name, wdlType, _, _, _) => (name -> wdlType)
-                        }.toMap
-                        val ali = ExecLinkInfo(callInputDefs, dxObj)
+                        val ali = genLinkInfo(irCall, dxObj)
                         key -> ExecLinkInfo.writeJson(ali)
                     }.toMap)
                 Some(linkInfo.prettyPrint)
@@ -578,9 +585,7 @@ case class Native(dxWDLrtId: String,
 
         // limit the applet dictionary, only to actual dependencies
         val calls:Map[String, String] = applet.kind match {
-            case IR.AppletKindIf(calls) => calls
-            case IR.AppletKindScatter(calls) => calls
-            case IR.AppletKindScatterCollect(calls) => calls
+            case IR.AppletKindWfFragment(calls) => calls
             case _ => Map.empty
         }
         val aplLinks = calls.map{ case (_,tName) => tName -> execDict(tName) }.toMap
@@ -734,10 +739,10 @@ case class Native(dxWDLrtId: String,
                     val stageReqDesc = JsObject(
                         "id" -> JsString(stg.id.getId),
                         "executable" -> JsString(dxExec.getId),
-                        "name" -> JsString(stg.name),
+                        "name" -> JsString(stg.description.getOrElse(stg.stageName)),
                         "input" -> inputs)
                     (stagesReq :+ stageReqDesc,
-                     stageDict ++ Map(stg.name -> stg.id))
+                     stageDict ++ Map(stg.stageName -> stg.id))
             }
 
         // pack all the arguments into a single API call
@@ -808,9 +813,7 @@ case class Native(dxWDLrtId: String,
                 case apl: IR.Applet =>
                     // A generated applet requires all the executables it calls
                     apl.kind match {
-                        case IR.AppletKindIf(calls) => calls.values
-                        case IR.AppletKindScatter(calls) => calls.values
-                        case IR.AppletKindScatterCollect(calls) => calls.values
+                        case IR.AppletKindWfFragment(calls) => calls.values
                         case _ => Vector.empty
                     }
                 case wf: IR.Workflow =>

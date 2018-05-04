@@ -16,7 +16,7 @@ workflow optionals {
 #    }
 
     # Missing compulsory argument
-    call lib.Inc as inc
+    call lib.Inc as inc { input: i=106 }
 
     call lib_str.ConcatArray as concatArr {
         input: words = sa
@@ -25,10 +25,10 @@ workflow optionals {
         input: words = foodArray
     }
 
-    call lib_str.Concat as concat { input:
-        x = if select_first([flag,false]) then 'OKAY' else 'FAIL',
-        y = if defined(flag) then 'OKAY' else 'FAIL'
-    }
+#    call lib_str.Concat as concat { input:
+#        x = if select_first([flag,false]) then 'OKAY' else 'FAIL',
+#        y = if defined(flag) then 'OKAY' else 'FAIL'
+#    }
 
     call lib.MaybeInt as mi1 { input: a=rain }
     call lib.MaybeInt as mi2 { input: a=mi1.result}
@@ -59,13 +59,13 @@ workflow optionals {
 
     if (true) {
         # Missing argument [i]
-        call lib.Inc as inc2
+        call lib.Inc as inc2 { input: i=107 }
     }
 
     output {
         Int inc_result = inc.result
         String concatArr_result = concatArr.result
-        String concat_result = concat.result
+#        String concat_result = concat.result
         Int? mi2_result = mi2.result
         Int? mi3_result = mi3.result
         String? ms1_result = ms1.result

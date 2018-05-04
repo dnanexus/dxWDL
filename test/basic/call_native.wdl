@@ -35,7 +35,7 @@ workflow call_native {
         Int sum_var1_result = sum_var1.result
         Int sum_var2_result = sum_var2.result
         Int sum_var3_result = sum_var3.result
-        Array[Int] mk_list_all = mk_list.all
+        Array[Int]+ mk_list_all = mk_list.all
         String concat_c = concat.c
         Array[Int]+? mk_list2_all = mk_list2.all
         Array[Int] sum_result = sum.result

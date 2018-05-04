@@ -25,7 +25,6 @@ import wdl.command.{WdlCommandPart, ParameterCommandPart, StringCommandPart}
 //   library. The values are then:
 //       (libPath, libName, calleeNames)
 case class WdlPrettyPrinter(fqnFlag: Boolean,
-                            workflowOutputs: Option[Seq[WorkflowOutput]],
                             callablesMovedToLibrary: Option[(String, String, Set[String])] = None) {
     private val I_STEP = 4
 
@@ -101,18 +100,18 @@ case class WdlPrettyPrinter(fqnFlag: Boolean,
 
     def apply(call: WdlCall, level: Int) : Vector[String] = {
         val aliasStr = call.alias match {
-            case None => ""
-            case Some(nm) => " as " ++ nm
+            case Some(nm) if nm != call.callable.unqualifiedName => " as " ++ nm
+            case _ => ""
         }
         val inputs: Seq[String] = call.inputMappings.map { case (key, expr) =>
             val rhs = WdlExpression.toString(expr.ast)
             s"${key}=${rhs}"
-        }.toList
+        }.toVector
         val inputsVec: Vector[String] =
             if (inputs.isEmpty) {
                 Vector.empty
             } else {
-                val line = "input:  " + inputs.mkString(", ")
+                val line = "input:  " ++ inputs.mkString(",\n" ++ genNSpaces((level+1) * I_STEP))
                 Vector(indentLine(line, level+1))
             }
         val callName = callablesMovedToLibrary match {
@@ -215,6 +214,10 @@ case class WdlPrettyPrinter(fqnFlag: Boolean,
         WdlNamespace.loadUsingSource(taskHeredoc, None, None) match {
             case Success(_) => return COMMAND_HEREDOC_BRACKETS
             case Failure(_) =>
+                System.err.println("curly brackets")
+                System.err.println(taskWithCurlyBrackets)
+                System.err.println("heredoc")
+                System.err.println(taskHeredoc)
                 throw new Exception(s"Task ${task} cannot be pretty printed with any kind of brackets")
         }
     }
@@ -224,19 +227,15 @@ case class WdlPrettyPrinter(fqnFlag: Boolean,
         buildTaskWithBrackets(task, bracketSymbols, level)
     }
 
-    /* There are several legal formats
-
-    output {
-        Array[String] keys = value
-        bam_file
-        Add.sum
-     */
     def apply(wfo: WorkflowOutput, level: Int) : Vector[String] = {
-        val ln =
-            if (wfo.unqualifiedName == wfo.requiredExpression.toWomString)
-                wfo.unqualifiedName
-            else
-                wfo.toWdlString
+        // Make absolutely sure that we are using the unqualified name
+        var shortName = wfo.unqualifiedName
+        val index = shortName.lastIndexOf('.')
+        if (index != -1)
+            shortName = shortName.substring(index + 1)
+        val ln = s"""|${wfo.womType.toDisplayString} ${shortName} =
+                     |${orgExpression(wfo.requiredExpression)}"""
+            .stripMargin.replaceAll("\n", " ").trim
         Vector(indentLine(ln, level))
     }
 
@@ -259,10 +258,7 @@ case class WdlPrettyPrinter(fqnFlag: Boolean,
         // An error occurs in wdl4s if we use the wf.outputs method,
         // where there are no outputs.  We use the explicit output
         // list instead.
-        val wos: Seq[WorkflowOutput] = workflowOutputs match {
-            case None => wfOutputs.map(x => x.asInstanceOf[WorkflowOutput])
-            case Some(outputs) => outputs
-        }
+        val wos: Seq[WorkflowOutput] = wfOutputs.map(x => x.asInstanceOf[WorkflowOutput])
         val outputs = wos.map(apply(_, level + 2)).flatten.toVector
         val paramMeta = wf.parameterMeta.map{ case (x,y) =>  s"${x}: ${y}" }.toVector
         val meta = wf.meta.map{ case (x,y) =>  s"${x}: ${y}" }.toVector

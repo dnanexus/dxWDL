@@ -1,10 +1,13 @@
-package dxWDL
+package dxWDL.compiler
 
+import dxWDL.{Main, WdlPrettyPrinter}
 import java.nio.file.{Path, Paths}
 import org.scalatest.{FlatSpec, Matchers}
 import org.scalatest.Inside._
 import wdl._
 
+// These tests involve compilation -without- access to the platform.
+//
 class CompilerUnitTest extends FlatSpec with Matchers {
     lazy val currentWorkDir:Path = Paths.get(System.getProperty("user.dir"))
     private def pathFromBasename(basename: String) : Path = {
@@ -24,17 +27,18 @@ class CompilerUnitTest extends FlatSpec with Matchers {
     }
 
 
-    // These tests require compilation -without- access to the platform.
-    // We need to split the compiler into front/back-ends to be able to
-    // do this.
-    it should "Allow adding unbound argument" in {
+    it should "disallow call with missing compulsory arguments" in {
         val path = pathFromBasename("unbound_arg.wdl")
-        Main.compile(
+        val retval = Main.compile(
             List(path.toString, "--compileMode", "ir", "-quiet")
-        ) should equal(Main.SuccessfulTermination(""))
+        )
+        inside(retval) {
+            case Main.UnsuccessfulTermination(errMsg) =>
+                errMsg should include ("Call is missing a compulsory argument")
+        }
     }
 
-    it should "Can't have unbound arguments from a subworkflow" in {
+    it should "disallow unbound arguments in a subworkflow" in {
         val path = pathFromBasename("toplevel_unbound_arg.wdl")
         val retval = Main.compile(
             List(path.toString, "--compileMode", "ir", "-quiet")
@@ -45,6 +49,7 @@ class CompilerUnitTest extends FlatSpec with Matchers {
         }
     }
 
+    // This should be supported natively by WDL!
     it should "Report a useful error for a missing reference" in {
         val path = pathFromBasename("ngs.wdl")
         val retval = Main.compile(
@@ -107,6 +112,41 @@ class CompilerUnitTest extends FlatSpec with Matchers {
 
     it should "Allow using the same import name twice" in {
         val path = pathFromBasename("three_levels/top.wdl")
+        Main.compile(
+            List(path.toString, "--compileMode", "ir", "--locked", "--quiet")
+        ) should equal(Main.SuccessfulTermination(""))
+    }
+
+    it should "handle closures across code blocks" in {
+        val path = pathFromBasename("closure1.wdl")
+        Main.compile(
+            List(path.toString, "--compileMode", "ir", "--locked", "--quiet")
+        ) should equal(Main.SuccessfulTermination(""))
+    }
+
+    it should "handle a call closure " in {
+        val path = pathFromBasename("closure2.wdl")
+        Main.compile(
+            List(path.toString, "--compileMode", "ir", "--locked", "--quiet")
+        ) should equal(Main.SuccessfulTermination(""))
+    }
+
+    it should "handle weird tasks " in {
+        val path = pathFromBasename("task_bug.wdl")
+        Main.compile(
+            List(path.toString, "--compileMode", "ir", "--locked", "--quiet")
+        ) should equal(Main.SuccessfulTermination(""))
+    }
+
+    it should "pass workflow input to task call" in {
+        val path = pathFromBasename("closure3.wdl")
+        Main.compile(
+            List(path.toString, "--compileMode", "ir", "--locked", "--quiet")
+        ) should equal(Main.SuccessfulTermination(""))
+    }
+
+    it should "handle pair left/right" in {
+        val path = pathFromBasename("pairs.wdl")
         Main.compile(
             List(path.toString, "--compileMode", "ir", "--locked", "--quiet")
         ) should equal(Main.SuccessfulTermination(""))

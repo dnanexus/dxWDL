@@ -40,11 +40,6 @@ class UtilsTest extends FlatSpec with Matchers {
         checkMarshal(ra)
     }
 
-    // This does not work with wdl4s version 0.7
-    ignore should "marshal and unmarshal WomFloat without losing precision" in {
-        checkMarshal(WomFloat(4.2))
-    }
-
     it should "sanitize json strings" in {
         List("A", "2211", "abcf", "abc ABC 123").foreach(s =>
             Utils.sanitize(s) should equal(s)
@@ -68,21 +63,6 @@ class UtilsTest extends FlatSpec with Matchers {
                      |  // ||  ||__
                      |""".stripMargin
         yaml1.prettyPrint should equal(buf)
-        //print(buf)
-
-/*        {
-
-            val yaml2:  = YamlString(
-                """hello
-                   |world
-                   |it is nice outside""".stripMargin)
-
-            assert(yaml2.prettyPrint(Block) ==
-                       """||
-                          | hello
-                          | world
-                          | it is nice outside""".stripMargin)
-        } */
     }
 
     it should "evaluate constants" in {
@@ -104,7 +84,7 @@ class UtilsTest extends FlatSpec with Matchers {
         Utils.isExpressionConst(expr) should equal(false)
     }
 
-    ignore should "coerce arrays" in {
+    it  should "coerce arrays" in {
         val v = WomArray(
             WomArrayType(WomStringType),
             List(WomString("one"), WomString("two"), WomString("three"), WomString("four")))
@@ -118,12 +98,10 @@ class UtilsTest extends FlatSpec with Matchers {
             s"""{ "name" : "${name}", "class" : "${dxType}" }""".parseJson
         }
         val x: JsValue = marshal("xxx", "array:file")
-        //System.err.println(s"json=${x.prettyPrint}")
 
         val m : Map[String, JsValue] = x.asJsObject.fields
         val m2 = m + ("optional" -> JsBoolean(true))
-        val _ = JsObject(m2)
-        //System.err.println(s"json=${x2.prettyPrint}")
+        Utils.ignore(JsObject(m2))
     }
 
     "ConfigFactory" should "understand our reference.conf file" in {

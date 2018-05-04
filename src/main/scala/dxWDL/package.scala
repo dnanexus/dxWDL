@@ -44,6 +44,11 @@ object CompilerFlag extends Enumeration {
     val Default, IR = Value
 }
 
+// An equivalent for the InputParmater/OutputParameter types
+case class DXIOParam(ioClass: IOClass,
+                     optional: Boolean)
+
+
 // Request for an instance type
 case class InstanceTypeReq(dxInstanceType: Option[String],
                            memoryMB: Option[Int],
@@ -75,6 +80,7 @@ case class CompilerOptions(archive: Boolean,
 // Information used to link applets that call other applets. For example, a scatter
 // applet calls applets that implement tasks.
 case class ExecLinkInfo(inputs: Map[String, WomType],
+                        outputs: Map[String, WomType],
                         dxExec: DXDataObject)
 
 object ExecLinkInfo {
@@ -84,9 +90,13 @@ object ExecLinkInfo {
         val appInputDefs: Map[String, JsString] = ali.inputs.map{
             case (name, womType) => name -> JsString(womType.toDisplayString)
         }.toMap
+        val appOutputDefs: Map[String, JsString] = ali.outputs.map{
+            case (name, womType) => name -> JsString(womType.toDisplayString)
+        }.toMap
         JsObject(
             "id" -> JsString(ali.dxExec.getId()),
-            "inputs" -> JsObject(appInputDefs)
+            "inputs" -> JsObject(appInputDefs),
+            "outputs" -> JsObject(appOutputDefs)
         )
     }
 
@@ -105,7 +115,11 @@ object ExecLinkInfo {
             case (key, JsString(womTypeStr)) => key -> WdlFlavoredWomType.fromDisplayString(womTypeStr)
             case _ => throw new Exception("Bad JSON")
         }.toMap
-        ExecLinkInfo(inputDefs, dxExec)
+        val outputDefs = aplInfo.asJsObject.fields("outputs").asJsObject.fields.map{
+            case (key, JsString(womTypeStr)) => key -> WdlFlavoredWomType.fromDisplayString(womTypeStr)
+            case _ => throw new Exception("Bad JSON")
+        }.toMap
+        ExecLinkInfo(inputDefs, outputDefs, dxExec)
     }
 }
 
@@ -113,3 +127,10 @@ object ExecLinkInfo {
 case class CompilationResults(entrypoint: Option[DXWorkflow],
                               subWorkflows: Map[String, DXWorkflow],
                               applets: Map[String, DXApplet])
+
+// Different ways of using the mini-workflow runner.
+//   Launch:     there are WDL calls, lanuch the dx:executables.
+//   Collect:    the dx:exucutables are done, collect the results.
+object RunnerWfFragmentMode extends Enumeration {
+    val Launch, Collect = Value
+}

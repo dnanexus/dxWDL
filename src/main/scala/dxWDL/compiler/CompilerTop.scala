@@ -37,14 +37,14 @@ object CompilerTop {
                               irNs: IR.Namespace,
                               path: Path,
                               cOpt: CompilerOptions) : IR.Namespace = {
-        val allStageNames = wf.stages.map{ stg => stg.name }.toVector
+        val allStageNames = wf.stages.map{ stg => stg.stageName }.toVector
 
         // embed the defaults into the IR
         val irNsEmb = InputFile(cOpt.verbose).embedDefaults(wf, irNs, path)
 
         // make sure the stage order hasn't changed
         val workflow1: IR.Workflow = irNsEmb.entrypoint.get
-        val embedAllStageNames = workflow1.stages.map{ stg => stg.name }.toVector
+        val embedAllStageNames = workflow1.stages.map{ stg => stg.stageName }.toVector
         assert(allStageNames == embedAllStageNames)
 
         irNsEmb
@@ -122,19 +122,14 @@ object CompilerTop {
         // that will give us problems.
         Validate.apply(ns, cOpt.verbose)
 
-        val nsTree: NamespaceOps.Tree = NamespaceOps.load(ns, allWdlSources, cOpt.verbose)
+        val ctx: NamespaceOps.Context = NamespaceOps.makeContext(allWdlSources, wdlSourceFile, cOpt.verbose)
+        val nsTree: NamespaceOps.Tree = NamespaceOps.load(ns, ctx)
+        val nsTreePruned = NamespaceOps.prune(nsTree, ctx)
 
-        // Simplify the original workflow, for example,
-        // convert call arguments from expressions to variables.
-        val nsTreeSimple = SimplifyExpr.apply(nsTree, wdlSourceFile, cOpt.verbose)
-
-        // Reorganize the declarations, to minimize the number of
-        // applets, stages, and jobs.
-        val nsTreeReorg = ReorgDecl.apply(nsTreeSimple, wdlSourceFile, cOpt.verbose)
+        NamespaceOps.prettyPrint(wdlSourceFile, nsTreePruned, "pruned", cOpt.verbose)
 
         // Convert large sub-blocks to sub-workflows
-         DecomposeBlocks.apply(nsTreeReorg, wdlSourceFile, cOpt.verbose)
-        //nsTreeReorg
+        Decompose.apply(nsTreePruned, wdlSourceFile, ctx, cOpt.verbose)
     }
 
     private def compileIR(wdlSourceFile : Path,

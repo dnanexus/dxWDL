@@ -45,7 +45,7 @@ medium_test_list = [
     "dict",
 
     # objects
-    "complex",
+#    "complex",
 
     # calling native dx applets
     "call_native",
