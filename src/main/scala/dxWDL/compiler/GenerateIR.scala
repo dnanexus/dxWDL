@@ -76,12 +76,10 @@ case class GenerateIR(callables: Map[String, IR.Callable],
                 case Some(_) => false
             }
         } else {
-            (decl.expression, decl.womType) match {
-                case (None,_) => true
-                case (Some(_), WomOptionalType(_)) => true
-                case (Some(expr), _) if Utils.isExpressionConst(expr) =>
-                    true
-                case (_,_) => false
+            decl.expression match {
+                case None => true
+                case Some(expr) if Utils.isExpressionConst(expr) => true
+                case _ => false
             }
         }
     }
@@ -818,7 +816,7 @@ task Add {
                                       wfInputs: Vector[(CVar, SArg)],
                                       subBlocks: Vector[Block]) :
             (Vector[(IR.Stage, Option[IR.Applet])], Vector[(CVar, SArg)]) = {
-        Utils.trace(verbose.on, s"Compiling locked-down workflow ${wf.unqualifiedName}")
+        Utils.trace(verbose2, s"Compiling locked-down workflow ${wf.unqualifiedName}")
 
         // Locked-down workflow, we have workflow level inputs and outputs
         val initEnv : CallEnv = wfInputs.map { case (cVar,sArg) =>
@@ -837,7 +835,7 @@ task Add {
                                        wfInputs: Vector[(CVar, SArg)],
                                        subBlocks: Vector[Block]) :
             (Vector[(IR.Stage, Option[IR.Applet])], Vector[(CVar, SArg)]) = {
-        Utils.trace(verbose.on, s"Compiling regular workflow ${wf.unqualifiedName}")
+        Utils.trace(verbose2, s"Compiling regular workflow ${wf.unqualifiedName}")
 
         // Create a preliminary stage to handle workflow inputs, and top-level
         // declarations.

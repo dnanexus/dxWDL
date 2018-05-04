@@ -146,12 +146,7 @@ object NamespaceOps {
             val accessed = allImports.filter{ imp =>
                 accessedNamespaces contains imp.namespaceName
             }.toVector
-            /*Utils.trace(ctx.verbose.on,
-                        s"""|calcUsedImports
-                            |    original = ${allImports.map(_.namespaceName)}
-                            |    accessed = ${accessed.map(_.namespaceName)}
-                            |""".stripMargin)*/
-            Utils.trace(ctx.verbose.on,
+            Utils.trace(ctx.verbose2,
                         s"calcUsedImports  ${allImports.size}  -> ${accessed.size}")
             accessed
         }
@@ -192,7 +187,7 @@ object NamespaceOps {
             ctx.addWdlSourceFile(wf.unqualifiedName + ".wdl", cleanWdlSrc)
             val resolver = ctx.makeResolver
 
-            Utils.trace(ctx.verbose.on, s"loadUsingSource[")
+            Utils.trace(ctx.verbose2, s"loadUsingSource[")
             val cleanNs =
                 WdlNamespace.loadUsingSource(cleanWdlSrc, None, Some(List(resolver))) match {
                     case Success(x) => x
@@ -206,7 +201,7 @@ object NamespaceOps {
                                 |====================""".stripMargin)
                         throw f
                 }
-            Utils.trace(ctx.verbose.on, s"]")
+            Utils.trace(ctx.verbose2, s"]")
 
             // Clean up the new workflow. Remove unused imports.
             val cleanCef = new CompilerErrorFormatter(cef.resource, cleanNs.terminalMap)

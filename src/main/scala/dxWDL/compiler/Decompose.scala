@@ -431,7 +431,7 @@ object Decompose {
 
         // Prefix all the generated subworkflows with a consistent
         // string
-        val subwfPrefix = orgNode.workflow.unqualifiedName
+        val subwfPrefix = s"${orgNode.workflow.unqualifiedName}_"
 
         var node = orgNode
         var done = false
@@ -448,7 +448,7 @@ object Decompose {
                 case None => true
                 case Some(child) =>
                     Utils.trace(verbose.on, s"Decompose iteration ${counter.get}")
-                    val sbw = new Decompose(subwfPrefix + "_subwf", subwfNames, node.cef, verbose)
+                    val sbw = new Decompose(subwfPrefix, subwfNames, node.cef, verbose)
                     val (wf2, subWf) = sbw.apply(node.workflow, child)
                     node = node.cleanAfterRewrite(wf2, subWf, ctx, node.kind)
                     if (verbose2)
@@ -465,18 +465,18 @@ object Decompose {
     // Perform one reduction operation on each node that is not already
     // fully reduced. Note that this can create children requiring
     // additional passes.
-    def reduceEntireTree(nsTree: NamespaceOps.Tree,
-                         wdlSourceFile: Path,
-                         ctx: NamespaceOps.Context,
-                         counter: Counter,
-                         verbose: Verbose) : NamespaceOps.Tree = {
+    private def reduceEntireTree(nsTree: NamespaceOps.Tree,
+                                 wdlSourceFile: Path,
+                                 ctx: NamespaceOps.Context,
+                                 counter: Counter,
+                                 verbose: Verbose) : NamespaceOps.Tree = {
         nsTree match {
             case leaf: NamespaceOps.TreeLeaf =>
                 leaf
             case node: NamespaceOps.TreeNode =>
                 // recurse into the children
                 val children = node.children.map{ child =>
-                    apply(child, wdlSourceFile, ctx, verbose)
+                    reduceEntireTree(child, wdlSourceFile, ctx, counter, verbose)
                 }
                 val node1 = node.copy(children = children)
 
@@ -495,7 +495,7 @@ object Decompose {
     }
 
     // check if all the node in the tree have been reduced.
-    def isTreeFullyReduced(nsTree: NamespaceOps.Tree) : Boolean = {
+    private def isTreeFullyReduced(nsTree: NamespaceOps.Tree) : Boolean = {
         nsTree match {
             case _: NamespaceOps.TreeLeaf => true
             case node: NamespaceOps.TreeNode =>
@@ -509,10 +509,11 @@ object Decompose {
               ctx: NamespaceOps.Context,
               verbose: Verbose) : NamespaceOps.Tree = {
         // iterate on the tree until it is fully reduced
-        val counter = new Counter
+        val counter = new Counter()
         var nsTree = orgTree
-        while (!isTreeFullyReduced(nsTree))
+        while (!isTreeFullyReduced(nsTree)) {
             nsTree = reduceEntireTree(nsTree, wdlSourceFile, ctx, counter, verbose)
+        }
 
         if (verbose.on)
             NamespaceOps.prettyPrint(wdlSourceFile, nsTree, "subblocks", verbose)
