@@ -405,57 +405,118 @@ case class Decompose(subWorkflowPrefix: String,
 //    or, the remaining blocks contain a single call
 //
 object Decompose {
+    case class Counter() {
+        private var i = 0
 
-    def apply(nsTree: NamespaceOps.Tree,
-              wdlSourceFile: Path,
-              ctx: NamespaceOps.Context,
-              verbose: Verbose) : NamespaceOps.Tree = {
+        def get : Int = i
+
+        def increment() : Unit = {
+            if (i > Utils.MAX_NUM_REDUCE_ITERATIONS)
+                throw new Exception(
+                    s"""|Internal error: more than
+                        |${Utils.MAX_NUM_REDUCE_ITERATIONS} reduce iterations"""
+                        .stripMargin.replaceAll("\n", " "))
+            i = i + 1
+        }
+    }
+
+    // Reduce the top tree node until it becomes unreducible.
+    private def reduceNode(orgNode: NamespaceOps.TreeNode,
+                           wdlSourceFile: Path,
+                           ctx: NamespaceOps.Context,
+                           counter: Counter,
+                           verbose: Verbose) : NamespaceOps.Tree = {
         val verbose2:Boolean = verbose.keywords contains "decompose"
         Utils.trace(verbose.on, "Breaking sub-blocks into sub-workflows")
 
         // Prefix all the generated subworkflows with a consistent
         // string
-        val subwfPrefix = nsTree match {
-            case _: NamespaceOps.TreeLeaf => ""
-            case node: NamespaceOps.TreeNode => node.workflow.unqualifiedName
-        }
+        val subwfPrefix = orgNode.workflow.unqualifiedName
 
-        var tree = nsTree
-        var iter = 0
+        var node = orgNode
         var done = false
         val subwfNames = new NameBox(verbose)
         while (!done) {
-            done = tree match {
-                case leaf: NamespaceOps.TreeLeaf => true
-                case node: NamespaceOps.TreeNode =>
-                    //  1) Find the first reducible scatter/if block, If none exists, we are done.
-                    //  2) Split the children to those before and after the large-block.
-                    //     (beforeList, largeBlock, afterList)
-                    //  3) The beforeList doesn't change
-                    //  4) The largeBlock is decomposed into a sub-workflow and small block
-                    //  5) All references in afterList to results from the sub-workflow are
-                    //     renamed.
-                    Block.findReducibleChild(node.workflow.children.toVector, verbose) match {
-                        case None => true
-                        case Some(child) =>
-                            Utils.trace(verbose.on, s"Decompose iteration ${iter}")
-                            val sbw = new Decompose(subwfPrefix + "_subwf", subwfNames, node.cef, verbose)
-                            val (wf2, subWf) = sbw.apply(node.workflow, child)
-                            tree = node.cleanAfterRewrite(wf2, subWf, ctx, node.kind)
-                            if (verbose2)
-                                NamespaceOps.prettyPrint(wdlSourceFile, tree, s"subblocks_${iter}", verbose)
-                            iter = iter + 1
-                            false
-                    }
+            //  1) Find the first reducible scatter/if block, If none exists, we are done.
+            //  2) Split the children to those before and after the large-block.
+            //     (beforeList, largeBlock, afterList)
+            //  3) The beforeList doesn't change
+            //  4) The largeBlock is decomposed into a sub-workflow and small block
+            //  5) All references in afterList to results from the sub-workflow are
+            //     renamed.
+            done = Block.findReducibleChild(node.workflow.children.toVector, verbose) match {
+                case None => true
+                case Some(child) =>
+                    Utils.trace(verbose.on, s"Decompose iteration ${counter.get}")
+                    val sbw = new Decompose(subwfPrefix + "_subwf", subwfNames, node.cef, verbose)
+                    val (wf2, subWf) = sbw.apply(node.workflow, child)
+                    node = node.cleanAfterRewrite(wf2, subWf, ctx, node.kind)
+                    if (verbose2)
+                        NamespaceOps.prettyPrint(wdlSourceFile, node, s"subblocks_${counter.get}", verbose)
+                    counter.increment()
+                    false
             }
         }
-        if (verbose.on)
-            NamespaceOps.prettyPrint(wdlSourceFile, tree, "subblocks", verbose)
 
         // Mark the node as fully-reduced, so we do not try to reduce it again
-        tree match {
-            case leaf: NamespaceOps.TreeLeaf => leaf
-            case node: NamespaceOps.TreeNode => node.copy(fullyReduced = true)
+        node.copy(fullyReduced = true)
+    }
+
+    // Perform one reduction operation on each node that is not already
+    // fully reduced. Note that this can create children requiring
+    // additional passes.
+    def reduceEntireTree(nsTree: NamespaceOps.Tree,
+                         wdlSourceFile: Path,
+                         ctx: NamespaceOps.Context,
+                         counter: Counter,
+                         verbose: Verbose) : NamespaceOps.Tree = {
+        nsTree match {
+            case leaf: NamespaceOps.TreeLeaf =>
+                leaf
+            case node: NamespaceOps.TreeNode =>
+                // recurse into the children
+                val children = node.children.map{ child =>
+                    apply(child, wdlSourceFile, ctx, verbose)
+                }
+                val node1 = node.copy(children = children)
+
+                // reduce this node if needed
+                if (node1.fullyReduced) {
+                    node1
+                } else {
+                    // This operation leaves children that require reduction
+                    reduceNode(node1,
+                               wdlSourceFile,
+                               ctx,
+                               counter,
+                               verbose)
+                }
         }
+    }
+
+    // check if all the node in the tree have been reduced.
+    def isTreeFullyReduced(nsTree: NamespaceOps.Tree) : Boolean = {
+        nsTree match {
+            case _: NamespaceOps.TreeLeaf => true
+            case node: NamespaceOps.TreeNode =>
+                (node.fullyReduced &&
+                     node.children.forall(child => isTreeFullyReduced(child)))
+        }
+    }
+
+    def apply(orgTree: NamespaceOps.Tree,
+              wdlSourceFile: Path,
+              ctx: NamespaceOps.Context,
+              verbose: Verbose) : NamespaceOps.Tree = {
+        // iterate on the tree until it is fully reduced
+        val counter = new Counter
+        var nsTree = orgTree
+        while (!isTreeFullyReduced(nsTree))
+            nsTree = reduceEntireTree(nsTree, wdlSourceFile, ctx, counter, verbose)
+
+        if (verbose.on)
+            NamespaceOps.prettyPrint(wdlSourceFile, nsTree, "subblocks", verbose)
+
+        nsTree
     }
 }

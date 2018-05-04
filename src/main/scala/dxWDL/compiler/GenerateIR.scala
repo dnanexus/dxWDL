@@ -978,8 +978,12 @@ object GenerateIR {
                 //Utils.trace(verbose.on, s"node: callables = ${allCallables.keys}")
                 makeNamespace(name, Some(irWf), allCallables)
 
-            case NamespaceOps.TreeNode(_, _, _, _, _, _, false, _) =>
-                throw new Exception("Tree is not fully reduced")
+            case NamespaceOps.TreeNode(_, _, _, workflow, _, _, false, _) =>
+                val wdlCode = WdlPrettyPrinter(false, None).apply(workflow, 0).mkString("\n")
+                System.err.println(s"""|=== Workflow is not fully reduced ===
+                                       |${wdlCode}
+                                       |""".stripMargin)
+                throw new Exception("Internal error, tree is not fully reduced")
         }
         nsTree1
     }
