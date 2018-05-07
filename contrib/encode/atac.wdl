@@ -119,7 +119,8 @@ workflow atac {
 		call trim_adapter { input :
 			fastqs = fastqs_[i],
 			adapters = if length(adapters_)>0 then adapters_[i] else [],
-			paired_end = paired_end,
+		        paired_end = paired_end,
+                        auto_detect_adapter = true
 		}
 		# align trimmed/merged fastqs with bowtie2s
 		call bowtie2 { input :
@@ -462,7 +463,7 @@ task trim_adapter { # trim adapters and merge trimmed fastqs
 	Array[Array[String]] adapters 	# [merge_id][read_end_id]
 	Boolean paired_end
 	# mandatory
-        Boolean auto_detect_adapter = true		# automatically detect/trim adapters
+        Boolean auto_detect_adapter		# automatically detect/trim adapters
 	# optional
 	Int? min_trim_len 		# minimum trim length for cutadapt -m
 	Float? err_rate			# Maximum allowed adapter error rate
