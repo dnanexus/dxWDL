@@ -1,5 +1,8 @@
 # Release Notes
 
+## 0.62.1
+* Bug fix for case where optional optional types were generated. For example, `Int??`.
+
 ## 0.62
 
 * Nested scatters and if blocks
