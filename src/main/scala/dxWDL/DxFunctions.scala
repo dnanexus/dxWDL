@@ -9,7 +9,7 @@ import scala.collection.JavaConverters._
 import scala.collection.mutable.HashMap
 import spray.json._
 import wdl4s.parser.MemoryUnit
-import wdl.expression.WdlStandardLibraryFunctions
+import wdl.draft2.model.expression.WdlStandardLibraryFunctions
 import wom.TsvSerializable
 import wom.values._
 import wom.types._
@@ -108,7 +108,7 @@ object DxFunctions extends WdlStandardLibraryFunctions {
     private def writeContent(baseName: String, content: String): Try[WomFile] = {
         val tmpFile = Utils.tmpDirPath.resolve(s"$baseName-${content.md5Sum}.tmp")
         Files.write(tmpFile, content.getBytes(StandardCharsets.UTF_8))
-        Success(WomFile(tmpFile.toString))
+        Success(WomSingleFile(tmpFile.toString))
     }
 
     private def writeToTsv(params: Seq[Try[WomValue]],
@@ -175,14 +175,14 @@ object DxFunctions extends WdlStandardLibraryFunctions {
         val stdoutPath = getMetaDir().resolve("stdout")
         if (!Files.exists(stdoutPath))
             Utils.writeFileContent(stdoutPath, "")
-        Success(WomFile(stdoutPath.toString))
+        Success(WomSingleFile(stdoutPath.toString))
     }
 
     override def stderr(params: Seq[Try[WomValue]]): Try[WomFile] = {
         val stderrPath = getMetaDir().resolve("stderr")
         if (!Files.exists(stderrPath))
             Utils.writeFileContent(stderrPath, "")
-        Success(WomFile(stderrPath.toString))
+        Success(WomSingleFile(stderrPath.toString))
     }
 
     override def read_json(params: Seq[Try[WomValue]]): Try[WomValue] =

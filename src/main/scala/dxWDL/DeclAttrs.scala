@@ -1,7 +1,7 @@
 // Declaration attributes, an experimental extension
 package dxWDL
 
-import wdl.{Declaration, WdlTask}
+import wdl.draft2.model.{Declaration, WdlTask}
 import wom.values._
 import wom.types._
 
@@ -53,7 +53,7 @@ object DeclAttrs {
                     case None => throw new Exception(s"No variable ${varName}")
                     case Some(x) => x
                 }
-                if (Utils.stripOptional(decl.womType) != WomFileType) {
+                if (!Utils.stripOptional(decl.womType).isInstanceOf[WomFileType]) {
                     System.err.println(s"Warning: only files can be streamed ${varName} type=${decl.womType.toDisplayString}")
                     Map.empty
                 } else {

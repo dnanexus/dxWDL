@@ -13,8 +13,8 @@ import ExecutionContext.Implicits.global
 import scala.sys.process._
 import spray.json._
 import wdl._
-import wdl.expression._
-import wdl.types._
+import wdl.draft2.model.expression._
+import wdl.draft2.model.types._
 import wom.types._
 import wom.values._
 
