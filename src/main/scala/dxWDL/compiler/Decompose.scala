@@ -122,7 +122,7 @@ case class Decompose(subWorkflowPrefix: String,
                 innerVars.map{ dVar => dVar.copy(womType = WomArrayType(dVar.womType)) }
             case condStmt:If =>
                 val innerVars = blockOutputsAll(condStmt.children.toVector)
-                innerVars.map{ dVar => dVar.copy(womType = WomOptionalType(dVar.womType)) }
+                innerVars.map{ dVar => dVar.copy(womType = Utils.makeOptional(dVar.womType)) }
 
             case x =>
                 throw new Exception(cef.notCurrentlySupported(

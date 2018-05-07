@@ -11,6 +11,7 @@ import scala.collection.mutable.HashMap
 import wdl._
 import wdl4s.parser.WdlParser.{Terminal}
 import wom.core.WorkflowSource
+import wom.types._
 
 object NamespaceOps {
 
@@ -151,6 +152,37 @@ object NamespaceOps {
             accessed
         }
 
+        private def reportError(ns: WdlNamespace) : Unit = {
+            val lines = WdlPrettyPrinter(true).apply(ns, 0).mkString("\n")
+            System.err.println(
+                s"""|=== NamespaceOps ===
+                    |Generated an invalid WDL namespace
+                    |
+                    |${lines}
+                    |====================""".stripMargin)
+        }
+
+        private def validate(ns: WdlNamespace) : Unit = {
+            ns match {
+                case nswf:WdlNamespaceWithWorkflow =>
+                    val wfOutputs: Vector[WorkflowOutput] =
+                        workflow.children.filter(x => x.isInstanceOf[WorkflowOutput])
+                            .map(_.asInstanceOf[WorkflowOutput])
+                            .toVector
+
+                    // make sure we don't generate double optional types like [Int??]
+                    wfOutputs.foreach { wot =>
+                        wot.womType match {
+                            case WomOptionalType(WomOptionalType(_)) =>
+                                reportError(ns)
+                                throw new Exception(s"Bad type ${wot.womType.toDisplayString}")
+                            case _ => ()
+                        }
+                    }
+                case _ => ()
+            }
+        }
+
         // prune unused imports, and create a namespace from a workflow
         private def toNamespace(wf: WdlWorkflow) : WdlNamespaceWithWorkflow = {
             new WdlNamespaceWithWorkflow(
@@ -192,16 +224,11 @@ object NamespaceOps {
                 WdlNamespace.loadUsingSource(cleanWdlSrc, None, Some(List(resolver))) match {
                     case Success(x) => x
                     case Failure(f) =>
-                        val lines = WdlPrettyPrinter(true).apply(ns, 0).mkString("\n")
-                        System.err.println(
-                            s"""|=== NamespaceOps ===
-                                |Generated an invalid WDL namespace
-                                |
-                                |${lines}
-                                |====================""".stripMargin)
+                        reportError(ns)
                         throw f
                 }
             Utils.trace(ctx.verbose2, s"]")
+            validate(ns)
 
             // Clean up the new workflow. Remove unused imports.
             val cleanCef = new CompilerErrorFormatter(cef.resource, cleanNs.terminalMap)

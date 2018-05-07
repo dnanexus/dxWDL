@@ -7,7 +7,7 @@ import org.scalatest.{FlatSpec, Matchers}
 class DecomposeTest extends FlatSpec with Matchers {
     lazy val currentWorkDir:Path = Paths.get(System.getProperty("user.dir"))
     private def pathFromBasename(basename: String) : Path = {
-        currentWorkDir.resolve(s"src/test/resources/decompose_blocks/${basename}")
+        currentWorkDir.resolve(s"src/test/resources/decompose/${basename}")
     }
 
 
@@ -49,6 +49,13 @@ class DecomposeTest extends FlatSpec with Matchers {
 
     it should "recogonize member accesses when calculating free variables" in {
         val path = pathFromBasename("map.wdl")
+        Main.compile(
+            List(path.toString, "--compileMode", "ir", "--locked", "--quiet")
+        ) should equal(Main.SuccessfulTermination(""))
+    }
+
+    it should "deal with deep conditionals without creating optional optional types" in {
+        val path = pathFromBasename("deep_conditionals.wdl")
         Main.compile(
             List(path.toString, "--compileMode", "ir", "--locked", "--quiet")
         ) should equal(Main.SuccessfulTermination(""))
