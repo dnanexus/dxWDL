@@ -49,7 +49,7 @@ import dxWDL.{Verbose, Utils, WdlPrettyPrinter}
 import java.nio.file.{Files, Path}
 import scala.collection.JavaConverters._
 import scala.util.{Failure, Success}
-import wdl.{WdlTask, WdlNamespace}
+import wdl.draft2.model.{WdlTask, WdlNamespace}
 import wom.types._
 
 case class DxNI(ns: WdlNamespace, verbose: Verbose) {
@@ -64,12 +64,12 @@ case class DxNI(ns: WdlNamespace, verbose: Verbose) {
             case IOClass.INT => WomOptionalType(WomIntegerType)
             case IOClass.FLOAT => WomOptionalType(WomFloatType)
             case IOClass.STRING => WomOptionalType(WomStringType)
-            case IOClass.FILE => WomOptionalType(WomFileType)
+            case IOClass.FILE => WomOptionalType(WomSingleFileType)
             case IOClass.ARRAY_OF_BOOLEANS => WomMaybeEmptyArrayType(WomBooleanType)
             case IOClass.ARRAY_OF_INTS => WomMaybeEmptyArrayType(WomIntegerType)
             case IOClass.ARRAY_OF_FLOATS => WomMaybeEmptyArrayType(WomFloatType)
             case IOClass.ARRAY_OF_STRINGS => WomMaybeEmptyArrayType(WomStringType)
-            case IOClass.ARRAY_OF_FILES => WomMaybeEmptyArrayType(WomFileType)
+            case IOClass.ARRAY_OF_FILES => WomMaybeEmptyArrayType(WomSingleFileType)
             case _ => throw new Exception(
                 s"""|Cannot call applet ${appletName} from WDL, argument ${argName}
                     |has IO class ${ioClass}""".stripMargin.replaceAll("\n", " "))
@@ -80,12 +80,12 @@ case class DxNI(ns: WdlNamespace, verbose: Verbose) {
                 case IOClass.INT => WomIntegerType
                 case IOClass.FLOAT => WomFloatType
                 case IOClass.STRING => WomStringType
-                case IOClass.FILE => WomFileType
+                case IOClass.FILE => WomSingleFileType
                 case IOClass.ARRAY_OF_BOOLEANS => WomNonEmptyArrayType(WomBooleanType)
                 case IOClass.ARRAY_OF_INTS => WomNonEmptyArrayType(WomIntegerType)
                 case IOClass.ARRAY_OF_FLOATS => WomNonEmptyArrayType(WomFloatType)
                 case IOClass.ARRAY_OF_STRINGS => WomNonEmptyArrayType(WomStringType)
-                case IOClass.ARRAY_OF_FILES => WomNonEmptyArrayType(WomFileType)
+                case IOClass.ARRAY_OF_FILES => WomNonEmptyArrayType(WomSingleFileType)
                 case _ => throw new Exception(
                     s"""|Cannot call applet ${appletName} from WDL, argument ${argName}
                         |has IO class ${ioClass}""".stripMargin.replaceAll("\n", " "))

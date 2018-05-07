@@ -6,7 +6,7 @@ import java.nio.file.{Path, Paths}
 import scala.collection.mutable.HashMap
 import spray.json._
 import spray.json.JsString
-import wdl.{WdlNamespace, WdlTask, WdlNamespaceWithWorkflow, WdlWorkflow}
+import wdl.draft2.model.{WdlNamespace, WdlTask, WdlNamespaceWithWorkflow, WdlWorkflow}
 
 object Main extends App {
     sealed trait Termination

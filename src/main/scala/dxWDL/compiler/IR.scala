@@ -12,13 +12,13 @@ import com.dnanexus.DXRecord
 import dxWDL.{DeclAttrs, Utils, WdlPrettyPrinter}
 import net.jcazevedo.moultingyaml._
 import spray.json._
-import wdl.WdlNamespace
-import wdl.types._
+import wdl.draft2.model.WdlNamespace
+import wdl.draft2.model.types._
 import wom.types.WomType
 import wom.values._
 
 object IR {
-    private val INVALID_AST = wdl.AstTools.getAst("", "")
+    private val INVALID_AST =  wdl.draft2.model.AstTools.getAst("", "")
 
     // Compile time representation of a variable. Used also as
     // an applet argument. We keep track of the syntax-tree, for error
@@ -30,7 +30,7 @@ object IR {
     case class CVar(name: String,
                     womType: WomType,
                     attrs: DeclAttrs,
-                    ast: wdl4s.parser.WdlParser.Ast) {
+                    ast: wdl.draft2.parser.WdlParser.Ast) {
         // dx does not allow dots in variable names, so we
         // convert them to underscores.
         //

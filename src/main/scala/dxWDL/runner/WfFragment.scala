@@ -41,7 +41,7 @@ import dxWDL._
 import java.nio.file.{Path, Paths, Files}
 import scala.util.{Failure, Success}
 import spray.json._
-import wdl._
+import wdl.draft2.model._
 import wom.values._
 import wom.types._
 

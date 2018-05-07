@@ -2,8 +2,8 @@ package dxWDL
 
 import org.scalatest.{FlatSpec, Matchers}
 import scala.util.{Failure, Success}
-import wdl._
-import wdl.expression._
+import wdl.draft2.model._
+import wdl.draft2.model.expression._
 import wom.types._
 
 class TypeEvalTest extends FlatSpec with Matchers {
@@ -114,7 +114,7 @@ class TypeEvalTest extends FlatSpec with Matchers {
         val e1 = copy2call.inputMappings("src")
         val t1 = evalType(e1, copy2call)
         //System.err.println(s"type(${e1.toWomString}) = ${t1.toWomString}")
-        t1 should equal(WomFileType)
+        t1 should equal(WomSingleFileType)
 
         val e2 = copy2call.inputMappings("basename")
         evalType(e2, copy2call) should equal(WomStringType)

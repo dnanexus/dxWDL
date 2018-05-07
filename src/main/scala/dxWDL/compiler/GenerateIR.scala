@@ -7,10 +7,10 @@ import dxWDL.Utils
 import IR.{CVar, LinkedVar, SArg}
 import scala.util.{Failure, Success, Try}
 import scala.util.matching.Regex.Match
-import wdl._
-import wdl.expression._
-import wdl4s.parser.WdlParser.{Ast, Terminal}
-import wdl.WdlExpression.AstForExpressions
+import wdl.draft2.model._
+import wdl.draft2.model.expression._
+import wdl.draft2.parser.WdlParser.{Ast, Terminal}
+import wdl.draft2.model.WdlExpression.AstForExpressions
 import wom.types._
 import wom.values._
 

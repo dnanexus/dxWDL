@@ -4,7 +4,7 @@ import dxWDL.{Main, WdlPrettyPrinter}
 import java.nio.file.{Path, Paths}
 import org.scalatest.{FlatSpec, Matchers}
 import org.scalatest.Inside._
-import wdl._
+import wdl.draft2.model._
 
 // These tests involve compilation -without- access to the platform.
 //

@@ -1,9 +1,9 @@
 package dxWDL
 
 import org.scalatest.{FlatSpec, Matchers}
-import wdl._
-import wdl.AstTools.EnhancedAstNode
-import wdl.types.WdlCallOutputsObjectType
+import wdl.draft2.model._
+import wdl.draft2.model.AstTools.EnhancedAstNode
+import wdl.draft2.model.types.WdlCallOutputsObjectType
 
 class Wdl4sTest extends FlatSpec with Matchers {
 

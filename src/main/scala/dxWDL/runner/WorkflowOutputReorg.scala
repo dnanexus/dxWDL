@@ -15,7 +15,7 @@ import dxWDL.WdlVarLinks.yaml
 import net.jcazevedo.moultingyaml._
 import scala.collection.JavaConverters._
 import spray.json._
-import wdl.WdlWorkflow
+import wdl.draft2.model.WdlWorkflow
 
 
 case class WorkflowOutputReorg(verbose: Boolean) {

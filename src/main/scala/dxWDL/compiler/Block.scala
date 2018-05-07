@@ -28,7 +28,7 @@
 package dxWDL.compiler
 
 import dxWDL.{Verbose}
-import wdl._
+import wdl.draft2.model._
 
 // Find all the calls inside a statement block
 case class Block(statements: Vector[Scope]) {

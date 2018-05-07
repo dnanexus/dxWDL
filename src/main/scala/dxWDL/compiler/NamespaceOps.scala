@@ -8,8 +8,8 @@ import java.nio.file.{Path, Paths}
 import java.io.{FileWriter, PrintWriter}
 import scala.util.{Failure, Success}
 import scala.collection.mutable.HashMap
-import wdl._
-import wdl4s.parser.WdlParser.{Terminal}
+import wdl.draft2.model._
+import wdl.draft2.parser.WdlParser.{Terminal}
 import wom.core.WorkflowSource
 import wom.types._
 

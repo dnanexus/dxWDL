@@ -206,31 +206,37 @@ object DxFunctions extends WdlStandardLibraryFunctions {
     override def size(params: Seq[Try[WomValue]]): Try[WomFloat] = {
         // Inner function: is this a file type, or an optional containing a file type?
         def isOptionalOfFileType(wdlType: WomType): Boolean = wdlType match {
-            case f if WomFileType.isCoerceableFrom(f) => true
+            case WomSingleFileType => true
+            case WomStringType => true
             case WomOptionalType(inner) => isOptionalOfFileType(inner)
             case _ => false
         }
 
+        def getFileSize(fileName: String) : Double = {
+            // If this is not an absolute path, we assume the file
+            // is located in the DX home directory
+            val path:String =
+                if (fileName.startsWith("/")) fileName
+                else dxHomeDir.resolve(fileName).toString
+            val fSize:Long = remoteFiles.get(path) match {
+                case Some(dxFile) =>
+                    // File has not been downloaded yet.
+                    // Query the platform how big it is; do not download it.
+                    dxFile.describe().getSize()
+                case None =>
+                    // File is local
+                    val p = Paths.get(fileName)
+                    p.toFile.length
+            }
+            fSize.toDouble
+        }
+
         // Inner function: Get the file size, allowing for unpacking of optionals
         def optionalSafeFileSize(value: WomValue): Double = value match {
-            case f if f.isInstanceOf[WomFile] || WomFileType.isCoerceableFrom(f.womType) =>
-                // If this is not an absolute path, we assume the file
-                // is located in the DX home directory
-                val fileName = f.valueString
-                val path:String =
-                    if (fileName.startsWith("/")) fileName
-                    else dxHomeDir.resolve(fileName).toString
-                val fSize:Long = remoteFiles.get(path) match {
-                    case Some(dxFile) =>
-                        // File has not been downloaded yet.
-                        // Query the platform how big it is; do not download it.
-                        dxFile.describe().getSize()
-                    case None =>
-                        // File is local
-                        val p = Paths.get(fileName)
-                        p.toFile.length
-                }
-                fSize.toDouble
+            case WomString(f) =>
+                getFileSize(f)
+            case f if f.isInstanceOf[WomFile] =>
+                getFileSize(f.valueString)
             case WomOptionalValue(_, Some(o)) => optionalSafeFileSize(o)
             case WomOptionalValue(f, None) if isOptionalOfFileType(f) => 0d
             case _ => throw new Exception(

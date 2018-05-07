@@ -1,7 +1,7 @@
 package dxWDL.compiler
 
 import dxWDL.{CompilerErrorFormatter, Utils, Verbose}
-import wdl._
+import wdl.draft2.model._
 
 case class FreeVarAnalysis(cef: CompilerErrorFormatter,
                            verbose: Verbose) {

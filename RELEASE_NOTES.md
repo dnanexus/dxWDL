@@ -1,5 +1,8 @@
 # Release Notes
 
+## 0.63
+* Upgrade to cromwell-31 WDL/WOM library
+
 ## 0.62.1
 * Bug fix for case where optional optional types were generated. For example, `Int??`.
 
