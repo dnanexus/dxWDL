@@ -5,8 +5,8 @@ package dxWDL.compiler
 // with the source WDL is straight-forward
 //
 import dxWDL.{CompilerErrorFormatter, Utils, Verbose}
-import wdl._
-import wdl4s.parser.WdlParser.Ast
+import wdl.draft2.model._
+import wdl.draft2.parser.WdlParser.Ast
 import wom.types._
 
 case class Validate(cef: CompilerErrorFormatter,

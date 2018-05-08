@@ -13,7 +13,7 @@ class RunnerTaskTest extends FlatSpec with Matchers {
             WomInteger(3),
             WomFloat(4.5),
             WomString("flute"),
-            WomFile("invalid-file"),
+            WomSingleFile("invalid-file"),
 
             WomArray(WomArrayType(WomIntegerType),
                      List(WomInteger(3), WomInteger(15))),

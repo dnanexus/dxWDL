@@ -12,9 +12,9 @@ import scala.util.{Failure, Success}
 import ExecutionContext.Implicits.global
 import scala.sys.process._
 import spray.json._
-import wdl._
-import wdl.expression._
-import wdl.types._
+import wdl.draft2.model._
+import wdl.draft2.model.expression._
+import wdl.draft2.model.types._
 import wom.types._
 import wom.values._
 
@@ -138,12 +138,12 @@ object Utils {
     // Is this a WDL type that maps to a native DX type?
     def isNativeDxType(wdlType: WomType) : Boolean = {
         wdlType match {
-            case WomBooleanType | WomIntegerType | WomFloatType | WomStringType | WomFileType
+            case WomBooleanType | WomIntegerType | WomFloatType | WomStringType | WomSingleFileType
                    | WomArrayType(WomBooleanType)
                    | WomArrayType(WomIntegerType)
                    | WomArrayType(WomFloatType)
                    | WomArrayType(WomStringType)
-                   | WomArrayType(WomFileType) => true
+                   | WomArrayType(WomSingleFileType) => true
             case WomOptionalType(t) => isNativeDxType(t)
             case _ => false
         }

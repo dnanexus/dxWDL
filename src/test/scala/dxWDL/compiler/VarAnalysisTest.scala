@@ -1,7 +1,7 @@
 package dxWDL.compiler
 
 import dxWDL.{CompilerErrorFormatter, Verbose}
-import wdl._
+import wdl.draft2.model._
 
 import org.scalatest.{FlatSpec, Matchers}
 

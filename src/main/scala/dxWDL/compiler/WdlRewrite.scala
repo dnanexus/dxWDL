@@ -11,10 +11,10 @@ package dxWDL.compiler
 
 import dxWDL.Utils
 import com.dnanexus.{DXRecord}
-import wdl._
-import wdl.AstTools
-import wdl.AstTools._
-import wdl4s.parser.WdlParser.{Ast, Terminal}
+import wdl.draft2.model._
+import wdl.draft2.model.AstTools
+import wdl.draft2.model.AstTools._
+import wdl.draft2.parser.WdlParser.{Ast, Terminal}
 import wom.core.WorkflowSource
 import wom.types._
 import wom.values._
@@ -131,7 +131,7 @@ object WdlRewrite {
             case WomIntegerType => WomInteger(0)
             case WomFloatType => WomFloat(0.0)
             case WomStringType => WomString("")
-            case WomFileType => WomFile("")
+            case WomSingleFileType => WomSingleFile("")
 
             case WomOptionalType(t) => genDefaultValueOfType(t)
 
@@ -257,7 +257,7 @@ object WdlRewrite {
     def cond [Child <: Scope] (old: If,
                                children: Seq[Child],
                                condition: WdlExpression): If = {
-        val fresh = wdl.If(old.index, condition, INVALID_AST)
+        val fresh = wdl.draft2.model.If(old.index, condition, INVALID_AST)
         fresh.children = children
         updateScope(old, fresh)
         fresh

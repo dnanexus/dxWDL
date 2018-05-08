@@ -22,7 +22,7 @@ package dxWDL.runner
 // DX bindings
 import spray.json._
 import dxWDL._
-import wdl.{Declaration, DeclarationInterface, WdlExpression, WdlWorkflow, WorkflowOutput}
+import wdl.draft2.model.{Declaration, DeclarationInterface, WdlExpression, WdlWorkflow, WorkflowOutput}
 import wom.types._
 import wom.values._
 

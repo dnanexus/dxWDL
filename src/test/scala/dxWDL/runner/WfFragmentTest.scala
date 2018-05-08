@@ -4,7 +4,7 @@ import dxWDL._
 import java.nio.file.{Path, Paths}
 import org.scalatest.{FlatSpec, Matchers}
 import spray.json._
-import wdl._
+import wdl.draft2.model._
 import wom.types._
 import wom.values._
 

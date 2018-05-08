@@ -117,19 +117,19 @@ case class Native(dxWDLrtId: String,
                 case WomIntegerType => mkPrimitive("int", optional)
                 case WomFloatType => mkPrimitive("float", optional)
                 case WomStringType =>mkPrimitive("string", optional)
-                case WomFileType => mkPrimitive("file", optional)
+                case WomSingleFileType => mkPrimitive("file", optional)
 
                 // single dimension arrays of primitive types
                 case WomNonEmptyArrayType(WomBooleanType) => mkPrimitiveArray("boolean", optional)
                 case WomNonEmptyArrayType(WomIntegerType) => mkPrimitiveArray("int", optional)
                 case WomNonEmptyArrayType(WomFloatType) => mkPrimitiveArray("float", optional)
                 case WomNonEmptyArrayType(WomStringType) => mkPrimitiveArray("string", optional)
-                case WomNonEmptyArrayType(WomFileType) => mkPrimitiveArray("file", optional)
+                case WomNonEmptyArrayType(WomSingleFileType) => mkPrimitiveArray("file", optional)
                 case WomMaybeEmptyArrayType(WomBooleanType) => mkPrimitiveArray("boolean", true)
                 case WomMaybeEmptyArrayType(WomIntegerType) => mkPrimitiveArray("int", true)
                 case WomMaybeEmptyArrayType(WomFloatType) => mkPrimitiveArray("float", true)
                 case WomMaybeEmptyArrayType(WomStringType) => mkPrimitiveArray("string", true)
-                case WomMaybeEmptyArrayType(WomFileType) => mkPrimitiveArray("file", true)
+                case WomMaybeEmptyArrayType(WomSingleFileType) => mkPrimitiveArray("file", true)
 
                 // complex type, that may contains files
                 case _ => mkComplex(optional)

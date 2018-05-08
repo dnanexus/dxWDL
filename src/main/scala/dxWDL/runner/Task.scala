@@ -24,9 +24,8 @@ import dxWDL._
 import java.nio.file.{Path, Paths}
 import scala.collection.mutable.HashMap
 import spray.json._
-import wdl.{Declaration, DeclarationInterface, WdlExpression, WdlTask}
-import wdl.types.WdlFlavoredWomType
-import wom.InstantiatedCommand
+import wdl.draft2.model.{Declaration, DeclarationInterface, WdlExpression, WdlTask}
+import wdl.draft2.model.types.WdlFlavoredWomType
 import wom.values._
 import wom.types._
 
@@ -41,8 +40,8 @@ private [dxWDL] object TaskSerialization {
             case (WomFloatType, WomFloat(x)) => JsNumber(x)
             case (WomStringType, WomString(s)) => JsString(s)
             case (WomStringType, WomSingleFile(path)) => JsString(path)
-            case (WomFileType, WomSingleFile(path)) => JsString(path)
-            case (WomFileType, WomString(path)) => JsString(path)
+            case (WomSingleFileType, WomSingleFile(path)) => JsString(path)
+            case (WomSingleFileType, WomString(path)) => JsString(path)
 
             // arrays
             // Base case: empty array
@@ -76,7 +75,7 @@ private [dxWDL] object TaskSerialization {
 
             // keys are strings, requiring no conversion. We do
             // need to carry the types are runtime.
-            case (WomObjectType, WomObject(m: Map[String, WomValue])) =>
+            case (WomObjectType, WomObject(m: Map[String, WomValue], _)) =>
                 JsObject(m.map{ case (k, v) =>
                              k -> JsObject(
                                  "type" -> JsString(v.womType.toDisplayString),
@@ -113,7 +112,7 @@ private [dxWDL] object TaskSerialization {
             case (WomIntegerType, JsNumber(bnm)) => WomInteger(bnm.intValue)
             case (WomFloatType, JsNumber(bnm)) => WomFloat(bnm.doubleValue)
             case (WomStringType, JsString(s)) => WomString(s)
-            case (WomFileType, JsString(path)) => WomSingleFile(path)
+            case (WomSingleFileType, JsString(path)) => WomSingleFile(path)
 
             // arrays
             case (WomArrayType(t), JsArray(vec)) =>
@@ -321,8 +320,8 @@ case class Task(task:WdlTask,
                 }
                 decl -> wdlValue
         }.toMap
-        val womInstantiation = task.instantiateCommand(cmdEnv, DxFunctions)
-        val InstantiatedCommand(shellCmd, _) = womInstantiation.toTry.get
+        val womInstantiation = task.instantiateCommand(cmdEnv, DxFunctions).toTry.get
+        val command = womInstantiation.head.commandString
 
         // This is based on Cromwell code from
         // [BackgroundAsyncJobExecutionActor.scala].  Generate a bash
@@ -337,7 +336,7 @@ case class Task(task:WdlTask,
         //    <     redirect stdin
         //
         val script =
-            if (shellCmd.isEmpty) {
+            if (command.isEmpty) {
                 s"""|#!/bin/bash
                     |echo 0 > ${rcPath}
                     |""".stripMargin.trim + "\n"
@@ -345,7 +344,7 @@ case class Task(task:WdlTask,
                 s"""|#!/bin/bash
                     |(
                     |    cd ${Utils.DX_HOME}
-                    |    ${shellCmd}
+                    |    ${command}
                     |) \\
                     |  > >( tee ${stdoutPath} ) \\
                     |  2> >( tee ${stderrPath} >&2 )

@@ -15,9 +15,9 @@ package dxWDL
 
 import scala.util.{Failure, Success}
 import Utils.{COMMAND_DEFAULT_BRACKETS, COMMAND_HEREDOC_BRACKETS}
-import wdl._
-import wdl.AstTools.EnhancedAstNode
-import wdl.command.{WdlCommandPart, ParameterCommandPart, StringCommandPart}
+import wdl.draft2.model._
+import wdl.draft2.model.AstTools.EnhancedAstNode
+import wdl.draft2.model.command.{WdlCommandPart, ParameterCommandPart, StringCommandPart}
 
 
 // The callablesMovedToLibrary:

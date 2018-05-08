@@ -15,7 +15,7 @@ package dxWDL.compiler
 import dxWDL.{CompilerErrorFormatter, Utils, Verbose}
 import scala.util.matching.Regex
 import scala.util.matching.Regex.Match
-import wdl._
+import wdl.draft2.model._
 
 // dict: variables to rename. ("Add.result" -> "subwf_Add.out_result")
 //

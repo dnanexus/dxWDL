@@ -5,7 +5,7 @@ import net.jcazevedo.moultingyaml._
 import org.scalatest.{FlatSpec, Matchers}
 import scala.collection.JavaConverters._
 import spray.json._
-import wdl._
+import wdl.draft2.model._
 import wom.types._
 import wom.values._
 

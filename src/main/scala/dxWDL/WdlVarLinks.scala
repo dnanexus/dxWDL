@@ -28,8 +28,8 @@ import net.jcazevedo.moultingyaml._
 import spray.json._
 import Utils.{appletLog, dxFileFromJsValue, dxFileToJsValue,
     DX_URL_PREFIX, DXWorkflowStage, FLAT_FILES_SUFFIX, isNativeDxType}
-import wdl.{WdlTask}
-import wdl.types.WdlFlavoredWomType
+import wdl.draft2.model.{WdlTask}
+import wdl.draft2.model.types.WdlFlavoredWomType
 import wom.types._
 import wom.values._
 
@@ -118,7 +118,7 @@ object WdlVarLinks {
 
     // Get the file-id
     def getDxFile(wvl: WdlVarLinks) : DXFile = {
-        assert(Utils.stripOptional(wvl.womType) == WomFileType)
+        assert(Utils.stripOptional(wvl.womType) == WomSingleFileType)
         wvl.dxlink match {
             case DxlValue(jsn) =>
                 val dxFiles = findDxFiles(jsn)
@@ -243,7 +243,7 @@ object WdlVarLinks {
             case (WomIntegerType, JsNumber(bnm)) => WomInteger(bnm.intValue)
             case (WomFloatType, JsNumber(bnm)) => WomFloat(bnm.doubleValue)
             case (WomStringType, JsString(s)) => WomString(s)
-            case (WomFileType, _) => evalCoreHandleFile(jsValue, ioMode, ioDir)
+            case (WomSingleFileType, _) => evalCoreHandleFile(jsValue, ioMode, ioDir)
 
             // Maps. These are serialized as an object with a keys array and
             // a values array.
@@ -371,8 +371,8 @@ object WdlVarLinks {
 
         (womType, womValue) match {
             // Base case: primitive types
-            case (WomFileType, WomString(path)) => handleFile(path)
-            case (WomFileType, WomSingleFile(path)) => handleFile(path)
+            case (WomSingleFileType, WomString(path)) => handleFile(path)
+            case (WomSingleFileType, WomSingleFile(path)) => handleFile(path)
             case (WomStringType, WomSingleFile(path)) => JsString(path)
             case (WomStringType, WomString(buf)) =>
                 if (buf.length > Utils.MAX_STRING_LEN)
@@ -434,7 +434,7 @@ object WdlVarLinks {
 
             // keys are strings, requiring no conversion. Because objects
             // are not statically typed, we need to carry the types at runtime.
-            case (WomObjectType, WomObject(m: Map[String, WomValue])) =>
+            case (WomObjectType, WomObject(m: Map[String, WomValue], _)) =>
                 val jsm:Map[String, JsValue] = m.map{ case (key, w:WomValue) =>
                     key -> JsObject("type" -> JsString(w.womType.toDisplayString),
                                     "value" -> jsFromWomValue(w.womType, w, ioDir))
@@ -542,12 +542,12 @@ object WdlVarLinks {
                         case IOClass.INT => WomOptionalType(WomIntegerType)
                         case IOClass.FLOAT => WomOptionalType(WomFloatType)
                         case IOClass.STRING => WomOptionalType(WomStringType)
-                        case IOClass.FILE => WomOptionalType(WomFileType)
+                        case IOClass.FILE => WomOptionalType(WomSingleFileType)
                         case IOClass.ARRAY_OF_BOOLEANS => WomMaybeEmptyArrayType(WomBooleanType)
                         case IOClass.ARRAY_OF_INTS => WomMaybeEmptyArrayType(WomIntegerType)
                         case IOClass.ARRAY_OF_FLOATS => WomMaybeEmptyArrayType(WomFloatType)
                         case IOClass.ARRAY_OF_STRINGS => WomMaybeEmptyArrayType(WomStringType)
-                        case IOClass.ARRAY_OF_FILES => WomMaybeEmptyArrayType(WomFileType)
+                        case IOClass.ARRAY_OF_FILES => WomMaybeEmptyArrayType(WomSingleFileType)
                         case other => throw new Exception(s"unhandled IO class ${other}")
                     }
                 } else {
@@ -556,12 +556,12 @@ object WdlVarLinks {
                         case IOClass.INT => WomIntegerType
                         case IOClass.FLOAT => WomFloatType
                         case IOClass.STRING => WomStringType
-                        case IOClass.FILE => WomFileType
+                        case IOClass.FILE => WomSingleFileType
                         case IOClass.ARRAY_OF_BOOLEANS => WomNonEmptyArrayType(WomBooleanType)
                         case IOClass.ARRAY_OF_INTS => WomNonEmptyArrayType(WomIntegerType)
                         case IOClass.ARRAY_OF_FLOATS => WomNonEmptyArrayType(WomFloatType)
                         case IOClass.ARRAY_OF_STRINGS => WomNonEmptyArrayType(WomStringType)
-                        case IOClass.ARRAY_OF_FILES => WomNonEmptyArrayType(WomFileType)
+                        case IOClass.ARRAY_OF_FILES => WomNonEmptyArrayType(WomSingleFileType)
                         case other => throw new Exception(s"unhandled IO class ${other}")
                     }
                 }
@@ -580,24 +580,24 @@ object WdlVarLinks {
             case WomOptionalType(WomIntegerType) => DXIOParam(IOClass.INT, true)
             case WomOptionalType(WomFloatType) => DXIOParam(IOClass.FLOAT, true)
             case WomOptionalType(WomStringType) => DXIOParam(IOClass.STRING, true)
-            case WomOptionalType(WomFileType) => DXIOParam(IOClass.FILE, true)
+            case WomOptionalType(WomSingleFileType) => DXIOParam(IOClass.FILE, true)
             case WomMaybeEmptyArrayType(WomBooleanType) => DXIOParam(IOClass.ARRAY_OF_BOOLEANS, true)
             case WomMaybeEmptyArrayType(WomIntegerType) => DXIOParam(IOClass.ARRAY_OF_INTS, true)
             case WomMaybeEmptyArrayType(WomFloatType) => DXIOParam(IOClass.ARRAY_OF_FLOATS, true)
             case WomMaybeEmptyArrayType(WomStringType) => DXIOParam(IOClass.ARRAY_OF_STRINGS, true)
-            case WomMaybeEmptyArrayType(WomFileType) => DXIOParam(IOClass.ARRAY_OF_FILES, true)
+            case WomMaybeEmptyArrayType(WomSingleFileType) => DXIOParam(IOClass.ARRAY_OF_FILES, true)
 
             // compulsory dx:native types
             case WomBooleanType => DXIOParam(IOClass.BOOLEAN, false)
             case WomIntegerType => DXIOParam(IOClass.INT, false)
             case WomFloatType => DXIOParam(IOClass.FLOAT, false)
             case WomStringType => DXIOParam(IOClass.STRING, false)
-            case WomFileType => DXIOParam(IOClass.FILE, false)
+            case WomSingleFileType => DXIOParam(IOClass.FILE, false)
             case WomNonEmptyArrayType(WomBooleanType) => DXIOParam(IOClass.ARRAY_OF_BOOLEANS, false)
             case WomNonEmptyArrayType(WomIntegerType) => DXIOParam(IOClass.ARRAY_OF_INTS, false)
             case WomNonEmptyArrayType(WomFloatType) => DXIOParam(IOClass.ARRAY_OF_FLOATS, false)
             case WomNonEmptyArrayType(WomStringType) => DXIOParam(IOClass.ARRAY_OF_STRINGS, false)
-            case WomNonEmptyArrayType(WomFileType) => DXIOParam(IOClass.ARRAY_OF_FILES, false)
+            case WomNonEmptyArrayType(WomSingleFileType) => DXIOParam(IOClass.ARRAY_OF_FILES, false)
 
             // non dx:native types, thse are converted to hashes
             case WomOptionalType(_) => DXIOParam(IOClass.HASH, true)
@@ -624,7 +624,7 @@ object WdlVarLinks {
             case (WomIntegerType, JsNumber(_)) => jsv
             case (WomFloatType, JsNumber(_)) => jsv
             case (WomStringType, JsString(_)) => jsv
-            case (WomFileType, JsObject(_)) => jsv
+            case (WomSingleFileType, JsObject(_)) => jsv
 
             // Maps. Since these have string values, they are, essentially,
             // mapped to WDL maps of type Map[String, T].

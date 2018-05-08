@@ -1,8 +1,8 @@
 package dxWDL
 
-import wdl4s.parser.WdlParser._
-import wdl.AstTools
-import wdl.{WdlExpression, WdlCall, WorkflowOutput}
+import wdl.draft2.parser.WdlParser._
+import wdl.draft2.model.AstTools
+import wdl.draft2.model.{WdlExpression, WdlCall, WorkflowOutput}
 import wom.core._
 import wom.types.WomType
 

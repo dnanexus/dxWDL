@@ -9,7 +9,7 @@ import scala.collection.JavaConverters._
 import scala.collection.mutable.HashMap
 import spray.json._
 import wdl4s.parser.MemoryUnit
-import wdl.expression.WdlStandardLibraryFunctions
+import wdl.draft2.model.expression.WdlStandardLibraryFunctions
 import wom.TsvSerializable
 import wom.values._
 import wom.types._
@@ -108,7 +108,7 @@ object DxFunctions extends WdlStandardLibraryFunctions {
     private def writeContent(baseName: String, content: String): Try[WomFile] = {
         val tmpFile = Utils.tmpDirPath.resolve(s"$baseName-${content.md5Sum}.tmp")
         Files.write(tmpFile, content.getBytes(StandardCharsets.UTF_8))
-        Success(WomFile(tmpFile.toString))
+        Success(WomSingleFile(tmpFile.toString))
     }
 
     private def writeToTsv(params: Seq[Try[WomValue]],
@@ -175,14 +175,14 @@ object DxFunctions extends WdlStandardLibraryFunctions {
         val stdoutPath = getMetaDir().resolve("stdout")
         if (!Files.exists(stdoutPath))
             Utils.writeFileContent(stdoutPath, "")
-        Success(WomFile(stdoutPath.toString))
+        Success(WomSingleFile(stdoutPath.toString))
     }
 
     override def stderr(params: Seq[Try[WomValue]]): Try[WomFile] = {
         val stderrPath = getMetaDir().resolve("stderr")
         if (!Files.exists(stderrPath))
             Utils.writeFileContent(stderrPath, "")
-        Success(WomFile(stderrPath.toString))
+        Success(WomSingleFile(stderrPath.toString))
     }
 
     override def read_json(params: Seq[Try[WomValue]]): Try[WomValue] =
@@ -206,31 +206,37 @@ object DxFunctions extends WdlStandardLibraryFunctions {
     override def size(params: Seq[Try[WomValue]]): Try[WomFloat] = {
         // Inner function: is this a file type, or an optional containing a file type?
         def isOptionalOfFileType(wdlType: WomType): Boolean = wdlType match {
-            case f if WomFileType.isCoerceableFrom(f) => true
+            case WomSingleFileType => true
+            case WomStringType => true
             case WomOptionalType(inner) => isOptionalOfFileType(inner)
             case _ => false
         }
 
+        def getFileSize(fileName: String) : Double = {
+            // If this is not an absolute path, we assume the file
+            // is located in the DX home directory
+            val path:String =
+                if (fileName.startsWith("/")) fileName
+                else dxHomeDir.resolve(fileName).toString
+            val fSize:Long = remoteFiles.get(path) match {
+                case Some(dxFile) =>
+                    // File has not been downloaded yet.
+                    // Query the platform how big it is; do not download it.
+                    dxFile.describe().getSize()
+                case None =>
+                    // File is local
+                    val p = Paths.get(fileName)
+                    p.toFile.length
+            }
+            fSize.toDouble
+        }
+
         // Inner function: Get the file size, allowing for unpacking of optionals
         def optionalSafeFileSize(value: WomValue): Double = value match {
-            case f if f.isInstanceOf[WomFile] || WomFileType.isCoerceableFrom(f.womType) =>
-                // If this is not an absolute path, we assume the file
-                // is located in the DX home directory
-                val fileName = f.valueString
-                val path:String =
-                    if (fileName.startsWith("/")) fileName
-                    else dxHomeDir.resolve(fileName).toString
-                val fSize:Long = remoteFiles.get(path) match {
-                    case Some(dxFile) =>
-                        // File has not been downloaded yet.
-                        // Query the platform how big it is; do not download it.
-                        dxFile.describe().getSize()
-                    case None =>
-                        // File is local
-                        val p = Paths.get(fileName)
-                        p.toFile.length
-                }
-                fSize.toDouble
+            case WomString(f) =>
+                getFileSize(f)
+            case f if f.isInstanceOf[WomFile] =>
+                getFileSize(f.valueString)
             case WomOptionalValue(_, Some(o)) => optionalSafeFileSize(o)
             case WomOptionalValue(f, None) if isOptionalOfFileType(f) => 0d
             case _ => throw new Exception(

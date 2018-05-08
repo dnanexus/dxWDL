@@ -7,7 +7,7 @@ import java.nio.file.{Files, Path, Paths}
 import java.io.{FileWriter, PrintWriter}
 import scala.collection.JavaConverters._
 import scala.util.{Failure, Success}
-import wdl.{WdlNamespace, ImportResolver}
+import wdl.draft2.model.{WdlNamespace, ImportResolver}
 
 // Interface to the compilation tool chain. The methods here are the only ones
 // that should be called to perform compilation.

@@ -88,7 +88,7 @@ package dxWDL.compiler
 import dxWDL.{CompilerErrorFormatter, Utils, Verbose, WdlPrettyPrinter}
 import java.nio.file.Path
 import scala.util.matching.Regex.Match
-import wdl._
+import wdl.draft2.model._
 import wom.types._
 
 case class Decompose(subWorkflowPrefix: String,
