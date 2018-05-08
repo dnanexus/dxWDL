@@ -2,6 +2,8 @@
 
 ## 0.63
 * Upgrade to cromwell-31 WDL/WOM library
+* Report multiple validation errors in one step; do not throw an exception for
+  the first one and stop.
 
 ## 0.62.1
 * Bug fix for case where optional optional types were generated. For example, `Int??`.

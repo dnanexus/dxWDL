@@ -34,7 +34,7 @@ class CompilerUnitTest extends FlatSpec with Matchers {
         )
         inside(retval) {
             case Main.UnsuccessfulTermination(errMsg) =>
-                errMsg should include ("Call is missing a compulsory argument")
+                errMsg should include ("Namespace failed validation")
         }
     }
 
@@ -45,7 +45,7 @@ class CompilerUnitTest extends FlatSpec with Matchers {
         )
         inside(retval) {
             case Main.UnsuccessfulTermination(errMsg) =>
-                errMsg should include ("Call is missing a compulsory argument")
+                errMsg should include ("Namespace failed validation")
         }
     }
 
@@ -104,7 +104,7 @@ class CompilerUnitTest extends FlatSpec with Matchers {
         )
         retval match  {
             case Main.UnsuccessfulTermination(errMsg) =>
-                errMsg should include ("Illegal call name")
+                errMsg should include ("Namespace failed validation")
             case _ =>
                 true should equal(false)
         }
