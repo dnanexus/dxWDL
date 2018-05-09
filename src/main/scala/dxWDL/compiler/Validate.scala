@@ -5,6 +5,7 @@ package dxWDL.compiler
 // with the source WDL is straight-forward
 //
 import dxWDL.{CompilerErrorFormatter, Utils, Verbose}
+import scala.collection.mutable.Queue
 import wdl.draft2.model._
 import wdl.draft2.parser.WdlParser.Ast
 import wom.types._
@@ -12,6 +13,7 @@ import wom.types._
 case class Validate(cef: CompilerErrorFormatter,
                     verbose: Verbose) {
     val verbose2:Boolean = verbose.keywords contains "validate"
+    val allErrors = Queue.empty[String]
 
     // Make a pass on all declarations amd calls. Make sure no reserved words or prefixes
     // are used.
@@ -19,13 +21,13 @@ case class Validate(cef: CompilerErrorFormatter,
         def checkVarName(varName: String, ast: Ast) : Unit = {
             Utils.reservedSubstrings.foreach{ s =>
                 if (varName contains s)
-                    throw new Exception(cef.illegalVariableName(ast))
+                    allErrors += cef.illegalVariableName(ast)
             }
         }
         def checkCallName(call : WdlCall) : Unit = {
             for (sb <- Utils.reservedSubstrings) {
                 if (call.unqualifiedName contains sb) {
-                    throw new Exception(cef.illegalCallName(call))
+                    allErrors += cef.illegalCallName(call)
                 }
             }
         }
@@ -101,23 +103,23 @@ case class Validate(cef: CompilerErrorFormatter,
         // did not work in Cromwell 30.2.
         val names = wfOutputs.map(_.unqualifiedName)
         if (names.toSet.size != names.toVector.size)
-            throw new Exception("Duplicate names in the workflow output section")
+            allErrors += "Duplicate names in the workflow output section"
 
         // Only trivial expressions are supposed
         val van = VarAnalysis(Set.empty, Map.empty, cef, verbose)
         wfOutputs.foreach{ wot =>
             if (!isTrivialExpression(wot.requiredExpression, van)) {
-                throw new Exception(cef.notCurrentlySupported(
-                                        wot.ast,
-                                        "expressions in the output section"))
+                allErrors += cef.notCurrentlySupported(
+                    wot.ast,
+                    "expressions in the output section")
             }
 
             // check if a cast is needed, that requires a job.
             if (wot.womType !=
                     Utils.evalType(wot.requiredExpression, workflow, cef, verbose)) {
-                throw new Exception(cef.notCurrentlySupported(
-                                        wot.ast,
-                                        "coercion in the output section"))
+                allErrors += cef.notCurrentlySupported(
+                    wot.ast,
+                    "coercion in the output section")
             }
         }
     }
@@ -152,7 +154,7 @@ case class Validate(cef: CompilerErrorFormatter,
                     val msg = s"""|Workflow doesn't supply required input ${decl.unqualifiedName}
                                   |to call ${call.unqualifiedName}
                                   |""".stripMargin.replaceAll("\n", " ")
-                    throw new Exception(cef.missingCallArgument(call.ast, msg))
+                    allErrors += cef.missingCallArgument(call.ast, msg)
                 case _ => ()
             }
         }
@@ -242,6 +244,11 @@ object Validate {
         val cef = new CompilerErrorFormatter(ns.resource, ns.terminalMap)
         val v = new Validate(cef, verbose)
         v.apply(ns)
+        if (!v.allErrors.isEmpty) {
+            for (err <- v.allErrors)
+                Utils.warning(verbose, err)
+            throw new Exception("Namespace failed validation")
+        }
 
         // recurse into all the sub-namespaces
         ns.namespaces.foreach(xNs => validateNamespace(xNs, verbose))

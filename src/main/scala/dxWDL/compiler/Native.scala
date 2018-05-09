@@ -597,7 +597,7 @@ case class Native(dxWDLrtId: String,
         // making of the applet.
         val req = appletNewReq(applet, bashScript, folder)
         val (digest,appletApiRequest) = checksumReq(req)
-        if (verbose.on) {
+        if (verbose2) {
             val fName = s"${applet.name}_req.json"
             val trgPath = Utils.appCompileDirPath.resolve(fName)
             Utils.writeFileContent(trgPath, req.prettyPrint)

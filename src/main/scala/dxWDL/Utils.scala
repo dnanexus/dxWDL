@@ -70,8 +70,10 @@ object Utils {
         "stdout", "stderr",
         "true", "false",
         "left", "right",
-        "if", "scatter", "else", "then",
+        "if", "scatter", "else", "then"
+    )
 
+    val STDLIB_FUNCTIONS: Set[String] = Set(
         "read_lines", "read_tsv", "read_map",
         "read_object", "read_objects", "read_json",
         "read_int", "read_string", "read_float", "read_boolean",

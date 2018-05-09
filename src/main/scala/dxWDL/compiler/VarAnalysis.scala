@@ -77,11 +77,28 @@ case class VarAnalysis(doNotModify: Set[Scope],
     // from: wdl4s.wdl.expression.ValueEvaluator.InterpolationTagPattern
     private val interpolationRegex = "\\$\\{\\s*([^\\}]*)\\s*\\}".r
 
-    private def isIdentifer(token: String) : Boolean = {
+    private def isIdentifer(token: String,
+                            nextToken: Option[String]) : Boolean = {
         if (token contains '"')
             return false
         if (!fqnRegex.pattern.matcher(token).matches)
             return false
+
+        // Distinguish between 'range(...)' and just 'range'.
+        // The first case is a call to an stdlib function, the
+        // second is a variable.
+        nextToken match {
+            case None => ()
+            case Some(x) =>
+                val nextWord = x.trim
+                if (nextWord(0) == '(') {
+                    // Must be a call to a standard library function
+                    if (!(Utils.STDLIB_FUNCTIONS contains token))
+                        throw new Exception(s"""|${token} is followed by parentheses, but is not a WDL
+                                                |standard library function""".stripMargin.replaceAll("\n", " "))
+                    return false
+                }
+        }
         if (Utils.RESERVED_WORDS contains token)
             return false
         return true
@@ -104,13 +121,18 @@ case class VarAnalysis(doNotModify: Set[Scope],
                 // look for ${...} elements inside the string
                 splitWithRangesAsTokens(token, interpolationRegex)
             else
-                // Look for a fully qualified names
+                // Look for fully qualified names
                 splitWithRangesAsTokens(token, fqnRegex)
         }.flatten
 
         // identify each sub-string; which kind of token is it?
-        ranges2.map{ token =>
-            if (isIdentifer(token))
+        ranges2.zipWithIndex.map{ case (token,i) =>
+            val nextToken =
+                if (i < (ranges2.length - 1))
+                    Some(ranges2(i+1))
+                else
+                    None
+            if (isIdentifer(token, nextToken))
                 Vector(Fqn(token))
             else if (isInterpolation(token))
                 Vector(Symbols("${"),

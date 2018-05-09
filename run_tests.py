@@ -51,7 +51,7 @@ medium_test_list = [
     "call_native",
 
     # subworkflows
-    "cannes", "modulo", "subblocks"
+    "cannes", "modulo", "subblocks", "trains"
 ]
 
 # Tests with the reorg flags
@@ -386,12 +386,22 @@ def compiler_per_test_flags(tname):
 ######################################################################
 # Set up the native calling tests
 def native_call_setup(project, applet_folder, version_id):
-    # build the native applets
     native_applets = ["native_concat",
                       "native_diff",
                       "native_mk_list",
                       "native_sum",
                       "native_sum_012"]
+
+    # Check if they already exist
+    applets = list(dxpy.bindings.search.find_data_objects(classname= "applet",
+                                                          name= "native_*",
+                                                          name_mode="glob",
+                                                          folder= applet_folder,
+                                                          project= project.get_id()))
+    if len(applets) == len(native_applets):
+        return
+
+    # build the native applets
     for napl in native_applets:
         try:
             cmdline = [ "dx", "build",

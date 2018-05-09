@@ -215,85 +215,6 @@ case class InputFile(verbose: Verbose) {
         }
     }
 
-    // This works for calls inside an if/scatter block. The naming is:
-    //  STAGE_ID.CALL_VARNAME
-    private def compoundCalls(wfName: String,
-                              stage:IR.Stage,
-                              calls:Map[String, String],
-                              callables: Map[String, IR.Callable],
-                              cif: CromwellInputFileState) : Unit = {
-        calls.foreach{ case (callName, execFQN) =>
-            val callee:IR.Callable = callables(execFQN)
-            callee.inputVars.zipWithIndex.foreach{
-                case (cVar,idx) =>
-                    val fqn = s"${wfName}.${callName}.${cVar.name}"
-                    val dxName = s"${stage.id.getId}.${callName}_${cVar.name}"
-                    cif.checkAndBind(fqn, dxName, cVar)
-            }
-        }
-    }
-
-    private def handleWorkflow(wf: IR.Workflow,
-                               callables: Map[String, IR.Callable],
-                               cif: CromwellInputFileState) : Unit = {
-        //val callableNames = callables.map{ case (name,_) => name }
-        //Utils.trace(verbose.on, s"InputFile callables=${callableNames}")
-
-        // make a pass on all the stages
-        wf.stages.foreach{ stage =>
-            val callee: IR.Callable = callables(stage.calleeName)
-            // make a pass on all call inputs
-            stage.inputs.zipWithIndex.foreach{
-                case (_,idx) =>
-                    val cVar = callee.inputVars(idx)
-                    val fqn = s"${wf.name}.${stage.stageName}.${cVar.name}"
-                    val dxName = s"${stage.id.getId}.${cVar.name}"
-                    cif.checkAndBind(fqn, dxName, cVar)
-            }
-            // check if the applet called from this stage has bindings
-            callee match {
-                case applet: IR.Applet =>
-                    applet.kind match {
-                        case IR.AppletKindTask => ()
-                        case other =>
-                            // An applet generated from a piece of the workflow.
-                            // search for all the applet inputs
-                            callee.inputVars.foreach{ cVar =>
-                                val fqn = s"${wf.name}.${cVar.name}"
-                                val dxName = s"${stage.id.getId}.${cVar.name}"
-                                cif.checkAndBind(fqn, dxName, cVar)
-                            }
-                    }
-                case workflow: IR.Workflow => ()
-            }
-
-            if (wf.locked) {
-                // Locked workflow. A user can set workflow level
-                // inputs; nothing else.
-                wf.inputs.foreach { case (cVar, sArg) =>
-                    val fqn = s"${wf.name}.${cVar.name}"
-                    val dxName = s"${cVar.name}"
-                    cif.checkAndBind(fqn, dxName, cVar)
-                }
-            } else {
-                // Unlocked workflow.
-                //
-                // compound stages, for example if blocks, or scatters.
-                // They contain calls to applets.
-                callee match {
-                    case applet: IR.Applet =>
-                        val callOpt = applet.kind match {
-                            case IR.AppletKindWfFragment(calls) => Some(calls)
-                            case _ => None
-                        }
-                        callOpt.map{ calls =>
-                            compoundCalls(wf.name, stage, calls, callables, cif)
-                        }
-                    case _: IR.Workflow => ()
-                }
-            }
-        }
-    }
 
     // Build a dx input file, based on the JSON input file and the workflow
     //
@@ -319,9 +240,23 @@ case class InputFile(verbose: Verbose) {
         }
         ns.entrypoint match {
             case None => ()
+            case Some(wf) if wf.locked =>
+                // Locked workflow. A user can set workflow level
+                // inputs; nothing else.
+                wf.inputs.foreach { case (cVar, sArg) =>
+                    val fqn = s"${wf.name}.${cVar.name}"
+                    val dxName = s"${cVar.name}"
+                    cif.checkAndBind(fqn, dxName, cVar)
+                }
             case Some(wf) =>
-                val callables = ns.buildCallables
-                handleWorkflow(wf, callables, cif)
+                if (!wf.stages.isEmpty) {
+                    val commonStage = wf.stages.head.id.getId
+                    wf.inputs.foreach { case (cVar, sArg) =>
+                        val fqn = s"${wf.name}.${cVar.name}"
+                        val dxName = s"${commonStage}.${cVar.name}"
+                        cif.checkAndBind(fqn, dxName, cVar)
+                    }
+                }
         }
         if (!inputFields.isEmpty) {
             Utils.warning(verbose, s"""|Could not map all default fields.
