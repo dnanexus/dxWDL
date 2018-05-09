@@ -17,7 +17,7 @@ import wom.values._
 case class GenerateIR(callables: Map[String, IR.Callable],
                       reorg: Boolean,
                       locked: Boolean,
-                      blockKind: NamespaceOps.Kind.Value,
+                      wfKind: IR.WorkflowKind.Value,
                       appletNamePrefix : String,
                       execNameBox: NameBox,
                       cef: CompilerErrorFormatter,
@@ -68,7 +68,7 @@ case class GenerateIR(callables: Map[String, IR.Callable],
     // pi -- calculated, non inputs
     // z - is an input with a default value
     private def declarationIsInput(decl: Declaration) : Boolean = {
-        if (blockKind != NamespaceOps.Kind.TopLevel) {
+        if (wfKind != IR.WorkflowKind.TopLevel) {
             // This is a generated workflow, the only inputs
             // are free variables.
             decl.expression match {
@@ -904,7 +904,7 @@ task Add {
                 .flatten
                 .map(apl => apl.name -> apl).toMap
 
-        val irwf = IR.Workflow(wf.unqualifiedName, wfInputs, wfOutputs, stages, locked)
+        val irwf = IR.Workflow(wf.unqualifiedName, wfInputs, wfOutputs, stages, locked, wfKind)
         execNameBox.add(wf.unqualifiedName)
         (irwf, aApplets)
     }
@@ -938,7 +938,7 @@ object GenerateIR {
         val nsTree1 = nsTree match {
             case NamespaceOps.TreeLeaf(name, cef, tasks) =>
                 // compile all the [tasks], that have not been already compiled, to IR.Applet
-                val gir = new GenerateIR(Map.empty, reorg, locked, NamespaceOps.Kind.TopLevel,
+                val gir = new GenerateIR(Map.empty, reorg, locked, IR.WorkflowKind.TopLevel,
                                          "", execNameBox, nsTree.cef, verbose)
                 val alreadyCompiledNames: Set[String] = callables.keys.toSet
                 val tasksNotCompiled = tasks.filter{
@@ -954,7 +954,7 @@ object GenerateIR {
                 //Utils.trace(verbose.on, s"leaf: callables = ${allCallables.keys}")
                 makeNamespace(name, None, allCallables)
 
-            case NamespaceOps.TreeNode(name, cef, _, workflow, children, blockKind, true, originalWorkflowName) =>
+            case NamespaceOps.TreeNode(name, cef, _, workflow, children, wfKind, true, originalWorkflowName) =>
                 // Recurse into the children.
                 //
                 // The reorg and locked flags only apply to the top level
@@ -967,9 +967,9 @@ object GenerateIR {
                 }
                 //Utils.trace(verbose.on, s"node: ${childCallables.keys}")
                 val locked2 =
-                    if (blockKind != NamespaceOps.Kind.TopLevel) true
+                    if (wfKind != IR.WorkflowKind.TopLevel) true
                     else locked
-                val gir = new GenerateIR(childCallables, reorg, locked2, blockKind,
+                val gir = new GenerateIR(childCallables, reorg, locked2, wfKind,
                                          s"${originalWorkflowName}_", execNameBox, cef, verbose)
                 val (irWf, auxApplets) = gir.compileWorkflow(workflow)
                 val allCallables = childCallables ++ auxApplets

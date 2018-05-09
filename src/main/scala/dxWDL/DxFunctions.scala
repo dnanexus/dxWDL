@@ -2,7 +2,7 @@ package dxWDL
 
 import com.dnanexus.DXFile
 import java.io.PrintStream
-import java.nio.charset.StandardCharsets
+//import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, FileSystems, Path, Paths, PathMatcher}
 import scala.util.{Try, Success, Failure}
 import scala.collection.JavaConverters._
@@ -10,7 +10,7 @@ import scala.collection.mutable.HashMap
 import spray.json._
 import wdl4s.parser.MemoryUnit
 import wdl.draft2.model.expression.WdlStandardLibraryFunctions
-import wom.TsvSerializable
+//import wom.TsvSerializable
 import wom.values._
 import wom.types._
 
@@ -105,21 +105,6 @@ object DxFunctions extends WdlStandardLibraryFunctions {
         metaDir
     }
 
-    private def writeContent(baseName: String, content: String): Try[WomFile] = {
-        val tmpFile = Utils.tmpDirPath.resolve(s"$baseName-${content.md5Sum}.tmp")
-        Files.write(tmpFile, content.getBytes(StandardCharsets.UTF_8))
-        Success(WomSingleFile(tmpFile.toString))
-    }
-
-    private def writeToTsv(params: Seq[Try[WomValue]],
-                           wdlClass: Class[_ <: WomValue with TsvSerializable]) = {
-        for {
-            singleArgument <- extractSingleArgument("writeToTsv", params)
-            downcast <- Try(wdlClass.cast(singleArgument))
-            tsvSerialized <- downcast.tsvSerialize
-            file <- writeContent(wdlClass.getSimpleName.toLowerCase, tsvSerialized)
-        } yield file
-    }
 
     // Search for the pattern in the home directory.
     // See Cromwell code base:
@@ -185,23 +170,6 @@ object DxFunctions extends WdlStandardLibraryFunctions {
         Success(WomSingleFile(stderrPath.toString))
     }
 
-    override def read_json(params: Seq[Try[WomValue]]): Try[WomValue] =
-        Failure(new NotImplementedError())
-
-    // Write functions: from Cromwell backend.
-    // cromwell/backend/src/main/scala/cromwell/backend/wdl/WriteFunctions.scala
-    override def write_lines(params: Seq[Try[WomValue]]): Try[WomFile] =
-        writeToTsv(params, classOf[WomArray])
-    override def write_map(params: Seq[Try[WomValue]]): Try[WomFile] =
-       writeToTsv(params, classOf[WomMap])
-    override def write_object(params: Seq[Try[WomValue]]): Try[WomFile] =
-        writeToTsv(params, classOf[WomObject])
-    override def write_objects(params: Seq[Try[WomValue]]): Try[WomFile] =
-        writeToTsv(params, classOf[WomArray])
-    override def write_tsv(params: Seq[Try[WomValue]]): Try[WomFile] =
-        writeToTsv(params, classOf[WomArray])
-    override def write_json(params: Seq[Try[WomValue]]): Try[WomFile] =
-        Failure(new NotImplementedError(s"write_json()"))
 
     override def size(params: Seq[Try[WomValue]]): Try[WomFloat] = {
         // Inner function: is this a file type, or an optional containing a file type?

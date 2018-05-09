@@ -140,6 +140,13 @@ object IR {
                      inputs: Vector[SArg],
                      outputs: Vector[CVar])
 
+
+    // A toplevel fragment is the initial workflow we started with, minus
+    // whatever was replaced or rewritten.
+    object WorkflowKind extends Enumeration {
+        val TopLevel, Sub  = Value
+    }
+
     /** A workflow output is linked to the stage that
       * generated it.
       */
@@ -147,7 +154,8 @@ object IR {
                         inputs: Vector[(CVar,SArg)],
                         outputs: Vector[(CVar,SArg)],
                         stages: Vector[Stage],
-                        locked: Boolean) extends Callable {
+                        locked: Boolean,
+                        kind: WorkflowKind.Value) extends Callable {
         def inputVars = inputs.map{ case (cVar,_) => cVar }.toVector
         def outputVars = outputs.map{ case (cVar,_) => cVar }.toVector
     }
@@ -181,6 +189,19 @@ object IR {
     // Automatic conversion to/from Yaml
     object IrInternalYamlProtocol extends DefaultYamlProtocol {
         implicit val InstanceTypeConstFormat = yamlFormat4(InstanceTypeConst)
+
+        implicit object WorkflowKindYamlFormat extends YamlFormat[WorkflowKind.Value] {
+            def write(wfKind: WorkflowKind.Value) =
+                wfKind match {
+                    case WorkflowKind.TopLevel => YamlString("topLevel")
+                    case WorkflowKind.Sub => YamlString("sub")
+                }
+            def read(value: YamlValue) = value match {
+                case YamlString("topLevel") => WorkflowKind.TopLevel
+                case YamlString("sub") => WorkflowKind.Sub
+                case unrecognized => throw new Exception(s"WorkflowKind expected ${unrecognized}")
+            }
+        }
 
         implicit object InstanceTypeYamlFormat extends YamlFormat[InstanceType] {
             def write(it: InstanceType) =
@@ -443,7 +464,7 @@ object IR {
 
         implicit val dxWorkflowStageFormat = yamlFormat1(Utils.DXWorkflowStage)
         implicit val stageFormat = yamlFormat6(Stage)
-        implicit val workflowFormat = yamlFormat5(Workflow)
+        implicit val workflowFormat = yamlFormat6(Workflow)
         implicit val namespaceFormat = yamlFormat4(Namespace)
     }
     import IrInternalYamlProtocol._
