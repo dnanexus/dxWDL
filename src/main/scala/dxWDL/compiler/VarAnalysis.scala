@@ -91,7 +91,8 @@ case class VarAnalysis(doNotModify: Set[Scope],
             case None => ()
             case Some(x) =>
                 val nextWord = x.trim
-                if (nextWord(0) == '(') {
+                if (!nextWord.isEmpty &&
+                        nextWord(0) == '(' ) {
                     // Must be a call to a standard library function
                     if (!(Utils.STDLIB_FUNCTIONS contains token))
                         throw new Exception(s"""|${token} is followed by parentheses, but is not a WDL

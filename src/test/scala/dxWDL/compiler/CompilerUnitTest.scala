@@ -151,4 +151,12 @@ class CompilerUnitTest extends FlatSpec with Matchers {
             List(path.toString, "--compileMode", "ir", "--locked", "--quiet")
         ) should equal(Main.SuccessfulTermination(""))
     }
+
+    it should "handle stdlib functions used as variable names" in {
+        val path = pathFromBasename("stdlib_variables.wdl")
+        Main.compile(
+            List(path.toString, "--compileMode", "ir", "--locked", "--quiet")
+        ) should equal(Main.SuccessfulTermination(""))
+    }
+
 }

@@ -15,12 +15,6 @@ import wom.types._
 
 object NamespaceOps {
 
-    // A toplevel fragment is the initial workflow we started with, minus
-    // whatever was replaced or rewritten.
-    object Kind extends Enumeration {
-        val TopLevel, Sub  = Value
-    }
-
     case class Context(
         allSourceFiles: HashMap[String, String],
         toplevelWdlSourceFile: Path,
@@ -130,7 +124,7 @@ object NamespaceOps {
                         imports: Seq[Import],
                         workflow: WdlWorkflow,
                         children: Vector[Tree],
-                        kind: Kind.Value,
+                        kind: IR.WorkflowKind.Value,
                         fullyReduced: Boolean,
                         originalWorkflowName: String) extends Tree {
 
@@ -209,7 +203,7 @@ object NamespaceOps {
         private def whiteWashWorkflow(wf: WdlWorkflow,
                                       extraImports: Vector[String],
                                       ctx: Context,
-                                      blockKind: Kind.Value) : CleanWf = {
+                                      blockKind: IR.WorkflowKind.Value) : CleanWf = {
             val ns = toNamespace(wf)
             val extraImportsText = extraImports.map{ libName =>
                 s"""import "${libName}.wdl" as ${libName}"""
@@ -269,9 +263,9 @@ object NamespaceOps {
         def cleanAfterRewrite( topwf: WdlWorkflow,
                                subWf: WdlWorkflow,
                                ctx: Context,
-                               kind: Kind.Value) : TreeNode = {
+                               kind: IR.WorkflowKind.Value) : TreeNode = {
             val CleanWf(subWf2, subWfName2, subWdlSrc2) =
-                whiteWashWorkflow(subWf, Vector.empty, ctx, Kind.Sub)
+                whiteWashWorkflow(subWf, Vector.empty, ctx, IR.WorkflowKind.Sub)
 
             // white wash the top level workflow
             ctx.addWdlSourceFile(subWfName2 + ".wdl", subWdlSrc2)
@@ -363,7 +357,7 @@ object NamespaceOps {
                              nswf.imports,
                              nswf.workflow,
                              children,
-                             Kind.TopLevel,
+                             IR.WorkflowKind.TopLevel,
                              false,
                              nswf.workflow.unqualifiedName)
                 } else {
@@ -389,7 +383,7 @@ object NamespaceOps {
                              nswf2.imports,
                              nswf2.workflow,
                              children :+ child,
-                             Kind.TopLevel,
+                             IR.WorkflowKind.TopLevel,
                              false,
                              nswf.workflow.unqualifiedName)
                 }

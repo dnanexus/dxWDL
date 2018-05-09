@@ -93,6 +93,9 @@ workflow atac {
 	String gensz = read_genome_tsv.genome['gensz']
     #@call dummy { input: f = blacklist } # dummy due to dxWDL 60.1 bug
 
+ 	String? qc_report_name # name of sample
+	String? qc_report_desc # description for sample
+
 	### pipeline starts here
 	# temporary 2-dim arrays for DNANexus style fastqs and adapters
 	Array[Array[File]] fastqs_rep1 = transpose([fastqs_rep1_R1,fastqs_rep1_R2])
@@ -419,7 +422,9 @@ workflow atac {
 	}
 	# Generate final QC report and JSON
 	call qc_report { input :
-		paired_end = paired_end,
+                name = qc_report_name,
+                desc = qc_report_desc,
+	        paired_end = paired_end,
 		pipeline_type = pipeline_type,
 		peak_caller = 'macs2',
 		idr_thresh = idr_thresh,

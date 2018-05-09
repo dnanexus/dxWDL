@@ -46,4 +46,37 @@ class VarAnalysisTest extends FlatSpec with Matchers {
 
         freeVars should equal(Set("s"))
     }
+
+    it should "Distinguish variables from stdlib functions" in {
+        val wdlCode = """|
+                         |workflow w {
+                         |    File f_in
+                         |    String s_in
+                         |
+                         |    Float len = size(f_in)
+                         |    String s = sub(s_in, "dog", "cat")
+                         |}
+                         |""".stripMargin
+
+        val ns = WdlNamespaceWithWorkflow.load(wdlCode, Seq.empty).get
+        val wf = ns.asInstanceOf[WdlNamespaceWithWorkflow].workflow
+        val verbose = Verbose(false, false, Set.empty)
+        val cef = CompilerErrorFormatter(wf.unqualifiedName, ns.terminalMap)
+        val va = new VarAnalysis(Set.empty, Map.empty, cef, verbose)
+
+        def validate_decl(unqualifiedName: String,
+                          expected: Set[String]) : Unit = {
+            val decl = wf.children.find{
+                case decl: Declaration =>
+                    decl.unqualifiedName == unqualifiedName
+                case _ => false
+            }.get.asInstanceOf[Declaration]
+
+            val freeVars = va.findAll(decl)
+            freeVars should equal(expected)
+        }
+
+        validate_decl("len", Set("f_in"))
+        validate_decl("s", Set("s_in"))
+    }
 }

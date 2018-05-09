@@ -775,7 +775,17 @@ case class Native(dxWDLrtId: String,
         val req = JsObject(reqFields ++ wfInputOutput)
         val rep = DXAPI.workflowNew(jsonNodeOfJsValue(req), classOf[JsonNode])
         val id = apiParseReplyID(rep)
-        DXWorkflow.getInstance(id)
+        val dxwf = DXWorkflow.getInstance(id)
+
+        // Close all sub-workflows. Ideally, we would like to close ALL workflows,
+        // but that would prevent users from adding tags and properties to the top
+        // level workflows.
+        /*wf.kind match {
+            case IR.WorkflowKind.TopLevel => ()
+            case IR.WorkflowKind.Sub => dxwf.close()
+         }*/
+        dxwf.close()
+        dxwf
     }
 
     // Compile an entire workflow

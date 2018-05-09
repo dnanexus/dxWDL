@@ -1,17 +1,20 @@
 # Release Notes
 
 ## 0.63
-* Upgrade to cromwell-31 WDL/WOM library
-* Report multiple validation errors in one step; do not throw an exception for
-  the first one and stop.
+- Upgrade to cromwell-31 WDL/WOM library
+- Report multiple validation errors in one step; do not throw an exception for
+the first one and stop.
+- Reuse more of Cromwell's stdlib implementation
+- Close generated dx workflows
 
-## 0.62.1
-* Bug fix for case where optional optional types were generated. For example, `Int??`.
+
+## 0.62.2
+- Bug fix for case where optional optional types were generated. For example, `Int??`.
 
 ## 0.62
 
-* Nested scatters and if blocks
-* Support for missing arguments has been removed, the compiler will generate
+- Nested scatters and if blocks
+- Support for missing arguments has been removed, the compiler will generate
 an error in such cases.
 
 
