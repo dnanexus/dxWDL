@@ -6,7 +6,8 @@ import java.nio.file.{Path, Paths}
 import scala.collection.mutable.HashMap
 import spray.json._
 import spray.json.JsString
-import wdl.draft2.model.{WdlNamespace, WdlTask, WdlNamespaceWithWorkflow, WdlWorkflow}
+import wdl.draft2.model.{WdlExpression, WdlNamespace, WdlTask, WdlNamespaceWithWorkflow, WdlWorkflow}
+import wom.values._
 
 object Main extends App {
     sealed trait Termination
@@ -103,6 +104,9 @@ object Main extends App {
                     case "destination" =>
                         checkNumberOfArguments(keyword, 1, subargs)
                         (keyword, subargs.head)
+                    case "extras" =>
+                        checkNumberOfArguments(keyword, 1, subargs)
+                        (keyword, subargs.head)
                     case "folder" =>
                         checkNumberOfArguments(keyword, 1, subargs)
                         (keyword, subargs.head)
@@ -136,12 +140,6 @@ object Main extends App {
                     case "reorg" =>
                         checkNumberOfArguments(keyword, 0, subargs)
                         (keyword, "")
-                    case "sort" =>
-                        val retval =
-                            if (subargs.isEmpty) "normal"
-                            else if (subargs.head == "relaxed") "relaxed"
-                            else throw new Exception(s"Unknown sort option ${subargs.head}")
-                        (keyword, retval)
                     case "verbose" =>
                         val retval =
                             if (subargs.isEmpty) ""
@@ -278,6 +276,34 @@ object Main extends App {
         (dxProject, dxFolder)
     }
 
+    def extrasParse(extraFields: Map[String, JsValue]) : Extras = {
+        def wdlExpressionFromJsValue(jsv: JsValue) : WdlExpression = {
+            val wValue: WomValue = jsv match {
+                case JsBoolean(b) => WomBoolean(b.booleanValue)
+                case JsNumber(bnm) => WomInteger(bnm.intValue)
+                //            case JsNumber(bnm) => WomFloat(bnm.doubleValue)
+                case JsString(s) => WomString(s)
+                case other => throw new Exception(s"Unsupported json value ${other}")
+            }
+            WdlExpression.fromString(wValue.toWomString)
+        }
+
+        // Guardrail, check the fields are actually supported
+        for (k <- extraFields.keys) {
+            if (!(Utils.EXTRA_KEYS_SUPPORTED contains k))
+                throw new Exception(s"Unsupported special option ${k}, we currently support ${Utils.EXTRA_KEYS_SUPPORTED}")
+        }
+        val defaultRuntimeAttributes = extraFields.get("default_runtime_attributes") match {
+            case None =>
+                Map.empty[String, WdlExpression]
+            case Some(x) =>
+                x.asJsObject.fields.map{ case (name, jsValue) =>
+                    name -> wdlExpressionFromJsValue(jsValue)
+                }.toMap
+        }
+        Extras(defaultRuntimeAttributes)
+    }
+
     // Get basic information about the dx environment, and process
     // the compiler flags
     private def compilerOptions(options: OptionsMap) : CompilerOptions = {
@@ -290,6 +316,13 @@ object Main extends App {
             case None => None
             case Some(List(p)) => Some(Paths.get(p))
             case _ => throw new Exception("defaults specified twice")
+        }
+        val extras = options.get("extras") match {
+            case None => None
+            case Some(List(p)) =>
+                val contents = Utils.readFileContent(Paths.get(p))
+                Some(extrasParse(contents.parseJson.asJsObject.fields))
+            case _ => throw new Exception("extras specified twice")
         }
         val inputs: List[Path] = options.get("inputs") match {
             case None => List.empty
@@ -309,6 +342,7 @@ object Main extends App {
         CompilerOptions(options contains "archive",
                         compileMode,
                         defaults,
+                        extras,
                         options contains "force",
                         imports,
                         inputs,
@@ -538,9 +572,11 @@ object Main extends App {
             |    options
             |      -archive               Archive older versions of applets
             |      -compileMode <string>  Compilation mode, a debugging flag
-            |      -defaults <string>     Path to Cromwell formatted default values file
+            |      -defaults <string>     File with Cromwell formatted default values (JSON)
             |      -destination <string>  Output path on the platform for workflow
-            |      -inputs <string>       Path to Cromwell formatted input file
+            |      -extras <string>       JSON formatted file with extra options, for example
+            |                             default runtime options for tasks.
+            |      -inputs <string>       File with Cromwell formatted inputs
             |      -p | -imports <string> Directory to search for imported WDL files
             |      -locked                Create a locked-down workflow
             |      -reorg                 Reorganize workflow output files

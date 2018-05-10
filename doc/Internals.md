@@ -1,9 +1,63 @@
 # Compiler internals
 
-The compiler is split into three passes
-  Decompose: split the WDL workflow into pieces that can be run by the WDL runner
+The compiler is split into several phases:
+
+- Validate: make sure the source WDL file does not use options of features
+    that we don't support
+- Decompose: split the WDL workflow into pieces that can be run by the WDL runner
 - IR: take simplified WDL, and generate Intermediate Code (IR)
 - Native: start with IR and generate platform applets and workflow
+
+
+The main idea is to compile a WDL workflow into an equivalent DNAnexus
+workflow, enabling running it on the platform. The basic mapping is:
+
+1. A WDL Workflow compiles to a dx workflow
+2. A WDL Call compiles to a dx workflow stage, and an applet (including invocation of dx-docker when called for)
+3. A scatter block is compiled into a workflow stage.
+
+
+WDL supports complex and recursive data types, which do not have
+native support. In order to maintain the usability of the UI, when possible,
+we map WDL types to the dx equivalent. This works for primitive types
+(Boolean, Int, String, Float, File), and for single dimensional arrays
+of primitives. However, difficulties arise with complex types. For
+example, a ragged array of strings `Array[Array[String]]` presents two issues:
+
+1. Type: Which dx type to use, so that it will be presented intuitively in the UI
+2. Size: variables of this type can be very large, we have seen 100KB
+sized values. This is much too large for a dx:string, that is passed to
+the bash, stored in a database, etc.
+
+The type mapping for primitive and single dimensional arrays
+is as follows:
+
+| WDL type       |  dxapp.json type |
+| -------------- |  --------------- |
+| Boolean        |   boolean    |
+| Int            |   int  |
+| Float          |   float |
+| String         |   string |
+| File           |   file |
+| Array[Boolean] |   array:boolean    |
+| Array[Int]     |   array:int  |
+| Array[Float]   |   array:float |
+| Array[String]  |   array:string |
+| Array[File]    |   array:file |
+| Complex types  |   hash + array:file |
+
+Ragged arrays of files (Array[Array[File]]), and other more complex
+WDL types, are mapped to two fields: a flat array of files, and a
+hash, which is a json serialized representation of the WDL value. The
+flat file array informs the job manager about data objects that need to
+be closed and cloned into the workspace.
+
+There are multiple obstacles to overcome. We wish to avoid creating a
+controlling applet that would run and manage a WDL workflow. Such an
+applet might get killed due to temporary resource shortage, causing an
+expensive workflow to fail. Further, it is desirable to minimize the
+context that needs to be kept around for the WDL workflow, because it
+limits job manager scalability.
 
 To explain these, we will walk through the compilation process of a simple WDL file.
 

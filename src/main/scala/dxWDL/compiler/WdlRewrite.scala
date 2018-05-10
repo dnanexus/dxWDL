@@ -125,6 +125,13 @@ object WdlRewrite {
         task2
     }
 
+    def taskReplaceRuntimeAttrs(task:WdlTask, attrs: WdlRuntimeAttributes) : WdlTask = {
+        val task2 = task.copy(runtimeAttributes = attrs)
+        task2.children = task.children
+        updateScope(task, task2)
+        task2
+    }
+
     private def genDefaultValueOfType(wdlType: WomType) : WomValue = {
         wdlType match {
             case WomBooleanType => WomBoolean(true)

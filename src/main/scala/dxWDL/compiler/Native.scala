@@ -19,6 +19,7 @@ case class Native(dxWDLrtId: String,
                   dxProject: DXProject,
                   dxObjDir: DxObjectDirectory,
                   instanceTypeDB: InstanceTypeDB,
+                  extras: Option[Extras],
                   force: Boolean,
                   archive: Boolean,
                   locked: Boolean,
@@ -905,6 +906,7 @@ object Native {
               folder: String,
               dxProject: DXProject,
               instanceTypeDB: InstanceTypeDB,
+              extras: Option[Extras],
               force: Boolean,
               archive: Boolean,
               locked: Boolean,
@@ -915,7 +917,7 @@ object Native {
         // We don't want to build them if we don't have to.
         val dxObjDir = DxObjectDirectory(ns, dxProject, folder, verbose)
         val ntv = new Native(dxWDLrtId, folder, dxProject, dxObjDir, instanceTypeDB,
-                             force, archive, locked, verbose)
+                             extras, force, archive, locked, verbose)
         ntv.compile(ns)
     }
 }
