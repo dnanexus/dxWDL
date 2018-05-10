@@ -323,19 +323,36 @@ object NamespaceOps {
     }
 
     def makeContext(allWdlSources: Map[String, String],
-                    toplevelWdlSourceFile: Path,
-                    verbose: Verbose) : Context = {
+                            toplevelWdlSourceFile: Path,
+                            verbose: Verbose) : Context = {
         val hm = HashMap.empty[String, String]
         allWdlSources.foreach{ case (name, src) => hm(name) = src}
         new Context(hm, toplevelWdlSourceFile, verbose)
     }
 
+    // Use default runtime attributes, where they are unset in the task
+    private def setDefaultAttributes(task: WdlTask ,
+                                     defaultRuntimeAttributes: Map[String, WdlExpression]) : WdlTask = {
+        val existingAttrNames =  task.runtimeAttributes.attrs.keys.toSet
+        val defaultAttrs: Map[String, WdlExpression] = defaultRuntimeAttributes
+            .filter{ case (name, _) => !(existingAttrNames contains name) }
+        val attrs: Map[String, WdlExpression] = task.runtimeAttributes.attrs ++ defaultAttrs
+        task.copy(runtimeAttributes = WdlRuntimeAttributes(attrs))
+    }
+
     def load(ns: WdlNamespace,
-             ctx: Context) : Tree = {
+             ctx: Context,
+             defaultRuntimeAttributes: Option[Map[String, WdlExpression]]) : Tree = {
         ns match {
             case _:WdlNamespaceWithoutWorkflow =>
                 val cef = new CompilerErrorFormatter(ns.resource, ns.terminalMap)
-                val taskDict = ns.tasks.map{ task => task.name -> task}.toMap
+                val taskDict = ns.tasks.map{ task =>
+                    val task2 = defaultRuntimeAttributes match {
+                        case None => task
+                        case Some(attrs) => setDefaultAttributes(task, attrs)
+                    }
+                    task.name -> task2
+                }.toMap
                 val name = ns.importUri match {
                     case None => "Unknown"
                     case Some(x) =>
@@ -349,7 +366,7 @@ object NamespaceOps {
 
                 // recurse into sub-namespaces
                 val children:Vector[Tree] = nswf.namespaces.map{
-                    child => load(child, ctx)
+                    child => load(child, ctx, defaultRuntimeAttributes)
                 }.toVector
                 if (ns.tasks.isEmpty) {
                     TreeNode(nswf.workflow.unqualifiedName,

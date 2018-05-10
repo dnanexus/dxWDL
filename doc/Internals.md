@@ -1,7 +1,10 @@
 # Compiler internals
 
-The compiler is split into three passes
-  Decompose: split the WDL workflow into pieces that can be run by the WDL runner
+The compiler is split into several phases:
+
+- Validate: make sure the source WDL file does not use options of features
+    that we don't support
+- Decompose: split the WDL workflow into pieces that can be run by the WDL runner
 - IR: take simplified WDL, and generate Intermediate Code (IR)
 - Native: start with IR and generate platform applets and workflow
 

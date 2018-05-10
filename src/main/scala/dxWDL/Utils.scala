@@ -51,6 +51,7 @@ object Utils {
     val DX_HOME = "/home/dnanexus"
     val DX_INSTANCE_TYPE_ATTR = "dx_instance_type"
     val DX_URL_PREFIX = "dx://"
+    val EXTRA_KEYS_SUPPORTED = Set("default_runtime_attributes")
     val FLAT_FILES_SUFFIX = "___dxfiles"
     val INSTANCE_TYPE_DB_FILENAME = "instanceTypeDB.json"
     val INTERMEDIATE_RESULTS_FOLDER = "intermediate"
@@ -184,6 +185,7 @@ object Utils {
             case Some(wdlValue) => wdlValue
         }
     }
+
 
     // Used to convert into the JSON datatype used by dxjava
     val objMapper : ObjectMapper = new ObjectMapper()
