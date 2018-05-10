@@ -68,7 +68,7 @@ case class Verbose(on: Boolean,
 
 
 // Place to put any extra options, equivalent to Cromwell workflowOptions.
-case class Extras(defaultRuntimeAttributes: Option[Map[String, WdlExpression]])
+case class Extras(defaultRuntimeAttributes: Map[String, WdlExpression])
 
 // Packing of all compiler flags in an easy to digest
 // format

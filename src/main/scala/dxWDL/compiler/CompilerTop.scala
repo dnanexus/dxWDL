@@ -7,7 +7,7 @@ import java.nio.file.{Files, Path, Paths}
 import java.io.{FileWriter, PrintWriter}
 import scala.collection.JavaConverters._
 import scala.util.{Failure, Success}
-import wdl.draft2.model.{WdlNamespace, ImportResolver}
+import wdl.draft2.model.{WdlExpression, WdlNamespace, ImportResolver}
 
 // Interface to the compilation tool chain. The methods here are the only ones
 // that should be called to perform compilation.
@@ -123,7 +123,7 @@ object CompilerTop {
 
         val ctx: NamespaceOps.Context = NamespaceOps.makeContext(allWdlSources, wdlSourceFile, cOpt.verbose)
         val defaultRuntimeAttributes = cOpt.extras match {
-            case None => None
+            case None => Map.empty[String, WdlExpression]
             case Some(xt) => xt.defaultRuntimeAttributes
         }
         val nsTree: NamespaceOps.Tree = NamespaceOps.load(ns, ctx, defaultRuntimeAttributes)

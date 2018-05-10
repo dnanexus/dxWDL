@@ -276,8 +276,7 @@ object Main extends App {
         (dxProject, dxFolder)
     }
 
-    private def parseDefaultRuntimeAttributes(extras: Map[String, JsValue])
-            : Option[Map[String, WdlExpression]] = {
+    def extrasParse(extraFields: Map[String, JsValue]) : Extras = {
         def wdlExpressionFromJsValue(jsv: JsValue) : WdlExpression = {
             val wValue: WomValue = jsv match {
                 case JsBoolean(b) => WomBoolean(b.booleanValue)
@@ -289,23 +288,19 @@ object Main extends App {
             WdlExpression.fromString(wValue.toWomString)
         }
 
-        extras.get("default_runtime_attributes") match {
-            case None =>
-                None
-            case Some(x) =>
-                val m = x.asJsObject.fields.map{ case (name, jsValue) =>
-                    name -> wdlExpressionFromJsValue(jsValue)
-                }.toMap
-                Some(m)
-        }
-    }
-
-    def extrasParse(extraFields: Map[String, JsValue]) : Extras = {
+        // Guardrail, check the fields are actually supported
         for (k <- extraFields.keys) {
             if (!(Utils.EXTRA_KEYS_SUPPORTED contains k))
                 throw new Exception(s"Unsupported special option ${k}, we currently support ${Utils.EXTRA_KEYS_SUPPORTED}")
         }
-        val defaultRuntimeAttributes = parseDefaultRuntimeAttributes(extraFields)
+        val defaultRuntimeAttributes = extraFields.get("default_runtime_attributes") match {
+            case None =>
+                Map.empty[String, WdlExpression]
+            case Some(x) =>
+                x.asJsObject.fields.map{ case (name, jsValue) =>
+                    name -> wdlExpressionFromJsValue(jsValue)
+                }.toMap
+        }
         Extras(defaultRuntimeAttributes)
     }
 
