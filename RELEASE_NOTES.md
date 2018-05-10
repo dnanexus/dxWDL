@@ -1,5 +1,24 @@
 # Release Notes
 
+## 0.64
+- Support for setting defaults for all task runtime attributes has been added.
+This is similar to the Cromwell style. The `extras` command line flag takes a JSON file
+as an argument. For example, if `taskAttrs.json` is this file:
+```
+{
+    "default_runtime_attributes" : {
+      "docker" : "quay.io/encode-dcc/atac-seq-pipeline:v1"
+    }
+}
+```
+
+Then adding it to the compilation command line will add the `atac-seq` docker image to all
+tasks by default.
+```
+java -jar dxWDL-0.44.jar compile test/files.wdl -defaults test/files_input.json -extras taskAttrs.json
+```
+
+
 ## 0.63
 - Upgrade to cromwell-31 WDL/WOM library
 - Report multiple validation errors in one step; do not throw an exception for
