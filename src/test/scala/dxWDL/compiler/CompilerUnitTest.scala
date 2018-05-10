@@ -1,6 +1,6 @@
 package dxWDL.compiler
 
-import dxWDL.{Main, WdlPrettyPrinter}
+import dxWDL.{Main, Utils, WdlPrettyPrinter}
 import java.nio.file.{Path, Paths}
 import org.scalatest.{FlatSpec, Matchers}
 import org.scalatest.Inside._
@@ -159,4 +159,20 @@ class CompilerUnitTest extends FlatSpec with Matchers {
         ) should equal(Main.SuccessfulTermination(""))
     }
 
+    it should "respect variables passed through the extras mechanisms" in {
+        val extraOptions =
+            """|{
+               |   "default_runtime_attributes" : {
+               |      "docker" : "quay.io/encode-dcc/atac-seq-pipeline:v1"
+               |   }
+               |}""".stripMargin
+        val extrasFile:Path = Paths.get("/tmp/extraOptions.json")
+        Utils.writeFileContent(extrasFile, extraOptions)
+
+        val path = pathFromBasename("extras.wdl")
+        Main.compile(
+            List(path.toString, "--compileMode", "ir", "--locked", "--quiet",
+                 "--extras", extrasFile.toString)
+        ) should equal(Main.SuccessfulTermination(""))
+    }
 }
