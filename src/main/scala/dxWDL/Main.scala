@@ -7,7 +7,7 @@ import java.nio.file.{Path, Paths}
 import scala.collection.mutable.HashMap
 import spray.json._
 import spray.json.JsString
-import wdl.draft2.model.{WdlExpression, WdlNamespace, WdlTask, WdlNamespaceWithWorkflow, WdlWorkflow}
+import wdl.draft2.model.{WdlExpression, WdlNamespace, WdlTask, WdlNamespaceWithWorkflow}
 import wom.values._
 
 object Main extends App {
@@ -454,13 +454,6 @@ object Main extends App {
         ns.tasks.head
     }
 
-    def workflowOfNamespace(ns: WdlNamespace): WdlWorkflow = {
-        ns match {
-            case nswf: WdlNamespaceWithWorkflow => nswf.workflow
-            case _ => throw new Exception("WDL file contains no workflow")
-        }
-    }
-
     private def isTaskOp(op: InternalOp.Value) : Boolean = {
         op match {
             case InternalOp.TaskEpilog | InternalOp.TaskProlog | InternalOp.TaskRelaunch =>
@@ -505,18 +498,18 @@ object Main extends App {
                     }
                 } else {
                     val inputs = WdlVarLinks.loadJobInputsAsLinks(inputLines, inputSpec, None)
-                    val wf = workflowOfNamespace(ns)
+                    val nswf = ns.asInstanceOf[WdlNamespaceWithWorkflow]
                     op match {
                         case InternalOp.Collect =>
-                            runner.WfFragment.apply(wf ,
-                                                      inputSpec, outputSpec, inputs, orgInputs,
-                                                      RunnerWfFragmentMode.Collect, true)
+                            runner.WfFragment.apply(nswf,
+                                                    inputSpec, outputSpec, inputs, orgInputs,
+                                                    RunnerWfFragmentMode.Collect, true)
                         case InternalOp.WfFragment =>
-                            runner.WfFragment.apply(wf,
-                                                      inputSpec, outputSpec, inputs, orgInputs,
-                                                      RunnerWfFragmentMode.Launch, true)
+                            runner.WfFragment.apply(nswf,
+                                                    inputSpec, outputSpec, inputs, orgInputs,
+                                                    RunnerWfFragmentMode.Launch, true)
                         case InternalOp.WorkflowOutputReorg =>
-                            runner.WorkflowOutputReorg(true).apply(wf, inputSpec, outputSpec, inputs)
+                            runner.WorkflowOutputReorg(true).apply(nswf, inputSpec, outputSpec, inputs)
                     }
                 }
 

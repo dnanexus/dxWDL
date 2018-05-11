@@ -8,8 +8,12 @@ workflow complex {
         y=c1.result,
         z=c2.result
     }
+
+    Int a1 = add.result.a
+    Int b1 = add.result.b
+
     output {
-        Int a = add.result.a
-        Int b = add.result.b
+        Int a = a1
+        Int b = b1
     }
 }

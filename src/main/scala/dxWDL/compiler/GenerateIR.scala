@@ -478,10 +478,17 @@ task Add {
                     accu
                 } else {
                     // no existing stub, create it
-                    val task = genAppletStub(callable)
+                    val task = callable match {
+                        case apl:IR.Applet =>
+                            assert(apl.ns.tasks.size == 1)
+                            apl.ns.tasks.head
+                        case wf:IR.Workflow =>
+                            genAppletStub(callable)
+                    }
                     accu + (name -> task)
                 }
             }
+
 
         // rename usages of the input variables in the statment block
         val wordTranslations = inputVars.map{ cVar =>

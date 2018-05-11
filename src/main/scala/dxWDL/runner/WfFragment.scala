@@ -765,14 +765,14 @@ object WfFragment {
     }
 
 
-    def apply(wf: WdlWorkflow,
+    def apply(nswf: WdlNamespaceWithWorkflow,
               inputSpec: Map[String, DXIOParam],
               outputSpec: Map[String, DXIOParam],
               inputs: Map[String, WdlVarLinks],
               orgInputs: JsValue,
               runMode: RunnerWfFragmentMode.Value,
               verbose: Boolean) : Map[String, JsValue] = {
-        val wdlCode: String = WdlPrettyPrinter(false, None).apply(wf, 0).mkString("\n")
+        val wdlCode: String = WdlPrettyPrinter(false, None).apply(nswf, 0).mkString("\n")
         Utils.appletLog(verbose, s"Workflow source code:")
         Utils.appletLog(verbose, wdlCode, 10000)
         Utils.appletLog(verbose, s"Input spec: ${inputSpec}")
@@ -793,6 +793,7 @@ object WfFragment {
         }
 
         // Run the workflow
+        val wf = nswf.workflow
         val cef = new CompilerErrorFormatter("", wf.wdlSyntaxErrorFormatter.terminalMap)
         val r = WfFragment(execSeqMap, execLinkInfo, cef, orgInputs, runMode, false)
         val wvlVarOutputs = r.apply(wf, inputs)
