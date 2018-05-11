@@ -56,7 +56,7 @@ workflow advanced {
 
     call BroadGenomicsDocker
     call Animals as str_animals {
-        input: s=species, num_cores=3, disk_size=40
+        input: s= species + "_family", num_cores=3, disk_size=40
     }
     scatter (name in names) {
         call lib_string.Concat as concat {

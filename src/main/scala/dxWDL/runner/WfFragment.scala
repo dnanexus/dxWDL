@@ -684,6 +684,7 @@ case class WfFragment(execSeqMap: Map[Int, ChildExecDesc],
             case (env, stmt) => evalStatement(stmt, env)
         }
         val exportTypes = calcExportVarTypes(wf)
+        Utils.appletLog(verbose, s"exportTypes = ${exportTypes}")
 
         runMode match {
             case RunnerWfFragmentMode.Launch =>
@@ -795,7 +796,7 @@ object WfFragment {
         // Run the workflow
         val wf = nswf.workflow
         val cef = new CompilerErrorFormatter("", wf.wdlSyntaxErrorFormatter.terminalMap)
-        val r = WfFragment(execSeqMap, execLinkInfo, cef, orgInputs, runMode, false)
+        val r = WfFragment(execSeqMap, execLinkInfo, cef, orgInputs, runMode, verbose)
         val wvlVarOutputs = r.apply(wf, inputs)
 
         // convert from WVL to JSON

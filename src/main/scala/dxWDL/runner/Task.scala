@@ -90,10 +90,6 @@ private [dxWDL] object TaskSerialization {
             // Strip optional type
             case (WomOptionalType(t), WomOptionalValue(_,Some(w))) =>
                 wdlToJSON(t, w)
-            case (WomOptionalType(t), w) =>
-                wdlToJSON(t, w)
-            case (t, WomOptionalValue(_,Some(w))) =>
-                wdlToJSON(t, w)
 
             // missing value
             case (_, WomOptionalValue(_,None)) => JsNull
@@ -195,6 +191,95 @@ private [dxWDL] object TaskSerialization {
 case class Task(task:WdlTask,
                 cef: CompilerErrorFormatter,
                 verbose: Boolean) {
+
+    private def evalDeclarations(declarations: Seq[DeclarationInterface],
+                                 envInputs : Map[String, WomValue])
+            : Map[DeclarationInterface, WomValue] = {
+        // Environment that includes a cache for values that have
+        // already been evaluated.  It is more efficient to make the
+        // conversion once, however, that is not the main point
+        // here. There are types that require special care, for
+        // example files. We need to make sure we download files
+        // exactly once, and later, we want to be able to delete them.
+        var env: Map[String, WomValue] = envInputs
+
+        def lookup(varName : String) : WomValue = env.get(varName) match {
+            case Some(v) => v
+            case None =>
+                // A value for this variable has not been passed. Check if it
+                // is optional.
+                val varDefinition = declarations.find(_.unqualifiedName == varName) match {
+                    case Some(x) => x
+                    case None => throw new Exception(
+                        s"Cannot find declaration for variable ${varName}")
+                }
+                varDefinition.womType match {
+                    case WomOptionalType(t) => WomOptionalValue(t, None)
+                    case _ =>  throw new UnboundVariableException(s"${varName}")
+                }
+        }
+
+        // coerce a WDL value to the required type (if needed)
+        def cast(wdlType: WomType, v: WomValue, varName: String) : WomValue = {
+            val retVal =
+                if (v.womType != wdlType) {
+                    // we need to convert types
+                    Utils.appletLog(verbose, s"casting ${v.womType} to ${wdlType}")
+                    wdlType.coerceRawValue(v).get
+                } else {
+                    // no need to change types
+                    v
+                }
+            retVal
+        }
+
+        def evalAndCache(decl:DeclarationInterface,
+                         expr:WdlExpression) : WomValue = {
+            val vRaw : WomValue = expr.evaluate(lookup, DxFunctions).get
+            Utils.appletLog(verbose, s"evaluating ${decl} -> ${vRaw}")
+            val w: WomValue = cast(decl.womType, vRaw, decl.unqualifiedName)
+            env = env + (decl.unqualifiedName -> w)
+            w
+        }
+
+        def evalDecl(decl : DeclarationInterface) : WomValue = {
+            (decl.womType, decl.expression) match {
+                // optional input
+                case (WomOptionalType(t), None) =>
+                    envInputs.get(decl.unqualifiedName) match {
+                        case None => WomOptionalValue(t, None)
+                        case Some(wdlValue) => wdlValue
+                    }
+
+                // compulsory input
+                case (_, None) =>
+                    envInputs.get(decl.unqualifiedName) match {
+                        case None =>
+                            throw new UnboundVariableException(s"${decl.unqualifiedName}")
+                        case Some(wdlValue) => wdlValue
+                    }
+
+                case (_, Some(expr)) if (envInputs contains decl.unqualifiedName) =>
+                    // An overriding value was provided, use it instead
+                    // of evaluating the right hand expression
+                    envInputs(decl.unqualifiedName)
+
+                case (_, Some(expr)) =>
+                    // declaration to evaluate, not an input
+                    evalAndCache(decl, expr)
+            }
+        }
+
+        // Process all the declarations. Take care to add new bindings
+        // to the environment, so variables like [cmdline] will be able to
+        // access previous results.
+        val results = declarations.map{ decl =>
+            decl -> evalDecl(decl)
+        }.toMap
+        Utils.appletLog(verbose, s"Eval env=${env}")
+        results
+    }
+
     def getMetaDir() = {
         val metaDir = Utils.getMetaDirPath()
         Utils.safeMkdir(metaDir)
@@ -412,7 +497,7 @@ case class Task(task:WdlTask,
 
         // evaluate the declarations, and localize any files if necessary
         val env: Map[String, WomValue] =
-            Eval.evalDeclarations(task.declarations, envInput)
+            evalDeclarations(task.declarations, envInput)
                 .map{ case (decl, v) => decl.unqualifiedName -> v}.toMap
         val docker = dockerImage(env)
 
@@ -457,7 +542,7 @@ case class Task(task:WdlTask,
         val env : Map[String, WomValue] = readEnvFromDisk()
 
         // evaluate the output declarations.
-        val outputs: Map[DeclarationInterface, WomValue] = Eval.evalDeclarations(task.outputs, env)
+        val outputs: Map[DeclarationInterface, WomValue] = evalDeclarations(task.outputs, env)
 
         // Upload any output files to the platform.
         val wvlOutputs:Map[String, WdlVarLinks] = outputs.map{ case (decl, wdlValue) =>
