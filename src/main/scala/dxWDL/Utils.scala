@@ -634,10 +634,12 @@ object Utils {
     }
 
     // Logging output for applets at runtime
-    def appletLog(verbose: Boolean, msg:String) : Unit = {
+    def appletLog(verbose: Boolean,
+                  msg: String,
+                  limit: Int = APPLET_LOG_MSG_LIMIT) : Unit = {
         if (verbose) {
             val shortMsg =
-                if (msg.length > APPLET_LOG_MSG_LIMIT)
+                if (msg.length > limit)
                     "Message is too long for logging"
                 else
                     msg

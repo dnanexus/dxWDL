@@ -15,21 +15,21 @@ class DecomposeTest extends FlatSpec with Matchers {
         val path = pathFromBasename("long_block.wdl")
         Main.compile(
             List(path.toString, "--compileMode", "ir", "--locked")
-        ) should equal(Main.SuccessfulTermination(""))
+        ) shouldBe a [Main.SuccessfulTerminationIR]
     }
 
     it should "recognize references to blocks compiled into sub-workflows" in {
         val path = pathFromBasename("long_refs.wdl")
         Main.compile(
             List(path.toString, "--compileMode", "ir", "--locked", "--quiet")
-        ) should equal(Main.SuccessfulTermination(""))
+        ) shouldBe a [Main.SuccessfulTerminationIR]
     }
 
     it should "handle wide and deep nesting" in {
         val path = pathFromBasename("two_phase.wdl")
         Main.compile(
             List(path.toString, "--compileMode", "ir", "--locked", "--quiet")
-        ) should equal(Main.SuccessfulTermination(""))
+        ) shouldBe a [Main.SuccessfulTerminationIR]
     }
 
 
@@ -37,27 +37,27 @@ class DecomposeTest extends FlatSpec with Matchers {
         val path = pathFromBasename("interpolation.wdl")
         Main.compile(
             List(path.toString, "--compileMode", "ir", "--locked", "--quiet")
-        ) should equal(Main.SuccessfulTermination(""))
+        ) shouldBe a [Main.SuccessfulTerminationIR]
     }
 
     it should "avoid giving the same name to scatters with similar items" in {
         val path = pathFromBasename("naming_scatters.wdl")
         Main.compile(
             List(path.toString, "--compileMode", "ir", "--locked", "--quiet")
-        ) should equal(Main.SuccessfulTermination(""))
+        ) shouldBe a [Main.SuccessfulTerminationIR]
     }
 
     it should "recogonize member accesses when calculating free variables" in {
         val path = pathFromBasename("map.wdl")
         Main.compile(
             List(path.toString, "--compileMode", "ir", "--locked", "--quiet")
-        ) should equal(Main.SuccessfulTermination(""))
+        ) shouldBe a [Main.SuccessfulTerminationIR]
     }
 
     it should "deal with deep conditionals without creating optional optional types" in {
         val path = pathFromBasename("deep_conditionals.wdl")
         Main.compile(
             List(path.toString, "--compileMode", "ir", "--locked", "--quiet")
-        ) should equal(Main.SuccessfulTermination(""))
+        ) shouldBe a [Main.SuccessfulTerminationIR]
     }
 }

@@ -339,10 +339,6 @@ object NamespaceOps {
         val defaultAttrs: Map[String, WdlExpression] = defaultRuntimeAttributes
             .filter{ case (name, _) => !(existingAttrNames contains name) }
         val attrs: Map[String, WdlExpression] = task.runtimeAttributes.attrs ++ defaultAttrs
-        System.err.println(s"""|setDefaultAttributes ${task.name}
-                               |  defaults = ${defaultRuntimeAttributes.keys.toSet}
-                               |  final = ${attrs.keys.toSet}
-                               |""".stripMargin)
         WdlRewrite.taskReplaceRuntimeAttrs(task, WdlRuntimeAttributes(attrs))
     }
 

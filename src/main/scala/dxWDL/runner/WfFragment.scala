@@ -774,7 +774,7 @@ object WfFragment {
               verbose: Boolean) : Map[String, JsValue] = {
         val wdlCode: String = WdlPrettyPrinter(false, None).apply(wf, 0).mkString("\n")
         Utils.appletLog(verbose, s"Workflow source code:")
-        Utils.appletLog(verbose, wdlCode)
+        Utils.appletLog(verbose, wdlCode, 10000)
         Utils.appletLog(verbose, s"Input spec: ${inputSpec}")
         Utils.appletLog(verbose, s"Inputs: ${inputs}")
         Utils.appletLog(verbose, s"runMode=${runMode}")
