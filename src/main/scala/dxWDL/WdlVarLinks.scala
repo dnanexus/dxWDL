@@ -202,7 +202,6 @@ object WdlVarLinks {
     private def evalCoreHandleFile(jsv:JsValue,
                                    ioMode: IOMode.Value,
                                    ioDir: IODirection.Value) : WomValue = {
-        System.err.println(s"evalCoreHandleFile ${jsv} ioMode=${ioMode} ioDir=${ioDir}")
         (ioDir,jsv) match {
             case (IODirection.Upload, JsString(path)) if isLocalPath(path) =>
                 // Local file that needs to be uploaded
@@ -227,7 +226,8 @@ object WdlVarLinks {
                 WomSingleFile(DxPath.dxFileToURL(dxFile))
             case (IODirection.Zero, JsObject(_)) =>
                 val dxFile = dxFileFromJsValue(jsv)
-                WomSingleFile(DxPath.dxFileToURL(dxFile))
+                val dxp = DxPath.dxFileToURL(dxFile)
+                WomSingleFile(dxp)
 
             case (_,_) =>
                 throw new Exception(s"Cannot transfer ${jsv} in context ${ioDir}")
@@ -347,6 +347,14 @@ object WdlVarLinks {
         }
     }
 
+    private def isDoubleOptional(t: WomType) : Boolean = {
+        t match {
+            case WomOptionalType(WomOptionalType(_)) => true
+            case _ => false
+        }
+    }
+
+
     // Serialize a complex WDL value into a JSON value. The value could potentially point
     // to many files. Serialization proceeds recursively, as follows:
     // 1. Make a pass on the object, upload any files, and keep an in-memory JSON representation
@@ -355,19 +363,35 @@ object WdlVarLinks {
     private def jsFromWomValue(womType: WomType,
                                womValue: WomValue,
                                ioDir: IODirection.Value) : JsValue = {
-        def handleFile(path:String) : JsValue = ioDir match {
-            case IODirection.Upload =>
-                LocalDxFiles.upload(Paths.get(path))
-            case IODirection.Download =>
-                LocalDxFiles.get(Paths.get(path)) match {
-                    case None => throw new Exception(s"File ${path} has not been downloaded yet")
-                    case Some(dxFile) => dxFileToJsValue(dxFile)
-                }
-            case IODirection.Zero =>
-                if (!path.startsWith(DX_URL_PREFIX))
-                    throw new Exception(s"${path} is not a dx:file, cannot transfer it in this context.")
-                val dxFile = DxPath.lookupDxURLFile(path)
-                dxFileToJsValue(dxFile)
+        if (isDoubleOptional(womType) ||
+                isDoubleOptional(womValue.womType)) {
+            System.err.println(s"""|jsFromWomValue
+                                   |    type=${womType.toDisplayString}
+                                   |    val=${womValue.toWomString}
+                                   |    val.type=${womValue.womType.toDisplayString}
+                                   |    ioDir=${ioDir}
+                                   |""".stripMargin)
+            throw new Exception("a double optional type")
+        }
+        def handleFile(path:String) : JsValue =  {
+            //System.err.println(s"jsFromWomValue:handleFile ${path}")
+            ioDir match {
+                case IODirection.Upload =>
+                    if (Files.exists(Paths.get(path)))
+                        LocalDxFiles.upload(Paths.get(path))
+                    else
+                        JsNull
+                case IODirection.Download =>
+                    LocalDxFiles.get(Paths.get(path)) match {
+                        case None => throw new Exception(s"File ${path} has not been downloaded yet")
+                        case Some(dxFile) => dxFileToJsValue(dxFile)
+                    }
+                case IODirection.Zero =>
+                    if (!path.startsWith(DX_URL_PREFIX))
+                        throw new Exception(s"${path} is not a dx:file, cannot transfer it in this context.")
+                    val dxFile = DxPath.lookupDxURLFile(path)
+                    dxFileToJsValue(dxFile)
+            }
         }
 
         (womType, womValue) match {
@@ -430,7 +454,7 @@ object WdlVarLinks {
 
             // Non empty array
             case (WomArrayType(t), WomArray(_, elems)) =>
-                val jsVals = elems.map(e => jsFromWomValue(t, e, ioDir))
+                val jsVals = elems.map{ x => jsFromWomValue(t, x, ioDir) }
                 JsArray(jsVals.toVector)
 
             // keys are strings, requiring no conversion. Because objects
@@ -443,9 +467,6 @@ object WdlVarLinks {
                 JsObject(jsm)
 
             // Strip optional type
-            case (WomOptionalType(t), WomOptionalValue(_,Some(WomSingleFile(path)))) =>
-                if (Files.exists(Paths.get(path))) handleFile(path)
-                else JsNull
             case (WomOptionalType(t), WomOptionalValue(_,Some(w))) =>
                 jsFromWomValue(t, w, ioDir)
             case (WomOptionalType(t), WomOptionalValue(_,None)) =>
@@ -465,7 +486,7 @@ object WdlVarLinks {
                     if (womValue == null)
                         "null"
                     else
-                        womValue.toWomString
+                        s"(${womValue.toWomString}, ${womValue.womType.toDisplayString})"
                 throw new Exception(s"""|Unsupported combination:
                                         |    womType:  ${womTypeStr}
                                         |    womValue: ${womValueStr}""".stripMargin)

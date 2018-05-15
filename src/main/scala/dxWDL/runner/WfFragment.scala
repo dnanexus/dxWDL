@@ -38,6 +38,7 @@ package dxWDL.runner
 import Collect.ChildExecDesc
 import com.dnanexus._
 import dxWDL._
+import dxWDL.Utils.{isOptional, makeOptional, stripOptional}
 import java.nio.file.{Path, Paths, Files}
 import scala.util.{Failure, Success}
 import spray.json._
@@ -51,6 +52,25 @@ case class WfFragment(execSeqMap: Map[Int, ChildExecDesc],
                       orgInputs: JsValue,
                       runMode: RunnerWfFragmentMode.Value,
                       verbose: Boolean) {
+
+    def makeOptionalWomValue(t: WomType,
+                             v: WomValue) : WomValue = {
+        v match {
+            case WomOptionalValue(WomOptionalType(WomOptionalType(_)),_) =>
+                throw new Exception(s"double optional type")
+            case WomOptionalValue(_, Some(WomOptionalValue(_,_))) =>
+                throw new Exception("double optional value")
+            case WomOptionalValue(_, _) =>
+                v
+            case _ =>
+                WomOptionalValue(stripOptional(t), Some(v))
+        }
+    }
+
+    def makeOptionalNone(t: WomType) : WomValue = {
+        WomOptionalValue(stripOptional(t), None)
+    }
+
     // A runtime representation of a WDL variable, or a call.
     //
 
@@ -164,10 +184,7 @@ case class WfFragment(execSeqMap: Map[Int, ChildExecDesc],
             // regular declarations, avoid creating Optional[Optional[_]] types.
             val decls = blockTypeMap.map{
                 case (varName, t) =>
-                    val t2 = Utils.stripOptional(t)
-                    varName -> ElemWom(varName,
-                                       WomOptionalType(t2),
-                                       WomOptionalValue(WomOptionalType(t2), None))
+                    varName -> ElemWom(varName, makeOptional(t), makeOptionalNone(t))
             }.toMap
 
             val calls = blockCallNames.map{
@@ -182,6 +199,10 @@ case class WfFragment(execSeqMap: Map[Int, ChildExecDesc],
                                   blockTypeMap: Map[String, WomType],
                                   blockCallNames: Vector[String]) : Env = {
             val emptyEnv = emptyOptionals(blockTypeMap, blockCallNames)
+/*            System.err.println("===  applyOptionalModifier")
+            emptyEnv.decls.foreach{ case (_, elem) =>
+                System.err.println(s"    ${elem.name}   ${elem.womType}  ${elem.value}")
+            }*/
 
             val calls = emptyEnv.calls.map{
                 case (name, defaultVal) =>
@@ -196,14 +217,23 @@ case class WfFragment(execSeqMap: Map[Int, ChildExecDesc],
 
             val decls = emptyEnv.decls.map {
                 case (name, ElemWom(_, t, value)) =>
+                    assert(isOptional(t))
                     val elemWom = env.decls.get(name) match {
                         case None =>
                             ElemWom(name, t, value)
                         case Some(elem) =>
-                            ElemWom(name, t, WomOptionalValue(t, Some(elem.value)))
+                            ElemWom(name, t,
+                                    makeOptionalWomValue(t, elem.value))
                     }
                     name -> elemWom
             }
+
+/*            System.err.println()
+            decls.foreach{ case (_, elem) =>
+                System.err.println(s"    ${elem.name}   ${elem.womType}  ${elem.value}")
+            }
+            System.err.println("===")*/
+
             Env(env.launched, decls, calls)
         }
 
@@ -533,7 +563,6 @@ case class WfFragment(execSeqMap: Map[Int, ChildExecDesc],
 
         // add optional modifiers to the environment
         val env2 = Env.applyOptionalModifier(childEnv, s2t, blockCallNames)
-
         Env.concat(env, env2)
     }
 
@@ -548,9 +577,9 @@ case class WfFragment(execSeqMap: Map[Int, ChildExecDesc],
                         // An input variable, read it from the environment
                         val elem = env.decls(decl.unqualifiedName)
                         elem.value
-                    case None if Utils.isOptional(decl.womType) =>
+                    case None if isOptional(decl.womType) =>
                         // An optional input, make it None
-                        WomOptionalValue(WomOptionalType(decl.womType), None)
+                        makeOptionalNone(decl.womType)
                     case None =>
                         // A declaration with no value, such as:
                         //   String buffer
@@ -649,12 +678,12 @@ case class WfFragment(execSeqMap: Map[Int, ChildExecDesc],
                     case None => JsNull
                     case Some(jsv) => jsv
                 }
-                Utils.appletLog(verbose, s"AggrCall ${seqNum}  jsv=${jsv.toString}")
 
                 // Import the value from the dx-executable, to a local WOM value.
                 // Avoid any downloads
                 val wvl = WdlVarLinks.importFromDxExec(womType, DeclAttrs.empty, jsv)
-                WdlVarLinks.eval(wvl, IOMode.Remote, IODirection.Zero)
+                val womValue = WdlVarLinks.eval(wvl, IOMode.Remote, IODirection.Zero)
+                womValue
 
             case (AggrCallArray(children), WomArrayType(tInner)) =>
                 // recurse into the children, build WomValues
@@ -662,11 +691,11 @@ case class WfFragment(execSeqMap: Map[Int, ChildExecDesc],
                 WomArray(WomArrayType(tInner), children2)
 
             case (AggrCallOption(None), _) =>
-                WomOptionalValue(womType, None)
+                makeOptionalNone(womType)
 
             case (AggrCallOption(Some(child)), WomOptionalType(tInner)) =>
                 val value = collectCallField(fieldName, tInner, child)
-                WomOptionalValue(womType, Some(value))
+                makeOptionalWomValue(womType, value)
         }
     }
 

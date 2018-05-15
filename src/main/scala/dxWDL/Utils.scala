@@ -605,7 +605,6 @@ object Utils {
         }
     }
 
-
     def stripArray(t: WomType) : WomType = {
         t match {
             case WomArrayType(x) => x
