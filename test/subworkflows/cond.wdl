@@ -7,15 +7,33 @@ workflow cond {
 
     if (flag) {
         call lib.add { input: a=5, b=1, n=n }
+        call lib.add as add2 {input: a=3, b=2, n=n }
+        call genFile { input: str="Jabberwocky" }
     }
-    Int i = select_first([add.result])
 
-    if (flag) {
-        call lib.mul {input: a=i, b=i, n=n}
+    File lewis_carol = select_first([genFile.summary])
+
+    scatter (i in [1, 3, 5]) {
+        Int k = select_first([add2.result])
+        call lib.mul {input: a=i, b=k, n=n}
     }
 
     output {
-        Int? add_r = add.result
-        Int? mul_r = mul.result
+        Int? add2_r = add2.result
+        Array[Int] mul = mul.result
+        File lc = lewis_carol
+    }
+}
+
+# Create a file with several lines.
+task genFile {
+    String str
+    command <<<
+       echo "Nut" >> ${str}.txt
+       echo "Screwdriver" >> ${str}.txt
+       echo "Wrench" >> ${str}.txt
+    >>>
+    output {
+        File summary = "${str}.txt"
     }
 }

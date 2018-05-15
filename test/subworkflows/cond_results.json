@@ -1,4 +1,4 @@
 {
-  "cond.add_r" : 6,
-  "cond.mul_r": 1
+  "cond.mul": [5, 1, 4],
+  "cond.add2_r": 5
 }

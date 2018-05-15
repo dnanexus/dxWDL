@@ -202,6 +202,7 @@ object WdlVarLinks {
     private def evalCoreHandleFile(jsv:JsValue,
                                    ioMode: IOMode.Value,
                                    ioDir: IODirection.Value) : WomValue = {
+        System.err.println(s"evalCoreHandleFile ${jsv} ioMode=${ioMode} ioDir=${ioDir}")
         (ioDir,jsv) match {
             case (IODirection.Upload, JsString(path)) if isLocalPath(path) =>
                 // Local file that needs to be uploaded

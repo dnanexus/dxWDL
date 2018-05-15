@@ -299,7 +299,7 @@ case class WfFragment(execSeqMap: Map[Int, ChildExecDesc],
         JsObject(mNonNull)
     }
 
-        // coerce a WDL value to the required type (if needed)
+    // coerce a WDL value to the required type (if needed)
     private def cast(wdlType: WomType, v: WomValue, varName: String) : WomValue = {
         val retVal =
             if (v.womType != wdlType) {
@@ -325,7 +325,9 @@ case class WfFragment(execSeqMap: Map[Int, ChildExecDesc],
         }
     }
 
-    private def execCall(call: WdlCall, env: Env) : (Int, DXExecution) = {
+    private def execCall(call: WdlCall,
+                         env: Env,
+                         callNameHint: Option[String]) : (Int, DXExecution) = {
         val calleeName = calleeGetName(call)
         val eInfo = execLinkInfo.get(calleeName) match {
             case None =>
@@ -341,12 +343,16 @@ case class WfFragment(execSeqMap: Map[Int, ChildExecDesc],
         // so the collect subjob will be able to put the
         // results back together.
         val seqNum: Int = launchSeqNum()
+        val dbgName = callNameHint match {
+            case None => call.unqualifiedName
+            case Some(hint) => s"${call.unqualifiedName} ${hint}"
+        }
         val dxExec =
             if (eInfo.dxExec.isInstanceOf[DXApplet]) {
                 val applet = eInfo.dxExec.asInstanceOf[DXApplet]
                 val dxJob :DXJob = applet.newRun()
                     .setRawInput(Utils.jsonNodeOfJsValue(callInputs))
-                    .setName(call.unqualifiedName)
+                    .setName(dbgName)
                     .putProperty("call", call.unqualifiedName)
                     .putProperty("seq_number", seqNum.toString)
                     .run()
@@ -355,7 +361,7 @@ case class WfFragment(execSeqMap: Map[Int, ChildExecDesc],
                 val workflow = eInfo.dxExec.asInstanceOf[DXWorkflow]
                 val dxAnalysis :DXAnalysis = workflow.newRun()
                     .setRawInput(Utils.jsonNodeOfJsValue(callInputs))
-                    .setName(call.unqualifiedName)
+                    .setName(dbgName)
                     .putProperty("call", call.unqualifiedName)
                     .putProperty("seq_number", seqNum.toString)
                     .run()
@@ -439,6 +445,28 @@ case class WfFragment(execSeqMap: Map[Int, ChildExecDesc],
         }
     }
 
+    // create a short, easy to read, description for a scatter element.
+    private def readableNameForScatterItem(item: WomValue) : Option[String] = {
+        item match {
+            case WomBoolean(_) | WomInteger(_) | WomFloat(_) | WomString(_) =>
+                Some(item.toWomString)
+            case WomSingleFile(path) =>
+                val p = Paths.get(path).getFileName()
+                Some(p.toString)
+            case WomPair(l, r) =>
+                val ls = readableNameForScatterItem(l)
+                val rs = readableNameForScatterItem(r)
+                (ls, rs) match {
+                    case (Some(ls1), Some(rs1)) => Some(s"(${ls1}, ${rs1})")
+                    case _ => None
+                }
+            case WomOptionalValue(_, Some(x)) =>
+                readableNameForScatterItem(x)
+            case _ =>
+                None
+        }
+    }
+
     // For each element in the collection, perform all the
     // body statements
     private def evalScatter(ssc:Scatter,
@@ -461,13 +489,14 @@ case class WfFragment(execSeqMap: Map[Int, ChildExecDesc],
             val item = ElemWom(ssc.item, itemType, itemVal)
             val envInner = envBgn.copy(decls = envBgn.decls + (ssc.item -> item))
             val envEnd = ssc.children.foldLeft(envInner) {
-                case (env2, stmt2) => evalStatement(stmt2, env2)
+                case (env2, stmt2) =>
+                    val callHint = readableNameForScatterItem(itemVal)
+                    evalStatement(stmt2, env2, callHint)
             }
             // We don't want to duplicate the environment we
             // started with.
             Env.removeKeys(envEnd, (envBgn.decls.keys.toSet + ssc.item))
         }
-        //Utils.appletLog(s"evalScatter sscEnvs=${sscEnvs}")
         val blockTypeMap = statementsToTypes(ssc.children)
         val blockCallNames = statementsToCallNames(ssc.children)
         val sme = scatterMergeEnvs(blockTypeMap, blockCallNames, sscEnvs)
@@ -488,7 +517,7 @@ case class WfFragment(execSeqMap: Map[Int, ChildExecDesc],
             if (condValue) {
                 // Condition is true, evaluate the sub block
                 val envEnd = ifStmt.children.foldLeft(env) {
-                    case (env2, stmt2) => evalStatement(stmt2, env2)
+                    case (env2, stmt2) => evalStatement(stmt2, env2, None)
                 }
                 // don't duplicate the top environment
                 Env.removeKeys(envEnd, env.decls.keys.toSet)
@@ -508,7 +537,9 @@ case class WfFragment(execSeqMap: Map[Int, ChildExecDesc],
         Env.concat(env, env2)
     }
 
-    private def evalStatement(stmt: Scope, env: Env) : Env = {
+    private def evalStatement(stmt: Scope,
+                              env: Env,
+                              callNameHint: Option[String]) : Env = {
         def lookup = lookupInEnv(env)(_)
         stmt match {
             case decl:Declaration =>
@@ -537,7 +568,7 @@ case class WfFragment(execSeqMap: Map[Int, ChildExecDesc],
                     case RunnerWfFragmentMode.Launch =>
                         // Embed the execution-id into the call object. This allows
                         // referencing the job/analysis results later on.
-                        val (seqNum, dxExec) = execCall(call, env)
+                        val (seqNum, dxExec) = execCall(call, env, callNameHint)
                         val elem = AggrCall(call.unqualifiedName, seqNum, dxExec)
                         env.copy(launched = env.launched + (seqNum -> (call, dxExec)),
                                  calls = env.calls + (call.unqualifiedName -> elem))
@@ -618,6 +649,8 @@ case class WfFragment(execSeqMap: Map[Int, ChildExecDesc],
                     case None => JsNull
                     case Some(jsv) => jsv
                 }
+                Utils.appletLog(verbose, s"AggrCall ${seqNum}  jsv=${jsv.toString}")
+
                 // Import the value from the dx-executable, to a local WOM value.
                 // Avoid any downloads
                 val wvl = WdlVarLinks.importFromDxExec(womType, DeclAttrs.empty, jsv)
@@ -681,7 +714,7 @@ case class WfFragment(execSeqMap: Map[Int, ChildExecDesc],
 
         // evaluate each of the statements in the workflow
         val envEnd = wf.children.foldLeft(envBgn) {
-            case (env, stmt) => evalStatement(stmt, env)
+            case (env, stmt) => evalStatement(stmt, env, None)
         }
         val exportTypes = calcExportVarTypes(wf)
         Utils.appletLog(verbose, s"exportTypes = ${exportTypes}")
@@ -698,29 +731,25 @@ case class WfFragment(execSeqMap: Map[Int, ChildExecDesc],
                         None
                 }.toMap
 
-                if (childJobs.isEmpty) {
-                    // There are no calls, we can return the results immediately
-                    declOutputs
-                } else if (childJobs.size == 1 && isSimpleCode(wf)) {
-                    // The WDL workflow has no scatters or if blocks. We can return
-                    // promises to the calls.
-                    val promises = envEnd.launched.values.map{
-                        case (call, dxJob) => genPromisesForCall(call, dxJob, exportTypes)
-                    }.flatten
-                    declOutputs ++ promises
-                } else {
-                    // Launch a subjob to collect and marshal the results.
-                    //
-                    launchCollectSubjob(childJobs.toVector, calls.toVector, exportTypes)
-                }
+                val promises : Map[String, WdlVarLinks] =
+                    if (childJobs.isEmpty) {
+                        // There are no calls, we can return the results immediately
+                        Map.empty
+                    } else if (childJobs.size == 1 && isSimpleCode(wf)) {
+                        // The WDL workflow has no scatters or if blocks. We can return
+                        // promises to the calls.
+                        val (_, (call, dxJob)) = envEnd.launched.head
+                        genPromisesForCall(call, dxJob, exportTypes)
+                    } else {
+                        // Launch a subjob to collect and marshal the call results.
+                        // Remove the declarations already calculated
+                        val declarations = declOutputs.keys.toSet
+                        val remaining = exportTypes.filter{ case (name,_) => !(declarations contains name) }
+                        launchCollectSubjob(childJobs.toVector, calls.toVector, remaining)
+                    }
+                declOutputs ++ promises
 
             case RunnerWfFragmentMode.Collect =>
-                // aggregate all the declaration
-                val declResults: Map[String, WdlVarLinks] = envEnd.decls.map{
-                    case (name, ElemWom(_, womType,value)) =>
-                        name -> wdlValueToWVL(womType, value)
-                }.toMap
-
                 // aggregate call results
                 val callResults: Map[String, WdlVarLinks] =
                     envEnd.calls.foldLeft(Map.empty[String, WdlVarLinks]){
@@ -734,7 +763,7 @@ case class WfFragment(execSeqMap: Map[Int, ChildExecDesc],
                             }.toMap
                             accu ++ fields
                     }
-                declResults ++ callResults
+                callResults
         }
     }
 }
