@@ -20,7 +20,7 @@ class InputFileTest extends FlatSpec with Matchers {
         Main.compile(
             List(wdlCode.toString, "--compileMode", "ir", "-quiet",
                  "-inputs", inputs.toString)
-        ) should equal(Main.SuccessfulTermination(""))
+        ) shouldBe a [Main.SuccessfulTerminationIR]
     }
 
     it should "one input too many" in {

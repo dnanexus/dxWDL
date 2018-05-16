@@ -6,6 +6,7 @@ import org.scalatest.{FlatSpec, Matchers}
 import org.scalatest.Inside._
 import wdl.draft2.model._
 
+
 // These tests involve compilation -without- access to the platform.
 //
 class CompilerUnitTest extends FlatSpec with Matchers {
@@ -67,7 +68,7 @@ class CompilerUnitTest extends FlatSpec with Matchers {
             List(path.toString, "--compileMode", "ir", "--locked")
         )
         inside(retval) {
-            case Main.SuccessfulTermination(_) => true
+            case Main.SuccessfulTerminationIR(_) => true
         }
     }
 
@@ -114,49 +115,49 @@ class CompilerUnitTest extends FlatSpec with Matchers {
         val path = pathFromBasename("three_levels/top.wdl")
         Main.compile(
             List(path.toString, "--compileMode", "ir", "--locked", "--quiet")
-        ) should equal(Main.SuccessfulTermination(""))
+        ) shouldBe a [Main.SuccessfulTerminationIR]
     }
 
     it should "handle closures across code blocks" in {
         val path = pathFromBasename("closure1.wdl")
         Main.compile(
             List(path.toString, "--compileMode", "ir", "--locked", "--quiet")
-        ) should equal(Main.SuccessfulTermination(""))
+        ) shouldBe a [Main.SuccessfulTerminationIR]
     }
 
     it should "handle a call closure " in {
         val path = pathFromBasename("closure2.wdl")
         Main.compile(
             List(path.toString, "--compileMode", "ir", "--locked", "--quiet")
-        ) should equal(Main.SuccessfulTermination(""))
+        ) shouldBe a [Main.SuccessfulTerminationIR]
     }
 
     it should "handle weird tasks " in {
         val path = pathFromBasename("task_bug.wdl")
         Main.compile(
             List(path.toString, "--compileMode", "ir", "--locked", "--quiet")
-        ) should equal(Main.SuccessfulTermination(""))
+        ) shouldBe a [Main.SuccessfulTerminationIR]
     }
 
     it should "pass workflow input to task call" in {
         val path = pathFromBasename("closure3.wdl")
         Main.compile(
             List(path.toString, "--compileMode", "ir", "--locked", "--quiet")
-        ) should equal(Main.SuccessfulTermination(""))
+        ) shouldBe a [Main.SuccessfulTerminationIR]
     }
 
     it should "handle pair left/right" in {
         val path = pathFromBasename("pairs.wdl")
         Main.compile(
             List(path.toString, "--compileMode", "ir", "--locked", "--quiet")
-        ) should equal(Main.SuccessfulTermination(""))
+        ) shouldBe a [Main.SuccessfulTerminationIR]
     }
 
     it should "handle stdlib functions used as variable names" in {
         val path = pathFromBasename("stdlib_variables.wdl")
         Main.compile(
             List(path.toString, "--compileMode", "ir", "--locked", "--quiet")
-        ) should equal(Main.SuccessfulTermination(""))
+        ) shouldBe a [Main.SuccessfulTerminationIR]
     }
 
     it should "respect variables passed through the extras mechanisms" in {
@@ -170,9 +171,33 @@ class CompilerUnitTest extends FlatSpec with Matchers {
         Utils.writeFileContent(extrasFile, extraOptions)
 
         val path = pathFromBasename("extras.wdl")
-        Main.compile(
+        val retval = Main.compile(
             List(path.toString, "--compileMode", "ir", "--locked", "--quiet",
                  "--extras", extrasFile.toString)
-        ) should equal(Main.SuccessfulTermination(""))
+        )
+        retval shouldBe a [Main.SuccessfulTerminationIR]
+
+        // verify that the intermediate code includes the correct docker image
+        val ir: dxWDL.compiler.IR.Namespace = retval match {
+            case Main.SuccessfulTerminationIR(x) => x
+            case _ => throw new Exception("sanity")
+        }
+        val (_,mulApl) = ir.applets.head
+        mulApl.docker should equal(dxWDL.compiler.IR.DockerImageNetwork)
+
+
+
+        // Verify that if we -do not- give the extra options, there is no
+        // docker image set.
+        val retval2 = Main.compile(
+            List(path.toString, "--compileMode", "ir", "--locked", "--quiet")
+        )
+        retval2 shouldBe a [Main.SuccessfulTerminationIR]
+        val ir2: dxWDL.compiler.IR.Namespace = retval2 match {
+            case Main.SuccessfulTerminationIR(x) => x
+            case _ => throw new Exception("sanity")
+        }
+        val (_,mulApl2) = ir2.applets.head
+        mulApl2.docker should equal(dxWDL.compiler.IR.DockerImageNone)
     }
 }

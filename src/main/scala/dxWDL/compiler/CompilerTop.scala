@@ -205,7 +205,7 @@ object CompilerTop {
 
     // Compile IR only
     def applyOnlyIR(wdlSourceFile: String,
-                    cOpt: CompilerOptions) : Unit = {
+                    cOpt: CompilerOptions) : IR.Namespace = {
         val path = Paths.get(wdlSourceFile)
         val nsTree = compileNamespaceOpsTree(path, cOpt)
         compileIR(path, nsTree, cOpt)

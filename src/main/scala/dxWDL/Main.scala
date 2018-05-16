@@ -2,16 +2,18 @@ package dxWDL
 
 import com.dnanexus.{DXProject}
 import com.typesafe.config._
+import dxWDL.compiler.IR
 import java.nio.file.{Path, Paths}
 import scala.collection.mutable.HashMap
 import spray.json._
 import spray.json.JsString
-import wdl.draft2.model.{WdlExpression, WdlNamespace, WdlTask, WdlNamespaceWithWorkflow, WdlWorkflow}
+import wdl.draft2.model.{WdlExpression, WdlNamespace, WdlTask, WdlNamespaceWithWorkflow}
 import wom.values._
 
 object Main extends App {
     sealed trait Termination
     case class SuccessfulTermination(output: String) extends Termination
+    case class SuccessfulTerminationIR(ir: IR.Namespace) extends Termination
     case class UnsuccessfulTermination(output: String) extends Termination
     case class BadUsageTermination(info: String) extends Termination
 
@@ -385,8 +387,8 @@ object Main extends App {
             val cOpt = compilerOptions(options)
             cOpt.compileMode match {
                 case CompilerFlag.IR =>
-                    compiler.CompilerTop.applyOnlyIR(wdlSourceFile, cOpt)
-                    return SuccessfulTermination("")
+                    val ir: IR.Namespace = compiler.CompilerTop.applyOnlyIR(wdlSourceFile, cOpt)
+                    return SuccessfulTerminationIR(ir)
 
                 case CompilerFlag.Default =>
                     val (dxProject, folder) = pathOptions(options, cOpt.verbose)
@@ -452,13 +454,6 @@ object Main extends App {
         ns.tasks.head
     }
 
-    def workflowOfNamespace(ns: WdlNamespace): WdlWorkflow = {
-        ns match {
-            case nswf: WdlNamespaceWithWorkflow => nswf.workflow
-            case _ => throw new Exception("WDL file contains no workflow")
-        }
-    }
-
     private def isTaskOp(op: InternalOp.Value) : Boolean = {
         op match {
             case InternalOp.TaskEpilog | InternalOp.TaskProlog | InternalOp.TaskRelaunch =>
@@ -503,18 +498,18 @@ object Main extends App {
                     }
                 } else {
                     val inputs = WdlVarLinks.loadJobInputsAsLinks(inputLines, inputSpec, None)
-                    val wf = workflowOfNamespace(ns)
+                    val nswf = ns.asInstanceOf[WdlNamespaceWithWorkflow]
                     op match {
                         case InternalOp.Collect =>
-                            runner.WfFragment.apply(wf ,
-                                                      inputSpec, outputSpec, inputs, orgInputs,
-                                                      RunnerWfFragmentMode.Collect, true)
+                            runner.WfFragment.apply(nswf,
+                                                    inputSpec, outputSpec, inputs, orgInputs,
+                                                    RunnerWfFragmentMode.Collect, true)
                         case InternalOp.WfFragment =>
-                            runner.WfFragment.apply(wf,
-                                                      inputSpec, outputSpec, inputs, orgInputs,
-                                                      RunnerWfFragmentMode.Launch, true)
+                            runner.WfFragment.apply(nswf,
+                                                    inputSpec, outputSpec, inputs, orgInputs,
+                                                    RunnerWfFragmentMode.Launch, true)
                         case InternalOp.WorkflowOutputReorg =>
-                            runner.WorkflowOutputReorg(true).apply(wf, inputSpec, outputSpec, inputs)
+                            runner.WorkflowOutputReorg(true).apply(nswf, inputSpec, outputSpec, inputs)
                     }
                 }
 
@@ -602,6 +597,7 @@ object Main extends App {
 
     termination match {
         case SuccessfulTermination(s) => println(s)
+        case SuccessfulTerminationIR(s) => println("Intermediate representation")
         case BadUsageTermination(s) if (s == "") =>
             Console.err.println(usageMessage)
             System.exit(1)

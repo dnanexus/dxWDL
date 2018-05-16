@@ -45,7 +45,7 @@ medium_test_list = [
     "dict",
 
     # objects
-#    "complex",
+    "complex",
 
     # calling native dx applets
     "call_native",
@@ -59,7 +59,7 @@ test_reorg=["files", "math"]
 test_defaults=["files", "math"]
 
 test_locked=["conditionals", "advanced", "bad_status", "bad_status2",
-             "instance_types", "dict"]
+             "instance_types", "dict", "cond"]
 
 TestMetaData = namedtuple('TestMetaData', 'name kind')
 TestDesc = namedtuple('TestDesc', 'name kind wdl_source wdl_input dx_input results')

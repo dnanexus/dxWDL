@@ -15,7 +15,7 @@ import dxWDL.WdlVarLinks.yaml
 import net.jcazevedo.moultingyaml._
 import scala.collection.JavaConverters._
 import spray.json._
-import wdl.draft2.model.WdlWorkflow
+import wdl.draft2.model.{WdlNamespaceWithWorkflow}
 
 
 case class WorkflowOutputReorg(verbose: Boolean) {
@@ -140,7 +140,7 @@ case class WorkflowOutputReorg(verbose: Boolean) {
 
     // The variables are passed through, so that workflow will
     // complete only after file movements are complete.
-    def apply(wf: WdlWorkflow,
+    def apply(nswf: WdlNamespaceWithWorkflow,
               inputSpec: Map[String, DXIOParam],
               outputSpec: Map[String, DXIOParam],
               wfInputs: Map[String, WdlVarLinks]) : Map[String, JsValue] = {
