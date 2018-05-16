@@ -37,6 +37,7 @@ package dxWDL.runner
 
 import Collect.ChildExecDesc
 import com.dnanexus._
+import com.fasterxml.jackson.databind.JsonNode
 import dxWDL._
 import dxWDL.Utils.{isOptional, makeOptional, stripOptional}
 import java.nio.file.{Path, Paths, Files}
@@ -46,7 +47,9 @@ import wdl.draft2.model._
 import wom.values._
 import wom.types._
 
-case class WfFragment(execSeqMap: Map[Int, ChildExecDesc],
+case class WfFragment(nswf: WdlNamespaceWithWorkflow,
+                      instanceTypeDB: InstanceTypeDB,
+                      execSeqMap: Map[Int, ChildExecDesc],
                       execLinkInfo: Map[String, ExecLinkInfo],
                       cef: CompilerErrorFormatter,
                       orgInputs: JsValue,
@@ -278,7 +281,7 @@ case class WfFragment(execSeqMap: Map[Int, ChildExecDesc],
       */
     private def buildAppletInputs(call: WdlCall,
                                   linkInfo: ExecLinkInfo,
-                                  env : Env) : JsValue = {
+                                  env : Env) : (Map[String, WdlVarLinks], JsValue) = {
         def lookup = lookupInEnv(env)(_)
         val inputs: Map[String, WomValue] = linkInfo.inputs.flatMap{
             case (varName, wdlType) =>
@@ -310,6 +313,7 @@ case class WfFragment(execSeqMap: Map[Int, ChildExecDesc],
             val womType = linkInfo.inputs(name)
             name -> wdlValueToWVL(womType, womValue)
         }.toMap
+
         val m = wvlInputs.foldLeft(Map.empty[String, JsValue]) {
             case (accu, (varName, wvl)) =>
                 val fields = WdlVarLinks.genFields(wvl, varName)
@@ -326,7 +330,7 @@ case class WfFragment(execSeqMap: Map[Int, ChildExecDesc],
                 } else
                     true
         }
-        JsObject(mNonNull)
+        (wvlInputs, JsObject(mNonNull))
     }
 
     // coerce a WDL value to the required type (if needed)
@@ -355,6 +359,22 @@ case class WfFragment(execSeqMap: Map[Int, ChildExecDesc],
         }
     }
 
+    // If this is a call to a task that computes the required instance type at runtime,
+    // do the calculation right now. This saves a job relaunch down the road.
+    private def preCalcInstanceType(task: WdlTask,
+                                    taskInputs:Map[String, WdlVarLinks]) : Option[String] = {
+        val taskRunner = new Task(task, instanceTypeDB, cef, true)
+        try {
+            val iType = taskRunner.calcInstanceType(taskInputs)
+            Utils.appletLog(verbose, s"Precalculated instance type for ${task.unqualifiedName}: ${iType}")
+            Some(iType)
+        } catch {
+            case e : Throwable =>
+                Utils.appletLog(verbose, s"Failed to precalculate the instance type for task ${task.unqualifiedName}")
+                None
+        }
+    }
+
     private def execCall(call: WdlCall,
                          env: Env,
                          callNameHint: Option[String]) : (Int, DXExecution) = {
@@ -365,7 +385,7 @@ case class WfFragment(execSeqMap: Map[Int, ChildExecDesc],
                     s"Could not find linking information for ${call.unqualifiedName}")
             case Some(eInfo) => eInfo
         }
-        val callInputs:JsValue = buildAppletInputs(call, eInfo, env)
+        val (callInputsWvl, callInputs:JsValue) = buildAppletInputs(call, eInfo, env)
         Utils.appletLog(verbose, s"Call ${call.unqualifiedName}   inputs = ${callInputs}")
 
         // We may need to run a collect subjob. Add the call
@@ -380,13 +400,37 @@ case class WfFragment(execSeqMap: Map[Int, ChildExecDesc],
         val dxExec =
             if (eInfo.dxExec.isInstanceOf[DXApplet]) {
                 val applet = eInfo.dxExec.asInstanceOf[DXApplet]
-                val dxJob :DXJob = applet.newRun()
-                    .setRawInput(Utils.jsonNodeOfJsValue(callInputs))
-                    .setName(dbgName)
-                    .putProperty("call", call.unqualifiedName)
-                    .putProperty("seq_number", seqNum.toString)
-                    .run()
-                dxJob
+                val fields = Map(
+                    "name" -> JsString(dbgName),
+                    "input" -> callInputs,
+                    "properties" -> JsObject("call" ->  JsString(call.unqualifiedName),
+                                             "seq_number" -> JsString(seqNum.toString))
+                )
+                // If this is a task that specifies the instance type
+                // at runtime, launch it in the requested instance.
+                val instanceType = nswf.findTask(calleeName) match {
+                    case None => None
+                    case Some(task) => preCalcInstanceType(task, callInputsWvl)
+                }
+                val instanceFields = instanceType match {
+                    case None => Map.empty
+                    case Some(iType) =>
+                        Map("systemRequirements" -> JsObject(
+                                "main" -> JsObject("instanceType" -> JsString(iType))
+                            ))
+                }
+                val req = JsObject(fields ++ instanceFields)
+                val retval: JsonNode = DXAPI.appletRun(applet.getId,
+                                                       Utils.jsonNodeOfJsValue(req),
+                                                       classOf[JsonNode])
+                val info: JsValue =  Utils.jsValueOfJsonNode(retval)
+                val id:String = info.asJsObject.fields.get("id") match {
+                    case Some(JsString(x)) => x
+                    case _ => throw new AppInternalException(
+                        s"Bad format returned from jobNew ${info.prettyPrint}")
+                }
+                DXJob.getInstance(id)
+
             } else if (eInfo.dxExec.isInstanceOf[DXWorkflow]) {
                 val workflow = eInfo.dxExec.asInstanceOf[DXWorkflow]
                 val dxAnalysis :DXAnalysis = workflow.newRun()
@@ -825,6 +869,7 @@ object WfFragment {
 
 
     def apply(nswf: WdlNamespaceWithWorkflow,
+              instanceTypeDB: InstanceTypeDB,
               inputSpec: Map[String, DXIOParam],
               outputSpec: Map[String, DXIOParam],
               inputs: Map[String, WdlVarLinks],
@@ -854,7 +899,7 @@ object WfFragment {
         // Run the workflow
         val wf = nswf.workflow
         val cef = new CompilerErrorFormatter("", wf.wdlSyntaxErrorFormatter.terminalMap)
-        val r = WfFragment(execSeqMap, execLinkInfo, cef, orgInputs, runMode, verbose)
+        val r = WfFragment(nswf, instanceTypeDB, execSeqMap, execLinkInfo, cef, orgInputs, runMode, verbose)
         val wvlVarOutputs = r.apply(wf, inputs)
 
         // convert from WVL to JSON

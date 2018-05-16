@@ -200,6 +200,27 @@ case class InstanceTypeDB(instances: Vector[DxInstanceType]) {
         }
         sortediTypes.toJson.prettyPrint
     }
+
+    // check if instance type A is smaller or equal in requirements to
+    // instance type B
+    def lteqByResources(iTypeA: String,
+                        iTypeB: String) : Boolean = {
+        val ax = instances.find(_.name == iTypeA)
+        val bx = instances.find(_.name == iTypeB)
+
+        (ax,bx) match {
+            case (Some(a), Some(b)) =>
+                // All the resources for instance A should be less than or equal
+                // to the resoruces for B.
+                (a.memoryMB <= b.memoryMB &&
+                     a.diskGB <= b.diskGB &&
+                     a.cpu <= b.cpu)
+            case (_,_) =>
+                // At least one of the instances is not in the database.
+                // We can't compare them.
+                false
+        }
+    }
 }
 
 object InstanceTypeDB extends DefaultJsonProtocol {

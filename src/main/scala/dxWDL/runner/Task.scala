@@ -18,10 +18,11 @@ task Add {
 
 package dxWDL.runner
 
-import com.dnanexus.{DXJob}
+import com.dnanexus.{DXAPI, DXJob}
+import com.fasterxml.jackson.databind.JsonNode
 import common.validation.Validation._
 import dxWDL._
-import java.nio.file.{Path, Paths}
+import java.nio.file.{Path}
 import scala.collection.mutable.HashMap
 import spray.json._
 import wdl.draft2.model.{Declaration, DeclarationInterface, WdlExpression, WdlTask}
@@ -189,6 +190,7 @@ private [dxWDL] object TaskSerialization {
 
 
 case class Task(task:WdlTask,
+                instanceTypeDB : InstanceTypeDB,
                 cef: CompilerErrorFormatter,
                 verbose: Boolean) {
 
@@ -562,8 +564,7 @@ case class Task(task:WdlTask,
 
     // Evaluate the runtime expressions, and figure out which instance type
     // this task requires.
-    private def calcInstanceType(taskInputs: Map[String, WdlVarLinks],
-                                 instanceTypeDB: InstanceTypeDB) : String = {
+    def calcInstanceType(taskInputs: Map[String, WdlVarLinks]) : String = {
         // input variables that were already calculated
         val env = HashMap.empty[String, WomValue]
         def lookup(varName : String) : WomValue = {
@@ -608,20 +609,47 @@ case class Task(task:WdlTask,
         JsObject(inputs.toMap)
     }
 
+
+    /** Check if we are already on the correct instance type. This allows for avoiding unnecessary
+      * relaunch operations.
+      */
+    def checkInstanceType(inputSpec: Map[String, DXIOParam],
+                          outputSpec: Map[String, DXIOParam],
+                          inputWvls: Map[String, WdlVarLinks]) : Boolean = {
+        // evaluate the runtime attributes
+        // determine the instance type
+        val requiredInstanceType:String = calcInstanceType(inputWvls)
+        Utils.appletLog(verbose, s"required instance type: ${requiredInstanceType}")
+
+        // Figure out which instance we are on right now
+        val dxJob = Utils.dxEnv.getJob()
+
+        val descFieldReq = JsObject("fields" -> JsObject("instanceType" -> JsBoolean(true)))
+        val retval: JsValue =
+            Utils.jsValueOfJsonNode(
+                DXAPI.jobDescribe(dxJob.getId,
+                                  Utils.jsonNodeOfJsValue(descFieldReq),
+                                  classOf[JsonNode]))
+        val crntInstanceType:String = retval.asJsObject.fields.get("instanceType") match {
+            case Some(JsString(x)) => x
+            case _ => throw new Exception(s"wrong type for instanceType ${retval}")
+        }
+        Utils.appletLog(verbose, s"current instance type: ${crntInstanceType}")
+
+        val isSufficient = instanceTypeDB.lteqByResources(requiredInstanceType, crntInstanceType)
+        Utils.appletLog(verbose, s"isSufficient? ${isSufficient}")
+        isSufficient
+    }
+
     /** The runtime attributes need to be calculated at runtime. Evaluate them,
       *  determine the instance type [xxxx], and relaunch the job on [xxxx]
       */
     def relaunch(inputSpec: Map[String, DXIOParam],
                  outputSpec: Map[String, DXIOParam],
                  inputWvls: Map[String, WdlVarLinks]) : Map[String, JsValue] = {
-        // Figure out the available instance types, and their prices,
-        // by reading the file
-        val dbRaw = Utils.readFileContent(Paths.get("/" + Utils.INSTANCE_TYPE_DB_FILENAME))
-        val instanceTypeDB = dbRaw.parseJson.convertTo[InstanceTypeDB]
-
         // evaluate the runtime attributes
         // determine the instance type
-        val instanceType:String = calcInstanceType(inputWvls, instanceTypeDB)
+        val instanceType:String = calcInstanceType(inputWvls)
 
         // relaunch the applet on the correct instance type
         val inputs = relaunchBuildInputs(inputWvls)

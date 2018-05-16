@@ -290,8 +290,14 @@ case class Native(dxWDLrtId: String,
                             |}""".stripMargin
                     case IR.InstanceTypeRuntime =>
                         s"""|main() {
-                            |    # evaluate the instance type, and launch a sub job on it
-                            |    java -jar $${DX_FS_ROOT}/dxWDL.jar internal taskRelaunch $${DX_FS_ROOT}/source.wdl $${HOME}
+                            |    # check if this is the correct instance type
+                            |    correctInstanceType=`java -jar $${DX_FS_ROOT}/dxWDL.jar internal taskCheckInstanceType $${DX_FS_ROOT}/source.wdl $${HOME}`
+                            |    if [[ $$correctInstanceType == "true" ]]; then
+                            |        body
+                            |    else
+                            |       # evaluate the instance type, and launch a sub job on it
+                            |       java -jar $${DX_FS_ROOT}/dxWDL.jar internal taskRelaunch $${DX_FS_ROOT}/source.wdl $${HOME}
+                            |    fi
                             |}
                             |
                             |# We are on the correct instance type, run the task
@@ -459,19 +465,14 @@ case class Native(dxWDLrtId: String,
                 Some(linkInfo.prettyPrint)
             }
 
-        // Add the pricing model, if this will be needed. Make the prices
+        // Add the pricing model, and make the prices
         // opaque.
-        val dbInstance =
-            if (applet.instanceType == IR.InstanceTypeRuntime) {
-                val dbOpaque = InstanceTypeDB.opaquePrices(instanceTypeDB)
-                Some(dbOpaque.toJson.prettyPrint)
-            } else {
-                None
-            }
+        val dbOpaque = InstanceTypeDB.opaquePrices(instanceTypeDB)
+        val dbInstance = dbOpaque.toJson.prettyPrint
 
         // write the bash script
         genBashScript(applet.kind, applet.instanceType,
-                      wdlCode, linkInfo, dbInstance)
+                      wdlCode, linkInfo, Some(dbInstance))
     }
 
     // Set the run spec.

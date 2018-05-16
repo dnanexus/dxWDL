@@ -25,7 +25,7 @@ object Main extends App {
     object InternalOp extends Enumeration {
         val Collect,
             WfFragment,
-            TaskEpilog, TaskProlog, TaskRelaunch,
+            TaskCheckInstanceType, TaskEpilog, TaskProlog, TaskRelaunch,
             WorkflowOutputReorg = Value
     }
 
@@ -456,30 +456,42 @@ object Main extends App {
 
     private def isTaskOp(op: InternalOp.Value) : Boolean = {
         op match {
-            case InternalOp.TaskEpilog | InternalOp.TaskProlog | InternalOp.TaskRelaunch =>
-                true
+            case InternalOp.TaskCheckInstanceType |
+                    InternalOp.TaskEpilog |
+                    InternalOp.TaskProlog |
+                    InternalOp.TaskRelaunch => true
             case _ => false
         }
     }
 
-    private def appletAction(op: InternalOp.Value, args : Seq[String]): Termination = {
-        if (args.length != 2)
-            return BadUsageTermination("All applet actions take a WDL file, and a home directory")
-        val wdlDefPath = args(0)
-        val homeDir = Paths.get(args(1))
-        val (jobInputPath, jobOutputPath, jobErrorPath, jobInfoPath) =
-            Utils.jobFilesOfHomeDir(homeDir)
-        val ns = WdlNamespace.loadUsingPath(Paths.get(wdlDefPath), None, None).get
-        val cef = new CompilerErrorFormatter(wdlDefPath, ns.terminalMap)
-        try {
-            // Figure out input/output types
-            val (inputSpec, outputSpec) = Utils.loadExecInfo
+    private def appletAction(op: InternalOp.Value,
+                             wdlDefPath: Path,
+                             jobInputPath: Path,
+                             jobOutputPath: Path): Termination = {
+        val ns = WdlNamespace.loadUsingPath(wdlDefPath, None, None).get
+        val cef = new CompilerErrorFormatter(wdlDefPath.toString, ns.terminalMap)
 
-            // Parse the inputs, do not download files from the platform,
-            // they will be passed as links.
-            val inputLines : String = Utils.readFileContent(jobInputPath)
-            val orgInputs = inputLines.parseJson
+        // Figure out input/output types
+        val (inputSpec, outputSpec) = Utils.loadExecInfo
 
+        // Parse the inputs, do not download files from the platform,
+        // they will be passed as links.
+        val inputLines : String = Utils.readFileContent(jobInputPath)
+        val orgInputs = inputLines.parseJson
+
+        // Figure out the available instance types, and their prices,
+        // by reading the file
+        val dbRaw = Utils.readFileContent(Paths.get("/" + Utils.INSTANCE_TYPE_DB_FILENAME))
+        val instanceTypeDB =dbRaw.parseJson.convertTo[InstanceTypeDB]
+
+        if (op == InternalOp.TaskCheckInstanceType) {
+            // special operation to check if this task is on the right instance type
+            val task = taskOfNamespace(ns)
+            val inputs = WdlVarLinks.loadJobInputsAsLinks(inputLines, inputSpec, Some(task))
+            val r = runner.Task(task, instanceTypeDB, cef, true)
+            val correctInstanceType:Boolean = r.checkInstanceType(inputSpec, outputSpec, inputs)
+            SuccessfulTermination(correctInstanceType.toString)
+        } else {
             val outputFields: Map[String, JsValue] =
                 if (isTaskOp(op)) {
                     // Running tasks
@@ -487,13 +499,13 @@ object Main extends App {
                     val inputs = WdlVarLinks.loadJobInputsAsLinks(inputLines, inputSpec, Some(task))
                     op match {
                         case InternalOp.TaskEpilog =>
-                            val r = runner.Task(task, cef, true)
+                            val r = runner.Task(task, instanceTypeDB, cef, true)
                             r.epilog(inputSpec, outputSpec, inputs)
                         case InternalOp.TaskProlog =>
-                            val r = runner.Task(task, cef, true)
+                            val r = runner.Task(task, instanceTypeDB, cef, true)
                             r.prolog(inputSpec, outputSpec, inputs)
                         case InternalOp.TaskRelaunch =>
-                            val r = runner.Task(task, cef, true)
+                            val r = runner.Task(task, instanceTypeDB, cef, true)
                             r.relaunch(inputSpec, outputSpec, inputs)
                     }
                 } else {
@@ -502,10 +514,12 @@ object Main extends App {
                     op match {
                         case InternalOp.Collect =>
                             runner.WfFragment.apply(nswf,
+                                                    instanceTypeDB,
                                                     inputSpec, outputSpec, inputs, orgInputs,
                                                     RunnerWfFragmentMode.Collect, true)
                         case InternalOp.WfFragment =>
                             runner.WfFragment.apply(nswf,
+                                                    instanceTypeDB,
                                                     inputSpec, outputSpec, inputs, orgInputs,
                                                     RunnerWfFragmentMode.Launch, true)
                         case InternalOp.WorkflowOutputReorg =>
@@ -523,19 +537,28 @@ object Main extends App {
             System.err.println(s"Wrote outputs ${ast_pp}")
 
             SuccessfulTermination(s"success ${op}")
-        } catch {
-            case e : Throwable =>
-                writeJobError(jobErrorPath, e)
-                UnsuccessfulTermination(s"failure running ${op}")
         }
     }
 
     def internalOp(args : Seq[String]) : Termination = {
-        val intOp = InternalOp.values find (x => normKey(x.toString) == normKey(args.head))
-        intOp match {
+        val op = InternalOp.values find (x => normKey(x.toString) == normKey(args.head))
+        op match {
             case None =>
                 UnsuccessfulTermination(s"unknown internal action ${args.head}")
-            case Some(x) =>  appletAction(x, args.tail)
+            case Some(x) if (args.length == 3) =>
+                val wdlDefPath = Paths.get(args(1))
+                val homeDir = Paths.get(args(2))
+                val (jobInputPath, jobOutputPath, jobErrorPath, _) =
+                    Utils.jobFilesOfHomeDir(homeDir)
+                try {
+                    appletAction(x, wdlDefPath, jobInputPath, jobOutputPath)
+                } catch {
+                    case e : Throwable =>
+                        writeJobError(jobErrorPath, e)
+                        UnsuccessfulTermination(s"failure running ${op}")
+                }
+            case Some(_) =>
+                BadUsageTermination(s"All applet actions take a WDL file, and a home directory (${args})")
         }
     }
 
