@@ -28,6 +28,8 @@ class WfFragmentTest extends FlatSpec with Matchers {
         WomOptionalValue(t, None)
     }
 
+    private val instanceTypeDB = InstanceTypeDB.genTestDB(true)
+
     private def evalWorkflow(filename: String,
                              inputs: Map[String, WdlVarLinks]) : Map[String, WomValue] = {
         val srcPath = pathFromBasename(filename)
@@ -35,19 +37,17 @@ class WfFragmentTest extends FlatSpec with Matchers {
         val ns = WdlNamespace.loadUsingSource(
             wdlCode, None, None
         ).get
+        val nswf = ns.asInstanceOf[WdlNamespaceWithWorkflow]
         val cef = new CompilerErrorFormatter(srcPath.toString, ns.terminalMap)
-        val mw = new WfFragment(Map.empty,
+        val mw = new WfFragment(nswf,
+                                instanceTypeDB,
+                                Map.empty,
                                 Map.empty,
                                 cef,
                                 JsNull,
                                 RunnerWfFragmentMode.Launch,
                                 false)
-
-        val wf = ns match {
-            case nswf:WdlNamespaceWithWorkflow => nswf.workflow
-            case _ => throw new Exception("sanity")
-        }
-        val wvlOutputVars = mw.apply(wf, inputs)
+        val wvlOutputVars = mw.apply(nswf.workflow, inputs)
         val results: Map[String, WomValue] = wvlOutputVars.map{
             case (name, wvl) =>
                 name -> wdlValueFromWVL(wvl)

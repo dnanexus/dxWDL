@@ -291,7 +291,7 @@ case class Native(dxWDLrtId: String,
                     case IR.InstanceTypeRuntime =>
                         s"""|main() {
                             |    # check if this is the correct instance type
-                            |    correctInstanceType=`java -jar $${DX_FS_ROOT}/dxWDL.jar internal checkInstanceType $${DX_FS_ROOT}/source.wdl $${HOME}`
+                            |    correctInstanceType=`java -jar $${DX_FS_ROOT}/dxWDL.jar internal taskCheckInstanceType $${DX_FS_ROOT}/source.wdl $${HOME}`
                             |    if [[ $$correctInstanceType == "true" ]]; then
                             |        body
                             |    else
@@ -465,19 +465,14 @@ case class Native(dxWDLrtId: String,
                 Some(linkInfo.prettyPrint)
             }
 
-        // Add the pricing model, if this will be needed. Make the prices
+        // Add the pricing model, and make the prices
         // opaque.
-        val dbInstance =
-            if (applet.instanceType == IR.InstanceTypeRuntime) {
-                val dbOpaque = InstanceTypeDB.opaquePrices(instanceTypeDB)
-                Some(dbOpaque.toJson.prettyPrint)
-            } else {
-                None
-            }
+        val dbOpaque = InstanceTypeDB.opaquePrices(instanceTypeDB)
+        val dbInstance = dbOpaque.toJson.prettyPrint
 
         // write the bash script
         genBashScript(applet.kind, applet.instanceType,
-                      wdlCode, linkInfo, dbInstance)
+                      wdlCode, linkInfo, Some(dbInstance))
     }
 
     // Set the run spec.

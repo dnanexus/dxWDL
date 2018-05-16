@@ -18,6 +18,9 @@ tasks by default.
 java -jar dxWDL-0.44.jar compile test/files.wdl -defaults test/files_input.json -extras taskAttrs.json
 ```
 
+- Reduced the number of auxiliary jobs launched when a task specifies the instance type dynamically.
+A task can do this is by specifiying runtime attributes with expressions.
+- Added the value iterated on in scatters
 
 ## 0.63
 - Upgrade to cromwell-31 WDL/WOM library

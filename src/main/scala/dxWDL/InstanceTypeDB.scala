@@ -203,8 +203,8 @@ case class InstanceTypeDB(instances: Vector[DxInstanceType]) {
 
     // check if instance type A is smaller or equal in requirements to
     // instance type B
-    def compareByResources(iTypeA: String,
-                           iTypeB: String) : Boolean = {
+    def lteqByResources(iTypeA: String,
+                        iTypeB: String) : Boolean = {
         val ax = instances.find(_.name == iTypeA)
         val bx = instances.find(_.name == iTypeB)
 

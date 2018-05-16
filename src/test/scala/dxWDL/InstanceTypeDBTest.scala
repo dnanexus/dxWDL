@@ -63,10 +63,10 @@ class InstaceTypeDBTest extends FlatSpec with Matchers {
     }
 
     it should "compare two instance types" in {
-        db.compareByResources("mem1_ssd1_x2", "mem1_ssd1_x8") should be (true)
-        db.compareByResources("mem1_ssd1_x4", "mem3_ssd1_x2") should be (false)
+        db.lteqByResources("mem1_ssd1_x2", "mem1_ssd1_x8") should be (true)
+        db.lteqByResources("mem1_ssd1_x4", "mem3_ssd1_x2") should be (false)
 
         // non existant instance
-        db.compareByResources("mem1_ssd2_x2", "ggxx") should be (false)
+        db.lteqByResources("mem1_ssd2_x2", "ggxx") should be (false)
     }
 }

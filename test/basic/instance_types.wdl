@@ -117,12 +117,22 @@ task Shortcut {
 }
 
 workflow instance_types {
+    Int i
+
+    # The following is compiled into a fragment. This checks
+    # the precalculation of instance types.
+    String s = "There are ${i} bandersnatchs"
+    call DiskSpaceSpec as diskSpec2 { input: disk_req_gb= 200 + i }
+
     call DiskSpaceSpec { input: disk_req_gb=90 }
     call MemorySpec { input: memory_req_gb=12 }
+    call MemorySpec as memorySpec2 { input: memory_req_gb=1 }
     call NumCoresSpec { input: num_cores_req=5 }
+    call NumCoresSpec as numCoresSpec2 { input: num_cores_req=1 }
     call RuntimeDockerChoice { input: imageName="python:2.7" }
     call RuntimeDockerChoice2 { input: imageName="python:2.7" }
     call Shortcut
+
     output {
         String MemorySpec_retval = MemorySpec.retval
         String DiskSpaceSpec_retval = DiskSpaceSpec.retval
@@ -130,5 +140,6 @@ workflow instance_types {
         String RuntimeDockerChoice_retval = RuntimeDockerChoice.retval
         String RuntimeDockerChoice2_retval = RuntimeDockerChoice2.retval
         String Shortcut_retval = Shortcut.retval
+        String DiskSpaceSpec2_retval = diskSpec2.retval
     }
 }
