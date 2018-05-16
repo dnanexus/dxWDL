@@ -18,7 +18,8 @@ task Add {
 
 package dxWDL.runner
 
-import com.dnanexus.{DXJob}
+import com.dnanexus.{DXAPI, DXJob}
+import com.fasterxml.jackson.databind.JsonNode
 import common.validation.Validation._
 import dxWDL._
 import java.nio.file.{Path, Paths}
@@ -606,6 +607,39 @@ case class Task(task:WdlTask,
                 accu ++ fields.toMap
         }
         JsObject(inputs.toMap)
+    }
+
+
+    /** Check if we are already on the correct instance type. This allows for avoiding unnecessary
+      * relaunch operations.
+      */
+    def checkInstanceType(inputSpec: Map[String, DXIOParam],
+                          outputSpec: Map[String, DXIOParam],
+                          inputWvls: Map[String, WdlVarLinks]) : Boolean = {
+        // Figure out the available instance types, and their prices,
+        // by reading the file
+        val dbRaw = Utils.readFileContent(Paths.get("/" + Utils.INSTANCE_TYPE_DB_FILENAME))
+        val instanceTypeDB = dbRaw.parseJson.convertTo[InstanceTypeDB]
+
+        // evaluate the runtime attributes
+        // determine the instance type
+        val requiredInstanceType:String = calcInstanceType(inputWvls, instanceTypeDB)
+
+        // Figure out which instance we are on right now
+        val dxJob = Utils.dxEnv.getJob()
+
+        val descFieldReq = JsObject("fields" -> JsObject("instanceType" -> JsBoolean(true)))
+        val retval: JsValue =
+            Utils.jsValueOfJsonNode(
+                DXAPI.jobDescribe(dxJob.getId,
+                                  Utils.jsonNodeOfJsValue(descFieldReq),
+                                  classOf[JsonNode]))
+        val crntInstanceType:String = retval.asJsObject.fields.get("instanceType") match {
+            case Some(JsString(x)) => x
+            case _ => throw new Exception(s"wrong type for instanceType ${retval}")
+        }
+
+        instanceTypeDB.compareByResources(crntInstanceType, requiredInstanceType)
     }
 
     /** The runtime attributes need to be calculated at runtime. Evaluate them,

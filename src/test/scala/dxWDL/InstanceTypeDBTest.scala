@@ -50,15 +50,23 @@ class InstaceTypeDBTest extends FlatSpec with Matchers {
                                       None)) should equal("mem3_ssd1_x32")
     }
 
+    val db = InstanceTypeDB.genTestDB(true)
+
     it should "Choose reasonable platform instance types" in {
         // parameters are:          RAM,     disk,     cores
-        val db = InstanceTypeDB.genTestDB(true)
         useDB(db)
     }
 
-    it should "Work even with opaque prices" in {
-        val db = InstanceTypeDB.genTestDB(true)
+    it should "work even with opaque prices" in {
         val dbOpaque = InstanceTypeDB.opaquePrices(db)
         useDB(dbOpaque)
+    }
+
+    it should "compare two instance types" in {
+        db.compareByResources("mem1_ssd1_x2", "mem1_ssd1_x8") should be (true)
+        db.compareByResources("mem1_ssd1_x4", "mem3_ssd1_x2") should be (false)
+
+        // non existant instance
+        db.compareByResources("mem1_ssd2_x2", "ggxx") should be (false)
     }
 }

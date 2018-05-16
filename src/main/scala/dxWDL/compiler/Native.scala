@@ -290,8 +290,14 @@ case class Native(dxWDLrtId: String,
                             |}""".stripMargin
                     case IR.InstanceTypeRuntime =>
                         s"""|main() {
-                            |    # evaluate the instance type, and launch a sub job on it
-                            |    java -jar $${DX_FS_ROOT}/dxWDL.jar internal taskRelaunch $${DX_FS_ROOT}/source.wdl $${HOME}
+                            |    # check if this is the correct instance type
+                            |    correctInstanceType=`java -jar $${DX_FS_ROOT}/dxWDL.jar internal checkInstanceType $${DX_FS_ROOT}/source.wdl $${HOME}`
+                            |    if [[ $$correctInstanceType == "true" ]]; then
+                            |        body
+                            |    else
+                            |       # evaluate the instance type, and launch a sub job on it
+                            |       java -jar $${DX_FS_ROOT}/dxWDL.jar internal taskRelaunch $${DX_FS_ROOT}/source.wdl $${HOME}
+                            |    fi
                             |}
                             |
                             |# We are on the correct instance type, run the task
