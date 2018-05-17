@@ -23,7 +23,6 @@ import com.fasterxml.jackson.databind.JsonNode
 import common.validation.Validation._
 import dxWDL._
 import java.nio.file.{Path}
-import scala.collection.mutable.HashMap
 import spray.json._
 import wdl.draft2.model.{Declaration, DeclarationInterface, WdlExpression, WdlTask}
 import wdl.draft2.model.types.WdlFlavoredWomType
@@ -566,25 +565,29 @@ case class Task(task:WdlTask,
     // this task requires.
     def calcInstanceType(taskInputs: Map[String, WdlVarLinks]) : String = {
         // input variables that were already calculated
-        val env = HashMap.empty[String, WomValue]
         def lookup(varName : String) : WomValue = {
-            env.get(varName) match {
-                case Some(x) => x
+            taskInputs.get(varName) match {
                 case None =>
-                    // value not evaluated yet, calculate and keep in cache
-                    taskInputs.get(varName) match {
-                        case Some(wvl) =>
-                            env(varName) = WdlVarLinks.eval(wvl, IOMode.Data, IODirection.Download)
-                            env(varName)
-                        case None => throw new UnboundVariableException(varName)
+                    // A value for this variable has not been passed. Check if it
+                    // is optional.
+                    val varDefinition = task.declarations.find(_.unqualifiedName == varName) match {
+                        case Some(x) => x
+                        case None => throw new Exception(
+                            s"Cannot find declaration for variable ${varName}")
                     }
+                    val womValue = varDefinition.womType match {
+                        case WomOptionalType(t) => WomOptionalValue(t, None)
+                        case _ =>  throw new UnboundVariableException(s"${varName}")
+                    }
+                    womValue
+                case Some(wvl) =>
+                    WdlVarLinks.eval(wvl, IOMode.Data, IODirection.Download)
             }
         }
         def evalAttr(attrName: String) : Option[WomValue] = {
             task.runtimeAttributes.attrs.get(attrName) match {
                 case None => None
-                case Some(expr) =>
-                    Some(expr.evaluate(lookup, DxFunctions).get)
+                case Some(expr) => Some(expr.evaluate(lookup, DxFunctions).get)
             }
         }
 
