@@ -303,13 +303,13 @@ object Main extends App {
                     name -> wdlExpressionFromJsValue(jsValue)
                 }.toMap
         }
-        val taskDxConfig = extraFields.get("tasks") match {
+        val defaultTaskDxAttributes = extraFields.get("default_task_dx_attributes") match {
             case None =>
                 Map.empty[String, JsValue]
             case Some(x) =>
                 x.asJsObject.fields
         }
-        Extras(defaultRuntimeAttributes, taskDxConfig)
+        Extras(defaultRuntimeAttributes, defaultTaskDxAttributes)
     }
 
     // Get basic information about the dx environment, and process
