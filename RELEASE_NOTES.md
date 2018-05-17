@@ -1,5 +1,11 @@
 # Release Notes
 
+## 0.65
+- Optimization for the case of launching an instance where it is
+calculated at runtime.
+
+-
+
 ## 0.64
 - Support for setting defaults for all task runtime attributes has been added.
 This is similar to the Cromwell style. The `extras` command line flag takes a JSON file

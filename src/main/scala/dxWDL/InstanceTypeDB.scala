@@ -425,6 +425,7 @@ object InstanceTypeDB extends DefaultJsonProtocol {
     // Check if an instance type passes some basic criteria:
     // - Instance must support Ubuntu 14.04.
     // - Instance is not a GPU instance.
+    // - Instance is not an FPGA instance.
     // - Instance does not have local HDD storage, this
     //   means it is really old hardware.
     private def instanceCriteria(iType: DxInstanceType) : Boolean = {
@@ -438,6 +439,8 @@ object InstanceTypeDB extends DefaultJsonProtocol {
         if (!osSupported)
             return false
         if (iType.name contains "gpu")
+            return false
+        if (iType.name contains "fpga")
             return false
         if (iType.name contains "hdd")
             return false

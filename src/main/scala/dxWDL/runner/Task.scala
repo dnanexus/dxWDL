@@ -23,7 +23,6 @@ import com.fasterxml.jackson.databind.JsonNode
 import common.validation.Validation._
 import dxWDL._
 import java.nio.file.{Path}
-import scala.collection.mutable.HashMap
 import spray.json._
 import wdl.draft2.model.{Declaration, DeclarationInterface, WdlExpression, WdlTask}
 import wdl.draft2.model.types.WdlFlavoredWomType
@@ -564,27 +563,28 @@ case class Task(task:WdlTask,
 
     // Evaluate the runtime expressions, and figure out which instance type
     // this task requires.
+    //
+    // Do not download the files, if there are any. We may be
+    // calculating the instance type in the workflow runner, outside
+    // the task.
     def calcInstanceType(taskInputs: Map[String, WdlVarLinks]) : String = {
-        // input variables that were already calculated
-        val env = HashMap.empty[String, WomValue]
+        val envInput: Map[String, WomValue] = taskInputs.map{ case (key, wvl) =>
+            key -> WdlVarLinks.localize(wvl, IOMode.Remote)
+        }.toMap
+        val env: Map[String, WomValue] =
+            evalDeclarations(task.declarations, envInput)
+                .map{ case (decl, v) => decl.unqualifiedName -> v}.toMap
+
         def lookup(varName : String) : WomValue = {
             env.get(varName) match {
+                case None => throw new UnboundVariableException(varName)
                 case Some(x) => x
-                case None =>
-                    // value not evaluated yet, calculate and keep in cache
-                    taskInputs.get(varName) match {
-                        case Some(wvl) =>
-                            env(varName) = WdlVarLinks.eval(wvl, IOMode.Data, IODirection.Download)
-                            env(varName)
-                        case None => throw new UnboundVariableException(varName)
-                    }
             }
         }
         def evalAttr(attrName: String) : Option[WomValue] = {
             task.runtimeAttributes.attrs.get(attrName) match {
                 case None => None
-                case Some(expr) =>
-                    Some(expr.evaluate(lookup, DxFunctions).get)
+                case Some(expr) => Some(expr.evaluate(lookup, DxFunctions).get)
             }
         }
 

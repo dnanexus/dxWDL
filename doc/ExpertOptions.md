@@ -332,6 +332,25 @@ runtime {
 }
 ```
 
+## Setting a default docker image for all tasks
+
+Sometimes, you want to use the same docker image for all tasks, unless specified otherwise.
+The `extras` commad line flag can help achieve this. It takes a JSON file
+as an argument. For example, if `taskAttrs.json` is this file:
+```
+{
+    "default_runtime_attributes" : {
+      "docker" : "quay.io/encode-dcc/atac-seq-pipeline:v1"
+    }
+}
+```
+
+Then adding it to the compilation command line will add the `atac-seq` docker image to all
+tasks by default.
+```
+java -jar dxWDL-0.44.jar compile files.wdl -defaults files_input.json -extras taskAttrs.json
+```
+
 ## Debugging an applet
 
 If you build an applet on the platform with dxWDL, and want to inspect
