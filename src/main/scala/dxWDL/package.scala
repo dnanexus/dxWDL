@@ -68,7 +68,9 @@ case class Verbose(on: Boolean,
 
 
 // Place to put any extra options, equivalent to Cromwell workflowOptions.
-case class Extras(defaultRuntimeAttributes: Map[String, WdlExpression])
+// Also, allows dnanexus specific configuration per task.
+case class Extras(defaultRuntimeAttributes: Map[String, WdlExpression],
+                  taskDxConfig: Map[String, JsValue])
 
 // Packing of all compiler flags in an easy to digest
 // format
