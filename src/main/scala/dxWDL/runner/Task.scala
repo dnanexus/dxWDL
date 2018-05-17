@@ -563,25 +563,22 @@ case class Task(task:WdlTask,
 
     // Evaluate the runtime expressions, and figure out which instance type
     // this task requires.
+    //
+    // Do not download the files, if there are any. We may be
+    // calculating the instance type in the workflow runner, outside
+    // the task.
     def calcInstanceType(taskInputs: Map[String, WdlVarLinks]) : String = {
-        // input variables that were already calculated
+        val envInput: Map[String, WomValue] = taskInputs.map{ case (key, wvl) =>
+            key -> WdlVarLinks.localize(wvl, IOMode.Remote)
+        }.toMap
+        val env: Map[String, WomValue] =
+            evalDeclarations(task.declarations, envInput)
+                .map{ case (decl, v) => decl.unqualifiedName -> v}.toMap
+
         def lookup(varName : String) : WomValue = {
-            taskInputs.get(varName) match {
-                case None =>
-                    // A value for this variable has not been passed. Check if it
-                    // is optional.
-                    val varDefinition = task.declarations.find(_.unqualifiedName == varName) match {
-                        case Some(x) => x
-                        case None => throw new Exception(
-                            s"Cannot find declaration for variable ${varName}")
-                    }
-                    val womValue = varDefinition.womType match {
-                        case WomOptionalType(t) => WomOptionalValue(t, None)
-                        case _ =>  throw new UnboundVariableException(s"${varName}")
-                    }
-                    womValue
-                case Some(wvl) =>
-                    WdlVarLinks.eval(wvl, IOMode.Data, IODirection.Download)
+            env.get(varName) match {
+                case None => throw new UnboundVariableException(varName)
+                case Some(x) => x
             }
         }
         def evalAttr(attrName: String) : Option[WomValue] = {

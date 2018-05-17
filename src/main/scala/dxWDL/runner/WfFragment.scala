@@ -370,7 +370,12 @@ case class WfFragment(nswf: WdlNamespaceWithWorkflow,
             Some(iType)
         } catch {
             case e : Throwable =>
-                Utils.appletLog(verbose, s"Failed to precalculate the instance type for task ${task.unqualifiedName}")
+                Utils.appletLog(verbose,
+                                s"""|Failed to precalculate the instance type for
+                                    |task ${task.unqualifiedName}.
+                                    |
+                                    |${e}
+                                    |""".stripMargin)
                 None
         }
     }

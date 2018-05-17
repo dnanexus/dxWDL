@@ -1,7 +1,7 @@
 # A sub-block with a conditional
 import "library_math.wdl" as lib
 
-workflow cond {
+workflow conditionals2 {
     Boolean flag
     Int n = 7
 

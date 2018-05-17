@@ -21,6 +21,33 @@ task DiskSpaceSpec {
   }
 }
 
+task DiskSpaceTaskDeclarations {
+    Int dummy_arg
+    File fruits
+
+    # use provided disk number or dynamically size on our own,
+    Int disk_req_gb = ceil(size(fruits, "GB")) + 50
+
+  command <<<
+    lines=$(df -t btrfs | grep dev)
+    size_kb=$(echo $lines | cut -d ' ' -f 2)
+    size_gb=$(echo "$size_kb / (1024 * 1024)" | bc)
+    if [[ $size_gb -ge disk_req_gb ]]; then
+       echo "true"
+    else
+       echo "false"
+   fi
+>>>
+
+    runtime {
+        disks: "local-disk ${disk_req_gb} HDD"
+    }
+    output {
+        String retval = read_string(stdout())
+    }
+}
+
+
 task MemorySpec {
   Int memory_req_gb
 
@@ -116,21 +143,35 @@ task Shortcut {
     }
 }
 
+
 workflow instance_types {
     Int i
+    File fruits
+
+    ### Disk space tests
+    call DiskSpaceSpec { input: disk_req_gb=90 }
 
     # The following is compiled into a fragment. This checks
     # the precalculation of instance types.
-    String s = "There are ${i} bandersnatchs"
     call DiskSpaceSpec as diskSpec2 { input: disk_req_gb= 200 + i }
 
-    call DiskSpaceSpec { input: disk_req_gb=90 }
+    call DiskSpaceTaskDeclarations as diskSpec3 {
+        input: dummy_arg = 4 + i,
+               fruits= fruits
+    }
+
+    ### Memory tests
     call MemorySpec { input: memory_req_gb=12 }
     call MemorySpec as memorySpec2 { input: memory_req_gb=1 }
+
+    ### Number of cores
     call NumCoresSpec { input: num_cores_req=5 }
     call NumCoresSpec as numCoresSpec2 { input: num_cores_req=1 }
+
+    ### Choosing a docker image at runtime
     call RuntimeDockerChoice { input: imageName="python:2.7" }
     call RuntimeDockerChoice2 { input: imageName="python:2.7" }
+
     call Shortcut
 
     output {

@@ -1,5 +1,6 @@
 //import com.typesafe.sbt.GitPlugin.autoImport._
 import sbt.Keys._
+import scoverage.ScoverageKeys._
 import Merging.customMergeStrategy
 enablePlugins(GitVersioning)
 
@@ -17,6 +18,8 @@ resolvers ++= Seq(
 
 // reduce the maximum number of errors shown by the Scala compiler
 maxErrors := 10
+
+//coverageEnabled := true
 
 // Show deprecation warnings
 scalacOptions ++= Seq(
@@ -58,7 +61,6 @@ assemblyOutputPath in assembly := file("applet_resources/resources/dxWDL.jar")
 assemblyMergeStrategy in assembly := customMergeStrategy.value
 
 libraryDependencies ++= Seq(
-//    "org.broadinstitute" %% "cromwell-wdl" % "30.2",
     "org.broadinstitute" %% "cromwell-wdl-model-draft2" % "31-39223b8",
 //    "org.broadinstitute" %% "cromwell-wdl-model-draft2" % "31",
 

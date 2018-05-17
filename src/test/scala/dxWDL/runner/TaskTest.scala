@@ -77,6 +77,15 @@ class TaskTest extends FlatSpec with Matchers {
         instanceType should equal("mem1_ssd1_x4")
     }
 
+    it should "calculate instance types with task declarations" in {
+        val taskRunner = makeTaskRunner("TC.wdl")
+
+        val inputs = Map("base_mem_mb" -> wdlValueToWVL(WomInteger(5 * 1024)),
+                         "disk_gb" -> wdlValueToWVL(WomInteger(2)))
+        val instanceType = taskRunner.calcInstanceType(inputs)
+        instanceType should equal("mem2_ssd1_x8")
+    }
+
     it should "evaluate a task with an empty command" in {
         val taskRunner = makeTaskRunner("TB.wdl")
 
@@ -96,4 +105,20 @@ class TaskTest extends FlatSpec with Matchers {
                                                JsString("Washington")))
     }
 
+    it should "correctly call the {floor, ceil, round} stdlib function" in {
+        val taskRunner = makeTaskRunner("TD.wdl")
+
+        val inputs = Map("x" -> wdlValueToWVL(WomFloat(1.4)))
+        val inputSpec = Map("x" -> DXIOParam(IOClass.FLOAT, false))
+        val outputSpec = Map("x_floor" -> DXIOParam(IOClass.FLOAT, false),
+                             "x_ceil" -> DXIOParam(IOClass.FLOAT, false),
+                             "x_round" -> DXIOParam(IOClass.FLOAT, false))
+
+        taskRunner.prolog(inputSpec, outputSpec, inputs)
+        val results = taskRunner.epilog(inputSpec, outputSpec, inputs)
+
+        results("x_floor") should equal(JsNumber(1))
+        results("x_ceil") should equal(JsNumber(2))
+        results("x_round") should equal(JsNumber(1))
+    }
 }
