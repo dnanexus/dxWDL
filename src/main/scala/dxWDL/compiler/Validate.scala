@@ -4,7 +4,7 @@ package dxWDL.compiler
 // Try to put all of the exceptions here, because then matching the error
 // with the source WDL is straight-forward
 //
-import dxWDL.{CompilerErrorFormatter, Utils, Verbose}
+import dxWDL._
 import scala.collection.mutable.Queue
 import wdl.draft2.model._
 import wdl.draft2.parser.WdlParser.Ast
@@ -58,10 +58,8 @@ case class Validate(cef: CompilerErrorFormatter,
 
     private def validateTask(task: WdlTask) : Unit = {
         // validate runtime attributes
-        val validAttrNames:Set[String] = Set(Utils.DX_INSTANCE_TYPE_ATTR,
-                                             "memory", "disks", "cpu", "docker")
         task.runtimeAttributes.attrs.foreach{ case (attrName,_) =>
-            if (!(validAttrNames contains attrName))
+            if (!(Extras.RUNTIME_ATTRS contains attrName))
                 Utils.warning(verbose,
                               s"Runtime attribute ${attrName} for task ${task.name} is unknown")
         }

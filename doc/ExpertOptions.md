@@ -380,8 +380,8 @@ be set.
         "timeoutPolicy": {
           "main": {
             "hours": 12
-          },
-        }
+          }
+        },
         "access" : {
           "project": "CONTRIBUTE",
           "allProjects": "VIEW",
