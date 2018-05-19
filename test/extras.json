@@ -1,0 +1,22 @@
+{
+  "default_task_dx_attributes" : {
+    "runSpec": {
+      "executionPolicy": {
+        "restartOn": {
+          "*": 1
+        }
+      },
+      "timeoutPolicy": {
+        "*": {
+          "hours": 1
+        }
+      },
+      "access" : {
+        "project": "VIEW",
+        "network": [
+          "*"
+        ]
+      }
+    }
+  }
+}

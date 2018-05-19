@@ -7,8 +7,7 @@ import java.nio.file.{Path, Paths}
 import scala.collection.mutable.HashMap
 import spray.json._
 import spray.json.JsString
-import wdl.draft2.model.{WdlExpression, WdlNamespace, WdlTask, WdlNamespaceWithWorkflow}
-import wom.values._
+import wdl.draft2.model.{WdlNamespace, WdlTask, WdlNamespaceWithWorkflow}
 
 object Main extends App {
     sealed trait Termination
@@ -278,34 +277,6 @@ object Main extends App {
         (dxProject, dxFolder)
     }
 
-    def extrasParse(extraFields: Map[String, JsValue]) : Extras = {
-        def wdlExpressionFromJsValue(jsv: JsValue) : WdlExpression = {
-            val wValue: WomValue = jsv match {
-                case JsBoolean(b) => WomBoolean(b.booleanValue)
-                case JsNumber(bnm) => WomInteger(bnm.intValue)
-                //            case JsNumber(bnm) => WomFloat(bnm.doubleValue)
-                case JsString(s) => WomString(s)
-                case other => throw new Exception(s"Unsupported json value ${other}")
-            }
-            WdlExpression.fromString(wValue.toWomString)
-        }
-
-        // Guardrail, check the fields are actually supported
-        for (k <- extraFields.keys) {
-            if (!(Utils.EXTRA_KEYS_SUPPORTED contains k))
-                throw new Exception(s"Unsupported special option ${k}, we currently support ${Utils.EXTRA_KEYS_SUPPORTED}")
-        }
-        val defaultRuntimeAttributes = extraFields.get("default_runtime_attributes") match {
-            case None =>
-                Map.empty[String, WdlExpression]
-            case Some(x) =>
-                x.asJsObject.fields.map{ case (name, jsValue) =>
-                    name -> wdlExpressionFromJsValue(jsValue)
-                }.toMap
-        }
-        Extras(defaultRuntimeAttributes)
-    }
-
     // Get basic information about the dx environment, and process
     // the compiler flags
     private def compilerOptions(options: OptionsMap) : CompilerOptions = {
@@ -323,7 +294,7 @@ object Main extends App {
             case None => None
             case Some(List(p)) =>
                 val contents = Utils.readFileContent(Paths.get(p))
-                Some(extrasParse(contents.parseJson.asJsObject.fields))
+                Some(Extras.parse(contents.parseJson))
             case _ => throw new Exception("extras specified twice")
         }
         val inputs: List[Path] = options.get("inputs") match {

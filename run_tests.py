@@ -502,6 +502,7 @@ def main():
         compiler_flags.append("-force")
     if args.verbose:
         compiler_flags.append("-verbose")
+    compiler_flags += ["--extras", os.path.join(top_dir, "test/extras.json")]
 
     if "call_native" in test_names:
         native_call_setup(project, applet_folder, version_id)

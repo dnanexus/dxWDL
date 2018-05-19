@@ -500,6 +500,14 @@ case class Native(dxWDLrtId: String,
             "distribution" -> JsString("Ubuntu"),
             "release" -> JsString("14.04"),
         )
+        val extraRunSpec : Map[String, JsValue] = extras match {
+            case None => Map.empty
+            case Some(ext) => ext.defaultTaskDxAttributes match {
+                case None => Map.empty
+                case Some(dta) => dta.toRunSpecJson
+            }
+        }
+        val runSpecWithExtras = runSpec ++ extraRunSpec
 
         // If the docker image is a platform asset,
         // add it to the asset-depends.
@@ -523,8 +531,43 @@ case class Native(dxWDLrtId: String,
             case None => Vector(runtimeLibrary)
             case Some(img) => Vector(runtimeLibrary, img)
         }
-        JsObject(runSpec +
+        JsObject(runSpecWithExtras +
                      ("bundledDepends" -> JsArray(bundledDepends)))
+    }
+
+    def  calcAccess(applet: IR.Applet) : JsValue = {
+        val access: DxAccess = applet.kind match {
+            case IR.AppletKindTask =>
+                val extraAccess: DxAccess = extras match {
+                    case None => DxAccess.empty
+                    case Some(ext) => ext.defaultTaskDxAttributes match {
+                        case None => DxAccess.empty
+                        case Some(dta) => dta.access match {
+                            case None => DxAccess.empty
+                            case Some(access) => access
+                        }
+                    }
+                }
+                if (applet.docker == IR.DockerImageNetwork) {
+                    // docker requires network access, because we are downloading
+                    // the image from the network
+                    extraAccess.merge(DxAccess(Some(Vector("*")), None,  None,  None,  None))
+                } else {
+                    extraAccess
+                }
+            case IR.AppletKindWorkflowOutputReorg =>
+                // The WorkflowOutput applet requires higher permissions
+                // to organize the output directory.
+                DxAccess(None, Some(AccessLevel.CONTRIBUTE), None, None, None)
+            case _ =>
+                // Even scatters need network access, because
+                // they spawn subjobs that (may) use dx-docker.
+                // We end up allowing all applets to use the network
+                DxAccess(Option(Vector("*")), None, None, None, None)
+        }
+        val fields = access.toJson
+        if (fields.isEmpty) JsNull
+        else JsObject(fields)
     }
 
     // Build an '/applet/new' request
@@ -540,22 +583,10 @@ case class Native(dxWDLrtId: String,
             cVarToSpec(cVar)
         ).flatten.toVector
         val runSpec : JsValue = calcRunSpec(bashScript, applet.instanceType, applet.docker)
-
-        // Even scatters need network access, because
-        // they spawn subjobs that (may) use dx-docker.
-        // We end up allowing all applets to use the network
-        val network:Map[String, JsValue] = Map("network" -> JsArray(JsString("*")))
-
-        // The WorkflowOutput applet requires higher permissions
-        // to organize the output directory.
-        val projAccess:Map[String, JsValue] = applet.kind match {
-            case IR.AppletKindWorkflowOutputReorg => Map("project" -> JsString("CONTRIBUTE"))
-            case _ => Map()
-        }
-        val access = JsObject(network ++ projAccess)
+        val access : JsValue = calcAccess(applet)
 
         // pack all the arguments into a single request
-        JsObject(
+        val req = Map(
             "project" -> JsString(dxProject.getId),
             "name" -> JsString(applet.name),
             "folder" -> JsString(folder),
@@ -564,9 +595,12 @@ case class Native(dxWDLrtId: String,
             "outputSpec" -> JsArray(outputSpec),
             "runSpec" -> runSpec,
             "dxapi" -> JsString("1.0.0"),
-            "access" -> access,
             "tags" -> JsArray(JsString("dxWDL"))
         )
+        if (access == JsNull)
+            JsObject(req)
+        else
+            JsObject(req ++ Map("access" -> access))
     }
 
     private def apiParseReplyID(rep: JsonNode) : String = {

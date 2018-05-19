@@ -30,8 +30,7 @@ class WfFragmentTest extends FlatSpec with Matchers {
 
     private val instanceTypeDB = InstanceTypeDB.genTestDB(true)
 
-    private def evalWorkflow(filename: String,
-                             inputs: Map[String, WdlVarLinks]) : Map[String, WomValue] = {
+    private def makeFragmentRunner(filename: String) : WfFragment = {
         val srcPath = pathFromBasename(filename)
         val wdlCode = Utils.readFileContent(srcPath)
         val ns = WdlNamespace.loadUsingSource(
@@ -39,15 +38,20 @@ class WfFragmentTest extends FlatSpec with Matchers {
         ).get
         val nswf = ns.asInstanceOf[WdlNamespaceWithWorkflow]
         val cef = new CompilerErrorFormatter(srcPath.toString, ns.terminalMap)
-        val mw = new WfFragment(nswf,
-                                instanceTypeDB,
-                                Map.empty,
-                                Map.empty,
-                                cef,
-                                JsNull,
-                                RunnerWfFragmentMode.Launch,
-                                false)
-        val wvlOutputVars = mw.apply(nswf.workflow, inputs)
+        new WfFragment(nswf,
+                       instanceTypeDB,
+                       Map.empty,
+                       Map.empty,
+                       cef,
+                       JsNull,
+                       RunnerWfFragmentMode.Launch,
+                       false)
+    }
+
+    private def evalWorkflow(filename: String,
+                             inputs: Map[String, WdlVarLinks]) : Map[String, WomValue] = {
+        val fragRunner = makeFragmentRunner(filename)
+        val wvlOutputVars = fragRunner.apply(inputs)
         val results: Map[String, WomValue] = wvlOutputVars.map{
             case (name, wvl) =>
                 name -> wdlValueFromWVL(wvl)
@@ -66,6 +70,21 @@ class WfFragmentTest extends FlatSpec with Matchers {
                                       Vector(WomInteger(2), WomInteger(4), WomInteger(6))))
         results("s") should equal(WomOptionalValue(WomStringType,
                                                    Some(WomString("hello class of 2017"))))
+    }
+
+    it should "generate readable names for scatter elements" in {
+        val fragRunner = makeFragmentRunner("A.wdl")
+        fragRunner.readableNameForScatterItem(WomBoolean(false)) should be (Some("false"))
+        fragRunner.readableNameForScatterItem(WomInteger(1)) should be (Some("1"))
+        fragRunner.readableNameForScatterItem(WomString("bandersnatch")) should be (Some("bandersnatch"))
+        fragRunner.readableNameForScatterItem(WomFloat(1.4)) should be (Some("1.4"))
+        fragRunner.readableNameForScatterItem(WomSingleFile("/A/B/C")) should be (Some("C"))
+        fragRunner.readableNameForScatterItem(
+            WomPair(WomInteger(3), WomBoolean(true))
+        )  should be (Some("(3, true)"))
+        fragRunner.readableNameForScatterItem(
+            WomOptionalValue(WomIntegerType, Some(WomInteger(32)))
+        )  should be (Some("32"))
     }
 
     it should "evaluate conditional inside scatter" in {

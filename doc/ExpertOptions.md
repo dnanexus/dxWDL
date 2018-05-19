@@ -334,7 +334,7 @@ runtime {
 
 ## Setting a default docker image for all tasks
 
-Sometimes, you want to use the same docker image for all tasks, unless specified otherwise.
+Sometimes, you want to use a default docker image for tasks.
 The `extras` commad line flag can help achieve this. It takes a JSON file
 as an argument. For example, if `taskAttrs.json` is this file:
 ```
@@ -357,3 +357,40 @@ If you build an applet on the platform with dxWDL, and want to inspect
 it, use: ```dx get --omit-resources <applet path>```. This will
 refrain from downloading the large resource files that go into the
 applet.
+
+
+## Setting dnanexus specific attributes for tasks
+
+When writing a dnanexus applet the user can specify options through
+the [dxapp.json](https://wiki.dnanexus.com/dxapp.json) file. The dxWDL
+equivalent is the *extras* file, specified with the
+`extras` command line option. The extras file has a `default_taskdx_attributes`
+section where runtime specification, timeout policies, and access control can
+be set.
+
+```
+{
+  "default_task_dx_attributes" : {
+    "runSpec": {
+        "executionPolicy": {
+          "restartOn": {
+            "*": 3
+          }
+        },
+        "timeoutPolicy": {
+          "main": {
+            "hours": 12
+          }
+        },
+        "access" : {
+          "project": "CONTRIBUTE",
+          "allProjects": "VIEW",
+          "network": [
+            "*"
+          ],
+          "developer": true
+        }
+      }
+  }
+}
+```

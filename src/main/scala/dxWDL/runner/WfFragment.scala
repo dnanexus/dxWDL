@@ -525,10 +525,12 @@ case class WfFragment(nswf: WdlNamespaceWithWorkflow,
     }
 
     // create a short, easy to read, description for a scatter element.
-    private def readableNameForScatterItem(item: WomValue) : Option[String] = {
+    def readableNameForScatterItem(item: WomValue) : Option[String] = {
         item match {
-            case WomBoolean(_) | WomInteger(_) | WomFloat(_) | WomString(_) =>
+            case WomBoolean(_) | WomInteger(_) | WomFloat(_) =>
                 Some(item.toWomString)
+            case WomString(s) =>
+                Some(s)
             case WomSingleFile(path) =>
                 val p = Paths.get(path).getFileName()
                 Some(p.toString)
@@ -778,8 +780,7 @@ case class WfFragment(nswf: WdlNamespaceWithWorkflow,
         }.toMap
     }
 
-    def apply(wf: WdlWorkflow,
-              inputs: Map[String, WdlVarLinks]) : Map[String, WdlVarLinks] = {
+    def apply(inputs: Map[String, WdlVarLinks]) : Map[String, WdlVarLinks] = {
         // build the environment from the dx:applet inputs
         val inputDecls: Map[String, ElemWom] = inputs.map{
             case (varName, wvl) =>
@@ -791,10 +792,10 @@ case class WfFragment(nswf: WdlNamespaceWithWorkflow,
         Utils.appletLog(verbose, s"envBgn = ${envBgn.decls}")
 
         // evaluate each of the statements in the workflow
-        val envEnd = wf.children.foldLeft(envBgn) {
+        val envEnd = nswf.workflow.children.foldLeft(envBgn) {
             case (env, stmt) => evalStatement(stmt, env, None)
         }
-        val exportTypes = calcExportVarTypes(wf)
+        val exportTypes = calcExportVarTypes(nswf.workflow)
         Utils.appletLog(verbose, s"exportTypes = ${exportTypes}")
 
         runMode match {
@@ -813,7 +814,7 @@ case class WfFragment(nswf: WdlNamespaceWithWorkflow,
                     if (childJobs.isEmpty) {
                         // There are no calls, we can return the results immediately
                         Map.empty
-                    } else if (childJobs.size == 1 && isSimpleCode(wf)) {
+                    } else if (childJobs.size == 1 && isSimpleCode(nswf.workflow)) {
                         // The WDL workflow has no scatters or if blocks. We can return
                         // promises to the calls.
                         val (_, (call, dxJob)) = envEnd.launched.head
@@ -832,7 +833,7 @@ case class WfFragment(nswf: WdlNamespaceWithWorkflow,
                 val callResults: Map[String, WdlVarLinks] =
                     envEnd.calls.foldLeft(Map.empty[String, WdlVarLinks]){
                         case (accu, (callName, aggr)) =>
-                            val call = wf.findCallByName(callName).get
+                            val call = nswf.workflow.findCallByName(callName).get
                             val fields = call.outputs.map{ cot =>
                                 val fullName = s"${call.unqualifiedName}_${cot.unqualifiedName}"
                                 val womType = exportTypes(fullName)
@@ -905,7 +906,7 @@ object WfFragment {
         val wf = nswf.workflow
         val cef = new CompilerErrorFormatter("", wf.wdlSyntaxErrorFormatter.terminalMap)
         val r = WfFragment(nswf, instanceTypeDB, execSeqMap, execLinkInfo, cef, orgInputs, runMode, verbose)
-        val wvlVarOutputs = r.apply(wf, inputs)
+        val wvlVarOutputs = r.apply(inputs)
 
         // convert from WVL to JSON
         val jsVarOutputs: Map[String, JsValue] =

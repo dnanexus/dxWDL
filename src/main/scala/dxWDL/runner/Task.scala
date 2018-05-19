@@ -588,7 +588,7 @@ case class Task(task:WdlTask,
             }
         }
 
-        val dxInstaceType = evalAttr(Utils.DX_INSTANCE_TYPE_ATTR)
+        val dxInstaceType = evalAttr(Extras.DX_INSTANCE_TYPE_ATTR)
         val memory = evalAttr("memory")
         val diskSpace = evalAttr("disks")
         val cores = evalAttr("cpu")

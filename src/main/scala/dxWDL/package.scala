@@ -4,7 +4,6 @@ import com.dnanexus._
 import java.nio.file.Path
 import spray.json._
 import wdl.draft2.model.types._
-import wdl.draft2.model.WdlExpression
 import wom.types._
 
 
@@ -66,9 +65,6 @@ case class Verbose(on: Boolean,
                    quiet: Boolean,
                    keywords: Set[String])
 
-
-// Place to put any extra options, equivalent to Cromwell workflowOptions.
-case class Extras(defaultRuntimeAttributes: Map[String, WdlExpression])
 
 // Packing of all compiler flags in an easy to digest
 // format

@@ -2,7 +2,7 @@
   */
 package dxWDL.compiler
 
-import dxWDL.{CompilerErrorFormatter, DeclAttrs, DxPath, InstanceTypeDB, Verbose, WdlPrettyPrinter}
+import dxWDL._
 import dxWDL.Utils
 import IR.{CVar, LinkedVar, SArg}
 import scala.util.{Failure, Success, Try}
@@ -159,7 +159,7 @@ task Add {
                     // and it will probably be inexpensive.
                     IR.InstanceTypeDefault
                 case Some(task) =>
-                    val dxInstaceType = evalAttr(task, Utils.DX_INSTANCE_TYPE_ATTR)
+                    val dxInstaceType = evalAttr(task, Extras.DX_INSTANCE_TYPE_ATTR)
                     val memory = evalAttr(task, "memory")
                     val diskSpace = evalAttr(task, "disks")
                     val cores = evalAttr(task, "cpu")
