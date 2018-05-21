@@ -358,16 +358,20 @@ object Main extends App {
             val cOpt = compilerOptions(options)
             cOpt.compileMode match {
                 case CompilerFlag.IR =>
-                    val ir: IR.Namespace = compiler.CompilerTop.applyOnlyIR(wdlSourceFile, cOpt)
+                    val ir: IR.Namespace = compiler.Top.applyOnlyIR(wdlSourceFile, cOpt)
                     return SuccessfulTerminationIR(ir)
 
                 case CompilerFlag.Default =>
                     val (dxProject, folder) = pathOptions(options, cOpt.verbose)
-                    val retval = compiler.CompilerTop.apply(wdlSourceFile, folder, dxProject, cOpt)
+                    val retval = compiler.Top.apply(wdlSourceFile, folder, dxProject, cOpt)
                     val desc = retval.getOrElse("")
                     return SuccessfulTermination(desc)
             }
         } catch {
+            case e : NamespaceValidationException =>
+                return UnsuccessfulTermination(
+                    "Namespace validation error\n\n" +
+                    e.getMessage)
             case e : Throwable =>
                 return UnsuccessfulTermination(Utils.exceptionToString(e))
         }

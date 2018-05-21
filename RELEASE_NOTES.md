@@ -37,6 +37,8 @@ example:
 }
 ```
 
+- Improved error message for namespace validation. Details are no longer hidden when
+the `-quiet` flag is set.
 
 ## 0.64
 - Support for setting defaults for all task runtime attributes has been added.

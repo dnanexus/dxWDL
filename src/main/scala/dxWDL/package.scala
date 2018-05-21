@@ -21,6 +21,10 @@ class UnboundVariableException private(ex: RuntimeException) extends RuntimeExce
     def this(varName: String) = this(new RuntimeException(s"Variable ${varName} is unbound"))
 }
 
+class NamespaceValidationException private(ex: RuntimeException) extends RuntimeException(ex) {
+    def this(msg: String) = this(new RuntimeException(msg))
+}
+
 // Mode of file data transfer
 //   Data: download of upload the entire file
 //   Remote: leave the file on the platform
