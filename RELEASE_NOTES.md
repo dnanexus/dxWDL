@@ -40,6 +40,9 @@ example:
 - Improved error message for namespace validation. Details are no longer hidden when
 the `-quiet` flag is set.
 
+- Reduced logging verbosity at runtime. Disabled printing of directory structure when running
+tasks, as the directories could be very large.
+
 ## 0.64
 - Support for setting defaults for all task runtime attributes has been added.
 This is similar to the Cromwell style. The `extras` command line flag takes a JSON file

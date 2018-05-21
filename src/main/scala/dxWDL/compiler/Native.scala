@@ -187,9 +187,10 @@ case class Native(dxWDLrtId: String,
             |
             |    # evaluate input arguments, and download input files
             |    java -jar $${DX_FS_ROOT}/dxWDL.jar internal taskProlog $${DX_FS_ROOT}/source.wdl $${HOME}
-            |    # Debugging outputs
-            |    ls -lR
-            |    cat $${HOME}/execution/meta/script
+            |
+            |    # uncomment to get more debugging outputs
+            |    # ls -lR
+            |    # cat $${HOME}/execution/meta/script
             |
             |    # setup any file streams. Keep track of background
             |    # processes in the 'background_pids' array.
@@ -199,7 +200,7 @@ case class Native(dxWDLrtId: String,
             |    if [[ -e $${HOME}/execution/meta/setup_streams ]]; then
             |       source $${HOME}/execution/meta/setup_streams > $${HOME}/execution/meta/background_pids.txt
             |
-            |       # reads the file line by line, and converts into a bash array
+            |       # reads the file line by line, and convert into a bash array
             |       mapfile -t background_pids < $${HOME}/execution/meta/background_pids.txt
             |       echo "Background processes ids: $${background_pids[@]}"
             |    fi
@@ -242,8 +243,8 @@ case class Native(dxWDLrtId: String,
             |        fi
             |    done
             |
-            |    # See what the directory looks like after execution
-            |    ls -lR
+            |    # Uncomment to see what the directory looks like after execution
+            |    # ls -lR
             |
             |    #  check return code of the script
             |    rc=`cat $${HOME}/execution/meta/rc`
