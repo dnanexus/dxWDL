@@ -237,7 +237,7 @@ case class Task(task:WdlTask,
         def evalAndCache(decl:DeclarationInterface,
                          expr:WdlExpression) : WomValue = {
             val vRaw : WomValue = expr.evaluate(lookup, DxFunctions).get
-            Utils.appletLog(verbose, s"evaluating ${decl} -> ${vRaw}")
+            //Utils.appletLog(verbose, s"evaluating ${decl} -> ${vRaw}")
             val w: WomValue = cast(decl.womType, vRaw, decl.unqualifiedName)
             env = env + (decl.unqualifiedName -> w)
             w
@@ -470,6 +470,10 @@ case class Task(task:WdlTask,
     def prolog(inputSpec: Map[String, DXIOParam],
                outputSpec: Map[String, DXIOParam],
                inputWvls: Map[String, WdlVarLinks]) : Map[String, JsValue] = {
+        val wdlCode: String = WdlPrettyPrinter(false, None).apply(task, 0).mkString("\n")
+        Utils.appletLog(verbose, s"Task source code:")
+        Utils.appletLog(verbose, wdlCode, 10000)
+
         val ioMode =
             if (task.commandTemplateString.trim.isEmpty) {
                 // The shell command is empty, there is no need to download the files.

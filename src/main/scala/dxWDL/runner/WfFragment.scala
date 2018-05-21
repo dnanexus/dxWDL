@@ -796,7 +796,7 @@ case class WfFragment(nswf: WdlNamespaceWithWorkflow,
             case (env, stmt) => evalStatement(stmt, env, None)
         }
         val exportTypes = calcExportVarTypes(nswf.workflow)
-        Utils.appletLog(verbose, s"exportTypes = ${exportTypes}")
+        //Utils.appletLog(verbose, s"exportTypes = ${exportTypes}")
 
         runMode match {
             case RunnerWfFragmentMode.Launch =>
@@ -885,7 +885,7 @@ object WfFragment {
         val wdlCode: String = WdlPrettyPrinter(false, None).apply(nswf, 0).mkString("\n")
         Utils.appletLog(verbose, s"Workflow source code:")
         Utils.appletLog(verbose, wdlCode, 10000)
-        Utils.appletLog(verbose, s"Input spec: ${inputSpec}")
+        //Utils.appletLog(verbose, s"Input spec: ${inputSpec}")
         Utils.appletLog(verbose, s"Inputs: ${inputs}")
         Utils.appletLog(verbose, s"runMode=${runMode}")
 
@@ -916,8 +916,8 @@ object WfFragment {
                     accu ++ fields.toMap
             }
 
-        Utils.appletLog(verbose, s"outputSpec= ${outputSpec}")
-        Utils.appletLog(verbose, s"jsVarOutputs= ${jsVarOutputs}")
+        //Utils.appletLog(verbose, s"outputSpec= ${outputSpec}")
+        //Utils.appletLog(verbose, s"jsVarOutputs= ${jsVarOutputs}")
         jsVarOutputs
     }
 }

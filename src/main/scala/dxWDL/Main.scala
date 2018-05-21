@@ -28,7 +28,8 @@ object Main extends App {
             WorkflowOutputReorg = Value
     }
 
-    case class DxniOptions(force: Boolean,
+    case class DxniOptions(apps: Boolean,
+                           force: Boolean,
                            outputFile: Option[Path],
                            recursive: Boolean,
                            verbose: Verbose)
@@ -93,6 +94,9 @@ object Main extends App {
             case keyOrg :: subargs =>
                 val keyword = normKeyword(keyOrg)
                 val (nKeyword, value) = keyword match {
+                    case "apps" =>
+                        checkNumberOfArguments(keyword, 0, subargs)
+                        (keyword, "")
                     case "archive" =>
                         checkNumberOfArguments(keyword, 0, subargs)
                         (keyword, "")
@@ -337,7 +341,8 @@ object Main extends App {
         val verbose = Verbose(options contains "verbose",
                               options contains "quiet",
                               verboseKeys)
-        DxniOptions(options contains "force",
+        DxniOptions(options contains "apps",
+                    options contains "force",
                     outputFile,
                     options contains "recursive",
                     verbose)
@@ -412,7 +417,10 @@ object Main extends App {
         }
 
         try {
-            compiler.DxNI.apply(dxProject, folder, output, dOpt.recursive, dOpt.force, dOpt.verbose)
+            if (dOpt.apps)
+                compiler.DxNI.applyApps(output, dOpt.force, dOpt.verbose)
+            else
+                compiler.DxNI.apply(dxProject, folder, output, dOpt.recursive, dOpt.force, dOpt.verbose)
             SuccessfulTermination("")
         } catch {
             case e : Throwable =>
@@ -576,19 +584,21 @@ object Main extends App {
             |
             |  dxni
             |    Dx Native call Interface. Create stubs for calling dx
-            |    applets, and store them as WDL tasks in a local file. Allows
-            |    calling existing platform applets without modification.
+            |    executables (apps/applets/workflows), and store them as WDL
+            |    tasks in a local file. Allows calling existing platform executables
+            |    without modification. Default is to look for applets.
             |    options:
-            |      -o <string>           Destination file for WDL task definitions
-            |      -r | recursive        Recursive search
+            |      -apps                  Search only for global apps.
+            |      -o <string>            Destination file for WDL task definitions
+            |      -r | recursive         Recursive search
             |
             |Common options
-            |    -destination           Full platform path (project:/folder)
-            |    -f | force             Delete existing applets/workflows
-            |    -folder <string>       Platform folder
-            |    -project <string>      Platform project
-            |    -quiet                 Do not print warnings or informational outputs
-            |    -verbose [flag]        Print detailed progress reports
+            |    -destination             Full platform path (project:/folder)
+            |    -f | force               Delete existing applets/workflows
+            |    -folder <string>         Platform folder
+            |    -project <string>        Platform project
+            |    -quiet                   Do not print warnings or informational outputs
+            |    -verbose [flag]          Print detailed progress reports
             |""".stripMargin
 
     val termination = dispatchCommand(args)
