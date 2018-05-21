@@ -4,7 +4,39 @@
 - Optimization for the case of launching an instance where it is
 calculated at runtime.
 
--
+- Support dnanexus configuration options for tasks. Setting
+the execution policy, timeout policies, and access
+control can be achieved by specifying the default option in the
+`default_taskdx_attributes` section of the `extras` file. For
+example:
+
+```
+{
+  "default_task_dx_attributes" : {
+    "runSpec": {
+        "executionPolicy": {
+          "restartOn": {
+            "*": 3
+          }
+        },
+        "timeoutPolicy": {
+          "main": {
+            "hours": 12
+          }
+        },
+        "access" : {
+          "project": "CONTRIBUTE",
+          "allProjects": "VIEW",
+          "network": [
+            "*"
+          ],
+          "developer": true
+        }
+      }
+  }
+}
+```
+
 
 ## 0.64
 - Support for setting defaults for all task runtime attributes has been added.
