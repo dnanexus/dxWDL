@@ -4,7 +4,54 @@
 - Optimization for the case of launching an instance where it is
 calculated at runtime.
 
--
+- Support dnanexus configuration options for tasks. Setting
+the execution policy, timeout policies, and access
+control can be achieved by specifying the default option in the
+`default_taskdx_attributes` section of the `extras` file. For
+example:
+
+```
+{
+  "default_task_dx_attributes" : {
+    "runSpec": {
+        "executionPolicy": {
+          "restartOn": {
+            "*": 3
+          }
+        },
+        "timeoutPolicy": {
+          "main": {
+            "hours": 12
+          }
+        },
+        "access" : {
+          "project": "CONTRIBUTE",
+          "allProjects": "VIEW",
+          "network": [
+            "*"
+          ],
+          "developer": true
+        }
+      }
+  }
+}
+```
+
+- Improved error message for namespace validation. Details are no longer hidden when
+the `-quiet` flag is set.
+
+- Reduced logging verbosity at runtime. Disabled printing of directory structure when running
+tasks, as the directories could be very large.
+
+- Added support for calling native DNAx apps. The command
+
+```
+java -jar dxWDL.jar dxni -apps -o my_apps.wdl
+```
+
+instructs the compiler to search for all the apps you can call, and create WDL
+tasks for them.
+
 
 ## 0.64
 - Support for setting defaults for all task runtime attributes has been added.

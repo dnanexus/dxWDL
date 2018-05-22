@@ -50,6 +50,9 @@ medium_test_list = [
     # calling native dx applets
     "call_native",
 
+    # calling native dx apps
+    "call_native_app",
+
     # subworkflows
     "cannes", "modulo", "subblocks", "trains", "conditionals2"
 ]
@@ -59,7 +62,8 @@ test_reorg=["files", "math"]
 test_defaults=["files", "math"]
 
 test_locked=["conditionals", "advanced", "bad_status", "bad_status2",
-             "instance_types", "dict", "cond"]
+             "instance_types", "dict", "cond",
+             "call_native_app", "call_native"]
 
 TestMetaData = namedtuple('TestMetaData', 'name kind')
 TestDesc = namedtuple('TestDesc', 'name kind wdl_source wdl_input dx_input results')
@@ -424,6 +428,22 @@ def native_call_setup(project, applet_folder, version_id):
     print(" ".join(cmdline))
     subprocess.check_output(cmdline)
 
+
+def native_call_app_setup(version_id):
+    header_file = os.path.join(top_dir, "test/basic/dx_app_extern.wdl")
+    if os.path.exists(header_file):
+        return
+    # build WDL wrapper tasks in test/dx_extern.wdl
+    cmdline = [ "java", "-jar",
+                os.path.join(top_dir, "dxWDL-{}.jar".format(version_id)),
+                "dxni",
+                "--apps",
+                "--force",
+                "--output", header_file]
+    print(" ".join(cmdline))
+    subprocess.check_output(cmdline)
+
+
 ######################################################################
 ## Program entry point
 def main():
@@ -506,7 +526,8 @@ def main():
 
     if "call_native" in test_names:
         native_call_setup(project, applet_folder, version_id)
-
+    if "call_native_app" in test_names:
+        native_call_app_setup(version_id)
     try:
         # Compile the WDL files to dx:workflows and dx:applets
         runnable = {}

@@ -35,7 +35,7 @@ class CompilerUnitTest extends FlatSpec with Matchers {
         )
         inside(retval) {
             case Main.UnsuccessfulTermination(errMsg) =>
-                errMsg should include ("Namespace failed validation")
+                errMsg should include ("Namespace validation error")
         }
     }
 
@@ -46,7 +46,7 @@ class CompilerUnitTest extends FlatSpec with Matchers {
         )
         inside(retval) {
             case Main.UnsuccessfulTermination(errMsg) =>
-                errMsg should include ("Namespace failed validation")
+                errMsg should include ("Namespace validation error")
         }
     }
 
@@ -103,11 +103,9 @@ class CompilerUnitTest extends FlatSpec with Matchers {
         val retval = Main.compile(
             List(path.toString, "--compileMode", "ir", "--locked", "--quiet")
         )
-        retval match  {
+        inside(retval) {
             case Main.UnsuccessfulTermination(errMsg) =>
-                errMsg should include ("Namespace failed validation")
-            case _ =>
-                true should equal(false)
+                errMsg should include ("Namespace validation error")
         }
     }
 

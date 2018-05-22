@@ -24,8 +24,8 @@ case class Native(dxWDLrtId: String,
                   archive: Boolean,
                   locked: Boolean,
                   verbose: Verbose) {
-    type ExecDict = Map[String, (IR.Callable, DXDataObject)]
-    val execDictEmpty = Map.empty[String, (IR.Callable, DXDataObject)]
+    type ExecDict = Map[String, (IR.Callable, DxExec)]
+    val execDictEmpty = Map.empty[String, (IR.Callable, DxExec)]
 
     val verbose2:Boolean = verbose.keywords contains "native"
     lazy val runtimeLibrary:JsValue = getRuntimeLibrary()
@@ -187,9 +187,10 @@ case class Native(dxWDLrtId: String,
             |
             |    # evaluate input arguments, and download input files
             |    java -jar $${DX_FS_ROOT}/dxWDL.jar internal taskProlog $${DX_FS_ROOT}/source.wdl $${HOME}
-            |    # Debugging outputs
-            |    ls -lR
-            |    cat $${HOME}/execution/meta/script
+            |
+            |    # uncomment to get more debugging outputs
+            |    # ls -lR
+            |    # cat $${HOME}/execution/meta/script
             |
             |    # setup any file streams. Keep track of background
             |    # processes in the 'background_pids' array.
@@ -199,7 +200,7 @@ case class Native(dxWDLrtId: String,
             |    if [[ -e $${HOME}/execution/meta/setup_streams ]]; then
             |       source $${HOME}/execution/meta/setup_streams > $${HOME}/execution/meta/background_pids.txt
             |
-            |       # reads the file line by line, and converts into a bash array
+            |       # reads the file line by line, and convert into a bash array
             |       mapfile -t background_pids < $${HOME}/execution/meta/background_pids.txt
             |       echo "Background processes ids: $${background_pids[@]}"
             |    fi
@@ -242,8 +243,8 @@ case class Native(dxWDLrtId: String,
             |        fi
             |    done
             |
-            |    # See what the directory looks like after execution
-            |    ls -lR
+            |    # Uncomment to see what the directory looks like after execution
+            |    # ls -lR
             |
             |    #  check return code of the script
             |    rc=`cat $${HOME}/execution/meta/rc`
@@ -429,7 +430,7 @@ case class Native(dxWDLrtId: String,
 
     // Create linking information for a dx:executable
     private def genLinkInfo(irCall: IR.Callable,
-                            dxObj: DXDataObject) : ExecLinkInfo = {
+                            dxObj: DxExec) : ExecLinkInfo = {
         val callInputDefs: Map[String, WomType] = irCall.inputVars.map{
             case CVar(name, wdlType, _, _) => (name -> wdlType)
         }.toMap
@@ -909,13 +910,15 @@ case class Native(dxWDLrtId: String,
                 execIr match {
                     case irwf: IR.Workflow =>
                         val dxwfl = buildWorkflowIfNeeded(irwf, accu)
-                        accu + (irwf.name -> (irwf, dxwfl))
+                        accu + (irwf.name -> (irwf, DxExec(dxwfl.getId)))
                     case irapl: IR.Applet =>
-                        val dxApplet = irapl.kind match {
-                            case IR.AppletKindNative(id) => DXApplet.getInstance(id)
-                            case _ => buildAppletIfNeeded(irapl, accu)
+                        val id = irapl.kind match {
+                            case IR.AppletKindNative(id) => id
+                            case _ =>
+                                val dxApplet = buildAppletIfNeeded(irapl, accu)
+                                dxApplet.getId
                         }
-                        accu + (irapl.name -> (irapl, dxApplet))
+                        accu + (irapl.name -> (irapl, DxExec(id)))
                 }
         }
 
@@ -924,14 +927,8 @@ case class Native(dxWDLrtId: String,
             buildWorkflowIfNeeded(wf, execDict)
         }
 
-        // split into dx:applets and dx:workflows
-        val dxSubWorkflows = execDict
-            .filter{ case (name, (_, exec)) => exec.isInstanceOf[DXWorkflow]}
-            .map{ case (name, (_, exec)) => name -> exec.asInstanceOf[DXWorkflow]}.toMap
-        val dxApplets = execDict
-            .filter{ case (name, (_, exec)) => exec.isInstanceOf[DXApplet]}
-            .map{ case (name, (_, exec)) => name -> exec.asInstanceOf[DXApplet]}.toMap
-        CompilationResults(entrypoint, dxSubWorkflows, dxApplets)
+        CompilationResults(entrypoint,
+                           execDict.map{ case (name, (_,dxExec)) => name -> dxExec }.toMap)
     }
 }
 

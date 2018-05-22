@@ -11,7 +11,7 @@ import wdl.draft2.model.{WdlExpression, WdlNamespace, ImportResolver}
 
 // Interface to the compilation tool chain. The methods here are the only ones
 // that should be called to perform compilation.
-object CompilerTop {
+object Top {
     private def prettyPrintIR(wdlSourceFile : Path,
                               extraSuffix: Option[String],
                               irc: IR.Namespace,
@@ -229,7 +229,7 @@ object CompilerTop {
         val cResults = compileNative(irNs, folder, dxProject, cOpt)
         val execIds = cResults.entrypoint match {
             case None =>
-                cResults.applets.map{ case (_, apl) => apl.getId }.mkString(",")
+                cResults.execDict.map{ case (_, dxExec) => dxExec.getId }.mkString(",")
             case Some(wf) =>
                 wf.getId
         }

@@ -243,9 +243,8 @@ object Validate {
         val v = new Validate(cef, verbose)
         v.apply(ns)
         if (!v.allErrors.isEmpty) {
-            for (err <- v.allErrors)
-                Utils.warning(verbose, err)
-            throw new Exception("Namespace failed validation")
+            val aggregatedErrorMsg = v.allErrors.mkString("\n\n")
+            throw new NamespaceValidationException(aggregatedErrorMsg)
         }
 
         // recurse into all the sub-namespaces

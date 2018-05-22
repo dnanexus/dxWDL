@@ -43,16 +43,29 @@ task mk_int_list {
   */
 package dxWDL.compiler
 
-import com.dnanexus.{DXApplet, DXDataObject, DXProject, DXSearch,
-    IOClass, InputParameter, OutputParameter}
+import com.dnanexus._
+import com.fasterxml.jackson.databind.JsonNode
 import dxWDL.{Verbose, Utils, WdlPrettyPrinter}
 import java.nio.file.{Files, Path}
 import scala.collection.JavaConverters._
 import scala.util.{Failure, Success}
+import scala.util.matching.Regex
+import spray.json._
 import wdl.draft2.model.{WdlTask, WdlNamespace}
 import wom.types._
 
-case class DxNI(ns: WdlNamespace, verbose: Verbose) {
+
+case class IoSpec(name: String,
+                  ioClass: IOClass,
+                  optional: Boolean)
+
+case class DxApp(name: String,
+                 id: String,
+                 inputSpec: Map[String, IoSpec],
+                 outputSpec: Map[String, IoSpec])
+
+case class DxNI(verbose: Verbose) {
+    val nsEmpty = WdlRewrite.namespaceEmpty
 
     private def wdlTypeOfIOClass(appletName:String,
                                  argName: String,
@@ -116,13 +129,13 @@ case class DxNI(ns: WdlNamespace, verbose: Verbose) {
         (inputSpec, outputSpec)
     }
 
-    private def genAppletStub(dxApplet: DXApplet,
+    private def genAppletStub(id: String,
                               appletName: String,
                               inputSpec: Map[String, WomType],
                               outputSpec: Map[String, WomType]) : WdlTask = {
         val meta = Map("type" -> "native",
-                       "id" -> dxApplet.getId)
-        val task = WdlRewrite.taskGenEmpty(appletName, meta, ns)
+                       "id" -> id)
+        val task = WdlRewrite.taskGenEmpty(appletName, meta, nsEmpty)
         val inputs = inputSpec.map{ case (name, wdlType) =>
             WdlRewrite.declaration(wdlType, name, None)
         }.toVector
@@ -181,7 +194,7 @@ case class DxNI(ns: WdlNamespace, verbose: Verbose) {
                     val bothStr = "[" + both.mkString(", ") + "]"
                     throw new Exception(s"""Parameters ${bothStr} used as both input and output in applet ${aplName}""")
                 }
-                val task = genAppletStub(apl, aplName, inputSpec, outputSpec)
+                val task = genAppletStub(apl.getId, aplName, inputSpec, outputSpec)
                 Some(task)
             } catch {
                 case e : Throwable =>
@@ -191,39 +204,195 @@ case class DxNI(ns: WdlNamespace, verbose: Verbose) {
             }
         }.flatten.toVector
     }
+
+    private def checkedGetJsBooleanOrFalse(jsv: JsValue,
+                                           fieldName: String) : Boolean = {
+        val fields = jsv.asJsObject.fields
+        fields.get(fieldName) match {
+            case Some(JsBoolean(x)) => x
+            case other => false
+        }
+    }
+
+    private def checkedGetJsString(jsv: JsValue,
+                                   fieldName: String) : String = {
+        val fields = jsv.asJsObject.fields
+        fields.get(fieldName) match {
+            case Some(JsString(x)) => x
+            case other => throw new Exception(s"malformed field ${fieldName} (${other})")
+        }
+    }
+
+    private def checkedGetJsObject(jsv: JsValue,
+                                   fieldName: String) : JsObject = {
+        val fields = jsv.asJsObject.fields
+        fields.get(fieldName) match {
+            case Some(JsObject(x)) => JsObject(x)
+            case other => throw new Exception(s"malformed field ${fieldName} (${other})")
+        }
+    }
+
+    private def checkedGetJsArray(jsv: JsValue,
+                                  fieldName: String) : Vector[JsValue] = {
+        val fields = jsv.asJsObject.fields
+        fields.get(fieldName) match {
+            case Some(JsArray(x)) => x.toVector
+            case other => throw new Exception(s"malformed field ${fieldName} (${other})")
+        }
+    }
+
+    private def checkedGetIoSpec(appName: String,
+                                 jsv: JsValue) : IoSpec = {
+        val name = checkedGetJsString(jsv, "name")
+        val ioClassRaw = checkedGetJsString(jsv, "class")
+        val ioClass = ioClassRaw match {
+            case "boolean" => IOClass.BOOLEAN
+            case "int" => IOClass.INT
+            case "float" => IOClass.FLOAT
+            case "string" => IOClass.STRING
+            case "file" => IOClass.FILE
+            case "array:boolean" => IOClass.ARRAY_OF_BOOLEANS
+            case "array:int" => IOClass.ARRAY_OF_INTS
+            case "array:float" => IOClass.ARRAY_OF_FLOATS
+            case "array:string" => IOClass.ARRAY_OF_STRINGS
+            case "array:file" => IOClass.ARRAY_OF_FILES
+            case other => throw new Exception(s"app ${appName} has field ${name} with non WDL-native io class ${other}")
+        }
+        val optional = checkedGetJsBooleanOrFalse(jsv, "optional")
+        IoSpec(name, ioClass, optional)
+    }
+
+
+    // App names can have characters that are illegal in WDL.
+    // 1) Leave only number, letters, and underscores
+    // 2) If the name starts with a number, add the prefix "app_"
+    private val taskNameRegex:Regex = raw"""[a-zA-Z][a-zA-Z0-9_.]*""".r
+    private def normalizeAppName(name: String) : String = {
+        def sanitizeChar(ch: Char) : String = ch match {
+            case '_' => "_"
+            case _ if (ch.isLetterOrDigit) => ch.toString
+            case _ => "_"
+        }
+        name match {
+            case taskNameRegex(_*) =>
+                // legal in WDL
+                name
+            case _ =>
+                // remove all illegal characeters
+                val nameClean = name.flatMap(sanitizeChar)
+
+                // add a prefix if needed
+                val prefix = nameClean(0) match {
+                    case x if x.isLetter => ""
+                    case '_' => "app"
+                    case _ => "app_"
+                }
+                if (!prefix.isEmpty)
+                    System.err.println(s"""|app ${nameClean} does not start
+                                           |with a letter, adding the prefix '${prefix}'"""
+                                           .stripMargin.replaceAll("\n", " "))
+                s"${prefix}${nameClean}"
+        }
+    }
+
+    private def checkedGetApp(jsv: JsValue) : DxApp = {
+        val id: String = checkedGetJsString(jsv, "id")
+        val desc: JsObject = checkedGetJsObject(jsv, "describe")
+        val name: String = checkedGetJsString(desc, "name")
+        val inputSpecJs = checkedGetJsArray(desc, "inputSpec")
+        val outputSpecJs = checkedGetJsArray(desc, "outputSpec")
+
+        val inputSpec = inputSpecJs.map{ x =>
+            val spec = checkedGetIoSpec(name, x)
+            spec.name -> spec
+        }.toMap
+        val outputSpec = outputSpecJs.map{ x =>
+            val spec = checkedGetIoSpec(name, x)
+            spec.name -> spec
+        }.toMap
+        val normName = normalizeAppName(name)
+        DxApp(normName, id, inputSpec, outputSpec)
+    }
+
+    private def appToWdlInterface(dxApp: DxApp) : WdlTask = {
+        val inputSpec:Map[String, WomType] =
+            dxApp.inputSpec.map{ case (_,ioSpec) =>
+                ioSpec.name -> wdlTypeOfIOClass(dxApp.name, ioSpec.name,
+                                                ioSpec.ioClass, ioSpec.optional)
+            }.toMap
+        val outputSpec:Map[String, WomType] =
+            dxApp.outputSpec.map{ case (_,ioSpec) =>
+                ioSpec.name -> wdlTypeOfIOClass(dxApp.name, ioSpec.name,
+                                                ioSpec.ioClass, ioSpec.optional)
+            }.toMap
+
+        // DNAx applets allow the same variable name to be used for inputs and outputs.
+        // This is illegal in WDL.
+        val allInputNames = inputSpec.keys.toSet
+        val allOutputNames = outputSpec.keys.toSet
+        val both = allInputNames.intersect(allOutputNames)
+        if (!both.isEmpty) {
+            val bothStr = "[" + both.mkString(", ") + "]"
+            throw new Exception(s"""|Parameters ${bothStr} used as both input and
+                                    |output in applet ${dxApp.name}""".stripMargin.replaceAll("\n", " "))
+        }
+        val task = genAppletStub(dxApp.id, dxApp.name, inputSpec, outputSpec)
+
+        // make sure the task can be pretty printed
+        val lines: String = WdlPrettyPrinter(false, None).apply(task, 0).mkString("\n")
+        WdlNamespace.loadUsingSource(lines, None, None) match {
+            case Success(_) => ()
+            case Failure(_) => throw new Exception(s"The WDL header for app ${dxApp.name} cannot be pretty printed")
+        }
+        task
+    }
+
+    // Search for global apps
+    def searchApps: Vector[WdlTask] = {
+        val req = JsObject("published" -> JsBoolean(true),
+                           "describe" -> JsObject("inputSpec" -> JsBoolean(true),
+                                                  "outputSpec" -> JsBoolean(true)),
+                           "limit" -> JsNumber(1000))
+        val rep = DXAPI.systemFindApps(Utils.jsonNodeOfJsValue(req),
+                                       classOf[JsonNode])
+        val repJs:JsValue = Utils.jsValueOfJsonNode(rep)
+        val appsJs = repJs.asJsObject.fields.get("results") match {
+            case Some(JsArray(apps)) => apps
+            case _ => throw new Exception(s"""|malformed reply to findApps
+                                              |
+                                              |${repJs}""".stripMargin)
+        }
+        if (appsJs.length == 1000)
+            throw new Exception("There are probably more than 1000 accessible apps")
+
+        val taskHeaders = appsJs.flatMap{ jsv =>
+            val desc: JsObject = checkedGetJsObject(jsv, "describe")
+            val appName = checkedGetJsString(desc, "name")
+            try {
+                val dxApp = checkedGetApp(jsv)
+                Some(appToWdlInterface(dxApp))
+            } catch {
+                case e : Throwable =>
+                    System.err.println(s"Unable to construct a WDL interface for applet ${appName}")
+                    System.err.println(e.getMessage)
+                    None
+            }
+        }
+        taskHeaders.toVector
+    }
 }
 
+
 object DxNI {
-    // create headers for calling dx:applets and dx:workflows
-    // We assume the folder is valid.
-    def apply(dxProject: DXProject,
-              folder: String,
-              output: Path,
-              recursive: Boolean,
-              force: Boolean,
-              verbose: Verbose) : Unit = {
-        val nsEmpty = WdlRewrite.namespaceEmpty
-        val dxni = DxNI(nsEmpty, verbose)
-
-        val dxNativeTasks: Vector[WdlTask] = dxni.search(dxProject, folder, recursive)
-        if (dxNativeTasks.isEmpty) {
-            System.err.println(s"Found no DX native applets in ${folder}")
-            return
-        }
-        val ns = WdlRewrite.namespace(dxNativeTasks)
-        val projName = dxProject.describe.getName
-
+    private def writeHeadersToFile(ns: WdlNamespace,
+                                   header: String,
+                                   output: Path,
+                                   force: Boolean) : Unit = {
         // pretty print into a buffer
         val lines: String = WdlPrettyPrinter(false, None)
             .apply(ns, 0)
             .mkString("\n")
-        // add comment describing how the file was created
-        val header =
-            s"""|# This file was generated by the Dx Native Interface (DxNI) tool.
-                |# project name = ${projName}
-                |# project ID = ${dxProject.getId}
-                |# folder = ${folder}
-                |""".stripMargin
+
         val allLines = header + "\n" + lines
         if (Files.exists(output)) {
             if (!force) {
@@ -244,4 +413,55 @@ object DxNI {
                 throw f
         }
     }
+
+
+    // create headers for calling dx:applets and dx:workflows
+    // We assume the folder is valid.
+    def apply(dxProject: DXProject,
+              folder: String,
+              output: Path,
+              recursive: Boolean,
+              force: Boolean,
+              verbose: Verbose) : Unit = {
+        val dxni = DxNI(verbose)
+        val dxNativeTasks: Vector[WdlTask] = dxni.search(dxProject, folder, recursive)
+        if (dxNativeTasks.isEmpty) {
+            System.err.println(s"Found no DX native applets in ${folder}")
+            return
+        }
+        val ns = WdlRewrite.namespace(dxNativeTasks)
+        val projName = dxProject.describe.getName
+
+        // add comment describing how the file was created
+        val header =
+            s"""|# This file was generated by the Dx Native Interface (DxNI) tool.
+                |# project name = ${projName}
+                |# project ID = ${dxProject.getId}
+                |# folder = ${folder}
+                |""".stripMargin
+
+        writeHeadersToFile(ns, header, output, force)
+    }
+
+    def applyApps(output: Path,
+                  force: Boolean,
+                  verbose: Verbose) : Unit = {
+        val dxni = DxNI(verbose)
+        val dxAppsAsTasks: Vector[WdlTask] = dxni.searchApps
+        if (dxAppsAsTasks.isEmpty) {
+            System.err.println(s"Found no DX global apps")
+            return
+        }
+        val ns = WdlRewrite.namespace(dxAppsAsTasks)
+
+        // add comment describing how the file was created
+        val header =
+            s"""|# This file was generated by the Dx Native Interface (DxNI) tool.
+                |# These are interfaces to apps.
+                |#
+                |""".stripMargin
+
+        writeHeadersToFile(ns, header, output, force)
+    }
+
 }

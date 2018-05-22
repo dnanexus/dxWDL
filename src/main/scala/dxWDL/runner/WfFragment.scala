@@ -402,9 +402,28 @@ case class WfFragment(nswf: WdlNamespaceWithWorkflow,
             case None => call.unqualifiedName
             case Some(hint) => s"${call.unqualifiedName} ${hint}"
         }
+        val dxExecId = eInfo.dxExec.getId
         val dxExec =
-            if (eInfo.dxExec.isInstanceOf[DXApplet]) {
-                val applet = eInfo.dxExec.asInstanceOf[DXApplet]
+            if (dxExecId.startsWith("app-")) {
+                val fields = Map(
+                    "name" -> JsString(dbgName),
+                    "input" -> callInputs,
+                    "properties" -> JsObject("call" ->  JsString(call.unqualifiedName),
+                                             "seq_number" -> JsString(seqNum.toString))
+                )
+                val req = JsObject(fields)
+                val retval: JsonNode = DXAPI.appRun(dxExecId,
+                                                    Utils.jsonNodeOfJsValue(req),
+                                                    classOf[JsonNode])
+                val info: JsValue =  Utils.jsValueOfJsonNode(retval)
+                val id:String = info.asJsObject.fields.get("id") match {
+                    case Some(JsString(x)) => x
+                    case _ => throw new AppInternalException(
+                        s"Bad format returned from jobNew ${info.prettyPrint}")
+                }
+                DXJob.getInstance(id)
+            } else if (dxExecId.startsWith("applet-")) {
+                val applet = DXApplet.getInstance(dxExecId)
                 val fields = Map(
                     "name" -> JsString(dbgName),
                     "input" -> callInputs,
@@ -435,9 +454,8 @@ case class WfFragment(nswf: WdlNamespaceWithWorkflow,
                         s"Bad format returned from jobNew ${info.prettyPrint}")
                 }
                 DXJob.getInstance(id)
-
-            } else if (eInfo.dxExec.isInstanceOf[DXWorkflow]) {
-                val workflow = eInfo.dxExec.asInstanceOf[DXWorkflow]
+            } else if (dxExecId.startsWith("workflow-")) {
+                val workflow = DXWorkflow.getInstance(dxExecId)
                 val dxAnalysis :DXAnalysis = workflow.newRun()
                     .setRawInput(Utils.jsonNodeOfJsValue(callInputs))
                     .setName(dbgName)
@@ -796,7 +814,7 @@ case class WfFragment(nswf: WdlNamespaceWithWorkflow,
             case (env, stmt) => evalStatement(stmt, env, None)
         }
         val exportTypes = calcExportVarTypes(nswf.workflow)
-        Utils.appletLog(verbose, s"exportTypes = ${exportTypes}")
+        //Utils.appletLog(verbose, s"exportTypes = ${exportTypes}")
 
         runMode match {
             case RunnerWfFragmentMode.Launch =>
@@ -885,7 +903,7 @@ object WfFragment {
         val wdlCode: String = WdlPrettyPrinter(false, None).apply(nswf, 0).mkString("\n")
         Utils.appletLog(verbose, s"Workflow source code:")
         Utils.appletLog(verbose, wdlCode, 10000)
-        Utils.appletLog(verbose, s"Input spec: ${inputSpec}")
+        //Utils.appletLog(verbose, s"Input spec: ${inputSpec}")
         Utils.appletLog(verbose, s"Inputs: ${inputs}")
         Utils.appletLog(verbose, s"runMode=${runMode}")
 
@@ -916,8 +934,8 @@ object WfFragment {
                     accu ++ fields.toMap
             }
 
-        Utils.appletLog(verbose, s"outputSpec= ${outputSpec}")
-        Utils.appletLog(verbose, s"jsVarOutputs= ${jsVarOutputs}")
+        //Utils.appletLog(verbose, s"outputSpec= ${outputSpec}")
+        //Utils.appletLog(verbose, s"jsVarOutputs= ${jsVarOutputs}")
         jsVarOutputs
     }
 }
