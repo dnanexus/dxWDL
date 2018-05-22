@@ -912,11 +912,17 @@ case class Native(dxWDLrtId: String,
                         val dxwfl = buildWorkflowIfNeeded(irwf, accu)
                         accu + (irwf.name -> (irwf, dxwfl))
                     case irapl: IR.Applet =>
-                        val dxApplet = irapl.kind match {
-                            case IR.AppletKindNative(id) => DXApplet.getInstance(id)
-                            case _ => buildAppletIfNeeded(irapl, accu)
+                        val dxExec = irapl.kind match {
+                            case IR.AppletKindNative(id) if (id.startsWith("applet-")) =>
+                                DXApplet.getInstance(id)
+                            case IR.AppletKindNative(id) if (id.startsWith("app-")) =>
+                                DXApp.getInstance(id)
+                            case IR.AppletKindNative(id) =>
+                                throw new Exception("cannot link with id ${id}")
+                            case _ =>
+                                buildAppletIfNeeded(irapl, accu)
                         }
-                        accu + (irapl.name -> (irapl, dxApplet))
+                        accu + (irapl.name -> (irapl, dxExec))
                 }
         }
 

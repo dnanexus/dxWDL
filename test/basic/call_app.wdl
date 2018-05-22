@@ -13,6 +13,5 @@ task testing_app_yhwang {
 
 
 workflow call_app {
-
-    call testing_app_yhwang { input: i=3}
+    call testing_app_yhwang { input: int=3}
 }
