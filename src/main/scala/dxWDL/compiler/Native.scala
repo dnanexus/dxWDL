@@ -24,8 +24,8 @@ case class Native(dxWDLrtId: String,
                   archive: Boolean,
                   locked: Boolean,
                   verbose: Verbose) {
-    type ExecDict = Map[String, (IR.Callable, DXDataObject)]
-    val execDictEmpty = Map.empty[String, (IR.Callable, DXDataObject)]
+    type ExecDict = Map[String, (IR.Callable, DxExec)]
+    val execDictEmpty = Map.empty[String, (IR.Callable, DxExec)]
 
     val verbose2:Boolean = verbose.keywords contains "native"
     lazy val runtimeLibrary:JsValue = getRuntimeLibrary()
@@ -430,7 +430,7 @@ case class Native(dxWDLrtId: String,
 
     // Create linking information for a dx:executable
     private def genLinkInfo(irCall: IR.Callable,
-                            dxObj: DXDataObject) : ExecLinkInfo = {
+                            dxObj: DxExec) : ExecLinkInfo = {
         val callInputDefs: Map[String, WomType] = irCall.inputVars.map{
             case CVar(name, wdlType, _, _) => (name -> wdlType)
         }.toMap
@@ -910,19 +910,15 @@ case class Native(dxWDLrtId: String,
                 execIr match {
                     case irwf: IR.Workflow =>
                         val dxwfl = buildWorkflowIfNeeded(irwf, accu)
-                        accu + (irwf.name -> (irwf, dxwfl))
+                        accu + (irwf.name -> (irwf, DxExec(dxwfl.getId)))
                     case irapl: IR.Applet =>
-                        val dxExec = irapl.kind match {
-                            case IR.AppletKindNative(id) if (id.startsWith("applet-")) =>
-                                DXApplet.getInstance(id)
-                            case IR.AppletKindNative(id) if (id.startsWith("app-")) =>
-                                DXApp.getInstance(id)
-                            case IR.AppletKindNative(id) =>
-                                throw new Exception("cannot link with id ${id}")
+                        val id = irapl.kind match {
+                            case IR.AppletKindNative(id) => id
                             case _ =>
-                                buildAppletIfNeeded(irapl, accu)
+                                val dxApplet = buildAppletIfNeeded(irapl, accu)
+                                dxApplet.getId
                         }
-                        accu + (irapl.name -> (irapl, dxExec))
+                        accu + (irapl.name -> (irapl, DxExec(id)))
                 }
         }
 
@@ -931,14 +927,8 @@ case class Native(dxWDLrtId: String,
             buildWorkflowIfNeeded(wf, execDict)
         }
 
-        // split into dx:applets and dx:workflows
-        val dxSubWorkflows = execDict
-            .filter{ case (name, (_, exec)) => exec.isInstanceOf[DXWorkflow]}
-            .map{ case (name, (_, exec)) => name -> exec.asInstanceOf[DXWorkflow]}.toMap
-        val dxApplets = execDict
-            .filter{ case (name, (_, exec)) => exec.isInstanceOf[DXApplet]}
-            .map{ case (name, (_, exec)) => name -> exec.asInstanceOf[DXApplet]}.toMap
-        CompilationResults(entrypoint, dxSubWorkflows, dxApplets)
+        CompilationResults(entrypoint,
+                           execDict.map{ case (name, (_,dxExec)) => name -> dxExec }.toMap)
     }
 }
 

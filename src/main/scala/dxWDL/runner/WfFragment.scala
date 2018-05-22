@@ -402,9 +402,10 @@ case class WfFragment(nswf: WdlNamespaceWithWorkflow,
             case None => call.unqualifiedName
             case Some(hint) => s"${call.unqualifiedName} ${hint}"
         }
+        val dxExecId = eInfo.dxExec.getId
         val dxExec =
-            if (eInfo.dxExec.isInstanceOf[DXApplet]) {
-                val applet = eInfo.dxExec.asInstanceOf[DXApplet]
+            if (dxExecId.startsWith("app-")) {
+                val applet = DXApplet.getInstance(dxExecId)
                 val fields = Map(
                     "name" -> JsString(dbgName),
                     "input" -> callInputs,
@@ -436,8 +437,8 @@ case class WfFragment(nswf: WdlNamespaceWithWorkflow,
                 }
                 DXJob.getInstance(id)
 
-            } else if (eInfo.dxExec.isInstanceOf[DXWorkflow]) {
-                val workflow = eInfo.dxExec.asInstanceOf[DXWorkflow]
+            } else if (dxExecId.startsWith("workflow-")) {
+                val workflow = DXWorkflow.getInstance(dxExecId)
                 val dxAnalysis :DXAnalysis = workflow.newRun()
                     .setRawInput(Utils.jsonNodeOfJsValue(callInputs))
                     .setName(dbgName)

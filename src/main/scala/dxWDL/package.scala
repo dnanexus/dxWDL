@@ -83,11 +83,16 @@ case class CompilerOptions(archive: Boolean,
                            reorg: Boolean,
                            verbose: Verbose)
 
+// A DNAx executable. An app, applet, or workflow.
+case class DxExec(id: String) {
+    def getId : String = id
+}
+
 // Information used to link applets that call other applets. For example, a scatter
 // applet calls applets that implement tasks.
 case class ExecLinkInfo(inputs: Map[String, WomType],
                         outputs: Map[String, WomType],
-                        dxExec: DXDataObject)
+                        dxExec: DxExec)
 
 object ExecLinkInfo {
     def writeJson(ali: ExecLinkInfo) : JsValue = {
@@ -100,7 +105,7 @@ object ExecLinkInfo {
             case (name, womType) => name -> JsString(womType.toDisplayString)
         }.toMap
         JsObject(
-            "id" -> JsString(ali.dxExec.getId()),
+            "id" -> JsString(ali.dxExec.getId),
             "inputs" -> JsObject(appInputDefs),
             "outputs" -> JsObject(appOutputDefs)
         )
@@ -109,12 +114,12 @@ object ExecLinkInfo {
     def readJson(aplInfo: JsValue, dxProject: DXProject) = {
         val dxExec = aplInfo.asJsObject.fields("id") match {
             case JsString(execId) =>
-                if (execId.startsWith("applet-"))
-                    DXApplet.getInstance(execId, dxProject)
-                else if (execId.startsWith("workflow-"))
-                    DXWorkflow.getInstance(execId, dxProject)
+                if (execId.startsWith("app-") ||
+                        execId.startsWith("applet-") ||
+                        execId.startsWith("workflow-"))
+                    DxExec(execId)
                 else
-                    throw new Exception(s"${execId} is not an applet nor a workflow")
+                    throw new Exception(s"${execId} is not an app/applet/workflow")
             case _ => throw new Exception("Bad JSON")
         }
         val inputDefs = aplInfo.asJsObject.fields("inputs").asJsObject.fields.map{
@@ -131,8 +136,7 @@ object ExecLinkInfo {
 
 // The end result of the compiler
 case class CompilationResults(entrypoint: Option[DXWorkflow],
-                              subWorkflows: Map[String, DXWorkflow],
-                              applets: Map[String, DXApplet])
+                              execDict: Map[String, DxExec])
 
 // Different ways of using the mini-workflow runner.
 //   Launch:     there are WDL calls, lanuch the dx:executables.

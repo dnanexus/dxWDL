@@ -229,7 +229,7 @@ object Top {
         val cResults = compileNative(irNs, folder, dxProject, cOpt)
         val execIds = cResults.entrypoint match {
             case None =>
-                cResults.applets.map{ case (_, apl) => apl.getId }.mkString(",")
+                cResults.execDict.map{ case (_, dxExec) => dxExec.getId }.mkString(",")
             case Some(wf) =>
                 wf.getId
         }
