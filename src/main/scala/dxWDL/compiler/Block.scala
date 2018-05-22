@@ -134,10 +134,49 @@ object Block {
         }
     }
 
+    // Is there a declaration after a call? For example:
+    //
+    // scatter (i in numbers) {
+    //     call add { input: a=i, b=1 }
+    //     Int n = add.result
+    // }
+    private def isDeclarationAfterCall(statements: Vector[Scope]) : Boolean = {
+        statements.length match {
+            case 0 => false
+            case 1 =>
+                if (isSubBlock(statements.head)) {
+                    // recurse into the only child
+                    isDeclarationAfterCall(statements.head.children.toVector)
+                } else {
+                    // base case: there is just one one child,
+                    // and it is a call or a declaration.
+                    false
+                }
+            case _ =>
+                val numCalls = countCalls(statements.head)
+                if (numCalls == 1) true
+                else isDeclarationAfterCall(statements.tail)
+        }
+    }
+
     // A block is large if it has two calls or more
     private def isReducible(scope: Scope) : Boolean = {
-        (isSubBlock(scope) &&
-             Block(scope.children.toVector).countCalls >= 2)
+        if (!isSubBlock(scope))
+            return false
+        val numCalls = countCalls(scope.children.toVector)
+        if (numCalls == 0)
+            return false
+        if (numCalls >= 2)
+            return true
+
+        // There is one call. However, there may be declarations
+        // after it. For example:
+        //
+        // scatter (i in numbers) {
+        //     call add { input: a=i, b=1 }
+        //     Int n = add.result
+        // }
+        return isDeclarationAfterCall(scope.children.toVector)
     }
 
 

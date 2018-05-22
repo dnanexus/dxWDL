@@ -54,7 +54,7 @@ medium_test_list = [
     "call_native_app",
 
     # subworkflows
-    "cannes", "modulo", "subblocks", "trains", "conditionals2"
+    "cannes", "modulo", "subblocks", "subblocks2", "trains", "conditionals2"
 ]
 
 # Tests with the reorg flags
@@ -63,7 +63,8 @@ test_defaults=["files", "math"]
 
 test_locked=["conditionals", "advanced", "bad_status", "bad_status2",
              "instance_types", "dict", "cond",
-             "call_native_app", "call_native"]
+             "call_native_app", "call_native",
+             "subblocks", "subblocks2", "trains", "conditionals2"]
 
 TestMetaData = namedtuple('TestMetaData', 'name kind')
 TestDesc = namedtuple('TestDesc', 'name kind wdl_source wdl_input dx_input results')

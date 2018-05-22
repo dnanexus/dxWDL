@@ -2,6 +2,7 @@ package dxWDL.compiler
 
 import dxWDL.Main
 import java.nio.file.{Path, Paths}
+import org.scalatest.Inside._
 import org.scalatest.{FlatSpec, Matchers}
 
 class DecomposeTest extends FlatSpec with Matchers {
@@ -59,5 +60,38 @@ class DecomposeTest extends FlatSpec with Matchers {
         Main.compile(
             List(path.toString, "--compileMode", "ir", "--locked", "--quiet")
         ) shouldBe a [Main.SuccessfulTerminationIR]
+    }
+
+    it should "split a block with a declaration after a call" in {
+        val path = pathFromBasename("declaration_after_call.wdl")
+        val retval = Main.compile(
+            List(path.toString, "--compileMode", "ir", "--locked", "--quiet")
+        )
+        inside(retval) {
+            case Main.SuccessfulTerminationIR(ir) =>
+                ir.subWorkflows.size should be(1)
+        }
+    }
+
+    it should "split a block with a declaration after a call II" in {
+        val path = pathFromBasename("declaration_after_call2.wdl")
+        val retval = Main.compile(
+            List(path.toString, "--compileMode", "ir", "--locked", "--quiet")
+        )
+        inside(retval) {
+            case Main.SuccessfulTerminationIR(ir) =>
+                ir.subWorkflows.size should be(1)
+        }
+    }
+
+    it should "split a block with a declaration after a call III" in {
+        val path = pathFromBasename("declaration_after_call3.wdl")
+        val retval = Main.compile(
+            List(path.toString, "--compileMode", "ir", "--locked", "--quiet")
+        )
+        inside(retval) {
+            case Main.SuccessfulTerminationIR(ir) =>
+                ir.subWorkflows.size should be(1)
+        }
     }
 }

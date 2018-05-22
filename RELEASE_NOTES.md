@@ -1,5 +1,25 @@
 # Release Notes
 
+## 0.66
+- Decomposing a workflow when there is a declaration after a call. For example,
+workflow `foo` needs to be decomposed. The workflow fragment runner does not
+handle dependencies, and cannot wait for the `add` call to complete.
+
+```
+workflow foo {
+    Array[Int] numbers
+
+    scatter (i in numbers) {
+        call add { input: a=i, b=1}
+        Int m = add.result + 2
+    }
+
+    output {
+        Array[Int] ms = m
+    }
+}
+```
+
 ## 0.65
 - Optimization for the case of launching an instance where it is
 calculated at runtime.
