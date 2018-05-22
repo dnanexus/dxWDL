@@ -405,6 +405,24 @@ case class WfFragment(nswf: WdlNamespaceWithWorkflow,
         val dxExecId = eInfo.dxExec.getId
         val dxExec =
             if (dxExecId.startsWith("app-")) {
+                val fields = Map(
+                    "name" -> JsString(dbgName),
+                    "input" -> callInputs,
+                    "properties" -> JsObject("call" ->  JsString(call.unqualifiedName),
+                                             "seq_number" -> JsString(seqNum.toString))
+                )
+                val req = JsObject(fields)
+                val retval: JsonNode = DXAPI.appRun(dxExecId,
+                                                    Utils.jsonNodeOfJsValue(req),
+                                                    classOf[JsonNode])
+                val info: JsValue =  Utils.jsValueOfJsonNode(retval)
+                val id:String = info.asJsObject.fields.get("id") match {
+                    case Some(JsString(x)) => x
+                    case _ => throw new AppInternalException(
+                        s"Bad format returned from jobNew ${info.prettyPrint}")
+                }
+                DXJob.getInstance(id)
+            } else if (dxExecId.startsWith("applet-")) {
                 val applet = DXApplet.getInstance(dxExecId)
                 val fields = Map(
                     "name" -> JsString(dbgName),
@@ -436,7 +454,6 @@ case class WfFragment(nswf: WdlNamespaceWithWorkflow,
                         s"Bad format returned from jobNew ${info.prettyPrint}")
                 }
                 DXJob.getInstance(id)
-
             } else if (dxExecId.startsWith("workflow-")) {
                 val workflow = DXWorkflow.getInstance(dxExecId)
                 val dxAnalysis :DXAnalysis = workflow.newRun()

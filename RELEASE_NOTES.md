@@ -43,7 +43,15 @@ the `-quiet` flag is set.
 - Reduced logging verbosity at runtime. Disabled printing of directory structure when running
 tasks, as the directories could be very large.
 
-- Support for calling apps.
+- Added support for calling native DNAx apps. The command
+
+```
+java -jar dxWDL.jar dxni -apps -o my_apps.wdl
+```
+
+instructs the compiler to search for all the apps you can call, and create WDL
+tasks for them.
+
 
 ## 0.64
 - Support for setting defaults for all task runtime attributes has been added.

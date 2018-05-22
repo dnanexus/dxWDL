@@ -310,6 +310,17 @@ workflow w {
 }
 ```
 
+### Calling apps
+
+To call apps instead of applets, use
+
+```
+java -jar dxWDL.jar dxni -apps -o my_apps.wdl
+```
+
+The compiler will search for all the apps you can call, and create WDL
+tasks for them.
+
 ## Using a docker image on the platform
 
 Normally, docker images are public, and stored in publicly available
