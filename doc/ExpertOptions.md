@@ -375,7 +375,7 @@ applet.
 When writing a dnanexus applet the user can specify options through
 the [dxapp.json](https://wiki.dnanexus.com/dxapp.json) file. The dxWDL
 equivalent is the *extras* file, specified with the
-`extras` command line option. The extras file has a `default_taskdx_attributes`
+`extras` command line option. The extras file has a `default_task_dx_attributes`
 section where runtime specification, timeout policies, and access control can
 be set.
 
@@ -389,7 +389,7 @@ be set.
           }
         },
         "timeoutPolicy": {
-          "main": {
+          "*": {
             "hours": 12
           }
         },
