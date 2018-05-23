@@ -81,6 +81,7 @@ case class CompilerOptions(archive: Boolean,
                            inputs: List[Path],
                            locked: Boolean,
                            reorg: Boolean,
+                           runtimeDebugLevel: Option[Int],
                            verbose: Verbose)
 
 // A DNAx executable. An app, applet, or workflow.

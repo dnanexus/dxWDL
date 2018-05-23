@@ -54,7 +54,7 @@ medium_test_list = [
     "call_native_app",
 
     # subworkflows
-    "cannes", "modulo", "subblocks", "trains", "conditionals2"
+    "cannes", "modulo", "subblocks", "subblocks2", "trains", "conditionals2"
 ]
 
 # Tests with the reorg flags
@@ -63,7 +63,8 @@ test_defaults=["files", "math"]
 
 test_locked=["conditionals", "advanced", "bad_status", "bad_status2",
              "instance_types", "dict", "cond",
-             "call_native_app", "call_native"]
+             "call_native_app", "call_native",
+             "subblocks", "subblocks2", "trains", "conditionals2"]
 
 TestMetaData = namedtuple('TestMetaData', 'name kind')
 TestDesc = namedtuple('TestDesc', 'name kind wdl_source wdl_input dx_input results')
@@ -469,6 +470,8 @@ def main():
                            action="store_true", default=False)
     argparser.add_argument("--project", help="DNAnexus project ID",
                            default="project-F07pBj80ZvgfzQK28j35Gj54")
+    argparser.add_argument("--runtime-debug-level",
+                           help="printing verbosity of task/workflow runner, {0,1,2}")
     argparser.add_argument("--test", help="Run a test, or a subgroup of tests",
                            action="append", default=[])
     argparser.add_argument("--test-list", help="Print a list of available tests",
@@ -522,6 +525,9 @@ def main():
         compiler_flags.append("-force")
     if args.verbose:
         compiler_flags.append("-verbose")
+    if args.runtime_debug_level:
+        compiler_flags += ["-runtimeDebugLevel", args.runtime_debug_level]
+
     compiler_flags += ["--extras", os.path.join(top_dir, "test/extras.json")]
 
     if "call_native" in test_names:

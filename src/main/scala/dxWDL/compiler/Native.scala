@@ -20,6 +20,7 @@ case class Native(dxWDLrtId: String,
                   dxObjDir: DxObjectDirectory,
                   instanceTypeDB: InstanceTypeDB,
                   extras: Option[Extras],
+                  runtimeDebugLevel: Option[Int],
                   force: Boolean,
                   archive: Boolean,
                   locked: Boolean,
@@ -28,6 +29,7 @@ case class Native(dxWDLrtId: String,
     val execDictEmpty = Map.empty[String, (IR.Callable, DxExec)]
 
     val verbose2:Boolean = verbose.keywords contains "native"
+    val rtDebugLvl = runtimeDebugLevel.getOrElse(Utils.DEFAULT_RUNTIME_DEBUG_LEVEL)
     lazy val runtimeLibrary:JsValue = getRuntimeLibrary()
     lazy val projName = dxProject.describe().getName()
 
@@ -149,9 +151,7 @@ case class Native(dxWDLrtId: String,
         // badly with bash
         val wdlCodeUu64 = base64Encode(wdlCode)
         val part1 =
-            s"""|    echo "working directory =$${PWD}"
-                |    echo "home dir =$${HOME}"
-                |
+            s"""|
                 |    # write the WDL script into a file
                 |    cat >$${DX_FS_ROOT}/source.wdl.uu64 <<'EOL'
                 |${wdlCodeUu64}
@@ -186,11 +186,7 @@ case class Native(dxWDLrtId: String,
             |    background_pids=()
             |
             |    # evaluate input arguments, and download input files
-            |    java -jar $${DX_FS_ROOT}/dxWDL.jar internal taskProlog $${DX_FS_ROOT}/source.wdl $${HOME}
-            |
-            |    # uncomment to get more debugging outputs
-            |    # ls -lR
-            |    # cat $${HOME}/execution/meta/script
+            |    java -jar $${DX_FS_ROOT}/dxWDL.jar internal taskProlog $${DX_FS_ROOT}/source.wdl $${HOME} ${rtDebugLvl}
             |
             |    # setup any file streams. Keep track of background
             |    # processes in the 'background_pids' array.
@@ -243,9 +239,6 @@ case class Native(dxWDLrtId: String,
             |        fi
             |    done
             |
-            |    # Uncomment to see what the directory looks like after execution
-            |    # ls -lR
-            |
             |    #  check return code of the script
             |    rc=`cat $${HOME}/execution/meta/rc`
             |    if [[ $$rc != 0 ]]; then
@@ -253,23 +246,23 @@ case class Native(dxWDLrtId: String,
             |    fi
             |
             |    # evaluate applet outputs, and upload result files
-            |    java -jar $${DX_FS_ROOT}/dxWDL.jar internal taskEpilog $${DX_FS_ROOT}/source.wdl $${HOME}
+            |    java -jar $${DX_FS_ROOT}/dxWDL.jar internal taskEpilog $${DX_FS_ROOT}/source.wdl $${HOME} ${rtDebugLvl}
             |""".stripMargin.trim
     }
 
     private def genBashScriptNonTask(miniCmd:String) : String = {
         s"""|main() {
-            |    java -jar $${DX_FS_ROOT}/dxWDL.jar internal ${miniCmd} $${DX_FS_ROOT}/source.wdl $${HOME}
+            |    java -jar $${DX_FS_ROOT}/dxWDL.jar internal ${miniCmd} $${DX_FS_ROOT}/source.wdl $${HOME} ${rtDebugLvl}
             |}""".stripMargin.trim
     }
 
     private def genBashScriptWfFragment() : String = {
         s"""|main() {
-            |    java -jar $${DX_FS_ROOT}/dxWDL.jar internal wfFragment $${DX_FS_ROOT}/source.wdl $${HOME}
+            |    java -jar $${DX_FS_ROOT}/dxWDL.jar internal wfFragment $${DX_FS_ROOT}/source.wdl $${HOME} ${rtDebugLvl}
             |}
             |
             |collect() {
-            |    java -jar $${DX_FS_ROOT}/dxWDL.jar internal collect $${DX_FS_ROOT}/source.wdl $${HOME}
+            |    java -jar $${DX_FS_ROOT}/dxWDL.jar internal collect $${DX_FS_ROOT}/source.wdl $${HOME} ${rtDebugLvl}
             |}""".stripMargin.trim
     }
 
@@ -292,12 +285,12 @@ case class Native(dxWDLrtId: String,
                     case IR.InstanceTypeRuntime =>
                         s"""|main() {
                             |    # check if this is the correct instance type
-                            |    correctInstanceType=`java -jar $${DX_FS_ROOT}/dxWDL.jar internal taskCheckInstanceType $${DX_FS_ROOT}/source.wdl $${HOME}`
+                            |    correctInstanceType=`java -jar $${DX_FS_ROOT}/dxWDL.jar internal taskCheckInstanceType $${DX_FS_ROOT}/source.wdl $${HOME} ${rtDebugLvl}`
                             |    if [[ $$correctInstanceType == "true" ]]; then
                             |        body
                             |    else
                             |       # evaluate the instance type, and launch a sub job on it
-                            |       java -jar $${DX_FS_ROOT}/dxWDL.jar internal taskRelaunch $${DX_FS_ROOT}/source.wdl $${HOME}
+                            |       java -jar $${DX_FS_ROOT}/dxWDL.jar internal taskRelaunch $${DX_FS_ROOT}/source.wdl $${HOME} ${rtDebugLvl}
                             |    fi
                             |}
                             |
@@ -939,6 +932,7 @@ object Native {
               dxProject: DXProject,
               instanceTypeDB: InstanceTypeDB,
               extras: Option[Extras],
+              runtimeDebugLevel: Option[Int],
               force: Boolean,
               archive: Boolean,
               locked: Boolean,
@@ -949,7 +943,7 @@ object Native {
         // We don't want to build them if we don't have to.
         val dxObjDir = DxObjectDirectory(ns, dxProject, folder, verbose)
         val ntv = new Native(dxWDLrtId, folder, dxProject, dxObjDir, instanceTypeDB,
-                             extras, force, archive, locked, verbose)
+                             extras, runtimeDebugLevel, force, archive, locked, verbose)
         ntv.compile(ns)
     }
 }

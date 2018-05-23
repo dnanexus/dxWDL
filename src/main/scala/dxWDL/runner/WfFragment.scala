@@ -54,10 +54,11 @@ case class WfFragment(nswf: WdlNamespaceWithWorkflow,
                       cef: CompilerErrorFormatter,
                       orgInputs: JsValue,
                       runMode: RunnerWfFragmentMode.Value,
-                      verbose: Boolean) {
+                      runtimeDebugLevel: Int) {
+    private val verbose = runtimeDebugLevel >= 1
 
-    def makeOptionalWomValue(t: WomType,
-                             v: WomValue) : WomValue = {
+    private def makeOptionalWomValue(t: WomType,
+                                     v: WomValue) : WomValue = {
         v match {
             case WomOptionalValue(WomOptionalType(WomOptionalType(_)),_) =>
                 throw new Exception(s"double optional type")
@@ -70,7 +71,7 @@ case class WfFragment(nswf: WdlNamespaceWithWorkflow,
         }
     }
 
-    def makeOptionalNone(t: WomType) : WomValue = {
+    private def makeOptionalNone(t: WomType) : WomValue = {
         WomOptionalValue(stripOptional(t), None)
     }
 
@@ -363,7 +364,7 @@ case class WfFragment(nswf: WdlNamespaceWithWorkflow,
     // do the calculation right now. This saves a job relaunch down the road.
     private def preCalcInstanceType(task: WdlTask,
                                     taskInputs:Map[String, WdlVarLinks]) : Option[String] = {
-        val taskRunner = new Task(task, instanceTypeDB, cef, true)
+        val taskRunner = new Task(task, instanceTypeDB, cef, runtimeDebugLevel)
         try {
             val iType = taskRunner.calcInstanceType(taskInputs)
             Utils.appletLog(verbose, s"Precalculated instance type for ${task.unqualifiedName}: ${iType}")
@@ -899,7 +900,9 @@ object WfFragment {
               inputs: Map[String, WdlVarLinks],
               orgInputs: JsValue,
               runMode: RunnerWfFragmentMode.Value,
-              verbose: Boolean) : Map[String, JsValue] = {
+              runtimeDebugLevel: Int) : Map[String, JsValue] = {
+        val verbose = runtimeDebugLevel >= 1
+
         val wdlCode: String = WdlPrettyPrinter(false, None).apply(nswf, 0).mkString("\n")
         Utils.appletLog(verbose, s"Workflow source code:")
         Utils.appletLog(verbose, wdlCode, 10000)
@@ -923,7 +926,8 @@ object WfFragment {
         // Run the workflow
         val wf = nswf.workflow
         val cef = new CompilerErrorFormatter("", wf.wdlSyntaxErrorFormatter.terminalMap)
-        val r = WfFragment(nswf, instanceTypeDB, execSeqMap, execLinkInfo, cef, orgInputs, runMode, verbose)
+        val r = WfFragment(nswf, instanceTypeDB, execSeqMap, execLinkInfo, cef, orgInputs, runMode,
+                           runtimeDebugLevel)
         val wvlVarOutputs = r.apply(inputs)
 
         // convert from WVL to JSON

@@ -45,6 +45,7 @@ object Utils {
     val COMMAND_HEREDOC_BRACKETS = ("<<<", ">>>")
     val COMMON = "common"
     val DEFAULT_INSTANCE_TYPE = "mem1_ssd1_x4"
+    val DEFAULT_RUNTIME_DEBUG_LEVEL = 1
     val DECOMPOSE_MAX_NUM_RENAME_TRIES = 100
     val DOWNLOAD_RETRY_LIMIT = 3
     val DX_FUNCTIONS_FILES = "dx_functions_files.json"

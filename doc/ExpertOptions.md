@@ -389,7 +389,7 @@ be set.
           }
         },
         "timeoutPolicy": {
-          "main": {
+          "*": {
             "hours": 12
           }
         },
