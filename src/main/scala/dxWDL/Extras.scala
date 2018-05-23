@@ -175,6 +175,9 @@ object Extras {
     val RUN_SPEC_ACCESS_ATTRS = Set("network", "project", "allProjects", "developer", "projectCreation")
     val RUN_SPEC_TIMEOUT_ATTRS = Set("days", "hours", "minutes")
     val RUN_SPEC_EXEC_POLICY_ATTRS = Set("restartOn", "maxRestarts")
+    val RUN_SPEC_EXEC_POLICY_RESTART_ON_ATTRS = Set("ExecutionError", "UnresponsiveWorker",
+                                                    "JMInternalError", "AppInternalError",
+                                                    "JobTimeoutExceeded", "*")
 
     private def wdlExpressionFromJsValue(jsv: JsValue) : WdlExpression = {
         val wValue: WomValue = jsv match {
@@ -290,8 +293,18 @@ object Extras {
                                         |""".stripMargin.replaceAll("\n", ""))
 
         }
-        return Some(DxExecPolicy(checkedParseMapStringInt(fields, "restartOn"),
-                                 checkedParseIntField(fields, "maxRestarts")))
+
+        val restartOn = checkedParseMapStringInt(fields, "restartOn")
+        restartOn match {
+            case None => ()
+            case Some(restartOnPolicy) =>
+                for (k <- restartOnPolicy.keys)
+                    if (!(RUN_SPEC_EXEC_POLICY_RESTART_ON_ATTRS contains k))
+                        throw new Exception(s"unknown field ${k} in restart policy")
+        }
+
+        val maxRestarts = checkedParseIntField(fields, "maxRestarts")
+        return Some(DxExecPolicy(restartOn, maxRestarts))
     }
 
     private def parseAccess(jsv: JsValue) : Option[DxAccess] = {
