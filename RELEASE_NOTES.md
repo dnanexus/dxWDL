@@ -20,6 +20,10 @@ workflow foo {
 }
 ```
 
+- Setting debug levels at runtime. The compiler flag `runtimeDebugLevel` can be set to 0, 1, or 2.
+Level 2 is maximum verbosity, level 1 is the default, zero is minimal outputs.
+
+
 ## 0.65
 - Optimization for the case of launching an instance where it is
 calculated at runtime.

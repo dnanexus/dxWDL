@@ -191,7 +191,9 @@ private [dxWDL] object TaskSerialization {
 case class Task(task:WdlTask,
                 instanceTypeDB : InstanceTypeDB,
                 cef: CompilerErrorFormatter,
-                verbose: Boolean) {
+                runtimeDebugLevel: Int) {
+    private val verbose = (runtimeDebugLevel >= 1)
+    private val maxVerboseLevel = (runtimeDebugLevel == 2)
 
     private def evalDeclarations(declarations: Seq[DeclarationInterface],
                                  envInputs : Map[String, WomValue])
@@ -307,6 +309,12 @@ case class Task(task:WdlTask,
         m.map { case (key, jsVal) =>
             key -> TaskSerialization.fromJSON(jsVal)
         }.toMap
+    }
+
+    private def printDirStruct() : Unit = {
+        Utils.appletLog(maxVerboseLevel, "Directory structure:")
+        val (stdout, stderr) = Utils.execCommand("ls -lR", None)
+        Utils.appletLog(maxVerboseLevel, stdout + "\n", 10000)
     }
 
     // Figure out if a docker image is specified. If so, return it as a string.
@@ -470,6 +478,10 @@ case class Task(task:WdlTask,
     def prolog(inputSpec: Map[String, DXIOParam],
                outputSpec: Map[String, DXIOParam],
                inputWvls: Map[String, WdlVarLinks]) : Map[String, JsValue] = {
+        Utils.appletLog(verbose, s"Prolog  debugLevel=${runtimeDebugLevel}")
+        if (maxVerboseLevel)
+            printDirStruct()
+
         val wdlCode: String = WdlPrettyPrinter(false, None).apply(task, 0).mkString("\n")
         Utils.appletLog(verbose, s"Task source code:")
         Utils.appletLog(verbose, wdlCode, 10000)
@@ -510,7 +522,8 @@ case class Task(task:WdlTask,
         if (bashSnippetVec.size > 0) {
             // set up all the named pipes
             val path = getMetaDir().resolve("setup_streams")
-            Utils.appletLog(verbose, s"writing bash script for stream(s) set up to ${path}")
+            Utils.appletLog(maxVerboseLevel,
+                            s"writing bash script for stream(s) set up to ${path}")
             val snippet = bashSnippetVec.mkString("\n")
             Utils.writeFileContent(path, snippet)
             path.toFile.setExecutable(true)
@@ -540,6 +553,10 @@ case class Task(task:WdlTask,
     def epilog(inputSpec: Map[String, DXIOParam],
                outputSpec: Map[String, DXIOParam],
                inputs: Map[String, WdlVarLinks]) : Map[String, JsValue] = {
+        Utils.appletLog(verbose, s"Epilog  debugLevel=${runtimeDebugLevel}")
+        if (maxVerboseLevel)
+            printDirStruct()
+
         // Repopulate the localized file tables
         LocalDxFiles.unfreeze()
         DxFunctions.unfreeze()

@@ -65,7 +65,7 @@ class TaskTest extends FlatSpec with Matchers {
         ).get
         val task = ns.tasks.head
         val cef = new CompilerErrorFormatter(srcPath.toString, ns.terminalMap)
-        new Task(task, instanceTypeDB, cef, false)
+        new Task(task, instanceTypeDB, cef, 0)
     }
 
     it should "calculate instance types" in {

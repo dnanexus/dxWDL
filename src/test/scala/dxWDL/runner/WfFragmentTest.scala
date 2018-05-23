@@ -45,7 +45,7 @@ class WfFragmentTest extends FlatSpec with Matchers {
                        cef,
                        JsNull,
                        RunnerWfFragmentMode.Launch,
-                       false)
+                       0)
     }
 
     private def evalWorkflow(filename: String,

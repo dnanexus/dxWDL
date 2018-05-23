@@ -145,6 +145,9 @@ object Main extends App {
                     case "reorg" =>
                         checkNumberOfArguments(keyword, 0, subargs)
                         (keyword, "")
+                    case "runtimedebuglevel" =>
+                        checkNumberOfArguments(keyword, 1, subargs)
+                        (keyword, subargs.head)
                     case "verbose" =>
                         val retval =
                             if (subargs.isEmpty) ""
@@ -281,6 +284,23 @@ object Main extends App {
         (dxProject, dxFolder)
     }
 
+    private def parseRuntimeDebugLevel(numberStr: String) : Int = {
+        val rtDebugLvl =
+            try {
+                numberStr.toInt
+            } catch {
+                case e : java.lang.NumberFormatException =>
+                    throw new Exception(s"""|the runtimeDebugLevel flag takes an integer input,
+                                            |${numberStr} is not of type int"""
+                                            .stripMargin.replaceAll("\n", " "))
+            }
+        if (rtDebugLvl < 0 || rtDebugLvl > 2)
+            throw new Exception(s"""|the runtimeDebugLevel flag must be one of {0, 1, 2}.
+                                    |Value ${rtDebugLvl} is out of bounds."""
+                                    .stripMargin.replaceAll("\n", " "))
+        rtDebugLvl
+    }
+
     // Get basic information about the dx environment, and process
     // the compiler flags
     private def compilerOptions(options: OptionsMap) : CompilerOptions = {
@@ -309,6 +329,11 @@ object Main extends App {
             case None => List.empty
             case Some(pl) => pl.map(p => Paths.get(p))
         }
+        val runtimeDebugLevel:Option[Int] = options.get("runtimedebuglevel") match {
+            case None => None
+            case Some(List(numberStr)) => Some(parseRuntimeDebugLevel(numberStr))
+            case _ => throw new Exception("debug level specified twice")
+        }
         val verboseKeys: Set[String] = options.get("verbose") match {
             case None => Set.empty
             case Some(modulesToTrace) => modulesToTrace.toSet
@@ -325,6 +350,7 @@ object Main extends App {
                         inputs,
                         options contains "locked",
                         options contains "reorg",
+                        runtimeDebugLevel,
                         verbose)
     }
 
@@ -450,7 +476,8 @@ object Main extends App {
     private def appletAction(op: InternalOp.Value,
                              wdlDefPath: Path,
                              jobInputPath: Path,
-                             jobOutputPath: Path): Termination = {
+                             jobOutputPath: Path,
+                             rtDebugLvl: Int): Termination = {
         val ns = WdlNamespace.loadUsingPath(wdlDefPath, None, None).get
         val cef = new CompilerErrorFormatter(wdlDefPath.toString, ns.terminalMap)
 
@@ -471,7 +498,7 @@ object Main extends App {
             // special operation to check if this task is on the right instance type
             val task = taskOfNamespace(ns)
             val inputs = WdlVarLinks.loadJobInputsAsLinks(inputLines, inputSpec, Some(task))
-            val r = runner.Task(task, instanceTypeDB, cef, true)
+            val r = runner.Task(task, instanceTypeDB, cef, rtDebugLvl)
             val correctInstanceType:Boolean = r.checkInstanceType(inputSpec, outputSpec, inputs)
             SuccessfulTermination(correctInstanceType.toString)
         } else {
@@ -482,13 +509,13 @@ object Main extends App {
                     val inputs = WdlVarLinks.loadJobInputsAsLinks(inputLines, inputSpec, Some(task))
                     op match {
                         case InternalOp.TaskEpilog =>
-                            val r = runner.Task(task, instanceTypeDB, cef, true)
+                            val r = runner.Task(task, instanceTypeDB, cef, rtDebugLvl)
                             r.epilog(inputSpec, outputSpec, inputs)
                         case InternalOp.TaskProlog =>
-                            val r = runner.Task(task, instanceTypeDB, cef, true)
+                            val r = runner.Task(task, instanceTypeDB, cef, rtDebugLvl)
                             r.prolog(inputSpec, outputSpec, inputs)
                         case InternalOp.TaskRelaunch =>
-                            val r = runner.Task(task, instanceTypeDB, cef, true)
+                            val r = runner.Task(task, instanceTypeDB, cef, rtDebugLvl)
                             r.relaunch(inputSpec, outputSpec, inputs)
                     }
                 } else {
@@ -499,12 +526,12 @@ object Main extends App {
                             runner.WfFragment.apply(nswf,
                                                     instanceTypeDB,
                                                     inputSpec, outputSpec, inputs, orgInputs,
-                                                    RunnerWfFragmentMode.Collect, true)
+                                                    RunnerWfFragmentMode.Collect, rtDebugLvl)
                         case InternalOp.WfFragment =>
                             runner.WfFragment.apply(nswf,
                                                     instanceTypeDB,
                                                     inputSpec, outputSpec, inputs, orgInputs,
-                                                    RunnerWfFragmentMode.Launch, true)
+                                                    RunnerWfFragmentMode.Launch, rtDebugLvl)
                         case InternalOp.WorkflowOutputReorg =>
                             runner.WorkflowOutputReorg(true).apply(nswf, inputSpec, outputSpec, inputs)
                     }
@@ -528,13 +555,14 @@ object Main extends App {
         op match {
             case None =>
                 UnsuccessfulTermination(s"unknown internal action ${args.head}")
-            case Some(x) if (args.length == 3) =>
+            case Some(x) if (args.length == 4) =>
                 val wdlDefPath = Paths.get(args(1))
                 val homeDir = Paths.get(args(2))
+                val rtDebugLvl = parseRuntimeDebugLevel(args(3))
                 val (jobInputPath, jobOutputPath, jobErrorPath, _) =
                     Utils.jobFilesOfHomeDir(homeDir)
                 try {
-                    appletAction(x, wdlDefPath, jobInputPath, jobOutputPath)
+                    appletAction(x, wdlDefPath, jobInputPath, jobOutputPath, rtDebugLvl)
                 } catch {
                     case e : Throwable =>
                         writeJobError(jobErrorPath, e)
@@ -578,9 +606,12 @@ object Main extends App {
             |      -extras <string>       JSON formatted file with extra options, for example
             |                             default runtime options for tasks.
             |      -inputs <string>       File with Cromwell formatted inputs
-            |      -p | -imports <string> Directory to search for imported WDL files
             |      -locked                Create a locked-down workflow
+            |      -p | -imports <string> Directory to search for imported WDL files
             |      -reorg                 Reorganize workflow output files
+            |      -runtimeDebugLevel [0,1,2] How much debug information to write to the
+            |                             job log at runtime. Zero means write the minimum,
+            |                             one is the default, and two is for internal debugging.
             |
             |  dxni
             |    Dx Native call Interface. Create stubs for calling dx

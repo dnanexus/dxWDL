@@ -199,7 +199,9 @@ object Top {
         // Generate dx:applets and dx:workflow from the IR
         Native.apply(irNs,
                      dxWDLrtId, folder, dxProject, instanceTypeDB,
-                     cOpt.extras, cOpt.force, cOpt.archive, cOpt.locked, cOpt.verbose)
+                     cOpt.extras,
+                     cOpt.runtimeDebugLevel,
+                     cOpt.force, cOpt.archive, cOpt.locked, cOpt.verbose)
     }
 
 
