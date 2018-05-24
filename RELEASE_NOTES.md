@@ -44,7 +44,7 @@ example:
           }
         },
         "timeoutPolicy": {
-          "main": {
+          "*": {
             "hours": 12
           }
         },
