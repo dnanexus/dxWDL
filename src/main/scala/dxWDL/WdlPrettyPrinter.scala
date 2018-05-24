@@ -40,7 +40,18 @@ case class WdlPrettyPrinter(fqnFlag: Boolean,
     }
 
     private def orgExpression(expr: WdlExpression) : String = {
-        escapeChars(expr.toWomString)
+        try {
+            escapeChars(expr.toWomString)
+        } catch {
+            case e: Throwable =>
+                throw new Exception(s"""|Error converting an expression to a string
+                                        |
+                                        |${expr}
+                                        |
+                                        |${e.getMessage}
+                                        |""".stripMargin)
+                //throw e
+        }
     }
 
     // indent a line by [level] steps

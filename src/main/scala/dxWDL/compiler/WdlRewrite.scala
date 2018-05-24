@@ -132,7 +132,7 @@ object WdlRewrite {
         task2
     }
 
-    private def genDefaultValueOfType(wdlType: WomType) : WomValue = {
+    def genDefaultValueOfType(wdlType: WomType) : WomValue = {
         wdlType match {
             case WomBooleanType => WomBoolean(true)
             case WomIntegerType => WomInteger(0)
@@ -145,7 +145,9 @@ object WdlRewrite {
             case WomObjectType =>
                 // This fails when trying to do a 'toWomString'
                 // operation.
+                //WomObject(Map("_" -> WomString("_")), WomObjectType)
                 WomObject(Map.empty)
+
 
             // The WomMap type HAS to appear before the array types, because
             // otherwise it is coerced into an array. The map has to
@@ -168,7 +170,6 @@ object WdlRewrite {
             case _ => throw new Exception(s"Unhandled type ${wdlType.toDisplayString}")
         }
     }
-
 
     def taskOutput(name: String, wdlType: WomType, scope: Scope) = {
         // We need to provide a default value, in the form of a Wdl

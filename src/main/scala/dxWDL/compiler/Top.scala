@@ -121,7 +121,7 @@ object Top {
         // that will give us problems.
         Validate.apply(ns, cOpt.verbose)
 
-        val ctx: NamespaceOps.Context = NamespaceOps.makeContext(allWdlSources, wdlSourceFile, cOpt.verbose)
+        val ctx: Context = Context.make(allWdlSources, wdlSourceFile, cOpt.verbose)
         val defaultRuntimeAttributes = cOpt.extras match {
             case None => Map.empty[String, WdlExpression]
             case Some(xt) => xt.defaultRuntimeAttributes
@@ -131,8 +131,10 @@ object Top {
 
         NamespaceOps.prettyPrint(wdlSourceFile, nsTreePruned, "pruned", cOpt.verbose)
 
+        val ctxHdrs = ctx.makeHeaders
+
         // Convert large sub-blocks to sub-workflows
-        Decompose.apply(nsTreePruned, wdlSourceFile, ctx, cOpt.verbose)
+        Decompose.apply(nsTreePruned, wdlSourceFile, ctxHdrs, cOpt.verbose)
     }
 
     private def compileIR(wdlSourceFile : Path,
