@@ -20,7 +20,7 @@ case class Context(allSourceFiles: HashMap[String, WdlModule],
                    verbose: Verbose) {
     val verbose2:Boolean = verbose.keywords contains "NamespaceOps"
 
-    def makeResolver: ImportResolver = {
+    def makeResolver: Draft2ImportResolver = {
         // Make an immutable copy of the source files, to avoid buggy
         // behavior.
         val allSources = allSourceFiles.foldLeft(Map.empty[String,String]) {
@@ -168,7 +168,7 @@ object Context {
     def make(allWdlSources: Map[String, String],
              toplevelWdlSourceFile: Path,
              verbose: Verbose) : Context = {
-        def resolver: ImportResolver = {
+        def resolver: Draft2ImportResolver = {
             filename => allWdlSources.get(filename) match {
                 case None => throw new Exception(s"Unable to find ${filename}")
                 case Some(content) => content

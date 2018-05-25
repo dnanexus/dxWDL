@@ -7,7 +7,7 @@ import java.nio.file.{Files, Path, Paths}
 import java.io.{FileWriter, PrintWriter}
 import scala.collection.JavaConverters._
 import scala.util.{Failure, Success}
-import wdl.draft2.model.{WdlExpression, WdlNamespace, ImportResolver}
+import wdl.draft2.model.{WdlExpression, WdlNamespace, Draft2ImportResolver}
 
 // Interface to the compilation tool chain. The methods here are the only ones
 // that should be called to perform compilation.
@@ -95,7 +95,7 @@ object Top {
     }
 
 
-    def makeResolver(allWdlSources: Map[String, String]) : ImportResolver = {
+    def makeResolver(allWdlSources: Map[String, String]) : Draft2ImportResolver = {
         filename => allWdlSources.get(filename) match {
             case None => throw new Exception(s"Unable to find ${filename}")
             case Some(content) => content

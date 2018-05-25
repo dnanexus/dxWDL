@@ -130,7 +130,10 @@ object DxFunctions extends WdlStandardLibraryFunctions {
         retval
     }
 
-    override def readFile(path: String): String = {
+    protected def fileSizeLimitationConfig: wdl.shared.FileSizeLimitationConfig = ???
+
+    // We ignore the size limit
+    override def readFile(path: String, sizeLimit: Int): String = {
         if (path.startsWith(Utils.DX_URL_PREFIX)) {
             // A non localized file
             val dxFile = DxPath.lookupDxURLFile(path)

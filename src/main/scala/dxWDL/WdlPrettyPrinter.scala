@@ -225,11 +225,13 @@ case class WdlPrettyPrinter(fqnFlag: Boolean,
         WdlNamespace.loadUsingSource(taskHeredoc, None, None) match {
             case Success(_) => return COMMAND_HEREDOC_BRACKETS
             case Failure(_) =>
-                System.err.println("curly brackets")
-                System.err.println(taskWithCurlyBrackets)
-                System.err.println("heredoc")
-                System.err.println(taskHeredoc)
-                throw new Exception(s"Task ${task} cannot be pretty printed with any kind of brackets")
+                val msg = s"""|Task ${task} cannot be pretty printed with any kind of brackets
+                              |
+                              |${taskWithCurlyBrackets}
+                              |heredoc:
+                              |${taskHeredoc}
+                              |""".stripMargin
+                throw new Exception(msg)
         }
     }
 
