@@ -130,7 +130,9 @@ object DxFunctions extends WdlStandardLibraryFunctions {
         retval
     }
 
-    protected def fileSizeLimitationConfig: wdl.shared.FileSizeLimitationConfig = ???
+    protected def fileSizeLimitationConfig: wdl.shared.FileSizeLimitationConfig = {
+        wdl.shared.FileSizeLimitationConfig.default
+    }
 
     // We ignore the size limit
     override def readFile(path: String, sizeLimit: Int): String = {
