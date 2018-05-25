@@ -9,9 +9,13 @@ import scala.util.{Failure, Success}
 import scala.collection.mutable.HashMap
 import wdl.draft2.model._
 import wom.values.WomValue
-import wom.types.WomType
 
-case class Context(allSourceFiles: HashMap[String, String],
+// Stripped down WDL module, without the surrounding namespace
+case class WdlModule(workflow: Option[WdlWorkflow],
+                     tasks: Vector[WdlTask],
+                     wdlCode: String)
+
+case class Context(allSourceFiles: HashMap[String, WdlModule],
                    toplevelWdlSourceFile: Path,
                    verbose: Verbose) {
     val verbose2:Boolean = verbose.keywords contains "NamespaceOps"
@@ -20,47 +24,11 @@ case class Context(allSourceFiles: HashMap[String, String],
         // Make an immutable copy of the source files, to avoid buggy
         // behavior.
         val allSources = allSourceFiles.foldLeft(Map.empty[String,String]) {
-            case (accu, (k,v)) => accu + (k -> v)
+            case (accu, (k, WdlModule(_,_,wdlCode))) => accu + (k -> wdlCode)
         }.toMap
         filename => allSources.get(filename) match {
             case None => throw new Exception(s"Unable to find ${filename}")
             case Some(content) => content
-        }
-    }
-
-    def addWdlSourceFile(name: String, sourceCode: String) : Unit = {
-        allSourceFiles(name) = sourceCode
-    }
-
-    def setWdlSourceFiles(filename:String, wdlSourceCode:String) : Unit = {
-        allSourceFiles.clear
-        allSourceFiles(filename) = wdlSourceCode
-    }
-
-    // prune files that have nothing we want to use
-    def filterUnusedFiles(taskWfNames: Set[String]) : Unit = {
-        val resolver = makeResolver
-        val accessed:Map[String, Boolean] = allSourceFiles.map{
-            case (filename, wdlSourceCode) =>
-                WdlNamespace.loadUsingSource(wdlSourceCode,
-                                             None, Some(List(resolver))) match {
-                    case Failure(_) =>
-                        // the WDL source does not parse, drop it
-                        filename -> false
-                    case Success(ns) =>
-                        val taskNames = ns.tasks.map(_.unqualifiedName).toSet
-                        val definedTasksAndWorkflows: Set[String] = ns match {
-                            case nswf:WdlNamespaceWithWorkflow =>
-                                taskNames + nswf.workflow.unqualifiedName
-                            case _ => taskNames
-                        }
-                        val retval = (taskWfNames intersect definedTasksAndWorkflows).size > 0
-                        filename -> retval
-                }
-        }.toMap
-        accessed.foreach{
-            case (filename, false) => allSourceFiles.remove(filename)
-            case (_,_) => ()
         }
     }
 
@@ -72,12 +40,7 @@ case class Context(allSourceFiles: HashMap[String, String],
         }
     }
 
-    def genDefaultValue(womType: WomType) : WdlExpression = {
-        val defaultVal:WomValue = WdlRewrite.genDefaultValueOfType(womType)
-        WdlExpression.fromString(defaultVal.toWomString)
-    }
-
-    def genTaskHeader(task: WdlTask) : String = {
+    private def genTaskHeader(task: WdlTask) : String = {
         val taskHdr = WdlRewrite.taskGenEmpty(task.unqualifiedName)
         val inputs = task.declarations
             .filter{ decl => declarationIsInput(decl) }
@@ -100,7 +63,7 @@ case class Context(allSourceFiles: HashMap[String, String],
         }
     }
 
-    def genWorkflowHeader(wf: WdlWorkflow) : String = {
+    private def genWorkflowHeader(wf: WdlWorkflow) : String = {
         val wfEmpty = WdlRewrite.workflowGenEmpty(wf.unqualifiedName)
         val inputs = wf.declarations
         val outputs = wf.outputs.map { wot =>
@@ -125,29 +88,77 @@ case class Context(allSourceFiles: HashMap[String, String],
         }
     }
 
-    def genHeader(ns: WdlNamespace) : String = {
-        val taskHeaders: String = ns.tasks.map{ task =>
+    private def genHeader(workflow: Option[WdlWorkflow],
+                          tasks: Vector[WdlTask]) : String = {
+        val taskHeaders: String = tasks.map{ task =>
             genTaskHeader(task)
         }.toVector.mkString("\n\n")
-        ns match {
-            case _:WdlNamespaceWithoutWorkflow =>
+        workflow match {
+            case None =>
                 taskHeaders
-            case nswf:WdlNamespaceWithWorkflow =>
-                val wfHdr = genWorkflowHeader(nswf.workflow)
+            case Some(wf) =>
+                val wfHdr = genWorkflowHeader(wf)
                 taskHeaders + "\n\n" + wfHdr
         }
 
     }
 
-    // Take a context, and convert it into headers alone
+    def addWdlSourceFile(name: String,
+                         ns: WdlNamespace,
+                         source: String,
+                         header: Boolean) : Unit = {
+        val workflow = ns match {
+            case _:WdlNamespaceWithoutWorkflow => None
+            case nswf:WdlNamespaceWithWorkflow => Some(nswf.workflow)
+        }
+        allSourceFiles(name) = WdlModule(workflow, ns.tasks.toVector, source)
+    }
+
+    def addWdlSourceFile(name: String,
+                         workflow: WdlWorkflow,
+                         source: String,
+                         header: Boolean) : Unit = {
+        allSourceFiles(name) = WdlModule(Some(workflow), Vector.empty, source)
+    }
+
+    def addWdlSourceFile(name: String,
+                         tasks: Vector[WdlTask],
+                         source: String,
+                         header: Boolean) : Unit = {
+        allSourceFiles(name) = WdlModule(None, tasks, source)
+    }
+
+    def clear() : Unit = {
+        allSourceFiles.clear
+    }
+
+    // prune files that have nothing we want to use
+    def filterUnusedFiles(taskWfNames: Set[String]) : Unit = {
+        val accessed:Map[String, Boolean] = allSourceFiles.map{
+            case (filename, WdlModule(workflow, tasks, _)) =>
+                val taskNames = tasks.map(_.unqualifiedName).toSet
+                val definedTasksAndWorkflows: Set[String] = workflow match {
+                    case None => taskNames
+                    case Some(wf) => taskNames + wf.unqualifiedName
+                }
+                val retval = (taskWfNames intersect definedTasksAndWorkflows).size > 0
+                filename -> retval
+        }.toMap
+        accessed.foreach{
+            case (filename, false) => allSourceFiles.remove(filename)
+            case (_,_) => ()
+        }
+    }
+
+
+    // Take a context, and convert it into headers.
+    // This improves the behavior of loadFromSource, because
+    // we remove transitive imports, and reduce the import sizes.
     def makeHeaders : Context = {
-        val resolver = makeResolver
-        val hm = HashMap.empty[String, String]
-        allSourceFiles.map{ case (name, wdlSourceCode) =>
-            val ns = WdlNamespace.loadUsingSource(
-                wdlSourceCode, None, Some(List(resolver))
-            ).get
-            hm(name) = genHeader(ns)
+        val hm = HashMap.empty[String, WdlModule]
+        allSourceFiles.map{ case (name, WdlModule(workflow, tasks,_)) =>
+            val hdr = genHeader(workflow, tasks)
+            hm(name) = WdlModule(workflow, tasks, hdr)
         }
         this.copy(allSourceFiles = hm)
     }
@@ -157,8 +168,28 @@ object Context {
     def make(allWdlSources: Map[String, String],
              toplevelWdlSourceFile: Path,
              verbose: Verbose) : Context = {
-        val hm = HashMap.empty[String, String]
-        allWdlSources.foreach{ case (name, src) => hm(name) = src}
+        def resolver: ImportResolver = {
+            filename => allWdlSources.get(filename) match {
+                case None => throw new Exception(s"Unable to find ${filename}")
+                case Some(content) => content
+            }
+        }
+
+        val hm = HashMap.empty[String, WdlModule]
+        allWdlSources.foreach{ case (name, wdlSourceCode) =>
+            WdlNamespace.loadUsingSource(wdlSourceCode,
+                                         None, Some(List(resolver))) match {
+                case Failure(_) =>
+                    // the WDL source does not parse, drop it
+                    ()
+                case Success(ns) =>
+                    val workflow = ns match {
+                        case _:WdlNamespaceWithoutWorkflow => None
+                        case nswf:WdlNamespaceWithWorkflow => Some(nswf.workflow)
+                    }
+                    hm(name) = WdlModule(workflow, ns.tasks.toVector, wdlSourceCode)
+            }
+        }
         new Context(hm, toplevelWdlSourceFile, verbose)
     }
 }

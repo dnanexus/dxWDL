@@ -33,7 +33,7 @@ object NamespaceOps {
     case class TreeLeaf(name: String,
                         cef: CompilerErrorFormatter,
                         tasks: Map[String, WdlTask]) extends Tree {
-        private def toNamespace =
+        private def toNamespace : WdlNamespaceWithoutWorkflow=
             new WdlNamespaceWithoutWorkflow(
                 None,
                 Seq.empty,
@@ -153,7 +153,6 @@ object NamespaceOps {
             }
             val lines = WdlPrettyPrinter(true).apply(ns, 0)
             val cleanWdlSrc = (extraImportsText ++ lines).mkString("\n")
-            ctx.addWdlSourceFile(wf.unqualifiedName + ".wdl", cleanWdlSrc)
             val resolver = ctx.makeResolver
 
             Utils.trace(ctx.verbose2, s"loadUsingSource[")
@@ -166,6 +165,7 @@ object NamespaceOps {
                 }
             Utils.trace(ctx.verbose2, s"]")
             validate(ns)
+            ctx.addWdlSourceFile(wf.unqualifiedName + ".wdl", cleanNs, cleanWdlSrc, true)
 
             // Clean up the new workflow. Remove unused imports.
             val cleanCef = new CompilerErrorFormatter(cef.resource, cleanNs.terminalMap)
@@ -211,7 +211,7 @@ object NamespaceOps {
                 whiteWashWorkflow(subWf, Vector.empty, ctx, IR.WorkflowKind.Sub)
 
             // white wash the top level workflow
-            ctx.addWdlSourceFile(subWfName2 + ".wdl", subWdlSrc2)
+            ctx.addWdlSourceFile(subWfName2 + ".wdl", subWf2.workflow, subWdlSrc2, true)
             val CleanWf(topwf2, _, _) = whiteWashWorkflow(topwf, Vector(subWfName2), ctx, kind)
             topwf2.copy(children = this.children :+ subWf2)
         }
@@ -325,7 +325,7 @@ object NamespaceOps {
                                     .stripMargin)
 
                     val child: TreeLeaf = genLeaf(tasksLibName, tasksLibPath, taskDict)
-                    ctx.addWdlSourceFile(tasksLibPath, child.genWdlSource)
+                    ctx.addWdlSourceFile(tasksLibPath, child.tasks.values.toVector, child.genWdlSource, false)
 
                     val (nswf2, cef2) = rewriteWorkflowExtractTasks(
                         nswf, tasksLibPath, tasksLibName,
@@ -418,7 +418,8 @@ object NamespaceOps {
                         val node2 = node.copy(children= Vector.empty)
                         val topWdlFilename: String = ctx.toplevelWdlSourceFile.toString
                         val topWdlSource = Utils.readFileContent(ctx.toplevelWdlSourceFile)
-                        ctx.setWdlSourceFiles(topWdlFilename, topWdlSource)
+                        ctx.clear()
+                        ctx.addWdlSourceFile(topWdlFilename, node.workflow, topWdlSource, false)
                         node2
                     case Some(tree2) =>
                         ctx.filterUnusedFiles(taskWfNames)
