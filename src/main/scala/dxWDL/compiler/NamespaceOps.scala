@@ -7,7 +7,6 @@ import dxWDL.{CompilerErrorFormatter, Utils, Verbose, WdlPrettyPrinter}
 import java.nio.file.{Path, Paths}
 import java.io.{FileWriter, PrintWriter}
 import scala.util.{Failure, Success}
-import scala.collection.mutable.HashMap
 import wdl.draft2.model._
 import wdl.draft2.parser.WdlParser.{Terminal}
 import wom.core.WorkflowSource
@@ -15,60 +14,9 @@ import wom.types._
 
 object NamespaceOps {
 
-    case class Context(
-        allSourceFiles: HashMap[String, String],
-        toplevelWdlSourceFile: Path,
-        verbose: Verbose) {
-        val verbose2:Boolean = verbose.keywords contains "NamespaceOps"
-
-        def makeResolver: ImportResolver = {
-            // Make an immutable copy of the source files, to avoid buggy
-            // behavior.
-            val allSources = allSourceFiles.foldLeft(Map.empty[String,String]) {
-                case (accu, (k,v)) => accu + (k -> v)
-            }.toMap
-            filename => allSources.get(filename) match {
-                case None => throw new Exception(s"Unable to find ${filename}")
-                case Some(content) => content
-            }
-        }
-
-        def addWdlSourceFile(name: String, sourceCode: String) : Unit = {
-            allSourceFiles(name) = sourceCode
-        }
-
-        def setWdlSourceFiles(filename:String, wdlSourceCode:String) : Unit = {
-            allSourceFiles.clear
-            allSourceFiles(filename) = wdlSourceCode
-        }
-
-        // prune files that have nothing we want to use
-        def filterUnusedFiles(taskWfNames: Set[String]) : Unit = {
-            val resolver = makeResolver
-            val accessed:Map[String, Boolean] = allSourceFiles.map{
-                case (filename, wdlSourceCode) =>
-                    WdlNamespace.loadUsingSource(wdlSourceCode,
-                                                 None, Some(List(resolver))) match {
-                        case Failure(_) =>
-                            // the WDL source does not parse, drop it
-                            filename -> false
-                        case Success(ns) =>
-                            val taskNames = ns.tasks.map(_.unqualifiedName).toSet
-                            val definedTasksAndWorkflows: Set[String] = ns match {
-                                case nswf:WdlNamespaceWithWorkflow =>
-                                    taskNames + nswf.workflow.unqualifiedName
-                                case _ => taskNames
-                            }
-                            val retval = (taskWfNames intersect definedTasksAndWorkflows).size > 0
-                            filename -> retval
-                    }
-            }.toMap
-            accessed.foreach{
-                case (filename, false) => allSourceFiles.remove(filename)
-                case (_,_) => ()
-            }
-        }
-    }
+    case class CleanWf(node: TreeNode,
+                       name: String,
+                       wdlSource: String)
 
     sealed trait Tree {
         // The URI from which this namespace was loaded. Typically,
@@ -81,16 +29,11 @@ object NamespaceOps {
         def prettyPrint : String
     }
 
-
-    case class CleanWf(node: TreeNode,
-                       name: String,
-                       wdlSource: String)
-
     // A namespace that is a library of tasks; it has no workflow
     case class TreeLeaf(name: String,
                         cef: CompilerErrorFormatter,
                         tasks: Map[String, WdlTask]) extends Tree {
-        private def toNamespace =
+        private def toNamespace : WdlNamespaceWithoutWorkflow=
             new WdlNamespaceWithoutWorkflow(
                 None,
                 Seq.empty,
@@ -210,7 +153,6 @@ object NamespaceOps {
             }
             val lines = WdlPrettyPrinter(true).apply(ns, 0)
             val cleanWdlSrc = (extraImportsText ++ lines).mkString("\n")
-            ctx.addWdlSourceFile(wf.unqualifiedName + ".wdl", cleanWdlSrc)
             val resolver = ctx.makeResolver
 
             Utils.trace(ctx.verbose2, s"loadUsingSource[")
@@ -223,6 +165,7 @@ object NamespaceOps {
                 }
             Utils.trace(ctx.verbose2, s"]")
             validate(ns)
+            ctx.addWdlSourceFile(wf.unqualifiedName + ".wdl", cleanNs, cleanWdlSrc, true)
 
             // Clean up the new workflow. Remove unused imports.
             val cleanCef = new CompilerErrorFormatter(cef.resource, cleanNs.terminalMap)
@@ -268,7 +211,7 @@ object NamespaceOps {
                 whiteWashWorkflow(subWf, Vector.empty, ctx, IR.WorkflowKind.Sub)
 
             // white wash the top level workflow
-            ctx.addWdlSourceFile(subWfName2 + ".wdl", subWdlSrc2)
+            ctx.addWdlSourceFile(subWfName2 + ".wdl", subWf2.workflow, subWdlSrc2, true)
             val CleanWf(topwf2, _, _) = whiteWashWorkflow(topwf, Vector(subWfName2), ctx, kind)
             topwf2.copy(children = this.children :+ subWf2)
         }
@@ -320,14 +263,6 @@ object NamespaceOps {
         ).get
         val cef = new CompilerErrorFormatter(resource, cleanNs.terminalMap)
         TreeLeaf(tasksLibName, cef, taskDict)
-    }
-
-    def makeContext(allWdlSources: Map[String, String],
-                            toplevelWdlSourceFile: Path,
-                            verbose: Verbose) : Context = {
-        val hm = HashMap.empty[String, String]
-        allWdlSources.foreach{ case (name, src) => hm(name) = src}
-        new Context(hm, toplevelWdlSourceFile, verbose)
     }
 
     // Use default runtime attributes, where they are unset in the task
@@ -390,7 +325,7 @@ object NamespaceOps {
                                     .stripMargin)
 
                     val child: TreeLeaf = genLeaf(tasksLibName, tasksLibPath, taskDict)
-                    ctx.addWdlSourceFile(tasksLibPath, child.genWdlSource)
+                    ctx.addWdlSourceFile(tasksLibPath, child.tasks.values.toVector, child.genWdlSource, false)
 
                     val (nswf2, cef2) = rewriteWorkflowExtractTasks(
                         nswf, tasksLibPath, tasksLibName,
@@ -483,7 +418,8 @@ object NamespaceOps {
                         val node2 = node.copy(children= Vector.empty)
                         val topWdlFilename: String = ctx.toplevelWdlSourceFile.toString
                         val topWdlSource = Utils.readFileContent(ctx.toplevelWdlSourceFile)
-                        ctx.setWdlSourceFiles(topWdlFilename, topWdlSource)
+                        ctx.clear()
+                        ctx.addWdlSourceFile(topWdlFilename, node.workflow, topWdlSource, false)
                         node2
                     case Some(tree2) =>
                         ctx.filterUnusedFiles(taskWfNames)

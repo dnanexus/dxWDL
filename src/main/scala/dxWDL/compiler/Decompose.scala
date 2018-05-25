@@ -423,7 +423,7 @@ object Decompose {
     // Reduce the top tree node until it becomes unreducible.
     private def reduceNode(orgNode: NamespaceOps.TreeNode,
                            wdlSourceFile: Path,
-                           ctx: NamespaceOps.Context,
+                           ctx: Context,
                            counter: Counter,
                            verbose: Verbose) : NamespaceOps.Tree = {
         val verbose2:Boolean = verbose.keywords contains "decompose"
@@ -467,7 +467,7 @@ object Decompose {
     // additional passes.
     private def reduceEntireTree(nsTree: NamespaceOps.Tree,
                                  wdlSourceFile: Path,
-                                 ctx: NamespaceOps.Context,
+                                 ctx: Context,
                                  counter: Counter,
                                  verbose: Verbose) : NamespaceOps.Tree = {
         nsTree match {
@@ -506,7 +506,7 @@ object Decompose {
 
     def apply(orgTree: NamespaceOps.Tree,
               wdlSourceFile: Path,
-              ctx: NamespaceOps.Context,
+              ctx: Context,
               verbose: Verbose) : NamespaceOps.Tree = {
         // iterate on the tree until it is fully reduced
         val counter = new Counter()

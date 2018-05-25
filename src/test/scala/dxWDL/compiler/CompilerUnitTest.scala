@@ -184,7 +184,6 @@ class CompilerUnitTest extends FlatSpec with Matchers {
         mulApl.docker should equal(dxWDL.compiler.IR.DockerImageNetwork)
 
 
-
         // Verify that if we -do not- give the extra options, there is no
         // docker image set.
         val retval2 = Main.compile(

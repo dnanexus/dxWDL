@@ -72,11 +72,12 @@ object Main extends App {
     def parseCmdlineOptions(arglist: List[String]) : OptionsMap = {
         def keywordValueIsList = Set("inputs", "imports", "verbose")
         def normKeyword(word: String) : String = {
-            // normalize a keyword, remove leading dashes, and convert
+            // normalize a keyword, remove leading dashes
             // letters to lowercase.
             //
             // "--Archive" -> "archive"
-            word.replaceAll("-", "").toLowerCase
+            // "--archive-only -> "archiveonly"
+            word.replaceAll("-", "")
         }
         def checkNumberOfArguments(keyword: String,
                                    expectedNumArgs:Int,
@@ -100,7 +101,7 @@ object Main extends App {
                     case "archive" =>
                         checkNumberOfArguments(keyword, 0, subargs)
                         (keyword, "")
-                    case "compilemode" =>
+                    case "compileMode" =>
                         checkNumberOfArguments(keyword, 1, subargs)
                         (keyword, subargs.head)
                     case "defaults" =>
@@ -130,7 +131,7 @@ object Main extends App {
                     case "locked" =>
                         checkNumberOfArguments(keyword, 0, subargs)
                         (keyword, "")
-                    case ("o"|"output"|"outputfile") =>
+                    case ("o"|"output"|"outputFile") =>
                         checkNumberOfArguments(keyword, 1, subargs)
                         ("outputFile", subargs.head)
                     case "project" =>
@@ -145,7 +146,7 @@ object Main extends App {
                     case "reorg" =>
                         checkNumberOfArguments(keyword, 0, subargs)
                         (keyword, "")
-                    case "runtimedebuglevel" =>
+                    case "runtimeDebugLevel" =>
                         checkNumberOfArguments(keyword, 1, subargs)
                         (keyword, subargs.head)
                     case "verbose" =>
@@ -304,7 +305,7 @@ object Main extends App {
     // Get basic information about the dx environment, and process
     // the compiler flags
     private def compilerOptions(options: OptionsMap) : CompilerOptions = {
-        val compileMode: CompilerFlag.Value = options.get("compilemode") match {
+        val compileMode: CompilerFlag.Value = options.get("compileMode") match {
             case None => CompilerFlag.Default
             case Some(List(x)) if (x.toLowerCase == "ir") => CompilerFlag.IR
             case Some(other) => throw new Exception(s"unrecognized compiler flag ${other}")
@@ -329,7 +330,7 @@ object Main extends App {
             case None => List.empty
             case Some(pl) => pl.map(p => Paths.get(p))
         }
-        val runtimeDebugLevel:Option[Int] = options.get("runtimedebuglevel") match {
+        val runtimeDebugLevel:Option[Int] = options.get("runtimeDebugLevel") match {
             case None => None
             case Some(List(numberStr)) => Some(parseRuntimeDebugLevel(numberStr))
             case _ => throw new Exception("debug level specified twice")
