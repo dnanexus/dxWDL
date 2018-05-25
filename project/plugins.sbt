@@ -1,6 +1,6 @@
-addSbtPlugin("com.eed3si9n" % "sbt-assembly" % "0.14.5")
-addSbtPlugin("com.typesafe.sbt" % "sbt-git" % "0.9.3")
-addSbtPlugin("com.github.gseitz" % "sbt-release" % "1.0.6")
+addSbtPlugin("com.eed3si9n" % "sbt-assembly" % "0.14.6")
+addSbtPlugin("com.typesafe.sbt" % "sbt-git" % "1.0.0")
+addSbtPlugin("com.github.gseitz" % "sbt-release" % "1.0.8")
 addSbtPlugin("org.scoverage" % "sbt-scoverage" % "1.5.1")
 
 // This prevents the SLF dialog from appearing when starting

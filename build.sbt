@@ -4,7 +4,7 @@ import scoverage.ScoverageKeys._
 import Merging.customMergeStrategy
 enablePlugins(GitVersioning)
 
-scalaVersion := "2.12.4"
+scalaVersion := "2.12.6"
 name := "dxWDL"
 organization := "com.dnanexus"
 
