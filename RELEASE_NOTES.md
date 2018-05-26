@@ -23,6 +23,12 @@ workflow foo {
 - Setting debug levels at runtime. The compiler flag `runtimeDebugLevel` can be set to 0, 1, or 2.
 Level 2 is maximum verbosity, level 1 is the default, zero is minimal outputs.
 
+- Upgrade to Cromwell version 32.
+
+- Using headers to speed up the workflow decomposition step. The idea
+is to represent a WDL file with header. When a file is imported, we
+use the header, instead of pulling in the entire WDL code, including
+its own imports.
 
 ## 0.65
 - Optimization for the case of launching an instance where it is
