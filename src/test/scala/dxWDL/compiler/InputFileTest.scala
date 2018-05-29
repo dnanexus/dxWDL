@@ -36,4 +36,19 @@ class InputFileTest extends FlatSpec with Matchers {
                 errMsg should include ("Failed to map all input fields")
         }
     }
+
+    it should "not compile for several applets without a workflow" in {
+        val wdlCode = pathFromBasename("several_tasks.wdl")
+        val inputs = pathFromBasename("several_tasks_inputs.json")
+        val retval = Main.compile(
+            List(wdlCode.toString, "--compileMode", "ir", "-quiet",
+                 "-inputs", inputs.toString)
+        )
+
+        inside(retval) {
+            case Main.UnsuccessfulTermination(errMsg) =>
+                errMsg should include ("Cannot generate one input file for 2 tasks")
+        }
+    }
+
 }

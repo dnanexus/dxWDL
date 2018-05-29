@@ -195,7 +195,6 @@ case class InputFile(verbose: Verbose) {
 
     // Converting a Cromwell style input JSON file, into a valid DNAx input file
     //
-
     case class CromwellInputFileState(inputFields: HashMap[String,JsValue],
                                       workflowBindings: HashMap[String, JsValue]) {
         // If WDL variable fully qualified name [fqn] was provided in the
@@ -231,15 +230,18 @@ case class InputFile(verbose: Verbose) {
         val inputFields:HashMap[String,JsValue] = preprocessInputs(wdlInputs)
         val cif = CromwellInputFileState(inputFields, HashMap.empty)
 
-        ns.applets.map{ case (aplName, applet) =>
-            applet.inputs.foreach { cVar =>
-                val fqn = s"${aplName}.${cVar.name}"
-                val dxName = s"${cVar.name}"
-                cif.checkAndBind(fqn, dxName, cVar)
-            }
-        }
         ns.entrypoint match {
-            case None => ()
+            case None if ns.applets.size == 0 => ()
+            case None if ns.applets.size == 1 =>
+                // There is one task, we can generate one input file for it.
+                val (aplName, applet) = ns.applets.head
+                applet.inputs.foreach { cVar =>
+                    val fqn = s"${aplName}.${cVar.name}"
+                    val dxName = s"${cVar.name}"
+                    cif.checkAndBind(fqn, dxName, cVar)
+                }
+            case None =>
+                throw new Exception(s"Cannot generate one input file for ${ns.applets.size} tasks")
             case Some(wf) if wf.locked =>
                 // Locked workflow. A user can set workflow level
                 // inputs; nothing else.
