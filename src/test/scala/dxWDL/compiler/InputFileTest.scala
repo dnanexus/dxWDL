@@ -51,4 +51,13 @@ class InputFileTest extends FlatSpec with Matchers {
         }
     }
 
+    it should "build defaults into applet underneath workflow" in {
+        val wdlCode = pathFromBasename("population.wdl")
+        val defaults = pathFromBasename("population_inputs.json")
+        val retval = Main.compile(
+            List(wdlCode.toString, "--compileMode", "ir", "-quiet",
+                 "-defaults", defaults.toString)
+        )
+        retval shouldBe a [Main.SuccessfulTerminationIR]
+    }
 }

@@ -38,6 +38,9 @@ medium_test_list = [
     # Error codes
     "bad_status", "bad_status2",
 
+    # Setting defaults for tasks, not just workflows
+    "population",
+
     # Variable instance types
     "instance_types",
 
@@ -59,12 +62,12 @@ medium_test_list = [
 
 # Tests with the reorg flags
 test_reorg=["files", "math"]
-test_defaults=["files", "math"]
+test_defaults=["files", "math", "population"]
 
 test_locked=["conditionals", "advanced", "bad_status", "bad_status2",
              "instance_types", "dict", "cond",
              "call_native_app", "call_native",
-             "subblocks", "subblocks2", "trains", "conditionals2"]
+             "subblocks", "subblocks2", "trains", "conditionals2", "population"]
 
 TestMetaData = namedtuple('TestMetaData', 'name kind')
 TestDesc = namedtuple('TestDesc', 'name kind wdl_source wdl_input dx_input results')

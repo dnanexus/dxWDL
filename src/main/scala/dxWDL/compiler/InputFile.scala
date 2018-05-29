@@ -139,20 +139,32 @@ case class InputFile(verbose: Verbose) {
         }.toVector
     }
 
-    // Embed default values into the IR
+    // set defaults for an applet
+    private def embedDefaultsIntoTask(applet: IR.Applet,
+                                      defaultFields:HashMap[String,JsValue]) : IR.Applet = {
+        val inputsWithDefaults: Vector[CVar] = applet.inputs.map {
+            case cVar =>
+                val fqn = s"${applet.name}.${cVar.name}"
+                getExactlyOnce(defaultFields, fqn) match {
+                    case None =>
+                        cVar
+                    case Some(dflt:JsValue) =>
+                        val wvl = translateValue(cVar, dflt)
+                        val w = WdlVarLinks.eval(wvl, IOMode.Remote, IODirection.Zero)
+                        cVar.copy(attrs = cVar.attrs.setDefault(w))
+                }
+        }.toVector
+        applet.copy(inputs = inputsWithDefaults)
+    }
+
+    // Embed default values into the workflow IR
     //
     // Make a sequential pass on the IR, figure out the fully qualified names
     // of all CVar and SArgs. If they have a default value, add it as an attribute
     // (DeclAttrs).
-    def embedDefaults(wf: IR.Workflow,
-                      ns: IR.Namespace,
-                      defaultInputs: Path) : IR.Namespace = {
-        Utils.trace(verbose.on, s"Embedding defaults into the IR")
-
-        // read the default inputs file (xxxx.json)
-        val wdlDefaults: JsObject = Utils.readFileContent(defaultInputs).parseJson.asJsObject
-        val defaultFields:HashMap[String,JsValue] = preprocessInputs(wdlDefaults)
-        val callables = ns.buildCallables
+    private def embedDefaultsIntoWorkflow(wf: IR.Workflow,
+                                          callables: Map[String, IR.Callable],
+                                          defaultFields:HashMap[String,JsValue]) : IR.Workflow = {
         val callableNames = callables.map{ case (name,_) => name }
         Utils.trace(verbose.on, s"callables=${callableNames}")
 
@@ -181,9 +193,47 @@ case class InputFile(verbose: Verbose) {
             } else {
                 wf.inputs
             }
-        val wf2 = wf.copy(inputs = wfInputsWithDefaults,
-                          stages = stagesWithDefaults)
-        val irNs = ns.copy(entrypoint = Some(wf2))
+
+        val wfWithDefaults = wf.copy(inputs = wfInputsWithDefaults,
+                                     stages = stagesWithDefaults)
+
+        // check that the stage order hasn't changed
+        val allStageNames = wf.stages.map{ stg => stg.stageName }.toVector
+        val embedAllStageNames = wfWithDefaults.stages.map{ stg => stg.stageName }.toVector
+        assert(allStageNames == embedAllStageNames)
+
+        wfWithDefaults
+    }
+
+    // Embed default values into the IR
+    //
+    // Make a sequential pass on the IR, figure out the fully qualified names
+    // of all CVar and SArgs. If they have a default value, add it as an attribute
+    // (DeclAttrs).
+    def embedDefaults(ns: IR.Namespace,
+                      defaultInputs: Path) : IR.Namespace = {
+        Utils.trace(verbose.on, s"Embedding defaults into the IR")
+
+        // read the default inputs file (xxxx.json)
+        val wdlDefaults: JsObject = Utils.readFileContent(defaultInputs).parseJson.asJsObject
+        val defaultFields:HashMap[String,JsValue] = preprocessInputs(wdlDefaults)
+
+        val appletsWithDefaults = ns.applets.map{ case (name, apl) =>
+            val apl2 = apl.kind match {
+                case IR.AppletKindTask => embedDefaultsIntoTask(apl, defaultFields)
+                case _ => apl
+            }
+            name -> apl2
+        }.toMap
+        val irNs = ns.entrypoint match {
+            case None =>
+                ns.copy(applets = appletsWithDefaults)
+            case Some(wf) =>
+                val callables = ns.buildCallables
+                val wf2 = embedDefaultsIntoWorkflow(wf, callables, defaultFields)
+                ns.copy(entrypoint = Some(wf2),
+                        applets = appletsWithDefaults)
+        }
         if (!defaultFields.isEmpty) {
             Utils.warning(verbose, s"""|Could not map all default fields.
                                        |These were left: ${defaultFields}""".stripMargin)
@@ -191,7 +241,6 @@ case class InputFile(verbose: Verbose) {
         }
         irNs
     }
-
 
     // Converting a Cromwell style input JSON file, into a valid DNAx input file
     //
