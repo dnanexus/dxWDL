@@ -23,11 +23,6 @@ def get_top_conf_path(top_dir):
     return os.path.join(top_dir, "ref.conf")
 
 def get_crnt_conf_path(top_dir):
-#    try:
-#        os.mkdir(os.path.join(top_dir, "src/main/resources"))
-#    except:
-#        pass
-#    return os.path.join(top_dir, "src/main/resources/reference.conf")
     return os.path.join(top_dir, "reference.conf")
 
 
@@ -92,7 +87,19 @@ def make_asset_file(version_id, top_dir):
 def sbt_assembly(top_dir):
     crnt_work_dir = os.getcwd()
     os.chdir(os.path.abspath(top_dir))
+
+    # Make sure the directory path exists
+    if not os.path.exists("applet_resources"):
+        os.mkdir("applet_resources")
+    if not os.path.exists("applet_resources/resources"):
+        os.mkdir("applet_resources/resources")
+
+    if os.path.exists(dxWDL_jar_path):
+        os.remove(dxWDL_jar_path)
+    subprocess.check_call(["sbt", "clean"])
     subprocess.check_call(["sbt", "assembly"])
+    if not os.path.exists(dxWDL_jar_path):
+        raise Exception("sbt assembly failed")
     os.chdir(crnt_work_dir)
 
 # Run make, to ensure that we have an up-to-date jar file
@@ -112,7 +119,6 @@ def build_asset(top_dir, destination):
     subprocess.check_call(["dx", "build_asset", "applet_resources",
                            "--destination", destination])
     os.chdir(crnt_work_dir)
-
 
 def make_prerequisits(project, folder, version_id, top_dir):
     # Create the asset description file
