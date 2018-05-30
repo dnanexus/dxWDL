@@ -1,5 +1,8 @@
 # Release Notes
 
+## 0.66.1
+- Ignoring unknown runtime attributes in the extras file.
+
 ## 0.66
 - Decomposing a workflow when there is a declaration after a call. For example,
 workflow `foo` needs to be decomposed. The workflow fragment runner does not
