@@ -1,4 +1,3 @@
-//import com.typesafe.sbt.GitPlugin.autoImport._
 import Merging.customMergeStrategy
 import sbt.Keys._
 import sbtassembly.AssemblyPlugin.autoImport._

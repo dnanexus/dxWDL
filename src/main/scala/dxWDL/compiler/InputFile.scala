@@ -85,8 +85,8 @@ case class InputFile(verbose: Verbose) {
 
     // If a stage has defaults, set the SArg to a constant. The user
     // can override it at runtime.
-    private def addDefaultsToStage(wf: IR.Workflow,
-                                   stg:IR.Stage,
+    private def addDefaultsToStage(stg: IR.Stage,
+                                   wfName: String,
                                    callee: IR.Callable,
                                    defaultFields: HashMap[String, JsValue]) : IR.Stage = {
         Utils.trace(verbose2, s"addDefaultToStage ${stg.stageName}")
@@ -95,20 +95,8 @@ case class InputFile(verbose: Verbose) {
                 val cVar = callee.inputVars(idx)
                 (sArg, cVar)
         }
-        val nameTrail = callee match {
-            case applet: IR.Applet =>
-                applet.kind match {
-                    case IR.AppletKindNative(_) => s"${wf.name}.${stg.stageName}"
-                    case IR.AppletKindTask => s"${wf.name}.${stg.stageName}"
-                    case _ => wf.name
-                }
-            case workflow: IR.Workflow =>
-                wf.name
-        }
-        val inputNames = inputsFull.map{ case (_,cVar) => cVar.name }
-        Utils.trace(verbose2, s"inputNames=${inputNames}  trail=${nameTrail}")
         val inputsWithDefaults: Vector[SArg] = inputsFull.map{ case (sArg, cVar) =>
-            val fqn = s"${nameTrail}.${cVar.name}"
+            val fqn = s"${wfName}.${cVar.name}"
             getExactlyOnce(defaultFields, fqn) match {
                 case None => sArg
                 case Some(dflt:JsValue) =>
@@ -139,7 +127,7 @@ case class InputFile(verbose: Verbose) {
         }.toVector
     }
 
-    // set defaults for an applet
+    // set defaults for a task
     private def embedDefaultsIntoTask(applet: IR.Applet,
                                       defaultFields:HashMap[String,JsValue]) : IR.Applet = {
         val inputsWithDefaults: Vector[CVar] = applet.inputs.map {
@@ -165,37 +153,26 @@ case class InputFile(verbose: Verbose) {
     private def embedDefaultsIntoWorkflow(wf: IR.Workflow,
                                           callables: Map[String, IR.Callable],
                                           defaultFields:HashMap[String,JsValue]) : IR.Workflow = {
-        val callableNames = callables.map{ case (name,_) => name }
-        Utils.trace(verbose.on, s"callables=${callableNames}")
-
-        val stagesWithDefaults = wf.stages.map{ stage =>
-            val callee:IR.Callable = callables(stage.calleeName)
-            val visible = callee match {
-                case applet: IR.Applet =>
-                    applet.kind match {
-                        case IR.AppletKindWorkflowOutputReorg => false
-                        case _ if (stage.stageName == Utils.OUTPUT_SECTION) => false
-                        case _ => true
-                    }
-                case _ => true
-            }
-            if (visible) {
-                // user can see these stages, and set defaults
-                addDefaultsToStage(wf, stage, callee, defaultFields)
-            } else {
-                stage
-            }
-        }
-        val wfInputsWithDefaults =
+        val wfWithDefaults =
             if (wf.locked) {
                 // Locked workflows, we have workflow level inputs
-                addDefaultsToWorkflowInputs(wf.inputs, wf.name, defaultFields)
+                val wfInputsWithDefaults = addDefaultsToWorkflowInputs(wf.inputs, wf.name,
+                                                                       defaultFields)
+                wf.copy(inputs = wfInputsWithDefaults)
             } else {
-                wf.inputs
-            }
+                // Workflow is unlocked, we don't have proper
+                // workflow level inputs. Instead, set the defaults in the COMMON stage
 
-        val wfWithDefaults = wf.copy(inputs = wfInputsWithDefaults,
-                                     stages = stagesWithDefaults)
+                val stagesWithDefaults = wf.stages.map{ stg =>
+                    if (stg.stageName == Utils.COMMON) {
+                        val callee:IR.Callable = callables(stg.calleeName)
+                        addDefaultsToStage(stg, wf.name, callee, defaultFields)
+                    } else {
+                        stg
+                    }
+                }
+                wf.copy(stages = stagesWithDefaults)
+            }
 
         // check that the stage order hasn't changed
         val allStageNames = wf.stages.map{ stg => stg.stageName }.toVector
@@ -217,6 +194,7 @@ case class InputFile(verbose: Verbose) {
         // read the default inputs file (xxxx.json)
         val wdlDefaults: JsObject = Utils.readFileContent(defaultInputs).parseJson.asJsObject
         val defaultFields:HashMap[String,JsValue] = preprocessInputs(wdlDefaults)
+        val callables = ns.buildCallables
 
         val appletsWithDefaults = ns.applets.map{ case (name, apl) =>
             val apl2 = apl.kind match {
@@ -225,21 +203,21 @@ case class InputFile(verbose: Verbose) {
             }
             name -> apl2
         }.toMap
-        val irNs = ns.entrypoint match {
-            case None =>
-                ns.copy(applets = appletsWithDefaults)
-            case Some(wf) =>
-                val callables = ns.buildCallables
-                val wf2 = embedDefaultsIntoWorkflow(wf, callables, defaultFields)
-                ns.copy(entrypoint = Some(wf2),
-                        applets = appletsWithDefaults)
+        val subWorkflowsWithDefaults = ns.subWorkflows.map{ case (name, subwf) =>
+            name -> embedDefaultsIntoWorkflow(subwf, callables, defaultFields)
+        }.toMap
+        val entryPoint = ns.entrypoint match {
+            case None => None
+            case Some(wf) => Some(embedDefaultsIntoWorkflow(wf, callables, defaultFields))
         }
         if (!defaultFields.isEmpty) {
             Utils.warning(verbose, s"""|Could not map all default fields.
                                        |These were left: ${defaultFields}""".stripMargin)
             throw new Exception("Failed to map all default fields")
         }
-        irNs
+        ns.copy(entrypoint = entryPoint,
+                subWorkflows = subWorkflowsWithDefaults,
+                applets = appletsWithDefaults)
     }
 
     // Converting a Cromwell style input JSON file, into a valid DNAx input file

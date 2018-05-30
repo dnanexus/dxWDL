@@ -60,4 +60,25 @@ class InputFileTest extends FlatSpec with Matchers {
         )
         retval shouldBe a [Main.SuccessfulTerminationIR]
     }
+
+    it should "build defaults into subworkflows" in {
+        val wdlCode = pathFromBasename("L3.wdl")
+        val defaults = pathFromBasename("L3_inputs.json")
+        val retval = Main.compile(
+            List(wdlCode.toString, "--compileMode", "ir", "-quiet",
+                 "-defaults", defaults.toString)
+        )
+        retval shouldBe a [Main.SuccessfulTerminationIR]
+    }
+
+    it should "build defaults into subworkflows II" in {
+        val wdlCode = pathFromBasename("L3.wdl")
+        val defaults = pathFromBasename("L3_inputs.json")
+        val retval = Main.compile(
+            List(wdlCode.toString, "--compileMode", "ir", "--locked", "-quiet",
+                 "-defaults", defaults.toString)
+        )
+        retval shouldBe a [Main.SuccessfulTerminationIR]
+    }
+
 }
