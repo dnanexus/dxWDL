@@ -305,6 +305,15 @@ object Main extends App {
     // Get basic information about the dx environment, and process
     // the compiler flags
     private def compilerOptions(options: OptionsMap) : CompilerOptions = {
+        // First: get the verbosity mode. It is used almost everywhere.
+        val verboseKeys: Set[String] = options.get("verbose") match {
+            case None => Set.empty
+            case Some(modulesToTrace) => modulesToTrace.toSet
+        }
+        val verbose = Verbose(options contains "verbose",
+                              options contains "quiet",
+                              verboseKeys)
+
         val compileMode: CompilerFlag.Value = options.get("compileMode") match {
             case None => CompilerFlag.Default
             case Some(List(x)) if (x.toLowerCase == "ir") => CompilerFlag.IR
@@ -319,7 +328,7 @@ object Main extends App {
             case None => None
             case Some(List(p)) =>
                 val contents = Utils.readFileContent(Paths.get(p))
-                Some(Extras.parse(contents.parseJson))
+                Some(Extras.parse(contents.parseJson, verbose))
             case _ => throw new Exception("extras specified twice")
         }
         val inputs: List[Path] = options.get("inputs") match {
@@ -335,13 +344,6 @@ object Main extends App {
             case Some(List(numberStr)) => Some(parseRuntimeDebugLevel(numberStr))
             case _ => throw new Exception("debug level specified twice")
         }
-        val verboseKeys: Set[String] = options.get("verbose") match {
-            case None => Set.empty
-            case Some(modulesToTrace) => modulesToTrace.toSet
-        }
-        val verbose = Verbose(options contains "verbose",
-                              options contains "quiet",
-                              verboseKeys)
         CompilerOptions(options contains "archive",
                         compileMode,
                         defaults,
