@@ -36,4 +36,49 @@ class InputFileTest extends FlatSpec with Matchers {
                 errMsg should include ("Failed to map all input fields")
         }
     }
+
+    it should "not compile for several applets without a workflow" in {
+        val wdlCode = pathFromBasename("several_tasks.wdl")
+        val inputs = pathFromBasename("several_tasks_inputs.json")
+        val retval = Main.compile(
+            List(wdlCode.toString, "--compileMode", "ir", "-quiet",
+                 "-inputs", inputs.toString)
+        )
+
+        inside(retval) {
+            case Main.UnsuccessfulTermination(errMsg) =>
+                errMsg should include ("Cannot generate one input file for 2 tasks")
+        }
+    }
+
+    it should "build defaults into applet underneath workflow" in {
+        val wdlCode = pathFromBasename("population.wdl")
+        val defaults = pathFromBasename("population_inputs.json")
+        val retval = Main.compile(
+            List(wdlCode.toString, "--compileMode", "ir", "-quiet",
+                 "-defaults", defaults.toString)
+        )
+        retval shouldBe a [Main.SuccessfulTerminationIR]
+    }
+
+    it should "build defaults into subworkflows" in {
+        val wdlCode = pathFromBasename("L3.wdl")
+        val defaults = pathFromBasename("L3_inputs.json")
+        val retval = Main.compile(
+            List(wdlCode.toString, "--compileMode", "ir", "-quiet",
+                 "-defaults", defaults.toString)
+        )
+        retval shouldBe a [Main.SuccessfulTerminationIR]
+    }
+
+    it should "build defaults into subworkflows II" in {
+        val wdlCode = pathFromBasename("L3.wdl")
+        val defaults = pathFromBasename("L3_inputs.json")
+        val retval = Main.compile(
+            List(wdlCode.toString, "--compileMode", "ir", "--locked", "-quiet",
+                 "-defaults", defaults.toString)
+        )
+        retval shouldBe a [Main.SuccessfulTerminationIR]
+    }
+
 }

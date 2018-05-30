@@ -32,23 +32,6 @@ object Top {
         Utils.trace(verbose, s"Wrote intermediate representation to ${trgPath.toString}")
     }
 
-    private def embedDefaults(wf: IR.Workflow,
-                              irNs: IR.Namespace,
-                              path: Path,
-                              cOpt: CompilerOptions) : IR.Namespace = {
-        val allStageNames = wf.stages.map{ stg => stg.stageName }.toVector
-
-        // embed the defaults into the IR
-        val irNsEmb = InputFile(cOpt.verbose).embedDefaults(wf, irNs, path)
-
-        // make sure the stage order hasn't changed
-        val workflow1: IR.Workflow = irNsEmb.entrypoint.get
-        val embedAllStageNames = workflow1.stages.map{ stg => stg.stageName }.toVector
-        assert(allStageNames == embedAllStageNames)
-
-        irNsEmb
-    }
-
     private def findSourcesInImports(wdlSourceFile: Path,
                                      imports: List[Path],
                                      verbose: Verbose) : Map[String, Path] = {
@@ -143,10 +126,9 @@ object Top {
         // Compile the WDL workflow into an Intermediate
         // Representation (IR)
         val irNs = GenerateIR.apply(nsTree, cOpt.reorg, cOpt.locked, cOpt.verbose)
-        val irNs2: IR.Namespace = (cOpt.defaults, irNs.entrypoint) match {
-            case (Some(path), Some(wf)) =>
-                embedDefaults(wf, irNs, path, cOpt)
-            case (_,_) => irNs
+        val irNs2: IR.Namespace = cOpt.defaults match {
+            case None => irNs
+            case Some(path) => InputFile(cOpt.verbose).embedDefaults(irNs, path)
         }
 
         // Write out the intermediate representation

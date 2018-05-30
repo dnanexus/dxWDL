@@ -30,6 +30,9 @@ is to represent a WDL file with header. When a file is imported, we
 use the header, instead of pulling in the entire WDL code, including
 its own imports.
 
+- Support setting defaults in applets, not just workflows. This can be done with the `--defaults`
+command line option, and a JSON file of WDL inputs.
+
 ## 0.65
 - Optimization for the case of launching an instance where it is
 calculated at runtime.

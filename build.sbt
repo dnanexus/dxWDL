@@ -1,16 +1,11 @@
-//import com.typesafe.sbt.GitPlugin.autoImport._
-import sbt.Keys._
-import scoverage.ScoverageKeys._
 import Merging.customMergeStrategy
-enablePlugins(GitVersioning)
+import sbt.Keys._
+import sbtassembly.AssemblyPlugin.autoImport._
+import scoverage.ScoverageKeys._
 
 scalaVersion := "2.12.6"
 name := "dxWDL"
 organization := "com.dnanexus"
-
-// Shorten the git commit hash
-git.gitHeadCommit := git.gitHeadCommit.value map { _.take(8) }
-versionWithGit
 
 resolvers ++= Seq(
     "Broad Artifactory Releases" at "https://broadinstitute.jfrog.io/broadinstitute/libs-release/"
@@ -58,7 +53,7 @@ scalacOptions ++= Seq(
 assemblyJarName in assembly := "dxWDL.jar"
 logLevel in assembly := Level.Info
 assemblyOutputPath in assembly := file("applet_resources/resources/dxWDL.jar")
-assemblyMergeStrategy in assembly := customMergeStrategy.value
+assemblyMergeStrategy in assembly := customMergeStrategy
 
 libraryDependencies ++= Seq(
     "org.broadinstitute" %% "cromwell-wdl-model-draft2" % "32",

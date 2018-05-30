@@ -85,8 +85,8 @@ case class InputFile(verbose: Verbose) {
 
     // If a stage has defaults, set the SArg to a constant. The user
     // can override it at runtime.
-    private def addDefaultsToStage(wf: IR.Workflow,
-                                   stg:IR.Stage,
+    private def addDefaultsToStage(stg: IR.Stage,
+                                   wfName: String,
                                    callee: IR.Callable,
                                    defaultFields: HashMap[String, JsValue]) : IR.Stage = {
         Utils.trace(verbose2, s"addDefaultToStage ${stg.stageName}")
@@ -95,20 +95,8 @@ case class InputFile(verbose: Verbose) {
                 val cVar = callee.inputVars(idx)
                 (sArg, cVar)
         }
-        val nameTrail = callee match {
-            case applet: IR.Applet =>
-                applet.kind match {
-                    case IR.AppletKindNative(_) => s"${wf.name}.${stg.stageName}"
-                    case IR.AppletKindTask => s"${wf.name}.${stg.stageName}"
-                    case _ => wf.name
-                }
-            case workflow: IR.Workflow =>
-                wf.name
-        }
-        val inputNames = inputsFull.map{ case (_,cVar) => cVar.name }
-        Utils.trace(verbose2, s"inputNames=${inputNames}  trail=${nameTrail}")
         val inputsWithDefaults: Vector[SArg] = inputsFull.map{ case (sArg, cVar) =>
-            val fqn = s"${nameTrail}.${cVar.name}"
+            val fqn = s"${wfName}.${cVar.name}"
             getExactlyOnce(defaultFields, fqn) match {
                 case None => sArg
                 case Some(dflt:JsValue) =>
@@ -139,13 +127,67 @@ case class InputFile(verbose: Verbose) {
         }.toVector
     }
 
+    // set defaults for a task
+    private def embedDefaultsIntoTask(applet: IR.Applet,
+                                      defaultFields:HashMap[String,JsValue]) : IR.Applet = {
+        val inputsWithDefaults: Vector[CVar] = applet.inputs.map {
+            case cVar =>
+                val fqn = s"${applet.name}.${cVar.name}"
+                getExactlyOnce(defaultFields, fqn) match {
+                    case None =>
+                        cVar
+                    case Some(dflt:JsValue) =>
+                        val wvl = translateValue(cVar, dflt)
+                        val w = WdlVarLinks.eval(wvl, IOMode.Remote, IODirection.Zero)
+                        cVar.copy(attrs = cVar.attrs.setDefault(w))
+                }
+        }.toVector
+        applet.copy(inputs = inputsWithDefaults)
+    }
+
+    // Embed default values into the workflow IR
+    //
+    // Make a sequential pass on the IR, figure out the fully qualified names
+    // of all CVar and SArgs. If they have a default value, add it as an attribute
+    // (DeclAttrs).
+    private def embedDefaultsIntoWorkflow(wf: IR.Workflow,
+                                          callables: Map[String, IR.Callable],
+                                          defaultFields:HashMap[String,JsValue]) : IR.Workflow = {
+        val wfWithDefaults =
+            if (wf.locked) {
+                // Locked workflows, we have workflow level inputs
+                val wfInputsWithDefaults = addDefaultsToWorkflowInputs(wf.inputs, wf.name,
+                                                                       defaultFields)
+                wf.copy(inputs = wfInputsWithDefaults)
+            } else {
+                // Workflow is unlocked, we don't have proper
+                // workflow level inputs. Instead, set the defaults in the COMMON stage
+
+                val stagesWithDefaults = wf.stages.map{ stg =>
+                    if (stg.stageName == Utils.COMMON) {
+                        val callee:IR.Callable = callables(stg.calleeName)
+                        addDefaultsToStage(stg, wf.name, callee, defaultFields)
+                    } else {
+                        stg
+                    }
+                }
+                wf.copy(stages = stagesWithDefaults)
+            }
+
+        // check that the stage order hasn't changed
+        val allStageNames = wf.stages.map{ stg => stg.stageName }.toVector
+        val embedAllStageNames = wfWithDefaults.stages.map{ stg => stg.stageName }.toVector
+        assert(allStageNames == embedAllStageNames)
+
+        wfWithDefaults
+    }
+
     // Embed default values into the IR
     //
     // Make a sequential pass on the IR, figure out the fully qualified names
     // of all CVar and SArgs. If they have a default value, add it as an attribute
     // (DeclAttrs).
-    def embedDefaults(wf: IR.Workflow,
-                      ns: IR.Namespace,
+    def embedDefaults(ns: IR.Namespace,
                       defaultInputs: Path) : IR.Namespace = {
         Utils.trace(verbose.on, s"Embedding defaults into the IR")
 
@@ -153,49 +195,33 @@ case class InputFile(verbose: Verbose) {
         val wdlDefaults: JsObject = Utils.readFileContent(defaultInputs).parseJson.asJsObject
         val defaultFields:HashMap[String,JsValue] = preprocessInputs(wdlDefaults)
         val callables = ns.buildCallables
-        val callableNames = callables.map{ case (name,_) => name }
-        Utils.trace(verbose.on, s"callables=${callableNames}")
 
-        val stagesWithDefaults = wf.stages.map{ stage =>
-            val callee:IR.Callable = callables(stage.calleeName)
-            val visible = callee match {
-                case applet: IR.Applet =>
-                    applet.kind match {
-                        case IR.AppletKindWorkflowOutputReorg => false
-                        case _ if (stage.stageName == Utils.OUTPUT_SECTION) => false
-                        case _ => true
-                    }
-                case _ => true
+        val appletsWithDefaults = ns.applets.map{ case (name, apl) =>
+            val apl2 = apl.kind match {
+                case IR.AppletKindTask => embedDefaultsIntoTask(apl, defaultFields)
+                case _ => apl
             }
-            if (visible) {
-                // user can see these stages, and set defaults
-                addDefaultsToStage(wf, stage, callee, defaultFields)
-            } else {
-                stage
-            }
+            name -> apl2
+        }.toMap
+        val subWorkflowsWithDefaults = ns.subWorkflows.map{ case (name, subwf) =>
+            name -> embedDefaultsIntoWorkflow(subwf, callables, defaultFields)
+        }.toMap
+        val entryPoint = ns.entrypoint match {
+            case None => None
+            case Some(wf) => Some(embedDefaultsIntoWorkflow(wf, callables, defaultFields))
         }
-        val wfInputsWithDefaults =
-            if (wf.locked) {
-                // Locked workflows, we have workflow level inputs
-                addDefaultsToWorkflowInputs(wf.inputs, wf.name, defaultFields)
-            } else {
-                wf.inputs
-            }
-        val wf2 = wf.copy(inputs = wfInputsWithDefaults,
-                          stages = stagesWithDefaults)
-        val irNs = ns.copy(entrypoint = Some(wf2))
         if (!defaultFields.isEmpty) {
             Utils.warning(verbose, s"""|Could not map all default fields.
                                        |These were left: ${defaultFields}""".stripMargin)
             throw new Exception("Failed to map all default fields")
         }
-        irNs
+        ns.copy(entrypoint = entryPoint,
+                subWorkflows = subWorkflowsWithDefaults,
+                applets = appletsWithDefaults)
     }
-
 
     // Converting a Cromwell style input JSON file, into a valid DNAx input file
     //
-
     case class CromwellInputFileState(inputFields: HashMap[String,JsValue],
                                       workflowBindings: HashMap[String, JsValue]) {
         // If WDL variable fully qualified name [fqn] was provided in the
@@ -231,15 +257,18 @@ case class InputFile(verbose: Verbose) {
         val inputFields:HashMap[String,JsValue] = preprocessInputs(wdlInputs)
         val cif = CromwellInputFileState(inputFields, HashMap.empty)
 
-        ns.applets.map{ case (aplName, applet) =>
-            applet.inputs.foreach { cVar =>
-                val fqn = s"${aplName}.${cVar.name}"
-                val dxName = s"${cVar.name}"
-                cif.checkAndBind(fqn, dxName, cVar)
-            }
-        }
         ns.entrypoint match {
-            case None => ()
+            case None if ns.applets.size == 0 => ()
+            case None if ns.applets.size == 1 =>
+                // There is one task, we can generate one input file for it.
+                val (aplName, applet) = ns.applets.head
+                applet.inputs.foreach { cVar =>
+                    val fqn = s"${aplName}.${cVar.name}"
+                    val dxName = s"${cVar.name}"
+                    cif.checkAndBind(fqn, dxName, cVar)
+                }
+            case None =>
+                throw new Exception(s"Cannot generate one input file for ${ns.applets.size} tasks")
             case Some(wf) if wf.locked =>
                 // Locked workflow. A user can set workflow level
                 // inputs; nothing else.
