@@ -3,8 +3,12 @@ package dxWDL
 import com.dnanexus.AccessLevel
 import org.scalatest.{FlatSpec, Matchers}
 import spray.json._
+import wdl.draft2.model.WdlExpression
+import wom.values.WomString
 
 class ExtrasTest extends FlatSpec with Matchers {
+    val verbose = Verbose(false, true, Set.empty)
+
     it should "invalid runSpec I" in {
         val ex1 =
             """|{
@@ -19,7 +23,7 @@ class ExtrasTest extends FlatSpec with Matchers {
                |""".stripMargin
 
         assertThrows[Exception] {
-            Extras.parse(ex1.parseJson)
+            Extras.parse(ex1.parseJson, verbose)
         }
     }
 
@@ -40,7 +44,7 @@ class ExtrasTest extends FlatSpec with Matchers {
                |""".stripMargin
 
         assertThrows[Exception] {
-            Extras.parse(ex2.parseJson)
+            Extras.parse(ex2.parseJson, verbose)
         }
     }
 
@@ -60,7 +64,7 @@ class ExtrasTest extends FlatSpec with Matchers {
                |""".stripMargin
 
         assertThrows[Exception] {
-            Extras.parse(ex3.parseJson)
+            Extras.parse(ex3.parseJson, verbose)
         }
     }
 
@@ -94,7 +98,7 @@ class ExtrasTest extends FlatSpec with Matchers {
                |""".stripMargin
 
         val js = runSpecValid.parseJson
-        val extras = Extras.parse(js)
+        val extras = Extras.parse(js, verbose)
         extras.defaultTaskDxAttributes should be (Some(DxRunSpec(Some(DxExecPolicy(Some(Map("*" -> 3)),
                                                                                    None)),
                                                                  Some(DxTimeout(None,
@@ -128,7 +132,7 @@ class ExtrasTest extends FlatSpec with Matchers {
                |""".stripMargin
 
         val js = runSpec.parseJson
-        val extras = Extras.parse(js)
+        val extras = Extras.parse(js, verbose)
 
         val restartPolicy = Map("UnresponsiveWorker" -> 2, "JMInternalError" -> 0, "ExecutionError" -> 4)
         extras.defaultTaskDxAttributes should be (Some(DxRunSpec(
@@ -157,7 +161,7 @@ class ExtrasTest extends FlatSpec with Matchers {
 
         val js = runSpec.parseJson
         assertThrows[Exception] {
-            Extras.parse(js)
+            Extras.parse(js, verbose)
         }
     }
 
@@ -195,4 +199,40 @@ class ExtrasTest extends FlatSpec with Matchers {
         JsObject(timeout.toJson) should be(expectedJs)
     }
 
+    it should "handle default runtime attributes" in {
+        val runtimeAttrs : JsValue=
+            """|{
+               | "default_runtime_attributes" : {
+               |     "docker" : "quay.io/encode-dcc/atac-seq-pipeline:v1",
+               |     "zones": "us-west1-a us-west1-b us-west1-c us-central1-c us-central1-b",
+               |     "failOnStderr" : false,
+               |     "continueOnReturnCode" : 0,
+               |     "preemptible": "0",
+               |     "bootDiskSizeGb": "10",
+               |     "noAddress": "false"
+               | }
+               |}""".stripMargin.parseJson
+
+        val extras = Extras.parse(runtimeAttrs, verbose)
+        val dockerOpt: Option[WdlExpression] = extras.defaultRuntimeAttributes.get("docker")
+        dockerOpt match {
+            case None =>
+                throw new Exception("Wrong type for dockerOpt")
+            case Some(docker) =>
+                Utils.evalConst(docker) should equal (WomString("quay.io/encode-dcc/atac-seq-pipeline:v1"))
+        }
+    }
+
+    it should "handle default runtime attributes that are empty" in {
+        val rtEmpty : JsValue =
+            """|{
+               | "default_runtime_attributes" : {
+               |     "preemptible": "0",
+               |     "bootDiskSizeGb": "10"
+               | }
+               |}""".stripMargin.parseJson
+
+        val extrasEmpty = Extras.parse(rtEmpty, verbose)
+        extrasEmpty.defaultRuntimeAttributes should equal(Map.empty)
+    }
 }

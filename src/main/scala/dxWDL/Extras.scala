@@ -8,7 +8,6 @@ import spray.json._
 import wdl.draft2.model.WdlExpression
 import wom.values._
 
-
 case class DxExecPolicy(restartOn: Option[Map[String, Int]],
                         maxRestarts: Option[Int]) {
     def toJson : Map[String, JsValue] = {
@@ -266,19 +265,21 @@ object Extras {
         return Some(m1)
     }
 
-    private def parseRuntimeAttrs(jsv: JsValue) : Map[String, WdlExpression] = {
+    private def parseRuntimeAttrs(jsv: JsValue,
+                                  verbose: Verbose) : Map[String, WdlExpression] = {
         if (jsv == JsNull)
             return Map.empty
         val fields = jsv.asJsObject.fields
         for (k <- fields.keys) {
             if (!(RUNTIME_ATTRS contains k))
-                throw new Exception(s"""|Unsupported runtime attribute ${k},
-                                        |we currently support ${RUNTIME_ATTRS}
-                                        |""".stripMargin.replaceAll("\n", ""))
+                Utils.warning(verbose, s"""|Unsupported runtime attribute ${k},
+                                           |we currently support ${RUNTIME_ATTRS}
+                                           |""".stripMargin.replaceAll("\n", ""))
         }
-        val attrs = fields.map{ case (name, jsValue) =>
-            name -> wdlExpressionFromJsValue(jsValue)
-        }.toMap
+        val attrs = fields
+            .filter{ case (key,_) => RUNTIME_ATTRS contains key }
+            .map{ case (name, jsValue) =>
+                name -> wdlExpressionFromJsValue(jsValue) }.toMap
         return attrs
     }
 
@@ -374,7 +375,8 @@ object Extras {
                               parseAccess(checkedParseObjectField(fields, "access"))))
     }
 
-    private def parseTaskDxAttrs(jsv: JsValue) : Option[DxRunSpec] = {
+    private def parseTaskDxAttrs(jsv: JsValue,
+                                 verbose: Verbose) : Option[DxRunSpec] = {
         if (jsv == JsNull)
             return None
         val fields = jsv.asJsObject.fields
@@ -389,7 +391,8 @@ object Extras {
     }
 
 
-    def parse(jsv: JsValue) : Extras = {
+    def parse(jsv: JsValue,
+              verbose: Verbose) : Extras = {
         val fields = jsv match {
             case JsObject(fields) => fields
             case _ => throw new Exception(s"malformed extras JSON ${jsv}")
@@ -402,7 +405,11 @@ object Extras {
                                         |we currently support ${EXTRA_ATTRS}
                                         |""".stripMargin.replaceAll("\n", ""))
         }
-        Extras(parseRuntimeAttrs(checkedParseObjectField(fields, "default_runtime_attributes")),
-               parseTaskDxAttrs(checkedParseObjectField(fields, "default_task_dx_attributes")))
+        Extras(parseRuntimeAttrs(
+                   checkedParseObjectField(fields, "default_runtime_attributes"),
+                   verbose),
+               parseTaskDxAttrs(
+                   checkedParseObjectField(fields, "default_task_dx_attributes"),
+                   verbose))
     }
 }
