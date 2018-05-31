@@ -1,10 +1,12 @@
 # WDL Runner App
 
 This page discusses a possible resesign of the WDL runner, to make it
-app based.
+app based. Today, a WDL workflow is decomposed into fragments, each
+fragment is compiled into a custom dx:applet. An app-based runner will
+make these applets superfluous, because one generic app will be able
+to run all the fragments.
 
-Today, we build a custom applet to run each workflow fragment. Instead, it may be preferable
-to have a single app that can run any fragment. The app will have a signature like this:
+The app will have a signature like this:
 - input: hash containing WDL inputs
 - output: hash containing WDL outputs
 - files: an array of dx:files
@@ -13,7 +15,7 @@ to have a single app that can run any fragment. The app will have a signature li
 Using hashes to wrap around inputs and outputs is defined as *boxed*
 calling convention. Using native dnanexus types (*int*, *float*,
 *dx:file*, ...) to accept inputs and return outputs is defined as
-*unboxed*.
+*unboxed* calling convention.
 
 A workflow is decomposed into fragments, each fragment uses boxed
 calling convention. A task is compiled into a custom applet to allow setting
