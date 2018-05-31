@@ -16,7 +16,7 @@ calling convention. Using native dnanexus types (*int*, *float*,
 *unboxed*.
 
 A workflow is decomposed into fragments, each fragment uses boxed
-calling convention. A task is into a custom applet to allow setting
+calling convention. A task is compiled into a custom applet to allow setting
 the runspec, access, and various other attributes. It uses boxed
 calling convention, so that calling tasks will not require unboxing.
 Calling native executables (dx:app, dx:applet, dx:workflow) requires
