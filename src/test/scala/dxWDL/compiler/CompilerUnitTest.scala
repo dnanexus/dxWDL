@@ -197,4 +197,11 @@ class CompilerUnitTest extends FlatSpec with Matchers {
         val (_,mulApl2) = ir2.applets.head
         mulApl2.docker should equal(dxWDL.compiler.IR.DockerImageNone)
     }
+
+    it should "allow last to be used in a variable name" in {
+        val path = pathFromBasename("last.wdl")
+        Main.compile(
+            List(path.toString, "--compileMode", "ir", "--locked", "--quiet")
+        ) shouldBe a [Main.SuccessfulTerminationIR]
+    }
 }

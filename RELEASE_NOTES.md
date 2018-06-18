@@ -1,5 +1,8 @@
 # Release Notes
 
+## 0.66.2
+- Allow variable and task names that include "last"
+
 ## 0.66.1
 - Ignoring unknown runtime attributes in the extras file.
 
