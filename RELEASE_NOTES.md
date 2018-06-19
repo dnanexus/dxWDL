@@ -1,7 +1,9 @@
 # Release Notes
 
 ## 0.66.2
-- Allow variable and task names that include "last"
+- Allow variable and task names to include the sub-string "last"
+- Workflow fragment applets inherit access properties from the extras
+file.
 
 ## 0.66.1
 - Ignoring unknown runtime attributes in the extras file.

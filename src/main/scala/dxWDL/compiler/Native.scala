@@ -530,18 +530,18 @@ case class Native(dxWDLrtId: String,
     }
 
     def  calcAccess(applet: IR.Applet) : JsValue = {
+        val extraAccess: DxAccess = extras match {
+            case None => DxAccess.empty
+            case Some(ext) => ext.defaultTaskDxAttributes match {
+                case None => DxAccess.empty
+                case Some(dta) => dta.access match {
+                    case None => DxAccess.empty
+                    case Some(access) => access
+                }
+            }
+        }
         val access: DxAccess = applet.kind match {
             case IR.AppletKindTask =>
-                val extraAccess: DxAccess = extras match {
-                    case None => DxAccess.empty
-                    case Some(ext) => ext.defaultTaskDxAttributes match {
-                        case None => DxAccess.empty
-                        case Some(dta) => dta.access match {
-                            case None => DxAccess.empty
-                            case Some(access) => access
-                        }
-                    }
-                }
                 if (applet.docker == IR.DockerImageNetwork) {
                     // docker requires network access, because we are downloading
                     // the image from the network
@@ -557,7 +557,7 @@ case class Native(dxWDLrtId: String,
                 // Even scatters need network access, because
                 // they spawn subjobs that (may) use dx-docker.
                 // We end up allowing all applets to use the network
-                DxAccess(Option(Vector("*")), None, None, None, None)
+                extraAccess.merge(DxAccess(Some(Vector("*")), None,  None,  None,  None))
         }
         val fields = access.toJson
         if (fields.isEmpty) JsNull
