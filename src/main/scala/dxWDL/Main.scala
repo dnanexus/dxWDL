@@ -202,11 +202,7 @@ object Main extends App {
 
     // Get the project name.
     //
-    // We use dxpy here, because there is some subtle difference
-    // between dxjava and dxpy.  When opening sessions on two
-    // terminals, and selecting two projects, dxpy will correctly
-    // provide pwd, dxjava only returns the name stored in
-    // ~/.dnanexus_config.DX_PROJECT_CONTEXT_NAME.
+    // Get rid of this code when the dx-toolkit integration is complete.
     private def getDxPwd(): (String, String) = {
         try {
             // version with dxjava

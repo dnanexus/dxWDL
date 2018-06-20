@@ -251,6 +251,7 @@ case class InputFile(verbose: Verbose) {
     def dxFromCromwell(ns: IR.Namespace,
                        inputPath: Path) : JsObject = {
         Utils.trace(verbose.on, s"Translating WDL input file ${inputPath}")
+        Utils.traceLevelInc()
 
         // read the input file xxxx.json
         val wdlInputs: JsObject = Utils.readFileContent(inputPath).parseJson.asJsObject
@@ -292,6 +293,8 @@ case class InputFile(verbose: Verbose) {
                                        |These were left: ${inputFields}""".stripMargin)
             throw new Exception("Failed to map all input fields")
         }
+        Utils.traceLevelDec()
+
         JsObject(cif.workflowBindings.toMap)
     }
 }

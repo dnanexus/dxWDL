@@ -91,6 +91,8 @@ object Utils {
     val RUNNER_TASK_ENV_FILE = "taskEnv.json"
     val UPLOAD_RETRY_LIMIT = DOWNLOAD_RETRY_LIMIT
 
+    var traceLevel = 0
+
     lazy val dxEnv = DXEnvironment.create()
 
     // Ignore a value. This is useful for avoiding warnings/errors
@@ -645,11 +647,27 @@ object Utils {
         }
     }
 
-    // Used by the compiler to provide more information to the user
+    private def genNSpaces(n: Int) = s"${" " * n}"
+
+    def traceLevelSet(i: Int) : Unit = {
+        traceLevel = i
+    }
+
+    def traceLevelInc() : Unit = {
+        traceLevel += 1
+    }
+
+    def traceLevelDec() : Unit = {
+        if (traceLevel > 0)
+            traceLevel -= 1
+    }
+
+        // Used by the compiler to provide more information to the user
     def trace(verbose: Boolean, msg: String) : Unit = {
         if (!verbose)
             return
-        System.err.println(msg)
+        val indent = genNSpaces(traceLevel * 2)
+        System.err.println(indent + msg)
     }
 
     // color warnings yellow
