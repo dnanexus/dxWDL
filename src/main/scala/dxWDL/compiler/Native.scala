@@ -384,10 +384,10 @@ case class Native(dxWDLrtId: String,
                 val dxObjInfo = existingDxObjs.head
                 val dxClass:String = dxObjInfo.dxClass
                 if (digest != dxObjInfo.digest) {
-                    trace(verbose.on, s"${dxClass} has changed, rebuild required")
+                    trace(verbose.on, s"${dxClass} ${name} has changed, rebuild required")
                     true
                 } else {
-                    trace(verbose.on, s"${dxClass} has not changed")
+                    trace(verbose.on, s"${dxClass} ${name} has not changed")
                     false
                 }
             case _ =>
@@ -568,7 +568,7 @@ case class Native(dxWDLrtId: String,
     private def appletNewReq(applet: IR.Applet,
                              bashScript: String,
                              folder : String) : JsValue = {
-        trace(verbose.on, s"Building /applet/new request for ${applet.name}")
+        trace(verbose2, s"Building /applet/new request for ${applet.name}")
 
         val inputSpec : Vector[JsValue] = applet.inputs.map(cVar =>
             cVarToSpec(cVar)
@@ -611,7 +611,7 @@ case class Native(dxWDLrtId: String,
     // When [force] is true, always rebuild. Otherwise, rebuild only
     // if the WDL code has changed.
     private def buildAppletIfNeeded(applet: IR.Applet, execDict: ExecDict) : DXApplet = {
-        trace(verbose.on, s"Compiling applet ${applet.name}")
+        trace(verbose2, s"Compiling applet ${applet.name}")
 
         // limit the applet dictionary, only to actual dependencies
         val calls:Map[String, String] = applet.kind match {

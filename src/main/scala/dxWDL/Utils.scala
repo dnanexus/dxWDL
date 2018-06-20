@@ -652,10 +652,15 @@ object Utils {
         System.err.println(msg)
     }
 
+    // color warnings yellow
     def warning(verbose: Verbose, msg:String) : Unit = {
         if (verbose.quiet)
             return;
-        System.err.println(msg)
+        System.err.println(Console.YELLOW + msg + Console.RESET)
+    }
+
+    def error(msg: String) : Unit = {
+        System.err.println(Console.RED + msg + Console.RESET)
     }
 
     // This code is copied the lookupType method in the WdlNamespace trait

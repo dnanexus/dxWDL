@@ -644,10 +644,10 @@ object Main extends App {
             Console.err.println(usageMessage)
             System.exit(1)
         case BadUsageTermination(s) =>
-            Console.err.println(s)
+            Utils.error(s)
             System.exit(1)
         case UnsuccessfulTermination(s) =>
-            Console.err.println(s)
+            Utils.error(s)
             System.exit(1)
     }
 }
