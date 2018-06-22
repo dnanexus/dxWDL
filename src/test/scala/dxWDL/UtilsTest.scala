@@ -93,6 +93,14 @@ class UtilsTest extends FlatSpec with Matchers {
         v2.womType should equal(womType)
     }
 
+
+    it should "be able to decode unicode strings" in {
+        val s = "\u8704\u2200"
+        val h = Utils.unicodeToHex(s)
+        val s2 = Utils.unicodeFromHex(h)
+        s should equal(s2)
+    }
+
     "SprayJs" should "marshal optionals" in {
         def marshal(name: String, dxType: String) : JsValue =  {
             s"""{ "name" : "${name}", "class" : "${dxType}" }""".parseJson

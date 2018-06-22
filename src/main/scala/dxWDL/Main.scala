@@ -110,6 +110,9 @@ object Main extends App {
                     case "destination" =>
                         checkNumberOfArguments(keyword, 1, subargs)
                         (keyword, subargs.head)
+                    case "destination_unicode" =>
+                        checkNumberOfArguments(keyword, 1, subargs)
+                        (keyword, subargs.head)
                     case "extras" =>
                         checkNumberOfArguments(keyword, 1, subargs)
                         (keyword, subargs.head)
@@ -200,28 +203,6 @@ object Main extends App {
     }
 
 
-    // Get the project name.
-    //
-    // Get rid of this code when the dx-toolkit integration is complete.
-    private def getDxPwd(): (String, String) = {
-        try {
-            // version with dxjava
-            //val dxEnv = com.dnanexus.DXEnvironment.create()
-            //dxEnv.getProjectContext()
-            val (path, _) = Utils.execCommand("dx pwd", None)
-            val vec = path.trim.split(":")
-            val (projName, folder) = vec.length match {
-                case 1 => (vec(0), "/")
-                case 2 => (vec(0), vec(1))
-                case _ => throw new Exception(s"Invalid path syntex <${path}>")
-            }
-            (projName, folder)
-        } catch {
-            case e : Throwable =>
-                throw new Exception("Could not execute 'dx pwd', please check that dx is in your path")
-        }
-    }
-
     private def pathOptions(options: OptionsMap,
                             verbose: Verbose) : (DXProject, String) = {
         var folderOpt:Option[String] = options.get("folder") match {
@@ -234,14 +215,25 @@ object Main extends App {
             case Some(List(p)) => Some(p)
             case _ => throw new Exception("sanity")
         }
+        var destinationOpt : Option[String] = options.get("destination") match {
+            case None => None
+            case Some(List(d)) => Some(d)
+            case Some(other) => throw new Exception(s"Invalid path syntex <${other}>")
+        }
+        options.get("destination_unicode") match {
+            case None => None
+            case Some(List(d)) =>
+                destinationOpt = Some(Utils.unicodeFromHex(d))
+            case Some(other) => throw new Exception(s"Invalid path syntex <${other}>")
+        }
 
         // There are three possible syntaxes:
         //    project-id:/folder
         //    project-id:
         //    /folder
-        options.get("destination") match {
+        destinationOpt match {
             case None => ()
-            case Some(List(d)) if d contains ":" =>
+            case Some(d) if d contains ":" =>
                 val vec = d.split(":")
                 vec.length match {
                     case 1 if (d.endsWith(":")) =>
@@ -251,7 +243,7 @@ object Main extends App {
                         folderOpt = Some(vec(1))
                     case _ => throw new Exception(s"Invalid path syntex <${d}>")
                 }
-            case Some(List(d)) if d.startsWith("/") =>
+            case Some(d) if d.startsWith("/") =>
                 folderOpt = Some(d)
             case Some(other) => throw new Exception(s"Invalid path syntex <${other}>")
         }
@@ -259,10 +251,7 @@ object Main extends App {
         // Use the current dx path, if nothing else was
         // specified
         val (projectRaw, folderRaw) = (projectOpt, folderOpt) match {
-            case (None, None) => getDxPwd()
-            case (None, Some(d)) =>
-                val (crntProj, _) = getDxPwd()
-                (crntProj, d)
+            case (None, _) => throw new Exception("project is unspecified")
             case (Some(p), None) => (p, "/")
             case (Some(p), Some(d)) =>(p, d)
         }
@@ -602,6 +591,7 @@ object Main extends App {
             |      -compileMode <string>  Compilation mode, a debugging flag
             |      -defaults <string>     File with Cromwell formatted default values (JSON)
             |      -destination <string>  Output path on the platform for workflow
+            |      -destination_unicode <string>  destination in unicode encoded as hexadecimal
             |      -extras <string>       JSON formatted file with extra options, for example
             |                             default runtime options for tasks.
             |      -inputs <string>       File with Cromwell formatted inputs
