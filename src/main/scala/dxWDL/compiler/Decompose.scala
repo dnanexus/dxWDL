@@ -447,7 +447,7 @@ object Decompose {
             done = Block.findReducibleChild(node.workflow.children.toVector, verbose) match {
                 case None => true
                 case Some(child) =>
-                    Utils.trace(verbose.on, s"Decompose iteration ${counter.get}")
+                    Utils.trace(verbose.on, s"iteration ${counter.get}")
                     val sbw = new Decompose(subwfPrefix, subwfNames, node.cef, verbose)
                     val (wf2, subWf) = sbw.apply(node.workflow, child)
                     node = node.cleanAfterRewrite(wf2, subWf, ctx, node.kind)
@@ -508,6 +508,9 @@ object Decompose {
               wdlSourceFile: Path,
               ctx: Context,
               verbose: Verbose) : NamespaceOps.Tree = {
+        Utils.trace(verbose.on, "Decompose pass")
+        Utils.traceLevelInc()
+
         // iterate on the tree until it is fully reduced
         val counter = new Counter()
         var nsTree = orgTree
@@ -517,7 +520,7 @@ object Decompose {
 
         if (verbose.on)
             NamespaceOps.prettyPrint(wdlSourceFile, nsTree, "subblocks", verbose)
-
+        Utils.traceLevelDec()
         nsTree
     }
 }

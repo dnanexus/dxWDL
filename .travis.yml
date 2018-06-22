@@ -58,17 +58,17 @@ script:
   #
   # Test on US-east
   - dx select dxWDL_playground
-  - java -jar dxWDL-*.jar compile test/basic/trivial.wdl --destination /travis_ci --force
+  - java -jar dxWDL-*.jar compile test/basic/trivial.wdl --project dxWDL_playground --folder /travis_ci --force
   - dx run /travis_ci/trivial -y
 
   # Test on Sydney region
   - dx select dxWDL_Sydney
-  - java -jar dxWDL-*.jar compile test/basic/trivial.wdl --destination '/Swiss Cheese/' --force
+  - java -jar dxWDL-*.jar compile test/basic/trivial.wdl --project dxWDL_Sydney --folder '/Swiss Cheese/' --force
   - dx run /Swiss\ Cheese/trivial -y
 
   # Test on Azure region
   - dx select dxWDL_Azure
-  - java -jar dxWDL-*.jar compile test/basic/trivial.wdl --force
+  - java -jar dxWDL-*.jar compile test/basic/trivial.wdl --destination dxWDL_Azure:/ --force
   - dx run /trivial -y
 
 env:

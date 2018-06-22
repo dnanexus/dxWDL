@@ -999,7 +999,10 @@ object GenerateIR {
               locked: Boolean,
               verbose: Verbose) : IR.Namespace = {
         Utils.trace(verbose.on, s"IR pass")
+        Utils.traceLevelInc()
         val execNameBox = new NameBox(verbose)
-        applyRec(nsTree, Map.empty, reorg, locked, execNameBox, verbose)
+        val retval = applyRec(nsTree, Map.empty, reorg, locked, execNameBox, verbose)
+        Utils.traceLevelDec()
+        retval
     }
 }

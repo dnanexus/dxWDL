@@ -1,5 +1,13 @@
 # Release Notes
 
+## 0.67
+- Color coding outputs, yellow for warnings, red for errors.
+- Indenting information output in verbose mode
+- Removing the use of `dx pwd`. The user needs to specify the
+destination path on the command line. A way to avoid this, is to compile
+from the dx-toolkit, with the upcoming `dx compile` command.
+
+
 ## 0.66.2
 - Allow variable and task names to include the sub-string "last"
 - Workflow fragment applets inherit access properties from the extras
