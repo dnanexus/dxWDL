@@ -60,7 +60,7 @@ hundreds of inputs, making the user interface interface ungainly.
 ## Implementation issues
 
 An implementation will need to start by adding the missing arguments. Let's
-tkae a look at adding `trivial.add.b`. The workflow is rewritten to:
+take a look at adding `trivial.add.b`. The workflow is rewritten to:
 
 ```wdl
 workflow trivial {
@@ -78,15 +78,13 @@ workflow trivial {
 ```
 
 When reading the input file, we need to translate `trivial.add.b` to `trivial.add_b`. This requires
-a reverse lookup table to go from workflow input argument, to its original name. This is extra
-metadata for the compilation process.
+a mapping from workflow input arguments to their original names. This is extra
+metadata for the compilation process; it is not simply just additional WDL code.
 
-```
-{
-  "trivial.x" : "trivial.x",
-  "trivial.add_b" : "trivial.add.b"
-}
-```
+| new name | original |
+| -------- | --------   |
+| trivial.x | trivial.x  |
+| trivial.add_b | trivial.add.b |
 
 If a variable named `add_b` already exists, a new name is required for `add.b`.
 Each workflow can go through multiple rewrite steps, each of these may encounter
