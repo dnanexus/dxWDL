@@ -87,7 +87,7 @@ metadata for the compilation process; it is not simply just additional WDL code.
 | trivial.add_b | trivial.add.b |
 
 If a variable named `add_b` already exists, a new name is required for `add.b`.
-Each workflow can go through multiple rewrite steps, each of these may encounter
+Each workflow can go through multiple rewrite steps, each of which may encounter
 naming collisions. For a complex workflow, the end result could be so different from
-the original, that the writer will not be able to recognize it. Further, it could be
-difficult to puzzle out what the new variables were orignally.
+the original, as to be unrecognizable. Because names are mangled, following what
+happens are runtime in the UI will be hard.
