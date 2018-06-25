@@ -204,4 +204,16 @@ class CompilerUnitTest extends FlatSpec with Matchers {
             List(path.toString, "--compileMode", "ir", "--locked", "--quiet")
         ) shouldBe a [Main.SuccessfulTerminationIR]
     }
+
+    it should "insist on an empty runtime block for native calls" in {
+        val path = pathFromBasename("native_call.wdl")
+        val retval = Main.compile(
+            List(path.toString, "--compileMode", "ir", "--locked", "--quiet")
+        )
+        inside(retval) {
+            case Main.UnsuccessfulTermination(errMsg) =>
+                errMsg should include ("empty runtime section")
+                errMsg should include ("native task")
+        }
+    }
 }

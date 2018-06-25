@@ -105,9 +105,19 @@ case class CompilerErrorFormatter(resource: String,
             |""".stripMargin
     }
 
-    def taskInputDefaultMustBeConst(expr: WdlExpression) = {
+    def taskInputDefaultMustBeConst(expr: WdlExpression) : String = {
         val t: Terminal = AstTools.findTerminals(expr.ast).head
         s"""|Task input expression ${expr.toWomString} must be const or variable
+            |
+            |${textualSource(t)}
+            |${pointToSource(t)}
+            |""".stripMargin
+    }
+
+    def taskNativeRuntimeBlockShouldBeEmpty(ast: Ast) : String = {
+        val t: Terminal = AstTools.findTerminals(ast).head
+        s"""|This is a native task, a wrapper for a dnanexus call. It should
+            |have an empty runtime section.
             |
             |${textualSource(t)}
             |${pointToSource(t)}
