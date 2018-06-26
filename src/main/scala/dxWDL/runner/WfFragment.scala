@@ -711,7 +711,10 @@ case class WfFragment(nswf: WdlNamespaceWithWorkflow,
 
         // Run a sub-job with the "collect" entry point.
         // We need to provide the exact same inputs.
-        val dxSubJob : DXJob = Utils.runSubJob("collect", None, orgInputs, childJobs)
+        val dxSubJob : DXJob = Utils.runSubJob("collect",
+                                               Some(Utils.DEFAULT_INSTANCE_TYPE),
+                                               orgInputs,
+                                               childJobs)
 
         // Return promises (JBORs) for all the outputs. Since the signature of the sub-job
         // is exactly the same as the parent, we can immediately exit the parent job.

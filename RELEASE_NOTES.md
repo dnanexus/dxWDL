@@ -1,5 +1,10 @@
 # Release Notes
 
+## 0.68
+- Throw an exception if a wrapper for a native platform call has
+a non-empty runtime section.
+- Use an SSD instance for the collect sub-jobs.
+
 ## 0.67
 - Color coding outputs, yellow for warnings, red for errors.
 - Indenting information output in verbose mode
