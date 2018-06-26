@@ -30,7 +30,7 @@ medium_test_list = [
     "advanced", "conditionals",
 
     # optional arguments
-    "optionals",
+    "optionals", "hello",
 
     # lifting declarations
     "decl_mid_wf",

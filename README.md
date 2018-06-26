@@ -108,3 +108,4 @@ At runtime this looks like this:
 
 - [Advanced options](doc/ExpertOptions.md) explains additional compiler options
 - [Internals](doc/Internals.md) goes into compiler internals
+- [Howto](doc/Internals.md) examples for how to write good WDL code
