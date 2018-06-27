@@ -291,14 +291,10 @@ case class WfFragment(nswf: WdlNamespaceWithWorkflow,
                     call.inputMappings.find{ case(key, expr) => key == varName }
                 rhs match {
                     case None =>
-                        // No binding for this input. It might be optional.
-                        wdlType match {
-                            case WomOptionalType(_) => None
-                            case _ =>
-                                throw new AppInternalException(
-                                    s"""|Call ${call.unqualifiedName} does not have a binding for required
-                                        |variable ${varName}.""".stripMargin.trim)
-                        }
+                        // No binding for this input. It might be optional,
+                        // it could have a default value. It could also actually be missing,
+                        // which will result in a platform error.
+                        None
                     case Some((_, expr)) =>
                         expr.evaluate(lookup, DxFunctions) match {
                             case Success(womValue) => Some(varName -> womValue)

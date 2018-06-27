@@ -102,15 +102,6 @@ def sbt_assembly(top_dir):
         raise Exception("sbt assembly failed")
     os.chdir(crnt_work_dir)
 
-# Run make, to ensure that we have an up-to-date jar file
-#
-# Be careful, so that the make invocation will work even if called from a different
-# directory.
-def call_make(top_dir, target):
-    print("Calling make")
-    subprocess.check_call(["make", "-C", top_dir, "target"])
-    print("")
-
 # Build a dx-asset from the runtime library.
 # Go to the top level directory, before running "dx"
 def build_asset(top_dir, destination):
@@ -151,39 +142,28 @@ def find_asset(project, folder):
         return assets[0]
     raise Exception("More than one asset found in folder {}".format(folder))
 
-def build(project, folder, version_id, top_dir):
-    sbt_assembly(top_dir)
-    asset = find_asset(project, folder)
-    if asset is None:
-        make_prerequisits(project, folder, version_id, top_dir)
-        asset = find_asset(project, folder)
-    region = dxpy.describe(project.get_id())['region']
-    return AssetDesc(region, asset.get_id(), project)
-
-def build_final_jar(version_id, top_dir, asset_descs):
-    # update asset_id in configuration file
+def build_compiler_jar(version_id, top_dir, project_dict):
     top_conf_path = get_top_conf_path(top_dir)
     crnt_conf_path = get_crnt_conf_path(top_dir)
-    conf = None
     with open(top_conf_path, 'r') as fd:
         conf = fd.read()
 
     # Convert the asset descriptors into ConfigFactory HOCON records.
     # We could use JSON instead, but that would make the file less
     # readable.
-    region_asset_hocon = []
+    region_project_hocon = []
     all_regions = []
-    for ad in asset_descs:
-        region_asset = "\n".join(["  {",
-                                  '    region = "{}"'.format(ad.region),
-                                  '    asset = "{}"'.format(ad.asset_id),
-                                  "  }"])
-        region_asset_hocon.append(region_asset)
-        all_regions.append(ad.region)
+    for region, dx_path in project_dict.iteritems():
+        record = "\n".join(["  {",
+                            '    region = "{}"'.format(region),
+                            '    project = "{}"'.format(dx_path),
+                            "  }"])
+        region_project_hocon.append(record)
+        all_regions.append(region)
 
-    buf = "\n".join(region_asset_hocon)
-    conf = conf.replace("    asset_ids = []\n",
-                        "    asset_ids = [\n{}\n]\n".format(buf))
+    buf = "\n".join(region_project_hocon)
+    conf = conf.replace("    region2project = []\n",
+                        "    region2project = [\n{}\n]\n".format(buf))
 
     if os.path.exists(crnt_conf_path):
         os.remove(crnt_conf_path)
@@ -205,6 +185,15 @@ def build_final_jar(version_id, top_dir, asset_descs):
                 all_in_one_jar)
     return all_in_one_jar
 
+
+def build(project, folder, version_id, top_dir):
+    sbt_assembly(top_dir)
+    asset = find_asset(project, folder)
+    if asset is None:
+        make_prerequisits(project, folder, version_id, top_dir)
+        asset = find_asset(project, folder)
+    region = dxpy.describe(project.get_id())['region']
+    return AssetDesc(region, asset.get_id(), project)
 
 # Extract version_id from configuration file
 def get_version_id(top_dir):

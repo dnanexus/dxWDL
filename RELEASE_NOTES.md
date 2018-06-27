@@ -4,6 +4,10 @@
 - Throw an exception if a wrapper for a native platform call has
 a non-empty runtime section.
 - Use an SSD instance for the collect sub-jobs.
+- Remove the runtime check for calling a task with missing values,
+fix issue (https://github.com/dnanexus/dxWDL/issues/112). The check
+is overly restrictive. The task could have a default, or, be able to
+tolerate the missing argument.
 
 ## 0.67
 - Color coding outputs, yellow for warnings, red for errors.

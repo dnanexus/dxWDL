@@ -505,11 +505,15 @@ def main():
     print("project: {} ({})".format(project.name, args.project))
     print("folder: {}".format(base_folder))
 
+    test_dict = {
+        "aws:us-east-1" :  args.project + ":" + base_folder
+    }
+
     # build the dxWDL jar file, only on us-east-1
     version_id = util.get_version_id(top_dir)
     if args.folder is None:
-        home_ad = util.build(project, applet_folder, version_id, top_dir)
-        jar_path = util.build_final_jar(version_id, top_dir, [home_ad])
+        util.build(project, applet_folder, version_id, top_dir)
+        jar_path = util.build_compiler_jar(version_id, top_dir, test_dict)
 
     if args.regular:
         # Disable all locked workflows
