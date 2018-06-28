@@ -60,7 +60,7 @@ object DxPath {
     }
 
 
-    def lookupObject(dxProject: DXProject,
+    private def lookupObject(dxProject: DXProject,
                              objName: String): DXDataObject = {
         if (objName.startsWith("applet-")) {
             return DXApplet.getInstance(objName)
