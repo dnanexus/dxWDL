@@ -1,6 +1,6 @@
 package dxWDL.compiler
 
-import com.dnanexus.{DXDataObject, DXProject, DXSearch}
+import com.dnanexus.{DXProject}
 import com.typesafe.config._
 import dxWDL.{CompilerOptions, CompilationResults, DxPath, InstanceTypeDB, Utils, Verbose}
 import dxWDL.Utils.DX_WDL_ASSET
@@ -157,7 +157,7 @@ object Top {
         val l: List[Config] = config.getConfigList("dxWDL.region2project").asScala.toList
         val region2project:Map[String, String] = l.map{ pair =>
             val r = pair.getString("region")
-            val projName = pair.getString("project")
+            val projName = pair.getString("path")
             r -> projName
         }.toMap
 
@@ -187,44 +187,14 @@ object Top {
         val dxProjRt = DxPath.lookupProject(projNameRt)
         Utils.trace(verbose.on, s"Looking for asset-id in ${projNameRt}:/${folder}")
 
-        // Find all the assets with the right name
-        val assets = DXSearch.findDataObjects()
-            .inFolderOrSubfolders(dxProjRt, folder)
-            .withClassRecord
-            .nameMatchesExactly(DX_WDL_ASSET)
-            .includeDescribeOutput(DXDataObject.DescribeOptions.get().withProperties())
-            .execute().asList().asScala.toVector
-        if (assets.isEmpty)
-            throw new Exception(s"Could not find an asset named ${DX_WDL_ASSET}")
-
-        // Leave only assets with the correct version id
-        val assetsWithCorrectVersion = assets.filter{ ast =>
-            val desc = ast.getCachedDescribe
-            val props: Map[String, String] = desc.getProperties().asScala.toMap
-            props.get("version") match {
-                case Some(v) if v == version => true
-                case _ => false
-            }
+        try {
+            val dxobj = DxPath.lookupObject(dxProjRt, s"${folder}/${DX_WDL_ASSET}")
+            dxobj.getId
+        } catch {
+            case e: Throwable =>
+                throw new Exception(s"""|Could not find an asset named ${DX_WDL_ASSET} with
+                                        |version ${version} in project ${dxProjRt}""".stripMargin.replaceAll("\n", " "))
         }
-        if (assetsWithCorrectVersion.isEmpty)
-            throw new Exception(s"""|Could not find an asset named ${DX_WDL_ASSET} with
-                                    |version ${version} in project ${dxProjRt}""".stripMargin.replaceAll("\n", " "))
-        Utils.trace(verbose.on, s"Assets for dxWDL version ${version}: ${assetsWithCorrectVersion}")
-
-        // If there is more than one asset with the right version, take the latest one
-        val assetLatest = assetsWithCorrectVersion.length match {
-            case 0 => throw new Exception(s"Could not find an asset ${DX_WDL_ASSET}")
-            case 1 => assets.head
-            case _ =>
-                assetsWithCorrectVersion.tail.foldLeft(assetsWithCorrectVersion.head) {
-                    case (best, j) =>
-                        val bestDate = best.getCachedDescribe.getCreationDate
-                        val jDate = j.getCachedDescribe.getCreationDate
-                        if (bestDate.before(jDate)) j
-                        else best
-                }
-        }
-        assetLatest.getId
     }
 
     // Backend compiler pass

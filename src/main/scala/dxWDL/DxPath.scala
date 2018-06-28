@@ -36,6 +36,7 @@ object DxPath {
 
         // A project name, resolve it
         val req = JsObject("name" -> JsString(projName),
+                           "level" -> JsString("VIEW"),
                            "limit" -> JsNumber(2))
         val rep = DXAPI.systemFindProjects(jsonNodeOfJsValue(req),
                                            classOf[JsonNode])
@@ -59,7 +60,7 @@ object DxPath {
     }
 
 
-    private def lookupObject(dxProject: DXProject,
+    def lookupObject(dxProject: DXProject,
                              objName: String): DXDataObject = {
         if (objName.startsWith("applet-")) {
             return DXApplet.getInstance(objName)

@@ -66,7 +66,7 @@ test_defaults=["files", "math", "population"]
 
 test_locked=["conditionals", "advanced", "bad_status", "bad_status2",
              "instance_types", "dict", "cond",
-             "call_native_app", "call_native",
+             "call_native_app", "call_native", "call_with_defaults",
              "subblocks", "subblocks2", "trains", "conditionals2", "population"]
 
 TestMetaData = namedtuple('TestMetaData', 'name kind')
@@ -367,8 +367,8 @@ def register_all_tests():
                     print("Skipping WDL file {} error={}".format(fname, e))
 
 
-def build_dirs(project):
-    base_folder = time.strftime("/builds/%Y-%m-%d/%H%M%S-") + git_revision
+def build_dirs(project, version_id):
+    base_folder = "/builds/{}".format(version_id)
     applet_folder = base_folder + "/applets"
     test_folder = base_folder + "/test"
     project.new_folder(test_folder, parents=True)
@@ -493,10 +493,11 @@ def main():
     for t in args.test:
         test_names += choose_tests(t)
     print("Running tests {}".format(test_names))
+    version_id = util.get_version_id(top_dir)
 
     project = dxpy.DXProject(args.project)
     if args.folder is None:
-        base_folder = build_dirs(project)
+        base_folder = build_dirs(project, version_id)
     else:
         # Use existing prebuilt folder
         base_folder = args.folder
@@ -510,10 +511,9 @@ def main():
     }
 
     # build the dxWDL jar file, only on us-east-1
-    version_id = util.get_version_id(top_dir)
     if args.folder is None:
-        util.build(project, applet_folder, version_id, top_dir)
-        jar_path = util.build_compiler_jar(version_id, top_dir, test_dict)
+        util.build(project, base_folder, version_id, top_dir)
+        util.build_compiler_jar(version_id, top_dir, test_dict)
 
     if args.regular:
         # Disable all locked workflows

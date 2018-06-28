@@ -29,6 +29,8 @@ def main():
     argparser = argparse.ArgumentParser(description="Build the dxWDL jar file")
     argparser.add_argument("--folder",
                            help="Destination folder")
+    argparser.add_argument("--force",
+                           help="Build even if the there is an existing version")
     argparser.add_argument("--multi-region",
                            help="Copy to all supported regions",
                            action='store_true',
@@ -56,12 +58,18 @@ def main():
     if args.folder is not None:
         folder = args.folder
     elif args.release:
-        folder = time.strftime("/releases/%Y-%m-%d/%H%M%S")
-        project.new_folder(folder, parents=True)
+        folder = time.strftime("/releases/{}".format(version_id))
     else:
-        folder = time.strftime("/builds/%Y-%m-%d/%H%M%S")
-        project.new_folder(folder, parents=True)
+        folder = time.strftime("/builds/{}".format(version_id))
     print("folder: {}".format(folder))
+
+    if args.force:
+        # remove the existing directory path
+        cmd = "dx rm -r {}:/{}".format(project.get_id(), folder)
+        subprocess.check_call(cmd.split())
+
+    # Make sure the target directory exists
+    project.new_folder(folder, parents=True)
 
     # build multi-region jar for releases, or
     # if explicitly specified
@@ -72,8 +80,10 @@ def main():
     # build the asset
     home_ad = util.build(project, folder, version_id, top_dir)
 
-    # build the compiler jar file
-    # projects
+    # Build the compiler jar file.
+    # add the folder to all the  projects
+    path_dict = dict(map(lambda kv: (kv[0], kv[1] + ":" + folder),
+                         project_dict.iteritems()))
     jar_path = util.build_compiler_jar(version_id, top_dir, project_dict)
 
     if multi_region:

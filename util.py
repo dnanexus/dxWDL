@@ -153,7 +153,7 @@ def build_compiler_jar(version_id, top_dir, project_dict):
     for region, dx_path in project_dict.iteritems():
         record = "\n".join(["  {",
                             '    region = "{}"'.format(region),
-                            '    project = "{}"'.format(dx_path),
+                            '    path = "{}"'.format(dx_path),
                             "  }"])
         region_project_hocon.append(record)
         all_regions.append(region)
