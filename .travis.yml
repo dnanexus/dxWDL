@@ -48,4 +48,4 @@ before_script:
 script:
   - pwd
   - java -version
-  - cd dxWDL && sbt version && sbt assembly && sbt test
+  - cd dxWDL && sbt version && sbt assembly
