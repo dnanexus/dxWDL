@@ -47,31 +47,5 @@ before_script:
 
 script:
   - pwd
-  - source dx-toolkit/environment
-  - dx login --token ${DX_AUTH_TOKEN} --noprojects
   - java -version
-  - cd dxWDL && sbt version && ./build_jar.py --multi-region
-  - pwd
-
-  # Test on the various regions. Don't wait for execution to complete, it
-  # takes too long, and travis times out.
-  #
-  # Test on US-east
-  - dx select dxWDL_playground
-  - java -jar dxWDL-*.jar compile test/basic/trivial.wdl --project dxWDL_playground --folder /travis_ci --force
-  - dx run /travis_ci/trivial -y
-
-  # Test on Sydney region
-  - dx select dxWDL_Sydney
-  - java -jar dxWDL-*.jar compile test/basic/trivial.wdl --project dxWDL_Sydney --folder '/Swiss Cheese/' --force
-  - dx run /Swiss\ Cheese/trivial -y
-
-  # Test on Azure region
-  - dx select dxWDL_Azure
-  - java -jar dxWDL-*.jar compile test/basic/trivial.wdl --destination dxWDL_Azure:/ --force
-  - dx run /trivial -y
-
-env:
-  global:
-    # DX_AUTH_TOKEN (orodeh)
-    secure: "RE2zCgQDjih9jcNPydVUbonc+OmWfZuaHJB1kStLlF+Mzvw9536/1w20KKIOdr2zzCbeeYq7J8CUREIOU0FCh5FJct/Mz0uBXIThus7uk1cb32xzqucmNxR6QprXSK7OWs/6jhxaMONTybiqIagB361lcwLfMUfu3RG95bAZe198ZSTsjMI8sLWwnLQ8CqB9jFmJI8nu8KD/DIx9uATJ4bOLT7wQIRmVkXvaUpK2L6IYw//5skI4QPlziNoy3nXOG30BEzjizh8O6OGsGYC6Jf1ECAzBeetEzbLD54KeANIt8EmcAvOXEbnjXWBzpTx3S4MXCNYhsb1JhDabn2q5Uykw7hyFks+u7YsCzjVFUJ+y7R89kJ9DfiE+KT7quEaTY0XdN6UCCZ45xObL6WdcBQhz9/G3zhfFdb/PH0QO4cRlJUOaDm5h0WTkjiavHEg+ogFf1yUNamFH0SEaaOl0MuD3Lo8zws4gwbze0M8Nj9xpaqAjxsCQYmuMXgKkvVT6nUzXSRU3Ir+wrV+kvy4+V0RGswar5QzoQqG9DVAjWLMg1sOPb5O1bY5Lr7oFxIS6Ywa3fWOJhKU34PCs+JpvvP/OCtBDzDs/lIW6alKhML+gbM7pvNscMoEEG9WW8FuJT698uKjGW5W7NvElSYBzAlfgwcAtRYNK/VSyzhJJ1r8="
+  - cd dxWDL && sbt version && sbt assembly && sbt test
