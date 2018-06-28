@@ -1,8 +1,9 @@
 package dxWDL.compiler
 
-import com.dnanexus.{DXProject}
+import com.dnanexus.{DXDataObject, DXProject, DXSearch}
 import com.typesafe.config._
-import dxWDL.{CompilerOptions, CompilationResults, InstanceTypeDB, Utils, Verbose}
+import dxWDL.{CompilerOptions, CompilationResults, DxPath, InstanceTypeDB, Utils, Verbose}
+import dxWDL.Utils.DX_WDL_ASSET
 import java.nio.file.{Files, Path, Paths}
 import java.io.{FileWriter, PrintWriter}
 import scala.collection.JavaConverters._
@@ -150,22 +151,80 @@ object Top {
     }
 
 
-    private def getAssetId(region: String) : String = {
-        val config = ConfigFactory.load()
-
-        // The asset ids is list of (region, asset-id) pairs
-        val rawAssets: List[Config] = config.getConfigList("dxWDL.asset_ids").asScala.toList
-        val assets:Map[String, String] = rawAssets.map{ pair =>
+    // The mapping from region to project name is list of (region, proj-name) pairs.
+    // Get the project for this region.
+    private def getProjectWithRuntimeLibrary(config: Config, region: String) : (String, String) = {
+        val l: List[Config] = config.getConfigList("dxWDL.region2project").asScala.toList
+        val region2project:Map[String, String] = l.map{ pair =>
             val r = pair.getString("region")
-            val assetId = pair.getString("asset")
-            assert(assetId.startsWith("record"))
-            r -> assetId
+            val projName = pair.getString("project")
+            r -> projName
         }.toMap
 
-        assets.get(region) match {
+        val destination = region2project.get(region) match {
             case None => throw new Exception(s"Region ${region} is currently unsupported")
-            case Some(assetId) => assetId
+            case Some(dest) => dest
         }
+
+        // The destionation is something like:
+        val parts = destination.split(":")
+        if (parts.length == 1) {
+            (parts(0), "/")
+        } else if (parts.length == 2) {
+            (parts(0), parts(1))
+        } else {
+            throw new Exception(s"Bad syntax for destination ${destination}")
+        }
+    }
+
+    // Find the runtime dxWDL asset with the correct version. Look inside the
+    // project configured for this region.
+    private def getAssetId(region: String,
+                           verbose: Verbose) : String = {
+        val config = ConfigFactory.load()
+        val version = config.getString("dxWDL.version")
+        val (projNameRt, folder)  = getProjectWithRuntimeLibrary(config, region)
+        val dxProjRt = DxPath.lookupProject(projNameRt)
+        Utils.trace(verbose.on, s"Looking for asset-id in ${projNameRt}:/${folder}")
+
+        // Find all the assets with the right name
+        val assets = DXSearch.findDataObjects()
+            .inFolderOrSubfolders(dxProjRt, folder)
+            .withClassRecord
+            .nameMatchesExactly(DX_WDL_ASSET)
+            .includeDescribeOutput(DXDataObject.DescribeOptions.get().withProperties())
+            .execute().asList().asScala.toVector
+        if (assets.isEmpty)
+            throw new Exception(s"Could not find an asset named ${DX_WDL_ASSET}")
+
+        // Leave only assets with the correct version id
+        val assetsWithCorrectVersion = assets.filter{ ast =>
+            val desc = ast.getCachedDescribe
+            val props: Map[String, String] = desc.getProperties().asScala.toMap
+            props.get("version") match {
+                case Some(v) if v == version => true
+                case _ => false
+            }
+        }
+        if (assetsWithCorrectVersion.isEmpty)
+            throw new Exception(s"""|Could not find an asset named ${DX_WDL_ASSET} with
+                                    |version ${version} in project ${dxProjRt}""".stripMargin.replaceAll("\n", " "))
+        Utils.trace(verbose.on, s"Assets for dxWDL version ${version}: ${assetsWithCorrectVersion}")
+
+        // If there is more than one asset with the right version, take the latest one
+        val assetLatest = assetsWithCorrectVersion.length match {
+            case 0 => throw new Exception(s"Could not find an asset ${DX_WDL_ASSET}")
+            case 1 => assets.head
+            case _ =>
+                assetsWithCorrectVersion.tail.foldLeft(assetsWithCorrectVersion.head) {
+                    case (best, j) =>
+                        val bestDate = best.getCachedDescribe.getCreationDate
+                        val jDate = j.getCachedDescribe.getCreationDate
+                        if (bestDate.before(jDate)) j
+                        else best
+                }
+        }
+        assetLatest.getId
     }
 
     // Backend compiler pass
@@ -175,7 +234,7 @@ object Top {
                               cOpt: CompilerOptions) : CompilationResults = {
         // get billTo and region from the project
         val (billTo, region) = Utils.projectDescribeExtraInfo(dxProject)
-        val dxWDLrtId = getAssetId(region)
+        val dxWDLrtId = getAssetId(region, cOpt.verbose)
 
         // get list of available instance types
         val instanceTypeDB = InstanceTypeDB.query(dxProject, cOpt.verbose)

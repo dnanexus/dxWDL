@@ -291,14 +291,10 @@ case class WfFragment(nswf: WdlNamespaceWithWorkflow,
                     call.inputMappings.find{ case(key, expr) => key == varName }
                 rhs match {
                     case None =>
-                        // No binding for this input. It might be optional.
-                        wdlType match {
-                            case WomOptionalType(_) => None
-                            case _ =>
-                                throw new AppInternalException(
-                                    s"""|Call ${call.unqualifiedName} does not have a binding for required
-                                        |variable ${varName}.""".stripMargin.trim)
-                        }
+                        // No binding for this input. It might be optional,
+                        // it could have a default value. It could also actually be missing,
+                        // which will result in a platform error.
+                        None
                     case Some((_, expr)) =>
                         expr.evaluate(lookup, DxFunctions) match {
                             case Success(womValue) => Some(varName -> womValue)
@@ -711,7 +707,10 @@ case class WfFragment(nswf: WdlNamespaceWithWorkflow,
 
         // Run a sub-job with the "collect" entry point.
         // We need to provide the exact same inputs.
-        val dxSubJob : DXJob = Utils.runSubJob("collect", None, orgInputs, childJobs)
+        val dxSubJob : DXJob = Utils.runSubJob("collect",
+                                               Some(Utils.DEFAULT_INSTANCE_TYPE),
+                                               orgInputs,
+                                               childJobs)
 
         // Return promises (JBORs) for all the outputs. Since the signature of the sub-job
         // is exactly the same as the parent, we can immediately exit the parent job.

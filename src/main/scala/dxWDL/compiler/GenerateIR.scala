@@ -273,6 +273,19 @@ task Add {
     private def compileTask(task : WdlTask) : IR.Applet = {
         Utils.trace(verbose.on, s"Compiling task ${task.name}")
 
+        val kind =
+            (task.meta.get("type"), task.meta.get("id")) match {
+                case (Some("native"), Some(id)) =>
+                    // wrapper for a native applet.
+                    // make sure the runtime block is empty
+                    if (!task.runtimeAttributes.attrs.isEmpty)
+                        throw new Exception(cef.taskNativeRuntimeBlockShouldBeEmpty(task.ast))
+                    IR.AppletKindNative(id)
+                case (_,_) =>
+                    // a WDL task
+                    IR.AppletKindTask
+            }
+
         // The task inputs are declarations that:
         // 1) are unassigned (do not have an expression)
         // 2) OR, are assigned, but optional
@@ -332,15 +345,6 @@ task Add {
                 WdlRewrite.taskReplaceDockerValue(task, dxRecord)
             case _ => task
         }
-        val kind =
-            (task.meta.get("type"), task.meta.get("id")) match {
-                case (Some("native"), Some(id)) =>
-                    // wrapper for a native applet
-                    IR.AppletKindNative(id)
-                case (_,_) =>
-                    // a WDL task
-                    IR.AppletKindTask
-            }
         val applet = IR.Applet(task.name,
                                inputVars,
                                outputVars,

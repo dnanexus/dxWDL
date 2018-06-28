@@ -807,13 +807,7 @@ case class Native(dxWDLrtId: String,
         val id = apiParseReplyID(rep)
         val dxwf = DXWorkflow.getInstance(id)
 
-        // Close all sub-workflows. Ideally, we would like to close ALL workflows,
-        // but that would prevent users from adding tags and properties to the top
-        // level workflows.
-        /*wf.kind match {
-            case IR.WorkflowKind.TopLevel => ()
-            case IR.WorkflowKind.Sub => dxwf.close()
-         }*/
+        // Close the workflow
         dxwf.close()
         dxwf
     }

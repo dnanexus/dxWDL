@@ -7,7 +7,8 @@
 - Merge onto master branch, make sure [travis tests](https://travis-ci.org/dnanexus/dxWDL) pass
 - Tag git with the release version
 - Build new externally visible release
-  * run `build_jar.py --release`
+  * run `build_jar.py --release` in staging
+  * run `build_jar.py --release` in production
   * Update [releases](https://github.com/dnanexus-rnd/dxWDL/releases) github page,
   use the `Draft a new release` button.
   * Upload a dxWDL.jar file

@@ -39,14 +39,18 @@ def main():
                            default=False)
     args = argparser.parse_args()
 
-    # resolve project
-    project_dict = None
+    # Choose which dictionary to use
     if args.release:
         project_dict = RELEASE_DICT
     else:
         project_dict = TEST_DICT
     project = util.get_project(project_dict[HOME_REGION])
     print("project: {} ({})".format(project.name, project.get_id()))
+
+
+    # Figure out what the current version is
+    version_id = util.get_version_id(top_dir)
+    print("version: {}".format(version_id))
 
     # Set the folder, build one if necessary
     if args.folder is not None:
@@ -65,14 +69,13 @@ def main():
     if args.release:
         multi_region = True
 
-    # Figure out what the current version is
-    version_id = util.get_version_id(top_dir)
-    print("version: {}".format(version_id))
-
     # build the asset
     home_ad = util.build(project, folder, version_id, top_dir)
 
-    ad_all = [home_ad]
+    # build the compiler jar file
+    # projects
+    jar_path = util.build_compiler_jar(version_id, top_dir, project_dict)
+
     if multi_region:
         # download dxWDL runtime library
         home_rec = dxpy.DXRecord(home_ad.asset_id)
@@ -91,12 +94,10 @@ def main():
                 if proj is None:
                     raise Exception("No project configured for region {}".format(region))
                 dest_proj = util.get_project(proj)
-                dest_ad = util.copy_across_regions(rtlib_path, home_rec, region, dest_proj, folder)
-                ad_all.append(dest_ad)
-
-    # build the final jar file, containing a list of the per-region
-    # assets
-    jar_path = util.build_final_jar(version_id, top_dir, ad_all)
+                if dest_proj is not None:
+                    dest_ad = util.copy_across_regions(rtlib_path, home_rec, region, dest_proj, folder)
+                else:
+                    print("No project named {}".format(proj))
 
     # Upload compiler jar file
     if args.release:
