@@ -174,7 +174,7 @@ def build_compiler_jar(version_id, top_dir, project_dict):
 
     # Hygiene, remove the new configuration file, we
     # don't want it to leak into the next build cycle.
-    os.remove(crnt_conf_path)
+    #os.remove(crnt_conf_path)
 
     # Move the file to the top level directory
     all_in_one_jar = os.path.join(top_dir, "dxWDL-{}.jar".format(version_id))

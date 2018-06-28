@@ -14,11 +14,6 @@ HOME_REGION = "aws:us-east-1"
 # To add region R, create a project for it, dxWDL_R, and add
 # a mapping to the lists
 #    R : dxWDL_R
-TEST_DICT = {
-    "aws:us-east-1" :  "dxWDL_playground",
-    "aws:ap-southeast-2" : "dxWDL_Sydney",
-    "azure:westus" : "dxWDL_Azure"
-}
 RELEASE_DICT = {
     "aws:us-east-1" :  "dxWDL",
     "aws:ap-southeast-2" : "dxWDL_Sydney",
@@ -26,41 +21,26 @@ RELEASE_DICT = {
 }
 
 def main():
-    argparser = argparse.ArgumentParser(description="Build the dxWDL jar file")
-    argparser.add_argument("--folder",
-                           help="Destination folder")
+    argparser = argparse.ArgumentParser(description="Build a dxWDL release")
     argparser.add_argument("--force",
                            help="Build even if the there is an existing version")
     argparser.add_argument("--multi-region",
                            help="Copy to all supported regions",
                            action='store_true',
                            default=False)
-    argparser.add_argument("--release",
-                           help="Create a dxWDL release, implies multi-region",
-                           action='store_true',
-                           default=False)
     args = argparser.parse_args()
 
     # Choose which dictionary to use
-    if args.release:
-        project_dict = RELEASE_DICT
-    else:
-        project_dict = TEST_DICT
+    project_dict = RELEASE_DICT
     project = util.get_project(project_dict[HOME_REGION])
     print("project: {} ({})".format(project.name, project.get_id()))
-
 
     # Figure out what the current version is
     version_id = util.get_version_id(top_dir)
     print("version: {}".format(version_id))
 
-    # Set the folder, build one if necessary
-    if args.folder is not None:
-        folder = args.folder
-    elif args.release:
-        folder = time.strftime("/releases/{}".format(version_id))
-    else:
-        folder = time.strftime("/builds/{}".format(version_id))
+    # Set the folder
+    folder = time.strftime("/releases/{}".format(version_id))
     print("folder: {}".format(folder))
 
     if args.force:
@@ -74,8 +54,6 @@ def main():
     # build multi-region jar for releases, or
     # if explicitly specified
     multi_region = args.multi_region
-    if args.release:
-        multi_region = True
 
     # build the asset
     home_ad = util.build(project, folder, version_id, top_dir)
@@ -84,7 +62,7 @@ def main():
     # add the folder to all the  projects
     path_dict = dict(map(lambda kv: (kv[0], kv[1] + ":" + folder),
                          project_dict.iteritems()))
-    jar_path = util.build_compiler_jar(version_id, top_dir, project_dict)
+    jar_path = util.build_compiler_jar(version_id, top_dir, path_dict)
 
     if multi_region:
         # download dxWDL runtime library
@@ -110,8 +88,7 @@ def main():
                     print("No project named {}".format(proj))
 
     # Upload compiler jar file
-    if args.release:
-        util.upload_local_file(jar_path, project, folder)
+    util.upload_local_file(jar_path, project, folder)
 
 if __name__ == '__main__':
     main()

@@ -1,5 +1,10 @@
 # Release Notes
 
+## 0.68.1
+- Fixing build and release scripts.
+- Allowing non-priviliged users to find the dxWDL runtime asset in
+the public repository.
+
 ## 0.68
 - Throw an exception if a wrapper for a native platform call has
 a non-empty runtime section.

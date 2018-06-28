@@ -1,6 +1,6 @@
 package dxWDL.compiler
 
-import com.dnanexus.{DXProject}
+import com.dnanexus.{DXDataObject, DXProject, DXSearch}
 import com.typesafe.config._
 import dxWDL.{CompilerOptions, CompilationResults, DxPath, InstanceTypeDB, Utils, Verbose}
 import dxWDL.Utils.DX_WDL_ASSET
@@ -182,19 +182,21 @@ object Top {
     private def getAssetId(region: String,
                            verbose: Verbose) : String = {
         val config = ConfigFactory.load()
-        val version = config.getString("dxWDL.version")
         val (projNameRt, folder)  = getProjectWithRuntimeLibrary(config, region)
         val dxProjRt = DxPath.lookupProject(projNameRt)
         Utils.trace(verbose.on, s"Looking for asset-id in ${projNameRt}:/${folder}")
 
-        try {
-            val dxobj = DxPath.lookupObject(dxProjRt, s"${folder}/${DX_WDL_ASSET}")
-            dxobj.getId
-        } catch {
-            case e: Throwable =>
-                throw new Exception(s"""|Could not find an asset named ${DX_WDL_ASSET} with
-                                        |version ${version} in project ${dxProjRt}""".stripMargin.replaceAll("\n", " "))
-        }
+        val found:List[DXDataObject] =
+            DXSearch.findDataObjects()
+                .nameMatchesExactly(DX_WDL_ASSET)
+                .inFolder(dxProjRt, folder)
+                .execute().asList().asScala.toList
+        if (found.length == 0)
+            throw new Exception(s"Could not find runtime asset at ${dxProjRt.getId}:${folder}/${DX_WDL_ASSET}")
+        if (found.length > 1)
+            throw new Exception(s"Found more than one dx:object named ${DX_WDL_ASSET} in path ${dxProjRt.getId}:${folder}")
+
+        found(0).getId
     }
 
     // Backend compiler pass

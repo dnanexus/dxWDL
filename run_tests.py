@@ -472,7 +472,7 @@ def main():
     argparser.add_argument("--no-wait", help="Exit immediately after launching tests",
                            action="store_true", default=False)
     argparser.add_argument("--project", help="DNAnexus project ID",
-                           default="project-F07pBj80ZvgfzQK28j35Gj54")
+                           default="dxWDL_playground")
     argparser.add_argument("--runtime-debug-level",
                            help="printing verbosity of task/workflow runner, {0,1,2}")
     argparser.add_argument("--test", help="Run a test, or a subgroup of tests",
@@ -495,7 +495,9 @@ def main():
     print("Running tests {}".format(test_names))
     version_id = util.get_version_id(top_dir)
 
-    project = dxpy.DXProject(args.project)
+    project = util.get_project(args.project)
+    if project is None:
+        raise RuntimeError("Could not find project {}".format(args.project))
     if args.folder is None:
         base_folder = build_dirs(project, version_id)
     else:
@@ -503,11 +505,11 @@ def main():
         base_folder = args.folder
     applet_folder = base_folder + "/applets"
     test_folder = base_folder + "/test"
-    print("project: {} ({})".format(project.name, args.project))
+    print("project: {} ({})".format(project.name, project.get_id()))
     print("folder: {}".format(base_folder))
 
     test_dict = {
-        "aws:us-east-1" :  args.project + ":" + base_folder
+        "aws:us-east-1" :  project.name + ":" + base_folder
     }
 
     # build the dxWDL jar file, only on us-east-1
