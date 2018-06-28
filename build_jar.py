@@ -39,8 +39,7 @@ def main():
                            default=False)
     args = argparser.parse_args()
 
-    # resolve project
-    project_dict = None
+    # Choose which dictionary to use
     if args.release:
         project_dict = RELEASE_DICT
     else:
@@ -71,9 +70,10 @@ def main():
         multi_region = True
 
     # build the asset
-    util.build(project, folder, version_id, top_dir)
+    home_ad = util.build(project, folder, version_id, top_dir)
 
     # build the compiler jar file
+    # projects
     jar_path = util.build_compiler_jar(version_id, top_dir, project_dict)
 
     if multi_region:
@@ -94,7 +94,10 @@ def main():
                 if proj is None:
                     raise Exception("No project configured for region {}".format(region))
                 dest_proj = util.get_project(proj)
-                dest_ad = util.copy_across_regions(rtlib_path, home_rec, region, dest_proj, folder)
+                if dest_proj is not None:
+                    dest_ad = util.copy_across_regions(rtlib_path, home_rec, region, dest_proj, folder)
+                else:
+                    print("No project named {}".format(proj))
 
     # Upload compiler jar file
     if args.release:

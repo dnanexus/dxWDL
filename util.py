@@ -38,16 +38,13 @@ def get_project(project_name):
 
     project = dxpy.find_projects(name=project_name, name_mode='glob', return_handler=True, level="VIEW")
     project = [p for p in project]
-    if len(project) < 1:
-        print('Did not find project {0}.'.format(project_name), file=sys.stderr)
-        sys.exit(1)
-    elif len(project) > 1:
-        print('Found more than 1 project matching {0}.'.format(project_name), file=sys.stderr)
-        sys.exit(1)
+    if len(project) == 0:
+        print('Did not find project {0}'.format(project_name), file=sys.stderr)
+        return None
+    elif len(project) == 1:
+        return project[0]
     else:
-        project = project[0]
-
-    return project
+        raise Exception('Found more than 1 project matching {0}'.format(project_name))
 
 
 def upload_local_file(local_path, project, destFolder, **kwargs):
