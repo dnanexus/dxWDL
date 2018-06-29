@@ -3,6 +3,7 @@ from __future__ import print_function
 import argparse
 import dxpy
 import os
+import subprocess
 import sys
 import time
 import util
@@ -23,7 +24,9 @@ RELEASE_DICT = {
 def main():
     argparser = argparse.ArgumentParser(description="Build a dxWDL release")
     argparser.add_argument("--force",
-                           help="Build even if the there is an existing version")
+                           help="Build even if the there is an existing version",
+                           action='store_true',
+                           default=False)
     argparser.add_argument("--multi-region",
                            help="Copy to all supported regions",
                            action='store_true',
