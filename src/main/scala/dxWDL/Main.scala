@@ -125,7 +125,7 @@ object Main extends App {
                     case "help" =>
                         checkNumberOfArguments(keyword, 0, subargs)
                         (keyword, "")
-                    case "inputs" =>
+                    case ("input" | "inputs") =>
                         checkNumberOfArguments(keyword, 1, subargs)
                         (keyword, subargs.head)
                     case ("imports"|"p") =>

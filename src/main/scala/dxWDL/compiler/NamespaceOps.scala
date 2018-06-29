@@ -320,7 +320,7 @@ object NamespaceOps {
                     val tasksLibPath = tasksLibName + ".wdl"
                     if (ctx.allSourceFiles contains tasksLibPath)
                         throw new Exception(s"Module name collision, ${tasksLibPath} already exists")
-                    Utils.trace(ctx.verbose.on, s"""|Splitting out tasks into separate source file
+                    Utils.trace(ctx.verbose.on, s"""|Splitting out tasks into a separate source file
                                                     |path=${tasksLibPath}  name=${tasksLibName}"""
                                     .stripMargin)
 
