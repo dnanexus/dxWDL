@@ -1,5 +1,8 @@
 # Release Notes
 
+## 0.69
+- Support importing http URLs
+
 ## 0.68.1
 - Fixing build and release scripts.
 - Allowing non-priviliged users to find the dxWDL runtime asset in

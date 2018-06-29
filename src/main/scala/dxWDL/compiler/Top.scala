@@ -1,3 +1,6 @@
+// Interface to the compilation tool chain. The methods here are the only ones
+// that should be called to perform compilation.
+
 package dxWDL.compiler
 
 import com.dnanexus.{DXDataObject, DXProject, DXSearch}
@@ -6,15 +9,14 @@ import dxWDL.{CompilerOptions, CompilationResults, DxPath, InstanceTypeDB, Utils
 import dxWDL.Utils.DX_WDL_ASSET
 import java.nio.file.{Files, Path, Paths}
 import java.io.{FileWriter, PrintWriter}
-//import languages.wdl.draft2.WdlDraft2LanguageFactory
 import scala.collection.JavaConverters._
 import scala.collection.mutable.HashMap
 import scala.io.Source
 import scala.util.{Failure, Success}
 import wdl.draft2.model.{WdlExpression, WdlNamespace, Draft2ImportResolver}
 
-// Interface to the compilation tool chain. The methods here are the only ones
-// that should be called to perform compilation.
+// The [languages.wdl.draft2.WdlDraft2LanguageFactory] module has the implementation
+// of the Cromwell http resolver.
 
 // Download files from the web, and record the contents in a mapping.
 case class TopHttpResolver(fileIndex: HashMap[String, String]) {

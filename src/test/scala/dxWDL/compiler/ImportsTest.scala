@@ -16,7 +16,7 @@ class ImportsTest extends FlatSpec with Matchers {
     it should "be able to import http URLs" in {
         val path = pathFromBasename("imports/http_import.wdl")
         Main.compile(
-            List(path.toString, "--compileMode", "ir", "-verbose")
+            List(path.toString, "--compileMode", "ir", "-quiet")
         ) shouldBe a [Main.SuccessfulTerminationIR]
     }
 
