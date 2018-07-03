@@ -277,9 +277,11 @@ object NamespaceOps {
         WdlRewrite.taskReplaceRuntimeAttrs(task, WdlRuntimeAttributes(attrs))
     }
 
-    def load(ns: WdlNamespace,
-             ctx: Context,
-             defaultRuntimeAttributes: Map[String, WdlExpression]) : Tree = {
+    private def loadAndSplitNamespaces(ns: WdlNamespace,
+                                       ctx: Context,
+                                       defaultRuntimeAttributes: Map[String, WdlExpression],
+                                       movedTasks: Map[String, String])
+            : (Tree, Map[String, String]) = {
         ns match {
             case _:WdlNamespaceWithoutWorkflow =>
                 val cef = new CompilerErrorFormatter(ns.resource, ns.terminalMap)
@@ -299,7 +301,7 @@ object NamespaceOps {
 
                 // recurse into sub-namespaces
                 val children:Vector[Tree] = nswf.namespaces.map{
-                    child => load(child, ctx, defaultRuntimeAttributes)
+                    child => loadAndSplitNamespaces(child, ctx, defaultRuntimeAttributes, movedTasks)
                 }.toVector
                 if (ns.tasks.isEmpty) {
                     TreeNode(nswf.workflow.unqualifiedName,
@@ -340,6 +342,26 @@ object NamespaceOps {
                              nswf.workflow.unqualifiedName)
                 }
         }
+    }
+
+
+    // Namespaces that have workflows and tasks are split into (1) a node with the workflow,
+    // and (2) a leaf with the tasks. The leaf gets a new name, which causes all the tasks to
+    // move. For example, if we start with a file foo.wdl
+    //     workflow foo { ... }
+    //     task add { ... }
+    // it is split into:
+    // [foo.wdl]
+    //     workflow foo { ... }
+    // [foo_task_lib.wdl]
+    //     task add { ... }
+    // Task add is moved from namespace foo to namespace foo_task_lib. This requires
+    // renaming call from foo.add to foo_task_lib.add.
+    def load(ns: WdlNamespace,
+             ctx: Context,
+             defaultRuntimeAttributes: Map[String, WdlExpression]) : (Tree, Map[String, String]) = {
+        val (tree, movedTasks) = loadAndSplitNamespaces(ns, ctx, defaultRuntimeAttributes, Map.empty)
+        tree.handleMovedTasks(tree, movedTasks)
     }
 
 

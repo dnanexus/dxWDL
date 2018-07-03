@@ -17,6 +17,10 @@ import wdl.draft2.model.{WdlExpression, WdlNamespace, Draft2ImportResolver}
 
 // The [languages.wdl.draft2.WdlDraft2LanguageFactory] module has the implementation
 // of the Cromwell http resolver.
+//
+// The full path is
+//    CROMWELL/languageFactories/language-factory-core/src/main/scala/cromwell/languages
+//    CROMWELL/languageFactories/wdl-draft2/src/main/scala/languages/wdl/draft2/WdlDraft2LanguageFactory.scala
 
 // Download files from the web, and record the contents in a mapping.
 case class TopHttpResolver(fileIndex: HashMap[String, String]) {
@@ -35,6 +39,25 @@ case class TopHttpResolver(fileIndex: HashMap[String, String]) {
     }
 }
 
+// Load files from the local filesystem
+case class TopFileResolver(dirs: List[String],
+                           fileIndex: HashMap[String, String]) {
+    def make : Draft2ImportResolver = { path =>
+        fileIndex.get(path) match {
+            case None =>
+                /*val html = Source.fromURL(url)
+                val wdlCode = html.mkString
+                fileIndex(url) = wdlCode
+                 wdlCode*/
+                throw new Exception("Unimplemented")
+            case Some(wdlCode) =>
+                // file has already been downloaded; we assume the contents
+                // has not changed
+                wdlCode
+        }
+    }
+
+}
 
 object Top {
     private def prettyPrintIR(wdlSourceFile : Path,
