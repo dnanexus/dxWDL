@@ -2,6 +2,7 @@
 
 ## 0.69
 - Support importing http URLs
+- Simplified handling of imports and workflow decomposition
 
 ## 0.68.1
 - Fixing build and release scripts.
