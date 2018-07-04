@@ -20,14 +20,28 @@ case class Context(allSourceFiles: HashMap[String, WdlModule],
                    verbose: Verbose) {
     val verbose2:Boolean = verbose.keywords contains "NamespaceOps"
 
+    // Extract the last part of the name from a filename path.
+    //  "/A/B/C/foo.txt"   -> "foo.txt"
+    private def getFilename(path: String) : String = {
+        val i = path.lastIndexOf('/')
+        if (i == -1)
+            path
+        else
+            path.substring(i + 1)
+    }
     def makeResolver: Draft2ImportResolver = {
         // Make an immutable copy of the source files, to avoid buggy
         // behavior.
         val allSources = allSourceFiles.foldLeft(Map.empty[String,String]) {
             case (accu, (k, WdlModule(_,_,wdlCode))) => accu + (k -> wdlCode)
         }.toMap
-        filename => allSources.get(filename) match {
-            case None => throw new Exception(s"Unable to find ${filename}")
+        // Index the source files by name, instead of their full path. This allows finding
+        // source WDL files regardless of which import directory they come from.
+        val allSourcesByName = allSources.map{ case (k,v) => getFilename(k) -> v}.toMap
+        filename => allSourcesByName.get(getFilename(filename)) match {
+            case None =>
+                val knownFiles = allSources.keys
+                throw new Exception(s"Unable to find ${filename}, known files are: ${knownFiles}")
             case Some(content) => content
         }
     }
@@ -116,16 +130,10 @@ case class Context(allSourceFiles: HashMap[String, WdlModule],
 
     def addWdlSourceFile(name: String,
                          workflow: WdlWorkflow,
-                         source: String,
-                         header: Boolean) : Unit = {
-        allSourceFiles(name) = WdlModule(Some(workflow), Vector.empty, source)
-    }
-
-    def addWdlSourceFile(name: String,
                          tasks: Vector[WdlTask],
                          source: String,
                          header: Boolean) : Unit = {
-        allSourceFiles(name) = WdlModule(None, tasks, source)
+        allSourceFiles(name) = WdlModule(Some(workflow), tasks, source)
     }
 
     def clear() : Unit = {

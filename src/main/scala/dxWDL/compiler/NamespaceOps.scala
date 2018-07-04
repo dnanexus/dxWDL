@@ -122,14 +122,14 @@ object NamespaceOps {
             }
         }
 
-        // prune unused imports, and create a namespace from a workflow
-        private def toNamespace(wf: WdlWorkflow) : WdlNamespaceWithWorkflow = {
+        private def toNamespace(wf: WdlWorkflow,
+                                tasks:Vector[WdlTask]) : WdlNamespaceWithWorkflow = {
             new WdlNamespaceWithWorkflow(
                 None,
                 wf,
                 imports,
                 Vector.empty[WdlNamespace],
-                Vector.empty,   // tasks
+                tasks,
                 Map.empty[Terminal, WorkflowSource],
                 WdlRewrite.INVALID_ERR_FORMATTER,
                 WdlRewrite.INVALID_AST,
@@ -150,7 +150,7 @@ object NamespaceOps {
                                       extraImports: Vector[String],
                                       ctx: Context,
                                       blockKind: IR.WorkflowKind.Value) : CleanWf = {
-            val ns = toNamespace(wf)
+            val ns = toNamespace(wf, tasks.values.toVector)
             val extraImportsText = extraImports.map{ libName =>
                 s"""import "${libName}.wdl" as ${libName}"""
             }
@@ -188,7 +188,7 @@ object NamespaceOps {
 
 
         def prettyPrint : String = {
-            val ns = toNamespace(workflow)
+            val ns = toNamespace(workflow, tasks.values.toVector)
             val lines = WdlPrettyPrinter(true).apply(ns, 0)
             val desc = s"### Namespace  ${name}"
             val top = (desc +: lines).mkString("\n")
@@ -212,13 +212,14 @@ object NamespaceOps {
                                tasks: Map[String, WdlTask],
                                ctx: Context,
                                kind: IR.WorkflowKind.Value) : TreeNode = {
-            val CleanWf(subWf2, subWfName2, subWdlSrc2) =
+            Utils.trace(ctx.verbose.on, s"cleanAfterRewrite tasks = ${tasks.keys}")
+            val CleanWf(subNode2, subWfName2, subWdlSrc2) =
                 whiteWashWorkflow(subWf, tasks, Vector.empty, ctx, IR.WorkflowKind.Sub)
 
             // white wash the top level workflow
-            ctx.addWdlSourceFile(subWfName2 + ".wdl", subWf2.workflow, subWdlSrc2, true)
+            ctx.addWdlSourceFile(subWfName2 + ".wdl", subNode2.workflow, tasks.values.toVector, subWdlSrc2, true)
             val CleanWf(topwf2, _, _) = whiteWashWorkflow(topwf, tasks, Vector(subWfName2), ctx, kind)
-            topwf2.copy(children = this.children :+ subWf2)
+            topwf2.copy(children = this.children :+ subNode2)
         }
     }
 

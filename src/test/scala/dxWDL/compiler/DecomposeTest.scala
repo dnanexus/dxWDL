@@ -15,7 +15,7 @@ class DecomposeTest extends FlatSpec with Matchers {
     it should "Compile subblocks into subworkflows" in {
         val path = pathFromBasename("long_block.wdl")
         Main.compile(
-            List(path.toString, "--compileMode", "ir", "--locked")
+            List(path.toString, "--compileMode", "ir", "--locked", "--quiet")
         ) shouldBe a [Main.SuccessfulTerminationIR]
     }
 

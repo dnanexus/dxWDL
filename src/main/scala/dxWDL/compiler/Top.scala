@@ -116,18 +116,18 @@ object Top {
                     accu ++ getListOfFiles(d)
             }
 
-        val wdlFileNames = "{" + allWdlSourceFiles.keys.mkString(", ") + "}"
-        Utils.trace(verbose.on, s"Files in search path=${wdlFileNames}")
+        //val wdlFileNames = "{" + allWdlSourceFiles.keys.mkString(", ") + "}"
+        //Utils.trace(verbose.on, s"Files in search path=${wdlFileNames}")
         allWdlSourceFiles
     }
 
     private def compileNamespaceOpsTree(wdlSourceFile : Path,
                                         cOpt: CompilerOptions) : NamespaceOps.Tree = {
-        val accessedFiles = HashMap.empty[String, String]
+        val importedFiles = HashMap.empty[String, String]
         val localWdlSourceFiles : Map[String, Path] =
             findSourcesInImportDirs(wdlSourceFile, cOpt.importDirs, cOpt.verbose)
-        val fileResolver = new TopFileResolver(localWdlSourceFiles, accessedFiles)
-        val httpResolver = new TopHttpResolver(accessedFiles)
+        val fileResolver = new TopFileResolver(localWdlSourceFiles, importedFiles)
+        val httpResolver = new TopHttpResolver(importedFiles)
         val ns =
             WdlNamespace.loadUsingPath(wdlSourceFile,
                                        None,
@@ -142,8 +142,8 @@ object Top {
         // that will give us problems.
         Validate.apply(ns, cOpt.verbose)
 
-        Utils.trace(cOpt.verbose.on, s"access files: ${accessedFiles.keys}")
-        val ctx: Context = Context.make(accessedFiles.toMap, wdlSourceFile, cOpt.verbose)
+        Utils.trace(cOpt.verbose.on, s"imported files: ${importedFiles.keys}")
+        val ctx: Context = Context.make(importedFiles.toMap, wdlSourceFile, cOpt.verbose)
         val defaultRuntimeAttributes = cOpt.extras match {
             case None => Map.empty[String, WdlExpression]
             case Some(xt) => xt.defaultRuntimeAttributes
