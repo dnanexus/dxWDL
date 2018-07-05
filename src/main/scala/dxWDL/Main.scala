@@ -396,29 +396,16 @@ object Main extends App {
         }
     }
 
-    def dxni(args: Seq[String]): Termination = {
-        val options =
+    def dxniApplets(options: OptionsMap,
+                    dOpt: DxniOptions,
+                    outputFile: Path): Termination = {
+        val (dxProject, folder) =
             try {
-                parseCmdlineOptions(args.toList)
-            } catch {
-                case e : Throwable =>
-                    return BadUsageTermination(Utils.exceptionToString(e))
-            }
-        if (options contains "help")
-            return BadUsageTermination("")
-        val (dOpt, dxProject, folder) =
-            try {
-                val dxniOpt = dxniOptions(options)
-                val (dxProject, folder) = pathOptions(options, dxniOpt.verbose)
-                (dxniOpt, dxProject, folder)
+                pathOptions(options, dOpt.verbose)
             } catch {
                 case e: Throwable =>
                     return BadUsageTermination(Utils.exceptionToString(e))
             }
-        val output = dOpt.outputFile match {
-            case None => throw new Exception("Output file not specified")
-            case Some(x) => x
-        }
 
         // Validate the folder. It would have been nicer to be able
         // to check if a folder exists, instead of validating by
@@ -431,10 +418,7 @@ object Main extends App {
         }
 
         try {
-            if (dOpt.apps)
-                compiler.DxNI.applyApps(output, dOpt.force, dOpt.verbose)
-            else
-                compiler.DxNI.apply(dxProject, folder, output, dOpt.recursive, dOpt.force, dOpt.verbose)
+            compiler.DxNI.apply(dxProject, folder, outputFile, dOpt.recursive, dOpt.force, dOpt.verbose)
             SuccessfulTermination("")
         } catch {
             case e : Throwable =>
@@ -442,6 +426,39 @@ object Main extends App {
         }
     }
 
+    def dxniApps(options: OptionsMap,
+                 dOpt: DxniOptions,
+                 outputFile: Path): Termination = {
+        try {
+            compiler.DxNI.applyApps(outputFile, dOpt.force, dOpt.verbose)
+            SuccessfulTermination("")
+        } catch {
+            case e : Throwable =>
+                return UnsuccessfulTermination(Utils.exceptionToString(e))
+        }
+    }
+
+    def dxni(args: Seq[String]): Termination = {
+        try {
+            val options = parseCmdlineOptions(args.toList)
+            if (options contains "help")
+                return BadUsageTermination("")
+
+            val dOpt = dxniOptions(options)
+            val output = dOpt.outputFile match {
+                case None => throw new Exception("Output file not specified")
+                case Some(x) => x
+            }
+
+            if (dOpt.apps)
+                dxniApps(options, dOpt, output)
+            else
+                dxniApplets(options, dOpt, output)
+        } catch {
+            case e: Throwable =>
+                return BadUsageTermination(Utils.exceptionToString(e))
+        }
+    }
 
     // Extract the only task from a namespace
     def taskOfNamespace(ns: WdlNamespace) : WdlTask = {
