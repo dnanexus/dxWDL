@@ -923,7 +923,7 @@ task Add {
 
 
 object GenerateIR {
-    // The applets and subworkflows are combined into noe big map. Split
+    // The applets and subworkflows are combined into one big map. Split
     // it, and return a namespace.
     private def makeNamespace(name: String,
                               entrypoint: Option[IR.Workflow],
@@ -945,33 +945,36 @@ object GenerateIR {
                          locked: Boolean,
                          execNameBox: NameBox,
                          verbose: Verbose) : IR.Namespace = {
+        def compileTasks() : Map[String, IR.Applet] = {
+            val gir = new GenerateIR(Map.empty, reorg, locked, IR.WorkflowKind.TopLevel,
+                                     "", execNameBox, nsTree.cef, verbose)
+            val alreadyCompiledNames: Set[String] = callables.keys.toSet
+            val tasksNotCompiled = nsTree.tasks.filter{
+                case (taskName,_) =>
+                    !(alreadyCompiledNames contains taskName)
+            }
+            tasksNotCompiled.map{ case (_,task) =>
+                val applet = gir.compileTask(task)
+                task.name -> applet
+            }.toMap
+        }
+        val taskApplets = compileTasks()
+        val allCallables = callables ++ taskApplets
+
         // recursively generate IR for the entire tree
         val nsTree1 = nsTree match {
-            case NamespaceOps.TreeLeaf(name, cef, tasks) =>
+            case NamespaceOps.TreeLeaf(name, _, _) =>
                 // compile all the [tasks], that have not been already compiled, to IR.Applet
-                val gir = new GenerateIR(Map.empty, reorg, locked, IR.WorkflowKind.TopLevel,
-                                         "", execNameBox, nsTree.cef, verbose)
-                val alreadyCompiledNames: Set[String] = callables.keys.toSet
-                val tasksNotCompiled = tasks.filter{
-                    case (taskName,_) =>
-                        !(alreadyCompiledNames contains taskName)
-                }
-                val taskApplets = tasksNotCompiled.map{ case (_,task) =>
-                    val applet = gir.compileTask(task)
-                    task.name -> applet
-                }.toMap
-
-                val allCallables = callables ++ taskApplets
                 //Utils.trace(verbose.on, s"leaf: callables = ${allCallables.keys}")
                 makeNamespace(name, None, allCallables)
 
-            case NamespaceOps.TreeNode(name, cef, _, workflow, children, wfKind, true, originalWorkflowName) =>
+            case NamespaceOps.TreeNode(name, cef, _, workflow, _, children, wfKind, true, originalWorkflowName) =>
                 // Recurse into the children.
                 //
                 // The reorg and locked flags only apply to the top level
                 // workflow. All other workflows are sub-workflows, and they do
                 // not reorganize the outputs.
-                val childCallables = children.foldLeft(callables){
+                val childCallables: Map[String, IR.Callable] = children.foldLeft(allCallables){
                     case (accu, child) =>
                         val childIr = applyRec(child, accu, false, true, execNameBox, verbose)
                         accu ++ childIr.buildCallables
@@ -982,12 +985,12 @@ object GenerateIR {
                     else locked
                 val gir = new GenerateIR(childCallables, reorg, locked2, wfKind,
                                          s"${originalWorkflowName}_", execNameBox, cef, verbose)
-                val (irWf, auxApplets) = gir.compileWorkflow(workflow)
-                val allCallables = childCallables ++ auxApplets
-                //Utils.trace(verbose.on, s"node: callables = ${allCallables.keys}")
-                makeNamespace(name, Some(irWf), allCallables)
 
-            case NamespaceOps.TreeNode(_, _, _, workflow, _, _, false, _) =>
+                val (irWf, auxApplets) = gir.compileWorkflow(workflow)
+                //Utils.trace(verbose.on, s"node: callables = ${allCallables.keys}")
+                makeNamespace(name, Some(irWf), childCallables ++ auxApplets)
+
+            case NamespaceOps.TreeNode(_, _, _, workflow, _, _, _, false, _) =>
                 val wdlCode = WdlPrettyPrinter(false, None).apply(workflow, 0).mkString("\n")
                 System.err.println(s"""|=== Workflow is not fully reduced ===
                                        |${wdlCode}

@@ -1,4 +1,3 @@
 {
-  "call_native_app.in_file" : "dx://dxWDL_playground:/test_data/fileA",
-  "call_native_app.pack" : "dx://dxWDL_playground:/test_data/XYZ.tar"
+  "call_native_app.my_name" : "Wilbert"
 }

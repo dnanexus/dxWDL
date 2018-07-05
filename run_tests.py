@@ -434,18 +434,29 @@ def native_call_setup(project, applet_folder, version_id):
 
 
 def native_call_app_setup(version_id):
-    header_file = os.path.join(top_dir, "test/basic/dx_app_extern.wdl")
-    if os.path.exists(header_file):
-        return
+    app_name = "native_hello"
+
+    # Check if they already exist
+    apps = list(dxpy.bindings.search.find_apps(name= app_name))
+
+    if len(apps) == 0:
+        # build the app
+        cmdline = [ "dx", "build", "--create-app", "--publish",
+                    os.path.join(top_dir, "test/apps/{}".format(app_name)) ]
+        print(" ".join(cmdline))
+        subprocess.check_output(cmdline)
+
     # build WDL wrapper tasks in test/dx_extern.wdl
-    cmdline = [ "java", "-jar",
-                os.path.join(top_dir, "dxWDL-{}.jar".format(version_id)),
-                "dxni",
-                "--apps",
-                "--force",
-                "--output", header_file]
-    print(" ".join(cmdline))
-    subprocess.check_output(cmdline)
+    header_file = os.path.join(top_dir, "test/basic/dx_app_extern.wdl")
+    if not os.path.isfile(header_file):
+        cmdline = [ "java", "-jar",
+                    os.path.join(top_dir, "dxWDL-{}.jar".format(version_id)),
+                    "dxni",
+                    "--apps",
+                    "--force",
+                    "--output", header_file]
+        print(" ".join(cmdline))
+        subprocess.check_output(cmdline)
 
 
 ######################################################################

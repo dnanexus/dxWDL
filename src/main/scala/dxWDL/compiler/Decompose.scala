@@ -448,9 +448,10 @@ object Decompose {
                 case None => true
                 case Some(child) =>
                     Utils.trace(verbose.on, s"iteration ${counter.get}")
+                    Utils.trace(verbose.on, s"node.tasks = ${node.tasks.keys}")
                     val sbw = new Decompose(subwfPrefix, subwfNames, node.cef, verbose)
                     val (wf2, subWf) = sbw.apply(node.workflow, child)
-                    node = node.cleanAfterRewrite(wf2, subWf, ctx, node.kind)
+                    node = node.cleanAfterRewrite(wf2, subWf, node.tasks, ctx, node.kind)
                     if (verbose2)
                         NamespaceOps.prettyPrint(wdlSourceFile, node, s"subblocks_${counter.get}", verbose)
                     counter.increment()

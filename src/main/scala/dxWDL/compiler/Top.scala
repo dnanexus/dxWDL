@@ -1,3 +1,6 @@
+// Interface to the compilation tool chain. The methods here are the only ones
+// that should be called to perform compilation.
+
 package dxWDL.compiler
 
 import com.dnanexus.{DXDataObject, DXProject, DXSearch}
@@ -7,11 +10,51 @@ import dxWDL.Utils.DX_WDL_ASSET
 import java.nio.file.{Files, Path, Paths}
 import java.io.{FileWriter, PrintWriter}
 import scala.collection.JavaConverters._
+import scala.collection.mutable.HashMap
+import scala.io.Source
 import scala.util.{Failure, Success}
 import wdl.draft2.model.{WdlExpression, WdlNamespace, Draft2ImportResolver}
 
-// Interface to the compilation tool chain. The methods here are the only ones
-// that should be called to perform compilation.
+// Load files from the local filesystem
+case class TopFileResolver(localWdlSourceFiles: Map[String, Path],
+                           fileIndex: HashMap[String, String]) {
+    def make : Draft2ImportResolver = { fullName =>
+        localWdlSourceFiles.get(fullName) match {
+            case None =>
+                throw new Exception(s"Unable to find ${fullName}")
+            case Some(path) =>
+                val wdlCode = Utils.readFileContent(path)
+                fileIndex(path.toString) = wdlCode
+                wdlCode
+        }
+    }
+}
+
+// The [languages.wdl.draft2.WdlDraft2LanguageFactory] module has the implementation
+// of the Cromwell http resolver.
+//
+// The full path is
+//    CROMWELL/languageFactories/language-factory-core/src/main/scala/cromwell/languages
+//    CROMWELL/languageFactories/wdl-draft2/src/main/scala/languages/wdl/draft2/WdlDraft2LanguageFactory.scala
+
+// Download files from the web, and record the contents in a mapping.
+case class TopHttpResolver(fileIndex: HashMap[String, String]) {
+    def make : Draft2ImportResolver = { url =>
+        fileIndex.get(url) match {
+            case None =>
+                val html = Source.fromURL(url)
+                val wdlCode = html.mkString
+                fileIndex(url) = wdlCode
+                wdlCode
+            case Some(wdlCode) =>
+                // file has already been downloaded; we assume the contents
+                // has not changed
+                wdlCode
+        }
+    }
+}
+
+
 object Top {
     private def prettyPrintIR(wdlSourceFile : Path,
                               extraSuffix: Option[String],
@@ -33,9 +76,9 @@ object Top {
         Utils.trace(verbose, s"Wrote intermediate representation to ${trgPath.toString}")
     }
 
-    private def findSourcesInImports(wdlSourceFile: Path,
-                                     imports: List[Path],
-                                     verbose: Verbose) : Map[String, Path] = {
+    private def findSourcesInImportDirs(wdlSourceFile: Path,
+                                        imports: List[Path],
+                                        verbose: Verbose) : Map[String, Path] = {
         Utils.trace(verbose.on, s"WDL import directories:  ${imports.toVector}")
 
         // Find all the WDL files under a directory.
@@ -73,28 +116,22 @@ object Top {
                     accu ++ getListOfFiles(d)
             }
 
-        val wdlFileNames = "{" + allWdlSourceFiles.keys.mkString(", ") + "}"
-        Utils.trace(verbose.on, s"Files in search path=${wdlFileNames}")
+        //val wdlFileNames = "{" + allWdlSourceFiles.keys.mkString(", ") + "}"
+        //Utils.trace(verbose.on, s"Files in search path=${wdlFileNames}")
         allWdlSourceFiles
-    }
-
-
-    def makeResolver(allWdlSources: Map[String, String]) : Draft2ImportResolver = {
-        filename => allWdlSources.get(filename) match {
-            case None => throw new Exception(s"Unable to find ${filename}")
-            case Some(content) => content
-        }
     }
 
     private def compileNamespaceOpsTree(wdlSourceFile : Path,
                                         cOpt: CompilerOptions) : NamespaceOps.Tree = {
-        val allWdlSourceFiles = findSourcesInImports(wdlSourceFile, cOpt.imports, cOpt.verbose)
-        val allWdlSources: Map[String, String] = allWdlSourceFiles.map{
-            case (name, path) => name -> Utils.readFileContent(path)
-        }.toMap
-        val resolver = makeResolver(allWdlSources)
+        val importedFiles = HashMap.empty[String, String]
+        val localWdlSourceFiles : Map[String, Path] =
+            findSourcesInImportDirs(wdlSourceFile, cOpt.importDirs, cOpt.verbose)
+        val fileResolver = new TopFileResolver(localWdlSourceFiles, importedFiles)
+        val httpResolver = new TopHttpResolver(importedFiles)
         val ns =
-            WdlNamespace.loadUsingPath(wdlSourceFile, None, Some(List(resolver))) match {
+            WdlNamespace.loadUsingPath(wdlSourceFile,
+                                       None,
+                                       Some(List(fileResolver.make, httpResolver.make))) match {
                 case Success(ns) => ns
                 case Failure(f) =>
                     System.err.println("Error loading WDL source code")
@@ -105,20 +142,17 @@ object Top {
         // that will give us problems.
         Validate.apply(ns, cOpt.verbose)
 
-        val ctx: Context = Context.make(allWdlSources, wdlSourceFile, cOpt.verbose)
+        Utils.trace(cOpt.verbose.on, s"imported files: ${importedFiles.keys}")
+        val ctx: Context = Context.make(importedFiles.toMap, wdlSourceFile, cOpt.verbose)
         val defaultRuntimeAttributes = cOpt.extras match {
             case None => Map.empty[String, WdlExpression]
             case Some(xt) => xt.defaultRuntimeAttributes
         }
         val nsTree: NamespaceOps.Tree = NamespaceOps.load(ns, ctx, defaultRuntimeAttributes)
-        val nsTreePruned = NamespaceOps.prune(nsTree, ctx)
-
-        NamespaceOps.prettyPrint(wdlSourceFile, nsTreePruned, "pruned", cOpt.verbose)
-
         val ctxHdrs = ctx.makeHeaders
 
         // Convert large sub-blocks to sub-workflows
-        Decompose.apply(nsTreePruned, wdlSourceFile, ctxHdrs, cOpt.verbose)
+        Decompose.apply(nsTree, wdlSourceFile, ctxHdrs, cOpt.verbose)
     }
 
     private def compileIR(wdlSourceFile : Path,
