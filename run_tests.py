@@ -437,8 +437,7 @@ def native_call_app_setup(version_id):
     app_name = "native_hello"
 
     # Check if they already exist
-    apps = list(dxpy.bindings.search.find_data_objects(classname= "app",
-                                                       name= app_name))
+    apps = list(dxpy.bindings.search.find_apps(name= app_name))
 
     if len(apps) == 0:
         # build the app
