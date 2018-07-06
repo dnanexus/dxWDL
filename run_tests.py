@@ -23,52 +23,56 @@ test_failing=set(["bad_status", "bad_status2", "missing_output"])
 reserved_test_names=['M', 'All', 'list']
 
 medium_test_list = [
-    # Basics
-    "cast", "math", "strings", "files",
-
-    # various advanced features
-    "advanced", "conditionals",
-
-    # optional arguments
-    "optionals", "hello", "call_with_defaults",
-
-    # lifting declarations
-    "decl_mid_wf",
-
-    # Error codes
+    "advanced",
     "bad_status", "bad_status2",
 
-    # Setting defaults for tasks, not just workflows
-    "population",
+    # calling native dx applets/apps
+    "call_native",
+    "call_native_app",
 
-    # Variable instance types
-    "instance_types",
-
-    # Maps and pairs.
-    "dict",
+    "call_with_defaults",
+    "cannes",
+    "cast",
 
     # objects
     "complex",
 
-    # calling native dx applets
-    "call_native",
+    "conditionals",
+    "conditionals2",
 
-    # calling native dx apps
-    "call_native_app",
+    # lifting declarations
+    "decl_mid_wf",
+    "dict",
+    "files",
+    "hello",
 
-    # subworkflows
-    "cannes", "modulo", "subblocks", "subblocks2", "trains", "conditionals2"
+    # Variable instance types
+    "instance_types",
+
+    "math",
+    "modulo",
+    "optionals",
+
+    # Setting defaults for tasks, not just workflows
+    "population",
+
+    "strings",
+    "subblocks",
+    "subblocks2",
+    "trains",
+    "var_type_change"
 ]
 
 # Tests with the reorg flags
 test_reorg=["files", "math"]
 test_defaults=["files", "math", "population"]
-
-test_locked=["conditionals", "advanced", "bad_status", "bad_status2",
-             "instance_types", "dict", "cond",
-             "call_native_app", "call_native", "call_with_defaults",
-             "subblocks", "subblocks2", "trains", "conditionals2", "population"]
-
+test_unlocked=["cast",
+               "call_with_defaults",
+               "files",
+               "hello",
+               "math",
+               "optionals",
+               "strings"]
 TestMetaData = namedtuple('TestMetaData', 'name kind')
 TestDesc = namedtuple('TestDesc', 'name kind wdl_source wdl_input dx_input results')
 
@@ -282,7 +286,7 @@ def run_executable(project, test_folder, tname, oid, delay_workspace_destruction
 def extract_outputs(tname, exec_obj):
     desc = test_files[tname]
     if desc.kind == "workflow":
-        locked = tname in test_locked
+        locked = tname not in test_unlocked
         if locked:
             return exec_obj['output']
         else:
@@ -379,7 +383,7 @@ def build_dirs(project, version_id):
 def compiler_per_test_flags(tname):
     flags = []
     desc = test_files[tname]
-    if tname in test_locked:
+    if tname not in test_unlocked:
         flags.append("-locked")
     if tname in test_reorg:
         flags.append("-reorg")
