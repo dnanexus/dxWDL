@@ -407,14 +407,15 @@ be set.
 }
 ```
 
-## Handling intermediate workflow results
+## Handling intermediate workflow outputs
 
 A workflow may create a large number of files, taking up significant
 disk space, and incurring storage costs. Some of the files are
-workflow outputs, but many of them may be intermediate results
-that are not needed once the workflow completes. By default, all outputs are
-stored in one platform folder. With the `--reorg` flag, the intermediate
-results are moved into a subfolder named "intermediate". This is achieved by
-adding a stage to the workflow that reorganizes the output folder. The stage
-uses `CONTRIBUTE` access to reach into the parent project and
-move files around.
+workflow outputs, but many of them may be intermediate results that
+are not needed once the workflow completes. By default, all outputs
+are stored in one platform folder. With the `--reorg` flag, the
+intermediate results are moved into a subfolder named
+"intermediate". This is achieved by adding a stage to the workflow
+that reorganizes the output folder, it uses `CONTRIBUTE` access to
+reach into the parent project, create a subfolder, and move files into
+it.
