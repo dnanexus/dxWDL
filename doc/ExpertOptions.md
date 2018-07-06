@@ -36,6 +36,7 @@ Compilation can be controled with several parameters.
 | inputs   | A cromwell style inputs file |
 | imports  | Directory to search for imported WDL files |
 | locked   | Create a locked-down workflow (experimental) |
+| reorg    | Move workflow intermediate results into a separate subdirectory |
 | verbose  | Print detailed progress information |
 
 The `-inputs` option allows specifying a Cromwell JSON
@@ -405,3 +406,15 @@ be set.
   }
 }
 ```
+
+## Handling intermediate workflow results
+
+A workflow may create a large number of files, taking up significant
+disk space, and incurring storage costs. Some of the files are
+workflow outputs, but many of them may be intermediate results
+that are not needed once the workflow completes. By default, all outputs are
+stored in one platform folder. With the `--reorg` flag, the intermediate
+results are moved into a subfolder named "intermediate". This is achieved by
+adding a stage to the workflow that reorganizes the output folder. The stage
+uses `CONTRIBUTE` access to reach into the parent project and
+move files around.
