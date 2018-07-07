@@ -44,6 +44,7 @@ medium_test_list = [
     "decl_mid_wf",
     "dict",
     "files",
+    "files_with_the_same_name",
     "hello",
 
     # Variable instance types
