@@ -3,6 +3,32 @@
 ## 0.69
 - Support importing http URLs
 - Simplified handling of imports and workflow decomposition
+- Fixed issue (https://github.com/dnanexus/dxWDL/issues/148). This was a bug
+occuring when three or more files with the same name were downloaded to
+a task.
+- Fixed issue (https://github.com/dnanexus/dxWDL/issues/146). This
+occurred when (1) a workflow called a task, and (2) the task and the workflow had
+an input with the same name but different types. For example, workflow
+`w` calls task `PTAsays`, both use input `fruit`, but it has types
+`Array[String]` and `String`.
+
+```wdl
+workflow w {
+    Array[String] fruit = ["Banana", "Apple"]
+    scatter (index in indices) {
+        call PTAsays {
+            input: fruit = fruit[index], y = " is good to eat"
+        }
+        call Add { input:  a = 2, b = 4 }
+    }
+}
+
+task PTAsays {
+    String fruit
+    String y
+     ...
+}
+```
 
 ## 0.68.1
 - Fixing build and release scripts.
@@ -39,7 +65,7 @@ file.
 workflow `foo` needs to be decomposed. The workflow fragment runner does not
 handle dependencies, and cannot wait for the `add` call to complete.
 
-```
+```wdl
 workflow foo {
     Array[Int] numbers
 
@@ -77,7 +103,7 @@ control can be achieved by specifying the default option in the
 `default_taskdx_attributes` section of the `extras` file. For
 example:
 
-```
+```json
 {
   "default_task_dx_attributes" : {
     "runSpec": {
@@ -124,7 +150,7 @@ tasks for them.
 - Support for setting defaults for all task runtime attributes has been added.
 This is similar to the Cromwell style. The `extras` command line flag takes a JSON file
 as an argument. For example, if `taskAttrs.json` is this file:
-```
+```json
 {
     "default_runtime_attributes" : {
       "docker" : "quay.io/encode-dcc/atac-seq-pipeline:v1"

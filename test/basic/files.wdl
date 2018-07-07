@@ -72,7 +72,7 @@ workflow files {
     call FileArrayMake as mk2 {input: n=3}
     Array[Array[File]] allFiles = [mk1.result, mk2.result]
     scatter (fa in allFiles) {
-        call FileArraySize {input: files=fa}
+        call lib.FileArraySize as FileArraySize {input: files=fa}
     }
 
     # scatter that calls a task that returns a file array
@@ -216,21 +216,6 @@ task TsvReadTable {
     command {}
     output {
         Array[Array[String]] result = read_tsv(tbl_file)
-    }
-}
-
-# Calculate the total number of bytes the array has
-task FileArraySize {
-    Array[File] files
-
-    parameter_meta {
-        files : "stream"
-    }
-    command <<<
-        wc -c ${sep=' ' files} | cut -d ' ' -f 1 | tail -1
-    >>>
-    output {
-        Int result = read_int(stdout())
     }
 }
 
