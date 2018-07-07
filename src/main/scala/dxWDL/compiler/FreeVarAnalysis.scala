@@ -68,7 +68,7 @@ case class FreeVarAnalysis(cef: CompilerErrorFormatter,
                          expr: WdlExpression,
                          scope: Scope): Vector[DVar] = {
         val variables = erv.findAllInExpr(expr)
-        variables.map{ varName =>
+        val retval = variables.map{ varName =>
             val womType =
                 try {
                     Utils.lookupType(scope)(varName)
@@ -80,6 +80,8 @@ case class FreeVarAnalysis(cef: CompilerErrorFormatter,
                 }
             DVar(varName, womType)
         }.toVector
+        //Utils.trace(verbose.on, s"exprDeps(${expr.toWomString}) = ${retval}")
+        retval
     }
 
     // Find all the free variables in a block of statements. For example,
@@ -103,8 +105,31 @@ case class FreeVarAnalysis(cef: CompilerErrorFormatter,
                 accu.findNewIn(xtrnVars).addLocal(declVar)
 
             case (accu, call:WdlCall) =>
+                // If the call has a parent, we want to use the parent scope.
+                // The scope lookup algorithm (cromwell-32) gets confused if
+                // the callee has an input variable with the same name, but
+                // a different type, than the caller.
+                //
+                // Below, workflow w has "fruit" with type Array[String], but
+                // task PTAsays has "fruit" with type String.
+                //
+                // workflow w {
+                //  Array[String] fruit = ["Banana", "Apple"]
+                //  scatter (index in indices) {
+                //    call PTAsays {
+                //        input: fruit = fruit[index], y = " is good to eat"
+                //    }
+                //    call Add { input:  a = 2, b = 4 }
+                //  }
+                //
+                // task PTAsays {
+                //    String fruit
+                //    String y
+                //    ...
+                // }
+                val parentScope = call.parent.getOrElse(call)
                 val xtrnVars = call.inputMappings.map{
-                    case (_, expr) => exprDeps(erv, expr, call)
+                    case (_, expr) => exprDeps(erv, expr, parentScope)
                 }.flatten.toSeq
                 val callOutputs = call.outputs.map { cOut: CallOutput =>
                     DVar(call.unqualifiedName + "." ++ cOut.unqualifiedName, cOut.womType)

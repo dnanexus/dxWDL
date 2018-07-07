@@ -118,3 +118,15 @@ task FileSize {
         Float num_bytes = size(in_file)
     }
 }
+
+# Calculate the total number of bytes the array has
+task FileArraySize {
+    Array[File] files
+
+    command <<<
+        wc -c ${sep=' ' files} | cut -d ' ' -f 1 | tail -1
+    >>>
+    output {
+        Int result = read_int(stdout())
+    }
+}

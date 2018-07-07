@@ -7,6 +7,7 @@ import com.dnanexus.DXFile
 import java.nio.file.{Files, Path, Paths}
 import scala.collection.mutable.HashMap
 import spray.json._
+import Utils.DISAMBIGUATION_DIRS_MAX_NUM
 import wom.values._
 
 object LocalDxFiles {
@@ -22,9 +23,6 @@ object LocalDxFiles {
         val Local, Remote = Value
     }
     case class FileInfo(state: FileState.Value, dxFile: DXFile)
-
-    // Used when disambiguating files
-    var file_count = 0
 
     object FileInfo {
         def toJSON(fInfo: FileInfo) : JsValue = {
@@ -136,15 +134,24 @@ object LocalDxFiles {
     // name, we may need to disambiguate them.
     private def createUniqueDownloadPath(fid:String, basename:String) : Path = {
         val shortPath = Utils.inputFilesDirPath.resolve(basename)
-        if (Files.exists(shortPath)) {
-            file_count += 1
-            System.err.println(s"Disambiguating file ${fid} with name ${basename}")
-            val dir:Path = Utils.inputFilesDirPath.resolve(file_count.toString)
+        if (!Files.exists(shortPath))
+            return shortPath
+        // We already downloaded a file with this name. Try to place it
+        // in directories: [inputs/1, inputs/2, ... ]
+        System.err.println(s"Disambiguating file ${fid} with name ${basename}")
+        var pathsTried = List.empty[Path]
+
+        for (dirNum <- 1 to DISAMBIGUATION_DIRS_MAX_NUM) {
+            val dir:Path = Utils.inputFilesDirPath.resolve(dirNum.toString)
             Utils.safeMkdir(dir)
-            dir.resolve(basename)
-        } else {
-            shortPath
+            val longPath = dir.resolve(basename)
+            pathsTried = longPath :: pathsTried
+            if (!Files.exists(longPath))
+                return longPath
         }
+        throw new Exception(s"""|Tried to download ${fid} ${basename} to local
+                                |filesystem at ${pathsTried}, all are taken"""
+                                .stripMargin.replaceAll("\n", " "))
     }
 
     def download(jsValue: JsValue, ioMode: IOMode.Value) : WomValue = {
