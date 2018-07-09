@@ -198,8 +198,8 @@ case class DxNI(verbose: Verbose) {
                 Some(task)
             } catch {
                 case e : Throwable =>
-                    System.err.println(s"Unable to construct a WDL interface for applet ${aplName}")
-                    System.err.println(e.getMessage)
+                    Utils.warning(verbose, s"Unable to construct a WDL interface for applet ${aplName}")
+                    Utils.warning(verbose, e.getMessage)
                     None
             }
         }.flatten.toVector
@@ -288,9 +288,9 @@ case class DxNI(verbose: Verbose) {
                     case _ => "app_"
                 }
                 if (!prefix.isEmpty)
-                    System.err.println(s"""|app ${nameClean} does not start
-                                           |with a letter, adding the prefix '${prefix}'"""
-                                           .stripMargin.replaceAll("\n", " "))
+                    Utils.warning(verbose, s"""|app ${nameClean} does not start
+                                               |with a letter, adding the prefix '${prefix}'"""
+                                      .stripMargin.replaceAll("\n", " "))
                 s"${prefix}${nameClean}"
         }
     }
@@ -373,8 +373,8 @@ case class DxNI(verbose: Verbose) {
                 Some(appToWdlInterface(dxApp))
             } catch {
                 case e : Throwable =>
-                    System.err.println(s"Unable to construct a WDL interface for applet ${appName}")
-                    System.err.println(e.getMessage)
+                    Utils.warning(verbose, s"Unable to construct a WDL interface for applet ${appName}")
+                    Utils.warning(verbose, e.getMessage)
                     None
             }
         }
@@ -409,7 +409,7 @@ object DxNI {
         WdlNamespace.loadUsingSource(allLines, None, None) match {
             case Success(_) => ()
             case Failure(f) =>
-                System.err.println("DxNI generated WDL file contains errors")
+                Utils.error("DxNI generated WDL file contains errors")
                 throw f
         }
     }
@@ -426,7 +426,7 @@ object DxNI {
         val dxni = DxNI(verbose)
         val dxNativeTasks: Vector[WdlTask] = dxni.search(dxProject, folder, recursive)
         if (dxNativeTasks.isEmpty) {
-            System.err.println(s"Found no DX native applets in ${folder}")
+            Utils.warning(verbose, s"Found no DX native applets in ${folder}")
             return
         }
         val ns = WdlRewrite.namespace(dxNativeTasks)
@@ -449,7 +449,7 @@ object DxNI {
         val dxni = DxNI(verbose)
         val dxAppsAsTasks: Vector[WdlTask] = dxni.searchApps
         if (dxAppsAsTasks.isEmpty) {
-            System.err.println(s"Found no DX global apps")
+            Utils.warning(verbose, s"Found no DX global apps")
             return
         }
         val ns = WdlRewrite.namespace(dxAppsAsTasks)
