@@ -17,7 +17,7 @@ Make sure you've installed the dx-toolkit CLI, and initialized it with
 
 To compile a workflow:
 ```
-$ java -jar dxWDL-xxx.jar compile /path/to/foo.wdl
+$ java -jar dxWDL-xxx.jar compile /path/to/foo.wdl -project project-xxxx
 ```
 This compiles ```foo.wdl``` to platform workflow ```foo``` in dx's
 current project and folder. The generated workflow can then be run as
@@ -55,7 +55,7 @@ has input file
 
 The command
 ```
-java -jar dxWDL-0.44.jar compile test/files.wdl -inputs test/files_input.json
+java -jar dxWDL-0.44.jar compile test/files.wdl -project project-xxxx -inputs test/files_input.json
 ```
 
 generates a `test/files_input.dx.json` file that looks like this:
@@ -82,7 +82,7 @@ The `-defaults` option is similar to `-inputs`. It takes a JSON file with key-va
 and compiles them as defaults into the workflow. If the `files.wdl` worklow is compiled with
 `-defaults` instead of `-inputs`
 ```
-java -jar dxWDL-0.44.jar compile test/files.wdl -defaults test/files_input.json
+java -jar dxWDL-0.44.jar compile test/files.wdl -project project-xxxx -defaults test/files_input.json
 ```
 
 It can be run without parameters, for an equivalent execution.
@@ -105,7 +105,7 @@ If this is file `extraOptions.json`:
 Then adding it to the compilation command line will add the `atac-seq` docker image to all
 tasks by default.
 ```
-java -jar dxWDL-0.44.jar compile test/files.wdl -defaults test/files_input.json -extras extraOptions.json
+java -jar dxWDL-0.44.jar compile test/files.wdl -project project-xxxx -defaults test/files_input.json -extras extraOptions.json
 ```
 
 ## Extensions
@@ -252,7 +252,7 @@ case. It searchs a platform folder and generates a WDL wrapper task for each
 applet. For example, the command:
 
 ```
-java -jar dxWDL.jar dxni --folder /A/B/C --output dx_extern.wdl
+java -jar dxWDL.jar dxni --project project-xxxx --folder /A/B/C --output dx_extern.wdl
 ```
 
 will find native applets in the `/A/B/C` folder, generate tasks for
@@ -360,7 +360,7 @@ as an argument. For example, if `taskAttrs.json` is this file:
 Then adding it to the compilation command line will add the `atac-seq` docker image to all
 tasks by default.
 ```
-java -jar dxWDL-0.44.jar compile files.wdl -defaults files_input.json -extras taskAttrs.json
+java -jar dxWDL-0.44.jar compile files.wdl -project project-xxxx -defaults files_input.json -extras taskAttrs.json
 ```
 
 ## Debugging an applet

@@ -86,7 +86,7 @@ task count_bam {
 
 From the command line, we can compile the workflow to the DNAnexus platform using the dxWDL jar file.
 ```
-$ java -jar dxWDL-0.59.jar compile bam_chrom_counter.wdl
+$ java -jar dxWDL-0.59.jar compile bam_chrom_counter.wdl -project project-xxxx
 ```
 
 This compiles the source WDL file to several platform objects.
