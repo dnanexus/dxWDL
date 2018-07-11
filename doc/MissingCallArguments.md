@@ -93,7 +93,7 @@ the original, as to be unrecognizable. Because names are mangled, following what
 happens are runtime in the UI will be hard.
 
 
-## Future direction: toplevel_calls_as_stages
+## Toplevel calls compiled as stages
 
 There is an import use case where leaving task arguments unbound is
 desirable. The `detect_virus` workflow below, is a simplified version
