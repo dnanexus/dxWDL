@@ -96,53 +96,84 @@ happens are runtime in the UI will be hard.
 ## Future direction: toplevel_calls_as_stages
 
 There is an import use case where leaving task arguments unbound is
-desirable. In the `detect_virus` workflow below, the
-[scaffold](https://github.com/broadinstitute/viral-ngs/blob/master/pipes/WDL/workflows/tasks/assembly.wdl)
-task takes 11 arguments. Users want to be able to open the UI and see
-the `aligner` argument associated with the `scaffold` stage; further,
-they want to be able to set it from that stage. With the CLI, they
-would like to be able to do: `dx run detect_virus
--iscaffold.aligner="great_new_tool"`. Propagating `aligner` to a
-workflow level input would make `detect_virus` less readable, while
-also obscuring the utility of the argument.
+desirable. The `detect_virus` workflow below, is a simplified version
+of the real world worklfow
+[assemble_denovo_with_deplete_and_isnv_calling](https://github.com/broadinstitute/viral-ngs/blob/master/pipes/WDL/workflows/assemble_denovo_with_deplete_and_isnv_calling.wdl).
+The three tasks have a large number of inputs. If we propage them to
+the workflow level, we will have an unreadable script, and potential argument name collisions.
+Users would like to be able to do:
+```sh
+dx run detect_virus -ideplete_taxa.query_chunk_size=200
+```
+
+This makes it clear that `query_chunk_size` is an input for the
+`deplete_taxa` call, and not to any other call.
 
 
 ```wdl
 workflow detect_virus {
-  File contigs_fasta
+  File raw_reads_unmapped_bam
 
-  call scaffold { input: contigs_fasta = contigs_fasta }
+  call deplete_taxa {
+    input:
+      raw_reads_unmapped_bam = raw_reads_unmapped_bam,
+      bmtaggerDbs = bmtaggerDbs,
+      blastDbs = blastDbs,
+      bwaDbs = bwaDbs
+  }
+
+  call filter_to_taxon {
+    input:
+      reads_unmapped_bam = deplete_taxa.cleaned_bam
+  }
+
+  call assembly.assemble {
+   input:
+     reads_unmapped_bam = filter_to_taxon.taxfilt_bam,
+     trim_clip_db = trim_clip_db
+  }
 
   ...
 }
 
-task scaffold {
-  File         contigs_fasta
-  File         reads_bam
-  Array[File]+ reference_genome_fasta
+task deplete_taxa {
+  File         raw_reads_unmapped_bam
+  Array[File]? bmtaggerDbs  # .tar.gz, .tgz, .tar.bz2, .tar.lz4, .fasta, or .fasta.gz
+  Array[File]? blastDbs  # .tar.gz, .tgz, .tar.bz2, .tar.lz4, .fasta, or .fasta.gz
+  Array[File]? bwaDbs  # .tar.gz, .tgz, .tar.bz2, .tar.lz4, .fasta, or .fasta.gz
+  Int?         query_chunk_size
+  Boolean?     clear_tags = false
+  String? tags_to_clear_space_separated = "XT X0 X1 XA AM SM BQ CT XN OC OP"
 
-  String? aligner
-  Float?  min_length_fraction
-  Float?  min_unambig
-  Int?    replace_length=55
-
-  Int?    nucmer_max_gap
-  Int?    nucmer_min_match
-  Int?    nucmer_min_cluster
-  Int?    scaffold_min_pct_contig_aligned
-
-  command {}
-  output {
-    ...
-  }
+  ...
 }
+
+task filter_to_taxon {
+  File reads_unmapped_bam
+  File lastal_db_fasta
+  String bam_basename = basename(basename(reads_unmapped_bam, ".bam"), ".cleaned")
+  ...
+}
+
+task assemble {
+  File    reads_unmapped_bam
+  File    trim_clip_db
+  Int?    trinity_n_reads=250000
+  Int?    spades_n_reads=10000000
+  String? assembler="trinity"  # trinity, spades, or trinity-spades
+  String  cleaned_assembler = select_first([assembler, ""])
+  String  sample_name = basename(basename(reads_unmapped_bam, ".bam"), ".taxfilt")
+  ...
+}
+
 ```
 
 The proposed `toplevel_calls_as_stages` flag will instruct dxWDL to
 compile `detect_virus` to an unlocked dx:workflow with a stage for the
-scaffold call. More generally, any toplevel call with no
-subexpressions will be compiled to a stage. For example, in workflow
-`foo`, only call `C` fits the bill.
+`deplete_taxa`, `filter_to_taxon`, and `assemble` calls. More
+generally, any toplevel call with no subexpressions will be compiled
+to a stage. For example, in workflow `foo`, only call `C` fits the
+bill.
 
 ```wdl
 
@@ -152,13 +183,10 @@ workflow foo {
   if (flag) {
      call A
   }
-
   scatter (i in [1,2,3]) {
     call B
   }
-
   call C { input: i=1 }
-
   call D { input: x= who + "__x"  }
 }
 
@@ -168,7 +196,6 @@ task C {
      Int result = i
    }
 }
-
 
 task D {
   String x
