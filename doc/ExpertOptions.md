@@ -233,14 +233,8 @@ workflow math {
 }
 ```
 
-The dx:workflow that is compiled from `math` can set this variable from
-the command line as follows:
-```
-dx run math -iadd.b=5
-```
-
-Setting workflow variables from the command line works for all unnested calls.
-If the call is inside a scatter or an if block, this is not supported.
+Currently, dxWDL does not support this feature. However, there is a [suggestion](MissingCallArguments.md)
+for limited support.
 
 ## Calling existing applets
 
