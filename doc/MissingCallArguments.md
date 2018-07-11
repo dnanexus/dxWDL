@@ -91,3 +91,90 @@ Each workflow can go through multiple rewrite steps, each of which may encounter
 naming collisions. For a complex workflow, the end result could be so different from
 the original, as to be unrecognizable. Because names are mangled, following what
 happens are runtime in the UI will be hard.
+
+
+## Future direction: toplevel_calls_as_stages
+
+There is an import use case where leaving task arguments unbound is
+desirable. In the `detect_virus` workflow below, the
+[scaffold](https://github.com/broadinstitute/viral-ngs/blob/master/pipes/WDL/workflows/tasks/assembly.wdl)
+task takes 11 arguments. Users want to be able to open the UI and see
+the `aligner` argument associated with the `scaffold` stage; further,
+they want to be able to set it from that stage. With the CLI, they
+would like to be able to do: `dx run detect_virus
+-iscaffold.aligner="great_new_tool"`. Propagating `aligner` to a
+workflow level input would make `detect_virus` less readable, while
+also obscuring the utility of the argument.
+
+
+```wdl
+workflow detect_virus {
+  File contigs_fasta
+
+  call scaffold { input: contigs_fasta = contigs_fasta }
+
+  ...
+}
+
+task scaffold {
+  File         contigs_fasta
+  File         reads_bam
+  Array[File]+ reference_genome_fasta
+
+  String? aligner
+  Float?  min_length_fraction
+  Float?  min_unambig
+  Int?    replace_length=55
+
+  Int?    nucmer_max_gap
+  Int?    nucmer_min_match
+  Int?    nucmer_min_cluster
+  Int?    scaffold_min_pct_contig_aligned
+
+  command {}
+  output {
+    ...
+  }
+}
+```
+
+The proposed `toplevel_calls_as_stages` flag will instruct dxWDL to
+compile `detect_virus` to an unlocked dx:workflow with a stage for the
+scaffold call. More generally, any toplevel call with no
+subexpressions will be compiled to a stage. For example, in workflow
+`foo`, only call `C` fits the bill.
+
+```wdl
+
+workflow foo {
+  String who
+
+  if (flag) {
+     call A
+  }
+
+  scatter (i in [1,2,3]) {
+    call B
+  }
+
+  call C { input: i=1 }
+
+  call D { input: x= who + "__x"  }
+}
+
+task C {
+   Int i
+   output {
+     Int result = i
+   }
+}
+
+
+task D {
+  String x
+  String? y
+  output {
+     String result = x
+  }
+}
+```
