@@ -210,7 +210,7 @@ Turning the flag on has a downside, it reduces the opportunitues to
 batch expression evaluation. In workflow `bar`, by default, the
 calculation of `sz` and the call to `allele_freq` would be performed
 in one job. With the flag turned on, these cannot be combined, and we need three separate
-jobs.
+jobs. In addition, missing call arguments do not trigger a compile time error.
 
 ```wdl
 workflow bar {
@@ -222,5 +222,4 @@ workflow bar {
    Int sz = round(size(config) * overhead_factor)
    call allele_freq { disk_space = sz }
 }
-
 ```
