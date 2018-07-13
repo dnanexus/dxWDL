@@ -8,11 +8,6 @@ testing. WDL draft-2 is supported, with a few exceptions:
 * Expressions in the output section are not supported
 * Calls with missing compulsory arguments are not allowed
 
-*Use at your own risk:* for the time being, dxWDL is an exploratory
- tool NOT covered by DNAnexus service and support agreements. We
- welcome feedback and provide assistance as time permits.
-
-
 ## Setup
 Prerequisites: DNAnexus platform account, dx-toolkit, java 8+, python 2.7.
 
