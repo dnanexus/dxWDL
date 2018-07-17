@@ -8,7 +8,6 @@ import com.dnanexus._
 import dxWDL._
 import dxWDL.Utils._
 import java.security.MessageDigest
-import java.time.format.DateTimeFormatter
 import IR.{CVar, SArg}
 import scala.collection.JavaConverters._
 import spray.json._
@@ -328,47 +327,6 @@ case class Native(dxWDLrtId: String,
         (digest, reqChk)
     }
 
-    // Move an object into an archive directory. If the object
-    // is an applet, for example /A/B/C/GLnexus, move it to
-    //     /A/B/C/Applet_archive/GLnexus (Day Mon DD hh:mm:ss year)
-    // If the object is a workflow, move it to
-    //     /A/B/C/Workflow_archive/GLnexus (Day Mon DD hh:mm:ss year)
-    //
-    // Examples:
-    //   GLnexus (Fri Aug 19 18:01:02 2016)
-    //   GLnexus (Mon Mar  7 15:18:14 2016)
-    //
-    // Note: 'dx build' does not support workflow archiving at the moment.
-    private def archiveDxObject(objInfo:DxObjectInfo) : Unit = {
-        trace(verbose.on, s"Archiving ${objInfo.name} ${objInfo.dxObj.getId}")
-        val dxClass:String = objInfo.dxClass
-        val destFolder = folder ++ "/." ++ dxClass + "_archive"
-
-        // move the object to the new location
-        dxObjDir.newFolder(destFolder)
-        dxProject.move(List(objInfo.dxObj).asJava, List.empty[String].asJava, destFolder)
-
-        // add the date to the object name
-        val formatter = DateTimeFormatter.ofPattern("EE MMM dd kk:mm:ss yyyy")
-        val crDateStr = objInfo.crDate.format(formatter)
-        val req = JsObject(
-            "project" -> JsString(dxProject.getId),
-            "name" -> JsString(s"${objInfo.name} ${crDateStr}")
-        )
-
-        dxClass match {
-            case "Workflow" =>
-                DXAPI.workflowRename(objInfo.dxObj.getId,
-                                     jsonNodeOfJsValue(req),
-                                     classOf[JsonNode])
-            case "Applet" =>
-                DXAPI.appletRename(objInfo.dxObj.getId,
-                                   jsonNodeOfJsValue(req),
-                                   classOf[JsonNode])
-            case other => throw new Exception(s"Unkown class ${other}")
-        }
-    }
-
     // Do we need to build this applet/workflow?
     //
     // Returns:
@@ -377,6 +335,17 @@ case class Native(dxWDLrtId: String,
     private def isBuildRequired(name: String,
                                 digest: String) : Option[DXDataObject] = {
         val existingDxObjs = dxObjDir.lookup(name)
+        if (existingDxObjs.isEmpty) {
+            // The executable does not exist in the target path.
+            // Have we built it, but placed it elsewhere in the project?
+            dxObjDir.lookupOtherVersions(name, digest) match {
+                case None => ()
+                case Some((dxObj, desc)) =>
+                    trace(verbose.on, s"Found ${name} in an alternate folder ${desc.getFolder}")
+                    return Some(dxObj)
+            }
+        }
+
         val buildRequired:Boolean = existingDxObjs.size match {
             case 0 => true
             case 1 =>
@@ -401,7 +370,7 @@ case class Native(dxWDLrtId: String,
             if (existingDxObjs.size > 0) {
                 if (archive) {
                     // archive the applet/workflow(s)
-                    existingDxObjs.foreach(x => archiveDxObject(x))
+                    existingDxObjs.foreach(x => dxObjDir.archiveDxObject(x))
                 } else if (force) {
                     // the dx:object exists, and needs to be removed. There
                     // may be several versions, all are removed.
@@ -567,7 +536,7 @@ case class Native(dxWDLrtId: String,
     // Build an '/applet/new' request
     private def appletNewReq(applet: IR.Applet,
                              bashScript: String,
-                             folder : String) : JsValue = {
+                             folder : String) : (String, JsValue) = {
         trace(verbose2, s"Building /applet/new request for ${applet.name}")
 
         val inputSpec : Vector[JsValue] = applet.inputs.map(cVar =>
@@ -579,22 +548,34 @@ case class Native(dxWDLrtId: String,
         val runSpec : JsValue = calcRunSpec(bashScript, applet.instanceType, applet.docker)
         val access : JsValue = calcAccess(applet)
 
-        // pack all the arguments into a single request
-        val req = Map(
-            "project" -> JsString(dxProject.getId),
+        // pack all the core arguments into a single request
+        val reqCore = Map(
             "name" -> JsString(applet.name),
-            "folder" -> JsString(folder),
-            "parents" -> JsBoolean(true),
             "inputSpec" -> JsArray(inputSpec),
             "outputSpec" -> JsArray(outputSpec),
             "runSpec" -> runSpec,
             "dxapi" -> JsString("1.0.0"),
             "tags" -> JsArray(JsString("dxWDL"))
         )
-        if (access == JsNull)
-            JsObject(req)
-        else
-            JsObject(req ++ Map("access" -> access))
+        val reqWithAccess =
+            if (access == JsNull)
+                JsObject(reqCore)
+            else
+                JsObject(reqCore ++ Map("access" -> access))
+
+        // Add a checksum
+        val (digest, req) = checksumReq(reqWithAccess)
+
+        // Add properties we do not want to fall under the checksum.
+        // This allows, for example, moving the dx:executable, while
+        // still being able to reuse it.
+        val reqWithEverything =
+            JsObject(req.asJsObject.fields ++ Map(
+                         "project" -> JsString(dxProject.getId),
+                         "folder" -> JsString(folder),
+                         "parents" -> JsBoolean(true)
+                     ))
+        (digest, reqWithEverything)
     }
 
     private def apiParseReplyID(rep: JsonNode) : String = {
@@ -625,12 +606,11 @@ case class Native(dxWDLrtId: String,
 
         // Calculate a checksum of the inputs that went into the
         // making of the applet.
-        val req = appletNewReq(applet, bashScript, folder)
-        val (digest,appletApiRequest) = checksumReq(req)
+        val (digest,appletApiRequest) = appletNewReq(applet, bashScript, folder)
         if (verbose2) {
             val fName = s"${applet.name}_req.json"
             val trgPath = Utils.appCompileDirPath.resolve(fName)
-            Utils.writeFileContent(trgPath, req.prettyPrint)
+            Utils.writeFileContent(trgPath, appletApiRequest.prettyPrint)
         }
 
         val buildRequired = isBuildRequired(applet.name, digest)

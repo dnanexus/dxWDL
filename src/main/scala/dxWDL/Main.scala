@@ -4,6 +4,7 @@ import com.dnanexus.{DXProject}
 import com.typesafe.config._
 import dxWDL.compiler.IR
 import java.nio.file.{Path, Paths}
+import org.apache.log4j.{Level, Logger}
 import scala.collection.mutable.HashMap
 import spray.json._
 import spray.json.JsString
@@ -593,6 +594,10 @@ object Main extends App {
             }
         }
     }
+
+    // Silence the log4j package
+    Logger.getRootLogger().removeAllAppenders()
+    Logger.getRootLogger().setLevel(Level.OFF);
 
     val usageMessage =
         s"""|java -jar dxWDL.jar <action> <parameters> [options]

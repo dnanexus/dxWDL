@@ -1,4 +1,11 @@
 # Release Notes
+## 0.70
+- Upgrade to Cromwell 33.1
+- Reuse applets and workflows inside a rpoject. The compiler now looks
+for an applet/workflow with the correct name and checksum anywhere in
+the project, not just in the target directory. This resolved
+issue (https://github.com/dnanexus/dxWDL/issues/154).
+-
 
 ## 0.69
 - Support importing http URLs
