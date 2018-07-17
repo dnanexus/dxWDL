@@ -68,7 +68,7 @@ the new file on the host. It might look like this:
 
 ```bash
 WDL=chip.wdl
-docker run -v $PWD:/opt --entrypoint dnanexus/dxwdl compile $WDL ... # (continued)
+docker run -v $PWD:/opt dnanexus/dxwdl compile $WDL ... # (continued)
 ```
 
 ## 4. Work Interactively
