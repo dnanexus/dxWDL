@@ -58,7 +58,7 @@ assemblyMergeStrategy in assembly := customMergeStrategy
 libraryDependencies ++= Seq(
 //    "org.broadinstitute" %% "cromwell-wdl-model-core" % "32",
 //    "org.broadinstitute" %% "cromwell-wdl-transforms-draft2" % "32",
-    "org.broadinstitute" %% "cromwell-wdl-model-draft2" % "32",
+    "org.broadinstitute" %% "cromwell-wdl-model-draft2" % "33.1",
 //    "org.broadinstitute" %% "cromwell-wom" % "32",
 //    "org.broadinstitute" %% "wdl-draft2" % "32",
 //    "org.broadinstitute" %% "language-factory-core" % "32",
