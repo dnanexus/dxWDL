@@ -3,7 +3,23 @@
 The [Dockerfile](Dockerfile) in this folder will build a container to interact
 with the tools in this repository.
 
-## 1. Build the Container
+## 1a. Pull the Container
+If you don't want to build on your local machine, you are welcome to pull a [pre-built
+container](https://hub.docker.com/r/vanessa/dx-toolkit/) directly from Docker Hub, and it 
+ might be helpful to tag it with the expected name for this repository.
+
+```bash
+docker pull vanessa/dx-toolkit
+docker tag vanessa/dx-toolkit dnanexus/dxdwl
+```
+If you have any issues with the container or would like to request updates or changes,
+please [open an issue](https://www.github.com/dnanexus/dxWDL/issues) and tag [@vsoch](https://www.github.com/vsoch) and she will be
+happy to help you.
+
+You are also welcome to build the container from scratch, either as is, or with some change that might
+be warranted, discussed next.
+
+## 1b. Build the Container
 From the folder with the Dockerfile:
 
 ```bash
