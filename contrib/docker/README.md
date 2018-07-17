@@ -1,6 +1,6 @@
 # Building the Docker Container
 
-The [Dockerfile](../Dockerfile) in the root folder will build a container to interact
+The [Dockerfile](Dockerfile) in this folder will build a container to interact
 with the tools in this repository.
 
 ## 1. Build the Container

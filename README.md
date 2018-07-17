@@ -104,3 +104,12 @@ At runtime this looks like this:
 - [Advanced options](doc/ExpertOptions.md) explains additional compiler options
 - [Internals](doc/Internals.md) goes into compiler internals
 - [Howto](doc/Internals.md) examples for how to write good WDL code
+
+# Contributions
+
+This software is a community effort! You can browse any of the contributions below in
+our [contrib](contrib) folder, or [let us know](https://github.com/dnanexus/dxWDL/issues) 
+if you would like to contribute or request a feature.
+
+ - [docker](contrib/docker): A Dockerfile to deploy the software ([@vsoch](https://www.github.com/vsoch))
+ - [czi](contrib/czi): From the [HumanCellAtlas project](https://github.com/HumanCellAtlas/skylab)
