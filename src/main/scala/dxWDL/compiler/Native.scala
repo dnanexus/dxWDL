@@ -461,7 +461,7 @@ case class Native(dxWDLrtId: String,
                 JsObject("main" ->
                              JsObject("instanceType" -> JsString(instanceType))),
             "distribution" -> JsString("Ubuntu"),
-            "release" -> JsString("14.04"),
+            "release" -> JsString("16.04"),
         )
         val extraRunSpec : Map[String, JsValue] = extras match {
             case None => Map.empty
