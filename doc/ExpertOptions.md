@@ -54,12 +54,12 @@ has input file
 ```
 
 The command
-```sh
+```console
 java -jar dxWDL-0.44.jar compile test/files.wdl -project project-xxxx -inputs test/files_input.json
 ```
 
 generates a `test/files_input.dx.json` file that looks like this:
-```
+```json
 {
   "f": {
     "$dnanexus_link": "file-F5gkKkQ0ZvgjG3g16xyFf7b1"
@@ -74,27 +74,27 @@ generates a `test/files_input.dx.json` file that looks like this:
 ```
 
 The workflow can then be run with the command:
-```
-dx run files -f test/files_input.dx.json
+```console
+$ dx run files -f test/files_input.dx.json
 ```
 
 The `-defaults` option is similar to `-inputs`. It takes a JSON file with key-value pairs,
 and compiles them as defaults into the workflow. If the `files.wdl` worklow is compiled with
 `-defaults` instead of `-inputs`
-```
-java -jar dxWDL-0.44.jar compile test/files.wdl -project project-xxxx -defaults test/files_input.json
+```console
+$ java -jar dxWDL-0.44.jar compile test/files.wdl -project project-xxxx -defaults test/files_input.json
 ```
 
 It can be run without parameters, for an equivalent execution.
-```
-dx run files
+```console
+$ dx run files
 ```
 
 The `extras` command line option allows, for example, the Cromwell feature of setting the
 default runtime attributes of a task.
 
 If this is file `extraOptions.json`:
-```
+```json
 {
     "default_runtime_attributes" : {
       "docker" : "quay.io/encode-dcc/atac-seq-pipeline:v1"
@@ -104,8 +104,8 @@ If this is file `extraOptions.json`:
 
 Then adding it to the compilation command line will add the `atac-seq` docker image to all
 tasks by default.
-```
-java -jar dxWDL-0.44.jar compile test/files.wdl -project project-xxxx -defaults test/files_input.json -extras extraOptions.json
+```console
+$ java -jar dxWDL-0.44.jar compile test/files.wdl -project project-xxxx -defaults test/files_input.json -extras extraOptions.json
 ```
 
 ## Extensions
@@ -117,7 +117,7 @@ the compiler. If you wish to choose an instance type from the
 list, this can be done by specifying the `dx_instance_type` key
 instead. For example:
 
-```
+```json
 runtime {
    dx_instance_type: "mem1_ssd2_x4"
 }
@@ -245,8 +245,8 @@ subcommand, short for *Dx Native Interface*, is dedicated to this use
 case. It searchs a platform folder and generates a WDL wrapper task for each
 applet. For example, the command:
 
-```
-java -jar dxWDL.jar dxni --project project-xxxx --folder /A/B/C --output dx_extern.wdl
+```console
+$ java -jar dxWDL.jar dxni --project project-xxxx --folder /A/B/C --output dx_extern.wdl
 ```
 
 will find native applets in the `/A/B/C` folder, generate tasks for
@@ -309,8 +309,8 @@ workflow w {
 
 To call apps instead of applets, use
 
-```
-java -jar dxWDL.jar dxni -apps -o my_apps.wdl
+```console
+$ java -jar dxWDL.jar dxni -apps -o my_apps.wdl
 ```
 
 The compiler will search for all the apps you can call, and create WDL
@@ -353,8 +353,8 @@ as an argument. For example, if `taskAttrs.json` is this file:
 
 Then adding it to the compilation command line will add the `atac-seq` docker image to all
 tasks by default.
-```
-java -jar dxWDL-0.44.jar compile files.wdl -project project-xxxx -defaults files_input.json -extras taskAttrs.json
+```console
+$ java -jar dxWDL-0.44.jar compile files.wdl -project project-xxxx -defaults files_input.json -extras taskAttrs.json
 ```
 
 ## Debugging an applet
@@ -456,3 +456,7 @@ task check {
    ...
 }
 ```
+
+When a call is compiled to a stage, missing arguments are transformed
+into stage inputs. The `add` stage will have compulsory integer inputs
+`a` and `b`.
