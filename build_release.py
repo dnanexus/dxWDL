@@ -47,9 +47,12 @@ def main():
     print("folder: {}".format(folder))
 
     if args.force:
-        # remove the existing directory path
-        cmd = "dx rm -r {}:/{}".format(project.get_id(), folder)
-        subprocess.check_call(cmd.split())
+        try:
+            # remove the existing directory path
+            cmd = "dx rm -r {}:/{}".format(project.get_id(), folder)
+            subprocess.check_call(cmd.split())
+        except:
+            pass
 
     # Make sure the target directory exists
     project.new_folder(folder, parents=True)

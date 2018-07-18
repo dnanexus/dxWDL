@@ -3,10 +3,10 @@
 dxWDL takes a bioinformatics pipeline written in the
 [Workflow Description Language (WDL)](http://www.openwdl.org/)
 and compiles it to an equivalent workflow on the DNAnexus platform.
-It provides a reasonably complete set of WDL features for beta
-testing. WDL draft-2 is supported, with a few exceptions:
+It provides a reasonably complete set of WDL features.
+WDL draft-2 is supported, with a few exceptions:
 * Expressions in the output section are not supported
-* Calls with missing compulsory arguments are not allowed
+* Calls with missing arguments have limited support
 
 ## Setup
 Prerequisites: DNAnexus platform account, dx-toolkit, java 8+, python 2.7.
@@ -108,7 +108,7 @@ At runtime this looks like this:
 # Contributions
 
 This software is a community effort! You can browse any of the contributions below in
-our [contrib](contrib) folder, or [let us know](https://github.com/dnanexus/dxWDL/issues) 
+our [contrib](contrib) folder, or [let us know](https://github.com/dnanexus/dxWDL/issues)
 if you would like to contribute or request a feature.
 
  - [docker](contrib/docker): A Dockerfile to deploy the software ([@vsoch](https://www.github.com/vsoch))
