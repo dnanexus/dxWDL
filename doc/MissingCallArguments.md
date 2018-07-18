@@ -93,7 +93,7 @@ the original, as to be unrecognizable. Because names are mangled, following what
 happens are runtime in the UI will be hard.
 
 
-## Toplevel calls compiled as stages
+## Compromise: toplevel calls compiled as stages
 
 There is an import use case where leaving task arguments unbound is
 desirable. The `detect_virus` workflow below, is a simplified version
@@ -168,12 +168,12 @@ task assemble {
 
 ```
 
-The proposed `toplevel_calls_as_stages` flag will instruct dxWDL to
-compile `detect_virus` to an unlocked dx:workflow with a stage for the
-`deplete_taxa`, `filter_to_taxon`, and `assemble` calls. More
-generally, any toplevel call with no subexpressions will be compiled
-to a stage. For example, in workflow `foo`, only call `C` fits the
-bill.
+In support of this, as of version 0.70, if `detect_virus` is compiled
+to an unlocked workflow, the compiler generates a dx:workflow with a
+stage for the `deplete_taxa`, `filter_to_taxon`, and `assemble`
+calls. More generally, any toplevel call with no subexpressions will
+be compiled to a stage. For example, in workflow `foo`, only call `C`
+fits the bill.
 
 ```wdl
 
@@ -206,11 +206,11 @@ task D {
 }
 ```
 
-Turning the flag on has a downside, it reduces the opportunitues to
+Note that there are downsides to this solution. It reduces the opportunitues to
 batch expression evaluation. In workflow `bar`, by default, the
 calculation of `sz` and the call to `allele_freq` would be performed
 in one job. With the flag turned on, these cannot be combined, and we need three separate
-jobs. In addition, missing call arguments do not trigger a compile time error.
+jobs. In addition, missing call arguments no longer trigger a compile time error.
 
 ```wdl
 workflow bar {

@@ -5,7 +5,7 @@
 for an applet/workflow with the correct name and checksum anywhere in
 the project, not just in the target directory. This resolved
 issue (https://github.com/dnanexus/dxWDL/issues/154).
--
+- In an unlocked workflow, compiling toplevel calls to dx stages.
 
 ## 0.69
 - Support importing http URLs
