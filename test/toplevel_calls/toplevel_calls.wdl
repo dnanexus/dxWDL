@@ -6,31 +6,24 @@ workflow toplevel_calls {
     Boolean flag
     Int prime
 
-    call Add {input: a = prime, b = 1 }
+    # toplevel calls with missing argument
+    call lib.Add {input: a = prime}
+    call lib.MaybeInt
 
-    # toplevel call with missing argument
-    call Multiply {input: a = prime }
-
-    # not a toplevel call
+    # not a toplevel calls
     if (flag) {
-        call Sub
+        call lib.Inc {input: i=2 }
+    }
+    scatter (k in [1, 2]) {
+        call lib.Inc as inc2 { input: i=k }
     }
 
-    if (false) {
-        Int i2 = 10
-    }
-    if (true) {
-        Int i3 = 100
-    }
+    # top level call with subexpression
+    call lib.Multiply {input: a=1, b = prime+1 }
 
-    Array[Int?] powers10 = [i1, i2, i3]
-
-    # scatter that returns an optional type
-    scatter (i in powers10) {
-        call lib.MaybeInt { input: a=i }
-    }
-    Array[Int] r =select_all(MaybeInt.result)
     output {
-        Array[Int] results = r
+        Int add_r = Add.result
+        Int? maybe_int_r = MaybeInt.result
+        Int multiply_r = Multiply.result
     }
 }
