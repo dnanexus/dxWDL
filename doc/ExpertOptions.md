@@ -45,7 +45,7 @@ inputs file. An equivalent DNAx format inputs file is generated from
 it. For example, workflow
 [files](https://github.com/dnanexus/dxWDL/blob/master/test/files.wdl)
 has input file
-```javascript
+```json
 {
   "files.f": "dx://file-F5gkKkQ0ZvgjG3g16xyFf7b1",
   "files.f1": "dx://file-F5gkQ3Q0ZvgzxKZ28JX5YZjy",
@@ -59,7 +59,7 @@ java -jar dxWDL-0.44.jar compile test/files.wdl -project project-xxxx -inputs te
 ```
 
 generates a `test/files_input.dx.json` file that looks like this:
-```javascript
+```json
 {
   "f": {
     "$dnanexus_link": "file-F5gkKkQ0ZvgjG3g16xyFf7b1"
@@ -94,7 +94,7 @@ The `extras` command line option allows, for example, the Cromwell feature of se
 default runtime attributes of a task.
 
 If this is file `extraOptions.json`:
-```javascript
+```json
 {
     "default_runtime_attributes" : {
       "docker" : "quay.io/encode-dcc/atac-seq-pipeline:v1"
@@ -117,7 +117,7 @@ the compiler. If you wish to choose an instance type from the
 list, this can be done by specifying the `dx_instance_type` key
 instead. For example:
 
-```javascript
+```json
 runtime {
    dx_instance_type: "mem1_ssd2_x4"
 }
@@ -253,7 +253,7 @@ will find native applets in the `/A/B/C` folder, generate tasks for
 them, and write to local file `dx_extern.wdl`. If an
 applet has the `dxapp.json` signature:
 
-```javascript
+```json
 {
   "name": concat,
   "inputSpec": [
@@ -328,7 +328,7 @@ docker attribute in the runtime section as:
 `dx://project-id:/image-name`.
 
 For example:
-```javascript
+```json
 runtime {
    docker: "dx://GenomeSequenceProject:/A/B/myOrgTools"
 }
@@ -343,7 +343,7 @@ runtime {
 Sometimes, you want to use a default docker image for tasks.
 The `extras` commad line flag can help achieve this. It takes a JSON file
 as an argument. For example, if `taskAttrs.json` is this file:
-```javascript
+```json
 {
     "default_runtime_attributes" : {
       "docker" : "quay.io/encode-dcc/atac-seq-pipeline:v1"
@@ -374,7 +374,7 @@ equivalent is the *extras* file, specified with the
 section where runtime specification, timeout policies, and access control can
 be set.
 
-```javascript
+```json
 {
   "default_task_dx_attributes" : {
     "runSpec": {
@@ -460,3 +460,5 @@ task check {
 When a call is compiled to a stage, missing arguments are transformed
 into stage inputs. The `add` stage will have compulsory integer inputs
 `a` and `b`.
+
+For an in depth discussion, please see [Missing Call Arguments](MissingCallArguments.md).
