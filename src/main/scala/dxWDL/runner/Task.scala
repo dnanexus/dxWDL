@@ -460,7 +460,7 @@ case class Task(task:WdlTask,
         // we can reach the result files, and upload them to
         // the platform.
         val DX_HOME = Utils.DX_HOME
-        val dockerCmd = s"""|docker run --entrypoint /bin/bash
+        val dockerCmd = s"""|dx-docker run --entrypoint /bin/bash
                             |-v ${DX_HOME}:${DX_HOME}
                             |${imgName}
                             |$${HOME}/execution/meta/script""".stripMargin.replaceAll("\n", " ")
