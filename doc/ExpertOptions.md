@@ -45,7 +45,7 @@ inputs file. An equivalent DNAx format inputs file is generated from
 it. For example, workflow
 [files](https://github.com/dnanexus/dxWDL/blob/master/test/files.wdl)
 has input file
-```json
+```javascript
 {
   "files.f": "dx://file-F5gkKkQ0ZvgjG3g16xyFf7b1",
   "files.f1": "dx://file-F5gkQ3Q0ZvgzxKZ28JX5YZjy",
