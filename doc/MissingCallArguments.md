@@ -161,7 +161,7 @@ task assemble {
 
 ```
 
-In support of this, as of version 0.70, if `detect_virus` is compiled
+To support this use case, if `detect_virus` is compiled
 to an unlocked workflow, the compiler generates a dx:workflow with a
 stage for the `deplete_taxa`, `filter_to_taxon`, and `assemble`
 calls. More generally, any toplevel call with no subexpressions will

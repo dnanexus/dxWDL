@@ -130,7 +130,7 @@ streaming instead. The Unix `cat`, `wc`, and `head` commands are of this
 nature. To specify that a file is to be streamed, mark it as such in
 the `parameter_meta` section. For example:
 
-```
+```wdl
 task head {
     File in_file
     Int num_lines
@@ -157,7 +157,7 @@ task (below) calculates the size of a file, but does not need to
 download it.  In such cases, the input files are downloaded lazily,
 only if their data is accessed.
 
-```
+```wdl
 task fileSize {
     File in_file
 
@@ -174,7 +174,7 @@ task fileSize {
 WDL assumes that a task declaration can be overriden
 by the caller, if it is unassigned, or assigned to a constant.
 
-```
+```wdl
 task manipulate {
   Int x
   Int y = 6
@@ -195,7 +195,7 @@ workflow `foo` has three inputs: `ref_genome`, `min_coverage`, and
 because it is assigned to an expression. Note that `config` is an
 input, even though it is located in the middle of the workflow.
 
-```
+```wdl
 workflow foo {
     File ref_genome
     Float min_coverage = 0.8
@@ -216,7 +216,7 @@ specifying them from the input file. For example, workflow `math`
 calls task `add`, but does not specify argument `b`. It can then
 be specified from the input file as follows: `{ "math.add.b" : 3}`.
 
-```
+```wdl
 task add {
     Int a
     Int b
@@ -253,7 +253,7 @@ will find native applets in the `/A/B/C` folder, generate tasks for
 them, and write to local file `dx_extern.wdl`. If an
 applet has the `dxapp.json` signature:
 
-```
+```json
 {
   "name": concat,
   "inputSpec": [
@@ -275,7 +275,7 @@ applet has the `dxapp.json` signature:
 ```
 
 The WDL definition file will be:
-```
+```wdl
 task concat {
   String a
   String b
@@ -292,7 +292,7 @@ task concat {
 The meta section includes the applet-id, which will be called at runtime. A WDL file can
 call the `concat` task as follows:
 
-```
+```wdl
 import "dx_extern.wdl" as lib
 
 workflow w {
@@ -328,7 +328,7 @@ docker attribute in the runtime section as:
 `dx://project-id:/image-name`.
 
 For example:
-```
+```json
 runtime {
    docker: "dx://GenomeSequenceProject:/A/B/myOrgTools"
 }
@@ -343,7 +343,7 @@ runtime {
 Sometimes, you want to use a default docker image for tasks.
 The `extras` commad line flag can help achieve this. It takes a JSON file
 as an argument. For example, if `taskAttrs.json` is this file:
-```
+```json
 {
     "default_runtime_attributes" : {
       "docker" : "quay.io/encode-dcc/atac-seq-pipeline:v1"
@@ -374,7 +374,7 @@ equivalent is the *extras* file, specified with the
 section where runtime specification, timeout policies, and access control can
 be set.
 
-```
+```json
 {
   "default_task_dx_attributes" : {
     "runSpec": {
@@ -413,3 +413,46 @@ intermediate results are moved into a subfolder named
 that reorganizes the output folder, it uses `CONTRIBUTE` access to
 reach into the parent project, create a subfolder, and move files into
 it.
+
+
+## Toplevel calls compiled as stages
+
+If a workflow is compiled in unlocked mode, top level calls with no
+subexpressions are compiled directly to dx:workflow stages. For
+example, in workflow `foo` call `add` is compiled to a dx:stage.
+`concat` has a subexpression, and `check` is not a top level call; they
+will be compiled to dx:applets.
+
+```wdl
+
+workflow foo {
+    String username
+    Boolean flag
+
+    call add
+    call concat {input: x="hello", y="_" + username }
+
+    if (flag) {
+        call check {input:  factor = 1 }
+    }
+}
+
+task add {
+    Int a
+    Int b
+    command {}
+    output { Int result = a + b }
+}
+
+task concat {
+   String s1
+   String s2
+   command {}
+   output { String result = s1 + s2 }
+}
+
+task check {
+   Int factor = 3
+   ...
+}
+```

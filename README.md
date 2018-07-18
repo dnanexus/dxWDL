@@ -5,7 +5,7 @@ dxWDL takes a bioinformatics pipeline written in the
 and compiles it to an equivalent workflow on the DNAnexus platform.
 It provides a reasonably complete set of WDL features.
 WDL draft-2 is supported, with a few exceptions:
-* Expressions in the output section are not supported
+* Expressions in the output section are not allowed
 * Calls with missing arguments have limited support
 
 ## Setup
