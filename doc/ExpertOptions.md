@@ -16,7 +16,7 @@ Make sure you've installed the dx-toolkit CLI, and initialized it with
 [releases](https://github.com/dnanexus/dxWDL/releases) page.
 
 To compile a workflow:
-```
+```sh
 $ java -jar dxWDL-xxx.jar compile /path/to/foo.wdl -project project-xxxx
 ```
 This compiles `foo.wdl` to platform workflow `foo` in dx's
@@ -45,7 +45,7 @@ inputs file. An equivalent DNAx format inputs file is generated from
 it. For example, workflow
 [files](https://github.com/dnanexus/dxWDL/blob/master/test/files.wdl)
 has input file
-```
+```json
 {
   "files.f": "dx://file-F5gkKkQ0ZvgjG3g16xyFf7b1",
   "files.f1": "dx://file-F5gkQ3Q0ZvgzxKZ28JX5YZjy",
@@ -54,7 +54,7 @@ has input file
 ```
 
 The command
-```
+```sh
 java -jar dxWDL-0.44.jar compile test/files.wdl -project project-xxxx -inputs test/files_input.json
 ```
 
