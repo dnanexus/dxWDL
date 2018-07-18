@@ -16,7 +16,7 @@ Make sure you've installed the dx-toolkit CLI, and initialized it with
 [releases](https://github.com/dnanexus/dxWDL/releases) page.
 
 To compile a workflow:
-```sh
+```console
 $ java -jar dxWDL-xxx.jar compile /path/to/foo.wdl -project project-xxxx
 ```
 This compiles `foo.wdl` to platform workflow `foo` in dx's
