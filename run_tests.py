@@ -222,8 +222,8 @@ def build_test(tname, project, folder, version_id, compiler_flags):
                 "-project", project.get_id() ]
     cmdline += compiler_flags
     print(" ".join(cmdline))
-    subprocess.check_output(cmdline)
-    return lookup_dataobj(tname, project, folder)
+    oid = subprocess.check_output(cmdline).strip()
+    return oid
 
 def ensure_dir(path):
     print("making sure that {} exists".format(path))

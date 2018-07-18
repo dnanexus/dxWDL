@@ -2,12 +2,15 @@
   */
 package dxWDL.compiler
 
+import com.fasterxml.jackson.databind.JsonNode
 import dxWDL.{Utils, Verbose}
-import com.dnanexus.{DXApplet, DXDataObject, DXProject, DXSearch, DXWorkflow}
+import com.dnanexus._
 import java.time.{LocalDateTime, ZoneId}
+import java.time.format.DateTimeFormatter
 import scala.collection.JavaConverters._
 import scala.collection.mutable.HashMap
 import scala.collection.mutable.HashSet
+import spray.json._
 import Utils.CHECKSUM_PROP
 
 // Keep all the information about an applet in packaged form
@@ -31,21 +34,25 @@ case class DxObjectDirectory(ns: IR.Namespace,
                              folder: String,
                              verbose: Verbose) {
     private lazy val objDir : HashMap[String, Vector[DxObjectInfo]] = bulkLookup()
+    private lazy val projectObjDir :
+            Map[(String,String), (DXDataObject, DXDataObject.Describe)] = projectBulkLookup()
     private val folders = HashSet.empty[String]
 
-    // Instead of looking applets/workflows one by one, perform a bulk lookup, and
-    // find all the objects in the target directory. Setup an easy to
-    // use map with information on each name.
-    private def bulkLookup() : HashMap[String, Vector[DxObjectInfo]] = {
-        // make a list of all expected workflow and applet names
+    // a list of all dx:workflow and dx:applet names used in this WDL workflow
+    private def allExecutableNames: Set[String] = {
         val allAppletNames: Set[String] = ns.applets.keys.toSet
         val allWorkflowNames: Set[String] = ns.listWorkflows.map(_.name).toSet
 
         val bothAplWf = allAppletNames.intersect(allWorkflowNames)
         if (!bothAplWf.isEmpty)
             throw new Exception(s"Illegal IR namespace, applet and workflow share names ${bothAplWf}")
-        val allNames = allAppletNames ++ allWorkflowNames
+        allAppletNames ++ allWorkflowNames
+    }
 
+    // Instead of looking up applets/workflows one by one, perform a bulk lookup, and
+    // find all the objects in the target directory. Setup an easy to
+    // use map with information on each name.
+    private def bulkLookup() : HashMap[String, Vector[DxObjectInfo]] = {
         val dxAppletsInFolder: List[DXApplet] = DXSearch.findDataObjects()
             .inFolder(dxProject, folder)
             .withClassApplet
@@ -60,7 +67,7 @@ case class DxObjectDirectory(ns: IR.Namespace,
         // Leave only dx:objects that could belong to the workflow
         val dxObjects = (dxAppletsInFolder ++ dxWorkflowsInFolder).filter{ dxObj =>
             val name = dxObj.getCachedDescribe().getName
-            allNames contains name
+            allExecutableNames contains name
         }
 
         val dxObjectList: List[DxObjectInfo] = dxObjects.map{ dxObj =>
@@ -95,11 +102,54 @@ case class DxObjectDirectory(ns: IR.Namespace,
         hm
     }
 
-    def lookup(aplName: String) : Vector[DxObjectInfo] = {
-        objDir.get(aplName) match {
+
+    // Scan the entire project for dx:workflows and dx:applets that we
+    // already created, and may be reused, instead of recompiling.
+    private def projectBulkLookup()
+            : Map[(String,String), (DXDataObject, DXDataObject.Describe)] = {
+        val dxAppletsInProj: List[DXApplet] = DXSearch.findDataObjects()
+            .inProject(dxProject)
+            .withClassApplet
+            .includeDescribeOutput(DXDataObject.DescribeOptions.get().withProperties())
+            .execute().asList().asScala.toList
+        val dxWorkflowsInProj: List[DXWorkflow] = DXSearch.findDataObjects()
+            .inProject(dxProject)
+            .withClassWorkflow
+            .includeDescribeOutput(DXDataObject.DescribeOptions.get().withProperties())
+            .execute().asList().asScala.toList
+
+        // Leave only dx:objects that could belong to the workflow
+        val dxObjects = (dxAppletsInProj ++ dxWorkflowsInProj).filter{ dxObj =>
+            val name = dxObj.getCachedDescribe().getName
+            allExecutableNames contains name
+        }
+
+        val hm = HashMap.empty[(String, String), (DXDataObject, DXDataObject.Describe)]
+        dxObjects.foreach{ dxObj =>
+            val desc = dxObj.getCachedDescribe()
+            val name = desc.getName()
+
+            val props: Map[String, String] = desc.getProperties().asScala.toMap
+            props.get(CHECKSUM_PROP) match {
+                case None => ()
+                case Some(digest) =>
+                    hm((name, digest)) = (dxObj, desc)
+            }
+        }
+        hm.toMap
+    }
+
+    def lookup(execName: String) : Vector[DxObjectInfo] = {
+        objDir.get(execName) match {
             case None => Vector.empty
             case Some(v) => v
         }
+    }
+
+    // Search for an executable named [execName], with a specific
+    // checksum anywhere in the project. This could save recompilation.
+    def lookupOtherVersions(execName: String, digest: String) : Option[(DXDataObject, DXDataObject.Describe)] = {
+        projectObjDir.get((execName, digest))
     }
 
     def insert(name:String, dxObj:DXDataObject, digest: String) : Unit = {
@@ -108,10 +158,51 @@ case class DxObjectDirectory(ns: IR.Namespace,
     }
 
     // create a folder, if it does not already exist.
-    def newFolder(fullPath:String) : Unit = {
+    private def newFolder(fullPath:String) : Unit = {
         if (!(folders contains fullPath)) {
             dxProject.newFolder(fullPath, true)
             folders.add(fullPath)
+        }
+    }
+
+    // Move an object into an archive directory. If the object
+    // is an applet, for example /A/B/C/GLnexus, move it to
+    //     /A/B/C/Applet_archive/GLnexus (Day Mon DD hh:mm:ss year)
+    // If the object is a workflow, move it to
+    //     /A/B/C/Workflow_archive/GLnexus (Day Mon DD hh:mm:ss year)
+    //
+    // Examples:
+    //   GLnexus (Fri Aug 19 18:01:02 2016)
+    //   GLnexus (Mon Mar  7 15:18:14 2016)
+    //
+    // Note: 'dx build' does not support workflow archiving at the moment.
+    def archiveDxObject(objInfo:DxObjectInfo) : Unit = {
+        Utils.trace(verbose.on, s"Archiving ${objInfo.name} ${objInfo.dxObj.getId}")
+        val dxClass:String = objInfo.dxClass
+        val destFolder = folder ++ "/." ++ dxClass + "_archive"
+
+        // move the object to the new location
+        newFolder(destFolder)
+        dxProject.move(List(objInfo.dxObj).asJava, List.empty[String].asJava, destFolder)
+
+        // add the date to the object name
+        val formatter = DateTimeFormatter.ofPattern("EE MMM dd kk:mm:ss yyyy")
+        val crDateStr = objInfo.crDate.format(formatter)
+        val req = JsObject(
+            "project" -> JsString(dxProject.getId),
+            "name" -> JsString(s"${objInfo.name} ${crDateStr}")
+        )
+
+        dxClass match {
+            case "Workflow" =>
+                DXAPI.workflowRename(objInfo.dxObj.getId,
+                                     Utils.jsonNodeOfJsValue(req),
+                                     classOf[JsonNode])
+            case "Applet" =>
+                DXAPI.appletRename(objInfo.dxObj.getId,
+                                   Utils.jsonNodeOfJsValue(req),
+                                   classOf[JsonNode])
+            case other => throw new Exception(s"Unkown class ${other}")
         }
     }
 }
