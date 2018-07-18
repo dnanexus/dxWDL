@@ -8,9 +8,7 @@ parameters `a` and `b` are required. If the user supplies
 
 ```wdl
 workflow trivial {
-    input {
-      Int x
-    }
+    Int x
     call add {
       input: a=x
     }
@@ -20,10 +18,8 @@ workflow trivial {
 }
 
 task add {
-  input {
-    Int a
-    Int b
-  }
+  Int a
+  Int b
   command {}
   output {
     Int result = a + b
@@ -55,7 +51,7 @@ add.a, add.b, add.c}`. A large realistic workflow makes many calls,
 and has many hidden arguments. To implement this with a dnanexus
 workflow, we need to materialize all these inputs, they cannot remain
 hidden. The resulting platform workflow could easily have tens or
-hundreds of inputs, making the user interface interface ungainly.
+hundreds of inputs, making the user interface ungainly.
 
 ## Implementation issues
 
@@ -64,10 +60,8 @@ take a look at adding `trivial.add.b`. The workflow is rewritten to:
 
 ```wdl
 workflow trivial {
-    input {
-      Int x
-      Int add_b
-    }
+    Int x
+    Int add_b
     call add {
       input: a=x, b=add_b
     }
@@ -91,7 +85,6 @@ Each workflow can go through multiple rewrite steps, each of which may encounter
 naming collisions. For a complex workflow, the end result could be so different from
 the original, as to be unrecognizable. Because names are mangled, following what
 happens are runtime in the UI will be hard.
-
 
 ## Compromise: toplevel calls compiled as stages
 

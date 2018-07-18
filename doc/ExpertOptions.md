@@ -19,10 +19,10 @@ To compile a workflow:
 ```
 $ java -jar dxWDL-xxx.jar compile /path/to/foo.wdl -project project-xxxx
 ```
-This compiles ```foo.wdl``` to platform workflow ```foo``` in dx's
+This compiles `foo.wdl` to platform workflow `foo` in dx's
 current project and folder. The generated workflow can then be run as
 usual using `dx run`. For example, if the workflow takes string
-argument ```X```, then: ``` dx run foo -i0.X="hello world" ```
+argument `X`, then: ``` dx run foo -i0.X="hello world" ```
 
 Compilation can be controled with several parameters.
 
@@ -35,7 +35,7 @@ Compilation can be controled with several parameters.
 | force    | Overwrite existing applets/workflows if they have changed |
 | inputs   | A cromwell style inputs file |
 | imports  | Directory to search for imported WDL files |
-| locked   | Create a locked-down workflow (experimental) |
+| locked   | Create a locked-down workflow |
 | reorg    | Move workflow intermediate results into a separate subdirectory |
 | verbose  | Print detailed progress information |
 
