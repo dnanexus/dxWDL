@@ -102,9 +102,6 @@ object Utils {
     // on unused variables.
     def ignore[A](value: A) : Unit = {}
 
-    // Substrings used by the compiler for encoding purposes
-    val reservedSubstrings = List("___")
-
     lazy val execDirPath : Path = {
         val currentDir = System.getProperty("user.dir")
         val p = Paths.get(currentDir, "execution")

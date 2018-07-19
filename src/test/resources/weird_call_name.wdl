@@ -6,7 +6,7 @@ task review {
     }
 }
 
-workflow illegal_call_name {
+workflow weird_call_name {
     Array[String] titles
 
     scatter (film in titles) {

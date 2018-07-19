@@ -7,54 +7,12 @@ package dxWDL.compiler
 import dxWDL._
 import scala.collection.mutable.Queue
 import wdl.draft2.model._
-import wdl.draft2.parser.WdlParser.Ast
 import wom.types._
 
 case class Validate(cef: CompilerErrorFormatter,
                     verbose: Verbose) {
     val verbose2:Boolean = verbose.keywords contains "validate"
     val allErrors = Queue.empty[String]
-
-    // Make a pass on all declarations amd calls. Make sure no reserved words or prefixes
-    // are used.
-    private def checkReservedWords(ns: WdlNamespace) : Unit = {
-        def checkVarName(varName: String, ast: Ast) : Unit = {
-            Utils.reservedSubstrings.foreach{ s =>
-                if (varName contains s)
-                    allErrors += cef.illegalVariableName(ast)
-            }
-        }
-        def checkCallName(call : WdlCall) : Unit = {
-            for (sb <- Utils.reservedSubstrings) {
-                if (call.unqualifiedName contains sb) {
-                    allErrors += cef.illegalCallName(call)
-                }
-            }
-        }
-        def deepCheck(children: Seq[Scope]) : Unit = {
-            children.foreach {
-                case decl:DeclarationInterface =>
-                    checkVarName(decl.unqualifiedName, decl.ast)
-                case call:WdlCall =>
-                    checkCallName(call)
-                case ssc:Scatter =>
-                    checkVarName(ssc.item, ssc.ast)
-                    deepCheck(ssc.children)
-                case ifStmt:If =>
-                    deepCheck(ifStmt.children)
-                case _ => ()
-            }
-        }
-        ns match {
-            case nswf: WdlNamespaceWithWorkflow => deepCheck(nswf.workflow.children)
-            case _ => ()
-        }
-        ns.tasks.map{ task =>
-            // check task inputs and outputs
-            deepCheck(task.outputs)
-            deepCheck(task.declarations)
-        }
-    }
 
     private def validateTask(task: WdlTask) : Unit = {
         // validate runtime attributes
@@ -63,17 +21,6 @@ case class Validate(cef: CompilerErrorFormatter,
                 Utils.warning(verbose,
                               s"Runtime attribute ${attrName} for task ${task.name} is unknown")
         }
-    }
-
-    // A trivial expression is a variable id, or a fully-qualified name.
-    // For examples {a, b, a.b.c}. These are not trivial: {a+b, a-b, sub(x,y,z) }.
-    //
-    private def isTrivialExpression(expr: WdlExpression,
-                                    van: VarAnalysis) : Boolean = {
-        val ids: Set[String] = van.findAllInExpr(expr)
-        if (ids.size != 1)
-            return false
-        ids.head == expr.toWomString
     }
 
     // Make sure we don't have partial output expressions like:
@@ -103,10 +50,10 @@ case class Validate(cef: CompilerErrorFormatter,
         if (names.toSet.size != names.toVector.size)
             allErrors += "Duplicate names in the workflow output section"
 
-        // Only trivial expressions are supposed
+        // Only trivial expressions are supported in the output section
         val van = VarAnalysis(Set.empty, Map.empty, cef, verbose)
         wfOutputs.foreach{ wot =>
-            if (!isTrivialExpression(wot.requiredExpression, van)) {
+            if (!van.isTrivialExpression(wot.requiredExpression)) {
                 allErrors += cef.notCurrentlySupported(
                     wot.ast,
                     "expressions in the output section")
@@ -152,7 +99,7 @@ case class Validate(cef: CompilerErrorFormatter,
                     val msg = s"""|Workflow doesn't supply required input ${decl.unqualifiedName}
                                   |to call ${call.unqualifiedName}
                                   |""".stripMargin.replaceAll("\n", " ")
-                    allErrors += cef.missingCallArgument(call.ast, msg)
+                    Utils.warning(verbose, cef.missingCallArgument(call.ast, msg))
                 case _ => ()
             }
         }
@@ -176,7 +123,6 @@ case class Validate(cef: CompilerErrorFormatter,
     }
 
     def apply(ns: WdlNamespace) : Unit = {
-        checkReservedWords(ns)
         ns.tasks.foreach(t => validateTask(t))
 
         // Make sure there are well defined outputs

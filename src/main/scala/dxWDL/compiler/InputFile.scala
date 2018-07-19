@@ -279,6 +279,7 @@ case class InputFile(verbose: Verbose) {
                     cif.checkAndBind(fqn, dxName, cVar)
                 }
             case Some(wf) =>
+                // unlocked workflow
                 if (!wf.stages.isEmpty) {
                     val commonStage = wf.stages.head.id.getId
                     wf.inputs.foreach { case (cVar, sArg) =>

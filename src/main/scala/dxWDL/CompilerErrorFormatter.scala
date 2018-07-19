@@ -42,24 +42,6 @@ case class CompilerErrorFormatter(resource: String,
                     |""".stripMargin
     }
 
-    def illegalCallName(call: WdlCall) : String = {
-        val t: Terminal = AstTools.findTerminals(call.ast).head
-        s"""|Illegal call name ${call.unqualifiedName}
-            |
-            |${textualSource(t)}
-            |${pointToSource(t)}
-            |""".stripMargin
-    }
-
-    def illegalVariableName(ast: Ast) : String = {
-        val name: Terminal = ast.getAttribute("name").asInstanceOf[Terminal]
-        s"""|Illegal variable name
-            |
-            |${textualSource(name)}
-            |${pointToSource(name)}
-            |""".stripMargin
-    }
-
     def missingCallArgument(ast: Ast, msg:String) : String = {
         val t: Terminal = AstTools.findTerminals(ast).head
         s"""|Call is missing a compulsory argument.

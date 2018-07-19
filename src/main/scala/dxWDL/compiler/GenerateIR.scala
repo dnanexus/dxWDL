@@ -892,7 +892,8 @@ task Add {
         )
 
         // Create a stage per call/scatter-block/declaration-block
-        val subBlocks = Block.splitIntoBlocks(wfProper.toVector)
+        val van = new VarAnalysis(Set.empty, Map.empty, cef, verbose)
+        val subBlocks = Block.splitIntoBlocks(wfProper.toVector, locked, van)
 
         val (allStageInfo_i, wfOutputs) =
             if (locked)
