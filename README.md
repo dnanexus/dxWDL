@@ -112,4 +112,3 @@ our [contrib](contrib) folder, or [let us know](https://github.com/dnanexus/dxWD
 if you would like to contribute or request a feature.
 
  - [docker](contrib/docker): A Dockerfile to deploy the software ([@vsoch](https://www.github.com/vsoch))
- - [czi](contrib/czi): From the [HumanCellAtlas project](https://github.com/HumanCellAtlas/skylab)

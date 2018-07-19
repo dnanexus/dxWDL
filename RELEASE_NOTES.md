@@ -1,7 +1,15 @@
 # Release Notes
 
 ## 0.71
-- In an unlocked workflow, compiling toplevel calls to dx stages.
+- In an unlocked workflow, compiling toplevel calls with no
+subexpressions to dx stages. The
+[expert options](./doc/ExpertOptions.md#Toplevel-calls-compiled-as-stages)
+page has a full description of the feature.
+- Allow the compiler to reuse applets that have been archived. Such
+applets are moved to a `.Archive` directory, and the creation date is
+appended to the applet name. Since the applet name changed, the search
+failed to find it. This was fixed by making the search look for
+a name prefix matche, instead of an exact match.
 
 
 ## 0.70
