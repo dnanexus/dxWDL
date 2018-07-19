@@ -61,11 +61,13 @@ case class DxObjectDirectory(ns: IR.Namespace,
         val dxAppletsInFolder: List[DXApplet] = DXSearch.findDataObjects()
             .inFolder(dxProject, folder)
             .withClassApplet
+            .withProperty(CHECKSUM_PROP)
             .includeDescribeOutput(DXDataObject.DescribeOptions.get().withProperties())
             .execute().asList().asScala.toList
         val dxWorkflowsInFolder: List[DXWorkflow] = DXSearch.findDataObjects()
             .inFolder(dxProject, folder)
             .withClassWorkflow
+            .withProperty(CHECKSUM_PROP)
             .includeDescribeOutput(DXDataObject.DescribeOptions.get().withProperties())
             .execute().asList().asScala.toList
 
@@ -110,24 +112,25 @@ case class DxObjectDirectory(ns: IR.Namespace,
 
     // Scan the entire project for dx:workflows and dx:applets that we
     // already created, and may be reused, instead of recompiling.
+    //
+    // Note: This could be expensive, and we need a good way of limiting it. The best
+    // way is to supply a maximum number of replies.
     private def projectBulkLookup() : Map[String, Vector[(DXDataObject, DXDataObject.Describe)]] = {
         val dxAppletsInProj: List[DXApplet] = DXSearch.findDataObjects()
             .inProject(dxProject)
             .withClassApplet
+            .withProperty(CHECKSUM_PROP)
             .includeDescribeOutput(DXDataObject.DescribeOptions.get().withProperties())
             .execute().asList().asScala.toList
+        Utils.trace(verbose.on, s"Found ${dxAppletsInProj.size} applets in project")
         val dxWorkflowsInProj: List[DXWorkflow] = DXSearch.findDataObjects()
             .inProject(dxProject)
             .withClassWorkflow
+            .withProperty(CHECKSUM_PROP)
             .includeDescribeOutput(DXDataObject.DescribeOptions.get().withProperties())
             .execute().asList().asScala.toList
-
-        // Leave only dx:objects that could belong to the workflow
+        Utils.trace(verbose.on, s"Found ${dxWorkflowsInProj.size} workflows in project")
         val dxObjects = (dxAppletsInProj ++ dxWorkflowsInProj)
-            /*.filter{ dxObj =>
-            val name = dxObj.getCachedDescribe().getName
-            allExecutableNames contains name
-        }*/
 
         val hm = HashMap.empty[String, Vector[(DXDataObject, DXDataObject.Describe)]]
         dxObjects.foreach{ dxObj =>

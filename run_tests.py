@@ -16,7 +16,8 @@ import util
 from dxpy.exceptions import DXJobFailureError
 
 top_dir = os.path.dirname(sys.argv[0])
-test_dir = os.path.join(top_dir, "test")
+test_dir = os.path.join(os.path.abspath(top_dir), "test")
+
 git_revision = subprocess.check_output(["git", "describe", "--always", "--dirty", "--tags"]).strip()
 test_files={}
 test_failing=set(["bad_status", "bad_status2", "missing_output"])
@@ -505,6 +506,8 @@ def main():
     argparser.add_argument("--verbose", help="Verbose compilation",
                            action="store_true", default=False)
     args = argparser.parse_args()
+
+    print("top_dir={} test_dir={}".format(top_dir, test_dir))
 
     register_all_tests()
     if args.test_list:

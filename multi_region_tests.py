@@ -18,7 +18,7 @@ from dxpy.exceptions import DXJobFailureError
 
 projects = ["dxWDL_playground", "dxWDL_Sydney", "dxWDL_Azure"]
 top_dir = os.path.dirname(sys.argv[0])
-test_dir = os.path.join(top_dir, "test")
+test_dir = os.path.join(os.path.abspath(top_dir), "test")
 target_folder = "/release_test"
 
 # Build a workflow.

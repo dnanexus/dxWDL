@@ -17,7 +17,8 @@ import time
 AssetDesc = namedtuple('AssetDesc', 'region asset_id project')
 
 max_num_retries = 5
-dxWDL_jar_path = "applet_resources/resources/dxWDL.jar"
+def dxWDL_jar_path(top_dir):
+    return os.path.join(top_dir, "applet_resources/resources/dxWDL.jar")
 
 def get_top_conf_path(top_dir):
     return os.path.join(top_dir, "ref.conf")
@@ -91,11 +92,12 @@ def sbt_assembly(top_dir):
     if not os.path.exists("applet_resources/resources"):
         os.mkdir("applet_resources/resources")
 
-    if os.path.exists(dxWDL_jar_path):
-        os.remove(dxWDL_jar_path)
+    jar_path = dxWDL_jar_path(top_dir)
+    if os.path.exists(jar_path):
+        os.remove(jar_path)
     subprocess.check_call(["sbt", "clean"])
     subprocess.check_call(["sbt", "assembly"])
-    if not os.path.exists(dxWDL_jar_path):
+    if not os.path.exists(jar_path):
         raise Exception("sbt assembly failed")
     os.chdir(crnt_work_dir)
 
@@ -168,7 +170,8 @@ def build_compiler_jar(version_id, top_dir, project_dict):
         fd.write(conf)
 
     # Add the configuration file to the jar archive
-    subprocess.check_call(["jar", "uf", dxWDL_jar_path, crnt_conf_path])
+    jar_path = dxWDL_jar_path(top_dir)
+    subprocess.check_call(["jar", "uf", jar_path, crnt_conf_path])
     all_regions_str = ", ".join(all_regions)
     print("Added configuration for regions [{}] to jar file".format(all_regions_str))
 
@@ -178,7 +181,7 @@ def build_compiler_jar(version_id, top_dir, project_dict):
 
     # Move the file to the top level directory
     all_in_one_jar = os.path.join(top_dir, "dxWDL-{}.jar".format(version_id))
-    shutil.move(os.path.join(top_dir, dxWDL_jar_path),
+    shutil.move(os.path.join(top_dir, jar_path),
                 all_in_one_jar)
     return all_in_one_jar
 

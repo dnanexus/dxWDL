@@ -330,22 +330,19 @@ case class Native(dxWDLrtId: String,
     // Do we need to build this applet/workflow?
     //
     // Returns:
-    //   None: build is required: None
+    //   None: build is required
     //   Some(dxobject) : the right object is already on the platform
     private def isBuildRequired(name: String,
                                 digest: String) : Option[DXDataObject] = {
-        val existingDxObjs = dxObjDir.lookup(name)
-        if (existingDxObjs.isEmpty) {
-            // The executable does not exist in the target path.
-            // Have we built it, but placed it elsewhere in the project?
-            dxObjDir.lookupOtherVersions(name, digest) match {
-                case None => ()
-                case Some((dxObj, desc)) =>
-                    trace(verbose.on, s"Found ${name} in an alternate folder ${desc.getFolder}")
-                    return Some(dxObj)
-            }
+        // Have we built this applet already, but placed it elsewhere in the project?
+        dxObjDir.lookupOtherVersions(name, digest) match {
+            case None => ()
+            case Some((dxObj, desc)) =>
+                trace(verbose.on, s"Found existing version of ${name} in folder ${desc.getFolder}")
+                return Some(dxObj)
         }
 
+        val existingDxObjs = dxObjDir.lookup(name)
         val buildRequired:Boolean = existingDxObjs.size match {
             case 0 => true
             case 1 =>
