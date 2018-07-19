@@ -16,13 +16,13 @@ Make sure you've installed the dx-toolkit CLI, and initialized it with
 [releases](https://github.com/dnanexus/dxWDL/releases) page.
 
 To compile a workflow:
-```
+```console
 $ java -jar dxWDL-xxx.jar compile /path/to/foo.wdl -project project-xxxx
 ```
-This compiles ```foo.wdl``` to platform workflow ```foo``` in dx's
+This compiles `foo.wdl` to platform workflow `foo` in dx's
 current project and folder. The generated workflow can then be run as
 usual using `dx run`. For example, if the workflow takes string
-argument ```X```, then: ``` dx run foo -i0.X="hello world" ```
+argument `X`, then: ``` dx run foo -i0.X="hello world" ```
 
 Compilation can be controled with several parameters.
 
@@ -35,7 +35,7 @@ Compilation can be controled with several parameters.
 | force    | Overwrite existing applets/workflows if they have changed |
 | inputs   | A cromwell style inputs file |
 | imports  | Directory to search for imported WDL files |
-| locked   | Create a locked-down workflow (experimental) |
+| locked   | Create a locked-down workflow |
 | reorg    | Move workflow intermediate results into a separate subdirectory |
 | verbose  | Print detailed progress information |
 
@@ -54,7 +54,7 @@ has input file
 ```
 
 The command
-```
+```console
 java -jar dxWDL-0.44.jar compile test/files.wdl -project project-xxxx -inputs test/files_input.json
 ```
 
@@ -74,20 +74,20 @@ generates a `test/files_input.dx.json` file that looks like this:
 ```
 
 The workflow can then be run with the command:
-```
-dx run files -f test/files_input.dx.json
+```console
+$ dx run files -f test/files_input.dx.json
 ```
 
 The `-defaults` option is similar to `-inputs`. It takes a JSON file with key-value pairs,
 and compiles them as defaults into the workflow. If the `files.wdl` worklow is compiled with
 `-defaults` instead of `-inputs`
-```
-java -jar dxWDL-0.44.jar compile test/files.wdl -project project-xxxx -defaults test/files_input.json
+```console
+$ java -jar dxWDL-0.44.jar compile test/files.wdl -project project-xxxx -defaults test/files_input.json
 ```
 
 It can be run without parameters, for an equivalent execution.
-```
-dx run files
+```console
+$ dx run files
 ```
 
 The `extras` command line option allows, for example, the Cromwell feature of setting the
@@ -104,8 +104,8 @@ If this is file `extraOptions.json`:
 
 Then adding it to the compilation command line will add the `atac-seq` docker image to all
 tasks by default.
-```
-java -jar dxWDL-0.44.jar compile test/files.wdl -project project-xxxx -defaults test/files_input.json -extras extraOptions.json
+```console
+$ java -jar dxWDL-0.44.jar compile test/files.wdl -project project-xxxx -defaults test/files_input.json -extras extraOptions.json
 ```
 
 ## Extensions
@@ -130,7 +130,7 @@ streaming instead. The Unix `cat`, `wc`, and `head` commands are of this
 nature. To specify that a file is to be streamed, mark it as such in
 the `parameter_meta` section. For example:
 
-```
+```wdl
 task head {
     File in_file
     Int num_lines
@@ -157,7 +157,7 @@ task (below) calculates the size of a file, but does not need to
 download it.  In such cases, the input files are downloaded lazily,
 only if their data is accessed.
 
-```
+```wdl
 task fileSize {
     File in_file
 
@@ -174,7 +174,7 @@ task fileSize {
 WDL assumes that a task declaration can be overriden
 by the caller, if it is unassigned, or assigned to a constant.
 
-```
+```wdl
 task manipulate {
   Int x
   Int y = 6
@@ -195,7 +195,7 @@ workflow `foo` has three inputs: `ref_genome`, `min_coverage`, and
 because it is assigned to an expression. Note that `config` is an
 input, even though it is located in the middle of the workflow.
 
-```
+```wdl
 workflow foo {
     File ref_genome
     Float min_coverage = 0.8
@@ -216,7 +216,7 @@ specifying them from the input file. For example, workflow `math`
 calls task `add`, but does not specify argument `b`. It can then
 be specified from the input file as follows: `{ "math.add.b" : 3}`.
 
-```
+```wdl
 task add {
     Int a
     Int b
@@ -233,14 +233,8 @@ workflow math {
 }
 ```
 
-The dx:workflow that is compiled from `math` can set this variable from
-the command line as follows:
-```
-dx run math -iadd.b=5
-```
-
-Setting workflow variables from the command line works for all unnested calls.
-If the call is inside a scatter or an if block, this is not supported.
+Currently, dxWDL does not support this feature. However, there is a [suggestion](MissingCallArguments.md)
+for limited support.
 
 ## Calling existing applets
 
@@ -251,8 +245,8 @@ subcommand, short for *Dx Native Interface*, is dedicated to this use
 case. It searchs a platform folder and generates a WDL wrapper task for each
 applet. For example, the command:
 
-```
-java -jar dxWDL.jar dxni --project project-xxxx --folder /A/B/C --output dx_extern.wdl
+```console
+$ java -jar dxWDL.jar dxni --project project-xxxx --folder /A/B/C --output dx_extern.wdl
 ```
 
 will find native applets in the `/A/B/C` folder, generate tasks for
@@ -281,7 +275,7 @@ applet has the `dxapp.json` signature:
 ```
 
 The WDL definition file will be:
-```
+```wdl
 task concat {
   String a
   String b
@@ -298,7 +292,7 @@ task concat {
 The meta section includes the applet-id, which will be called at runtime. A WDL file can
 call the `concat` task as follows:
 
-```
+```wdl
 import "dx_extern.wdl" as lib
 
 workflow w {
@@ -315,8 +309,8 @@ workflow w {
 
 To call apps instead of applets, use
 
-```
-java -jar dxWDL.jar dxni -apps -o my_apps.wdl
+```console
+$ java -jar dxWDL.jar dxni -apps -o my_apps.wdl
 ```
 
 The compiler will search for all the apps you can call, and create WDL
@@ -359,8 +353,8 @@ as an argument. For example, if `taskAttrs.json` is this file:
 
 Then adding it to the compilation command line will add the `atac-seq` docker image to all
 tasks by default.
-```
-java -jar dxWDL-0.44.jar compile files.wdl -project project-xxxx -defaults files_input.json -extras taskAttrs.json
+```console
+$ java -jar dxWDL-0.44.jar compile files.wdl -project project-xxxx -defaults files_input.json -extras taskAttrs.json
 ```
 
 ## Debugging an applet
@@ -419,3 +413,52 @@ intermediate results are moved into a subfolder named
 that reorganizes the output folder, it uses `CONTRIBUTE` access to
 reach into the parent project, create a subfolder, and move files into
 it.
+
+
+## Toplevel calls compiled as stages
+
+If a workflow is compiled in unlocked mode, top level calls with no
+subexpressions are compiled directly to dx:workflow stages. For
+example, in workflow `foo` call `add` is compiled to a dx:stage.
+`concat` has a subexpression, and `check` is not a top level call; they
+will be compiled to dx:applets.
+
+```wdl
+
+workflow foo {
+    String username
+    Boolean flag
+
+    call add
+    call concat {input: x="hello", y="_" + username }
+
+    if (flag) {
+        call check {input:  factor = 1 }
+    }
+}
+
+task add {
+    Int a
+    Int b
+    command {}
+    output { Int result = a + b }
+}
+
+task concat {
+   String s1
+   String s2
+   command {}
+   output { String result = s1 + s2 }
+}
+
+task check {
+   Int factor = 3
+   ...
+}
+```
+
+When a call is compiled to a stage, missing arguments are transformed
+into stage inputs. The `add` stage will have compulsory integer inputs
+`a` and `b`.
+
+For an in depth discussion, please see [Missing Call Arguments](MissingCallArguments.md).

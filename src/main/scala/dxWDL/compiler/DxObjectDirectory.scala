@@ -33,9 +33,14 @@ case class DxObjectDirectory(ns: IR.Namespace,
                              dxProject:DXProject,
                              folder: String,
                              verbose: Verbose) {
+    // A map from an applet/workflow that is part of the namespace to its dx:object
+    // on the target path (project/folder)
     private lazy val objDir : HashMap[String, Vector[DxObjectInfo]] = bulkLookup()
-    private lazy val projectObjDir :
-            Map[(String,String), (DXDataObject, DXDataObject.Describe)] = projectBulkLookup()
+
+    // A map from checksum to dx:executable, across the entire project.
+    private lazy val projectWideExecutableDir :
+            Map[String, Vector[(DXDataObject, DXDataObject.Describe)]] = projectBulkLookup()
+
     private val folders = HashSet.empty[String]
 
     // a list of all dx:workflow and dx:applet names used in this WDL workflow
@@ -56,11 +61,13 @@ case class DxObjectDirectory(ns: IR.Namespace,
         val dxAppletsInFolder: List[DXApplet] = DXSearch.findDataObjects()
             .inFolder(dxProject, folder)
             .withClassApplet
+            .withProperty(CHECKSUM_PROP)
             .includeDescribeOutput(DXDataObject.DescribeOptions.get().withProperties())
             .execute().asList().asScala.toList
         val dxWorkflowsInFolder: List[DXWorkflow] = DXSearch.findDataObjects()
             .inFolder(dxProject, folder)
             .withClassWorkflow
+            .withProperty(CHECKSUM_PROP)
             .includeDescribeOutput(DXDataObject.DescribeOptions.get().withProperties())
             .execute().asList().asScala.toList
 
@@ -105,35 +112,45 @@ case class DxObjectDirectory(ns: IR.Namespace,
 
     // Scan the entire project for dx:workflows and dx:applets that we
     // already created, and may be reused, instead of recompiling.
-    private def projectBulkLookup()
-            : Map[(String,String), (DXDataObject, DXDataObject.Describe)] = {
+    //
+    // Note: This could be expensive, and the maximal number of replies
+    // is (by default) 1000. Since the index is limited, we may miss
+    // miss matches when we search. The cost would be creating a
+    // dx:executable again, which is acceptable.
+    private def projectBulkLookup() : Map[String, Vector[(DXDataObject, DXDataObject.Describe)]] = {
+        val t0 = System.nanoTime()
         val dxAppletsInProj: List[DXApplet] = DXSearch.findDataObjects()
             .inProject(dxProject)
             .withClassApplet
+            .withProperty(CHECKSUM_PROP)
             .includeDescribeOutput(DXDataObject.DescribeOptions.get().withProperties())
             .execute().asList().asScala.toList
         val dxWorkflowsInProj: List[DXWorkflow] = DXSearch.findDataObjects()
             .inProject(dxProject)
             .withClassWorkflow
+            .withProperty(CHECKSUM_PROP)
             .includeDescribeOutput(DXDataObject.DescribeOptions.get().withProperties())
             .execute().asList().asScala.toList
+        val t1 = System.nanoTime()
+        val diffMSec = (t1 -t0) / (1000 * 1000)
+        Utils.trace(verbose.on,
+                    s"""|Found ${dxAppletsInProj.size} applets and ${dxWorkflowsInProj.size}
+                        |workflows in project (${diffMSec} millisec)"""
+                        .stripMargin.replaceAll("\n", " "))
+        val dxObjects = (dxAppletsInProj ++ dxWorkflowsInProj)
 
-        // Leave only dx:objects that could belong to the workflow
-        val dxObjects = (dxAppletsInProj ++ dxWorkflowsInProj).filter{ dxObj =>
-            val name = dxObj.getCachedDescribe().getName
-            allExecutableNames contains name
-        }
-
-        val hm = HashMap.empty[(String, String), (DXDataObject, DXDataObject.Describe)]
+        val hm = HashMap.empty[String, Vector[(DXDataObject, DXDataObject.Describe)]]
         dxObjects.foreach{ dxObj =>
             val desc = dxObj.getCachedDescribe()
-            val name = desc.getName()
-
             val props: Map[String, String] = desc.getProperties().asScala.toMap
             props.get(CHECKSUM_PROP) match {
                 case None => ()
                 case Some(digest) =>
-                    hm((name, digest)) = (dxObj, desc)
+                    if (hm contains digest)
+                        // Digest collision
+                        hm(digest) :+ (dxObj, desc)
+                    else
+                        hm(digest) = Vector((dxObj, desc))
             }
         }
         hm.toMap
@@ -148,8 +165,21 @@ case class DxObjectDirectory(ns: IR.Namespace,
 
     // Search for an executable named [execName], with a specific
     // checksum anywhere in the project. This could save recompilation.
-    def lookupOtherVersions(execName: String, digest: String) : Option[(DXDataObject, DXDataObject.Describe)] = {
-        projectObjDir.get((execName, digest))
+    //
+    // Note: in case of checksum collision, there could be several hits.
+    // Return only the one that starts with the name we are looking for.
+    def lookupOtherVersions(execName: String, digest: String)
+            : Option[(DXDataObject, DXDataObject.Describe)] = {
+        val checksumMatches = projectWideExecutableDir.get(digest) match {
+            case None => return None
+            case Some(vec) => vec
+        }
+        val checksumAndNameMatches = checksumMatches.filter{ case (dxObj, dxDesc) =>
+            dxDesc.getName.startsWith(execName)
+        }
+        if (checksumAndNameMatches.isEmpty)
+            return None
+        return Some(checksumAndNameMatches.head)
     }
 
     def insert(name:String, dxObj:DXDataObject, digest: String) : Unit = {

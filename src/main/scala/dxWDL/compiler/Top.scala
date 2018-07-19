@@ -140,7 +140,7 @@ object Top {
 
         // Make sure the namespace doesn't use names or substrings
         // that will give us problems.
-        Validate.apply(ns, cOpt.verbose)
+        Validate.apply(ns, cOpt.fatalValidationWarnings, cOpt.verbose)
 
         Utils.trace(cOpt.verbose.on, s"imported files: ${importedFiles.keys}")
         val ctx: Context = Context.make(importedFiles.toMap, wdlSourceFile, cOpt.verbose)

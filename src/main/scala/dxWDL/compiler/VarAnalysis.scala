@@ -26,6 +26,12 @@ case class VarAnalysis(doNotModify: Set[Scope],
     case class Accu(tokens: Vector[String],  // tokens found so far
                     pos: Int)   // position in the string
 
+    private def notCurrentlySupported(scope: Scope) : String = {
+        cef.notCurrentlySupported(
+            scope.ast,
+            "Unimplemented workflow element")
+    }
+
     // Split a a string by a regular expression into tokens. Include
     // the extents in between matches as individual tokens.
     private def splitWithRangesAsTokens(buf: String, regex: Regex) : Vector[String] = {
@@ -232,9 +238,7 @@ case class VarAnalysis(doNotModify: Set[Scope],
                 WdlRewrite.workflow(wf, children)
 
             case x =>
-                throw new Exception(cef.notCurrentlySupported(
-                                        x.ast,
-                                        "Unimplemented workflow element"))
+                throw new Exception(notCurrentlySupported(x))
         }
     }
 
@@ -295,9 +299,7 @@ case class VarAnalysis(doNotModify: Set[Scope],
                 findInExpr(wot.requiredExpression)
 
             case x =>
-                throw new Exception(cef.notCurrentlySupported(
-                                        x.ast,
-                                        "Unimplemented workflow element"))
+                throw new Exception(notCurrentlySupported(x))
         }
     }
 
@@ -344,10 +346,17 @@ case class VarAnalysis(doNotModify: Set[Scope],
                 findAllInExpr(wot.requiredExpression)
 
             case x =>
-                throw new Exception(cef.notCurrentlySupported(
-                                        x.ast,
-                                        "Unimplemented workflow element"))
+                throw new Exception(notCurrentlySupported(x))
         }
     }
 
+    // A trivial expression is a variable id, or a fully-qualified name.
+    // For examples {a, b, a.b.c}. These are not trivial: {a+b, a-b, sub(x,y,z) }.
+    //
+    def isTrivialExpression(expr: WdlExpression) : Boolean = {
+        val ids: Set[String] = findAllInExpr(expr)
+        if (ids.size != 1)
+            return false
+        ids.head == expr.toWomString
+    }
 }

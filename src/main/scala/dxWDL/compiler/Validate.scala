@@ -10,25 +10,27 @@ import wdl.draft2.model._
 import wdl.draft2.parser.WdlParser.Ast
 import wom.types._
 
-case class Validate(cef: CompilerErrorFormatter,
+case class Validate(allErrors :  Queue[String],
+                    allWarnings : Queue[String],
+                    cef: CompilerErrorFormatter,
                     verbose: Verbose) {
-    val verbose2:Boolean = verbose.keywords contains "validate"
-    val allErrors = Queue.empty[String]
+    val reservedWords = List(Utils.COMMON,
+                             Utils.OUTPUT_SECTION,
+                             Utils.REORG)
 
     // Make a pass on all declarations amd calls. Make sure no reserved words or prefixes
     // are used.
     private def checkReservedWords(ns: WdlNamespace) : Unit = {
         def checkVarName(varName: String, ast: Ast) : Unit = {
-            Utils.reservedSubstrings.foreach{ s =>
-                if (varName contains s)
-                    allErrors += cef.illegalVariableName(ast)
-            }
+            /*for (word <- reservedWords) {
+                if (varName == word)
+                    recordError(cef.illegalVariableName(ast))
+            }*/
         }
         def checkCallName(call : WdlCall) : Unit = {
-            for (sb <- Utils.reservedSubstrings) {
-                if (call.unqualifiedName contains sb) {
-                    allErrors += cef.illegalCallName(call)
-                }
+            for (word <- reservedWords) {
+                if (call.unqualifiedName == word)
+                    allErrors += (cef.illegalCallName(call))
             }
         }
         def deepCheck(children: Seq[Scope]) : Unit = {
@@ -60,20 +62,8 @@ case class Validate(cef: CompilerErrorFormatter,
         // validate runtime attributes
         task.runtimeAttributes.attrs.foreach{ case (attrName,_) =>
             if (!(Extras.RUNTIME_ATTRS contains attrName))
-                Utils.warning(verbose,
-                              s"Runtime attribute ${attrName} for task ${task.name} is unknown")
+                allWarnings += (s"Runtime attribute ${attrName} for task ${task.name} is unknown")
         }
-    }
-
-    // A trivial expression is a variable id, or a fully-qualified name.
-    // For examples {a, b, a.b.c}. These are not trivial: {a+b, a-b, sub(x,y,z) }.
-    //
-    private def isTrivialExpression(expr: WdlExpression,
-                                    van: VarAnalysis) : Boolean = {
-        val ids: Set[String] = van.findAllInExpr(expr)
-        if (ids.size != 1)
-            return false
-        ids.head == expr.toWomString
     }
 
     // Make sure we don't have partial output expressions like:
@@ -88,8 +78,7 @@ case class Validate(cef: CompilerErrorFormatter,
     private def validateWorkflowOutputs(workflow: WdlWorkflow) : Unit = {
         if (workflow.noWorkflowOutputs) {
             // Empty output section. Unlike Cromwell, we generate no outputs
-            Utils.warning(verbose, "Empty output section, no outputs will be generated")
-            return
+            allWarnings += ("Empty output section, no outputs will be generated")
         }
 
         val wfOutputs: Vector[WorkflowOutput] =
@@ -101,23 +90,23 @@ case class Validate(cef: CompilerErrorFormatter,
         // did not work in Cromwell 30.2.
         val names = wfOutputs.map(_.unqualifiedName)
         if (names.toSet.size != names.toVector.size)
-            allErrors += "Duplicate names in the workflow output section"
+            allErrors += ("Duplicate names in the workflow output section")
 
-        // Only trivial expressions are supposed
+        // Only trivial expressions are supported in the output section
         val van = VarAnalysis(Set.empty, Map.empty, cef, verbose)
         wfOutputs.foreach{ wot =>
-            if (!isTrivialExpression(wot.requiredExpression, van)) {
-                allErrors += cef.notCurrentlySupported(
-                    wot.ast,
-                    "expressions in the output section")
+            if (!van.isTrivialExpression(wot.requiredExpression)) {
+                allErrors += (cef.notCurrentlySupported(
+                                wot.ast,
+                                "expressions in the output section"))
             }
 
             // check if a cast is needed, that requires a job.
             if (wot.womType !=
                     Utils.evalType(wot.requiredExpression, workflow, cef, verbose)) {
-                allErrors += cef.notCurrentlySupported(
-                    wot.ast,
-                    "coercion in the output section")
+                allErrors += (cef.notCurrentlySupported(
+                                wot.ast,
+                                "coercion in the output section"))
             }
         }
     }
@@ -152,7 +141,7 @@ case class Validate(cef: CompilerErrorFormatter,
                     val msg = s"""|Workflow doesn't supply required input ${decl.unqualifiedName}
                                   |to call ${call.unqualifiedName}
                                   |""".stripMargin.replaceAll("\n", " ")
-                    allErrors += cef.missingCallArgument(call.ast, msg)
+                    allWarnings += (cef.missingCallArgument(call.ast, msg))
                 case _ => ()
             }
         }
@@ -169,9 +158,9 @@ case class Validate(cef: CompilerErrorFormatter,
             case ifStmt:If => checkMissingArguments(ifStmt.children)
             case _:WorkflowOutput => ()
             case x =>
-                throw new Exception(cef.notCurrentlySupported(
-                                        x.ast,
-                                        s"unimplemented workflow element"))
+                allErrors += (cef.notCurrentlySupported(
+                                x.ast,
+                                s"unimplemented workflow element"))
         }
     }
 
@@ -201,6 +190,8 @@ object Validate {
     // defined exactly once, and is uniquely named by its
     // unqualified name.
     private def checkFlatNamespace(ns: WdlNamespace,
+                                   allErrors :  Queue[String],
+                                   allWarnings : Queue[String],
                                    verbose: Verbose) : Unit = {
         // make a flat list of all referenced namespaces and sub-namespaces
         val allNs: Vector[WdlNamespace] = ns.allNamespacesRecursively.toVector
@@ -211,9 +202,9 @@ object Validate {
         val taskCounts: Map[String, Int] = allTaskNames.groupBy(x => x).mapValues(_.size)
         taskCounts.foreach{ case (taskName, nAppear) =>
             if (nAppear > 1)
-                throw new Exception(s"""|Task ${taskName} appears ${nAppear} times. It has to
-                                        |be unique in order to be compiled to a single
-                                        |dnanexus applet""".stripMargin.trim)
+                allErrors += (s"""|Task ${taskName} appears ${nAppear} times. It has to
+                                  |be unique in order to be compiled to a single
+                                  |dnanexus applet""".stripMargin.trim)
         }
 
         // make sure workflow names are unique
@@ -222,9 +213,9 @@ object Validate {
         val wfCounts: Map[String, Int] = allWorkflowNames.groupBy(x => x).mapValues(_.size)
         wfCounts.foreach{ case (wfName, nAppear) =>
             if (nAppear > 1)
-                throw new Exception(s"""|Workflow ${wfName} appears ${nAppear} times. It has to
-                                        |be unique in order to be compiled to a single
-                                        |dnanexus workflow""".stripMargin.trim)
+                allErrors += (s"""|Workflow ${wfName} appears ${nAppear} times. It has to
+                                  |be unique in order to be compiled to a single
+                                  |dnanexus workflow""".stripMargin.trim)
         }
 
         // make sure there is no intersection between applet and workflow names
@@ -232,28 +223,44 @@ object Validate {
         val counts: Map[String, Int] = allNames.groupBy(x => x).mapValues(_.size)
         counts.foreach{ case (name, nAppear) =>
             if (nAppear > 1)
-                throw new Exception(s"Name ${name} is used for an applet and a workflow.")
+                allErrors += (s"Name ${name} is used for an applet and a workflow.")
         }
     }
 
-    def validateNamespace(ns: WdlNamespace,
-                          verbose: Verbose) : Unit = {
+    private def validateNamespace(ns: WdlNamespace,
+                                  allErrors :  Queue[String],
+                                  allWarnings : Queue[String],
+                                  verbose: Verbose) : Unit = {
         // check this namespace
         val cef = new CompilerErrorFormatter(ns.resource, ns.terminalMap)
-        val v = new Validate(cef, verbose)
+        val v = new Validate(allErrors, allWarnings, cef, verbose)
         v.apply(ns)
-        if (!v.allErrors.isEmpty) {
-            val aggregatedErrorMsg = v.allErrors.mkString("\n\n")
-            throw new NamespaceValidationException(aggregatedErrorMsg)
-        }
 
         // recurse into all the sub-namespaces
-        ns.namespaces.foreach(xNs => validateNamespace(xNs, verbose))
+        ns.namespaces.foreach(xNs => validateNamespace(xNs, allErrors, allWarnings, verbose))
     }
 
     def apply(ns: WdlNamespace,
+              fatalValidationWarnings: Boolean,
               verbose: Verbose) : Unit = {
-        checkFlatNamespace(ns, verbose)
-        validateNamespace(ns, verbose)
+        // Keep track of warnings and errors, instead of throwing them immediately
+        val allErrors = Queue.empty[String]
+        val allWarnings = Queue.empty[String]
+
+        checkFlatNamespace(ns, allErrors, allWarnings, verbose)
+        validateNamespace(ns, allErrors, allWarnings, verbose)
+
+        if (fatalValidationWarnings) {
+            allErrors ++= allWarnings
+            allWarnings.clear
+        }
+        if (!allWarnings.isEmpty) {
+            val aggregatedWarningMsg = allWarnings.mkString("\n\n")
+            Utils.warning(verbose, aggregatedWarningMsg)
+        }
+        if (!allErrors.isEmpty) {
+            val aggregatedErrorMsg = allErrors.mkString("\n\n")
+            throw new NamespaceValidationException(aggregatedErrorMsg)
+        }
     }
 }

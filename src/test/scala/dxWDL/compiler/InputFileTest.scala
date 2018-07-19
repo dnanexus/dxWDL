@@ -33,7 +33,7 @@ class InputFileTest extends FlatSpec with Matchers {
 
         inside(retval) {
             case Main.UnsuccessfulTermination(errMsg) =>
-                errMsg should include ("Failed to map all input fields")
+                errMsg should include ("Could not map all default fields")
         }
     }
 
@@ -81,4 +81,25 @@ class InputFileTest extends FlatSpec with Matchers {
         retval shouldBe a [Main.SuccessfulTerminationIR]
     }
 
+    it should "handle inputs specified in the json file, but missing in the workflow" in {
+        val wdlCode = pathFromBasename("missing_args.wdl")
+        val inputs = pathFromBasename("missing_args_inputs.json")
+        Main.compile(
+            List(wdlCode.toString, "--compileMode", "ir", "-quiet",
+                 "-inputs", inputs.toString)
+        ) shouldBe a [Main.SuccessfulTerminationIR]
+
+        // inputs as defaults
+        Main.compile(
+            List(wdlCode.toString, "--compileMode", "ir", "-quiet",
+                 "-defaults", inputs.toString)
+        ) shouldBe a [Main.SuccessfulTerminationIR]
+
+        // Locked mode should fail, because we provide an input to
+        // an intermediate stage.
+        Main.compile(
+            List(wdlCode.toString, "--compileMode", "ir", "--locked", "-quiet",
+                 "-defaults", inputs.toString)
+        ) shouldBe a [Main.UnsuccessfulTermination]
+    }
 }

@@ -86,7 +86,7 @@ case class InputFile(verbose: Verbose) {
     // If a stage has defaults, set the SArg to a constant. The user
     // can override it at runtime.
     private def addDefaultsToStage(stg: IR.Stage,
-                                   wfName: String,
+                                   prefix: String,
                                    callee: IR.Callable,
                                    defaultFields: HashMap[String, JsValue]) : IR.Stage = {
         Utils.trace(verbose2, s"addDefaultToStage ${stg.stageName}")
@@ -96,7 +96,7 @@ case class InputFile(verbose: Verbose) {
                 (sArg, cVar)
         }
         val inputsWithDefaults: Vector[SArg] = inputsFull.map{ case (sArg, cVar) =>
-            val fqn = s"${wfName}.${cVar.name}"
+            val fqn = s"${prefix}.${cVar.name}"
             getExactlyOnce(defaultFields, fqn) match {
                 case None => sArg
                 case Some(dflt:JsValue) =>
@@ -164,11 +164,11 @@ case class InputFile(verbose: Verbose) {
                 // workflow level inputs. Instead, set the defaults in the COMMON stage
 
                 val stagesWithDefaults = wf.stages.map{ stg =>
+                    val callee:IR.Callable = callables(stg.calleeName)
                     if (stg.stageName == Utils.COMMON) {
-                        val callee:IR.Callable = callables(stg.calleeName)
                         addDefaultsToStage(stg, wf.name, callee, defaultFields)
                     } else {
-                        stg
+                        addDefaultsToStage(stg, s"${wf.name}.${stg.stageName}", callee, defaultFields)
                     }
                 }
                 wf.copy(stages = stagesWithDefaults)
@@ -211,9 +211,8 @@ case class InputFile(verbose: Verbose) {
             case Some(wf) => Some(embedDefaultsIntoWorkflow(wf, callables, defaultFields))
         }
         if (!defaultFields.isEmpty) {
-            Utils.warning(verbose, s"""|Could not map all default fields.
-                                       |These were left: ${defaultFields}""".stripMargin)
-            throw new Exception("Failed to map all default fields")
+            throw new Exception(s"""|Could not map all default fields.
+                                    |These were left: ${defaultFields}""".stripMargin)
         }
         ns.copy(entrypoint = entryPoint,
                 subWorkflows = subWorkflowsWithDefaults,
@@ -259,7 +258,8 @@ case class InputFile(verbose: Verbose) {
         val cif = CromwellInputFileState(inputFields, HashMap.empty)
 
         ns.entrypoint match {
-            case None if ns.applets.size == 0 => ()
+            case None if ns.applets.size == 0 =>
+                ()
             case None if ns.applets.size == 1 =>
                 // There is one task, we can generate one input file for it.
                 val (aplName, applet) = ns.applets.head
@@ -269,6 +269,7 @@ case class InputFile(verbose: Verbose) {
                     cif.checkAndBind(fqn, dxName, cVar)
                 }
             case None =>
+                // File with tasks only, where there are two or more tasks.
                 throw new Exception(s"Cannot generate one input file for ${ns.applets.size} tasks")
             case Some(wf) if wf.locked =>
                 // Locked workflow. A user can set workflow level
@@ -278,20 +279,37 @@ case class InputFile(verbose: Verbose) {
                     val dxName = s"${cVar.name}"
                     cif.checkAndBind(fqn, dxName, cVar)
                 }
+            case Some(wf) if wf.stages.isEmpty =>
+                // unlocked workflow, no stages
+                ()
             case Some(wf) =>
-                if (!wf.stages.isEmpty) {
-                    val commonStage = wf.stages.head.id.getId
-                    wf.inputs.foreach { case (cVar, sArg) =>
-                        val fqn = s"${wf.name}.${cVar.name}"
-                        val dxName = s"${commonStage}.${cVar.name}"
+                // unlocked workflow with at least one stage
+                // Workflow inputs go into the common stage
+                val commonStage = wf.stages.head.id.getId
+                wf.inputs.foreach { case (cVar, _) =>
+                    val fqn = s"${wf.name}.${cVar.name}"
+                    val dxName = s"${commonStage}.${cVar.name}"
+                    cif.checkAndBind(fqn, dxName, cVar)
+                }
+
+                // Inputs for top level calls
+                val callables: Map[String, IR.Callable] = ns.buildCallables
+                val middleStages = wf.stages.filter{ stg =>
+                    stg.stageName != Utils.COMMON && stg.stageName != Utils.OUTPUT_SECTION
+                }
+                middleStages.foreach{ stg =>
+                    // Find the input definitions for the stage, by locating the callee
+                    val callee = callables(stg.calleeName)
+                    callee.inputVars.foreach { cVar =>
+                        val fqn = s"${wf.name}.${stg.stageName}.${cVar.name}"
+                        val dxName = s"${stg.id.getId}.${cVar.name}"
                         cif.checkAndBind(fqn, dxName, cVar)
                     }
                 }
         }
         if (!inputFields.isEmpty) {
-            Utils.warning(verbose, s"""|Could not map all default fields.
-                                       |These were left: ${inputFields}""".stripMargin)
-            throw new Exception("Failed to map all input fields")
+            throw new Exception(s"""|Could not map all default fields.
+                                    |These were left: ${inputFields}""".stripMargin)
         }
         Utils.traceLevelDec()
 

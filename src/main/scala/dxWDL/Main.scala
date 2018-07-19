@@ -117,6 +117,9 @@ object Main extends App {
                     case "extras" =>
                         checkNumberOfArguments(keyword, 1, subargs)
                         (keyword, subargs.head)
+                    case "fatalValidationWarnings" =>
+                        checkNumberOfArguments(keyword, 0, subargs)
+                        (keyword, "")
                     case "folder" =>
                         checkNumberOfArguments(keyword, 1, subargs)
                         (keyword, subargs.head)
@@ -334,6 +337,7 @@ object Main extends App {
                         compileMode,
                         defaults,
                         extras,
+                        options contains "fatalValidationWarnings",
                         options contains "force",
                         imports,
                         inputs,

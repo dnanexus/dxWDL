@@ -1,11 +1,22 @@
 # Release Notes
+
+## 0.71
+- In an unlocked workflow, compile toplevel calls with no
+subexpressions to dx stages. The
+[expert options](./doc/ExpertOptions.md#Toplevel-calls-compiled-as-stages)
+page has a full description of the feature.
+- Allow the compiler to reuse applets that have been archived. Such
+applets are moved to a `.Archive` directory, and the creation date is
+appended to the applet name, thereby modifying the applet name. The
+name changes causes the search to fail. This was fixed by loosening the
+search criterion.
+
 ## 0.70
 - Upgrade to Cromwell 33.1
 - Reuse applets and workflows inside a rpoject. The compiler now looks
 for an applet/workflow with the correct name and checksum anywhere in
 the project, not just in the target directory. This resolved
 issue (https://github.com/dnanexus/dxWDL/issues/154).
--
 
 ## 0.69
 - Support importing http URLs
