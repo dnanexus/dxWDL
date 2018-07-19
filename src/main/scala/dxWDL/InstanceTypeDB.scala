@@ -280,7 +280,7 @@ object InstanceTypeDB extends DefaultJsonProtocol {
             case None => None
             case Some(WomString(buf)) =>
                 val components = buf.split("\\s+")
-                val ignoreWords = Set("local-disk", "hdd", "sdd")
+                val ignoreWords = Set("local-disk", "hdd", "sdd", "ssd")
                 val l = components.filter(x => !(ignoreWords contains x.toLowerCase))
                 if (l.length != 1)
                     throw new Exception(s"Can't parse disk space specification ${buf}")
