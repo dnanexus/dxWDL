@@ -113,8 +113,12 @@ case class DxObjectDirectory(ns: IR.Namespace,
     // Scan the entire project for dx:workflows and dx:applets that we
     // already created, and may be reused, instead of recompiling.
     //
-    // Note: This could be expensive, and we need a good way of limiting it. The best
-    // way is to supply a maximum number of replies.
+    // Note: This could be expensive, and we need a good way of
+    // limiting it. The best way is to supply a maximum number of
+    // replies, thereby limiting the client side index.  This could
+    // cause us to miss matches. The cost would be creating a
+    // dx:executable again, which is acceptable. It may be wise to add
+    // a command line flag to skip this step.
     private def projectBulkLookup() : Map[String, Vector[(DXDataObject, DXDataObject.Describe)]] = {
         val dxAppletsInProj: List[DXApplet] = DXSearch.findDataObjects()
             .inProject(dxProject)
