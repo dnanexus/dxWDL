@@ -28,10 +28,10 @@ class CompilerUnitTest extends FlatSpec with Matchers {
     }
 
 
-    ignore should "disallow call with missing compulsory arguments" in {
+    it should "disallow call with missing compulsory arguments" in {
         val path = pathFromBasename("unbound_arg.wdl")
         val retval = Main.compile(
-            List(path.toString, "--compileMode", "ir", "-quiet")
+            List(path.toString, "--compileMode", "ir", "-quiet", "-fatalValidationWarnings")
         )
         inside(retval) {
             case Main.UnsuccessfulTermination(errMsg) =>

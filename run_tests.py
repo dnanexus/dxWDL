@@ -60,6 +60,10 @@ medium_test_list = [
     "strings",
     "subblocks",
     "subblocks2",
+
+    # missing arguments, provided in a complementary inputs file
+    "toplevel_calls",
+
     "trains",
     "var_type_change"
 ]
@@ -73,7 +77,8 @@ test_unlocked=["cast",
                "hello",
                "math",
                "optionals",
-               "strings"]
+               "strings",
+               "toplevel_calls"]
 TestMetaData = namedtuple('TestMetaData', 'name kind')
 TestDesc = namedtuple('TestDesc', 'name kind wdl_source wdl_input dx_input results')
 
