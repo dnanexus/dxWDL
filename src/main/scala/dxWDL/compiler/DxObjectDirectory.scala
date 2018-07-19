@@ -118,20 +118,25 @@ case class DxObjectDirectory(ns: IR.Namespace,
     // miss matches when we search. The cost would be creating a
     // dx:executable again, which is acceptable.
     private def projectBulkLookup() : Map[String, Vector[(DXDataObject, DXDataObject.Describe)]] = {
+        val t0 = System.nanoTime()
         val dxAppletsInProj: List[DXApplet] = DXSearch.findDataObjects()
             .inProject(dxProject)
             .withClassApplet
             .withProperty(CHECKSUM_PROP)
             .includeDescribeOutput(DXDataObject.DescribeOptions.get().withProperties())
             .execute().asList().asScala.toList
-        Utils.trace(verbose.on, s"Found ${dxAppletsInProj.size} applets in project")
         val dxWorkflowsInProj: List[DXWorkflow] = DXSearch.findDataObjects()
             .inProject(dxProject)
             .withClassWorkflow
             .withProperty(CHECKSUM_PROP)
             .includeDescribeOutput(DXDataObject.DescribeOptions.get().withProperties())
             .execute().asList().asScala.toList
-        Utils.trace(verbose.on, s"Found ${dxWorkflowsInProj.size} workflows in project")
+        val t1 = System.nanoTime()
+        val diffMSec = (t1 -t0) / (1000 * 1000)
+        Utils.trace(verbose.on,
+                    s"""|Found ${dxAppletsInProj.size} applets and ${dxWorkflowsInProj.size}
+                        |workflows in project (${diffMSec} millisec)"""
+                        .stripMargin.replaceAll("\n", " "))
         val dxObjects = (dxAppletsInProj ++ dxWorkflowsInProj)
 
         val hm = HashMap.empty[String, Vector[(DXDataObject, DXDataObject.Describe)]]
