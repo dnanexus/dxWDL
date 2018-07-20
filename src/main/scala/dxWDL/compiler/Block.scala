@@ -105,12 +105,20 @@ object Block {
     def findCalls(statement: Scope) : Vector[WdlCall] =
         Block(Vector(statement)).findCalls
 
+    // Is this a subblock? Declarations aren't subblocks, scatters and if's are.
+    private def isSubBlock(scope:Scope) : Boolean = {
+        scope match {
+            case _:Scatter => true
+            case _:If => true
+            case _ => false
+        }
+    }
+
     // Split a workflow into blocks, where each block will compile to
     // a stage. When the workflow is unlocked, we create a separate
     // block for each toplevel call that has no subexpressions. These
     // will have their own stages.
     def splitIntoBlocks(children: Vector[Scope],
-                        locked: Boolean,
                         van : VarAnalysis) : Vector[Block] = {
         // base cases: zero and one children
         if (children.isEmpty)
@@ -120,45 +128,42 @@ object Block {
 
         // Normal case, recurse into the first N-1 statements,
         // than append the Nth.
-        val blocks = splitIntoBlocks(children.dropRight(1), locked, van)
+        val blocks = splitIntoBlocks(children.dropRight(1), van)
         val allBlocksButLast = blocks.dropRight(1)
 
+        // see if the last statement should be incorporated into the last block,
+        // of if we should open a new block.
         val lastBlock = blocks.last
-        val lastChild = Block(Vector(children.last))
-        val trailing: Vector[Block] = (lastBlock.countCalls, lastChild.countCalls) match {
-            case (0, (0|1)) if (!locked && lastChild.isCallWithNoSubexpressions(van)) =>
-                // create a separate block for the last child; it will get its
-                // own stage.
-                Vector(lastBlock, lastChild)
-            case (0, (0|1)) =>
-                // no calls were seen far, extend the block
-                Vector(lastBlock.append(lastChild))
-            case (1, (0|1)) =>
-                // The last block already contains a call, start a new block
-                Vector(lastBlock, lastChild)
-            case (x ,y) =>
-                if (x > 1) {
-                    System.err.println("GenerateIR, block:")
-                    System.err.println(lastBlock)
-                    throw new Exception(s"block has ${x} calls")
-                }
-                assert(y > 1)
-                System.err.println("GenerateIR, child:")
-                System.err.println(lastChild)
-                throw new Exception(s"child has ${y} calls")
+        val lastStatement = children.last
+        val lastChild = Block(Vector(lastStatement))
+        var openNewBlock =
+            (lastBlock.countCalls, lastChild.countCalls) match {
+                case (0, 1) if (lastChild.isCallWithNoSubexpressions(van)) =>
+                    // create a separate block for the last child; it will get its
+                    // own stage. We are compiling a WDL call directly into a stage
+                    // here.
+                    true
+                case (0, (0|1)) =>
+                    // no calls were seen so far, extend the block
+                    false
+                case (1, (0|1)) =>
+                    // The last block already contains a call, start a new block
+                    true
+                case (x ,y) =>
+                    throw new Exception(s"Internal error: block has ${x} calls, and child has ${y} calls")
+            }
+        if (isSubBlock(lastStatement)) {
+            // If the last statement is an if/scatter, always start a new block
+            openNewBlock = true
         }
+        val trailing: Vector[Block] =
+            if (openNewBlock)
+                Vector(lastBlock, lastChild)
+            else
+                Vector(lastBlock.append(lastChild))
         allBlocksButLast ++ trailing
     }
 
-
-    // Is this a subblock? Declarations aren't subblocks, scatters and if's are.
-    private def isSubBlock(scope:Scope) : Boolean = {
-        scope match {
-            case _:Scatter => true
-            case _:If => true
-            case _ => false
-        }
-    }
 
     // Is there a declaration after a call? For example:
     //

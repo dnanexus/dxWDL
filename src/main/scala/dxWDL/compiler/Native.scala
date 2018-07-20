@@ -902,6 +902,7 @@ object Native {
               folder: String,
               dxProject: DXProject,
               instanceTypeDB: InstanceTypeDB,
+              dxObjDir: DxObjectDirectory,
               extras: Option[Extras],
               runtimeDebugLevel: Option[Int],
               force: Boolean,
@@ -911,9 +912,6 @@ object Native {
         trace(verbose.on, "Native pass, generate dx:applets and dx:workflows")
         traceLevelInc()
 
-        // Efficiently build a directory of the currently existing applets.
-        // We don't want to build them if we don't have to.
-        val dxObjDir = DxObjectDirectory(ns, dxProject, folder, verbose)
         val ntv = new Native(dxWDLrtId, folder, dxProject, dxObjDir, instanceTypeDB,
                              extras, runtimeDebugLevel, force, archive, locked, verbose)
         val retval = ntv.compile(ns)

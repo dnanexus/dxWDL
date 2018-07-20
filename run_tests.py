@@ -491,7 +491,7 @@ def main():
                            action="store_true", default=False)
     argparser.add_argument("--locked", help="Generate locked-down workflows",
                            action="store_true", default=False)
-    argparser.add_argument("--regular", help="Generate only regular workflows",
+    argparser.add_argument("--unlocked", help="Generate only unlocked workflows",
                            action="store_true", default=False)
     argparser.add_argument("--no-wait", help="Exit immediately after launching tests",
                            action="store_true", default=False)
@@ -543,7 +543,7 @@ def main():
         util.build(project, base_folder, version_id, top_dir)
         util.build_compiler_jar(version_id, top_dir, test_dict)
 
-    if args.regular:
+    if args.unlocked:
         # Disable all locked workflows
         args.locked = False
         test_locked = []
