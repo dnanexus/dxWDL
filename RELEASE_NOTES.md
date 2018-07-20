@@ -3,6 +3,7 @@
 ## 0.72
 - Put the project-wide reuse of applets under a special flag `projectWideReuse`.
 - Improved the queries to find dx:executables on the target path.
+- Improvements to the algorithm for splitting a WDL code block into parts.
 
 ## 0.71
 - In an unlocked workflow, compile toplevel calls with no
