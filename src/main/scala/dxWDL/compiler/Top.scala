@@ -245,9 +245,14 @@ object Top {
         // get list of available instance types
         val instanceTypeDB = InstanceTypeDB.query(dxProject, cOpt.verbose)
 
+        // Efficiently build a directory of the currently existing applets.
+        // We don't want to build them if we don't have to.
+        val dxObjDir = DxObjectDirectory(irNs, dxProject, folder, cOpt.projectWideReuse,
+                                         cOpt.verbose)
+
         // Generate dx:applets and dx:workflow from the IR
         Native.apply(irNs,
-                     dxWDLrtId, folder, dxProject, instanceTypeDB,
+                     dxWDLrtId, folder, dxProject, instanceTypeDB, dxObjDir,
                      cOpt.extras,
                      cOpt.runtimeDebugLevel,
                      cOpt.force, cOpt.archive, cOpt.locked, cOpt.verbose)

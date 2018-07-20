@@ -144,6 +144,9 @@ object Main extends App {
                     case "project" =>
                         checkNumberOfArguments(keyword, 1, subargs)
                         (keyword, subargs.head)
+                    case "projectWideReuse" =>
+                        checkNumberOfArguments(keyword, 0, subargs)
+                        (keyword, "")
                     case ("q"|"quiet") =>
                         checkNumberOfArguments(keyword, 0, subargs)
                         ("quiet", "")
@@ -342,6 +345,7 @@ object Main extends App {
                         imports,
                         inputs,
                         options contains "locked",
+                        options contains "projectWideReuse",
                         options contains "reorg",
                         runtimeDebugLevel,
                         verbose)
@@ -623,6 +627,9 @@ object Main extends App {
             |      -inputs <string>       File with Cromwell formatted inputs
             |      -locked                Create a locked-down workflow
             |      -p | -imports <string> Directory to search for imported WDL files
+            |      -projectWideReuse      Look for existing applets/workflows in the entire project
+            |                             before generating new ones. The normal search scope is the
+            |                             target folder only.
             |      -reorg                 Reorganize workflow output files
             |      -runtimeDebugLevel [0,1,2] How much debug information to write to the
             |                             job log at runtime. Zero means write the minimum,

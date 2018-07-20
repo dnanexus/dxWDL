@@ -32,14 +32,21 @@ case class DxObjectInfo(name:String,
 case class DxObjectDirectory(ns: IR.Namespace,
                              dxProject:DXProject,
                              folder: String,
+                             projectWideReuse: Boolean,
                              verbose: Verbose) {
     // A map from an applet/workflow that is part of the namespace to its dx:object
     // on the target path (project/folder)
-    private lazy val objDir : HashMap[String, Vector[DxObjectInfo]] = bulkLookup()
+    private val objDir : HashMap[String, Vector[DxObjectInfo]] = bulkLookup()
 
-    // A map from checksum to dx:executable, across the entire project.
-    private lazy val projectWideExecutableDir :
-            Map[String, Vector[(DXDataObject, DXDataObject.Describe)]] = projectBulkLookup()
+    // A map from checksum to dx:executable, across the entire
+    // project.  It allows reusing dx:executables across the entire
+    // project, at the cost of a potentially expensive API call. It is
+    // not clear this is useful to the majority of users, so it is
+    // gated by the [projectWideReuse] flag.
+    private val projectWideExecutableDir :
+            Map[String, Vector[(DXDataObject, DXDataObject.Describe)]] =
+        if (projectWideReuse) projectBulkLookup()
+        else Map.empty
 
     private val folders = HashSet.empty[String]
 
@@ -57,24 +64,32 @@ case class DxObjectDirectory(ns: IR.Namespace,
     // Instead of looking up applets/workflows one by one, perform a bulk lookup, and
     // find all the objects in the target directory. Setup an easy to
     // use map with information on each name.
+    //
+    // DXSearch.findDataObjects can be an expensive call, both on the server and client sides.
+    // We limit it by filtering on the CHECKSUM property, which is attached only to generated
+    // applets and workflows.
     private def bulkLookup() : HashMap[String, Vector[DxObjectInfo]] = {
-        val dxAppletsInFolder: List[DXApplet] = DXSearch.findDataObjects()
+        val t0 = System.nanoTime()
+        val dxObjectsInFolder: List[DXDataObject] = DXSearch.findDataObjects()
             .inFolder(dxProject, folder)
-            .withClassApplet
             .withProperty(CHECKSUM_PROP)
             .includeDescribeOutput(DXDataObject.DescribeOptions.get().withProperties())
             .execute().asList().asScala.toList
-        val dxWorkflowsInFolder: List[DXWorkflow] = DXSearch.findDataObjects()
-            .inFolder(dxProject, folder)
-            .withClassWorkflow
-            .withProperty(CHECKSUM_PROP)
-            .includeDescribeOutput(DXDataObject.DescribeOptions.get().withProperties())
-            .execute().asList().asScala.toList
+        val nrApplets = dxObjectsInFolder.count{ _.isInstanceOf[DXApplet] }
+        val nrWorkflows = dxObjectsInFolder.count{ _.isInstanceOf[DXWorkflow] }
+        val t1 = System.nanoTime()
+        val diffMSec = (t1 -t0) / (1000 * 1000)
+        Utils.trace(verbose.on,
+                    s"""|Found ${nrApplets} applets and ${nrWorkflows}
+                        |workflows in ${dxProject.getId}/${folder} (${diffMSec} millisec)"""
+                        .stripMargin.replaceAll("\n", " "))
 
         // Leave only dx:objects that could belong to the workflow
-        val dxObjects = (dxAppletsInFolder ++ dxWorkflowsInFolder).filter{ dxObj =>
-            val name = dxObj.getCachedDescribe().getName
-            allExecutableNames contains name
+        val dxObjects = dxObjectsInFolder.filter{ dxObj =>
+            val desc = dxObj.getCachedDescribe()
+            val name = desc.getName
+            val appletOrWorkflow = dxObj.isInstanceOf[DXApplet] || dxObj.isInstanceOf[DXWorkflow]
+            (allExecutableNames contains name) && appletOrWorkflow
         }
 
         val dxObjectList: List[DxObjectInfo] = dxObjects.map{ dxObj =>
@@ -117,30 +132,27 @@ case class DxObjectDirectory(ns: IR.Namespace,
     // is (by default) 1000. Since the index is limited, we may miss
     // miss matches when we search. The cost would be creating a
     // dx:executable again, which is acceptable.
+    //
+    // DXSearch.findDataObjects can be an expensive call, both on the server and client sides.
+    // We limit it by filtering on the CHECKSUM property, which is attached only to generated
+    // applets and workflows.
     private def projectBulkLookup() : Map[String, Vector[(DXDataObject, DXDataObject.Describe)]] = {
         val t0 = System.nanoTime()
-        val dxAppletsInProj: List[DXApplet] = DXSearch.findDataObjects()
+        val dxAppletsInProject: List[DXDataObject] = DXSearch.findDataObjects()
             .inProject(dxProject)
+            .withProperty(CHECKSUM_PROP)
             .withClassApplet
-            .withProperty(CHECKSUM_PROP)
             .includeDescribeOutput(DXDataObject.DescribeOptions.get().withProperties())
             .execute().asList().asScala.toList
-        val dxWorkflowsInProj: List[DXWorkflow] = DXSearch.findDataObjects()
-            .inProject(dxProject)
-            .withClassWorkflow
-            .withProperty(CHECKSUM_PROP)
-            .includeDescribeOutput(DXDataObject.DescribeOptions.get().withProperties())
-            .execute().asList().asScala.toList
+        val nrApplets = dxAppletsInProject.size
         val t1 = System.nanoTime()
         val diffMSec = (t1 -t0) / (1000 * 1000)
         Utils.trace(verbose.on,
-                    s"""|Found ${dxAppletsInProj.size} applets and ${dxWorkflowsInProj.size}
-                        |workflows in project (${diffMSec} millisec)"""
-                        .stripMargin.replaceAll("\n", " "))
-        val dxObjects = (dxAppletsInProj ++ dxWorkflowsInProj)
+                    s"Found ${nrApplets} applets in project (${diffMSec} millisec)")
 
         val hm = HashMap.empty[String, Vector[(DXDataObject, DXDataObject.Describe)]]
-        dxObjects.foreach{ dxObj =>
+        dxAppletsInProject.foreach{ dxApplet =>
+            val dxObj = dxApplet.asInstanceOf[DXDataObject]
             val desc = dxObj.getCachedDescribe()
             val props: Map[String, String] = desc.getProperties().asScala.toMap
             props.get(CHECKSUM_PROP) match {

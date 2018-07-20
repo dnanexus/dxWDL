@@ -1,5 +1,9 @@
 # Release Notes
 
+## 0.72
+- Put the project-wide reuse of applets under a special flag `projectWideReuse`.
+- Improved the queries to find dx:executables on the target path.
+
 ## 0.71
 - In an unlocked workflow, compile toplevel calls with no
 subexpressions to dx stages. The

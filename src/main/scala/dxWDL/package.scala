@@ -81,6 +81,7 @@ case class CompilerOptions(archive: Boolean,
                            importDirs: List[Path],
                            inputs: List[Path],
                            locked: Boolean,
+                           projectWideReuse: Boolean,
                            reorg: Boolean,
                            runtimeDebugLevel: Option[Int],
                            verbose: Verbose)
