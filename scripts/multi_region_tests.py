@@ -17,9 +17,11 @@ from dxpy.exceptions import DXJobFailureError
 #
 # Compile the trivial workflow on all supported regions, and see that it runs.
 
-projects = ["dxWDL_playground", "dxWDL_Sydney", "dxWDL_Azure"]
-top_dir = os.path.dirname(sys.argv[0])
+here = os.path.dirname(sys.argv[0])
+top_dir = os.path.dirname(os.path.abspath(here))
 test_dir = os.path.join(os.path.abspath(top_dir), "test")
+
+projects = ["dxWDL_playground", "dxWDL_Sydney", "dxWDL_Azure"]
 target_folder = "/release_test"
 
 def wait_for_completion(test_exec_objs):
@@ -67,6 +69,7 @@ def build_test(source_file, dx_proj, folder, version_id):
                 "compile",
                 source_file,
                 "-force",
+                "-locked",
                 "-folder", folder,
                 "-project", dx_proj.get_id() ]
     print(" ".join(cmdline))
@@ -75,6 +78,8 @@ def build_test(source_file, dx_proj, folder, version_id):
 
 def main():
     argparser = argparse.ArgumentParser(description="Run WDL compiler tests on the platform")
+    argparser.add_argument("--compile-only", help="Only compile the workflows, don't run them",
+                           action="store_true", default=False)
     args = argparser.parse_args()
 
     version_id = util.get_version_id(top_dir)
@@ -88,6 +93,8 @@ def main():
         if dx_proj is None:
             raise RuntimeError("Could not find project {}".format(proj_name))
         oid = build_test(wdl_source_file, dx_proj, target_folder, version_id)
+        if args.compile_only:
+            continue
         anl = run_workflow(dx_proj, target_folder, oid)
         print("Running {}".format(oid))
         test_exec_objs.append(anl)

@@ -1,5 +1,8 @@
 # Release Notes
 
+## 0.73
+- Improving test and release scripts.
+
 ## 0.72
 - Put the project-wide reuse of applets under a special flag `projectWideReuse`.
 - Improved the queries to find dx:executables on the target path.

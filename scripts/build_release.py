@@ -8,7 +8,8 @@ import sys
 import time
 import util
 
-top_dir = os.path.dirname(sys.argv[0])
+here = os.path.dirname(sys.argv[0])
+top_dir = os.path.dirname(os.path.abspath(here))
 
 HOME_REGION = "aws:us-east-1"
 

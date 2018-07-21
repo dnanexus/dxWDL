@@ -15,7 +15,8 @@ import time
 import util
 from dxpy.exceptions import DXJobFailureError
 
-top_dir = os.path.dirname(sys.argv[0])
+here = os.path.dirname(sys.argv[0])
+top_dir = os.path.dirname(os.path.abspath(here))
 test_dir = os.path.join(os.path.abspath(top_dir), "test")
 
 git_revision = subprocess.check_output(["git", "describe", "--always", "--dirty", "--tags"]).strip()
