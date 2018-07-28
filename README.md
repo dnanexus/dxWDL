@@ -30,13 +30,11 @@ workflow bam_chrom_counter {
     File bam
 
     call slice_bam {
-        input :
-               bam = bam
+        input : bam = bam
     }
     scatter (slice in slice_bam.slices) {
         call count_bam {
-            input:
-                    bam = slice
+            input: bam = slice
         }
     }
     output {
@@ -68,7 +66,7 @@ task slice_bam {
 task count_bam {
     File bam
     command <<<
-    samtools view -c ${bam}
+        samtools view -c ${bam}
     >>>
     runtime {
         docker: "quay.io/ucsc_cgl/samtools"
