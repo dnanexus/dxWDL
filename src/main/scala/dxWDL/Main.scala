@@ -41,7 +41,7 @@ object Main extends App {
 
     // load configuration information
     private def getVersion() : String = {
-        val config = ConfigFactory.load()
+        val config = ConfigFactory.load("dxWDL.conf")
         val version = config.getString("dxWDL.version")
         version
     }

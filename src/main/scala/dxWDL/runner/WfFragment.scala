@@ -56,6 +56,7 @@ case class WfFragment(nswf: WdlNamespaceWithWorkflow,
                       runMode: RunnerWfFragmentMode.Value,
                       runtimeDebugLevel: Int) {
     private val verbose = runtimeDebugLevel >= 1
+    private val maxVerboseLevel = (runtimeDebugLevel == 2)
 
     private def makeOptionalWomValue(t: WomType,
                                      v: WomValue) : WomValue = {
@@ -83,7 +84,7 @@ case class WfFragment(nswf: WdlNamespaceWithWorkflow,
                         womType: WomType,
                         value: WomValue ) {
         override def toString =
-            s"${name}  ${womType.toDisplayString}  ${value.toWomString}"
+            s"""{${name}, ${womType.toDisplayString}, ${value.toWomString}}"""
     }
 
     // The aggregated values of a declaration.
@@ -739,32 +740,40 @@ case class WfFragment(nswf: WdlNamespaceWithWorkflow,
     private def collectCallField(fieldName: String,
                                  womType: WomType,
                                  aggr: Aggr) : WomValue = {
-        (aggr, womType) match {
-            case (AggrCall(_,seqNum,_), _) =>
-                // The field may be missing, put in a JsNull in this case.
-                val childDesc = execSeqMap(seqNum)
-                val jsv = childDesc.outputs.asJsObject.fields.get(fieldName) match {
-                    case None => JsNull
-                    case Some(jsv) => jsv
-                }
+        Utils.appletLog(maxVerboseLevel,
+                        s"collectCallField ${fieldName} with type ${womType} from ${aggr}")
+        try {
+            (aggr, womType) match {
+                case (AggrCall(_,seqNum,_), _) =>
+                    // The field may be missing, put in a JsNull in this case.
+                    val childDesc = execSeqMap(seqNum)
+                    val jsv = childDesc.outputs.asJsObject.fields.get(fieldName) match {
+                        case None => JsNull
+                        case Some(jsv) => jsv
+                    }
 
-                // Import the value from the dx-executable, to a local WOM value.
-                // Avoid any downloads
-                val wvl = WdlVarLinks.importFromDxExec(womType, DeclAttrs.empty, jsv)
-                val womValue = WdlVarLinks.eval(wvl, IOMode.Remote, IODirection.Zero)
-                womValue
+                    // Import the value from the dx-executable, to a local WOM value.
+                    // Avoid any downloads
+                    val wvl = WdlVarLinks.importFromDxExec(womType, DeclAttrs.empty, jsv)
+                    val womValue = WdlVarLinks.eval(wvl, IOMode.Remote, IODirection.Zero)
+                    womValue
 
-            case (AggrCallArray(children), WomArrayType(tInner)) =>
-                // recurse into the children, build WomValues
-                val children2 = children.map{ child => collectCallField(fieldName, tInner, child) }
-                WomArray(WomArrayType(tInner), children2)
+                case (AggrCallArray(children), WomArrayType(tInner)) =>
+                    // recurse into the children, build WomValues
+                    val children2 = children.map{ child => collectCallField(fieldName, tInner, child) }
+                    WomArray(WomArrayType(tInner), children2)
 
-            case (AggrCallOption(None), _) =>
-                makeOptionalNone(womType)
+                case (AggrCallOption(None), _) =>
+                    makeOptionalNone(womType)
 
-            case (AggrCallOption(Some(child)), WomOptionalType(tInner)) =>
-                val value = collectCallField(fieldName, tInner, child)
-                makeOptionalWomValue(womType, value)
+                case (AggrCallOption(Some(child)), tInner) =>
+                    val value = collectCallField(fieldName, tInner, child)
+                    makeOptionalWomValue(womType, value)
+            }
+        } catch {
+            case e : Throwable =>
+                Utils.appletLog(verbose, s"failed to get field ${fieldName} with type ${womType}")
+                throw e
         }
     }
 
@@ -807,7 +816,8 @@ case class WfFragment(nswf: WdlNamespaceWithWorkflow,
                 varName -> rVar
         }.toMap
         val envBgn = Env(Map.empty, inputDecls, Map.empty)
-        Utils.appletLog(verbose, s"envBgn = ${envBgn.decls}")
+        val envBgnStr = envBgn.decls.map(_.toString).mkString(",\n")
+        Utils.appletLog(verbose, s"envBgn = ${envBgnStr}")
 
         // evaluate each of the statements in the workflow
         val envEnd = nswf.workflow.children.foldLeft(envBgn) {

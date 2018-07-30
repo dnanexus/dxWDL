@@ -24,7 +24,7 @@ def get_top_conf_path(top_dir):
     return os.path.join(top_dir, "ref.conf")
 
 def get_crnt_conf_path(top_dir):
-    return os.path.join(top_dir, "reference.conf")
+    return os.path.join(top_dir, "dxWDL.conf")
 
 
 def get_project(project_name):
@@ -171,13 +171,15 @@ def build_compiler_jar(version_id, top_dir, project_dict):
 
     # Add the configuration file to the jar archive
     jar_path = dxWDL_jar_path(top_dir)
-    subprocess.check_call(["jar", "uf", jar_path, crnt_conf_path])
+    subprocess.check_call(["jar",
+                           "uf", jar_path,
+                           "-C", top_dir, os.path.basename(crnt_conf_path)])
     all_regions_str = ", ".join(all_regions)
     print("Added configuration for regions [{}] to jar file".format(all_regions_str))
 
     # Hygiene, remove the new configuration file, we
     # don't want it to leak into the next build cycle.
-    #os.remove(crnt_conf_path)
+    os.remove(crnt_conf_path)
 
     # Move the file to the top level directory
     all_in_one_jar = os.path.join(top_dir, "dxWDL-{}.jar".format(version_id))
