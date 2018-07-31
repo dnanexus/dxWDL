@@ -412,6 +412,18 @@ def native_call_setup(project, applet_folder, version_id):
                       "native_sum",
                       "native_sum_012"]
 
+    # build WDL wrapper tasks in test/dx_extern.wdl
+    cmdline = [ "java", "-jar",
+                os.path.join(top_dir, "dxWDL-{}.jar".format(version_id)),
+                "dxni",
+                "--force",
+                "--verbose",
+                "--folder", applet_folder,
+                "--project", project.get_id(),
+                "--output", os.path.join(top_dir, "test/basic/dx_extern.wdl")]
+    print(" ".join(cmdline))
+    subprocess.check_output(cmdline)
+
     # Check if they already exist
     applets = list(dxpy.bindings.search.find_data_objects(classname= "applet",
                                                           name= "native_*",
@@ -432,21 +444,20 @@ def native_call_setup(project, applet_folder, version_id):
         except Exception, e:
             print("Applet {} already exists".format(napl))
 
-    # build WDL wrapper tasks in test/dx_extern.wdl
-    cmdline = [ "java", "-jar",
-                os.path.join(top_dir, "dxWDL-{}.jar".format(version_id)),
-                "dxni",
-                "--force",
-                "--verbose",
-                "--folder", applet_folder,
-                "--project", project.get_id(),
-                "--output", os.path.join(top_dir, "test/basic/dx_extern.wdl")]
-    print(" ".join(cmdline))
-    subprocess.check_output(cmdline)
-
 
 def native_call_app_setup(version_id):
     app_name = "native_hello"
+
+    # build WDL wrapper tasks in test/dx_extern.wdl
+    header_file = os.path.join(top_dir, "test/basic/dx_app_extern.wdl")
+    cmdline = [ "java", "-jar",
+                os.path.join(top_dir, "dxWDL-{}.jar".format(version_id)),
+                "dxni",
+                "--apps",
+                "--force",
+                "--output", header_file]
+    print(" ".join(cmdline))
+    subprocess.check_output(cmdline)
 
     # Check if they already exist
     apps = list(dxpy.bindings.search.find_apps(name= app_name))
@@ -455,18 +466,6 @@ def native_call_app_setup(version_id):
         # build the app
         cmdline = [ "dx", "build", "--create-app", "--publish",
                     os.path.join(top_dir, "test/apps/{}".format(app_name)) ]
-        print(" ".join(cmdline))
-        subprocess.check_output(cmdline)
-
-    # build WDL wrapper tasks in test/dx_extern.wdl
-    header_file = os.path.join(top_dir, "test/basic/dx_app_extern.wdl")
-    if not os.path.isfile(header_file):
-        cmdline = [ "java", "-jar",
-                    os.path.join(top_dir, "dxWDL-{}.jar".format(version_id)),
-                    "dxni",
-                    "--apps",
-                    "--force",
-                    "--output", header_file]
         print(" ".join(cmdline))
         subprocess.check_output(cmdline)
 
@@ -541,8 +540,7 @@ def main():
 
     # build the dxWDL jar file, only on us-east-1
     if not args.do_not_build:
-        util.build(project, base_folder, version_id, top_dir)
-        util.build_compiler_jar(version_id, top_dir, test_dict)
+        util.build(project, base_folder, version_id, top_dir, test_dict)
 
     if args.unlocked:
         # Disable all locked workflows

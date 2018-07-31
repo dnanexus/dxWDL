@@ -82,7 +82,7 @@ def make_asset_file(version_id, top_dir):
 #
 # call sbt-assembly. The tricky part here, is to
 # change the working directory to the top of the project.
-def sbt_assembly(top_dir):
+def _sbt_assembly(top_dir, version_id):
     crnt_work_dir = os.getcwd()
     os.chdir(os.path.abspath(top_dir))
 
@@ -100,6 +100,13 @@ def sbt_assembly(top_dir):
     if not os.path.exists(jar_path):
         raise Exception("sbt assembly failed")
     os.chdir(crnt_work_dir)
+
+    # Move the file to the top level directory
+    all_in_one_jar = os.path.join(top_dir, "dxWDL-{}.jar".format(version_id))
+    shutil.move(os.path.join(top_dir, jar_path),
+                all_in_one_jar)
+
+    return all_in_one_jar
 
 # Build a dx-asset from the runtime library.
 # Go to the top level directory, before running "dx"
@@ -141,7 +148,10 @@ def find_asset(project, folder):
         return assets[0]
     raise Exception("More than one asset found in folder {}".format(folder))
 
-def build_compiler_jar(version_id, top_dir, project_dict):
+# Create a dxWDL.conf file in the top level directory. It
+# holds a mapping from region to project, where the runtime
+# asset is stored.
+def _gen_config_file(version_id, top_dir, project_dict):
     top_conf_path = get_top_conf_path(top_dir)
     crnt_conf_path = get_crnt_conf_path(top_dir)
     with open(top_conf_path, 'r') as fd:
@@ -169,33 +179,36 @@ def build_compiler_jar(version_id, top_dir, project_dict):
     with open(crnt_conf_path, 'w') as fd:
         fd.write(conf)
 
-    # Add the configuration file to the jar archive
-    jar_path = dxWDL_jar_path(top_dir)
-    subprocess.check_call(["jar",
-                           "uf", jar_path,
-                           "-C", top_dir, os.path.basename(crnt_conf_path)])
     all_regions_str = ", ".join(all_regions)
-    print("Added configuration for regions [{}] to jar file".format(all_regions_str))
+    print("Built configuration regions [{}] into {}".format(all_regions_str,
+                                                            crnt_conf_path))
+    return crnt_conf_path
+
+def build(project, folder, version_id, top_dir, path_dict):
+    all_in_one_jar = _sbt_assembly(top_dir, version_id)
+
+    # Add the configuration file to the jar archive
+    #
+    # This should be possible to do within the 'sbt assembly' command,
+    # but I haven't been able to figure out how to do it.
+    crnt_conf_path = _gen_config_file(version_id, top_dir, path_dict)
+    subprocess.check_call(["jar",
+                           "uf", all_in_one_jar,
+                           "-C", top_dir, "dxWDL.conf"])
 
     # Hygiene, remove the new configuration file, we
     # don't want it to leak into the next build cycle.
     os.remove(crnt_conf_path)
 
-    # Move the file to the top level directory
-    all_in_one_jar = os.path.join(top_dir, "dxWDL-{}.jar".format(version_id))
-    shutil.move(os.path.join(top_dir, jar_path),
-                all_in_one_jar)
-    return all_in_one_jar
-
-
-def build(project, folder, version_id, top_dir):
-    sbt_assembly(top_dir)
     asset = find_asset(project, folder)
     if asset is None:
         make_prerequisits(project, folder, version_id, top_dir)
         asset = find_asset(project, folder)
     region = dxpy.describe(project.get_id())['region']
-    return AssetDesc(region, asset.get_id(), project)
+    ad = AssetDesc(region, asset.get_id(), project)
+
+    return (all_in_one_jar, ad)
+
 
 # Extract version_id from configuration file
 def get_version_id(top_dir):

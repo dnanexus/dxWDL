@@ -19,7 +19,9 @@ HOME_REGION = "aws:us-east-1"
 RELEASE_DICT = {
     "aws:us-east-1" :  "dxWDL",
     "aws:ap-southeast-2" : "dxWDL_Sydney",
-    "azure:westus" : "dxWDL_Azure"
+    "azure:westus" : "dxWDL_Azure",
+    "azure:westeurope" : "dxWDL_Amsterdam",
+    "aws:eu-central-1" : "dxWDL_Berlin"
 }
 
 def main():
@@ -62,14 +64,10 @@ def main():
     # if explicitly specified
     multi_region = args.multi_region
 
-    # build the asset
-    home_ad = util.build(project, folder, version_id, top_dir)
-
-    # Build the compiler jar file.
-    # add the folder to all the  projects
+    # Build the asset, and the compiler jar file.
     path_dict = dict(map(lambda kv: (kv[0], kv[1] + ":" + folder),
                          project_dict.iteritems()))
-    jar_path = util.build_compiler_jar(version_id, top_dir, path_dict)
+    (jar_path, home_ad) = util.build(project, folder, version_id, top_dir, path_dict)
 
     if multi_region:
         # download dxWDL runtime library
