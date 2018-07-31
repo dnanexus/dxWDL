@@ -100,13 +100,7 @@ def _sbt_assembly(top_dir, version_id):
     if not os.path.exists(jar_path):
         raise Exception("sbt assembly failed")
     os.chdir(crnt_work_dir)
-
-    # Move the file to the top level directory
-    all_in_one_jar = os.path.join(top_dir, "dxWDL-{}.jar".format(version_id))
-    shutil.move(os.path.join(top_dir, jar_path),
-                all_in_one_jar)
-
-    return all_in_one_jar
+    return jar_path
 
 # Build a dx-asset from the runtime library.
 # Go to the top level directory, before running "dx"
@@ -185,7 +179,19 @@ def _gen_config_file(version_id, top_dir, project_dict):
     return crnt_conf_path
 
 def build(project, folder, version_id, top_dir, path_dict):
-    all_in_one_jar = _sbt_assembly(top_dir, version_id)
+    jar_path = _sbt_assembly(top_dir, version_id)
+
+    asset = find_asset(project, folder)
+    if asset is None:
+        make_prerequisits(project, folder, version_id, top_dir)
+        asset = find_asset(project, folder)
+    region = dxpy.describe(project.get_id())['region']
+    ad = AssetDesc(region, asset.get_id(), project)
+
+    # Move the file to the top level directory
+    all_in_one_jar = os.path.join(top_dir, "dxWDL-{}.jar".format(version_id))
+    shutil.move(os.path.join(top_dir, jar_path),
+                all_in_one_jar)
 
     # Add the configuration file to the jar archive
     #
@@ -198,15 +204,7 @@ def build(project, folder, version_id, top_dir, path_dict):
 
     # Hygiene, remove the new configuration file, we
     # don't want it to leak into the next build cycle.
-    os.remove(crnt_conf_path)
-
-    asset = find_asset(project, folder)
-    if asset is None:
-        make_prerequisits(project, folder, version_id, top_dir)
-        asset = find_asset(project, folder)
-    region = dxpy.describe(project.get_id())['region']
-    ad = AssetDesc(region, asset.get_id(), project)
-
+    # os.remove(crnt_conf_path)
     return (all_in_one_jar, ad)
 
 

@@ -3,6 +3,7 @@ package dxWDL
 import com.dnanexus._
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.databind.JsonNode
+import com.typesafe.config._
 import java.io.PrintStream
 import java.nio.charset.{Charset, StandardCharsets}
 import java.nio.file.{Path, Paths, Files}
@@ -98,6 +99,18 @@ object Utils {
     var traceLevel = 0
 
     lazy val dxEnv = DXEnvironment.create()
+
+    // load configuration information
+    def getVersion() : String = {
+        try {
+            val config = ConfigFactory.load(Utils.DX_WDL_RUNTIME_CONF_FILE)
+            val version = config.getString("dxWDL.version")
+            version
+        } catch {
+            case e: Throwable =>
+                ""
+        }
+    }
 
     // Ignore a value. This is useful for avoiding warnings/errors
     // on unused variables.

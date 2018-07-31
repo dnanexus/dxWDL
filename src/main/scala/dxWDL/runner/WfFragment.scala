@@ -38,7 +38,6 @@ package dxWDL.runner
 import Collect.ChildExecDesc
 import com.dnanexus._
 import com.fasterxml.jackson.databind.JsonNode
-import com.typesafe.config._
 import dxWDL._
 import dxWDL.Utils.{isOptional, makeOptional, stripOptional}
 import java.nio.file.{Path, Paths, Files}
@@ -903,13 +902,6 @@ object WfFragment {
     }
 
 
-    // load configuration information
-    private def getVersion() : String = {
-        val config = ConfigFactory.load(Utils.DX_WDL_RUNTIME_CONF_FILE)
-        val version = config.getString("dxWDL.version")
-        version
-    }
-
     def apply(nswf: WdlNamespaceWithWorkflow,
               instanceTypeDB: InstanceTypeDB,
               inputSpec: Map[String, DXIOParam],
@@ -919,7 +911,7 @@ object WfFragment {
               runMode: RunnerWfFragmentMode.Value,
               runtimeDebugLevel: Int) : Map[String, JsValue] = {
         val verbose = runtimeDebugLevel >= 1
-        Utils.appletLog(verbose, s"dxWDL version: ${getVersion()}")
+        Utils.appletLog(verbose, s"dxWDL version: ${Utils.getVersion()}")
         Utils.appletLog(verbose, s"Workflow source code:")
         val wdlCode: String = WdlPrettyPrinter(false, None).apply(nswf, 0).mkString("\n")
         Utils.appletLog(verbose, wdlCode, 10000)

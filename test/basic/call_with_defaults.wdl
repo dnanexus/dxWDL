@@ -1,12 +1,12 @@
 workflow call_with_defaults {
     Int x
-    String output_name
+    Boolean flag
 
-    String quality_control_output_basename = output_name + "_qc"
-
-    call SumWithDefaults { input: x = x }
+    if (flag) {
+        call SumWithDefaults { input: x = x }
+    }
     output {
-        Int result = SumWithDefaults.result
+        Int? result = SumWithDefaults.result
     }
 }
 

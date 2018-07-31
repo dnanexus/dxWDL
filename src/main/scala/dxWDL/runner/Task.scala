@@ -479,6 +479,7 @@ case class Task(task:WdlTask,
                outputSpec: Map[String, DXIOParam],
                inputWvls: Map[String, WdlVarLinks]) : Map[String, JsValue] = {
         Utils.appletLog(verbose, s"Prolog  debugLevel=${runtimeDebugLevel}")
+        Utils.appletLog(verbose, s"dxWDL version: ${Utils.getVersion()}")
         if (maxVerboseLevel)
             printDirStruct()
 

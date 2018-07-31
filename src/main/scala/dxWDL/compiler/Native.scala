@@ -484,8 +484,11 @@ case class Native(dxWDLrtId: String,
                     case _ => throw new Exception(s"Badly formatted record ${dxRecord}")
                 }
                 val pkgName = pkgFile.describe.getName
+                val pkgId = JsObject("$dnanexus_link" -> JsObject(
+                                         "project" -> JsString(pkgFile.getProject.getId),
+                                         "id" -> JsString(pkgFile.getId)))
                 Some(JsObject("name" -> JsString(pkgName),
-                             "id" -> jsValueOfJsonNode(pkgFile.getLinkAsJson)))
+                              "id" -> pkgId))
         }
         val bundledDepends = dockerAssets match {
             case None => Vector(runtimeLibrary)
