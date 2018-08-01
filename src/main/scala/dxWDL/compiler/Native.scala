@@ -484,7 +484,11 @@ case class Native(dxWDLrtId: String,
                 }
                 val pkgName = pkgFile.describe.getName
 
-                // if the asset points to another project, copy the record
+                // Error out if the asset points to a different
+                // project.  In dxpy, in contrast, clones the asset
+                // into -this- project.  That removes the worry from
+                // the user, however, it can cause a proliferation of
+                // records.
                 val rmtProject = desc.getProject
                 if (rmtProject != dxProject) {
                     throw new Exception(s"""|The asset ${pkgName} is from a different project ${rmtProject.getId},
