@@ -39,13 +39,6 @@ object Main extends App {
         s.replaceAll("_", "").toUpperCase
     }
 
-    // load configuration information
-    private def getVersion() : String = {
-        val config = ConfigFactory.load(Utils.DX_WDL_RUNTIME_CONF_FILE)
-        val version = config.getString("dxWDL.version")
-        version
-    }
-
     // Split arguments into sub-lists, one per each option.
     // For example:
     //    --sort relaxed --reorg --compile-mode IR
@@ -596,7 +589,7 @@ object Main extends App {
                 case Actions.Config => SuccessfulTermination(ConfigFactory.load().toString)
                 case Actions.DXNI => dxni(args.tail)
                 case Actions.Internal => internalOp(args.tail)
-                case Actions.Version => SuccessfulTermination(getVersion())
+                case Actions.Version => SuccessfulTermination(Utils.getVersion())
             }
         }
     }

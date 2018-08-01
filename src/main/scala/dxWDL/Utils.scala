@@ -55,7 +55,7 @@ object Utils {
     val DX_HOME = "/home/dnanexus"
     val DX_URL_PREFIX = "dx://"
     val DX_WDL_ASSET = "dxWDLrt"
-    val DX_WDL_RUNTIME_CONF_FILE = "dxWDL.conf"
+    val DX_WDL_RUNTIME_DEFAULT_CONF_FILE = "dxWDL.conf"
     val FLAT_FILES_SUFFIX = "___dxfiles"
     val INSTANCE_TYPE_DB_FILENAME = "instanceTypeDB.json"
     val INTERMEDIATE_RESULTS_FOLDER = "intermediate"
@@ -100,16 +100,21 @@ object Utils {
 
     lazy val dxEnv = DXEnvironment.create()
 
-    // load configuration information
-    def getVersion() : String = {
+
+    // load configuration information. It should be in "application.conf",
+    // if it doesn't exist, then the default is in "dxWDL.conf".
+    def getConfig() : com.typesafe.config.Config = {
         try {
-            val config = ConfigFactory.load(Utils.DX_WDL_RUNTIME_CONF_FILE)
-            val version = config.getString("dxWDL.version")
-            version
+            ConfigFactory.load()
         } catch {
-            case e: Throwable =>
-                ""
+            case e : Throwable =>
+                ConfigFactory.load(DX_WDL_RUNTIME_DEFAULT_CONF_FILE)
         }
+    }
+
+    def getVersion() : String = {
+        val config = getConfig()
+        config.getString("dxWDL.version")
     }
 
     // Ignore a value. This is useful for avoiding warnings/errors

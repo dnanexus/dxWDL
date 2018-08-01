@@ -30,7 +30,6 @@ case class Native(dxWDLrtId: String,
     val verbose2:Boolean = verbose.keywords contains "native"
     val rtDebugLvl = runtimeDebugLevel.getOrElse(Utils.DEFAULT_RUNTIME_DEBUG_LEVEL)
     lazy val runtimeLibrary:JsValue = getRuntimeLibrary()
-    lazy val projName = dxProject.describe().getName()
 
     // Open the archive
     // Extract the archive from the details field
@@ -377,7 +376,7 @@ case class Native(dxWDLrtId: String,
                 } else {
                     val dxClass = existingDxObjs.head.dxClass
                     throw new Exception(s"""|${dxClass} ${name} already exists in
-                                            | ${projName}:${folder}""".stripMargin)
+                                            | ${dxProject.getId}:${folder}""".stripMargin)
                 }
             }
             None
@@ -484,6 +483,14 @@ case class Native(dxWDLrtId: String,
                     case _ => throw new Exception(s"Badly formatted record ${dxRecord}")
                 }
                 val pkgName = pkgFile.describe.getName
+
+                // if the asset points to another project, copy the record
+                val rmtProject = desc.getProject
+                if (rmtProject != dxProject) {
+                    throw new Exception(s"""|The asset ${pkgName} is from a different project ${rmtProject.getId},
+                                            |it needs to be cloned into project ${dxProject.getId}"""
+                                            .stripMargin.replaceAll("\n", " "))
+                }
                 Some(JsObject("name" -> JsString(pkgName),
                               "id" -> jsValueOfJsonNode(pkgFile.getLinkAsJson)))
         }

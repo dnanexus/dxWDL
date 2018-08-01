@@ -26,5 +26,4 @@ test/scratch
 
 # misc
 applet_resources/
-reference.conf
-dxWDL.conf
+src/main/resources/application.conf

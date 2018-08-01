@@ -622,6 +622,9 @@ object WdlVarLinks {
         }
         val ioParam =
             if (isOptional(womType)) {
+                // Note: this transformation converts type Array[Int]+? into Array[Int].
+                // They are almost the same, but not equivalent. For example, the first
+                // type can take a null value, but the other one can't.
                 ioParamBase.copy(optional = true)
             } else {
                 ioParamBase

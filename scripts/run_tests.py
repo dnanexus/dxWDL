@@ -33,7 +33,7 @@ medium_test_list = [
     "call_native_app",
 
     "call_with_defaults1",
-    "call_with_defaults2",
+#    "call_with_defaults2",
     "cannes",
     "cast",
 

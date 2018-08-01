@@ -101,6 +101,11 @@ class UtilsTest extends FlatSpec with Matchers {
         s should equal(s2)
     }
 
+    it should "get version number" in {
+        val version = Utils.getVersion()
+        Utils.ignore(version)
+    }
+
     "SprayJs" should "marshal optionals" in {
         def marshal(name: String, dxType: String) : JsValue =  {
             s"""{ "name" : "${name}", "class" : "${dxType}" }""".parseJson

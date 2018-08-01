@@ -20,11 +20,11 @@ max_num_retries = 5
 def dxWDL_jar_path(top_dir):
     return os.path.join(top_dir, "applet_resources/resources/dxWDL.jar")
 
-def get_top_conf_path(top_dir):
-    return os.path.join(top_dir, "ref.conf")
+def get_default_conf_path(top_dir):
+    return os.path.join(top_dir, "src", "main", "resources", "dxWDL.conf")
 
 def get_crnt_conf_path(top_dir):
-    return os.path.join(top_dir, "dxWDL.conf")
+    return os.path.join(top_dir, "src", "main", "resources", "application.conf")
 
 
 def get_project(project_name):
@@ -146,14 +146,12 @@ def find_asset(project, folder):
 # holds a mapping from region to project, where the runtime
 # asset is stored.
 def _gen_config_file(version_id, top_dir, project_dict):
-    top_conf_path = get_top_conf_path(top_dir)
+    top_conf_path = get_default_conf_path(top_dir)
     crnt_conf_path = get_crnt_conf_path(top_dir)
     with open(top_conf_path, 'r') as fd:
         conf = fd.read()
 
-    # Convert the asset descriptors into ConfigFactory HOCON records.
-    # We could use JSON instead, but that would make the file less
-    # readable.
+    # Create a record for each region
     region_project_hocon = []
     all_regions = []
     for region, dx_path in project_dict.iteritems():
@@ -176,9 +174,10 @@ def _gen_config_file(version_id, top_dir, project_dict):
     all_regions_str = ", ".join(all_regions)
     print("Built configuration regions [{}] into {}".format(all_regions_str,
                                                             crnt_conf_path))
-    return crnt_conf_path
 
 def build(project, folder, version_id, top_dir, path_dict):
+    # Create a configuration file
+    _gen_config_file(version_id, top_dir, path_dict)
     jar_path = _sbt_assembly(top_dir, version_id)
 
     asset = find_asset(project, folder)
@@ -193,15 +192,6 @@ def build(project, folder, version_id, top_dir, path_dict):
     shutil.move(os.path.join(top_dir, jar_path),
                 all_in_one_jar)
 
-    # Add the configuration file to the jar archive
-    #
-    # This should be possible to do within the 'sbt assembly' command,
-    # but I haven't been able to figure out how to do it.
-    crnt_conf_path = _gen_config_file(version_id, top_dir, path_dict)
-    subprocess.check_call(["jar",
-                           "uf", all_in_one_jar,
-                           "-C", top_dir, "dxWDL.conf"])
-
     # Hygiene, remove the new configuration file, we
     # don't want it to leak into the next build cycle.
     # os.remove(crnt_conf_path)
@@ -211,7 +201,7 @@ def build(project, folder, version_id, top_dir, path_dict):
 # Extract version_id from configuration file
 def get_version_id(top_dir):
     pattern = re.compile(r"^(\s*)(version)(\s*)(=)(\s*)(\S+)(\s*)$")
-    top_conf_path = get_top_conf_path(top_dir)
+    top_conf_path = get_default_conf_path(top_dir)
     with open(top_conf_path, 'r') as fd:
         for line in fd:
             line_clean = line.replace("\"", "").replace("'", "")

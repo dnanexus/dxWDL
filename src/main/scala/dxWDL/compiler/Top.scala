@@ -215,7 +215,7 @@ object Top {
     // project configured for this region.
     private def getAssetId(region: String,
                            verbose: Verbose) : String = {
-        val config = ConfigFactory.load(Utils.DX_WDL_RUNTIME_CONF_FILE)
+        val config = Utils.getConfig()
         val (projNameRt, folder)  = getProjectWithRuntimeLibrary(config, region)
         val dxProjRt = DxPath.lookupProject(projNameRt)
         Utils.trace(verbose.on, s"Looking for asset-id in ${projNameRt}:/${folder}")
