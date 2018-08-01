@@ -2,6 +2,11 @@
 
 ## 0.73
 - Improving test and release scripts.
+- Adding printout for the dxWDL version to running applets and workflows
+- Check and throw an exception of an asset is not in the current project. It
+needs to be cloned.
+- Supporting Amsterdam and Berlin regions.
+- Fixed error in collecting results from an optional workflow branch.
 
 ## 0.72
 - Put the project-wide reuse of applets under a special flag `projectWideReuse`.
