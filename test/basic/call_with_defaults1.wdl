@@ -1,4 +1,4 @@
-workflow call_with_defaults {
+workflow call_with_defaults1 {
     Int x
     Boolean flag
 

@@ -1,9 +1,12 @@
 import "library_math.wdl" as lib
 
-workflow conditionals {
+workflow conditionals_base {
     # Return null from an optional
     if (true) {
         call lib.MaybeInt as empty
+    }
+    if (true) {
+        call nonEmptyArray
     }
 
     # Artifically construct an array of optional integers
@@ -28,5 +31,16 @@ workflow conditionals {
     output {
         Int? e = empty.result
         Array[Int] results = r
+        Array[Int]+? nea = nonEmptyArray.results
+    }
+}
+
+# Return a non-empty array type. We want
+# to test that it works when we put an
+# optional modifier on it.
+task nonEmptyArray {
+    command {}
+    output {
+        Array[Int]+ results = [5,7]
     }
 }

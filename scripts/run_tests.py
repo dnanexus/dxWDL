@@ -29,17 +29,18 @@ medium_test_list = [
     "bad_status", "bad_status2",
 
     # calling native dx applets/apps
-#    "call_native",
-#    "call_native_app",
+    "call_native",
+    "call_native_app",
 
-    "call_with_defaults",
+    "call_with_defaults1",
+    "call_with_defaults2",
     "cannes",
     "cast",
 
     # objects
     "complex",
 
-    "conditionals",
+    "conditionals_base",
     "conditionals2",
 
     # lifting declarations
@@ -74,7 +75,7 @@ medium_test_list = [
 test_reorg=["files", "math"]
 test_defaults=["files", "math", "population"]
 test_unlocked=["cast",
-               "call_with_defaults",
+               "call_with_defaults1",
                "files",
                "hello",
                "math",
@@ -419,17 +420,14 @@ def native_call_setup(project, applet_folder, version_id):
                                                              folder= applet_folder,
                                                             project= project.get_id()))
         if len(applet) == 0:
-            try:
-                cmdline = [ "dx", "build",
-                            os.path.join(top_dir, "test/applets/{}".format(napl)),
-                            "--destination", (project.get_id() + ":" + applet_folder + "/") ]
-                print(" ".join(cmdline))
-                subprocess.check_output(cmdline)
-            except Exception, e:
-                print("Applet {} already exists".format(napl))
+            cmdline = [ "dx", "build",
+                        os.path.join(top_dir, "test/applets/{}".format(napl)),
+                        "--destination", (project.get_id() + ":" + applet_folder + "/") ]
+            print(" ".join(cmdline))
+            subprocess.check_output(cmdline)
 
-                # build WDL wrapper tasks in test/dx_extern.wdl
-                cmdline = [ "java", "-jar",
+    # build WDL wrapper tasks in test/dx_extern.wdl
+    cmdline = [ "java", "-jar",
                 os.path.join(top_dir, "dxWDL-{}.jar".format(version_id)),
                 "dxni",
                 "--force",
