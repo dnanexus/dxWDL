@@ -161,13 +161,32 @@ object Utils {
     // Is this a WDL type that maps to a native DX type?
     def isNativeDxType(wdlType: WomType) : Boolean = {
         wdlType match {
-            case WomBooleanType | WomIntegerType | WomFloatType | WomStringType | WomSingleFileType
-                   | WomArrayType(WomBooleanType)
-                   | WomArrayType(WomIntegerType)
-                   | WomArrayType(WomFloatType)
-                   | WomArrayType(WomStringType)
-                   | WomArrayType(WomSingleFileType) => true
-            case WomOptionalType(t) => isNativeDxType(t)
+            // optional dx:native types
+            case WomOptionalType(WomBooleanType) => true
+            case WomOptionalType(WomIntegerType) => true
+            case WomOptionalType(WomFloatType) => true
+            case WomOptionalType(WomStringType) => true
+            case WomOptionalType(WomSingleFileType) => true
+            case WomMaybeEmptyArrayType(WomBooleanType) => true
+            case WomMaybeEmptyArrayType(WomIntegerType) => true
+            case WomMaybeEmptyArrayType(WomFloatType) => true
+            case WomMaybeEmptyArrayType(WomStringType) => true
+            case WomMaybeEmptyArrayType(WomSingleFileType) => true
+
+                // compulsory dx:native types
+            case WomBooleanType => true
+            case WomIntegerType => true
+            case WomFloatType => true
+            case WomStringType => true
+            case WomSingleFileType => true
+            case WomNonEmptyArrayType(WomBooleanType) => true
+            case WomNonEmptyArrayType(WomIntegerType) => true
+            case WomNonEmptyArrayType(WomFloatType) => true
+            case WomNonEmptyArrayType(WomStringType) => true
+            case WomNonEmptyArrayType(WomSingleFileType) => true
+
+            // A tricky, but important case, is `Array[File]+?`. This
+            // cannot be converted into a dx file array, unfortunately.
             case _ => false
         }
     }

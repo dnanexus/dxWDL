@@ -25,6 +25,11 @@ class NamespaceValidationException private(ex: RuntimeException) extends Runtime
     def this(msg: String) = this(new RuntimeException(msg))
 }
 
+class NullValueException private(ex: Exception) extends RuntimeException(ex) {
+    def this(msg: String) = this(new RuntimeException(msg))
+}
+
+
 // Mode of file data transfer
 //   Data: download of upload the entire file
 //   Remote: leave the file on the platform

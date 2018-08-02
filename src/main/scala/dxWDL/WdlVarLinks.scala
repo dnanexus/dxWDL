@@ -595,40 +595,38 @@ object WdlVarLinks {
     def importFromDxExec(womType:WomType,
                          attrs:DeclAttrs,
                          jsValue: JsValue) : WdlVarLinks = {
-        val ioParamBase = stripOptional(womType) match {
-            // primitive types
-            case WomBooleanType => DXIOParam(IOClass.BOOLEAN, false)
-            case WomIntegerType => DXIOParam(IOClass.INT, false)
-            case WomFloatType => DXIOParam(IOClass.FLOAT, false)
-            case WomStringType => DXIOParam(IOClass.STRING, false)
-            case WomSingleFileType => DXIOParam(IOClass.FILE, false)
-
-            // arrays that may be empty are converted to optional arguments
+        val ioParam = womType match {
+            // optional dx:native types
+            case WomOptionalType(WomBooleanType) => DXIOParam(IOClass.BOOLEAN, true)
+            case WomOptionalType(WomIntegerType) => DXIOParam(IOClass.INT, true)
+            case WomOptionalType(WomFloatType) => DXIOParam(IOClass.FLOAT, true)
+            case WomOptionalType(WomStringType) => DXIOParam(IOClass.STRING, true)
+            case WomOptionalType(WomSingleFileType) => DXIOParam(IOClass.FILE, true)
             case WomMaybeEmptyArrayType(WomBooleanType) => DXIOParam(IOClass.ARRAY_OF_BOOLEANS, true)
             case WomMaybeEmptyArrayType(WomIntegerType) => DXIOParam(IOClass.ARRAY_OF_INTS, true)
             case WomMaybeEmptyArrayType(WomFloatType) => DXIOParam(IOClass.ARRAY_OF_FLOATS, true)
             case WomMaybeEmptyArrayType(WomStringType) => DXIOParam(IOClass.ARRAY_OF_STRINGS, true)
             case WomMaybeEmptyArrayType(WomSingleFileType) => DXIOParam(IOClass.ARRAY_OF_FILES, true)
 
-            // arrays that cannot be empty are converted to compulsory arguments
+                // compulsory dx:native types
+            case WomBooleanType => DXIOParam(IOClass.BOOLEAN, false)
+            case WomIntegerType => DXIOParam(IOClass.INT, false)
+            case WomFloatType => DXIOParam(IOClass.FLOAT, false)
+            case WomStringType => DXIOParam(IOClass.STRING, false)
+            case WomSingleFileType => DXIOParam(IOClass.FILE, false)
             case WomNonEmptyArrayType(WomBooleanType) => DXIOParam(IOClass.ARRAY_OF_BOOLEANS, false)
             case WomNonEmptyArrayType(WomIntegerType) => DXIOParam(IOClass.ARRAY_OF_INTS, false)
             case WomNonEmptyArrayType(WomFloatType) => DXIOParam(IOClass.ARRAY_OF_FLOATS, false)
             case WomNonEmptyArrayType(WomStringType) => DXIOParam(IOClass.ARRAY_OF_STRINGS, false)
             case WomNonEmptyArrayType(WomSingleFileType) => DXIOParam(IOClass.ARRAY_OF_FILES, false)
 
-            // non dx:native types, thse are converted to hashes
+            // non dx:native types, thse are converted to hashes.
+            //
+            // Note: WDL types like "Array[Int]+?" cannot be converted to a native
+            // dx type. They can take null, requiring an optional type.
+            case WomOptionalType(_) => DXIOParam(IOClass.HASH, true)
             case _ => DXIOParam(IOClass.HASH, false)
         }
-        val ioParam =
-            if (isOptional(womType)) {
-                // Note: this transformation converts type Array[Int]+? into Array[Int].
-                // They are almost the same, but not equivalent. For example, the first
-                // type can take a null value, but the other one can't.
-                ioParamBase.copy(optional = true)
-            } else {
-                ioParamBase
-            }
         importFromDxExec(ioParam, attrs, jsValue)
     }
 
