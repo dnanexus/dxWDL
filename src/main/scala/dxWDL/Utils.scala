@@ -55,7 +55,7 @@ object Utils {
     val DX_HOME = "/home/dnanexus"
     val DX_URL_PREFIX = "dx://"
     val DX_WDL_ASSET = "dxWDLrt"
-    val DX_WDL_RUNTIME_DEFAULT_CONF_FILE = "dxWDL.conf"
+    val DX_WDL_RUNTIME_CONF_FILE = "dxWDL_runtime.conf"
     val FLAT_FILES_SUFFIX = "___dxfiles"
     val INSTANCE_TYPE_DB_FILENAME = "instanceTypeDB.json"
     val INTERMEDIATE_RESULTS_FOLDER = "intermediate"
@@ -101,20 +101,22 @@ object Utils {
     lazy val dxEnv = DXEnvironment.create()
 
 
-    // load configuration information. It should be in "application.conf",
-    // if it doesn't exist, then the default is in "dxWDL.conf".
-    def getConfig() : com.typesafe.config.Config = {
-        try {
-            ConfigFactory.load()
-        } catch {
-            case e : Throwable =>
-                ConfigFactory.load(DX_WDL_RUNTIME_DEFAULT_CONF_FILE)
-        }
+    // The version lives in application.conf
+    def getVersion() : String = {
+        val config = ConfigFactory.load("application.conf")
+        config.getString("dxWDL.version")
     }
 
-    def getVersion() : String = {
-        val config = getConfig()
-        config.getString("dxWDL.version")
+    // the regions live in dxWDL.conf
+    def getRegions() : Map[String, String] = {
+        val config = ConfigFactory.load(DX_WDL_RUNTIME_CONF_FILE)
+        val l: List[Config] = config.getConfigList("dxWDL.region2project").asScala.toList
+        val region2project:Map[String, String] = l.map{ pair =>
+            val r = pair.getString("region")
+            val projName = pair.getString("path")
+            r -> projName
+        }.toMap
+        region2project
     }
 
     // Ignore a value. This is useful for avoiding warnings/errors

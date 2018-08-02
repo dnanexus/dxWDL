@@ -20,11 +20,11 @@ max_num_retries = 5
 def dxWDL_jar_path(top_dir):
     return os.path.join(top_dir, "applet_resources/resources/dxWDL.jar")
 
-def get_default_conf_path(top_dir):
-    return os.path.join(top_dir, "src", "main", "resources", "dxWDL.conf")
-
-def get_crnt_conf_path(top_dir):
+def get_appl_conf_path(top_dir):
     return os.path.join(top_dir, "src", "main", "resources", "application.conf")
+
+def get_runtime_conf_path(top_dir):
+    return os.path.join(top_dir, "src", "main", "resources", "dxWDL_runtime.conf")
 
 
 def get_project(project_name):
@@ -146,11 +146,6 @@ def find_asset(project, folder):
 # holds a mapping from region to project, where the runtime
 # asset is stored.
 def _gen_config_file(version_id, top_dir, project_dict):
-    top_conf_path = get_default_conf_path(top_dir)
-    crnt_conf_path = get_crnt_conf_path(top_dir)
-    with open(top_conf_path, 'r') as fd:
-        conf = fd.read()
-
     # Create a record for each region
     region_project_hocon = []
     all_regions = []
@@ -163,17 +158,18 @@ def _gen_config_file(version_id, top_dir, project_dict):
         all_regions.append(region)
 
     buf = "\n".join(region_project_hocon)
-    conf = conf.replace("    region2project = []\n",
-                        "    region2project = [\n{}\n]\n".format(buf))
+    conf = "\n".join(["dxWDL {",
+                      "    region2project = [\n{}\n]".format(buf),
+                      "}"])
 
-    if os.path.exists(crnt_conf_path):
-        os.remove(crnt_conf_path)
-    with open(crnt_conf_path, 'w') as fd:
+    rt_conf_path = get_runtime_conf_path(top_dir)
+    if os.path.exists(rt_conf_path):
+        os.remove(rt_conf_path)
+    with open(rt_conf_path, 'w') as fd:
         fd.write(conf)
-
     all_regions_str = ", ".join(all_regions)
     print("Built configuration regions [{}] into {}".format(all_regions_str,
-                                                            crnt_conf_path))
+                                                            rt_conf_path))
 
 def build(project, folder, version_id, top_dir, path_dict):
     # Create a configuration file
@@ -201,8 +197,8 @@ def build(project, folder, version_id, top_dir, path_dict):
 # Extract version_id from configuration file
 def get_version_id(top_dir):
     pattern = re.compile(r"^(\s*)(version)(\s*)(=)(\s*)(\S+)(\s*)$")
-    top_conf_path = get_default_conf_path(top_dir)
-    with open(top_conf_path, 'r') as fd:
+    appl_conf_path = get_appl_conf_path(top_dir)
+    with open(appl_conf_path, 'r') as fd:
         for line in fd:
             line_clean = line.replace("\"", "").replace("'", "")
             m = re.match(pattern, line_clean)
