@@ -61,7 +61,7 @@ limits job manager scalability.
 
 To explain these, we will walk through the compilation process of a simple WDL file.
 
-```
+```wdl
 task Add {
     Int a
     Int b
@@ -112,7 +112,7 @@ are applied as transformations to this tree.
 Workflows allow `scatter` and `if` blocks, which can be arbitrarily
 nested. A few examples are shown in workflow `w`.
 
-```
+```wdl
 workflow w {
    Int n
    Int m
@@ -161,7 +161,7 @@ In practical terms, this is achieved with a two step process:
 There are workflows that require several decomposition steps. For example,
 workflow _twoStep_ below is simplified to _twoStepV2_ and then _twoStepV3_.
 
-```
+```wdl
 workflow twoStep {
     Int i
     Array[Int] xa
@@ -179,7 +179,7 @@ workflow twoStep {
 }
 ```
 
-```
+```wdl
 workflow twoStepV2 {
     Int i
     Array[Int] xa
@@ -211,7 +211,7 @@ workflow twoStep_add {
  }
  ```
 
-```
+```wdl
 workflow twoStepV3 {
     Int i
     Array[Int] xa
@@ -372,7 +372,7 @@ expression. To implement scatters, we use an applet that launches
 sub-jobs, and leaves links to their results. Examine the workflow
 snippet below.
 
-```
+```wdl
 scatter (k in [1,2,3]) {
     call lib.Inc as inc3 {input: i=k}
 }
@@ -380,7 +380,7 @@ scatter (k in [1,2,3]) {
 
 Variable ```k``` is looping over an integer array. The Preprocessor
 extracts the collection expression into a separate declaration.
-```
+```wdl
 Array[Int] xtmp0 = [1,2,3]
 scatter (k in xtmp0) {
     call lib.Inc as inc3 {input: i=k}
@@ -393,7 +393,7 @@ so we do not spawn a separate job to calculate `xtmp0`.
 Workflow `sg_sum3` presents a more complex case. It imports
 tasks from the math library, and takes a `numbers` input array.
 
-```
+```wdl
 import "library_math.wdl" as lib
 
 workflow sg_sum3 {
@@ -411,7 +411,7 @@ workflow sg_sum3 {
 ```
 
 It is simplified into:
-```
+```wdl
 import "library_math.wdl" as lib
 
 workflow sg_sum3 {
@@ -432,7 +432,7 @@ workflow sg_sum3 {
 Three applets are generated, `common`, `scatter_1`, and `scatter_2`.
 
 #### common
-```
+```wdl
     Array[Int] numbers
     Array[Int] xtmp0 = range(length(numbers))
 ```
@@ -440,7 +440,7 @@ Accept workflow input arguments (`numbers`), and calculate the
 `range(length(numbers))` expression.
 
 #### scatter_1
-```
+```wdl
     scatter (k in xtmp0) {
         call lib.Inc as inc {input: i= numbers[k]}
         call lib.Mod7 as mod7 {input: i=inc.result}
@@ -449,7 +449,7 @@ Accept workflow input arguments (`numbers`), and calculate the
 Loop over the `xtmp0` array.
 
 #### scatter_2
-```
+```wdl
     Array[Int] partial = inc.results
     Array[Int] xtmp1 = mod7.result
     scatter (k in xtmp1) {
@@ -463,7 +463,7 @@ arrays.
 
 ## Scatters with a collect subjob
 
-```
+```wdl
 task GenFiles {
   ...
   output {
@@ -512,7 +512,7 @@ this: `[ GenFiles(len=2) , GenFiles(len=3), GenFile(len=5)]`. To
 achieve this, two properties are added to each the child jobs (1) the
 call name, and (2) the invocation serial number.
 
-```
+```wdl
 workflow math {
     scatter (k in [2,3,5]) {
         call GenFiles  { input: len=k }
@@ -535,7 +535,7 @@ these structures uses dot, and syntactically is the same is call member access.
 For example, in workflow `salad`, the `pair.left` syntax is similar to
 calling task `pair` and accessing member `left`.
 
-```
+```wdl
 workflow salad {
     Map[String, Int] weight = {"apple": 100, "banana": 150}
 
@@ -551,7 +551,7 @@ of the pair `sign`. This cannot be compiled directly into a dx:stage, because
 the arguments {`a`,`b`} need to be extracted first; the job manager does
 not know how to access members in a JSON hash.
 
-```
+```wdl
 task Concat {
     String a
     String b
@@ -572,7 +572,7 @@ The workflow is rewritten into `chef_simplified`, with temporary variables
 for the pair members. The downside is that the caculating the new variables may, in
 certain cases, require an additional sub-job.
 
-```
+```wdl
 workflow chef_simplified {
     Pair[String, String] sign = ("chef", "Julian Dremond")
     String xtmp1 = sign.left
@@ -586,7 +586,7 @@ A workflow declares its outputs via an output section, which may define
 new variable names, access call results, and evaluate expressions. For example,
 see workflows `salad`, and `salad2`.
 
-```
+```wdl
 task fruit {
     output {
         Array[String] ingredients
@@ -623,7 +623,7 @@ name as an input variable.
 To handle these difficulties, we add an "out_" prefix to outputs,
 and replace dots with underscores. For example:
 
-```
+```wdl
 workflow salad_output {
    Array[String] fruit_ingredients
    Int fruit_num_veggies
@@ -676,7 +676,7 @@ section describes the dxWDL implementation.
 
 A task can have input files, for example, task `wc` takes `in_file`.
 
-```
+```wdl
 task wc {
     File in_file
 
@@ -765,7 +765,7 @@ The input/output declaration in the `dxapp.json` is:
 ```
 
 The DxNI pass creates a WDL header that looks like this:
-```
+```wdl
 task mk_int_list {
   Int a
   Int b

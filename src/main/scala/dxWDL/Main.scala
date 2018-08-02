@@ -39,13 +39,6 @@ object Main extends App {
         s.replaceAll("_", "").toUpperCase
     }
 
-    // load configuration information
-    private def getVersion() : String = {
-        val config = ConfigFactory.load()
-        val version = config.getString("dxWDL.version")
-        version
-    }
-
     // Split arguments into sub-lists, one per each option.
     // For example:
     //    --sort relaxed --reorg --compile-mode IR
@@ -269,11 +262,9 @@ object Main extends App {
             throw new Exception(s"Folder must start with '/'")
         val dxFolder = folderRaw
         val dxProject = DxPath.lookupProject(projectRaw)
-        val projName = dxProject.describe.getName
         Utils.trace(verbose.on,
-                    s"""|project name: <${projName}>
-                        |project ID: <${dxProject.getId}>
-                        |folder: <${dxFolder}>""".stripMargin)
+                    s"""|project ID: ${dxProject.getId}
+                        |folder: ${dxFolder}""".stripMargin)
         (dxProject, dxFolder)
     }
 
@@ -598,7 +589,7 @@ object Main extends App {
                 case Actions.Config => SuccessfulTermination(ConfigFactory.load().toString)
                 case Actions.DXNI => dxni(args.tail)
                 case Actions.Internal => internalOp(args.tail)
-                case Actions.Version => SuccessfulTermination(getVersion())
+                case Actions.Version => SuccessfulTermination(Utils.getVersion())
             }
         }
     }

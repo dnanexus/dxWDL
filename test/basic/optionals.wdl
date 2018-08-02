@@ -10,11 +10,6 @@ workflow optionals {
     Boolean? flag
     Array[String] foodArray = ["our", "own", "peanut", "butter"]
 
-    # scatter that returns an optional type
-#    scatter (i in [1, 10, 100]) {
-#        call isLargeInt { input: a=i }
-#    }
-
     # Missing compulsory argument
     call lib.Inc as inc { input: i=106 }
 
@@ -24,11 +19,6 @@ workflow optionals {
     call lib_str.ConcatArray as concatArr2 {
         input: words = foodArray
     }
-
-#    call lib_str.Concat as concat { input:
-#        x = if select_first([flag,false]) then 'OKAY' else 'FAIL',
-#        y = if defined(flag) then 'OKAY' else 'FAIL'
-#    }
 
     call lib.MaybeInt as mi1 { input: a=rain }
     call lib.MaybeInt as mi2 { input: a=mi1.result}

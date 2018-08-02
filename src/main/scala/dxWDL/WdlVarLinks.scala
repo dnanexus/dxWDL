@@ -26,8 +26,7 @@ import com.dnanexus.{DXFile, DXExecution, IOClass}
 import java.nio.file.{Files, Paths}
 import net.jcazevedo.moultingyaml._
 import spray.json._
-import Utils.{appletLog, dxFileFromJsValue, dxFileToJsValue,
-    DX_URL_PREFIX, DXWorkflowStage, FLAT_FILES_SUFFIX, isNativeDxType}
+import Utils._
 import wdl.draft2.model.{WdlTask}
 import wdl.draft2.model.types.WdlFlavoredWomType
 import wom.types._
@@ -609,7 +608,7 @@ object WdlVarLinks {
             case WomMaybeEmptyArrayType(WomStringType) => DXIOParam(IOClass.ARRAY_OF_STRINGS, true)
             case WomMaybeEmptyArrayType(WomSingleFileType) => DXIOParam(IOClass.ARRAY_OF_FILES, true)
 
-            // compulsory dx:native types
+                // compulsory dx:native types
             case WomBooleanType => DXIOParam(IOClass.BOOLEAN, false)
             case WomIntegerType => DXIOParam(IOClass.INT, false)
             case WomFloatType => DXIOParam(IOClass.FLOAT, false)
@@ -621,7 +620,10 @@ object WdlVarLinks {
             case WomNonEmptyArrayType(WomStringType) => DXIOParam(IOClass.ARRAY_OF_STRINGS, false)
             case WomNonEmptyArrayType(WomSingleFileType) => DXIOParam(IOClass.ARRAY_OF_FILES, false)
 
-            // non dx:native types, thse are converted to hashes
+            // non dx:native types, thse are converted to hashes.
+            //
+            // Note: WDL types like "Array[Int]+?" cannot be converted to a native
+            // dx type. They can take null, requiring an optional type.
             case WomOptionalType(_) => DXIOParam(IOClass.HASH, true)
             case _ => DXIOParam(IOClass.HASH, false)
         }

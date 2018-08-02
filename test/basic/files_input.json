@@ -1,6 +1,6 @@
 {
   "files.f": "dx://dxWDL_playground:/test_data/fileB",
-  "files.f1": "dx://file-FGqFJZ80ffP18q5YGz9jGzzQ",
-  "files.f2": "dx://file-FGqFJP00ffPJ6gbzGzV7208k",
+  "files.f1": "dx://dxWDL_playground:/test_data/fileC",
+  "files.f2": "dx://dxWDL_playground:/test_data/1/fileC",
   "files.fruit_list": "dx://dxWDL_playground:/test_data/fruit_list.txt"
 }

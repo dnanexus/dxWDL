@@ -15,7 +15,8 @@ import time
 import util
 from dxpy.exceptions import DXJobFailureError
 
-top_dir = os.path.dirname(sys.argv[0])
+here = os.path.dirname(sys.argv[0])
+top_dir = os.path.dirname(os.path.abspath(here))
 test_dir = os.path.join(os.path.abspath(top_dir), "test")
 
 git_revision = subprocess.check_output(["git", "describe", "--always", "--dirty", "--tags"]).strip()
@@ -31,14 +32,15 @@ medium_test_list = [
     "call_native",
     "call_native_app",
 
-    "call_with_defaults",
+    "call_with_defaults1",
+#    "call_with_defaults2",
     "cannes",
     "cast",
 
     # objects
     "complex",
 
-    "conditionals",
+    "conditionals_base",
     "conditionals2",
 
     # lifting declarations
@@ -73,7 +75,7 @@ medium_test_list = [
 test_reorg=["files", "math"]
 test_defaults=["files", "math", "population"]
 test_unlocked=["cast",
-               "call_with_defaults",
+               "call_with_defaults1",
                "files",
                "hello",
                "math",
@@ -411,25 +413,18 @@ def native_call_setup(project, applet_folder, version_id):
                       "native_sum",
                       "native_sum_012"]
 
-    # Check if they already exist
-    applets = list(dxpy.bindings.search.find_data_objects(classname= "applet",
-                                                          name= "native_*",
-                                                          name_mode="glob",
-                                                          folder= applet_folder,
-                                                          project= project.get_id()))
-    if len(applets) == len(native_applets):
-        return
-
-    # build the native applets
+    # build the native applets, only if they do not exist
     for napl in native_applets:
-        try:
+        applet = list(dxpy.bindings.search.find_data_objects(classname= "applet",
+                                                             name= napl,
+                                                             folder= applet_folder,
+                                                            project= project.get_id()))
+        if len(applet) == 0:
             cmdline = [ "dx", "build",
                         os.path.join(top_dir, "test/applets/{}".format(napl)),
                         "--destination", (project.get_id() + ":" + applet_folder + "/") ]
             print(" ".join(cmdline))
             subprocess.check_output(cmdline)
-        except Exception, e:
-            print("Applet {} already exists".format(napl))
 
     # build WDL wrapper tasks in test/dx_extern.wdl
     cmdline = [ "java", "-jar",
@@ -459,15 +454,15 @@ def native_call_app_setup(version_id):
 
     # build WDL wrapper tasks in test/dx_extern.wdl
     header_file = os.path.join(top_dir, "test/basic/dx_app_extern.wdl")
-    if not os.path.isfile(header_file):
-        cmdline = [ "java", "-jar",
-                    os.path.join(top_dir, "dxWDL-{}.jar".format(version_id)),
-                    "dxni",
-                    "--apps",
-                    "--force",
-                    "--output", header_file]
-        print(" ".join(cmdline))
-        subprocess.check_output(cmdline)
+    cmdline = [ "java", "-jar",
+                os.path.join(top_dir, "dxWDL-{}.jar".format(version_id)),
+                "dxni",
+                "--apps",
+                "--force",
+                "--output", header_file]
+    print(" ".join(cmdline))
+    subprocess.check_output(cmdline)
+
 
 
 ######################################################################
@@ -540,8 +535,7 @@ def main():
 
     # build the dxWDL jar file, only on us-east-1
     if not args.do_not_build:
-        util.build(project, base_folder, version_id, top_dir)
-        util.build_compiler_jar(version_id, top_dir, test_dict)
+        util.build(project, base_folder, version_id, top_dir, test_dict)
 
     if args.unlocked:
         # Disable all locked workflows
