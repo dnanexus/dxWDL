@@ -26,4 +26,4 @@ test/scratch
 
 # misc
 applet_resources/
-src/main/resources/application.conf
+src/main/resources/dxWDL_runtime.conf

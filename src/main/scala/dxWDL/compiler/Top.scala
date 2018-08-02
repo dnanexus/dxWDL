@@ -4,7 +4,6 @@
 package dxWDL.compiler
 
 import com.dnanexus.{DXDataObject, DXProject, DXSearch}
-import com.typesafe.config._
 import dxWDL.{CompilerOptions, CompilationResults, DxPath, InstanceTypeDB, Utils, Verbose}
 import dxWDL.Utils.DX_WDL_ASSET
 import java.nio.file.{Files, Path, Paths}
@@ -187,14 +186,8 @@ object Top {
 
     // The mapping from region to project name is list of (region, proj-name) pairs.
     // Get the project for this region.
-    private def getProjectWithRuntimeLibrary(config: Config, region: String) : (String, String) = {
-        val l: List[Config] = config.getConfigList("dxWDL.region2project").asScala.toList
-        val region2project:Map[String, String] = l.map{ pair =>
-            val r = pair.getString("region")
-            val projName = pair.getString("path")
-            r -> projName
-        }.toMap
-
+    private def getProjectWithRuntimeLibrary(region2project: Map[String, String],
+                                             region: String) : (String, String) = {
         val destination = region2project.get(region) match {
             case None => throw new Exception(s"Region ${region} is currently unsupported")
             case Some(dest) => dest
@@ -215,8 +208,8 @@ object Top {
     // project configured for this region.
     private def getAssetId(region: String,
                            verbose: Verbose) : String = {
-        val config = Utils.getConfig()
-        val (projNameRt, folder)  = getProjectWithRuntimeLibrary(config, region)
+        val region2project = Utils.getRegions()
+        val (projNameRt, folder)  = getProjectWithRuntimeLibrary(region2project, region)
         val dxProjRt = DxPath.lookupProject(projNameRt)
         Utils.trace(verbose.on, s"Looking for asset-id in ${projNameRt}:/${folder}")
 
