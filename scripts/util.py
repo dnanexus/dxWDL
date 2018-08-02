@@ -159,7 +159,6 @@ def _gen_config_file(version_id, top_dir, project_dict):
 
     buf = "\n".join(region_project_hocon)
     conf = "\n".join(["dxWDL {",
-                      "    region2project = []",
                       "    region2project = [\n{}\n]".format(buf),
                       "}"])
 

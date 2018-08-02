@@ -1,11 +1,11 @@
 # Release Notes
 
-## 0.73
+## 0.74
 - Improving test and release scripts.
 - Adding printout for the dxWDL version to running applets and workflows
-- Check and throw an exception of an asset is not in the current project. It
+- Check and throw an exception if an asset is not in the current project. It
 needs to be cloned.
-- Supporting Amsterdam and Berlin regions.
+- Supporting Amsterdam (azure:westeurope) and Berlin (aws:eu-central-1) regions.
 - Fixed error in collecting results from an optional workflow branch.
 
 ## 0.72
