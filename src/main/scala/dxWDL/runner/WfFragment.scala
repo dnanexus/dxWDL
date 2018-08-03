@@ -361,6 +361,12 @@ case class WfFragment(nswf: WdlNamespaceWithWorkflow,
     // do the calculation right now. This saves a job relaunch down the road.
     private def preCalcInstanceType(task: WdlTask,
                                     taskInputs:Map[String, WdlVarLinks]) : Option[String] = {
+        // do we need to calculate which instance type this is?
+        val instanceAttrs = Set("memory", "disks", "cpu")
+        val keys = task.runtimeAttributes.attrs.keys.toSet
+        if (keys.intersect(instanceAttrs).isEmpty)
+            return None
+
         val taskRunner = new Task(task, instanceTypeDB, cef, runtimeDebugLevel)
         try {
             val iType = taskRunner.calcInstanceType(taskInputs)
@@ -376,6 +382,22 @@ case class WfFragment(nswf: WdlNamespaceWithWorkflow,
                                     |""".stripMargin)
                 None
         }
+    }
+
+
+    // Does this task have a an instance type determined at runtime?
+    //
+    // If all the expressions for resources are constant, no
+    // evaluation is required.
+    private def mayCalculateInstaceType(task: WdlTask) : Boolean = {
+        val instanceAttrs = Set("memory", "disks", "cpu")
+        val allConst = instanceAttrs.forall{ attrName =>
+            task.runtimeAttributes.attrs.get(attrName) match {
+                case None => true
+                case Some(expr) => Utils.isExpressionConst(expr)
+            }
+        }
+        !allConst
     }
 
     private def execCall(call: WdlCall,
@@ -431,8 +453,9 @@ case class WfFragment(nswf: WdlNamespaceWithWorkflow,
                 // If this is a task that specifies the instance type
                 // at runtime, launch it in the requested instance.
                 val instanceType = nswf.findTask(calleeName) match {
-                    case None => None
-                    case Some(task) => preCalcInstanceType(task, callInputsWvl)
+                    case Some(task) if mayCalculateInstaceType(task) =>
+                        preCalcInstanceType(task, callInputsWvl)
+                    case _ => None
                 }
                 val instanceFields = instanceType match {
                     case None => Map.empty
