@@ -132,6 +132,18 @@ object WdlRewrite {
         task2
     }
 
+
+    // Leave as little as possible from the original task. Just enough
+    // to allow calculating the instance type it needs.
+    def taskMakeHeader(task:WdlTask) : WdlTask = {
+        val task2 = task.copy(commandTemplate = Vector.empty,
+                              meta = Map.empty,
+                              parameterMeta = Map.empty)
+        task2.children = task.children
+        updateScope(task, task2)
+        task2
+    }
+
     def genDefaultValueOfType(wdlType: WomType) : WomValue = {
         wdlType match {
             case WomBooleanType => WomBoolean(true)
