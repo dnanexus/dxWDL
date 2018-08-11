@@ -10,6 +10,7 @@ import spray.json._
 import spray.json.JsString
 import wdl.draft2.model.{WdlNamespace, WdlTask, WdlNamespaceWithWorkflow}
 
+
 object Main extends App {
     sealed trait Termination
     case class SuccessfulTermination(output: String) extends Termination
@@ -20,7 +21,7 @@ object Main extends App {
     type OptionsMap = Map[String, List[String]]
 
     object Actions extends Enumeration {
-        val Compile, Config, DXNI, Internal, Version  = Value
+        val Compile, Config, DXNI, Internal, Version, Wom  = Value
     }
     object InternalOp extends Enumeration {
         val Collect,
@@ -460,6 +461,22 @@ object Main extends App {
         }
     }
 
+    def wom(args: Seq[String]): Termination = {
+        try {
+            val options = parseCmdlineOptions(args.toList)
+            if (options contains "help")
+                return BadUsageTermination("")
+
+            val wdlSourceFile = args.head
+            val bundle = Wom.getBundle(wdlSourceFile)
+            SuccessfulTermination(bundle.toString)
+        } catch {
+            case e: Throwable =>
+                return BadUsageTermination(Utils.exceptionToString(e))
+        }
+    }
+
+
     // Extract the only task from a namespace
     def taskOfNamespace(ns: WdlNamespace) : WdlTask = {
         val numTasks = ns.tasks.length
@@ -590,6 +607,7 @@ object Main extends App {
                 case Actions.DXNI => dxni(args.tail)
                 case Actions.Internal => internalOp(args.tail)
                 case Actions.Version => SuccessfulTermination(Utils.getVersion())
+                case Actions.Wom => wom(args.tail)
             }
         }
     }
@@ -635,6 +653,9 @@ object Main extends App {
             |      -apps                  Search only for global apps.
             |      -o <string>            Destination file for WDL task definitions
             |      -r | recursive         Recursive search
+            |
+            |  wom
+            |    Experimental. Compile into the WOM model.
             |
             |Common options
             |    -destination             Full platform path (project:/folder)

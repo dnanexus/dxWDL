@@ -56,13 +56,16 @@ assemblyOutputPath in assembly := file("applet_resources/resources/dxWDL.jar")
 assemblyMergeStrategy in assembly := customMergeStrategy
 
 libraryDependencies ++= Seq(
-//    "org.broadinstitute" %% "cromwell-wdl-model-core" % "32",
-//    "org.broadinstitute" %% "cromwell-wdl-transforms-draft2" % "32",
-    "org.broadinstitute" %% "cromwell-wdl-model-draft2" % "33.1",
-//    "org.broadinstitute" %% "cromwell-wom" % "32",
-//    "org.broadinstitute" %% "wdl-draft2" % "32",
-//    "org.broadinstitute" %% "language-factory-core" % "32",
+    "org.broadinstitute" %% "cromwell-common" % "34",
+    "org.broadinstitute" %% "cromwell-core" % "34",
+    "org.broadinstitute" %% "cromwell-wom" % "34",
+    "org.broadinstitute" %% "cwl-v1-0" % "34",
+    "org.broadinstitute" %% "language-factory-core" % "34",
+    "org.broadinstitute" %% "wdl-draft2" % "34",
+    "org.broadinstitute" %% "wdl-draft3" % "34",
+    "org.broadinstitute" %% "wdl-biscayne" % "34",
 
+    // "cromwell.languages.util"
     "io.spray" %% "spray-json" % "1.3.2",
     "net.jcazevedo" %% "moultingyaml" % "0.4.0",
     "com.typesafe" % "config" % "1.3.1",
