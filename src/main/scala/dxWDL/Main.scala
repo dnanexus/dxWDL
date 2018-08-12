@@ -4,7 +4,6 @@ import com.dnanexus.{DXProject}
 import com.typesafe.config._
 import dxWDL.compiler.IR
 import java.nio.file.{Path, Paths}
-//import org.apache.log4j.{Level, Logger}
 import scala.collection.mutable.HashMap
 import spray.json._
 import spray.json.JsString
@@ -462,18 +461,19 @@ object Main extends App {
     }
 
     def wom(args: Seq[String]): Termination = {
-        try {
-            val options = parseCmdlineOptions(args.toList)
-            if (options contains "help")
-                return BadUsageTermination("")
+        val wdlSourceFile = args.head
+        val options =
+            try {
+                parseCmdlineOptions(args.tail.toList)
+            } catch {
+                case e : Throwable =>
+                    return BadUsageTermination(Utils.exceptionToString(e))
+            }
+        if (options contains "help")
+            return BadUsageTermination("")
 
-            val wdlSourceFile = args.head
-            val bundle = Wom.getBundle(wdlSourceFile)
-            SuccessfulTermination(bundle.toString)
-        } catch {
-            case e: Throwable =>
-                return BadUsageTermination(Utils.exceptionToString(e))
-        }
+        val bundle = Wom.getBundle(wdlSourceFile)
+        SuccessfulTermination(bundle.toString)
     }
 
 
@@ -612,10 +612,6 @@ object Main extends App {
         }
     }
 
-    // Silence the log4j package
-//    Logger.getRootLogger().removeAllAppenders()
-//    Logger.getRootLogger().setLevel(Level.OFF);
-
     val usageMessage =
         s"""|java -jar dxWDL.jar <action> <parameters> [options]
             |
@@ -654,8 +650,8 @@ object Main extends App {
             |      -o <string>            Destination file for WDL task definitions
             |      -r | recursive         Recursive search
             |
-            |  wom
-            |    Experimental. Compile into the WOM model.
+            |  wom <WDL file>
+            |    Compile into the WOM model (experimental)
             |
             |Common options
             |    -destination             Full platform path (project:/folder)
