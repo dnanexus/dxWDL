@@ -53,7 +53,7 @@ scalacOptions ++= Seq(
 assemblyJarName in assembly := "dxWDL.jar"
 logLevel in assembly := Level.Info
 assemblyOutputPath in assembly := file("applet_resources/resources/dxWDL.jar")
-assemblyMergeStrategy in assembly := customMergeStrategy
+assemblyMergeStrategy in assembly := customMergeStrategy.value
 
 val cromwellV = "35-fb4e1ec-SNAP"
 

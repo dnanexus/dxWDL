@@ -1181,10 +1181,15 @@ public final class DXSearch {
                     // Exactly one of jobStates or analysisStates has a single element, and the
                     // other one is empty. In the case of only one element, we fill in just the
                     // String instead of a singleton array.
-                    this.state =
+                    /*this.state =
                             Iterables.getOnlyElement(builder.jobStates.size() == 1
                                     ? builder.jobStates
-                                    : builder.analysisStates);
+                                    : builder.analysisStates);*/
+                    if (builder.jobStates.size() == 1) {
+                        this.state = builder.jobStates.get(0);
+                    } else {
+                        this.state = builder.analysisStates.get(0);
+                    }
                 }
             } else {
                 this.state = null;
