@@ -72,11 +72,6 @@ libraryDependencies ++= Seq(
     "net.jcazevedo" %% "moultingyaml" % "0.4.0",
     "com.typesafe" % "config" % "1.3.1",
 
-//    "org.typelevel" %% "cats-core" % "1.0.1",
-//    "org.typelevel" %% "alleycats-core" % "1.0.1",
-//    "com.github.benhutchison" %% "mouse" % "0.10-MF",
-//    "org.typelevel" %% "kittens" % "1.0.0-RC3",
-
     //---------- Test libraries -------------------//
     "org.scalactic" %% "scalactic" % "3.0.1",
     "org.scalatest" %% "scalatest" % "3.0.1" % "test"
