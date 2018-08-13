@@ -3,6 +3,7 @@ package dxWDL
 import com.dnanexus._
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.databind.JsonNode
+import com.typesafe.config._
 import java.io.PrintStream
 import java.nio.charset.{Charset, StandardCharsets}
 import java.nio.file.{Path, Paths, Files}
@@ -54,6 +55,7 @@ object Utils {
     val DX_HOME = "/home/dnanexus"
     val DX_URL_PREFIX = "dx://"
     val DX_WDL_ASSET = "dxWDLrt"
+    val DX_WDL_RUNTIME_CONF_FILE = "dxWDL_runtime.conf"
     val FLAT_FILES_SUFFIX = "___dxfiles"
     val INSTANCE_TYPE_DB_FILENAME = "instanceTypeDB.json"
     val INTERMEDIATE_RESULTS_FOLDER = "intermediate"
@@ -98,12 +100,28 @@ object Utils {
 
     lazy val dxEnv = DXEnvironment.create()
 
+
+    // The version lives in application.conf
+    def getVersion() : String = {
+        val config = ConfigFactory.load("application.conf")
+        config.getString("dxWDL.version")
+    }
+
+    // the regions live in dxWDL.conf
+    def getRegions() : Map[String, String] = {
+        val config = ConfigFactory.load(DX_WDL_RUNTIME_CONF_FILE)
+        val l: List[Config] = config.getConfigList("dxWDL.region2project").asScala.toList
+        val region2project:Map[String, String] = l.map{ pair =>
+            val r = pair.getString("region")
+            val projName = pair.getString("path")
+            r -> projName
+        }.toMap
+        region2project
+    }
+
     // Ignore a value. This is useful for avoiding warnings/errors
     // on unused variables.
     def ignore[A](value: A) : Unit = {}
-
-    // Substrings used by the compiler for encoding purposes
-    val reservedSubstrings = List("___")
 
     lazy val execDirPath : Path = {
         val currentDir = System.getProperty("user.dir")
@@ -145,13 +163,32 @@ object Utils {
     // Is this a WDL type that maps to a native DX type?
     def isNativeDxType(wdlType: WomType) : Boolean = {
         wdlType match {
-            case WomBooleanType | WomIntegerType | WomFloatType | WomStringType | WomSingleFileType
-                   | WomArrayType(WomBooleanType)
-                   | WomArrayType(WomIntegerType)
-                   | WomArrayType(WomFloatType)
-                   | WomArrayType(WomStringType)
-                   | WomArrayType(WomSingleFileType) => true
-            case WomOptionalType(t) => isNativeDxType(t)
+            // optional dx:native types
+            case WomOptionalType(WomBooleanType) => true
+            case WomOptionalType(WomIntegerType) => true
+            case WomOptionalType(WomFloatType) => true
+            case WomOptionalType(WomStringType) => true
+            case WomOptionalType(WomSingleFileType) => true
+            case WomMaybeEmptyArrayType(WomBooleanType) => true
+            case WomMaybeEmptyArrayType(WomIntegerType) => true
+            case WomMaybeEmptyArrayType(WomFloatType) => true
+            case WomMaybeEmptyArrayType(WomStringType) => true
+            case WomMaybeEmptyArrayType(WomSingleFileType) => true
+
+                // compulsory dx:native types
+            case WomBooleanType => true
+            case WomIntegerType => true
+            case WomFloatType => true
+            case WomStringType => true
+            case WomSingleFileType => true
+            case WomNonEmptyArrayType(WomBooleanType) => true
+            case WomNonEmptyArrayType(WomIntegerType) => true
+            case WomNonEmptyArrayType(WomFloatType) => true
+            case WomNonEmptyArrayType(WomStringType) => true
+            case WomNonEmptyArrayType(WomSingleFileType) => true
+
+            // A tricky, but important case, is `Array[File]+?`. This
+            // cannot be converted into a dx file array, unfortunately.
             case _ => false
         }
     }

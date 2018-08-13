@@ -3,10 +3,10 @@
 dxWDL takes a bioinformatics pipeline written in the
 [Workflow Description Language (WDL)](http://www.openwdl.org/)
 and compiles it to an equivalent workflow on the DNAnexus platform.
-It provides a reasonably complete set of WDL features for beta
-testing. WDL draft-2 is supported, with a few exceptions:
-* Expressions in the output section are not supported
-* Calls with missing compulsory arguments are not allowed
+It provides a reasonably complete set of WDL features.
+WDL draft-2 is supported, with a few exceptions:
+* Expressions in the output section are not allowed
+* Calls with missing arguments have limited support
 
 ## Setup
 Prerequisites: DNAnexus platform account, dx-toolkit, java 8+, python 2.7.
@@ -30,13 +30,11 @@ workflow bam_chrom_counter {
     File bam
 
     call slice_bam {
-        input :
-               bam = bam
+        input : bam = bam
     }
     scatter (slice in slice_bam.slices) {
         call count_bam {
-            input:
-                    bam = slice
+            input: bam = slice
         }
     }
     output {
@@ -68,7 +66,7 @@ task slice_bam {
 task count_bam {
     File bam
     command <<<
-    samtools view -c ${bam}
+        samtools view -c ${bam}
     >>>
     runtime {
         docker: "quay.io/ucsc_cgl/samtools"

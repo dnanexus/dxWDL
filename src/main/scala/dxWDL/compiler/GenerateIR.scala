@@ -483,10 +483,17 @@ task Add {
                 } else {
                     // no existing stub, create it
                     val task = callable match {
-                        case apl:IR.Applet =>
+                        case apl:IR.Applet if (apl.instanceType == IR.InstanceTypeRuntime) =>
+                            // we need a header, that
+                            // 1) is minimal
+                            // 2) allows calculating the instance type in the fragment runner.
+                            //    this is an important optimization that allows saving a job.
                             assert(apl.ns.tasks.size == 1)
-                            apl.ns.tasks.head
-                        case wf:IR.Workflow =>
+                            val originalTask: WdlTask = apl.ns.tasks.head
+                            WdlRewrite.taskMakeHeader(originalTask)
+                        case _ =>
+                            // A workflow, or a task with an instance type known at
+                            // compile time. We need a minimal header.
                             genAppletStub(callable)
                     }
                     accu + (name -> task)
@@ -892,7 +899,8 @@ task Add {
         )
 
         // Create a stage per call/scatter-block/declaration-block
-        val subBlocks = Block.splitIntoBlocks(wfProper.toVector)
+        val van = new VarAnalysis(Set.empty, Map.empty, cef, verbose)
+        val subBlocks = Block.splitIntoBlocks(wfProper.toVector, van)
 
         val (allStageInfo_i, wfOutputs) =
             if (locked)

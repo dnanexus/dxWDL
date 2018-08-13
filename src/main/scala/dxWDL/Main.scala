@@ -39,13 +39,6 @@ object Main extends App {
         s.replaceAll("_", "").toUpperCase
     }
 
-    // load configuration information
-    private def getVersion() : String = {
-        val config = ConfigFactory.load()
-        val version = config.getString("dxWDL.version")
-        version
-    }
-
     // Split arguments into sub-lists, one per each option.
     // For example:
     //    --sort relaxed --reorg --compile-mode IR
@@ -117,6 +110,9 @@ object Main extends App {
                     case "extras" =>
                         checkNumberOfArguments(keyword, 1, subargs)
                         (keyword, subargs.head)
+                    case "fatalValidationWarnings" =>
+                        checkNumberOfArguments(keyword, 0, subargs)
+                        (keyword, "")
                     case "folder" =>
                         checkNumberOfArguments(keyword, 1, subargs)
                         (keyword, subargs.head)
@@ -141,6 +137,9 @@ object Main extends App {
                     case "project" =>
                         checkNumberOfArguments(keyword, 1, subargs)
                         (keyword, subargs.head)
+                    case "projectWideReuse" =>
+                        checkNumberOfArguments(keyword, 0, subargs)
+                        (keyword, "")
                     case ("q"|"quiet") =>
                         checkNumberOfArguments(keyword, 0, subargs)
                         ("quiet", "")
@@ -263,11 +262,9 @@ object Main extends App {
             throw new Exception(s"Folder must start with '/'")
         val dxFolder = folderRaw
         val dxProject = DxPath.lookupProject(projectRaw)
-        val projName = dxProject.describe.getName
         Utils.trace(verbose.on,
-                    s"""|project name: <${projName}>
-                        |project ID: <${dxProject.getId}>
-                        |folder: <${dxFolder}>""".stripMargin)
+                    s"""|project ID: ${dxProject.getId}
+                        |folder: ${dxFolder}""".stripMargin)
         (dxProject, dxFolder)
     }
 
@@ -334,10 +331,12 @@ object Main extends App {
                         compileMode,
                         defaults,
                         extras,
+                        options contains "fatalValidationWarnings",
                         options contains "force",
                         imports,
                         inputs,
                         options contains "locked",
+                        options contains "projectWideReuse",
                         options contains "reorg",
                         runtimeDebugLevel,
                         verbose)
@@ -590,7 +589,7 @@ object Main extends App {
                 case Actions.Config => SuccessfulTermination(ConfigFactory.load().toString)
                 case Actions.DXNI => dxni(args.tail)
                 case Actions.Internal => internalOp(args.tail)
-                case Actions.Version => SuccessfulTermination(getVersion())
+                case Actions.Version => SuccessfulTermination(Utils.getVersion())
             }
         }
     }
@@ -619,6 +618,9 @@ object Main extends App {
             |      -inputs <string>       File with Cromwell formatted inputs
             |      -locked                Create a locked-down workflow
             |      -p | -imports <string> Directory to search for imported WDL files
+            |      -projectWideReuse      Look for existing applets/workflows in the entire project
+            |                             before generating new ones. The normal search scope is the
+            |                             target folder only.
             |      -reorg                 Reorganize workflow output files
             |      -runtimeDebugLevel [0,1,2] How much debug information to write to the
             |                             job log at runtime. Zero means write the minimum,

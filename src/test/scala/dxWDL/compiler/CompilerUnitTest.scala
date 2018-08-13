@@ -31,7 +31,7 @@ class CompilerUnitTest extends FlatSpec with Matchers {
     it should "disallow call with missing compulsory arguments" in {
         val path = pathFromBasename("unbound_arg.wdl")
         val retval = Main.compile(
-            List(path.toString, "--compileMode", "ir", "-quiet")
+            List(path.toString, "--compileMode", "ir", "-quiet", "-fatalValidationWarnings")
         )
         inside(retval) {
             case Main.UnsuccessfulTermination(errMsg) =>
@@ -39,15 +39,11 @@ class CompilerUnitTest extends FlatSpec with Matchers {
         }
     }
 
-    it should "disallow unbound arguments in a subworkflow" in {
+    it should "allow unbound arguments in a subworkflow" in {
         val path = pathFromBasename("toplevel_unbound_arg.wdl")
-        val retval = Main.compile(
+        Main.compile(
             List(path.toString, "--compileMode", "ir", "-quiet")
-        )
-        inside(retval) {
-            case Main.UnsuccessfulTermination(errMsg) =>
-                errMsg should include ("Namespace validation error")
-        }
+        ) shouldBe a [Main.SuccessfulTerminationIR]
     }
 
     // This should be supported natively by WDL!
@@ -98,15 +94,11 @@ class CompilerUnitTest extends FlatSpec with Matchers {
         WdlPrettyPrinter(false, None).commandBracketTaskSymbol(task) should be ("<<<",">>>")
     }
 
-    it should "Report a useful error for an invalid call name" in {
-        val path = pathFromBasename("illegal_call_name.wdl")
-        val retval = Main.compile(
+    it should "Accept weird  call names" in {
+        val path = pathFromBasename("weird_call_name.wdl")
+        Main.compile(
             List(path.toString, "--compileMode", "ir", "--locked", "--quiet")
-        )
-        inside(retval) {
-            case Main.UnsuccessfulTermination(errMsg) =>
-                errMsg should include ("Namespace validation error")
-        }
+        ) shouldBe a [Main.SuccessfulTerminationIR]
     }
 
     it should "Allow using the same import name twice" in {

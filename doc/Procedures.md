@@ -7,7 +7,7 @@
 - Merge onto master branch, make sure [travis tests](https://travis-ci.org/dnanexus/dxWDL) pass
 - Tag git with the release version
 - Build new externally visible release
-  * run `build_release.py --force` in staging
+  * run `build_release.py --force --multi-region` in staging
   * run `build_release.py --force --multi-region` in production
   * Update [releases](https://github.com/dnanexus-rnd/dxWDL/releases) github page,
   use the `Draft a new release` button.

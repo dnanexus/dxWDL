@@ -1,11 +1,43 @@
 # Release Notes
+
+## 0.75
+- Upgrade to Ubuntu 16.04
+
+## 0.74.1
+- Removed inlining of tasks code into auxiliary applets. This was causing
+a workflow to change when a task was modified, violating separate compilation,
+and not allowing executable cloning to work.
+
+## 0.74
+- Improving test and release scripts.
+- Adding printout for the dxWDL version to running applets and workflows
+- Check and throw an exception if an asset is not in the current project. It
+needs to be cloned.
+- Supporting Amsterdam (azure:westeurope) and Berlin (aws:eu-central-1) regions.
+- Fixed error in collecting results from an optional workflow branch.
+
+## 0.72
+- Put the project-wide reuse of applets under a special flag `projectWideReuse`.
+- Improved the queries to find dx:executables on the target path.
+- Improvements to the algorithm for splitting a WDL code block into parts.
+
+## 0.71
+- In an unlocked workflow, compile toplevel calls with no
+subexpressions to dx stages. The
+[expert options](./doc/ExpertOptions.md#toplevel-calls-compiled-as-stages)
+page has a full description of the feature.
+- Allow the compiler to reuse applets that have been archived. Such
+applets are moved to a `.Archive` directory, and the creation date is
+appended to the applet name, thereby modifying the applet name. The
+name changes causes the search to fail. This was fixed by loosening the
+search criterion.
+
 ## 0.70
 - Upgrade to Cromwell 33.1
 - Reuse applets and workflows inside a rpoject. The compiler now looks
 for an applet/workflow with the correct name and checksum anywhere in
 the project, not just in the target directory. This resolved
 issue (https://github.com/dnanexus/dxWDL/issues/154).
-- Upgrade to Ubuntu 16.04
 
 ## 0.69
 - Support importing http URLs

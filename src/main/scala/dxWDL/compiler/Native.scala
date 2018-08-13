@@ -30,7 +30,6 @@ case class Native(dxWDLrtId: String,
     val verbose2:Boolean = verbose.keywords contains "native"
     val rtDebugLvl = runtimeDebugLevel.getOrElse(Utils.DEFAULT_RUNTIME_DEBUG_LEVEL)
     lazy val runtimeLibrary:JsValue = getRuntimeLibrary()
-    lazy val projName = dxProject.describe().getName()
 
     // Open the archive
     // Extract the archive from the details field
@@ -330,22 +329,19 @@ case class Native(dxWDLrtId: String,
     // Do we need to build this applet/workflow?
     //
     // Returns:
-    //   None: build is required: None
+    //   None: build is required
     //   Some(dxobject) : the right object is already on the platform
     private def isBuildRequired(name: String,
                                 digest: String) : Option[DXDataObject] = {
-        val existingDxObjs = dxObjDir.lookup(name)
-        if (existingDxObjs.isEmpty) {
-            // The executable does not exist in the target path.
-            // Have we built it, but placed it elsewhere in the project?
-            dxObjDir.lookupOtherVersions(name, digest) match {
-                case None => ()
-                case Some((dxObj, desc)) =>
-                    trace(verbose.on, s"Found ${name} in an alternate folder ${desc.getFolder}")
-                    return Some(dxObj)
-            }
+        // Have we built this applet already, but placed it elsewhere in the project?
+        dxObjDir.lookupOtherVersions(name, digest) match {
+            case None => ()
+            case Some((dxObj, desc)) =>
+                trace(verbose.on, s"Found existing version of ${name} in folder ${desc.getFolder}")
+                return Some(dxObj)
         }
 
+        val existingDxObjs = dxObjDir.lookup(name)
         val buildRequired:Boolean = existingDxObjs.size match {
             case 0 => true
             case 1 =>
@@ -380,7 +376,7 @@ case class Native(dxWDLrtId: String,
                 } else {
                     val dxClass = existingDxObjs.head.dxClass
                     throw new Exception(s"""|${dxClass} ${name} already exists in
-                                            | ${projName}:${folder}""".stripMargin)
+                                            | ${dxProject.getId}:${folder}""".stripMargin)
                 }
             }
             None
@@ -487,8 +483,20 @@ case class Native(dxWDLrtId: String,
                     case _ => throw new Exception(s"Badly formatted record ${dxRecord}")
                 }
                 val pkgName = pkgFile.describe.getName
+
+                // Error out if the asset points to a different
+                // project.  In dxpy, in contrast, clones the asset
+                // into -this- project.  That removes the worry from
+                // the user, however, it can cause a proliferation of
+                // records.
+                val rmtProject = desc.getProject
+                if (rmtProject != dxProject) {
+                    throw new Exception(s"""|The asset ${pkgName} is from a different project ${rmtProject.getId},
+                                            |it needs to be cloned into project ${dxProject.getId}"""
+                                            .stripMargin.replaceAll("\n", " "))
+                }
                 Some(JsObject("name" -> JsString(pkgName),
-                             "id" -> jsValueOfJsonNode(pkgFile.getLinkAsJson)))
+                              "id" -> jsValueOfJsonNode(pkgFile.getLinkAsJson)))
         }
         val bundledDepends = dockerAssets match {
             case None => Vector(runtimeLibrary)
@@ -905,6 +913,7 @@ object Native {
               folder: String,
               dxProject: DXProject,
               instanceTypeDB: InstanceTypeDB,
+              dxObjDir: DxObjectDirectory,
               extras: Option[Extras],
               runtimeDebugLevel: Option[Int],
               force: Boolean,
@@ -914,9 +923,6 @@ object Native {
         trace(verbose.on, "Native pass, generate dx:applets and dx:workflows")
         traceLevelInc()
 
-        // Efficiently build a directory of the currently existing applets.
-        // We don't want to build them if we don't have to.
-        val dxObjDir = DxObjectDirectory(ns, dxProject, folder, verbose)
         val ntv = new Native(dxWDLrtId, folder, dxProject, dxObjDir, instanceTypeDB,
                              extras, runtimeDebugLevel, force, archive, locked, verbose)
         val retval = ntv.compile(ns)

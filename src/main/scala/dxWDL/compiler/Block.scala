@@ -75,6 +75,21 @@ case class Block(statements: Vector[Scope]) {
     // of statements.
     def countCalls : Int =
         findCalls.length
+
+
+    // The block is a singleton with one statement which is a call. The call
+    // has no subexpressions. Note that the call may not provide
+    // all the callee's arguments.
+    def isCallWithNoSubexpressions(van: VarAnalysis) : Boolean = {
+        if (statements.size != 1)
+            return false
+        if (!statements.head.isInstanceOf[WdlCall])
+            return false
+        val call = statements.head.asInstanceOf[WdlCall]
+        call.inputMappings.values.forall{ expr =>
+            van.isTrivialExpression(expr)
+        }
+    }
 }
 
 object Block {
@@ -90,41 +105,6 @@ object Block {
     def findCalls(statement: Scope) : Vector[WdlCall] =
         Block(Vector(statement)).findCalls
 
-    def splitIntoBlocks(children: Vector[Scope]) : Vector[Block] = {
-        // base cases: zero and one children
-        if (children.isEmpty)
-            return Vector.empty
-        if (children.length == 1)
-            return Vector(Block(children))
-
-        // Normal case, recurse into the first N-1 statements,
-        // than append the Nth.
-        val blocks = splitIntoBlocks(children.dropRight(1))
-        val allBlocksButLast = blocks.dropRight(1)
-
-        val lastBlock = blocks.last
-        val lastChild = Block(Vector(children.last))
-        val trailing: Vector[Block] = (lastBlock.countCalls, lastChild.countCalls) match {
-            case (0, (0|1)) =>
-                Vector(lastBlock.append(lastChild))
-            case (1, (0|1)) =>
-                // The last block already contains a call, start a new block
-                Vector(lastBlock, lastChild)
-            case (x ,y) =>
-                if (x > 1) {
-                    System.err.println("GenerateIR, block:")
-                    System.err.println(lastBlock)
-                    throw new Exception(s"block has ${x} calls")
-                }
-                assert(y > 1)
-                System.err.println("GenerateIR, child:")
-                System.err.println(lastChild)
-                throw new Exception(s"child has ${y} calls")
-        }
-        allBlocksButLast ++ trailing
-    }
-
-
     // Is this a subblock? Declarations aren't subblocks, scatters and if's are.
     private def isSubBlock(scope:Scope) : Boolean = {
         scope match {
@@ -133,6 +113,57 @@ object Block {
             case _ => false
         }
     }
+
+    // Split a workflow into blocks, where each block will compile to
+    // a stage. When the workflow is unlocked, we create a separate
+    // block for each toplevel call that has no subexpressions. These
+    // will have their own stages.
+    def splitIntoBlocks(children: Vector[Scope],
+                        van : VarAnalysis) : Vector[Block] = {
+        // base cases: zero and one children
+        if (children.isEmpty)
+            return Vector.empty
+        if (children.length == 1)
+            return Vector(Block(children))
+
+        // Normal case, recurse into the first N-1 statements,
+        // than append the Nth.
+        val blocks = splitIntoBlocks(children.dropRight(1), van)
+        val allBlocksButLast = blocks.dropRight(1)
+
+        // see if the last statement should be incorporated into the last block,
+        // of if we should open a new block.
+        val lastBlock = blocks.last
+        val lastStatement = children.last
+        val lastChild = Block(Vector(lastStatement))
+        var openNewBlock =
+            (lastBlock.countCalls, lastChild.countCalls) match {
+                case (0, 1) if (lastChild.isCallWithNoSubexpressions(van)) =>
+                    // create a separate block for the last child; it will get its
+                    // own stage. We are compiling a WDL call directly into a stage
+                    // here.
+                    true
+                case (0, (0|1)) =>
+                    // no calls were seen so far, extend the block
+                    false
+                case (1, (0|1)) =>
+                    // The last block already contains a call, start a new block
+                    true
+                case (x ,y) =>
+                    throw new Exception(s"Internal error: block has ${x} calls, and child has ${y} calls")
+            }
+        if (isSubBlock(lastStatement)) {
+            // If the last statement is an if/scatter, always start a new block
+            openNewBlock = true
+        }
+        val trailing: Vector[Block] =
+            if (openNewBlock)
+                Vector(lastBlock, lastChild)
+            else
+                Vector(lastBlock.append(lastChild))
+        allBlocksButLast ++ trailing
+    }
+
 
     // Is there a declaration after a call? For example:
     //
@@ -159,7 +190,15 @@ object Block {
         }
     }
 
-    // A block is large if it has two calls or more
+    // A block is reducible if one of these conditions hold.
+    // (1) it has two calls or more.
+    // (2) It has one call, but there may be dependent
+    // declarations after it. For example:
+    //
+    // scatter (i in numbers) {
+    //     call add { input: a=i, b=1 }
+    //     Int n = add.result
+    // }
     private def isReducible(scope: Scope) : Boolean = {
         if (!isSubBlock(scope))
             return false
@@ -168,14 +207,6 @@ object Block {
             return false
         if (numCalls >= 2)
             return true
-
-        // There is one call. However, there may be declarations
-        // after it. For example:
-        //
-        // scatter (i in numbers) {
-        //     call add { input: a=i, b=1 }
-        //     Int n = add.result
-        // }
         return isDeclarationAfterCall(scope.children.toVector)
     }
 

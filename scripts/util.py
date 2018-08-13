@@ -17,13 +17,14 @@ import time
 AssetDesc = namedtuple('AssetDesc', 'region asset_id project')
 
 max_num_retries = 5
-dxWDL_jar_path = "applet_resources/resources/dxWDL.jar"
+def dxWDL_jar_path(top_dir):
+    return os.path.join(top_dir, "applet_resources/resources/dxWDL.jar")
 
-def get_top_conf_path(top_dir):
-    return os.path.join(top_dir, "ref.conf")
+def get_appl_conf_path(top_dir):
+    return os.path.join(top_dir, "src", "main", "resources", "application.conf")
 
-def get_crnt_conf_path(top_dir):
-    return os.path.join(top_dir, "reference.conf")
+def get_runtime_conf_path(top_dir):
+    return os.path.join(top_dir, "src", "main", "resources", "dxWDL_runtime.conf")
 
 
 def get_project(project_name):
@@ -81,7 +82,7 @@ def make_asset_file(version_id, top_dir):
 #
 # call sbt-assembly. The tricky part here, is to
 # change the working directory to the top of the project.
-def sbt_assembly(top_dir):
+def _sbt_assembly(top_dir, version_id):
     crnt_work_dir = os.getcwd()
     os.chdir(os.path.abspath(top_dir))
 
@@ -91,13 +92,15 @@ def sbt_assembly(top_dir):
     if not os.path.exists("applet_resources/resources"):
         os.mkdir("applet_resources/resources")
 
-    if os.path.exists(dxWDL_jar_path):
-        os.remove(dxWDL_jar_path)
+    jar_path = dxWDL_jar_path(top_dir)
+    if os.path.exists(jar_path):
+        os.remove(jar_path)
     subprocess.check_call(["sbt", "clean"])
     subprocess.check_call(["sbt", "assembly"])
-    if not os.path.exists(dxWDL_jar_path):
+    if not os.path.exists(jar_path):
         raise Exception("sbt assembly failed")
     os.chdir(crnt_work_dir)
+    return jar_path
 
 # Build a dx-asset from the runtime library.
 # Go to the top level directory, before running "dx"
@@ -139,15 +142,11 @@ def find_asset(project, folder):
         return assets[0]
     raise Exception("More than one asset found in folder {}".format(folder))
 
-def build_compiler_jar(version_id, top_dir, project_dict):
-    top_conf_path = get_top_conf_path(top_dir)
-    crnt_conf_path = get_crnt_conf_path(top_dir)
-    with open(top_conf_path, 'r') as fd:
-        conf = fd.read()
-
-    # Convert the asset descriptors into ConfigFactory HOCON records.
-    # We could use JSON instead, but that would make the file less
-    # readable.
+# Create a dxWDL.conf file in the top level directory. It
+# holds a mapping from region to project, where the runtime
+# asset is stored.
+def _gen_config_file(version_id, top_dir, project_dict):
+    # Create a record for each region
     region_project_hocon = []
     all_regions = []
     for region, dx_path in project_dict.iteritems():
@@ -159,44 +158,47 @@ def build_compiler_jar(version_id, top_dir, project_dict):
         all_regions.append(region)
 
     buf = "\n".join(region_project_hocon)
-    conf = conf.replace("    region2project = []\n",
-                        "    region2project = [\n{}\n]\n".format(buf))
+    conf = "\n".join(["dxWDL {",
+                      "    region2project = [\n{}\n]".format(buf),
+                      "}"])
 
-    if os.path.exists(crnt_conf_path):
-        os.remove(crnt_conf_path)
-    with open(crnt_conf_path, 'w') as fd:
+    rt_conf_path = get_runtime_conf_path(top_dir)
+    if os.path.exists(rt_conf_path):
+        os.remove(rt_conf_path)
+    with open(rt_conf_path, 'w') as fd:
         fd.write(conf)
-
-    # Add the configuration file to the jar archive
-    subprocess.check_call(["jar", "uf", dxWDL_jar_path, crnt_conf_path])
     all_regions_str = ", ".join(all_regions)
-    print("Added configuration for regions [{}] to jar file".format(all_regions_str))
+    print("Built configuration regions [{}] into {}".format(all_regions_str,
+                                                            rt_conf_path))
 
-    # Hygiene, remove the new configuration file, we
-    # don't want it to leak into the next build cycle.
-    #os.remove(crnt_conf_path)
+def build(project, folder, version_id, top_dir, path_dict):
+    # Create a configuration file
+    _gen_config_file(version_id, top_dir, path_dict)
+    jar_path = _sbt_assembly(top_dir, version_id)
 
-    # Move the file to the top level directory
-    all_in_one_jar = os.path.join(top_dir, "dxWDL-{}.jar".format(version_id))
-    shutil.move(os.path.join(top_dir, dxWDL_jar_path),
-                all_in_one_jar)
-    return all_in_one_jar
-
-
-def build(project, folder, version_id, top_dir):
-    sbt_assembly(top_dir)
     asset = find_asset(project, folder)
     if asset is None:
         make_prerequisits(project, folder, version_id, top_dir)
         asset = find_asset(project, folder)
     region = dxpy.describe(project.get_id())['region']
-    return AssetDesc(region, asset.get_id(), project)
+    ad = AssetDesc(region, asset.get_id(), project)
+
+    # Move the file to the top level directory
+    all_in_one_jar = os.path.join(top_dir, "dxWDL-{}.jar".format(version_id))
+    shutil.move(os.path.join(top_dir, jar_path),
+                all_in_one_jar)
+
+    # Hygiene, remove the new configuration file, we
+    # don't want it to leak into the next build cycle.
+    # os.remove(crnt_conf_path)
+    return (all_in_one_jar, ad)
+
 
 # Extract version_id from configuration file
 def get_version_id(top_dir):
     pattern = re.compile(r"^(\s*)(version)(\s*)(=)(\s*)(\S+)(\s*)$")
-    top_conf_path = get_top_conf_path(top_dir)
-    with open(top_conf_path, 'r') as fd:
+    appl_conf_path = get_appl_conf_path(top_dir)
+    with open(appl_conf_path, 'r') as fd:
         for line in fd:
             line_clean = line.replace("\"", "").replace("'", "")
             m = re.match(pattern, line_clean)

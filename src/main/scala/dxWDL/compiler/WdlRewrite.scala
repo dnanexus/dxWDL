@@ -132,6 +132,18 @@ object WdlRewrite {
         task2
     }
 
+
+    // Leave as little as possible from the original task. Just enough
+    // to allow calculating the instance type it needs.
+    def taskMakeHeader(task:WdlTask) : WdlTask = {
+        val task2 = task.copy(commandTemplate = Vector.empty,
+                              meta = Map.empty,
+                              parameterMeta = Map.empty)
+        task2.children = task.children
+        updateScope(task, task2)
+        task2
+    }
+
     def genDefaultValueOfType(wdlType: WomType) : WomValue = {
         wdlType match {
             case WomBooleanType => WomBoolean(true)
@@ -140,6 +152,9 @@ object WdlRewrite {
             case WomStringType => WomString("")
             case WomSingleFileType => WomSingleFile("")
 
+            // We could convert an optional to a null value, but that causes
+            // problems for the pretty printer.
+            // WomOptionalValue(wdlType, None)
             case WomOptionalType(t) => genDefaultValueOfType(t)
 
             case WomObjectType =>
@@ -174,22 +189,9 @@ object WdlRewrite {
     def taskOutput(name: String, wdlType: WomType, scope: Scope) = {
         // We need to provide a default value, in the form of a Wdl
         // expression
-        /*if (wdlType == WomObject) {
-            // Using WomObject(Map.empty) fails when doing a 'toWomString'
-            // operation. This is a workaround, that applies only to
-            // the case of a single object.
-            val sourceString =
-                s"""|task t {
-                    |  command {}
-                    |  outputs {
-                    |    Object ${name} = read_object(stdout())
-                    |  }
-                    |}
-                    |"""
-            val ns:WdlNamespace = WdlNamespace.loadUsingSource(sourceString, None, None).get
-            val task = ns.tasks.head
-            task.outputs.head
-        } else {*/
+        //
+        // There is a problem with the WomObject type, because we
+        // can't figure out how to make a default value for it.
         val defaultVal:WomValue = genDefaultValueOfType(wdlType)
         val defaultExpr:WdlExpression = WdlExpression.fromString(defaultVal.toWomString)
         new TaskOutput(name, wdlType, defaultExpr, INVALID_AST, Some(scope))
