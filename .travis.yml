@@ -21,18 +21,12 @@ addons:
     - tree
     - python2.7
     - python-pip
-    - maven
 
 before_install:
   - mkdir -p /tmp/ci_tests
   - cd /tmp/ci_tests
 
 install:
-  # Clone and make the python and java dxpy version
-  - pwd
-  - git clone https://github.com/dnanexus/dx-toolkit.git
-  - make -C dx-toolkit python
-
   # Clone dxWDL into a new directory,
   - pwd
   - git clone https://github.com/dnanexus-rnd/dxWDL.git
