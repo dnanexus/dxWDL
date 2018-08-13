@@ -423,7 +423,7 @@ object InstanceTypeDB extends DefaultJsonProtocol {
     }
 
     // Check if an instance type passes some basic criteria:
-    // - Instance must support Ubuntu 14.04.
+    // - Instance must support Ubuntu 16.04.
     // - Instance is not a GPU instance.
     // - Instance is not an FPGA instance.
     // - Instance does not have local HDD storage, this
@@ -431,7 +431,7 @@ object InstanceTypeDB extends DefaultJsonProtocol {
     private def instanceCriteria(iType: DxInstanceType) : Boolean = {
         val osSupported = iType.os.foldLeft(false) {
             case (accu, (distribution, release)) =>
-                if (release == "14.04")
+                if (release == "16.04")
                     true
                 else
                     accu

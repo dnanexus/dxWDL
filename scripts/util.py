@@ -67,7 +67,7 @@ def make_asset_file(version_id, top_dir):
         "version": version_id,
         "name": "dxWDLrt",
         "title": "dx WDL library",
-        "release": "14.04",
+        "release": "16.04",
         "distribution": "Ubuntu",
         "execDepends": [
             { "name": "openjdk-8-jre-headless" }

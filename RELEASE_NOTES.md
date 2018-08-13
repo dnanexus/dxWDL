@@ -1,5 +1,8 @@
 # Release Notes
 
+## 0.75
+- Upgrade to Ubuntu 16.04
+
 ## 0.74.1
 - Removed inlining of tasks code into auxiliary applets. This was causing
 a workflow to change when a task was modified, violating separate compilation,
