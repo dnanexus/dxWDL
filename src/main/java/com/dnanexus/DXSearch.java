@@ -594,26 +594,6 @@ public final class DXSearch {
         }
 
         /**
-         * Only returns GTables (filters out data objects of all other classes).
-         *
-         * <p>
-         * This method may only be called once during the construction of a query, and is mutually
-         * exclusive with {@link #withClassApplet()}, {@link #withClassFile()},
-         * {@link #withClassRecord()}, and {@link #withClassWorkflow()}.
-         * </p>
-         *
-         * @return the same builder object
-         */
-        @SuppressWarnings("unchecked")
-        public FindDataObjectsRequestBuilder<DXGTable> withClassGTable() {
-            Preconditions.checkState(this.classConstraint == null,
-                    "Cannot specify class constraints more than once");
-            this.classConstraint = "gtable";
-            // This cast should be safe, since we hold no references of type T
-            return (FindDataObjectsRequestBuilder<DXGTable>) this;
-        }
-
-        /**
          * Only returns records (filters out data objects of all other classes).
          *
          * <p>

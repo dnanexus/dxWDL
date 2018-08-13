@@ -16,6 +16,8 @@ maxErrors := 10
 
 //coverageEnabled := true
 
+javacOptions ++= Seq("-Xlint:deprecation")
+
 // Show deprecation warnings
 scalacOptions ++= Seq(
     "-unchecked",

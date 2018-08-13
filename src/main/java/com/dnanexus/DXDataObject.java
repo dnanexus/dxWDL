@@ -699,7 +699,7 @@ public abstract class DXDataObject extends DXObject {
     // Not sure how to do this (deserialization to a Map object instead of
     // a user-defined class) without bringing in this new ObjectReader
     private static final ObjectReader listProjectsReader = MAPPER
-            .reader(new TypeReference<Map<String, AccessLevel>>() {
+            .readerFor(new TypeReference<Map<String, AccessLevel>>() {
                 // Empty body for Jackson's TypeReference
             });
 
@@ -783,8 +783,6 @@ public abstract class DXDataObject extends DXObject {
             return DXRecord.getInstanceWithCachedDescribe(objectId, project, env, describe);
         } else if (objectId.startsWith("file-")) {
             return DXFile.getInstanceWithCachedDescribe(objectId, project, env, describe);
-        } else if (objectId.startsWith("gtable-")) {
-            return DXGTable.getInstanceWithCachedDescribe(objectId, project, env, describe);
         } else if (objectId.startsWith("applet-")) {
             return DXApplet.getInstanceWithCachedDescribe(objectId, project, env, describe);
         } else if (objectId.startsWith("workflow-")) {
@@ -810,8 +808,6 @@ public abstract class DXDataObject extends DXObject {
             return DXRecord.getInstanceWithEnvironment(objectId, project, env);
         } else if (objectId.startsWith("file-")) {
             return DXFile.getInstanceWithEnvironment(objectId, project, env);
-        } else if (objectId.startsWith("gtable-")) {
-            return DXGTable.getInstanceWithEnvironment(objectId, project, env);
         } else if (objectId.startsWith("applet-")) {
             return DXApplet.getInstanceWithEnvironment(objectId, project, env);
         } else if (objectId.startsWith("workflow-")) {
@@ -835,8 +831,6 @@ public abstract class DXDataObject extends DXObject {
             return DXRecord.getInstanceWithEnvironment(objectId, env);
         } else if (objectId.startsWith("file-")) {
             return DXFile.getInstanceWithEnvironment(objectId, env);
-        } else if (objectId.startsWith("gtable-")) {
-            return DXGTable.getInstanceWithEnvironment(objectId, env);
         } else if (objectId.startsWith("applet-")) {
             return DXApplet.getInstanceWithEnvironment(objectId, env);
         } else if (objectId.startsWith("workflow-")) {
