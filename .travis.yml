@@ -31,7 +31,7 @@ install:
   # Clone and make the python and java dxpy version
   - pwd
   - git clone https://github.com/dnanexus/dx-toolkit.git
-  - make -C dx-toolkit python java
+  - make -C dx-toolkit python
 
   # Clone dxWDL into a new directory,
   - pwd
@@ -39,8 +39,6 @@ install:
   - echo "dxWDL branch = $TRAVIS_BRANCH"
   - cd dxWDL && git checkout $TRAVIS_BRANCH && cd ..
   - ls -R dxWDL
-  - mkdir -p dxWDL/lib
-  - cp dx-toolkit/lib/java/dnanexus-api-0.1.0-SNAPSHOT-jar-with-dependencies.jar dxWDL/lib/
 
 before_script:
   - cd /tmp/ci_tests
