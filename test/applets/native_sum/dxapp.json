@@ -25,7 +25,7 @@
     "interpreter": "python2.7",
     "file": "code.py",
     "distribution": "Ubuntu",
-    "release": "14.04"
+    "release": "16.04"
   },
   "authorizedUsers": []
 }
