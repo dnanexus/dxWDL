@@ -21,26 +21,18 @@ addons:
     - tree
     - python2.7
     - python-pip
-    - maven
 
 before_install:
   - mkdir -p /tmp/ci_tests
   - cd /tmp/ci_tests
 
 install:
-  # Clone and make the python and java dxpy version
-  - pwd
-  - git clone https://github.com/dnanexus/dx-toolkit.git
-  - make -C dx-toolkit python java
-
   # Clone dxWDL into a new directory,
   - pwd
   - git clone https://github.com/dnanexus-rnd/dxWDL.git
   - echo "dxWDL branch = $TRAVIS_BRANCH"
   - cd dxWDL && git checkout $TRAVIS_BRANCH && cd ..
   - ls -R dxWDL
-  - mkdir -p dxWDL/lib
-  - cp dx-toolkit/lib/java/dnanexus-api-0.1.0-SNAPSHOT-jar-with-dependencies.jar dxWDL/lib/
 
 before_script:
   - cd /tmp/ci_tests

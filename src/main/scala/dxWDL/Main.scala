@@ -4,11 +4,11 @@ import com.dnanexus.{DXProject}
 import com.typesafe.config._
 import dxWDL.compiler.IR
 import java.nio.file.{Path, Paths}
-import org.apache.log4j.{Level, Logger}
 import scala.collection.mutable.HashMap
 import spray.json._
 import spray.json.JsString
 import wdl.draft2.model.{WdlNamespace, WdlTask, WdlNamespaceWithWorkflow}
+
 
 object Main extends App {
     sealed trait Termination
@@ -20,7 +20,7 @@ object Main extends App {
     type OptionsMap = Map[String, List[String]]
 
     object Actions extends Enumeration {
-        val Compile, Config, DXNI, Internal, Version  = Value
+        val Compile, Config, DXNI, Internal, Version, Wom  = Value
     }
     object InternalOp extends Enumeration {
         val Collect,
@@ -460,6 +460,23 @@ object Main extends App {
         }
     }
 
+    def wom(args: Seq[String]): Termination = {
+        val wdlSourceFile = args.head
+        val options =
+            try {
+                parseCmdlineOptions(args.tail.toList)
+            } catch {
+                case e : Throwable =>
+                    return BadUsageTermination(Utils.exceptionToString(e))
+            }
+        if (options contains "help")
+            return BadUsageTermination("")
+
+        val bundle = Wom.getBundle(wdlSourceFile)
+        SuccessfulTermination(bundle.toString)
+    }
+
+
     // Extract the only task from a namespace
     def taskOfNamespace(ns: WdlNamespace) : WdlTask = {
         val numTasks = ns.tasks.length
@@ -590,13 +607,10 @@ object Main extends App {
                 case Actions.DXNI => dxni(args.tail)
                 case Actions.Internal => internalOp(args.tail)
                 case Actions.Version => SuccessfulTermination(Utils.getVersion())
+                case Actions.Wom => wom(args.tail)
             }
         }
     }
-
-    // Silence the log4j package
-    Logger.getRootLogger().removeAllAppenders()
-    Logger.getRootLogger().setLevel(Level.OFF);
 
     val usageMessage =
         s"""|java -jar dxWDL.jar <action> <parameters> [options]
@@ -635,6 +649,9 @@ object Main extends App {
             |      -apps                  Search only for global apps.
             |      -o <string>            Destination file for WDL task definitions
             |      -r | recursive         Recursive search
+            |
+            |  wom <WDL file>
+            |    Compile into the WOM model (experimental)
             |
             |Common options
             |    -destination             Full platform path (project:/folder)

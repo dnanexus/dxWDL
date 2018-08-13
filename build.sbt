@@ -16,6 +16,8 @@ maxErrors := 10
 
 //coverageEnabled := true
 
+javacOptions ++= Seq("-Xlint:deprecation")
+
 // Show deprecation warnings
 scalacOptions ++= Seq(
     "-unchecked",
@@ -53,16 +55,21 @@ scalacOptions ++= Seq(
 assemblyJarName in assembly := "dxWDL.jar"
 logLevel in assembly := Level.Info
 assemblyOutputPath in assembly := file("applet_resources/resources/dxWDL.jar")
-assemblyMergeStrategy in assembly := customMergeStrategy
+assemblyMergeStrategy in assembly := customMergeStrategy.value
+
+val cromwellV = "35-fb4e1ec-SNAP"
 
 libraryDependencies ++= Seq(
-//    "org.broadinstitute" %% "cromwell-wdl-model-core" % "32",
-//    "org.broadinstitute" %% "cromwell-wdl-transforms-draft2" % "32",
-    "org.broadinstitute" %% "cromwell-wdl-model-draft2" % "33.1",
-//    "org.broadinstitute" %% "cromwell-wom" % "32",
-//    "org.broadinstitute" %% "wdl-draft2" % "32",
-//    "org.broadinstitute" %% "language-factory-core" % "32",
+    "org.broadinstitute" %% "cromwell-common" % cromwellV,
+    "org.broadinstitute" %% "cromwell-core" % cromwellV,
+    "org.broadinstitute" %% "cromwell-wom" % cromwellV,
+    "org.broadinstitute" %% "cwl-v1-0" % cromwellV,
+    "org.broadinstitute" %% "language-factory-core" % cromwellV,
+    "org.broadinstitute" %% "wdl-draft2" % cromwellV,
+    "org.broadinstitute" %% "wdl-draft3" % cromwellV,
+    "org.broadinstitute" %% "wdl-biscayne" % cromwellV,
 
+    // "cromwell.languages.util"
     "io.spray" %% "spray-json" % "1.3.2",
     "net.jcazevedo" %% "moultingyaml" % "0.4.0",
     "com.typesafe" % "config" % "1.3.1",

@@ -2,6 +2,7 @@
 
 ## 0.75
 - Upgrade to Ubuntu 16.04
+- Preparatory work for supporting WOM as a compilation intermediate representation.
 
 ## 0.74.1
 - Removed inlining of tasks code into auxiliary applets. This was causing
