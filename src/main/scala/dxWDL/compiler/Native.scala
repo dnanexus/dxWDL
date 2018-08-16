@@ -434,6 +434,45 @@ case class Native(dxWDLrtId: String,
                       wdlCode, linkInfo, Some(dbInstance))
     }
 
+    private def apiParseReplyID(rep: JsonNode) : String = {
+        val repJs:JsValue = jsValueOfJsonNode(rep)
+        repJs.asJsObject.fields.get("id") match {
+            case None => throw new Exception("API call did not returnd an ID")
+            case Some(JsString(x)) => x
+            case other => throw new Exception(s"API call returned invalid ID ${other}")
+        }
+    }
+
+    private def cloneAssetFromDifferentProject(assetRecord: DXRecord,
+                                               desc: DXDataObject.Describe,
+                                               pkgName: String,
+                                               rmtProject: DXProject) : Unit = {
+        trace(verbose.on, s"""|The asset ${pkgName} is from a different project ${rmtProject.getId},
+                           |it needs to be cloned into project ${dxProject.getId}"""
+                  .stripMargin.replaceAll("\n", " "))
+        // Search for an existing record in -this- project. If one already exists,
+        // we are good. Otherwise, create a record.
+        val toplevelRecords: List[DXRecord] = DXSearch.findDataObjects()
+            .inFolder(dxProject, "/")
+            .withClassRecord
+            .nameMatchesExactly(desc.getName)
+            .execute().asList().asScala.toList
+        if (toplevelRecords.isEmpty) {
+            // clone
+            val req = JsObject( "objects" -> JsArray(JsString(assetRecord.getId)),
+                                "project" -> JsString(rmtProject.getId),
+                                "destination" -> JsString("/"))
+            val rep = DXAPI.projectClone(dxProject.getId,
+                                         jsonNodeOfJsValue(req),
+                                         classOf[JsonNode])
+            val id = apiParseReplyID(rep)
+            val localAssetRecord = DXRecord.getInstance(id)
+            trace(verbose.on, s"Created record ${localAssetRecord} pointing to asset ${pkgName}")
+        } else {
+            trace(verbose.on, s"The project already has a record pointing to asset ${pkgName}, cloning is not required")
+        }
+    }
+
     // Set the run spec.
     //
     private def calcRunSpec(bashScript: String,
@@ -484,17 +523,15 @@ case class Native(dxWDLrtId: String,
                 }
                 val pkgName = pkgFile.describe.getName
 
-                // Error out if the asset points to a different
-                // project.  In dxpy, in contrast, clones the asset
-                // into -this- project.  That removes the worry from
-                // the user, however, it can cause a proliferation of
-                // records.
-                val rmtProject = desc.getProject
-                if (rmtProject != dxProject) {
-                    throw new Exception(s"""|The asset ${pkgName} is from a different project ${rmtProject.getId},
-                                            |it needs to be cloned into project ${dxProject.getId}"""
-                                            .stripMargin.replaceAll("\n", " "))
-                }
+                // Check if the asset points to a different
+                // project. If so, make sure we have an asset clone
+                // in -this- project.
+                val rmtContainer = desc.getProject
+                if (!rmtContainer.isInstanceOf[DXProject])
+                    throw new Exception(s"remote asset is in container ${rmtContainer.getId}, not a project")
+                val rmtProject = rmtContainer.asInstanceOf[DXProject]
+                if (rmtProject != dxProject)
+                    cloneAssetFromDifferentProject(dxRecord, desc, pkgName, rmtProject)
                 Some(JsObject("name" -> JsString(pkgName),
                               "id" -> jsValueOfJsonNode(pkgFile.getLinkAsJson)))
         }
@@ -584,15 +621,6 @@ case class Native(dxWDLrtId: String,
                          "parents" -> JsBoolean(true)
                      ))
         (digest, reqWithEverything)
-    }
-
-    private def apiParseReplyID(rep: JsonNode) : String = {
-        val repJs:JsValue = jsValueOfJsonNode(rep)
-        repJs.asJsObject.fields.get("id") match {
-            case None => throw new Exception("API call did not returnd an ID")
-            case Some(JsString(x)) => x
-            case other => throw new Exception(s"API call returned invalid ID ${other}")
-        }
     }
 
     // Rebuild the applet if needed.
