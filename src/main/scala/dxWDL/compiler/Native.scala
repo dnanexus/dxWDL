@@ -449,18 +449,6 @@ case class Native(dxWDLrtId: String,
                                                rmtProject: DXProject) : Unit = {
         trace(verbose.on, s"The asset ${pkgName} is from a different project ${rmtProject.getId}")
 
-        // Search for an existing record in -this- project. If one already exists,
-        // we are good. Otherwise, create a record.
-        val toplevelRecords: List[DXRecord] = DXSearch.findDataObjects()
-            .inFolder(dxProject, "/")
-            .withClassRecord
-            .nameMatchesExactly(desc.getName)
-            .execute().asList().asScala.toList
-        if (!toplevelRecords.isEmpty) {
-            trace(verbose.on, s"The project already has a record pointing to asset ${pkgName}, cloning is not necessary")
-            return
-        }
-
         // clone
         val req = JsObject( "objects" -> JsArray(JsString(assetRecord.getId)),
                             "project" -> JsString(dxProject.getId),
@@ -470,15 +458,24 @@ case class Native(dxWDLrtId: String,
                                      classOf[JsonNode])
         val repJs:JsValue = jsValueOfJsonNode(rep)
 
-        // make sure the response makes sense
-        val x = repJs.asJsObject.fields.get("exists") match {
+        val exists = repJs.asJsObject.fields.get("exists") match {
             case None => throw new Exception("API call did not returnd an exists field")
-            case Some(JsArray(x)) => x
+            case Some(JsArray(x)) => x.map {
+                case JsString(id) => id
+                case _ => throw new Exception("bad type, not a string")
+            }.toVector
             case other => throw new Exception(s"API call returned invalid exists field")
         }
-        Util.ignore(x)
-        val localAssetRecord = DXRecord.getInstance(assetRecord.getId)
-        trace(verbose.on, s"Created ${localAssetRecord.getId} pointing to asset ${pkgName}")
+        val existingRecords = exists.filter(_.startsWith("record-"))
+        existingRecords.size match {
+            case 0 =>
+                val localAssetRecord = DXRecord.getInstance(assetRecord.getId)
+                trace(verbose.on, s"Created ${localAssetRecord.getId} pointing to asset ${pkgName}")
+            case 1 =>
+                trace(verbose.on, s"The project already has a record pointing to asset ${pkgName}")
+            case _ =>
+                throw new Exception(s"clone returned too many existing records ${exists}")
+        }
     }
 
     // Set the run spec.
