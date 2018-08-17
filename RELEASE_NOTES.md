@@ -1,5 +1,9 @@
 # Release Notes
 
+## 0.76
+- Handle using an asset that lives in another project by creating a local
+record for it.
+
 ## 0.75
 - Upgrade to Ubuntu 16.04
 - Preparatory work for supporting WOM as a compilation intermediate representation.

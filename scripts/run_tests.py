@@ -36,7 +36,7 @@ medium_test_list = [
     "call_native_app",
 
     "call_with_defaults1",
-#    "call_with_defaults2",
+#    "call_with_defaults2",  # doesn't work yet
     "cannes",
     "cast",
 
@@ -60,6 +60,9 @@ medium_test_list = [
     "modulo",
     "optionals",
 
+    # docker image stored as an asset
+    "platform_asset",
+
     # Setting defaults for tasks, not just workflows
     "population",
 
@@ -73,6 +76,8 @@ medium_test_list = [
     "trains",
     "var_type_change"
 ]
+
+tests_for_alt_project = [ "platform_asset" ]
 
 # Tests with the reorg flags
 test_reorg=["files", "math"]
@@ -130,6 +135,8 @@ def get_metadata(filename):
     if len(tasks) == 1:
         return TestMetaData(name = tasks[0],
                             kind = "applet")
+    if os.path.basename(filename).startswith("library_"):
+        return
     raise RuntimeError("{} is not a valid WDL test, #tasks={}".format(filename, len(tasks)))
 
 # Register a test name, find its inputs and expected results files.
@@ -377,6 +384,8 @@ def register_all_tests():
             if t_file.endswith(".wdl"):
                 base = os.path.basename(t_file)
                 fname = os.path.splitext(base)[0]
+                if fname.startswith("library_"):
+                    continue
                 try:
                     register_test(root, fname)
                 except Exception, e:
@@ -406,6 +415,9 @@ def compiler_per_test_flags(tname):
         flags.append("-inputs")
         flags.append(desc.wdl_input)
     return flags
+
+# Which project to use for a test
+# def project_for_test(tname):
 
 ######################################################################
 # Set up the native calling tests
@@ -467,6 +479,25 @@ def native_call_app_setup(version_id):
     subprocess.check_output(cmdline)
 
 
+######################################################################
+# Compile the WDL files to dx:workflows and dx:applets
+def compile_tests_to_project(trg_proj,
+                             test_names,
+                             applet_folder,
+                             compiler_flags,
+                             version_id,
+                             lazy_flag):
+    runnable = {}
+    for tname in test_names:
+        oid = None
+        if lazy_flag:
+            oid = lookup_dataobj(tname, trg_proj, applet_folder)
+        if oid is None:
+            c_flags = compiler_flags[:] + compiler_per_test_flags(tname)
+            oid = build_test(tname, trg_proj, applet_folder, version_id, c_flags)
+        runnable[tname] = oid
+        print("runnable({}) = {}".format(tname, oid))
+    return runnable
 
 ######################################################################
 ## Program entry point
@@ -566,25 +597,32 @@ def main():
         native_call_setup(project, applet_folder, version_id)
     if "call_native_app" in test_names:
         native_call_app_setup(version_id)
+
+    # compile into an alternate project
+    alt_tests = list(set(test_names) & set(tests_for_alt_project))
+    if len(alt_tests) > 0:
+        alt_project = util.get_project("dxWDL_playground_2")
+        compile_tests_to_project(alt_project,
+                                 alt_tests,
+                                 applet_folder,
+                                 compiler_flags,
+                                 version_id,
+                                 args.lazy)
+
     try:
         # Compile the WDL files to dx:workflows and dx:applets
-        runnable = {}
-        for tname in test_names:
-            oid = None
-            if args.lazy:
-                oid = lookup_dataobj(tname, project, applet_folder)
-            if oid is None:
-                c_flags = compiler_flags[:] + compiler_per_test_flags(tname)
-                oid = build_test(tname, project, applet_folder, version_id, c_flags)
-            runnable[tname] = oid
-            print("runnable({}) = {}".format(tname, oid))
+        runnable = compile_tests_to_project(project,
+                                            test_names,
+                                            applet_folder,
+                                            compiler_flags,
+                                            version_id,
+                                            args.lazy)
         if not args.compile_only:
             run_test_subset(project, runnable, test_folder,
                             args.delay_workspace_destruction,
                             args.no_wait)
     finally:
         print("Test complete")
-
 
 if __name__ == '__main__':
     main()
