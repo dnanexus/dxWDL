@@ -16,7 +16,7 @@ task Add {
 
   */
 
-package dxWDL.womc.runner
+package dxWDL.runner
 
 import com.dnanexus.{DXAPI, DXJob}
 import com.fasterxml.jackson.databind.JsonNode

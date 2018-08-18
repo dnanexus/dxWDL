@@ -6,20 +6,20 @@ import java.nio.file.{Path, Paths}
 import scala.collection.mutable.HashMap
 import spray.json._
 import spray.json.JsString
-import wdl.draft2.model.{WdlNamespace, WdlTask, WdlNamespaceWithWorkflow}
+import wdl.draft2.model.{WdlNamespace, WdlTask}
 
 
 object Main extends App {
     sealed trait Termination
     case class SuccessfulTermination(output: String) extends Termination
-    case class SuccessfulTerminationIR(ir: dxWDL.compiler.IR.Namespace) extends Termination
+    case class SuccessfulTerminationIR(ir: dxWDL.compiler.IR.Bundle) extends Termination
     case class UnsuccessfulTermination(output: String) extends Termination
     case class BadUsageTermination(info: String) extends Termination
 
     type OptionsMap = Map[String, List[String]]
 
     object Actions extends Enumeration {
-        val Compile, Config, DXNI, Internal, Version  = Value
+        val Compile, Config, Internal, Version  = Value
     }
     object InternalOp extends Enumeration {
         val Collect,
@@ -27,12 +27,6 @@ object Main extends App {
             TaskCheckInstanceType, TaskEpilog, TaskProlog, TaskRelaunch,
             WorkflowOutputReorg = Value
     }
-
-    case class DxniOptions(apps: Boolean,
-                           force: Boolean,
-                           outputFile: Option[Path],
-                           recursive: Boolean,
-                           verbose: Verbose)
 
     private def normKey(s: String) : String= {
         s.replaceAll("_", "").toUpperCase
@@ -341,26 +335,6 @@ object Main extends App {
                         verbose)
     }
 
-    private def dxniOptions(options: OptionsMap) : DxniOptions = {
-        val outputFile: Option[Path] = options.get("outputFile") match {
-            case None => None
-            case Some(List(p)) => Some(Paths.get(p))
-            case _ => throw new Exception("only one output file can be specified")
-        }
-        val verboseKeys: Set[String] = options.get("verbose") match {
-            case None => Set.empty
-            case Some(modulesToTrace) => modulesToTrace.toSet
-        }
-        val verbose = Verbose(options contains "verbose",
-                              options contains "quiet",
-                              verboseKeys)
-        DxniOptions(options contains "apps",
-                    options contains "force",
-                    outputFile,
-                    options contains "recursive",
-                    verbose)
-    }
-
     def compile(args: Seq[String]): Termination = {
         if (args.isEmpty)
             return BadUsageTermination("WDL file to compile is missing")
@@ -377,18 +351,18 @@ object Main extends App {
         try {
             val cOpt = compilerOptions(options)
 
-            //cOpt.compileMode match {
-            //case CompilerFlag.IR =>
+            cOpt.compileMode match {
+                case CompilerFlag.IR =>
+                    val ir: compiler.IR.Bundle = compiler.Top.applyOnlyIR(sourceFile, cOpt)
+                    return SuccessfulTerminationIR(ir)
 
-            val ir: IR.Namespace = compiler.Top.applyOnlyIR(sourceFile, cOpt)
-            return SuccessfulTerminationIR(ir)
-
-            /*case CompilerFlag.Default =>
+                case CompilerFlag.Default =>
                     val (dxProject, folder) = pathOptions(options, cOpt.verbose)
-                    val retval = compiler.Top.apply(sourceFile, folder, dxProject, cOpt)
+                    /*val retval = compiler.Top.apply(sourceFile, folder, dxProject, cOpt)
                     val desc = retval.getOrElse("")
-                    return SuccessfulTermination(desc)
-            }*/
+                     return SuccessfulTermination(desc)*/
+                    return BadUsageTermination("only the IR compilation flag is currently supported")
+            }
         } catch {
             case e : NamespaceValidationException =>
                 return UnsuccessfulTermination(
@@ -398,71 +372,6 @@ object Main extends App {
                 return UnsuccessfulTermination(Utils.exceptionToString(e))
         }
     }
-
-    def dxniApplets(options: OptionsMap,
-                    dOpt: DxniOptions,
-                    outputFile: Path): Termination = {
-        val (dxProject, folder) =
-            try {
-                pathOptions(options, dOpt.verbose)
-            } catch {
-                case e: Throwable =>
-                    return BadUsageTermination(Utils.exceptionToString(e))
-            }
-
-        // Validate the folder. It would have been nicer to be able
-        // to check if a folder exists, instead of validating by
-        // listing its contents, which could be very large.
-        try {
-            dxProject.listFolder(folder)
-        } catch {
-            case e : Throwable =>
-                return UnsuccessfulTermination(s"Folder ${folder} is invalid")
-        }
-
-        try {
-            compiler.DxNI.apply(dxProject, folder, outputFile, dOpt.recursive, dOpt.force, dOpt.verbose)
-            SuccessfulTermination("")
-        } catch {
-            case e : Throwable =>
-                return UnsuccessfulTermination(Utils.exceptionToString(e))
-        }
-    }
-
-    def dxniApps(options: OptionsMap,
-                 dOpt: DxniOptions,
-                 outputFile: Path): Termination = {
-        try {
-            compiler.DxNI.applyApps(outputFile, dOpt.force, dOpt.verbose)
-            SuccessfulTermination("")
-        } catch {
-            case e : Throwable =>
-                return UnsuccessfulTermination(Utils.exceptionToString(e))
-        }
-    }
-
-    def dxni(args: Seq[String]): Termination = {
-        try {
-            val options = parseCmdlineOptions(args.toList)
-            if (options contains "help")
-                return BadUsageTermination("")
-
-            val dOpt = dxniOptions(options)
-            val output = dOpt.outputFile match {
-                case None => throw new Exception("Output file not specified")
-                case Some(x) => x
-            }
-
-            if (dOpt.apps)
-                dxniApps(options, dOpt, output)
-            else
-                dxniApplets(options, dOpt, output)
-        } catch {
-            case e: Throwable =>
-                return BadUsageTermination(Utils.exceptionToString(e))
-        }
-    }
-
 
     // Extract the only task from a namespace
     def taskOfNamespace(ns: WdlNamespace) : WdlTask = {
@@ -496,7 +405,6 @@ object Main extends App {
         // Parse the inputs, do not download files from the platform,
         // they will be passed as links.
         val inputLines : String = Utils.readFileContent(jobInputPath)
-        val orgInputs = inputLines.parseJson
 
         // Figure out the available instance types, and their prices,
         // by reading the file
@@ -528,22 +436,7 @@ object Main extends App {
                             r.relaunch(inputSpec, outputSpec, inputs)
                     }
                 } else {
-                    val inputs = WdlVarLinks.loadJobInputsAsLinks(inputLines, inputSpec, None)
-                    val nswf = ns.asInstanceOf[WdlNamespaceWithWorkflow]
-                    op match {
-                        case InternalOp.Collect =>
-                            runner.WfFragment.apply(nswf,
-                                                    instanceTypeDB,
-                                                    inputSpec, outputSpec, inputs, orgInputs,
-                                                    RunnerWfFragmentMode.Collect, rtDebugLvl)
-                        case InternalOp.WfFragment =>
-                            runner.WfFragment.apply(nswf,
-                                                    instanceTypeDB,
-                                                    inputSpec, outputSpec, inputs, orgInputs,
-                                                    RunnerWfFragmentMode.Launch, rtDebugLvl)
-                        case InternalOp.WorkflowOutputReorg =>
-                            runner.WorkflowOutputReorg(true).apply(nswf, inputSpec, outputSpec, inputs)
-                    }
+                    throw new Exception("not currently supported")
                 }
 
             // write outputs, ignore null values, these could occur for optional
@@ -591,7 +484,6 @@ object Main extends App {
             case Some(x) => x match {
                 case Actions.Compile => compile(args.tail)
                 case Actions.Config => SuccessfulTermination(ConfigFactory.load().toString)
-                case Actions.DXNI => dxni(args.tail)
                 case Actions.Internal => internalOp(args.tail)
                 case Actions.Version => SuccessfulTermination(Utils.getVersion())
             }
@@ -626,15 +518,6 @@ object Main extends App {
             |                             job log at runtime. Zero means write the minimum,
             |                             one is the default, and two is for internal debugging.
             |
-            |  dxni
-            |    Dx Native call Interface. Create stubs for calling dx
-            |    executables (apps/applets/workflows), and store them as WDL
-            |    tasks in a local file. Allows calling existing platform executables
-            |    without modification. Default is to look for applets.
-            |    options:
-            |      -apps                  Search only for global apps.
-            |      -o <string>            Destination file for WDL task definitions
-            |      -r | recursive         Recursive search
             |
             |Common options
             |    -destination             Full platform path (project:/folder)

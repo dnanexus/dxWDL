@@ -10,16 +10,11 @@ package dxWDL.compiler
 
 import com.dnanexus.DXRecord
 import dxWDL.{DeclAttrs, Utils, WdlPrettyPrinter}
-import net.jcazevedo.moultingyaml._
 import spray.json._
-import wdl.draft2.model.WdlNamespace
-import wdl.draft2.model.types._
 import wom.types.WomType
 import wom.values._
 
 object IR {
-    private val INVALID_AST =  wdl.draft2.model.AstTools.getAst("", "")
-
     // Compile time representation of a variable. Used also as
     // an applet argument. We keep track of the syntax-tree, for error
     // reporting purposes.
@@ -29,8 +24,7 @@ object IR {
     //
     case class CVar(name: String,
                     womType: WomType,
-                    attrs: DeclAttrs,
-                    ast: wdl.draft2.parser.WdlParser.Ast) {
+                    attrs: DeclAttrs) {
         // dx does not allow dots in variable names, so we
         // convert them to underscores.
         //
@@ -53,7 +47,9 @@ object IR {
     case object InstanceTypeDefault extends InstanceType
     case class InstanceTypeConst(
         dxInstanceType: Option[String],
-        memoryMB: Option[Int], diskGB: Option[Int], cpu: Option[Int]
+        memoryMB: Option[Int],
+        diskGB: Option[Int],
+        cpu: Option[Int]
     ) extends InstanceType
     case object InstanceTypeRuntime extends InstanceType
 
@@ -74,8 +70,8 @@ object IR {
     // same syntax.
     sealed trait Callable {
         def name: String
-        def inputVars: Vector[CVar]
-        def outputVars: Vector[CVar]
+        def inputs: Vector[CVar]
+        def outputs: Vector[CVar]
     }
 
     // There are several kinds of applets
@@ -87,15 +83,14 @@ object IR {
     case class  AppletKindNative(id: String) extends AppletKind
     case class  AppletKindWfFragment(calls: Map[String, String]) extends AppletKind
     case object AppletKindTask extends AppletKind
-    case object AppletKindWorkflowOutputReorg extends AppletKind
 
     /** @param name          Name of applet
-      * @param input         WDL input arguments
-      * @param output        WDL output arguments
+      * @param inputs        input arguments
+      * @param outputs       output arguments
       * @param instaceType   a platform instance name
       * @param docker        is docker used? if so, what image
       * @param kind          Kind of applet: task, scatter, ...
-      * @param ns            WDL namespace
+      * @param task          Task definition
       */
     case class Applet(name: String,
                       inputs: Vector[CVar],
@@ -103,72 +98,8 @@ object IR {
                       instanceType: InstanceType,
                       docker: DockerImage,
                       kind: AppletKind,
-                      ns: WdlNamespace) extends Callable {
-        def inputVars = inputs
-        def outputVars = outputs
-    }
+                      task: wom.callable.ExecutableTaskDefinition) extends Callable
 
-    /** An input to a stage. Could be empty, a wdl constant,
-      * a link to an output variable from another stage,
-      * or a workflow input.
-      */
-    sealed trait SArg
-    case object SArgEmpty extends SArg
-    case class SArgConst(wdlValue: WomValue) extends SArg
-    case class SArgLink(stageName: String, argName: CVar) extends SArg
-    case class SArgWorkflowInput(argName: CVar) extends SArg
-
-    // Linking between a variable, and which stage we got
-    // it from.
-    case class LinkedVar(cVar: CVar, sArg: SArg) {
-        def yaml : YamlObject = {
-            YamlObject(
-                YamlString("cVar") -> IR.yaml(cVar),
-                YamlString("sArg") -> IR.yaml(sArg)
-            )
-        }
-    }
-
-    // A stage can call an applet or a workflow.
-    //
-    // Note: the description may concatin dots, parentheses, and other special
-    // symbols. It is shown to the user on the UI.
-    case class Stage(stageName: String,
-                     description: Option[String],
-                     id: Utils.DXWorkflowStage,
-                     calleeName: String,
-                     inputs: Vector[SArg],
-                     outputs: Vector[CVar])
-
-
-    // A toplevel fragment is the initial workflow we started with, minus
-    // whatever was replaced or rewritten.
-    object WorkflowKind extends Enumeration {
-        val TopLevel, Sub  = Value
-    }
-
-    /** A workflow output is linked to the stage that
-      * generated it.
-      */
-    case class Workflow(name: String,
-                        inputs: Vector[(CVar,SArg)],
-                        outputs: Vector[(CVar,SArg)],
-                        stages: Vector[Stage],
-                        locked: Boolean,
-                        kind: WorkflowKind.Value) extends Callable {
-        def inputVars = inputs.map{ case (cVar,_) => cVar }.toVector
-        def outputVars = outputs.map{ case (cVar,_) => cVar }.toVector
-    }
-
-    /** The simplest form of namespace contains a library of tasks.
-      * Tasks do not call other tasks, and so they are standalone. A more complex
-      * namespace also contains a workflow.
-      *
-      * The most advanced namespace is one where the top level
-      * workflow imports other namespaces, and calls subworkflows and tasks.
-      */
-    case class Namespace(name: String,
-                         entrypoint: Option[Workflow],
-                         subWorkflows: Map[String, Workflow],
-                         applets: Map[String, Applet])
+    case class Bundle(primaryCallable: Option[Callable],
+                      allCallables: Map[String, Callable])
 }
