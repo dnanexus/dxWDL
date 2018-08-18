@@ -2,7 +2,6 @@ package dxWDL
 
 import com.dnanexus.{DXProject}
 import com.typesafe.config._
-import dxWDL.compiler.IR
 import java.nio.file.{Path, Paths}
 import scala.collection.mutable.HashMap
 import spray.json._
@@ -13,14 +12,14 @@ import wdl.draft2.model.{WdlNamespace, WdlTask, WdlNamespaceWithWorkflow}
 object Main extends App {
     sealed trait Termination
     case class SuccessfulTermination(output: String) extends Termination
-    case class SuccessfulTerminationIR(ir: IR.Namespace) extends Termination
+    case class SuccessfulTerminationIR(ir: dxWDL.compiler.IR.Namespace) extends Termination
     case class UnsuccessfulTermination(output: String) extends Termination
     case class BadUsageTermination(info: String) extends Termination
 
     type OptionsMap = Map[String, List[String]]
 
     object Actions extends Enumeration {
-        val Compile, Config, DXNI, Internal, Version, Wom  = Value
+        val Compile, Config, DXNI, Internal, Version  = Value
     }
     object InternalOp extends Enumeration {
         val Collect,
@@ -363,7 +362,9 @@ object Main extends App {
     }
 
     def compile(args: Seq[String]): Termination = {
-        val wdlSourceFile = args.head
+        if (args.isEmpty)
+            return BadUsageTermination("WDL file to compile is missing")
+        val sourceFile = args.head
         val options =
             try {
                 parseCmdlineOptions(args.tail.toList)
@@ -375,17 +376,19 @@ object Main extends App {
             return BadUsageTermination("")
         try {
             val cOpt = compilerOptions(options)
-            cOpt.compileMode match {
-                case CompilerFlag.IR =>
-                    val ir: IR.Namespace = compiler.Top.applyOnlyIR(wdlSourceFile, cOpt)
-                    return SuccessfulTerminationIR(ir)
 
-                case CompilerFlag.Default =>
+            //cOpt.compileMode match {
+            //case CompilerFlag.IR =>
+
+            val ir: IR.Namespace = compiler.Top.applyOnlyIR(sourceFile, cOpt)
+            return SuccessfulTerminationIR(ir)
+
+            /*case CompilerFlag.Default =>
                     val (dxProject, folder) = pathOptions(options, cOpt.verbose)
-                    val retval = compiler.Top.apply(wdlSourceFile, folder, dxProject, cOpt)
+                    val retval = compiler.Top.apply(sourceFile, folder, dxProject, cOpt)
                     val desc = retval.getOrElse("")
                     return SuccessfulTermination(desc)
-            }
+            }*/
         } catch {
             case e : NamespaceValidationException =>
                 return UnsuccessfulTermination(
@@ -458,22 +461,6 @@ object Main extends App {
             case e: Throwable =>
                 return BadUsageTermination(Utils.exceptionToString(e))
         }
-    }
-
-    def wom(args: Seq[String]): Termination = {
-        val wdlSourceFile = args.head
-        val options =
-            try {
-                parseCmdlineOptions(args.tail.toList)
-            } catch {
-                case e : Throwable =>
-                    return BadUsageTermination(Utils.exceptionToString(e))
-            }
-        if (options contains "help")
-            return BadUsageTermination("")
-
-        val bundle = Wom.getBundle(wdlSourceFile)
-        SuccessfulTermination(bundle.toString)
     }
 
 
@@ -607,7 +594,6 @@ object Main extends App {
                 case Actions.DXNI => dxni(args.tail)
                 case Actions.Internal => internalOp(args.tail)
                 case Actions.Version => SuccessfulTermination(Utils.getVersion())
-                case Actions.Wom => wom(args.tail)
             }
         }
     }
@@ -649,9 +635,6 @@ object Main extends App {
             |      -apps                  Search only for global apps.
             |      -o <string>            Destination file for WDL task definitions
             |      -r | recursive         Recursive search
-            |
-            |  wom <WDL file>
-            |    Compile into the WOM model (experimental)
             |
             |Common options
             |    -destination             Full platform path (project:/folder)
