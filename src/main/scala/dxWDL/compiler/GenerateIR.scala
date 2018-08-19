@@ -2,6 +2,9 @@
   */
 package dxWDL.compiler
 
+import cats.data.Validated
+import cats.data.Validated.{Invalid, Valid}
+import common.validation.ErrorOr.ErrorOr
 import dxWDL._
 import dxWDL.Utils
 import IR.{CVar}
@@ -27,19 +30,15 @@ case class GenerateIR(verbose: Verbose) {
     // Currently, we support only constants. If a runtime expression is used,
     // we convert it to a moderatly high constant.
     def calcInstanceType(taskOpt: Option[ExecutableTaskDefinition]) : IR.InstanceType = {
-        def lookup(varName : String) : WomValue = {
-            throw new DynamicInstanceTypesException()
-        }
         def evalAttr(task: ExecutableTaskDefinition, attrName: String) : Option[WomValue] = {
             task.runtimeAttributes.attributes.get(attrName) match {
                 case None => None
                 case Some(expr) =>
-                    try {
-                        Some(expr.evaluate(lookup, PureStandardLibraryFunctions).get)
-                    } catch {
-                        case e : Exception =>
-                            // The expression can only be evaluated at runtime
-                            throw new DynamicInstanceTypesException
+                    val result: ErrorOr[WomValue] =
+                        expr.evaluateValue(Map.empty[String, WomValue], wom.expression.NoIoFunctionSet)
+                    result match {
+                        case Invalid(_) => None
+                        case Valid(x: WomValue) => Some(x)
                     }
             }
         }
