@@ -128,6 +128,9 @@ object Main extends App {
                     case ("imports"|"p") =>
                         checkNumberOfArguments(keyword, 1, subargs)
                         (keyword, subargs.head)
+                    case "leaveWorkflowsOpen" =>
+                        checkNumberOfArguments(keyword, 0, subargs)
+                        (keyword, "")
                     case "locked" =>
                         checkNumberOfArguments(keyword, 0, subargs)
                         (keyword, "")
@@ -335,6 +338,7 @@ object Main extends App {
                         options contains "force",
                         imports,
                         inputs,
+                        options contains "leaveWorkflowsOpen",
                         options contains "locked",
                         options contains "projectWideReuse",
                         options contains "reorg",
@@ -630,6 +634,9 @@ object Main extends App {
             |      -extras <string>       JSON formatted file with extra options, for example
             |                             default runtime options for tasks.
             |      -inputs <string>       File with Cromwell formatted inputs
+            |      -leaveWorkflowsOpen    leave workflows and subworkflows open, do not close them.
+            |                             This allows modifying the workflows after the compiler is done.
+            |                             As a general rule, it is better to close workflows.
             |      -locked                Create a locked-down workflow
             |      -p | -imports <string> Directory to search for imported WDL files
             |      -projectWideReuse      Look for existing applets/workflows in the entire project

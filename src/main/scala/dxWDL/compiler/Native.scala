@@ -20,6 +20,7 @@ case class Native(dxWDLrtId: String,
                   instanceTypeDB: InstanceTypeDB,
                   extras: Option[Extras],
                   runtimeDebugLevel: Option[Int],
+                  leaveWorkflowsOpen: Boolean,
                   force: Boolean,
                   archive: Boolean,
                   locked: Boolean,
@@ -501,7 +502,7 @@ case class Native(dxWDLrtId: String,
                 JsObject("main" ->
                              JsObject("instanceType" -> JsString(instanceType))),
             "distribution" -> JsString("Ubuntu"),
-            "release" -> JsString("16.04"),
+            "release" -> JsString(UBUNTU_VERSION),
         )
         val extraRunSpec : Map[String, JsValue] = extras match {
             case None => Map.empty
@@ -829,7 +830,8 @@ case class Native(dxWDLrtId: String,
         val dxwf = DXWorkflow.getInstance(id)
 
         // Close the workflow
-        dxwf.close()
+        if (!leaveWorkflowsOpen)
+            dxwf.close()
         dxwf
     }
 
@@ -949,6 +951,7 @@ object Native {
               dxObjDir: DxObjectDirectory,
               extras: Option[Extras],
               runtimeDebugLevel: Option[Int],
+              leaveWorkflowsOpen: Boolean,
               force: Boolean,
               archive: Boolean,
               locked: Boolean,
@@ -957,7 +960,8 @@ object Native {
         traceLevelInc()
 
         val ntv = new Native(dxWDLrtId, folder, dxProject, dxObjDir, instanceTypeDB,
-                             extras, runtimeDebugLevel, force, archive, locked, verbose)
+                             extras, runtimeDebugLevel,
+                             leaveWorkflowsOpen, force, archive, locked, verbose)
         val retval = ntv.compile(ns)
         traceLevelDec()
         retval

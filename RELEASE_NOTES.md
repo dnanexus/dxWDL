@@ -1,5 +1,15 @@
 # Release Notes
 
+## 0.77
+- Improve user message when pretty printing an erroneous WDL file.
+- New command line flag `--leaveWorkflowsOpen`, that leaves the toplevel workflow
+open. This option is intended for power users, it allows modifying the workflow
+after the compiler is done.
+- Figure out the smallest instance from the *current* price list,
+avoid the use of a hardcoded instance type. On the Azure cloud, an
+applet failed because it tried using the hardcoded `mem1_ssd1_x4`
+instance, which does not exist there (only on AWS).
+
 ## 0.76
 - Handle using an asset that lives in another project by creating a local
 record for it.

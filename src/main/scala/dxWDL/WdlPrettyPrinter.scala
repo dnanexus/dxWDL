@@ -224,12 +224,15 @@ case class WdlPrettyPrinter(fqnFlag: Boolean,
             buildTaskWithBrackets(task, COMMAND_HEREDOC_BRACKETS, 0).mkString("\n")
         WdlNamespace.loadUsingSource(taskHeredoc, None, None) match {
             case Success(_) => return COMMAND_HEREDOC_BRACKETS
-            case Failure(_) =>
+            case Failure(e) =>
                 val msg = s"""|Task ${task} cannot be pretty printed with any kind of brackets
                               |
                               |${taskWithCurlyBrackets}
                               |heredoc:
                               |${taskHeredoc}
+                              |
+                              |Error reported by WDL is:
+                              |${e.getMessage}
                               |""".stripMargin
                 throw new Exception(msg)
         }
