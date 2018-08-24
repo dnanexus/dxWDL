@@ -68,6 +68,7 @@ object Utils {
     val MAX_NUM_FILES_MOVE_LIMIT = 1000
     val OUTPUT_SECTION = "outputs"
     val REORG = "reorg"
+    val UBUNTU_VERSION = "16.04"
 
     // All the words defined in the WDL language, and NOT to be confused
     // with identifiers.

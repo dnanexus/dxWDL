@@ -248,7 +248,7 @@ object Top {
                      dxWDLrtId, folder, dxProject, instanceTypeDB, dxObjDir,
                      cOpt.extras,
                      cOpt.runtimeDebugLevel,
-                     cOpt.force, cOpt.archive, cOpt.locked, cOpt.verbose)
+                     cOpt.leaveWorkflowsOpen, cOpt.force, cOpt.archive, cOpt.locked, cOpt.verbose)
     }
 
 

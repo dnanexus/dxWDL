@@ -31,7 +31,7 @@ import com.dnanexus.{DXAPI, DXJSON, DXProject}
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.node.ObjectNode
 import spray.json._
-import Utils.{DEFAULT_INSTANCE_TYPE, warning}
+import Utils.{DEFAULT_INSTANCE_TYPE, UBUNTU_VERSION, warning}
 import wom.values._
 
 // Instance Type on the platform. For example:
@@ -431,7 +431,7 @@ object InstanceTypeDB extends DefaultJsonProtocol {
     private def instanceCriteria(iType: DxInstanceType) : Boolean = {
         val osSupported = iType.os.foldLeft(false) {
             case (accu, (distribution, release)) =>
-                if (release == "16.04")
+                if (release == UBUNTU_VERSION)
                     true
                 else
                     accu

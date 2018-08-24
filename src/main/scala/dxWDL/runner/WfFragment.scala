@@ -732,7 +732,7 @@ case class WfFragment(nswf: WdlNamespaceWithWorkflow,
         // Run a sub-job with the "collect" entry point.
         // We need to provide the exact same inputs.
         val dxSubJob : DXJob = Utils.runSubJob("collect",
-                                               Some(Utils.DEFAULT_INSTANCE_TYPE),
+                                               Some(instanceTypeDB.defaultInstanceType),
                                                orgInputs,
                                                childJobs)
 
