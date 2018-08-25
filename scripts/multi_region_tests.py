@@ -21,8 +21,11 @@ here = os.path.dirname(sys.argv[0])
 top_dir = os.path.dirname(os.path.abspath(here))
 test_dir = os.path.join(os.path.abspath(top_dir), "test")
 
-projects = ["dxWDL_playground", "dxWDL_Sydney", "dxWDL_Azure",
-            "dxWDL_Amsterdam", "dxWDL_Berlin"]
+projects = ["dxWDL",
+            "dxWDL_Sydney",
+            "dxWDL_Azure",
+            "dxWDL_Amsterdam",
+            "dxWDL_Berlin"]
 
 target_folder = "/release_test"
 
