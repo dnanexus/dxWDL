@@ -5,7 +5,7 @@ task DiskSpaceSpec {
   command <<<
     lines=$(df -t btrfs | grep dev)
     size_kb=$(echo $lines | cut -d ' ' -f 2)
-    size_gb=$(echo "$size_kb / (1024 * 1024)" | bc)
+    let "size_gb= $size_kb / (1024 * 1024)"
     if [[ $size_gb -ge disk_req_gb ]]; then
        echo "true"
     else
@@ -31,7 +31,7 @@ task DiskSpaceTaskDeclarations {
   command <<<
     lines=$(df -t btrfs | grep dev)
     size_kb=$(echo $lines | cut -d ' ' -f 2)
-    size_gb=$(echo "$size_kb / (1024 * 1024)" | bc)
+    let "size_gb= $size_kb / (1024 * 1024)"
     if [[ $size_gb -ge disk_req_gb ]]; then
        echo "true"
     else
@@ -54,7 +54,7 @@ task MemorySpec {
   command <<<
     line=$(cat /proc/meminfo | grep MemTotal)
     size_kb=$(echo $line | cut -d ' ' -f 2)
-    size_gb=$(echo "$size_kb / (1024 * 1024)" | bc)
+    let "size_gb= $size_kb / (1024 * 1024)"
     if [[ $size_gb -ge $memory_req_gb ]]; then
        echo "true"
     else
@@ -130,7 +130,7 @@ task Shortcut {
     command {
         line=$(cat /proc/meminfo | grep MemTotal)
         size_kb=$(echo $line | cut -d ' ' -f 2)
-        size_gb=$(echo "$size_kb / (1024 * 1024)" | bc)
+        let "size_gb= $size_kb / (1024 * 1024)"
         echo $size_gb
     }
     runtime {

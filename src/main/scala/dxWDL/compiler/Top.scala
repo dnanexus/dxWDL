@@ -3,7 +3,7 @@
 
 package dxWDL.compiler
 
-import com.dnanexus.{DXDataObject, DXProject, DXSearch}
+import com.dnanexus.{DXDataObject, DXProject, DXRecord, DXSearch}
 import dxWDL.{CompilerOptions, CompilationResults, DxPath, InstanceTypeDB, Utils, Verbose}
 import dxWDL.Utils.DX_WDL_ASSET
 import java.nio.file.{Files, Path, Paths}
@@ -226,6 +226,22 @@ object Top {
         found(0).getId
     }
 
+    // We need the dxWDL runtime library cloned into this project, so it will
+    // be available to all subjobs we run.
+    private def cloneRtLibraryToProject(region: String,
+                                        dxWDLrtId: String,
+                                        dxProject: DXProject,
+                                        verbose: Verbose) : Unit = {
+        val region2project = Utils.getRegions()
+        val (projNameRt, folder)  = getProjectWithRuntimeLibrary(region2project, region)
+        val dxProjRt = DxPath.lookupProject(projNameRt)
+        Utils.cloneAsset(DXRecord.getInstance(dxWDLrtId),
+                         dxProject,
+                         DX_WDL_ASSET,
+                         dxProjRt,
+                         verbose)
+    }
+
     // Backend compiler pass
     private def compileNative(irNs: IR.Namespace,
                               folder: String,
@@ -234,6 +250,7 @@ object Top {
         // get billTo and region from the project
         val (billTo, region) = Utils.projectDescribeExtraInfo(dxProject)
         val dxWDLrtId = getAssetId(region, cOpt.verbose)
+        cloneRtLibraryToProject(region, dxWDLrtId, dxProject, cOpt.verbose)
 
         // get list of available instance types
         val instanceTypeDB = InstanceTypeDB.query(dxProject, cOpt.verbose)
