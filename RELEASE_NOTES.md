@@ -1,5 +1,8 @@
 # Release Notes
 
+## 0.78
+- Clone the dxWDL runtime asset to local project, to allow sub-jobs access to it.
+
 ## 0.77
 - Improve user message when pretty printing an erroneous WDL file.
 - New command line flag `--leaveWorkflowsOpen`, that leaves the toplevel workflow
