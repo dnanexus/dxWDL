@@ -10,7 +10,7 @@ task image {
         echo "Major Major"
     >>>
     runtime {
-        docker: "dx://dxWDL_playground:/ubuntu"
+        docker: "dx://dxWDL_playground:/test_data/ubuntu"
     }
     output {
         String result = read_string(stdout())
