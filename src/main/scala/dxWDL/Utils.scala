@@ -1,9 +1,12 @@
 package dxWDL
 
+import cats.data.Validated
+import cats.data.Validated.{Invalid, Valid}
 import com.dnanexus._
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.databind.JsonNode
 import com.typesafe.config._
+import common.validation.ErrorOr.ErrorOr
 import java.io.PrintStream
 import java.nio.charset.{Charset, StandardCharsets}
 import java.nio.file.{Path, Paths, Files}
@@ -14,17 +17,11 @@ import scala.util.{Failure, Success}
 import ExecutionContext.Implicits.global
 import scala.sys.process._
 import spray.json._
-import wdl.draft2.model._
-import wdl.draft2.model.expression._
-import wdl.draft2.model.types._
+import wom.expression._
 import wom.types._
 import wom.values._
 
 object Utils {
-    class VariableAccessException private(ex: Exception) extends RuntimeException(ex) {
-        def this() = this(new RuntimeException("Variable access in supposed constant"))
-    }
-
     // A stand in for the DXWorkflow.Stage inner class (we don't have a constructor for it)
     case class DXWorkflowStage(id: String) {
         def getId() = id
@@ -196,31 +193,23 @@ object Utils {
 
     // Check if the WDL expression is a constant. If so, calculate and return it.
     // Otherwise, return None.
-    private def ifConstEval(expr: WdlExpression) : Option[WomValue] = {
-        try {
-            def lookup(x:String) : WomValue = {
-                throw new VariableAccessException()
-            }
-            val ve = ValueEvaluator(lookup, PureStandardLibraryFunctions)
-            ve.evaluate(expr.ast) match {
-                case Failure(_) => None
-                case Success(wValue:WomValue) => Some(wValue)
-            }
-        } catch {
-            case e: VariableAccessException =>
-                // Not a constant
-                None
+    private def ifConstEval(expr: WomExpression) : Option[WomValue] = {
+        val result: ErrorOr[WomValue] =
+            expr.evaluateValue(Map.empty[String, WomValue], wom.expression.NoIoFunctionSet)
+        result match {
+            case Invalid(_) => None
+            case Valid(x: WomValue) => Some(x)
         }
     }
 
-    def isExpressionConst(expr: WdlExpression) : Boolean = {
+    def isExpressionConst(expr: WomExpression) : Boolean = {
         ifConstEval(expr) match {
             case None => false
             case Some(_) => true
         }
     }
 
-    def evalConst(expr: WdlExpression) : WomValue = {
+    def evalConst(expr: WomExpression) : WomValue = {
         ifConstEval(expr) match {
             case None => throw new Exception(s"Expression ${expr} is not a WDL constant")
             case Some(wdlValue) => wdlValue
@@ -769,7 +758,7 @@ object Utils {
     }
 
     // Figure out the type of an expression
-    def evalType(expr: WdlExpression,
+    def evalType(expr: WomExpression,
                  parent: Scope,
                  cef: CompilerErrorFormatter,
                  verbose: Verbose) : WomType = {

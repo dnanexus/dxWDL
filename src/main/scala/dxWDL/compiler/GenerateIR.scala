@@ -77,10 +77,10 @@ case class GenerateIR(verbose: Verbose) {
         Utils.trace(verbose.on, s"Compiling task ${task.name}")
 
         val inputs = task.inputs.map{
-            inp => CVar(inp.localName, inp.womType, Map.empty)
+            inp => CVar(inp.localName.value, inp.womType, DeclAttrs.empty)
         }.toVector
         val outputs = task.outputs.map{
-            out => CVar(out.localName, out.womType, Map.empty)
+            out => CVar(out.localName.value, out.womType, DeclAttrs.empty)
         }.toVector
         val instaceType = calcInstanceType(Some(task))
 
@@ -89,8 +89,8 @@ case class GenerateIR(verbose: Verbose) {
                 case (Some("native"), Some(id)) =>
                     // wrapper for a native applet.
                     // make sure the runtime block is empty
-                    if (!task.runtimeAttributes.attrs.isEmpty)
-                        throw new Exception(cef.taskNativeRuntimeBlockShouldBeEmpty(task.ast))
+                    if (!task.runtimeAttributes.attributes.isEmpty)
+                        throw new Exception(s"Native task ${task.name} should have an empty runtime block")
                     IR.AppletKindNative(id)
                 case (_,_) =>
                     // a WDL task
@@ -98,7 +98,7 @@ case class GenerateIR(verbose: Verbose) {
             }
 
         // Figure out if we need to use docker
-        val docker = task.runtimeAttributes.attrs.get("docker") match {
+        val docker = task.runtimeAttributes.attributes.get("docker") match {
             case None =>
                 IR.DockerImageNone
             case Some(expr) if Utils.isExpressionConst(expr) =>
