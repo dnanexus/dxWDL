@@ -9,10 +9,8 @@
 package dxWDL.compiler
 
 import com.dnanexus.DXRecord
-import dxWDL.{DeclAttrs, Utils, WdlPrettyPrinter}
-import spray.json._
+import dxWDL.{DeclAttrs, Utils}
 import wom.types.WomType
-import wom.values._
 
 object IR {
     // Compile time representation of a variable. Used also as
@@ -98,7 +96,7 @@ object IR {
                       instanceType: InstanceType,
                       docker: DockerImage,
                       kind: AppletKind,
-                      task: wom.callable.ExecutableTaskDefinition) extends Callable
+                      task: wom.callable.CallableTaskDefinition) extends Callable
 
     case class Bundle(primaryCallable: Option[Callable],
                       allCallables: Map[String, Callable])

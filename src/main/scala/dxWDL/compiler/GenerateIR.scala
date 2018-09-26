@@ -2,21 +2,16 @@
   */
 package dxWDL.compiler
 
-import cats.data.Validated
 import cats.data.Validated.{Invalid, Valid}
 import common.validation.ErrorOr.ErrorOr
 import dxWDL._
 import dxWDL.Utils
 import IR.{CVar}
-import scala.util.{Failure, Success, Try}
-import scala.util.matching.Regex.Match
-import wom.types._
 import wom.values._
-import wom.executable.WomBundle
-import wom.callable.ExecutableTaskDefinition
+import wom.callable.{CallableTaskDefinition, ExecutableTaskDefinition}
 
 case class GenerateIR(verbose: Verbose) {
-    private val verbose2:Boolean = verbose.keywords contains "GenerateIR"
+    //private val verbose2:Boolean = verbose.keywords contains "GenerateIR"
 
     private class DynamicInstanceTypesException private(ex: Exception) extends RuntimeException(ex) {
         def this() = this(new RuntimeException("Runtime instance type calculation required"))
@@ -29,8 +24,8 @@ case class GenerateIR(verbose: Verbose) {
     // that, in the general case, could be calculated only at runtime.
     // Currently, we support only constants. If a runtime expression is used,
     // we convert it to a moderatly high constant.
-    def calcInstanceType(taskOpt: Option[ExecutableTaskDefinition]) : IR.InstanceType = {
-        def evalAttr(task: ExecutableTaskDefinition, attrName: String) : Option[WomValue] = {
+    def calcInstanceType(taskOpt: Option[CallableTaskDefinition]) : IR.InstanceType = {
+        def evalAttr(task: CallableTaskDefinition, attrName: String) : Option[WomValue] = {
             task.runtimeAttributes.attributes.get(attrName) match {
                 case None => None
                 case Some(expr) =>
@@ -73,7 +68,7 @@ case class GenerateIR(verbose: Verbose) {
     //
     // Note: check if a task is a real WDL task, or if it is a wrapper for a
     // native applet.
-    private def compileTask(task : ExecutableTaskDefinition) : IR.Applet = {
+    private def compileTask(task : CallableTaskDefinition) : IR.Applet = {
         Utils.trace(verbose.on, s"Compiling task ${task.name}")
 
         val inputs = task.inputs.map{
@@ -132,7 +127,7 @@ case class GenerateIR(verbose: Verbose) {
                   outputs,
                   instanceType,
                   docker,
-                  IR.AppletKindTask,
+                  kind,
                   task)
     }
 
@@ -152,16 +147,17 @@ object GenerateIR {
         val gir = GenerateIR(verbose)
         val allCallables = womBundle.allCallables.map{
             case (name: String, callable: wom.callable.Callable) =>
-                callable match {
+                val exec = callable match {
                     case ExecutableTaskDefinition(task, graph) =>
-                        gir.compileTask(callable)
+                        gir.compileTask(task)
                     case x =>
                         throw new Exception(s"""|Only the ExecutableTaskDefinition class is currently supported.
                                                 |Can't compile: ${name}
                                                 |${x}
                                                 |""")
                 }
-        }
+                name -> exec
+        }.toMap
 
         Utils.traceLevelDec()
         IR.Bundle(None, allCallables)
