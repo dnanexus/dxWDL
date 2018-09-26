@@ -82,7 +82,7 @@ case class GenerateIR(verbose: Verbose) {
         val outputs = task.outputs.map{
             out => CVar(out.localName.value, out.womType, DeclAttrs.empty)
         }.toVector
-        val instaceType = calcInstanceType(Some(task))
+        val instanceType = calcInstanceType(Some(task))
 
         val kind =
             (task.meta.get("type"), task.meta.get("id")) match {
@@ -150,14 +150,17 @@ object GenerateIR {
         assert(womBundle.primaryCallable == None)
         assert(womBundle.typeAliases.isEmpty)
         val gir = GenerateIR(verbose)
-        val allCallables = womBundle.allCallables{
-            case (name, ExecutableTaskDefinition(task)) =>
-                gir.compileTask(task)
-            case (name, x) =>
-                throw new Exception(s"""|Only the ExecutableTaskDefinition class is currently supported.
-                                        |Can't compile: ${name}
-                                        |${x}
-                                        |""")
+        val allCallables = womBundle.allCallables.map{
+            case (name: String, callable: wom.callable.Callable) =>
+                callable match {
+                    case ExecutableTaskDefinition(task, graph) =>
+                        gir.compileTask(callable)
+                    case x =>
+                        throw new Exception(s"""|Only the ExecutableTaskDefinition class is currently supported.
+                                                |Can't compile: ${name}
+                                                |${x}
+                                                |""")
+                }
         }
 
         Utils.traceLevelDec()

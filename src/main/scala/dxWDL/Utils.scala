@@ -1,6 +1,5 @@
 package dxWDL
 
-import cats.data.Validated
 import cats.data.Validated.{Invalid, Valid}
 import com.dnanexus._
 import com.fasterxml.jackson.databind.ObjectMapper
@@ -13,7 +12,6 @@ import java.nio.file.{Path, Paths, Files}
 import java.util.Base64
 import scala.collection.JavaConverters._
 import scala.concurrent._
-import scala.util.{Failure, Success}
 import ExecutionContext.Implicits.global
 import scala.sys.process._
 import spray.json._
@@ -407,39 +405,15 @@ object Utils {
     // We encode as base64, to remove special characters. This allows
     // embedding the resulting string as a field in a JSON document.
     def marshal(v: WomValue) : String = {
-        val js = JsArray(
-            JsString(v.womType.toDisplayString),
-            JsString(v.toWomString)
-        )
+        val js = WomValueSerialization.toJSON(v)
         base64Encode(js.compactPrint)
     }
 
     // reverse of [marshal]
     def unmarshal(buf64 : String) : WomValue = {
         val buf = base64Decode(buf64)
-        buf.parseJson match {
-            case JsArray(vec) if (vec.length == 2) =>
-                (vec(0), vec(1)) match {
-                    case (JsString(wTypeStr), JsString(wValueStr)) =>
-                        val t : WomType = WdlFlavoredWomType.fromDisplayString(wTypeStr)
-                        try {
-                            WdlFlavoredWomType.FromString(t).fromWorkflowSource(wValueStr)
-                        } catch {
-                            case e: Throwable =>
-                                t match {
-                                    case WomOptionalType(t1) =>
-                                        System.err.println(s"Error unmarshalling wdlType=${t.toDisplayString}")
-                                        System.err.println(s"Value=${wValueStr}")
-                                        System.err.println(s"Trying again with type=${t1.toDisplayString}")
-                                        WdlFlavoredWomType.FromString(t1).fromWorkflowSource(wValueStr)
-                                    case _ =>
-                                        throw e
-                                }
-                        }
-                    case _ => throw new AppInternalException(s"JSON vector should have two strings ${buf}")
-                }
-            case _ => throw new AppInternalException(s"Error unmarshalling json value ${buf}")
-        }
+        val js = buf.parseJson
+        WomValueSerialization.fromJSON(js)
     }
 
     // Job input, output,  error, and info files are located relative to the home
@@ -732,55 +706,5 @@ object Utils {
 
     def error(msg: String) : Unit = {
         System.err.println(Console.RED + msg + Console.RESET)
-    }
-
-    // This code is copied the lookupType method in the WdlNamespace trait
-    //   https://github.com/broadinstitute/wdl4s/blob/develop/wom/src/main/scala/wdl/WdlNamespace.scala
-    //
-    // We should ask to make it public.
-    //
-    def lookupType(from: Scope)(n: String): WomType = {
-        val resolved: Option[WdlGraphNode] = from.resolveVariable(n)
-        resolved match {
-            case Some(d: DeclarationInterface) => d.relativeWdlType(from)
-            case Some(c: WdlCall) => WdlCallOutputsObjectType(c)
-            case Some(s: Scatter) => s.collection.evaluateType(lookupType(s),
-                                                               new WdlStandardLibraryFunctionsType,
-                                                               Option(from)) match {
-                case Success(WomArrayType(aType)) => aType
-                // We don't need to check for a WOM map type, because
-                // of the custom unapply in object WomArrayType
-                case _ => throw new Exception(s"Variable $n references a scatter block ${s.fullyQualifiedName}, but the collection does not evaluate to an array")
-            }
-            case Some(_: WdlNamespace) => WdlNamespaceType
-            case _ => throw new Exception(s"Could not resolve $n from scope ${from.fullyQualifiedName}")
-        }
-    }
-
-    // Figure out the type of an expression
-    def evalType(expr: WomExpression,
-                 parent: Scope,
-                 cef: CompilerErrorFormatter,
-                 verbose: Verbose) : WomType = {
-        TypeEvaluator(lookupType(parent),
-                      new WdlStandardLibraryFunctionsType,
-                      Some(parent)).evaluate(expr.ast) match {
-            case Success(wdlType) => wdlType
-            case Failure(f) =>
-                warning(verbose, cef.couldNotEvaluateType(expr))
-                throw f
-        }
-    }
-
-    // Here, we use the flat namespace assumption. We use
-    // unqualified names as Fully-Qualified-Names, because
-    // task and workflow names are unique.
-    def calleeGetName(call: WdlCall) : String = {
-        call match {
-            case tc: WdlTaskCall =>
-                tc.task.unqualifiedName
-            case wfc: WdlWorkflowCall =>
-                wfc.calledWorkflow.unqualifiedName
-        }
     }
 }
