@@ -6,7 +6,6 @@ package dxWDL.compiler
 import common.Checked
 import common.validation.Validation._
 import cromwell.core.path.{DefaultPathBuilder, Path}
-import cromwell.languages.LanguageFactory
 import cromwell.languages.util.ImportResolver._
 import dxWDL.CompilerOptions
 import languages.cwl.CwlV1_0LanguageFactory
@@ -16,8 +15,6 @@ import java.nio.file.{Files, Paths}
 import scala.collection.JavaConverters._
 import scala.util.Try
 import wom.executable.WomBundle
-import wom.expression.NoIoFunctionSet
-import wom.graph._
 
 object Top {
 
@@ -58,10 +55,14 @@ object Top {
     def applyOnlyIR(sourceFile: String,
                     cOpt: CompilerOptions) : IR.Bundle = {
         val src : Path = DefaultPathBuilder.build(Paths.get(sourceFile))
-        val bundle : wom.executable.WomBundle = getBundle(src)
-
-        // Compile the WDL workflow into an Intermediate
-        // Representation (IR)
-        GenerateIR.applyOnlyIR(bundle, cOpt.verbose)
+        val bundle = getBundle(src)
+        bundle match {
+            case Right(bn) =>
+                // Compile the WDL workflow into an Intermediate
+                // Representation (IR)
+                GenerateIR.applyOnlyIR(bn, cOpt.verbose)
+            case Left(errors) =>
+                throw new Exception(errors)
+        }
     }
 }

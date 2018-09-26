@@ -25,7 +25,6 @@ import dxWDL._
 import java.nio.file.{Path}
 import spray.json._
 import wdl.draft2.model.{Declaration, DeclarationInterface, WdlExpression, WdlTask}
-import wdl.draft2.model.types.WdlFlavoredWomType
 import wom.values._
 import wom.types._
 
@@ -133,7 +132,7 @@ case class Task(task:WdlTask,
     // serialize the task inputs to json, and then write to a file.
     private def writeEnvToDisk(env: Map[String, WomValue]) : Unit = {
         val m : Map[String, JsValue] = env.map{ case(varName, v) =>
-            (varName, TaskSerialization.toJSON(v))
+            (varName, WomValueSerialization.toJSON(v))
         }.toMap
         val buf = (JsObject(m)).prettyPrint
         Utils.writeFileContent(getMetaDir().resolve(Utils.RUNNER_TASK_ENV_FILE),
@@ -148,7 +147,7 @@ case class Task(task:WdlTask,
             case _ => throw new Exception("Malformed task declarations")
         }
         m.map { case (key, jsVal) =>
-            key -> TaskSerialization.fromJSON(jsVal)
+            key -> WomValueSerialization.fromJSON(jsVal)
         }.toMap
     }
 
