@@ -137,8 +137,8 @@ case class GenerateIR(verbose: Verbose) {
 object GenerateIR {
 
     // Entrypoint
-    def apply(womBundle : wom.executable.WomBundle,
-              verbose: Verbose) : IR.Bundle = {
+    def applyOnlyIR(womBundle : wom.executable.WomBundle,
+                    verbose: Verbose) : IR.Bundle = {
         Utils.trace(verbose.on, s"IR pass")
         Utils.traceLevelInc()
 
