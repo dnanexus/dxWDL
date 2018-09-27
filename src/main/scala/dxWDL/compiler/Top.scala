@@ -60,7 +60,7 @@ object Top {
             case Right(bn) =>
                 // Compile the WDL workflow into an Intermediate
                 // Representation (IR)
-                GenerateIR.applyOnlyIR(bn, cOpt.verbose)
+                GenerateIR.apply(bn, cOpt.verbose)
             case Left(errors) =>
                 throw new Exception(errors.toString)
         }
