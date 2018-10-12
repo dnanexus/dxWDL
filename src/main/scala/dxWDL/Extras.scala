@@ -5,7 +5,7 @@ package dxWDL
 
 import com.dnanexus.AccessLevel
 import spray.json._
-import wdl.draft2.model.WdlExpression
+import wom.expression.{ValueAsAnExpression, WomExpression}
 import wom.values._
 
 case class DxExecPolicy(restartOn: Option[Map[String, Int]],
@@ -162,7 +162,7 @@ case class DxRunSpec(execPolicy: Option[DxExecPolicy],
     }
 }
 
-case class Extras(defaultRuntimeAttributes: Map[String, WdlExpression],
+case class Extras(defaultRuntimeAttributes: Map[String, WomExpression],
                   defaultTaskDxAttributes: Option[DxRunSpec])
 
 object Extras {
@@ -178,14 +178,15 @@ object Extras {
                                                     "JMInternalError", "AppInternalError",
                                                     "JobTimeoutExceeded", "*")
 
-    private def wdlExpressionFromJsValue(jsv: JsValue) : WdlExpression = {
+    private def wdlExpressionFromJsValue(jsv: JsValue) : WomExpression = {
         val wValue: WomValue = jsv match {
             case JsBoolean(b) => WomBoolean(b.booleanValue)
             case JsNumber(nmb) => WomInteger(nmb.intValue)
             case JsString(s) => WomString(s)
             case other => throw new Exception(s"Unsupported json value ${other}")
         }
-        WdlExpression.fromString(wValue.toWomString)
+        //WomExpression.fromString(wValue.toWomString)
+        ValueAsAnExpression(wValue)
     }
 
 
@@ -266,7 +267,7 @@ object Extras {
     }
 
     private def parseRuntimeAttrs(jsv: JsValue,
-                                  verbose: Verbose) : Map[String, WdlExpression] = {
+                                  verbose: Verbose) : Map[String, WomExpression] = {
         if (jsv == JsNull)
             return Map.empty
         val fields = jsv.asJsObject.fields

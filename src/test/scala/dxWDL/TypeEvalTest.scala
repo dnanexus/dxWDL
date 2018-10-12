@@ -1,9 +1,10 @@
 package dxWDL
 
+import cats.data.Validated.{Invalid, Valid}
+import common.validation.ErrorOr.ErrorOr
 import org.scalatest.{FlatSpec, Matchers}
 import scala.util.{Failure, Success}
-import wdl.draft2.model._
-import wdl.draft2.model.expression._
+import wom.expression._
 import wom.types._
 
 class TypeEvalTest extends FlatSpec with Matchers {
@@ -43,17 +44,13 @@ class TypeEvalTest extends FlatSpec with Matchers {
 
 
     // Figure out the type of an expression
-    def evalType(expr: WdlExpression, parent: Scope) : WomType = {
-        expr.evaluateType(Utils.lookupType(parent),
-                          new WdlStandardLibraryFunctionsType,
-                          Some(parent)) match {
-/*        dxWDL.TypeEvaluator(Utils.lookupType(parent),
-                            new WdlStandardLibraryFunctionsType,
-                            Some(parent)).evaluate(expr.ast) match { */
-            case Success(wdlType) => wdlType
-            case Failure(f) =>
-                System.err.println(s"could not evaluate type of expression ${expr.toWomString}")
-                throw f
+    def evalType(expr: WomExpression,
+                 inputTypes: Map[String, WomType]) : WomType = {
+        val result: ErrorOr[WomType] = expr.evaluateType(inputTypes)
+        result match {
+            case Invalid(_) =>
+                throw new Exception(s"could not evaluate type of expression ${expr}")
+            case Valid(t: WomType) => t
         }
     }
 

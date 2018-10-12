@@ -3,7 +3,7 @@ package dxWDL
 import com.dnanexus.AccessLevel
 import org.scalatest.{FlatSpec, Matchers}
 import spray.json._
-import wdl.draft2.model.WdlExpression
+import wom.expression.WomExpression
 import wom.values.WomString
 
 class ExtrasTest extends FlatSpec with Matchers {
@@ -214,7 +214,7 @@ class ExtrasTest extends FlatSpec with Matchers {
                |}""".stripMargin.parseJson
 
         val extras = Extras.parse(runtimeAttrs, verbose)
-        val dockerOpt: Option[WdlExpression] = extras.defaultRuntimeAttributes.get("docker")
+        val dockerOpt: Option[WomExpression] = extras.defaultRuntimeAttributes.get("docker")
         dockerOpt match {
             case None =>
                 throw new Exception("Wrong type for dockerOpt")
