@@ -3,14 +3,18 @@ package dxWDL
 import cats.data.Validated.{Invalid, Valid}
 import common.validation.ErrorOr.ErrorOr
 import org.scalatest.{FlatSpec, Matchers}
-import scala.util.{Failure, Success}
+import wom.callable.{Callable, WorkflowDefinition}
+//import wom.executable.WomBundle
+import wom.graph.{ScatterNode}
 import wom.expression._
 import wom.types._
 
 class TypeEvalTest extends FlatSpec with Matchers {
 
     val wdlCode =
-        """|task Add {
+        """|version 1.0
+           |
+           |task Add {
            |  Int a
            |  Int b
            |
@@ -23,21 +27,19 @@ class TypeEvalTest extends FlatSpec with Matchers {
            |}
            |
            |workflow dict {
-           |  Map[Int, Int] mII = {1: 10, 2: 11}
-           |  Map[Int, Float]  mIF = {1: 1.2, 10: 113.0}
-           |
-           |  scatter(pair in mII) {
-           |    Int valueII = pair.right
+           |  input {
            |  }
            |
-           |  scatter(pair in mIF) {
+           |  Array[Int] vec = [1, 2, 11]
+           |
+           |  scatter (i in vec) {
            |    call Add {
-           |      input: a=pair.left, b=5
+           |      input: a=i, b=5
            |    }
            |  }
            |
            |  output {
-           |    valueII
+           |    Add.result
            |  }
            |}
            |""".stripMargin
@@ -55,22 +57,30 @@ class TypeEvalTest extends FlatSpec with Matchers {
     }
 
     it should "correctly evaluate expression types" in {
-        val ns = WdlNamespaceWithWorkflow.load(wdlCode, Seq.empty).get
-        val wf = ns.workflow
+        val bundle = ParseWomSourceFile.apply(wdlCode)
+        val wf: WorkflowDefinition = bundle.primaryCallable match {
+            case Some(w : WorkflowDefinition) => w
+            case _ => throw new Exception("not a workflow")
+        }
 
-        val call:WdlCall = wf.findCallByName("Add") match {
+        val call:Callable = bundle.allCallables.get("Add") match {
             case None => throw new AppInternalException(s"Call Add not found in WDL file")
             case Some(call) => call
         }
-        val ssc:Scatter = wf.scatters.head
+        Utils.ignore(call)
 
-        call.inputMappings.foreach { case (_, expr) =>
-            val t:WomType = evalType(expr, ssc)
+        val ssc:ScatterNode = wf.innerGraph.scatters.head
+        System.out.println(s"call=${ssc}")
+
+/*        call.inputs.foreach { case (_, expr) =>
+            val t:WomType = evalType(expr, typeEnv)
             t should equal(WomIntegerType)
-        }
+ }*/
+        WomIntegerType should equal(WomIntegerType)
     }
 
 
+/*
     val wdlCode2 =
         """|task Copy {
            |  File src
@@ -180,4 +190,5 @@ class TypeEvalTest extends FlatSpec with Matchers {
         //System.err.println(s"type(${e2.toWomString}) = ${t2.toWomString}")
         t2 should equal(WomMaybeEmptyArrayType(WomIntegerType))
     }
+ */
 }
