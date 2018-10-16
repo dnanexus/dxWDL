@@ -2,21 +2,35 @@ package dxWDL
 
 import cats.data.Validated.{Invalid, Valid}
 import common.validation.ErrorOr.ErrorOr
+import languages.wdl.draft3.WdlDraft3LanguageFactory
 import org.scalatest.{FlatSpec, Matchers}
 import wom.callable.{Callable, WorkflowDefinition}
-//import wom.executable.WomBundle
+import wom.executable.WomBundle
 import wom.graph.{ScatterNode}
 import wom.expression._
 import wom.types._
 
 class TypeEvalTest extends FlatSpec with Matchers {
 
+    def parseWdlCode(sourceCode: String) : WomBundle = {
+        val languageFactory = new WdlDraft3LanguageFactory(Map.empty)
+        val bundle = languageFactory.getWomBundle(sourceCode, "{}", List.empty, List(languageFactory))
+        bundle match {
+            case Right(bn) =>
+                bn
+            case Left(errors) =>
+                throw new Exception(errors.toString)
+        }
+    }
+
     val wdlCode =
         """|version 1.0
            |
            |task Add {
-           |  Int a
-           |  Int b
+           |  input {
+           |    Int a
+           |    Int b
+           |  }
            |
            |  command {
            |    echo $((${a} + ${b}))
@@ -39,7 +53,7 @@ class TypeEvalTest extends FlatSpec with Matchers {
            |  }
            |
            |  output {
-           |    Add.result
+           |    Array[Int] o = Add.result
            |  }
            |}
            |""".stripMargin
@@ -57,7 +71,7 @@ class TypeEvalTest extends FlatSpec with Matchers {
     }
 
     it should "correctly evaluate expression types" in {
-        val bundle = ParseWomSourceFile.apply(wdlCode)
+        val bundle = parseWdlCode(wdlCode)
         val wf: WorkflowDefinition = bundle.primaryCallable match {
             case Some(w : WorkflowDefinition) => w
             case _ => throw new Exception("not a workflow")
