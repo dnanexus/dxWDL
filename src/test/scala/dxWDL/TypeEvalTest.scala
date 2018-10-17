@@ -6,7 +6,7 @@ import languages.wdl.draft3.WdlDraft3LanguageFactory
 import org.scalatest.{FlatSpec, Matchers}
 import wom.callable._
 import wom.executable.WomBundle
-//import wom.graph.{ScatterNode}
+import wom.graph._
 import wom.expression._
 import wom.types._
 
@@ -83,7 +83,28 @@ class TypeEvalTest extends FlatSpec with Matchers {
         call.inputs.foreach { case inputDef =>
             /*val t:WomType = evalType(expr, typeEnv)
              t should equal(WomIntegerType)*/
-            System.out.println(s"inputDef=${inputDef}")
+            //System.out.println(s"inputDef=${inputDef}")
+        }
+/*        System.out.println()
+
+        wf.graph.nodes.foreach{
+            case node =>
+                System.out.println(s"node=${node}\n")
+        }
+        System.out.println() */
+
+        val addCallNode : CallNode = wf.graph.calls.head
+        addCallNode match {
+            case cn : CommandCallNode =>
+                ()
+                /*System.out.println(
+                    s"""|CommandCallNode
+                        |  identifier = ${cn.identifier}
+                        |  inputPorts = ${cn.inputPorts}
+                        |  inputDefMap = ${cn.inputDefinitionMappings}
+                        |""".stripMargin)*/
+            case _ =>
+                throw new Exception("sanity")
         }
     }
 
