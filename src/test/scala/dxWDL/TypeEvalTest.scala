@@ -4,9 +4,9 @@ import cats.data.Validated.{Invalid, Valid}
 import common.validation.ErrorOr.ErrorOr
 import languages.wdl.draft3.WdlDraft3LanguageFactory
 import org.scalatest.{FlatSpec, Matchers}
-import wom.callable.{Callable, WorkflowDefinition}
+import wom.callable._
 import wom.executable.WomBundle
-import wom.graph.{ScatterNode}
+//import wom.graph.{ScatterNode}
 import wom.expression._
 import wom.types._
 
@@ -40,21 +40,16 @@ class TypeEvalTest extends FlatSpec with Matchers {
            |  }
            |}
            |
-           |workflow dict {
+           |workflow foo {
            |  input {
+           |    Int x
+           |    Int y
            |  }
            |
-           |  Array[Int] vec = [1, 2, 11]
+           |  call Add{ input: a = x + 5,
+           |                   b = y - 1 }
            |
-           |  scatter (i in vec) {
-           |    call Add {
-           |      input: a=i, b=5
-           |    }
-           |  }
-           |
-           |  output {
-           |    Array[Int] o = Add.result
-           |  }
+           |  output {}
            |}
            |""".stripMargin
 
@@ -70,27 +65,26 @@ class TypeEvalTest extends FlatSpec with Matchers {
         }
     }
 
-    it should "correctly evaluate expression types" in {
+    it should "correctly evaluate expression types in call" in {
         val bundle = parseWdlCode(wdlCode)
         val wf: WorkflowDefinition = bundle.primaryCallable match {
             case Some(w : WorkflowDefinition) => w
             case _ => throw new Exception("not a workflow")
         }
+        wf.name should equal("foo")
 
         val call:Callable = bundle.allCallables.get("Add") match {
             case None => throw new AppInternalException(s"Call Add not found in WDL file")
             case Some(call) => call
         }
-        Utils.ignore(call)
+        System.out.println(s"call=${call} type=${call.getClass}")
+        call.getClass.toString should equal("class wom.callable.CallableTaskDefinition")
 
-        val ssc:ScatterNode = wf.innerGraph.scatters.head
-        System.out.println(s"call=${ssc}")
-
-/*        call.inputs.foreach { case (_, expr) =>
-            val t:WomType = evalType(expr, typeEnv)
-            t should equal(WomIntegerType)
- }*/
-        WomIntegerType should equal(WomIntegerType)
+        call.inputs.foreach { case inputDef =>
+            /*val t:WomType = evalType(expr, typeEnv)
+             t should equal(WomIntegerType)*/
+            System.out.println(s"inputDef=${inputDef}")
+        }
     }
 
 
