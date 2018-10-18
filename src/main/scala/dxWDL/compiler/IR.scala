@@ -10,6 +10,7 @@ package dxWDL.compiler
 
 import com.dnanexus.DXRecord
 import dxWDL.{DeclAttrs, Utils}
+import wom.callable.CallableTaskDefinition
 import wom.types.WomType
 
 object IR {
@@ -68,8 +69,8 @@ object IR {
     // same syntax.
     sealed trait Callable {
         def name: String
-        def inputs: Vector[CVar]
-        def outputs: Vector[CVar]
+        def inputVars: Vector[CVar]
+        def outputVars: Vector[CVar]
     }
 
     // There are several kinds of applets
@@ -80,6 +81,7 @@ object IR {
     sealed trait AppletKind
     case class  AppletKindNative(id: String) extends AppletKind
     case class  AppletKindWfFragment(calls: Map[String, String]) extends AppletKind
+    case object AppletKindWorkflowOutputReorg extends AppletKind
     case object AppletKindTask extends AppletKind
 
     /** @param name          Name of applet
@@ -96,7 +98,10 @@ object IR {
                       instanceType: InstanceType,
                       docker: DockerImage,
                       kind: AppletKind,
-                      task: wom.callable.CallableTaskDefinition) extends Callable
+                      task: CallableTaskDefinition) extends Callable {
+        def inputVars = inputs
+        def outputVars = outputs
+    }
 
     case class Bundle(primaryCallable: Option[Callable],
                       allCallables: Map[String, Callable])

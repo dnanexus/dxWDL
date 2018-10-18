@@ -1,4 +1,4 @@
-package dxWDL
+package dxWDL.util
 
 import spray.json._
 import wom.values._

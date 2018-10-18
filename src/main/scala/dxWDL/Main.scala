@@ -358,10 +358,9 @@ object Main extends App {
 
                 case CompilerFlag.Default =>
                     val (dxProject, folder) = pathOptions(options, cOpt.verbose)
-                    /*val retval = compiler.Top.apply(sourceFile, folder, dxProject, cOpt)
+                    val retval = compiler.Top.apply(sourceFile, folder, dxProject, cOpt)
                     val desc = retval.getOrElse("")
-                     return SuccessfulTermination(desc)*/
-                    return BadUsageTermination("only the IR compilation flag is currently supported")
+                    return SuccessfulTermination(desc)
             }
         } catch {
             case e : NamespaceValidationException =>

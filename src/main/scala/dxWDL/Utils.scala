@@ -38,8 +38,6 @@ object Utils {
 
     val APPLET_LOG_MSG_LIMIT = 1000
     val CHECKSUM_PROP = "dxWDL_checksum"
-    val COMMAND_DEFAULT_BRACKETS = ("{", "}")
-    val COMMAND_HEREDOC_BRACKETS = ("<<<", ">>>")
     val COMMON = "common"
     val DEFAULT_INSTANCE_TYPE = "mem1_ssd1_x4"
     val DEFAULT_RUNTIME_DEBUG_LEVEL = 1

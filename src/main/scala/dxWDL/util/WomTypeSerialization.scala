@@ -1,4 +1,4 @@
-package dxWDL
+package dxWDL.util
 
 import wom.types._
 
