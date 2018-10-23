@@ -5,8 +5,7 @@ package dxWDL.compiler
 // DX bindings
 import com.fasterxml.jackson.databind.JsonNode
 import com.dnanexus._
-import dxWDL._
-import dxWDL.Utils._
+import dxWDL.util._
 import java.security.MessageDigest
 import IR.{CVar}
 import scala.collection.JavaConverters._
@@ -37,13 +36,13 @@ case class Native(dxWDLrtId: String,
     private def getRuntimeLibrary(): JsValue = {
         val record = DXRecord.getInstance(dxWDLrtId)
         val descOptions = DXDataObject.DescribeOptions.get().inProject(dxProject).withDetails
-        val details = jsValueOfJsonNode(
+        val details = Utils.jsValueOfJsonNode(
             record.describe(descOptions).getDetails(classOf[JsonNode]))
         val dxLink = details.asJsObject.fields.get("archiveFileId") match {
             case Some(x) => x
             case None => throw new Exception(s"record does not have an archive field ${details}")
         }
-        val dxFile = dxFileFromJsValue(dxLink)
+        val dxFile = Utils.dxFileFromJsValue(dxLink)
         val name = dxFile.describe.getName()
         JsObject(
             "name" -> JsString(name),
@@ -106,10 +105,10 @@ case class Native(dxWDLrtId: String,
                                 "class" -> JsString("hash"))
                                 ++ jsMapFromOptional(optional)
                                 ++ jsMapFromDefault(name)),
-                   JsObject(Map("name" -> JsString(name + FLAT_FILES_SUFFIX),
+                   JsObject(Map("name" -> JsString(name + Utils.FLAT_FILES_SUFFIX),
                                 "class" -> JsString("array:file"),
                                 "optional" -> JsBoolean(true))
-                                ++ jsMapFromDefault(name + FLAT_FILES_SUFFIX)))
+                                ++ jsMapFromDefault(name + Utils.FLAT_FILES_SUFFIX)))
         }
         def handleType(wdlType: WomType,
                        optional: Boolean) : Vector[JsValue] = {
@@ -148,7 +147,7 @@ case class Native(dxWDLrtId: String,
                        dbInstance: Option[String]): String = {
         // UU64 encode the WDL script to avoid characters that interact
         // badly with bash
-        val wdlCodeUu64 = base64Encode(wdlCode)
+        val wdlCodeUu64 = Utils.base64Encode(wdlCode)
         val part1 =
             s"""|
                 |    # write the WDL script into a file
@@ -161,7 +160,7 @@ case class Native(dxWDLrtId: String,
 
         val part2 = linkInfo.map{ info =>
             s"""|    # write the linking information into a file
-                |    cat >$${DX_FS_ROOT}/${LINK_INFO_FILENAME} <<'EOL'
+                |    cat >$${DX_FS_ROOT}/${Utils.LINK_INFO_FILENAME} <<'EOL'
                 |${info}
                 |EOL
                 |""".stripMargin.trim
@@ -169,7 +168,7 @@ case class Native(dxWDLrtId: String,
 
         val part3 = dbInstance.map { db =>
             s"""|    # write the instance type DB
-                |    cat >$${DX_FS_ROOT}/${INSTANCE_TYPE_DB_FILENAME} <<'EOL'
+                |    cat >$${DX_FS_ROOT}/${Utils.INSTANCE_TYPE_DB_FILENAME} <<'EOL'
                 |${db}
                 |EOL
                 |""".stripMargin.trim
@@ -318,7 +317,7 @@ case class Native(dxWDLrtId: String,
     private def checksumReq(req: JsValue) : (String, JsValue) = {
         val digest = chksum(req.prettyPrint)
         val props = Map("properties" ->
-                            JsObject(CHECKSUM_PROP -> JsString(digest)))
+                            JsObject(Utils.CHECKSUM_PROP -> JsString(digest)))
         val reqChk = req match {
             case JsObject(fields) =>
                 JsObject(fields ++ props)
@@ -338,7 +337,7 @@ case class Native(dxWDLrtId: String,
         dxObjDir.lookupOtherVersions(name, digest) match {
             case None => ()
             case Some((dxObj, desc)) =>
-                trace(verbose.on, s"Found existing version of ${name} in folder ${desc.getFolder}")
+                Utils.trace(verbose.on, s"Found existing version of ${name} in folder ${desc.getFolder}")
                 return Some(dxObj)
         }
 
@@ -350,16 +349,16 @@ case class Native(dxWDLrtId: String,
                 val dxObjInfo = existingDxObjs.head
                 val dxClass:String = dxObjInfo.dxClass
                 if (digest != dxObjInfo.digest) {
-                    trace(verbose.on, s"${dxClass} ${name} has changed, rebuild required")
+                    Utils.trace(verbose.on, s"${dxClass} ${name} has changed, rebuild required")
                     true
                 } else {
-                    trace(verbose.on, s"${dxClass} ${name} has not changed")
+                    Utils.trace(verbose.on, s"${dxClass} ${name} has not changed")
                     false
                 }
             case _ =>
                 val dxClass = existingDxObjs.head.dxClass
-                warning(verbose, s"""|More than one ${dxClass} ${name} found in
-                                     |path ${dxProject.getId()}:${folder}""".stripMargin)
+                Utils.warning(verbose, s"""|More than one ${dxClass} ${name} found in
+                                           |path ${dxProject.getId()}:${folder}""".stripMargin)
                 true
         }
 
@@ -372,7 +371,7 @@ case class Native(dxWDLrtId: String,
                     // the dx:object exists, and needs to be removed. There
                     // may be several versions, all are removed.
                     val objs = existingDxObjs.map(_.dxObj)
-                    trace(verbose.on, s"Removing old ${name} ${objs.map(_.getId)}")
+                    Utils.trace(verbose.on, s"Removing old ${name} ${objs.map(_.getId)}")
                     dxProject.removeObjects(objs.asJava)
                 } else {
                     val dxClass = existingDxObjs.head.dxClass
@@ -407,10 +406,6 @@ case class Native(dxWDLrtId: String,
     // of the callees, so they could be found a runtime. This is
     // equivalent to linking, in a standard C compiler.
     private def genAppletScript(applet: IR.Applet, aplLinks: ExecDict) : String = {
-        // generate the wdl source file
-        val wdlCode:String = WdlPrettyPrinter(false, None).apply(applet.ns, 0)
-            .mkString("\n")
-
         // create linking information
         val linkInfo:Option[String] =
             if (aplLinks.isEmpty) {
@@ -432,11 +427,11 @@ case class Native(dxWDLrtId: String,
 
         // write the bash script
         genBashScript(applet.kind, applet.instanceType,
-                      wdlCode, linkInfo, Some(dbInstance))
+                      applet.womSourceCode, linkInfo, Some(dbInstance))
     }
 
     private def apiParseReplyID(rep: JsonNode) : String = {
-        val repJs:JsValue = jsValueOfJsonNode(rep)
+        val repJs:JsValue = Utils.jsValueOfJsonNode(rep)
         repJs.asJsObject.fields.get("id") match {
             case None => throw new Exception("API call did not returnd an ID")
             case Some(JsString(x)) => x
@@ -467,7 +462,7 @@ case class Native(dxWDLrtId: String,
                 JsObject("main" ->
                              JsObject("instanceType" -> JsString(instanceType))),
             "distribution" -> JsString("Ubuntu"),
-            "release" -> JsString(UBUNTU_VERSION),
+            "release" -> JsString(Utils.UBUNTU_VERSION),
         )
         val extraRunSpec : Map[String, JsValue] = extras match {
             case None => Map.empty
@@ -487,9 +482,9 @@ case class Native(dxWDLrtId: String,
                 val desc = dxRecord.describe(DXDataObject.DescribeOptions.get.withDetails)
 
                 // extract the archiveFileId field
-                val details:JsValue = jsValueOfJsonNode(desc.getDetails(classOf[JsonNode]))
+                val details:JsValue = Utils.jsValueOfJsonNode(desc.getDetails(classOf[JsonNode]))
                 val pkgFile:DXFile = details.asJsObject.fields.get("archiveFileId") match {
-                    case Some(id) => dxFileFromJsValue(id)
+                    case Some(id) => Utils.dxFileFromJsValue(id)
                     case _ => throw new Exception(s"Badly formatted record ${dxRecord}")
                 }
                 val pkgName = pkgFile.describe.getName
@@ -503,7 +498,7 @@ case class Native(dxWDLrtId: String,
                 val rmtProject = rmtContainer.asInstanceOf[DXProject]
                 Utils.cloneAsset(dxRecord, dxProject, pkgName, rmtProject, verbose)
                 Some(JsObject("name" -> JsString(pkgName),
-                              "id" -> jsValueOfJsonNode(pkgFile.getLinkAsJson)))
+                              "id" -> Utils.jsValueOfJsonNode(pkgFile.getLinkAsJson)))
         }
         val bundledDepends = dockerAssets match {
             case None => Vector(runtimeLibrary)
@@ -552,7 +547,7 @@ case class Native(dxWDLrtId: String,
     private def appletNewReq(applet: IR.Applet,
                              bashScript: String,
                              folder : String) : (String, JsValue) = {
-        trace(verbose2, s"Building /applet/new request for ${applet.name}")
+        Utils.trace(verbose2, s"Building /applet/new request for ${applet.name}")
 
         val inputSpec : Vector[JsValue] = applet.inputs.map(cVar =>
             cVarToSpec(cVar)
@@ -598,7 +593,7 @@ case class Native(dxWDLrtId: String,
     // When [force] is true, always rebuild. Otherwise, rebuild only
     // if the WDL code has changed.
     private def buildAppletIfNeeded(applet: IR.Applet, execDict: ExecDict) : DXApplet = {
-        trace(verbose2, s"Compiling applet ${applet.name}")
+        Utils.trace(verbose2, s"Compiling applet ${applet.name}")
 
         // limit the applet dictionary, only to actual dependencies
         val calls:Map[String, String] = applet.kind match {
@@ -623,7 +618,7 @@ case class Native(dxWDLrtId: String,
         buildRequired match {
             case None =>
                 // Compile a WDL snippet into an applet.
-                val rep = DXAPI.appletNew(jsonNodeOfJsValue(appletApiRequest), classOf[JsonNode])
+                val rep = DXAPI.appletNew(Utils.jsonNodeOfJsValue(appletApiRequest), classOf[JsonNode])
                 val id = apiParseReplyID(rep)
                 val dxApplet = DXApplet.getInstance(id)
                 dxObjDir.insert(applet.name, dxApplet, digest)
@@ -676,7 +671,7 @@ object Native {
               archive: Boolean,
               locked: Boolean,
               verbose: Verbose) : CompilationResults = {
-        trace(verbose.on, "Native pass, generate dx:applets and dx:workflows")
+        Utils.trace(verbose.on, "Native pass, generate dx:applets and dx:workflows")
         traceLevelInc()
 
         val ntv = new Native(dxWDLrtId, folder, dxProject, dxObjDir, instanceTypeDB,

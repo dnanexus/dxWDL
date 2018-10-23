@@ -2,13 +2,12 @@ package dxWDL
 
 import com.dnanexus.{DXProject}
 import com.typesafe.config._
-import dxWDL.util.{DxPath, InstanceTypeDB, Utils}
+import dxWDL.util._
 import java.nio.file.{Path, Paths}
 import scala.collection.mutable.HashMap
 import spray.json._
 import spray.json.JsString
-import wdl.draft2.model.{WdlNamespace, WdlTask}
-
+import wom.callable.CallableTaskDefinition
 
 object Main extends App {
     sealed trait Termination
@@ -377,14 +376,6 @@ object Main extends App {
         }
     }
 
-    // Extract the only task from a namespace
-    def taskOfNamespace(ns: WdlNamespace) : WdlTask = {
-        val numTasks = ns.tasks.length
-        if (numTasks != 1)
-            throw new Exception(s"WDL file contains ${numTasks} tasks, instead of 1")
-        ns.tasks.head
-    }
-
     private def isTaskOp(op: InternalOp.Value) : Boolean = {
         op match {
             case InternalOp.TaskCheckInstanceType |
@@ -400,7 +391,17 @@ object Main extends App {
                              jobInputPath: Path,
                              jobOutputPath: Path,
                              rtDebugLvl: Int): Termination = {
-        val ns = WdlNamespace.loadUsingPath(wdlDefPath, None, None).get
+        val bundle = ParseWomSourceFile.apply(wdlDefPath)
+
+        // Extract the only task from a namespace
+        val task = bundle.primaryCallable match  {
+            case Some(task : CallableTaskDefinition) => task
+            case Some(x) =>
+                throw new Exception(s"""|WDL file must contain exactly one task.
+                                        |The primary entry point is ${x.name} ${x.getClass}""".stripMargin)
+            case None =>
+                throw new Exception(s"""|WDL file contains no main entry point""")
+        }
 
         // Figure out input/output types
         val (inputSpec, outputSpec) = Utils.loadExecInfo
@@ -416,26 +417,24 @@ object Main extends App {
 
         if (op == InternalOp.TaskCheckInstanceType) {
             // special operation to check if this task is on the right instance type
-            val task = taskOfNamespace(ns)
-            val inputs = WdlVarLinks.loadJobInputsAsLinks(inputLines, inputSpec, Some(task))
-            val r = runner.Task(task, instanceTypeDB, cef, rtDebugLvl)
+            val inputs = WdlVarLinks.loadJobInputsAsLinks(inputLines, inputSpec, task)
+            val r = runner.Task(task, instanceTypeDB, rtDebugLvl)
             val correctInstanceType:Boolean = r.checkInstanceType(inputSpec, outputSpec, inputs)
             SuccessfulTermination(correctInstanceType.toString)
         } else {
             val outputFields: Map[String, JsValue] =
                 if (isTaskOp(op)) {
                     // Running tasks
-                    val task = taskOfNamespace(ns)
-                    val inputs = WdlVarLinks.loadJobInputsAsLinks(inputLines, inputSpec, Some(task))
+                    val inputs = WdlVarLinks.loadJobInputsAsLinks(inputLines, inputSpec, task)
                     op match {
                         case InternalOp.TaskEpilog =>
-                            val r = runner.Task(task, instanceTypeDB, cef, rtDebugLvl)
+                            val r = runner.Task(task, instanceTypeDB, rtDebugLvl)
                             r.epilog(inputSpec, outputSpec, inputs)
                         case InternalOp.TaskProlog =>
-                            val r = runner.Task(task, instanceTypeDB, cef, rtDebugLvl)
+                            val r = runner.Task(task, instanceTypeDB, rtDebugLvl)
                             r.prolog(inputSpec, outputSpec, inputs)
                         case InternalOp.TaskRelaunch =>
-                            val r = runner.Task(task, instanceTypeDB, cef, rtDebugLvl)
+                            val r = runner.Task(task, instanceTypeDB, rtDebugLvl)
                             r.relaunch(inputSpec, outputSpec, inputs)
                     }
                 } else {

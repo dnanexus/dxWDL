@@ -21,27 +21,6 @@ import wom.types._
 import wom.values._
 
 object Utils {
-    // An equivalent for the InputParmater/OutputParameter types
-    case class DXIOParam(ioClass: IOClass,
-                         optional: Boolean)
-
-
-    // A stand in for the DXWorkflow.Stage inner class (we don't have a constructor for it)
-    case class DXWorkflowStage(id: String) {
-        def getId() = id
-
-        def getInputReference(inputName:String) : JsValue = {
-            JsObject("$dnanexus_link" -> JsObject(
-                         "stage" -> JsString(id),
-                         "inputField" -> JsString(inputName)))
-        }
-        def getOutputReference(outputName:String) : JsValue = {
-            JsObject("$dnanexus_link" -> JsObject(
-                         "stage" -> JsString(id),
-                         "outputField" -> JsString(outputName)))
-        }
-    }
-
     val APPLET_LOG_MSG_LIMIT = 1000
     val CHECKSUM_PROP = "dxWDL_checksum"
     val COMMON = "common"

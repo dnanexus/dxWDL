@@ -20,7 +20,7 @@ implementation depedent, can then percolate to the rest of the
 workflow. For this reason, we want to do lazy evaluation of WDL files,
 not just lazy download.
   */
-package dxWDL
+package dxWDL.util
 
 import com.dnanexus.{DXFile, DXExecution}
 import java.nio.file.{Files, Paths}
@@ -695,7 +695,7 @@ object WdlVarLinks {
     // to links that can be passed to other applets.
     def loadJobInputsAsLinks(inputLines: String,
                              inputSpec:Map[String, DXIOParam],
-                             callable: WdlCallable): Map[String, WdlVarLinks] = {
+                             callable: wom.callable.Callable): Map[String, WdlVarLinks] = {
         // Discard auxiliary fields
         val jsonAst : JsValue = inputLines.parseJson
         val fields : Map[String, JsValue] = jsonAst
@@ -703,15 +703,18 @@ object WdlVarLinks {
             .filter{ case (fieldName,_) => !fieldName.endsWith(FLAT_FILES_SUFFIX) }
         val fieldNames = fields.keys.toSet
 
-        // Get the declarations matching the input fields. There are "declarations"
-        // that are not actually inputs, we need to prune them.
-        val inputDecls = callable.declarations.filter{
-            decl => fieldNames contains decl.unqualifiedName
-        }
+        // Get the declarations matching the input fields.
+        val inputDecls = callable.inputs
 
         // Create a mapping from each key to its WDL value
-        inputDecls.map { decl =>
-            val defaultValue: Option[WomValue] = decl.expression.flatMap(Utils.ifConstEval)
+        inputDecls.map { inDef =>
+            val defaultValue: Option[WomValue] = inDef match {
+                case d: InputDefinitionWithDefault =>
+                    d.default.flatMap(Utils.ifConstEval)
+                case d: FixedInputDefinition =>
+                    d.default.flatMap(Utils.ifConstEval)
+                case _ => None
+            }
 
             // There are several distinct cases
             //

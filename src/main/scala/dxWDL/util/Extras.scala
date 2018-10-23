@@ -1,9 +1,8 @@
-package dxWDL
+package dxWDL.util
 
 // Place to put any extra options, equivalent to Cromwell workflowOptions.
 // Also, allows dnanexus specific configuration per task.
 
-import dxWDL.util.Utils
 import com.dnanexus.AccessLevel
 import spray.json._
 import wom.expression.{ValueAsAnExpression, WomExpression}

@@ -1,4 +1,4 @@
-package dxWDL
+package dxWDL.util
 
 import com.dnanexus._
 import java.nio.file.Path
@@ -53,6 +53,11 @@ object IODirection extends Enumeration {
 object CompilerFlag extends Enumeration {
     val Default, IR = Value
 }
+
+// An equivalent for the InputParmater/OutputParameter types
+case class DXIOParam(ioClass: IOClass,
+                     optional: Boolean)
+
 
 // Request for an instance type
 case class InstanceTypeReq(dxInstanceType: Option[String],

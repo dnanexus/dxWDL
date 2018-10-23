@@ -4,8 +4,7 @@ package dxWDL.compiler
 
 import cats.data.Validated.{Invalid, Valid}
 import common.validation.ErrorOr.ErrorOr
-import dxWDL._
-import dxWDL.Utils
+import dxWDL.util._
 import IR.{CVar}
 import wom.values._
 import wom.callable.{CallableTaskDefinition, ExecutableTaskDefinition}

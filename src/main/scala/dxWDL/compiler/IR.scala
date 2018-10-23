@@ -9,7 +9,7 @@
 package dxWDL.compiler
 
 import com.dnanexus.DXRecord
-import dxWDL.{DeclAttrs, Utils}
+import dxWDL.util.{Utils, DeclAttrs}
 import wom.callable.CallableTaskDefinition
 import wom.types.WomType
 
@@ -91,6 +91,7 @@ object IR {
       * @param docker        is docker used? if so, what image
       * @param kind          Kind of applet: task, scatter, ...
       * @param task          Task definition
+      * @param womSourceCode WDL/CWL source code for task.
       */
     case class Applet(name: String,
                       inputs: Vector[CVar],
@@ -98,7 +99,8 @@ object IR {
                       instanceType: InstanceType,
                       docker: DockerImage,
                       kind: AppletKind,
-                      task: CallableTaskDefinition) extends Callable {
+                      task: CallableTaskDefinition,
+                      womSourceCode: String) extends Callable {
         def inputVars = inputs
         def outputVars = outputs
     }

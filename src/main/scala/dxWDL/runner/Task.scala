@@ -22,15 +22,15 @@ import com.dnanexus.{DXAPI, DXJob}
 import com.fasterxml.jackson.databind.JsonNode
 import common.validation.Validation._
 import dxWDL._
+import dxWDL.util.{DXIOParam, InstanceTypeDB, WdlVarLinks}
 import java.nio.file.{Path}
 import spray.json._
-import wdl.draft2.model.{Declaration, DeclarationInterface, WdlExpression, WdlTask}
+import wom.callable.CallableTaskDefinition
 import wom.values._
 import wom.types._
 
-case class Task(task:WdlTask,
+case class Task(task: CallableTaskDefinition,
                 instanceTypeDB : InstanceTypeDB,
-                cef: CompilerErrorFormatter,
                 runtimeDebugLevel: Int) {
     private val verbose = (runtimeDebugLevel >= 1)
     private val maxVerboseLevel = (runtimeDebugLevel == 2)

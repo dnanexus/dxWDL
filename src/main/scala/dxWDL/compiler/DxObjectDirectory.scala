@@ -3,7 +3,7 @@
 package dxWDL.compiler
 
 import com.fasterxml.jackson.databind.JsonNode
-import dxWDL.{Utils, Verbose}
+import dxWDL.util.{Verbose, Utils}
 import com.dnanexus._
 import java.time.{LocalDateTime, ZoneId}
 import java.time.format.DateTimeFormatter
