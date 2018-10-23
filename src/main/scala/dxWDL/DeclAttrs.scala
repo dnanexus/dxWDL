@@ -1,6 +1,7 @@
 // Declaration attributes, an experimental extension
 package dxWDL
 
+import dxWDL.util.Utils
 import wdl.draft2.model.{Declaration, WdlTask}
 import wom.values._
 import wom.types._

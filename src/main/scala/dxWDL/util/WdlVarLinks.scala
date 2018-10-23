@@ -22,12 +22,12 @@ not just lazy download.
   */
 package dxWDL
 
-import com.dnanexus.{DXFile, DXExecution, IOClass}
+import com.dnanexus.{DXFile, DXExecution}
 import java.nio.file.{Files, Paths}
 import net.jcazevedo.moultingyaml._
 import spray.json._
 import Utils._
-import wdl.draft2.model.{WdlTask}
+import wdl.draft2.model.{WdlCallable}
 import wdl.draft2.model.types.WdlFlavoredWomType
 import wom.types._
 import wom.values._
@@ -75,7 +75,7 @@ object WdlVarLinks {
             case DxlValue(jsn) => jsn
             case _ =>
                 throw new AppInternalException(
-                    s"Unsupported conversion from ${wvl.dxlink} to WdlValue")
+                    s"Unsupported conversion from ${wvl.dxlink} to WomValue")
         }
     }
 
@@ -539,95 +539,16 @@ object WdlVarLinks {
         }
     }
 
-    // Convert an input field to a dx-links structure. This allows
-    // passing it to other jobs.
-    //
-    // Note: we need to represent dx-files as local paths, even if we
-    // do not download them. This is because accessing these files
-    // later on will cause a WDL failure.
-    def importFromDxExec(ioParam:DXIOParam,
-                         attrs:DeclAttrs,
-                         jsValue: JsValue) : WdlVarLinks = {
-        if (ioParam.ioClass == IOClass.HASH) {
-            val (t, v) = unmarshalHash(jsValue)
-            if (ioParam.optional)
-                (WomOptionalType(t), v)
-            else
-                (t, v)
-            WdlVarLinks(t, attrs, DxlValue(v))
-        } else {
-            val womType =
-                if (ioParam.optional) {
-                    ioParam.ioClass match {
-                        case IOClass.BOOLEAN => WomOptionalType(WomBooleanType)
-                        case IOClass.INT => WomOptionalType(WomIntegerType)
-                        case IOClass.FLOAT => WomOptionalType(WomFloatType)
-                        case IOClass.STRING => WomOptionalType(WomStringType)
-                        case IOClass.FILE => WomOptionalType(WomSingleFileType)
-                        case IOClass.ARRAY_OF_BOOLEANS => WomMaybeEmptyArrayType(WomBooleanType)
-                        case IOClass.ARRAY_OF_INTS => WomMaybeEmptyArrayType(WomIntegerType)
-                        case IOClass.ARRAY_OF_FLOATS => WomMaybeEmptyArrayType(WomFloatType)
-                        case IOClass.ARRAY_OF_STRINGS => WomMaybeEmptyArrayType(WomStringType)
-                        case IOClass.ARRAY_OF_FILES => WomMaybeEmptyArrayType(WomSingleFileType)
-                        case other => throw new Exception(s"unhandled IO class ${other}")
-                    }
-                } else {
-                    ioParam.ioClass match {
-                        case IOClass.BOOLEAN => WomBooleanType
-                        case IOClass.INT => WomIntegerType
-                        case IOClass.FLOAT => WomFloatType
-                        case IOClass.STRING => WomStringType
-                        case IOClass.FILE => WomSingleFileType
-                        case IOClass.ARRAY_OF_BOOLEANS => WomNonEmptyArrayType(WomBooleanType)
-                        case IOClass.ARRAY_OF_INTS => WomNonEmptyArrayType(WomIntegerType)
-                        case IOClass.ARRAY_OF_FLOATS => WomNonEmptyArrayType(WomFloatType)
-                        case IOClass.ARRAY_OF_STRINGS => WomNonEmptyArrayType(WomStringType)
-                        case IOClass.ARRAY_OF_FILES => WomNonEmptyArrayType(WomSingleFileType)
-                        case other => throw new Exception(s"unhandled IO class ${other}")
-                    }
-                }
-            WdlVarLinks(womType, attrs, DxlValue(jsValue))
-        }
-    }
-
     // Import a value we got as an output from a dx:executable. In this case,
     // we don't have the dx:specification, but we do have the WomType.
     def importFromDxExec(womType:WomType,
-                         attrs:DeclAttrs,
                          jsValue: JsValue) : WdlVarLinks = {
-        val ioParam = womType match {
-            // optional dx:native types
-            case WomOptionalType(WomBooleanType) => DXIOParam(IOClass.BOOLEAN, true)
-            case WomOptionalType(WomIntegerType) => DXIOParam(IOClass.INT, true)
-            case WomOptionalType(WomFloatType) => DXIOParam(IOClass.FLOAT, true)
-            case WomOptionalType(WomStringType) => DXIOParam(IOClass.STRING, true)
-            case WomOptionalType(WomSingleFileType) => DXIOParam(IOClass.FILE, true)
-            case WomMaybeEmptyArrayType(WomBooleanType) => DXIOParam(IOClass.ARRAY_OF_BOOLEANS, true)
-            case WomMaybeEmptyArrayType(WomIntegerType) => DXIOParam(IOClass.ARRAY_OF_INTS, true)
-            case WomMaybeEmptyArrayType(WomFloatType) => DXIOParam(IOClass.ARRAY_OF_FLOATS, true)
-            case WomMaybeEmptyArrayType(WomStringType) => DXIOParam(IOClass.ARRAY_OF_STRINGS, true)
-            case WomMaybeEmptyArrayType(WomSingleFileType) => DXIOParam(IOClass.ARRAY_OF_FILES, true)
-
-                // compulsory dx:native types
-            case WomBooleanType => DXIOParam(IOClass.BOOLEAN, false)
-            case WomIntegerType => DXIOParam(IOClass.INT, false)
-            case WomFloatType => DXIOParam(IOClass.FLOAT, false)
-            case WomStringType => DXIOParam(IOClass.STRING, false)
-            case WomSingleFileType => DXIOParam(IOClass.FILE, false)
-            case WomNonEmptyArrayType(WomBooleanType) => DXIOParam(IOClass.ARRAY_OF_BOOLEANS, false)
-            case WomNonEmptyArrayType(WomIntegerType) => DXIOParam(IOClass.ARRAY_OF_INTS, false)
-            case WomNonEmptyArrayType(WomFloatType) => DXIOParam(IOClass.ARRAY_OF_FLOATS, false)
-            case WomNonEmptyArrayType(WomStringType) => DXIOParam(IOClass.ARRAY_OF_STRINGS, false)
-            case WomNonEmptyArrayType(WomSingleFileType) => DXIOParam(IOClass.ARRAY_OF_FILES, false)
-
-            // non dx:native types, thse are converted to hashes.
-            //
-            // Note: WDL types like "Array[Int]+?" cannot be converted to a native
-            // dx type. They can take null, requiring an optional type.
-            case WomOptionalType(_) => DXIOParam(IOClass.HASH, true)
-            case _ => DXIOParam(IOClass.HASH, false)
+        if (Utils.isNativeDxType(womType)) {
+            WdlVarLinks(womType, DeclAttrs.empty, DxlValue(jsValue))
+        } else {
+            val (_, v) = unmarshalHash(jsValue)
+            WdlVarLinks(womType, DeclAttrs.empty, DxlValue(v))
         }
-        importFromDxExec(ioParam, attrs, jsValue)
     }
 
     // Import a value specified in a Cromwell style JSON input
@@ -774,38 +695,55 @@ object WdlVarLinks {
     // to links that can be passed to other applets.
     def loadJobInputsAsLinks(inputLines: String,
                              inputSpec:Map[String, DXIOParam],
-                             taskOpt: Option[WdlTask]): Map[String, WdlVarLinks] = {
+                             callable: WdlCallable): Map[String, WdlVarLinks] = {
         // Discard auxiliary fields
         val jsonAst : JsValue = inputLines.parseJson
         val fields : Map[String, JsValue] = jsonAst
             .asJsObject.fields
             .filter{ case (fieldName,_) => !fieldName.endsWith(FLAT_FILES_SUFFIX) }
+        val fieldNames = fields.keys.toSet
 
-        // Optional inputs could be missing, we want to convert
-        // them into appropriate JSON null.
-        val missingFields = inputSpec.foldLeft(Map.empty[String, JsValue]) {
-            case (accu, (key, ioParam)) if ioParam.optional =>
-                fields.get(key) match {
-                    case None if ioParam.optional =>
-                        accu + (key -> JsNull)
-                    case Some(v) => accu
-                }
-            case (accu, (key, ioClass)) => accu
+        // Get the declarations matching the input fields. There are "declarations"
+        // that are not actually inputs, we need to prune them.
+        val inputDecls = callable.declarations.filter{
+            decl => fieldNames contains decl.unqualifiedName
         }
 
-        // Create a mapping from each key to its WDL value,
-        (fields ++ missingFields).map { case (key,jsValue) =>
-            val ioParam = inputSpec.get(key) match {
-                case Some(x) => x
-                case None => throw new Exception(s"Key ${key} has no IO specification")
+        // Create a mapping from each key to its WDL value
+        inputDecls.map { decl =>
+            val defaultValue: Option[WomValue] = decl.expression.flatMap(Utils.ifConstEval)
+
+            // There are several distinct cases
+            //
+            //   default   input           result   comments
+            //   -------   -----           ------   --------
+            //   d         not-specified   d
+            //   _         null            None     override
+            //   _         Some(v)         Some(v)
+            //
+            val wvl = fields.get(decl.unqualifiedName) match {
+                case None =>
+                    // this key is not specified in the input. Use the default.
+                    defaultValue match {
+                        case None if isOptional(decl.womType) =>
+                            // Default value was not specified
+                            WdlVarLinks(decl.womType, DeclAttrs.empty, DxlValue(JsNull))
+                        case None =>
+                            // Default value was not specified, and null is not a valid
+                            // value, given the WDL type.
+                            throw new Exception(s"Invalid conversion from null to non optional type ${decl.womType}")
+                        case Some(x: WomValue) =>
+                            // convert [x] to JSON
+                            val jsx = jsFromWomValue(decl.womType, x, IODirection.Zero)
+                            importFromDxExec(decl.womType, jsx)
+                    }
+                case Some(JsNull) =>
+                    // override the default, even if it exists
+                    WdlVarLinks(decl.womType, DeclAttrs.empty, DxlValue(JsNull))
+                case Some(jsv) =>
+                    importFromDxExec(decl.womType, jsv)
             }
-            // Attach attributes, if any
-            val attrs = taskOpt match {
-                case None => DeclAttrs.empty
-                case Some(task) => DeclAttrs.get(task, key)
-            }
-            val wvl = importFromDxExec(ioParam, attrs, jsValue)
-            key -> wvl
+            decl.unqualifiedName -> wvl
         }.toMap
     }
 }

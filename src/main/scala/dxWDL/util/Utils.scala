@@ -1,4 +1,4 @@
-package dxWDL
+package dxWDL.util
 
 import cats.data.Validated.{Invalid, Valid}
 import com.dnanexus._
@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.databind.JsonNode
 import com.typesafe.config._
 import common.validation.ErrorOr.ErrorOr
+import dxWDL.Verbose
 import java.io.PrintStream
 import java.nio.charset.{Charset, StandardCharsets}
 import java.nio.file.{Path, Paths, Files}
@@ -20,6 +21,11 @@ import wom.types._
 import wom.values._
 
 object Utils {
+    // An equivalent for the InputParmater/OutputParameter types
+    case class DXIOParam(ioClass: IOClass,
+                         optional: Boolean)
+
+
     // A stand in for the DXWorkflow.Stage inner class (we don't have a constructor for it)
     case class DXWorkflowStage(id: String) {
         def getId() = id

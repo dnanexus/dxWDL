@@ -1,7 +1,7 @@
 // A dictionary of all WDL files that are also
 // platform files. These are files that have been uploaded or
 // downloaded. The WDL representation is (essentially) a local filesystem path.
-package dxWDL
+package dxWDL.util
 
 import com.dnanexus.DXFile
 import java.nio.file.{Files, Path, Paths}

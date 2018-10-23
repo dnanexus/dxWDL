@@ -2,6 +2,7 @@ package dxWDL
 
 import com.dnanexus.{DXProject}
 import com.typesafe.config._
+import dxWDL.util.{DxPath, InstanceTypeDB, Utils}
 import java.nio.file.{Path, Paths}
 import scala.collection.mutable.HashMap
 import spray.json._
@@ -121,6 +122,9 @@ object Main extends App {
                     case ("imports"|"p") =>
                         checkNumberOfArguments(keyword, 1, subargs)
                         (keyword, subargs.head)
+                    case "leaveWorkflowsOpen" =>
+                        checkNumberOfArguments(keyword, 0, subargs)
+                        (keyword, "")
                     case "locked" =>
                         checkNumberOfArguments(keyword, 0, subargs)
                         (keyword, "")
@@ -328,6 +332,7 @@ object Main extends App {
                         options contains "force",
                         imports,
                         inputs,
+                        options contains "leaveWorkflowsOpen",
                         options contains "locked",
                         options contains "projectWideReuse",
                         options contains "reorg",
@@ -396,7 +401,6 @@ object Main extends App {
                              jobOutputPath: Path,
                              rtDebugLvl: Int): Termination = {
         val ns = WdlNamespace.loadUsingPath(wdlDefPath, None, None).get
-        val cef = new CompilerErrorFormatter(wdlDefPath.toString, ns.terminalMap)
 
         // Figure out input/output types
         val (inputSpec, outputSpec) = Utils.loadExecInfo

@@ -25,7 +25,7 @@ price       comparative price
 
   */
 
-package dxWDL
+package dxWDL.util
 
 import com.dnanexus.{DXAPI, DXJSON, DXProject}
 import com.fasterxml.jackson.databind.JsonNode

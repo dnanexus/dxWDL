@@ -155,7 +155,7 @@ object Top {
     def apply(sourcePath: String,
               folder: String,
               dxProject: DXProject,
-              cOpt: CompilerOptions) : IR.Bundle = {
+              cOpt: CompilerOptions) : Option[String] = {
         val bundle: IR.Bundle = applyOnlyIR(sourcePath, cOpt)
 
         // Up to this point, compilation does not require

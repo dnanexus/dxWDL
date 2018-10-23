@@ -9,10 +9,11 @@
 
   genome_ref:/A/B/C.txt     dx://proj-xxxx:file-yyyy::/A/B/C.txt
 */
-package dxWDL
+package dxWDL.util
 
 import com.dnanexus.{DXAPI, DXApplet, DXDataObject, DXFile, DXProject, DXRecord, DXSearch, DXWorkflow}
 import com.fasterxml.jackson.databind.JsonNode
+import dxWDL.util.Utils
 import java.nio.file.Paths
 import scala.collection.JavaConverters._
 import scala.collection.mutable.HashMap

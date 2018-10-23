@@ -127,10 +127,7 @@ case class WdlPrettyPrinter(fqnFlag: Boolean) {
 
 
                                         commandTemplateBuilder: WomEvaluatedCallInputs => ErrorOr[Seq[CommandPart]],
-                                        runtimeAttributes: RuntimeAttributes,
-                                        meta: Map[String, String],
-                                        parameterMeta: Map[String, String],
-                                        outputs: List[Callable.OutputDefinition],
+
                                         inputs: List[_ <: Callable.InputDefinition],
                                         environmentExpressions: Map[String, WomExpression],
 
