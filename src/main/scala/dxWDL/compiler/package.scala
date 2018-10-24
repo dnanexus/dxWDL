@@ -1,6 +1,6 @@
 package dxWDL.compiler
 
-import dxWDL.{Utils, Verbose}
+import dxWDL.util.{Utils, Verbose}
 import wom.types._
 
 // The WDL source variable with a fully qualified name. It can include for example,

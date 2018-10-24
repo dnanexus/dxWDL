@@ -6,7 +6,6 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.databind.JsonNode
 import com.typesafe.config._
 import common.validation.ErrorOr.ErrorOr
-import dxWDL.Verbose
 import java.io.PrintStream
 import java.nio.charset.{Charset, StandardCharsets}
 import java.nio.file.{Path, Paths, Files}
@@ -46,6 +45,7 @@ object Utils {
     val MAX_NUM_FILES_MOVE_LIMIT = 1000
     val OUTPUT_SECTION = "outputs"
     val REORG = "reorg"
+    val UBUNTU_VERSION = "16.04"
 
     // All the words defined in the WDL language, and NOT to be confused
     // with identifiers.
@@ -174,7 +174,7 @@ object Utils {
 
     // Check if the WDL expression is a constant. If so, calculate and return it.
     // Otherwise, return None.
-    private def ifConstEval(expr: WomExpression) : Option[WomValue] = {
+    def ifConstEval(expr: WomExpression) : Option[WomValue] = {
         val result: ErrorOr[WomValue] =
             expr.evaluateValue(Map.empty[String, WomValue], wom.expression.NoIoFunctionSet)
         result match {

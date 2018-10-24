@@ -342,7 +342,7 @@ object Main extends App {
     def compile(args: Seq[String]): Termination = {
         if (args.isEmpty)
             return BadUsageTermination("WDL file to compile is missing")
-        val sourceFile = args.head
+        val sourceFile = Paths.get(args.head)
         val options =
             try {
                 parseCmdlineOptions(args.tail.toList)

@@ -634,7 +634,7 @@ case class Native(dxWDLrtId: String,
 
         // build applets and workflows if they aren't on the platform already
         val execDict = bundle.allCallables.foldLeft(execDictEmpty) {
-            case (accu, execIr) =>
+            case (accu, (_, execIr)) =>
                 execIr match {
                     case irapl: IR.Applet =>
                         val id = irapl.kind match {
@@ -658,7 +658,7 @@ case class Native(dxWDLrtId: String,
 }
 
 object Native {
-    def apply(ns: IR.Namespace,
+    def apply(ns: IR.Bundle,
               dxWDLrtId: String,
               folder: String,
               dxProject: DXProject,
@@ -672,13 +672,13 @@ object Native {
               locked: Boolean,
               verbose: Verbose) : CompilationResults = {
         Utils.trace(verbose.on, "Native pass, generate dx:applets and dx:workflows")
-        traceLevelInc()
+        Utils.traceLevelInc()
 
         val ntv = new Native(dxWDLrtId, folder, dxProject, dxObjDir, instanceTypeDB,
                              extras, runtimeDebugLevel,
                              leaveWorkflowsOpen, force, archive, locked, verbose)
         val retval = ntv.compile(ns)
-        traceLevelDec()
+        Utils.traceLevelDec()
         retval
     }
 }

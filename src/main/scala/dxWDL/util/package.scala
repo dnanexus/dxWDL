@@ -59,6 +59,22 @@ case class DXIOParam(ioClass: IOClass,
                      optional: Boolean)
 
 
+// A stand in for the DXWorkflow.Stage inner class (we don't have a constructor for it)
+case class DXWorkflowStage(id: String) {
+    def getId() = id
+
+    def getInputReference(inputName:String) : JsValue = {
+        JsObject("$dnanexus_link" -> JsObject(
+                     "stage" -> JsString(id),
+                     "inputField" -> JsString(inputName)))
+    }
+    def getOutputReference(outputName:String) : JsValue = {
+        JsObject("$dnanexus_link" -> JsObject(
+                     "stage" -> JsString(id),
+                     "outputField" -> JsString(outputName)))
+    }
+}
+
 // Request for an instance type
 case class InstanceTypeReq(dxInstanceType: Option[String],
                            memoryMB: Option[Int],

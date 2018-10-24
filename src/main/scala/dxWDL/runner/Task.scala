@@ -18,22 +18,28 @@ task Add {
 
 package dxWDL.runner
 
+/*
 import com.dnanexus.{DXAPI, DXJob}
 import com.fasterxml.jackson.databind.JsonNode
 import common.validation.Validation._
-import dxWDL._
-import dxWDL.util.{DXIOParam, InstanceTypeDB, WdlVarLinks}
 import java.nio.file.{Path}
+*/
 import spray.json._
+import dxWDL.util.{DXIOParam, InstanceTypeDB, WdlVarLinks}
 import wom.callable.CallableTaskDefinition
+/*
 import wom.values._
 import wom.types._
+*/
+
 
 case class Task(task: CallableTaskDefinition,
                 instanceTypeDB : InstanceTypeDB,
                 runtimeDebugLevel: Int) {
+/*
     private val verbose = (runtimeDebugLevel >= 1)
     private val maxVerboseLevel = (runtimeDebugLevel == 2)
+
 
     private def evalDeclarations(declarations: Seq[DeclarationInterface],
                                  envInputs : Map[String, WomValue])
@@ -312,12 +318,14 @@ case class Task(task: CallableTaskDefinition,
         Utils.writeFileContent(dockerRunPath, dockerRunScript)
         dockerRunPath.toFile.setExecutable(true)
     }
+ */
 
     // Calculate the input variables for the task, download the input files,
     // and build a shell script to run the command.
     def prolog(inputSpec: Map[String, DXIOParam],
                outputSpec: Map[String, DXIOParam],
                inputWvls: Map[String, WdlVarLinks]) : Map[String, JsValue] = {
+        /*
         Utils.appletLog(verbose, s"Prolog  debugLevel=${runtimeDebugLevel}")
         Utils.appletLog(verbose, s"dxWDL version: ${Utils.getVersion()}")
         if (maxVerboseLevel)
@@ -388,12 +396,14 @@ case class Task(task: CallableTaskDefinition,
         LocalDxFiles.freeze()
         DxFunctions.freeze()
 
-        Map.empty
+         Map.empty          */
+        throw new Exception("TODO")
     }
 
     def epilog(inputSpec: Map[String, DXIOParam],
                outputSpec: Map[String, DXIOParam],
                inputs: Map[String, WdlVarLinks]) : Map[String, JsValue] = {
+        /*
         Utils.appletLog(verbose, s"Epilog  debugLevel=${runtimeDebugLevel}")
         if (maxVerboseLevel)
             printDirStruct()
@@ -420,6 +430,8 @@ case class Task(task: CallableTaskDefinition,
             case (key, wvl) => WdlVarLinks.genFields(wvl, key)
         }.toList.flatten.toMap
         outputFields
+         */
+        throw new Exception("TODO")
     }
 
 
@@ -430,6 +442,7 @@ case class Task(task: CallableTaskDefinition,
     // calculating the instance type in the workflow runner, outside
     // the task.
     def calcInstanceType(taskInputs: Map[String, WdlVarLinks]) : String = {
+        /*
         val envInput: Map[String, WomValue] = taskInputs.map{ case (key, wvl) =>
             key -> WdlVarLinks.localize(wvl, IOMode.Remote)
         }.toMap
@@ -459,9 +472,11 @@ case class Task(task: CallableTaskDefinition,
         Utils.appletLog(verbose, s"""|calcInstanceType memory=${memory} disk=${diskSpace}
                                      |cores=${cores} instancetype=${iType}"""
                             .stripMargin.replaceAll("\n", " "))
-        iType
+         iType */
+        throw new Exception("TODO")
     }
 
+    /*
     private def relaunchBuildInputs(inputWvls: Map[String, WdlVarLinks]) : JsValue = {
         val inputs:Map[String,JsValue] = inputWvls.foldLeft(Map.empty[String, JsValue]) {
             case (accu, (varName, wvl)) =>
@@ -469,7 +484,7 @@ case class Task(task: CallableTaskDefinition,
                 accu ++ fields.toMap
         }
         JsObject(inputs.toMap)
-    }
+    } */
 
 
     /** Check if we are already on the correct instance type. This allows for avoiding unnecessary
@@ -478,6 +493,7 @@ case class Task(task: CallableTaskDefinition,
     def checkInstanceType(inputSpec: Map[String, DXIOParam],
                           outputSpec: Map[String, DXIOParam],
                           inputWvls: Map[String, WdlVarLinks]) : Boolean = {
+        /*
         // evaluate the runtime attributes
         // determine the instance type
         val requiredInstanceType:String = calcInstanceType(inputWvls)
@@ -500,7 +516,8 @@ case class Task(task: CallableTaskDefinition,
 
         val isSufficient = instanceTypeDB.lteqByResources(requiredInstanceType, crntInstanceType)
         Utils.appletLog(verbose, s"isSufficient? ${isSufficient}")
-        isSufficient
+         isSufficient */
+        throw new Exception("TODO")
     }
 
     /** The runtime attributes need to be calculated at runtime. Evaluate them,
@@ -509,6 +526,7 @@ case class Task(task: CallableTaskDefinition,
     def relaunch(inputSpec: Map[String, DXIOParam],
                  outputSpec: Map[String, DXIOParam],
                  inputWvls: Map[String, WdlVarLinks]) : Map[String, JsValue] = {
+        /*
         // evaluate the runtime attributes
         // determine the instance type
         val instanceType:String = calcInstanceType(inputWvls)
@@ -528,5 +546,7 @@ case class Task(task: CallableTaskDefinition,
             WdlVarLinks.genFields(wvl, tso.unqualifiedName)
         }.flatten.toMap
         outputs
+         */
+        throw new Exception("TODO")
     }
 }

@@ -127,9 +127,9 @@ case class GenerateIR(verbose: Verbose) {
                   instanceType,
                   docker,
                   kind,
-                  task)
+                  task,
+                  "TODO: extract source for task")
     }
-
 }
 
 

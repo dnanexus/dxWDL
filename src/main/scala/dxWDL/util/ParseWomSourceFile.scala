@@ -8,6 +8,8 @@ import java.nio.file.{Files, Paths}
 import languages.cwl.CwlV1_0LanguageFactory
 import languages.wdl.draft2.WdlDraft2LanguageFactory
 import languages.wdl.draft3.WdlDraft3LanguageFactory
+import scala.collection.JavaConverters._
+import scala.util.Try
 import wom.executable.WomBundle
 
 // Read, parse, and typecheck a WDL/CWL source file. This includes loading all imported files.

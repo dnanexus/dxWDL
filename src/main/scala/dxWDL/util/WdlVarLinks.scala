@@ -26,9 +26,7 @@ import com.dnanexus.{DXFile, DXExecution}
 import java.nio.file.{Files, Paths}
 import net.jcazevedo.moultingyaml._
 import spray.json._
-import Utils._
-import wdl.draft2.model.{WdlCallable}
-import wdl.draft2.model.types.WdlFlavoredWomType
+import wom.callable.Callable.{InputDefinitionWithDefault, FixedInputDefinition}
 import wom.types._
 import wom.values._
 
@@ -66,7 +64,7 @@ object WdlVarLinks {
                 "execRef" -> varEncName
         }
         YamlObject(
-            YamlString("type") -> YamlString(wvl.womType.toDisplayString),
+            YamlString("type") -> YamlString(WomTypeSerialization.toString(wvl.womType)),
             YamlString(key) -> YamlString(value))
     }
 
@@ -102,7 +100,7 @@ object WdlVarLinks {
             case JsBoolean(_) | JsNumber(_) | JsString(_) | JsNull =>
                 Vector.empty[DXFile]
             case JsObject(_) if isDxFile(jsValue) =>
-                Vector(dxFileFromJsValue(jsValue))
+                Vector(Utils.dxFileFromJsValue(jsValue))
             case JsObject(fields) =>
                 fields.map{ case(_,v) => findDxFiles(v) }.toVector.flatten
             case JsArray(elems) =>
@@ -185,12 +183,12 @@ object WdlVarLinks {
                     throw new Exception(
                         s"JSON object ${JsObject(fields)} does not contain fields {type, value}")
                 val womType = fields("type") match {
-                    case JsString(s) => WdlFlavoredWomType.fromDisplayString(s)
+                    case JsString(s) => WomTypeSerialization.fromString(s)
                     case other  => throw new Exception(s"type field is not a string (${other})")
                 }
                 key -> (womType, fields("value"))
             case (key, other) =>
-                appletLog(true, s"Unmarshalling error for  JsObject=${JsObject(m)}")
+                Utils.appletLog(true, s"Unmarshalling error for  JsObject=${JsObject(m)}")
                 throw new Exception(s"key=${key}, expecting ${other} to be a JsObject")
         }.toMap
     }
@@ -209,7 +207,7 @@ object WdlVarLinks {
             case (IODirection.Upload, JsObject(_)) =>
                 // We already downloaded this file. We need to get from the dx:link
                 // to a WomValue.
-                val dxFile = dxFileFromJsValue(jsv)
+                val dxFile = Utils.dxFileFromJsValue(jsv)
                 LocalDxFiles.get(dxFile) match {
                     case None =>
                         throw new AppInternalException(
@@ -220,11 +218,11 @@ object WdlVarLinks {
             case (IODirection.Download, _) =>
                 LocalDxFiles.download(jsv, ioMode)
 
-            case (IODirection.Zero, JsString(path)) if path.startsWith(DX_URL_PREFIX) =>
+            case (IODirection.Zero, JsString(path)) if path.startsWith(Utils.DX_URL_PREFIX) =>
                 val dxFile = DxPath.lookupDxURLFile(path)
                 WomSingleFile(DxPath.dxFileToURL(dxFile))
             case (IODirection.Zero, JsObject(_)) =>
-                val dxFile = dxFileFromJsValue(jsv)
+                val dxFile = Utils.dxFileFromJsValue(jsv)
                 val dxp = DxPath.dxFileToURL(dxFile)
                 WomSingleFile(dxp)
 
@@ -290,7 +288,7 @@ object WdlVarLinks {
 
             case _ =>
                 throw new AppInternalException(
-                    s"Unsupported combination ${womType.toDisplayString} ${jsValue.prettyPrint}"
+                    s"Unsupported combination ${womType} ${jsValue.prettyPrint}"
                 )
         }
     }
@@ -365,9 +363,9 @@ object WdlVarLinks {
         if (isDoubleOptional(womType) ||
                 isDoubleOptional(womValue.womType)) {
             System.err.println(s"""|jsFromWomValue
-                                   |    type=${womType.toDisplayString}
+                                   |    type=${womType}
                                    |    val=${womValue.toWomString}
-                                   |    val.type=${womValue.womType.toDisplayString}
+                                   |    val.type=${womValue.womType}
                                    |    ioDir=${ioDir}
                                    |""".stripMargin)
             throw new Exception("a double optional type")
@@ -383,13 +381,13 @@ object WdlVarLinks {
                 case IODirection.Download =>
                     LocalDxFiles.get(Paths.get(path)) match {
                         case None => throw new Exception(s"File ${path} has not been downloaded yet")
-                        case Some(dxFile) => dxFileToJsValue(dxFile)
+                        case Some(dxFile) => Utils.dxFileToJsValue(dxFile)
                     }
                 case IODirection.Zero =>
-                    if (!path.startsWith(DX_URL_PREFIX))
+                    if (!path.startsWith(Utils.DX_URL_PREFIX))
                         throw new Exception(s"${path} is not a dx:file, cannot transfer it in this context.")
                     val dxFile = DxPath.lookupDxURLFile(path)
-                    dxFileToJsValue(dxFile)
+                    Utils.dxFileToJsValue(dxFile)
             }
         }
 
@@ -460,7 +458,7 @@ object WdlVarLinks {
             // are not statically typed, we need to carry the types at runtime.
             case (WomObjectType, WomObject(m: Map[String, WomValue], _)) =>
                 val jsm:Map[String, JsValue] = m.map{ case (key, w:WomValue) =>
-                    key -> JsObject("type" -> JsString(w.womType.toDisplayString),
+                    key -> JsObject("type" -> JsString(WomTypeSerialization.toString(w.womType)),
                                     "value" -> jsFromWomValue(w.womType, w, ioDir))
                 }.toMap
                 JsObject(jsm)
@@ -485,7 +483,7 @@ object WdlVarLinks {
                     if (womValue == null)
                         "null"
                     else
-                        s"(${womValue.toWomString}, ${womValue.womType.toDisplayString})"
+                        s"(${womValue.toWomString}, ${womValue.womType})"
                 throw new Exception(s"""|Unsupported combination:
                                         |    womType:  ${womTypeStr}
                                         |    womValue: ${womValueStr}""".stripMargin)
@@ -513,7 +511,8 @@ object WdlVarLinks {
                 // Embed the value into a JSON object
                 Map("value" -> jsVal)
         }
-        val mWithType = m + ("womType" -> JsString(womType.toDisplayString))
+        val typeStr = WomTypeSerialization.toString(womType)
+        val mWithType = m + ("womType" -> JsString(typeStr))
         JsObject(mWithType)
     }
 
@@ -523,7 +522,7 @@ object WdlVarLinks {
                 // An object, the type is embedded as a 'womType' field
                 fields.get("womType") match {
                     case Some(JsString(s)) =>
-                        val t = WdlFlavoredWomType.fromDisplayString(s)
+                        val t = WomTypeSerialization.fromString(s)
                         if (fields contains "value") {
                             // the value is encapsulated in the "value" field
                             (t, fields("value"))
@@ -642,7 +641,7 @@ object WdlVarLinks {
             (bindEncName, jsv)
         }
         def mkComplex(womType: WomType) : Map[String, JsValue] = {
-            val bindEncName_F = bindEncName + FLAT_FILES_SUFFIX
+            val bindEncName_F = bindEncName + Utils.FLAT_FILES_SUFFIX
             wvl.dxlink match {
                 case DxlValue(jsn) =>
                     // files that are embedded in the structure
@@ -653,7 +652,7 @@ object WdlVarLinks {
                     Map(bindEncName -> hash,
                         bindEncName_F -> JsArray(jsFiles))
                 case DxlStage(dxStage, ioRef, varEncName) =>
-                    val varEncName_F = varEncName + FLAT_FILES_SUFFIX
+                    val varEncName_F = varEncName + Utils.FLAT_FILES_SUFFIX
                     ioRef match {
                         case IORef.Input => Map(
                             bindEncName -> dxStage.getInputReference(varEncName),
@@ -665,7 +664,7 @@ object WdlVarLinks {
                         )
                     }
                 case DxlWorkflowInput(varEncName) =>
-                    val varEncName_F = varEncName + FLAT_FILES_SUFFIX
+                    val varEncName_F = varEncName + Utils.FLAT_FILES_SUFFIX
                     Map( bindEncName ->
                             JsObject("$dnanexus_link" -> JsObject(
                                          "workflowInputField" -> JsString(varEncName))),
@@ -674,14 +673,14 @@ object WdlVarLinks {
                                          "workflowInputField" -> JsString(varEncName_F)))
                     )
                 case DxlExec(dxJob, varEncName) =>
-                    val varEncName_F = varEncName + FLAT_FILES_SUFFIX
+                    val varEncName_F = varEncName + Utils.FLAT_FILES_SUFFIX
                     Map(bindEncName -> Utils.makeEBOR(dxJob, varEncName),
                         bindEncName_F -> Utils.makeEBOR(dxJob, varEncName_F))
             }
         }
 
         val womType = Utils.stripOptional(wvl.womType)
-        if (isNativeDxType(womType)) {
+        if (Utils.isNativeDxType(womType)) {
             // Types that are supported natively in DX
             List(mkSimple())
         } else {
@@ -700,19 +699,16 @@ object WdlVarLinks {
         val jsonAst : JsValue = inputLines.parseJson
         val fields : Map[String, JsValue] = jsonAst
             .asJsObject.fields
-            .filter{ case (fieldName,_) => !fieldName.endsWith(FLAT_FILES_SUFFIX) }
-        val fieldNames = fields.keys.toSet
+            .filter{ case (fieldName,_) => !fieldName.endsWith(Utils.FLAT_FILES_SUFFIX) }
 
         // Get the declarations matching the input fields.
-        val inputDecls = callable.inputs
-
         // Create a mapping from each key to its WDL value
-        inputDecls.map { inDef =>
-            val defaultValue: Option[WomValue] = inDef match {
+        callable.inputs.map { inpDfn =>
+            val defaultValue: Option[WomValue] = inpDfn match {
                 case d: InputDefinitionWithDefault =>
-                    d.default.flatMap(Utils.ifConstEval)
+                    Utils.ifConstEval(d.default)
                 case d: FixedInputDefinition =>
-                    d.default.flatMap(Utils.ifConstEval)
+                    Utils.ifConstEval(d.default)
                 case _ => None
             }
 
@@ -724,29 +720,29 @@ object WdlVarLinks {
             //   _         null            None     override
             //   _         Some(v)         Some(v)
             //
-            val wvl = fields.get(decl.unqualifiedName) match {
+            val wvl = fields.get(inpDfn.name) match {
                 case None =>
                     // this key is not specified in the input. Use the default.
                     defaultValue match {
-                        case None if isOptional(decl.womType) =>
+                        case None if Utils.isOptional(inpDfn.womType) =>
                             // Default value was not specified
-                            WdlVarLinks(decl.womType, DeclAttrs.empty, DxlValue(JsNull))
+                            WdlVarLinks(inpDfn.womType, DeclAttrs.empty, DxlValue(JsNull))
                         case None =>
                             // Default value was not specified, and null is not a valid
                             // value, given the WDL type.
-                            throw new Exception(s"Invalid conversion from null to non optional type ${decl.womType}")
+                            throw new Exception(s"Invalid conversion from null to non optional type ${inpDfn.womType}")
                         case Some(x: WomValue) =>
                             // convert [x] to JSON
-                            val jsx = jsFromWomValue(decl.womType, x, IODirection.Zero)
-                            importFromDxExec(decl.womType, jsx)
+                            val jsx = jsFromWomValue(inpDfn.womType, x, IODirection.Zero)
+                            importFromDxExec(inpDfn.womType, jsx)
                     }
                 case Some(JsNull) =>
                     // override the default, even if it exists
-                    WdlVarLinks(decl.womType, DeclAttrs.empty, DxlValue(JsNull))
+                    WdlVarLinks(inpDfn.womType, DeclAttrs.empty, DxlValue(JsNull))
                 case Some(jsv) =>
-                    importFromDxExec(decl.womType, jsv)
+                    importFromDxExec(inpDfn.womType, jsv)
             }
-            decl.unqualifiedName -> wvl
+            inpDfn.name -> wvl
         }.toMap
     }
 }

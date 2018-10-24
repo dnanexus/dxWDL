@@ -4,18 +4,10 @@
 package dxWDL.compiler
 
 import com.dnanexus.{DXDataObject, DXProject, DXRecord, DXSearch}
-import common.Checked
-import common.validation.Validation._
 import dxWDL.util._
 import dxWDL.util.Utils.DX_WDL_ASSET
-import cromwell.core.path.{DefaultPathBuilder, Path}
-import cromwell.languages.util.ImportResolver._
-import java.nio.file.{Files, Paths}
-import languages.cwl.CwlV1_0LanguageFactory
-import languages.wdl.draft2.WdlDraft2LanguageFactory
-import languages.wdl.draft3.WdlDraft3LanguageFactory
+import java.nio.file.{Path}
 import scala.collection.JavaConverters._
-import scala.util.Try
 import wom.executable.WomBundle
 
 object Top {
@@ -105,9 +97,9 @@ object Top {
     }
 
     // Compile IR only
-    def applyOnlyIR(sourcePath: String,
+    def applyOnlyIR(source: Path,
                     cOpt: CompilerOptions) : IR.Bundle = {
-        val bundle = ParseWomSourceFile.apply(sourcePath)
+        val bundle: WomBundle = ParseWomSourceFile.apply(source)
 
         // Compile the WDL workflow into an Intermediate
         // Representation (IR)
@@ -115,11 +107,11 @@ object Top {
     }
 
     // Compile up to native dx applets and workflows
-    def apply(sourcePath: String,
+    def apply(source: Path,
               folder: String,
               dxProject: DXProject,
               cOpt: CompilerOptions) : Option[String] = {
-        val bundle: IR.Bundle = applyOnlyIR(sourcePath, cOpt)
+        val bundle: IR.Bundle = applyOnlyIR(source, cOpt)
 
         // Up to this point, compilation does not require
         // the dx:project. This allows unit testing without

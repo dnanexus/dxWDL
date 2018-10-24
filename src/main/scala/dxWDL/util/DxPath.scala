@@ -13,7 +13,6 @@ package dxWDL.util
 
 import com.dnanexus.{DXAPI, DXApplet, DXDataObject, DXFile, DXProject, DXRecord, DXSearch, DXWorkflow}
 import com.fasterxml.jackson.databind.JsonNode
-import dxWDL.util.Utils
 import java.nio.file.Paths
 import scala.collection.JavaConverters._
 import scala.collection.mutable.HashMap
