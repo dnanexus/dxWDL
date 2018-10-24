@@ -169,3 +169,7 @@ case class CompilationResults(entrypoint: Option[DXWorkflow],
 object RunnerWfFragmentMode extends Enumeration {
     val Launch, Collect = Value
 }
+
+object Language extends Enumeration {
+    val WDLvDraft2, WDLv1_0, CWLv1_0 = Value
+}

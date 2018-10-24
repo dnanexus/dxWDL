@@ -391,7 +391,7 @@ object Main extends App {
                              jobInputPath: Path,
                              jobOutputPath: Path,
                              rtDebugLvl: Int): Termination = {
-        val bundle = ParseWomSourceFile.apply(wdlDefPath)
+        val (_, bundle) = ParseWomSourceFile.apply(wdlDefPath)
 
         // Extract the only task from a namespace
         val task = bundle.primaryCallable match  {

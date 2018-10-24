@@ -99,7 +99,7 @@ object Top {
     // Compile IR only
     def applyOnlyIR(source: Path,
                     cOpt: CompilerOptions) : IR.Bundle = {
-        val bundle: WomBundle = ParseWomSourceFile.apply(source)
+        val (_, bundle: WomBundle) = ParseWomSourceFile.apply(source)
 
         // Compile the WDL workflow into an Intermediate
         // Representation (IR)
