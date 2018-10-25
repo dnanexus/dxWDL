@@ -6,8 +6,9 @@ import cats.data.Validated.{Invalid, Valid}
 import common.validation.ErrorOr.ErrorOr
 import dxWDL.util._
 import IR.{CVar}
-import wom.values._
+import wom.core.WorkflowSource
 import wom.callable.{CallableTaskDefinition, ExecutableTaskDefinition}
+import wom.values._
 
 case class GenerateIR(verbose: Verbose) {
     //private val verbose2:Boolean = verbose.keywords contains "GenerateIR"
@@ -67,7 +68,8 @@ case class GenerateIR(verbose: Verbose) {
     //
     // Note: check if a task is a real WDL task, or if it is a wrapper for a
     // native applet.
-    private def compileTask(task : CallableTaskDefinition) : IR.Applet = {
+    private def compileTask(task : CallableTaskDefinition,
+                            taskSourceCode: String) : IR.Applet = {
         Utils.trace(verbose.on, s"Compiling task ${task.name}")
 
         val inputs = task.inputs.map{
@@ -128,8 +130,35 @@ case class GenerateIR(verbose: Verbose) {
                   docker,
                   kind,
                   task,
-                  "TODO: extract source for task")
+                  taskSourceCode)
     }
+
+
+    // Entry point for compiling tasks and workflows into IR
+    def compileCallable(callable: wom.callable.Callable,
+                        taskDir: Map[String, String]) = {
+        def compileTask2(task : CallableTaskDefinition) = {
+            val taskSourceCode = taskDir.get(task.name) match {
+                case None => throw new Exception(s"Did not find task ${task.name}")
+                case Some(x) => x
+            }
+            compileTask(task, taskSourceCode)
+        }
+        callable match {
+            case exec : ExecutableTaskDefinition =>
+                val task = exec.callableTaskDefinition
+                compileTask2(task)
+            case task : CallableTaskDefinition =>
+                compileTask2(task)
+            case x =>
+                throw new Exception(s"""|Only the ExecutableTaskDefinition class is currently supported.
+                                        |Can't compile: ${callable.name}, class=${callable.getClass}
+                                        |${x}
+                                        |""")
+        }
+    }
+
+
 }
 
 
@@ -137,28 +166,33 @@ object GenerateIR {
 
     // Entrypoint
     def apply(womBundle : wom.executable.WomBundle,
+              allSources: Map[String, WorkflowSource],
               verbose: Verbose) : IR.Bundle = {
         Utils.trace(verbose.on, s"IR pass")
         Utils.traceLevelInc()
 
-        assert(womBundle.primaryCallable == None)
-        assert(womBundle.typeAliases.isEmpty)
         val gir = GenerateIR(verbose)
+
+        // Scan the source files and extract the tasks. It is hard
+        // to generate WDL from the abstract syntax tree (AST). One
+        // issue is that tabs and special characters have to preserved.
+        // There is no built-in method for this.
+        val taskDir = allSources.foldLeft(Map.empty[String, String]) {
+            case (accu, (filename, srcCode)) =>
+                val d = ParseWomSourceFile.scanForTasks(srcCode)
+                accu ++ d
+        }
+
+        val primary = womBundle.primaryCallable.map{ callable =>
+            gir.compileCallable(callable, taskDir)
+        }
         val allCallables = womBundle.allCallables.map{
-            case (name: String, callable: wom.callable.Callable) =>
-                val exec = callable match {
-                    case ExecutableTaskDefinition(task, graph) =>
-                        gir.compileTask(task)
-                    case x =>
-                        throw new Exception(s"""|Only the ExecutableTaskDefinition class is currently supported.
-                                                |Can't compile: ${name}
-                                                |${x}
-                                                |""")
-                }
+            case (name, callable) =>
+                val exec = gir.compileCallable(callable, taskDir)
                 name -> exec
         }.toMap
 
         Utils.traceLevelDec()
-        IR.Bundle(None, allCallables)
+        IR.Bundle(primary, allCallables)
     }
 }

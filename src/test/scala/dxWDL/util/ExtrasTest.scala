@@ -1,4 +1,4 @@
-package dxWDL
+package dxWDL.util
 
 import com.dnanexus.AccessLevel
 import org.scalatest.{FlatSpec, Matchers}

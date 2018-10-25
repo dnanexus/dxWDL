@@ -1,34 +1,27 @@
 package dxWDL.compiler
 
-import dxWDL.{Main, Utils, WdlPrettyPrinter}
+import dxWDL.Main
 import java.nio.file.{Path, Paths}
 import org.scalatest.{FlatSpec, Matchers}
-import org.scalatest.Inside._
-import wdl.draft2.model._
 
 
 // These tests involve compilation -without- access to the platform.
 //
 class CompilerUnitTest extends FlatSpec with Matchers {
     lazy val currentWorkDir:Path = Paths.get(System.getProperty("user.dir"))
+
     private def pathFromBasename(basename: String) : Path = {
         currentWorkDir.resolve(s"src/test/resources/${basename}")
     }
 
-    private def compareIgnoreWhitespace(a: String, b:String): Boolean = {
-        val retval = (a.replaceAll("\\s+", "") == b.replaceAll("\\s+", ""))
-        if (!retval) {
-            System.err.println("--- String comparison failed ---")
-            System.err.println(s"${a}")
-            System.err.println("---")
-            System.err.println(s"${b}")
-            System.err.println("---")
-        }
-        retval
+    it should "compile a single WDL task" in {
+        val path = pathFromBasename("tasks/add.wdl")
+        Main.compile(
+            List(path.toString, "--compileMode", "ir", "-quiet", "-fatalValidationWarnings")
+        ) shouldBe a [Main.SuccessfulTerminationIR]
     }
 
-
-    it should "disallow call with missing compulsory arguments" in {
+/*    it should "disallow call with missing compulsory arguments" in {
         val path = pathFromBasename("unbound_arg.wdl")
         val retval = Main.compile(
             List(path.toString, "--compileMode", "ir", "-quiet", "-fatalValidationWarnings")
@@ -46,52 +39,12 @@ class CompilerUnitTest extends FlatSpec with Matchers {
         ) shouldBe a [Main.SuccessfulTerminationIR]
     }
 
-    // This should be supported natively by WDL!
-    it should "Report a useful error for a missing reference" in {
-        val path = pathFromBasename("ngs.wdl")
-        val retval = Main.compile(
-            List(path.toString, "--compileMode", "ir", "--locked", "--quiet")
-        )
-        inside(retval) {
-            case Main.UnsuccessfulTermination(errMsg) =>
-                errMsg should include ("Could not resolve")
-        }
-    }
-
     it should "Handle array access" in {
         val path = pathFromBasename("file_array.wdl")
         val retval = Main.compile(
             List(path.toString, "--compileMode", "ir", "--locked")
         )
-        inside(retval) {
-            case Main.SuccessfulTerminationIR(_) => true
-        }
-    }
-
-    it should "Pretty print declaration" in {
-        val wdl = "Array[Int] integers"
-        val ns = WdlNamespace.loadUsingSource(wdl, None, None).get
-        val decl = ns.declarations.head
-        val strWdlCode = WdlPrettyPrinter(true, None).apply(decl, 0).mkString("\n")
-        compareIgnoreWhitespace(strWdlCode, wdl) should be(true)
-    }
-
-    it should "Pretty print task" in {
-        val wdl = """|task inc {
-                     |  File input_file
-                     |
-                     |  command <<<
-                     |     wc -l ${input_file} | awk '{print $1}' > line.count
-                     |  >>>
-                     |
-                     |  output {
-                     |    Int line_count = read_int("line.count")
-                     |  }
-                     |}""".stripMargin.trim
-
-        val ns = WdlNamespace.loadUsingSource(wdl, None, None).get
-        val task = ns.findTask("inc").get
-        WdlPrettyPrinter(false, None).commandBracketTaskSymbol(task) should be ("<<<",">>>")
+        retval shouldBe a [Main.SuccessfulTerminationIR]
     }
 
     it should "Accept weird  call names" in {
@@ -150,6 +103,16 @@ class CompilerUnitTest extends FlatSpec with Matchers {
         ) shouldBe a [Main.SuccessfulTerminationIR]
     }
 
+    it should "allow last to be used in a variable name" in {
+        val path = pathFromBasename("last.wdl")
+        Main.compile(
+            List(path.toString, "--compileMode", "ir", "--locked", "--quiet")
+        ) shouldBe a [Main.SuccessfulTerminationIR]
+    }
+ */
+
+    // Specific dxWDL extensions. These will be supported later.
+    /*
     it should "respect variables passed through the extras mechanisms" in {
         val extraOptions =
             """|{
@@ -190,13 +153,6 @@ class CompilerUnitTest extends FlatSpec with Matchers {
         mulApl2.docker should equal(dxWDL.compiler.IR.DockerImageNone)
     }
 
-    it should "allow last to be used in a variable name" in {
-        val path = pathFromBasename("last.wdl")
-        Main.compile(
-            List(path.toString, "--compileMode", "ir", "--locked", "--quiet")
-        ) shouldBe a [Main.SuccessfulTerminationIR]
-    }
-
     it should "insist on an empty runtime block for native calls" in {
         val path = pathFromBasename("native_call.wdl")
         val retval = Main.compile(
@@ -207,5 +163,5 @@ class CompilerUnitTest extends FlatSpec with Matchers {
                 errMsg should include ("empty runtime section")
                 errMsg should include ("native task")
         }
-    }
+    } */
 }

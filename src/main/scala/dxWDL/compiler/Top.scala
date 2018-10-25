@@ -99,11 +99,11 @@ object Top {
     // Compile IR only
     def applyOnlyIR(source: Path,
                     cOpt: CompilerOptions) : IR.Bundle = {
-        val (_, bundle: WomBundle) = ParseWomSourceFile.apply(source)
+        val (_, bundle: WomBundle, allSources) = ParseWomSourceFile.apply(source)
 
         // Compile the WDL workflow into an Intermediate
         // Representation (IR)
-        GenerateIR.apply(bundle, cOpt.verbose)
+        GenerateIR.apply(bundle, allSources, cOpt.verbose)
     }
 
     // Compile up to native dx applets and workflows

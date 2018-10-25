@@ -1,4 +1,4 @@
-package dxWDL
+package dxWDL.util
 
 import cats.data.Validated.{Invalid, Valid}
 import common.validation.ErrorOr.ErrorOr
@@ -77,7 +77,6 @@ class TypeEvalTest extends FlatSpec with Matchers {
             case None => throw new AppInternalException(s"Call Add not found in WDL file")
             case Some(call) => call
         }
-        System.out.println(s"call=${call} type=${call.getClass}")
         call.getClass.toString should equal("class wom.callable.CallableTaskDefinition")
 
         call.inputs.foreach { case inputDef =>

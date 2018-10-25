@@ -1,4 +1,4 @@
-package dxWDL
+package dxWDL.util
 
 import org.scalatest.{FlatSpec, Matchers}
 import wom.values._
