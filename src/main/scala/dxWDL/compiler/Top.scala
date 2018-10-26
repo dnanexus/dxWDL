@@ -75,11 +75,21 @@ object Top {
                               folder: String,
                               dxProject: DXProject,
                               cOpt: CompilerOptions) : CompilationResults = {
-        // get billTo and region from the project
-        val (billTo, region) = Utils.projectDescribeExtraInfo(dxProject)
-        val dxWDLrtId = getAssetId(region, cOpt.verbose)
-        cloneRtLibraryToProject(region, dxWDLrtId, dxProject, cOpt.verbose)
-
+        val dxWDLrtId: Option[String] = cOpt.compileMode match {
+            case CompilerFlag.IR =>
+                throw new Exception("Invalid value IR for compilation mode")
+            case CompilerFlag.NativeWithoutRuntimeAsset =>
+                // Testing mode, we don't need the runtime library to check native
+                // compilation.
+                None
+            case CompilerFlag.All =>
+                // get billTo and region from the project, then find the runtime asset
+                // in the current region.
+                val (billTo, region) = Utils.projectDescribeExtraInfo(dxProject)
+                val lrtId = getAssetId(region, cOpt.verbose)
+                cloneRtLibraryToProject(region, lrtId, dxProject, cOpt.verbose)
+                Some(lrtId)
+        }
         // get list of available instance types
         val instanceTypeDB = InstanceTypeDB.query(dxProject, cOpt.verbose)
 
@@ -120,7 +130,7 @@ object Top {
         // (1) the instance price list and database
         // (2) the output location of applets and workflows
         val cResults = compileNative(bundle, folder, dxProject, cOpt)
-        val execIds = cResults.entrypoint match {
+        val execIds = cResults.primaryCallable match {
             case None =>
                 cResults.execDict.map{ case (_, dxExec) => dxExec.getId }.mkString(",")
             case Some(wf) =>

@@ -294,8 +294,9 @@ object Main extends App {
                               verboseKeys)
 
         val compileMode: CompilerFlag.Value = options.get("compileMode") match {
-            case None => CompilerFlag.Default
-            case Some(List(x)) if (x.toLowerCase == "ir") => CompilerFlag.IR
+            case None => CompilerFlag.All
+            case Some(List(x)) if (x.toLowerCase == "IR".toLowerCase) => CompilerFlag.IR
+            case Some(List(x)) if (x.toLowerCase == "NativeWithoutRuntimeAsset".toLowerCase) => CompilerFlag.NativeWithoutRuntimeAsset
             case Some(other) => throw new Exception(s"unrecognized compiler flag ${other}")
         }
         val defaults: Option[Path] = options.get("defaults") match {
@@ -360,7 +361,7 @@ object Main extends App {
                     val ir: compiler.IR.Bundle = compiler.Top.applyOnlyIR(sourceFile, cOpt)
                     return SuccessfulTerminationIR(ir)
 
-                case CompilerFlag.Default =>
+                case CompilerFlag.All | CompilerFlag.NativeWithoutRuntimeAsset =>
                     val (dxProject, folder) = pathOptions(options, cOpt.verbose)
                     val retval = compiler.Top.apply(sourceFile, folder, dxProject, cOpt)
                     val desc = retval.getOrElse("")

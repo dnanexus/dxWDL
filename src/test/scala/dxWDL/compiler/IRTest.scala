@@ -7,7 +7,7 @@ import org.scalatest.{FlatSpec, Matchers}
 
 // These tests involve compilation -without- access to the platform.
 //
-class CompilerUnitTest extends FlatSpec with Matchers {
+class IRTest extends FlatSpec with Matchers {
     lazy val currentWorkDir:Path = Paths.get(System.getProperty("user.dir"))
 
     private def pathFromBasename(basename: String) : Path = {

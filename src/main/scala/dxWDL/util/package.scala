@@ -51,7 +51,7 @@ object IODirection extends Enumeration {
 }
 
 object CompilerFlag extends Enumeration {
-    val Default, IR = Value
+    val All, IR, NativeWithoutRuntimeAsset = Value
 }
 
 // An equivalent for the InputParmater/OutputParameter types
@@ -160,7 +160,7 @@ object ExecLinkInfo {
 }
 
 // The end result of the compiler
-case class CompilationResults(entrypoint: Option[DXWorkflow],
+case class CompilationResults(primaryCallable: Option[DxExec],
                               execDict: Map[String, DxExec])
 
 // Different ways of using the mini-workflow runner.

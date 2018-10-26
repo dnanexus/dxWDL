@@ -12,7 +12,7 @@ import scala.collection.JavaConverters._
 import spray.json._
 import wom.types._
 
-case class Native(dxWDLrtId: String,
+case class Native(dxWDLrtId: Option[String],
                   folder: String,
                   dxProject: DXProject,
                   dxObjDir: DxObjectDirectory,
@@ -29,26 +29,27 @@ case class Native(dxWDLrtId: String,
 
     val verbose2:Boolean = verbose.keywords contains "native"
     val rtDebugLvl = runtimeDebugLevel.getOrElse(Utils.DEFAULT_RUNTIME_DEBUG_LEVEL)
-    lazy val runtimeLibrary:JsValue = getRuntimeLibrary()
-
-    // Open the archive
-    // Extract the archive from the details field
-    private def getRuntimeLibrary(): JsValue = {
-        val record = DXRecord.getInstance(dxWDLrtId)
-        val descOptions = DXDataObject.DescribeOptions.get().inProject(dxProject).withDetails
-        val details = Utils.jsValueOfJsonNode(
-            record.describe(descOptions).getDetails(classOf[JsonNode]))
-        val dxLink = details.asJsObject.fields.get("archiveFileId") match {
-            case Some(x) => x
-            case None => throw new Exception(s"record does not have an archive field ${details}")
+    lazy val runtimeLibrary: Option[JsValue] =
+        dxWDLrtId match {
+            case None => None
+            case Some(id) =>
+                // Open the archive
+                // Extract the archive from the details field
+                val record = DXRecord.getInstance(id)
+                val descOptions = DXDataObject.DescribeOptions.get().inProject(dxProject).withDetails
+                val details = Utils.jsValueOfJsonNode(
+                    record.describe(descOptions).getDetails(classOf[JsonNode]))
+                val dxLink = details.asJsObject.fields.get("archiveFileId") match {
+                    case Some(x) => x
+                    case None => throw new Exception(s"record does not have an archive field ${details}")
+                }
+                val dxFile = Utils.dxFileFromJsValue(dxLink)
+                val name = dxFile.describe.getName()
+                Some(JsObject(
+                    "name" -> JsString(name),
+                    "id" -> JsObject("$dnanexus_link" -> JsString(dxFile.getId()))
+                ))
         }
-        val dxFile = Utils.dxFileFromJsValue(dxLink)
-        val name = dxFile.describe.getName()
-        JsObject(
-            "name" -> JsString(name),
-            "id" -> JsObject("$dnanexus_link" -> JsString(dxFile.getId()))
-        )
-    }
 
     // For primitive types, and arrays of such types, we can map directly
     // to the equivalent dx types. For example,
@@ -455,12 +456,19 @@ case class Native(dxWDLrtId: String,
                 Some(JsObject("name" -> JsString(pkgName),
                               "id" -> Utils.jsValueOfJsonNode(pkgFile.getLinkAsJson)))
         }
-        val bundledDepends = dockerAssets match {
-            case None => Vector(runtimeLibrary)
-            case Some(img) => Vector(runtimeLibrary, img)
+        runtimeLibrary match {
+            case None =>
+                // The runtime library is not provided. This is only for testing,
+                // because the applet will not be able to run.
+                JsObject(runSpecWithExtras)
+            case Some(rtLib) =>
+                val bundledDepends = dockerAssets match {
+                    case None => Vector(rtLib)
+                    case Some(img) => Vector(rtLib, img)
+                }
+                JsObject(runSpecWithExtras +
+                             ("bundledDepends" -> JsArray(bundledDepends)))
         }
-        JsObject(runSpecWithExtras +
-                     ("bundledDepends" -> JsArray(bundledDepends)))
     }
 
     def  calcAccess(applet: IR.Applet) : JsValue = {
@@ -591,30 +599,39 @@ case class Native(dxWDLrtId: String,
         val execDict = bundle.allCallables.foldLeft(execDictEmpty) {
             case (accu, (_, execIr)) =>
                 execIr match {
-                    case irapl: IR.Applet =>
-                        val id = irapl.kind match {
+                    case apl: IR.Applet =>
+                        val id = apl.kind match {
                             case IR.AppletKindNative(id) => id
                             case _ =>
-                                val dxApplet = buildAppletIfNeeded(irapl, accu)
+                                val dxApplet = buildAppletIfNeeded(apl, accu)
                                 dxApplet.getId
                         }
-                        accu + (irapl.name -> (irapl, DxExec(id)))
+                        accu + (apl.name -> (apl, DxExec(id)))
                 }
         }
 
         // build the toplevel workflow, if it is defined
-        /*val entrypoint = bundle.entrypoint.map{ wf =>
-            buildWorkflowIfNeeded(wf, execDict)
-        }*/
+        val primaryCallable = bundle.primaryCallable.map{ pc =>
+            pc match {
+                case apl : IR.Applet =>
+                    val id = apl.kind match {
+                        case IR.AppletKindNative(id) => id
+                        case _ =>
+                            val dxApplet = buildAppletIfNeeded(apl, execDict)
+                            dxApplet.getId
+                    }
+                    DxExec(id)
+            }
+        }
 
-        CompilationResults(None,
+        CompilationResults(primaryCallable,
                            execDict.map{ case (name, (_,dxExec)) => name -> dxExec }.toMap)
     }
 }
 
 object Native {
     def apply(ns: IR.Bundle,
-              dxWDLrtId: String,
+              dxWDLrtId: Option[String],
               folder: String,
               dxProject: DXProject,
               instanceTypeDB: InstanceTypeDB,
