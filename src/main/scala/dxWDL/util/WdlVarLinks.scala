@@ -550,68 +550,10 @@ object WdlVarLinks {
         }
     }
 
-    // Import a value specified in a Cromwell style JSON input
-    // file. Assume that all the platform files have already been
-    // converted into dx:links.
-    //
-    // Challenges:
-    // 1) avoiding an intermediate conversion into a WDL value. Most
-    // types pose no issues. However, dx:files cannot be converted
-    // into WDL files in all cases.
-    // 2) JSON maps and WDL maps are slighly different. WDL maps can have
-    // keys of any type, where JSON maps can only have string keys.
-    private def importFromCromwell(womType: WomType,
-                                   jsv: JsValue) : JsValue = {
-        (womType, jsv) match {
-            // base case: primitive types
-            case (WomBooleanType, JsBoolean(_)) => jsv
-            case (WomIntegerType, JsNumber(_)) => jsv
-            case (WomFloatType, JsNumber(_)) => jsv
-            case (WomStringType, JsString(_)) => jsv
-            case (WomSingleFileType, JsObject(_)) => jsv
-
-            // Maps. Since these have string values, they are, essentially,
-            // mapped to WDL maps of type Map[String, T].
-            case (WomMapType(keyType, valueType), JsObject(fields)) =>
-                if (keyType != WomStringType)
-                    throw new Exception("Importing a JSON object to a WDL map requires string keys")
-                JsObject(fields.map{ case (k,v) =>
-                             k -> importFromCromwell(valueType, v)
-                         })
-
-            case (WomPairType(lType, rType), JsArray(Vector(l,r))) =>
-                val lJs = importFromCromwell(lType, l)
-                val rJs = importFromCromwell(rType, r)
-                JsObject("left" -> lJs, "right" -> rJs)
-
-            case (WomObjectType, _) =>
-                throw new Exception(
-                    s"""|WDL Objects are not supported when converting from JSON inputs
-                        |type = ${womType.toDisplayString}
-                        |value = ${jsv.prettyPrint}
-                        |""".stripMargin.trim)
-
-            case (WomArrayType(t), JsArray(vec)) =>
-                JsArray(vec.map{
-                    elem => importFromCromwell(t, elem)
-                })
-
-            case (WomOptionalType(t), (null|JsNull)) => JsNull
-            case (WomOptionalType(t), _) =>  importFromCromwell(t, jsv)
-
-            case _ =>
-                throw new Exception(
-                    s"""|Unsupported/Invalid type/JSON combination in input file
-                        |  womType= ${womType.toDisplayString}
-                        |  JSON= ${jsv.prettyPrint}""".stripMargin.trim)
-        }
-    }
-
     def importFromCromwellJSON(womType: WomType,
                                attrs:DeclAttrs,
                                jsv: JsValue) : WdlVarLinks = {
-        val importedJs = importFromCromwell(womType, jsv)
-        WdlVarLinks(womType, attrs, DxlValue(importedJs))
+        WdlVarLinks(womType, attrs, DxlValue(jsv))
     }
 
     // create input/output fields that bind the variable name [bindName] to

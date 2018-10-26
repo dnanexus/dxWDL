@@ -206,7 +206,7 @@ def validate_result(tname, exec_outputs, key, expected_val):
             print("Field {} should be {}, actual = {}".format(field_name, expected_val, result))
             return False
         return True
-    except Exception, e:
+    except Exception as e:
         print("exception message={}".format(e))
         return False
 
@@ -290,7 +290,11 @@ def run_executable(project, test_folder, tname, oid, delay_workspace_destruction
                                 name="{} {}".format(desc.name, git_revision),
                                 delay_workspace_destruction=delay_workspace_destruction,
                                 instance_type="mem1_ssd1_x4")
-        except Exception, e:
+        except dxpy.exceptions.DXAPIError as e:
+            # We think this is not retryable. More triage might be needed here,
+            # for dxpy errors that can be retried.
+            raise(e)
+        except Exception as e:
             print("exception message={}".format(e))
             return None
 
@@ -388,7 +392,7 @@ def register_all_tests():
                     continue
                 try:
                     register_test(root, fname)
-                except Exception, e:
+                except Exception as e:
                     print("Skipping WDL file {} error={}".format(fname, e))
 
 

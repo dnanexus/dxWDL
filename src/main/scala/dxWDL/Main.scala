@@ -361,7 +361,8 @@ object Main extends App {
                     val ir: compiler.IR.Bundle = compiler.Top.applyOnlyIR(sourceFile, cOpt)
                     return SuccessfulTerminationIR(ir)
 
-                case CompilerFlag.All | CompilerFlag.NativeWithoutRuntimeAsset =>
+                case CompilerFlag.All
+                       | CompilerFlag.NativeWithoutRuntimeAsset =>
                     val (dxProject, folder) = pathOptions(options, cOpt.verbose)
                     val retval = compiler.Top.apply(sourceFile, folder, dxProject, cOpt)
                     val desc = retval.getOrElse("")

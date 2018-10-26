@@ -6,7 +6,7 @@ package dxWDL.compiler
 import com.dnanexus.{DXDataObject, DXProject, DXRecord, DXSearch}
 import dxWDL.util._
 import dxWDL.util.Utils.DX_WDL_ASSET
-import java.nio.file.{Path}
+import java.nio.file.{Path, Paths}
 import scala.collection.JavaConverters._
 import wom.executable.WomBundle
 
@@ -109,11 +109,25 @@ object Top {
     // Compile IR only
     def applyOnlyIR(source: Path,
                     cOpt: CompilerOptions) : IR.Bundle = {
-        val (_, bundle: WomBundle, allSources) = ParseWomSourceFile.apply(source)
+        val (_, womBundle: WomBundle, allSources) = ParseWomSourceFile.apply(source)
 
         // Compile the WDL workflow into an Intermediate
         // Representation (IR)
-        GenerateIR.apply(bundle, allSources, cOpt.verbose)
+        val bundle: IR.Bundle = GenerateIR.apply(womBundle, allSources, cOpt.verbose)
+
+        // generate dx inputs from the Cromwell-style input specification.
+        cOpt.inputs.foreach{ path =>
+            val dxInputs = InputFile(cOpt.verbose).dxFromCromwell(bundle, path)
+            // write back out as xxxx.dx.json
+            val filename = Utils.replaceFileSuffix(path, ".dx.json")
+            val parent = path.getParent
+            val dxInputFile =
+                if (parent != null) parent.resolve(filename)
+                else Paths.get(filename)
+            Utils.writeFileContent(dxInputFile, dxInputs.prettyPrint)
+            Utils.trace(cOpt.verbose.on, s"Wrote dx JSON input file ${dxInputFile}")
+        }
+        bundle
     }
 
     // Compile up to native dx applets and workflows
