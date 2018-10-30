@@ -18,29 +18,30 @@ task Add {
 
 package dxWDL.runner
 
-/*
-import com.dnanexus.{DXAPI, DXJob}
+
+import com.dnanexus.DXAPI // DXJob
 import com.fasterxml.jackson.databind.JsonNode
+/*
 import common.validation.Validation._
 import java.nio.file.{Path}
 */
 import spray.json._
-import dxWDL.util.{DXIOParam, InstanceTypeDB, WdlVarLinks}
+import dxWDL.util.{InstanceTypeDB, Utils, WdlVarLinks}
 import wom.callable.CallableTaskDefinition
-/*
+import wom.core.WorkflowSource
 import wom.values._
 import wom.types._
-*/
+
 
 
 case class Task(task: CallableTaskDefinition,
+                taskSourceCode: WorkflowSource,  // for debugging/informational purposes only
                 instanceTypeDB : InstanceTypeDB,
                 runtimeDebugLevel: Int) {
-/*
     private val verbose = (runtimeDebugLevel >= 1)
     private val maxVerboseLevel = (runtimeDebugLevel == 2)
 
-
+/*
     private def evalDeclarations(declarations: Seq[DeclarationInterface],
                                  envInputs : Map[String, WomValue])
             : Map[DeclarationInterface, WomValue] = {
@@ -128,6 +129,7 @@ case class Task(task: CallableTaskDefinition,
         Utils.appletLog(verbose, s"Eval env=${env}")
         results
     }
+ */
 
     def getMetaDir() = {
         val metaDir = Utils.getMetaDirPath()
@@ -202,41 +204,6 @@ case class Task(task: CallableTaskDefinition,
                 Utils.appletLog(verbose, s"Image name is ${imageName}")
                 Some(imageName)
             case _ => dImg
-        }
-    }
-
-    // Each file marked "stream" is converted into a special fifo
-    // file on the instance.
-    //
-    // Make a named pipe, and stream the file from the platform to the
-    // pipe. Ensure pipes have different names, even if the
-    // file-names are the same. Write the process ids of the download
-    // jobs to stdout. The calling script will keep track of them,
-    // and check for abnormal termination.
-    //
-    def mkfifo(wvl: WdlVarLinks) : (WomValue, String) = {
-        val dxFile = WdlVarLinks.getDxFile(wvl)
-        val p:Path = LocalDxFiles.get(dxFile) match {
-            case None => throw new Exception(s"File ${dxFile} has not been localized yet")
-            case Some(p) => p
-        }
-        val bashSnippet:String =
-            s"""|mkfifo ${p}
-                |dx cat ${dxFile.getId} > ${p} &
-                |echo $$!
-                |""".stripMargin
-        (WomSingleFile(p.toString), bashSnippet)
-    }
-
-    private def handleStreamingFile(wvl: WdlVarLinks,
-                                    wdlValue:WomValue) : (WomValue, String) = {
-        wdlValue match {
-            case WomSingleFile(_) if wvl.attrs.stream =>
-                mkfifo(wvl)
-            case WomOptionalValue(_,Some(WomSingleFile(_))) if wvl.attrs.stream =>
-                mkfifo(wvl)
-            case _ =>
-                throw new Exception(s"Value is not a streaming file ${wvl} ${wdlValue}")
         }
     }
 
@@ -318,22 +285,17 @@ case class Task(task: CallableTaskDefinition,
         Utils.writeFileContent(dockerRunPath, dockerRunScript)
         dockerRunPath.toFile.setExecutable(true)
     }
- */
 
     // Calculate the input variables for the task, download the input files,
     // and build a shell script to run the command.
-    def prolog(inputSpec: Map[String, DXIOParam],
-               outputSpec: Map[String, DXIOParam],
-               inputWvls: Map[String, WdlVarLinks]) : Map[String, JsValue] = {
-        /*
+    def prolog(inputWvls: Map[String, WdlVarLinks]) : Map[String, JsValue] = {
         Utils.appletLog(verbose, s"Prolog  debugLevel=${runtimeDebugLevel}")
         Utils.appletLog(verbose, s"dxWDL version: ${Utils.getVersion()}")
         if (maxVerboseLevel)
             printDirStruct()
 
-        val wdlCode: String = WdlPrettyPrinter(false, None).apply(task, 0).mkString("\n")
         Utils.appletLog(verbose, s"Task source code:")
-        Utils.appletLog(verbose, wdlCode, 10000)
+        Utils.appletLog(verbose, taskSourceCode, 10000)
 
         val ioMode =
             if (task.commandTemplateString.trim.isEmpty) {
@@ -345,15 +307,11 @@ case class Task(task: CallableTaskDefinition,
                 IOMode.Data
             }
 
-        var bashSnippetVec = Vector.empty[String]
         val envInput = inputWvls.map{ case (key, wvl) =>
             val w:WomValue =
                 if (wvl.attrs.stream) {
                     // streaming file, create a named fifo for it
-                    val w:WomValue = WdlVarLinks.localize(wvl, IOMode.Stream)
-                    val (wdlValueRewrite,bashSnippet) = handleStreamingFile(wvl, w)
-                    bashSnippetVec = bashSnippetVec :+ bashSnippet
-                    wdlValueRewrite
+                    throw new Exception("Not handling streaming files currently")
                 } else  {
                     // regular file
                     WdlVarLinks.localize(wvl, ioMode)
@@ -367,23 +325,11 @@ case class Task(task: CallableTaskDefinition,
                 .map{ case (decl, v) => decl.unqualifiedName -> v}.toMap
         val docker = dockerImage(env)
 
-        // deal with files that need streaming
-        if (bashSnippetVec.size > 0) {
-            // set up all the named pipes
-            val path = getMetaDir().resolve("setup_streams")
-            Utils.appletLog(maxVerboseLevel,
-                            s"writing bash script for stream(s) set up to ${path}")
-            val snippet = bashSnippetVec.mkString("\n")
-            Utils.writeFileContent(path, snippet)
-            path.toFile.setExecutable(true)
-        }
-
         // Write shell script to a file. It will be executed by the dx-applet code
         writeBashScript(env)
         docker match {
             case Some(img) =>
                 // write a script that launches the actual command inside a docker image.
-                // Streamed files are set up before launching docker.
                 writeDockerSubmitBashScript(env, img)
             case None => ()
         }
@@ -396,13 +342,10 @@ case class Task(task: CallableTaskDefinition,
         LocalDxFiles.freeze()
         DxFunctions.freeze()
 
-         Map.empty          */
-        throw new Exception("TODO")
+        Map.empty
     }
 
-    def epilog(inputSpec: Map[String, DXIOParam],
-               outputSpec: Map[String, DXIOParam],
-               inputs: Map[String, WdlVarLinks]) : Map[String, JsValue] = {
+    def epilog(inputs: Map[String, WdlVarLinks]) : Map[String, JsValue] = {
         /*
         Utils.appletLog(verbose, s"Epilog  debugLevel=${runtimeDebugLevel}")
         if (maxVerboseLevel)
@@ -490,10 +433,7 @@ case class Task(task: CallableTaskDefinition,
     /** Check if we are already on the correct instance type. This allows for avoiding unnecessary
       * relaunch operations.
       */
-    def checkInstanceType(inputSpec: Map[String, DXIOParam],
-                          outputSpec: Map[String, DXIOParam],
-                          inputWvls: Map[String, WdlVarLinks]) : Boolean = {
-        /*
+    def checkInstanceType(inputWvls: Map[String, WdlVarLinks]) : Boolean = {
         // evaluate the runtime attributes
         // determine the instance type
         val requiredInstanceType:String = calcInstanceType(inputWvls)
@@ -516,16 +456,13 @@ case class Task(task: CallableTaskDefinition,
 
         val isSufficient = instanceTypeDB.lteqByResources(requiredInstanceType, crntInstanceType)
         Utils.appletLog(verbose, s"isSufficient? ${isSufficient}")
-         isSufficient */
-        throw new Exception("TODO")
+        isSufficient
     }
 
     /** The runtime attributes need to be calculated at runtime. Evaluate them,
       *  determine the instance type [xxxx], and relaunch the job on [xxxx]
       */
-    def relaunch(inputSpec: Map[String, DXIOParam],
-                 outputSpec: Map[String, DXIOParam],
-                 inputWvls: Map[String, WdlVarLinks]) : Map[String, JsValue] = {
+    def relaunch(inputWvls: Map[String, WdlVarLinks]) : Map[String, JsValue] = {
         /*
         // evaluate the runtime attributes
         // determine the instance type

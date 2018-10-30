@@ -9,9 +9,10 @@
 package dxWDL.compiler
 
 import com.dnanexus.DXRecord
-import dxWDL.util.{Utils, DeclAttrs}
+import dxWDL.util.{DeclAttrs, DXWorkflowStage, Utils}
 import wom.callable.CallableTaskDefinition
 import wom.types.WomType
+import wom.values.WomValue
 
 object IR {
     // Compile time representation of a variable. Used also as
@@ -103,6 +104,40 @@ object IR {
                       womSourceCode: String) extends Callable {
         def inputVars = inputs
         def outputVars = outputs
+    }
+
+    /** An input to a stage. Could be empty, a wdl constant,
+      *  a link to an output variable from another stage,
+      *  or a workflow input.
+      */
+    sealed trait SArg
+    case object SArgEmpty extends SArg
+    case class SArgConst(wdlValue: WomValue) extends SArg
+    case class SArgLink(stageName: String, argName: CVar) extends SArg
+    case class SArgWorkflowInput(argName: CVar) extends SArg
+
+    // A stage can call an applet or a workflow.
+    //
+    // Note: the description may concatin dots, parentheses, and other special
+    // symbols. It is shown to the user on the UI.
+    case class Stage(stageName: String,
+                     description: Option[String],
+                     id: DXWorkflowStage,
+                     calleeName: String,
+                     inputs: Vector[SArg],
+                     outputs: Vector[CVar])
+
+    /** A workflow output is linked to the stage that
+      *  generated it.
+      */
+    case class Workflow(name: String,
+                        inputs: Vector[(CVar,SArg)],
+                        outputs: Vector[(CVar,SArg)],
+                        stages: Vector[Stage],
+                        locked: Boolean,
+                        /*kind: WorkflowKind.Value*/) extends Callable {
+        def inputVars = inputs.map{ case (cVar,_) => cVar }.toVector
+        def outputVars = outputs.map{ case (cVar,_) => cVar }.toVector
     }
 
     case class Bundle(primaryCallable: Option[Callable],

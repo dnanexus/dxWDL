@@ -3,7 +3,7 @@ package dxWDL.compiler
 import dxWDL.{Main}
 import java.nio.file.{Path, Paths}
 import org.scalatest.{FlatSpec, Matchers}
-import org.scalatest.Inside._
+//import org.scalatest.Inside._
 
 // These tests involve compilation -without- access to the platform.
 //
@@ -14,6 +14,17 @@ class InputFileTest extends FlatSpec with Matchers {
         currentWorkDir.resolve(s"src/test/resources/input_file/${basename}")
     }
 
+    it should "handle one task and two inputs" in {
+        val wdlCode = pathFromBasename("add.wdl")
+        val inputs = pathFromBasename("add_inputs.json")
+        Main.compile(
+            List(wdlCode.toString, "--compileMode", "ir", "-quiet",
+                 "-inputs", inputs.toString)
+        ) shouldBe a [Main.SuccessfulTerminationIR]
+    }
+
+
+/*
     it should "one input" in {
         val wdlCode = pathFromBasename("math.wdl")
         val inputs = pathFromBasename("math_inputs.json")
@@ -102,4 +113,5 @@ class InputFileTest extends FlatSpec with Matchers {
                  "-defaults", inputs.toString)
         ) shouldBe a [Main.UnsuccessfulTermination]
     }
+ */
 }

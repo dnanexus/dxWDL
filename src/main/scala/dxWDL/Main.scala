@@ -7,7 +7,8 @@ import java.nio.file.{Path, Paths}
 import scala.collection.mutable.HashMap
 import spray.json._
 import spray.json.JsString
-import wom.callable.CallableTaskDefinition
+import wom.callable.{CallableTaskDefinition, ExecutableTaskDefinition}
+import wom.executable.WomBundle
 
 object Main extends App {
     sealed trait Termination
@@ -388,25 +389,41 @@ object Main extends App {
         }
     }
 
+    // Extract the only task from a namespace
+    private def getMainTask(bundle: WomBundle) : CallableTaskDefinition = {
+        // check if the primary is nonempty
+        val task: Option[CallableTaskDefinition] = bundle.primaryCallable match  {
+            case Some(task : CallableTaskDefinition) => Some(task)
+            case Some(exec : ExecutableTaskDefinition) => Some(exec.callableTaskDefinition)
+            case _ => None
+        }
+        task match {
+            case Some(x) => x
+            case None =>
+                // primary is empty, check the allCallables map
+                if (bundle.allCallables.size != 1)
+                    throw new Exception("WDL file must contains exactly one task")
+                val (_, task) = bundle.allCallables.head
+                task match {
+                    case task : CallableTaskDefinition => task
+                    case exec : ExecutableTaskDefinition => exec.callableTaskDefinition
+                    case _ => throw new Exception("Cannot find task inside WDL file")
+                }
+        }
+    }
+
     private def appletAction(op: InternalOp.Value,
                              wdlDefPath: Path,
                              jobInputPath: Path,
                              jobOutputPath: Path,
                              rtDebugLvl: Int): Termination = {
-        val (_, bundle, _) = ParseWomSourceFile.apply(wdlDefPath)
-
-        // Extract the only task from a namespace
-        val task = bundle.primaryCallable match  {
-            case Some(task : CallableTaskDefinition) => task
-            case Some(x) =>
-                throw new Exception(s"""|WDL file must contain exactly one task.
-                                        |The primary entry point is ${x.name} ${x.getClass}""".stripMargin)
-            case None =>
-                throw new Exception(s"""|WDL file contains no main entry point""")
-        }
+        val (_, womBundle: WomBundle, allSources) = ParseWomSourceFile.apply(wdlDefPath)
+        val task : CallableTaskDefinition = getMainTask(womBundle)
+        assert(allSources.size == 1)
+        val taskSourceCode = ParseWomSourceFile.scanForTasks(allSources.values.head)
 
         // Figure out input/output types
-        val (inputSpec, outputSpec) = Utils.loadExecInfo
+        //val (inputSpec, outputSpec) = Utils.loadExecInfo
 
         // Parse the inputs, do not download files from the platform,
         // they will be passed as links.
@@ -416,28 +433,21 @@ object Main extends App {
         // by reading the file
         val dbRaw = Utils.readFileContent(Paths.get("/" + Utils.INSTANCE_TYPE_DB_FILENAME))
         val instanceTypeDB =dbRaw.parseJson.convertTo[InstanceTypeDB]
+        val inputs = WdlVarLinks.loadJobInputsAsLinks(inputLines, task)
+        val r = runner.Task(task, taskSourceCode, instanceTypeDB, rtDebugLvl)
 
         if (op == InternalOp.TaskCheckInstanceType) {
             // special operation to check if this task is on the right instance type
-            val inputs = WdlVarLinks.loadJobInputsAsLinks(inputLines, inputSpec, task)
-            val r = runner.Task(task, instanceTypeDB, rtDebugLvl)
-            val correctInstanceType:Boolean = r.checkInstanceType(inputSpec, outputSpec, inputs)
+            val correctInstanceType:Boolean = r.checkInstanceType(inputs)
             SuccessfulTermination(correctInstanceType.toString)
         } else {
             val outputFields: Map[String, JsValue] =
                 if (isTaskOp(op)) {
                     // Running tasks
-                    val inputs = WdlVarLinks.loadJobInputsAsLinks(inputLines, inputSpec, task)
                     op match {
-                        case InternalOp.TaskEpilog =>
-                            val r = runner.Task(task, instanceTypeDB, rtDebugLvl)
-                            r.epilog(inputSpec, outputSpec, inputs)
-                        case InternalOp.TaskProlog =>
-                            val r = runner.Task(task, instanceTypeDB, rtDebugLvl)
-                            r.prolog(inputSpec, outputSpec, inputs)
-                        case InternalOp.TaskRelaunch =>
-                            val r = runner.Task(task, instanceTypeDB, rtDebugLvl)
-                            r.relaunch(inputSpec, outputSpec, inputs)
+                        case InternalOp.TaskEpilog => r.epilog(inputs)
+                        case InternalOp.TaskProlog => r.prolog(inputs)
+                        case InternalOp.TaskRelaunch => r.relaunch(inputs)
                     }
                 } else {
                     throw new Exception("not currently supported")

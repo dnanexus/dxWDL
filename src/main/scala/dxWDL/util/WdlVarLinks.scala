@@ -635,7 +635,6 @@ object WdlVarLinks {
     // Read the job-inputs JSON file, and convert the variables
     // to links that can be passed to other applets.
     def loadJobInputsAsLinks(inputLines: String,
-                             inputSpec:Map[String, DXIOParam],
                              callable: wom.callable.Callable): Map[String, WdlVarLinks] = {
         // Discard auxiliary fields
         val jsonAst : JsValue = inputLines.parseJson

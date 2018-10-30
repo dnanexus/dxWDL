@@ -47,30 +47,6 @@ object Utils {
     val REORG = "reorg"
     val UBUNTU_VERSION = "16.04"
 
-    // All the words defined in the WDL language, and NOT to be confused
-    // with identifiers.
-    val RESERVED_WORDS: Set[String] = Set(
-        "stdout", "stderr",
-        "true", "false",
-        "left", "right",
-        "if", "scatter", "else", "then"
-    )
-
-    val STDLIB_FUNCTIONS: Set[String] = Set(
-        "read_lines", "read_tsv", "read_map",
-        "read_object", "read_objects", "read_json",
-        "read_int", "read_string", "read_float", "read_boolean",
-
-        "write_lines", "write_tsv", "write_map",
-        "write_object", "write_objects", "write_json",
-        "write_int", "write_string", "write_float", "write_boolean",
-
-        "size", "sub", "range",
-        "transpose", "zip", "cross", "length", "flatten", "prefix",
-        "select_first", "select_all", "defined", "basename",
-        "floor", "ceil", "round",
-    )
-
     val RUNNER_TASK_ENV_FILE = "taskEnv.json"
     val UPLOAD_RETRY_LIMIT = DOWNLOAD_RETRY_LIMIT
 
@@ -198,27 +174,6 @@ object Utils {
     }
 
 
-    // Used to convert into the JSON datatype used by dxjava
-    val objMapper : ObjectMapper = new ObjectMapper()
-
-    // Get the dx:classes for inputs and outputs
-    def loadExecInfo : (Map[String, DXIOParam], Map[String, DXIOParam]) = {
-        val dxapp : DXApplet = dxEnv.getJob().describe().getApplet()
-        val desc : DXApplet.Describe = dxapp.describe()
-        val inputSpecRaw: List[InputParameter] = desc.getInputSpecification().asScala.toList
-        val inputSpec:Map[String, DXIOParam] = inputSpecRaw.map(
-            iSpec => iSpec.getName -> DXIOParam(iSpec.getIOClass, iSpec.isOptional)
-        ).toMap
-        val outputSpecRaw: List[OutputParameter] = desc.getOutputSpecification().asScala.toList
-        val outputSpec:Map[String, DXIOParam] = outputSpecRaw.map(
-            iSpec => iSpec.getName -> DXIOParam(iSpec.getIOClass, iSpec.isOptional)
-        ).toMap
-
-        // remove auxiliary fields
-        (inputSpec.filter{ case (fieldName,_) => !fieldName.endsWith(FLAT_FILES_SUFFIX) },
-         outputSpec.filter{ case (fieldName,_) => !fieldName.endsWith(FLAT_FILES_SUFFIX) })
-    }
-
     // Create a file from a string
     def writeFileContent(path : Path, str : String) : Unit = {
         Files.write(path, str.getBytes(StandardCharsets.UTF_8))
@@ -242,6 +197,9 @@ object Utils {
     }
 
     // Convert from spray-json to jackson JsonNode
+    // Used to convert into the JSON datatype used by dxjava
+    private val objMapper : ObjectMapper = new ObjectMapper()
+
     def jsonNodeOfJsValue(jsValue : JsValue) : JsonNode = {
         val s : String = jsValue.prettyPrint
         objMapper.readTree(s)

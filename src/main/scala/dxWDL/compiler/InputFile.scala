@@ -189,16 +189,24 @@ case class InputFile(verbose: Verbose) {
         val cif = CromwellInputFileState(inputFields, HashMap.empty)
 
         bundle.primaryCallable match {
-            case None => ()
-            case Some(applet: IR.Applet) =>
-                // There is one task, we can generate one input file for it.
-                applet.inputs.foreach { cVar =>
-                    val fqn = s"${applet.name}.${cVar.name}"
-                    val dxName = s"${cVar.name}"
-                    cif.checkAndBind(fqn, dxName, cVar)
-                }
+            case None =>  ()
             case _ =>
                 throw new Exception(s"Workflows aren't handled yet")
+        }
+
+        // If there is one task, we can generate one input file for it.
+        val tasks = bundle.allCallables.filter{ case (_, callable) => callable.isInstanceOf[IR.Applet] }
+        if (tasks.size == 1) {
+            tasks.head match {
+                case (_, applet: IR.Applet) =>
+                    applet.inputs.foreach { cVar =>
+                        val fqn = s"${applet.name}.${cVar.name}"
+                        val dxName = s"${cVar.name}"
+                        cif.checkAndBind(fqn, dxName, cVar)
+                    }
+                case _ =>
+                    throw new Exception(s"Workflows aren't handled yet")
+            }
         }
         cif.checkAllUsed()
 
