@@ -24,8 +24,8 @@ ENV PATH $PATH:/dnanexus-upload-agent-1.5.30-linux
 
 # dxWDL
 WORKDIR /
-RUN wget https://github.com/dnanexus/dxWDL/releases/download/0.69/dxWDL-0.69.jar && \
-    chmod +x dxWDL-0.69.jar
+RUN wget https://github.com/dnanexus/dxWDL/releases/download/0.78/dxWDL-0.78.jar && \
+    chmod +x dxWDL-0.78.jar
 
 ENTRYPOINT ["java"]
-CMD ["-jar", "/dxWDL-0.69.jar"]
+CMD ["-jar", "/dxWDL-0.78.jar"]
