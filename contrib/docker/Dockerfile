@@ -28,5 +28,4 @@ ARG DXWDL_VERSION=0.78
 RUN wget https://github.com/dnanexus/dxWDL/releases/download/0.78/dxWDL-$DXWDL_VERSION.jar && \
     chmod +x dxWDL-$DXWDL_VERSION.jar && mv dxWDL-$DXWDL_VERSION.jar dxWDL.jar
 
-ENTRYPOINT ["java"]
-CMD ["-jar", "/dxWDL.jar"]
+ENTRYPOINT ["java", "-jar", "/dxWDL.jar"]
