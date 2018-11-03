@@ -420,7 +420,9 @@ object Main extends App {
         val (_, womBundle: WomBundle, allSources) = ParseWomSourceFile.apply(wdlDefPath)
         val task : CallableTaskDefinition = getMainTask(womBundle)
         assert(allSources.size == 1)
-        val taskSourceCode = ParseWomSourceFile.scanForTasks(allSources.values.head)
+        val sourceDict  = ParseWomSourceFile.scanForTasks(allSources.values.head)
+        assert(sourceDict.size == 1)
+        val taskSourceCode = sourceDict.values.head
 
         // Figure out input/output types
         //val (inputSpec, outputSpec) = Utils.loadExecInfo

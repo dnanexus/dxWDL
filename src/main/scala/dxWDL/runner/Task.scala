@@ -19,19 +19,17 @@ task Add {
 package dxWDL.runner
 
 
+import cats.data.Validated.{Invalid, Valid}
 import com.dnanexus.DXAPI // DXJob
 import com.fasterxml.jackson.databind.JsonNode
-/*
-import common.validation.Validation._
-import java.nio.file.{Path}
-*/
+import common.validation.ErrorOr.ErrorOr
 import spray.json._
-import dxWDL.util.{InstanceTypeDB, Utils, WdlVarLinks}
+import dxWDL.util._
 import wom.callable.CallableTaskDefinition
 import wom.core.WorkflowSource
-import wom.values._
+import wom.expression.WomExpression
 import wom.types._
-
+import wom.values._
 
 
 case class Task(task: CallableTaskDefinition,
@@ -167,26 +165,16 @@ case class Task(task: CallableTaskDefinition,
 
     // Figure out if a docker image is specified. If so, return it as a string.
     private def dockerImageEval(env: Map[String, WomValue]) : Option[String] = {
-        def lookup(varName : String) : WomValue = {
-            env.get(varName) match {
-                case Some(x) => x
-                case None => throw new AppInternalException(
-                    s"No value found for variable ${varName}")
-            }
-        }
-        def evalStringExpr(expr: WdlExpression) : String = {
-            val v : WomValue = expr.evaluate(lookup, DxFunctions).get
-            v match {
-                case WomString(s) => s
-                case _ => throw new AppInternalException(
-                    s"docker is not a string expression ${v.toWomString}")
-            }
-        }
-        // Figure out if docker is used. If so, it is specified by an
-        // expression that requires evaluation.
-        task.runtimeAttributes.attrs.get("docker") match {
+        task.runtimeAttributes.attributes.get("docker") match {
             case None => None
-            case Some(expr) => Some(evalStringExpr(expr))
+            case Some(expr) =>
+                val result: ErrorOr[WomValue] =
+                    expr.evaluateValue(env, wom.expression.NoIoFunctionSet)
+                result match {
+                    case Valid(WomString(s)) => Some(s)
+                    case _ =>
+                        throw new AppInternalException(s"docker is not a string expression ${expr}")
+                }
         }
     }
 
