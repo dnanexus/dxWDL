@@ -197,7 +197,7 @@ case class Task(task: CallableTaskDefinition,
 
     // Write the core bash script into a file. In some cases, we
     // need to run some shell setup statements before and after this
-    // script. Returns these as two strings (prolog, epilog).
+    // script.
     private def writeBashScript(env: Map[String, WomValue]) : Unit = {
         val metaDir = getMetaDir()
         val scriptPath = metaDir.resolve("script")
@@ -276,7 +276,7 @@ case class Task(task: CallableTaskDefinition,
 
     // Calculate the input variables for the task, download the input files,
     // and build a shell script to run the command.
-    def prolog(inputWvls: Map[String, WdlVarLinks]) : Map[String, JsValue] = {
+    def prolog(inputWvls: Map[String, WomValue]) : Map[String, JsValue] = {
         Utils.appletLog(verbose, s"Prolog  debugLevel=${runtimeDebugLevel}")
         Utils.appletLog(verbose, s"dxWDL version: ${Utils.getVersion()}")
         if (maxVerboseLevel)
@@ -284,16 +284,6 @@ case class Task(task: CallableTaskDefinition,
 
         Utils.appletLog(verbose, s"Task source code:")
         Utils.appletLog(verbose, taskSourceCode, 10000)
-
-        val ioMode =
-            if (task.commandTemplateString.trim.isEmpty) {
-                // The shell command is empty, there is no need to download the files.
-                IOMode.Remote
-            } else {
-                // default: download all input files
-                Utils.appletLog(verbose, s"Eagerly download input files")
-                IOMode.Data
-            }
 
         val envInput = inputWvls.map{ case (key, wvl) =>
             val w:WomValue =

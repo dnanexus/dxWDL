@@ -424,18 +424,15 @@ object Main extends App {
         assert(sourceDict.size == 1)
         val taskSourceCode = sourceDict.values.head
 
-        // Figure out input/output types
-        //val (inputSpec, outputSpec) = Utils.loadExecInfo
-
-        // Parse the inputs, do not download files from the platform,
-        // they will be passed as links.
+        // Parse the inputs, convert to WOM values. Delay downloading files
+        // from the platform, we may not need to access them.
         val inputLines : String = Utils.readFileContent(jobInputPath)
+        val inputs = runner.JobInputOutput.loadInputs(inputLines, task)
 
         // Figure out the available instance types, and their prices,
         // by reading the file
         val dbRaw = Utils.readFileContent(Paths.get("/" + Utils.INSTANCE_TYPE_DB_FILENAME))
-        val instanceTypeDB =dbRaw.parseJson.convertTo[InstanceTypeDB]
-        val inputs = WdlVarLinks.loadJobInputsAsLinks(inputLines, task)
+        val instanceTypeDB = dbRaw.parseJson.convertTo[InstanceTypeDB]
         val r = runner.Task(task, taskSourceCode, instanceTypeDB, rtDebugLvl)
 
         if (op == InternalOp.TaskCheckInstanceType) {

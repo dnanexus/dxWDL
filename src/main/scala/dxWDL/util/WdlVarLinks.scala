@@ -545,7 +545,8 @@ object WdlVarLinks {
         if (Utils.isNativeDxType(womType)) {
             WdlVarLinks(womType, DeclAttrs.empty, DxlValue(jsValue))
         } else {
-            val (_, v) = unmarshalHash(jsValue)
+            val (womType2, v) = unmarshalHash(jsValue)
+            assert(womType2 == womType)
             WdlVarLinks(womType, DeclAttrs.empty, DxlValue(v))
         }
     }
@@ -630,60 +631,5 @@ object WdlVarLinks {
             // structure, and a flat array of files.
             mkComplex(womType).toList
         }
-    }
-
-    // Read the job-inputs JSON file, and convert the variables
-    // to links that can be passed to other applets.
-    def loadJobInputsAsLinks(inputLines: String,
-                             callable: wom.callable.Callable): Map[String, WdlVarLinks] = {
-        // Discard auxiliary fields
-        val jsonAst : JsValue = inputLines.parseJson
-        val fields : Map[String, JsValue] = jsonAst
-            .asJsObject.fields
-            .filter{ case (fieldName,_) => !fieldName.endsWith(Utils.FLAT_FILES_SUFFIX) }
-
-        // Get the declarations matching the input fields.
-        // Create a mapping from each key to its WDL value
-        callable.inputs.map { inpDfn =>
-            val defaultValue: Option[WomValue] = inpDfn match {
-                case d: InputDefinitionWithDefault =>
-                    Utils.ifConstEval(d.default)
-                case d: FixedInputDefinition =>
-                    Utils.ifConstEval(d.default)
-                case _ => None
-            }
-
-            // There are several distinct cases
-            //
-            //   default   input           result   comments
-            //   -------   -----           ------   --------
-            //   d         not-specified   d
-            //   _         null            None     override
-            //   _         Some(v)         Some(v)
-            //
-            val wvl = fields.get(inpDfn.name) match {
-                case None =>
-                    // this key is not specified in the input. Use the default.
-                    defaultValue match {
-                        case None if Utils.isOptional(inpDfn.womType) =>
-                            // Default value was not specified
-                            WdlVarLinks(inpDfn.womType, DeclAttrs.empty, DxlValue(JsNull))
-                        case None =>
-                            // Default value was not specified, and null is not a valid
-                            // value, given the WDL type.
-                            throw new Exception(s"Invalid conversion from null to non optional type ${inpDfn.womType}")
-                        case Some(x: WomValue) =>
-                            // convert [x] to JSON
-                            val jsx = jsFromWomValue(inpDfn.womType, x, IODirection.Zero)
-                            importFromDxExec(inpDfn.womType, jsx)
-                    }
-                case Some(JsNull) =>
-                    // override the default, even if it exists
-                    WdlVarLinks(inpDfn.womType, DeclAttrs.empty, DxlValue(JsNull))
-                case Some(jsv) =>
-                    importFromDxExec(inpDfn.womType, jsv)
-            }
-            inpDfn.name -> wvl
-        }.toMap
     }
 }
