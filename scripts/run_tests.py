@@ -3,6 +3,7 @@ from __future__ import print_function
 
 import argparse
 from collections import namedtuple
+import copy
 import dxpy
 import fnmatch
 import json
@@ -24,7 +25,7 @@ test_files={}
 test_failing=set(["bad_status",
                   #"bad_status2",
                   "missing_output"])
-reserved_test_names=['M', 'All', 'list']
+reserved_test_names=['CI', 'M', 'All']
 
 medium_test_list = [
     "advanced",
@@ -76,6 +77,11 @@ medium_test_list = [
     "trains",
     "var_type_change"
 ]
+
+# Tests run in continuous integration. We remove the native app test,
+# because we don't want to give permissions for creating platform apps.
+ci_test_list = copy.deepcopy(medium_test_list)
+ci_test_list.remove("call_native_app")
 
 tests_for_alt_project = [ "platform_asset" ]
 
@@ -363,6 +369,8 @@ def print_test_list():
 def choose_tests(test_name):
     if test_name == 'M':
         return medium_test_list
+    if test_name == 'CI':
+        return ci_test_list
     if test_name == 'All':
         return test_files.keys()
     if test_name in test_files.keys():
