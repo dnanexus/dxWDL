@@ -82,6 +82,7 @@ medium_test_list = [
 # because we don't want to give permissions for creating platform apps.
 ci_test_list = copy.deepcopy(medium_test_list)
 ci_test_list.remove("call_native_app")
+ci_test_list.remove("platform_asset")
 
 tests_for_alt_project = [ "platform_asset" ]
 
