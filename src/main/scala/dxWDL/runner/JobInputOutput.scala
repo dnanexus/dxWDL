@@ -10,6 +10,82 @@ import wom.values._
 
 object JobInputOutput {
 
+    val DOWNLOAD_RETRY_LIMIT = 3
+    val UPLOAD_RETRY_LIMIT = DOWNLOAD_RETRY_LIMIT
+
+    // download a file from the platform to a path on the local disk. Use
+    // 'dx download' as a separate process.
+    //
+    // Note: this function assumes that the target path does not exist yet
+    def downloadFile(path: Path, dxfile: DXFile) : Unit = {
+        def downloadOneFile(path: Path, dxfile: DXFile, counter: Int) : Boolean = {
+            val fid = dxfile.getId()
+            try {
+                // Shell out to 'dx download'
+                val dxDownloadCmd = s"dx download ${fid} -o ${path.toString()}"
+                System.err.println(s"--  ${dxDownloadCmd}")
+                val (outmsg, errmsg) = Utils.execCommand(dxDownloadCmd, None)
+
+                true
+            } catch {
+                case e: Throwable =>
+                    if (counter < DOWNLOAD_RETRY_LIMIT)
+                        false
+                    else throw e
+            }
+        }
+        val dir = path.getParent()
+        if (dir != null) {
+            if (!Files.exists(dir))
+                Files.createDirectories(dir)
+        }
+        var rc = false
+        var counter = 0
+        while (!rc && counter < DOWNLOAD_RETRY_LIMIT) {
+            System.err.println(s"downloading file ${path.toString} (try=${counter})")
+            rc = downloadOneFile(path, dxfile, counter)
+            counter = counter + 1
+        }
+        if (!rc)
+            throw new Exception(s"Failure to download file ${path}")
+    }
+
+    // Upload a local file to the platform, and return a json link.
+    // Use 'dx upload' as a separate process.
+    def uploadFile(path: Path) : JsValue = {
+        if (!Files.exists(path))
+            throw new AppInternalException(s"Output file ${path.toString} is missing")
+        def uploadOneFile(path: Path, counter: Int) : Option[String] = {
+            try {
+                // shell out to 'dx upload'
+                val dxUploadCmd = s"dx upload ${path.toString} --brief"
+                System.err.println(s"--  ${dxUploadCmd}")
+                val (outmsg, errmsg) = Utils.execCommand(dxUploadCmd, None)
+                if (!outmsg.startsWith("file-"))
+                    return None
+                Some(outmsg.trim())
+            } catch {
+                case e: Throwable =>
+                    if (counter < UPLOAD_RETRY_LIMIT)
+                        None
+                    else throw e
+            }
+        }
+
+        var counter = 0
+        while (counter < UPLOAD_RETRY_LIMIT) {
+            System.err.println(s"upload file ${path.toString} (try=${counter})")
+            uploadOneFile(path, counter) match {
+                case Some(fid) =>
+                    val v = s"""{ "$$dnanexus_link": "${fid}" }"""
+                    return v.parseJson
+                case None => ()
+            }
+            counter = counter + 1
+        }
+        throw new Exception(s"Failure to upload file ${path}")
+    }
+
     // Convert a job input to a WomValue. Do not download any files, convert them
     // to a string representation. For example: dx://proj-xxxx:file-yyyy::/A/B/C.txt
     //
@@ -192,6 +268,83 @@ object JobInputOutput {
         }
     }
 
+    // Create a local path for a DNAx file. The normal location, is to download
+    // to the $HOME/inputs directory. However, since downloaded files may have the same
+    // name, we may need to disambiguate them.
+    private def createUniqueDownloadPath(dxUrl: String,
+                                         existingFiles: Map[String, Path]) : Path = {
+        val (projId, objId, basename,_) = parse(dxUrl)
+        val shortPath = Utils.inputFilesDirPath.resolve(basename)
+        if (!(existingFiles.values contains shortPath))
+            return shortPath
+
+        // The path is already used for a file with this name. Try to place it
+        // in directories: [inputs/1, inputs/2, ... ]
+        System.err.println(s"Disambiguating file ${fid} with name ${basename}")
+
+        for (dirNum <- 1 to DISAMBIGUATION_DIRS_MAX_NUM) {
+            val dir:Path = Utils.inputFilesDirPath.resolve(dirNum.toString)
+            val longPath = dir.resolve(basename)
+            if (!(existingFiles.values contains longPath))
+                return longPath
+        }
+        throw new Exception(s"""|Tried to download ${objId} ${basename} to local filesystem
+                                |at ${Utils.inputFilesDirPath}/*/${basename}, all are taken"""
+                                .stripMargin.replaceAll("\n", " "))
+    }
+
+
+    // Recursively go into a womValue, and replace cloud URLs with the
+    // equivalent local path.
+    private def replaceURLsWithLocalPaths(womValue: WomValue,
+                                          localizationPlan: Map[String, Path]) : WomValue = {
+        womValue match {
+            // primitive types, pass through
+            case _: WomBoolean | WomInteger | WomFloat | WomString => womValue
+
+            // single file
+            case WomSingleFile(url) =>
+                localizationPlan.get(url) match {
+                    case None =>
+                        throw new Exception(s"Did not localize ${url}")
+                    case Some(localPath) =>
+                        // replace URL with local file
+                        WomSingleFile(localPath)
+                }
+
+            // Maps
+            case (WomMap(t: WomMapType, m: Map[WomValue, WomValue])) =>
+                val m1 = m.map{ case (k, v) =>
+                    val k1 = replaceURLsWithLocalPaths(k, localizationPlan)
+                    val v1 = replaceURLsWithLocalPaths(v, localizationPlan)
+                    k1 -> v1
+                }
+                WomMap(t, m1)
+
+            case (WomPair(l, r)) =>
+                val left = replaceURLsWithLocalPaths(l, localizationPlan)
+                val right = replaceURLsWithLocalPaths(r, localizationPlan)
+                WomPair(left, right)
+
+            case (WomObjectType, JsObject(fields)) =>
+                throw new Exception("WOM objects not supported")
+
+            case WomArray(t: WomArrayType, a: Seq[WomValue]) =>
+                val a1 = a.map{ v => replaceURLsWithLocalPaths(v, localizationPlan) }
+                WomArray(t, a1)
+
+            case (WomOptionalValue(t: WomType), None) =>
+                WomOptionalValue(t, None)
+            case (WomOptionalValue(t), Some(v)) =>
+                val v1 = replaceURLsWithLocalPaths(v, localizationPlan)
+                WomOptionalValue(t, Some(v1))
+
+            case _ =>
+                throw new AppInternalException(s"Unsupported wom value ${womValue}")
+        }
+    }
+
+
     // After applying [loadInputs] above, we have the job inputs in the correct format,
     // except for files. These are represented as dx URLs (dx://proj-xxxx:file-yyyy::/A/B/C.txt)
     // instead of local files (/home/C.txt).
@@ -208,6 +361,25 @@ object JobInputOutput {
         // remove duplicates; we want to download each file just once
         val fileToDownload: Set[String] = fileURLs.toSet
 
+        // Choose a local path for each cloud file
+        val localizationPlan: Map[String, Path] =
+            filesToDownload.foldLeft(Map.empty[String, Path]) { case (accu, url) =>
+                val path = createUniqueDownloadPath(url, accu)
+                accu + (url -> path)
+            }
 
+        // download the files from the cloud.
+        // This could be done in parallel using the download agent.
+        // Right now, we are downloading the files one at a time
+        localizationPlan.foreach{ case (dxURL, localPath) =>
+            val (_, _, _, dxFile) = parse(dxUrl)
+            downloadFile(dxFile, localPath)
+        }
+
+        // Replace the dxURLs with local file paths
+        inputs.map{ case (inputName, womValue) =>
+            val v1 = replaceURLsWithLocalPaths(womValue, localizationPlan)
+            inputName -> v1
+        }
     }
 }

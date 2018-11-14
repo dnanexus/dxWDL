@@ -20,6 +20,11 @@ import spray.json._
 import Utils.{DX_URL_PREFIX, jsonNodeOfJsValue, jsValueOfJsonNode, trace}
 
 object DxPath {
+    case class Parts(proj: String,
+                     fid: String,
+                     basename: Option[String],
+                     dxFile: DXFile)
+
     // Lookup cache for projects. This saves
     // repeated searches for projects we already found.
     private val projectDict = HashMap.empty[String, DXProject]
@@ -96,6 +101,33 @@ object DxPath {
         if (found.length > 1)
             throw new Exception(s"Found more than one dx:object named ${objName} in path ${dxProject.getId}:${folder}")
         return found(0)
+    }
+
+
+    def parse(dxPath: String) : Parts = {
+        val components = dxPath.split(":")
+        if (components.length > 2)
+            throw new Exception(s"Path ${dxPath} cannot have more than two components")
+        if (components.length == 0)
+            throw new Exception(s"Path ${dxPath} is invalid")
+
+        // figure out the basename
+        val index = s.lastIndexOf("::")
+        val basename =
+            if (index == -1) None
+            else Some(s.substring(0, index))
+
+        val (projId, objId) =
+            if (components.length == 2) {
+                (components(0), components(1))
+            } else if (components.length == 1) {
+                val objName = components(0)
+                val crntProj = Utils.dxEnv.getProjectContext()
+                (crntProj, objName)
+            }
+        val dxProj = DXProject.getInstance(projId)
+        val dxFile = DXFile.getInstance(objId, dxProj)
+        Parts(projId, objId, basename, dxFile)
     }
 
     private def lookupDxPath(dxPath: String) : DXDataObject = {

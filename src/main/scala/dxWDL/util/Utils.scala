@@ -27,7 +27,6 @@ object Utils {
     val DEFAULT_RUNTIME_DEBUG_LEVEL = 1
     val DECOMPOSE_MAX_NUM_RENAME_TRIES = 100
     val DISAMBIGUATION_DIRS_MAX_NUM = 10
-    val DOWNLOAD_RETRY_LIMIT = 3
     val DX_FUNCTIONS_FILES = "dx_functions_files.json"
     val DX_HOME = "/home/dnanexus"
     val DX_URL_PREFIX = "dx://"
@@ -45,15 +44,12 @@ object Utils {
     val MAX_NUM_FILES_MOVE_LIMIT = 1000
     val OUTPUT_SECTION = "outputs"
     val REORG = "reorg"
-    val UBUNTU_VERSION = "16.04"
-
     val RUNNER_TASK_ENV_FILE = "taskEnv.json"
-    val UPLOAD_RETRY_LIMIT = DOWNLOAD_RETRY_LIMIT
+    val UBUNTU_VERSION = "16.04"
 
     var traceLevel = 0
 
     lazy val dxEnv = DXEnvironment.create()
-
 
     // The version lives in application.conf
     def getVersion() : String = {
@@ -426,77 +422,6 @@ object Utils {
     def downloadString(dxfile: DXFile) : String = {
         val bytes = dxfile.downloadBytes()
         new String(bytes, StandardCharsets.UTF_8)
-    }
-
-    // download a file from the platform to a path on the local disk.
-    //
-    // Note: this function assumes that the target path does not exist yet
-    def downloadFile(path: Path, dxfile: DXFile) : Unit = {
-        def downloadOneFile(path: Path, dxfile: DXFile, counter: Int) : Boolean = {
-            val fid = dxfile.getId()
-            try {
-                // Use dx download
-                val dxDownloadCmd = s"dx download ${fid} -o ${path.toString()}"
-                System.err.println(s"--  ${dxDownloadCmd}")
-                val (outmsg, errmsg) = execCommand(dxDownloadCmd, None)
-
-                true
-            } catch {
-                case e: Throwable =>
-                    if (counter < DOWNLOAD_RETRY_LIMIT)
-                        false
-                    else throw e
-            }
-        }
-        val dir = path.getParent()
-        if (dir != null) {
-            if (!Files.exists(dir))
-                Files.createDirectories(dir)
-        }
-        var rc = false
-        var counter = 0
-        while (!rc && counter < DOWNLOAD_RETRY_LIMIT) {
-            System.err.println(s"downloading file ${path.toString} (try=${counter})")
-            rc = downloadOneFile(path, dxfile, counter)
-            counter = counter + 1
-        }
-        if (!rc)
-            throw new Exception(s"Failure to download file ${path}")
-    }
-
-    // Upload a local file to the platform, and return a json link
-    def uploadFile(path: Path) : JsValue = {
-        if (!Files.exists(path))
-            throw new AppInternalException(s"Output file ${path.toString} is missing")
-        def uploadOneFile(path: Path, counter: Int) : Option[String] = {
-            try {
-                // shell out to dx upload
-                val dxUploadCmd = s"dx upload ${path.toString} --brief"
-                System.err.println(s"--  ${dxUploadCmd}")
-                val (outmsg, errmsg) = execCommand(dxUploadCmd, None)
-                if (!outmsg.startsWith("file-"))
-                    return None
-                Some(outmsg.trim())
-            } catch {
-                case e: Throwable =>
-                    if (counter < UPLOAD_RETRY_LIMIT)
-                        None
-                    else throw e
-            }
-        }
-
-        var counter = 0
-        while (counter < UPLOAD_RETRY_LIMIT) {
-            System.err.println(s"upload file ${path.toString} (try=${counter})")
-            uploadOneFile(path, counter) match {
-                case Some(fid) =>
-                    val v = s"""{ "$$dnanexus_link": "${fid}" }"""
-                    return v.parseJson
-                case None => ()
-            }
-            counter = counter + 1
-        }
-        throw new Exception(s"Failure to upload file ${path}")
     }
 
     // Parse a dnanexus file descriptor. Examples:
