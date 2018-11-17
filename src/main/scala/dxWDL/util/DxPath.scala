@@ -22,7 +22,7 @@ import Utils.{DX_URL_PREFIX, jsonNodeOfJsValue, jsValueOfJsonNode, trace}
 object DxPath {
     case class Parts(proj: String,
                      fid: String,
-                     basename: Option[String],
+                     basename: String,
                      dxFile: DXFile)
 
     // Lookup cache for projects. This saves
@@ -103,33 +103,6 @@ object DxPath {
         return found(0)
     }
 
-
-    def parse(dxPath: String) : Parts = {
-        val components = dxPath.split(":")
-        if (components.length > 2)
-            throw new Exception(s"Path ${dxPath} cannot have more than two components")
-        if (components.length == 0)
-            throw new Exception(s"Path ${dxPath} is invalid")
-
-        // figure out the basename
-        val index = s.lastIndexOf("::")
-        val basename =
-            if (index == -1) None
-            else Some(s.substring(0, index))
-
-        val (projId, objId) =
-            if (components.length == 2) {
-                (components(0), components(1))
-            } else if (components.length == 1) {
-                val objName = components(0)
-                val crntProj = Utils.dxEnv.getProjectContext()
-                (crntProj, objName)
-            }
-        val dxProj = DXProject.getInstance(projId)
-        val dxFile = DXFile.getInstance(objId, dxProj)
-        Parts(projId, objId, basename, dxFile)
-    }
-
     private def lookupDxPath(dxPath: String) : DXDataObject = {
         val components = dxPath.split(":")
         if (components.length > 2) {
@@ -147,7 +120,6 @@ object DxPath {
             throw new Exception(s"Path ${dxPath} is invalid")
         }
     }
-
 
     // strip the prefix, and the optional suffix
     private def lookupDxURL(buf: String) : DXDataObject = {
@@ -176,6 +148,29 @@ object DxPath {
         if (!dxObj.isInstanceOf[DXFile])
             throw new Exception(s"Found dx:object of the wrong type ${dxObj}")
         dxObj.asInstanceOf[DXFile]
+    }
+
+    def parse(dxPath: String) : Parts = {
+        val dxFile = lookupDxURLFile(dxPath)
+
+        // strip the 'dx://' prefix
+        assert(buf.startsWith(DX_URL_PREFIX))
+        val s = dxPath.substring(DX_URL_PREFIX.length)
+        val index = s.lastIndexOf("::")
+        val basename =
+            if (index == -1) {
+                // We don't have the file name, we need to perform an API call
+                dxObj.describe.getName
+            } else {
+                // From a string such as: dx://proj-xxxx:file-yyyy::/A/B/C.txt
+                // extract /A/B/C.txt, and then C.txt.
+                val fullName = s.substring(index + 2)
+                fullName.substring(fullName.lastIndexOf("/") + 1)
+            }
+        Parts(dxFile.getProject,
+              dxFile.getId,
+              basename,
+              dxFile)
     }
 
     // Convert a dx-file to a string with the format:

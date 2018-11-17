@@ -39,10 +39,9 @@ case class Task(task: CallableTaskDefinition,
     private val verbose = (runtimeDebugLevel >= 1)
     private val maxVerboseLevel = (runtimeDebugLevel == 2)
 
-/*
-    private def evalDeclarations(declarations: Seq[DeclarationInterface],
-                                 envInputs : Map[String, WomValue])
-            : Map[DeclarationInterface, WomValue] = {
+    private def evalDeclarations(envExpressions: Map[String, WomExpression],
+                                 inputs : Map[String, WomValue])
+            : Map[String, WomValue] = {
         // Environment that includes a cache for values that have
         // already been evaluated.  It is more efficient to make the
         // conversion once, however, that is not the main point
@@ -127,7 +126,6 @@ case class Task(task: CallableTaskDefinition,
         Utils.appletLog(verbose, s"Eval env=${env}")
         results
     }
- */
 
     def getMetaDir() = {
         val metaDir = Utils.getMetaDirPath()
@@ -276,7 +274,7 @@ case class Task(task: CallableTaskDefinition,
 
     // Calculate the input variables for the task, download the input files,
     // and build a shell script to run the command.
-    def prolog(inputWvls: Map[String, WomValue]) : Map[String, JsValue] = {
+    def prolog(inputs: Map[String, WomValue]) : Map[String, JsValue] = {
         Utils.appletLog(verbose, s"Prolog  debugLevel=${runtimeDebugLevel}")
         Utils.appletLog(verbose, s"dxWDL version: ${Utils.getVersion()}")
         if (maxVerboseLevel)
@@ -285,22 +283,15 @@ case class Task(task: CallableTaskDefinition,
         Utils.appletLog(verbose, s"Task source code:")
         Utils.appletLog(verbose, taskSourceCode, 10000)
 
-        val envInput = inputWvls.map{ case (key, wvl) =>
-            val w:WomValue =
-                if (wvl.attrs.stream) {
-                    // streaming file, create a named fifo for it
-                    throw new Exception("Not handling streaming files currently")
-                } else  {
-                    // regular file
-                    WdlVarLinks.localize(wvl, ioMode)
-                }
-            key -> w
-        }.toMap
+        // Download all input files.
+        //
+        // Note: this may be overly conservative,
+        // because some of the files may not actually be accessed.
+        val localInputs = JobInputOutput.localizeFiles(inputs)
 
-        // evaluate the declarations, and localize any files if necessary
+        // evaluate the declarations
         val env: Map[String, WomValue] =
-            evalDeclarations(task.declarations, envInput)
-                .map{ case (decl, v) => decl.unqualifiedName -> v}.toMap
+            evalDeclarations(task.environmentExpressions, inputs)
         val docker = dockerImage(env)
 
         // Write shell script to a file. It will be executed by the dx-applet code

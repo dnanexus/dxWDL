@@ -273,7 +273,7 @@ object JobInputOutput {
     // name, we may need to disambiguate them.
     private def createUniqueDownloadPath(dxUrl: String,
                                          existingFiles: Map[String, Path]) : Path = {
-        val (projId, objId, basename,_) = parse(dxUrl)
+        val (projId, objId, basename,_) = DxPath.parse(dxUrl)
         val shortPath = Utils.inputFilesDirPath.resolve(basename)
         if (!(existingFiles.values contains shortPath))
             return shortPath
@@ -372,7 +372,7 @@ object JobInputOutput {
         // This could be done in parallel using the download agent.
         // Right now, we are downloading the files one at a time
         localizationPlan.foreach{ case (dxURL, localPath) =>
-            val (_, _, _, dxFile) = parse(dxUrl)
+            val (_, _, _, dxFile) = DxFile.parse(dxUrl)
             downloadFile(dxFile, localPath)
         }
 
