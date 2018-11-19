@@ -31,101 +31,12 @@ import wom.expression.WomExpression
 import wom.types._
 import wom.values._
 
-
 case class Task(task: CallableTaskDefinition,
                 taskSourceCode: WorkflowSource,  // for debugging/informational purposes only
                 instanceTypeDB : InstanceTypeDB,
                 runtimeDebugLevel: Int) {
     private val verbose = (runtimeDebugLevel >= 1)
     private val maxVerboseLevel = (runtimeDebugLevel == 2)
-
-    private def evalDeclarations(envExpressions: Map[String, WomExpression],
-                                 inputs : Map[String, WomValue])
-            : Map[String, WomValue] = {
-        // Environment that includes a cache for values that have
-        // already been evaluated.  It is more efficient to make the
-        // conversion once, however, that is not the main point
-        // here. There are types that require special care, for
-        // example files. We need to make sure we download files
-        // exactly once, and later, we want to be able to delete them.
-        var env: Map[String, WomValue] = envInputs
-
-        def lookup(varName : String) : WomValue = env.get(varName) match {
-            case Some(v) => v
-            case None =>
-                // A value for this variable has not been passed. Check if it
-                // is optional.
-                val varDefinition = declarations.find(_.unqualifiedName == varName) match {
-                    case Some(x) => x
-                    case None => throw new Exception(
-                        s"Cannot find declaration for variable ${varName}")
-                }
-                varDefinition.womType match {
-                    case WomOptionalType(t) => WomOptionalValue(t, None)
-                    case _ =>  throw new UnboundVariableException(s"${varName}")
-                }
-        }
-
-        // coerce a WDL value to the required type (if needed)
-        def cast(wdlType: WomType, v: WomValue, varName: String) : WomValue = {
-            val retVal =
-                if (v.womType != wdlType) {
-                    // we need to convert types
-                    Utils.appletLog(verbose, s"casting ${v.womType} to ${wdlType}")
-                    wdlType.coerceRawValue(v).get
-                } else {
-                    // no need to change types
-                    v
-                }
-            retVal
-        }
-
-        def evalAndCache(decl:DeclarationInterface,
-                         expr:WdlExpression) : WomValue = {
-            val vRaw : WomValue = expr.evaluate(lookup, DxFunctions).get
-            //Utils.appletLog(verbose, s"evaluating ${decl} -> ${vRaw}")
-            val w: WomValue = cast(decl.womType, vRaw, decl.unqualifiedName)
-            env = env + (decl.unqualifiedName -> w)
-            w
-        }
-
-        def evalDecl(decl : DeclarationInterface) : WomValue = {
-            (decl.womType, decl.expression) match {
-                // optional input
-                case (WomOptionalType(t), None) =>
-                    envInputs.get(decl.unqualifiedName) match {
-                        case None => WomOptionalValue(t, None)
-                        case Some(wdlValue) => wdlValue
-                    }
-
-                // compulsory input
-                case (_, None) =>
-                    envInputs.get(decl.unqualifiedName) match {
-                        case None =>
-                            throw new UnboundVariableException(s"${decl.unqualifiedName}")
-                        case Some(wdlValue) => wdlValue
-                    }
-
-                case (_, Some(expr)) if (envInputs contains decl.unqualifiedName) =>
-                    // An overriding value was provided, use it instead
-                    // of evaluating the right hand expression
-                    envInputs(decl.unqualifiedName)
-
-                case (_, Some(expr)) =>
-                    // declaration to evaluate, not an input
-                    evalAndCache(decl, expr)
-            }
-        }
-
-        // Process all the declarations. Take care to add new bindings
-        // to the environment, so variables like [cmdline] will be able to
-        // access previous results.
-        val results = declarations.map{ decl =>
-            decl -> evalDecl(decl)
-        }.toMap
-        Utils.appletLog(verbose, s"Eval env=${env}")
-        results
-    }
 
     def getMetaDir() = {
         val metaDir = Utils.getMetaDirPath()
@@ -134,25 +45,36 @@ case class Task(task: CallableTaskDefinition,
     }
 
     // serialize the task inputs to json, and then write to a file.
-    private def writeEnvToDisk(env: Map[String, WomValue]) : Unit = {
-        val m : Map[String, JsValue] = env.map{ case(varName, v) =>
+    private def writeEnvToDisk(env: Map[String, WomValue],
+                               dxUrl2path: Map[DxURL, Path]) : Unit = {
+        val env_m : Map[String, JsValue] = env.map{ case(varName, v) =>
             (varName, WomValueSerialization.toJSON(v))
         }.toMap
-        val buf = (JsObject(m)).prettyPrint
+        val url_m : Map[String, JsValue] = dxUrl2path.map{ case(dxURL, path) =>
+            dxURL.value -> JsString(path.toString)
+        }
+
+        // marshal into json, and then to a string
+        val json = JsObject("env" -> JsObject(env_m),
+                           "dxUrl2path" -> JsObject(url_m))
         Utils.writeFileContent(getMetaDir().resolve(Utils.RUNNER_TASK_ENV_FILE),
-                               buf)
+                               json.prettyPrint)
     }
 
-    private def readEnvFromDisk() : Map[String, WomValue] = {
+    private def readEnvFromDisk() : (Map[String, WomValue], Map[DxURL, Path]) = {
         val buf = Utils.readFileContent(getMetaDir().resolve(Utils.RUNNER_TASK_ENV_FILE))
         val json : JsValue = buf.parseJson
-        val m = json match {
-            case JsObject(m) => m
-            case _ => throw new Exception("Malformed task declarations")
+        val (env_m, path_m) = json match {
+            case JsObject("env" -> env_m, "dxUrl2path" -> path_m) => (env_m, path_m)
+            case _ => throw new Exception("Malformed environment serialized to disk")
         }
-        m.map { case (key, jsVal) =>
+        val env = env_m.map{ case (key, jsVal) =>
             key -> WomValueSerialization.fromJSON(jsVal)
         }.toMap
+        val dxUrl2path = path_m.map{ case (key, JsString(path)) =>
+            DxURL(key) -> Paths.get(path)
+        }
+        (env, dxUrl2path)
     }
 
     private def printDirStruct() : Unit = {
@@ -287,11 +209,20 @@ case class Task(task: CallableTaskDefinition,
         //
         // Note: this may be overly conservative,
         // because some of the files may not actually be accessed.
-        val localInputs = JobInputOutput.localizeFiles(inputs)
+        val (localInputs, dxUrl2path) = JobInputOutput.localizeFiles(inputs)
 
         // evaluate the declarations
         val env: Map[String, WomValue] =
-            evalDeclarations(task.environmentExpressions, inputs)
+            task.environmentExpressions.foldLeft(inputs){
+                case (env, (varName, expr)) =>
+                    val result: ErrorOr[WomValue] =
+                        expr.evaluateValue(env, DxIoFunctions)
+                    result match {
+                        case Valid(value) => value
+                        case _ =>
+                            throw new AppInternalException(s"Error evaluating expression ${expr}")
+                    }
+            }
         val docker = dockerImage(env)
 
         // Write shell script to a file. It will be executed by the dx-applet code
@@ -305,29 +236,29 @@ case class Task(task: CallableTaskDefinition,
 
         // serialize the environment, so we don't have to calculate it again in
         // the epilog
-        writeEnvToDisk(env)
-
-        // Checkpoint the localized file tables
-        LocalDxFiles.freeze()
-        DxFunctions.freeze()
+        writeEnvToDisk(env, dxUrl2path)
 
         Map.empty
     }
 
     def epilog(inputs: Map[String, WdlVarLinks]) : Map[String, JsValue] = {
-        /*
         Utils.appletLog(verbose, s"Epilog  debugLevel=${runtimeDebugLevel}")
         if (maxVerboseLevel)
             printDirStruct()
 
-        // Repopulate the localized file tables
-        LocalDxFiles.unfreeze()
-        DxFunctions.unfreeze()
-
-        val env : Map[String, WomValue] = readEnvFromDisk()
+        val (env, dxUrl2path) = readEnvFromDisk()
 
         // evaluate the output declarations.
-        val outputs: Map[DeclarationInterface, WomValue] = evalDeclarations(task.outputs, env)
+        val outputs: Map[String, WomValue] = task.outputs.map{
+            case (outDef: OutputDefinition) =>
+                val result: ErrorOr[WomValue] =
+                    outDef.expression.evaluateValue(env, DxIoFunctions)
+                result match {
+                    case Valid(value) => value
+                    case _ =>
+                        throw new AppInternalException(s"Error evaluating expression ${expr}")
+                }
+        }
 
         // Upload any output files to the platform.
         val wvlOutputs:Map[String, WdlVarLinks] = outputs.map{ case (decl, wdlValue) =>
@@ -342,8 +273,6 @@ case class Task(task: CallableTaskDefinition,
             case (key, wvl) => WdlVarLinks.genFields(wvl, key)
         }.toList.flatten.toMap
         outputFields
-         */
-        throw new Exception("TODO")
     }
 
 

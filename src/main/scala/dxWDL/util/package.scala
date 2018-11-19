@@ -58,6 +58,12 @@ object CompilerFlag extends Enumeration {
 case class DXIOParam(ioClass: IOClass,
                      optional: Boolean)
 
+// An abstraction for a path to a file on the platform.
+// For example:
+//    dx://proj-xxxx:file-yyyy::/A/B/C.txt
+//    dx://proj-xxxx:file-yyyy
+//
+case class DxURL(value : string)
 
 // A stand in for the DXWorkflow.Stage inner class (we don't have a constructor for it)
 case class DXWorkflowStage(id: String) {

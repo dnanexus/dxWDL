@@ -17,7 +17,7 @@ import java.nio.file.Paths
 import scala.collection.JavaConverters._
 import scala.collection.mutable.HashMap
 import spray.json._
-import Utils.{DX_URL_PREFIX, jsonNodeOfJsValue, jsValueOfJsonNode, trace}
+import Utils.{DX_URL_PREFIX, DxURL, jsonNodeOfJsValue, jsValueOfJsonNode, trace}
 
 object DxPath {
     case class Parts(proj: String,
@@ -150,12 +150,12 @@ object DxPath {
         dxObj.asInstanceOf[DXFile]
     }
 
-    def parse(dxPath: String) : Parts = {
-        val dxFile = lookupDxURLFile(dxPath)
+    def parse(dxURL: DxURL) : Parts = {
+        val dxFile = lookupDxURLFile(dxURL.value)
 
         // strip the 'dx://' prefix
-        assert(buf.startsWith(DX_URL_PREFIX))
-        val s = dxPath.substring(DX_URL_PREFIX.length)
+        assert(dxURL.value.startsWith(DX_URL_PREFIX))
+        val s = dxURL.value.substring(DX_URL_PREFIX.length)
         val index = s.lastIndexOf("::")
         val basename =
             if (index == -1) {

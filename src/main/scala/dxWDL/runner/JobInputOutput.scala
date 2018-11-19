@@ -244,9 +244,9 @@ object JobInputOutput {
     }
 
     // find all file URLs in a Wom value
-    private def findFiles(v : WomValue) : Vector[String] = {
+    private def findFiles(v : WomValue) : Vector[DxURL] = {
         v match {
-            case (WomSingleFile(url)) => Vector(url)
+            case (WomSingleFile(url)) => Vector(DxURL(url))
             case (WomMap(_, m: Map[WomValue, WomValue])) =>
                 m.foldLeft(Vector.empty[String]) {
                     case (accu, (k,v)) =>
@@ -271,7 +271,7 @@ object JobInputOutput {
     // Create a local path for a DNAx file. The normal location, is to download
     // to the $HOME/inputs directory. However, since downloaded files may have the same
     // name, we may need to disambiguate them.
-    private def createUniqueDownloadPath(dxUrl: String,
+    private def createUniqueDownloadPath(dxUrl: DxURL,
                                          existingFiles: Map[String, Path]) : Path = {
         val (projId, objId, basename,_) = DxPath.parse(dxUrl)
         val shortPath = Utils.inputFilesDirPath.resolve(basename)
@@ -351,19 +351,20 @@ object JobInputOutput {
     //
     // 1. Figure out what files to download.
     // 2. Return a new map with the localized files replacing the platform files.
+    //    Also return a mapping from the dxURL to the local path.
     //
     // Notes:
     // A file may be referenced more than once, we want to download it
     // just once.
-    def localizeFiles(inputs: Map[String, WomValue]) : Map[String, WomValue] = {
-        val fileURLs : Vector[String] = findFiles(inputs.values)
+    def localizeFiles(inputs: Map[String, WomValue]) : (Map[String, WomValue], Map[DxURL, Path])= {
+        val fileURLs : Vector[DxURL] = findFiles(inputs.values)
 
         // remove duplicates; we want to download each file just once
-        val fileToDownload: Set[String] = fileURLs.toSet
+        val fileToDownload: Set[DxURL] = fileURLs.toSet
 
         // Choose a local path for each cloud file
-        val localizationPlan: Map[String, Path] =
-            filesToDownload.foldLeft(Map.empty[String, Path]) { case (accu, url) =>
+        val dxUrl2path: Map[DxURL, Path] =
+            filesToDownload.foldLeft(Map.empty[DxURL, Path]) { case (accu, url) =>
                 val path = createUniqueDownloadPath(url, accu)
                 accu + (url -> path)
             }
@@ -371,15 +372,17 @@ object JobInputOutput {
         // download the files from the cloud.
         // This could be done in parallel using the download agent.
         // Right now, we are downloading the files one at a time
-        localizationPlan.foreach{ case (dxURL, localPath) =>
-            val (_, _, _, dxFile) = DxFile.parse(dxUrl)
+        dxUrl2path.foreach{ case (dxURL, localPath) =>
+            val (_, _, _, dxFile) = DxFile.parse(dxURL)
             downloadFile(dxFile, localPath)
         }
 
         // Replace the dxURLs with local file paths
-        inputs.map{ case (inputName, womValue) =>
-            val v1 = replaceURLsWithLocalPaths(womValue, localizationPlan)
+        val localValues = inputs.map{ case (inputName, womValue) =>
+            val v1 = replaceURLsWithLocalPaths(womValue, dxUrl2path)
             inputName -> v1
         }
+
+        (localValues, dxUrl2path)
     }
 }
