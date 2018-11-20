@@ -70,8 +70,7 @@ case class Native(dxWDLrtId: Option[String],
             case Some(wdlValue) =>
                 val wvl = WdlVarLinks.importFromWDL(cVar.womType,
                                                     DeclAttrs.empty,
-                                                    wdlValue,
-                                                    IODirection.Zero)
+                                                    wdlValue)
                 WdlVarLinks.genFields(wvl, name).toMap
         }
         def jsMapFromDefault(name: String) : Map[String, JsValue] = {

@@ -18,7 +18,7 @@ case class DVar(fullyQualifiedName: String,
 
 case class NameBox(verbose: Verbose) {
     // never allow the reserved words
-    private var allExecNames:Set[String] = Utils.RESERVED_WORDS
+    private var allExecNames:Set[String] = Set.empty[String] //Utils.RESERVED_WORDS
 
     def chooseUniqueName(baseName: String) : String = {
         if (!(allExecNames contains baseName)) {

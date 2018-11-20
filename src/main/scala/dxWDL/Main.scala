@@ -379,16 +379,6 @@ object Main extends App {
         }
     }
 
-    private def isTaskOp(op: InternalOp.Value) : Boolean = {
-        op match {
-            case InternalOp.TaskCheckInstanceType |
-                    InternalOp.TaskEpilog |
-                    InternalOp.TaskProlog |
-                    InternalOp.TaskRelaunch => true
-            case _ => false
-        }
-    }
-
     // Extract the only task from a namespace
     private def getMainTask(bundle: WomBundle) : CallableTaskDefinition = {
         // check if the primary is nonempty
@@ -427,6 +417,7 @@ object Main extends App {
         // Parse the inputs, convert to WOM values. Delay downloading files
         // from the platform, we may not need to access them.
         val inputLines : String = Utils.readFileContent(jobInputPath)
+        val originalInputs : JsValue = inputLines.parseJson
         val inputs = runner.JobInputOutput.loadInputs(inputLines, task)
 
         // Figure out the available instance types, and their prices,
@@ -435,33 +426,42 @@ object Main extends App {
         val instanceTypeDB = dbRaw.parseJson.convertTo[InstanceTypeDB]
         val r = runner.Task(task, taskSourceCode, instanceTypeDB, rtDebugLvl)
 
-        if (op == InternalOp.TaskCheckInstanceType) {
-            // special operation to check if this task is on the right instance type
-            val correctInstanceType:Boolean = r.checkInstanceType(inputs)
-            SuccessfulTermination(correctInstanceType.toString)
-        } else {
-            val outputFields: Map[String, JsValue] =
-                if (isTaskOp(op)) {
-                    // Running tasks
-                    op match {
-                        case InternalOp.TaskEpilog => r.epilog(inputs)
-                        case InternalOp.TaskProlog => r.prolog(inputs)
-                        case InternalOp.TaskRelaunch => r.relaunch(inputs)
-                    }
-                } else {
-                    throw new Exception("not currently supported")
-                }
+        // Running tasks
+        op match {
+            case InternalOp.TaskCheckInstanceType =>
+                // special operation to check if this task is on the right instance type
+                val correctInstanceType:Boolean = r.checkInstanceType(inputs)
+                SuccessfulTermination(correctInstanceType.toString)
 
-            // write outputs, ignore null values, these could occur for optional
-            // values that were not specified.
-            val json = JsObject(outputFields.filter{
-                                    case (_,jsValue) => jsValue != null && jsValue != JsNull
-                                })
-            val ast_pp = json.prettyPrint
-            Utils.writeFileContent(jobOutputPath, ast_pp)
-            System.err.println(s"Wrote outputs ${ast_pp}")
+            case InternalOp.TaskProlog =>
+                val (env, dxUrl2path) = r.prolog(inputs)
+                r.writeEnvToDisk(env, dxUrl2path)
+                SuccessfulTermination(s"success ${op}")
 
-            SuccessfulTermination(s"success ${op}")
+            case InternalOp.TaskEpilog =>
+                val (env, dxUrl2path) = r.readEnvFromDisk()
+                val outputFields: Map[String, JsValue] = r.epilog(env, dxUrl2path)
+
+                // write outputs, ignore null values, these could occur for optional
+                // values that were not specified.
+                val json = JsObject(outputFields.filter{
+                                        case (_,jsValue) => jsValue != null && jsValue != JsNull
+                                    })
+                val ast_pp = json.prettyPrint
+                Utils.writeFileContent(jobOutputPath, ast_pp)
+                SuccessfulTermination(s"success ${op}")
+
+            case InternalOp.TaskRelaunch =>
+                val outputFields: Map[String, JsValue] = r.relaunch(inputs, originalInputs)
+                val json = JsObject(outputFields.filter{
+                                        case (_,jsValue) => jsValue != null && jsValue != JsNull
+                                    })
+                val ast_pp = json.prettyPrint
+                Utils.writeFileContent(jobOutputPath, ast_pp)
+                SuccessfulTermination(s"success ${op}")
+
+            case _ =>
+                UnsuccessfulTermination(s"operation ${op} not supported")
         }
     }
 

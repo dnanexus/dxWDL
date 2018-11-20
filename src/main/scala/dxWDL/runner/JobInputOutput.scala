@@ -1,8 +1,8 @@
 package dxWDL.runner
 
 import com.dnanexus.{DXFile}
-import dxWDL.util.WomTypeSerialization
-import java.nio.file.{Files, Paths}
+import dxWDL.util._
+import java.nio.file.{Files, Path, Paths}
 import spray.json._
 import wom.callable.Callable.{InputDefinitionWithDefault, FixedInputDefinition}
 import wom.types._
@@ -101,7 +101,7 @@ object JobInputOutput {
             case (WomSingleFileType, JsObject(_)) =>
                 // Convert the path in DNAx to a string. We can later
                 // decide if we want to download it or not
-                val dxFile = Utils.dxFileFromJsValue(jsv)
+                val dxFile = Utils.dxFileFromJsValue(jsValue)
                 val s = DxPath.dxFileToURL(dxFile)
                 WomSingleFile(s)
 
@@ -127,8 +127,8 @@ object JobInputOutput {
 
             case (WomPairType(lType, rType), JsObject(fields))
                     if (List("left", "right").forall(fields contains _)) =>
-                val left = jobInputToWomValue(lType, fields("left"), ioMode, ioDir)
-                val right = jobInputToWomValue(rType, fields("right"), ioMode, ioDir)
+                val left = jobInputToWomValue(lType, fields("left"))
+                val right = jobInputToWomValue(rType, fields("right"))
                 WomPair(left, right)
 
             case (WomObjectType, JsObject(fields)) =>
@@ -141,14 +141,14 @@ object JobInputOutput {
             // array
             case (WomArrayType(t), JsArray(vec)) =>
                 val wVec: Seq[WomValue] = vec.map{
-                    elem:JsValue => jobInputToWomValue(t, elem, ioMode, ioDir)
+                    elem:JsValue => jobInputToWomValue(t, elem)
                 }
                 WomArray(WomArrayType(t), wVec)
 
             case (WomOptionalType(t), JsNull) =>
                 WomOptionalValue(t, None)
             case (WomOptionalType(t), jsv) =>
-                val value = jobInputToWomValue(t, jsv, ioMode, ioDir)
+                val value = jobInputToWomValue(t, jsv)
                 WomOptionalValue(t, Some(value))
 
             case _ =>
@@ -229,24 +229,24 @@ object JobInputOutput {
                     WomOptionalValue(inpDfn.womType, None)
                 case Some(jsv) =>
                     // The field was specified
-                    val jsv =
+                    val jsv2 =
                         if (Utils.isNativeDxType(inpDfn.womType)) {
-                            jsValue
-                        } else {
-                            val (womType2, jsv) = unmarshalHash(jsValue)
-                            assert(womType2 == inpDfn.womType)
                             jsv
+                        } else {
+                            val (womType2, jsv1) = unmarshalHash(jsv)
+                            assert(womType2 == inpDfn.womType)
+                            jsv1
                         }
-                    jobInputToWomValue(inptDfn.womType, jsv)
+                    jobInputToWomValue(inpDfn.womType, jsv2)
             }
             inpDfn.name -> wv
         }.toMap
     }
 
     // find all file URLs in a Wom value
-    private def findFiles(v : WomValue) : Vector[DxURL] = {
+    private def findFiles(v : WomValue) : Vector[String] = {
         v match {
-            case (WomSingleFile(url)) => Vector(DxURL(url))
+            case (WomSingleFile(s)) => Vector(s)
             case (WomMap(_, m: Map[WomValue, WomValue])) =>
                 m.foldLeft(Vector.empty[String]) {
                     case (accu, (k,v)) =>
@@ -254,7 +254,7 @@ object JobInputOutput {
                 }
             case WomPair(lf, rt) =>
                 findFiles(lf) ++ findFiles(rt)
-            case WomObjectType =>
+            case _ : WomObject =>
                 throw new Exception("WOM objects not supported")
 
             // empty array
@@ -294,55 +294,75 @@ object JobInputOutput {
     }
 
 
-    // Recursively go into a womValue, and replace cloud URLs with the
-    // equivalent local path.
-    private def replaceURLsWithLocalPaths(womValue: WomValue,
-                                          localizationPlan: Map[String, Path]) : WomValue = {
+    // Recursively go into a womValue, and replace file string with
+    // an equivalent. Use the [translation] map to translate.
+    private def translateFiles(womValue: WomValue,
+                               translation: Map[String, String]) : WomValue = {
         womValue match {
             // primitive types, pass through
             case _: WomBoolean | WomInteger | WomFloat | WomString => womValue
 
             // single file
-            case WomSingleFile(url) =>
-                localizationPlan.get(url) match {
+            case WomSingleFile(s) =>
+                translation.get(s) match {
                     case None =>
                         throw new Exception(s"Did not localize ${url}")
-                    case Some(localPath) =>
-                        // replace URL with local file
-                        WomSingleFile(localPath)
+                    case Some(s2) =>
+                        WomSingleFile(s2)
                 }
 
             // Maps
             case (WomMap(t: WomMapType, m: Map[WomValue, WomValue])) =>
                 val m1 = m.map{ case (k, v) =>
-                    val k1 = replaceURLsWithLocalPaths(k, localizationPlan)
-                    val v1 = replaceURLsWithLocalPaths(v, localizationPlan)
+                    val k1 = translateFiles(k, translation)
+                    val v1 = translateFiles(v, translation)
                     k1 -> v1
                 }
                 WomMap(t, m1)
 
             case (WomPair(l, r)) =>
-                val left = replaceURLsWithLocalPaths(l, localizationPlan)
-                val right = replaceURLsWithLocalPaths(r, localizationPlan)
+                val left = translateFiles(l, translation)
+                val right = translateFiles(r, translation)
                 WomPair(left, right)
 
             case (WomObjectType, JsObject(fields)) =>
                 throw new Exception("WOM objects not supported")
 
             case WomArray(t: WomArrayType, a: Seq[WomValue]) =>
-                val a1 = a.map{ v => replaceURLsWithLocalPaths(v, localizationPlan) }
+                val a1 = a.map{ v => translateFiles(v, translation) }
                 WomArray(t, a1)
 
             case (WomOptionalValue(t: WomType), None) =>
                 WomOptionalValue(t, None)
             case (WomOptionalValue(t), Some(v)) =>
-                val v1 = replaceURLsWithLocalPaths(v, localizationPlan)
+                val v1 = translateFiles(v, translation)
                 WomOptionalValue(t, Some(v1))
 
             case _ =>
                 throw new AppInternalException(s"Unsupported wom value ${womValue}")
         }
     }
+
+    // Recursively go into a womValue, and replace cloud URLs with the
+    // equivalent local path.
+    private def replaceURLsWithLocalPaths(womValue: WomValue,
+                                          localizationPlan: Map[DxURL, Path]) : WomValue = {
+        val translation : Map[String, String] = localizationPlan.map{
+            case (dxUrl, path) =>  dxUrl.value -> path.toString
+        }.toMap
+        translateFiles(womValue, translation)
+    }
+
+    // Recursively go into a womValue, and replace cloud URLs with the
+    // equivalent local path.
+    private def replaceLocalPathsWithURLs(womValue: WomValue,
+                                          path2dxUrl : Map[Path, DxURL]) : WomValue = {
+        val translation : Map[String, String] = path2dxUrl.map{
+            case (path, dxUrl) => path.toString -> dxUrl.value
+        }.toMap
+        translateFiles(womValue, translation)
+    }
+
 
 
     // After applying [loadInputs] above, we have the job inputs in the correct format,
@@ -356,8 +376,8 @@ object JobInputOutput {
     // Notes:
     // A file may be referenced more than once, we want to download it
     // just once.
-    def localizeFiles(inputs: Map[String, WomValue]) : (Map[String, WomValue], Map[DxURL, Path])= {
-        val fileURLs : Vector[DxURL] = findFiles(inputs.values)
+    def localizeFiles(inputs: Map[String, WomValue]) : (Map[String, WomValue], Map[DxURL, Path]) = {
+        val fileURLs : Vector[DxURL] = findFiles(inputs.values).map(x => DxURL(x))
 
         // remove duplicates; we want to download each file just once
         val fileToDownload: Set[DxURL] = fileURLs.toSet
@@ -384,5 +404,43 @@ object JobInputOutput {
         }
 
         (localValues, dxUrl2path)
+    }
+
+    // We have task outputs, where files are stored locally. Upload the files to
+    // the cloud, and replace the WomValues with dxURLs.
+    //
+    // Edge cases:
+    // 1) If a file is already on the cloud, do not re-upload it. The content has not
+    // changed because files are immutable.
+    def delocalizeFiles(outputs: Map[String, WomValue],
+                        dxUrl2path: Map[DxURL, Path]) : Map[String, WomValue] = {
+        val localFiles : Vector[Path] = findFiles(outputs.values).map(x => Paths.get(x))
+
+        // 1) Filter out files that are already on the cloud.
+        // 2) A path can appear multiple times, make paths unique
+        //    so we don't upload the same file twice.
+        val filesOnCloud : Set[Path] =  dxUrl2path.values.toSet
+        val pathsToUpload : Set[Path] = localFiles.filter{ case path =>
+            !(path in filesOnCloud)
+        }.toSet
+
+        // upload the files; this could be in parallel in the future.
+        val uploaded_path2dxUrl : Map[Path, DxURL] = pathsToUpload.map{ path =>
+            val dxFile = uploadFile(path)
+            path -> DxPath.dxFileToURL(dxFile)
+        }
+
+        // invert the dxUrl2path map
+        val alreadyOnCloud_path2dxURL : Map[Path, DxURL] = dxUrl2path.foldLeft(Map.empty[Path, DxURL]) {
+            case (accu, (dxUrl, path)) =>
+                accu + (path -> dxURL)
+        }
+        val path2dxUrl = alreadyOnCloud_path2dxURL ++ uploaded_path2dxUrl
+
+        // Replace the local file paths with dxURLs
+        outputs.map{ case (outputName, womValue) =>
+            val v1 = replaceLocalPathsWithURLs(womValue, path2dxUrl)
+            outputName -> v1
+        }.toMap
     }
 }

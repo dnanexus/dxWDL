@@ -42,14 +42,6 @@ object IORef extends Enumeration {
     val Input, Output = Value
 }
 
-// The direction of IO:
-//   Download: downloading files
-//   Upload:  uploading files
-//   Zero:    no upload or download should be attempted
-object IODirection extends Enumeration {
-    val Download, Upload, Zero = Value
-}
-
 object CompilerFlag extends Enumeration {
     val All, IR, NativeWithoutRuntimeAsset = Value
 }
@@ -63,7 +55,7 @@ case class DXIOParam(ioClass: IOClass,
 //    dx://proj-xxxx:file-yyyy::/A/B/C.txt
 //    dx://proj-xxxx:file-yyyy
 //
-case class DxURL(value : string)
+case class DxURL(value : String)
 
 // A stand in for the DXWorkflow.Stage inner class (we don't have a constructor for it)
 case class DXWorkflowStage(id: String) {

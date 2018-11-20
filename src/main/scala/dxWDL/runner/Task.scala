@@ -23,6 +23,7 @@ import cats.data.Validated.{Invalid, Valid}
 import com.dnanexus.DXAPI // DXJob
 import com.fasterxml.jackson.databind.JsonNode
 import common.validation.ErrorOr.ErrorOr
+import java.nio.file.Path
 import spray.json._
 import dxWDL.util._
 import wom.callable.CallableTaskDefinition
@@ -45,8 +46,8 @@ case class Task(task: CallableTaskDefinition,
     }
 
     // serialize the task inputs to json, and then write to a file.
-    private def writeEnvToDisk(env: Map[String, WomValue],
-                               dxUrl2path: Map[DxURL, Path]) : Unit = {
+    def writeEnvToDisk(env: Map[String, WomValue],
+                       dxUrl2path: Map[DxURL, Path]) : Unit = {
         val env_m : Map[String, JsValue] = env.map{ case(varName, v) =>
             (varName, WomValueSerialization.toJSON(v))
         }.toMap
@@ -61,7 +62,7 @@ case class Task(task: CallableTaskDefinition,
                                json.prettyPrint)
     }
 
-    private def readEnvFromDisk() : (Map[String, WomValue], Map[DxURL, Path]) = {
+    def readEnvFromDisk() : (Map[String, WomValue], Map[DxURL, Path]) = {
         val buf = Utils.readFileContent(getMetaDir().resolve(Utils.RUNNER_TASK_ENV_FILE))
         val json : JsValue = buf.parseJson
         val (env_m, path_m) = json match {
@@ -196,7 +197,7 @@ case class Task(task: CallableTaskDefinition,
 
     // Calculate the input variables for the task, download the input files,
     // and build a shell script to run the command.
-    def prolog(inputs: Map[String, WomValue]) : Map[String, JsValue] = {
+    def prolog(inputs: Map[String, WomValue]) : (Map[String, WomValue], Map[DxURL, Path]) = {
         Utils.appletLog(verbose, s"Prolog  debugLevel=${runtimeDebugLevel}")
         Utils.appletLog(verbose, s"dxWDL version: ${Utils.getVersion()}")
         if (maxVerboseLevel)
@@ -236,41 +237,40 @@ case class Task(task: CallableTaskDefinition,
 
         // serialize the environment, so we don't have to calculate it again in
         // the epilog
-        writeEnvToDisk(env, dxUrl2path)
-
-        Map.empty
+        (env, dxUrl2path)
     }
 
-    def epilog(inputs: Map[String, WdlVarLinks]) : Map[String, JsValue] = {
+    def epilog(env: Map[String, WomValue],
+               dxUrl2path: Map[DxURL, Path]) : Map[String, JsValue] = {
         Utils.appletLog(verbose, s"Epilog  debugLevel=${runtimeDebugLevel}")
         if (maxVerboseLevel)
             printDirStruct()
 
-        val (env, dxUrl2path) = readEnvFromDisk()
-
-        // evaluate the output declarations.
-        val outputs: Map[String, WomValue] = task.outputs.map{
+        // Evaluate the output declarations. Add outputs evaluated to
+        // the environment, so they can be referenced by expressions in the next
+        // lines.
+        var envFull = env
+        val outputsLocal: Map[String, WomValue] = task.outputs.map{
             case (outDef: OutputDefinition) =>
                 val result: ErrorOr[WomValue] =
                     outDef.expression.evaluateValue(env, DxIoFunctions)
                 result match {
-                    case Valid(value) => value
+                    case Valid(value) =>
+                        env = env + (outDef.name -> value)
+                        value
                     case _ =>
                         throw new AppInternalException(s"Error evaluating expression ${expr}")
                 }
         }
 
-        // Upload any output files to the platform.
-        val wvlOutputs:Map[String, WdlVarLinks] = outputs.map{ case (decl, wdlValue) =>
-            // The declaration type is sometimes more accurate than the type of the wdlValue
-            val wvl = WdlVarLinks.importFromWDL(decl.womType,
-                                                DeclAttrs.empty, wdlValue, IODirection.Upload)
-            decl.unqualifiedName -> wvl
-        }.toMap
+        // Upload output files to the platform.
+        val outputs : Map[String, WomValue] = JobInputOutput.delocalizeFiles(outputsLocal, dxUrl2path)
 
         // convert the WDL values to JSON
-        val outputFields:Map[String, JsValue] = wvlOutputs.map {
-            case (key, wvl) => WdlVarLinks.genFields(wvl, key)
+        val outputFields:Map[String, JsValue] = outputs.map {
+            case (outputVarName, womValue) =>
+                val wvl = WdlVarLinks.importFromWDL(womValue.womType, DeclAttrs.empty, womValue)
+                WdlVarLinks.genFields(wvl, outputVarName)
         }.toList.flatten.toMap
         outputFields
     }
@@ -282,25 +282,29 @@ case class Task(task: CallableTaskDefinition,
     // Do not download the files, if there are any. We may be
     // calculating the instance type in the workflow runner, outside
     // the task.
-    def calcInstanceType(taskInputs: Map[String, WdlVarLinks]) : String = {
-        /*
-        val envInput: Map[String, WomValue] = taskInputs.map{ case (key, wvl) =>
-            key -> WdlVarLinks.localize(wvl, IOMode.Remote)
-        }.toMap
+    def calcInstanceType(taskInputs: Map[String, WomValue]) : String = {
+        // evaluate the declarations
         val env: Map[String, WomValue] =
-            evalDeclarations(task.declarations, envInput)
-                .map{ case (decl, v) => decl.unqualifiedName -> v}.toMap
-
-        def lookup(varName : String) : WomValue = {
-            env.get(varName) match {
-                case None => throw new UnboundVariableException(varName)
-                case Some(x) => x
+            task.environmentExpressions.foldLeft(inputs){
+                case (env, (varName, expr)) =>
+                    val result: ErrorOr[WomValue] = expr.evaluateValue(env, DxIoFunctions)
+                    result match {
+                        case Valid(value) => value
+                        case _ =>
+                            throw new AppInternalException(s"Error evaluating expression ${expr}")
+                    }
             }
-        }
+
         def evalAttr(attrName: String) : Option[WomValue] = {
-            task.runtimeAttributes.attrs.get(attrName) match {
+            task.runtimeAttributes.attributes.get(attrName) match {
                 case None => None
-                case Some(expr) => Some(expr.evaluate(lookup, DxFunctions).get)
+                case Some(expr) =>
+                    val result: ErrorOr[WomValue] = expr.evaluateValue(env, DxIoFunctions)
+                    result match {
+                        case Valid(value) => value
+                        case _ =>
+                            throw new AppInternalException(s"Error evaluating expression ${expr}")
+                    }
             }
         }
 
@@ -313,28 +317,16 @@ case class Task(task: CallableTaskDefinition,
         Utils.appletLog(verbose, s"""|calcInstanceType memory=${memory} disk=${diskSpace}
                                      |cores=${cores} instancetype=${iType}"""
                             .stripMargin.replaceAll("\n", " "))
-         iType */
-        throw new Exception("TODO")
+        iType
     }
-
-    /*
-    private def relaunchBuildInputs(inputWvls: Map[String, WdlVarLinks]) : JsValue = {
-        val inputs:Map[String,JsValue] = inputWvls.foldLeft(Map.empty[String, JsValue]) {
-            case (accu, (varName, wvl)) =>
-                val fields = WdlVarLinks.genFields(wvl, varName)
-                accu ++ fields.toMap
-        }
-        JsObject(inputs.toMap)
-    } */
-
 
     /** Check if we are already on the correct instance type. This allows for avoiding unnecessary
       * relaunch operations.
       */
-    def checkInstanceType(inputWvls: Map[String, WdlVarLinks]) : Boolean = {
+    def checkInstanceType(inputs: Map[String, WomValue]) : Boolean = {
         // evaluate the runtime attributes
         // determine the instance type
-        val requiredInstanceType:String = calcInstanceType(inputWvls)
+        val requiredInstanceType:String = calcInstanceType(inputs)
         Utils.appletLog(verbose, s"required instance type: ${requiredInstanceType}")
 
         // Figure out which instance we are on right now
@@ -360,28 +352,23 @@ case class Task(task: CallableTaskDefinition,
     /** The runtime attributes need to be calculated at runtime. Evaluate them,
       *  determine the instance type [xxxx], and relaunch the job on [xxxx]
       */
-    def relaunch(inputWvls: Map[String, WdlVarLinks]) : Map[String, JsValue] = {
-        /*
+    def relaunch(inputs: Map[String, WomValue], originalInputs : JsValue) : Map[String, JsValue] = {
         // evaluate the runtime attributes
         // determine the instance type
-        val instanceType:String = calcInstanceType(inputWvls)
-
-        // relaunch the applet on the correct instance type
-        val inputs = relaunchBuildInputs(inputWvls)
+        val instanceType:String = calcInstanceType(inputs)
 
         // Run a sub-job with the "body" entry point, and the required instance type
-        val dxSubJob : DXJob = Utils.runSubJob("body", Some(instanceType), inputs, Vector.empty)
+        val dxSubJob : DXJob = Utils.runSubJob("body", Some(instanceType), originalInputs, Vector.empty)
 
         // Return promises (JBORs) for all the outputs. Since the signature of the sub-job
         // is exactly the same as the parent, we can immediately exit the parent job.
-        val outputs: Map[String, JsValue] = task.outputs.map { tso =>
-            val wvl = WdlVarLinks(tso.womType,
-                                  DeclAttrs.empty,
-                                  DxlExec(dxSubJob, tso.unqualifiedName))
-            WdlVarLinks.genFields(wvl, tso.unqualifiedName)
+        val outputs: Map[String, JsValue] = task.outputs.map {
+            case (outDef: OutputDefinition) =>
+                val wvl = WdlVarLinks(outDef.womType,
+                                      DeclAttrs.empty,
+                                      DxlExec(dxSubJob, outDef.name))
+                WdlVarLinks.genFields(wvl, outDef.name)
         }.flatten.toMap
         outputs
-         */
-        throw new Exception("TODO")
     }
 }
