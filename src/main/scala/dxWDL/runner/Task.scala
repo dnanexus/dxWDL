@@ -18,12 +18,17 @@ task Add {
 
 package dxWDL.runner
 
-
 import cats.data.Validated.{Invalid, Valid}
 import com.dnanexus.DXAPI // DXJob
 import com.fasterxml.jackson.databind.JsonNode
+import com.sun.management.OperatingSystemMXBean
 import common.validation.ErrorOr.ErrorOr
-import java.nio.file.Path
+import eu.timepit.refined._
+import eu.timepit.refined.api.Refined
+import eu.timepit.refined.auto._
+import eu.timepit.refined.numeric._
+import java.lang.management._
+import java.nio.file.{Path, Paths}
 import spray.json._
 import dxWDL.util._
 import wom.callable.CallableTaskDefinition
@@ -38,12 +43,48 @@ case class Task(task: CallableTaskDefinition,
                 runtimeDebugLevel: Int) {
     private val verbose = (runtimeDebugLevel >= 1)
     private val maxVerboseLevel = (runtimeDebugLevel == 2)
+    private val RUNNER_TASK_ENV_FILE = "taskEnv.json"
 
-    def getMetaDir() = {
-        val metaDir = Utils.getMetaDirPath()
-        Utils.safeMkdir(metaDir)
-        metaDir
+    lazy val metaDirPath : Path = {
+        val currentDir = System.getProperty("user.dir")
+        val p = Paths.get(currentDir, "meta")
+        Utils.safeMkdir(p)
+        p
     }
+
+    lazy val execDirPath : Path = {
+        val currentDir = System.getProperty("user.dir")
+        val p = Paths.get(currentDir, "execution")
+        Utils.safeMkdir(p)
+        p
+    }
+
+    // Running applets download files from the platform to
+    // this location
+    lazy val inputFilesDirPath : Path = {
+        val p = execDirPath.resolve("inputs")
+        Utils.safeMkdir(p)
+        p
+    }
+
+    // Running applets download files from the platform to
+    // this location
+    lazy val outputFilesDirPath : Path = {
+        val p = execDirPath.resolve("outputs")
+        Utils.safeMkdir(p)
+        p
+    }
+
+    // This directory has to reside under the user home directory. If
+    // a task runs under docker, the container will need access to
+    // temporary files created with stdlib calls like "write_lines".
+    lazy val tmpDirPath : Path = {
+        val currentDir = System.getProperty("user.dir")
+        val p = Paths.get(currentDir, "job_scratch_space")
+        Utils.safeMkdir(p)
+        p
+    }
+
 
     // serialize the task inputs to json, and then write to a file.
     def writeEnvToDisk(env: Map[String, WomValue],
@@ -58,15 +99,19 @@ case class Task(task: CallableTaskDefinition,
         // marshal into json, and then to a string
         val json = JsObject("env" -> JsObject(env_m),
                            "dxUrl2path" -> JsObject(url_m))
-        Utils.writeFileContent(getMetaDir().resolve(Utils.RUNNER_TASK_ENV_FILE),
+        Utils.writeFileContent(metaDirPath.resolve(RUNNER_TASK_ENV_FILE),
                                json.prettyPrint)
     }
 
     def readEnvFromDisk() : (Map[String, WomValue], Map[DxURL, Path]) = {
-        val buf = Utils.readFileContent(getMetaDir().resolve(Utils.RUNNER_TASK_ENV_FILE))
+        val buf = Utils.readFileContent(metaDirPath.resolve(RUNNER_TASK_ENV_FILE))
         val json : JsValue = buf.parseJson
         val (env_m, path_m) = json match {
-            case JsObject("env" -> env_m, "dxUrl2path" -> path_m) => (env_m, path_m)
+            case JsObject(m) =>
+                (m.get("env"), m.get("dxUrl2path")) match {
+                    case (Some(JsObject(env_m)), Some(JsObject(path_m))) => (env_m, path_m)
+                    case (_, _) => throw new Exception("Malformed environment serialized to disk")
+                }
             case _ => throw new Exception("Malformed environment serialized to disk")
         }
         val env = env_m.map{ case (key, jsVal) =>
@@ -120,23 +165,29 @@ case class Task(task: CallableTaskDefinition,
     // need to run some shell setup statements before and after this
     // script.
     private def writeBashScript(env: Map[String, WomValue]) : Unit = {
-        val metaDir = getMetaDir()
-        val scriptPath = metaDir.resolve("script")
-        val stdoutPath = metaDir.resolve("stdout")
-        val stderrPath = metaDir.resolve("stderr")
-        val rcPath = metaDir.resolve("rc")
+        val scriptPath = metaDirPath.resolve("script")
+        val stdoutPath = metaDirPath.resolve("stdout")
+        val stderrPath = metaDirPath.resolve("stderr")
+        val rcPath = metaDirPath.resolve("rc")
+
+        val mbean = ManagementFactory.getOperatingSystemMXBean().asInstanceOf[com.sun.management.OperatingSystemMXBean]
+        val physicalMemorySize = mbean.getTotalPhysicalMemorySize()
+        val numCores = Runtime.getRuntime().availableProcessors()
+        val nc = refineV[Positive](numCores).right.get
+
+        val runtimeEnvironment = wom.callable.RuntimeEnvironment(
+            outputFilesDirPath.toAbsolutePath().toString,
+            tmpDirPath.toAbsolutePath().toString,
+            nc,
+            physicalMemorySize,
+            1000, //outputPathSize: Long,
+            1000) //tempPathSize: Long)
 
         // instantiate the command
-        val cmdEnv: Map[Declaration, WomValue] = env.map {
-            case (varName, wdlValue) =>
-                val decl = task.declarations.find(_.unqualifiedName == varName) match {
-                    case Some(x) => x
-                    case None => throw new Exception(
-                        s"Cannot find declaration for variable ${varName}")
-                }
-                decl -> wdlValue
-        }.toMap
-        val womInstantiation = task.instantiateCommand(cmdEnv, DxFunctions).toTry.get
+        val womInstantiation = task.instantiateCommand(env,
+                                                       DxIoFunctions,
+                                                       Map.empty,
+                                                       runtimeEnvironment).toTry.get
         val command = womInstantiation.head.commandString
 
         // This is based on Cromwell code from

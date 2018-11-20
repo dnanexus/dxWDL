@@ -20,10 +20,7 @@ import spray.json._
 import Utils.{DX_URL_PREFIX, DxURL, jsonNodeOfJsValue, jsValueOfJsonNode, trace}
 
 object DxPath {
-    case class Parts(proj: String,
-                     fid: String,
-                     basename: String,
-                     dxFile: DXFile)
+    case class Parts(basename: String, dxFile: DXFile)
 
     // Lookup cache for projects. This saves
     // repeated searches for projects we already found.
@@ -167,10 +164,7 @@ object DxPath {
                 val fullName = s.substring(index + 2)
                 fullName.substring(fullName.lastIndexOf("/") + 1)
             }
-        Parts(dxFile.getProject,
-              dxFile.getId,
-              basename,
-              dxFile)
+        Parts(basename, dxFile)
     }
 
     // Convert a dx-file to a string with the format:

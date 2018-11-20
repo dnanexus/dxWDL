@@ -10,8 +10,9 @@ import wom.values._
 
 object JobInputOutput {
 
-    val DOWNLOAD_RETRY_LIMIT = 3
-    val UPLOAD_RETRY_LIMIT = DOWNLOAD_RETRY_LIMIT
+    private val DOWNLOAD_RETRY_LIMIT = 3
+    private val UPLOAD_RETRY_LIMIT = 3
+    private val DISAMBIGUATION_DIRS_MAX_NUM = 10
 
     // download a file from the platform to a path on the local disk. Use
     // 'dx download' as a separate process.
@@ -52,7 +53,7 @@ object JobInputOutput {
 
     // Upload a local file to the platform, and return a json link.
     // Use 'dx upload' as a separate process.
-    def uploadFile(path: Path) : JsValue = {
+    def uploadFile(path: Path) : DXFile = {
         if (!Files.exists(path))
             throw new AppInternalException(s"Output file ${path.toString} is missing")
         def uploadOneFile(path: Path, counter: Int) : Option[String] = {
@@ -77,8 +78,7 @@ object JobInputOutput {
             System.err.println(s"upload file ${path.toString} (try=${counter})")
             uploadOneFile(path, counter) match {
                 case Some(fid) =>
-                    val v = s"""{ "$$dnanexus_link": "${fid}" }"""
-                    return v.parseJson
+                   return DXFile.getInstance(fid)
                 case None => ()
             }
             counter = counter + 1
@@ -259,9 +259,9 @@ object JobInputOutput {
 
             // empty array
             case (WomArray(_, value: Seq[WomValue])) =>
-                value.map(findFiles).flatten
+                value.map(findFiles).flatten.toVector
 
-            case (WomOptional(_, Some(value))) =>
+            case (WomOptionalValue(_, Some(value))) =>
                 findFiles(value)
 
             case _ => Vector.empty
@@ -272,24 +272,25 @@ object JobInputOutput {
     // to the $HOME/inputs directory. However, since downloaded files may have the same
     // name, we may need to disambiguate them.
     private def createUniqueDownloadPath(dxUrl: DxURL,
-                                         existingFiles: Map[String, Path]) : Path = {
-        val (projId, objId, basename,_) = DxPath.parse(dxUrl)
-        val shortPath = Utils.inputFilesDirPath.resolve(basename)
-        if (!(existingFiles.values contains shortPath))
+                                         existingFiles: Set[Path],
+                                         inputsDir: Path) : Path = {
+        val DxPath.Parts(basename, dxFile) = DxPath.parse(dxUrl)
+        val shortPath = inputsDir.resolve(basename)
+        if (!(existingFiles contains shortPath))
             return shortPath
 
         // The path is already used for a file with this name. Try to place it
         // in directories: [inputs/1, inputs/2, ... ]
-        System.err.println(s"Disambiguating file ${fid} with name ${basename}")
+        System.err.println(s"Disambiguating file ${dxFile.getId} with name ${basename}")
 
         for (dirNum <- 1 to DISAMBIGUATION_DIRS_MAX_NUM) {
-            val dir:Path = Utils.inputFilesDirPath.resolve(dirNum.toString)
+            val dir:Path = inputsDir.resolve(dirNum.toString)
             val longPath = dir.resolve(basename)
-            if (!(existingFiles.values contains longPath))
+            if (!(existingFiles contains longPath))
                 return longPath
         }
-        throw new Exception(s"""|Tried to download ${objId} ${basename} to local filesystem
-                                |at ${Utils.inputFilesDirPath}/*/${basename}, all are taken"""
+        throw new Exception(s"""|Tried to download ${dxFile.getId} ${basename} to local filesystem
+                                |at ${inputsDir}/*/${basename}, all are taken"""
                                 .stripMargin.replaceAll("\n", " "))
     }
 
@@ -300,13 +301,13 @@ object JobInputOutput {
                                translation: Map[String, String]) : WomValue = {
         womValue match {
             // primitive types, pass through
-            case _: WomBoolean | WomInteger | WomFloat | WomString => womValue
+            case WomBoolean(_) | WomInteger(_) | WomFloat(_) | WomString(_) => womValue
 
             // single file
             case WomSingleFile(s) =>
                 translation.get(s) match {
                     case None =>
-                        throw new Exception(s"Did not localize ${url}")
+                        throw new Exception(s"Did not localize file ${s}")
                     case Some(s2) =>
                         WomSingleFile(s2)
                 }
@@ -325,16 +326,16 @@ object JobInputOutput {
                 val right = translateFiles(r, translation)
                 WomPair(left, right)
 
-            case (WomObjectType, JsObject(fields)) =>
+            case WomObject(_,_) =>
                 throw new Exception("WOM objects not supported")
 
             case WomArray(t: WomArrayType, a: Seq[WomValue]) =>
                 val a1 = a.map{ v => translateFiles(v, translation) }
                 WomArray(t, a1)
 
-            case (WomOptionalValue(t: WomType), None) =>
+            case WomOptionalValue(t,  None) =>
                 WomOptionalValue(t, None)
-            case (WomOptionalValue(t), Some(v)) =>
+            case WomOptionalValue(t, Some(v)) =>
                 val v1 = translateFiles(v, translation)
                 WomOptionalValue(t, Some(v1))
 
@@ -376,16 +377,18 @@ object JobInputOutput {
     // Notes:
     // A file may be referenced more than once, we want to download it
     // just once.
-    def localizeFiles(inputs: Map[String, WomValue]) : (Map[String, WomValue], Map[DxURL, Path]) = {
-        val fileURLs : Vector[DxURL] = findFiles(inputs.values).map(x => DxURL(x))
+    def localizeFiles(inputs: Map[String, WomValue],
+                      inputsDir: Path) : (Map[String, WomValue], Map[DxURL, Path]) = {
+        val fileURLs : Vector[DxURL] = inputs.values.map(findFiles).flatten.toVector.map(x => DxURL(x))
 
         // remove duplicates; we want to download each file just once
-        val fileToDownload: Set[DxURL] = fileURLs.toSet
+        val filesToDownload: Set[DxURL] = fileURLs.toSet
 
         // Choose a local path for each cloud file
         val dxUrl2path: Map[DxURL, Path] =
             filesToDownload.foldLeft(Map.empty[DxURL, Path]) { case (accu, url) =>
-                val path = createUniqueDownloadPath(url, accu)
+                val existingFiles = accu.values.toSet
+                val path = createUniqueDownloadPath(url, existingFiles, inputsDir)
                 accu + (url -> path)
             }
 
@@ -393,8 +396,8 @@ object JobInputOutput {
         // This could be done in parallel using the download agent.
         // Right now, we are downloading the files one at a time
         dxUrl2path.foreach{ case (dxURL, localPath) =>
-            val (_, _, _, dxFile) = DxFile.parse(dxURL)
-            downloadFile(dxFile, localPath)
+            val DxPath.Parts(_,dxFile) = DxPath.parse(dxURL)
+            downloadFile(localPath, dxFile)
         }
 
         // Replace the dxURLs with local file paths
@@ -414,26 +417,27 @@ object JobInputOutput {
     // changed because files are immutable.
     def delocalizeFiles(outputs: Map[String, WomValue],
                         dxUrl2path: Map[DxURL, Path]) : Map[String, WomValue] = {
-        val localFiles : Vector[Path] = findFiles(outputs.values).map(x => Paths.get(x))
+        val localFiles : Vector[Path] = outputs.values.map(findFiles).flatten.toVector.map(x => Paths.get(x))
 
         // 1) Filter out files that are already on the cloud.
         // 2) A path can appear multiple times, make paths unique
         //    so we don't upload the same file twice.
         val filesOnCloud : Set[Path] =  dxUrl2path.values.toSet
         val pathsToUpload : Set[Path] = localFiles.filter{ case path =>
-            !(path in filesOnCloud)
+            !(filesOnCloud contains path)
         }.toSet
 
         // upload the files; this could be in parallel in the future.
         val uploaded_path2dxUrl : Map[Path, DxURL] = pathsToUpload.map{ path =>
             val dxFile = uploadFile(path)
-            path -> DxPath.dxFileToURL(dxFile)
-        }
+
+            path -> DxURL(DxPath.dxFileToURL(dxFile))
+        }.toMap
 
         // invert the dxUrl2path map
         val alreadyOnCloud_path2dxURL : Map[Path, DxURL] = dxUrl2path.foldLeft(Map.empty[Path, DxURL]) {
             case (accu, (dxUrl, path)) =>
-                accu + (path -> dxURL)
+                accu + (path -> dxUrl)
         }
         val path2dxUrl = alreadyOnCloud_path2dxURL ++ uploaded_path2dxUrl
 

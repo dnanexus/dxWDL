@@ -26,8 +26,6 @@ object Utils {
     val DEFAULT_INSTANCE_TYPE = "mem1_ssd1_x4"
     val DEFAULT_RUNTIME_DEBUG_LEVEL = 1
     val DECOMPOSE_MAX_NUM_RENAME_TRIES = 100
-    val DISAMBIGUATION_DIRS_MAX_NUM = 10
-    val DX_FUNCTIONS_FILES = "dx_functions_files.json"
     val DX_HOME = "/home/dnanexus"
     val DX_URL_PREFIX = "dx://"
     val DX_WDL_ASSET = "dxWDLrt"
@@ -36,7 +34,6 @@ object Utils {
     val INSTANCE_TYPE_DB_FILENAME = "instanceTypeDB.json"
     val INTERMEDIATE_RESULTS_FOLDER = "intermediate"
     val LAST_STAGE = "last"
-    val LOCAL_DX_FILES_CHECKPOINT_FILE = "localized_files.json"
     val LINK_INFO_FILENAME = "linking.json"
     val MAX_NUM_REDUCE_ITERATIONS = 100
     val MAX_STRING_LEN = 8 * 1024     // Long strings cause problems with bash and the UI
@@ -44,7 +41,6 @@ object Utils {
     val MAX_NUM_FILES_MOVE_LIMIT = 1000
     val OUTPUT_SECTION = "outputs"
     val REORG = "reorg"
-    val RUNNER_TASK_ENV_FILE = "taskEnv.json"
     val UBUNTU_VERSION = "16.04"
 
     var traceLevel = 0
@@ -73,42 +69,11 @@ object Utils {
     // on unused variables.
     def ignore[A](value: A) : Unit = {}
 
-    lazy val execDirPath : Path = {
-        val currentDir = System.getProperty("user.dir")
-        val p = Paths.get(currentDir, "execution")
-        safeMkdir(p)
-        p
-    }
-
-    // This directory has to reside under the user home directory. If
-    // a task runs under docker, the container will need access to
-    // temporary files created with stdlib calls like "write_lines".
-    lazy val tmpDirPath : Path = {
-        val currentDir = System.getProperty("user.dir")
-        val p = Paths.get(currentDir, "job_scratch_space")
-        safeMkdir(p)
-        p
-    }
     lazy val appCompileDirPath : Path = {
         val p = Paths.get("/tmp/dxWDL_Compile")
         safeMkdir(p)
         p
     }
-
-    // Running applets download files from the platform to
-    // this location
-    lazy val inputFilesDirPath : Path = {
-        val p = execDirPath.resolve("inputs")
-        safeMkdir(p)
-        p
-    }
-
-    // where script files are placed and generated
-    def getMetaDirPath() : Path = {
-        val p = execDirPath.resolve("meta")
-        p
-    }
-
 
     // Is this a WDL type that maps to a native DX type?
     def isNativeDxType(wdlType: WomType) : Boolean = {
