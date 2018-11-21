@@ -19,22 +19,17 @@ task Add {
 package dxWDL.runner
 
 import cats.data.Validated.{Invalid, Valid}
-import com.dnanexus.DXAPI // DXJob
+import com.dnanexus.{DXAPI, DXJob}
 import com.fasterxml.jackson.databind.JsonNode
-import com.sun.management.OperatingSystemMXBean
 import common.validation.ErrorOr.ErrorOr
-import eu.timepit.refined._
-import eu.timepit.refined.api.Refined
-import eu.timepit.refined.auto._
-import eu.timepit.refined.numeric._
 import java.lang.management._
 import java.nio.file.{Path, Paths}
 import spray.json._
 import dxWDL.util._
 import wom.callable.CallableTaskDefinition
+import wom.callable.Callable.{InputDefinition, OutputDefinition}
 import wom.core.WorkflowSource
-import wom.expression.WomExpression
-import wom.types._
+import wom.expression.{NoIoFunctionSet}
 import wom.values._
 
 case class Task(task: CallableTaskDefinition,
@@ -44,6 +39,15 @@ case class Task(task: CallableTaskDefinition,
     private val verbose = (runtimeDebugLevel >= 1)
     private val maxVerboseLevel = (runtimeDebugLevel == 2)
     private val RUNNER_TASK_ENV_FILE = "taskEnv.json"
+    private val DX_HOME = "/home/dnanexus"
+
+    def getErrorOr[A](value: ErrorOr[A]) : A = {
+        value match {
+            case Valid(x) => x
+            case Invalid(s) => throw new AppInternalException(s"Invalid ${s}")
+        }
+    }
+
 
     lazy val metaDirPath : Path = {
         val currentDir = System.getProperty("user.dir")
@@ -117,9 +121,10 @@ case class Task(task: CallableTaskDefinition,
         val env = env_m.map{ case (key, jsVal) =>
             key -> WomValueSerialization.fromJSON(jsVal)
         }.toMap
-        val dxUrl2path = path_m.map{ case (key, JsString(path)) =>
-            DxURL(key) -> Paths.get(path)
-        }
+        val dxUrl2path = path_m.map{
+            case (key, JsString(path)) => DxURL(key) -> Paths.get(path)
+            case (_, _) => throw new Exception("Sanity")
+        }.toMap
         (env, dxUrl2path)
     }
 
@@ -135,7 +140,7 @@ case class Task(task: CallableTaskDefinition,
             case None => None
             case Some(expr) =>
                 val result: ErrorOr[WomValue] =
-                    expr.evaluateValue(env, wom.expression.NoIoFunctionSet)
+                    expr.evaluateValue(env, NoIoFunctionSet)
                 result match {
                     case Valid(WomString(s)) => Some(s)
                     case _ =>
@@ -164,31 +169,37 @@ case class Task(task: CallableTaskDefinition,
     // Write the core bash script into a file. In some cases, we
     // need to run some shell setup statements before and after this
     // script.
-    private def writeBashScript(env: Map[String, WomValue]) : Unit = {
-        val scriptPath = metaDirPath.resolve("script")
-        val stdoutPath = metaDirPath.resolve("stdout")
-        val stderrPath = metaDirPath.resolve("stderr")
-        val rcPath = metaDirPath.resolve("rc")
-
+    private def writeBashScript(inputEnv: Map[InputDefinition, WomValue]) : Unit = {
         val mbean = ManagementFactory.getOperatingSystemMXBean().asInstanceOf[com.sun.management.OperatingSystemMXBean]
         val physicalMemorySize = mbean.getTotalPhysicalMemorySize()
         val numCores = Runtime.getRuntime().availableProcessors()
-        val nc = refineV[Positive](numCores).right.get
+
+        import eu.timepit.refined._
+        //import eu.timepit.refined.api.Refined
+        import eu.timepit.refined.auto._
+        import eu.timepit.refined.numeric._
+        val numCoresPositiveInt = refineV[Positive](numCores).right.get
 
         val runtimeEnvironment = wom.callable.RuntimeEnvironment(
             outputFilesDirPath.toAbsolutePath().toString,
             tmpDirPath.toAbsolutePath().toString,
-            nc,
+            numCoresPositiveInt,
             physicalMemorySize,
+
+            // TODO
             1000, //outputPathSize: Long,
             1000) //tempPathSize: Long)
 
         // instantiate the command
-        val womInstantiation = task.instantiateCommand(env,
-                                                       DxIoFunctions,
-                                                       Map.empty,
-                                                       runtimeEnvironment).toTry.get
-        val command = womInstantiation.head.commandString
+        // TODO: [env] has to be of type:
+        //   type WomEvaluatedCallInputs = Map[InputDefinition, WomValue]
+        val womInstantiation = getErrorOr(task.instantiateCommand(inputEnv,
+                                                                  NoIoFunctionSet,
+                                                                  identity,
+                                                                  runtimeEnvironment))
+
+        //val command = womInstantiation.head.commandString
+        val command = womInstantiation.commandString
 
         // This is based on Cromwell code from
         // [BackgroundAsyncJobExecutionActor.scala].  Generate a bash
@@ -202,6 +213,10 @@ case class Task(task: CallableTaskDefinition,
         //    2>    redirect stderr
         //    <     redirect stdin
         //
+        val scriptPath = metaDirPath.resolve("script")
+        val stdoutPath = metaDirPath.resolve("stdout")
+        val stderrPath = metaDirPath.resolve("stderr")
+        val rcPath = metaDirPath.resolve("rc")
         val script =
             if (command.isEmpty) {
                 s"""|#!/bin/bash
@@ -210,7 +225,7 @@ case class Task(task: CallableTaskDefinition,
             } else {
                 s"""|#!/bin/bash
                     |(
-                    |    cd ${Utils.DX_HOME}
+                    |    cd ${DX_HOME}
                     |    ${command}
                     |) \\
                     |  > >( tee ${stdoutPath} ) \\
@@ -220,6 +235,21 @@ case class Task(task: CallableTaskDefinition,
             }
         Utils.appletLog(verbose, s"writing bash script to ${scriptPath}")
         Utils.writeFileContent(scriptPath, script)
+    }
+
+    private def evalEnvironment(inputs: Map[String, WomValue]) : Map[String, WomValue] = {
+        // evaluate the declarations
+        task.environmentExpressions.foldLeft(inputs){
+            case (env, (varName, expr)) =>
+                val result: ErrorOr[WomValue] =
+                    expr.evaluateValue(env, DxIoFunctions)
+                val v = result match {
+                    case Valid(value) => value
+                    case _ =>
+                        throw new AppInternalException(s"Error evaluating expression ${expr}")
+                }
+                env + (varName -> v)
+        }.toMap
     }
 
     private def writeDockerSubmitBashScript(env: Map[String, WomValue],
@@ -232,12 +262,11 @@ case class Task(task: CallableTaskDefinition,
         // Map the home directory into the container, so that
         // we can reach the result files, and upload them to
         // the platform.
-        val DX_HOME = Utils.DX_HOME
         val dockerCmd = s"""|dx-docker run --entrypoint /bin/bash
                             |-v ${DX_HOME}:${DX_HOME}
                             |${imgName}
                             |$${HOME}/execution/meta/script""".stripMargin.replaceAll("\n", " ")
-        val dockerRunPath = getMetaDir().resolve("script.submit")
+        val dockerRunPath = metaDirPath.resolve("script.submit")
         val dockerRunScript =
             s"""|#!/bin/bash -ex
                 |${dockerCmd}""".stripMargin
@@ -261,24 +290,25 @@ case class Task(task: CallableTaskDefinition,
         //
         // Note: this may be overly conservative,
         // because some of the files may not actually be accessed.
-        val (localInputs, dxUrl2path) = JobInputOutput.localizeFiles(inputs)
+        val (localInputs, dxUrl2path) = JobInputOutput.localizeFiles(inputs, inputFilesDirPath)
 
         // evaluate the declarations
-        val env: Map[String, WomValue] =
-            task.environmentExpressions.foldLeft(inputs){
-                case (env, (varName, expr)) =>
-                    val result: ErrorOr[WomValue] =
-                        expr.evaluateValue(env, DxIoFunctions)
-                    result match {
-                        case Valid(value) => value
-                        case _ =>
-                            throw new AppInternalException(s"Error evaluating expression ${expr}")
-                    }
-            }
+        val env: Map[String, WomValue] = evalEnvironment(inputs)
         val docker = dockerImage(env)
 
-        // Write shell script to a file. It will be executed by the dx-applet code
-        writeBashScript(env)
+        // We need a value of type
+        //    type WomEvaluatedCallInputs = Map[InputDefinition, WomValue]
+        // to be able to instantiate the command. It is not clear to me
+        // how the environment variables are passed.
+        val inputEnv : Map[InputDefinition, WomValue] = task.inputs.map{ inpDef =>
+            inputs.get(inpDef.name) match {
+                case Some(value) => inpDef -> value
+                case None => throw new Exception(s"Sanity: input ${inpDef.localName} is unspecified")
+            }
+        }.toMap
+
+        // Write shell script to a file. It will be executed by the dx-applet shell code.
+        writeBashScript(inputEnv)
         docker match {
             case Some(img) =>
                 // write a script that launches the actual command inside a docker image.
@@ -286,8 +316,7 @@ case class Task(task: CallableTaskDefinition,
             case None => ()
         }
 
-        // serialize the environment, so we don't have to calculate it again in
-        // the epilog
+        // Record the environment, we need it in the epilog
         (env, dxUrl2path)
     }
 
@@ -307,12 +336,12 @@ case class Task(task: CallableTaskDefinition,
                     outDef.expression.evaluateValue(env, DxIoFunctions)
                 result match {
                     case Valid(value) =>
-                        env = env + (outDef.name -> value)
-                        value
+                        envFull += (outDef.name -> value)
+                        outDef.name -> value
                     case _ =>
-                        throw new AppInternalException(s"Error evaluating expression ${expr}")
+                        throw new AppInternalException(s"Error evaluating output expression ${outDef.expression}")
                 }
-        }
+        }.toMap
 
         // Upload output files to the platform.
         val outputs : Map[String, WomValue] = JobInputOutput.delocalizeFiles(outputsLocal, dxUrl2path)
@@ -335,27 +364,12 @@ case class Task(task: CallableTaskDefinition,
     // the task.
     def calcInstanceType(taskInputs: Map[String, WomValue]) : String = {
         // evaluate the declarations
-        val env: Map[String, WomValue] =
-            task.environmentExpressions.foldLeft(inputs){
-                case (env, (varName, expr)) =>
-                    val result: ErrorOr[WomValue] = expr.evaluateValue(env, DxIoFunctions)
-                    result match {
-                        case Valid(value) => value
-                        case _ =>
-                            throw new AppInternalException(s"Error evaluating expression ${expr}")
-                    }
-            }
+        val env: Map[String, WomValue] = evalEnvironment(taskInputs)
 
         def evalAttr(attrName: String) : Option[WomValue] = {
             task.runtimeAttributes.attributes.get(attrName) match {
                 case None => None
-                case Some(expr) =>
-                    val result: ErrorOr[WomValue] = expr.evaluateValue(env, DxIoFunctions)
-                    result match {
-                        case Valid(value) => value
-                        case _ =>
-                            throw new AppInternalException(s"Error evaluating expression ${expr}")
-                    }
+                case Some(expr) => Some(getErrorOr(expr.evaluateValue(env, DxIoFunctions)))
             }
         }
 

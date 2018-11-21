@@ -5,28 +5,12 @@ representations. There are two difficulties this module needs to deal
 with: (1) WDL has high order types which DNAx does not, and (2) the
 file type is very different between WDL and DNAx.
 
-  A file is a heavy weight data type, downloading it can fill up the
-disk, and take a long time. There are import native WDL file
-operations that do not require file data. For example, getting
-file size, and passing around file references inside a
-workflow. Therefore, we want to implement lazy file download.
-
-A WDL file is equivalent to a path on a compute instance. There are
-cases where files with the same name are referenced, for example, in a
-scatter operation on an array AF of files. If we create local empty
-files, representing members of AF, we will need to disambiguate the
-files, and give them different paths. These "impure" paths, that are
-implementation depedent, can then percolate to the rest of the
-workflow. For this reason, we want to do lazy evaluation of WDL files,
-not just lazy download.
   */
 package dxWDL.util
 
 import com.dnanexus.{DXFile, DXExecution}
-import java.nio.file.{Files, Paths}
 import net.jcazevedo.moultingyaml._
 import spray.json._
-import wom.callable.Callable.{InputDefinitionWithDefault, FixedInputDefinition}
 import wom.types._
 import wom.values._
 

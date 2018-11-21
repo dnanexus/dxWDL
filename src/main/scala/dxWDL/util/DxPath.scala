@@ -17,7 +17,7 @@ import java.nio.file.Paths
 import scala.collection.JavaConverters._
 import scala.collection.mutable.HashMap
 import spray.json._
-import Utils.{DX_URL_PREFIX, DxURL, jsonNodeOfJsValue, jsValueOfJsonNode, trace}
+import Utils.{DX_URL_PREFIX, jsonNodeOfJsValue, jsValueOfJsonNode, trace}
 
 object DxPath {
     case class Parts(basename: String, dxFile: DXFile)
@@ -157,7 +157,7 @@ object DxPath {
         val basename =
             if (index == -1) {
                 // We don't have the file name, we need to perform an API call
-                dxObj.describe.getName
+                dxFile.describe.getName
             } else {
                 // From a string such as: dx://proj-xxxx:file-yyyy::/A/B/C.txt
                 // extract /A/B/C.txt, and then C.txt.
