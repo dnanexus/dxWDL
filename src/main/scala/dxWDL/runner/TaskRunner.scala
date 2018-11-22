@@ -29,7 +29,7 @@ import dxWDL.util._
 import wom.callable.{CallableTaskDefinition, RuntimeEnvironment}
 import wom.callable.Callable.{InputDefinition, OutputDefinition}
 import wom.core.WorkflowSource
-import wom.expression.{NoIoFunctionSet}
+import wom.expression.{WomExpression, NoIoFunctionSet}
 import wom.values._
 
 // We can't use the name Task, because that would confuse it with the
@@ -185,12 +185,40 @@ case class TaskRunner(task: CallableTaskDefinition,
             1000) //tempPathSize: Long)
     }
 
+    // standard input, and standard output may be overridden. Caluclate the
+    // final paths we need to use for these files.
+    private def getStandardPaths(env: Map[String, WomValue]) : (Path, Path) = {
+        def evalPathExpr(expr: WomExpression) : Path = {
+            val valueErrOr = expr.evaluateValue(env, NoIoFunctionSet)
+            val value = getErrorOr(valueErrOr)
+            value match {
+                case WomString(s) => Paths.get(s)
+                case _ => throw new Exception("sanity")
+            }
+        }
+
+        val stdoutPath = task.stdoutOverride match {
+            case None =>
+                metaDirPath.resolve("stdout")
+            case Some(expr) =>
+                evalPathExpr(expr)
+        }
+        val stderrPath = task.stderrOverride match {
+            case None =>
+                metaDirPath.resolve("stderr")
+            case Some(expr) =>
+                evalPathExpr(expr)
+        }
+        (stdoutPath, stderrPath)
+    }
+
     // Write the core bash script into a file. In some cases, we
     // need to run some shell setup statements before and after this
     // script.
     private def writeBashScript(inputEnv: Map[InputDefinition, WomValue],
                                 homeDir: Path,
-                                runtimeEnvironment: RuntimeEnvironment) : Unit = {
+                                runtimeEnvironment: RuntimeEnvironment,
+                                env : Map[String, WomValue]) : Unit = {
         // instantiate the command
         // TODO: [env] has to be of type:
         //   type WomEvaluatedCallInputs = Map[InputDefinition, WomValue]
@@ -215,8 +243,7 @@ case class TaskRunner(task: CallableTaskDefinition,
         //    <     redirect stdin
         //
         val scriptPath = metaDirPath.resolve("script")
-        val stdoutPath = metaDirPath.resolve("stdout")
-        val stderrPath = metaDirPath.resolve("stderr")
+        val (stdoutPath, stderrPath) = getStandardPaths(env)
         val rcPath = metaDirPath.resolve("rc")
         val script =
             if (command.isEmpty) {
@@ -319,7 +346,7 @@ case class TaskRunner(task: CallableTaskDefinition,
                 Paths.get(overrideFun(runtimeEnvironment))
         }
 
-        writeBashScript(inputEnv, homeDir, runtimeEnvironment)
+        writeBashScript(inputEnv, homeDir, runtimeEnvironment, env)
         docker match {
             case Some(img) =>
                 // write a script that launches the actual command inside a docker image.

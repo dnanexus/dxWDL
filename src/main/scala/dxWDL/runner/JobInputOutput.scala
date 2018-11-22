@@ -233,7 +233,10 @@ object JobInputOutput {
                         case None =>
                             // Default value was not specified, and null is not a valid
                             // value, given the WDL type.
-                            throw new Exception(s"Invalid conversion from null to non optional type ${inpDfn.womType}")
+                            throw new Exception(
+                                s"""|Input ${inpDfn.name}, invalid conversion from null
+                                    |to non optional type ${inpDfn.womType}"""
+                                    .stripMargin.replaceAll("\n", " "))
                         case Some(x: WomValue) =>
                             x
                     }
