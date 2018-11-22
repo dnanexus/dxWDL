@@ -23,9 +23,8 @@ class NativeTest extends FlatSpec with Matchers {
             DxPath.lookupProject(TEST_PROJECT)
         } catch {
             case e : Exception =>
-                System.err.println(s"""|Could not find project ${TEST_PROJECT}, you probably need to be logged into
-                                       |the platform""".stripMargin)
-                throw e
+                throw new Exception(s"""|Could not find project ${TEST_PROJECT}, you probably need to be logged into
+                                        |the platform""".stripMargin)
         }
 
     it should "compile a single WDL task" in {

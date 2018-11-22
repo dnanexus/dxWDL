@@ -26,20 +26,22 @@ import java.lang.management._
 import java.nio.file.{Path, Paths}
 import spray.json._
 import dxWDL.util._
-import wom.callable.CallableTaskDefinition
+import wom.callable.{CallableTaskDefinition, RuntimeEnvironment}
 import wom.callable.Callable.{InputDefinition, OutputDefinition}
 import wom.core.WorkflowSource
 import wom.expression.{NoIoFunctionSet}
 import wom.values._
 
-case class Task(task: CallableTaskDefinition,
-                taskSourceCode: WorkflowSource,  // for debugging/informational purposes only
-                instanceTypeDB : InstanceTypeDB,
-                runtimeDebugLevel: Int) {
+// We can't use the name Task, because that would confuse it with the
+// WDL language definition.
+case class TaskRunner(task: CallableTaskDefinition,
+                      taskSourceCode: WorkflowSource,  // for debugging/informational purposes only
+                      instanceTypeDB : InstanceTypeDB,
+                      runtimeDebugLevel: Int) {
     private val verbose = (runtimeDebugLevel >= 1)
     private val maxVerboseLevel = (runtimeDebugLevel == 2)
     private val RUNNER_TASK_ENV_FILE = "taskEnv.json"
-    private val DX_HOME = "/home/dnanexus"
+    private val userHomeDir : Path = Paths.get(System.getProperty("user.home"))
 
     def getErrorOr[A](value: ErrorOr[A]) : A = {
         value match {
@@ -48,17 +50,14 @@ case class Task(task: CallableTaskDefinition,
         }
     }
 
-
     lazy val metaDirPath : Path = {
-        val currentDir = System.getProperty("user.dir")
-        val p = Paths.get(currentDir, "meta")
+        val p = userHomeDir.resolve("meta")
         Utils.safeMkdir(p)
         p
     }
 
     lazy val execDirPath : Path = {
-        val currentDir = System.getProperty("user.dir")
-        val p = Paths.get(currentDir, "execution")
+        val p = userHomeDir.resolve("execution")
         Utils.safeMkdir(p)
         p
     }
@@ -83,8 +82,7 @@ case class Task(task: CallableTaskDefinition,
     // a task runs under docker, the container will need access to
     // temporary files created with stdlib calls like "write_lines".
     lazy val tmpDirPath : Path = {
-        val currentDir = System.getProperty("user.dir")
-        val p = Paths.get(currentDir, "job_scratch_space")
+        val p = userHomeDir.resolve("job_scratch_space")
         Utils.safeMkdir(p)
         p
     }
@@ -166,21 +164,17 @@ case class Task(task: CallableTaskDefinition,
         }
     }
 
-    // Write the core bash script into a file. In some cases, we
-    // need to run some shell setup statements before and after this
-    // script.
-    private def writeBashScript(inputEnv: Map[InputDefinition, WomValue]) : Unit = {
+
+    private def getRuntimeEnvironment() : RuntimeEnvironment = {
         val mbean = ManagementFactory.getOperatingSystemMXBean().asInstanceOf[com.sun.management.OperatingSystemMXBean]
         val physicalMemorySize = mbean.getTotalPhysicalMemorySize()
         val numCores = Runtime.getRuntime().availableProcessors()
 
         import eu.timepit.refined._
-        //import eu.timepit.refined.api.Refined
-        import eu.timepit.refined.auto._
         import eu.timepit.refined.numeric._
         val numCoresPositiveInt = refineV[Positive](numCores).right.get
 
-        val runtimeEnvironment = wom.callable.RuntimeEnvironment(
+        RuntimeEnvironment(
             outputFilesDirPath.toAbsolutePath().toString,
             tmpDirPath.toAbsolutePath().toString,
             numCoresPositiveInt,
@@ -189,7 +183,14 @@ case class Task(task: CallableTaskDefinition,
             // TODO
             1000, //outputPathSize: Long,
             1000) //tempPathSize: Long)
+    }
 
+    // Write the core bash script into a file. In some cases, we
+    // need to run some shell setup statements before and after this
+    // script.
+    private def writeBashScript(inputEnv: Map[InputDefinition, WomValue],
+                                homeDir: Path,
+                                runtimeEnvironment: RuntimeEnvironment) : Unit = {
         // instantiate the command
         // TODO: [env] has to be of type:
         //   type WomEvaluatedCallInputs = Map[InputDefinition, WomValue]
@@ -225,7 +226,7 @@ case class Task(task: CallableTaskDefinition,
             } else {
                 s"""|#!/bin/bash
                     |(
-                    |    cd ${DX_HOME}
+                    |    cd ${homeDir.toString}
                     |    ${command}
                     |) \\
                     |  > >( tee ${stdoutPath} ) \\
@@ -235,6 +236,30 @@ case class Task(task: CallableTaskDefinition,
             }
         Utils.appletLog(verbose, s"writing bash script to ${scriptPath}")
         Utils.writeFileContent(scriptPath, script)
+    }
+
+    private def writeDockerSubmitBashScript(env: Map[String, WomValue],
+                                            imgName: String,
+                                            homeDir: Path) : Unit = {
+        // The user wants to use a docker container with the
+        // image [imgName]. We implement this with dx-docker.
+        // There may be corner cases where the image will run
+        // into permission limitations due to security.
+        //
+        // Map the home directory into the container, so that
+        // we can reach the result files, and upload them to
+        // the platform.
+        val dockerCmd = s"""|dx-docker run --entrypoint /bin/bash
+                            |-v ${homeDir.toString}:${homeDir.toString}
+                            |${imgName}
+                            |$${HOME}/execution/meta/script""".stripMargin.replaceAll("\n", " ")
+        val dockerRunPath = metaDirPath.resolve("script.submit")
+        val dockerRunScript =
+            s"""|#!/bin/bash -ex
+                |${dockerCmd}""".stripMargin
+        Utils.appletLog(verbose, s"writing docker run script to ${dockerRunPath}")
+        Utils.writeFileContent(dockerRunPath, dockerRunScript)
+        dockerRunPath.toFile.setExecutable(true)
     }
 
     private def evalEnvironment(inputs: Map[String, WomValue]) : Map[String, WomValue] = {
@@ -252,28 +277,6 @@ case class Task(task: CallableTaskDefinition,
         }.toMap
     }
 
-    private def writeDockerSubmitBashScript(env: Map[String, WomValue],
-                                            imgName: String) : Unit = {
-        // The user wants to use a docker container with the
-        // image [imgName]. We implement this with dx-docker.
-        // There may be corner cases where the image will run
-        // into permission limitations due to security.
-        //
-        // Map the home directory into the container, so that
-        // we can reach the result files, and upload them to
-        // the platform.
-        val dockerCmd = s"""|dx-docker run --entrypoint /bin/bash
-                            |-v ${DX_HOME}:${DX_HOME}
-                            |${imgName}
-                            |$${HOME}/execution/meta/script""".stripMargin.replaceAll("\n", " ")
-        val dockerRunPath = metaDirPath.resolve("script.submit")
-        val dockerRunScript =
-            s"""|#!/bin/bash -ex
-                |${dockerCmd}""".stripMargin
-        Utils.appletLog(verbose, s"writing docker run script to ${dockerRunPath}")
-        Utils.writeFileContent(dockerRunPath, dockerRunScript)
-        dockerRunPath.toFile.setExecutable(true)
-    }
 
     // Calculate the input variables for the task, download the input files,
     // and build a shell script to run the command.
@@ -308,11 +311,19 @@ case class Task(task: CallableTaskDefinition,
         }.toMap
 
         // Write shell script to a file. It will be executed by the dx-applet shell code.
-        writeBashScript(inputEnv)
+        val runtimeEnvironment = getRuntimeEnvironment()
+        val homeDir = task.homeOverride match {
+            case None =>
+                userHomeDir
+            case Some(overrideFun) =>
+                Paths.get(overrideFun(runtimeEnvironment))
+        }
+
+        writeBashScript(inputEnv, homeDir, runtimeEnvironment)
         docker match {
             case Some(img) =>
                 // write a script that launches the actual command inside a docker image.
-                writeDockerSubmitBashScript(env, img)
+                writeDockerSubmitBashScript(env, img, homeDir)
             case None => ()
         }
 

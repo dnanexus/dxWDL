@@ -6,7 +6,6 @@ import dxWDL.util._
 import java.nio.file.{Path, Paths}
 import scala.collection.mutable.HashMap
 import spray.json._
-import spray.json.JsString
 import wom.callable.{CallableTaskDefinition, ExecutableTaskDefinition}
 import wom.executable.WomBundle
 
@@ -380,7 +379,7 @@ object Main extends App {
     }
 
     // Extract the only task from a namespace
-    private def getMainTask(bundle: WomBundle) : CallableTaskDefinition = {
+    def getMainTask(bundle: WomBundle) : CallableTaskDefinition = {
         // check if the primary is nonempty
         val task: Option[CallableTaskDefinition] = bundle.primaryCallable match  {
             case Some(task : CallableTaskDefinition) => Some(task)
@@ -424,7 +423,7 @@ object Main extends App {
         // by reading the file
         val dbRaw = Utils.readFileContent(Paths.get("/" + Utils.INSTANCE_TYPE_DB_FILENAME))
         val instanceTypeDB = dbRaw.parseJson.convertTo[InstanceTypeDB]
-        val r = runner.Task(task, taskSourceCode, instanceTypeDB, rtDebugLvl)
+        val r = runner.TaskRunner(task, taskSourceCode, instanceTypeDB, rtDebugLvl)
 
         // Running tasks
         op match {

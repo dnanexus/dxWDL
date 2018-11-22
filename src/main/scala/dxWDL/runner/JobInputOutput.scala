@@ -4,7 +4,8 @@ import com.dnanexus.{DXFile}
 import dxWDL.util._
 import java.nio.file.{Files, Path, Paths}
 import spray.json._
-import wom.callable.Callable.{InputDefinitionWithDefault, FixedInputDefinition}
+import wom.callable.Callable.{InputDefinition, InputDefinitionWithDefault,
+    FixedInputDefinition, RequiredInputDefinition}
 import wom.types._
 import wom.values._
 
@@ -181,6 +182,21 @@ object JobInputOutput {
         }
     }
 
+    // Figure out the default value of an input definition. Return None
+    // if there is no default.
+    private def getDefaultValueFromDefinition(inpDfn: InputDefinition) : Option[WomValue] = {
+        inpDfn match {
+            case d: InputDefinitionWithDefault =>
+                Utils.ifConstEval(d.default)
+            case d: FixedInputDefinition =>
+                Utils.ifConstEval(d.default)
+            case d: RequiredInputDefinition =>
+                None
+            case _ =>
+                throw new Exception(s"Unhandled input definition class ${inpDfn}")
+        }
+    }
+
     // Read the job-inputs JSON file, and convert the variables
     // from JSON to WOM values. Delay downloading the files.
     def loadInputs(inputLines: String,
@@ -190,17 +206,14 @@ object JobInputOutput {
         val fields : Map[String, JsValue] = jsonAst
             .asJsObject.fields
             .filter{ case (fieldName,_) => !fieldName.endsWith(Utils.FLAT_FILES_SUFFIX) }
+        //System.out.println(s"inputLines=${inputLines}")
+        //System.out.println(s"fields=${fields}")
 
         // Get the declarations matching the input fields.
         // Create a mapping from each key to its WDL value
         callable.inputs.map { inpDfn =>
-            val defaultValue: Option[WomValue] = inpDfn match {
-                case d: InputDefinitionWithDefault =>
-                    Utils.ifConstEval(d.default)
-                case d: FixedInputDefinition =>
-                    Utils.ifConstEval(d.default)
-                case _ => None
-            }
+            // Figure out the default value
+            val defaultValue = getDefaultValueFromDefinition(inpDfn)
 
             // There are several distinct cases
             //
