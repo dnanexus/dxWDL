@@ -1,11 +1,13 @@
 package dxWDL.runner
 
+import cats.data.Validated.{Invalid, Valid}
 import com.dnanexus.{DXFile}
+import common.validation.ErrorOr.ErrorOr
 import dxWDL.util._
 import java.nio.file.{Files, Path, Paths}
 import spray.json._
-import wom.callable.Callable.{InputDefinition, InputDefinitionWithDefault,
-    FixedInputDefinition, RequiredInputDefinition}
+import wom.callable.Callable._
+import wom.expression.WomExpression
 import wom.types._
 import wom.values._
 
@@ -182,25 +184,34 @@ object JobInputOutput {
         }
     }
 
-    // Figure out the default value of an input definition. Return None
-    // if there is no default.
-    private def getDefaultValueFromDefinition(inpDfn: InputDefinition) : Option[WomValue] = {
-        inpDfn match {
-            case d: InputDefinitionWithDefault =>
-                Utils.ifConstEval(d.default)
-            case d: FixedInputDefinition =>
-                Utils.ifConstEval(d.default)
-            case d: RequiredInputDefinition =>
-                None
-            case _ =>
-                throw new Exception(s"Unhandled input definition class ${inpDfn}")
+    private def unpackJobInput(womType: WomType, jsv: JsValue) : WomValue = {
+        val jsv2: JsValue =
+            if (Utils.isNativeDxType(womType)) {
+                jsv
+            } else {
+                // unpack the hash with which complex JSON values are
+                // wrapped in dnanexus.
+                val (womType2, jsv1) = unmarshalHash(jsv)
+                assert(womType2 == womType)
+                jsv1
+            }
+        jobInputToWomValue(womType, jsv2)
+    }
+
+    private def evaluateWomExpression(expr: WomExpression, env: Map[String, WomValue]) : WomValue = {
+        val result: ErrorOr[WomValue] =
+            expr.evaluateValue(env, DxIoFunctions)
+        result match {
+            case Invalid(errors) => throw new Exception(
+                s"Failed to evaluate expression ${expr} with ${errors}")
+            case Valid(x: WomValue) => x
         }
     }
 
     // Read the job-inputs JSON file, and convert the variables
     // from JSON to WOM values. Delay downloading the files.
     def loadInputs(inputLines: String,
-                   callable: wom.callable.Callable): Map[String, WomValue] = {
+                   callable: wom.callable.Callable): Map[InputDefinition, WomValue] = {
         // Discard auxiliary fields
         val jsonAst : JsValue = inputLines.parseJson
         val fields : Map[String, JsValue] = jsonAst
@@ -211,52 +222,66 @@ object JobInputOutput {
 
         // Get the declarations matching the input fields.
         // Create a mapping from each key to its WDL value
-        callable.inputs.map { inpDfn =>
-            // Figure out the default value
-            val defaultValue = getDefaultValueFromDefinition(inpDfn)
-
-            // There are several distinct cases
-            //
-            //   default   input           result   comments
-            //   -------   -----           ------   --------
-            //   d         not-specified   d
-            //   _         null            None     override
-            //   _         Some(v)         Some(v)
-            //
-            val wv: WomValue = fields.get(inpDfn.name) match {
-                case None =>
-                    // this key is not specified in the input. Use the default.
-                    defaultValue match {
-                        case None if Utils.isOptional(inpDfn.womType) =>
-                            // Default value was not specified
-                            WomOptionalValue(inpDfn.womType, None)
-                        case None =>
-                            // Default value was not specified, and null is not a valid
-                            // value, given the WDL type.
-                            throw new Exception(
-                                s"""|Input ${inpDfn.name}, invalid conversion from null
-                                    |to non optional type ${inpDfn.womType}"""
-                                    .stripMargin.replaceAll("\n", " "))
-                        case Some(x: WomValue) =>
-                            x
-                    }
-                case Some(JsNull) =>
-                    // override the default will a null value, even though it exists
-                    WomOptionalValue(inpDfn.womType, None)
-                case Some(jsv) =>
-                    // The field was specified
-                    val jsv2 =
-                        if (Utils.isNativeDxType(inpDfn.womType)) {
-                            jsv
-                        } else {
-                            val (womType2, jsv1) = unmarshalHash(jsv)
-                            assert(womType2 == inpDfn.womType)
-                            jsv1
+        callable.inputs.foldLeft(Map.empty[InputDefinition, WomValue]) {
+            case (accu, inpDfn) =>
+                val accuValues = accu.map{ case (inpDfn, value) =>
+                    inpDfn.name -> value
+                }.toMap
+                val value: WomValue = inpDfn match {
+                    // A required input, no default.
+                    case RequiredInputDefinition(iName, womType, _, _) =>
+                        fields.get(iName.value) match {
+                            case None =>
+                                throw new Exception(s"Input ${iName} is required but not provided")
+                            case Some(x : JsValue) =>
+                                // Conversion from JSON to WomValue
+                                unpackJobInput(womType, x)
                         }
-                    jobInputToWomValue(inpDfn.womType, jsv2)
-            }
-            inpDfn.name -> wv
-        }.toMap
+
+                    // An input definition that has a default value supplied.
+                    // Typical WDL example would be a declaration like: "Int x = 5"
+                    case InputDefinitionWithDefault(iName, womType, defaultExpr, _, _) =>
+                        fields.get(iName.value) match {
+                            case None =>
+                                // use the default expression
+                                evaluateWomExpression(defaultExpr, accuValues)
+                            case Some(x : JsValue) =>
+                                unpackJobInput(womType, x)
+                        }
+
+                    // An input whose value should always be calculated from the default, and is
+                    // not allowed to be overridden.
+                    case FixedInputDefinition(iName, womType, defaultExpr, _, _) =>
+                        fields.get(iName.value) match {
+                            case None => ()
+                            case Some(_) =>
+                                throw new Exception(s"Input ${iName} should not be provided")
+                        }
+                        evaluateWomExpression(defaultExpr, accuValues)
+
+                    // There are several distinct cases
+                    //
+                    //   default   input           result   comments
+                    //   -------   -----           ------   --------
+                    //   d         not-specified   d
+                    //   _         null            None     override
+                    //   _         Some(v)         Some(v)
+                    //
+                    case OptionalInputDefinition(iName, WomOptionalType(womType), _, _) =>
+                        fields.get(iName.value) match {
+                            case None =>
+                                // this key is not specified in the input
+                                WomOptionalValue(womType, None)
+                            case Some(JsNull) =>
+                                // the input is null
+                                WomOptionalValue(womType, None)
+                            case Some(x) =>
+                                val value:WomValue = unpackjobInput(womType, x)
+                                WomOptionalValue(womType, value)
+                        }
+                }
+                accu + (inpDfn -> value)
+        }
     }
 
     // find all file URLs in a Wom value
@@ -393,8 +418,8 @@ object JobInputOutput {
     // Notes:
     // A file may be referenced more than once, we want to download it
     // just once.
-    def localizeFiles(inputs: Map[String, WomValue],
-                      inputsDir: Path) : (Map[String, WomValue], Map[DxURL, Path]) = {
+    def localizeFiles(inputs: Map[InputDefinition, WomValue],
+                      inputsDir: Path) : (Map[InputDefinition, WomValue], Map[DxURL, Path]) = {
         val fileURLs : Vector[DxURL] = inputs.values.map(findFiles).flatten.toVector.map(x => DxURL(x))
 
         // remove duplicates; we want to download each file just once
@@ -417,12 +442,12 @@ object JobInputOutput {
         }
 
         // Replace the dxURLs with local file paths
-        val localValues = inputs.map{ case (inputName, womValue) =>
+        val localizedInputs = inputs.map{ case (inpDef, womValue) =>
             val v1 = replaceURLsWithLocalPaths(womValue, dxUrl2path)
-            inputName -> v1
+            inpDef -> v1
         }
 
-        (localValues, dxUrl2path)
+        (localizedInputs, dxUrl2path)
     }
 
     // We have task outputs, where files are stored locally. Upload the files to

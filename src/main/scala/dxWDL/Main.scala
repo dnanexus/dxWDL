@@ -433,13 +433,13 @@ object Main extends App {
                 SuccessfulTermination(correctInstanceType.toString)
 
             case InternalOp.TaskProlog =>
-                val (env, dxUrl2path) = r.prolog(inputs)
-                r.writeEnvToDisk(env, dxUrl2path)
+                val (localizedInputs, dxUrl2path) = r.prolog(inputs)
+                r.writeEnvToDisk(localizedInputs, dxUrl2path)
                 SuccessfulTermination(s"success ${op}")
 
             case InternalOp.TaskEpilog =>
-                val (env, dxUrl2path) = r.readEnvFromDisk()
-                val outputFields: Map[String, JsValue] = r.epilog(env, dxUrl2path)
+                val (localizedInputs, dxUrl2path) = r.readEnvFromDisk()
+                val outputFields: Map[String, JsValue] = r.epilog(localizedInputs, dxUrl2path)
 
                 // write outputs, ignore null values, these could occur for optional
                 // values that were not specified.

@@ -89,18 +89,18 @@ case class TaskRunner(task: CallableTaskDefinition,
 
 
     // serialize the task inputs to json, and then write to a file.
-    def writeEnvToDisk(env: Map[String, WomValue],
+    def writeEnvToDisk(localizedInputs: Map[InputDefinition, WomValue],
                        dxUrl2path: Map[DxURL, Path]) : Unit = {
-        val env_m : Map[String, JsValue] = env.map{ case(varName, v) =>
-            (varName, WomValueSerialization.toJSON(v))
+        val locInputsM : Map[String, JsValue] = localizedInputs.map{ case(inpDfn, v) =>
+            (infDfn.name, WomValueSerialization.toJSON(v))
         }.toMap
-        val url_m : Map[String, JsValue] = dxUrl2path.map{ case(dxURL, path) =>
+        val dxUrlM : Map[String, JsValue] = dxUrl2path.map{ case(dxURL, path) =>
             dxURL.value -> JsString(path.toString)
         }
 
         // marshal into json, and then to a string
-        val json = JsObject("env" -> JsObject(env_m),
-                           "dxUrl2path" -> JsObject(url_m))
+        val json = JsObject("localizedInputs" -> JsObject(locInputsM),
+                            "dxUrl2path" -> JsObject(dxUrlM))
         Utils.writeFileContent(metaDirPath.resolve(RUNNER_TASK_ENV_FILE),
                                json.prettyPrint)
     }
@@ -108,22 +108,22 @@ case class TaskRunner(task: CallableTaskDefinition,
     def readEnvFromDisk() : (Map[String, WomValue], Map[DxURL, Path]) = {
         val buf = Utils.readFileContent(metaDirPath.resolve(RUNNER_TASK_ENV_FILE))
         val json : JsValue = buf.parseJson
-        val (env_m, path_m) = json match {
+        val (locInputsM, dxUrlM) = json match {
             case JsObject(m) =>
-                (m.get("env"), m.get("dxUrl2path")) match {
+                (m.get("localizedInputs"), m.get("dxUrl2path")) match {
                     case (Some(JsObject(env_m)), Some(JsObject(path_m))) => (env_m, path_m)
                     case (_, _) => throw new Exception("Malformed environment serialized to disk")
                 }
             case _ => throw new Exception("Malformed environment serialized to disk")
         }
-        val env = env_m.map{ case (key, jsVal) =>
+        val localizedInputs = locInputsM.map{ case (key, jsVal) =>
             key -> WomValueSerialization.fromJSON(jsVal)
         }.toMap
-        val dxUrl2path = path_m.map{
+        val dxUrl2path = dxUrlM.map{
             case (key, JsString(path)) => DxURL(key) -> Paths.get(path)
             case (_, _) => throw new Exception("Sanity")
         }.toMap
-        (env, dxUrl2path)
+        (localizedInputs, dxUrl2path)
     }
 
     private def printDirStruct() : Unit = {
@@ -289,25 +289,31 @@ case class TaskRunner(task: CallableTaskDefinition,
         dockerRunPath.toFile.setExecutable(true)
     }
 
-    private def evalEnvironment(inputs: Map[String, WomValue]) : Map[String, WomValue] = {
+    private def evalEnvironment(localizedInputs: Map[String, WomValue]) : Map[String, WomValue] = {
+        val inputs = localizedInputs.map{ case (inpDef, value) =>
+            inpDef.name -> value
+        }.toMap
+
         // evaluate the declarations
-        task.environmentExpressions.foldLeft(inputs){
-            case (env, (varName, expr)) =>
+        task.environmentExpressions.map{
+            case (varName, expr) =>
                 val result: ErrorOr[WomValue] =
-                    expr.evaluateValue(env, DxIoFunctions)
+                    expr.evaluateValue(inputs, DxIoFunctions)
                 val v = result match {
                     case Valid(value) => value
                     case _ =>
                         throw new AppInternalException(s"Error evaluating expression ${expr}")
                 }
-                env + (varName -> v)
+                varName -> v
         }.toMap
     }
 
 
     // Calculate the input variables for the task, download the input files,
     // and build a shell script to run the command.
-    def prolog(inputs: Map[String, WomValue]) : (Map[String, WomValue], Map[DxURL, Path]) = {
+    def prolog(inputs: Map[InputDefinition, WomValue]) :
+            (Map[InputDefinition, WomValue], Map[DxURL, Path]) =
+    {
         Utils.appletLog(verbose, s"Prolog  debugLevel=${runtimeDebugLevel}")
         Utils.appletLog(verbose, s"dxWDL version: ${Utils.getVersion()}")
         if (maxVerboseLevel)
@@ -320,22 +326,11 @@ case class TaskRunner(task: CallableTaskDefinition,
         //
         // Note: this may be overly conservative,
         // because some of the files may not actually be accessed.
-        val (localInputs, dxUrl2path) = JobInputOutput.localizeFiles(inputs, inputFilesDirPath)
+        val (localizedInputs, dxUrl2path) = JobInputOutput.localizeFiles(inputs, inputFilesDirPath)
 
         // evaluate the declarations
-        val env: Map[String, WomValue] = evalEnvironment(inputs)
+        val env: Map[String, WomValue] = evalEnvironment(localizedInputs)
         val docker = dockerImage(env)
-
-        // We need a value of type
-        //    type WomEvaluatedCallInputs = Map[InputDefinition, WomValue]
-        // to be able to instantiate the command. It is not clear to me
-        // how the environment variables are passed.
-        val inputEnv : Map[InputDefinition, WomValue] = task.inputs.map{ inpDef =>
-            inputs.get(inpDef.name) match {
-                case Some(value) => inpDef -> value
-                case None => throw new Exception(s"Sanity: input ${inpDef.localName} is unspecified")
-            }
-        }.toMap
 
         // Write shell script to a file. It will be executed by the dx-applet shell code.
         val runtimeEnvironment = getRuntimeEnvironment()
@@ -346,7 +341,7 @@ case class TaskRunner(task: CallableTaskDefinition,
                 Paths.get(overrideFun(runtimeEnvironment))
         }
 
-        writeBashScript(inputEnv, homeDir, runtimeEnvironment, env)
+        writeBashScript(localizedInputs, homeDir, runtimeEnvironment, env)
         docker match {
             case Some(img) =>
                 // write a script that launches the actual command inside a docker image.
@@ -354,11 +349,11 @@ case class TaskRunner(task: CallableTaskDefinition,
             case None => ()
         }
 
-        // Record the environment, we need it in the epilog
-        (env, dxUrl2path)
+        // Record the localized inputs, we need them in the epilog
+        (localizedInputs, dxUrl2path)
     }
 
-    def epilog(env: Map[String, WomValue],
+    def epilog(locInputs: Map[String, WomValue],
                dxUrl2path: Map[DxURL, Path]) : Map[String, JsValue] = {
         Utils.appletLog(verbose, s"Epilog  debugLevel=${runtimeDebugLevel}")
         if (maxVerboseLevel)
@@ -367,7 +362,7 @@ case class TaskRunner(task: CallableTaskDefinition,
         // Evaluate the output declarations. Add outputs evaluated to
         // the environment, so they can be referenced by expressions in the next
         // lines.
-        var envFull = env
+        var envFull = locInputs
         val outputsLocal: Map[String, WomValue] = task.outputs.map{
             case (outDef: OutputDefinition) =>
                 val result: ErrorOr[WomValue] =
@@ -400,7 +395,7 @@ case class TaskRunner(task: CallableTaskDefinition,
     // Do not download the files, if there are any. We may be
     // calculating the instance type in the workflow runner, outside
     // the task.
-    def calcInstanceType(taskInputs: Map[String, WomValue]) : String = {
+    def calcInstanceType(taskInputs: Map[InputDefinition, WomValue]) : String = {
         // evaluate the declarations
         val env: Map[String, WomValue] = evalEnvironment(taskInputs)
 
@@ -426,7 +421,7 @@ case class TaskRunner(task: CallableTaskDefinition,
     /** Check if we are already on the correct instance type. This allows for avoiding unnecessary
       * relaunch operations.
       */
-    def checkInstanceType(inputs: Map[String, WomValue]) : Boolean = {
+    def checkInstanceType(inputs: Map[InputDefinition, WomValue]) : Boolean = {
         // evaluate the runtime attributes
         // determine the instance type
         val requiredInstanceType:String = calcInstanceType(inputs)
@@ -455,7 +450,7 @@ case class TaskRunner(task: CallableTaskDefinition,
     /** The runtime attributes need to be calculated at runtime. Evaluate them,
       *  determine the instance type [xxxx], and relaunch the job on [xxxx]
       */
-    def relaunch(inputs: Map[String, WomValue], originalInputs : JsValue) : Map[String, JsValue] = {
+    def relaunch(inputs: Map[InputDefinition, WomValue], originalInputs : JsValue) : Map[String, JsValue] = {
         // evaluate the runtime attributes
         // determine the instance type
         val instanceType:String = calcInstanceType(inputs)
