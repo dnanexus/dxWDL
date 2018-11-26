@@ -89,10 +89,10 @@ case class TaskRunner(task: CallableTaskDefinition,
 
 
     // serialize the task inputs to json, and then write to a file.
-    def writeEnvToDisk(localizedInputs: Map[InputDefinition, WomValue],
+    def writeEnvToDisk(localizedInputs: Map[String, WomValue],
                        dxUrl2path: Map[DxURL, Path]) : Unit = {
-        val locInputsM : Map[String, JsValue] = localizedInputs.map{ case(inpDfn, v) =>
-            (infDfn.name, WomValueSerialization.toJSON(v))
+        val locInputsM : Map[String, JsValue] = localizedInputs.map{ case(name, v) =>
+            (name, WomValueSerialization.toJSON(v))
         }.toMap
         val dxUrlM : Map[String, JsValue] = dxUrl2path.map{ case(dxURL, path) =>
             dxURL.value -> JsString(path.toString)
@@ -289,9 +289,9 @@ case class TaskRunner(task: CallableTaskDefinition,
         dockerRunPath.toFile.setExecutable(true)
     }
 
-    private def evalEnvironment(localizedInputs: Map[String, WomValue]) : Map[String, WomValue] = {
-        val inputs = localizedInputs.map{ case (inpDef, value) =>
-            inpDef.name -> value
+    private def evalEnvironment(localizedInputs: Map[InputDefinition, WomValue]) : Map[String, WomValue] = {
+        val inputs = localizedInputs.map{ case (inpDfn, value) =>
+            inpDfn.name -> value
         }.toMap
 
         // evaluate the declarations
@@ -312,7 +312,7 @@ case class TaskRunner(task: CallableTaskDefinition,
     // Calculate the input variables for the task, download the input files,
     // and build a shell script to run the command.
     def prolog(inputs: Map[InputDefinition, WomValue]) :
-            (Map[InputDefinition, WomValue], Map[DxURL, Path]) =
+            (Map[String, WomValue], Map[DxURL, Path]) =
     {
         Utils.appletLog(verbose, s"Prolog  debugLevel=${runtimeDebugLevel}")
         Utils.appletLog(verbose, s"dxWDL version: ${Utils.getVersion()}")
@@ -350,10 +350,13 @@ case class TaskRunner(task: CallableTaskDefinition,
         }
 
         // Record the localized inputs, we need them in the epilog
-        (localizedInputs, dxUrl2path)
+        (localizedInputs.map{
+             case (inpDfn, value) => inpDfn.name -> value
+         }.toMap,
+         dxUrl2path)
     }
 
-    def epilog(locInputs: Map[String, WomValue],
+    def epilog(localizedInputValues: Map[String, WomValue],
                dxUrl2path: Map[DxURL, Path]) : Map[String, JsValue] = {
         Utils.appletLog(verbose, s"Epilog  debugLevel=${runtimeDebugLevel}")
         if (maxVerboseLevel)
@@ -362,11 +365,11 @@ case class TaskRunner(task: CallableTaskDefinition,
         // Evaluate the output declarations. Add outputs evaluated to
         // the environment, so they can be referenced by expressions in the next
         // lines.
-        var envFull = locInputs
+        var envFull = localizedInputValues
         val outputsLocal: Map[String, WomValue] = task.outputs.map{
             case (outDef: OutputDefinition) =>
                 val result: ErrorOr[WomValue] =
-                    outDef.expression.evaluateValue(env, DxIoFunctions)
+                    outDef.expression.evaluateValue(envFull, DxIoFunctions)
                 result match {
                     case Valid(value) =>
                         envFull += (outDef.name -> value)

@@ -276,8 +276,8 @@ object JobInputOutput {
                                 // the input is null
                                 WomOptionalValue(womType, None)
                             case Some(x) =>
-                                val value:WomValue = unpackjobInput(womType, x)
-                                WomOptionalValue(womType, value)
+                                val value:WomValue = unpackJobInput(womType, x)
+                                WomOptionalValue(womType, Some(value))
                         }
                 }
                 accu + (inpDfn -> value)

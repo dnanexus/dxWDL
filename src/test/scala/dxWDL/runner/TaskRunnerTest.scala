@@ -56,6 +56,8 @@ class TaskRunnerTest extends FlatSpec with Matchers {
         val wdlCode : Path = pathFromBasename("float_arith.wdl")
         val outputFields : Map[String, JsValue] =
             runTask(wdlCode, Map("x" -> JsNumber(1)))
-        outputFields should be (Map("result" -> JsNumber(3)))
+        outputFields should be(Map("x_round" -> JsNumber(1),
+                                   "y_floor" -> JsNumber(2),
+                                   "z_ceil" -> JsNumber(1)))
     }
 }
