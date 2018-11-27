@@ -43,6 +43,39 @@ case class TaskRunner(task: CallableTaskDefinition,
     private val RUNNER_TASK_ENV_FILE = "taskEnv.json"
     private val userHomeDir : Path = Paths.get(System.getProperty("user.home"))
 
+    private val dxIoConfig : DxIoConfig = {
+        // standard input, and standard output may be overridden. Caluclate the
+        // final paths we need to use for these files.
+        def evalPathExpr(expr: WomExpression) : Path = {
+            val valueErrOr = expr.evaluateValue(Map.empty, NoIoFunctionSet)
+            val value = getErrorOr(valueErrOr)
+            value match {
+                case WomString(s) => Paths.get(s)
+                case _ => throw new Exception("sanity")
+            }
+        }
+
+        val stdoutPath = task.stdoutOverride match {
+            case None =>
+                metaDirPath.resolve("stdout")
+            case Some(expr) =>
+                evalPathExpr(expr)
+        }
+        val stderrPath = task.stderrOverride match {
+            case None =>
+                metaDirPath.resolve("stderr")
+            case Some(expr) =>
+                evalPathExpr(expr)
+        }
+
+        DxIoConfig(stdoutPath,
+                   stderrPath,
+                   userHomeDir)
+    }
+
+    private val dxIoFunctions = DxIoFunctions(dxIoConfig)
+
+
     def getErrorOr[A](value: ErrorOr[A]) : A = {
         value match {
             case Valid(x) => x
@@ -185,33 +218,6 @@ case class TaskRunner(task: CallableTaskDefinition,
             1000) //tempPathSize: Long)
     }
 
-    // standard input, and standard output may be overridden. Caluclate the
-    // final paths we need to use for these files.
-    private def getStandardPaths(env: Map[String, WomValue]) : (Path, Path) = {
-        def evalPathExpr(expr: WomExpression) : Path = {
-            val valueErrOr = expr.evaluateValue(env, NoIoFunctionSet)
-            val value = getErrorOr(valueErrOr)
-            value match {
-                case WomString(s) => Paths.get(s)
-                case _ => throw new Exception("sanity")
-            }
-        }
-
-        val stdoutPath = task.stdoutOverride match {
-            case None =>
-                metaDirPath.resolve("stdout")
-            case Some(expr) =>
-                evalPathExpr(expr)
-        }
-        val stderrPath = task.stderrOverride match {
-            case None =>
-                metaDirPath.resolve("stderr")
-            case Some(expr) =>
-                evalPathExpr(expr)
-        }
-        (stdoutPath, stderrPath)
-    }
-
     // Write the core bash script into a file. In some cases, we
     // need to run some shell setup statements before and after this
     // script.
@@ -243,7 +249,6 @@ case class TaskRunner(task: CallableTaskDefinition,
         //    <     redirect stdin
         //
         val scriptPath = metaDirPath.resolve("script")
-        val (stdoutPath, stderrPath) = getStandardPaths(env)
         val rcPath = metaDirPath.resolve("rc")
         val script =
             if (command.isEmpty) {
@@ -256,8 +261,8 @@ case class TaskRunner(task: CallableTaskDefinition,
                     |    cd ${homeDir.toString}
                     |    ${command}
                     |) \\
-                    |  > >( tee ${stdoutPath} ) \\
-                    |  2> >( tee ${stderrPath} >&2 )
+                    |  > >( tee ${dxIoConfig.stdout} ) \\
+                    |  2> >( tee ${dxIoConfig.stderr} >&2 )
                     |echo $$? > ${rcPath}
                     |""".stripMargin.trim + "\n"
             }
@@ -298,7 +303,7 @@ case class TaskRunner(task: CallableTaskDefinition,
         task.environmentExpressions.map{
             case (varName, expr) =>
                 val result: ErrorOr[WomValue] =
-                    expr.evaluateValue(inputs, DxIoFunctions)
+                    expr.evaluateValue(inputs, dxIoFunctions)
                 val v = result match {
                     case Valid(value) => value
                     case _ =>
@@ -369,7 +374,7 @@ case class TaskRunner(task: CallableTaskDefinition,
         val outputsLocal: Map[String, WomValue] = task.outputs.map{
             case (outDef: OutputDefinition) =>
                 val result: ErrorOr[WomValue] =
-                    outDef.expression.evaluateValue(envFull, DxIoFunctions)
+                    outDef.expression.evaluateValue(envFull, dxIoFunctions)
                 result match {
                     case Valid(value) =>
                         envFull += (outDef.name -> value)
@@ -405,7 +410,7 @@ case class TaskRunner(task: CallableTaskDefinition,
         def evalAttr(attrName: String) : Option[WomValue] = {
             task.runtimeAttributes.attributes.get(attrName) match {
                 case None => None
-                case Some(expr) => Some(getErrorOr(expr.evaluateValue(env, DxIoFunctions)))
+                case Some(expr) => Some(getErrorOr(expr.evaluateValue(env, dxIoFunctions)))
             }
         }
 

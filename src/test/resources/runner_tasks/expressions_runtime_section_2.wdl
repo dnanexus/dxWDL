@@ -1,7 +1,10 @@
+version 1.0
+
 task TC {
-    # Inputs
-    Int base_mem_mb
-    Int disk_gb
+    input {
+        Int base_mem_mb
+        Int disk_gb
+    }
 
     # runtime expressions
     Int machine_mem_mb = 15000 + base_mem_mb

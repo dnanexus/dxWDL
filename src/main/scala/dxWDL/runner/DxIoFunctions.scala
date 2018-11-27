@@ -1,11 +1,17 @@
 package dxWDL.util
 
+
+import java.nio.file.Path
 import scala.concurrent.{ExecutionContext, Future}
 import wom.expression.{IoFunctionSet, PathFunctionSet}
 import wom.expression.IoFunctionSet.IoElement
 import wom.values._
 
-object DxPathFunctions extends PathFunctionSet {
+case class DxIoConfig(stdout: Path,
+                      stderr: Path,
+                      root: Path)
+
+case class DxPathFunctions(config: DxIoConfig) extends PathFunctionSet {
   /**
     * Similar to java.nio.Path.resolveSibling with
     * of == a string representation of a java.nio.Path
@@ -44,9 +50,9 @@ object DxPathFunctions extends PathFunctionSet {
     override def stderr: String = ???
 }
 
-object DxIoFunctions extends IoFunctionSet {
+case class DxIoFunctions(config: DxIoConfig) extends IoFunctionSet {
 
-    override def pathFunctions = DxPathFunctions
+    override def pathFunctions = DxPathFunctions(config)
 
     // Functions that (possibly) necessitate I/O operation (on local, network, or cloud filesystems)
     /**

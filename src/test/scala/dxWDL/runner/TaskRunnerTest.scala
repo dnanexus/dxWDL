@@ -1,7 +1,7 @@
 package dxWDL.runner
 
 import dxWDL.Main
-import dxWDL.util.{InstanceTypeDB, ParseWomSourceFile}
+import dxWDL.util.{InstanceTypeDB, ParseWomSourceFile, Utils}
 import java.nio.file.{Path, Paths}
 import org.scalatest.{FlatSpec, Matchers}
 import spray.json._
@@ -24,8 +24,17 @@ class TaskRunnerTest extends FlatSpec with Matchers {
 
     // Parse the WDL source code, and extract the single task that is supposed to be there.
     // Also return the source script itself, verbatim.
-    private def runTask(wdlCode: Path,
-                        inputsOrg: Map[String, JsValue]) : Map[String, JsValue] = {
+    private def runTask(wdlName: String) : Unit = {
+        val wdlCode : Path = pathFromBasename(s"${wdlName}.wdl")
+        val inputsOrg : Map[String, JsValue] =
+            Utils.readFileContent(pathFromBasename(s"${wdlName}_input.json"))
+                .parseJson
+                .asJsObject.fields
+        val outputFieldsExpected : Map[String, JsValue] =
+            Utils.readFileContent(pathFromBasename(s"${wdlName}_output.json"))
+                .parseJson
+                .asJsObject.fields
+
         val (_, womBundle: WomBundle, allSources) = ParseWomSourceFile.apply(wdlCode)
         val task : CallableTaskDefinition = Main.getMainTask(womBundle)
         assert(allSources.size == 1)
@@ -37,27 +46,31 @@ class TaskRunnerTest extends FlatSpec with Matchers {
         // from the platform, we may not need to access them.
         val inputs = JobInputOutput.loadInputs(JsObject(inputsOrg).prettyPrint, task)
 
-        val r = TaskRunner(task, taskSourceCode, instanceTypeDB, 1)
+        val r = TaskRunner(task, taskSourceCode, instanceTypeDB, 0)
         val (env, dxUrl2path) = r.prolog(inputs)
         val outputFields: Map[String, JsValue] = r.epilog(env, dxUrl2path)
 
-        outputFields
+        outputFields should be(outputFieldsExpected)
     }
 
     it should "execute a simple WDL task" in {
-        val wdlCode : Path = pathFromBasename("add.wdl")
-        val outputFields : Map[String, JsValue] =
-            runTask(wdlCode, Map("a" -> JsNumber(1),
-                                 "b" -> JsNumber(2)))
-        outputFields should be (Map("result" -> JsNumber(3)))
+        runTask("add")
     }
 
     it should "execute a WDL task with expressions" in {
-        val wdlCode : Path = pathFromBasename("float_arith.wdl")
-        val outputFields : Map[String, JsValue] =
-            runTask(wdlCode, Map("x" -> JsNumber(1)))
-        outputFields should be(Map("x_round" -> JsNumber(1),
-                                   "y_floor" -> JsNumber(2),
-                                   "z_ceil" -> JsNumber(1)))
+        runTask("float_arith")
     }
+
+    it should "evaluate expressions in runtime section" in {
+        runTask("expressions_runtime_section")
+    }
+
+    it should "evaluate expressions in runtime section II" in {
+        runTask("expressions_runtime_section_2")
+    }
+
+    it should "evaluate a command section" in {
+        runTask("sub")
+    }
+
 }

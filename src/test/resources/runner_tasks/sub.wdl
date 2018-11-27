@@ -1,12 +1,12 @@
 version 1.0
 
-task Add {
+task sub {
     input {
         Int a
         Int b
     }
     command {
-        echo $((${a} + ${b}))
+        echo $((${a} - ${b}))
     }
     output {
         Int result = read_int(stdout())

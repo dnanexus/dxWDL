@@ -1,4 +1,4 @@
-task TB {
+task array_output {
     String hotel
     String city
     String state

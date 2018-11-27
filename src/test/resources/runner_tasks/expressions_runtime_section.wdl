@@ -1,10 +1,14 @@
-task TA {
-    Int? cpu
-    Int? mem_mb
-    Int? time_hr
-    String? disks
+version 1.0
 
-    command {}
+task expressions_runtime_section {
+    input {
+        Int? cpu
+        Int? mem_mb
+        Int? time_hr
+        String? disks
+    }
+    command {
+    }
     runtime {
 	cpu : select_first([cpu,2])
 	memory : "${select_first([mem_mb,'1000'])} MB"
