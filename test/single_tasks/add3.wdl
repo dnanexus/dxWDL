@@ -1,7 +1,7 @@
 # A file with one task should compile to one runnable
 # applet.
 
-task singleton {
+task add3 {
     Int a
     Int b
     Int c

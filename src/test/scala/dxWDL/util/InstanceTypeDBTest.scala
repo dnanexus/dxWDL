@@ -3,7 +3,7 @@ package dxWDL.util
 import org.scalatest.{FlatSpec, Matchers}
 import wom.values._
 
-class InstaceTypeDBTest extends FlatSpec with Matchers {
+class InstanceTypeDBTest extends FlatSpec with Matchers {
 
     it should "Work even without access to pricing information" in {
         val db = InstanceTypeDB.genTestDB(false)

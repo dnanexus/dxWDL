@@ -1,0 +1,4 @@
+{
+  "diff2files.a" : "dx://dxWDL_playground:/test_data/fileA",
+  "diff2files.b" : "dx://dxWDL_playground:/test_data/fileC"
+}
