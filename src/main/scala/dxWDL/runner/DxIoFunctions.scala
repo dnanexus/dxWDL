@@ -7,8 +7,8 @@ import wom.expression.{IoFunctionSet, PathFunctionSet}
 import wom.expression.IoFunctionSet.IoElement
 import wom.values._
 
-import dxWDL.util.{DxPath, DxPathConfig, DxURL, Utils}
-import dxWDL.util.Location._
+import dxWDL.util.{DxPathConfig, Utils}
+import dxWDL.util.{Furl, FurlLocal, FurlDx}
 
 case class DxPathFunctions(config: DxPathConfig) extends PathFunctionSet {
     /**
@@ -62,14 +62,12 @@ case class DxIoFunctions(config: DxPathConfig) extends IoFunctionSet {
       * @return the content of the file as a String
       */
     override def readFile(path: String, maxBytes: Option[Int], failOnOverflow: Boolean): Future[String] = {
-        val content = DxPath.getLocation(path) match {
-            case Local =>
-                Utils.readFileContent(Paths.get(path))
-            case DxFile =>
-                val dxFile = DxPath.parse(DxURL(path)).dxFile
+        val content = Furl.parse(path) match {
+            case FurlLocal(localPath) =>
+                Utils.readFileContent(Paths.get(localPath))
+            case fdx : FurlDx =>
+                val (_, dxFile) = FurlDx.components(fdx)
                 Utils.downloadString(dxFile)
-            case URL =>
-                throw new Exception("URLs are not handled right now")
         }
         Future(content)
     }

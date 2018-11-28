@@ -17,11 +17,10 @@ import java.nio.file.Paths
 import scala.collection.JavaConverters._
 import scala.collection.mutable.HashMap
 import spray.json._
+
 import Utils.{DX_URL_PREFIX, jsonNodeOfJsValue, jsValueOfJsonNode, trace}
 
 object DxPath {
-    case class Parts(basename: String, dxFile: DXFile)
-
     // Lookup cache for projects. This saves
     // repeated searches for projects we already found.
     private val projectDict = HashMap.empty[String, DXProject]
@@ -145,50 +144,5 @@ object DxPath {
         if (!dxObj.isInstanceOf[DXFile])
             throw new Exception(s"Found dx:object of the wrong type ${dxObj}")
         dxObj.asInstanceOf[DXFile]
-    }
-
-    def parse(dxURL: DxURL) : Parts = {
-        val dxFile = lookupDxURLFile(dxURL.value)
-
-        // strip the 'dx://' prefix
-        assert(dxURL.value.startsWith(DX_URL_PREFIX))
-        val s = dxURL.value.substring(DX_URL_PREFIX.length)
-        val index = s.lastIndexOf("::")
-        val basename =
-            if (index == -1) {
-                // We don't have the file name, we need to perform an API call
-                dxFile.describe.getName
-            } else {
-                // From a string such as: dx://proj-xxxx:file-yyyy::/A/B/C.txt
-                // extract /A/B/C.txt, and then C.txt.
-                val fullName = s.substring(index + 2)
-                fullName.substring(fullName.lastIndexOf("/") + 1)
-            }
-        Parts(basename, dxFile)
-    }
-
-    // Convert a dx-file to a string with the format:
-    //   dx://proj-xxxx:file-yyyy::/A/B/C.txt
-    def dxFileToURL(dxFile: DXFile) : String = {
-        val desc = dxFile.describe
-        val logicalName = s"${desc.getFolder}/${desc.getName}"
-        val fid = dxFile.getId
-        val proj = dxFile.getProject
-        if (proj == null) {
-            s"${DX_URL_PREFIX}${fid}::${logicalName}"
-        } else {
-            val projId = proj.getId
-            s"${DX_URL_PREFIX}${projId}:${fid}::${logicalName}"
-        }
-    }
-
-    def getLocation(path: String) : Location.Value = {
-        if (path.startsWith("/"))
-            return Location.Local
-        if (path.startsWith(Utils.DX_URL_PREFIX))
-            return Location.DxFile
-        if (path.startsWith("http"))
-            return Location.URL
-        throw new Exception(s"cannot determine where file ${path} is stored")
     }
 }

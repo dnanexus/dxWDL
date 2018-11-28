@@ -50,21 +50,6 @@ object CompilerFlag extends Enumeration {
 case class DXIOParam(ioClass: IOClass,
                      optional: Boolean)
 
-// Where is this file stored?
-//  Local :  on the local hard disk
-//  DxFile : on the dnanexus platform
-//  URL  :   an http URL
-object Location extends Enumeration {
-    val Local, DxFile, URL = Value
-}
-
-// An abstraction for a path to a file on the platform.
-// For example:
-//    dx://proj-xxxx:file-yyyy::/A/B/C.txt
-//    dx://proj-xxxx:file-yyyy
-//
-case class DxURL(value : String)
-
 // A stand in for the DXWorkflow.Stage inner class (we don't have a constructor for it)
 case class DXWorkflowStage(id: String) {
     def getId() = id

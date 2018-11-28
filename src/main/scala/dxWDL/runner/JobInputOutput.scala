@@ -105,7 +105,7 @@ case class JobInputOutput(dxIoFunctions : DxIoFunctions) {
                 // Convert the path in DNAx to a string. We can later
                 // decide if we want to download it or not
                 val dxFile = Utils.dxFileFromJsValue(jsValue)
-                val s = DxPath.dxFileToURL(dxFile)
+                val FurlDx(s) = FurlDx.dxFileToFurl(dxFile)
                 WomSingleFile(s)
 
             // Maps. These are serialized as an object with a keys array and
@@ -285,11 +285,11 @@ case class JobInputOutput(dxIoFunctions : DxIoFunctions) {
     }
 
     // find all file URLs in a Wom value
-    private def findFiles(v : WomValue) : Vector[String] = {
+    private def findFiles(v : WomValue) : Vector[Furl] = {
         v match {
-            case (WomSingleFile(s)) => Vector(s)
+            case (WomSingleFile(s)) => Vector(Furl.parse(s))
             case (WomMap(_, m: Map[WomValue, WomValue])) =>
-                m.foldLeft(Vector.empty[String]) {
+                m.foldLeft(Vector.empty[Furl]) {
                     case (accu, (k,v)) =>
                         findFiles(k) ++ findFiles(v) ++ accu
                 }
@@ -312,10 +312,11 @@ case class JobInputOutput(dxIoFunctions : DxIoFunctions) {
     // Create a local path for a DNAx file. The normal location, is to download
     // to the $HOME/inputs directory. However, since downloaded files may have the same
     // name, we may need to disambiguate them.
-    private def createUniqueDownloadPath(dxUrl: DxURL,
+    private def createUniqueDownloadPath(dxUrl: FurlDx,
                                          existingFiles: Set[Path],
                                          inputsDir: Path) : Path = {
-        val DxPath.Parts(basename, dxFile) = DxPath.parse(dxUrl)
+        val (basename, dxFile) = FurlDx.components(dxUrl)
+
         val shortPath = inputsDir.resolve(basename)
         if (!(existingFiles contains shortPath))
             return shortPath
@@ -387,10 +388,11 @@ case class JobInputOutput(dxIoFunctions : DxIoFunctions) {
 
     // Recursively go into a womValue, and replace cloud URLs with the
     // equivalent local path.
-    private def replaceURLsWithLocalPaths(womValue: WomValue,
-                                          localizationPlan: Map[DxURL, Path]) : WomValue = {
+    private def replaceFURLsWithLocalPaths(womValue: WomValue,
+                                           localizationPlan: Map[Furl, Path]) : WomValue = {
         val translation : Map[String, String] = localizationPlan.map{
-            case (dxUrl, path) =>  dxUrl.value -> path.toString
+            case (FurlDx(value), path) =>  value -> path.toString
+            case (FurlLocal(p1), p2) => p1 -> p2.toString
         }.toMap
         translateFiles(womValue, translation)
     }
@@ -398,9 +400,10 @@ case class JobInputOutput(dxIoFunctions : DxIoFunctions) {
     // Recursively go into a womValue, and replace cloud URLs with the
     // equivalent local path.
     private def replaceLocalPathsWithURLs(womValue: WomValue,
-                                          path2dxUrl : Map[Path, DxURL]) : WomValue = {
-        val translation : Map[String, String] = path2dxUrl.map{
-            case (path, dxUrl) => path.toString -> dxUrl.value
+                                          path2furl : Map[Path, Furl]) : WomValue = {
+        val translation : Map[String, String] = path2furl.map{
+            case (path, dxUrl:FurlDx) => path.toString -> dxUrl.value
+            case (path, local:FurlLocal) => path.toString -> local.path
         }.toMap
         translateFiles(womValue, translation)
     }
@@ -419,35 +422,51 @@ case class JobInputOutput(dxIoFunctions : DxIoFunctions) {
     // A file may be referenced more than once, we want to download it
     // just once.
     def localizeFiles(inputs: Map[InputDefinition, WomValue],
-                      inputsDir: Path) : (Map[InputDefinition, WomValue], Map[DxURL, Path]) = {
-        val fileURLs : Vector[DxURL] = inputs.values.map(findFiles).flatten.toVector.map(x => DxURL(x))
+                      inputsDir: Path) : (Map[InputDefinition, WomValue], Map[Furl, Path]) = {
+        val fileURLs : Vector[Furl] = inputs.values.map(findFiles).flatten.toVector
 
         // remove duplicates; we want to download each file just once
-        val filesToDownload: Set[DxURL] = fileURLs.toSet
+        val filesToDownload: Set[Furl] = fileURLs.toSet
 
         // Choose a local path for each cloud file
-        val dxUrl2path: Map[DxURL, Path] =
-            filesToDownload.foldLeft(Map.empty[DxURL, Path]) { case (accu, url) =>
-                val existingFiles = accu.values.toSet
-                val path = createUniqueDownloadPath(url, existingFiles, inputsDir)
-                accu + (url -> path)
+        val furl2path: Map[Furl, Path] =
+            filesToDownload.foldLeft(Map.empty[Furl, Path]) { case (accu, furl) =>
+                furl match {
+                    case FurlLocal(p) =>
+                        // The file is already on the local disk, there
+                        // is no need to download it.
+                        //
+                        // TODO: make sure this file is NOT in the applet input/output
+                        // directories.
+                        accu + (FurlLocal(p) -> Paths.get(p))
+
+                    case dxUrl: FurlDx =>
+                        // The file needs to be localized
+                        val existingFiles = accu.values.toSet
+                        val path = createUniqueDownloadPath(dxUrl, existingFiles, inputsDir)
+                        accu + (dxUrl -> path)
+                }
             }
 
         // download the files from the cloud.
         // This could be done in parallel using the download agent.
         // Right now, we are downloading the files one at a time
-        dxUrl2path.foreach{ case (dxURL, localPath) =>
-            val DxPath.Parts(_,dxFile) = DxPath.parse(dxURL)
-            downloadFile(localPath, dxFile)
+        furl2path.foreach{
+            case (dxUrl : FurlDx, localPath) =>
+                val (_,dxFile) = FurlDx.components(dxUrl)
+                downloadFile(localPath, dxFile)
+            case (FurlLocal(path), _) =>
+                // The file is already local, nothing to do
+                ()
         }
 
         // Replace the dxURLs with local file paths
         val localizedInputs = inputs.map{ case (inpDef, womValue) =>
-            val v1 = replaceURLsWithLocalPaths(womValue, dxUrl2path)
+            val v1 = replaceFURLsWithLocalPaths(womValue, furl2path)
             inpDef -> v1
         }
 
-        (localizedInputs, dxUrl2path)
+        (localizedInputs, furl2path)
     }
 
     // We have task outputs, where files are stored locally. Upload the files to
@@ -456,35 +475,49 @@ case class JobInputOutput(dxIoFunctions : DxIoFunctions) {
     // Edge cases:
     // 1) If a file is already on the cloud, do not re-upload it. The content has not
     // changed because files are immutable.
+    // 2) A file that was initially local, does not need to be uploaded.
     def delocalizeFiles(outputs: Map[String, WomValue],
-                        dxUrl2path: Map[DxURL, Path]) : Map[String, WomValue] = {
-        val localFiles : Vector[Path] = outputs.values.map(findFiles).flatten.toVector.map(x => Paths.get(x))
+                        furl2path: Map[Furl, Path]) : Map[String, WomValue] = {
+        // Files that were local to begin with
+        val localInputFiles: Set[Path] = furl2path.collect{
+            case (FurlLocal(_),path) => path
+        }.toSet
 
-        // 1) Filter out files that are already on the cloud.
-        // 2) A path can appear multiple times, make paths unique
+        val localOutputFilesAll : Vector[Path] = outputs.values.map(findFiles).flatten.toVector.map{
+            case FurlLocal(p) => Paths.get(p)
+            case dxUrl: FurlDx =>
+                throw new Exception(s"Should not find cloud file on local machine (${dxUrl})")
+        }.toVector
+
+        // Remove files that were local to begin with, and do not need to be uploaded to the cloud.
+        val localOutputFiles : Vector[Path] = localOutputFilesAll.filter{
+            path => !(localInputFiles contains path)
+        }.toVector
+
+        // 1) A path can appear multiple times, make paths unique
         //    so we don't upload the same file twice.
-        val filesOnCloud : Set[Path] =  dxUrl2path.values.toSet
-        val pathsToUpload : Set[Path] = localFiles.filter{ case path =>
+        // 2) Filter out files that are already on the cloud.
+        val filesOnCloud : Set[Path] =  furl2path.values.toSet
+        val pathsToUpload : Set[Path] = localOutputFiles.filter{ case path =>
             !(filesOnCloud contains path)
         }.toSet
 
         // upload the files; this could be in parallel in the future.
-        val uploaded_path2dxUrl : Map[Path, DxURL] = pathsToUpload.map{ path =>
+        val uploaded_path2furl : Map[Path, Furl] = pathsToUpload.map{ path =>
             val dxFile = uploadFile(path)
-
-            path -> DxURL(DxPath.dxFileToURL(dxFile))
+            path -> FurlDx.dxFileToFurl(dxFile)
         }.toMap
 
-        // invert the dxUrl2path map
-        val alreadyOnCloud_path2dxURL : Map[Path, DxURL] = dxUrl2path.foldLeft(Map.empty[Path, DxURL]) {
-            case (accu, (dxUrl, path)) =>
-                accu + (path -> dxUrl)
+        // invert the furl2path map
+        val alreadyOnCloud_path2furl : Map[Path, Furl] = furl2path.foldLeft(Map.empty[Path, Furl]) {
+            case (accu, (furl, path)) =>
+                accu + (path -> furl)
         }
-        val path2dxUrl = alreadyOnCloud_path2dxURL ++ uploaded_path2dxUrl
+        val path2furl = alreadyOnCloud_path2furl ++ uploaded_path2furl
 
-        // Replace the local file paths with dxURLs
+        // Replace the files that need to be uploaded, file paths with FURLs
         outputs.map{ case (outputName, womValue) =>
-            val v1 = replaceLocalPathsWithURLs(womValue, path2dxUrl)
+            val v1 = replaceLocalPathsWithURLs(womValue, path2furl)
             outputName -> v1
         }.toMap
     }

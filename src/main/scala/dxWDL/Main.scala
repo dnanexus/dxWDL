@@ -32,9 +32,9 @@ object Main extends App {
     }
 
     // Setup the standard paths used for applets. These are used at
-    // runtime, not on the local compilation machine. On the cloud
-    // instance running the job, the user is "dnanexus", and the home directory
-    // is "/home/dnanexus".
+    // runtime, not at compile time. On the cloud instance running the
+    // job, the user is "dnanexus", and the home directory is
+    // "/home/dnanexus".
     private lazy val dxPathConfig : DxPathConfig = {
         DxPathConfig.apply(Paths.get("/home/dnanexus"))
     }

@@ -5,6 +5,8 @@ import org.scalatest.{FlatSpec, Matchers}
 import spray.json._
 import wom.callable.{CallableTaskDefinition}
 import wom.executable.WomBundle
+import wom.types._
+import wom.values._
 
 import dxWDL.Main
 import dxWDL.util.{DxPathConfig, InstanceTypeDB, ParseWomSourceFile, Utils}
@@ -14,11 +16,70 @@ import dxWDL.util.{DxPathConfig, InstanceTypeDB, ParseWomSourceFile, Utils}
 // This tests the compiler Native mode, however, it creates
 // dnanexus applets and workflows that are not runnable.
 class TaskRunnerTest extends FlatSpec with Matchers {
-    lazy val currentWorkDir:Path = Paths.get(System.getProperty("user.dir"))
     private val instanceTypeDB = InstanceTypeDB.genTestDB(true)
 
-    private def pathFromBasename(basename: String) : Path = {
-        currentWorkDir.resolve(s"src/test/resources/runner_tasks/${basename}")
+    private lazy val currentWorkDir:Path = Paths.get(System.getProperty("user.dir"))
+    private lazy val baseDir : Path = {
+        currentWorkDir.resolve(s"src/test/resources/runner_tasks")
+    }
+    private def pathFromBasename(filename: String) : Path = {
+        baseDir.resolve(filename)
+    }
+
+    // Recursively go into a womValue, and add a base path to the file.
+    // For example:
+    //   foo.txt ---> /home/joe_heller/foo.txt
+    //
+    // This is used to convert relative paths to test files into absolute paths.
+    // For example, convert:
+    //  {
+    //    "pattern" : "snow",
+    //    "in_file" : "manuscript.txt"
+    //  }
+    // into:
+    //  {
+    //    "pattern" : "snow",
+    //    "in_file" : "/home/joe_heller/dxWDL/src/test/resources/runner_tasks/manuscript.txt"
+    // }
+    //
+    private def addBaseDir(womValue: WomValue) : WomValue = {
+        womValue match {
+            // primitive types, pass through
+            case WomBoolean(_) | WomInteger(_) | WomFloat(_) | WomString(_) => womValue
+
+            // single file
+            case WomSingleFile(s) => WomSingleFile(baseDir.resolve(s).toString)
+
+            // Maps
+            case (WomMap(t: WomMapType, m: Map[WomValue, WomValue])) =>
+                val m1 = m.map{ case (k, v) =>
+                    val k1 = addBaseDir(k)
+                    val v1 = addBaseDir(v)
+                    k1 -> v1
+                }
+                WomMap(t, m1)
+
+            case (WomPair(l, r)) =>
+                val left = addBaseDir(l)
+                val right = addBaseDir(r)
+                WomPair(left, right)
+
+            case WomObject(_,_) =>
+                throw new Exception("WOM objects not supported")
+
+            case WomArray(t: WomArrayType, a: Seq[WomValue]) =>
+                val a1 = a.map{ v => addBaseDir(v) }
+                WomArray(t, a1)
+
+            case WomOptionalValue(t,  None) =>
+                WomOptionalValue(t, None)
+            case WomOptionalValue(t, Some(v)) =>
+                val v1 = addBaseDir(v)
+                WomOptionalValue(t, Some(v1))
+
+            case _ =>
+                throw new Exception(s"Unsupported wom value ${womValue}")
+        }
     }
 
 
@@ -36,7 +97,7 @@ class TaskRunnerTest extends FlatSpec with Matchers {
                     .asJsObject.fields
             else Map.empty
 
-        // load the outputs
+        // load the expected outputs
         val outputsFile = pathFromBasename(s"${wdlName}_output.json")
         val outputFieldsExpected : Option[Map[String, JsValue]] =
             if (Files.exists(outputsFile))
@@ -62,7 +123,10 @@ class TaskRunnerTest extends FlatSpec with Matchers {
         // Parse the inputs, convert to WOM values. Delay downloading files
         // from the platform, we may not need to access them.
         val taskRunner = TaskRunner(task, taskSourceCode, instanceTypeDB, dxPathConfig, 0)
-        val inputs = taskRunner.jobInputOutput.loadInputs(JsObject(inputsOrg).prettyPrint, task)
+        val inputsRelPaths = taskRunner.jobInputOutput.loadInputs(JsObject(inputsOrg).prettyPrint, task)
+        val inputs = inputsRelPaths.map{
+            case (inpDef, value) => (inpDef, addBaseDir(value))
+        }.toMap
 
         // run the entire task
 

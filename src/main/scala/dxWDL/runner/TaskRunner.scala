@@ -55,12 +55,15 @@ case class TaskRunner(task: CallableTaskDefinition,
 
     // serialize the task inputs to json, and then write to a file.
     def writeEnvToDisk(localizedInputs: Map[String, WomValue],
-                       dxUrl2path: Map[DxURL, Path]) : Unit = {
+                       dxUrl2path: Map[Furl, Path]) : Unit = {
         val locInputsM : Map[String, JsValue] = localizedInputs.map{ case(name, v) =>
             (name, WomValueSerialization.toJSON(v))
         }.toMap
-        val dxUrlM : Map[String, JsValue] = dxUrl2path.map{ case(dxURL, path) =>
-            dxURL.value -> JsString(path.toString)
+        val dxUrlM : Map[String, JsValue] = dxUrl2path.map{
+            case (FurlLocal(url), path) =>
+                url -> JsString(path.toString)
+            case (FurlDx(value), path) =>
+                value -> JsString(path.toString)
         }
 
         // marshal into json, and then to a string
@@ -69,7 +72,7 @@ case class TaskRunner(task: CallableTaskDefinition,
         Utils.writeFileContent(dxPathConfig.runnerTaskEnv, json.prettyPrint)
     }
 
-    def readEnvFromDisk() : (Map[String, WomValue], Map[DxURL, Path]) = {
+    def readEnvFromDisk() : (Map[String, WomValue], Map[Furl, Path]) = {
         val buf = Utils.readFileContent(dxPathConfig.runnerTaskEnv)
         val json : JsValue = buf.parseJson
         val (locInputsM, dxUrlM) = json match {
@@ -84,7 +87,7 @@ case class TaskRunner(task: CallableTaskDefinition,
             key -> WomValueSerialization.fromJSON(jsVal)
         }.toMap
         val dxUrl2path = dxUrlM.map{
-            case (key, JsString(path)) => DxURL(key) -> Paths.get(path)
+            case (key, JsString(path)) => Furl.parse(key) -> Paths.get(path)
             case (_, _) => throw new Exception("Sanity")
         }.toMap
         (localizedInputs, dxUrl2path)
@@ -244,7 +247,7 @@ case class TaskRunner(task: CallableTaskDefinition,
     // Calculate the input variables for the task, download the input files,
     // and build a shell script to run the command.
     def prolog(inputs: Map[InputDefinition, WomValue]) :
-            (Map[String, WomValue], Map[DxURL, Path]) =
+            (Map[String, WomValue], Map[Furl, Path]) =
     {
         Utils.appletLog(verbose, s"Prolog  debugLevel=${runtimeDebugLevel}")
         Utils.appletLog(verbose, s"dxWDL version: ${Utils.getVersion()}")
@@ -283,7 +286,7 @@ case class TaskRunner(task: CallableTaskDefinition,
     }
 
     def epilog(localizedInputValues: Map[String, WomValue],
-               dxUrl2path: Map[DxURL, Path]) : Map[String, JsValue] = {
+               dxUrl2path: Map[Furl, Path]) : Map[String, JsValue] = {
         Utils.appletLog(verbose, s"Epilog  debugLevel=${runtimeDebugLevel}")
         if (maxVerboseLevel)
             printDirStruct()

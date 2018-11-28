@@ -1,6 +1,10 @@
+version 1.0
+
 task cgrep {
-    String pattern
-    File in_file
+    input {
+        String pattern
+        File in_file
+    }
 
     command {
         grep '${pattern}' ${in_file} | wc -l
