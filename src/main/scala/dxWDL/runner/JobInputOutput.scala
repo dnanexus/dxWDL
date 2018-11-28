@@ -11,7 +11,7 @@ import wom.expression.WomExpression
 import wom.types._
 import wom.values._
 
-object JobInputOutput {
+case class JobInputOutput(dxIoFunctions : DxIoFunctions) {
 
     private val DOWNLOAD_RETRY_LIMIT = 3
     private val UPLOAD_RETRY_LIMIT = 3
@@ -200,7 +200,7 @@ object JobInputOutput {
 
     private def evaluateWomExpression(expr: WomExpression, env: Map[String, WomValue]) : WomValue = {
         val result: ErrorOr[WomValue] =
-            expr.evaluateValue(env, DxIoFunctions)
+            expr.evaluateValue(env, dxIoFunctions)
         result match {
             case Invalid(errors) => throw new Exception(
                 s"Failed to evaluate expression ${expr} with ${errors}")

@@ -25,56 +25,26 @@ import common.validation.ErrorOr.ErrorOr
 import java.lang.management._
 import java.nio.file.{Path, Paths}
 import spray.json._
-import dxWDL.util._
 import wom.callable.{CallableTaskDefinition, RuntimeEnvironment}
 import wom.callable.Callable.{InputDefinition, OutputDefinition}
 import wom.core.WorkflowSource
-import wom.expression.{WomExpression, NoIoFunctionSet}
+import wom.expression.{NoIoFunctionSet}
 import wom.values._
+
+import dxWDL.util._
 
 // We can't use the name Task, because that would confuse it with the
 // WDL language definition.
 case class TaskRunner(task: CallableTaskDefinition,
                       taskSourceCode: WorkflowSource,  // for debugging/informational purposes only
                       instanceTypeDB : InstanceTypeDB,
+                      dxPathConfig : DxPathConfig,
                       runtimeDebugLevel: Int) {
     private val verbose = (runtimeDebugLevel >= 1)
     private val maxVerboseLevel = (runtimeDebugLevel == 2)
-    private val RUNNER_TASK_ENV_FILE = "taskEnv.json"
-    private val userHomeDir : Path = Paths.get(System.getProperty("user.home"))
 
-    private val dxIoConfig : DxIoConfig = {
-        // standard input, and standard output may be overridden. Caluclate the
-        // final paths we need to use for these files.
-        def evalPathExpr(expr: WomExpression) : Path = {
-            val valueErrOr = expr.evaluateValue(Map.empty, NoIoFunctionSet)
-            val value = getErrorOr(valueErrOr)
-            value match {
-                case WomString(s) => Paths.get(s)
-                case _ => throw new Exception("sanity")
-            }
-        }
-
-        val stdoutPath = task.stdoutOverride match {
-            case None =>
-                metaDirPath.resolve("stdout")
-            case Some(expr) =>
-                evalPathExpr(expr)
-        }
-        val stderrPath = task.stderrOverride match {
-            case None =>
-                metaDirPath.resolve("stderr")
-            case Some(expr) =>
-                evalPathExpr(expr)
-        }
-
-        DxIoConfig(stdoutPath,
-                   stderrPath,
-                   userHomeDir)
-    }
-
-    private val dxIoFunctions = DxIoFunctions(dxIoConfig)
-
+    val dxIoFunctions = DxIoFunctions(dxPathConfig)
+    val jobInputOutput = JobInputOutput(dxIoFunctions)
 
     def getErrorOr[A](value: ErrorOr[A]) : A = {
         value match {
@@ -82,44 +52,6 @@ case class TaskRunner(task: CallableTaskDefinition,
             case Invalid(s) => throw new AppInternalException(s"Invalid ${s}")
         }
     }
-
-    lazy val metaDirPath : Path = {
-        val p = userHomeDir.resolve("meta")
-        Utils.safeMkdir(p)
-        p
-    }
-
-    lazy val execDirPath : Path = {
-        val p = userHomeDir.resolve("execution")
-        Utils.safeMkdir(p)
-        p
-    }
-
-    // Running applets download files from the platform to
-    // this location
-    lazy val inputFilesDirPath : Path = {
-        val p = execDirPath.resolve("inputs")
-        Utils.safeMkdir(p)
-        p
-    }
-
-    // Running applets download files from the platform to
-    // this location
-    lazy val outputFilesDirPath : Path = {
-        val p = execDirPath.resolve("outputs")
-        Utils.safeMkdir(p)
-        p
-    }
-
-    // This directory has to reside under the user home directory. If
-    // a task runs under docker, the container will need access to
-    // temporary files created with stdlib calls like "write_lines".
-    lazy val tmpDirPath : Path = {
-        val p = userHomeDir.resolve("job_scratch_space")
-        Utils.safeMkdir(p)
-        p
-    }
-
 
     // serialize the task inputs to json, and then write to a file.
     def writeEnvToDisk(localizedInputs: Map[String, WomValue],
@@ -134,12 +66,11 @@ case class TaskRunner(task: CallableTaskDefinition,
         // marshal into json, and then to a string
         val json = JsObject("localizedInputs" -> JsObject(locInputsM),
                             "dxUrl2path" -> JsObject(dxUrlM))
-        Utils.writeFileContent(metaDirPath.resolve(RUNNER_TASK_ENV_FILE),
-                               json.prettyPrint)
+        Utils.writeFileContent(dxPathConfig.runnerTaskEnv, json.prettyPrint)
     }
 
     def readEnvFromDisk() : (Map[String, WomValue], Map[DxURL, Path]) = {
-        val buf = Utils.readFileContent(metaDirPath.resolve(RUNNER_TASK_ENV_FILE))
+        val buf = Utils.readFileContent(dxPathConfig.runnerTaskEnv)
         val json : JsValue = buf.parseJson
         val (locInputsM, dxUrlM) = json match {
             case JsObject(m) =>
@@ -208,8 +139,8 @@ case class TaskRunner(task: CallableTaskDefinition,
         val numCoresPositiveInt = refineV[Positive](numCores).right.get
 
         RuntimeEnvironment(
-            outputFilesDirPath.toAbsolutePath().toString,
-            tmpDirPath.toAbsolutePath().toString,
+            dxPathConfig.outputFilesDir.toAbsolutePath().toString,
+            dxPathConfig.tmpDir.toAbsolutePath().toString,
             numCoresPositiveInt,
             physicalMemorySize,
 
@@ -222,7 +153,6 @@ case class TaskRunner(task: CallableTaskDefinition,
     // need to run some shell setup statements before and after this
     // script.
     private def writeBashScript(inputEnv: Map[InputDefinition, WomValue],
-                                homeDir: Path,
                                 runtimeEnvironment: RuntimeEnvironment,
                                 env : Map[String, WomValue]) : Unit = {
         // instantiate the command
@@ -248,31 +178,29 @@ case class TaskRunner(task: CallableTaskDefinition,
         //    2>    redirect stderr
         //    <     redirect stdin
         //
-        val scriptPath = metaDirPath.resolve("script")
-        val rcPath = metaDirPath.resolve("rc")
         val script =
             if (command.isEmpty) {
                 s"""|#!/bin/bash
-                    |echo 0 > ${rcPath}
+                    |echo 0 > ${dxPathConfig.rcPath}
                     |""".stripMargin.trim + "\n"
             } else {
                 s"""|#!/bin/bash
                     |(
-                    |    cd ${homeDir.toString}
+                    |    cd ${dxPathConfig.homeDir.toString}
                     |    ${command}
                     |) \\
-                    |  > >( tee ${dxIoConfig.stdout} ) \\
-                    |  2> >( tee ${dxIoConfig.stderr} >&2 )
-                    |echo $$? > ${rcPath}
+                    |  > >( tee ${dxPathConfig.stdout} ) \\
+                    |  2> >( tee ${dxPathConfig.stderr} >&2 )
+                    |echo $$? > ${dxPathConfig.rcPath}
                     |""".stripMargin.trim + "\n"
             }
-        Utils.appletLog(verbose, s"writing bash script to ${scriptPath}")
-        Utils.writeFileContent(scriptPath, script)
+        Utils.appletLog(verbose, s"writing bash script to ${dxPathConfig.script}")
+        Utils.writeFileContent(dxPathConfig.script, script)
+        dxPathConfig.script.toFile.setExecutable(true)
     }
 
     private def writeDockerSubmitBashScript(env: Map[String, WomValue],
-                                            imgName: String,
-                                            homeDir: Path) : Unit = {
+                                            imgName: String) : Unit = {
         // The user wants to use a docker container with the
         // image [imgName]. We implement this with dx-docker.
         // There may be corner cases where the image will run
@@ -282,16 +210,15 @@ case class TaskRunner(task: CallableTaskDefinition,
         // we can reach the result files, and upload them to
         // the platform.
         val dockerCmd = s"""|dx-docker run --entrypoint /bin/bash
-                            |-v ${homeDir.toString}:${homeDir.toString}
+                            |-v ${dxPathConfig.homeDir.toString}:${dxPathConfig.homeDir.toString}
                             |${imgName}
-                            |$${HOME}/execution/meta/script""".stripMargin.replaceAll("\n", " ")
-        val dockerRunPath = metaDirPath.resolve("script.submit")
+                            |${dxPathConfig.script}""".stripMargin.replaceAll("\n", " ")
         val dockerRunScript =
             s"""|#!/bin/bash -ex
                 |${dockerCmd}""".stripMargin
-        Utils.appletLog(verbose, s"writing docker run script to ${dockerRunPath}")
-        Utils.writeFileContent(dockerRunPath, dockerRunScript)
-        dockerRunPath.toFile.setExecutable(true)
+        Utils.appletLog(verbose, s"writing docker run script to ${dxPathConfig.dockerSubmitScript}")
+        Utils.writeFileContent(dxPathConfig.dockerSubmitScript, dockerRunScript)
+        dxPathConfig.dockerSubmitScript.toFile.setExecutable(true)
     }
 
     private def evalEnvironment(localizedInputs: Map[InputDefinition, WomValue]) : Map[String, WomValue] = {
@@ -331,7 +258,8 @@ case class TaskRunner(task: CallableTaskDefinition,
         //
         // Note: this may be overly conservative,
         // because some of the files may not actually be accessed.
-        val (localizedInputs, dxUrl2path) = JobInputOutput.localizeFiles(inputs, inputFilesDirPath)
+        val (localizedInputs, dxUrl2path) = jobInputOutput.localizeFiles(inputs,
+                                                                         dxPathConfig.inputFilesDir)
 
         // evaluate the declarations
         val env: Map[String, WomValue] = evalEnvironment(localizedInputs)
@@ -339,18 +267,11 @@ case class TaskRunner(task: CallableTaskDefinition,
 
         // Write shell script to a file. It will be executed by the dx-applet shell code.
         val runtimeEnvironment = getRuntimeEnvironment()
-        val homeDir = task.homeOverride match {
-            case None =>
-                userHomeDir
-            case Some(overrideFun) =>
-                Paths.get(overrideFun(runtimeEnvironment))
-        }
-
-        writeBashScript(localizedInputs, homeDir, runtimeEnvironment, env)
+        writeBashScript(localizedInputs, runtimeEnvironment, env)
         docker match {
             case Some(img) =>
                 // write a script that launches the actual command inside a docker image.
-                writeDockerSubmitBashScript(env, img, homeDir)
+                writeDockerSubmitBashScript(env, img)
             case None => ()
         }
 
@@ -379,13 +300,14 @@ case class TaskRunner(task: CallableTaskDefinition,
                     case Valid(value) =>
                         envFull += (outDef.name -> value)
                         outDef.name -> value
-                    case _ =>
+                    case Invalid(errors) =>
+                        Utils.error(errors.toList.mkString)
                         throw new AppInternalException(s"Error evaluating output expression ${outDef.expression}")
                 }
         }.toMap
 
         // Upload output files to the platform.
-        val outputs : Map[String, WomValue] = JobInputOutput.delocalizeFiles(outputsLocal, dxUrl2path)
+        val outputs : Map[String, WomValue] = jobInputOutput.delocalizeFiles(outputsLocal, dxUrl2path)
 
         // convert the WDL values to JSON
         val outputFields:Map[String, JsValue] = outputs.map {

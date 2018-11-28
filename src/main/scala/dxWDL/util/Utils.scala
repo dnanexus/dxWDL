@@ -348,6 +348,7 @@ object Utils {
 
     // Run a child process and collect stdout and stderr into strings
     def execCommand(cmdLine : String, timeout: Option[Int]) : (String, String) = {
+
         val cmds = Seq("/bin/sh", "-c", cmdLine)
         val outStream = new StringBuilder()
         val errStream = new StringBuilder()

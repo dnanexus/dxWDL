@@ -50,6 +50,14 @@ object CompilerFlag extends Enumeration {
 case class DXIOParam(ioClass: IOClass,
                      optional: Boolean)
 
+// Where is this file stored?
+//  Local :  on the local hard disk
+//  DxFile : on the dnanexus platform
+//  URL  :   an http URL
+object Location extends Enumeration {
+    val Local, DxFile, URL = Value
+}
+
 // An abstraction for a path to a file on the platform.
 // For example:
 //    dx://proj-xxxx:file-yyyy::/A/B/C.txt

@@ -1,21 +1,20 @@
-package dxWDL.util
+package dxWDL.runner
 
-
-import java.nio.file.Path
+import java.nio.file.{Paths}
 import scala.concurrent.{ExecutionContext, Future}
+import scala.concurrent.ExecutionContext.Implicits.global
 import wom.expression.{IoFunctionSet, PathFunctionSet}
 import wom.expression.IoFunctionSet.IoElement
 import wom.values._
 
-case class DxIoConfig(stdout: Path,
-                      stderr: Path,
-                      root: Path)
+import dxWDL.util.{DxPath, DxPathConfig, DxURL, Utils}
+import dxWDL.util.Location._
 
-case class DxPathFunctions(config: DxIoConfig) extends PathFunctionSet {
-  /**
-    * Similar to java.nio.Path.resolveSibling with
-    * of == a string representation of a java.nio.Path
-    */
+case class DxPathFunctions(config: DxPathConfig) extends PathFunctionSet {
+    /**
+      * Similar to java.nio.Path.resolveSibling with
+      * of == a string representation of a java.nio.Path
+      */
     override def sibling(of: String, other: String): String = ???
 
     /**
@@ -42,15 +41,15 @@ case class DxPathFunctions(config: DxIoConfig) extends PathFunctionSet {
     /**
       * Path to stdout
       */
-    override def stdout: String = ???
+    override def stdout: String = config.stdout.toString
 
     /**
       * Path to stderr
       */
-    override def stderr: String = ???
+    override def stderr: String = config.stderr.toString
 }
 
-case class DxIoFunctions(config: DxIoConfig) extends IoFunctionSet {
+case class DxIoFunctions(config: DxPathConfig) extends IoFunctionSet {
 
     override def pathFunctions = DxPathFunctions(config)
 
@@ -62,7 +61,18 @@ case class DxIoFunctions(config: DxIoConfig) extends IoFunctionSet {
       * @param failOnOverflow if true, the Future will fail if the files has more than maxBytes
       * @return the content of the file as a String
       */
-    override def readFile(path: String, maxBytes: Option[Int], failOnOverflow: Boolean): Future[String] = ???
+    override def readFile(path: String, maxBytes: Option[Int], failOnOverflow: Boolean): Future[String] = {
+        val content = DxPath.getLocation(path) match {
+            case Local =>
+                Utils.readFileContent(Paths.get(path))
+            case DxFile =>
+                val dxFile = DxPath.parse(DxURL(path)).dxFile
+                Utils.downloadString(dxFile)
+            case URL =>
+                throw new Exception("URLs are not handled right now")
+        }
+        Future(content)
+    }
 
     /**
       * Write "content" to the specified "path" location

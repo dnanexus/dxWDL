@@ -2,12 +2,15 @@ package dxWDL
 
 import com.dnanexus.{DXProject}
 import com.typesafe.config._
-import dxWDL.util._
 import java.nio.file.{Path, Paths}
 import scala.collection.mutable.HashMap
 import spray.json._
 import wom.callable.{CallableTaskDefinition, ExecutableTaskDefinition}
 import wom.executable.WomBundle
+
+import dxWDL.util._
+import dxWDL.runner.{TaskRunner}
+import dxWDL.compiler.Top
 
 object Main extends App {
     sealed trait Termination
@@ -26,6 +29,14 @@ object Main extends App {
             WfFragment,
             TaskCheckInstanceType, TaskEpilog, TaskProlog, TaskRelaunch,
             WorkflowOutputReorg = Value
+    }
+
+    // Setup the standard paths used for applets. These are used at
+    // runtime, not on the local compilation machine. On the cloud
+    // instance running the job, the user is "dnanexus", and the home directory
+    // is "/home/dnanexus".
+    private lazy val dxPathConfig : DxPathConfig = {
+        DxPathConfig.apply(Paths.get("/home/dnanexus"))
     }
 
     private def normKey(s: String) : String= {
@@ -353,18 +364,19 @@ object Main extends App {
             }
         if (options contains "help")
             return BadUsageTermination("")
+
         try {
             val cOpt = compilerOptions(options)
 
             cOpt.compileMode match {
                 case CompilerFlag.IR =>
-                    val ir: compiler.IR.Bundle = compiler.Top.applyOnlyIR(sourceFile, cOpt)
+                    val ir: compiler.IR.Bundle = Top.applyOnlyIR(sourceFile, cOpt)
                     return SuccessfulTerminationIR(ir)
 
                 case CompilerFlag.All
                        | CompilerFlag.NativeWithoutRuntimeAsset =>
                     val (dxProject, folder) = pathOptions(options, cOpt.verbose)
-                    val retval = compiler.Top.apply(sourceFile, folder, dxProject, cOpt)
+                    val retval = Top.apply(sourceFile, folder, dxProject, dxPathConfig, cOpt)
                     val desc = retval.getOrElse("")
                     return SuccessfulTermination(desc)
             }
@@ -417,29 +429,32 @@ object Main extends App {
         // from the platform, we may not need to access them.
         val inputLines : String = Utils.readFileContent(jobInputPath)
         val originalInputs : JsValue = inputLines.parseJson
-        val inputs = runner.JobInputOutput.loadInputs(inputLines, task)
 
         // Figure out the available instance types, and their prices,
         // by reading the file
         val dbRaw = Utils.readFileContent(Paths.get("/" + Utils.INSTANCE_TYPE_DB_FILENAME))
         val instanceTypeDB = dbRaw.parseJson.convertTo[InstanceTypeDB]
-        val r = runner.TaskRunner(task, taskSourceCode, instanceTypeDB, rtDebugLvl)
+
+        // setup the utility directories that the task-runner employs
+        dxPathConfig.createCleanDirs()
+        val taskRunner = TaskRunner(task, taskSourceCode, instanceTypeDB, dxPathConfig, rtDebugLvl)
+        val inputs = taskRunner.jobInputOutput.loadInputs(inputLines, task)
 
         // Running tasks
         op match {
             case InternalOp.TaskCheckInstanceType =>
                 // special operation to check if this task is on the right instance type
-                val correctInstanceType:Boolean = r.checkInstanceType(inputs)
+                val correctInstanceType:Boolean = taskRunner.checkInstanceType(inputs)
                 SuccessfulTermination(correctInstanceType.toString)
 
             case InternalOp.TaskProlog =>
-                val (localizedInputs, dxUrl2path) = r.prolog(inputs)
-                r.writeEnvToDisk(localizedInputs, dxUrl2path)
+                val (localizedInputs, dxUrl2path) = taskRunner.prolog(inputs)
+                taskRunner.writeEnvToDisk(localizedInputs, dxUrl2path)
                 SuccessfulTermination(s"success ${op}")
 
             case InternalOp.TaskEpilog =>
-                val (localizedInputs, dxUrl2path) = r.readEnvFromDisk()
-                val outputFields: Map[String, JsValue] = r.epilog(localizedInputs, dxUrl2path)
+                val (localizedInputs, dxUrl2path) = taskRunner.readEnvFromDisk()
+                val outputFields: Map[String, JsValue] = taskRunner.epilog(localizedInputs, dxUrl2path)
 
                 // write outputs, ignore null values, these could occur for optional
                 // values that were not specified.
@@ -451,7 +466,7 @@ object Main extends App {
                 SuccessfulTermination(s"success ${op}")
 
             case InternalOp.TaskRelaunch =>
-                val outputFields: Map[String, JsValue] = r.relaunch(inputs, originalInputs)
+                val outputFields: Map[String, JsValue] = taskRunner.relaunch(inputs, originalInputs)
                 val json = JsObject(outputFields.filter{
                                         case (_,jsValue) => jsValue != null && jsValue != JsNull
                                     })

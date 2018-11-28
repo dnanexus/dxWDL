@@ -181,4 +181,14 @@ object DxPath {
             s"${DX_URL_PREFIX}${projId}:${fid}::${logicalName}"
         }
     }
+
+    def getLocation(path: String) : Location.Value = {
+        if (path.startsWith("/"))
+            return Location.Local
+        if (path.startsWith(Utils.DX_URL_PREFIX))
+            return Location.DxFile
+        if (path.startsWith("http"))
+            return Location.URL
+        throw new Exception(s"cannot determine where file ${path} is stored")
+    }
 }
