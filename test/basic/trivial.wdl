@@ -1,4 +1,4 @@
-# A trivial script, to test the basic sanity
+# A trivial workflow, to test the basic sanity
 # of a dxWDL release.
 import "library_math.wdl" as lib
 

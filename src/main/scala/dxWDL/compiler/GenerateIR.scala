@@ -7,7 +7,7 @@ import common.validation.ErrorOr.ErrorOr
 import dxWDL.util._
 import IR.{CVar}
 import wom.core.WorkflowSource
-import wom.callable.{CallableTaskDefinition, ExecutableTaskDefinition}
+import wom.callable.{CallableTaskDefinition, ExecutableTaskDefinition, WorkflowDefinition}
 import wom.values._
 
 case class GenerateIR(verbose: Verbose) {
@@ -22,8 +22,8 @@ case class GenerateIR(verbose: Verbose) {
     // Extract three fields from the task:
     // RAM, disk space, and number of cores. These are WDL expressions
     // that, in the general case, could be calculated only at runtime.
-    // Currently, we support only constants. If a runtime expression is used,
-    // we convert it to a moderatly high constant.
+    // At compile time, constants expressions are handled. Some can
+    // only be evaluated at runtime.
     def calcInstanceType(taskOpt: Option[CallableTaskDefinition]) : IR.InstanceType = {
         def evalAttr(task: CallableTaskDefinition, attrName: String) : Option[WomValue] = {
             task.runtimeAttributes.attributes.get(attrName) match {
@@ -32,7 +32,7 @@ case class GenerateIR(verbose: Verbose) {
                     val result: ErrorOr[WomValue] =
                         expr.evaluateValue(Map.empty[String, WomValue], wom.expression.NoIoFunctionSet)
                     result match {
-                        case Invalid(_) => None
+                        case Invalid(_) => throw new DynamicInstanceTypesException()
                         case Valid(x: WomValue) => Some(x)
                     }
             }
@@ -134,9 +134,18 @@ case class GenerateIR(verbose: Verbose) {
     }
 
 
+    // Compile a (single) WDL workflow into a single dx:workflow.
+    //
+    // There are cases where we are going to need to generate dx:subworkflows.
+    // This is not handled currently.
+    def compileWorkflow(wf: WorkflowDefinition) : IR.Workflow = {
+        System.out.println(s"wf = ${wf}")
+        throw new Exception("TODO")
+    }
+
     // Entry point for compiling tasks and workflows into IR
     def compileCallable(callable: wom.callable.Callable,
-                        taskDir: Map[String, String]) = {
+                        taskDir: Map[String, String]) : IR.Callable = {
         def compileTask2(task : CallableTaskDefinition) = {
             val taskSourceCode = taskDir.get(task.name) match {
                 case None => throw new Exception(s"Did not find task ${task.name}")
@@ -150,15 +159,14 @@ case class GenerateIR(verbose: Verbose) {
                 compileTask2(task)
             case task : CallableTaskDefinition =>
                 compileTask2(task)
+            case wf: WorkflowDefinition =>
+                compileWorkflow(wf)
             case x =>
-                throw new Exception(s"""|Only the ExecutableTaskDefinition class is currently supported.
-                                        |Can't compile: ${callable.name}, class=${callable.getClass}
+                throw new Exception(s"""|Can't compile: ${callable.name}, class=${callable.getClass}
                                         |${x}
-                                        |""")
+                                        |""".stripMargin.replaceAll("\n", " "))
         }
     }
-
-
 }
 
 

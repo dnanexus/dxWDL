@@ -29,12 +29,14 @@ object ParseWomSourceFile {
                              resolver: ImportResolver) : ImportResolver = {
         CheckedAtoB.fromErrorOr { path : String =>
             val fileContent = resolver(path)
-            allSources(path) = fileContent.right.toOption.get
 
             // convert an 'EitherOr' to 'Validated'
             fileContent match {
-                case Left(errors) => Invalid(errors)
-                case Right(v) => Valid(v)
+                case Left(errors) =>
+                    Invalid(errors)
+                case Right(v) =>
+                    allSources(path) = v
+                    Valid(v)
             }
         }
     }
