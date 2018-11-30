@@ -14,7 +14,7 @@ class NativeTest extends FlatSpec with Matchers {
     lazy val currentWorkDir:Path = Paths.get(System.getProperty("user.dir"))
 
     private def pathFromBasename(basename: String) : Path = {
-        currentWorkDir.resolve(s"src/test/resources/${basename}")
+        currentWorkDir.resolve(s"src/test/resources/compiler/${basename}")
     }
 
     val TEST_PROJECT = "dxWDL_playground"
@@ -27,8 +27,8 @@ class NativeTest extends FlatSpec with Matchers {
                                         |the platform""".stripMargin)
         }
 
-    it should "compile a single WDL task" in {
-        val path = pathFromBasename("tasks/add.wdl")
+    it should "Native compile a single WDL task" in {
+        val path = pathFromBasename("add.wdl")
         val retval = Main.compile(
             List(path.toString,
                  "-compileMode", "NativeWithoutRuntimeAsset",

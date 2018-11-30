@@ -13,17 +13,9 @@ case class DeclAttrs(m: Map[String, WomValue]) {
         }
     }
 
-    def getDefault: Option[WomValue] = {
-        m.get("default")
-    }
-
     // add another attribute
     def add(key:String, value:WomValue) : DeclAttrs = {
         DeclAttrs(m + (key -> value))
-    }
-
-    def setDefault(value:WomValue) : DeclAttrs = {
-        add("default", value)
     }
 
     def isEmpty : Boolean = m.isEmpty

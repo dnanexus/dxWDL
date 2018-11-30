@@ -1,6 +1,6 @@
 version 1.0
 
-task Add {
+task add {
     input {
         Int a
         Int b

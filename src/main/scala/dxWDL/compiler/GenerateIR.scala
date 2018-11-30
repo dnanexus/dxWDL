@@ -17,6 +17,19 @@ case class GenerateIR(verbose: Verbose) {
         def this() = this(new RuntimeException("Runtime instance type calculation required"))
     }
 
+    // generate a stage Id, this is a string of the form: 'stage-xxx'
+    private var stageNum = 0
+    private def genStageId(stageName: Option[String] = None) : Utils.DXWorkflowStage = {
+        stageName match {
+            case None =>
+                val retval = Utils.DXWorkflowStage(s"stage-${stageNum}")
+                stageNum += 1
+                retval
+            case Some(nm) =>
+                Utils.DXWorkflowStage(s"stage-${nm}")
+        }
+    }
+
     // Figure out which instance to use.
     //
     // Extract three fields from the task:
@@ -139,7 +152,42 @@ case class GenerateIR(verbose: Verbose) {
     // There are cases where we are going to need to generate dx:subworkflows.
     // This is not handled currently.
     def compileWorkflow(wf: WorkflowDefinition) : IR.Workflow = {
-        System.out.println(s"wf = ${wf}")
+        val graph = wf.innerGraph
+
+        // as a first step, only handle straight line workflows
+        if (!graph.workflowCalls.isEmpty)
+            throw new Exception(s"Workflow ${wf.name} calls a subworkflow; currently not supported")
+        if (!graph.scatters.isEmpty)
+            throw new Exception(s"Workflow ${wf.name} includes a scatter; currently not supported")
+        if (!graph.conditionals.isEmpty)
+            throw new Exception(s"Workflow ${wf.name} includes a conditional; currently not supported")
+
+        // now we are sure the workflow is a simple straight line. It only contains
+        // task calls.
+
+        // print the inputs
+        // compile these into workflow inputs
+        System.out.println(s"${wf.name} inputs")
+        graph.inputNodes.foreach{ n =>
+            System.out.println(s"${n}\n")
+        }
+
+        // print the series of calls
+        // compile into a series of stages, each of which
+        // calls a task. Each task must be compiled in a dx:applet
+        // beforehand (?)
+        System.out.println(s"${wf.name} calls")
+        graph.calls.foreach{ n =>
+            System.out.println(s"${n}\n")
+        }
+
+        // print the outputs
+        // compile into workflow outputs
+        System.out.println(s"${wf.name} outputs")
+        graph.outputNodes.foreach{ n =>
+            System.out.println(s"${n}\n")
+        }
+
         throw new Exception("TODO")
     }
 

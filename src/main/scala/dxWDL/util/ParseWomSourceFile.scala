@@ -73,8 +73,12 @@ object ParseWomSourceFile {
 
         val bundleChk: Checked[WomBundle] =
             languageFactory.getWomBundle(mainFileContents, "{}", importResolvers, List(languageFactory))
-        val bundle = bundleChk.right.toOption.get
-
+        val bundle = bundleChk match {
+            case Left(errors) => throw new Exception(s"""|WOM validation errors:
+                                                         | ${errors}
+                                                         |""".stripMargin)
+            case Right(bundle) => bundle
+        }
         val lang = (languageFactory.languageName.toLowerCase,
                     languageFactory.languageVersionName) match {
             case ("wdl", "draft-2") => Language.WDLvDraft2

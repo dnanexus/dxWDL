@@ -11,11 +11,22 @@ class IRTest extends FlatSpec with Matchers {
     lazy val currentWorkDir:Path = Paths.get(System.getProperty("user.dir"))
 
     private def pathFromBasename(basename: String) : Path = {
-        currentWorkDir.resolve(s"src/test/resources/${basename}")
+        currentWorkDir.resolve(s"src/test/resources/compiler/${basename}")
     }
 
-    it should "compile a single WDL task" in {
-        val path = pathFromBasename("tasks/add.wdl")
+    // task compilation
+    /*
+    it should "IR compile a single WDL task" in {
+        val path = pathFromBasename("add.wdl")
+        Main.compile(
+            List(path.toString, "--compileMode", "ir", "-quiet", "-fatalValidationWarnings")
+        ) shouldBe a [Main.SuccessfulTerminationIR]
+    }
+     */
+
+    // workflow compilation
+    it should "IR compile a simple WDL workflow" in {
+        val path = pathFromBasename("trivial.wdl")
         Main.compile(
             List(path.toString, "--compileMode", "ir", "-quiet", "-fatalValidationWarnings")
         ) shouldBe a [Main.SuccessfulTerminationIR]

@@ -16,14 +16,14 @@ import wom.values.WomValue
 
 object IR {
     // Compile time representation of a variable. Used also as
-    // an applet argument. We keep track of the syntax-tree, for error
-    // reporting purposes.
+    // an applet argument.
     //
     // The attributes are used to encode DNAx applet input/output
     // specification fields, such as {help, suggestions, patterns}.
     //
     case class CVar(name: String,
                     womType: WomType,
+                    default: Option[WomValue]
                     attrs: DeclAttrs) {
         // dx does not allow dots in variable names, so we
         // convert them to underscores.
@@ -127,6 +127,12 @@ object IR {
                      inputs: Vector[SArg],
                      outputs: Vector[CVar])
 
+    // A toplevel fragment is the initial workflow we started with, minus
+    // whatever was replaced or rewritten.
+    object WorkflowKind extends Enumeration {
+        val TopLevel, Sub  = Value
+    }
+
     /** A workflow output is linked to the stage that
       *  generated it.
       */
@@ -135,7 +141,7 @@ object IR {
                         outputs: Vector[(CVar,SArg)],
                         stages: Vector[Stage],
                         locked: Boolean,
-                        /*kind: WorkflowKind.Value*/) extends Callable {
+                        kind: WorkflowKind.Value) extends Callable {
         def inputVars = inputs.map{ case (cVar,_) => cVar }.toVector
         def outputVars = outputs.map{ case (cVar,_) => cVar }.toVector
     }
