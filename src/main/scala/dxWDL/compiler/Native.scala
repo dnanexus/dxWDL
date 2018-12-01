@@ -68,7 +68,7 @@ case class Native(dxWDLrtId: Option[String],
     // by passing a JSON structure and a vector of dx:files.
     private def cVarToSpec(cVar: CVar) : Vector[JsValue] = {
         val name = Utils.encodeAppletVarName(cVar.dxVarName)
-        val defaultVals:Map[String, JsValue] = cVar.attrs.getDefault match {
+        val defaultVals:Map[String, JsValue] = cVar.default match {
             case None => Map.empty
             case Some(wdlValue) =>
                 val wvl = WdlVarLinks.importFromWDL(cVar.womType, wdlValue)

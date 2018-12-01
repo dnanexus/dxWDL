@@ -271,19 +271,20 @@ case class GenerateIR(locked: Boolean,
                 val cVar = CVar(id.workflowLocalName, womType, None)
                 // TODO
                 // 1. Setup the environment of linked values
-                // 2. Translate the WOM port to a variable name
-                // 3. the outputs could include expressions.
+                // 2. Translate the WOM port to a variable name.
+                // 3. Lookup the variable in the environment
+                // 4. the outputs could include expressions.
                 //    This would require an extra calculation block.
                 (cVar, IR.SArgEmpty)
             case other =>
                 throw new Exception(s"unhandled ouput ${other}")
         }.toVector
 
-        /*
         // Create a stage per call/scatter-block/declaration-block
-        val van = new VarAnalysis(Set.empty, Map.empty, cef, verbose)
+        //val van = new VarAnalysis(Set.empty, Map.empty, cef, verbose)
         val subBlocks = Block.splitIntoBlocks(wfProper.toVector, van)
 
+        /*
         val (allStageInfo_i, wfOutputs) =
             if (locked)
                 compileWorkflowLocked(wf, wfInputs, subBlocks)

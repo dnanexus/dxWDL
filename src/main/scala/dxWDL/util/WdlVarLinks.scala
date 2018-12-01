@@ -131,12 +131,12 @@ object WdlVarLinks {
         (wvl.womType, jsValue) match {
             case (_:WomObject, JsObject(m)) =>
                 unmarshalWomObject(m).get(fieldName) match {
-                    case Some((womType,jsv)) => WdlVarLinks(womType, wvl.attrs, DxlValue(jsv))
+                    case Some((womType,jsv)) => WdlVarLinks(womType, DxlValue(jsv))
                     case None => throw new Exception(s"Unknown field ${fieldName} in object ${wvl}")
                 }
             case (WomPairType(lType, rType), JsObject(fields))
                     if (List("left", "right") contains fieldName) =>
-                WdlVarLinks(lType, wvl.attrs, DxlValue(fields(fieldName)))
+                WdlVarLinks(lType, DxlValue(fields(fieldName)))
             case (WomOptionalType(t), _) =>
                 // strip optional type
                 val wvl1 = wvl.copy(womType = t)
@@ -291,7 +291,7 @@ object WdlVarLinks {
     def importFromWDL(womType: WomType,
                       womValue: WomValue) : WdlVarLinks = {
         val jsValue = jsFromWomValue(womType, womValue)
-        WdlVarLinks(womType, attrs, DxlValue(jsValue))
+        WdlVarLinks(womType, DxlValue(jsValue))
     }
 
 
@@ -348,7 +348,7 @@ object WdlVarLinks {
 
     def importFromCromwellJSON(womType: WomType,
                                jsv: JsValue) : WdlVarLinks = {
-        WdlVarLinks(womType, attrs, DxlValue(jsv))
+        WdlVarLinks(womType, DxlValue(jsv))
     }
 
     // create input/output fields that bind the variable name [bindName] to
