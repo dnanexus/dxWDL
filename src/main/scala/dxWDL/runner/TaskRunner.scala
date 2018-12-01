@@ -315,7 +315,7 @@ case class TaskRunner(task: CallableTaskDefinition,
         // convert the WDL values to JSON
         val outputFields:Map[String, JsValue] = outputs.map {
             case (outputVarName, womValue) =>
-                val wvl = WdlVarLinks.importFromWDL(womValue.womType, DeclAttrs.empty, womValue)
+                val wvl = WdlVarLinks.importFromWDL(womValue.womType, womValue)
                 WdlVarLinks.genFields(wvl, outputVarName)
         }.toList.flatten.toMap
         outputFields
@@ -396,7 +396,6 @@ case class TaskRunner(task: CallableTaskDefinition,
         val outputs: Map[String, JsValue] = task.outputs.map {
             case (outDef: OutputDefinition) =>
                 val wvl = WdlVarLinks(outDef.womType,
-                                      DeclAttrs.empty,
                                       DxlExec(dxSubJob, outDef.name))
                 WdlVarLinks.genFields(wvl, outDef.name)
         }.flatten.toMap

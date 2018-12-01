@@ -5,30 +5,41 @@ package dxWDL.compiler
 import cats.data.Validated.{Invalid, Valid}
 import common.validation.ErrorOr.ErrorOr
 import dxWDL.util._
-import IR.{CVar}
+import IR.{CVar, SArg}
 import wom.core.WorkflowSource
 import wom.callable.{CallableTaskDefinition, ExecutableTaskDefinition, WorkflowDefinition}
+import wom.callable.Callable._
+import wom.expression.WomExpression
+import wom.graph._
+import wom.types._
 import wom.values._
 
-case class GenerateIR(verbose: Verbose) {
+
+case class GenerateIR(locked: Boolean,
+                      wfKind: IR.WorkflowKind.Value,
+                      verbose: Verbose) {
     //private val verbose2:Boolean = verbose.keywords contains "GenerateIR"
+
+    case class LinkedVar(cVar: CVar, sArg: SArg)
+    type CallEnv = Map[String, LinkedVar]
 
     private class DynamicInstanceTypesException private(ex: Exception) extends RuntimeException(ex) {
         def this() = this(new RuntimeException("Runtime instance type calculation required"))
     }
 
     // generate a stage Id, this is a string of the form: 'stage-xxx'
+    /*
     private var stageNum = 0
-    private def genStageId(stageName: Option[String] = None) : Utils.DXWorkflowStage = {
+    private def genStageId(stageName: Option[String] = None) : DXWorkflowStage = {
         stageName match {
             case None =>
-                val retval = Utils.DXWorkflowStage(s"stage-${stageNum}")
+                val retval = DXWorkflowStage(s"stage-${stageNum}")
                 stageNum += 1
                 retval
             case Some(nm) =>
-                Utils.DXWorkflowStage(s"stage-${nm}")
+                DXWorkflowStage(s"stage-${nm}")
         }
-    }
+    }*/
 
     // Figure out which instance to use.
     //
@@ -51,15 +62,15 @@ case class GenerateIR(verbose: Verbose) {
             }
         }
 
-        try {
-            taskOpt match {
-                case None =>
-                    // A utility calculation, that requires minimal computing resources.
-                    // For example, the top level of a scatter block. We use
-                    // the default instance type, because one will probably be available,
-                    // and it will probably be inexpensive.
-                    IR.InstanceTypeDefault
-                case Some(task) =>
+        taskOpt match {
+            case None =>
+                // A utility calculation, that requires minimal computing resources.
+                // For example, the top level of a scatter block. We use
+                // the default instance type, because one will probably be available,
+                // and it will probably be inexpensive.
+                IR.InstanceTypeDefault
+            case Some(task) =>
+                try {
                     val dxInstaceType = evalAttr(task, Extras.DX_INSTANCE_TYPE_ATTR)
                     val memory = evalAttr(task, "memory")
                     val diskSpace = evalAttr(task, "disks")
@@ -69,11 +80,11 @@ case class GenerateIR(verbose: Verbose) {
                                          iTypeDesc.memoryMB,
                                          iTypeDesc.diskGB,
                                          iTypeDesc.cpu)
-            }
-        } catch {
-            case e : DynamicInstanceTypesException =>
-                // The generated code will need to calculate the instance type at runtime
-                IR.InstanceTypeRuntime
+                } catch {
+                    case e : DynamicInstanceTypesException =>
+                        // The generated code will need to calculate the instance type at runtime
+                        IR.InstanceTypeRuntime
+                }
         }
     }
 
@@ -85,12 +96,47 @@ case class GenerateIR(verbose: Verbose) {
                             taskSourceCode: String) : IR.Applet = {
         Utils.trace(verbose.on, s"Compiling task ${task.name}")
 
-        val inputs = task.inputs.map{
-            inp => CVar(inp.localName.value, inp.womType, DeclAttrs.empty)
+        // create dx:applet input definitions. Note, some "inputs" are
+        // actually expressions.
+        val inputs: Vector[CVar] = task.inputs.flatMap{
+            case RequiredInputDefinition(iName, womType, _, _) =>
+                Some(CVar(iName.value, womType, None))
+
+            case InputDefinitionWithDefault(iName, womType, defaultExpr, _, _) =>
+                Utils.ifConstEval(defaultExpr) match {
+                    case None =>
+                        // This is a task "input" of the form:
+                        //    Int y = x + 3
+                        // We consider it an expression, and not an input. The
+                        // runtime system will evaluate it.
+                        None
+                    case Some(value) =>
+                        Some(CVar(iName.value, womType, Some(value)))
+                }
+
+            // An input whose value should always be calculated from the default, and is
+            // not allowed to be overridden.
+            case FixedInputDefinition(iName, womType, defaultExpr, _, _) =>
+                None
+
+            case OptionalInputDefinition(iName, WomOptionalType(womType), _, _) =>
+                Some(CVar(iName.value, WomOptionalType(womType), None))
         }.toVector
-        val outputs = task.outputs.map{
-            out => CVar(out.localName.value, out.womType, DeclAttrs.empty)
+
+        // create dx:applet outputs
+        val outputs : Vector[CVar] = task.outputs.map{
+            case OutputDefinition(id, womType, expr) =>
+                val defaultValue = Utils.ifConstEval(expr) match {
+                    case None =>
+                        // This is an expression to be evaluated at runtime
+                        None
+                    case Some(value) =>
+                        // A constant, we can assign it now.
+                        Some(value)
+                }
+                CVar(id.value, womType, defaultValue)
         }.toVector
+
         val instanceType = calcInstanceType(Some(task))
 
         val kind =
@@ -147,11 +193,49 @@ case class GenerateIR(verbose: Verbose) {
     }
 
 
+    // Represent each workflow input with:
+    // 1. CVar, for type declarations
+    // 2. SVar, connecting it to the source of the input
+    //
+    // It is possible to provide a default value to a workflow input.
+    // For example:
+    // workflow w {
+    //   Int? x = 3
+    //   ...
+    // }
+    // We handle only the case where the default is a constant.
+    def buildWorkflowInput(input: GraphInputNode) : (CVar,SArg) = {
+        val cVar = input match {
+            case RequiredGraphInputNode(id, womType, nameInInputSet, valueMapper) =>
+                CVar(id.workflowLocalName, womType, None)
+
+            case OptionalGraphInputNode(id, womType, nameInInputSet, valueMapper) =>
+                assert(womType.isInstanceOf[WomOptionalType])
+                CVar(id.workflowLocalName, womType, None)
+
+            case OptionalGraphInputNodeWithDefault(id, womType, defaultExpr : WomExpression, nameInInputSet, valueMapper) =>
+                val defaultValue: WomValue = Utils.ifConstEval(defaultExpr) match {
+                    case None => throw new Exception(s"""|default expression in input should be a constant
+                                                         | ${input}
+                                                         |""".stripMargin)
+                    case Some(value) => value
+                }
+                CVar(id.workflowLocalName, womType, Some(defaultValue))
+
+            case other =>
+                throw new Exception(s"unhandled input ${other}")
+        }
+
+        (cVar, IR.SArgWorkflowInput(cVar))
+    }
+
     // Compile a (single) WDL workflow into a single dx:workflow.
     //
     // There are cases where we are going to need to generate dx:subworkflows.
     // This is not handled currently.
     def compileWorkflow(wf: WorkflowDefinition) : IR.Workflow = {
+        Utils.trace(verbose.on, s"compiling workflow ${wf.name}")
+
         val graph = wf.innerGraph
 
         // as a first step, only handle straight line workflows
@@ -168,9 +252,7 @@ case class GenerateIR(verbose: Verbose) {
         // print the inputs
         // compile these into workflow inputs
         System.out.println(s"${wf.name} inputs")
-        graph.inputNodes.foreach{ n =>
-            System.out.println(s"${n}\n")
-        }
+        val wfInputs:Vector[(CVar, SArg)] = graph.inputNodes.map(buildWorkflowInput).toVector
 
         // print the series of calls
         // compile into a series of stages, each of which
@@ -184,11 +266,51 @@ case class GenerateIR(verbose: Verbose) {
         // print the outputs
         // compile into workflow outputs
         System.out.println(s"${wf.name} outputs")
-        graph.outputNodes.foreach{ n =>
-            System.out.println(s"${n}\n")
-        }
+        val wfOutputs : Vector[(CVar, SArg)] = graph.outputNodes.map{
+            case PortBasedGraphOutputNode(id, womType, _) =>
+                val cVar = CVar(id.workflowLocalName, womType, None)
+                // TODO
+                // 1. Setup the environment of linked values
+                // 2. Translate the WOM port to a variable name
+                // 3. the outputs could include expressions.
+                //    This would require an extra calculation block.
+                (cVar, IR.SArgEmpty)
+            case other =>
+                throw new Exception(s"unhandled ouput ${other}")
+        }.toVector
 
-        throw new Exception("TODO")
+        /*
+        // Create a stage per call/scatter-block/declaration-block
+        val van = new VarAnalysis(Set.empty, Map.empty, cef, verbose)
+        val subBlocks = Block.splitIntoBlocks(wfProper.toVector, van)
+
+        val (allStageInfo_i, wfOutputs) =
+            if (locked)
+                compileWorkflowLocked(wf, wfInputs, subBlocks)
+            else
+                compileWorkflowRegular(wf, wfInputs, subBlocks)
+
+        // Add a reorganization applet if requested
+        val allStageInfo =
+            if (reorg) {
+                val (rStage, rApl) = createReorgApplet(wfOutputs)
+                allStageInfo_i :+ (rStage, Some(rApl))
+            } else {
+                allStageInfo_i
+            }
+
+        val (stages, auxApplets) = allStageInfo.unzip
+        val aApplets: Map[String, IR.Applet] =
+            auxApplets
+                .flatten
+                .map(apl => apl.name -> apl).toMap
+         */
+        val irwf = IR.Workflow(wf.name, wfInputs, wfOutputs, /*stages*/ Vector.empty[IR.Stage], locked, wfKind)
+        //execNameBox.add(wf.unqualifiedName)
+        //(irwf, aApplets)
+        irwf
+
+        //throw new Exception("TODO")
     }
 
     // Entry point for compiling tasks and workflows into IR
@@ -223,11 +345,12 @@ object GenerateIR {
     // Entrypoint
     def apply(womBundle : wom.executable.WomBundle,
               allSources: Map[String, WorkflowSource],
+              locked: Boolean,
               verbose: Verbose) : IR.Bundle = {
         Utils.trace(verbose.on, s"IR pass")
         Utils.traceLevelInc()
 
-        val gir = GenerateIR(verbose)
+        val gir = GenerateIR(locked, IR.WorkflowKind.TopLevel, verbose)
 
         // Scan the source files and extract the tasks. It is hard
         // to generate WDL from the abstract syntax tree (AST). One

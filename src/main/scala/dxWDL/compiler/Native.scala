@@ -71,9 +71,7 @@ case class Native(dxWDLrtId: Option[String],
         val defaultVals:Map[String, JsValue] = cVar.attrs.getDefault match {
             case None => Map.empty
             case Some(wdlValue) =>
-                val wvl = WdlVarLinks.importFromWDL(cVar.womType,
-                                                    DeclAttrs.empty,
-                                                    wdlValue)
+                val wvl = WdlVarLinks.importFromWDL(cVar.womType, wdlValue)
                 WdlVarLinks.genFields(wvl, name).toMap
         }
         def jsMapFromDefault(name: String) : Map[String, JsValue] = {

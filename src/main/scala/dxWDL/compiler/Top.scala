@@ -115,7 +115,7 @@ object Top {
 
         // Compile the WDL workflow into an Intermediate
         // Representation (IR)
-        val bundle: IR.Bundle = GenerateIR.apply(womBundle, allSources, cOpt.verbose)
+        val bundle: IR.Bundle = GenerateIR.apply(womBundle, allSources, cOpt.locked, cOpt.verbose)
 
         // generate dx inputs from the Cromwell-style input specification.
         cOpt.inputs.foreach{ path =>

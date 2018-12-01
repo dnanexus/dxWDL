@@ -116,7 +116,7 @@ case class InputFile(verbose: Verbose) {
                                jsv: JsValue) : WdlVarLinks = {
         val jsWithDxLinks: JsValue = replaceURLsWithLinks(jsv)
         val js2 = importFromCromwell(cVar.womType, jsWithDxLinks)
-        WdlVarLinks.importFromCromwellJSON(cVar.womType, cVar.attrs, js2)
+        WdlVarLinks.importFromCromwellJSON(cVar.womType, js2)
     }
 
     // skip comment lines, these start with ##.

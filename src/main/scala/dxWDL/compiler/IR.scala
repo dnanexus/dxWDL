@@ -9,7 +9,7 @@
 package dxWDL.compiler
 
 import com.dnanexus.DXRecord
-import dxWDL.util.{DeclAttrs, DXWorkflowStage, Utils}
+import dxWDL.util.{DXWorkflowStage, Utils}
 import wom.callable.CallableTaskDefinition
 import wom.types.WomType
 import wom.values.WomValue
@@ -18,13 +18,14 @@ object IR {
     // Compile time representation of a variable. Used also as
     // an applet argument.
     //
+    // TODO: readd attributes.
+    //
     // The attributes are used to encode DNAx applet input/output
     // specification fields, such as {help, suggestions, patterns}.
     //
     case class CVar(name: String,
                     womType: WomType,
-                    default: Option[WomValue]
-                    attrs: DeclAttrs) {
+                    default: Option[WomValue]) {
         // dx does not allow dots in variable names, so we
         // convert them to underscores.
         //

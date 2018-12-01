@@ -30,9 +30,7 @@ case class DxlStage(dxStage: DXWorkflowStage, ioRef: IORef.Value, varName: Strin
 case class DxlWorkflowInput(varName: String) extends DxLink
 case class DxlExec(dxExec: DXExecution, varName: String) extends DxLink
 
-case class WdlVarLinks(womType: WomType,
-                       attrs: DeclAttrs,
-                       dxlink: DxLink)
+case class WdlVarLinks(womType: WomType, dxlink: DxLink)
 
 object WdlVarLinks {
     // Human readable representation of a WdlVarLinks structure
@@ -291,7 +289,6 @@ object WdlVarLinks {
 
     // import a WDL value
     def importFromWDL(womType: WomType,
-                      attrs: DeclAttrs,
                       womValue: WomValue) : WdlVarLinks = {
         val jsValue = jsFromWomValue(womType, womValue)
         WdlVarLinks(womType, attrs, DxlValue(jsValue))
@@ -341,16 +338,15 @@ object WdlVarLinks {
     def importFromDxExec(womType:WomType,
                          jsValue: JsValue) : WdlVarLinks = {
         if (Utils.isNativeDxType(womType)) {
-            WdlVarLinks(womType, DeclAttrs.empty, DxlValue(jsValue))
+            WdlVarLinks(womType, DxlValue(jsValue))
         } else {
             val (womType2, v) = unmarshalHash(jsValue)
             assert(womType2 == womType)
-            WdlVarLinks(womType, DeclAttrs.empty, DxlValue(v))
+            WdlVarLinks(womType, DxlValue(v))
         }
     }
 
     def importFromCromwellJSON(womType: WomType,
-                               attrs:DeclAttrs,
                                jsv: JsValue) : WdlVarLinks = {
         WdlVarLinks(womType, attrs, DxlValue(jsv))
     }
