@@ -26,7 +26,7 @@ class IRTest extends FlatSpec with Matchers {
 
     // workflow compilation
     it should "IR compile a simple WDL workflow" in {
-        val path = pathFromBasename("trivial.wdl")
+        val path = pathFromBasename("wf_two_inputs.wdl")
         Main.compile(
             List(path.toString, "--compileMode", "ir", "-quiet", "-fatalValidationWarnings")
         ) shouldBe a [Main.SuccessfulTerminationIR]

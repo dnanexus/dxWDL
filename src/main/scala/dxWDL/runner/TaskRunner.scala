@@ -28,7 +28,6 @@ import spray.json._
 import wom.callable.{CallableTaskDefinition, RuntimeEnvironment}
 import wom.callable.Callable.{InputDefinition, OutputDefinition}
 import wom.core.WorkflowSource
-import wom.expression.{NoIoFunctionSet}
 import wom.values._
 
 import dxWDL.util._
@@ -105,7 +104,7 @@ case class TaskRunner(task: CallableTaskDefinition,
             case None => None
             case Some(expr) =>
                 val result: ErrorOr[WomValue] =
-                    expr.evaluateValue(env, NoIoFunctionSet)
+                    expr.evaluateValue(env, dxIoFunctions)
                 result match {
                     case Valid(WomString(s)) => Some(s)
                     case _ =>
@@ -162,7 +161,7 @@ case class TaskRunner(task: CallableTaskDefinition,
         // TODO: [env] has to be of type:
         //   type WomEvaluatedCallInputs = Map[InputDefinition, WomValue]
         val womInstantiation = getErrorOr(task.instantiateCommand(inputEnv,
-                                                                  NoIoFunctionSet,
+                                                                  dxIoFunctions,
                                                                   identity,
                                                                   runtimeEnvironment))
 

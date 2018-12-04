@@ -1,4 +1,4 @@
-package dxWDL.runner
+package dxWDL.util
 
 import java.nio.file.{Paths}
 import scala.concurrent.{ExecutionContext, Future}
@@ -6,9 +6,6 @@ import scala.concurrent.ExecutionContext.Implicits.global
 import wom.expression.{IoFunctionSet, PathFunctionSet}
 import wom.expression.IoFunctionSet.IoElement
 import wom.values._
-
-import dxWDL.util.{DxPathConfig, Utils}
-import dxWDL.util.{Furl, FurlLocal, FurlDx}
 
 case class DxPathFunctions(config: DxPathConfig) extends PathFunctionSet {
     /**

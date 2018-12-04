@@ -4,7 +4,7 @@ version 1.0
 # of a dxWDL release.
 import "add.wdl"
 
-workflow trivial {
+workflow wf_two_inputs {
     input {
         Int x = 3
         Int y = 5

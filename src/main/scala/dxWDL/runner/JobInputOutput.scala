@@ -3,13 +3,14 @@ package dxWDL.runner
 import cats.data.Validated.{Invalid, Valid}
 import com.dnanexus.{DXFile}
 import common.validation.ErrorOr.ErrorOr
-import dxWDL.util._
 import java.nio.file.{Files, Path, Paths}
 import spray.json._
 import wom.callable.Callable._
 import wom.expression.WomExpression
 import wom.types._
 import wom.values._
+
+import dxWDL.util._
 
 case class JobInputOutput(dxIoFunctions : DxIoFunctions) {
 

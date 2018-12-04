@@ -4,8 +4,6 @@ package dxWDL.compiler
 
 import cats.data.Validated.{Invalid, Valid}
 import common.validation.ErrorOr.ErrorOr
-import dxWDL.util._
-import IR.{CVar, SArg}
 import wom.core.WorkflowSource
 import wom.callable.{CallableTaskDefinition, ExecutableTaskDefinition, WorkflowDefinition}
 import wom.callable.Callable._
@@ -14,6 +12,8 @@ import wom.graph._
 import wom.types._
 import wom.values._
 
+import dxWDL.util._
+import IR.{CVar, SArg}
 
 case class GenerateIR(locked: Boolean,
                       wfKind: IR.WorkflowKind.Value,
@@ -251,7 +251,6 @@ case class GenerateIR(locked: Boolean,
 
         // print the inputs
         // compile these into workflow inputs
-        System.out.println(s"${wf.name} inputs")
         val wfInputs:Vector[(CVar, SArg)] = graph.inputNodes.map(buildWorkflowInput).toVector
 
         // print the series of calls
@@ -265,7 +264,6 @@ case class GenerateIR(locked: Boolean,
 
         // print the outputs
         // compile into workflow outputs
-        System.out.println(s"${wf.name} outputs")
         val wfOutputs : Vector[(CVar, SArg)] = graph.outputNodes.map{
             case PortBasedGraphOutputNode(id, womType, _) =>
                 val cVar = CVar(id.workflowLocalName, womType, None)
@@ -276,13 +274,23 @@ case class GenerateIR(locked: Boolean,
                 // 4. the outputs could include expressions.
                 //    This would require an extra calculation block.
                 (cVar, IR.SArgEmpty)
+            case exprGon :ExpressionBasedGraphOutputNode =>
+                /*System.out.println(s"""|ExpressionBasedGraphOutputNode
+                                       | ${exprGon.womType}
+                                       | ${exprGon.graphOutputPort}
+                                       |""".stripMargin)*/
+                val cVar = CVar(exprGon.graphOutputPort.name, exprGon.womType, None)
+                (cVar, IR.SArgEmpty)
             case other =>
-                throw new Exception(s"unhandled ouput ${other}")
+                throw new Exception(s"unhandled output ${other}")
         }.toVector
 
         // Create a stage per call/scatter-block/declaration-block
-        //val van = new VarAnalysis(Set.empty, Map.empty, cef, verbose)
-        val subBlocks = Block.splitIntoBlocks(wfProper.toVector, van)
+        val subBlocks = Block.splitIntoBlocks(graph.nodes.toVector)
+        //Utils.ignore(subBlocks)
+        subBlocks.foreach{ block =>
+            System.out.println(block + "\n")
+        }
 
         /*
         val (allStageInfo_i, wfOutputs) =
@@ -363,14 +371,15 @@ object GenerateIR {
                 accu ++ d
         }
 
-        val primary = womBundle.primaryCallable.map{ callable =>
-            gir.compileCallable(callable, taskDir)
-        }
         val allCallables = womBundle.allCallables.map{
             case (name, callable) =>
                 val exec = gir.compileCallable(callable, taskDir)
                 name -> exec
         }.toMap
+
+        val primary = womBundle.primaryCallable.map{ callable =>
+            allCallables(callable.name)
+        }
 
         Utils.traceLevelDec()
         IR.Bundle(primary, allCallables)

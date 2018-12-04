@@ -110,9 +110,16 @@ object Utils {
 
     // Check if the WDL expression is a constant. If so, calculate and return it.
     // Otherwise, return None.
+    //
+    // These are used for evaluating if a WOM expression is constant.
+    // Ideally, we should not be using any of the IO functions, since
+    // these checks may be part of the compilation process.
+    private lazy val dxPathConfig = DxPathConfig(Paths.get("/tmp/"))
+    private lazy val dxIoFunctions = DxIoFunctions(dxPathConfig)
+
     def ifConstEval(expr: WomExpression) : Option[WomValue] = {
         val result: ErrorOr[WomValue] =
-            expr.evaluateValue(Map.empty[String, WomValue], wom.expression.NoIoFunctionSet)
+            expr.evaluateValue(Map.empty[String, WomValue], dxIoFunctions)
         result match {
             case Invalid(_) => None
             case Valid(x: WomValue) => Some(x)

@@ -64,10 +64,14 @@ libraryDependencies ++= Seq(
     "org.broadinstitute" %% "cromwell-core" % cromwellV,
     "org.broadinstitute" %% "cromwell-wom" % cromwellV,
     "org.broadinstitute" %% "cwl-v1-0" % cromwellV,
-    "org.broadinstitute" %% "language-factory-core" % cromwellV,
+//    "org.broadinstitute" %% "language-factory-core" % cromwellV,
     "org.broadinstitute" %% "wdl-draft2" % cromwellV,
+//    "org.broadinstitute" %% "cromwell-wdl-transforms-draft2" % cromwellV,
     "org.broadinstitute" %% "wdl-draft3" % cromwellV,
+//    "org.broadinstitute" %% "cromwell-wdl-transforms-draft3" % cromwellV,
     "org.broadinstitute" %% "wdl-biscayne" % cromwellV,
+//    "org.broadinstitute" %% "cromwell-wdl-transforms-biscayne" % cromwellV,
+//    "org.broadinstitute" %% "cromwell-wdl-transforms-shared" % cromwellV,
 
     // "cromwell.languages.util"
     "io.spray" %% "spray-json" % "1.3.2",
@@ -76,7 +80,7 @@ libraryDependencies ++= Seq(
 
     //---------- Test libraries -------------------//
     "org.scalactic" %% "scalactic" % "3.0.1",
-    "org.scalatest" %% "scalatest" % "3.0.1" % "test"
+    "org.scalatest" %% "scalatest" % "3.0.1" % "test",
 )
 
 // If an exception is thrown during tests, show the full
