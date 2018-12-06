@@ -1,11 +1,13 @@
 /*
-     Split a block of statements into sub-blocks, each of which contains:
-     1) at most one call
-     2) at most one toplevel if/scatter block
-     Note that the if/scatter block could be deeply nested. Previous compiler passes
-     must make sure that there is no more a single call inside an if/scatter block.
+
+ Split a graph into sub-blocks, each of which contains a bunch of toplevel
+expressions and one:
+   1) call to workflow or task
+or 2) conditional with one or more calls inside it
+or 3) scatter with one or more calls inside it.
 
      For example:
+
      call x
      Int a
      Int b
@@ -19,67 +21,25 @@
 
      =>
 
-     [call x, Int a, Int b]
-     [call y]
-     [call z]
-     [String buf, Float x, scatter]
+     block
+     1        [call x, Int a, Int b]
+     2        [call y]
+     3        [call z]
+     4        [String buf, Float x, scatter]
 */
 
 package dxWDL.compiler
 
-import dxWDL.util.{Verbose, Utils}
+import dxWDL.util.{Utils}
 import wom.expression.WomExpression
-import wom.graph.{GraphNode, CallNode, ScatterNode, ConditionalNode}
-import wom.graph.GraphNode.GraphNodeWithInnerGraph
+import wom.graph._
+import wom.graph.expression._
 
-// Find all the calls inside a statement block
-case class Block(statements: Vector[GraphNode]) {
-    def head : GraphNode =
-        statements.head
-
-    def size : Int =
-        statements.size
-
-    def append(stmt: GraphNode) : Block =
-        Block(statements :+ stmt)
-
-    def append(block2: Block) : Block =
-        Block(statements ++ block2.statements)
-
-    // Check if one of the statements is a scatter/if block
-    def hasSubBlock : Boolean = {
-        statements.foldLeft(false) {
-            case (accu, _:ScatterNode) => true
-            case (accu, _:ConditionalNode) => true
-            case (accu, _) => accu
-        }
-    }
-
-    def findCalls : Vector[CallNode] = {
-        def collectCalls(statements1: Seq[GraphNode]) : Vector[CallNode] = {
-            statements1.foldLeft(Vector.empty[CallNode]) {
-                case (accu, call:CallNode) =>
-                    accu :+ call
-                case (accu, ssc:ScatterNode) =>
-                    accu ++ collectCalls(ssc.innerGraph.nodes.toSeq)
-                case (accu, ifStmt:ConditionalNode) =>
-                    accu ++ collectCalls(ifStmt.innerGraph.nodes.toSeq)
-                  case (accu, _) =>
-                    accu
-            }.toVector
-        }
-        collectCalls(this.statements)
-    }
-
-    // Count how many calls (task or workflow) there are in a series
-    // of statements.
-    def countCalls : Int =
-        findCalls.length
-
+object Block {
     // A trivial expression has no operators, it is either a constant WomValue
     // or a single identifier. For example: '5' and 'x' are trivial. 'x + y'
     // is not.
-    private def isTrivialExpression(expr: WomExpression) : Boolean = {
+    def isTrivialExpression(expr: WomExpression) : Boolean = {
         val inputs = expr.inputs
         if (inputs.size > 1)
             return false
@@ -93,198 +53,138 @@ case class Block(statements: Vector[GraphNode]) {
     // The block is a singleton with one statement which is a call. The call
     // has no subexpressions. Note that the call may not provide
     // all the callee's arguments.
-    def isCallWithNoSubexpressions : Boolean = {
-        if (statements.size != 1)
-            return false
-        if (!statements.head.isInstanceOf[CallNode])
-            return false
-        val call = statements.head.asInstanceOf[CallNode]
+    def isCallWithNoSubexpressions(call : CallNode) : Boolean = {
         call.inputDefinitionMappings.forall{
             case (_, expr: WomExpression) =>
                 isTrivialExpression(expr)
             case (_, _) => true
         }
     }
-}
 
-object Block {
-    // construct a Block from a single statement
-    def apply(node: GraphNode) : Block = {
-        Block(Vector(node))
+    // Deep search for all calls in a graph
+    private def deepFindCalls(nodes: Seq[GraphNode]) : Vector[CallNode] = {
+        nodes.foldLeft(Vector.empty[CallNode]) {
+            case (accu: Vector[CallNode], call:CallNode) =>
+                accu :+ call
+            case (accu, ssc:ScatterNode) =>
+                accu ++ deepFindCalls(ssc.innerGraph.nodes.toVector)
+            case (accu, ifStmt:ConditionalNode) =>
+                accu ++ deepFindCalls(ifStmt.innerGraph.nodes.toVector)
+            case (accu, _) =>
+                accu
+        }.toVector
     }
 
-    // Is this a subblock? Declarations aren't subblocks, scatters and if's are.
-    private def isSubBlock(node :GraphNode) : Boolean = {
-        node match {
-            case _ : GraphNodeWithInnerGraph => true
-            case _ => false
-        }
+    // Count how many calls (task or workflow) there are in a series
+    // of nodes.
+    def deepCountCalls(nodes: Seq[GraphNode]) : Int = {
+        val retval = deepFindCalls(nodes.toVector).size
+        //System.out.println(s"deepCountCalls ${nodes.size} nodes = ${retval}")
+        retval
     }
 
-    private def getInnerNodes(node :GraphNode) : Vector[GraphNode] = {
-        node match {
-            case iNode : GraphNodeWithInnerGraph => iNode.innerGraph.nodes.toVector
-            case _ => throw new Exception(s"Does not have an inner graph ${node}")
-        }
-    }
-
-    // Split a workflow into blocks, where each block will compile to
-    // a stage. When the workflow is unlocked, we create a separate
-    // block for each toplevel call that has no subexpressions. These
-    // will have their own stages.
-    def splitIntoBlocks(children: Vector[GraphNode]) : Vector[Block] = {
-        // base cases: zero and one children
-        if (children.isEmpty)
-            return Vector.empty
-        if (children.length == 1)
-            return Vector(Block(children))
-
-        // Normal case, recurse into the first N-1 statements,
-        // than append the Nth.
-        val blocks = splitIntoBlocks(children.dropRight(1))
-        val allBlocksButLast = blocks.dropRight(1)
-
-        // see if the last statement should be incorporated into the last block,
-        // of if we should open a new block.
-        val lastBlock = blocks.last
-        val lastStatement = children.last
-        val lastChild = Block(Vector(lastStatement))
-        var openNewBlock =
-            (lastBlock.countCalls, lastChild.countCalls) match {
-                case (0, 1) if lastChild.isCallWithNoSubexpressions =>
-                    // create a separate block for the last child; it will get its
-                    // own stage. We are compiling a WDL call directly into a stage
-                    // here.
-                    true
-                case (0, (0|1)) =>
-                    // no calls were seen so far, extend the block
-                    false
-                case (1, (0|1)) =>
-                    // The last block already contains a call, start a new block
-                    true
-                case (x ,y) =>
-                    throw new Exception(s"Internal error: block has ${x} calls, and child has ${y} calls")
-            }
-        if (isSubBlock(lastStatement)) {
-            // If the last statement is an if/scatter, always start a new block
-            openNewBlock = true
-        }
-        val trailing: Vector[Block] =
-            if (openNewBlock)
-                Vector(lastBlock, lastChild)
-            else
-                Vector(lastBlock.append(lastChild))
-        allBlocksButLast ++ trailing
-    }
-
-
-    // Is there a declaration after a call? For example:
-    //
-    // scatter (i in numbers) {
-    //     call add { input: a=i, b=1 }
-    //     Int n = add.result
-    // }
-    private def isDeclarationAfterCall(statements: Vector[GraphNode]) : Boolean = {
-        statements.length match {
-            case 0 => false
-            case 1 =>
-                if (isSubBlock(statements.head)) {
-                    // recurse into the only child
-                    val nodes = getInnerNodes(statements.head)
-                    isDeclarationAfterCall(nodes.toVector)
-                } else {
-                    // base case: there is just one one child,
-                    // and it is a call or a declaration.
-                    false
-                }
-            case _ =>
-                val numCalls = Block(statements.head).countCalls
-                if (numCalls == 1) true
-                else isDeclarationAfterCall(statements.tail)
-        }
-    }
-
-    // A block is reducible if one of these conditions hold.
-    // (1) it has two calls or more.
-    // (2) It has one call, but there may be dependent
-    // declarations after it. For example:
-    //
-    // scatter (i in numbers) {
-    //     call add { input: a=i, b=1 }
-    //     Int n = add.result
-    // }
-    private def isReducible(statement: GraphNode) : Boolean = {
-        statement match {
-            case iNode : GraphNodeWithInnerGraph =>
-                val children = iNode.innerGraph.nodes.toVector
-                val numCalls = Block(children).countCalls
-                if (numCalls == 0)
-                    return false
-                if (numCalls >= 2)
-                    return true
-                isDeclarationAfterCall(children)
-            case _ =>
-                false
-        }
-    }
-
-
-
-    // In a tree like:
-    //    if ()
-    //      if ()
-    //        scatter ()
-    //           Int i
-    //           call A
-    //           call B
-    //
-    // The scatter node is the end of the trunk.
-    def findTrunkTop(statement: GraphNode) : GraphNode = {
-        statement match {
-            case iNode : GraphNodeWithInnerGraph =>
-                val children = iNode.innerGraph.nodes.toVector
-                children.size match {
-                    case 0 => throw new Exception("findTrunkTop on an empty tree")
-                    case 1 =>  findTrunkTop(children.head)
-                    case _ => statement
-                }
-            case _ => throw new Exception(s"""|findTrunkTop on node without an inner graph
-                                              |${statement}
-                                              |""")
-        }
-    }
-
-    // There is a separable workflow in here, either
-    // a fragment with one call, or a call-line with multiple calls.
-    //
-    // call line example:
-    // if (cond) {
-    //   call A
-    //   call B
-    //   call C
-    // }
-    //
-    // a fragment example:
-    // if (cond)
-    //    if (cond2)
-    //       scatter(x in xs)
-    //         call A
-    //
-    def findReducibleChild(statements: Seq[GraphNode],
-                           verbose: Verbose) : Option[GraphNode] = {
-        val child = statements.find{
-            case stmt => isReducible(stmt)
-        }
-        child match {
-            case None =>
-                // There is nothing to reduce here. This can happen for a sequence like:
-                // workflow w
-                //    call C
-                //    call D
-                //    String s = C.result
+    // Here, "top of the graph" is the node that has no dependencies on the rest of
+    // the nodes. It -could- depend on nodes in the 'topGroup' set.
+    private def pickTopNodes(nodes: Set[GraphNode], topGroup: Set[GraphNode]) : Set[GraphNode] = {
+        assert(nodes.size > 0)
+        val tops = nodes.flatMap{ node =>
+            val ancestors = node.upstreamAncestry
+            val others = nodes - node
+            if ((ancestors.intersect(others)).isEmpty) {
+                Some(node)
+            } else {
                 None
-            case Some(stmt) =>
-                Some(findTrunkTop(stmt))
+            }
         }
+        assert(tops.size > 0)
+        tops.toSet
+    }
+
+    // Build a top group that has nodes upstream of the rest. Stop
+    // once it has one or more calls.
+    //
+    // Note: the nodes are returned in sorted order, from upstream to downstream.
+    private def buildTopGroup(nodes: Set[GraphNode]) : Vector[GraphNode] = {
+        //System.err.println(s"buildTopGroup ${nodes.size} nodes")
+        var topGroup = Vector.empty[GraphNode]
+        var remaining = nodes
+        while (remaining.size > 0 &&
+                   deepCountCalls(topGroup) == 0) {
+            val topNodes = pickTopNodes(remaining, topGroup.toSet)
+            remaining --= topNodes
+            topGroup ++= topNodes.toVector
+        }
+        topGroup
+    }
+
+
+    // Check that all the call input expressions are placed
+    // in the same block as the call.
+    //
+    // For example, in a WDL source like this:
+    //
+    // workflow wf_linear {
+    //   input {
+    //     Int x = 3
+    //     Int y = 5
+    //   }
+    //   call add {input: a=x, b=y}
+    //   call mul { input: a = add.result, b = 5 }
+    //   output {
+    //     Int r1 = add.result
+    //     Int r2 = mul.result
+    //   }
+    // }
+    //
+    // For the call to mul, the b=5 clause will have the node:
+    //    TaskCallInputExpressionNode(b, 5, WomIntegerType)
+    // It can come at the very first block. We want it to be placed in
+    // the same block as the mul call.
+    private def closeGroup(nodes: Vector[GraphNode],
+                           rest: Set[GraphNode]) : Vector[GraphNode] = {
+        val callImmediateExpressions = rest.flatMap{
+            case call: CallNode => call.upstream.toVector
+            case _ => Vector.empty
+        }
+        val outsideTcInputs: Set[TaskCallInputExpressionNode] = callImmediateExpressions.collect{
+            case tc : TaskCallInputExpressionNode => tc
+        }.toSet
+
+        // Remove any of these expressions from the group
+        nodes.filter{
+            case iTc : TaskCallInputExpressionNode if outsideTcInputs contains iTc  => false
+            case _ => true
+        }
+    }
+
+    // Sort the graph into a linear set of blocks, according to dependencies.
+    // Each block is itself sorted.
+    def splitIntoBlocks(graph: Graph) : (Vector[GraphInputNode],   // inputs
+                                         Vector[Vector[GraphNode]], // blocks
+                                         Vector[GraphOutputNode]) // outputs
+    = {
+        //System.out.println(s"SplitIntoBlocks ${nodes.size} nodes")
+        assert(graph.nodes.size > 0)
+        var rest = graph.nodes
+        var blocks = Vector.empty[Vector[GraphNode]]
+
+        // The first block has the graph inputs
+        val inputBlock = graph.inputNodes.toVector
+        rest --= inputBlock.toSet
+
+        // The last block has the graph outputs
+        val outputBlock = graph.outputNodes.toVector
+        rest --= outputBlock.toSet
+
+        // Create a separate block for each group of statements
+        // that include one call or more.
+        while (rest.size > 0) {
+            val topGroup = buildTopGroup(rest)
+            val closedTopGroup = closeGroup(topGroup, rest -- topGroup)
+            blocks :+= closedTopGroup
+            rest = rest -- closedTopGroup
+        }
+
+        (inputBlock, blocks, outputBlock)
     }
 }

@@ -20,8 +20,8 @@ case class GenerateIR(locked: Boolean,
                       verbose: Verbose) {
     //private val verbose2:Boolean = verbose.keywords contains "GenerateIR"
 
-    case class LinkedVar(cVar: CVar, sArg: SArg)
-    type CallEnv = Map[String, LinkedVar]
+    private case class LinkedVar(cVar: CVar, sArg: SArg)
+    private type CallEnv = Map[String, LinkedVar]
 
     private class DynamicInstanceTypesException private(ex: Exception) extends RuntimeException(ex) {
         def this() = this(new RuntimeException("Runtime instance type calculation required"))
@@ -229,11 +229,111 @@ case class GenerateIR(locked: Boolean,
         (cVar, IR.SArgWorkflowInput(cVar))
     }
 
+
+    // Compile a workflow, having compiled the independent tasks.
+    private def compileWorkflowLocked(wf: WdlWorkflow,
+                                      wfInputs: Vector[(CVar, SArg)],
+                                      subBlocks: Vector[Block])
+            : (Vector[IR.Stage, Option[IR.Applet]], CallEnv) =
+    {
+        Utils.trace(verbose, s"Compiling locked-down workflow ${wf.unqualifiedName}")
+
+        // Locked-down workflow, we have workflow level inputs and outputs
+        val initEnv : CallEnv = wfInputs.map { case (cVar,sArg) =>
+            cVar.name -> LinkedVar(cVar, sArg)
+        }.toMap
+
+        // link together all the stages into a linear workflow
+        val allStageInfo = subBlocks.foldLeft(accu) {
+            case (accu, block) if isSingletonBlock(block, env) =>
+                // The block contains exactly one call, with no extra declarations.
+                // All the variables are already in the environment, so there
+                // is no need to do any extra work. Compile directly into a workflow
+                // stage.
+                val call = block.head.asInstanceOf[WdlCall]
+                val stage = compileCall(call, env)
+
+                // Add bindings for the output variables. This allows later calls to refer
+                // to these results.
+                for (cVar <- stage.outputs) {
+                    env = env + (call.unqualifiedName ++ "." + cVar.name ->
+                                     LinkedVar(cVar, IR.SArgLink(stage.stageName, cVar)))
+                }
+                accu :+ (stage, None)
+
+            case (accu, block) =>
+                // General case
+                val (stage, apl) = compileWfFragment(block, env)
+                for (cVar <- stage.outputs) {
+                    env = env + (cVar.name ->
+                                     LinkedVar(cVar, IR.SArgLink(stage.stageName, cVar)))
+                }
+                accu :+ (stage, Some(apl))
+        }
+        (allStageInfo, env)
+    }
+
+
+    // TODO: Currently, expressions in the output section are not supported.
+    // We would need an extra rewrite step to support this. At the moment,
+    // it is simpler to ask the user to perform the rewrite herself.
+    private def buildWorkflowOutput(outputNode: GraphOutputNode, env: CallEnv) : (CVar, SArg) = {
+        def getSArgFromEnv(source: String) : SArg = {
+            env.get(source) match {
+                case None => throw new Exception(s"Sanity: could not find ${source} in the workflow environment")
+                case Some(lVar) => (cVar, lVar)
+            }
+        }
+        outputNode match {
+            case PortBasedGraphOutputNode(id, womType, sourcePort) =>
+                val cVar = CVar(id.workflowLocalName, womType, None)
+                val source = sourcePort.name
+                (cVar, getSArgFromEnv(source))
+            case expr :ExpressionBasedGraphOutputNode =>
+                if (!Block.isTrivialExpression(expr.womExpression))
+                    throw new Exception(s"""|Expressions are not supported as workflow outputs,
+                                            |${WomPrettyPrint.apply(expr)}.
+                                            |Please rewrite""".stripMargin.replaceAll("\n", " "))
+                val cVar = CVar(expr.graphOutputPort.name, expr.womType, None)
+                val source = expr.womExpression.sourceString
+                (cVar, getSArgFromEnv(source))
+            case other =>
+                throw new Exception(s"unhandled output ${other}")
+        }
+    }
+
+    private def dbgPrint(inputNodes: Vector[GraphInputNode],   // inputs
+                         subBlocks: Vector[Vector[GraphNode]], // blocks
+                         outputNodes: Vector[GraphOutputNode]) // outputs
+            : Unit = {
+        System.out.println("Inputs [")
+        inputNodes.foreach{ node =>
+            val desc = WomPrettyPrint.apply(node)
+            System.out.println(s"  ${desc}")
+        }
+        System.out.println("]")
+        subBlocks.foreach{ nodes =>
+            System.out.println("Block [")
+            nodes.foreach{ node =>
+                val desc = WomPrettyPrint.apply(node)
+                System.out.println(s"  ${desc}")
+            }
+            System.out.println("]")
+        }
+        System.out.println("Output [")
+        outputNodes.foreach{ node =>
+            val desc = WomPrettyPrint.apply(node)
+            System.out.println(s"  ${desc}")
+        }
+        System.out.println("]")
+    }
+
     // Compile a (single) WDL workflow into a single dx:workflow.
     //
     // There are cases where we are going to need to generate dx:subworkflows.
     // This is not handled currently.
-    def compileWorkflow(wf: WorkflowDefinition) : IR.Workflow = {
+    def compileWorkflow(wf: WorkflowDefinition) : (IR.Workflow, Map[String, IR.Applet]) =
+    {
         Utils.trace(verbose.on, s"compiling workflow ${wf.name}")
 
         val graph = wf.innerGraph
@@ -249,77 +349,25 @@ case class GenerateIR(locked: Boolean,
         // now we are sure the workflow is a simple straight line. It only contains
         // task calls.
 
-        // print the inputs
-        // compile these into workflow inputs
-        val wfInputs:Vector[(CVar, SArg)] = graph.inputNodes.map(buildWorkflowInput).toVector
-
-        // print the series of calls
-        // compile into a series of stages, each of which
-        // calls a task. Each task must be compiled in a dx:applet
-        // beforehand (?)
-        System.out.println(s"${wf.name} calls")
-        graph.calls.foreach{ n =>
-            System.out.println(s"${n}\n")
-        }
-
-        // print the outputs
-        // compile into workflow outputs
-        val wfOutputs : Vector[(CVar, SArg)] = graph.outputNodes.map{
-            case PortBasedGraphOutputNode(id, womType, _) =>
-                val cVar = CVar(id.workflowLocalName, womType, None)
-                // TODO
-                // 1. Setup the environment of linked values
-                // 2. Translate the WOM port to a variable name.
-                // 3. Lookup the variable in the environment
-                // 4. the outputs could include expressions.
-                //    This would require an extra calculation block.
-                (cVar, IR.SArgEmpty)
-            case exprGon :ExpressionBasedGraphOutputNode =>
-                /*System.out.println(s"""|ExpressionBasedGraphOutputNode
-                                       | ${exprGon.womType}
-                                       | ${exprGon.graphOutputPort}
-                                       |""".stripMargin)*/
-                val cVar = CVar(exprGon.graphOutputPort.name, exprGon.womType, None)
-                (cVar, IR.SArgEmpty)
-            case other =>
-                throw new Exception(s"unhandled output ${other}")
-        }.toVector
-
         // Create a stage per call/scatter-block/declaration-block
-        val subBlocks = Block.splitIntoBlocks(graph.nodes.toVector)
-        //Utils.ignore(subBlocks)
-        subBlocks.foreach{ block =>
-            System.out.println(block + "\n")
-        }
+        val (inputNodes, subBlocks, outputNodes) = Block.splitIntoBlocks(graph)
+        dbgPrint(inputNodes, subBlocks, outputNodes)
 
-        /*
-        val (allStageInfo_i, wfOutputs) =
-            if (locked)
-                compileWorkflowLocked(wf, wfInputs, subBlocks)
-            else
-                compileWorkflowRegular(wf, wfInputs, subBlocks)
+        // compile into dx:workflow inputs
+        val wfInputs:Vector[(CVar, SArg)] = inputNodes.map(buildWorkflowInput).toVector
 
-        // Add a reorganization applet if requested
-        val allStageInfo =
-            if (reorg) {
-                val (rStage, rApl) = createReorgApplet(wfOutputs)
-                allStageInfo_i :+ (rStage, Some(rApl))
-            } else {
-                allStageInfo_i
-            }
+        val (allStageInfo, env) = compileWorkflowLocked(wf, wfInputs, subBlocks)
+
+        // compile into workflow outputs
+        val wfOutputs = outputNodes.map(node => buildWorkflowOutput(node, env)).toVector
 
         val (stages, auxApplets) = allStageInfo.unzip
         val aApplets: Map[String, IR.Applet] =
             auxApplets
                 .flatten
                 .map(apl => apl.name -> apl).toMap
-         */
-        val irwf = IR.Workflow(wf.name, wfInputs, wfOutputs, /*stages*/ Vector.empty[IR.Stage], locked, wfKind)
-        //execNameBox.add(wf.unqualifiedName)
-        //(irwf, aApplets)
-        irwf
-
-        //throw new Exception("TODO")
+        val irwf = IR.Workflow(wf.name, wfInputs, wfOutputs, stages, locked, wfKind)
+        (irwf, aApplets)
     }
 
     // Entry point for compiling tasks and workflows into IR

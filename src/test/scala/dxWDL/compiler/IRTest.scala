@@ -4,14 +4,15 @@ import dxWDL.Main
 import java.nio.file.{Path, Paths}
 import org.scalatest.{FlatSpec, Matchers}
 
-
 // These tests involve compilation -without- access to the platform.
 //
 class IRTest extends FlatSpec with Matchers {
     lazy val currentWorkDir:Path = Paths.get(System.getProperty("user.dir"))
 
     private def pathFromBasename(basename: String) : Path = {
-        currentWorkDir.resolve(s"src/test/resources/compiler/${basename}")
+        //currentWorkDir.resolve(s"src/test/resources/compiler/${basename}")
+        val p = getClass.getResource(s"/compiler/${basename}").getPath
+        Paths.get(p)
     }
 
     // task compilation
@@ -26,7 +27,7 @@ class IRTest extends FlatSpec with Matchers {
 
     // workflow compilation
     it should "IR compile a simple WDL workflow" in {
-        val path = pathFromBasename("wf_two_inputs.wdl")
+        val path = pathFromBasename("wf_linear.wdl")
         Main.compile(
             List(path.toString, "--compileMode", "ir", "-quiet", "-fatalValidationWarnings")
         ) shouldBe a [Main.SuccessfulTerminationIR]

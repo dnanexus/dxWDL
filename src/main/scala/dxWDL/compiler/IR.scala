@@ -119,7 +119,7 @@ object IR {
 
     // A stage can call an applet or a workflow.
     //
-    // Note: the description may concatin dots, parentheses, and other special
+    // Note: the description may contain dots, parentheses, and other special
     // symbols. It is shown to the user on the UI.
     case class Stage(stageName: String,
                      description: Option[String],
