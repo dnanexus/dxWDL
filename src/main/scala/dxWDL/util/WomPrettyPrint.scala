@@ -45,4 +45,8 @@ object WomPrettyPrint {
                 s"${other.getClass}"
         }
     }
+
+    def apply(nodes: Seq[GraphNode]) : String = {
+        nodes.map(apply).mkString("\n")
+    }
 }

@@ -53,11 +53,14 @@ object Block {
     // The block is a singleton with one statement which is a call. The call
     // has no subexpressions. Note that the call may not provide
     // all the callee's arguments.
-    def isCallWithNoSubexpressions(call : CallNode) : Boolean = {
-        call.inputDefinitionMappings.forall{
-            case (_, expr: WomExpression) =>
-                isTrivialExpression(expr)
-            case (_, _) => true
+    def isCallWithNoSubexpressions(node: GraphNode) : Boolean = {
+        node match {
+            case call : CallNode =>
+                call.inputDefinitionMappings.forall{
+                    case (_, expr: WomExpression) => isTrivialExpression(expr)
+                    case (_, _) => true
+                }
+            case _ => false
         }
     }
 
@@ -77,7 +80,7 @@ object Block {
 
     // Count how many calls (task or workflow) there are in a series
     // of nodes.
-    def deepCountCalls(nodes: Seq[GraphNode]) : Int = {
+    private def deepCountCalls(nodes: Seq[GraphNode]) : Int = {
         val retval = deepFindCalls(nodes.toVector).size
         //System.out.println(s"deepCountCalls ${nodes.size} nodes = ${retval}")
         retval
@@ -186,5 +189,43 @@ object Block {
         }
 
         (inputBlock, blocks, outputBlock)
+    }
+
+    // A block of nodes that represents a call with no subexpressions. These
+    // can be compiled directly into a dx:workflow stage.
+    //
+    // For example, the WDL code:
+    // call add { input: a=x, b=y }
+    //
+    // Is represented by the graph:
+    // Block [
+    //   TaskCallInputExpressionNode(a, x, WomIntegerType, GraphNodeOutputPort(a))
+    //   TaskCallInputExpressionNode(b, y, WomIntegerType, GraphNodeOutputPort(b))
+    //   CommandCall(add, Set(a, b))
+    // ]
+    def isSimpleCall(nodes: Vector[GraphNode]) : Option[CallNode] = {
+        // find the call
+        val calls : Seq[CallNode] = nodes.collect{
+            case cNode : CallNode => cNode
+        }
+        if (calls.size != 1)
+            return None
+        val oneCall = calls.head
+
+        // All the other nodes have to the call inputs
+        val rest = nodes.toSet - oneCall
+        val callInputs = oneCall.upstream.toSet
+        if (rest != callInputs)
+            return None
+
+        // The call inputs have to be simple expressions
+        val allSimple = rest.forall{
+            case expr: TaskCallInputExpressionNode => isTrivialExpression(expr.womExpression)
+            case _ => false
+        }
+
+        if (!allSimple)
+            return None
+        Some(oneCall)
     }
 }
