@@ -613,17 +613,11 @@ case class Native(dxWDLrtId: Option[String],
         }
 
         // build the toplevel workflow, if it is defined
-        val primary = bundle.primaryCallable.map{
-            case apl: IR.Applet =>
-                apl.kind match {
-                    case IR.AppletKindNative(id) => DxExec(id)
-                    case _ =>
-                        val dxApplet = buildAppletIfNeeded(apl, execDict)
-                        val id = dxApplet.getId
-                        DxExec(id)
-                }
-            case wf : IR.Workflow =>
-                throw new Exception("Workflows aren't handled yet")
+        val primary : Option[DxExec] = bundle.primaryCallable.flatMap{ callable =>
+            execDict.get(callable.name) match {
+                case None => None
+                case Some((_, dxExec)) => Some(dxExec)
+            }
         }
 
         CompilationResults(primary,

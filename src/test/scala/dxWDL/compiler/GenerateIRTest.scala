@@ -6,27 +6,23 @@ import org.scalatest.{FlatSpec, Matchers}
 
 // These tests involve compilation -without- access to the platform.
 //
-class IRTest extends FlatSpec with Matchers {
-    lazy val currentWorkDir:Path = Paths.get(System.getProperty("user.dir"))
-
+class GenerateIRTest extends FlatSpec with Matchers {
     private def pathFromBasename(basename: String) : Path = {
-        //currentWorkDir.resolve(s"src/test/resources/compiler/${basename}")
         val p = getClass.getResource(s"/compiler/${basename}").getPath
         Paths.get(p)
     }
 
     // task compilation
-    /*
+
     it should "IR compile a single WDL task" in {
         val path = pathFromBasename("add.wdl")
         Main.compile(
             List(path.toString, "--compileMode", "ir", "-quiet", "-fatalValidationWarnings")
         ) shouldBe a [Main.SuccessfulTerminationIR]
     }
-     */
 
     // workflow compilation
-    it should "IR compile a simple WDL workflow" in {
+    it should "IR compile a linear WDL workflow" in {
         val path = pathFromBasename("wf_linear.wdl")
         Main.compile(
             List(path.toString, "--compileMode", "ir", "-quiet", "-fatalValidationWarnings")

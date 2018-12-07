@@ -11,10 +11,9 @@ import org.scalatest.{FlatSpec, Matchers}
 // This tests the compiler Native mode, however, it creates
 // dnanexus applets and workflows that are not runnable.
 class NativeTest extends FlatSpec with Matchers {
-    lazy val currentWorkDir:Path = Paths.get(System.getProperty("user.dir"))
-
     private def pathFromBasename(basename: String) : Path = {
-        currentWorkDir.resolve(s"src/test/resources/compiler/${basename}")
+        val p = getClass.getResource(s"/compiler/${basename}").getPath
+        Paths.get(p)
     }
 
     val TEST_PROJECT = "dxWDL_playground"
@@ -26,15 +25,21 @@ class NativeTest extends FlatSpec with Matchers {
                 throw new Exception(s"""|Could not find project ${TEST_PROJECT}, you probably need to be logged into
                                         |the platform""".stripMargin)
         }
+    val compileFlags = List("-compileMode", "NativeWithoutRuntimeAsset",
+                            "-project", dxTestProject.getId,
+                            "-force")
 
     it should "Native compile a single WDL task" in {
         val path = pathFromBasename("add.wdl")
-        val retval = Main.compile(
-            List(path.toString,
-                 "-compileMode", "NativeWithoutRuntimeAsset",
-                 "-project", dxTestProject.getId,
-                 "-force")
-        )
+        val retval = Main.compile(path.toString :: compileFlags)
         retval shouldBe a [Main.SuccessfulTermination]
     }
+
+    // linear workflow
+    it should "Native compile a linear WDL workflow" in {
+        val path = pathFromBasename("wf_linear.wdl")
+        val retval = Main.compile(path.toString :: compileFlags)
+        retval shouldBe a [Main.SuccessfulTermination]
+    }
+
 }

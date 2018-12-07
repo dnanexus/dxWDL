@@ -400,7 +400,8 @@ case class GenerateIR(callables: Map[String, IR.Callable],
 
         // Create a stage per call/scatter-block/declaration-block
         val (inputNodes, subBlocks, outputNodes) = Block.splitIntoBlocks(graph)
-        dbgPrint(inputNodes, subBlocks, outputNodes)
+        if (verbose.on)
+            dbgPrint(inputNodes, subBlocks, outputNodes)
 
         // compile into dx:workflow inputs
         val wfInputs:Vector[(CVar, SArg)] = inputNodes.map(buildWorkflowInput).toVector
