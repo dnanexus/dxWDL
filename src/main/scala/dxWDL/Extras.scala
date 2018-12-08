@@ -143,9 +143,10 @@ object DxAccess {
     val empty = DxAccess(None, None, None, None, None)
 }
 
-case class DxRunSpec(execPolicy: Option[DxExecPolicy],
-                     timeoutPolicy: Option[DxTimeout],
-                     access: Option[DxAccess]) {
+case class DxRunSpec(access: Option[DxAccess],
+                     execPolicy: Option[DxExecPolicy],
+                     restartableEntryPoints: Option[String],
+                     timeoutPolicy: Option[DxTimeout]) {
     // The access field DOES NOT go into the run-specification in the API
     // call. It does fit, however, in dxapp.json.
     def toRunSpecJson : Map[String, JsValue] = {
@@ -154,11 +155,15 @@ case class DxRunSpec(execPolicy: Option[DxExecPolicy],
             case Some(execPolicy) =>
                 execPolicy.toJson
         }
+        val restartableEntryPointsFields = restartableEntryPoints match {
+            case None => Map.empty
+            case Some(value: String) => Map("restartableEntryPoints" -> JsString(value))
+        }
         val timeoutFields = timeoutPolicy match {
             case None => Map.empty
             case Some(execPolicy) => execPolicy.toJson
         }
-        execPolicyFields ++ timeoutFields
+        execPolicyFields ++ restartableEntryPointsFields ++ timeoutFields
     }
 }
 
@@ -170,7 +175,7 @@ object Extras {
     val EXTRA_ATTRS = Set("default_runtime_attributes", "default_task_dx_attributes")
     val RUNTIME_ATTRS = Set(DX_INSTANCE_TYPE_ATTR, "memory", "disks", "cpu", "docker")
     val TASK_DX_ATTRS = Set("runSpec")
-    val RUN_SPEC_ATTRS = Set("executionPolicy", "timeoutPolicy", "access")
+    val RUN_SPEC_ATTRS = Set("access", "executionPolicy", "restartableEntryPoints", "timeoutPolicy")
     val RUN_SPEC_ACCESS_ATTRS = Set("network", "project", "allProjects", "developer", "projectCreation")
     val RUN_SPEC_TIMEOUT_ATTRS = Set("days", "hours", "minutes")
     val RUN_SPEC_EXEC_POLICY_ATTRS = Set("restartOn", "maxRestarts")
@@ -370,9 +375,20 @@ object Extras {
                                         |""".stripMargin.replaceAll("\n", ""))
 
         }
-        return Some(DxRunSpec(parseExecutionPolicy(checkedParseObjectField(fields, "executionPolicy")),
-                              parseTimeoutPolicy(checkedParseObjectField(fields, "timeoutPolicy")),
-                              parseAccess(checkedParseObjectField(fields, "access"))))
+
+        val restartable : Option[String] =
+            checkedParseStringField(fields, "restartableEntryPoints") match  {
+                case None => None
+                case Some(str) if List("all", "master") contains str => Some(str)
+                case Some(str) => throw new Exception(s"Unsupported restartableEntryPoints value ${str}")
+            }
+        return Some(DxRunSpec(
+                        parseAccess(checkedParseObjectField(fields, "access")),
+                        parseExecutionPolicy(checkedParseObjectField(fields, "executionPolicy")),
+                        restartable,
+                        parseTimeoutPolicy(checkedParseObjectField(fields, "timeoutPolicy"))
+                    ))
+
     }
 
     private def parseTaskDxAttrs(jsv: JsValue,

@@ -1,5 +1,8 @@
 # Release Notes
 
+## 0.78.1
+- Support the `restartableEntryPoints` applet option in the `extras` file.
+
 ## 0.78
 - Clone the dxWDL runtime asset to local project, to allow sub-jobs access to it.
 

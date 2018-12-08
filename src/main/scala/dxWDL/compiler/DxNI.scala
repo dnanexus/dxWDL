@@ -452,7 +452,12 @@ object DxNI {
             Utils.warning(verbose, s"Found no DX global apps")
             return
         }
-        val ns = WdlRewrite.namespace(dxAppsAsTasks)
+
+        // If there are many apps, we might end up with multiple definitions of
+        // the same task. This gets rid of duplicates.
+        val m1 = dxAppsAsTasks.map{ task => task.name -> task }.toMap
+        val uniqueTasks: Vector[WdlTask] = m1.map{ case (_, task) => task}.toVector
+        val ns = WdlRewrite.namespace(uniqueTasks)
 
         // add comment describing how the file was created
         val header =
