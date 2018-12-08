@@ -1,14 +1,30 @@
 package dxWDL
 
-import com.dnanexus.AccessLevel
+//import com.dnanexus.AccessLevel
 import org.scalatest.{FlatSpec, Matchers}
 import spray.json._
-import wdl.draft2.model.WdlExpression
-import wom.values.WomString
+//import wdl.draft2.model.WdlExpression
+//import wom.values.WomString
 
 class ExtrasTest extends FlatSpec with Matchers {
-    val verbose = Verbose(false, true, Set.empty)
+    val verbose = Verbose(true, true, Set.empty)
 
+
+    it should "recognize restartable entry points" in {
+        val runtimeAttrs : JsValue =
+            """|{
+               |  "default_task_dx_attributes" : {
+               |     "runSpec" : {
+               |       "restartableEntryPoints": "all"
+               |     }
+               |  }
+               |}""".stripMargin.parseJson
+
+        val extras = Extras.parse(runtimeAttrs, verbose)
+        extras.defaultTaskDxAttributes should be (Some(DxRunSpec(None, None, Some("all"), None)))
+    }
+
+    /*
     it should "invalid runSpec I" in {
         val ex1 =
             """|{
@@ -99,16 +115,18 @@ class ExtrasTest extends FlatSpec with Matchers {
 
         val js = runSpecValid.parseJson
         val extras = Extras.parse(js, verbose)
-        extras.defaultTaskDxAttributes should be (Some(DxRunSpec(Some(DxExecPolicy(Some(Map("*" -> 3)),
-                                                                                   None)),
-                                                                 Some(DxTimeout(None,
-                                                                                Some(12),
-                                                                                None)),
-                                                                 Some(DxAccess(Some(Vector("*")),
-                                                                               Some(AccessLevel.CONTRIBUTE),
-                                                                               Some(AccessLevel.VIEW),
-                                                                               Some(true),
-                                                                               None))
+        extras.defaultTaskDxAttributes should be (Some(DxRunSpec(
+                                                           Some(DxAccess(Some(Vector("*")),
+                                                                         Some(AccessLevel.CONTRIBUTE),
+                                                                         Some(AccessLevel.VIEW),
+                                                                         Some(true),
+                                                                         None)),
+                                                           Some(DxExecPolicy(Some(Map("*" -> 3)),
+                                                                             None)),
+                                                           None,
+                                                           Some(DxTimeout(None,
+                                                                          Some(12),
+                                                                          None))
                                                        )))
     }
 
@@ -136,6 +154,7 @@ class ExtrasTest extends FlatSpec with Matchers {
 
         val restartPolicy = Map("UnresponsiveWorker" -> 2, "JMInternalError" -> 0, "ExecutionError" -> 4)
         extras.defaultTaskDxAttributes should be (Some(DxRunSpec(
+                                                           None,
                                                            Some(DxExecPolicy(Some(restartPolicy), Some(5))),
                                                            None,
                                                            None)
@@ -182,7 +201,9 @@ class ExtrasTest extends FlatSpec with Matchers {
                                       Some(4))
         JsObject(execPolicy.toJson) should be(expectedJs)
     }
+ */
 
+    /*
     it should "generate valid JSON timeout policy" in {
         val expectedJs : JsValue =
             """|{
@@ -235,4 +256,5 @@ class ExtrasTest extends FlatSpec with Matchers {
         val extrasEmpty = Extras.parse(rtEmpty, verbose)
         extrasEmpty.defaultRuntimeAttributes should equal(Map.empty)
     }
+     */
 }
