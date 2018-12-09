@@ -147,6 +147,10 @@ object IR {
         def outputVars = outputs.map{ case (cVar,_) => cVar }.toVector
     }
 
+    // dependencies: the order in which to compile the workflows and tasks.
+    // The first element in the vector depends on nothing else. Each other
+    // element (may) depend on all previous elements.
     case class Bundle(primaryCallable: Option[Callable],
-                      allCallables: Map[String, Callable])
+                      allCallables: Map[String, Callable],
+                      dependencies: Vector[String])
 }

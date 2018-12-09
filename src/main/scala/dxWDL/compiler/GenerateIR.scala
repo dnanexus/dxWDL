@@ -5,7 +5,7 @@ package dxWDL.compiler
 import cats.data.Validated.{Invalid, Valid}
 import common.validation.ErrorOr.ErrorOr
 import wom.core.WorkflowSource
-import wom.callable.{CallableTaskDefinition, ExecutableTaskDefinition, WorkflowDefinition}
+import wom.callable.{Callable, CallableTaskDefinition, ExecutableTaskDefinition, WorkflowDefinition}
 import wom.callable.Callable._
 import wom.expression.WomExpression
 import wom.graph._
@@ -421,7 +421,7 @@ case class GenerateIR(callables: Map[String, IR.Callable],
     }
 
     // Entry point for compiling tasks and workflows into IR
-    def compileCallable(callable: wom.callable.Callable,
+    def compileCallable(callable: Callable,
                         taskDir: Map[String, String]) : IR.Callable = {
         def compileTask2(task : CallableTaskDefinition) = {
             val taskSourceCode = taskDir.get(task.name) match {
@@ -449,6 +449,51 @@ case class GenerateIR(callables: Map[String, IR.Callable],
 
 
 object GenerateIR {
+    def sortByDependencies(allCallables: Vector[Callable]) : Vector[Callable] = {
+        // figure out, for each element, what it depends on.
+        // tasks don't depend on anything else. They are at the bottom of the dependency
+        // tree.
+        val immediateDeps : Map[String, Set[String]] = allCallables.map{ callable =>
+            val deps = callable match {
+                case _ : ExecutableTaskDefinition => Set.empty[String]
+                case _ : CallableTaskDefinition => Set.empty[String]
+                case wf: WorkflowDefinition =>
+                    val nodes = wf.innerGraph.allNodes
+                    val callNodes : Vector[CallNode] = nodes.collect{
+                        case cNode: CallNode => cNode
+                    }.toVector
+                    callNodes.map{ cNode =>  cNode.callable.name }.toSet
+                case other =>
+                    throw new Exception(s"Don't know how to deal with class ${other.getClass.getSimpleName}")
+            }
+            callable.name -> deps
+        }.toMap
+
+        // Find executables such that all of their dependencies are
+        // satisfied. These can be compiled.
+        def next(callables: Vector[Callable],
+                 ready: Vector[Callable]) : Vector[Callable] = {
+            val readyNames = ready.map(_.name).toSet
+            val satisfiedCallables = callables.filter{ c =>
+                val deps = immediateDeps(c.name)
+                deps.subsetOf(readyNames)
+            }
+            if (satisfiedCallables.isEmpty)
+                throw new Exception("Sanity: cannot find the next callable to compile.")
+            satisfiedCallables
+        }
+
+        var accu = Vector.empty[Callable]
+        var crnt = allCallables
+        while (!crnt.isEmpty) {
+            val execsToCompile = next(crnt, accu)
+            accu = accu ++ execsToCompile
+            val alreadyCompiled: Set[String] = accu.map(_.name).toSet
+            crnt = crnt.filter{ exec => !(alreadyCompiled contains exec.name) }
+        }
+        assert(accu.length == allCallables.length)
+        accu
+    }
 
     // Entrypoint
     def apply(womBundle : wom.executable.WomBundle,
@@ -468,11 +513,14 @@ object GenerateIR {
                 accu ++ d
         }
 
-        val allCallables = womBundle.allCallables.foldLeft(Map.empty[String, IR.Callable]) {
-            case (accu, (name, callable)) =>
+        val dependencies : Vector[Callable] = sortByDependencies(womBundle.allCallables.values.toVector)
+
+        // compile the tasks/workflows from bottom to top.
+        val allCallables = dependencies.foldLeft(Map.empty[String, IR.Callable]) {
+            case (accu, callable) =>
                 val gir = GenerateIR(accu, locked, IR.WorkflowKind.TopLevel, verbose)
                 val exec = gir.compileCallable(callable, taskDir)
-                accu + (name -> exec)
+                accu + (callable.name -> exec)
         }.toMap
 
         // We already compiled all the individual wdl:tasks and
@@ -482,6 +530,6 @@ object GenerateIR {
         }
 
         Utils.traceLevelDec()
-        IR.Bundle(primary, allCallables)
+        IR.Bundle(primary, allCallables, dependencies.map{_.name})
     }
 }
