@@ -162,7 +162,7 @@ case class GenerateIR(callables: Map[String, IR.Callable],
                     case WomString(url) if url.startsWith(Utils.DX_URL_PREFIX) =>
                         // A constant image specified with a DX URL
                         val dxRecord = DxPath.lookupDxURLRecord(url)
-                        IR.DockerImageDxAsset(dxRecord)
+                        IR.DockerImageDxAsset(url, dxRecord)
                     case _ =>
                         // Probably a public docker image
                         IR.DockerImageNetwork
@@ -176,11 +176,12 @@ case class GenerateIR(callables: Map[String, IR.Callable],
         // lookup. For example:
         //
         //   dx://dxWDL_playground:/glnexus_internal  ->   dx://project-xxxx:record-yyyy
-        /*val taskCleaned = docker match {
-            case IR.DockerImageDxAsset(dxRecord) =>
-                WdlRewrite.taskReplaceDockerValue(task, dxRecord)
-            case _ => task
-        }*/
+        val taskCleanedSourceCode = docker match {
+            case IR.DockerImageDxAsset(url, dxRecord) =>
+                val recordUrl = DxPath.dxRecordToURL(dxRecord)
+                taskSourceCode.replaceAll(url, recordUrl)
+            case _ => taskSourceCode
+        }
 
         IR.Applet(task.name,
                   inputs,
@@ -189,7 +190,7 @@ case class GenerateIR(callables: Map[String, IR.Callable],
                   docker,
                   kind,
                   task,
-                  taskSourceCode)
+                  taskCleanedSourceCode)
     }
 
 
@@ -513,10 +514,14 @@ object GenerateIR {
                 accu ++ d
         }
 
-        val dependencies : Vector[Callable] = sortByDependencies(womBundle.allCallables.values.toVector)
+        Utils.trace(verbose.on,
+                    s" sortByDependencies ${womBundle.allCallables.values.map{_.name}}")
+        val order : Vector[Callable] = sortByDependencies(womBundle.allCallables.values.toVector)
+        Utils.trace(verbose.on,
+                    s"order =${order.map{_.name}}")
 
         // compile the tasks/workflows from bottom to top.
-        val allCallables = dependencies.foldLeft(Map.empty[String, IR.Callable]) {
+        val allCallables = order.foldLeft(Map.empty[String, IR.Callable]) {
             case (accu, callable) =>
                 val gir = GenerateIR(accu, locked, IR.WorkflowKind.TopLevel, verbose)
                 val exec = gir.compileCallable(callable, taskDir)
@@ -530,6 +535,6 @@ object GenerateIR {
         }
 
         Utils.traceLevelDec()
-        IR.Bundle(primary, allCallables, dependencies.map{_.name})
+        IR.Bundle(primary, allCallables, order.map{_.name})
     }
 }

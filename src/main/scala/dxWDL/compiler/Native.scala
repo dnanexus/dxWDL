@@ -434,7 +434,7 @@ case class Native(dxWDLrtId: Option[String],
         val dockerAssets: Option[JsValue] = docker match {
             case IR.DockerImageNone => None
             case IR.DockerImageNetwork => None
-            case IR.DockerImageDxAsset(dxRecord) =>
+            case IR.DockerImageDxAsset(_, dxRecord) =>
                 val desc = dxRecord.describe(DXDataObject.DescribeOptions.get.withDetails)
 
                 // extract the archiveFileId field

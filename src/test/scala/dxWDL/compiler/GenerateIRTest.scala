@@ -13,20 +13,22 @@ class GenerateIRTest extends FlatSpec with Matchers {
     }
 
     // task compilation
+    def cFlags(p: Path) = List(p.toString, "--compileMode", "ir", "-quiet", "-fatalValidationWarnings")
 
     it should "IR compile a single WDL task" in {
         val path = pathFromBasename("add.wdl")
-        Main.compile(
-            List(path.toString, "--compileMode", "ir", "-quiet", "-fatalValidationWarnings")
-        ) shouldBe a [Main.SuccessfulTerminationIR]
+        Main.compile(cFlags(path)) shouldBe a [Main.SuccessfulTerminationIR]
+    }
+
+    it should "IR compile a task with docker" in {
+        val path = pathFromBasename("BroadGenomicsDocker.wdl")
+        Main.compile(cFlags(path)) shouldBe a [Main.SuccessfulTerminationIR]
     }
 
     // workflow compilation
     it should "IR compile a linear WDL workflow" in {
         val path = pathFromBasename("wf_linear.wdl")
-        Main.compile(
-            List(path.toString, "--compileMode", "ir", "-quiet", "-fatalValidationWarnings")
-        ) shouldBe a [Main.SuccessfulTerminationIR]
+        Main.compile(cFlags(path)) shouldBe a [Main.SuccessfulTerminationIR]
     }
 
 /*    it should "disallow call with missing compulsory arguments" in {

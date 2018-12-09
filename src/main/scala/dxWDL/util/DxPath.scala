@@ -145,4 +145,9 @@ object DxPath {
             throw new Exception(s"Found dx:object of the wrong type ${dxObj}")
         dxObj.asInstanceOf[DXFile]
     }
+
+    def dxRecordToURL(dxRecord: DXRecord) : String = {
+        val dxid = dxRecord.getId()
+        s"${DX_URL_PREFIX}${dxid}"
+    }
 }

@@ -63,7 +63,7 @@ object IR {
     sealed trait DockerImage
     case object DockerImageNone extends DockerImage
     case object DockerImageNetwork extends DockerImage
-    case class DockerImageDxAsset(asset: DXRecord) extends DockerImage
+    case class DockerImageDxAsset(url: String, asset: DXRecord) extends DockerImage
 
     // A unified type representing a WDL workflow or a WDL applet.
     // This is useful when compiling WDL workflows, because they can
