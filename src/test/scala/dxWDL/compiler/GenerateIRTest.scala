@@ -26,6 +26,11 @@ class GenerateIRTest extends FlatSpec with Matchers {
     }
 
     // workflow compilation
+    it should "IR compile a linear WDL workflow without expressions" in {
+        val path = pathFromBasename("wf_linear_no_expr.wdl")
+        Main.compile(cFlags(path)) shouldBe a [Main.SuccessfulTerminationIR]
+    }
+
     it should "IR compile a linear WDL workflow" in {
         val path = pathFromBasename("wf_linear.wdl")
         Main.compile(cFlags(path)) shouldBe a [Main.SuccessfulTerminationIR]
