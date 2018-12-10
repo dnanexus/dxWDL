@@ -188,26 +188,49 @@ case class InputFile(verbose: Verbose) {
         val inputFields:HashMap[String,JsValue] = preprocessInputs(wdlInputs)
         val cif = CromwellInputFileState(inputFields, HashMap.empty)
 
-        bundle.primaryCallable match {
-            case None =>  ()
-            case _ =>
-                throw new Exception(s"Workflows aren't handled yet")
+        def handleTask(applet: IR.Applet) : Unit = {
+            applet.inputs.foreach { cVar =>
+                val fqn = s"${applet.name}.${cVar.name}"
+                val dxName = s"${cVar.name}"
+                cif.checkAndBind(fqn, dxName, cVar)
+            }
         }
 
         // If there is one task, we can generate one input file for it.
-        val tasks = bundle.allCallables.filter{ case (_, callable) => callable.isInstanceOf[IR.Applet] }
-        if (tasks.size == 1) {
-            tasks.head match {
-                case (_, applet: IR.Applet) =>
-                    applet.inputs.foreach { cVar =>
-                        val fqn = s"${applet.name}.${cVar.name}"
-                        val dxName = s"${cVar.name}"
-                        cif.checkAndBind(fqn, dxName, cVar)
-                    }
-                case _ =>
-                    throw new Exception(s"Workflows aren't handled yet")
-            }
+        val tasks : Vector[IR.Applet] = bundle.allCallables.collect{
+            case (_, callable : IR.Applet) => callable
+        }.toVector
+
+        bundle.primaryCallable match {
+            // File with WDL tasks only, no workflows
+            case None if tasks.size == 0 =>
+                ()
+            case None if tasks.size == 1 =>
+                handleTask(tasks.head)
+            case None =>
+                throw new Exception(s"Cannot generate one input file for ${tasks.size} tasks")
+            case Some(task: IR.Applet) =>
+                handleTask(task)
+
+            case Some(wf : IR.Workflow) if wf.locked =>
+                // Locked workflow. A user can set workflow level
+                // inputs; nothing else.
+                wf.inputs.foreach { case (cVar, sArg) =>
+                    val fqn = s"${wf.name}.${cVar.name}"
+                    val dxName = s"${cVar.name}"
+                    cif.checkAndBind(fqn, dxName, cVar)
+                }
+            case Some(wf : IR.Workflow) if wf.stages.isEmpty =>
+                // edge case: workflow, with zero stages
+                ()
+            case Some(wf : IR.Workflow) =>
+                // unlocked workflow with at least one stage
+                throw new NotImplementedError("unlocked workflows")
+
+            case other =>
+                throw new Exception(s"Unknown case ${other.getClass}")
         }
+
         cif.checkAllUsed()
 
         Utils.traceLevelDec()

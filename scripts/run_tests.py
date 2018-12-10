@@ -56,6 +56,10 @@ medium_test_list = [
     # Variable instance types
     "instance_types",
 
+    # straight line wdl:workflow without conditionals scatters, or
+    # expressions. It should compile directly into a dx:workflow.
+    "linear_no_expressions",
+
     "math",
     "modulo",
     "optionals",
