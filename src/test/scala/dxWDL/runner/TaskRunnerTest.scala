@@ -18,6 +18,11 @@ import dxWDL.util.{DxPathConfig, InstanceTypeDB, ParseWomSourceFile, Utils}
 class TaskRunnerTest extends FlatSpec with Matchers {
     private val instanceTypeDB = InstanceTypeDB.genTestDB(true)
 
+/*    private def pathFromBasename(basename: String) : Path = {
+        val p = getClass.getResource(s"/runner_tasks/${basename}").getPath
+        Paths.get(p)
+    }*/
+
     private lazy val currentWorkDir:Path = Paths.get(System.getProperty("user.dir"))
     private lazy val baseDir : Path = {
         currentWorkDir.resolve(s"src/test/resources/runner_tasks")
@@ -48,7 +53,7 @@ class TaskRunnerTest extends FlatSpec with Matchers {
             case WomBoolean(_) | WomInteger(_) | WomFloat(_) | WomString(_) => womValue
 
             // single file
-            case WomSingleFile(s) => WomSingleFile(baseDir.resolve(s).toString)
+            case WomSingleFile(s) => WomSingleFile(pathFromBasename(s).toString)
 
             // Maps
             case (WomMap(t: WomMapType, m: Map[WomValue, WomValue])) =>
@@ -113,10 +118,10 @@ class TaskRunnerTest extends FlatSpec with Matchers {
         val dxPathConfig = DxPathConfig.apply(jobHomeDir)
         dxPathConfig.createCleanDirs()
 
-        val (_, womBundle: WomBundle, allSources) = ParseWomSourceFile.apply(wdlCode)
+        val (language, womBundle: WomBundle, allSources) = ParseWomSourceFile.apply(wdlCode)
         val task : CallableTaskDefinition = Main.getMainTask(womBundle)
         assert(allSources.size == 1)
-        val sourceDict  = ParseWomSourceFile.scanForTasks(allSources.values.head)
+        val sourceDict  = ParseWomSourceFile.scanForTasks(language, allSources.values.head)
         assert(sourceDict.size == 1)
         val taskSourceCode = sourceDict.values.head
 

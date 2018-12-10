@@ -418,10 +418,10 @@ object Main extends App {
                              jobInputPath: Path,
                              jobOutputPath: Path,
                              rtDebugLvl: Int): Termination = {
-        val (_, womBundle: WomBundle, allSources) = ParseWomSourceFile.apply(wdlDefPath)
+        val (language, womBundle: WomBundle, allSources) = ParseWomSourceFile.apply(wdlDefPath)
         val task : CallableTaskDefinition = getMainTask(womBundle)
         assert(allSources.size == 1)
-        val sourceDict  = ParseWomSourceFile.scanForTasks(allSources.values.head)
+        val sourceDict  = ParseWomSourceFile.scanForTasks(language, allSources.values.head)
         assert(sourceDict.size == 1)
         val taskSourceCode = sourceDict.values.head
 

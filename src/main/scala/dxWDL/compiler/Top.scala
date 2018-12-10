@@ -111,11 +111,11 @@ object Top {
     // Compile IR only
     def applyOnlyIR(source: Path,
                     cOpt: CompilerOptions) : IR.Bundle = {
-        val (_, womBundle: WomBundle, allSources) = ParseWomSourceFile.apply(source)
+        val (language, womBundle: WomBundle, allSources) = ParseWomSourceFile.apply(source)
 
         // Compile the WDL workflow into an Intermediate
         // Representation (IR)
-        val bundle: IR.Bundle = GenerateIR.apply(womBundle, allSources, cOpt.locked, cOpt.verbose)
+        val bundle: IR.Bundle = GenerateIR.apply(womBundle, allSources, language, cOpt.locked, cOpt.verbose)
 
         // generate dx inputs from the Cromwell-style input specification.
         cOpt.inputs.foreach{ path =>

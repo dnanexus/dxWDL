@@ -165,10 +165,30 @@ object ParseWomSourceFile {
         return None
     }
 
+    // add "version 1.0" or such to the WDL source code
+    private def addLanguageHeader(language: Language.Value,
+                                  sourceCode: String) : String = {
+        val header = language match {
+            case Language.WDLvDraft2 => ""
+            case Language.WDLv1_0 => "version 1.0"
+            case Language.CWLv1_0 => throw new NotImplementedError("CWL")
+        }
+
+        //System.out.println(s"language header = ${header}")
+        if (header.isEmpty) {
+            sourceCode
+        } else {
+            s"""|${header}
+                |
+                |${sourceCode}""".stripMargin
+        }
+    }
+
     // Go through one WDL source file, and return a map from task name
     // to its source code. Return an empty map if there are no tasks
     // in this file.
-    def scanForTasks(sourceCode: String) : Map[String, String] = {
+    def scanForTasks(language: Language.Value,
+                     sourceCode: String) : Map[String, String] = {
         var lines = sourceCode.split("\n").toList
         val taskDir = HashMap.empty[String, String]
 
@@ -179,7 +199,8 @@ object ParseWomSourceFile {
             retval match {
                 case None => return taskDir.toMap
                 case Some((remainingLines, taskName, taskLines)) =>
-                    taskDir(taskName) = taskLines
+                    val taskWithLanguageVersion : String = addLanguageHeader(language, taskLines)
+                    taskDir(taskName) = taskWithLanguageVersion
                     lines = remainingLines
             }
         }

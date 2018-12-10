@@ -17,7 +17,7 @@ class ParseWomSourceFileTest extends FlatSpec with Matchers {
                |}
                |""".stripMargin
 
-        val taskDir = ParseWomSourceFile.scanForTasks(srcCode)
+        val taskDir = ParseWomSourceFile.scanForTasks(Language.WDLvDraft2, srcCode)
         taskDir.size should equal(1)
         val helloTask = taskDir.get("hello")
         inside (helloTask) {
@@ -37,7 +37,7 @@ class ParseWomSourceFileTest extends FlatSpec with Matchers {
                |}
                |""".stripMargin
 
-        val taskDir = ParseWomSourceFile.scanForTasks(srcCode)
+        val taskDir = ParseWomSourceFile.scanForTasks(Language.WDLvDraft2, srcCode)
         taskDir.size should equal(1)
         val subTask = taskDir.get("sub")
         inside (subTask) {
@@ -62,7 +62,7 @@ class ParseWomSourceFileTest extends FlatSpec with Matchers {
                |}
                |""".stripMargin
 
-        val taskDir = ParseWomSourceFile.scanForTasks(srcCode)
+        val taskDir = ParseWomSourceFile.scanForTasks(Language.WDLvDraft2, srcCode)
         taskDir.size should equal(2)
         inside (taskDir.get("sub")) {
             case Some(x) =>
@@ -93,7 +93,7 @@ class ParseWomSourceFileTest extends FlatSpec with Matchers {
                |}
                |""".stripMargin
 
-        val taskDir = ParseWomSourceFile.scanForTasks(srcCode)
+        val taskDir = ParseWomSourceFile.scanForTasks(Language.WDLvDraft2, srcCode)
         taskDir.size should equal(1)
         inside (taskDir.get("Add")) {
             case Some(x) =>

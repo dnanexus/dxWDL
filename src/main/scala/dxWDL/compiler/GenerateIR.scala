@@ -499,6 +499,7 @@ object GenerateIR {
     // Entrypoint
     def apply(womBundle : wom.executable.WomBundle,
               allSources: Map[String, WorkflowSource],
+              language: Language.Value,
               locked: Boolean,
               verbose: Verbose) : IR.Bundle = {
         Utils.trace(verbose.on, s"IR pass")
@@ -510,7 +511,7 @@ object GenerateIR {
         // There is no built-in method for this.
         val taskDir = allSources.foldLeft(Map.empty[String, String]) {
             case (accu, (filename, srcCode)) =>
-                val d = ParseWomSourceFile.scanForTasks(srcCode)
+                val d = ParseWomSourceFile.scanForTasks(language, srcCode)
                 accu ++ d
         }
 
