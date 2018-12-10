@@ -17,9 +17,14 @@ workflow linear_no_expressions {
         input: a=op1.result, b=5
     }
 
+    call op as op3 {
+        input: a=op2.result, b=op1.result
+    }
+
     output {
         Int r1 = op1.result
         Int r2 = op2.result
+        Int r3 = op3.result
     }
 }
 
