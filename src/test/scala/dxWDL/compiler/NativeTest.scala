@@ -27,7 +27,8 @@ class NativeTest extends FlatSpec with Matchers {
         }
     val compileFlags = List("-compileMode", "NativeWithoutRuntimeAsset",
                             "-project", dxTestProject.getId,
-                            "-force")
+                            "-force",
+                            "-locked")
 
     it should "Native compile a single WDL task" in {
         val path = pathFromBasename("add.wdl")
