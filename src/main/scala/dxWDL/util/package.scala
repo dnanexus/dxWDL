@@ -6,7 +6,6 @@ import spray.json._
 import wdl.draft2.model.types._
 import wom.types._
 
-
 // Exception used for AppInternError
 class AppInternalException private(ex: RuntimeException) extends RuntimeException(ex) {
     def this(message:String) = this(new RuntimeException(message))

@@ -13,27 +13,31 @@ class GenerateIRTest extends FlatSpec with Matchers {
     }
 
     // task compilation
-    def cFlags(p: Path) = List(p.toString, "--compileMode", "ir", "-quiet", "-fatalValidationWarnings")
+    private val cFlags = List("--compileMode", "ir", "-quiet", "-fatalValidationWarnings")
 
     it should "IR compile a single WDL task" in {
         val path = pathFromBasename("add.wdl")
-        Main.compile(cFlags(path)) shouldBe a [Main.SuccessfulTerminationIR]
+        Main.compile(path.toString :: cFlags) shouldBe a [Main.SuccessfulTerminationIR]
     }
 
     it should "IR compile a task with docker" in {
         val path = pathFromBasename("BroadGenomicsDocker.wdl")
-        Main.compile(cFlags(path)) shouldBe a [Main.SuccessfulTerminationIR]
+        Main.compile(path.toString :: cFlags) shouldBe a [Main.SuccessfulTerminationIR]
     }
 
     // workflow compilation
     it should "IR compile a linear WDL workflow without expressions" in {
         val path = pathFromBasename("wf_linear_no_expr.wdl")
-        Main.compile(cFlags(path)) shouldBe a [Main.SuccessfulTerminationIR]
+        Main.compile(path.toString :: cFlags) shouldBe a [Main.SuccessfulTerminationIR]
     }
 
     it should "IR compile a linear WDL workflow" in {
         val path = pathFromBasename("wf_linear.wdl")
-        Main.compile(cFlags(path)) shouldBe a [Main.SuccessfulTerminationIR]
+        Main.compile(
+            List(path.toString, "--compileMode", "ir",
+                 "--verbose", "GenerateIR",
+                 "-fatalValidationWarnings")
+        ) shouldBe a [Main.SuccessfulTerminationIR]
     }
 
 /*    it should "disallow call with missing compulsory arguments" in {

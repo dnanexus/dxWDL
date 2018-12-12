@@ -119,17 +119,16 @@ object IR {
 
     // A stage can call an applet or a workflow.
     //
-    // Note: the description may contain dots, parentheses, and other special
-    // symbols. It is shown to the user on the UI.
+    // Note: the name may contain dots, parentheses, and other special
+    // symbols. It is shown to the user on the UI. The [id] is unique
+    // across the workflow.
     case class Stage(stageName: String,
-                     description: Option[String],
                      id: DXWorkflowStage,
                      calleeName: String,
                      inputs: Vector[SArg],
                      outputs: Vector[CVar])
 
-    // A toplevel fragment is the initial workflow we started with, minus
-    // whatever was replaced or rewritten.
+    // Is this the entrypoint, or a sub-workflow?
     object WorkflowKind extends Enumeration {
         val TopLevel, Sub  = Value
     }

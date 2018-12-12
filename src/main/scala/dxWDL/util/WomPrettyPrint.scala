@@ -15,8 +15,6 @@ object WomPrettyPrint {
 
             case cond : ConditionalNode => s"Conditional(${cond.conditionExpression.womExpression.sourceString})"
             case call : CommandCallNode =>
-                //val callInputs = call.upstream.map(apply)
-                //s"CommandCall(${call.identifier.localName.value}, <${callInputs}>)"
                 val inputNames = call.inputPorts.map(_.name)
                 s"CommandCall(${call.identifier.localName.value}, ${inputNames})"
 
@@ -43,6 +41,26 @@ object WomPrettyPrint {
 
             case other =>
                 s"${other.getClass}"
+        }
+    }
+
+    def apply(iPort: GraphNodePort.InputPort) : String = {
+        iPort match {
+            case cip : GraphNodePort.ConnectedInputPort =>
+                s"ConnectedInputPort(${cip.name})"
+            case other =>
+                s"(${other.getClass} ${other.name})"
+        }
+    }
+
+    def apply(oPort: GraphNodePort.OutputPort) : String = {
+        oPort match {
+            case gnop : GraphNodePort.GraphNodeOutputPort =>
+                s"GraphNodeOutputPort(${gnop.identifier.localName.value})"
+            case ebop : GraphNodePort.ExpressionBasedOutputPort =>
+                s"ExpressionBasedOutputPort(${ebop.identifier.localName.value})"
+            case other =>
+                s"OutputPort(${other.getClass})"
         }
     }
 

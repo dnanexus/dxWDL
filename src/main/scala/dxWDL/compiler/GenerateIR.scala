@@ -12,14 +12,40 @@ import wom.graph._
 import wom.graph.expression._
 import wom.types._
 import wom.values._
+
 import dxWDL.util._
 import IR.{CVar, SArg}
+
+private case class NameBox(verbose: Verbose) {
+    private val MAX_NUM_RENAME_TRIES = 100
+
+    // never allow the reserved words
+    private var namesUsed:Set[String] = Set.empty
+
+    def chooseUniqueName(baseName: String) : String = {
+        if (!(namesUsed contains baseName)) {
+            namesUsed += baseName
+            return baseName
+        }
+
+        // Add [1,2,3 ...] to the original name, until finding
+        // an unused variable name
+        for (i <- 1 to MAX_NUM_RENAME_TRIES) {
+            val tentative = s"${baseName}${i}"
+            if (!(namesUsed contains tentative)) {
+                namesUsed += tentative
+                return tentative
+            }
+        }
+        throw new Exception(s"Could not find a unique name for ${baseName}")
+    }
+}
 
 case class GenerateIR(callables: Map[String, IR.Callable],
                       locked: Boolean,
                       wfKind: IR.WorkflowKind.Value,
                       verbose: Verbose) {
-    //private val verbose2:Boolean = verbose.keywords contains "GenerateIR"
+    private val verbose2 : Boolean = verbose.keywords contains "GenerateIR"
 
     private case class LinkedVar(cVar: CVar, sArg: SArg)
     private type CallEnv = Map[String, LinkedVar]
@@ -27,6 +53,8 @@ case class GenerateIR(callables: Map[String, IR.Callable],
     private class DynamicInstanceTypesException private(ex: Exception) extends RuntimeException(ex) {
         def this() = this(new RuntimeException("Runtime instance type calculation required"))
     }
+
+    private val nameBox = NameBox(verbose)
 
     // generate a stage Id, this is a string of the form: 'stage-xxx'
     private var stageNum = 0
@@ -39,6 +67,13 @@ case class GenerateIR(callables: Map[String, IR.Callable],
             case Some(nm) =>
                 DXWorkflowStage(s"stage-${nm}")
         }
+    }
+
+    // create a unique name for a workflow fragment
+    private var fragNum = 0
+    private def genFragId() : String = {
+        fragNum += 1
+        fragNum.toString
     }
 
     // Figure out which instance to use.
@@ -262,9 +297,131 @@ case class GenerateIR(callables: Map[String, IR.Callable],
         }
 
         val stageName = call.identifier.localName.value
-        IR.Stage(stageName, None, genStageId(), calleeName, inputs, callee.outputVars)
+        IR.Stage(stageName, genStageId(), calleeName, inputs, callee.outputVars)
     }
 
+
+    // Create a human readable name for a block of statements
+    //
+    // 1. Ignore all declarations
+    // 2. If there is a scatter/if, use that
+    // 3. Otherwise, there must be at least one call. Use the first one.
+    private def createBlockName(block: Vector[GraphNode]) : String = {
+        val coreStmts = block.filter{
+            case _: ScatterNode => true
+            case _: ConditionalNode => true
+            case _: CallNode => true
+            case _ => false
+        }
+        if (coreStmts.isEmpty)
+            return s"eval_${genFragId()}"
+
+        coreStmts.head match {
+            case ssc : ScatterNode =>
+                val ids = ssc.scatterVariableNodes.map{
+                    svn => svn.identifier.localName.value
+                }.mkString(",")
+                s"scatter (${ids})"
+            case cond : ConditionalNode =>
+                s"if (${cond.conditionExpression.womExpression.sourceString})"
+            case call : CallNode =>
+                // TODO: What happens with aliases?
+                // call.fullyQualifiedName.value
+                call.identifier.localName.value
+            case _ =>
+                throw new Exception("sanity")
+        }
+    }
+
+    // Check if the environment has a variable with a binding for
+    // a fully-qualified name. For example, if fqn is "A.B.C", then
+    // look for "A.B.C", "A.B", or "A", in that order.
+    //
+    // If the environment has a pair "p", then we want to be able to
+    // to return "p" when looking for "p.left" or "p.right".
+    //
+    private def lookupInEnv(fqn: String, env: CallEnv) : Option[(String, LinkedVar)] = {
+        if (env contains fqn) {
+            // exact match
+            Some(fqn, env(fqn))
+        } else {
+            // A.B.C --> A.B
+            val pos = fqn.lastIndexOf(".")
+            if (pos < 0) None
+            else {
+                val lhs = fqn.substring(0, pos)
+                lookupInEnv(lhs, env)
+            }
+        }
+    }
+
+    // Find the closure of a block. All the variables defined earlier
+    // that are required for the calculation.
+    private def blockClosure(block: Vector[GraphNode],
+                             env : CallEnv,
+                             dbg: String) : CallEnv = {
+        val inputPortsPerNode = block.map{ _.inputPorts }
+        val allInputPorts : Set[GraphNodePort.InputPort] =
+            inputPortsPerNode.foldLeft(Set.empty[GraphNodePort.InputPort]) {
+                case (accu, inputs) => accu ++ inputs
+            }
+
+        // ignore references to variables not defined in the environment. These
+        // have to be block internal variables.
+        val closure = allInputPorts.flatMap { iPort =>
+            // TODO: How do we get the fully qualified name from the input port?
+            lookupInEnv(iPort.name, env)
+        }.toMap
+
+        val xtrnDesc = allInputPorts.map{
+            WomPrettyPrint.apply(_)
+        }.mkString(",")
+        Utils.trace(verbose2,
+                    s"""|blockClosure
+                        |   stage: ${dbg}
+                        |   external: ${xtrnDesc}
+                        |   env: ${env.keys}
+                        |   found: ${closure.keys}""".stripMargin)
+        closure
+    }
+
+    // Figure out all the outputs from a sequence of WDL statements.
+    //
+    // Note: The type outside a block is *different* than the type in
+    // the block.  For example, 'Int x' declared inside a scatter, is
+    // 'Array[Int] x' outside the scatter.
+    private def blockOutputs(block: Vector[GraphNode]) : Vector[CVar] = {
+        val outputPortsPerNode = block.map{ _.outputPorts}
+        val allOutputPorts : Set[GraphNodePort.OutputPort] =
+            outputPortsPerNode.foldLeft(Set.empty[GraphNodePort.OutputPort]) {
+                case (accu, outputs) => accu ++ outputs
+            }
+
+        // Optimization.
+        // Ignore ports that are not used outside this block. For example,
+        // expressions that are calculated but never accessed externally.
+
+        val portDesc = allOutputPorts.map{
+            WomPrettyPrint.apply(_)
+        }.mkString(",")
+
+        // create a cVar definition from each WDL output port. The dx:stage
+        // will output these cVars.
+        val cVars = allOutputPorts.map{
+            case gnop : GraphNodePort.GraphNodeOutputPort =>
+                CVar(gnop.identifier.localName.value, gnop.womType, None)
+            case ebop : GraphNodePort.ExpressionBasedOutputPort =>
+                CVar(ebop.identifier.localName.value, ebop.womType, None)
+            case other =>
+                throw new Exception(s"unhandled case ${other.getClass}")
+        }.toVector
+        val cVarDesc = cVars.mkString(",")
+        Utils.trace(verbose2,
+                    s"""|blockOutputs
+                        |   ports: ${portDesc}
+                        |   cVars: ${cVarDesc}""".stripMargin)
+        cVars
+    }
 
     // Build an applet to evaluate a WDL workflow fragment
     //
@@ -274,7 +431,48 @@ case class GenerateIR(callables: Map[String, IR.Callable],
                                   env : CallEnv) : (IR.Stage, IR.Applet) = {
         val desc = WomPrettyPrint(block)
         Utils.error(desc)
-        throw new NotImplementedError("Workflow fragments")
+
+        val baseName = createBlockName(block)
+        val stageName = nameBox.chooseUniqueName(baseName)
+        Utils.trace(verbose.on, s"Compiling wfFragment ${stageName}")
+
+        // Figure out the closure required for this block, out of the
+        // environment
+        val closure = blockClosure(block, env, stageName)
+
+        // create input variable definitions
+        val inputVars: Vector[CVar] = closure.map {
+            case (fqn, LinkedVar(cVar, _)) =>
+                cVar.copy(name = fqn)
+        }.toVector
+        Utils.ignore(inputVars)
+
+        val outputVars = blockOutputs(block)
+        Utils.ignore(outputVars)
+
+        /*
+        val wdlCode = blockGenWorklow(block, inputVars, outputVars)
+        val callDict = block.findCalls.map{ c =>
+            c.unqualifiedName -> Utils.calleeGetName(c)
+        }.toMap
+
+        val applet = IR.Applet(appletNamePrefix ++ stageName,
+                               inputVars,
+                               outputVars,
+                               calcInstanceType(None),
+                               IR.DockerImageNone,
+                               IR.AppletKindWfFragment(callDict),
+                               wdlCode)
+        verifyWdlCodeIsLegal(applet.ns)
+         */
+        val sArgs : Vector[SArg] = closure.map {
+            case (_, LinkedVar(_, sArg)) => sArg
+        }.toVector
+        Utils.ignore(sArgs)
+
+        /*(IR.Stage(stageName, genStageId(), applet.name, sargs, outputVars),
+         applet)*/
+        throw new NotImplementedError("in progress")
     }
 
     // Compile a workflow, having compiled the independent tasks.
@@ -352,32 +550,6 @@ case class GenerateIR(callables: Map[String, IR.Callable],
         }
     }
 
-    private def dbgPrint(inputNodes: Vector[GraphInputNode],   // inputs
-                         subBlocks: Vector[Vector[GraphNode]], // blocks
-                         outputNodes: Vector[GraphOutputNode]) // outputs
-            : Unit = {
-        System.out.println("Inputs [")
-        inputNodes.foreach{ node =>
-            val desc = WomPrettyPrint.apply(node)
-            System.out.println(s"  ${desc}")
-        }
-        System.out.println("]")
-        subBlocks.foreach{ nodes =>
-            System.out.println("Block [")
-            nodes.foreach{ node =>
-                val desc = WomPrettyPrint.apply(node)
-                System.out.println(s"  ${desc}")
-            }
-            System.out.println("]")
-        }
-        System.out.println("Output [")
-        outputNodes.foreach{ node =>
-            val desc = WomPrettyPrint.apply(node)
-            System.out.println(s"  ${desc}")
-        }
-        System.out.println("]")
-    }
-
     // Compile a (single) WDL workflow into a single dx:workflow.
     //
     // There are cases where we are going to need to generate dx:subworkflows.
@@ -401,8 +573,6 @@ case class GenerateIR(callables: Map[String, IR.Callable],
 
         // Create a stage per call/scatter-block/declaration-block
         val (inputNodes, subBlocks, outputNodes) = Block.splitIntoBlocks(graph)
-        if (verbose.on)
-            dbgPrint(inputNodes, subBlocks, outputNodes)
 
         // compile into dx:workflow inputs
         val wfInputs:Vector[(CVar, SArg)] = inputNodes.map(buildWorkflowInput).toVector

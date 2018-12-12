@@ -30,10 +30,11 @@ or 3) scatter with one or more calls inside it.
 
 package dxWDL.compiler
 
-import dxWDL.util.{Utils}
 import wom.expression.WomExpression
 import wom.graph._
 import wom.graph.expression._
+
+import dxWDL.util.{Utils, WomPrettyPrint}
 
 object Block {
     // A trivial expression has no operators, it is either a constant WomValue
@@ -190,6 +191,33 @@ object Block {
 
         (inputBlock, blocks, outputBlock)
     }
+
+    def dbgPrint(inputNodes: Vector[GraphInputNode],   // inputs
+                 subBlocks: Vector[Vector[GraphNode]], // blocks
+                 outputNodes: Vector[GraphOutputNode]) // outputs
+            : Unit = {
+        System.out.println("Inputs [")
+        inputNodes.foreach{ node =>
+            val desc = WomPrettyPrint.apply(node)
+            System.out.println(s"  ${desc}")
+        }
+        System.out.println("]")
+        subBlocks.foreach{ nodes =>
+            System.out.println("Block [")
+            nodes.foreach{ node =>
+                val desc = WomPrettyPrint.apply(node)
+                System.out.println(s"  ${desc}")
+            }
+            System.out.println("]")
+        }
+        System.out.println("Output [")
+        outputNodes.foreach{ node =>
+            val desc = WomPrettyPrint.apply(node)
+            System.out.println(s"  ${desc}")
+        }
+        System.out.println("]")
+    }
+
 
     // A block of nodes that represents a call with no subexpressions. These
     // can be compiled directly into a dx:workflow stage.

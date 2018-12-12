@@ -715,7 +715,7 @@ case class Native(dxWDLrtId: Option[String],
                     val stageReqDesc = JsObject(
                         "id" -> JsString(stg.id.getId),
                         "executable" -> JsString(dxExec.getId),
-                        "name" -> JsString(stg.description.getOrElse(stg.stageName)),
+                        "name" -> JsString(stg.stageName),
                         "input" -> inputs)
                     (stagesReq :+ stageReqDesc,
                      stageDict ++ Map(stg.stageName -> stg.id))

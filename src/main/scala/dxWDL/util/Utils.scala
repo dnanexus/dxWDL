@@ -25,7 +25,6 @@ object Utils {
     val COMMON = "common"
     val DEFAULT_INSTANCE_TYPE = "mem1_ssd1_x4"
     val DEFAULT_RUNTIME_DEBUG_LEVEL = 1
-    val DECOMPOSE_MAX_NUM_RENAME_TRIES = 100
     val DX_URL_PREFIX = "dx://"
     val DX_WDL_ASSET = "dxWDLrt"
     val DX_WDL_RUNTIME_CONF_FILE = "dxWDL_runtime.conf"
