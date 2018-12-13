@@ -82,9 +82,9 @@ object IR {
     //   WorkflowOutputReorg: move intermediate result files to a subdirectory.
     sealed trait AppletKind
     case class  AppletKindNative(id: String) extends AppletKind
-    case class  AppletKindWfFragment(calls: Map[String, String]) extends AppletKind
+    case class  AppletKindTask(task: CallableTaskDefinition) extends AppletKind
+    case class  AppletKindWfFragment(calls: Vector[String]) extends AppletKind
     case object AppletKindWorkflowOutputReorg extends AppletKind
-    case object AppletKindTask extends AppletKind
 
     /** @param name          Name of applet
       * @param inputs        input arguments
@@ -101,7 +101,6 @@ object IR {
                       instanceType: InstanceType,
                       docker: DockerImage,
                       kind: AppletKind,
-                      task: CallableTaskDefinition,
                       womSourceCode: String) extends Callable {
         def inputVars = inputs
         def outputVars = outputs

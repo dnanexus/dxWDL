@@ -232,7 +232,7 @@ case class Native(dxWDLrtId: Option[String],
                 throw new Exception("Sanity: generating a bash script for a native applet")
             case IR.AppletKindWfFragment(_) =>
                 genBashScriptWfFragment()
-            case IR.AppletKindTask =>
+            case IR.AppletKindTask(_) =>
                 instanceType match {
                     case IR.InstanceTypeDefault | IR.InstanceTypeConst(_,_,_,_) =>
                         s"""|main() {
@@ -485,7 +485,7 @@ case class Native(dxWDLrtId: Option[String],
             }
         }
         val access: DxAccess = applet.kind match {
-            case IR.AppletKindTask =>
+            case IR.AppletKindTask(_) =>
                 if (applet.docker == IR.DockerImageNetwork) {
                     // docker requires network access, because we are downloading
                     // the image from the network
@@ -561,11 +561,11 @@ case class Native(dxWDLrtId: Option[String],
         Utils.trace(verbose2, s"Compiling applet ${applet.name}")
 
         // limit the applet dictionary, only to actual dependencies
-        val calls:Map[String, String] = applet.kind match {
+        val calls: Vector[String] = applet.kind match {
             case IR.AppletKindWfFragment(calls) => calls
-            case _ => Map.empty
+            case _ => Vector.empty
         }
-        val aplLinks = calls.map{ case (_,tName) => tName -> execDict(tName) }.toMap
+        val aplLinks = calls.map{ tName => tName -> execDict(tName) }.toMap
 
         // Build an applet script
         val bashScript = genAppletScript(applet, aplLinks)

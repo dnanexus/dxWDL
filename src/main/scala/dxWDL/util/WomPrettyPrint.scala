@@ -54,11 +54,12 @@ object WomPrettyPrint {
     }
 
     def apply(oPort: GraphNodePort.OutputPort) : String = {
+        val ownerNode : String = apply(oPort.graphNode)
         oPort match {
             case gnop : GraphNodePort.GraphNodeOutputPort =>
-                s"GraphNodeOutputPort(${gnop.identifier.localName.value})"
+                s"GraphNodeOutputPort(${gnop.identifier.localName.value}, ${ownerNode})"
             case ebop : GraphNodePort.ExpressionBasedOutputPort =>
-                s"ExpressionBasedOutputPort(${ebop.identifier.localName.value})"
+                s"ExpressionBasedOutputPort(${ebop.identifier.localName.value}, ${ownerNode})"
             case other =>
                 s"OutputPort(${other.getClass})"
         }

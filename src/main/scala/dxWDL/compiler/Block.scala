@@ -66,7 +66,7 @@ object Block {
     }
 
     // Deep search for all calls in a graph
-    private def deepFindCalls(nodes: Seq[GraphNode]) : Vector[CallNode] = {
+    def deepFindCalls(nodes: Seq[GraphNode]) : Vector[CallNode] = {
         nodes.foldLeft(Vector.empty[CallNode]) {
             case (accu: Vector[CallNode], call:CallNode) =>
                 accu :+ call

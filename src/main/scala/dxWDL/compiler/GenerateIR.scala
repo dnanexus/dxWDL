@@ -46,6 +46,8 @@ case class GenerateIR(callables: Map[String, IR.Callable],
                       wfKind: IR.WorkflowKind.Value,
                       verbose: Verbose) {
     private val verbose2 : Boolean = verbose.keywords contains "GenerateIR"
+    private val nameBox = NameBox(verbose)
+    private val wdlCodeGen = new WdlCodeGen(verbose)
 
     private case class LinkedVar(cVar: CVar, sArg: SArg)
     private type CallEnv = Map[String, LinkedVar]
@@ -53,8 +55,6 @@ case class GenerateIR(callables: Map[String, IR.Callable],
     private class DynamicInstanceTypesException private(ex: Exception) extends RuntimeException(ex) {
         def this() = this(new RuntimeException("Runtime instance type calculation required"))
     }
-
-    private val nameBox = NameBox(verbose)
 
     // generate a stage Id, this is a string of the form: 'stage-xxx'
     private var stageNum = 0
@@ -184,7 +184,7 @@ case class GenerateIR(callables: Map[String, IR.Callable],
                     IR.AppletKindNative(id)
                 case (_,_) =>
                     // a WDL task
-                    IR.AppletKindTask
+                    IR.AppletKindTask(task)
             }
 
         // Figure out if we need to use docker
@@ -224,7 +224,6 @@ case class GenerateIR(callables: Map[String, IR.Callable],
                   instanceType,
                   docker,
                   kind,
-                  task,
                   taskCleanedSourceCode)
     }
 
@@ -385,29 +384,87 @@ case class GenerateIR(callables: Map[String, IR.Callable],
         closure
     }
 
+    // Create a valid WDL workflow that runs a block (Scatter, If,
+    // etc.) The main modification is renaming variables of the
+    // form A.x to A_x.
+    //
+    // A workflow must have definitions for all the tasks it
+    // calls. However, a scatter calls tasks, that are missing from
+    // the WDL file we generate. To ameliorate this, we add stubs for
+    // called tasks. The generated tasks are named by their
+    // unqualified names, not their fully-qualified names. This works
+    // because the WDL workflow must be "flattenable".
+    private def blockGenWorklow(block: Vector[GraphNode],
+                                allCallNames : Vector[String],
+                                inputVars: Vector[CVar],
+                                outputVars: Vector[CVar]) : String = {
+        val taskStubs: Map[String, String] =
+            calls.foldLeft(Map.empty[String, String]) { case (accu, name) =>
+                val callable = callables.get(name) match {
+                    case None => throw new Exception(s"Calling undefined task/workflow ${name}")
+                    case Some(x) => x
+                }
+                if (accu contains name) {
+                    // we have already created a stub for this call
+                    accu
+                } else {
+                    // no existing stub, create it
+                    val taskSourceCode =  wdlCodeGen.appletStub(callable)
+                    accu + (name -> taskSourceCode)
+                }
+            }
+
+/*
+        // rename usages of the input variables in the statment block
+        val wordTranslations = inputVars.map{ cVar =>
+            cVar.name -> cVar.dxVarName
+        }.toMap
+        val erv = VarAnalysis(Set.empty, wordTranslations, cef, verbose)
+        val statements2 = block.statements.map{
+            case stmt => erv.rename(stmt)
+        }.toVector
+
+        val decls: Vector[Declaration]  = inputVars.map{ cVar =>
+            WdlRewrite.declaration(cVar.womType, cVar.dxVarName, None)
+        }
+        val wfOutputs: Vector[WorkflowOutput] = outputVars.map{ cVar =>
+            WdlRewrite.workflowOutput(cVar.dxVarName,
+                                      cVar.womType,
+                                      WdlExpression.fromString(cVar.name))
+        }
+
+        // Create new workflow that includes only this block
+        val wf = WdlRewrite.workflowGenEmpty("w")
+        wf.children = decls ++ statements2 ++ wfOutputs
+        val tasks = taskStubs.map{ case (_,x) => x}.toVector
+        // namespace that includes the task stubs, and the workflow
+        WdlRewrite.namespace(wf, tasks)
+ */
+        throw new NotImplementedError("in progress")
+    }
+
     // Figure out all the outputs from a sequence of WDL statements.
     //
     // Note: The type outside a block is *different* than the type in
     // the block.  For example, 'Int x' declared inside a scatter, is
     // 'Array[Int] x' outside the scatter.
-    private def blockOutputs(block: Vector[GraphNode]) : Vector[CVar] = {
-        val outputPortsPerNode = block.map{ _.outputPorts}
-        val allOutputPorts : Set[GraphNodePort.OutputPort] =
-            outputPortsPerNode.foldLeft(Set.empty[GraphNodePort.OutputPort]) {
-                case (accu, outputs) => accu ++ outputs
-            }
+    private def blockOutputs(block: Vector[GraphNode],
+                             nextNodes: Set[GraphNode]) : Vector[CVar] = {
+        // figure what the rest of the graph depends on
+        val dependencies = nextNodes.flatMap{ _.upstream }
 
-        // Optimization.
-        // Ignore ports that are not used outside this block. For example,
-        // expressions that are calculated but never accessed externally.
+        // nodes required downstream
+        val xtrnNodes : Set[GraphNode] = dependencies.intersect(block.toSet)
 
-        val portDesc = allOutputPorts.map{
-            WomPrettyPrint.apply(_)
-        }.mkString(",")
+        // Get the output ports for these nodes
+        val xtrnPorts : Set[GraphNodePort.OutputPort] =
+            xtrnNodes.map{ _.outputPorts}
+                .foldLeft(Set.empty[GraphNodePort.OutputPort]) {
+                case (accu, outputs) => accu ++ outputs }
 
         // create a cVar definition from each WDL output port. The dx:stage
         // will output these cVars.
-        val cVars = allOutputPorts.map{
+        val cVars = xtrnPorts.map{
             case gnop : GraphNodePort.GraphNodeOutputPort =>
                 CVar(gnop.identifier.localName.value, gnop.womType, None)
             case ebop : GraphNodePort.ExpressionBasedOutputPort =>
@@ -415,11 +472,25 @@ case class GenerateIR(callables: Map[String, IR.Callable],
             case other =>
                 throw new Exception(s"unhandled case ${other.getClass}")
         }.toVector
-        val cVarDesc = cVars.mkString(",")
-        Utils.trace(verbose2,
-                    s"""|blockOutputs
-                        |   ports: ${portDesc}
-                        |   cVars: ${cVarDesc}""".stripMargin)
+
+        if (verbose2) {
+            val dependenciesDesc = dependencies.map{
+                "    " + WomPrettyPrint.apply(_)
+            }.mkString("\n")
+            val portDesc = xtrnPorts.map{
+                "    " + WomPrettyPrint.apply(_)
+            }.mkString("\n")
+            val cVarDesc = cVars.mkString(",")
+            Utils.trace(verbose2,
+                        s"""|blockOutputs
+                            |  dependencies: [
+                            |${dependenciesDesc}
+                            |  ]
+                            |  ports: [
+                            |${portDesc}
+                            |  ]
+                            |  cVars: ${cVarDesc}""".stripMargin)
+        }
         cVars
     }
 
@@ -428,7 +499,9 @@ case class GenerateIR(callables: Map[String, IR.Callable],
     // Note: all the calls have the compulsory arguments, this has
     // been checked in the Validate step.
     private def compileWfFragment(block: Vector[GraphNode],
-                                  env : CallEnv) : (IR.Stage, IR.Applet) = {
+                                  nextBlocks : Vector[Vector[GraphNode]],
+                                  env : CallEnv,
+                                  wfName : String) : (IR.Stage, IR.Applet) = {
         val desc = WomPrettyPrint(block)
         Utils.error(desc)
 
@@ -445,34 +518,35 @@ case class GenerateIR(callables: Map[String, IR.Callable],
             case (fqn, LinkedVar(cVar, _)) =>
                 cVar.copy(name = fqn)
         }.toVector
-        Utils.ignore(inputVars)
 
-        val outputVars = blockOutputs(block)
-        Utils.ignore(outputVars)
+        // To figure out the block outputs, we need the subsequent nodes.
+        val nextNodes : Set[GraphNode] = nextBlocks.foldLeft(Set.empty[GraphNode]) {
+            case (accu, b) => accu ++ b.toSet
+        }
+        val outputVars = blockOutputs(block, nextNodes)
 
-        /*
-        val wdlCode = blockGenWorklow(block, inputVars, outputVars)
-        val callDict = block.findCalls.map{ c =>
-            c.unqualifiedName -> Utils.calleeGetName(c)
-        }.toMap
+        // Make a list of all task/workflow calls made inside the block. We will need to link
+        // to the equivalent dx:applets and dx:workflows.
+        val allCallNames = Block.deepFindCalls(block).map{ cNode =>
+            cNode.callable.name
+        }.toVector
 
-        val applet = IR.Applet(appletNamePrefix ++ stageName,
+        // generate a new WDL script just for this sub-block
+        val wdlCode = blockGenWorklow(block, allCallNames, inputVars, outputVars)
+
+        val applet = IR.Applet(s"${wfName}_${stageName}",
                                inputVars,
                                outputVars,
                                calcInstanceType(None),
                                IR.DockerImageNone,
-                               IR.AppletKindWfFragment(callDict),
+                               IR.AppletKindWfFragment(allCallNames),
                                wdlCode)
-        verifyWdlCodeIsLegal(applet.ns)
-         */
         val sArgs : Vector[SArg] = closure.map {
             case (_, LinkedVar(_, sArg)) => sArg
         }.toVector
-        Utils.ignore(sArgs)
 
-        /*(IR.Stage(stageName, genStageId(), applet.name, sargs, outputVars),
-         applet)*/
-        throw new NotImplementedError("in progress")
+        (IR.Stage(stageName, genStageId(), applet.name, sArgs, outputVars),
+         applet)
     }
 
     // Compile a workflow, having compiled the independent tasks.
@@ -488,11 +562,15 @@ case class GenerateIR(callables: Map[String, IR.Callable],
         var env : CallEnv = wfInputs.map { case (cVar,sArg) =>
             cVar.name -> LinkedVar(cVar, sArg)
         }.toMap
+        var allStageInfo = Vector.empty[(IR.Stage, Option[IR.Applet])]
+        var remainingBlocks = subBlocks
 
         // link together all the stages into a linear workflow
-        val emptyStages = Vector.empty[(IR.Stage, Option[IR.Applet])]
-        val allStageInfo = subBlocks.foldLeft(emptyStages) {case (accu, block) =>
-            Block.isSimpleCall(block) match {
+        for (i <- 0 to (subBlocks.length - 1)) {
+            val block = remainingBlocks.head
+            remainingBlocks = remainingBlocks.tail
+
+            val (stage, aplOpt) = Block.isSimpleCall(block) match {
                 case Some(call) =>
                     // The block contains exactly one call, with no extra declarations.
                     // All the variables are already in the environment, so there
@@ -506,17 +584,18 @@ case class GenerateIR(callables: Map[String, IR.Callable],
                         env = env + (call.identifier.localName.value ++ "." + cVar.name ->
                                          LinkedVar(cVar, IR.SArgLink(stage.stageName, cVar)))
                     }
-                    accu :+ (stage, None)
+                    (stage, None)
 
                 case None =>
                     // General case
-                    val (stage, apl) = compileWfFragment(block, env)
+                    val (stage, apl) = compileWfFragment(block, remainingBlocks, env, wf.name)
                     for (cVar <- stage.outputs) {
                         env = env + (cVar.name ->
                                          LinkedVar(cVar, IR.SArgLink(stage.stageName, cVar)))
                     }
-                    accu :+ (stage, Some(apl))
+                    (stage, Some(apl))
             }
+            allStageInfo :+= (stage, aplOpt)
         }
         (allStageInfo, env)
     }
