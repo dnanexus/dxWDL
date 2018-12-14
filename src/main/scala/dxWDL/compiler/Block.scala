@@ -34,7 +34,43 @@ import wom.expression.WomExpression
 import wom.graph._
 import wom.graph.expression._
 
-import dxWDL.util.{Utils, WomPrettyPrint}
+import dxWDL.util.{Utils}
+
+
+// A sorted group of graph nodes, that match some original
+// set of WDL statements.
+case class Block(nodes : Vector[GraphNode]) {
+
+    // write a set of nodes into the body of a WDL workflow. For example:
+    //
+    // Int z = x + 1
+    // call foo { input: a = z }
+    def toWdlSource : String = {
+        nodes.foldLeft("") {
+            case (accu, ssc : ScatterNode) =>
+                throw new NotImplementedError("scatter")
+
+            case (accu, cond : ConditionalNode) =>
+                throw new NotImplementedError("condition")
+
+            case (accu, call : CommandCallNode) =>
+                val inputs : String = call.upstream.toVector.collect {
+                    case expr : TaskCallInputExpressionNode =>
+                        s"${expr.identifier.localName.value} = ${expr.womExpression.sourceString}"
+                }.mkString(", ")
+                s"call ${call.identifier.localName.value} { input: ${inputs} }"
+
+            case (accu, expr : ExposedExpressionNode) =>
+                s"${expr.womType.toDisplayString} ${expr.identifier.localName.value} = ${expr.womExpression.sourceString}"
+
+            case (accu, _) =>
+                // ignore all other nodes, they do not map directly to a WDL
+                // statement
+                accu
+        }
+    }
+}
+
 
 object Block {
     // A trivial expression has no operators, it is either a constant WomValue
@@ -164,13 +200,13 @@ object Block {
     // Sort the graph into a linear set of blocks, according to dependencies.
     // Each block is itself sorted.
     def splitIntoBlocks(graph: Graph) : (Vector[GraphInputNode],   // inputs
-                                         Vector[Vector[GraphNode]], // blocks
+                                         Vector[Block], // blocks
                                          Vector[GraphOutputNode]) // outputs
     = {
         //System.out.println(s"SplitIntoBlocks ${nodes.size} nodes")
         assert(graph.nodes.size > 0)
         var rest = graph.nodes
-        var blocks = Vector.empty[Vector[GraphNode]]
+        var blocks = Vector.empty[Block]
 
         // The first block has the graph inputs
         val inputBlock = graph.inputNodes.toVector
@@ -185,39 +221,12 @@ object Block {
         while (rest.size > 0) {
             val topGroup = buildTopGroup(rest)
             val closedTopGroup = closeGroup(topGroup, rest -- topGroup)
-            blocks :+= closedTopGroup
+            blocks :+= Block(closedTopGroup)
             rest = rest -- closedTopGroup
         }
 
         (inputBlock, blocks, outputBlock)
     }
-
-    def dbgPrint(inputNodes: Vector[GraphInputNode],   // inputs
-                 subBlocks: Vector[Vector[GraphNode]], // blocks
-                 outputNodes: Vector[GraphOutputNode]) // outputs
-            : Unit = {
-        System.out.println("Inputs [")
-        inputNodes.foreach{ node =>
-            val desc = WomPrettyPrint.apply(node)
-            System.out.println(s"  ${desc}")
-        }
-        System.out.println("]")
-        subBlocks.foreach{ nodes =>
-            System.out.println("Block [")
-            nodes.foreach{ node =>
-                val desc = WomPrettyPrint.apply(node)
-                System.out.println(s"  ${desc}")
-            }
-            System.out.println("]")
-        }
-        System.out.println("Output [")
-        outputNodes.foreach{ node =>
-            val desc = WomPrettyPrint.apply(node)
-            System.out.println(s"  ${desc}")
-        }
-        System.out.println("]")
-    }
-
 
     // A block of nodes that represents a call with no subexpressions. These
     // can be compiled directly into a dx:workflow stage.
@@ -231,9 +240,9 @@ object Block {
     //   TaskCallInputExpressionNode(b, y, WomIntegerType, GraphNodeOutputPort(b))
     //   CommandCall(add, Set(a, b))
     // ]
-    def isSimpleCall(nodes: Vector[GraphNode]) : Option[CallNode] = {
+    def isSimpleCall(block: Block) : Option[CallNode] = {
         // find the call
-        val calls : Seq[CallNode] = nodes.collect{
+        val calls : Seq[CallNode] = block.nodes.collect{
             case cNode : CallNode => cNode
         }
         if (calls.size != 1)
@@ -241,7 +250,7 @@ object Block {
         val oneCall = calls.head
 
         // All the other nodes have to the call inputs
-        val rest = nodes.toSet - oneCall
+        val rest = block.nodes.toSet - oneCall
         val callInputs = oneCall.upstream.toSet
         if (rest != callInputs)
             return None
@@ -256,4 +265,5 @@ object Block {
             return None
         Some(oneCall)
     }
+
 }

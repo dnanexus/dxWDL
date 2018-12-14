@@ -1,11 +1,19 @@
 package dxWDL.compiler
 
+import wom.types._
+import wom.values._
+//import wom.graph._
+//import wom.graph.expression._
+
+import dxWDL.util._
+
+
 // A bunch of WDL source lines
 case class WdlCodeSnippet(value : String)
 
 case class WdlCodeGen(verbose: Verbose) {
 
-    def genDefaultValueOfType(wdlType: WomType) : WomValue = {
+    private def genDefaultValueOfType(wdlType: WomType) : WomValue = {
         wdlType match {
             case WomBooleanType => WomBoolean(true)
             case WomIntegerType => WomInteger(0)
@@ -80,34 +88,43 @@ task Add {
   }
 */
     def appletStub(callable: IR.Callable) : WdlCodeSnippet = {
-        Utils.trace(verbose2,
+        /*Utils.trace(verbose.on,
                     s"""|genAppletStub  callable=${callable.name}
                         |  inputs= ${callable.inputVars.map(_.name)}
                         |  outputs= ${callable.outputVars.map(_.name)}"""
-                        .stripMargin)
+                        .stripMargin)*/
 
         val inputs = callable.inputVars.map{ cVar =>
-            s"${cVar.womType.toDisplayString} ${cVar.name}"
+            s"    ${cVar.womType.toDisplayString} ${cVar.name}"
         }.mkString("\n")
 
         val outputs = callable.outputVars.map{ cVar =>
             val defaultVal = genDefaultValueOfType(cVar.womType)
-            s"${cVar.womType.toDisplayString} ${cVar.name} = ${defaultVal}"
+            s"    ${cVar.womType.toDisplayString} ${cVar.name} = ${defaultVal.toWomString}"
         }.mkString("\n")
 
         // We are using WDL version 1.0 here. The input syntax is not
         // available prior.
-        s"""|task ${callable.name} {
-            |  input {
-            |    ${inputs}
-            |  }
-            |  command {}
-            |  output {
-            |    ${outputs}
-            |  }
-            |}""".stripMargin
+        WdlCodeSnippet(
+            s"""|task ${callable.name} {
+                |  input {
+                |${inputs}
+                |  }
+                |  command {}
+                |  output {
+                |${outputs}
+                |  }
+                |}""".stripMargin
+        )
+    }
 
-        task.children = inputs ++ outputs
-        task
+    def apply(cVar : IR.CVar, ioRef : IORef.Value) : String = {
+        ioRef match {
+            case IORef.Input =>
+                s"${cVar.womType.toDisplayString} ${cVar.name}"
+            case IORef.Output =>
+                val defaultVal = genDefaultValueOfType(cVar.womType)
+                s"${cVar.womType.toDisplayString} ${cVar.name} = ${defaultVal.toWomString}"
+        }
     }
 }

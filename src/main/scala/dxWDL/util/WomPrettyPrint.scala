@@ -1,4 +1,4 @@
-/** Pretty printing for WOM structures
+/** Pretty printing for WOM structures. This is used for debugging.
   */
 package dxWDL.util
 
