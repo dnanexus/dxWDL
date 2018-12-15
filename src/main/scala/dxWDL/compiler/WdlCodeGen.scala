@@ -2,8 +2,8 @@ package dxWDL.compiler
 
 import wom.types._
 import wom.values._
-//import wom.graph._
-//import wom.graph.expression._
+import wom.graph._
+import wom.graph.expression._
 
 import dxWDL.util._
 
@@ -121,10 +121,69 @@ task Add {
     def apply(cVar : IR.CVar, ioRef : IORef.Value) : String = {
         ioRef match {
             case IORef.Input =>
-                s"${cVar.womType.toDisplayString} ${cVar.name}"
+                s"${cVar.womType.toDisplayString} ${cVar.dxVarName}"
+            case IORef.Output if cVar.dxVarName == cVar.name =>
+                s"${cVar.womType.toDisplayString} ${cVar.name}___ = ${cVar.name}"
             case IORef.Output =>
-                val defaultVal = genDefaultValueOfType(cVar.womType)
-                s"${cVar.womType.toDisplayString} ${cVar.name} = ${defaultVal.toWomString}"
+                s"${cVar.womType.toDisplayString} ${cVar.dxVarName} = ${cVar.name}"
         }
     }
+
+
+    // write a set of nodes into the body of a WDL workflow.
+    // Rename variables from a provided dictionary. For example:
+    //
+    // Translations
+    //   Map(add.result -> add___result)
+    //
+    // Original block
+    //   Int z = add.result + 1
+    //   call mul { input: a=z, b=5 }
+    //
+    // Result block
+    //   Int z = add___result + 1
+    //   call mul { input: a=z, b=5 }
+    def blockRenameVars(block: Block,
+                        wordTranslations : Map[String, String]) : String = {
+        val va = new VarAnalysis(wordTranslations, verbose)
+
+        val lines = block.nodes.flatMap {
+            case ssc : ScatterNode =>
+                throw new NotImplementedError("scatter")
+
+            case cond : ConditionalNode =>
+                throw new NotImplementedError("condition")
+
+            case call : CommandCallNode => {
+                val inputs : String = call.upstream.toVector.collect {
+                    case expr : TaskCallInputExpressionNode =>
+                        val rnExpr = va.exprRenameVars(expr.womExpression)
+                        s"${expr.identifier.localName.value} = ${rnExpr}"
+                }.mkString(", ")
+                Some(s"call ${call.identifier.localName.value} { input: ${inputs} }")
+            }
+
+            case expr : ExposedExpressionNode => {
+                val rnExpr = va.exprRenameVars(expr.womExpression)
+                Some(s"${expr.womType.toDisplayString} ${expr.identifier.localName.value} = ${rnExpr}")
+            }
+
+            case _ :TaskCallInputExpressionNode =>
+                // Expressions that are inputs to a call. These are printed out as part of CommandCallNode
+                // handling.
+                None
+
+            case other =>
+                // ignore all other nodes, they do not map directly to a WDL
+                // statement
+                val otherDesc: String = WomPrettyPrint.apply(other)
+                Utils.warning(verbose, s"ignored graph node ${otherDesc}")
+                None
+        }
+        lines.mkString("\n")
+    }
+
+    // a debugging method
+    def blockToWdlSource(block: Block) : String =
+        blockRenameVars(block, Map.empty)
 }

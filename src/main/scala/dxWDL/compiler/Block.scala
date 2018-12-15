@@ -39,38 +39,7 @@ import dxWDL.util.{Utils}
 
 // A sorted group of graph nodes, that match some original
 // set of WDL statements.
-case class Block(nodes : Vector[GraphNode]) {
-
-    // write a set of nodes into the body of a WDL workflow. For example:
-    //
-    // Int z = x + 1
-    // call foo { input: a = z }
-    def toWdlSource : String = {
-        nodes.foldLeft("") {
-            case (accu, ssc : ScatterNode) =>
-                throw new NotImplementedError("scatter")
-
-            case (accu, cond : ConditionalNode) =>
-                throw new NotImplementedError("condition")
-
-            case (accu, call : CommandCallNode) =>
-                val inputs : String = call.upstream.toVector.collect {
-                    case expr : TaskCallInputExpressionNode =>
-                        s"${expr.identifier.localName.value} = ${expr.womExpression.sourceString}"
-                }.mkString(", ")
-                s"call ${call.identifier.localName.value} { input: ${inputs} }"
-
-            case (accu, expr : ExposedExpressionNode) =>
-                s"${expr.womType.toDisplayString} ${expr.identifier.localName.value} = ${expr.womExpression.sourceString}"
-
-            case (accu, _) =>
-                // ignore all other nodes, they do not map directly to a WDL
-                // statement
-                accu
-        }
-    }
-}
-
+case class Block(nodes : Vector[GraphNode])
 
 object Block {
     // A trivial expression has no operators, it is either a constant WomValue

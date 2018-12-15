@@ -30,17 +30,25 @@ class NativeTest extends FlatSpec with Matchers {
                             "-force",
                             "-locked")
 
-    it should "Native compile a single WDL task" in {
+    ignore should "Native compile a single WDL task" in {
         val path = pathFromBasename("add.wdl")
         val retval = Main.compile(path.toString :: compileFlags)
         retval shouldBe a [Main.SuccessfulTermination]
     }
 
     // linear workflow
-    it should "Native compile a linear WDL workflow without expressions" in {
+    ignore should "Native compile a linear WDL workflow without expressions" in {
         val path = pathFromBasename("wf_linear_no_expr.wdl")
         val retval = Main.compile(path.toString :: compileFlags)
         retval shouldBe a [Main.SuccessfulTermination]
     }
 
+    it should "Native compile a linear WDL workflow" in {
+        val path = pathFromBasename("wf_linear.wdl")
+        val retval = Main.compile(path.toString
+                                      :: "--verbose" :: "Native"
+                                      :: "--verbose" :: "GenerateIR"
+                                      :: compileFlags)
+        retval shouldBe a [Main.SuccessfulTermination]
+    }
 }

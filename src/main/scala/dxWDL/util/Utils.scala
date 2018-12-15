@@ -230,7 +230,7 @@ object Utils {
     // dx does not allow dots in variable names, so we
     // convert them to underscores.
     def transformVarName(varName: String) : String = {
-        varName.replaceAll("\\.", "_")
+        varName.replaceAll("\\.", "___")
     }
 
     // Dots are illegal in applet variable names.

@@ -34,9 +34,10 @@ class GenerateIRTest extends FlatSpec with Matchers {
     it should "IR compile a linear WDL workflow" in {
         val path = pathFromBasename("wf_linear.wdl")
         Main.compile(
-            List(path.toString, "--compileMode", "ir",
+            /*List(path.toString, "--compileMode", "ir",
                  "--verbose", "GenerateIR",
-                 "-fatalValidationWarnings")
+             "-fatalValidationWarnings")*/
+            path.toString :: cFlags
         ) shouldBe a [Main.SuccessfulTerminationIR]
     }
 

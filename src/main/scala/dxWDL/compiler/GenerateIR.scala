@@ -45,9 +45,8 @@ case class GenerateIR(callables: Map[String, IR.Callable],
                       locked: Boolean,
                       wfKind: IR.WorkflowKind.Value,
                       verbose: Verbose) {
-    private val verbose2 : Boolean = verbose.keywords contains "GenerateIR"
+    val verbose2 : Boolean = verbose.keywords contains "GenerateIR"
     private val nameBox = NameBox(verbose)
-    private val wdlCodeGen = new WdlCodeGen(verbose)
 
     private case class LinkedVar(cVar: CVar, sArg: SArg)
     private type CallEnv = Map[String, LinkedVar]
@@ -400,6 +399,22 @@ case class GenerateIR(callables: Map[String, IR.Callable],
                                 allCallNames : Vector[String],
                                 inputVars: Vector[CVar],
                                 outputVars: Vector[CVar]) : String = {
+        // rename usages of the input variables in the statment block
+        val wordTranslations = inputVars.map{ cVar =>
+            cVar.name -> cVar.dxVarName
+        }.toMap
+        val wdlCodeGen = new WdlCodeGen(verbose)
+
+        val block2 =
+            wdlCodeGen.blockRenameVars(block, wordTranslations)
+                .split("\n").map{line => s"  ${line}\n"}.mkString("")
+        val inputs: String = inputVars.map{ cVar =>
+            "    " + wdlCodeGen.apply(cVar, IORef.Input) + "\n"
+        }.mkString("")
+        val outputs: String = outputVars.map{ cVar =>
+            "    " + wdlCodeGen.apply(cVar, IORef.Output) + "\n"
+        }.mkString("")
+
         val taskStubs: Map[String, WdlCodeSnippet] =
             allCallNames.foldLeft(Map.empty[String, WdlCodeSnippet]) { case (accu, name) =>
                 val callable = callables.get(name) match {
@@ -417,40 +432,27 @@ case class GenerateIR(callables: Map[String, IR.Callable],
             }
         val tasks = taskStubs.map{case (name, wdlCode) => wdlCode.value}.mkString("\n\n")
 
-/*
-        // rename usages of the input variables in the statment block
-        val wordTranslations = inputVars.map{ cVar =>
-            cVar.name -> cVar.dxVarName
-        }.toMap
-        val erv = VarAnalysis(Set.empty, wordTranslations, cef, verbose)
-        val statements2 = block.statements.map{
-            case stmt => erv.rename(stmt)
-        }.toVector
- */
+        // A self contained WDL workflow
+        val wdlWfSource =
+            s"""|version 1.0
+                |
+                |workflow w {
+                |  input {
+                |${inputs}
+                |  }
+                |${block2}
+                |  output {
+                |${outputs}
+                |  }
+                |}
+                |
+                |${tasks}
+                |""".stripMargin
 
-        val inputs: String = inputVars.map{ cVar =>
-            "    " + wdlCodeGen.apply(cVar, IORef.Input) + "\n"
-        }.mkString("")
-        val outputs: String = outputVars.map{ cVar =>
-            "    " + wdlCodeGen.apply(cVar, IORef.Output) + "\n"
-        }.mkString("")
+        // Make sure this is actually valid WDL 1.0
+        ParseWomSourceFile.validateWdlWorkflow(wdlWfSource)
 
-        s"""|version 1.0
-            |
-            |${tasks}
-            |
-            |workflow w {
-            |  input {
-            |${inputs}
-            |  }
-            |
-            |${block.toWdlSource}
-            |
-            |  output {
-            |${outputs}
-            |  }
-            |}
-            |""".stripMargin
+        wdlWfSource
     }
 
     // Figure out all the outputs from a sequence of WDL statements.
@@ -509,12 +511,12 @@ case class GenerateIR(callables: Map[String, IR.Callable],
     // Note: all the calls have the compulsory arguments, this has
     // been checked in the Validate step.
     private def compileWfFragment(block: Block,
-                                  nextBlocks : Vector[Block],
+                                  nextNodes : Set[GraphNode],
                                   env : CallEnv,
                                   wfName : String) : (IR.Stage, IR.Applet) = {
         val baseName = createBlockName(block)
         val stageName = nameBox.chooseUniqueName(baseName)
-        Utils.trace(verbose.on, s"Compiling wfFragment ${stageName}")
+        Utils.trace(verbose.on, s"--- Compiling wfFragment ${stageName}")
 
         // Figure out the closure required for this block, out of the
         // environment
@@ -527,9 +529,6 @@ case class GenerateIR(callables: Map[String, IR.Callable],
         }.toVector
 
         // To figure out the block outputs, we need the subsequent nodes.
-        val nextNodes : Set[GraphNode] = nextBlocks.foldLeft(Set.empty[GraphNode]) {
-            case (accu, b) => accu ++ b.nodes.toSet
-        }
         val outputVars = blockOutputs(block, nextNodes)
 
         // Make a list of all task/workflow calls made inside the block. We will need to link
@@ -540,7 +539,7 @@ case class GenerateIR(callables: Map[String, IR.Callable],
 
         // generate a new WDL script just for this sub-block
         val wdlCode = blockGenWorklow(block, allCallNames, inputVars, outputVars)
-        Utils.trace(verbose2, wdlCode)
+        //Utils.trace(verbose2, wdlCode)
 
         val applet = IR.Applet(s"${wfName}_${stageName}",
                                inputVars,
@@ -553,6 +552,7 @@ case class GenerateIR(callables: Map[String, IR.Callable],
             case (_, LinkedVar(_, sArg)) => sArg
         }.toVector
 
+        Utils.trace(verbose.on, "---")
         (IR.Stage(stageName, genStageId(), applet.name, sArgs, outputVars),
          applet)
     }
@@ -562,7 +562,8 @@ case class GenerateIR(callables: Map[String, IR.Callable],
     // and outputs.
     private def compileWorkflowLocked(wf: WorkflowDefinition,
                                       wfInputs: Vector[(CVar, SArg)],
-                                      subBlocks: Vector[Block])
+                                      subBlocks: Vector[Block],
+                                      outputNodes: Vector[GraphOutputNode])
             : (Vector[(IR.Stage, Option[IR.Applet])], CallEnv) =
     {
         Utils.trace(verbose.on, s"Compiling locked-down workflow ${wf.name}")
@@ -574,7 +575,7 @@ case class GenerateIR(callables: Map[String, IR.Callable],
         var remainingBlocks = subBlocks
 
         // link together all the stages into a linear workflow
-        for (i <- 0 to (subBlocks.length - 1)) {
+        while (!remainingBlocks.isEmpty) {
             val block = remainingBlocks.head
             remainingBlocks = remainingBlocks.tail
 
@@ -596,7 +597,10 @@ case class GenerateIR(callables: Map[String, IR.Callable],
 
                 case None =>
                     // General case
-                    val (stage, apl) = compileWfFragment(block, remainingBlocks, env, wf.name)
+                    val nextNodes : Set[GraphNode] = remainingBlocks.foldLeft(Set.empty[GraphNode]) {
+                        case (accu, b) => accu ++ b.nodes.toSet
+                    }
+                    val (stage, apl) = compileWfFragment(block, nextNodes ++ outputNodes, env, wf.name)
                     for (cVar <- stage.outputs) {
                         env = env + (cVar.name ->
                                          LinkedVar(cVar, IR.SArgLink(stage.stageName, cVar)))
@@ -615,7 +619,12 @@ case class GenerateIR(callables: Map[String, IR.Callable],
     private def buildWorkflowOutput(outputNode: GraphOutputNode, env: CallEnv) : (CVar, SArg) = {
         def getSArgFromEnv(source: String) : SArg = {
             env.get(source) match {
-                case None => throw new Exception(s"Sanity: could not find ${source} in the workflow environment")
+                case None =>
+                    val envDesc = env.mkString("\n")
+                    Utils.error(s"""|env=[
+                                    |${envDesc}
+                                    |]""".stripMargin)
+                    throw new Exception(s"Sanity: could not find ${source} in the workflow environment")
                 case Some(lVar) => lVar.sArg
             }
         }
@@ -669,7 +678,7 @@ case class GenerateIR(callables: Map[String, IR.Callable],
     //
     // There are cases where we are going to need to generate dx:subworkflows.
     // This is not handled currently.
-    def compileWorkflow(wf: WorkflowDefinition) : (IR.Workflow, Map[String, IR.Applet]) =
+    def compileWorkflow(wf: WorkflowDefinition) : (IR.Workflow, Vector[IR.Applet]) =
     {
         Utils.trace(verbose.on, s"compiling workflow ${wf.name}")
 
@@ -692,23 +701,19 @@ case class GenerateIR(callables: Map[String, IR.Callable],
         // compile into dx:workflow inputs
         val wfInputs:Vector[(CVar, SArg)] = inputNodes.map(buildWorkflowInput).toVector
 
-        val (allStageInfo, env) = compileWorkflowLocked(wf, wfInputs, subBlocks)
+        val (allStageInfo, env) = compileWorkflowLocked(wf, wfInputs, subBlocks, outputNodes)
 
         // compile into workflow outputs
         val wfOutputs = outputNodes.map(node => buildWorkflowOutput(node, env)).toVector
 
         val (stages, auxApplets) = allStageInfo.unzip
-        val aApplets: Map[String, IR.Applet] =
-            auxApplets
-                .flatten
-                .map(apl => apl.name -> apl).toMap
         val irwf = IR.Workflow(wf.name, wfInputs, wfOutputs, stages, locked, wfKind)
-        (irwf, aApplets)
+        (irwf, auxApplets.flatten)
     }
 
     // Entry point for compiling tasks and workflows into IR
     def compileCallable(callable: Callable,
-                        taskDir: Map[String, String]) : IR.Callable = {
+                        taskDir: Map[String, String]) : (IR.Callable, Vector[IR.Applet]) = {
         def compileTask2(task : CallableTaskDefinition) = {
             val taskSourceCode = taskDir.get(task.name) match {
                 case None => throw new Exception(s"Did not find task ${task.name}")
@@ -719,12 +724,11 @@ case class GenerateIR(callables: Map[String, IR.Callable],
         callable match {
             case exec : ExecutableTaskDefinition =>
                 val task = exec.callableTaskDefinition
-                compileTask2(task)
+                (compileTask2(task), Vector.empty)
             case task : CallableTaskDefinition =>
-                compileTask2(task)
+                (compileTask2(task), Vector.empty)
             case wf: WorkflowDefinition =>
-                val (irwf, aApplets) = compileWorkflow(wf)
-                irwf
+                compileWorkflow(wf)
             case x =>
                 throw new Exception(s"""|Can't compile: ${callable.name}, class=${callable.getClass}
                                         |${x}
@@ -802,25 +806,35 @@ object GenerateIR {
 
         Utils.trace(verbose.on,
                     s" sortByDependencies ${womBundle.allCallables.values.map{_.name}}")
-        val order : Vector[Callable] = sortByDependencies(womBundle.allCallables.values.toVector)
+        val depOrder : Vector[Callable] = sortByDependencies(womBundle.allCallables.values.toVector)
         Utils.trace(verbose.on,
-                    s"order =${order.map{_.name}}")
+                    s"depOrder =${depOrder.map{_.name}}")
 
         // compile the tasks/workflows from bottom to top.
-        val allCallables = order.foldLeft(Map.empty[String, IR.Callable]) {
-            case (accu, callable) =>
-                val gir = GenerateIR(accu, locked, IR.WorkflowKind.TopLevel, verbose)
-                val exec = gir.compileCallable(callable, taskDir)
-                accu + (callable.name -> exec)
-        }.toMap
+        var allCallables = Map.empty[String, IR.Callable]
+        var allCallablesSorted = Vector.empty[IR.Callable]
+
+        for (callable <- depOrder) {
+            val gir = GenerateIR(allCallables, locked, IR.WorkflowKind.TopLevel, verbose)
+            val (exec, auxApplets) = gir.compileCallable(callable, taskDir)
+
+            allCallables = allCallables ++ (auxApplets.map{ apl => apl.name -> apl}.toMap)
+            allCallables = allCallables + (exec.name -> exec)
+
+            // Add the auxiliary applets while preserving the dependency order
+            allCallablesSorted = allCallablesSorted ++ auxApplets :+ exec
+        }
 
         // We already compiled all the individual wdl:tasks and
         // wdl:workflows, let's find the entrypoint.
         val primary = womBundle.primaryCallable.map{ callable =>
             allCallables(callable.name)
         }
+        val allCallablesSorted2 = allCallablesSorted.map{_.name}
+        Utils.trace(verbose.on, s"allCallablesSorted=${allCallablesSorted2}")
+        assert(allCallables.size == allCallablesSorted2.size)
 
         Utils.traceLevelDec()
-        IR.Bundle(primary, allCallables, order.map{_.name})
+        IR.Bundle(primary, allCallables, allCallablesSorted2)
     }
 }

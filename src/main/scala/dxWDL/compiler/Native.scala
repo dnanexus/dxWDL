@@ -782,8 +782,11 @@ case class Native(dxWDLrtId: Option[String],
 
     def compile(bundle: IR.Bundle) : CompilationResults = {
         // build applets and workflows if they aren't on the platform already
-        val execDict = bundle.allCallables.foldLeft(execDictEmpty) {
-            case (accu, (_, execIr)) =>
+
+        val execDict = bundle.dependencies.foldLeft(execDictEmpty) {
+            case (accu, cName) =>
+                System.out.println(accu)
+                val execIr = bundle.allCallables(cName)
                 execIr match {
                     case apl: IR.Applet =>
                         val id = apl.kind match {
