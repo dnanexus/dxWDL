@@ -46,8 +46,8 @@ class NativeTest extends FlatSpec with Matchers {
     it should "Native compile a linear WDL workflow" in {
         val path = pathFromBasename("wf_linear.wdl")
         val retval = Main.compile(path.toString
-                                      :: "--verbose" :: "Native"
-                                      :: "--verbose" :: "GenerateIR"
+//                                      :: "--verbose" :: "Native"
+//                                      :: "--verbose" :: "GenerateIR"
                                       :: compileFlags)
         retval shouldBe a [Main.SuccessfulTermination]
     }

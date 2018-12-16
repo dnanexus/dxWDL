@@ -785,7 +785,6 @@ case class Native(dxWDLrtId: Option[String],
 
         val execDict = bundle.dependencies.foldLeft(execDictEmpty) {
             case (accu, cName) =>
-                System.out.println(accu)
                 val execIr = bundle.allCallables(cName)
                 execIr match {
                     case apl: IR.Applet =>

@@ -646,34 +646,6 @@ case class GenerateIR(callables: Map[String, IR.Callable],
         }
     }
 
-    /*
-    def dbgPrint(inputNodes: Vector[GraphInputNode],   // inputs
-                 subBlocks: Vector[Vector[GraphNode]], // blocks
-                 outputNodes: Vector[GraphOutputNode]) // outputs
-            : Unit = {
-        System.out.println("Inputs [")
-        inputNodes.foreach{ node =>
-            val desc = WomPrettyPrint.apply(node)
-            System.out.println(s"  ${desc}")
-        }
-        System.out.println("]")
-        subBlocks.foreach{ nodes =>
-            System.out.println("Block [")
-            nodes.foreach{ node =>
-                val desc = WomPrettyPrint.apply(node)
-                System.out.println(s"  ${desc}")
-            }
-            System.out.println("]")
-        }
-        System.out.println("Output [")
-        outputNodes.foreach{ node =>
-            val desc = WomPrettyPrint.apply(node)
-            System.out.println(s"  ${desc}")
-        }
-        System.out.println("]")
-    }
-     */
-
     // Compile a (single) WDL workflow into a single dx:workflow.
     //
     // There are cases where we are going to need to generate dx:subworkflows.

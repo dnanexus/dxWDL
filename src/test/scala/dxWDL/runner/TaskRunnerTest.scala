@@ -18,17 +18,10 @@ import dxWDL.util.{DxPathConfig, InstanceTypeDB, ParseWomSourceFile, Utils}
 class TaskRunnerTest extends FlatSpec with Matchers {
     private val instanceTypeDB = InstanceTypeDB.genTestDB(true)
 
-/*    private def pathFromBasename(basename: String) : Path = {
-        val p = getClass.getResource(s"/runner_tasks/${basename}").getPath
+    // Note: if the file doesn't exist, this throws a null pointer exception
+    private def pathFromBasename(basename: String) : Path = {
+        val p = getClass.getResource(s"/task_runner/${basename}").getPath
         Paths.get(p)
-    }*/
-
-    private lazy val currentWorkDir:Path = Paths.get(System.getProperty("user.dir"))
-    private lazy val baseDir : Path = {
-        currentWorkDir.resolve(s"src/test/resources/runner_tasks")
-    }
-    private def pathFromBasename(filename: String) : Path = {
-        baseDir.resolve(filename)
     }
 
     // Recursively go into a womValue, and add a base path to the file.
@@ -94,22 +87,31 @@ class TaskRunnerTest extends FlatSpec with Matchers {
         val wdlCode : Path = pathFromBasename(s"${wdlName}.wdl")
 
         // load the inputs
-        val inputsFile = pathFromBasename(s"${wdlName}_input.json")
         val inputsOrg : Map[String, JsValue] =
-            if (Files.exists(inputsFile))
+            try {
+                val inputsFile = pathFromBasename(s"${wdlName}_input.json")
+                assert(Files.exists(inputsFile))
                 Utils.readFileContent(inputsFile)
                     .parseJson
                     .asJsObject.fields
-            else Map.empty
+            } catch {
+                case _: Throwable =>
+                    Map.empty
+            }
 
         // load the expected outputs
-        val outputsFile = pathFromBasename(s"${wdlName}_output.json")
         val outputFieldsExpected : Option[Map[String, JsValue]] =
-            if (Files.exists(outputsFile))
+            try {
+                val outputsFile = pathFromBasename(s"${wdlName}_output.json")
+                assert(Files.exists(outputsFile))
                 Some(Utils.readFileContent(outputsFile)
                          .parseJson
                          .asJsObject.fields)
-            else None
+            } catch {
+                case _: Throwable =>
+                    None
+            }
+
 
         // Create a clean directory in "/tmp" for the task to use
         val jobHomeDir : Path = Paths.get("/tmp/dxwdl_applet_test")
