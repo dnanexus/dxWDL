@@ -118,35 +118,9 @@ task Add {
         )
     }
 
-    def apply(cVar : IR.CVar, ioRef : IORef.Value) : String = {
-        ioRef match {
-            case IORef.Input =>
-                s"${cVar.womType.toDisplayString} ${cVar.dxVarName}"
-            case IORef.Output if cVar.dxVarName == cVar.name =>
-                s"${cVar.womType.toDisplayString} ${cVar.name}___ = ${cVar.name}"
-            case IORef.Output =>
-                s"${cVar.womType.toDisplayString} ${cVar.dxVarName} = ${cVar.name}"
-        }
-    }
-
-
     // write a set of nodes into the body of a WDL workflow.
-    // Rename variables from a provided dictionary. For example:
     //
-    // Translations
-    //   Map(add.result -> add___result)
-    //
-    // Original block
-    //   Int z = add.result + 1
-    //   call mul { input: a=z, b=5 }
-    //
-    // Result block
-    //   Int z = add___result + 1
-    //   call mul { input: a=z, b=5 }
-    def blockRenameVars(block: Block,
-                        wordTranslations : Map[String, String]) : String = {
-        val va = new VarAnalysis(wordTranslations, verbose)
-
+    def blockToWdlSource(block: Block) : String = {
         val lines = block.nodes.flatMap {
             case ssc : ScatterNode =>
                 throw new NotImplementedError("scatter")
@@ -157,15 +131,15 @@ task Add {
             case call : CommandCallNode => {
                 val inputs : String = call.upstream.toVector.collect {
                     case expr : TaskCallInputExpressionNode =>
-                        val rnExpr = va.exprRenameVars(expr.womExpression)
-                        s"${expr.identifier.localName.value} = ${rnExpr}"
+                        val exprStr = expr.womExpression.sourceString
+                        s"${expr.identifier.localName.value} = ${exprStr}"
                 }.mkString(", ")
                 Some(s"call ${call.identifier.localName.value} { input: ${inputs} }")
             }
 
             case expr : ExposedExpressionNode => {
-                val rnExpr = va.exprRenameVars(expr.womExpression)
-                Some(s"${expr.womType.toDisplayString} ${expr.identifier.localName.value} = ${rnExpr}")
+                val exprStr = expr.womExpression.sourceString
+                Some(s"${expr.womType.toDisplayString} ${expr.identifier.localName.value} = ${exprStr}")
             }
 
             case _ :TaskCallInputExpressionNode =>
@@ -183,7 +157,70 @@ task Add {
         lines.mkString("\n")
     }
 
-    // a debugging method
-    def blockToWdlSource(block: Block) : String =
-        blockRenameVars(block, Map.empty)
+    // A workflow must have definitions for all the tasks it
+    // calls. However, a scatter calls tasks, that are missing from
+    // the WDL file we generate. To ameliorate this, we add stubs for
+    // called tasks. The generated tasks are named by their
+    // unqualified names, not their fully-qualified names. This works
+    // because the WDL workflow must be "flattenable".
+    def standAloneWorkflow( inputNodes: Vector[GraphInputNode],    // inputs
+                            blocks: Vector[Block],             // blocks
+                            outputNodes: Vector[GraphOutputNode],   // outputs
+                            allCalls : Vector[IR.Callable]) : WdlCodeSnippet = {
+        val inputs: String = inputNodes.map{
+            case RequiredGraphInputNode(id, womType, _, _) =>
+                s"${womType.toDisplayString} ${id.workflowLocalName}"
+            case OptionalGraphInputNode(id, womType, _, _) =>
+                s"${womType.toDisplayString} ${id.workflowLocalName}"
+            case OptionalGraphInputNodeWithDefault(id, womType, expr : WomExpression, _, _) =>
+                s"${womType.toDisplayString} ${id.workflowLocalName}"
+            case other =>
+                throw new Exception(s"unhandled input ${other}")
+        }.mkString("\n")
+
+        val outputs: String = outputNodes.map{
+
+        }.mkString("\n")
+
+        val wfBody = blocks.map{ block => blockToWdlSource(block) }
+            .map{_.value}
+            .mkString("\n")
+
+        val taskStubs: Map[String, WdlCodeSnippet] =
+            allCalls.foldLeft(Map.empty[String, WdlCodeSnippet]) { case (accu, callable) =>
+                if (accu contains name) {
+                    // we have already created a stub for this call
+                    accu
+                } else {
+                    // no existing stub, create it
+                    val taskSourceCode =  wdlCodeGen.appletStub(callable)
+                    accu + (name -> taskSourceCode)
+                }
+            }
+        val tasks = taskStubs.map{case (name, wdlCode) => wdlCode.value}.mkString("\n\n")
+
+        // A self contained WDL workflow
+        val wdlWfSource =
+            s"""|version 1.0
+                |
+                |workflow w {
+                |  input {
+                |${inputs}
+                |  }
+                |
+                |${wfBody}
+                |
+                |  output {
+                |${outputs}
+                |  }
+                |}
+                |
+                |${tasks}
+                |""".stripMargin
+
+        // Make sure this is actually valid WDL 1.0
+        ParseWomSourceFile.validateWdlWorkflow(wdlWfSource)
+
+        wdlWfSource
+    }
 }

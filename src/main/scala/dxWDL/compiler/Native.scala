@@ -69,7 +69,7 @@ case class Native(dxWDLrtId: Option[String],
     // These are called "Complex Types", or "Complex". They are handled
     // by passing a JSON structure and a vector of dx:files.
     private def cVarToSpec(cVar: CVar) : Vector[JsValue] = {
-        val name = Utils.encodeAppletVarName(cVar.dxVarName)
+        val name = cVar.dxVarName
         val defaultVals:Map[String, JsValue] = cVar.default match {
             case None => Map.empty
             case Some(wdlValue) =>
@@ -517,6 +517,21 @@ case class Native(dxWDLrtId: Option[String],
         val inputSpec : Vector[JsValue] = applet.inputs.map(cVar =>
             cVarToSpec(cVar)
         ).flatten.toVector
+        val extraWfInfo : Option[JsValue] =
+            applet.kind match {
+                case AppletKindWfFragment(calls, subBlockNum, fqnDict) =>
+                    // extra information used for running workflow fragments
+                    val hardCodedFragInfo = Map(
+                        "calls" -> JsArray(calls.map{x => JsString(x) }),
+                        "subBlockNum" -> JsNumber(subBlockNum),
+                        "fqnDict" -> JsObject(fqnDict.map{ case (k, v) => k -> JsString(v) }.toMap)
+                    )
+                    Some(JsObject(Map("name" -> JsString(Utils.EXTRA_WORKFLOW_INFO),
+                                      "class" -> JsString("hash"),
+                                      "default" -> hardCodedFragInfo)))
+                case _ =>
+                    None
+            }
         val outputSpec : Vector[JsValue] = applet.outputs.map(cVar =>
             cVarToSpec(cVar)
         ).flatten.toVector
@@ -526,7 +541,7 @@ case class Native(dxWDLrtId: Option[String],
         // pack all the core arguments into a single request
         val reqCore = Map(
             "name" -> JsString(applet.name),
-            "inputSpec" -> JsArray(inputSpec),
+            "inputSpec" -> JsArray(inputSpec ++ extraWfInfo.toVector),
             "outputSpec" -> JsArray(outputSpec),
             "runSpec" -> runSpec,
             "dxapi" -> JsString("1.0.0"),

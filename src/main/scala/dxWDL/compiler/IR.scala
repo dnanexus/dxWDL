@@ -18,19 +18,23 @@ object IR {
     // Compile time representation of a variable. Used also as
     // an applet argument.
     //
-    // TODO: readd attributes.
+    // The fullyQualifiedName could contains dots. However dx does not allow
+    // dots in applet/workflow arugment names, this requires some kind
+    // of transform.
     //
     // The attributes are used to encode DNAx applet input/output
     // specification fields, such as {help, suggestions, patterns}.
     //
-    case class CVar(name: String,
+    case class CVar(fullyQualifiedName: String,
+                    unqualifiedName: Option[String],
                     womType: WomType,
                     default: Option[WomValue]) {
-        // dx does not allow dots in variable names, so we
-        // convert them to underscores.
-        //
-        // TODO: check for collisions that are created this way.
-        def dxVarName : String = Utils.transformVarName(name)
+        def dxVarName : String = {
+            val name = unqualifiedName.getOrElse(fullyQualifiedName)
+            assert(!(name contains "."))
+            assert(!(Utils.RESERVED_APPLET_INPUT_NAMES contains name))
+            name
+        }
     }
 
     /** Specification of instance type.
@@ -83,7 +87,9 @@ object IR {
     sealed trait AppletKind
     case class  AppletKindNative(id: String) extends AppletKind
     case class  AppletKindTask(task: CallableTaskDefinition) extends AppletKind
-    case class  AppletKindWfFragment(calls: Vector[String]) extends AppletKind
+    case class  AppletKindWfFragment(calls: Vector[String],
+                                     subBlockNum: Int,
+                                     fqnDict: Map[String, String])
     case object AppletKindWorkflowOutputReorg extends AppletKind
 
     /** @param name          Name of applet
