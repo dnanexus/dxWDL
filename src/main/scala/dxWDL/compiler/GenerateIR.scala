@@ -728,6 +728,11 @@ object GenerateIR {
                 val d = ParseWomSourceFile.scanForTasks(language, srcCode)
                 accu ++ d
         }
+        val workflowDir = allSources.foldLeft(Map.empty[String, String]) {
+            case (accu, (filename, srcCode)) =>
+                val d = ParseWomSourceFile.scanForWorkflows(language, srcCode)
+                accu ++ d
+        }
 
         Utils.trace(verbose.on,
                     s" sortByDependencies ${womBundle.allCallables.values.map{_.name}}")

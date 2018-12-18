@@ -1,9 +1,8 @@
 version 1.0
 
-# A trivial workflow, to test the basic sanity
-# of a dxWDL release.
+# A WDL workflow with expressions, but without branches and loops.
 
-workflow wf_linear_no_expr {
+workflow linear {
     input {
         Int x = 3
         Int y = 5
@@ -13,18 +12,13 @@ workflow wf_linear_no_expr {
         input: a=x, b=y
     }
 
-    call mul {
-        input: a=add.result, b=5
-    }
+    Int z = add.result + 1
+    call mul { input: a=z, b=5 }
 
-    call mul as mul2 {
-        input: a=4, b = 8
-    }
+    call inc { input: i= z + mul.result + 8}
 
     output {
-        Int r1 = add.result
-        Int r2 = mul.result
-        Int r3 = mul2.result
+        Int result = inc.result
     }
 }
 

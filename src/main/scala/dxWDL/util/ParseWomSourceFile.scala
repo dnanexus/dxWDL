@@ -102,9 +102,6 @@ object ParseWomSourceFile {
     }
 
 
-    private val taskStartLine: Regex = "^(\\s*)task(\\s+)(\\w+)(\\s+)\\{".r
-    private val taskEndLine: Regex = "^}(\\s)*$".r
-
     // Look for the first task in the sequence of lines. If not found, return None.
     // If found, return the remaining lines, the name of the task, and the WDL source lines.
     //
@@ -127,7 +124,9 @@ object ParseWomSourceFile {
     //    ls -lR
     // }
    // }
-    private def findNextTask(lines: List[String]) : Option[(List[String], String, String)] = {
+    private def findWdlElement(lines: List[String],
+                               elemStartLine : Regex,
+                               elemEndLine : Regex) : Option[(List[String], String, String)] = {
         var remaining: List[String] = lines
         var taskLines : Vector[String] = Vector.empty[String]
         var taskName : Option[String] = None
@@ -138,12 +137,12 @@ object ParseWomSourceFile {
             remaining = remaining.tail
 
             taskName match {
-                case None if (taskStartLine.pattern.matcher(line).matches) =>
+                case None if (elemStartLine.pattern.matcher(line).matches) =>
                     // hit the beginning of a task
                     taskLines = Vector(line)
 
                     // extract the task name
-                    val allMatches = taskStartLine.findAllMatchIn(line).toList
+                    val allMatches = elemStartLine.findAllMatchIn(line).toList
                     if (allMatches.size != 1)
                         throw new Exception(s"""|task definition appears twice in one line
                                                 |
@@ -153,7 +152,7 @@ object ParseWomSourceFile {
                 case None =>
                     // lines before the task
                     ()
-                case Some(tn) if (taskEndLine.pattern.matcher(line).matches) =>
+                case Some(tn) if (elemEndLine.pattern.matcher(line).matches) =>
                     // hit the end of the task
                     taskLines :+= line
                     return Some((remaining, tn, taskLines.mkString("\n")))
@@ -163,6 +162,19 @@ object ParseWomSourceFile {
             }
         }
         return None
+    }
+
+
+    private def findNextTask(lines: List[String]) : Option[(List[String], String, String)] = {
+        val taskStartLine: Regex = "^(\\s*)task(\\s+)(\\w+)(\\s+)\\{".r
+        val taskEndLine: Regex = "^}(\\s)*$".r
+        findWdlElement(taskStartLine, taskEndLine)
+    }
+
+    private def findNextWorkflow(lines: List[String]) : Option[(List[String], String, String)] = {
+        val workflowStartLine: Regex = "^(\\s*)workflow(\\s+)(\\w+)(\\s+)\\{".r
+        val workflowEndLine: Regex = "^}(\\s)*$".r
+        findWdlElement(workflowStartLine, workflowEndLine)
     }
 
     // add "version 1.0" or such to the WDL source code
@@ -205,6 +217,20 @@ object ParseWomSourceFile {
             }
         }
         return taskDir.toMap
+    }
+
+    // Go through one WDL source file, and return a map from task name
+    // to its source code. Return an empty map if there are no tasks
+    // in this file.
+    def scanForWorkflow(language: Language.Value,
+                        sourceCode: String) : Option((String, String)) = {
+        val lines = sourceCode.split("\n").toList
+        findNextWorkflow(lines) match {
+            case None =>
+                None
+            case Some((remainingLines, wfName, wfLines)) =>
+                Some((wfName, wfLines))
+        }
     }
 
     // throw an exception if the workflow source is not valid WDL 1.0

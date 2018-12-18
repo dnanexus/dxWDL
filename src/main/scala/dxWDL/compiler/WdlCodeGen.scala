@@ -88,7 +88,12 @@ task Add {
    }
   }
 */
-    def appletStub(callable: IR.Callable) : WdlCodeSnippet = {
+    def appletStub(callable: IR.Callable,
+                   language: Language.Value) : WdlCodeSnippet = {
+        // we currently support only WDL 1.0. It should be easy to add
+        // support for draft 2.
+        assert(language == WDLv1_0)
+
         /*Utils.trace(verbose.on,
                     s"""|genAppletStub  callable=${callable.name}
                         |  inputs= ${callable.inputVars.map(_.name)}
@@ -119,44 +124,6 @@ task Add {
         )
     }
 
-    // write a set of nodes into the body of a WDL workflow.
-    //
-    def blockToWdlSource(block: Block) : String = {
-        val lines = block.nodes.flatMap {
-            case ssc : ScatterNode =>
-                throw new NotImplementedError("scatter")
-
-            case cond : ConditionalNode =>
-                throw new NotImplementedError("condition")
-
-            case call : CommandCallNode => {
-                val inputs : String = call.upstream.toVector.collect {
-                    case expr : TaskCallInputExpressionNode =>
-                        val exprStr = expr.womExpression.sourceString
-                        s"${expr.identifier.localName.value} = ${exprStr}"
-                }.mkString(", ")
-                Some(s"call ${call.identifier.localName.value} { input: ${inputs} }")
-            }
-
-            case expr : ExposedExpressionNode => {
-                val exprStr = expr.womExpression.sourceString
-                Some(s"${expr.womType.toDisplayString} ${expr.identifier.localName.value} = ${exprStr}")
-            }
-
-            case _ :TaskCallInputExpressionNode =>
-                // Expressions that are inputs to a call. These are printed out as part of CommandCallNode
-                // handling.
-                None
-
-            case other =>
-                // ignore all other nodes, they do not map directly to a WDL
-                // statement
-                val otherDesc: String = WomPrettyPrint.apply(other)
-                Utils.warning(verbose, s"ignored graph node ${otherDesc}")
-                None
-        }
-        lines.mkString("\n")
-    }
 
     // A workflow must have definitions for all the tasks it
     // calls. However, a scatter calls tasks, that are missing from
@@ -164,32 +131,8 @@ task Add {
     // called tasks. The generated tasks are named by their
     // unqualified names, not their fully-qualified names. This works
     // because the WDL workflow must be "flattenable".
-    def standAloneWorkflow( inputNodes: Vector[GraphInputNode],    // inputs
-                            blocks: Vector[Block],             // blocks
-                            outputNodes: Vector[GraphOutputNode],   // outputs
+    def standAloneWorkflow( originalWorkflowSource: String,
                             allCalls : Vector[IR.Callable]) : WdlCodeSnippet = {
-        val inputs: String = inputNodes.map{
-            case RequiredGraphInputNode(id, womType, _, _) =>
-                s"${womType.toDisplayString} ${id.workflowLocalName}"
-            case OptionalGraphInputNode(id, womType, _, _) =>
-                s"${womType.toDisplayString} ${id.workflowLocalName}"
-            case OptionalGraphInputNodeWithDefault(id, womType, expr : WomExpression, _, _) =>
-                s"${womType.toDisplayString} ${id.workflowLocalName}"
-            case other =>
-                throw new Exception(s"unhandled input ${other}")
-        }.mkString("\n")
-
-        val outputs: String = outputNodes.map{
-            case expr : ExpressionBasedGraphOutputNode =>
-                s"${expr.womType.toDisplayString} ${expr.identifier.localName.value} = ${expr.womExpression.sourceString}"
-            case other =>
-                throw new Exception(s"unhandled output ${other}")
-        }.mkString("\n")
-
-        val wfBody = blocks.map{ block => blockToWdlSource(block) }
-            .map{_.value}
-            .mkString("\n")
-
         val taskStubs: Map[String, WdlCodeSnippet] =
             allCalls.foldLeft(Map.empty[String, WdlCodeSnippet]) { case (accu, callable) =>
                 if (accu contains callable.name) {
@@ -204,22 +147,15 @@ task Add {
         val tasks = taskStubs.map{case (name, wdlCode) => wdlCode.value}.mkString("\n\n")
 
         // A self contained WDL workflow
+        //
+        // This currently assumes WDL 1.0, due to the tasks.
         val wdlWfSource =
             s"""|version 1.0
                 |
-                |workflow w {
-                |  input {
-                |${inputs}
-                |  }
-                |
-                |${wfBody}
-                |
-                |  output {
-                |${outputs}
-                |  }
-                |}
-                |
                 |${tasks}
+                |
+                |${originalWorkflowSource}
+                |
                 |""".stripMargin
 
         // Make sure this is actually valid WDL 1.0
