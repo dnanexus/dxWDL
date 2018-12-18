@@ -87,10 +87,6 @@ task Add {
 */
     def appletStub(callable: IR.Callable,
                    language: Language.Value) : WdlCodeSnippet = {
-        // we currently support only WDL 1.0. It should be easy to add
-        // support for draft 2.
-        assert(language == Language.WDLv1_0)
-
         /*Utils.trace(verbose.on,
                     s"""|genAppletStub  callable=${callable.name}
                         |  inputs= ${callable.inputVars.map(_.name)}
@@ -106,19 +102,34 @@ task Add {
             s"    ${cVar.womType.toDisplayString} ${cVar.name} = ${defaultVal.toWomString}"
         }.mkString("\n")
 
-        // We are using WDL version 1.0 here. The input syntax is not
-        // available prior.
-        WdlCodeSnippet(
-            s"""|task ${callable.name} {
-                |  input {
-                |${inputs}
-                |  }
-                |  command {}
-                |  output {
-                |${outputs}
-                |  }
-                |}""".stripMargin
-        )
+        language match {
+            case Language.WDLvDraft2 =>
+                // Draft-2 does not support the input block.
+                WdlCodeSnippet(
+                    s"""|task ${callable.name} {
+                        |${inputs}
+                        |
+                        |  command {}
+                        |  output {
+                        |${outputs}
+                        |  }
+                        |}""".stripMargin
+                )
+            case Language.WDLv1_0 =>
+                WdlCodeSnippet(
+                    s"""|task ${callable.name} {
+                        |  input {
+                        |${inputs}
+                        |  }
+                        |  command {}
+                        |  output {
+                        |${outputs}
+                        |  }
+                        |}""".stripMargin
+                )
+            case other =>
+                throw new Exception(s"Unsupported language version ${other}")
+        }
     }
 
 
@@ -129,7 +140,8 @@ task Add {
     // unqualified names, not their fully-qualified names. This works
     // because the WDL workflow must be "flattenable".
     def standAloneWorkflow( originalWorkflowSource: String,
-                            allCalls : Vector[IR.Callable]) : WdlCodeSnippet = {
+                            allCalls : Vector[IR.Callable],
+                            language: Language.Value) : WdlCodeSnippet = {
         val taskStubs: Map[String, WdlCodeSnippet] =
             allCalls.foldLeft(Map.empty[String, WdlCodeSnippet]) { case (accu, callable) =>
                 if (accu contains callable.name) {
@@ -137,26 +149,29 @@ task Add {
                     accu
                 } else {
                     // no existing stub, create it
-                    val taskSourceCode =  appletStub(callable, Language.WDLv1_0)
+                    val taskSourceCode =  appletStub(callable, language)
                     accu + (callable.name -> taskSourceCode)
                 }
             }
         val tasks = taskStubs.map{case (name, wdlCode) => wdlCode.value}.mkString("\n\n")
 
         // A self contained WDL workflow
-        //
-        // This currently assumes WDL 1.0, due to the tasks.
-        val wdlWfSource =
-            s"""|version 1.0
-                |
-                |${tasks}
-                |
-                |${originalWorkflowSource}
-                |
-                |""".stripMargin
+        val versionString = language match {
+            case Language.WDLvDraft2 => ""
+            case Language.WDLv1_0 => "version 1.0"
+            case other =>
+                throw new Exception(s"Unsupported language version ${other}")
+        }
+        val wdlWfSource = s"""|${versionString}
+                              |
+                              |${tasks}
+                              |
+                              |${originalWorkflowSource}
+                              |
+                              |""".stripMargin
 
         // Make sure this is actually valid WDL 1.0
-        ParseWomSourceFile.validateWdlWorkflow(wdlWfSource)
+        ParseWomSourceFile.validateWdlWorkflow(wdlWfSource, language)
 
         WdlCodeSnippet(wdlWfSource)
     }

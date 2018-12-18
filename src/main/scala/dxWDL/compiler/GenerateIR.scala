@@ -40,6 +40,7 @@ private case class NameBox(verbose: Verbose) {
 }
 
 case class GenerateIR(callables: Map[String, IR.Callable],
+                      language: Language.Value,
                       locked: Boolean,
                       wfKind: IR.WorkflowKind.Value,
                       verbose: Verbose) {
@@ -500,7 +501,7 @@ case class GenerateIR(callables: Map[String, IR.Callable],
     // This is a locked-down workflow, we have workflow level inputs
     // and outputs.
     private def compileWorkflowLocked(wf: WorkflowDefinition,
-                                      wfSource_WDLv1 : WdlCodeSnippet,
+                                      wfSourceStandAlone : WdlCodeSnippet,
                                       wfInputs: Vector[(CVar, SArg)],
                                       subBlocks: Vector[Block],
                                       outputNodes: Vector[GraphOutputNode])
@@ -541,7 +542,7 @@ case class GenerateIR(callables: Map[String, IR.Callable],
                         case (accu, b) => accu ++ b.nodes.toSet
                     }
                     val (stage, apl) = compileWfFragment(block, blockNum, nextNodes ++ outputNodes,
-                                                         env, wf.name, wfSource_WDLv1)
+                                                         env, wf.name, wfSourceStandAlone)
                     for (cVar <- stage.outputs) {
                         env = env + (cVar.name ->
                                          LinkedVar(cVar, IR.SArgLink(stage.stageName, cVar)))
@@ -621,12 +622,12 @@ case class GenerateIR(callables: Map[String, IR.Callable],
                 case cNode : CallNode =>
                     callables(cNode.callable.name)
             }.toVector
-        val wfSource_WDLv1 = wdlCodeGen.standAloneWorkflow(wfSource, callablesUsedInWorkflow)
+        val wfSourceStandAlone = wdlCodeGen.standAloneWorkflow(wfSource, callablesUsedInWorkflow, language)
 
         // compile into dx:workflow inputs
         val wfInputs:Vector[(CVar, SArg)] = inputNodes.map(buildWorkflowInput).toVector
 
-        val (allStageInfo, env) = compileWorkflowLocked(wf, wfSource_WDLv1, wfInputs, subBlocks, outputNodes)
+        val (allStageInfo, env) = compileWorkflowLocked(wf, wfSourceStandAlone, wfInputs, subBlocks, outputNodes)
 
         // compile into workflow outputs
         val wfOutputs = outputNodes.map(node => buildWorkflowOutput(node, env)).toVector
@@ -755,7 +756,7 @@ object GenerateIR {
         var allCallablesSorted = Vector.empty[IR.Callable]
 
         for (callable <- depOrder) {
-            val gir = GenerateIR(allCallables, locked, IR.WorkflowKind.TopLevel, verbose)
+            val gir = GenerateIR(allCallables, language, locked, IR.WorkflowKind.TopLevel, verbose)
             val (exec, auxApplets) = gir.compileCallable(callable, taskDir, workflowDir)
 
             allCallables = allCallables ++ (auxApplets.map{ apl => apl.name -> apl}.toMap)

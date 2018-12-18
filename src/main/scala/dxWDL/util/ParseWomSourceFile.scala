@@ -234,10 +234,19 @@ object ParseWomSourceFile {
     }
 
     // throw an exception if the workflow source is not valid WDL 1.0
-    def validateWdlWorkflow(wdlWfSource: String) : Unit = {
-        val wdlV1 = new WdlDraft3LanguageFactory(Map.empty)
+    def validateWdlWorkflow(wdlWfSource: String,
+                            language: Language.Value) : Unit = {
+        val languageFactory = language match {
+            case Language.WDLv1_0 =>
+                new WdlDraft3LanguageFactory(Map.empty)
+            case Language.WDLvDraft2 =>
+                new WdlDraft2LanguageFactory(Map.empty)
+            case other =>
+                throw new Exception(s"Unsupported language ${other}")
+        }
+
         val bundleChk: Checked[WomBundle] =
-            wdlV1.getWomBundle(wdlWfSource, "{}", List.empty, List(wdlV1))
+            languageFactory.getWomBundle(wdlWfSource, "{}", List.empty, List.empty)
         bundleChk match {
             case Left(errors) =>
                 Utils.error("Found Errors in generated WDL source")
