@@ -591,7 +591,8 @@ case class GenerateIR(callables: Map[String, IR.Callable],
     //
     // There are cases where we are going to need to generate dx:subworkflows.
     // This is not handled currently.
-    def compileWorkflow(wf: WorkflowDefinition) : (IR.Workflow, Vector[IR.Applet]) =
+    def compileWorkflow(wf: WorkflowDefinition,
+                        wfSource: String) : (IR.Workflow, Vector[IR.Applet]) =
     {
         Utils.trace(verbose.on, s"compiling workflow ${wf.name}")
 
@@ -620,8 +621,7 @@ case class GenerateIR(callables: Map[String, IR.Callable],
                 case cNode : CallNode =>
                     callables(cNode.callable.name)
             }.toVector
-        val wfSource_WDLv1 = wdlCodeGen.standAloneWorkflow(inputNodes, subBlocks,
-                                                           outputNodes, callablesUsedInWorkflow)
+        val wfSource_WDLv1 = wdlCodeGen.standAloneWorkflow(wfSource, callablesUsedInWorkflow)
 
         // compile into dx:workflow inputs
         val wfInputs:Vector[(CVar, SArg)] = inputNodes.map(buildWorkflowInput).toVector
@@ -638,7 +638,8 @@ case class GenerateIR(callables: Map[String, IR.Callable],
 
     // Entry point for compiling tasks and workflows into IR
     def compileCallable(callable: Callable,
-                        taskDir: Map[String, String]) : (IR.Callable, Vector[IR.Applet]) = {
+                        taskDir: Map[String, String],
+                        workflowDir: Map[String, String]) : (IR.Callable, Vector[IR.Applet]) = {
         def compileTask2(task : CallableTaskDefinition) = {
             val taskSourceCode = taskDir.get(task.name) match {
                 case None => throw new Exception(s"Did not find task ${task.name}")
@@ -653,7 +654,12 @@ case class GenerateIR(callables: Map[String, IR.Callable],
             case task : CallableTaskDefinition =>
                 (compileTask2(task), Vector.empty)
             case wf: WorkflowDefinition =>
-                compileWorkflow(wf)
+                workflowDir.get(wf.name) match {
+                    case None =>
+                        throw new Exception(s"Did not find sources for workflow ${wf.name}")
+                    case Some(wfSource) =>
+                        compileWorkflow(wf, wfSource)
+                }
             case x =>
                 throw new Exception(s"""|Can't compile: ${callable.name}, class=${callable.getClass}
                                         |${x}
@@ -730,8 +736,12 @@ object GenerateIR {
         }
         val workflowDir = allSources.foldLeft(Map.empty[String, String]) {
             case (accu, (filename, srcCode)) =>
-                val d = ParseWomSourceFile.scanForWorkflows(language, srcCode)
-                accu ++ d
+                ParseWomSourceFile.scanForWorkflow(language, srcCode) match {
+                    case None =>
+                        accu
+                    case Some((wfName, wfSource)) =>
+                        accu + (wfName -> wfSource)
+                }
         }
 
         Utils.trace(verbose.on,
@@ -746,7 +756,7 @@ object GenerateIR {
 
         for (callable <- depOrder) {
             val gir = GenerateIR(allCallables, locked, IR.WorkflowKind.TopLevel, verbose)
-            val (exec, auxApplets) = gir.compileCallable(callable, taskDir)
+            val (exec, auxApplets) = gir.compileCallable(callable, taskDir, workflowDir)
 
             allCallables = allCallables ++ (auxApplets.map{ apl => apl.name -> apl}.toMap)
             allCallables = allCallables + (exec.name -> exec)

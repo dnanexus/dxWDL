@@ -1,8 +1,5 @@
 package dxWDL.compiler
 
-import wom.expression.WomExpression
-import wom.graph._
-import wom.graph.expression._
 import wom.types._
 import wom.values._
 
@@ -92,7 +89,7 @@ task Add {
                    language: Language.Value) : WdlCodeSnippet = {
         // we currently support only WDL 1.0. It should be easy to add
         // support for draft 2.
-        assert(language == WDLv1_0)
+        assert(language == Language.WDLv1_0)
 
         /*Utils.trace(verbose.on,
                     s"""|genAppletStub  callable=${callable.name}
@@ -140,7 +137,7 @@ task Add {
                     accu
                 } else {
                     // no existing stub, create it
-                    val taskSourceCode =  appletStub(callable)
+                    val taskSourceCode =  appletStub(callable, Language.WDLv1_0)
                     accu + (callable.name -> taskSourceCode)
                 }
             }

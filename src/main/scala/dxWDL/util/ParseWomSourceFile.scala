@@ -168,13 +168,13 @@ object ParseWomSourceFile {
     private def findNextTask(lines: List[String]) : Option[(List[String], String, String)] = {
         val taskStartLine: Regex = "^(\\s*)task(\\s+)(\\w+)(\\s+)\\{".r
         val taskEndLine: Regex = "^}(\\s)*$".r
-        findWdlElement(taskStartLine, taskEndLine)
+        findWdlElement(lines, taskStartLine, taskEndLine)
     }
 
     private def findNextWorkflow(lines: List[String]) : Option[(List[String], String, String)] = {
         val workflowStartLine: Regex = "^(\\s*)workflow(\\s+)(\\w+)(\\s+)\\{".r
         val workflowEndLine: Regex = "^}(\\s)*$".r
-        findWdlElement(workflowStartLine, workflowEndLine)
+        findWdlElement(lines, workflowStartLine, workflowEndLine)
     }
 
     // add "version 1.0" or such to the WDL source code
@@ -223,7 +223,7 @@ object ParseWomSourceFile {
     // to its source code. Return an empty map if there are no tasks
     // in this file.
     def scanForWorkflow(language: Language.Value,
-                        sourceCode: String) : Option((String, String)) = {
+                        sourceCode: String) : Option[(String, String)] = {
         val lines = sourceCode.split("\n").toList
         findNextWorkflow(lines) match {
             case None =>
