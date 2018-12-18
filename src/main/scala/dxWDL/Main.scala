@@ -5,7 +5,7 @@ import com.typesafe.config._
 import java.nio.file.{Path, Paths}
 import scala.collection.mutable.HashMap
 import spray.json._
-import wom.callable.{CallableTaskDefinition, ExecutableTaskDefinition}
+import wom.callable.{CallableTaskDefinition, ExecutableTaskDefinition, WorkflowDefinition}
 import wom.executable.WomBundle
 
 import dxWDL.util._
@@ -25,10 +25,15 @@ object Main extends App {
         val Compile, Config, Internal, Version  = Value
     }
     object InternalOp extends Enumeration {
-        val Collect,
-            WfFragment,
-            TaskCheckInstanceType, TaskEpilog, TaskProlog, TaskRelaunch,
-            WorkflowOutputReorg = Value
+        val WfFragment,
+            TaskCheckInstanceType, TaskEpilog, TaskProlog, TaskRelaunch = Value
+
+        def isTaskOp(op: InternalOp.Value) = {
+            op match {
+                case TaskCheckInstanceType | TaskEpilog | TaskProlog | TaskRelaunch => true
+                case _ => false
+            }
+        }
     }
 
     // Setup the standard paths used for applets. These are used at
@@ -106,9 +111,6 @@ object Main extends App {
                         checkNumberOfArguments(keyword, 1, subargs)
                         (keyword, subargs.head)
                     case "destination" =>
-                        checkNumberOfArguments(keyword, 1, subargs)
-                        (keyword, subargs.head)
-                    case "destination_unicode" =>
                         checkNumberOfArguments(keyword, 1, subargs)
                         (keyword, subargs.head)
                     case "extras" =>
@@ -225,12 +227,6 @@ object Main extends App {
         var destinationOpt : Option[String] = options.get("destination") match {
             case None => None
             case Some(List(d)) => Some(d)
-            case Some(other) => throw new Exception(s"Invalid path syntex <${other}>")
-        }
-        options.get("destination_unicode") match {
-            case None => None
-            case Some(List(d)) =>
-                destinationOpt = Some(Utils.unicodeFromHex(d))
             case Some(other) => throw new Exception(s"Invalid path syntex <${other}>")
         }
 
@@ -475,30 +471,89 @@ object Main extends App {
                 SuccessfulTermination(s"success ${op}")
 
             case _ =>
-                UnsuccessfulTermination(s"operation ${op} not supported")
+                UnsuccessfulTermination(s"Illegal task operation ${op}")
         }
     }
 
+    // Execute a part of a workflow
+    private def workflowFragAction(op: InternalOp.Value,
+                                   wdlDefPath: Path,
+                                   jobInputPath: Path,
+                                   jobOutputPath: Path,
+                                   rtDebugLvl: Int): Termination = {
+        val (language, womBundle, allSources) = ParseWomSourceFile.apply(wdlDefPath)
+        val wf : WorkflowDefinition = womBundle.primaryCallable match {
+            case Some(wf: WorkflowDefinition) => wf
+            case _ => throw new Exception("Could not find the workflow in the source")
+        }
+
+        // extract workflow source code, for reporting and debugging purposes.
+        assert(allSources.size == 1)
+        val wfSourceCode =
+            ParseWomSourceFile.scanForWorkflow(language, allSources.values.head) match {
+                case Some((_, wfBody)) => wfBody
+                case _ => throw new Exception("Could not find the workflow source")
+            }
+
+        // Parse the inputs, convert to WOM values. Delay downloading files
+        // from the platform, we may not need to access them.
+        val inputLines : String = Utils.readFileContent(jobInputPath)
+        val inputs : JsValue = inputLines.parseJson
+
+        // Figure out the available instance types, and their prices,
+        // by reading the file
+        val dbRaw = Utils.readFileContent(Paths.get("/" + Utils.INSTANCE_TYPE_DB_FILENAME))
+        val instanceTypeDB = dbRaw.parseJson.convertTo[InstanceTypeDB]
+
+        // setup the utility directories that the frag-runner employs
+        dxPathConfig.createCleanDirs()
+        val fragRunner = runner.WfFragRunner.make(wf, wfSourceCode, instanceTypeDB, dxPathConfig, rtDebugLvl)
+
+        val outputFields: Map[String, JsValue] =
+            op match {
+                case InternalOp.WfFragment =>
+                    fragRunner.apply(inputs)
+                case _ =>
+                    throw new Exception(s"Illegal task operation ${op}")
+            }
+
+        // write outputs, ignore null values, these could occur for optional
+        // values that were not specified.
+        val json = JsObject(outputFields)
+        val ast_pp = json.prettyPrint
+        Utils.writeFileContent(jobOutputPath, ast_pp)
+        //System.err.println(s"Wrote outputs ${ast_pp}")
+
+        SuccessfulTermination(s"success ${op}")
+    }
+
     def internalOp(args : Seq[String]) : Termination = {
-        val op = InternalOp.values find (x => normKey(x.toString) == normKey(args.head))
-        op match {
+        val operation = InternalOp.values find (x => normKey(x.toString) == normKey(args.head))
+        operation match {
             case None =>
                 UnsuccessfulTermination(s"unknown internal action ${args.head}")
-            case Some(x) if (args.length == 4) =>
+            case Some(op) if (args.length == 4) =>
                 val wdlDefPath = Paths.get(args(1))
                 val homeDir = Paths.get(args(2))
                 val rtDebugLvl = parseRuntimeDebugLevel(args(3))
                 val (jobInputPath, jobOutputPath, jobErrorPath, _) =
                     Utils.jobFilesOfHomeDir(homeDir)
                 try {
-                    appletAction(x, wdlDefPath, jobInputPath, jobOutputPath, rtDebugLvl)
+                    if (InternalOp.isTaskOp(op))
+                        taskAction(x, wdlDefPath, jobInputPath, jobOutputPath, rtDebugLvl)
+                    else
+                        workflowFragAction(x, wdlDefPath, jobInputPath, jobOutputPath, rtDebugLvl)
                 } catch {
                     case e : Throwable =>
                         writeJobError(jobErrorPath, e)
                         UnsuccessfulTermination(s"failure running ${op}")
                 }
             case Some(_) =>
-                BadUsageTermination(s"All applet actions take a WDL file, and a home directory (${args})")
+                BadUsageTermination(s"""|Bad arguments to internal operation
+                                        |  ${args}
+                                        |Usage:
+                                        |  java -jar dxWDL.jar <action> <wdl file> <home dir> <debug level>
+                                        |""".stripMargin)
         }
     }
 
@@ -531,7 +586,6 @@ object Main extends App {
             |      -compileMode <string>  Compilation mode, a debugging flag
             |      -defaults <string>     File with Cromwell formatted default values (JSON)
             |      -destination <string>  Output path on the platform for workflow
-            |      -destination_unicode <string>  destination in unicode encoded as hexadecimal
             |      -extras <string>       JSON formatted file with extra options, for example
             |                             default runtime options for tasks.
             |      -inputs <string>       File with Cromwell formatted inputs

@@ -284,30 +284,6 @@ object Utils {
         ba.map(x => x.toChar).mkString
     }
 
-    def unicodeFromHex(hexBuf: String) : String = {
-        val output = new StringBuilder("")
-        for (i <- 0 until hexBuf.length by 4) {
-            val str = hexBuf.substring(i, i + 4)
-            val unicodeCodepoint: Int  = Integer.parseInt(str, 16)
-            val ch = Character.toChars(unicodeCodepoint).charAt(0)
-            output.append(ch)
-        }
-        output.toString
-    }
-
-    def unicodeToHex(buf: String) : String = {
-        buf.flatMap{ ch => ch.toInt.toHexString }
-    }
-
-    def unicodePrint(strToPrint: String) : Unit = {
-        val utf8: Charset  = Charset.forName("UTF-8")
-        val message: String = new String(strToPrint.getBytes("UTF-8"),
-                                         Charset.defaultCharset().name())
-
-        val printStream: PrintStream = new PrintStream(System.out, true, utf8.name())
-        printStream.println(message) // should print your Character
-    }
-
     // Marshal an arbitrary WDL value, such as a ragged array,
     // into a scala string.
     //

@@ -18,7 +18,7 @@ import dxWDL.compiler.Block
 // It compiles WDL scripts without the runtime library.
 // This tests the compiler Native mode, however, it creates
 // dnanexus applets and workflows that are not runnable.
-class FragRunnerTest extends FlatSpec with Matchers {
+class WfFragRunnerTest extends FlatSpec with Matchers {
 
     lazy val dxIoFunctions : DxIoFunctions = setup()
 
