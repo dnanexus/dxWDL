@@ -1,9 +1,10 @@
 package dxWDL.compiler
 
-import wom.types._
-import wom.values._
+import wom.expression.WomExpression
 import wom.graph._
 import wom.graph.expression._
+import wom.types._
+import wom.values._
 
 import dxWDL.util._
 
@@ -179,7 +180,10 @@ task Add {
         }.mkString("\n")
 
         val outputs: String = outputNodes.map{
-
+            case expr : ExpressionBasedGraphOutputNode =>
+                s"${expr.womType.toDisplayString} ${expr.identifier.localName.value} = ${expr.womExpression.sourceString}"
+            case other =>
+                throw new Exception(s"unhandled output ${other}")
         }.mkString("\n")
 
         val wfBody = blocks.map{ block => blockToWdlSource(block) }
@@ -188,13 +192,13 @@ task Add {
 
         val taskStubs: Map[String, WdlCodeSnippet] =
             allCalls.foldLeft(Map.empty[String, WdlCodeSnippet]) { case (accu, callable) =>
-                if (accu contains name) {
+                if (accu contains callable.name) {
                     // we have already created a stub for this call
                     accu
                 } else {
                     // no existing stub, create it
-                    val taskSourceCode =  wdlCodeGen.appletStub(callable)
-                    accu + (name -> taskSourceCode)
+                    val taskSourceCode =  appletStub(callable)
+                    accu + (callable.name -> taskSourceCode)
                 }
             }
         val tasks = taskStubs.map{case (name, wdlCode) => wdlCode.value}.mkString("\n\n")
@@ -221,6 +225,6 @@ task Add {
         // Make sure this is actually valid WDL 1.0
         ParseWomSourceFile.validateWdlWorkflow(wdlWfSource)
 
-        wdlWfSource
+        WdlCodeSnippet(wdlWfSource)
     }
 }

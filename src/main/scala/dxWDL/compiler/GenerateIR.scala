@@ -132,7 +132,7 @@ case class GenerateIR(callables: Map[String, IR.Callable],
         // actually expressions.
         val inputs: Vector[CVar] = task.inputs.flatMap{
             case RequiredInputDefinition(iName, womType, _, _) =>
-                Some(CVar(iName.value, None, womType, None))
+                Some(CVar(iName.value, womType, None))
 
             case InputDefinitionWithDefault(iName, womType, defaultExpr, _, _) =>
                 Utils.ifConstEval(defaultExpr) match {
@@ -143,7 +143,7 @@ case class GenerateIR(callables: Map[String, IR.Callable],
                         // runtime system will evaluate it.
                         None
                     case Some(value) =>
-                        Some(CVar(iName.value, None, womType, Some(value)))
+                        Some(CVar(iName.value, womType, Some(value)))
                 }
 
             // An input whose value should always be calculated from the default, and is
@@ -152,7 +152,7 @@ case class GenerateIR(callables: Map[String, IR.Callable],
                 None
 
             case OptionalInputDefinition(iName, WomOptionalType(womType), _, _) =>
-                Some(CVar(iName.value, None, WomOptionalType(womType), None))
+                Some(CVar(iName.value, WomOptionalType(womType), None))
         }.toVector
 
         // create dx:applet outputs
@@ -166,7 +166,7 @@ case class GenerateIR(callables: Map[String, IR.Callable],
                         // A constant, we can assign it now.
                         Some(value)
                 }
-                CVar(id.value, None, womType, defaultValue)
+                CVar(id.value, womType, defaultValue)
         }.toVector
 
         val instanceType = calcInstanceType(Some(task))
@@ -239,11 +239,11 @@ case class GenerateIR(callables: Map[String, IR.Callable],
     def buildWorkflowInput(input: GraphInputNode) : (CVar,SArg) = {
         val cVar = input match {
             case RequiredGraphInputNode(id, womType, nameInInputSet, valueMapper) =>
-                CVar(id.workflowLocalName, None, womType, None)
+                CVar(id.workflowLocalName, womType, None)
 
             case OptionalGraphInputNode(id, womType, nameInInputSet, valueMapper) =>
                 assert(womType.isInstanceOf[WomOptionalType])
-                CVar(id.workflowLocalName, None, womType, None)
+                CVar(id.workflowLocalName, womType, None)
 
             case OptionalGraphInputNodeWithDefault(id, womType, defaultExpr : WomExpression, nameInInputSet, valueMapper) =>
                 val defaultValue: WomValue = Utils.ifConstEval(defaultExpr) match {
@@ -252,7 +252,7 @@ case class GenerateIR(callables: Map[String, IR.Callable],
                                                          |""".stripMargin)
                     case Some(value) => value
                 }
-                CVar(id.workflowLocalName, None, womType, Some(defaultValue))
+                CVar(id.workflowLocalName, womType, Some(defaultValue))
 
             case other =>
                 throw new Exception(s"unhandled input ${other}")
@@ -267,7 +267,7 @@ case class GenerateIR(callables: Map[String, IR.Callable],
         }
         callInputs.find{
             case expr : TaskCallInputExpressionNode =>
-                cVar.fullyQualifiedName == expr.identifier.localName.value
+                cVar.name == expr.identifier.localName.value
         }
     }
 
@@ -406,9 +406,9 @@ case class GenerateIR(callables: Map[String, IR.Callable],
         // will output these cVars.
         val cVars = xtrnPorts.map{
             case gnop : GraphNodePort.GraphNodeOutputPort =>
-                CVar(gnop.identifier.localName.value, None, gnop.womType, None)
+                CVar(gnop.identifier.localName.value, gnop.womType, None)
             case ebop : GraphNodePort.ExpressionBasedOutputPort =>
-                CVar(ebop.identifier.localName.value, None, ebop.womType, None)
+                CVar(ebop.identifier.localName.value, ebop.womType, None)
             case other =>
                 throw new Exception(s"unhandled case ${other.getClass}")
         }.toVector
@@ -451,31 +451,21 @@ case class GenerateIR(callables: Map[String, IR.Callable],
         // Figure out the closure required for this block, out of the
         // environment
         val closure = blockClosure(block, env, stageName)
+        val inputVars: Vector[CVar] = closure.map {
+            case (fqn, LinkedVar(cVar, _)) =>
+                cVar.copy(name = fqn)
+        }.toVector
 
-        // create input variable definitions
+
+        // TODO create input variable definitions
         //
         // mapping of fully qualified names, to short names. For example:
         //   mul.result ---> result
         //   add.result --> result1
-        val inputVars: Vector[CVar] = closure.foldLeft(Vector.empty[CVar]) {
-            case (accu, (fqn, LinkedVar(cVar, _))) =>
-                val unqualifiedName = fqn.lastIndexOf(".") match {
-                    case -1 => fqn
-                    case i => fqn.substring(i + 1)
-                }
-                var shortName = unqualifiedName
-                var counter = 0
-                val namesInUse = accu.map{ _.unqualifiedName.get }.toSet
-                while (namesInUse contains shortName) {
-                    counter = counter + 1
-                    shortName = s"${unqualifiedName}${counter}"
-                    if (counter > Utils.MAX_NUM_RENAME_TRIES)
-                        throw new Exception(s"Too many rename attempts for ${fqn}")
-                }
-                val cVar2 = cVar.copy(fullyQualifiedName = fqn,
-                                      unqualifiedName = Some(shortName))
-                accu :+ cVar2
-        }
+        //
+        // Currently: a reversible conversion mul.result --> mul___result. This
+        // assumes the ___ symbol is not used anywhere in the original WDL script.
+        val fqnDict = inputVars.map{ cVar => cVar.dxVarName -> cVar.name}.toMap
 
         // To figure out the block outputs, we need the subsequent nodes.
         val outputVars = blockOutputs(block, nextNodes)
@@ -495,7 +485,7 @@ case class GenerateIR(callables: Map[String, IR.Callable],
                                outputVars,
                                calcInstanceType(None),
                                IR.DockerImageNone,
-                               IR.AppletKindWfFragment(allCallNames, blockNum),
+                               IR.AppletKindWfFragment(allCallNames, blockNum, fqnDict),
                                wdlCode)
         val sArgs : Vector[SArg] = closure.map {
             case (_, LinkedVar(_, sArg)) => sArg
@@ -536,6 +526,13 @@ case class GenerateIR(callables: Map[String, IR.Callable],
                     // is no need to do any extra work. Compile directly into a workflow
                     // stage.
                     val stage = compileCall(call, env)
+
+                    // Add bindings for the output variables. This allows later calls to refer
+                    // to these results.
+                    for (cVar <- stage.outputs) {
+                        env = env + (call.identifier.localName.value ++ "." + cVar.name ->
+                                         LinkedVar(cVar, IR.SArgLink(stage.stageName, cVar)))
+                    }
                     (stage, None)
 
                 case None =>
@@ -545,14 +542,11 @@ case class GenerateIR(callables: Map[String, IR.Callable],
                     }
                     val (stage, apl) = compileWfFragment(block, blockNum, nextNodes ++ outputNodes,
                                                          env, wf.name, wfSource_WDLv1)
+                    for (cVar <- stage.outputs) {
+                        env = env + (cVar.name ->
+                                         LinkedVar(cVar, IR.SArgLink(stage.stageName, cVar)))
+                    }
                     (stage, Some(apl))
-            }
-
-            // Add bindings for the output variables. This allows later calls to refer
-            // to these results.
-            for (cVar <- stage.outputs) {
-                env = env + (call.identifier.localName.value ++ "." + cVar.name ->
-                                 LinkedVar(cVar, IR.SArgLink(stage.stageName, cVar)))
             }
             allStageInfo :+= (stage, aplOpt)
         }
@@ -621,10 +615,11 @@ case class GenerateIR(callables: Map[String, IR.Callable],
 
         // Make a list of all task/workflow calls made inside the block. We will need to link
         // to the equivalent dx:applets and dx:workflows.
-        val callablesUsedInWorkflow : Vector[IR.Callables] =
-            graph.allNodes.filterByType[CallNode]
-                .map{ cNode => callables(cNode.callable.name) }
-                .toVector
+        val callablesUsedInWorkflow : Vector[IR.Callable] =
+            graph.allNodes.collect {
+                case cNode : CallNode =>
+                    callables(cNode.callable.name)
+            }.toVector
         val wfSource_WDLv1 = wdlCodeGen.standAloneWorkflow(inputNodes, subBlocks,
                                                            outputNodes, callablesUsedInWorkflow)
 

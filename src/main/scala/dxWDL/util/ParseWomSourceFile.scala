@@ -207,28 +207,6 @@ object ParseWomSourceFile {
         return taskDir.toMap
     }
 
-    // Go through a WDL source code file, and find a workflow in it, if
-    // there is one.
-    def scanForWorkflow(language: Language.Value,
-                        sourceCode: String) : Option[String] = {
-        var lines = sourceCode.split("\n").toList
-        val taskDir = HashMap.empty[String, String]
-
-        while (!lines.isEmpty) {
-            val retval = findWorkflow(lines)
-
-            // TODO: add a WOM syntax check that this is indeed a workflow
-            retval match {
-                case None => None
-                case Some((remainingLines, taskName, taskLines)) =>
-                    val taskWithLanguageVersion : String = addLanguageHeader(language, taskLines)
-                    taskDir(taskName) = taskWithLanguageVersion
-                    lines = remainingLines
-            }
-        }
-        return taskDir.toMap
-    }
-
     // throw an exception if the workflow source is not valid WDL 1.0
     def validateWdlWorkflow(wdlWfSource: String) : Unit = {
         val wdlV1 = new WdlDraft3LanguageFactory(Map.empty)

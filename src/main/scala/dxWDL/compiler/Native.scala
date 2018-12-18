@@ -230,7 +230,7 @@ case class Native(dxWDLrtId: Option[String],
         val body:String = appKind match {
             case IR.AppletKindNative(_) =>
                 throw new Exception("Sanity: generating a bash script for a native applet")
-            case IR.AppletKindWfFragment(_) =>
+            case IR.AppletKindWfFragment(_, _, _) =>
                 genBashScriptWfFragment()
             case IR.AppletKindTask(_) =>
                 instanceType match {
@@ -519,16 +519,16 @@ case class Native(dxWDLrtId: Option[String],
         ).flatten.toVector
         val extraWfInfo : Option[JsValue] =
             applet.kind match {
-                case AppletKindWfFragment(calls, subBlockNum, fqnDict) =>
+                case IR.AppletKindWfFragment(calls, subBlockNum, fqnDict) =>
                     // extra information used for running workflow fragments
-                    val hardCodedFragInfo = Map(
+                    val hardCodedFragInfo = JsObject(
                         "calls" -> JsArray(calls.map{x => JsString(x) }),
                         "subBlockNum" -> JsNumber(subBlockNum),
                         "fqnDict" -> JsObject(fqnDict.map{ case (k, v) => k -> JsString(v) }.toMap)
                     )
-                    Some(JsObject(Map("name" -> JsString(Utils.EXTRA_WORKFLOW_INFO),
-                                      "class" -> JsString("hash"),
-                                      "default" -> hardCodedFragInfo)))
+                    Some(JsObject("name" -> JsString(Utils.EXTRA_WORKFLOW_INFO),
+                                  "class" -> JsString("hash"),
+                                  "default" -> hardCodedFragInfo))
                 case _ =>
                     None
             }
@@ -577,7 +577,7 @@ case class Native(dxWDLrtId: Option[String],
 
         // limit the applet dictionary, only to actual dependencies
         val calls: Vector[String] = applet.kind match {
-            case IR.AppletKindWfFragment(calls) => calls
+            case IR.AppletKindWfFragment(calls, _, _) => calls
             case _ => Vector.empty
         }
         val aplLinks = calls.map{ tName => tName -> execDict(tName) }.toMap

@@ -229,6 +229,12 @@ object Utils {
         DXJob.getInstance(id)
     }
 
+    // dx does not allow dots in variable names, so we
+    // convert them to underscores.
+    def transformVarName(varName: String) : String = {
+        varName.replaceAll("\\.", "___")
+    }
+
     // Dots are illegal in applet variable names.
     def encodeAppletVarName(varName : String) : String = {
         if (varName contains ".")
