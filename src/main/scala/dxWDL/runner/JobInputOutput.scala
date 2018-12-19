@@ -12,7 +12,8 @@ import wom.values._
 
 import dxWDL.util._
 
-case class JobInputOutput(dxIoFunctions : DxIoFunctions) {
+case class JobInputOutput(dxIoFunctions : DxIoFunctions,
+                          runtimeDebugLevel: Int) {
 
     private val DOWNLOAD_RETRY_LIMIT = 3
     private val UPLOAD_RETRY_LIMIT = 3

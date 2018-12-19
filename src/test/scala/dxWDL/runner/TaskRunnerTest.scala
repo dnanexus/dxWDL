@@ -9,13 +9,14 @@ import wom.types._
 import wom.values._
 
 import dxWDL.Main
-import dxWDL.util.{DxPathConfig, InstanceTypeDB, ParseWomSourceFile, Utils}
+import dxWDL.util.{DxIoFunctions, DxPathConfig, InstanceTypeDB, ParseWomSourceFile, Utils}
 
 // This test module requires being logged in to the platform.
 // It compiles WDL scripts without the runtime library.
 // This tests the compiler Native mode, however, it creates
 // dnanexus applets and workflows that are not runnable.
 class TaskRunnerTest extends FlatSpec with Matchers {
+    private val runtimeDebugLevel = 0
     private val instanceTypeDB = InstanceTypeDB.genTestDB(true)
 
     // Note: if the file doesn't exist, this throws a null pointer exception
@@ -129,7 +130,10 @@ class TaskRunnerTest extends FlatSpec with Matchers {
 
         // Parse the inputs, convert to WOM values. Delay downloading files
         // from the platform, we may not need to access them.
-        val taskRunner = TaskRunner(task, taskSourceCode, instanceTypeDB, dxPathConfig, 0)
+        val dxIoFunctions = DxIoFunctions(dxPathConfig, runtimeDebugLevel)
+        val jobInputOutput = new JobInputOutput(dxIoFunctions, runtimeDebugLevel)
+        val taskRunner = TaskRunner(task, taskSourceCode, instanceTypeDB,
+                                    dxPathConfig, dxIoFunctions, jobInputOutput, 0)
         val inputsRelPaths = taskRunner.jobInputOutput.loadInputs(JsObject(inputsOrg).prettyPrint, task)
         val inputs = inputsRelPaths.map{
             case (inpDef, value) => (inpDef, addBaseDir(value))

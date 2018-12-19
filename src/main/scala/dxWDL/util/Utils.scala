@@ -6,8 +6,7 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.databind.JsonNode
 import com.typesafe.config._
 import common.validation.ErrorOr.ErrorOr
-import java.io.PrintStream
-import java.nio.charset.{Charset, StandardCharsets}
+import java.nio.charset.{StandardCharsets}
 import java.nio.file.{Path, Paths, Files}
 import java.util.Base64
 import scala.collection.JavaConverters._
@@ -116,7 +115,7 @@ object Utils {
     // Ideally, we should not be using any of the IO functions, since
     // these checks may be part of the compilation process.
     private lazy val dxPathConfig = DxPathConfig(Paths.get("/tmp/"))
-    private lazy val dxIoFunctions = DxIoFunctions(dxPathConfig)
+    private lazy val dxIoFunctions = DxIoFunctions(dxPathConfig, 0)
 
     def ifConstEval(expr: WomExpression) : Option[WomValue] = {
         val result: ErrorOr[WomValue] =

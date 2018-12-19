@@ -38,12 +38,11 @@ case class TaskRunner(task: CallableTaskDefinition,
                       taskSourceCode: WorkflowSource,  // for debugging/informational purposes only
                       instanceTypeDB : InstanceTypeDB,
                       dxPathConfig : DxPathConfig,
+                      dxIoFunctions : DxIoFunctions,
+                      jobInputOutput : JobInputOutput,
                       runtimeDebugLevel: Int) {
     private val verbose = (runtimeDebugLevel >= 1)
     private val maxVerboseLevel = (runtimeDebugLevel == 2)
-
-    val dxIoFunctions = DxIoFunctions(dxPathConfig)
-    val jobInputOutput = JobInputOutput(dxIoFunctions)
 
     def getErrorOr[A](value: ErrorOr[A]) : A = {
         value match {

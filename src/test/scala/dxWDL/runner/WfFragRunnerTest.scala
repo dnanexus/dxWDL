@@ -11,26 +11,25 @@ import wom.graph.expression._
 import wom.values._
 import wom.expression.WomExpression
 
-import dxWDL.util.{DxIoFunctions, DxPathConfig, ParseWomSourceFile, Utils, WomPrettyPrint}
-import dxWDL.compiler.Block
+import dxWDL.util.{Block, DxIoFunctions, DxPathConfig, ParseWomSourceFile, Utils}
 
 // This test module requires being logged in to the platform.
 // It compiles WDL scripts without the runtime library.
 // This tests the compiler Native mode, however, it creates
 // dnanexus applets and workflows that are not runnable.
 class WfFragRunnerTest extends FlatSpec with Matchers {
-
-    lazy val dxIoFunctions : DxIoFunctions = setup()
+    private val runtimeDebugLevel = 0
 
     // Create a clean directory in "/tmp" for the task to use
-    def setup() : DxIoFunctions = {
+    lazy val dxPathConfig = {
         val jobHomeDir : Path = Paths.get("/tmp/dxwdl_applet_test")
         Utils.deleteRecursive(jobHomeDir.toFile)
         Utils.safeMkdir(jobHomeDir)
         val dxPathConfig = DxPathConfig.apply(jobHomeDir)
         dxPathConfig.createCleanDirs()
-        DxIoFunctions(dxPathConfig)
+        dxPathConfig
     }
+    lazy val dxIoFunctions = DxIoFunctions(dxPathConfig, runtimeDebugLevel)
 
     // Note: if the file doesn't exist, this throws a null pointer exception
     def pathFromBasename(basename: String) : Path = {
@@ -60,12 +59,6 @@ class WfFragRunnerTest extends FlatSpec with Matchers {
         val (inputNodes, subBlocks, outputNodes) = Block.splitIntoBlocks(graph)
 
         val block = subBlocks(1)
-        System.out.println("Block [")
-        block.nodes.foreach{ node =>
-            val desc = WomPrettyPrint.apply(node)
-            System.out.println(s"  ${desc}")
-        }
-        System.out.println("]")
 
         val env : Map[String, WomValue] =
             Map("x" -> WomInteger(3),

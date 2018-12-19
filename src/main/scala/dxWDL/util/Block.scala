@@ -28,18 +28,24 @@ or 3) scatter with one or more calls inside it.
      4        [String buf, Float x, scatter]
 */
 
-package dxWDL.compiler
+package dxWDL.util
 
 import wom.expression.WomExpression
 import wom.graph._
 import wom.graph.expression._
 
-import dxWDL.util.{Utils, WomPrettyPrint}
-
-
 // A sorted group of graph nodes, that match some original
 // set of WDL statements.
-case class Block(nodes : Vector[GraphNode])
+case class Block(nodes : Vector[GraphNode]) {
+    def prettyPrint : String = {
+        val desc = nodes.map{ node =>
+            "    " + WomPrettyPrint.apply(node) + "\n"
+        }.mkString("")
+        s"""|Block ["
+            |${desc}
+            |]""".stripMargin
+    }
+}
 
 object Block {
     // A trivial expression has no operators, it is either a constant WomValue

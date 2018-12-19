@@ -35,92 +35,72 @@ workflow wf_cond {
 
 package dxWDL.runner
 
-import com.dnanexus._
-import com.fasterxml.jackson.databind.JsonNode
-import java.nio.file.{Path, Paths, Files}
-import scala.util.{Failure, Success}
+import cats.data.Validated.{Invalid, Valid}
+import common.validation.ErrorOr.ErrorOr
 import spray.json._
 import wom.callable.{WorkflowDefinition}
-import wom.types._
+import wom.expression._
+import wom.graph._
+import wom.graph.expression._
 import wom.values._
 
 import dxWDL.util._
 
 case class WfFragRunner(wf: WorkflowDefinition,
+                        wfSourceCode: String,
                         instanceTypeDB: InstanceTypeDB,
-                        dxPathConfig : DxPathConfig,
                         execLinkInfo: Map[String, ExecLinkInfo],
+                        dxPathConfig : DxPathConfig,
+                        dxIoFunctions : DxIoFunctions,
                         runtimeDebugLevel: Int) {
     private val verbose = runtimeDebugLevel >= 1
     //private val maxVerboseLevel = (runtimeDebugLevel == 2)
 
-    val dxIoFunctions = DxIoFunctions(dxPathConfig)
-
-    def apply(inputs: Map[String, JsValue]) : Map[String, JsValue] = {
-        throw new NotImplementedError("TODO")
-
-        // 1. Convert the inputs to WOM values
-
-        // 2. setup an environment for running the block
-        // 3. Extract the block from the workflow
-
-        // convert from WVL to JSON
-        /*
-        val outputFields: Map[String, JsValue] =
-            wvlVarOutputs.foldLeft(Map.empty[String, JsValue]) {
-                case (accu, (varName, wvl)) =>
-                    val fields = WdlVarLinks.genFields(wvl, varName)
-                    accu ++ fields.toMap
-            }*/
-    }
-
-
-}
-
-object WfFragRunner {
-    // Load from disk a mapping of applet name to id. We
-    // need this in order to call the right version of other
-    // applets.
-    private def loadLinkInfo(dxProject: DXProject,
-                             verbose: Boolean) : Map[String, ExecLinkInfo] = {
-        Utils.appletLog(verbose, s"Loading link information")
-        val linkSourceFile: Path = Paths.get("/" + Utils.LINK_INFO_FILENAME)
-        if (!Files.exists(linkSourceFile)) {
-            Map.empty
-        } else {
-            val info: String = Utils.readFileContent(linkSourceFile)
-            try {
-                info.parseJson.asJsObject.fields.map {
-                    case (key:String, jso) =>
-                        key -> ExecLinkInfo.readJson(jso, dxProject)
-                    case _ =>
-                        throw new AppInternalException(s"Bad JSON")
-                }.toMap
-            } catch {
-                case e : Throwable =>
-                    throw new AppInternalException(s"Link JSON information is badly formatted ${info}")
-            }
+    def evaluateWomExpression(expr: WomExpression, env: Map[String, WomValue]) : WomValue = {
+        val result: ErrorOr[WomValue] =
+            expr.evaluateValue(env, dxIoFunctions)
+        result match {
+            case Invalid(errors) => throw new Exception(
+                s"Failed to evaluate expression ${expr} with ${errors}")
+            case Valid(x: WomValue) => x
         }
     }
 
-    def make(wf: WorkflowDefinition,
-              wfSourceCode : String,
-              instanceTypeDB: InstanceTypeDB,
-              dxPathConfig : DxPathConfig,
-              runtimeDebugLevel: Int) : WfFragRunner = {
-        val verbose = runtimeDebugLevel >= 1
+    def processOutputs(womOutputs: Map[String, WomValue],
+                       //wvlVarOutputs: Map[String, WdlVarLinks], // TODO: support WdlVarLinks
+                       outputNodes: Vector[GraphOutputNode]) : Map[String, JsValue] = {
+        // convert from WVL to JSON
+        womOutputs.foldLeft(Map.empty[String, JsValue]) {
+            case (accu, (varName, value)) =>
+                val wvl = WdlVarLinks.importFromWDL(value.womType, value)
+                val fields = WdlVarLinks.genFields(wvl, varName)
+                accu ++ fields.toMap
+        }.toMap
+    }
+
+    def apply(inputs: WfFragInput) : Map[String, JsValue] = {
         Utils.appletLog(verbose, s"dxWDL version: ${Utils.getVersion()}")
+        Utils.appletLog(verbose, s"link info=${execLinkInfo}")
         Utils.appletLog(verbose, s"Workflow source code:")
         Utils.appletLog(verbose, wfSourceCode, 10000)
         Utils.appletLog(verbose, s"Inputs: ${inputs}")
 
-        // Get handles for the referenced dx:applets
-        val dxEnv = DXEnvironment.create()
-        val dxProject = dxEnv.getProjectContext()
-        val execLinkInfo = loadLinkInfo(dxProject, verbose)
-        Utils.appletLog(verbose, s"link info=${execLinkInfo}")
+        val graph = wf.innerGraph
+        val (inputNodes, subBlocks, outputNodes) = Block.splitIntoBlocks(graph)
 
-        // Run the workflow
-        new WfFragRunner(wf, instanceTypeDB, dxPathConfig, execLinkInfo, runtimeDebugLevel)
+        val block = subBlocks(inputs.subBlockNr)
+
+        val finalEnv : Map[String, WomValue] = block.nodes.foldLeft(inputs.env) {
+            case (env, node : GraphNode) =>
+                node match {
+                    case eNode: ExposedExpressionNode =>
+                        val value : WomValue = evaluateWomExpression(eNode.womExpression, env)
+                        env + (node.identifier.workflowLocalName -> value)
+                    case other =>
+                        throw new Exception(s"${other.getClass} not implemented yet")
+                }
+        }
+
+        processOutputs(finalEnv, outputNodes)
     }
 }

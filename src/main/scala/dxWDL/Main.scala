@@ -2,14 +2,13 @@ package dxWDL
 
 import com.dnanexus.{DXProject}
 import com.typesafe.config._
-import java.nio.file.{Path, Paths}
+import java.nio.file.{Files, Path, Paths}
 import scala.collection.mutable.HashMap
 import spray.json._
 import wom.callable.{CallableTaskDefinition, ExecutableTaskDefinition, WorkflowDefinition}
 import wom.executable.WomBundle
 
 import dxWDL.util._
-import dxWDL.runner.{TaskRunner}
 import dxWDL.compiler.Top
 
 object Main extends App {
@@ -36,12 +35,19 @@ object Main extends App {
         }
     }
 
+    // This directory exists only at runtime in the cloud. Beware of using
+    // it in code paths that run at compile time.
+    private lazy val baseDNAxDir : Path = Paths.get("/home/dnanexus")
+    private lazy val compilerDir : Path = Utils.appCompileDirPath
+
     // Setup the standard paths used for applets. These are used at
     // runtime, not at compile time. On the cloud instance running the
     // job, the user is "dnanexus", and the home directory is
     // "/home/dnanexus".
-    private lazy val dxPathConfig : DxPathConfig = {
-        DxPathConfig.apply(Paths.get("/home/dnanexus"))
+    private def buildDxPathConfig(baseDir: Path ) : DxPathConfig = {
+        val dxPathConfig = DxPathConfig.apply(baseDir)
+        dxPathConfig.createCleanDirs()
+        dxPathConfig
     }
 
     private def normKey(s: String) : String= {
@@ -224,7 +230,7 @@ object Main extends App {
             case Some(List(p)) => Some(p)
             case _ => throw new Exception("sanity")
         }
-        var destinationOpt : Option[String] = options.get("destination") match {
+        val destinationOpt : Option[String] = options.get("destination") match {
             case None => None
             case Some(List(d)) => Some(d)
             case Some(other) => throw new Exception(s"Invalid path syntex <${other}>")
@@ -372,6 +378,7 @@ object Main extends App {
                 case CompilerFlag.All
                        | CompilerFlag.NativeWithoutRuntimeAsset =>
                     val (dxProject, folder) = pathOptions(options, cOpt.verbose)
+                    val dxPathConfig = buildDxPathConfig(compilerDir)
                     val retval = Top.apply(sourceFile, folder, dxProject, dxPathConfig, cOpt)
                     val desc = retval.getOrElse("")
                     return SuccessfulTermination(desc)
@@ -409,11 +416,13 @@ object Main extends App {
         }
     }
 
-    private def appletAction(op: InternalOp.Value,
-                             wdlDefPath: Path,
-                             jobInputPath: Path,
-                             jobOutputPath: Path,
-                             rtDebugLvl: Int): Termination = {
+    private def taskAction(op: InternalOp.Value,
+                           wdlDefPath: Path,
+                           jobInputPath: Path,
+                           jobOutputPath: Path,
+                           dxPathConfig : DxPathConfig,
+                           dxIoFunctions : DxIoFunctions,
+                           rtDebugLvl: Int): Termination = {
         val (language, womBundle: WomBundle, allSources) = ParseWomSourceFile.apply(wdlDefPath)
         val task : CallableTaskDefinition = getMainTask(womBundle)
         assert(allSources.size == 1)
@@ -428,13 +437,15 @@ object Main extends App {
 
         // Figure out the available instance types, and their prices,
         // by reading the file
-        val dbRaw = Utils.readFileContent(Paths.get("/" + Utils.INSTANCE_TYPE_DB_FILENAME))
+        val dbRaw = Utils.readFileContent(baseDNAxDir.resolve(Utils.INSTANCE_TYPE_DB_FILENAME))
         val instanceTypeDB = dbRaw.parseJson.convertTo[InstanceTypeDB]
 
         // setup the utility directories that the task-runner employs
-        dxPathConfig.createCleanDirs()
-        val taskRunner = TaskRunner(task, taskSourceCode, instanceTypeDB, dxPathConfig, rtDebugLvl)
-        val inputs = taskRunner.jobInputOutput.loadInputs(inputLines, task)
+        val jobInputOutput = new runner.JobInputOutput(dxIoFunctions, rtDebugLvl)
+        val inputs = jobInputOutput.loadInputs(inputLines, task)
+        val taskRunner = runner.TaskRunner(task, taskSourceCode, instanceTypeDB,
+                                           dxPathConfig, dxIoFunctions, jobInputOutput,
+                                           rtDebugLvl)
 
         // Running tasks
         op match {
@@ -475,11 +486,40 @@ object Main extends App {
         }
     }
 
+
+    // Load from disk a mapping of applet name to id. We
+    // need this in order to call the right version of other
+    // applets.
+    //
+    // TODO: replace this file hard coded into the applet with a parameter
+    // passed as input.
+    private def loadLinkInfo(dxProject: DXProject) : Map[String, ExecLinkInfo] = {
+        val linkSourceFile: Path = baseDNAxDir.resolve(Utils.LINK_INFO_FILENAME)
+        if (!Files.exists(linkSourceFile)) {
+            Map.empty
+        } else {
+            val info: String = Utils.readFileContent(linkSourceFile)
+            try {
+                info.parseJson.asJsObject.fields.map {
+                    case (key:String, jso) =>
+                        key -> ExecLinkInfo.readJson(jso, dxProject)
+                    case _ =>
+                        throw new AppInternalException(s"Bad JSON")
+                }.toMap
+            } catch {
+                case e : Throwable =>
+                    throw new AppInternalException(s"Link JSON information is badly formatted ${info}")
+            }
+        }
+    }
+
     // Execute a part of a workflow
     private def workflowFragAction(op: InternalOp.Value,
                                    wdlDefPath: Path,
                                    jobInputPath: Path,
                                    jobOutputPath: Path,
+                                   dxPathConfig : DxPathConfig,
+                                   dxIoFunctions : DxIoFunctions,
                                    rtDebugLvl: Int): Termination = {
         val (language, womBundle, allSources) = ParseWomSourceFile.apply(wdlDefPath)
         val wf : WorkflowDefinition = womBundle.primaryCallable match {
@@ -498,16 +538,23 @@ object Main extends App {
         // Parse the inputs, convert to WOM values. Delay downloading files
         // from the platform, we may not need to access them.
         val inputLines : String = Utils.readFileContent(jobInputPath)
-        val inputs : JsValue = inputLines.parseJson
+        val inputsRaw : JsValue = inputLines.parseJson
 
         // Figure out the available instance types, and their prices,
         // by reading the file
-        val dbRaw = Utils.readFileContent(Paths.get("/" + Utils.INSTANCE_TYPE_DB_FILENAME))
+        val dbRaw = Utils.readFileContent(baseDNAxDir.resolve(Utils.INSTANCE_TYPE_DB_FILENAME))
         val instanceTypeDB = dbRaw.parseJson.convertTo[InstanceTypeDB]
 
+        val dxProject = Utils.dxEnv.getProjectContext()
+
+        // Get handles for the referenced dx:applets and dx:workflows
+        val execLinkInfo = loadLinkInfo(dxProject)
+
         // setup the utility directories that the frag-runner employs
-        dxPathConfig.createCleanDirs()
-        val fragRunner = runner.WfFragRunner.make(wf, wfSourceCode, instanceTypeDB, dxPathConfig, rtDebugLvl)
+        val fragInputOutput = new runner.WfFragInputOutput(dxIoFunctions, wf, rtDebugLvl)
+        val inputs = fragInputOutput.loadInputs(inputsRaw)
+        val fragRunner = new runner.WfFragRunner(wf, wfSourceCode, instanceTypeDB, execLinkInfo,
+                                                 dxPathConfig, dxIoFunctions, rtDebugLvl)
 
         val outputFields: Map[String, JsValue] =
             op match {
@@ -538,11 +585,15 @@ object Main extends App {
                 val rtDebugLvl = parseRuntimeDebugLevel(args(3))
                 val (jobInputPath, jobOutputPath, jobErrorPath, _) =
                     Utils.jobFilesOfHomeDir(homeDir)
+                val dxPathConfig = buildDxPathConfig(baseDNAxDir)
+                val dxIoFunctions = DxIoFunctions(dxPathConfig, rtDebugLvl)
                 try {
                     if (InternalOp.isTaskOp(op))
-                        taskAction(x, wdlDefPath, jobInputPath, jobOutputPath, rtDebugLvl)
+                        taskAction(op, wdlDefPath, jobInputPath, jobOutputPath,
+                                   dxPathConfig, dxIoFunctions, rtDebugLvl)
                     else
-                        workflowFragAction(x, wdlDefPath, jobInputPath, jobOutputPath, rtDebugLvl)
+                        workflowFragAction(op, wdlDefPath, jobInputPath, jobOutputPath,
+                                           dxPathConfig, dxIoFunctions, rtDebugLvl)
                 } catch {
                     case e : Throwable =>
                         writeJobError(jobErrorPath, e)

@@ -7,7 +7,8 @@ import wom.expression.{IoFunctionSet, PathFunctionSet}
 import wom.expression.IoFunctionSet.IoElement
 import wom.values._
 
-case class DxPathFunctions(config: DxPathConfig) extends PathFunctionSet {
+case class DxPathFunctions(config: DxPathConfig,
+                           runtimeDebugLevel: Int) extends PathFunctionSet {
     /**
       * Similar to java.nio.Path.resolveSibling with
       * of == a string representation of a java.nio.Path
@@ -46,9 +47,10 @@ case class DxPathFunctions(config: DxPathConfig) extends PathFunctionSet {
     override def stderr: String = config.stderr.toString
 }
 
-case class DxIoFunctions(config: DxPathConfig) extends IoFunctionSet {
+case class DxIoFunctions(config: DxPathConfig,
+                         runtimeDebugLevel: Int) extends IoFunctionSet {
 
-    override def pathFunctions = DxPathFunctions(config)
+    override def pathFunctions = DxPathFunctions(config, runtimeDebugLevel)
 
     // Functions that (possibly) necessitate I/O operation (on local, network, or cloud filesystems)
     /**
