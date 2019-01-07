@@ -526,7 +526,7 @@ case class Native(dxWDLrtId: Option[String],
                         "subBlockNum" -> JsNumber(subBlockNum),
                         "fqnDict" -> JsObject(fqnDict.map{ case (k, v) => k -> JsString(v) }.toMap)
                     )
-                    Some(JsObject("name" -> JsString(Utils.EXTRA_WORKFLOW_INFO),
+                    Some(JsObject("name" -> JsString(Utils.META_WORKFLOW_INFO),
                                   "class" -> JsString("hash"),
                                   "default" -> hardCodedFragInfo))
                 case _ =>

@@ -38,8 +38,8 @@ object Utils {
     val MAX_NUM_FILES_MOVE_LIMIT = 1000
     val OUTPUT_SECTION = "outputs"
     val REORG = "reorg"
-    val EXTRA_WORKFLOW_INFO = "_extraWfInfo"
-    val RESERVED_APPLET_INPUT_NAMES = Set(EXTRA_WORKFLOW_INFO)
+    val META_WORKFLOW_INFO = "_extraWfInfo"
+    val RESERVED_APPLET_INPUT_NAMES = Set(META_WORKFLOW_INFO)
     val UBUNTU_VERSION = "16.04"
 
     var traceLevel = 0
