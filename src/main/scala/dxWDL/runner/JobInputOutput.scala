@@ -186,7 +186,7 @@ case class JobInputOutput(dxIoFunctions : DxIoFunctions,
         }
     }
 
-    private def unpackJobInput(womType: WomType, jsv: JsValue) : WomValue = {
+    def unpackJobInput(womType: WomType, jsv: JsValue) : WomValue = {
         val jsv2: JsValue =
             if (Utils.isNativeDxType(womType)) {
                 jsv

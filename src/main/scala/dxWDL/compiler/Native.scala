@@ -145,40 +145,6 @@ case class Native(dxWDLrtId: Option[String],
         }
     }
 
-    private def genSourceFiles(wdlCode:String,
-                               linkInfo: Option[String],
-                               dbInstance: Option[String]): String = {
-        // UU64 encode the WDL script to avoid characters that interact
-        // badly with bash
-        val wdlCodeUu64 = Utils.base64Encode(wdlCode)
-        val part1 =
-            s"""|
-                |    # write the WDL script into a file
-                |    cat >$${DX_FS_ROOT}/source.wdl.uu64 <<'EOL'
-                |${wdlCodeUu64}
-                |EOL
-                |# decode the WDL script
-                |base64 -d $${DX_FS_ROOT}/source.wdl.uu64 > $${DX_FS_ROOT}/source.wdl
-                |""".stripMargin.trim
-
-        val part2 = linkInfo.map{ info =>
-            s"""|    # write the linking information into a file
-                |    cat >$${DX_FS_ROOT}/${Utils.LINK_INFO_FILENAME} <<'EOL'
-                |${info}
-                |EOL
-                |""".stripMargin.trim
-        }
-
-        val part3 = dbInstance.map { db =>
-            s"""|    # write the instance type DB
-                |    cat >$${DX_FS_ROOT}/${Utils.INSTANCE_TYPE_DB_FILENAME} <<'EOL'
-                |${db}
-                |EOL
-                |""".stripMargin.trim
-        }
-
-        List(Some(part1), part2, part3).flatten.mkString("\n")
-    }
 
     private def genBashScriptTaskBody(): String = {
         s"""|
@@ -206,19 +172,13 @@ case class Native(dxWDLrtId: Option[String],
             |""".stripMargin.trim
     }
 
-    private def genBashScriptNonTask(miniCmd:String) : String = {
-        s"""|main() {
-            |    java -jar $${DX_FS_ROOT}/dxWDL.jar internal ${miniCmd} $${DX_FS_ROOT}/source.wdl $${HOME} ${rtDebugLvl}
-            |}""".stripMargin.trim
-    }
-
     private def genBashScriptWfFragment() : String = {
         s"""|main() {
-            |    java -jar $${DX_FS_ROOT}/dxWDL.jar internal wfFragment $${DX_FS_ROOT}/source.wdl $${HOME} ${rtDebugLvl}
+            |    java -jar $${DX_FS_ROOT}/dxWDL.jar internal wfFragment $${HOME} ${rtDebugLvl}
             |}
             |
             |collect() {
-            |    java -jar $${DX_FS_ROOT}/dxWDL.jar internal collect $${DX_FS_ROOT}/source.wdl $${HOME} ${rtDebugLvl}
+            |    java -jar $${DX_FS_ROOT}/dxWDL.jar internal collect $${HOME} ${rtDebugLvl}
             |}""".stripMargin.trim
     }
 
@@ -230,7 +190,7 @@ case class Native(dxWDLrtId: Option[String],
         val body:String = appKind match {
             case IR.AppletKindNative(_) =>
                 throw new Exception("Sanity: generating a bash script for a native applet")
-            case IR.AppletKindWfFragment(_, _, _) =>
+            case IR.AppletKindWfFragment(_, _, _, _) =>
                 genBashScriptWfFragment()
             case IR.AppletKindTask(_) =>
                 instanceType match {
@@ -256,11 +216,9 @@ case class Native(dxWDLrtId: Option[String],
                             |}""".stripMargin.trim
                 }
             case IR.AppletKindWorkflowOutputReorg =>
-                genBashScriptNonTask("workflowOutputReorg")
+                throw new NotImplementedError("need to implement workflow file reorg")
         }
-        val setupFilesScript = genSourceFiles(wdlCode, linkInfo, dbInstance)
         s"""|#!/bin/bash -ex
-            |${setupFilesScript}
             |
             |${body}""".stripMargin
     }
@@ -517,14 +475,25 @@ case class Native(dxWDLrtId: Option[String],
         val inputSpec : Vector[JsValue] = applet.inputs.map(cVar =>
             cVarToSpec(cVar)
         ).flatten.toVector
-        val extraWfInfo : Option[JsValue] =
+
+        val dbOpaque = InstanceTypeDB.opaquePrices(instanceTypeDB)
+        val dbInstance = dbOpaque.toJson.prettyPrint
+
+        val metaWfInfo : Option[JsValue] =
             applet.kind match {
-                case IR.AppletKindWfFragment(calls, subBlockNum, fqnDict) =>
-                    // extra information used for running workflow fragments
+                case IR.AppletKindWfFragment(calls, subBlockNum, fqnDict, fqnDictTypes) =>
+                    // meta information used for running workflow fragments
                     val hardCodedFragInfo = JsObject(
+                        "workflowSource" -> JsString(Utils.base64Encode(applet.womSourceCode)),
+                        "instanceTypeDB" -> JsString(Utils.base64Encode(dbInstance)),
                         "calls" -> JsArray(calls.map{x => JsString(x) }),
                         "subBlockNum" -> JsNumber(subBlockNum),
-                        "fqnDict" -> JsObject(fqnDict.map{ case (k, v) => k -> JsString(v) }.toMap)
+                        "fqnDict" -> JsObject(fqnDict.map{ case (k, v) => k -> JsString(v) }.toMap),
+                        "fqnDictTypes" -> JsObject(
+                            fqnDictTypes.map{ case (k,t) =>
+                                val tStr = WomTypeSerialization.toString(t)
+                                k -> JsString(tStr)
+                            }.toMap)
                     )
                     Some(JsObject("name" -> JsString(Utils.META_WORKFLOW_INFO),
                                   "class" -> JsString("hash"),
@@ -541,7 +510,7 @@ case class Native(dxWDLrtId: Option[String],
         // pack all the core arguments into a single request
         val reqCore = Map(
             "name" -> JsString(applet.name),
-            "inputSpec" -> JsArray(inputSpec ++ extraWfInfo.toVector),
+            "inputSpec" -> JsArray(inputSpec ++ metaWfInfo.toVector),
             "outputSpec" -> JsArray(outputSpec),
             "runSpec" -> runSpec,
             "dxapi" -> JsString("1.0.0"),
@@ -577,7 +546,7 @@ case class Native(dxWDLrtId: Option[String],
 
         // limit the applet dictionary, only to actual dependencies
         val calls: Vector[String] = applet.kind match {
-            case IR.AppletKindWfFragment(calls, _, _) => calls
+            case IR.AppletKindWfFragment(calls, _, _, _) => calls
             case _ => Vector.empty
         }
         val aplLinks = calls.map{ tName => tName -> execDict(tName) }.toMap

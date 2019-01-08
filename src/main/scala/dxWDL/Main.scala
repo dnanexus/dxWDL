@@ -515,45 +515,26 @@ object Main extends App {
 
     // Execute a part of a workflow
     private def workflowFragAction(op: InternalOp.Value,
-                                   wdlDefPath: Path,
                                    jobInputPath: Path,
                                    jobOutputPath: Path,
                                    dxPathConfig : DxPathConfig,
                                    dxIoFunctions : DxIoFunctions,
                                    rtDebugLvl: Int): Termination = {
-        val (language, womBundle, allSources) = ParseWomSourceFile.apply(wdlDefPath)
-        val wf : WorkflowDefinition = womBundle.primaryCallable match {
-            case Some(wf: WorkflowDefinition) => wf
-            case _ => throw new Exception("Could not find the workflow in the source")
-        }
-
-        // extract workflow source code, for reporting and debugging purposes.
-        assert(allSources.size == 1)
-        val wfSourceCode =
-            ParseWomSourceFile.scanForWorkflow(language, allSources.values.head) match {
-                case Some((_, wfBody)) => wfBody
-                case _ => throw new Exception("Could not find the workflow source")
-            }
+        val dxProject = Utils.dxEnv.getProjectContext()
 
         // Parse the inputs, convert to WOM values. Delay downloading files
         // from the platform, we may not need to access them.
         val inputLines : String = Utils.readFileContent(jobInputPath)
         val inputsRaw : JsValue = inputLines.parseJson
 
-        // Figure out the available instance types, and their prices,
-        // by reading the file
-        val dbRaw = Utils.readFileContent(baseDNAxDir.resolve(Utils.INSTANCE_TYPE_DB_FILENAME))
-        val instanceTypeDB = dbRaw.parseJson.convertTo[InstanceTypeDB]
-
-        val dxProject = Utils.dxEnv.getProjectContext()
-
-        // Get handles for the referenced dx:applets and dx:workflows
-        val execLinkInfo = loadLinkInfo(dxProject)
-
         // setup the utility directories that the frag-runner employs
-        val fragInputOutput = new runner.WfFragInputOutput(dxIoFunctions, wf, rtDebugLvl)
-        val inputs = fragInputOutput.loadInputs(inputsRaw)
-        val fragRunner = new runner.WfFragRunner(wf, wfSourceCode, instanceTypeDB, execLinkInfo,
+        val fragInputOutput = new runner.WfFragInputOutput(dxIoFunctions, rtDebugLvl)
+
+        // process the inputs
+        val sbInputs = fragInputOutput.loadInputs(inputsRaw)
+        val wf = ParseWomSourceFile.validateWdlWorkflow(readInputs.wfSource, language???)
+        val fragRunner = new runner.WfFragRunner(wf, sbInputs.wfSource, sbInputs.instanceTypeDB,
+                                                 execLinkInfo,
                                                  dxPathConfig, dxIoFunctions, rtDebugLvl)
 
         val outputFields: Map[String, JsValue] =
@@ -579,7 +560,7 @@ object Main extends App {
         operation match {
             case None =>
                 UnsuccessfulTermination(s"unknown internal action ${args.head}")
-            case Some(op) if (args.length == 4) =>
+            case Some(op) if (InternalOp.isTaskOp(op) && args.length == 4) =>
                 val wdlDefPath = Paths.get(args(1))
                 val homeDir = Paths.get(args(2))
                 val rtDebugLvl = parseRuntimeDebugLevel(args(3))
@@ -588,17 +569,23 @@ object Main extends App {
                 val dxPathConfig = buildDxPathConfig(baseDNAxDir)
                 val dxIoFunctions = DxIoFunctions(dxPathConfig, rtDebugLvl)
                 try {
-                    if (InternalOp.isTaskOp(op))
-                        taskAction(op, wdlDefPath, jobInputPath, jobOutputPath,
-                                   dxPathConfig, dxIoFunctions, rtDebugLvl)
-                    else
-                        workflowFragAction(op, wdlDefPath, jobInputPath, jobOutputPath,
-                                           dxPathConfig, dxIoFunctions, rtDebugLvl)
+                    taskAction(op, wdlDefPath, jobInputPath, jobOutputPath,
+                               dxPathConfig, dxIoFunctions, rtDebugLvl)
                 } catch {
                     case e : Throwable =>
                         writeJobError(jobErrorPath, e)
                         UnsuccessfulTermination(s"failure running ${op}")
                 }
+            case Some(op) if (!InternalOp.isTaskOp(op) && args.length == 3) =>
+                val homeDir = Paths.get(args(1))
+                val rtDebugLvl = parseRuntimeDebugLevel(args(2))
+                val (jobInputPath, jobOutputPath, jobErrorPath, _) =
+                    Utils.jobFilesOfHomeDir(homeDir)
+                val dxPathConfig = buildDxPathConfig(baseDNAxDir)
+                val dxIoFunctions = DxIoFunctions(dxPathConfig, rtDebugLvl)
+                workflowFragAction(op, jobInputPath, jobOutputPath,
+                                   dxPathConfig, dxIoFunctions, rtDebugLvl)
+
             case Some(_) =>
                 BadUsageTermination(s"""|Bad arguments to internal operation
                                         |  ${args}

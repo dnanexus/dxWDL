@@ -275,11 +275,18 @@ object Utils {
     }
 
     def base64Encode(buf: String) : String = {
-        Base64.getEncoder.encodeToString(buf.getBytes(StandardCharsets.UTF_8))
+        val bytes = buf.getBytes(StandardCharsets.UTF_8)
+        val gzBytes = Gzip.compress(bytes)
+        Base64.getEncoder.encodeToString(gzBytes)
     }
 
     def base64Decode(buf64: String) : String = {
-        val ba : Array[Byte] = Base64.getDecoder.decode(buf64.getBytes(StandardCharsets.UTF_8))
+        val gzBytes = buf64.getBytes(StandardCharsets.UTF_8)
+        val bytes = Gzip.decompress(gzBytes) match {
+            case Some(x) => x
+            case None => throw new Exception("Gzip decompression failed")
+        }
+        val ba : Array[Byte] = Base64.getDecoder.decode(bytes)
         ba.map(x => x.toChar).mkString
     }
 

@@ -467,6 +467,7 @@ case class GenerateIR(callables: Map[String, IR.Callable],
         // Currently: a reversible conversion mul.result --> mul___result. This
         // assumes the ___ symbol is not used anywhere in the original WDL script.
         val fqnDict = inputVars.map{ cVar => cVar.dxVarName -> cVar.name}.toMap
+        val fqnDictTypes = inputVars.map{ cVar => cVar.dxVarName -> cVar.womType}.toMap
 
         // To figure out the block outputs, we need the subsequent nodes.
         val outputVars = blockOutputs(block, nextNodes)
@@ -486,7 +487,7 @@ case class GenerateIR(callables: Map[String, IR.Callable],
                                outputVars,
                                calcInstanceType(None),
                                IR.DockerImageNone,
-                               IR.AppletKindWfFragment(allCallNames, blockNum, fqnDict),
+                               IR.AppletKindWfFragment(allCallNames, blockNum, fqnDict, fqnDictTypes),
                                wdlCode)
         val sArgs : Vector[SArg] = closure.map {
             case (_, LinkedVar(_, sArg)) => sArg
