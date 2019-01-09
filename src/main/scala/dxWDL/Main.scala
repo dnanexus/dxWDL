@@ -36,14 +36,13 @@ object Main extends App {
     // This directory exists only at runtime in the cloud. Beware of using
     // it in code paths that run at compile time.
     private lazy val baseDNAxDir : Path = Paths.get("/home/dnanexus")
-    private lazy val compilerDir : Path = Utils.appCompileDirPath
 
     // Setup the standard paths used for applets. These are used at
     // runtime, not at compile time. On the cloud instance running the
     // job, the user is "dnanexus", and the home directory is
     // "/home/dnanexus".
-    private def buildDxPathConfig(baseDir: Path ) : DxPathConfig = {
-        val dxPathConfig = DxPathConfig.apply(baseDir)
+    private def buildRuntimePathConfig() : DxPathConfig = {
+        val dxPathConfig = DxPathConfig.apply(baseDNAxDir)
         dxPathConfig.createCleanDirs()
         dxPathConfig
     }
@@ -376,7 +375,7 @@ object Main extends App {
                 case CompilerFlag.All
                        | CompilerFlag.NativeWithoutRuntimeAsset =>
                     val (dxProject, folder) = pathOptions(options, cOpt.verbose)
-                    val dxPathConfig = buildDxPathConfig(compilerDir)
+                    val dxPathConfig = DxPathConfig.apply(baseDNAxDir)
                     val retval = Top.apply(sourceFile, folder, dxProject, dxPathConfig, cOpt)
                     val desc = retval.getOrElse("")
                     return SuccessfulTermination(desc)
@@ -503,7 +502,7 @@ object Main extends App {
                 val rtDebugLvl = parseRuntimeDebugLevel(args(2))
                 val (jobInputPath, jobOutputPath, jobErrorPath, _) =
                     Utils.jobFilesOfHomeDir(homeDir)
-                val dxPathConfig = buildDxPathConfig(baseDNAxDir)
+                val dxPathConfig = buildRuntimePathConfig()
                 val dxIoFunctions = DxIoFunctions(dxPathConfig, rtDebugLvl)
                 try {
                     if (InternalOp.isTaskOp(op)) {

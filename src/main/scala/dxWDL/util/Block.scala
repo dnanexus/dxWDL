@@ -41,7 +41,7 @@ case class Block(nodes : Vector[GraphNode]) {
         val desc = nodes.map{ node =>
             "    " + WomPrettyPrint.apply(node) + "\n"
         }.mkString("")
-        s"""|Block ["
+        s"""|Block [
             |${desc}
             |]""".stripMargin
     }

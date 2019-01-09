@@ -6,9 +6,11 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.databind.JsonNode
 import com.typesafe.config._
 import common.validation.ErrorOr.ErrorOr
+import java.io.{ByteArrayOutputStream, ByteArrayInputStream}
 import java.nio.charset.{StandardCharsets}
 import java.nio.file.{Path, Paths, Files}
 import java.util.Base64
+import java.util.zip.{GZIPOutputStream, GZIPInputStream}
 import scala.collection.JavaConverters._
 import scala.concurrent._
 import ExecutionContext.Implicits.global
@@ -17,6 +19,7 @@ import spray.json._
 import wom.expression._
 import wom.types._
 import wom.values._
+
 
 object Utils {
     val APPLET_LOG_MSG_LIMIT = 1000
@@ -274,37 +277,33 @@ object Utils {
         }
     }
 
+// From: https://gist.github.com/owainlewis/1e7d1e68a6818ee4d50e
+// By: owainlewis
+//
+    def gzipCompress(input: Array[Byte]): Array[Byte] = {
+        val bos = new ByteArrayOutputStream(input.length)
+        val gzip = new GZIPOutputStream(bos)
+        gzip.write(input)
+        gzip.close()
+        val compressed = bos.toByteArray
+        bos.close()
+        compressed
+    }
+
+    def gzipDecompress(compressed: Array[Byte]): String = {
+        val inputStream = new GZIPInputStream(new ByteArrayInputStream(compressed))
+        scala.io.Source.fromInputStream(inputStream).mkString
+    }
+
     def base64Encode(buf: String) : String = {
-        val bytes = buf.getBytes(StandardCharsets.UTF_8)
-        val gzBytes = Gzip.compress(bytes)
+        val bytes = buf.getBytes
+        val gzBytes = gzipCompress(bytes)
         Base64.getEncoder.encodeToString(gzBytes)
     }
 
     def base64Decode(buf64: String) : String = {
-        val gzBytes = buf64.getBytes(StandardCharsets.UTF_8)
-        val bytes = Gzip.decompress(gzBytes) match {
-            case Some(x) => x
-            case None => throw new Exception("Gzip decompression failed")
-        }
-        val ba : Array[Byte] = Base64.getDecoder.decode(bytes)
-        ba.map(x => x.toChar).mkString
-    }
-
-    // Marshal an arbitrary WDL value, such as a ragged array,
-    // into a scala string.
-    //
-    // We encode as base64, to remove special characters. This allows
-    // embedding the resulting string as a field in a JSON document.
-    def marshal(v: WomValue) : String = {
-        val js = WomValueSerialization.toJSON(v)
-        base64Encode(js.compactPrint)
-    }
-
-    // reverse of [marshal]
-    def unmarshal(buf64 : String) : WomValue = {
-        val buf = base64Decode(buf64)
-        val js = buf.parseJson
-        WomValueSerialization.fromJSON(js)
+        val ba : Array[Byte] = Base64.getDecoder.decode(buf64.getBytes)
+        gzipDecompress(ba)
     }
 
     // Job input, output,  error, and info files are located relative to the home

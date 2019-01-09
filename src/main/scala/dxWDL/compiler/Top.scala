@@ -74,7 +74,7 @@ object Top {
     private def compileNative(bundle: IR.Bundle,
                               folder: String,
                               dxProject: DXProject,
-                              dxPathConfig: DxPathConfig,
+                              runtimePathConfig: DxPathConfig,
                               cOpt: CompilerOptions) : CompilationResults = {
         val dxWDLrtId: Option[String] = cOpt.compileMode match {
             case CompilerFlag.IR =>
@@ -102,7 +102,7 @@ object Top {
         // Generate dx:applets and dx:workflow from the IR
         Native.apply(bundle,
                      dxWDLrtId, folder, dxProject,
-                     instanceTypeDB, dxPathConfig, dxObjDir,
+                     instanceTypeDB, runtimePathConfig, dxObjDir,
                      cOpt.extras,
                      cOpt.runtimeDebugLevel,
                      cOpt.leaveWorkflowsOpen, cOpt.force, cOpt.archive, cOpt.locked, cOpt.verbose)
@@ -136,7 +136,7 @@ object Top {
     def apply(source: Path,
               folder: String,
               dxProject: DXProject,
-              dxPathConfig: DxPathConfig,
+              runtimePathConfig: DxPathConfig,
               cOpt: CompilerOptions) : Option[String] = {
         val bundle: IR.Bundle = applyOnlyIR(source, cOpt)
 
@@ -146,7 +146,7 @@ object Top {
         // pass the dx:project is required to establish
         // (1) the instance price list and database
         // (2) the output location of applets and workflows
-        val cResults = compileNative(bundle, folder, dxProject, dxPathConfig, cOpt)
+        val cResults = compileNative(bundle, folder, dxProject, runtimePathConfig, cOpt)
         val execIds = cResults.primaryCallable match {
             case None =>
                 cResults.execDict.map{ case (_, dxExec) => dxExec.getId }.mkString(",")
