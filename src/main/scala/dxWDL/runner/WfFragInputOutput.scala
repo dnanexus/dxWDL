@@ -6,7 +6,7 @@ import wom.types._
 import wom.values._
 
 import dxWDL.util._
-import dxWDL.util.Utils.META_WORKFLOW_INFO
+import dxWDL.util.Utils.META_INFO
 
 case class WfFragInput(wfSource: String,
                        instanceTypeDB: InstanceTypeDB,
@@ -20,20 +20,9 @@ case class WfFragInputOutput(dxIoFunctions : DxIoFunctions,
     val verbose = runtimeDebugLevel >= 1
     val jobInputOutput = JobInputOutput(dxIoFunctions, runtimeDebugLevel)
 
-    private def getMetaInfo(metaInfo : Map[String, JsValue]) :
-            (String, InstanceTypeDB, Map[String, ExecLinkInfo], Int, Map[String, String], Map[String, WomType]) = {
+    private def loadWorkflowMetaInfo(metaInfo : Map[String, JsValue]) :
+            (Map[String, ExecLinkInfo], Int, Map[String, String], Map[String, WomType]) = {
         // meta information used for running workflow fragments
-
-        val workflowSource : String = metaInfo.get("workflowSource") match {
-            case Some(JsString(src)) => Utils.base64Decode(src)
-            case other => throw new Exception(s"Bad value ${other}")
-        }
-        val instanceTypeDB : InstanceTypeDB = metaInfo.get("instanceTypeDB") match {
-            case Some(JsString(src)) =>
-                val dbRaw = Utils.base64Decode(src)
-                dbRaw.parseJson.convertTo[InstanceTypeDB]
-            case other => throw new Exception(s"Bad value ${other}")
-        }
         val execLinkInfo: Map[String, ExecLinkInfo] = metaInfo.get("execLinkInfo") match {
             case Some(JsObject(fields)) =>
                 fields.map{
@@ -63,7 +52,7 @@ case class WfFragInputOutput(dxIoFunctions : DxIoFunctions,
             case other => throw new Exception(s"Bad value ${other}")
         }
 
-        (workflowSource, instanceTypeDB, execLinkInfo, subBlockNum, fqnDict, fqnDictTypes)
+        (execLinkInfo, subBlockNum, fqnDict, fqnDictTypes)
     }
 
     // 1. Convert the inputs to WOM values
@@ -74,21 +63,22 @@ case class WfFragInputOutput(dxIoFunctions : DxIoFunctions,
             .asJsObject.fields
             .filter{ case (fieldName,_) => !fieldName.endsWith(Utils.FLAT_FILES_SUFFIX) }
 
+        val (wfSource, instanceTypeDB) = jobInputOutput.loadMetaInfo(inputs)
+
         // Extract the meta information needed to setup the closure
         // for the subblock
         val metaInfo: Map[String, JsValue] =
-            fields.get(META_WORKFLOW_INFO) match {
+            fields.get(META_INFO) match {
                 case Some(JsObject(fields)) => fields
                 case other =>
                     throw new Exception(
-                        s"JSON object has bad value ${other} for field ${META_WORKFLOW_INFO}")
+                        s"JSON object has bad value ${other} for field ${META_INFO}")
             }
-        val (wfSource, instanceTypeDB, execLinkInfo,
-             subBlockNr, fqnDict, fqnDictTypes) = getMetaInfo(metaInfo)
+        val (execLinkInfo, subBlockNr, fqnDict, fqnDictTypes) = loadWorkflowMetaInfo(metaInfo)
 
         // What remains are inputs from other stages. Convert from JSON
         // to wom values
-        val regularFields = fields - META_WORKFLOW_INFO
+        val regularFields = fields - META_INFO
         val env : Map[String, WomValue] = regularFields.map{
             case (name, jsValue) =>
                 val fqnName = fqnDict.get(name) match {

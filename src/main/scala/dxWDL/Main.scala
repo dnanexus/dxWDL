@@ -5,8 +5,6 @@ import com.typesafe.config._
 import java.nio.file.{Path, Paths}
 import scala.collection.mutable.HashMap
 import spray.json._
-import wom.callable.{CallableTaskDefinition, ExecutableTaskDefinition}
-import wom.executable.WomBundle
 
 import dxWDL.util._
 import dxWDL.compiler.Top
@@ -393,56 +391,22 @@ object Main extends App {
         }
     }
 
-    // Extract the only task from a namespace
-    def getMainTask(bundle: WomBundle) : CallableTaskDefinition = {
-        // check if the primary is nonempty
-        val task: Option[CallableTaskDefinition] = bundle.primaryCallable match  {
-            case Some(task : CallableTaskDefinition) => Some(task)
-            case Some(exec : ExecutableTaskDefinition) => Some(exec.callableTaskDefinition)
-            case _ => None
-        }
-        task match {
-            case Some(x) => x
-            case None =>
-                // primary is empty, check the allCallables map
-                if (bundle.allCallables.size != 1)
-                    throw new Exception("WDL file must contains exactly one task")
-                val (_, task) = bundle.allCallables.head
-                task match {
-                    case task : CallableTaskDefinition => task
-                    case exec : ExecutableTaskDefinition => exec.callableTaskDefinition
-                    case _ => throw new Exception("Cannot find task inside WDL file")
-                }
-        }
-    }
-
     private def taskAction(op: InternalOp.Value,
-                           wdlDefPath: Path,
                            jobInputPath: Path,
                            jobOutputPath: Path,
                            dxPathConfig : DxPathConfig,
                            dxIoFunctions : DxIoFunctions,
                            rtDebugLvl: Int): Termination = {
-        val (language, womBundle: WomBundle, allSources) = ParseWomSourceFile.apply(wdlDefPath)
-        val task : CallableTaskDefinition = getMainTask(womBundle)
-        assert(allSources.size == 1)
-        val sourceDict  = ParseWomSourceFile.scanForTasks(language, allSources.values.head)
-        assert(sourceDict.size == 1)
-        val taskSourceCode = sourceDict.values.head
-
         // Parse the inputs, convert to WOM values. Delay downloading files
         // from the platform, we may not need to access them.
         val inputLines : String = Utils.readFileContent(jobInputPath)
         val originalInputs : JsValue = inputLines.parseJson
 
-        // Figure out the available instance types, and their prices,
-        // by reading the file
-        val dbRaw = Utils.readFileContent(baseDNAxDir.resolve(Utils.INSTANCE_TYPE_DB_FILENAME))
-        val instanceTypeDB = dbRaw.parseJson.convertTo[InstanceTypeDB]
-
         // setup the utility directories that the task-runner employs
         val jobInputOutput = new runner.JobInputOutput(dxIoFunctions, rtDebugLvl)
-        val inputs = jobInputOutput.loadInputs(inputLines, task)
+        val (taskSourceCode, instanceTypeDB) = jobInputOutput.loadMetaInfo(originalInputs)
+        val task = ParseWomSourceFile.parseWdlTask(taskSourceCode)
+        val inputs = jobInputOutput.loadInputs(originalInputs, task)
         val taskRunner = runner.TaskRunner(task, taskSourceCode, instanceTypeDB,
                                            dxPathConfig, dxIoFunctions, jobInputOutput,
                                            rtDebugLvl)
@@ -534,37 +498,31 @@ object Main extends App {
         operation match {
             case None =>
                 UnsuccessfulTermination(s"unknown internal action ${args.head}")
-            case Some(op) if (InternalOp.isTaskOp(op) && args.length == 4) =>
-                val wdlDefPath = Paths.get(args(1))
-                val homeDir = Paths.get(args(2))
-                val rtDebugLvl = parseRuntimeDebugLevel(args(3))
-                val (jobInputPath, jobOutputPath, jobErrorPath, _) =
-                    Utils.jobFilesOfHomeDir(homeDir)
-                val dxPathConfig = buildDxPathConfig(baseDNAxDir)
-                val dxIoFunctions = DxIoFunctions(dxPathConfig, rtDebugLvl)
-                try {
-                    taskAction(op, wdlDefPath, jobInputPath, jobOutputPath,
-                               dxPathConfig, dxIoFunctions, rtDebugLvl)
-                } catch {
-                    case e : Throwable =>
-                        writeJobError(jobErrorPath, e)
-                        UnsuccessfulTermination(s"failure running ${op}")
-                }
-            case Some(op) if (!InternalOp.isTaskOp(op) && args.length == 3) =>
+            case Some(op) if args.length == 3 =>
                 val homeDir = Paths.get(args(1))
                 val rtDebugLvl = parseRuntimeDebugLevel(args(2))
                 val (jobInputPath, jobOutputPath, jobErrorPath, _) =
                     Utils.jobFilesOfHomeDir(homeDir)
                 val dxPathConfig = buildDxPathConfig(baseDNAxDir)
                 val dxIoFunctions = DxIoFunctions(dxPathConfig, rtDebugLvl)
-                workflowFragAction(op, jobInputPath, jobOutputPath,
+                try {
+                    if (InternalOp.isTaskOp(op)) {
+                        taskAction(op, jobInputPath, jobOutputPath,
                                    dxPathConfig, dxIoFunctions, rtDebugLvl)
-
+                    } else {
+                        workflowFragAction(op, jobInputPath, jobOutputPath,
+                                           dxPathConfig, dxIoFunctions, rtDebugLvl)
+                    }
+                } catch {
+                    case e : Throwable =>
+                        writeJobError(jobErrorPath, e)
+                        UnsuccessfulTermination(s"failure running ${op}")
+                }
             case Some(_) =>
                 BadUsageTermination(s"""|Bad arguments to internal operation
                                         |  ${args}
                                         |Usage:
-                                        |  java -jar dxWDL.jar <action> <wdl file> <home dir> <debug level>
+                                        |  java -jar dxWDL.jar internal <action> <home dir> <debug level>
                                         |""".stripMargin)
         }
     }

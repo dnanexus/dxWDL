@@ -8,7 +8,6 @@ import wom.executable.WomBundle
 import wom.types._
 import wom.values._
 
-import dxWDL.Main
 import dxWDL.util.{DxIoFunctions, DxPathConfig, InstanceTypeDB, ParseWomSourceFile, Utils}
 
 // This test module requires being logged in to the platform.
@@ -122,7 +121,7 @@ class TaskRunnerTest extends FlatSpec with Matchers {
         dxPathConfig.createCleanDirs()
 
         val (language, womBundle: WomBundle, allSources) = ParseWomSourceFile.apply(wdlCode)
-        val task : CallableTaskDefinition = Main.getMainTask(womBundle)
+        val task : CallableTaskDefinition = ParseWomSourceFile.getMainTask(womBundle)
         assert(allSources.size == 1)
         val sourceDict  = ParseWomSourceFile.scanForTasks(language, allSources.values.head)
         assert(sourceDict.size == 1)
@@ -134,7 +133,7 @@ class TaskRunnerTest extends FlatSpec with Matchers {
         val jobInputOutput = new JobInputOutput(dxIoFunctions, runtimeDebugLevel)
         val taskRunner = TaskRunner(task, taskSourceCode, instanceTypeDB,
                                     dxPathConfig, dxIoFunctions, jobInputOutput, 0)
-        val inputsRelPaths = taskRunner.jobInputOutput.loadInputs(JsObject(inputsOrg).prettyPrint, task)
+        val inputsRelPaths = taskRunner.jobInputOutput.loadInputs(JsObject(inputsOrg), task)
         val inputs = inputsRelPaths.map{
             case (inpDef, value) => (inpDef, addBaseDir(value))
         }.toMap

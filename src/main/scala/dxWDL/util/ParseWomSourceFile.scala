@@ -13,7 +13,7 @@ import languages.wdl.draft3.WdlDraft3LanguageFactory
 import scala.collection.JavaConverters._
 import scala.collection.mutable.HashMap
 import scala.util.matching.Regex
-import wom.callable.{WorkflowDefinition}
+import wom.callable.{CallableTaskDefinition, ExecutableTaskDefinition, WorkflowDefinition}
 import wom.core.WorkflowSource
 import wom.executable.WomBundle
 
@@ -282,5 +282,48 @@ object ParseWomSourceFile {
             case Some(wf: WorkflowDefinition) => wf
             case _ => throw new Exception("Could not find the workflow in the source")
         }
+    }
+
+    // Extract the only task from a namespace
+    def getMainTask(bundle: WomBundle) : CallableTaskDefinition = {
+        // check if the primary is nonempty
+        val task: Option[CallableTaskDefinition] = bundle.primaryCallable match  {
+            case Some(task : CallableTaskDefinition) => Some(task)
+            case Some(exec : ExecutableTaskDefinition) => Some(exec.callableTaskDefinition)
+            case _ => None
+        }
+        task match {
+            case Some(x) => x
+            case None =>
+                // primary is empty, check the allCallables map
+                if (bundle.allCallables.size != 1)
+                    throw new Exception("WDL file must contains exactly one task")
+                val (_, task) = bundle.allCallables.head
+                task match {
+                    case task : CallableTaskDefinition => task
+                    case exec : ExecutableTaskDefinition => exec.callableTaskDefinition
+                    case _ => throw new Exception("Cannot find task inside WDL file")
+                }
+        }
+    }
+
+    def parseWdlTask(wfSource: String) : CallableTaskDefinition = {
+        val languageFactory =
+            if (wfSource.startsWith("version 1.0") ||
+                    wfSource.startsWith("version draft-3")) {
+                new WdlDraft3LanguageFactory(Map.empty)
+            } else {
+                new WdlDraft2LanguageFactory(Map.empty)
+            }
+
+        val bundleChk: Checked[WomBundle] =
+            languageFactory.getWomBundle(wfSource, "{}", List.empty, List(languageFactory))
+        val womBundle = bundleChk match {
+            case Left(errors) => throw new Exception(s"""|WOM validation errors:
+                                                         | ${errors}
+                                                         |""".stripMargin)
+            case Right(bundle) => bundle
+        }
+        getMainTask(womBundle)
     }
 }

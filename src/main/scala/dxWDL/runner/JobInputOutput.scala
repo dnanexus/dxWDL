@@ -11,6 +11,7 @@ import wom.types._
 import wom.values._
 
 import dxWDL.util._
+import dxWDL.util.Utils.{META_INFO, FLAT_FILES_SUFFIX}
 
 case class JobInputOutput(dxIoFunctions : DxIoFunctions,
                           runtimeDebugLevel: Int) {
@@ -212,13 +213,14 @@ case class JobInputOutput(dxIoFunctions : DxIoFunctions,
 
     // Read the job-inputs JSON file, and convert the variables
     // from JSON to WOM values. Delay downloading the files.
-    def loadInputs(inputLines: String,
+    def loadInputs(inputs: JsValue,
                    callable: wom.callable.Callable): Map[InputDefinition, WomValue] = {
         // Discard auxiliary fields
-        val jsonAst : JsValue = inputLines.parseJson
-        val fields : Map[String, JsValue] = jsonAst
+        val fields : Map[String, JsValue] = inputs
             .asJsObject.fields
-            .filter{ case (fieldName,_) => !fieldName.endsWith(Utils.FLAT_FILES_SUFFIX) }
+            .filter{ case (fieldName,_) => !fieldName.endsWith(FLAT_FILES_SUFFIX) }
+            .filter{ case (fieldName,_) => fieldName != META_INFO }
+
         //System.out.println(s"inputLines=${inputLines}")
         //System.out.println(s"fields=${fields}")
 
@@ -284,6 +286,32 @@ case class JobInputOutput(dxIoFunctions : DxIoFunctions,
                 }
                 accu + (inpDfn -> value)
         }
+    }
+
+    // Extract the meta information for the task:
+    // WOM source code, and the database of instance types
+    def loadMetaInfo(inputs: JsValue) : (String, InstanceTypeDB) = {
+        val fields : Map[String, JsValue] = inputs.asJsObject.fields
+
+        val metaInfo: Map[String, JsValue] =
+            fields.get(META_INFO) match {
+                case Some(JsObject(fields)) => fields
+                case other =>
+                    throw new Exception(
+                        s"JSON object has bad value ${other} for field ${META_INFO}")
+            }
+
+        val taskSource : String = metaInfo.get("womSourceCode") match {
+            case Some(JsString(src)) => Utils.base64Decode(src)
+            case other => throw new Exception(s"Bad value ${other}")
+        }
+        val instanceTypeDB : InstanceTypeDB = metaInfo.get("instanceTypeDB") match {
+            case Some(JsString(src)) =>
+                val dbRaw = Utils.base64Decode(src)
+                dbRaw.parseJson.convertTo[InstanceTypeDB]
+            case other => throw new Exception(s"Bad value ${other}")
+        }
+        (taskSource, instanceTypeDB)
     }
 
     // find all file URLs in a Wom value
