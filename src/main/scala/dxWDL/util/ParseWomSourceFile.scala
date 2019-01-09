@@ -13,6 +13,7 @@ import languages.wdl.draft3.WdlDraft3LanguageFactory
 import scala.collection.JavaConverters._
 import scala.collection.mutable.HashMap
 import scala.util.matching.Regex
+import wom.callable.{WorkflowDefinition}
 import wom.core.WorkflowSource
 import wom.executable.WomBundle
 
@@ -235,7 +236,7 @@ object ParseWomSourceFile {
 
     // throw an exception if the workflow source is not valid WDL 1.0
     def validateWdlWorkflow(wdlWfSource: String,
-                            language: Language.Value) : WorkflowDefinition = {
+                            language: Language.Value) : Unit = {
         val languageFactory = language match {
             case Language.WDLv1_0 =>
                 new WdlDraft3LanguageFactory(Map.empty)
@@ -247,7 +248,7 @@ object ParseWomSourceFile {
 
         val bundleChk: Checked[WomBundle] =
             languageFactory.getWomBundle(wdlWfSource, "{}", List.empty, List.empty)
-        val bundle = bundleChk match {
+        bundleChk match {
             case Left(errors) =>
                 Utils.error("Found Errors in generated WDL source")
                 Utils.error(wdlWfSource + "\n")
@@ -256,12 +257,30 @@ object ParseWomSourceFile {
                                         |""".stripMargin)
             case Right(bundle) =>
                 // Passed WOM validation
-                bundle
+                ()
         }
-        val wf : WorkflowDefinition = bundle.primaryCallable match {
+    }
+
+    def parseWdlWorkflow(wfSource: String) : WorkflowDefinition = {
+        val languageFactory =
+            if (wfSource.startsWith("version 1.0") ||
+                    wfSource.startsWith("version draft-3")) {
+                new WdlDraft3LanguageFactory(Map.empty)
+            } else {
+                new WdlDraft2LanguageFactory(Map.empty)
+            }
+
+        val bundleChk: Checked[WomBundle] =
+            languageFactory.getWomBundle(wfSource, "{}", List.empty, List(languageFactory))
+        val womBundle = bundleChk match {
+            case Left(errors) => throw new Exception(s"""|WOM validation errors:
+                                                         | ${errors}
+                                                         |""".stripMargin)
+            case Right(bundle) => bundle
+        }
+        womBundle.primaryCallable match {
             case Some(wf: WorkflowDefinition) => wf
             case _ => throw new Exception("Could not find the workflow in the source")
         }
-        wf
     }
 }

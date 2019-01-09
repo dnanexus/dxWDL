@@ -2,10 +2,10 @@ package dxWDL
 
 import com.dnanexus.{DXProject}
 import com.typesafe.config._
-import java.nio.file.{Files, Path, Paths}
+import java.nio.file.{Path, Paths}
 import scala.collection.mutable.HashMap
 import spray.json._
-import wom.callable.{CallableTaskDefinition, ExecutableTaskDefinition, WorkflowDefinition}
+import wom.callable.{CallableTaskDefinition, ExecutableTaskDefinition}
 import wom.executable.WomBundle
 
 import dxWDL.util._
@@ -487,32 +487,6 @@ object Main extends App {
     }
 
 
-    // Load from disk a mapping of applet name to id. We
-    // need this in order to call the right version of other
-    // applets.
-    //
-    // TODO: replace this file hard coded into the applet with a parameter
-    // passed as input.
-    private def loadLinkInfo(dxProject: DXProject) : Map[String, ExecLinkInfo] = {
-        val linkSourceFile: Path = baseDNAxDir.resolve(Utils.LINK_INFO_FILENAME)
-        if (!Files.exists(linkSourceFile)) {
-            Map.empty
-        } else {
-            val info: String = Utils.readFileContent(linkSourceFile)
-            try {
-                info.parseJson.asJsObject.fields.map {
-                    case (key:String, jso) =>
-                        key -> ExecLinkInfo.readJson(jso, dxProject)
-                    case _ =>
-                        throw new AppInternalException(s"Bad JSON")
-                }.toMap
-            } catch {
-                case e : Throwable =>
-                    throw new AppInternalException(s"Link JSON information is badly formatted ${info}")
-            }
-        }
-    }
-
     // Execute a part of a workflow
     private def workflowFragAction(op: InternalOp.Value,
                                    jobInputPath: Path,
@@ -528,19 +502,19 @@ object Main extends App {
         val inputsRaw : JsValue = inputLines.parseJson
 
         // setup the utility directories that the frag-runner employs
-        val fragInputOutput = new runner.WfFragInputOutput(dxIoFunctions, rtDebugLvl)
+        val fragInputOutput = new runner.WfFragInputOutput(dxIoFunctions, dxProject, rtDebugLvl)
 
         // process the inputs
-        val sbInputs = fragInputOutput.loadInputs(inputsRaw)
-        val wf = ParseWomSourceFile.validateWdlWorkflow(readInputs.wfSource, language???)
-        val fragRunner = new runner.WfFragRunner(wf, sbInputs.wfSource, sbInputs.instanceTypeDB,
-                                                 execLinkInfo,
+        val meta = fragInputOutput.loadInputs(inputsRaw)
+        val wf = ParseWomSourceFile.parseWdlWorkflow(meta.wfSource)
+        val fragRunner = new runner.WfFragRunner(wf, meta.wfSource, meta.instanceTypeDB,
+                                                 meta.execLinkInfo,
                                                  dxPathConfig, dxIoFunctions, rtDebugLvl)
 
         val outputFields: Map[String, JsValue] =
             op match {
                 case InternalOp.WfFragment =>
-                    fragRunner.apply(inputs)
+                    fragRunner.apply(meta.subBlockNr, meta.env)
                 case _ =>
                     throw new Exception(s"Illegal task operation ${op}")
             }

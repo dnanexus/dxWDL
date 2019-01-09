@@ -78,19 +78,20 @@ case class WfFragRunner(wf: WorkflowDefinition,
         }.toMap
     }
 
-    def apply(inputs: WfFragInput) : Map[String, JsValue] = {
+    def apply(subBlockNr: Int,
+              env: Map[String, WomValue]) : Map[String, JsValue] = {
         Utils.appletLog(verbose, s"dxWDL version: ${Utils.getVersion()}")
         Utils.appletLog(verbose, s"link info=${execLinkInfo}")
         Utils.appletLog(verbose, s"Workflow source code:")
         Utils.appletLog(verbose, wfSourceCode, 10000)
-        Utils.appletLog(verbose, s"Inputs: ${inputs}")
+        Utils.appletLog(verbose, s"Environment: ${env}")
 
         val graph = wf.innerGraph
         val (inputNodes, subBlocks, outputNodes) = Block.splitIntoBlocks(graph)
 
-        val block = subBlocks(inputs.subBlockNr)
+        val block = subBlocks(subBlockNr)
 
-        val finalEnv : Map[String, WomValue] = block.nodes.foldLeft(inputs.env) {
+        val finalEnv : Map[String, WomValue] = block.nodes.foldLeft(env) {
             case (env, node : GraphNode) =>
                 node match {
                     case eNode: ExposedExpressionNode =>

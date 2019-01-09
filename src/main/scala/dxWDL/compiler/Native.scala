@@ -183,10 +183,7 @@ case class Native(dxWDLrtId: Option[String],
     }
 
     private def genBashScript(appKind: IR.AppletKind,
-                              instanceType: IR.InstanceType,
-                              wdlCode: String,
-                              linkInfo: Option[String],
-                              dbInstance: Option[String]) : String = {
+                              instanceType: IR.InstanceType) : String = {
         val body:String = appKind match {
             case IR.AppletKindNative(_) =>
                 throw new Exception("Sanity: generating a bash script for a native applet")
@@ -316,36 +313,6 @@ case class Native(dxWDLrtId: Option[String],
                      dxObj)
     }
 
-    // Bundle all the applet code into one bash script.
-    //
-    // For applets that call other applets, we pass a directory
-    // of the callees, so they could be found a runtime. This is
-    // equivalent to linking, in a standard C compiler.
-    private def genAppletScript(applet: IR.Applet, aplLinks: ExecDict) : String = {
-        // create linking information
-        val linkInfo:Option[String] =
-            if (aplLinks.isEmpty) {
-                None
-            } else {
-                val linkInfo = JsObject(
-                    aplLinks.map{ case (key, (irCall, dxObj)) =>
-                        // Reduce the information to what will be needed for runtime linking.
-                        val ali = genLinkInfo(irCall, dxObj)
-                        key -> ExecLinkInfo.writeJson(ali)
-                    }.toMap)
-                Some(linkInfo.prettyPrint)
-            }
-
-        // Add the pricing model, and make the prices
-        // opaque.
-        val dbOpaque = InstanceTypeDB.opaquePrices(instanceTypeDB)
-        val dbInstance = dbOpaque.toJson.prettyPrint
-
-        // write the bash script
-        genBashScript(applet.kind, applet.instanceType,
-                      applet.womSourceCode, linkInfo, Some(dbInstance))
-    }
-
     private def apiParseReplyID(rep: JsonNode) : String = {
         val repJs:JsValue = Utils.jsValueOfJsonNode(rep)
         repJs.asJsObject.fields.get("id") match {
@@ -467,9 +434,14 @@ case class Native(dxWDLrtId: Option[String],
     }
 
     // Build an '/applet/new' request
+    //
+    // For applets that call other applets, we pass a directory
+    // of the callees, so they could be found a runtime. This is
+    // equivalent to linking, in a standard C compiler.
     private def appletNewReq(applet: IR.Applet,
                              bashScript: String,
-                             folder : String) : (String, JsValue) = {
+                             folder : String,
+                             aplLinks: Map[String, ExecLinkInfo]) : (String, JsValue) = {
         Utils.trace(verbose2, s"Building /applet/new request for ${applet.name}")
 
         val inputSpec : Vector[JsValue] = applet.inputs.map(cVar =>
@@ -479,6 +451,12 @@ case class Native(dxWDLrtId: Option[String],
         val dbOpaque = InstanceTypeDB.opaquePrices(instanceTypeDB)
         val dbInstance = dbOpaque.toJson.prettyPrint
 
+        // create linking information
+        val linkInfo : Map[String, JsValue] =
+            aplLinks.map{ case (name, ali) =>
+                name -> ExecLinkInfo.writeJson(ali)
+            }.toMap
+
         val metaWfInfo : Option[JsValue] =
             applet.kind match {
                 case IR.AppletKindWfFragment(calls, subBlockNum, fqnDict, fqnDictTypes) =>
@@ -486,7 +464,7 @@ case class Native(dxWDLrtId: Option[String],
                     val hardCodedFragInfo = JsObject(
                         "workflowSource" -> JsString(Utils.base64Encode(applet.womSourceCode)),
                         "instanceTypeDB" -> JsString(Utils.base64Encode(dbInstance)),
-                        "calls" -> JsArray(calls.map{x => JsString(x) }),
+                        "execLinkInfo" -> JsObject(linkInfo),
                         "subBlockNum" -> JsNumber(subBlockNum),
                         "fqnDict" -> JsObject(fqnDict.map{ case (k, v) => k -> JsString(v) }.toMap),
                         "fqnDictTypes" -> JsObject(
@@ -549,14 +527,18 @@ case class Native(dxWDLrtId: Option[String],
             case IR.AppletKindWfFragment(calls, _, _, _) => calls
             case _ => Vector.empty
         }
-        val aplLinks = calls.map{ tName => tName -> execDict(tName) }.toMap
+
+        val aplLinks : Map[String, ExecLinkInfo] = calls.map{ tName =>
+            val (irCall, dxObj) = execDict(tName)
+            tName -> genLinkInfo(irCall, dxObj)
+        }.toMap
 
         // Build an applet script
-        val bashScript = genAppletScript(applet, aplLinks)
+        val bashScript = genBashScript(applet.kind, applet.instanceType)
 
         // Calculate a checksum of the inputs that went into the
         // making of the applet.
-        val (digest,appletApiRequest) = appletNewReq(applet, bashScript, folder)
+        val (digest,appletApiRequest) = appletNewReq(applet, bashScript, folder, aplLinks)
         if (verbose2) {
             val fName = s"${applet.name}_req.json"
             val trgPath = Utils.appCompileDirPath.resolve(fName)
