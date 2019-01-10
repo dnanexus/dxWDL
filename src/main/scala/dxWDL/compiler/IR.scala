@@ -94,7 +94,6 @@ object IR {
     case class  AppletKindTask(task: CallableTaskDefinition) extends AppletKind
     case class  AppletKindWfFragment(calls: Vector[String],
                                      subBlockNum: Int,
-                                     fqnDict: Map[String, String],
                                      fqnDictTypes: Map[String, WomType]) extends AppletKind
     case object AppletKindWorkflowOutputReorg extends AppletKind
 

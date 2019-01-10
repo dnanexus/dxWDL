@@ -21,7 +21,7 @@ case class WfFragInputOutput(dxIoFunctions : DxIoFunctions,
     val jobInputOutput = JobInputOutput(dxIoFunctions, runtimeDebugLevel)
 
     private def loadWorkflowMetaInfo(metaInfo : Map[String, JsValue]) :
-            (Map[String, ExecLinkInfo], Int, Map[String, String], Map[String, WomType]) = {
+            (Map[String, ExecLinkInfo], Int, Map[String, WomType]) = {
         // meta information used for running workflow fragments
         val execLinkInfo: Map[String, ExecLinkInfo] = metaInfo.get("execLinkInfo") match {
             case Some(JsObject(fields)) =>
@@ -35,24 +35,20 @@ case class WfFragInputOutput(dxIoFunctions : DxIoFunctions,
             case JsNumber(i) => i.toInt
             case other => throw new Exception(s"Bad value ${other}")
         }
-        val fqnDict : Map[String, String]  = metaInfo.get("fqnDict") match {
+        val fqnDictTypes : Map[String, WomType] = metaInfo.get("fqnDictTypes") match {
             case Some(JsObject(fields)) =>
                 fields.map{
-                    case (key, JsString(value)) => key -> value
-                    case other => throw new Exception(s"Bad value ${other}")
-                }.toMap
-            case other => throw new Exception(s"Bad value ${other}")
-        }
-        val fqnDictTypes : Map[String, WomType]  = metaInfo.get("fqnDictTypes") match {
-            case Some(JsObject(fields)) =>
-                fields.map{
-                    case (key, JsString(value)) => key -> WomTypeSerialization.fromString(value)
+                    case (key, JsString(value)) =>
+                        // Transform back to a fully qualified name with dots
+                        val orgKeyName = Utils.revTransformVarName(key)
+                        val womType = WomTypeSerialization.fromString(value)
+                        orgKeyName -> womType
                     case other => throw new Exception(s"Bad value ${other}")
                 }.toMap
             case other => throw new Exception(s"Bad value ${other}")
         }
 
-        (execLinkInfo, subBlockNum, fqnDict, fqnDictTypes)
+        (execLinkInfo, subBlockNum, fqnDictTypes)
     }
 
     // 1. Convert the inputs to WOM values
@@ -74,22 +70,19 @@ case class WfFragInputOutput(dxIoFunctions : DxIoFunctions,
                     throw new Exception(
                         s"JSON object has bad value ${other} for field ${META_INFO}")
             }
-        val (execLinkInfo, subBlockNr, fqnDict, fqnDictTypes) = loadWorkflowMetaInfo(metaInfo)
+        val (execLinkInfo, subBlockNr, fqnDictTypes) = loadWorkflowMetaInfo(metaInfo)
 
         // What remains are inputs from other stages. Convert from JSON
         // to wom values
         val regularFields = fields - META_INFO
         val env : Map[String, WomValue] = regularFields.map{
             case (name, jsValue) =>
-                val fqnName = fqnDict.get(name) match {
-                    case None => throw new Exception(s"Did not find variable ${name} in the block environment")
+                val fqn = Utils.revTransformVarName(name)
+                val womType = fqnDictTypes.get(fqn) match {
+                    case None => throw new Exception(s"Did not find variable ${fqn} (${name}) in the block environment")
                     case Some(x) => x
                 }
-                val womType = fqnDictTypes.get(name) match {
-                    case None => throw new Exception(s"Did not find variable ${name} in the block environment")
-                    case Some(x) => x
-                }
-                fqnName -> jobInputOutput.unpackJobInput(womType, jsValue)
+                fqn -> jobInputOutput.unpackJobInput(womType, jsValue)
         }.toMap
 
         WfFragInput(wfSource,

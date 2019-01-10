@@ -187,7 +187,7 @@ case class Native(dxWDLrtId: Option[String],
         val body:String = appKind match {
             case IR.AppletKindNative(_) =>
                 throw new Exception("Sanity: generating a bash script for a native applet")
-            case IR.AppletKindWfFragment(_, _, _, _) =>
+            case IR.AppletKindWfFragment(_, _, _) =>
                 genBashScriptWfFragment()
             case IR.AppletKindTask(_) =>
                 instanceType match {
@@ -459,14 +459,13 @@ case class Native(dxWDLrtId: Option[String],
 
         val metaInfo : Option[JsValue] =
             applet.kind match {
-                case IR.AppletKindWfFragment(calls, subBlockNum, fqnDict, fqnDictTypes) =>
+                case IR.AppletKindWfFragment(calls, subBlockNum, fqnDictTypes) =>
                     // meta information used for running workflow fragments
                     val hardCodedFragInfo = JsObject(
                         "womSourceCode" -> JsString(Utils.base64Encode(applet.womSourceCode)),
                         "instanceTypeDB" -> JsString(Utils.base64Encode(dbInstance)),
                         "execLinkInfo" -> JsObject(linkInfo),
                         "subBlockNum" -> JsNumber(subBlockNum),
-                        "fqnDict" -> JsObject(fqnDict.map{ case (k, v) => k -> JsString(v) }.toMap),
                         "fqnDictTypes" -> JsObject(
                             fqnDictTypes.map{ case (k,t) =>
                                 val tStr = WomTypeSerialization.toString(t)
@@ -535,7 +534,7 @@ case class Native(dxWDLrtId: Option[String],
 
         // limit the applet dictionary, only to actual dependencies
         val calls: Vector[String] = applet.kind match {
-            case IR.AppletKindWfFragment(calls, _, _, _) => calls
+            case IR.AppletKindWfFragment(calls, _, _) => calls
             case _ => Vector.empty
         }
 

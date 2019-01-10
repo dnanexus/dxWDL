@@ -487,7 +487,6 @@ object Main extends App {
         val json = JsObject(outputFields)
         val ast_pp = json.prettyPrint
         Utils.writeFileContent(jobOutputPath, ast_pp)
-        //System.err.println(s"Wrote outputs ${ast_pp}")
 
         SuccessfulTermination(s"success ${op}")
     }

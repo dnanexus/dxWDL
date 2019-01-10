@@ -31,7 +31,6 @@ object Utils {
     val DX_WDL_ASSET = "dxWDLrt"
     val DX_WDL_RUNTIME_CONF_FILE = "dxWDL_runtime.conf"
     val FLAT_FILES_SUFFIX = "___dxfiles"
-    val INSTANCE_TYPE_DB_FILENAME = "instanceTypeDB.json"
     val INTERMEDIATE_RESULTS_FOLDER = "intermediate"
     val LAST_STAGE = "last"
     val LINK_INFO_FILENAME = "linking.json"
@@ -236,6 +235,11 @@ object Utils {
     def transformVarName(varName: String) : String = {
         varName.replaceAll("\\.", "___")
     }
+
+    def revTransformVarName(varName: String) : String = {
+        varName.replaceAll("___", "\\.")
+    }
+
 
     // Dots are illegal in applet variable names.
     def encodeAppletVarName(varName : String) : String = {
