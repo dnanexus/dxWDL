@@ -46,6 +46,7 @@ import wom.expression._
 import wom.graph._
 import wom.graph.expression._
 import wom.values._
+import wom.types._
 
 import dxWDL.util._
 
@@ -65,14 +66,22 @@ case class WfFragRunner(wf: WorkflowDefinition,
         gSeqNum
     }
 
-    private def evaluateWomExpression(expr: WomExpression, env: Map[String, WomValue]) : WomValue = {
+    private def evaluateWomExpression(expr: WomExpression,
+                                      womType: WomType,
+                                      env: Map[String, WomValue]) : WomValue = {
         val result: ErrorOr[WomValue] =
             expr.evaluateValue(env, dxIoFunctions)
-        result match {
+        val value = result match {
             case Invalid(errors) => throw new Exception(
                 s"Failed to evaluate expression ${expr} with ${errors}")
             case Valid(x: WomValue) => x
         }
+
+        // cast the result value to the correct type
+        // For example, an expression like:
+        //   Float x = "3.2"
+        // requires casting from string to float
+        womType.coerceRawValue(value).get
     }
 
     // Figure out what outputs need to be exported.
@@ -276,7 +285,8 @@ case class WfFragRunner(wf: WorkflowDefinition,
             case (env, node : GraphNode) =>
                 node match {
                     case eNode: ExpressionNode =>
-                        val value : WomValue = evaluateWomExpression(eNode.womExpression, env)
+                        val value : WomValue =
+                            evaluateWomExpression(eNode.womExpression, eNode.womType, env)
                         env + (eNode.identifier.workflowLocalName -> value)
                     case other =>
                         throw new Exception(s"${other.getClass} not implemented yet")

@@ -45,6 +45,20 @@ case class Block(nodes : Vector[GraphNode]) {
             |${desc}
             |]""".stripMargin
     }
+
+    // Check that this block is valid.
+    // 1) It can have zero or one calls
+    def validate() : Unit = {
+        val calls: Vector[CallNode] = nodes.collect{
+            case x:CallNode => x
+        }.toVector
+        val numCalls = calls.size
+        if (numCalls > 1) {
+            val buf = this.prettyPrint
+            System.err.println(buf)
+            throw new Exception(s"${numCalls} calls in block")
+        }
+    }
 }
 
 object Block {
@@ -100,7 +114,7 @@ object Block {
 
     // Here, "top of the graph" is the node that has no dependencies on the rest of
     // the nodes. It -could- depend on nodes in the 'topGroup' set.
-    private def pickTopNodes(nodes: Set[GraphNode], topGroup: Set[GraphNode]) : Set[GraphNode] = {
+    private def pickTopNode(nodes: Set[GraphNode], topGroup: Set[GraphNode]) : GraphNode = {
         assert(nodes.size > 0)
         val tops = nodes.flatMap{ node =>
             val ancestors = node.upstreamAncestry
@@ -112,7 +126,7 @@ object Block {
             }
         }
         assert(tops.size > 0)
-        tops.toSet
+        tops.head
     }
 
     // Build a top group that has nodes upstream of the rest. Stop
@@ -125,9 +139,9 @@ object Block {
         var remaining = nodes
         while (remaining.size > 0 &&
                    deepCountCalls(topGroup) == 0) {
-            val topNodes = pickTopNodes(remaining, topGroup.toSet)
-            remaining --= topNodes
-            topGroup ++= topNodes.toVector
+            val topNode = pickTopNode(remaining, topGroup.toSet)
+            remaining -= topNode
+            topGroup :+= topNode
         }
         topGroup
     }
@@ -196,7 +210,9 @@ object Block {
         while (rest.size > 0) {
             val topGroup = buildTopGroup(rest)
             val closedTopGroup = closeGroup(topGroup, rest -- topGroup)
-            blocks :+= Block(closedTopGroup)
+            val crnt = Block(closedTopGroup)
+            crnt.validate()
+            blocks :+= crnt
             rest = rest -- closedTopGroup
         }
 

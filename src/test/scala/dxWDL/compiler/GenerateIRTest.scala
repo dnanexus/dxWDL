@@ -4,6 +4,9 @@ import dxWDL.Main
 import java.nio.file.{Path, Paths}
 import org.scalatest.{FlatSpec, Matchers}
 
+import org.scalatest.Tag
+object BlockTest extends Tag("block")
+
 // These tests involve compilation -without- access to the platform.
 //
 class GenerateIRTest extends FlatSpec with Matchers {
@@ -26,7 +29,7 @@ class GenerateIRTest extends FlatSpec with Matchers {
     }
 
     // workflow compilation
-    it should "IR compile a linear WDL workflow without expressions" in {
+    it should "IR compile a linear WDL workflow without expressions" taggedAs(BlockTest) in {
         val path = pathFromBasename("wf_linear_no_expr.wdl")
         Main.compile(path.toString :: cFlags) shouldBe a [Main.SuccessfulTerminationIR]
     }
@@ -39,6 +42,11 @@ class GenerateIRTest extends FlatSpec with Matchers {
              "-fatalValidationWarnings")*/
             path.toString :: cFlags
         ) shouldBe a [Main.SuccessfulTerminationIR]
+    }
+
+    it should "IR compile a non trivial linear workflow with variable coercions" in {
+        val path = pathFromBasename("cast.wdl")
+        Main.compile(path.toString :: cFlags) shouldBe a [Main.SuccessfulTerminationIR]
     }
 
 /*    it should "disallow call with missing compulsory arguments" in {

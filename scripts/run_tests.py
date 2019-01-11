@@ -510,7 +510,7 @@ def compile_tests_to_project(trg_proj,
 ######################################################################
 ## Program entry point
 def main():
-    global test_locked
+    global test_unlocked
     argparser = argparse.ArgumentParser(description="Run WDL compiler tests on the platform")
     argparser.add_argument("--archive", help="Archive old applets",
                            action="store_true", default=False)
@@ -582,12 +582,12 @@ def main():
     if args.unlocked:
         # Disable all locked workflows
         args.locked = False
-        test_locked = []
+        test_unlocked = test_names
 
     compiler_flags = []
     if args.locked:
         compiler_flags.append("-locked")
-        test_locked += test_names
+        test_unlocked = []
     if args.archive:
         compiler_flags.append("-archive")
     if args.compile_mode:

@@ -458,14 +458,11 @@ case class GenerateIR(callables: Map[String, IR.Callable],
         }.toVector
 
 
-        // TODO create input variable definitions
+        // A reversible conversion mul.result --> mul___result. This
+        // assumes the '___' symbol is not used anywhere in the original WDL script.
         //
-        // mapping of fully qualified names, to short names. For example:
-        //   mul.result ---> result
-        //   add.result --> result1
-        //
-        // Currently: a reversible conversion mul.result --> mul___result. This
-        // assumes the ___ symbol is not used anywhere in the original WDL script.
+        // This is a simplifying assumption, that is hopefully sufficient. It disallows
+        // users from using variables with the ___ character sequence.
         val fqnDictTypes = inputVars.map{ cVar => cVar.dxVarName -> cVar.womType}.toMap
 
         // To figure out the block outputs, we need the subsequent nodes.
@@ -671,7 +668,8 @@ case class GenerateIR(callables: Map[String, IR.Callable],
 
 
 object GenerateIR {
-    def sortByDependencies(allCallables: Vector[Callable]) : Vector[Callable] = {
+    def sortByDependencies(allCallables: Vector[Callable],
+                           verbose: Verbose) : Vector[Callable] = {
         // figure out, for each element, what it depends on.
         // tasks don't depend on anything else. They are at the bottom of the dependency
         // tree.
@@ -708,6 +706,8 @@ object GenerateIR {
         var accu = Vector.empty[Callable]
         var crnt = allCallables
         while (!crnt.isEmpty) {
+            Utils.trace(verbose.on, s"""|  accu=${accu.map(_.name)}
+                                        |  crnt=${crnt.map(_.name)}""".stripMargin)
             val execsToCompile = next(crnt, accu)
             accu = accu ++ execsToCompile
             val alreadyCompiled: Set[String] = accu.map(_.name).toSet
@@ -747,7 +747,8 @@ object GenerateIR {
 
         Utils.trace(verbose.on,
                     s" sortByDependencies ${womBundle.allCallables.values.map{_.name}}")
-        val depOrder : Vector[Callable] = sortByDependencies(womBundle.allCallables.values.toVector)
+        val depOrder : Vector[Callable] = sortByDependencies(womBundle.allCallables.values.toVector,
+                                                             verbose)
         Utils.trace(verbose.on,
                     s"depOrder =${depOrder.map{_.name}}")
 

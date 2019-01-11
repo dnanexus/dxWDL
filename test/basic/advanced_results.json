@@ -1,6 +1,0 @@
-{
-  "advanced.cgrep_count": [8, 0, 3],
-  "advanced.str_animals_result" : "Arctic fox_family --K -S --flags --contamination 0 --s foobar",
-  "advanced.str_animals_family" : "Family Arctic fox_family",
-  "advanced.BroadGenomicsDocker_version" : "0.7.13-r1126"
-}

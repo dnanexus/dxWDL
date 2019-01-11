@@ -1,9 +1,0 @@
-{
-  "strings.cond_c2_result": "hello_world_2",
-  "strings.concat1_result": "frogs.aligned_frogs.duplicate_metrics",
-  "strings.concat2_result": "frogs.aligned_frogs.duplicate_metrics_xRIPx",
-  "strings.concat3_result": "delicate.aligned_number.duplicate_metrics_xRIPx_toads_salamander",
-  "strings.concat4_result": "A_B_C",
-  "strings.concat5_result": "Tamara likes oranges and popsicles_Would you like some too?",
-  "strings.collect_result":  ["1", "2", "3 INPUT=4", "5", "6 INPUT=7 INPUT=8"]
-}
