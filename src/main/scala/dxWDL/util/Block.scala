@@ -47,16 +47,15 @@ case class Block(nodes : Vector[GraphNode]) {
     }
 
     // Check that this block is valid.
-    // 1) It can have zero or one calls
+    // 1) It can have zero or one top-level calls
     def validate() : Unit = {
-        val calls: Vector[CallNode] = nodes.collect{
+        val topLevelCalls: Vector[CallNode] = nodes.collect{
             case x:CallNode => x
         }.toVector
-        val numCalls = calls.size
-        if (numCalls > 1) {
-            val buf = this.prettyPrint
-            System.err.println(buf)
-            throw new Exception(s"${numCalls} calls in block")
+        val numTopLeveleCalls = topLevelCalls.size
+        if (numTopLeveleCalls > 1) {
+            Utils.error(this.prettyPrint)
+            throw new Exception(s"${numTopLeveleCalls} calls in block")
         }
     }
 }
@@ -113,8 +112,8 @@ object Block {
     }
 
     // Here, "top of the graph" is the node that has no dependencies on the rest of
-    // the nodes. It -could- depend on nodes in the 'topGroup' set.
-    private def pickTopNode(nodes: Set[GraphNode], topGroup: Set[GraphNode]) : GraphNode = {
+    // the nodes.
+    private def pickTopNode(nodes: Set[GraphNode]) : GraphNode = {
         assert(nodes.size > 0)
         val tops = nodes.flatMap{ node =>
             val ancestors = node.upstreamAncestry
@@ -126,7 +125,7 @@ object Block {
             }
         }
         assert(tops.size > 0)
-        tops.head
+        tops.toVector.sort.head
     }
 
     // Build a top group that has nodes upstream of the rest. Stop
@@ -139,7 +138,7 @@ object Block {
         var remaining = nodes
         while (remaining.size > 0 &&
                    deepCountCalls(topGroup) == 0) {
-            val topNode = pickTopNode(remaining, topGroup.toSet)
+            val topNode = pickTopNode(remaining)
             remaining -= topNode
             topGroup :+= topNode
         }

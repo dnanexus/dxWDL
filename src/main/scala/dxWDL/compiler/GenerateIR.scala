@@ -310,10 +310,10 @@ case class GenerateIR(callables: Map[String, IR.Callable],
             case _: CallNode => true
             case _ => false
         }
+
         if (coreStmts.isEmpty)
             return s"eval_${genFragId()}"
-
-        coreStmts.head match {
+        val name = coreStmts.head match {
             case ssc : ScatterNode =>
                 val ids = ssc.scatterVariableNodes.map{
                     svn => svn.identifier.localName.value
@@ -322,12 +322,11 @@ case class GenerateIR(callables: Map[String, IR.Callable],
             case cond : ConditionalNode =>
                 s"if (${cond.conditionExpression.womExpression.sourceString})"
             case call : CallNode =>
-                // TODO: What happens with aliases?
-                // call.fullyQualifiedName.value
                 call.identifier.localName.value
             case _ =>
                 throw new Exception("sanity")
         }
+        s"frag_${name}"
     }
 
     // Check if the environment has a variable with a binding for
@@ -548,6 +547,13 @@ case class GenerateIR(callables: Map[String, IR.Callable],
             }
             allStageInfo :+= (stage, aplOpt)
         }
+
+        val stagesDbgStr = allStageInfo.map{ case (stage,_) =>
+            s"Stage(${stage.stageName}, callee=${stage.calleeName})"
+        }.mkString("\n")
+        Utils.trace(verbose2, s"""|stages =
+                                  |${stagesDbgStr}
+                                  |""".stripMargin)
         (allStageInfo, env)
     }
 

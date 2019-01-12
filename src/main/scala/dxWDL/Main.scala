@@ -76,7 +76,7 @@ object Main extends App {
 
     // parse extra command line arguments
     def parseCmdlineOptions(arglist: List[String]) : OptionsMap = {
-        def keywordValueIsList = Set("inputs", "imports", "verbose")
+        def keywordValueIsList = Set("inputs", "imports", "verboseKey")
         def normKeyword(word: String) : String = {
             // normalize a keyword, remove leading dashes
             // letters to lowercase.
@@ -165,11 +165,11 @@ object Main extends App {
                         checkNumberOfArguments(keyword, 1, subargs)
                         (keyword, subargs.head)
                     case "verbose" =>
-                        val retval =
-                            if (subargs.isEmpty) ""
-                            else if (subargs.length == 1) subargs.head
-                            else throw new Exception("Too many arguments to verbose flag")
-                        (keyword, retval)
+                        checkNumberOfArguments(keyword, 0, subargs)
+                        (keyword, "")
+                    case "verboseKey" =>
+                        checkNumberOfArguments(keyword, 1, subargs)
+                        (keyword, subargs.head)
                     case _ =>
                         throw new IllegalArgumentException(s"Unregonized keyword ${keyword}")
                 }
@@ -295,7 +295,7 @@ object Main extends App {
     // the compiler flags
     private def compilerOptions(options: OptionsMap) : CompilerOptions = {
         // First: get the verbosity mode. It is used almost everywhere.
-        val verboseKeys: Set[String] = options.get("verbose") match {
+        val verboseKeys: Set[String] = options.get("verboseKey") match {
             case None => Set.empty
             case Some(modulesToTrace) => modulesToTrace.toSet
         }

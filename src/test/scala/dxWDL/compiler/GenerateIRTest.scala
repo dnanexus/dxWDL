@@ -29,7 +29,7 @@ class GenerateIRTest extends FlatSpec with Matchers {
     }
 
     // workflow compilation
-    it should "IR compile a linear WDL workflow without expressions" taggedAs(BlockTest) in {
+    it should "IR compile a linear WDL workflow without expressions" in {
         val path = pathFromBasename("wf_linear_no_expr.wdl")
         Main.compile(path.toString :: cFlags) shouldBe a [Main.SuccessfulTerminationIR]
     }
@@ -44,9 +44,9 @@ class GenerateIRTest extends FlatSpec with Matchers {
         ) shouldBe a [Main.SuccessfulTerminationIR]
     }
 
-    it should "IR compile a non trivial linear workflow with variable coercions" in {
+    it should "IR compile a non trivial linear workflow with variable coercions" taggedAs(BlockTest) in {
         val path = pathFromBasename("cast.wdl")
-        Main.compile(path.toString :: cFlags) shouldBe a [Main.SuccessfulTerminationIR]
+        Main.compile(path.toString :: "--verboseKey" :: "GenerateIR" :: cFlags) shouldBe a [Main.SuccessfulTerminationIR]
     }
 
 /*    it should "disallow call with missing compulsory arguments" in {
