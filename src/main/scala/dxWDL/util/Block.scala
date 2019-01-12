@@ -124,8 +124,26 @@ object Block {
                 None
             }
         }
+        // There could be several nodes, we need to make the choice deterministic
+        // It would have been MUCH BETTER to choose the node that comes first in
+        // the original source code. This would keep line ordering, and be
+        // much more intuitive.
         assert(tops.size > 0)
-        tops.toVector.sort.head
+
+        def compareNodes(a: GraphNode, b: GraphNode) : Boolean = {
+            val aStr = a.fullyQualifiedName
+            val bStr = b.fullyQualifiedName
+            if (aStr != bStr) {
+                aStr < bStr
+            } else {
+                val ax = a.hashCode
+                val bx = b.hashCode
+                assert(ax != bx)
+                ax < bx
+            }
+
+        }
+        tops.toSeq.sortWith(compareNodes).head
     }
 
     // Build a top group that has nodes upstream of the rest. Stop
