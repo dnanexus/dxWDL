@@ -234,6 +234,74 @@ object ParseWomSourceFile {
         }
     }
 
+    private def matchPatterAtMostOnce(ptrn: Regex,
+                                      line: String) : Option[Regex.Match] = {
+        val allMatches = ptrn.findAllMatchIn(line).toList
+        allMatches.size match {
+            case 0 => None
+            case 1 => Some(allMatches(0))
+            case _ =>
+                throw new Exception(s"""|bad line, pattern appears twice
+                                        |
+                                        |${line}
+                                        |""".stripMargin)
+        }
+    }
+
+    // Scan the workflow for calls, and return the list of call names.
+    //
+    // For example, scanning workflow foo
+    //
+    // workflow foo {
+    //   Float x
+    //   call A
+    //   call A as A2
+    // }
+    //
+    // would return : [A, A2]
+    def scanForCalls(wdlWfSource: String) : Map[String, Int] = {
+        val callLine: Regex = "^(\\s*)call(\\s+)(\\w+)(\\s+)\\{".r
+        val callAsLine: Regex = "^(\\s*)call(\\s+)(\\w+)(\\s+)as(\\s+)(\\w+)(\\s+)".r
+        val wfLines = wdlWfSource.split("\n").toList
+
+        val calls =  HashMap.empty[String, Int]
+        for (lineNr <- 0 until wfLines.length) {
+            val line = wfLines(lineNr)
+
+            // is this an aliased call?
+            //   call A as Av1 { input: ... }
+            //   calls A as Av1
+            matchPatterAtMostOnce(callAsLine, line) match {
+                case Some(m) =>
+                    val callName = m.group(6)
+                    calls(callName) = lineNr
+                case None =>
+                    calls
+            }
+
+            // is this a simple call?
+            //   call A { input: ... }
+            //   call A
+            matchPatterAtMostOnce(callLine, line) match {
+                case Some(m) =>
+                    val callName = m.group(3)
+                    calls.get(callName) match {
+                        case None =>
+                            calls(callName) = lineNr
+                        case Some(_) =>
+                            // already matched to an aliased call.
+                            ()
+                    }
+                case None => ()
+            }
+        }
+
+        // make sure there are no duplicate lines
+        val sourceLines = calls.values.toVector
+        assert(sourceLines.size == sourceLines.toSet.size)
+        calls.toMap
+    }
+
     // throw an exception if the workflow source is not valid WDL 1.0
     def validateWdlWorkflow(wdlWfSource: String,
                             language: Language.Value) : Unit = {

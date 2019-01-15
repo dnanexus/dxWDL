@@ -50,13 +50,14 @@ class WfFragRunnerTest extends FlatSpec with Matchers {
     it should "second block in a linear workflow" in {
         val source : Path = pathFromBasename("wf_linear.wdl")
         val (language, womBundle: WomBundle, allSources) = ParseWomSourceFile.apply(source)
+        val wfSource = allSources.values.head
 
         val wf: WorkflowDefinition = womBundle.primaryCallable match {
             case Some(wf: WorkflowDefinition) => wf
             case _ => throw new Exception("sanity")
         }
         val graph = wf.innerGraph
-        val (inputNodes, subBlocks, outputNodes) = Block.splitIntoBlocks(graph)
+        val (inputNodes, subBlocks, outputNodes) = Block.splitIntoBlocks(graph, wfSource)
 
         val block = subBlocks(1)
 

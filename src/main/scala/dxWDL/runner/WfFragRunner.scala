@@ -265,9 +265,7 @@ case class WfFragRunner(wf: WorkflowDefinition,
         Utils.appletLog(verbose, wfSourceCode, 10000)
         Utils.appletLog(verbose, s"Environment: ${env}")
 
-        val graph = wf.innerGraph
-        val (_, subBlocks, _) = Block.splitIntoBlocks(graph)
-
+        val (_, subBlocks, _) = Block.splitIntoBlocks(wf.innerGraph, wfSourceCode)
         val block = subBlocks(subBlockNr)
 
         Utils.appletLog(verbose, s"""|Block ${subBlockNr} to execute:

@@ -113,9 +113,10 @@ object Block {
 
     // Here, "top of the graph" is the node that has no dependencies on the rest of
     // the nodes.
-    private def pickTopNode(nodes: Set[GraphNode]) : GraphNode = {
+    private def pickTopNodes(nodes: Set[GraphNode],
+                             callToSrcLine: Map[String, Int]) : Set[GraphNode] = {
         assert(nodes.size > 0)
-        val tops = nodes.flatMap{ node =>
+        val tops : Set[GraphNode] = nodes.flatMap{ node =>
             val ancestors = node.upstreamAncestry
             val others = nodes - node
             if ((ancestors.intersect(others)).isEmpty) {
@@ -124,41 +125,47 @@ object Block {
                 None
             }
         }
-        // There could be several nodes, we need to make the choice deterministic
-        // It would have been MUCH BETTER to choose the node that comes first in
-        // the original source code. This would keep line ordering, and be
-        // much more intuitive.
-        assert(tops.size > 0)
 
-        def compareNodes(a: GraphNode, b: GraphNode) : Boolean = {
-            val aStr = a.fullyQualifiedName
-            val bStr = b.fullyQualifiedName
-            if (aStr != bStr) {
-                aStr < bStr
-            } else {
-                val ax = a.hashCode
-                val bx = b.hashCode
-                assert(ax != bx)
-                ax < bx
-            }
+        // if there are two calls or more, choose the one that comes first in the
+        // WDL source code.
+        if (deepCountCalls(tops.toSeq) <= 1)
+            return tops
 
+        // Find the call with minimal source line
+        val maxSourceLine = callToSrcLine.values.toVector.sorted.last
+        val minLine = tops.foldLeft(maxSourceLine + 10) {
+            case (loLine, call: CallNode) =>
+                val sourceLine = callToSrcLine(call.identifier.localName.value)
+                Math.min(loLine, sourceLine)
+            case (loLine, _) => loLine
         }
-        tops.toSeq.sortWith(compareNodes).head
+        tops.filter{
+            case call: CallNode =>
+                val sourceLine = callToSrcLine(call.identifier.localName.value)
+                sourceLine == minLine
+            case other =>
+                true
+        }
     }
 
     // Build a top group that has nodes upstream of the rest. Stop
     // once it has one or more calls.
     //
     // Note: the nodes are returned in sorted order, from upstream to downstream.
-    private def buildTopGroup(nodes: Set[GraphNode]) : Vector[GraphNode] = {
-        //System.err.println(s"buildTopGroup ${nodes.size} nodes")
+    private def buildTopGroup(nodes: Set[GraphNode],
+                              callToSrcLine: Map[String, Int]) : Vector[GraphNode] = {
+        System.err.println(s"buildTopGroup ${nodes.size} nodes")
+        System.err.println(s"""|pickTopNodes:
+                               |${callToSrcLine.mkString("\n")}
+                               |""".stripMargin)
+
         var topGroup = Vector.empty[GraphNode]
         var remaining = nodes
         while (remaining.size > 0 &&
                    deepCountCalls(topGroup) == 0) {
-            val topNode = pickTopNode(remaining)
-            remaining -= topNode
-            topGroup :+= topNode
+            val topNodes = pickTopNodes(remaining, callToSrcLine)
+            remaining = remaining -- topNodes
+            topGroup = topGroup ++ topNodes
         }
         topGroup
     }
@@ -203,16 +210,34 @@ object Block {
         }
     }
 
-    // Sort the graph into a linear set of blocks, according to dependencies.
-    // Each block is itself sorted.
-    def splitIntoBlocks(graph: Graph) : (Vector[GraphInputNode],   // inputs
-                                         Vector[Block], // blocks
-                                         Vector[GraphOutputNode]) // outputs
+    // Sort the graph into a linear set of blocks, according to
+    // dependencies.  Each block is itself sorted. The dependencies
+    // impose a partial ordering on the graph. To make it correspond
+    // to the original WDL, we attempt to maintain the original line
+    // ordering.
+    //
+    // For example, in the workflow below:
+    // workflow foo {
+    //    call A
+    //    call B
+    // }
+    // the block splitting algorithm could generate:
+    //
+    //    1           2
+    //  [ call B ]  [ call A ]
+    //  [ call A ]  [ call B ]
+    //
+    // We prefer option #2 because it resembles the original.
+    def splitIntoBlocks(graph: Graph, wdlSourceCode: String) :
+            (Vector[GraphInputNode],   // inputs
+             Vector[Block], // blocks
+             Vector[GraphOutputNode]) // outputs
     = {
         //System.out.println(s"SplitIntoBlocks ${nodes.size} nodes")
         assert(graph.nodes.size > 0)
         var rest = graph.nodes
         var blocks = Vector.empty[Block]
+        val callToSrcLine = ParseWomSourceFile.scanForCalls(wdlSourceCode)
 
         // The first block has the graph inputs
         val inputBlock = graph.inputNodes.toVector
@@ -225,7 +250,7 @@ object Block {
         // Create a separate block for each group of statements
         // that include one call or more.
         while (rest.size > 0) {
-            val topGroup = buildTopGroup(rest)
+            val topGroup = buildTopGroup(rest, callToSrcLine)
             val closedTopGroup = closeGroup(topGroup, rest -- topGroup)
             val crnt = Block(closedTopGroup)
             crnt.validate()
