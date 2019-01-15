@@ -103,110 +103,36 @@ object Block {
         }.toVector
     }
 
-    // Count how many calls (task or workflow) there are in a series
-    // of nodes.
-    private def deepCountCalls(nodes: Seq[GraphNode]) : Int = {
-        val retval = deepFindCalls(nodes.toVector).size
-        //System.out.println(s"deepCountCalls ${nodes.size} nodes = ${retval}")
-        retval
-    }
-
-    // Here, "top of the graph" is the node that has no dependencies on the rest of
-    // the nodes.
-    private def pickTopNodes(nodes: Set[GraphNode],
-                             callToSrcLine: Map[String, Int]) : Set[GraphNode] = {
-        assert(nodes.size > 0)
-        val tops : Set[GraphNode] = nodes.flatMap{ node =>
-            val ancestors = node.upstreamAncestry
-            val others = nodes - node
-            if ((ancestors.intersect(others)).isEmpty) {
-                Some(node)
-            } else {
-                None
-            }
-        }
-
-        // if there are two calls or more, choose the one that comes first in the
-        // WDL source code.
-        if (deepCountCalls(tops.toSeq) <= 1)
-            return tops
-
-        // Find the call with minimal source line
-        val maxSourceLine = callToSrcLine.values.toVector.sorted.last
-        val minLine = tops.foldLeft(maxSourceLine + 10) {
-            case (loLine, call: CallNode) =>
-                val sourceLine = callToSrcLine(call.identifier.localName.value)
-                Math.min(loLine, sourceLine)
-            case (loLine, _) => loLine
-        }
-        tops.filter{
-            case call: CallNode =>
-                val sourceLine = callToSrcLine(call.identifier.localName.value)
-                sourceLine == minLine
-            case other =>
-                true
+    // Is the call [callName] invoked in one of the nodes, or their
+    // inner graphs?
+    private def graphContainsCall(callName: String,
+                                  nodes: Set[GraphNode]) : Boolean = {
+        nodes.exists{
+            case callNode: CallNode =>
+                callNode.identifier.localName.value == callName
+            case cNode: ConditionalNode =>
+                graphContainsCall(callName, cNode.innerGraph.nodes)
+            case scNode: ScatterNode =>
+                graphContainsCall(callName, scNode.innerGraph.nodes)
+            case _ => false
         }
     }
 
-    // Build a top group that has nodes upstream of the rest. Stop
-    // once it has one or more calls.
-    //
-    // Note: the nodes are returned in sorted order, from upstream to downstream.
-    private def buildTopGroup(nodes: Set[GraphNode],
-                              callToSrcLine: Map[String, Int]) : Vector[GraphNode] = {
-        System.err.println(s"buildTopGroup ${nodes.size} nodes")
-        System.err.println(s"""|pickTopNodes:
-                               |${callToSrcLine.mkString("\n")}
-                               |""".stripMargin)
-
-        var topGroup = Vector.empty[GraphNode]
-        var remaining = nodes
-        while (remaining.size > 0 &&
-                   deepCountCalls(topGroup) == 0) {
-            val topNodes = pickTopNodes(remaining, callToSrcLine)
-            remaining = remaining -- topNodes
-            topGroup = topGroup ++ topNodes
+    // Find the toplevel graph node that contains this call
+    private def findCallByName(callName: String,
+                               nodes: Set[GraphNode]) : GraphNode = {
+        val topNodeContainingCall = nodes.find{
+            case callNode: CallNode =>
+                callNode.identifier.localName.value == callName
+            case cNode: ConditionalNode =>
+                graphContainsCall(callName, cNode.innerGraph.nodes)
+            case scNode: ScatterNode =>
+                graphContainsCall(callName, scNode.innerGraph.nodes)
+            case _ => false
         }
-        topGroup
-    }
-
-
-    // Check that all the call input expressions are placed
-    // in the same block as the call.
-    //
-    // For example, in a WDL source like this:
-    //
-    // workflow wf_linear {
-    //   input {
-    //     Int x = 3
-    //     Int y = 5
-    //   }
-    //   call add {input: a=x, b=y}
-    //   call mul { input: a = add.result, b = 5 }
-    //   output {
-    //     Int r1 = add.result
-    //     Int r2 = mul.result
-    //   }
-    // }
-    //
-    // For the call to mul, the b=5 clause will have the node:
-    //    TaskCallInputExpressionNode(b, 5, WomIntegerType)
-    // It can come at the very first block. We want it to be placed in
-    // the same block as the mul call.
-    private def closeGroup(nodes: Vector[GraphNode],
-                           rest: Set[GraphNode]) : Vector[GraphNode] = {
-        val callImmediateExpressions = rest.flatMap{
-            case call: CallNode => call.upstream.toVector
-            case _ => Vector.empty
-        }
-        val outsideTcInputs: Set[TaskCallInputExpressionNode] = callImmediateExpressions.collect{
-            case tc : TaskCallInputExpressionNode => tc
-        }.toSet
-
-        // Remove any of these expressions from the group
-        nodes.filter{
-            case iTc : TaskCallInputExpressionNode if outsideTcInputs contains iTc  => false
-            case _ => true
+        topNodeContainingCall match {
+            case None => throw new Exception(s"Could not find call ${callName}")
+            case Some(node) => node
         }
     }
 
@@ -239,6 +165,9 @@ object Block {
         var blocks = Vector.empty[Block]
         val callToSrcLine = ParseWomSourceFile.scanForCalls(wdlSourceCode)
 
+        // sort from low to high according to the source lines.
+        val callsLoToHi : Vector[(String, Int)] = callToSrcLine.toVector.sortBy(_._2)
+
         // The first block has the graph inputs
         val inputBlock = graph.inputNodes.toVector
         rest --= inputBlock.toSet
@@ -247,18 +176,38 @@ object Block {
         val outputBlock = graph.outputNodes.toVector
         rest --= outputBlock.toSet
 
-        // Create a separate block for each group of statements
-        // that include one call or more.
-        while (rest.size > 0) {
-            val topGroup = buildTopGroup(rest, callToSrcLine)
-            val closedTopGroup = closeGroup(topGroup, rest -- topGroup)
-            val crnt = Block(closedTopGroup)
+        // Create a separate block for each call. This maintains
+        // the sort order from the origial code.
+        //
+        for ((callName, _) <- callsLoToHi) {
+            assert(!rest.isEmpty)
+            val node = findCallByName(callName, rest)
+            val group : Set[GraphNode] = node.upstreamAncestry
+
+            // Build a vector where the callNode comes LAST
+            val blockNodes = (group - node).toVector :+ node
+            //val blockNodesClean =
+            //    blockNodes.filter{ x => !x.isInstanceOf[GraphInputNode] }
+
+            System.err.println(s"""|block for call
+                                   |  call=${callName}
+                                   |${WomPrettyPrint.apply(blockNodes.toSeq)}
+                                   |
+                                   |""".stripMargin)
+            val crnt = Block(blockNodes)
             crnt.validate()
             blocks :+= crnt
-            rest = rest -- closedTopGroup
+            rest = rest -- group
         }
 
-        (inputBlock, blocks, outputBlock)
+        val allBlocks =
+            if (rest.size > 0) {
+                // Add an additional block for anything not belonging to the calls
+                blocks :+ Block(rest.toVector)
+            } else {
+                blocks
+            }
+        (inputBlock, allBlocks, outputBlock)
     }
 
     def dbgPrint(inputNodes: Vector[GraphInputNode],   // inputs
