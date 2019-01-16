@@ -1,9 +1,10 @@
 package dxWDL.util
 
 
-import cats.data.Validated.{Invalid, Valid}
+//import cats.data.Validated.{Invalid, Valid}
 import common.Checked
-import common.transforms.CheckedAtoB
+//import common.transforms.CheckedAtoB
+import com.typesafe.config.ConfigFactory
 import cromwell.core.path.{DefaultPathBuilder, Path}
 import cromwell.languages.util.ImportResolver._
 import java.nio.file.{Files, Paths}
@@ -26,21 +27,23 @@ object ParseWomSourceFile {
     // the Cromwell importers, and write down every new file.
     //
     // type ImportResolver = CheckedAtoB[String, WorkflowSource]
-    private def fileRecorder(allSources: HashMap[String, WorkflowSource],
-                             resolver: ImportResolver) : ImportResolver = {
+    /*
+    def fileRecorder(allSources: HashMap[String, WorkflowSource],
+                     resolver: ImportResolver) : ImportResolver = {
         CheckedAtoB.fromErrorOr { path : String =>
-            val fileContent = resolver(path)
+            val request = ImportResolutionRequest(path, List(resolver))
+            val fileContent = resolver.resolver(request)
 
             // convert an 'EitherOr' to 'Validated'
             fileContent match {
                 case Left(errors) =>
                     Invalid(errors)
                 case Right(v) =>
-                    allSources(path) = v
-                    Valid(v)
+                    allSources(path) = v.source
+                    Valid(v.source)
             }
         }
-    }
+    } */
 
     private def getBundle(mainFile: Path): (Language.Value, WomBundle, Map[String, WorkflowSource]) = {
         // Resolves for:
@@ -48,29 +51,22 @@ object ParseWomSourceFile {
         // - Where the file is
         val allSources =  HashMap.empty[String, WorkflowSource]
 
-        lazy val importResolvers = List(
-            fileRecorder(allSources, directoryResolver(
-                DefaultPathBuilder.build(Paths.get(".")), allowEscapingDirectory = true
-            )),
-            fileRecorder(allSources, directoryResolver(
-                DefaultPathBuilder.build(Paths.get(mainFile.toAbsolutePath.toFile.getParent)),
-                allowEscapingDirectory = true
-            )),
-            fileRecorder(allSources, httpResolver)
-        )
-
         val absPath = Paths.get(mainFile.toAbsolutePath.pathAsString)
         val mainFileContents = Files.readAllLines(absPath).asScala.mkString(System.lineSeparator())
         allSources(mainFile.toString) = mainFileContents
 
-        val languageFactory = if (mainFile.name.toLowerCase().endsWith("wdl")) {
-            if (mainFileContents.startsWith("version 1.0") ||
-                    mainFileContents.startsWith("version draft-3")) {
-                new WdlDraft3LanguageFactory(Map.empty)
-            } else {
-                new WdlDraft2LanguageFactory(Map.empty)
-            }
-        } else new CwlV1_0LanguageFactory(Map.empty)
+        val importResolvers: List[ImportResolver] =
+            DirectoryResolver.localFilesystemResolvers(Some(mainFile)) :+ HttpResolver(relativeTo = None)
+        //val importResolversRecorded: List[ImportResolver] =
+        //    importResolvers.map{ impr => fileRecorder(allSources, impr) }
+
+        val languageFactory =
+            List(
+                new WdlDraft3LanguageFactory(ConfigFactory.empty()),
+                new CwlV1_0LanguageFactory(ConfigFactory.empty()))
+                .find(_.looksParsable(mainFileContents))
+                .getOrElse(new WdlDraft2LanguageFactory(ConfigFactory.empty())
+            )
 
         val bundleChk: Checked[WomBundle] =
             languageFactory.getWomBundle(mainFileContents, "{}", importResolvers, List(languageFactory))
@@ -88,6 +84,22 @@ object ParseWomSourceFile {
             case ("cwl", "1.0") => Language.CWLv1_0
             case (l,v) => throw new Exception(s"Unsupported language (${l}) version (${v})")
         }
+
+        // get the source files
+        //
+        // V1
+        /*val validatedWomNamespace = languageFactory.createExecutable(womBundle, "{}", NoIoFunctionSet)
+        val validated = validatedWomNamespace match {
+            case Left(errors) => throw new Exception(s"""|WOM validation errors:
+                                                         | ${errors}
+                                                         |""".stripMargin)
+            case Right(sources) => sources
+         }*/
+        //
+        // V2
+        //val validated = LanguageFactoryUtil.validateWomNamespace(executable, ioFunctions)
+        //val allSources = validated.importedFileContent
+
         (lang, bundle, allSources.toMap)
     }
 
@@ -307,9 +319,9 @@ object ParseWomSourceFile {
                             language: Language.Value) : Unit = {
         val languageFactory = language match {
             case Language.WDLv1_0 =>
-                new WdlDraft3LanguageFactory(Map.empty)
+                new WdlDraft3LanguageFactory(ConfigFactory.empty())
             case Language.WDLvDraft2 =>
-                new WdlDraft2LanguageFactory(Map.empty)
+                new WdlDraft2LanguageFactory(ConfigFactory.empty())
             case other =>
                 throw new Exception(s"Unsupported language ${other}")
         }
@@ -333,9 +345,9 @@ object ParseWomSourceFile {
         val languageFactory =
             if (wfSource.startsWith("version 1.0") ||
                     wfSource.startsWith("version draft-3")) {
-                new WdlDraft3LanguageFactory(Map.empty)
+                new WdlDraft3LanguageFactory(ConfigFactory.empty())
             } else {
-                new WdlDraft2LanguageFactory(Map.empty)
+                new WdlDraft2LanguageFactory(ConfigFactory.empty())
             }
 
         val bundleChk: Checked[WomBundle] =
@@ -379,9 +391,9 @@ object ParseWomSourceFile {
         val languageFactory =
             if (wfSource.startsWith("version 1.0") ||
                     wfSource.startsWith("version draft-3")) {
-                new WdlDraft3LanguageFactory(Map.empty)
+                new WdlDraft3LanguageFactory(ConfigFactory.empty())
             } else {
-                new WdlDraft2LanguageFactory(Map.empty)
+                new WdlDraft2LanguageFactory(ConfigFactory.empty())
             }
 
         val bundleChk: Checked[WomBundle] =

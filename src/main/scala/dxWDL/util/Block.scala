@@ -186,15 +186,15 @@ object Block {
 
             // Build a vector where the callNode comes LAST
             val blockNodes = (group - node).toVector :+ node
-            //val blockNodesClean =
-            //    blockNodes.filter{ x => !x.isInstanceOf[GraphInputNode] }
+            val blockNodesClean =
+                blockNodes.filter{ x => !x.isInstanceOf[GraphInputNode] }
 
             System.err.println(s"""|block for call
                                    |  call=${callName}
-                                   |${WomPrettyPrint.apply(blockNodes.toSeq)}
+                                   |${WomPrettyPrint.apply(blockNodesClean.toSeq)}
                                    |
                                    |""".stripMargin)
-            val crnt = Block(blockNodes)
+            val crnt = Block(blockNodesClean)
             crnt.validate()
             blocks :+= crnt
             rest = rest -- group

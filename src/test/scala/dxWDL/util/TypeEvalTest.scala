@@ -1,6 +1,7 @@
 package dxWDL.util
 
 import cats.data.Validated.{Invalid, Valid}
+import com.typesafe.config.ConfigFactory
 import common.validation.ErrorOr.ErrorOr
 import languages.wdl.draft3.WdlDraft3LanguageFactory
 import org.scalatest.{FlatSpec, Matchers}
@@ -13,7 +14,7 @@ import wom.types._
 class TypeEvalTest extends FlatSpec with Matchers {
 
     def parseWdlCode(sourceCode: String) : WomBundle = {
-        val languageFactory = new WdlDraft3LanguageFactory(Map.empty)
+        val languageFactory = new WdlDraft3LanguageFactory(ConfigFactory.empty())
         val bundle = languageFactory.getWomBundle(sourceCode, "{}", List.empty, List(languageFactory))
         bundle match {
             case Right(bn) =>
