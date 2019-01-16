@@ -87,6 +87,6 @@ libraryDependencies ++= Seq(
 // stack trace, by adding the "-oF" option to the list.
 //
 Test / testOptions += Tests.Argument(TestFrameworks.ScalaCheck,
-                                     "-l", "dxWDL.compiler.NativeTest",
-                                     "-oF")
+                                     "-l", "dxWDL.compiler.NativeTest")
+
 Test / parallelExecution := false

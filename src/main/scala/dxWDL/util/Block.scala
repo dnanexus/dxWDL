@@ -161,7 +161,7 @@ object Block {
     = {
         //System.out.println(s"SplitIntoBlocks ${nodes.size} nodes")
         assert(graph.nodes.size > 0)
-        var rest = graph.nodes
+        var rest : Set[GraphNode] = graph.nodes
         var blocks = Vector.empty[Block]
         val callToSrcLine = ParseWomSourceFile.scanForCalls(wdlSourceCode)
 
@@ -182,22 +182,21 @@ object Block {
         for ((callName, _) <- callsLoToHi) {
             assert(!rest.isEmpty)
             val node = findCallByName(callName, rest)
-            val group : Set[GraphNode] = node.upstreamAncestry
 
             // Build a vector where the callNode comes LAST
-            val blockNodes = (group - node).toVector :+ node
+            val ancestors = node.upstreamAncestry.intersect(rest)
+            val blockNodes = ancestors.toVector :+ node
             val blockNodesClean =
                 blockNodes.filter{ x => !x.isInstanceOf[GraphInputNode] }
 
-            System.err.println(s"""|block for call
+            /*System.err.println(s"""|block for call
                                    |  call=${callName}
                                    |${WomPrettyPrint.apply(blockNodesClean.toSeq)}
                                    |
-                                   |""".stripMargin)
+                                   |""".stripMargin)*/
             val crnt = Block(blockNodesClean)
-            crnt.validate()
             blocks :+= crnt
-            rest = rest -- group
+            rest = rest -- blockNodesClean.toSet
         }
 
         val allBlocks =
@@ -207,6 +206,7 @@ object Block {
             } else {
                 blocks
             }
+        allBlocks.foreach{ b => b.validate() }
         (inputBlock, allBlocks, outputBlock)
     }
 
