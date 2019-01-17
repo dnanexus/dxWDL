@@ -46,7 +46,7 @@ class GenerateIRTest extends FlatSpec with Matchers {
 
     it should "IR compile a non trivial linear workflow with variable coercions" taggedAs(BlockTest) in {
         val path = pathFromBasename("cast.wdl")
-        Main.compile(path.toString :: "--verboseKey" :: "GenerateIR" :: cFlags) shouldBe a [Main.SuccessfulTerminationIR]
+        Main.compile(path.toString :: cFlags) shouldBe a [Main.SuccessfulTerminationIR]
     }
 
 /*    it should "disallow call with missing compulsory arguments" in {

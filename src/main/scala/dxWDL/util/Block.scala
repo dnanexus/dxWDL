@@ -136,6 +136,36 @@ object Block {
         }
     }
 
+    private def pickTopNodes(nodes: Set[GraphNode]) = {
+        assert(nodes.size > 0)
+        nodes.flatMap{ node =>
+            val ancestors = node.upstreamAncestry
+            val others = nodes - node
+            if ((ancestors.intersect(others)).isEmpty) {
+                Some(node)
+            } else {
+                None
+            }
+        }
+    }
+
+    // Sort a group of nodes according to dependencies. Note that this is a partial
+    // ordering only.
+    private def partialSortByDep(nodes: Set[GraphNode]) : Vector[GraphNode] = {
+        var ordered = Vector.empty[GraphNode]
+        var rest : Set[GraphNode] = nodes
+
+        while (!rest.isEmpty) {
+            val tops = pickTopNodes(rest)
+            assert(!tops.isEmpty)
+            ordered = ordered ++ tops
+            rest = rest -- tops
+        }
+
+        assert(ordered.size == nodes.size)
+        ordered
+    }
+
     // Sort the graph into a linear set of blocks, according to
     // dependencies.  Each block is itself sorted. The dependencies
     // impose a partial ordering on the graph. To make it correspond
@@ -183,20 +213,15 @@ object Block {
             assert(!rest.isEmpty)
             val node = findCallByName(callName, rest)
 
-            // Build a vector where the callNode comes LAST
+            // Build a vector where the callNode comes LAST. Choose
+            // the nodes from the ones that have not been picked yet.
             val ancestors = node.upstreamAncestry.intersect(rest)
-            val blockNodes = ancestors.toVector :+ node
-            val blockNodesClean =
-                blockNodes.filter{ x => !x.isInstanceOf[GraphInputNode] }
-
-            /*System.err.println(s"""|block for call
-                                   |  call=${callName}
-                                   |${WomPrettyPrint.apply(blockNodesClean.toSeq)}
-                                   |
-                                   |""".stripMargin)*/
-            val crnt = Block(blockNodesClean)
+            val nodes: Vector[GraphNode] = partialSortByDep(ancestors) :+ node
+            val nodesNoInputs =
+                nodes.filter{ x => !x.isInstanceOf[GraphInputNode] }
+            val crnt = Block(nodesNoInputs)
             blocks :+= crnt
-            rest = rest -- blockNodesClean.toSet
+            rest = rest -- nodesNoInputs.toSet
         }
 
         val allBlocks =
