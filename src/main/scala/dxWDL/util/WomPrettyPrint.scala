@@ -2,8 +2,10 @@
   */
 package dxWDL.util
 
+import wom.callable.Callable._
 import wom.graph._
 import wom.graph.expression._
+import wom.types._
 
 object WomPrettyPrint {
 
@@ -65,7 +67,33 @@ object WomPrettyPrint {
         }
     }
 
+    def apply(inputDef: InputDefinition) : String = {
+        inputDef match {
+            // A required input, no default.
+            case RequiredInputDefinition(iName, womType, _, _) =>
+                s"RequiredInputDefinition(${iName}, ${womType})"
+
+            // An input definition that has a default value supplied.
+            // Typical WDL example would be a declaration like: "Int x = 5"
+            case InputDefinitionWithDefault(iName, womType, defaultExpr, _, _) =>
+                s"InputDefinitionWithDefault(${iName}, ${womType})"
+
+            // An input whose value should always be calculated from the default, and is
+            // not allowed to be overridden.
+            case FixedInputDefinition(iName, womType, defaultExpr, _, _) =>
+                s"FixedInputDefinition(${iName}, ${womType},  default=${defaultExpr})"
+
+            case OptionalInputDefinition(iName, WomOptionalType(womType), _, _) =>
+                s"OptionalInputDefinition(${iName}, ${womType})"
+        }
+    }
+
     def apply(nodes: Seq[GraphNode]) : String = {
         nodes.map(apply).mkString("\n")
     }
+
+//    def apply(inputDefs: Seq[InputDefinition]) : String = {
+//        inputDefs.map(apply).mkString("\n")
+//    }
+
 }

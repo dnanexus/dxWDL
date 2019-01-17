@@ -241,6 +241,12 @@ case class TaskRunner(task: CallableTaskDefinition,
         }.toMap
     }
 
+    private def inputsDbg(inputs: Map[InputDefinition, WomValue]) : String = {
+        inputs.map{ case (inp, value) =>
+            val i = WomPrettyPrint.apply(inp)
+            s"${i} -> ${value}"
+        }.mkString("\n")
+    }
 
     // Calculate the input variables for the task, download the input files,
     // and build a shell script to run the command.
@@ -254,6 +260,7 @@ case class TaskRunner(task: CallableTaskDefinition,
 
         Utils.appletLog(verbose, s"Task source code:")
         Utils.appletLog(verbose, taskSourceCode, 10000)
+        Utils.appletLog(verbose, s"inputs: ${inputsDbg(inputs)}")
 
         // Download all input files.
         //
@@ -355,6 +362,8 @@ case class TaskRunner(task: CallableTaskDefinition,
     def checkInstanceType(inputs: Map[InputDefinition, WomValue]) : Boolean = {
         // evaluate the runtime attributes
         // determine the instance type
+        Utils.appletLog(verbose, s"inputs: ${inputsDbg(inputs)}")
+
         val requiredInstanceType:String = calcInstanceType(inputs)
         Utils.appletLog(verbose, s"required instance type: ${requiredInstanceType}")
 
@@ -382,6 +391,8 @@ case class TaskRunner(task: CallableTaskDefinition,
       *  determine the instance type [xxxx], and relaunch the job on [xxxx]
       */
     def relaunch(inputs: Map[InputDefinition, WomValue], originalInputs : JsValue) : Map[String, JsValue] = {
+        Utils.appletLog(verbose, s"inputs: ${inputsDbg(inputs)}")
+
         // evaluate the runtime attributes
         // determine the instance type
         val instanceType:String = calcInstanceType(inputs)

@@ -27,10 +27,10 @@ task EmptyArray {
 
 task SumArray {
     input {
-        Array[Int] ints
+        Array[Int] numbers
     }
     command <<<
-        python -c "print(${sep="+" ints})"
+        python -c "print(~{sep=" + " numbers})"
     >>>
     output {
         Int result = read_int(stdout())
@@ -65,9 +65,9 @@ workflow cast {
     call EmptyArray { input: fooAr=[] }
 
     call AddV1 as Add { input: a=i, b=i }
-    call SumArray {input: ints=iArr }
+    call SumArray {input: numbers=iArr }
 
-    call SumArray as SumArray2 {input: ints=[i] }
+    call SumArray as SumArray2 {input: numbers=[i] }
 
     # Check various rarely used types (float, boolean)
     Boolean b = true

@@ -185,4 +185,9 @@ class TaskRunnerTest extends FlatSpec with Matchers {
     it should "localize a file to a task" in {
         runTask("cgrep")
     }
+
+    ignore should "handle type coercion" in {
+        runTask("cast")
+    }
+
 }

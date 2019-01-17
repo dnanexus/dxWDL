@@ -1,0 +1,7 @@
+{
+  "instance_types.DiskSpaceSpec_retval" : "true",
+  "instance_types.MemorySpec_retval" : "true",
+  "instance_types.NumCoresSpec_retval" : "true",
+  "instance_types.RuntimeDockerChoice_retval": "We are inside a python docker image",
+  "instance_types.DiskSpaceSpec2_retval" : "true"
+}
