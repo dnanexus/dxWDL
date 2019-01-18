@@ -1,10 +1,10 @@
 package dxWDL
 
-//import com.dnanexus.AccessLevel
+import com.dnanexus.AccessLevel
 import org.scalatest.{FlatSpec, Matchers}
 import spray.json._
-//import wdl.draft2.model.WdlExpression
-//import wom.values.WomString
+import wdl.draft2.model.WdlExpression
+import wom.values.WomString
 
 class ExtrasTest extends FlatSpec with Matchers {
     val verbose = Verbose(true, true, Set.empty)
@@ -24,7 +24,6 @@ class ExtrasTest extends FlatSpec with Matchers {
         extras.defaultTaskDxAttributes should be (Some(DxRunSpec(None, None, Some("all"), None)))
     }
 
-    /*
     it should "invalid runSpec I" in {
         val ex1 =
             """|{
@@ -201,9 +200,7 @@ class ExtrasTest extends FlatSpec with Matchers {
                                       Some(4))
         JsObject(execPolicy.toJson) should be(expectedJs)
     }
- */
 
-    /*
     it should "generate valid JSON timeout policy" in {
         val expectedJs : JsValue =
             """|{
@@ -256,5 +253,57 @@ class ExtrasTest extends FlatSpec with Matchers {
         val extrasEmpty = Extras.parse(rtEmpty, verbose)
         extrasEmpty.defaultRuntimeAttributes should equal(Map.empty)
     }
-     */
+
+    it should "accept per task attributes" in {
+        val runSpec : JsValue =
+            """|{
+               | "default_task_dx_attributes" : {
+               |   "runSpec": {
+               |     "timeoutPolicy": {
+               |        "*": {
+               |          "hours": 12
+               |        }
+               |     }
+               |   }
+               |  },
+               | "per_task_dx_attributes" : {
+               |   "Add": {
+               |      "runSpec": {
+               |        "timeoutPolicy": {
+               |          "*": {
+               |             "minutes": 30
+               |          }
+               |        }
+               |      }
+               |    },
+               |    "Multiply" : {
+               |      "runSpec": {
+               |        "timeoutPolicy": {
+               |          "*": {
+               |            "minutes": 30
+               |          }
+               |        },
+               |        "access" : {
+               |          "project": "UPLOAD"
+               |        }
+               |      }
+               |    }
+               |  }
+               |}
+               |""".stripMargin.parseJson
+
+        val extras = Extras.parse(runSpec, verbose)
+        extras.defaultTaskDxAttributes should be (
+            Some(DxRunSpec(
+                     None,
+                     None,
+                     None,
+                     Some(DxTimeout(None, Some(12), None))
+                 )))
+        extras.perTaskDxAttributes should be (
+            Map("Multiply" -> DxRunSpec(Some(DxAccess(None, Some(AccessLevel.UPLOAD), None, None, None)),
+                                        None, None, Some(DxTimeout(None, None, Some(30)))),
+                "Add" -> DxRunSpec(None, None, None, Some(DxTimeout(None, None, Some(30)))))
+        )
+    }
 }

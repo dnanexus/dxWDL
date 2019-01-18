@@ -446,11 +446,10 @@ case class Native(dxWDLrtId: String,
 
     // Set the run spec.
     //
-    private def calcRunSpec(bashScript: String,
-                            iType: IR.InstanceType,
-                            docker: IR.DockerImage) : JsValue = {
+    private def calcRunSpec(applet: IR.Applet,
+                            bashScript: String) : JsValue = {
         // find the dxWDL asset
-        val instanceType:String = iType match {
+        val instanceType:String = applet.instanceType match {
             case x : IR.InstanceTypeConst =>
                 val xDesc = InstanceTypeReq(x.dxInstanceType,
                                             x.memoryMB,
@@ -469,6 +468,9 @@ case class Native(dxWDLrtId: String,
             "distribution" -> JsString("Ubuntu"),
             "release" -> JsString(UBUNTU_VERSION),
         )
+
+        // Start with the default dx-attribute section, and override
+        // any field that is specified in the individual task section.
         val extraRunSpec : Map[String, JsValue] = extras match {
             case None => Map.empty
             case Some(ext) => ext.defaultTaskDxAttributes match {
@@ -476,11 +478,24 @@ case class Native(dxWDLrtId: String,
                 case Some(dta) => dta.toRunSpecJson
             }
         }
-        val runSpecWithExtras = runSpec ++ extraRunSpec
+        val taskSpecificRunSpec : Map[String, JsValue] =
+            if (applet.kind == IR.AppletKindTask) {
+                // A task can override the default dx attributes
+                extras match {
+                    case None => Map.empty
+                    case Some(ext) => ext.perTaskDxAttributes.get(applet.name) match {
+                        case None => Map.empty
+                        case Some(dta) => dta.toRunSpecJson
+                    }
+                }
+            } else {
+                Map.empty
+            }
+        val runSpecWithExtras = runSpec ++ extraRunSpec ++ taskSpecificRunSpec
 
         // If the docker image is a platform asset,
         // add it to the asset-depends.
-        val dockerAssets: Option[JsValue] = docker match {
+        val dockerAssets: Option[JsValue] = applet.docker match {
             case IR.DockerImageNone => None
             case IR.DockerImageNetwork => None
             case IR.DockerImageDxAsset(dxRecord) =>
@@ -513,25 +528,31 @@ case class Native(dxWDLrtId: String,
                      ("bundledDepends" -> JsArray(bundledDepends)))
     }
 
-    def  calcAccess(applet: IR.Applet) : JsValue = {
+    def calcAccess(applet: IR.Applet) : JsValue = {
         val extraAccess: DxAccess = extras match {
             case None => DxAccess.empty
-            case Some(ext) => ext.defaultTaskDxAttributes match {
-                case None => DxAccess.empty
-                case Some(dta) => dta.access match {
-                    case None => DxAccess.empty
-                    case Some(access) => access
-                }
-            }
+            case Some(ext) => ext.getDefaultAccess
         }
+        val taskSpecificAccess : DxAccess =
+            if (applet.kind == IR.AppletKindTask) {
+                // A task can override the default dx attributes
+                extras match {
+                    case None => DxAccess.empty
+                    case Some(ext) => ext.getTaskAccess(applet.name)
+                }
+            } else {
+                DxAccess.empty
+            }
+        val taskAccess = extraAccess.merge(taskSpecificAccess)
+
         val access: DxAccess = applet.kind match {
             case IR.AppletKindTask =>
                 if (applet.docker == IR.DockerImageNetwork) {
                     // docker requires network access, because we are downloading
                     // the image from the network
-                    extraAccess.merge(DxAccess(Some(Vector("*")), None,  None,  None,  None))
+                    taskAccess.merge(DxAccess(Some(Vector("*")), None,  None,  None,  None))
                 } else {
-                    extraAccess
+                    taskAccess
                 }
             case IR.AppletKindWorkflowOutputReorg =>
                 // The WorkflowOutput applet requires higher permissions
@@ -541,7 +562,7 @@ case class Native(dxWDLrtId: String,
                 // Even scatters need network access, because
                 // they spawn subjobs that (may) use dx-docker.
                 // We end up allowing all applets to use the network
-                extraAccess.merge(DxAccess(Some(Vector("*")), None,  None,  None,  None))
+                taskAccess.merge(DxAccess(Some(Vector("*")), None,  None,  None,  None))
         }
         val fields = access.toJson
         if (fields.isEmpty) JsNull
@@ -560,7 +581,7 @@ case class Native(dxWDLrtId: String,
         val outputSpec : Vector[JsValue] = applet.outputs.map(cVar =>
             cVarToSpec(cVar)
         ).flatten.toVector
-        val runSpec : JsValue = calcRunSpec(bashScript, applet.instanceType, applet.docker)
+        val runSpec : JsValue = calcRunSpec(applet, bashScript)
         val access : JsValue = calcAccess(applet)
 
         // pack all the core arguments into a single request

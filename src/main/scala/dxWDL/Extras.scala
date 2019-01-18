@@ -168,11 +168,35 @@ case class DxRunSpec(access: Option[DxAccess],
 }
 
 case class Extras(defaultRuntimeAttributes: Map[String, WdlExpression],
-                  defaultTaskDxAttributes: Option[DxRunSpec])
+                  defaultTaskDxAttributes: Option[DxRunSpec],
+                  perTaskDxAttributes: Map[String, DxRunSpec]) {
+    def getDefaultAccess : DxAccess = {
+        defaultTaskDxAttributes match {
+            case None => DxAccess.empty
+            case Some(dta) => dta.access match {
+                case None => DxAccess.empty
+                case Some(access) => access
+            }
+        }
+    }
+
+    def getTaskAccess(taskName: String) : DxAccess = {
+        perTaskDxAttributes.get(taskName) match {
+            case None => DxAccess.empty
+            case Some(dta) => dta.access match {
+                case None => DxAccess.empty
+                case Some(access) => access
+            }
+        }
+    }
+
+}
 
 object Extras {
     val DX_INSTANCE_TYPE_ATTR = "dx_instance_type"
-    val EXTRA_ATTRS = Set("default_runtime_attributes", "default_task_dx_attributes")
+    val EXTRA_ATTRS = Set("default_runtime_attributes",
+                          "default_task_dx_attributes",
+                          "per_task_dx_attributes")
     val RUNTIME_ATTRS = Set(DX_INSTANCE_TYPE_ATTR, "memory", "disks", "cpu", "docker")
     val TASK_DX_ATTRS = Set("runSpec")
     val RUN_SPEC_ATTRS = Set("access", "executionPolicy", "restartableEntryPoints", "timeoutPolicy")
@@ -421,11 +445,32 @@ object Extras {
                                         |we currently support ${EXTRA_ATTRS}
                                         |""".stripMargin.replaceAll("\n", ""))
         }
+
+        // parse the individual task dx attributes
+        val perTaskDxAttrs : Map[String, DxRunSpec] =
+            checkedParseObjectField(fields, "per_task_dx_attributes") match {
+                case JsNull =>
+                    Map.empty[String, DxRunSpec]
+                case jsObj =>
+                    val fields = jsObj.asJsObject.fields
+                    fields.foldLeft(Map.empty[String, DxRunSpec]){
+                        case (accu, (name, jsValue)) =>
+                            val dxAttrs = parseTaskDxAttrs(jsValue, verbose)
+                            dxAttrs match {
+                                case None =>
+                                    accu
+                                case Some(attrs) =>
+                                    accu + (name -> attrs)
+                            }
+                    }
+            }
+
         Extras(parseRuntimeAttrs(
                    checkedParseObjectField(fields, "default_runtime_attributes"),
                    verbose),
                parseTaskDxAttrs(
                    checkedParseObjectField(fields, "default_task_dx_attributes"),
-                   verbose))
+                   verbose),
+               perTaskDxAttrs)
     }
 }
