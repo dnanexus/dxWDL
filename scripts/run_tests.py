@@ -81,6 +81,7 @@ medium_test_list = [
 # Tests run in continuous integration. We remove the native app test,
 # because we don't want to give permissions for creating platform apps.
 ci_test_list = copy.deepcopy(medium_test_list)
+ci_test_list.remove("call_native")
 ci_test_list.remove("call_native_app")
 ci_test_list.remove("platform_asset")
 

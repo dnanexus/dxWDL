@@ -539,14 +539,32 @@ case class Native(dxWDLrtId: String,
                 }
             }
         }
+        val taskSpecificAccess : DxAccess =
+            if (applet.kind == IR.AppletKindTask) {
+                // A task can override the default dx attributes
+                extras match {
+                    case None => DxAccess.empty
+                    case Some(ext) => ext.perTaskDxAttributes.get(applet.name) match {
+                        case None => DxAccess.empty
+                        case Some(attrs) => attrs.access match {
+                            case None => DxAccess.empty
+                            case Some(access) => access
+                        }
+                    }
+                }
+            } else {
+                DxAccess.empty
+            }
+        val taskAccess = extraAccess.merge(taskSpecificAccess)
+
         val access: DxAccess = applet.kind match {
             case IR.AppletKindTask =>
                 if (applet.docker == IR.DockerImageNetwork) {
                     // docker requires network access, because we are downloading
                     // the image from the network
-                    extraAccess.merge(DxAccess(Some(Vector("*")), None,  None,  None,  None))
+                    taskAccess.merge(DxAccess(Some(Vector("*")), None,  None,  None,  None))
                 } else {
-                    extraAccess
+                    taskAccess
                 }
             case IR.AppletKindWorkflowOutputReorg =>
                 // The WorkflowOutput applet requires higher permissions
@@ -556,7 +574,7 @@ case class Native(dxWDLrtId: String,
                 // Even scatters need network access, because
                 // they spawn subjobs that (may) use dx-docker.
                 // We end up allowing all applets to use the network
-                extraAccess.merge(DxAccess(Some(Vector("*")), None,  None,  None,  None))
+                taskAccess.merge(DxAccess(Some(Vector("*")), None,  None,  None,  None))
         }
         val fields = access.toJson
         if (fields.isEmpty) JsNull

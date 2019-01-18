@@ -21,7 +21,7 @@
     }
   },
 
-  "individual_task_dx_attributes" : {
+  "per_task_dx_attributes" : {
     "Add": {
       "runSpec": {
         "timeoutPolicy": {
@@ -31,16 +31,16 @@
         }
       }
     },
-    "Multiply" : {
+    "Inc" : {
       "runSpec": {
         "timeoutPolicy": {
           "*": {
             "minutes": 30
           }
+        },
+        "access" : {
+          "project": "UPLOAD"
         }
-      },
-      "access" : {
-        "project": "UPLOAD"
       }
     }
   }
