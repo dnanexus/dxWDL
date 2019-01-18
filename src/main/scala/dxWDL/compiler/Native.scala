@@ -528,29 +528,17 @@ case class Native(dxWDLrtId: String,
                      ("bundledDepends" -> JsArray(bundledDepends)))
     }
 
-    def  calcAccess(applet: IR.Applet) : JsValue = {
+    def calcAccess(applet: IR.Applet) : JsValue = {
         val extraAccess: DxAccess = extras match {
             case None => DxAccess.empty
-            case Some(ext) => ext.defaultTaskDxAttributes match {
-                case None => DxAccess.empty
-                case Some(dta) => dta.access match {
-                    case None => DxAccess.empty
-                    case Some(access) => access
-                }
-            }
+            case Some(ext) => ext.getDefaultAccess
         }
         val taskSpecificAccess : DxAccess =
             if (applet.kind == IR.AppletKindTask) {
                 // A task can override the default dx attributes
                 extras match {
                     case None => DxAccess.empty
-                    case Some(ext) => ext.perTaskDxAttributes.get(applet.name) match {
-                        case None => DxAccess.empty
-                        case Some(attrs) => attrs.access match {
-                            case None => DxAccess.empty
-                            case Some(access) => access
-                        }
-                    }
+                    case Some(ext) => ext.getTaskAccess(applet.name)
                 }
             } else {
                 DxAccess.empty

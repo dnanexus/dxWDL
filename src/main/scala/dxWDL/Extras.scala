@@ -169,7 +169,28 @@ case class DxRunSpec(access: Option[DxAccess],
 
 case class Extras(defaultRuntimeAttributes: Map[String, WdlExpression],
                   defaultTaskDxAttributes: Option[DxRunSpec],
-                  perTaskDxAttributes: Map[String, DxRunSpec])
+                  perTaskDxAttributes: Map[String, DxRunSpec]) {
+    def getDefaultAccess : DxAccess = {
+        defaultTaskDxAttributes match {
+            case None => DxAccess.empty
+            case Some(dta) => dta.access match {
+                case None => DxAccess.empty
+                case Some(access) => access
+            }
+        }
+    }
+
+    def getTaskAccess(taskName: String) : DxAccess = {
+        perTaskDxAttributes.get(taskName) match {
+            case None => DxAccess.empty
+            case Some(dta) => dta.access match {
+                case None => DxAccess.empty
+                case Some(access) => access
+            }
+        }
+    }
+
+}
 
 object Extras {
     val DX_INSTANCE_TYPE_ATTR = "dx_instance_type"

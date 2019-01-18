@@ -282,6 +282,9 @@ class ExtrasTest extends FlatSpec with Matchers {
                |          "*": {
                |            "minutes": 30
                |          }
+               |        },
+               |        "access" : {
+               |          "project": "UPLOAD"
                |        }
                |      }
                |    }
@@ -298,7 +301,8 @@ class ExtrasTest extends FlatSpec with Matchers {
                      Some(DxTimeout(None, Some(12), None))
                  )))
         extras.perTaskDxAttributes should be (
-            Map("Multiply" -> DxRunSpec(None, None, None, Some(DxTimeout(None, None, Some(30)))),
+            Map("Multiply" -> DxRunSpec(Some(DxAccess(None, Some(AccessLevel.UPLOAD), None, None, None)),
+                                        None, None, Some(DxTimeout(None, None, Some(30)))),
                 "Add" -> DxRunSpec(None, None, None, Some(DxTimeout(None, None, Some(30)))))
         )
     }
