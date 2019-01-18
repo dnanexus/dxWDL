@@ -279,7 +279,7 @@ task Add {
                     // wrapper for a native applet.
                     // make sure the runtime block is empty
                     if (!task.runtimeAttributes.attrs.isEmpty)
-                        Utils.warning(cef.taskNativeRuntimeBlockShouldBeEmpty(task.ast))
+                        Utils.warning(verbose, cef.taskNativeRuntimeBlockShouldBeEmpty(task.ast))
                     IR.AppletKindNative(id)
                 case (_,_) =>
                     // a WDL task

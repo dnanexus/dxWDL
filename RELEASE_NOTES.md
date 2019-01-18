@@ -1,5 +1,10 @@
 # Release Notes
 
+## 0.79
+- Support [per task dx-attributes](./doc/ExpertOptions.md#Setting-dnanexus-specific-attributes-for-tasks).
+- Report an warning for a non-empty runtime section in a native applet, instead of throwing an error. Note
+  that the runtime section will be ignored.
+
 ## 0.78.1
 - Support the `restartableEntryPoints` applet option in the `extras` file.
 

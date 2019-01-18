@@ -401,6 +401,40 @@ be set.
 }
 ```
 
+In order to override the defaults for specific tasks, you can add the `per_task_dx_attributes`
+section. For example
+
+```
+{
+  "per_task_dx_attributes" : {
+    "Add": {
+      "runSpec": {
+        "timeoutPolicy": {
+          "*": {
+            "minutes": 30
+          }
+        }
+      }
+    },
+    "Inc" : {
+      "runSpec": {
+        "timeoutPolicy": {
+          "*": {
+            "minutes": 30
+          }
+        },
+        "access" : {
+          "project": "UPLOAD"
+        }
+      }
+    }
+  }
+}
+```
+
+will override the default timeout for tasks `Add` and `Inc`. It will also provide
+`UPLOAD` instead of `VIEW` project access to `Inc`.
+
 ## Handling intermediate workflow outputs
 
 A workflow may create a large number of files, taking up significant
