@@ -50,8 +50,11 @@ medium_test_list = [
     # lifting declarations
     "decl_mid_wf",
     "dict",
+
+    # files
     "files",
     "files_with_the_same_name",
+    "spaces_in_output_files",
     "hello",
 
     # Variable instance types

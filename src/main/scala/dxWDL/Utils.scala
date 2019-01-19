@@ -533,7 +533,7 @@ object Utils {
             val fid = dxfile.getId()
             try {
                 // Use dx download
-                val dxDownloadCmd = s"dx download ${fid} -o ${path.toString()}"
+                val dxDownloadCmd = s"""dx download ${fid} -o "${path.toString()}" """
                 System.err.println(s"--  ${dxDownloadCmd}")
                 val (outmsg, errmsg) = execCommand(dxDownloadCmd, None)
 
@@ -567,8 +567,9 @@ object Utils {
             throw new AppInternalException(s"Output file ${path.toString} is missing")
         def uploadOneFile(path: Path, counter: Int) : Option[String] = {
             try {
-                // shell out to dx upload
-                val dxUploadCmd = s"dx upload ${path.toString} --brief"
+                // shell out to dx upload. We need to quote the path, because it may contain
+                // spaces
+                val dxUploadCmd = s"""dx upload "${path.toString}" --brief"""
                 System.err.println(s"--  ${dxUploadCmd}")
                 val (outmsg, errmsg) = execCommand(dxUploadCmd, None)
                 if (!outmsg.startsWith("file-"))
