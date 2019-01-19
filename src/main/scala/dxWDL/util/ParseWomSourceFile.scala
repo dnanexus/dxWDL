@@ -272,11 +272,14 @@ object ParseWomSourceFile {
     //
     // would return : [A, A2]
     def scanForCalls(wdlWfSource: String) : Map[String, Int] = {
-        val callLine: Regex = "^(\\s*)call(\\s+)(\\w+)(\\s+)\\{".r
-        val callAsLine: Regex = "^(\\s*)call(\\s+)(\\w+)(\\s+)as(\\s+)(\\w+)(\\s+)".r
+        // The "callLine" regular expression will match occurrences of
+        // "callAsLine", so we are careful to find all aliased calls first
+        val callLine: Regex = "^(\\s*)call(\\s+)(\\w+)".r
+        val callAsLine: Regex = "^(\\s*)call(\\s+)(\\w+)(\\s+)as(\\s+)(\\w+)".r
         val wfLines = wdlWfSource.split("\n").toList
 
         val calls =  HashMap.empty[String, Int]
+        var linesWithCalls = Set.empty[Int]
         for (lineNr <- 0 until wfLines.length) {
             val line = wfLines(lineNr)
 
@@ -287,24 +290,32 @@ object ParseWomSourceFile {
                 case Some(m) =>
                     val callName = m.group(6)
                     calls(callName) = lineNr
+                    linesWithCalls += lineNr
                 case None =>
                     calls
             }
+        }
 
-            // is this a simple call?
-            //   call A { input: ... }
-            //   call A
-            matchPatterAtMostOnce(callLine, line) match {
-                case Some(m) =>
-                    val callName = m.group(3)
-                    calls.get(callName) match {
-                        case None =>
-                            calls(callName) = lineNr
-                        case Some(_) =>
-                            // already matched to an aliased call.
-                            ()
-                    }
-                case None => ()
+        for (lineNr <- 0 until wfLines.length) {
+            val line = wfLines(lineNr)
+
+            if (!(linesWithCalls contains lineNr)) {
+                // is this a simple call?
+                //   call A { input: ... }
+                //   call A
+                matchPatterAtMostOnce(callLine, line) match {
+                    case Some(m) =>
+                        val callName = m.group(3)
+                        calls.get(callName) match {
+                            case None =>
+                                calls(callName) = lineNr
+                                linesWithCalls += lineNr
+                            case Some(_) =>
+                                // already matched to an aliased call.
+                                ()
+                        }
+                    case None => ()
+                }
             }
         }
 

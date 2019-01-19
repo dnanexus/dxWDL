@@ -44,14 +44,18 @@ class GenerateIRTest extends FlatSpec with Matchers {
         ) shouldBe a [Main.SuccessfulTerminationIR]
     }
 
-    it should "IR compile a non trivial linear workflow with variable coercions" taggedAs(BlockTest) in {
+    it should "IR compile a non trivial linear workflow with variable coercions" in {
         val path = pathFromBasename("cast.wdl")
         Main.compile(path.toString :: cFlags) shouldBe a [Main.SuccessfulTerminationIR]
     }
 
     it should "IR compile a workflow with two consecutive calls" taggedAs(BlockTest) in {
         val path = pathFromBasename("strings.wdl")
-        Main.compile(path.toString :: cFlags) shouldBe a [Main.SuccessfulTerminationIR]
+        Main.compile(
+            List(path.toString, "--compileMode", "ir",
+                 "--quiet",
+                 "--verboseKey", "GenerateIR")
+        ) shouldBe a [Main.SuccessfulTerminationIR]
     }
 
 

@@ -39,7 +39,7 @@ case class DxPathFunctions(config: DxPathConfig,
       * If path is relative, prefix it with the _host_ call root.
       */
     override def relativeToHostCallRoot(path: String): String =
-        throw new AppInternalException("need to implement this function in DxIoFunctions")
+        throw new AppInternalException("relativeToHostCallRoot: not implemented in DxIoFunctions")
 
     /**
       * Similar to java.nio.Path.getFileName
@@ -95,22 +95,31 @@ case class DxIoFunctions(config: DxPathConfig,
     /**
       * Write "content" to the specified "path" location
       */
-    override def writeFile(path: String, content: String): Future[WomSingleFile] =
-        throw new AppInternalException("need to implement this function in DxIoFunctions")
+    override def writeFile(path: String, content: String): Future[WomSingleFile] = {
+        Furl.parse(path) match {
+            case FurlLocal(localPath) =>
+                val p = Paths.get(localPath)
+                Utils.writeFileContent(p, content)
+                Future(WomSingleFile(localPath))
+            case fdx : FurlDx =>
+                throw new AppInternalException(s"writeFile: not implemented in DxIoFunctions for cloud files (${fdx})")
+        }
+    }
+
 
     /**
       * Creates a temporary directory. This must be in a place accessible to the backend.
       * In a world where then backend is not known at submission time this will not be sufficient.
       */
     override def createTemporaryDirectory(name: Option[String]): Future[String] =
-        throw new AppInternalException("need to implement this function in DxIoFunctions")
+        throw new AppInternalException("createTemporaryDirectory: not implemented in DxIoFunctions")
 
     /**
       * Copy pathFrom to targetName
       * @return destination as a WomSingleFile
       */
     override def copyFile(source: String, destination: String): Future[WomSingleFile] =
-        throw new AppInternalException("need to implement this function in DxIoFunctions")
+        throw new AppInternalException("copyFile: not implemented in DxIoFunctions")
 
     /**
       * Glob files and directories using the provided pattern.
@@ -142,20 +151,27 @@ case class DxIoFunctions(config: DxPathConfig,
       * @return The list of all files under "dirPath"
       */
     override def listAllFilesUnderDirectory(dirPath: String): Future[Seq[String]] =
-        throw new AppInternalException("need to implement this function in DxIoFunctions")
+        throw new AppInternalException("listAllFilesUnderDirectory: not implemented in DxIoFunctions")
 
     /**
       * List entries in a directory non recursively. Includes directories
       */
     override def listDirectory(path: String)(visited: Vector[String] = Vector.empty)
             : Future[Iterator[IoElement]] =
-        throw new AppInternalException("need to implement this function in DxIoFunctions")
+        throw new AppInternalException("listDirectory: not implemented in DxIoFunctions")
 
     /**
       * Return true if path points to a directory, false otherwise
       */
-    override def isDirectory(path: String): Future[Boolean] =
-        throw new AppInternalException("need to implement this function in DxIoFunctions")
+    override def isDirectory(path: String): Future[Boolean] = {
+        Furl.parse(path) match {
+            case FurlLocal(localPath) =>
+                val p = Paths.get(localPath)
+                Future(p.toFile.isDirectory)
+            case fdx : FurlDx =>
+                throw new AppInternalException(s"isDirectory: cannot be applied to non local file (${path})")
+        }
+    }
 
     /**
       * Return the size of the file located at "path"

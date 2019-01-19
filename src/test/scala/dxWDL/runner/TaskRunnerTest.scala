@@ -195,8 +195,11 @@ class TaskRunnerTest extends FlatSpec with Matchers {
         runTask("spaces_in_file_paths")
     }
 
-    it should "support tab separated value table" in {
-        runTask("create_tsv")
+    it should "read_tsv" in {
+        runTask("read_tsv_x")
     }
 
+    it should "write_tsv" in {
+        runTask("write_tsv_x")
+    }
 }

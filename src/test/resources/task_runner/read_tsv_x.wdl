@@ -1,5 +1,5 @@
 # Generate sets of intervals for scatter-gathering over chromosomes
-task create_tsv {
+task read_tsv_x {
     # Use python to create a string parsed into a wdl Array[Array[String]]
     command<<<
     python <<CODE

@@ -212,16 +212,17 @@ object Block {
         for ((callName, _) <- callsLoToHi) {
             assert(!rest.isEmpty)
             val node = findCallByName(callName, rest)
+            rest = rest - node
 
             // Build a vector where the callNode comes LAST. Choose
             // the nodes from the ones that have not been picked yet.
             val ancestors = node.upstreamAncestry.intersect(rest)
-            val nodes: Vector[GraphNode] = partialSortByDep(ancestors) :+ node
-            val nodesNoInputs =
-                nodes.filter{ x => !x.isInstanceOf[GraphInputNode] }
-            val crnt = Block(nodesNoInputs)
+            val nodes: Vector[GraphNode] =
+                (partialSortByDep(ancestors) :+ node)
+                    .filter{ x => !x.isInstanceOf[GraphInputNode] }
+            val crnt = Block(nodes)
             blocks :+= crnt
-            rest = rest -- nodesNoInputs.toSet
+            rest = rest -- nodes.toSet
         }
 
         val allBlocks =

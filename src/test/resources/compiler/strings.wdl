@@ -31,72 +31,10 @@ task processTsv {
     }
 }
 
-# Concatenate two strings
-task concat {
-    input {
-        String x
-        String y
-    }
-
-    command {
-        echo ${x}_${y}
-    }
-    output {
-        String result = read_string(stdout())
-    }
-}
-
-# Concatenate array of strings
-task concatArray {
-    input {
-        Array[String] words
-    }
-    command {
-        echo ${sep='_' words}
-    }
-    output {
-      String result = read_string(stdout())
-    }
-}
-
 workflow strings {
     input {
         String s
         Array[String] sa
-    }
-    # The following two calls are equivalent to
-    # concatenating three variables.
-    # Test string interpolation.
-    call concat as concat1 {
-        input:
-            x = "${s}.aligned",
-            y = "${s}.duplicate_metrics"
-    }
-    call concat as concat2 {
-        input:
-            x = concat1.result,
-            y = sub(s, "frogs", "xRIPx")
-    }
-
-    call concatArray as concat3 {
-        input: words = [
-            "delicate" + ".aligned",
-            "number" + ".duplicate_metrics",
-            sub("frogs_toads_salamander", "frogs", "xRIPx")
-        ]
-    }
-
-    call concatArray as concat4 {
-        input : words=sa
-    }
-
-    String fruit = "orange"
-    String ice = "popsicle"
-    call concatArray as concat5 {
-        input: words = [
-            "Tamara likes ${fruit}s and ${ice}s",
-            "Would you like some too?"
-        ]
     }
 
     # Ragged array of strings
@@ -104,11 +42,6 @@ workflow strings {
     call processTsv { input: words = createTsv.result }
 
     output {
-        String concat1_result = concat1.result
-        String concat2_result = concat2.result
-        String concat3_result = concat3.result
-        String concat4_result = concat4.result
-        String concat5_result = concat5.result
         String tsv_result = processTsv.result
     }
 }
