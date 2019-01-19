@@ -3,7 +3,8 @@
 ## 0.79
 - Support [per task dx-attributes](./doc/ExpertOptions.md#Setting-dnanexus-specific-attributes-for-tasks).
 - Report a warning for a non-empty runtime section in a native applet, instead of throwing an error. Note
-  that the WDL runtime section will be ignored, the native definitions will be used instead.
+that the WDL runtime section will be ignored, the native definitions will be used instead.
+- Fix bug when using [spaces in output files](https://github.com/dnanexus/dxWDL/issues/181)
 
 ## 0.78.1
 - Support the `restartableEntryPoints` applet option in the `extras` file.
