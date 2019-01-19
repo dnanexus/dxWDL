@@ -154,8 +154,7 @@ case class TaskRunner(task: CallableTaskDefinition,
     // need to run some shell setup statements before and after this
     // script.
     private def writeBashScript(inputEnv: Map[InputDefinition, WomValue],
-                                runtimeEnvironment: RuntimeEnvironment,
-                                env : Map[String, WomValue]) : Unit = {
+                                runtimeEnvironment: RuntimeEnvironment) : Unit = {
         // instantiate the command
         // TODO: [env] has to be of type:
         //   type WomEvaluatedCallInputs = Map[InputDefinition, WomValue]
@@ -200,8 +199,7 @@ case class TaskRunner(task: CallableTaskDefinition,
         dxPathConfig.script.toFile.setExecutable(true)
     }
 
-    private def writeDockerSubmitBashScript(env: Map[String, WomValue],
-                                            imgName: String) : Unit = {
+    private def writeDockerSubmitBashScript(imgName: String) : Unit = {
         // The user wants to use a docker container with the
         // image [imgName]. We implement this with dx-docker.
         // There may be corner cases where the image will run
@@ -222,13 +220,17 @@ case class TaskRunner(task: CallableTaskDefinition,
         dxPathConfig.dockerSubmitScript.toFile.setExecutable(true)
     }
 
+/*
     private def evalEnvironment(localizedInputs: Map[InputDefinition, WomValue]) : Map[String, WomValue] = {
         val inputs = localizedInputs.map{ case (inpDfn, value) =>
             inpDfn.name -> value
         }.toMap
 
-        // evaluate the declarations
-        task.environmentExpressions.map{
+        // evaluate the declarations.
+        //
+        // It isn't clear that this is actually correct, because I'm not sure what's in the
+        // environment.
+        val env = task.environmentExpressions.map{
             case (varName, expr) =>
                 val result: ErrorOr[WomValue] =
                     expr.evaluateValue(inputs, dxIoFunctions)
@@ -239,7 +241,10 @@ case class TaskRunner(task: CallableTaskDefinition,
                 }
                 varName -> v
         }.toMap
+
+        inputs ++ env
     }
+ */
 
     private def inputsDbg(inputs: Map[InputDefinition, WomValue]) : String = {
         inputs.map{ case (inp, value) =>
@@ -250,7 +255,7 @@ case class TaskRunner(task: CallableTaskDefinition,
 
     // Calculate the input variables for the task, download the input files,
     // and build a shell script to run the command.
-    def prolog(inputs: Map[InputDefinition, WomValue]) :
+    def prolog(taskInputs: Map[InputDefinition, WomValue]) :
             (Map[String, WomValue], Map[Furl, Path]) =
     {
         Utils.appletLog(verbose, s"Prolog  debugLevel=${runtimeDebugLevel}")
@@ -260,34 +265,31 @@ case class TaskRunner(task: CallableTaskDefinition,
 
         Utils.appletLog(verbose, s"Task source code:")
         Utils.appletLog(verbose, taskSourceCode, 10000)
-        Utils.appletLog(verbose, s"inputs: ${inputsDbg(inputs)}")
+        Utils.appletLog(verbose, s"inputs: ${inputsDbg(taskInputs)}")
 
         // Download all input files.
         //
         // Note: this may be overly conservative,
         // because some of the files may not actually be accessed.
-        val (localizedInputs, dxUrl2path) = jobInputOutput.localizeFiles(inputs,
+        val (localizedInputs, dxUrl2path) = jobInputOutput.localizeFiles(taskInputs,
                                                                          dxPathConfig.inputFilesDir)
-
-        // evaluate the declarations
-        val env: Map[String, WomValue] = evalEnvironment(localizedInputs)
-        val docker = dockerImage(env)
+        val inputs = localizedInputs.map{ case (inpDfn, value) =>
+            inpDfn.name -> value
+        }.toMap
+        val docker = dockerImage(inputs)
 
         // Write shell script to a file. It will be executed by the dx-applet shell code.
         val runtimeEnvironment = getRuntimeEnvironment()
-        writeBashScript(localizedInputs, runtimeEnvironment, env)
+        writeBashScript(localizedInputs, runtimeEnvironment)
         docker match {
             case Some(img) =>
                 // write a script that launches the actual command inside a docker image.
-                writeDockerSubmitBashScript(env, img)
+                writeDockerSubmitBashScript(img)
             case None => ()
         }
 
         // Record the localized inputs, we need them in the epilog
-        (localizedInputs.map{
-             case (inpDfn, value) => inpDfn.name -> value
-         }.toMap,
-         dxUrl2path)
+        (inputs, dxUrl2path)
     }
 
     def epilog(localizedInputValues: Map[String, WomValue],
@@ -335,12 +337,14 @@ case class TaskRunner(task: CallableTaskDefinition,
     // the task.
     def calcInstanceType(taskInputs: Map[InputDefinition, WomValue]) : String = {
         // evaluate the declarations
-        val env: Map[String, WomValue] = evalEnvironment(taskInputs)
+        val inputs = taskInputs.map{ case (inpDfn, value) =>
+            inpDfn.name -> value
+        }.toMap
 
         def evalAttr(attrName: String) : Option[WomValue] = {
             task.runtimeAttributes.attributes.get(attrName) match {
                 case None => None
-                case Some(expr) => Some(getErrorOr(expr.evaluateValue(env, dxIoFunctions)))
+                case Some(expr) => Some(getErrorOr(expr.evaluateValue(inputs, dxIoFunctions)))
             }
         }
 

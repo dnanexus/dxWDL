@@ -27,58 +27,10 @@ test_failing=set(["bad_status",
 reserved_test_names=['M', 'All', 'list']
 
 medium_test_list = [
-    "advanced",
-    "bad_status",
-    #"bad_status2",   # This test is just too slow!
-
-    # calling native dx applets/apps
-    "call_native",
-    "call_native_app",
-
-    "call_with_defaults1",
-#    "call_with_defaults2",  # doesn't work yet
-    "cannes",
     "cast",
-
-    # objects
-    "complex",
-
-    "conditionals_base",
-    "conditionals2",
-
-    # lifting declarations
-    "decl_mid_wf",
-    "dict",
-    "files",
-    "files_with_the_same_name",
-    "hello",
-
-    # Variable instance types
     "instance_types",
-
-    # straight line wdl:workflow without conditionals scatters, or
-    # expressions. It should compile directly into a dx:workflow.
     "linear_no_expressions",
-
-    "math",
-    "modulo",
-    "optionals",
-
-    # docker image stored as an asset
-    "platform_asset",
-
-    # Setting defaults for tasks, not just workflows
-    "population",
-
-    "strings",
-    "subblocks",
-    "subblocks2",
-
-    # missing arguments, provided in a complementary inputs file
-    "toplevel_calls",
-
-    "trains",
-    "var_type_change"
+    "linear"
 ]
 
 tests_for_alt_project = [ "platform_asset" ]

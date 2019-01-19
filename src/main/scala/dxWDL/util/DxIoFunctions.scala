@@ -117,7 +117,18 @@ case class DxIoFunctions(config: DxPathConfig,
     /**
       * Return the size of the file located at "path"
       */
-    override def size(path: String): Future[Long] = ???
+    override def size(path: String): Future[Long] = {
+        val size = Furl.parse(path) match {
+            case FurlLocal(localPath) =>
+                val p = Paths.get(localPath)
+                p.toFile.length
+            case fdx : FurlDx =>
+                val (_, dxFile) = FurlDx.components(fdx)
+                // perform an API call to get the size
+                dxFile.describe().getSize()
+        }
+        Future(size)
+    }
 
     /**
       * To map/flatMap over IO results
