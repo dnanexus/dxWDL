@@ -17,6 +17,7 @@ import dxWDL.util.{DxIoFunctions, DxPathConfig, InstanceTypeDB, ParseWomSourceFi
 class TaskRunnerTest extends FlatSpec with Matchers {
     private val runtimeDebugLevel = 0
     private val instanceTypeDB = InstanceTypeDB.genTestDB(true)
+    private val verbose = false
 
     // Note: if the file doesn't exist, this throws a null pointer exception
     private def pathFromBasename(basename: String) : Path = {
@@ -117,7 +118,7 @@ class TaskRunnerTest extends FlatSpec with Matchers {
         val jobHomeDir : Path = Paths.get("/tmp/dxwdl_applet_test")
         Utils.deleteRecursive(jobHomeDir.toFile)
         Utils.safeMkdir(jobHomeDir)
-        val dxPathConfig = DxPathConfig.apply(jobHomeDir)
+        val dxPathConfig = DxPathConfig.apply(jobHomeDir, verbose)
         dxPathConfig.createCleanDirs()
 
         val (language, womBundle: WomBundle, allSources) = ParseWomSourceFile.apply(wdlCode)
@@ -188,6 +189,14 @@ class TaskRunnerTest extends FlatSpec with Matchers {
 
     it should "handle type coercion" in {
         runTask("cast")
+    }
+
+    it should "handle spaces in file paths" in {
+        runTask("spaces_in_file_paths")
+    }
+
+    it should "support tab separated value table" in {
+        runTask("create_tsv")
     }
 
 }

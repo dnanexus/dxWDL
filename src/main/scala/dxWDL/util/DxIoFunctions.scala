@@ -1,6 +1,7 @@
 package dxWDL.util
 
-import java.nio.file.{Paths}
+import java.nio.file.{Files, FileSystems, Paths, PathMatcher}
+import scala.collection.JavaConverters._
 import scala.concurrent.{ExecutionContext, Future}
 import scala.concurrent.ExecutionContext.Implicits.global
 import wom.expression.{IoFunctionSet, PathFunctionSet}
@@ -18,7 +19,15 @@ case class DxPathFunctions(config: DxPathConfig,
     /**
       * Similar to java.nio.Path.isAbsolute
       */
-    override def isAbsolute(path: String): Boolean = ???
+    override def isAbsolute(path: String): Boolean = {
+        Furl.parse(path) match {
+            case FurlLocal(localPath) =>
+                val p = Paths.get(localPath)
+                p.isAbsolute
+            case fdx : FurlDx =>
+                false
+        }
+    }
 
     /**
       * Similar to sibling only if "of" IS an absolute path and "other" IS NOT an absolute path, otherwise return other
@@ -29,12 +38,24 @@ case class DxPathFunctions(config: DxPathConfig,
     /**
       * If path is relative, prefix it with the _host_ call root.
       */
-    override def relativeToHostCallRoot(path: String): String = ???
+    override def relativeToHostCallRoot(path: String): String =
+        throw new AppInternalException("need to implement this function in DxIoFunctions")
 
     /**
       * Similar to java.nio.Path.getFileName
       */
-    override def name(path: String): String = ???
+    override def name(path: String): String = {
+        Furl.parse(path) match {
+            case FurlLocal(localPath) =>
+                val p = Paths.get(localPath)
+                p.getFileName.toString
+            case fdx : FurlDx =>
+                // perform an API call to get the file name
+                val (_, dxFile) = FurlDx.components(fdx)
+                dxFile.describe().getName()
+        }
+
+    }
 
     /**
       * Path to stdout
@@ -74,45 +95,67 @@ case class DxIoFunctions(config: DxPathConfig,
     /**
       * Write "content" to the specified "path" location
       */
-    override def writeFile(path: String, content: String): Future[WomSingleFile] = ???
+    override def writeFile(path: String, content: String): Future[WomSingleFile] =
+        throw new AppInternalException("need to implement this function in DxIoFunctions")
 
     /**
       * Creates a temporary directory. This must be in a place accessible to the backend.
       * In a world where then backend is not known at submission time this will not be sufficient.
       */
-    override def createTemporaryDirectory(name: Option[String]): Future[String] = ???
+    override def createTemporaryDirectory(name: Option[String]): Future[String] =
+        throw new AppInternalException("need to implement this function in DxIoFunctions")
 
     /**
       * Copy pathFrom to targetName
       * @return destination as a WomSingleFile
       */
-    override def copyFile(source: String, destination: String): Future[WomSingleFile] = ???
+    override def copyFile(source: String, destination: String): Future[WomSingleFile] =
+        throw new AppInternalException("need to implement this function in DxIoFunctions")
 
     /**
       * Glob files and directories using the provided pattern.
       * @return the list of globbed paths
       */
-    override def glob(pattern: String): Future[Seq[String]] = ???
+    override def glob(pattern: String): Future[Seq[String]] = {
+        Utils.appletLog(config.verbose, s"glob(${pattern})")
+        val baseDir = config.homeDir
+        val matcher:PathMatcher = FileSystems.getDefault()
+            .getPathMatcher(s"glob:${baseDir.toString}/${pattern}")
+        val retval =
+            if (!Files.exists(baseDir)) {
+                Seq.empty[String]
+            } else {
+                val files = Files.walk(baseDir).iterator().asScala
+                    .filter(Files.isRegularFile(_))
+                    .filter(matcher.matches(_))
+                    .map(_.toString)
+                    .toSeq
+                files.sorted
+            }
+        Utils.appletLog(config.verbose, s"""glob results=${retval.mkString("\n")}""")
+        Future(retval)
+    }
 
     /**
       * Recursively list all files (and only files, not directories) under "dirPath"
       * dirPath MUST BE a directory
       * @return The list of all files under "dirPath"
       */
-    override def listAllFilesUnderDirectory(dirPath: String): Future[Seq[String]] = ???
+    override def listAllFilesUnderDirectory(dirPath: String): Future[Seq[String]] =
+        throw new AppInternalException("need to implement this function in DxIoFunctions")
 
     /**
       * List entries in a directory non recursively. Includes directories
       */
     override def listDirectory(path: String)(visited: Vector[String] = Vector.empty)
-            : Future[Iterator[IoElement]] = {
-        ???
-    }
+            : Future[Iterator[IoElement]] =
+        throw new AppInternalException("need to implement this function in DxIoFunctions")
 
     /**
       * Return true if path points to a directory, false otherwise
       */
-    override def isDirectory(path: String): Future[Boolean] = ???
+    override def isDirectory(path: String): Future[Boolean] =
+        throw new AppInternalException("need to implement this function in DxIoFunctions")
 
     /**
       * Return the size of the file located at "path"

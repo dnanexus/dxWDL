@@ -49,6 +49,12 @@ class GenerateIRTest extends FlatSpec with Matchers {
         Main.compile(path.toString :: cFlags) shouldBe a [Main.SuccessfulTerminationIR]
     }
 
+    it should "IR compile a workflow with two consecutive calls" taggedAs(BlockTest) in {
+        val path = pathFromBasename("strings.wdl")
+        Main.compile(path.toString :: cFlags) shouldBe a [Main.SuccessfulTerminationIR]
+    }
+
+
 /*    it should "disallow call with missing compulsory arguments" in {
         val path = pathFromBasename("unbound_arg.wdl")
         val retval = Main.compile(

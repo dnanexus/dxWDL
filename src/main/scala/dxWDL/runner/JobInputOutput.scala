@@ -28,8 +28,8 @@ case class JobInputOutput(dxIoFunctions : DxIoFunctions,
         def downloadOneFile(path: Path, dxfile: DXFile, counter: Int) : Boolean = {
             val fid = dxfile.getId()
             try {
-                // Shell out to 'dx download'
-                val dxDownloadCmd = s"dx download ${fid} -o ${path.toString()}"
+                // Use dx download. Quote the path, because it may contains spaces.
+                val dxDownloadCmd = s"""dx download ${fid} -o "${path.toString()}" """
                 System.err.println(s"--  ${dxDownloadCmd}")
                 val (outmsg, errmsg) = Utils.execCommand(dxDownloadCmd, None)
 
@@ -64,8 +64,9 @@ case class JobInputOutput(dxIoFunctions : DxIoFunctions,
             throw new AppInternalException(s"Output file ${path.toString} is missing")
         def uploadOneFile(path: Path, counter: Int) : Option[String] = {
             try {
-                // shell out to 'dx upload'
-                val dxUploadCmd = s"dx upload ${path.toString} --brief"
+                // shell out to dx upload. We need to quote the path, because it may contain
+                // spaces
+                val dxUploadCmd = s"""dx upload "${path.toString}" --brief"""
                 System.err.println(s"--  ${dxUploadCmd}")
                 val (outmsg, errmsg) = Utils.execCommand(dxUploadCmd, None)
                 if (!outmsg.startsWith("file-"))

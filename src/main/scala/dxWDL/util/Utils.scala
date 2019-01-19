@@ -116,7 +116,7 @@ object Utils {
     // These are used for evaluating if a WOM expression is constant.
     // Ideally, we should not be using any of the IO functions, since
     // these checks may be part of the compilation process.
-    private lazy val dxPathConfig = DxPathConfig(Paths.get("/tmp/"))
+    private lazy val dxPathConfig = DxPathConfig(Paths.get("/tmp/"), false)
     private lazy val dxIoFunctions = DxIoFunctions(dxPathConfig, 0)
 
     def ifConstEval(expr: WomExpression) : Option[WomValue] = {

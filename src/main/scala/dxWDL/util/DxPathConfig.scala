@@ -42,7 +42,8 @@ case class DxPathConfig(
     rcPath : Path,
 
     // file for storing the state between prolog and epilog of the task runner
-    runnerTaskEnv: Path) {
+    runnerTaskEnv: Path,
+    verbose: Boolean) {
 
     // create all the directory paths, so we can start using them.
     // This is used when running tasks, but NOT when compiling.
@@ -55,7 +56,8 @@ case class DxPathConfig(
 }
 
 object DxPathConfig {
-    def apply(homeDir: Path) : DxPathConfig = {
+    def apply(homeDir: Path,
+              verbose: Boolean) : DxPathConfig = {
         val metaDir: Path = homeDir.resolve("meta")
         val inputFilesDir: Path = homeDir.resolve("inputs")
         val outputFilesDir: Path = homeDir.resolve("outputs")
@@ -78,6 +80,7 @@ object DxPathConfig {
                      dockerSubmitScript,
                      script,
                      rcPath,
-                     runnerTaskEnv)
+                     runnerTaskEnv,
+                     verbose)
     }
 }

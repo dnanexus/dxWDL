@@ -41,8 +41,8 @@ object Main extends App {
     // runtime, not at compile time. On the cloud instance running the
     // job, the user is "dnanexus", and the home directory is
     // "/home/dnanexus".
-    private def buildRuntimePathConfig() : DxPathConfig = {
-        val dxPathConfig = DxPathConfig.apply(baseDNAxDir)
+    private def buildRuntimePathConfig(verbose: Boolean) : DxPathConfig = {
+        val dxPathConfig = DxPathConfig.apply(baseDNAxDir, verbose)
         dxPathConfig.createCleanDirs()
         dxPathConfig
     }
@@ -375,7 +375,7 @@ object Main extends App {
                 case CompilerFlag.All
                        | CompilerFlag.NativeWithoutRuntimeAsset =>
                     val (dxProject, folder) = pathOptions(options, cOpt.verbose)
-                    val dxPathConfig = DxPathConfig.apply(baseDNAxDir)
+                    val dxPathConfig = DxPathConfig.apply(baseDNAxDir, cOpt.verbose.on)
                     val retval = Top.apply(sourceFile, folder, dxProject, dxPathConfig, cOpt)
                     val desc = retval.getOrElse("")
                     return SuccessfulTermination(desc)
@@ -501,7 +501,7 @@ object Main extends App {
                 val rtDebugLvl = parseRuntimeDebugLevel(args(2))
                 val (jobInputPath, jobOutputPath, jobErrorPath, _) =
                     Utils.jobFilesOfHomeDir(homeDir)
-                val dxPathConfig = buildRuntimePathConfig()
+                val dxPathConfig = buildRuntimePathConfig(rtDebugLvl >= 1)
                 val dxIoFunctions = DxIoFunctions(dxPathConfig, rtDebugLvl)
                 try {
                     if (InternalOp.isTaskOp(op)) {
@@ -574,7 +574,8 @@ object Main extends App {
             |    -folder <string>         Platform folder
             |    -project <string>        Platform project
             |    -quiet                   Do not print warnings or informational outputs
-            |    -verbose [flag]          Print detailed progress reports
+            |    -verbose                 Print detailed progress reports
+            |    -verboseKey [module]     Detailed information for a specific module
             |""".stripMargin
 
     val termination = dispatchCommand(args)

@@ -140,6 +140,11 @@ case class WfFragRunner(wf: WorkflowDefinition,
     private def buildAppletInputs(call: CallNode,
                                   linkInfo: ExecLinkInfo,
                                   env : Map[String, WomValue]) : JsValue = {
+        Utils.appletLog(verbose, s"""|buildAppletInputs (${call.identifier.localName.value})
+                                     |env:
+                                     |${env.mkString("\n")}
+                                     |""".stripMargin)
+
         val inputs: Map[String, WomValue] = linkInfo.inputs.flatMap{
             case (varName, wdlType) =>
                 env.get(varName) match {

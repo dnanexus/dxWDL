@@ -306,14 +306,21 @@ case class TaskRunner(task: CallableTaskDefinition,
             case (outDef: OutputDefinition) =>
                 val result: ErrorOr[WomValue] =
                     outDef.expression.evaluateValue(envFull, dxIoFunctions)
-                result match {
+                val valueRaw = result match {
                     case Valid(value) =>
-                        envFull += (outDef.name -> value)
-                        outDef.name -> value
+                        value
                     case Invalid(errors) =>
                         Utils.error(errors.toList.mkString)
                         throw new AppInternalException(s"Error evaluating output expression ${outDef.expression}")
                 }
+
+                // cast the result value to the correct type
+                // For example, an expression like:
+                //   Float x = "3.2"
+                // requires casting from string to float
+                val value = outDef.womType.coerceRawValue(valueRaw).get
+                envFull += (outDef.name -> value)
+                outDef.name -> value
         }.toMap
 
         // Upload output files to the platform.

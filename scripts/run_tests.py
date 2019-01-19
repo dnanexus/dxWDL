@@ -30,7 +30,8 @@ medium_test_list = [
     "cast",
     "instance_types",
     "linear_no_expressions",
-    "linear"
+    "linear",
+    "spaces_in_file_paths"
 ]
 
 tests_for_alt_project = [ "platform_asset" ]
