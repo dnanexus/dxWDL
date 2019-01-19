@@ -17,7 +17,7 @@ class NativeTest extends FlatSpec with Matchers {
     }
 
     val TEST_PROJECT = "dxWDL_playground"
-    val dxTestProject =
+    lazy val dxTestProject =
         try {
             DxPath.lookupProject(TEST_PROJECT)
         } catch {
@@ -25,25 +25,25 @@ class NativeTest extends FlatSpec with Matchers {
                 throw new Exception(s"""|Could not find project ${TEST_PROJECT}, you probably need to be logged into
                                         |the platform""".stripMargin)
         }
-    val compileFlags = List("-compileMode", "NativeWithoutRuntimeAsset",
-                            "-project", dxTestProject.getId,
-                            "-force",
-                            "-locked")
+    lazy val compileFlags = List("-compileMode", "NativeWithoutRuntimeAsset",
+                                 "-project", dxTestProject.getId,
+                                 "-force",
+                                 "-locked")
 
-    it should "Native compile a single WDL task" in {
+    ignore should "Native compile a single WDL task" in {
         val path = pathFromBasename("add.wdl")
         val retval = Main.compile(path.toString :: compileFlags)
         retval shouldBe a [Main.SuccessfulTermination]
     }
 
     // linear workflow
-    it should "Native compile a linear WDL workflow without expressions" in {
+    ignore should "Native compile a linear WDL workflow without expressions" in {
         val path = pathFromBasename("wf_linear_no_expr.wdl")
         val retval = Main.compile(path.toString :: compileFlags)
         retval shouldBe a [Main.SuccessfulTermination]
     }
 
-    it should "Native compile a linear WDL workflow" in {
+    ignore should "Native compile a linear WDL workflow" in {
         val path = pathFromBasename("wf_linear.wdl")
         val retval = Main.compile(path.toString
 //                                      :: "--verbose" :: "Native"

@@ -186,7 +186,7 @@ class TaskRunnerTest extends FlatSpec with Matchers {
         runTask("cgrep")
     }
 
-    ignore should "handle type coercion" in {
+    it should "handle type coercion" in {
         runTask("cast")
     }
 
