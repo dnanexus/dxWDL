@@ -46,6 +46,7 @@ import wom.expression._
 import wom.graph._
 import wom.graph.expression._
 import wom.values._
+import wom.values.WomArray.WomArrayLike
 import wom.types._
 
 import dxWDL.util._
@@ -262,6 +263,54 @@ case class WfFragRunner(wf: WorkflowDefinition,
         }.toMap
     }
 
+    private def evalExpressions(nodes: Seq[GraphNode],
+                                env: Map[String, WomValue]) : Map[String, WomValue] = {
+        nodes.foldLeft(env) {
+            // simple expression
+            case (env, eNode: ExpressionNode) =>
+                val value : WomValue =
+                    evaluateWomExpression(eNode.womExpression, eNode.womType, env)
+                env + (eNode.identifier.workflowLocalName -> value)
+
+            // scatter
+            case(env, sctNode : ScatterNode) =>
+                assert(sctNode.scatterVariableNodes.size == 1)
+                val svNode: ScatterVariableNode = sctNode.scatterVariableNodes.head
+                val sctExprValue : WomValue =
+                    evaluateWomExpression(svNode.scatterExpressionNode.womExpression, svNode.womType, env)
+                val wArray : Seq[WomValue] = sctExprValue match {
+                    case wa : WomArray => wa.value
+                    case wal : WomArrayLike => wal.asArray.value
+                    case other => throw new AppInternalException(s"Unexpected class ${other.getClass}, ${other}")
+                }
+                val vm : Vector[Map[String, WomValue]] =
+                    wArray.map{ v =>
+                        val envInner = env + (svNode.identifier.workflowLocalName -> v)
+                        evalExpressions(sctNode.innerGraph.nodes.toSeq, envInner)
+                    }.toVector
+                if (vm.isEmpty)
+                    Map.empty
+                else {
+                    // merge the vector of results, each of which is a map
+                    val results : Map[String, WomValue] = vm.tail.foldLeft(vm.head) {
+                        case (accu, m) =>
+                            accu.map{
+                                case (key, WomArray(at, av)) =>
+                                    val v = m(key)
+                                    key -> WomArray(at, (av :+ v))
+                                case (_, other) => throw new AppInternalException(
+                                    s"Unexpected class ${other.getClass}, ${other}")
+                            }.toMap
+                    }
+                    results
+                }
+
+            case (env, other) =>
+                throw new Exception(s"${other.getClass} not implemented yet")
+        }
+    }
+
+
     def apply(subBlockNr: Int,
               env: Map[String, WomValue]) : Map[String, JsValue] = {
         Utils.appletLog(verbose, s"dxWDL version: ${Utils.getVersion()}")
@@ -283,19 +332,7 @@ case class WfFragRunner(wf: WorkflowDefinition,
             case x:CallNode => x
         }.toVector
         val otherNodes: Vector[GraphNode] = block.nodes.filter{ x => !x.isInstanceOf[CallNode] }
-
-        val callEnv : Map[String, WomValue] = otherNodes.foldLeft(env) {
-            case (env, node : GraphNode) =>
-                node match {
-                    case eNode: ExpressionNode =>
-                        val value : WomValue =
-                            evaluateWomExpression(eNode.womExpression, eNode.womType, env)
-                        env + (eNode.identifier.workflowLocalName -> value)
-                    case other =>
-                        throw new Exception(s"${other.getClass} not implemented yet")
-                }
-        }
-
+        val callEnv = evalExpressions(otherNodes, env)
         val exportedVars = exportedVarNames()
         if (calls.isEmpty) {
             return processOutputs(callEnv, Map.empty, exportedVars)

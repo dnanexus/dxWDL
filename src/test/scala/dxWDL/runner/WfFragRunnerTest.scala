@@ -4,14 +4,14 @@ import cats.data.Validated.{Invalid, Valid}
 import common.validation.ErrorOr.ErrorOr
 import java.nio.file.{Path, Paths}
 import org.scalatest.{FlatSpec, Matchers}
+import spray.json._
 import wom.callable.{WorkflowDefinition}
 import wom.executable.WomBundle
 import wom.graph.expression._
-//import wom.types._
 import wom.values._
 import wom.expression.WomExpression
 
-import dxWDL.util.{Block, DxIoFunctions, DxPathConfig, ParseWomSourceFile, Utils}
+import dxWDL.util._
 
 // This test module requires being logged in to the platform.
 // It compiles WDL scripts without the runtime library.
@@ -19,17 +19,19 @@ import dxWDL.util.{Block, DxIoFunctions, DxPathConfig, ParseWomSourceFile, Utils
 // dnanexus applets and workflows that are not runnable.
 class WfFragRunnerTest extends FlatSpec with Matchers {
     private val runtimeDebugLevel = 0
+    //private val verbose = runtimeDebugLevel >= 1
+    private val instanceTypeDB = InstanceTypeDB.genTestDB(false)
 
-    // Create a clean directory in "/tmp" for the task to use
-    lazy val dxPathConfig = {
+    private def setup() : (DxPathConfig, DxIoFunctions) = {
+        // Create a clean directory in "/tmp" for the task to use
         val jobHomeDir : Path = Paths.get("/tmp/dxwdl_applet_test")
         Utils.deleteRecursive(jobHomeDir.toFile)
         Utils.safeMkdir(jobHomeDir)
         val dxPathConfig = DxPathConfig.apply(jobHomeDir, runtimeDebugLevel >= 1)
         dxPathConfig.createCleanDirs()
-        dxPathConfig
+        val dxIoFunctions = DxIoFunctions(dxPathConfig, runtimeDebugLevel)
+        (dxPathConfig, dxIoFunctions)
     }
-    lazy val dxIoFunctions = DxIoFunctions(dxPathConfig, runtimeDebugLevel)
 
     // Note: if the file doesn't exist, this throws a null pointer exception
     def pathFromBasename(basename: String) : Path = {
@@ -37,7 +39,10 @@ class WfFragRunnerTest extends FlatSpec with Matchers {
         Paths.get(p)
     }
 
-    def evaluateWomExpression(expr: WomExpression, env: Map[String, WomValue]) : WomValue = {
+
+    def evaluateWomExpression(expr: WomExpression,
+                              env: Map[String, WomValue],
+                              dxIoFunctions : DxIoFunctions) : WomValue = {
         val result: ErrorOr[WomValue] =
             expr.evaluateValue(env, dxIoFunctions)
         result match {
@@ -49,6 +54,8 @@ class WfFragRunnerTest extends FlatSpec with Matchers {
 
     it should "second block in a linear workflow" in {
         val source : Path = pathFromBasename("wf_linear.wdl")
+        val (dxPathConfig, dxIoFunctions) = setup()
+
         val (language, womBundle: WomBundle, allSources) = ParseWomSourceFile.apply(source)
         val wfSource = allSources.values.head
 
@@ -70,9 +77,25 @@ class WfFragRunnerTest extends FlatSpec with Matchers {
             case eNode: ExposedExpressionNode => eNode
         }
         val expr : WomExpression = eNodes(0).womExpression
-        val value: WomValue = evaluateWomExpression(expr, env)
+        val value: WomValue = evaluateWomExpression(expr, env, dxIoFunctions)
         value should be(WomInteger(9))
     }
 
+    it should "evaluate a scatter without a call" in {
+        val path = pathFromBasename("scatter_no_call.wdl")
+        val wdlCode = Utils.readFileContent(path)
 
+        val (dxPathConfig, dxIoFunctions) = setup()
+        val wf : WorkflowDefinition = ParseWomSourceFile.parseWdlWorkflow(wdlCode)
+        val fragRunner = new WfFragRunner(wf, wdlCode,
+                                          instanceTypeDB,
+                                          Map.empty[String, ExecLinkInfo],
+                                          dxPathConfig,
+                                          dxIoFunctions,
+                                          runtimeDebugLevel)
+
+        val env = Map.empty[String, WomValue]
+        val results : Map[String, JsValue] = fragRunner.apply(0, env)
+        Utils.ignore(results)
+    }
 }
