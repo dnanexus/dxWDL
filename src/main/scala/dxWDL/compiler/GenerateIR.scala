@@ -409,6 +409,8 @@ case class GenerateIR(callables: Map[String, IR.Callable],
                 CVar(gnop.identifier.localName.value, gnop.womType, None)
             case ebop : GraphNodePort.ExpressionBasedOutputPort =>
                 CVar(ebop.identifier.localName.value, ebop.womType, None)
+            case sctOp : GraphNodePort.ScatterGathererPort =>
+                CVar(sctOp.identifier.localName.value, sctOp.womType, None)
             case other =>
                 throw new Exception(s"unhandled case ${other.getClass}")
         }.toVector
@@ -605,8 +607,6 @@ case class GenerateIR(callables: Map[String, IR.Callable],
         // as a first step, only handle straight line workflows
         if (!graph.workflowCalls.isEmpty)
             throw new Exception(s"Workflow ${wf.name} calls a subworkflow; currently not supported")
-        if (!graph.scatters.isEmpty)
-            throw new Exception(s"Workflow ${wf.name} includes a scatter; currently not supported")
         if (!graph.conditionals.isEmpty)
             throw new Exception(s"Workflow ${wf.name} includes a conditional; currently not supported")
 

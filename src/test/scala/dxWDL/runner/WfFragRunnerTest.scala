@@ -73,4 +73,6 @@ class WfFragRunnerTest extends FlatSpec with Matchers {
         val value: WomValue = evaluateWomExpression(expr, env)
         value should be(WomInteger(9))
     }
+
+
 }

@@ -59,6 +59,26 @@ task concatArray {
     }
 }
 
+task processLine {
+    Array[String] line
+    command {
+        echo ${sep=' INPUT=' line}
+    }
+    output {
+        String result = read_string(stdout())
+    }
+}
+
+task collect {
+    Array[String] line
+    command {
+    }
+    output {
+        Array[String] result = line
+    }
+}
+
+
 workflow strings {
     input {
         String s
@@ -102,6 +122,12 @@ workflow strings {
     # Ragged array of strings
     call createTsv
     call processTsv { input: words = createTsv.result }
+    scatter (x in createTsv.result) {
+        call processLine as processLine {input : line=x}
+    }
+    call collect {
+        input : line=processLine.result
+    }
 
     output {
         String concat1_result = concat1.result
@@ -110,5 +136,6 @@ workflow strings {
         String concat4_result = concat4.result
         String concat5_result = concat5.result
         String tsv_result = processTsv.result
+        Array[String] collect_result = collect.result
     }
 }

@@ -86,7 +86,8 @@ libraryDependencies ++= Seq(
 // If an exception is thrown during tests, show the full
 // stack trace, by adding the "-oF" option to the list.
 //
-Test / testOptions += Tests.Argument(TestFrameworks.ScalaCheck,
-                                     "-l", "dxWDL.compiler.NativeTest")
+//Test / testOptions += Tests.Argument(TestFrameworks.ScalaCheck,
+//                                     "-l", "dxWDL.compiler.NativeTest")
+Test / testOptions += Tests.Argument("-l", "org.scalatest.tags.Slow")
 
 Test / parallelExecution := false
