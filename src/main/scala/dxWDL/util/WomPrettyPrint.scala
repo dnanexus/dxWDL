@@ -38,9 +38,12 @@ object WomPrettyPrint {
                 s"ExternalGraphInputNode(${egin.nameInInputSet})"
 
             // Graph output nodes
-            case gon : PortBasedGraphOutputNode =>
-                s"PortBasedGraphOutputNode"
+            case pbgon : PortBasedGraphOutputNode =>
+                s"PortBasedGraphOutputNode(${pbgon.identifier.localName.value})"
 
+            case svNode: ScatterVariableNode =>
+                val expr = svNode.scatterExpressionNode
+                s"ScatterVariableNode[OGIN](${svNode.identifier.localName.value}, ${expr.womExpression.sourceString}, ${expr.womType})"
             case other =>
                 s"${other.getClass}"
         }

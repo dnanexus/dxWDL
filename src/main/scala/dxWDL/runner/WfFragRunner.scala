@@ -263,8 +263,18 @@ case class WfFragRunner(wf: WorkflowDefinition,
         }.toMap
     }
 
-    private def evalExpressions(nodes: Seq[GraphNode],
-                                env: Map[String, WomValue]) : Map[String, WomValue] = {
+    // This method is exposed so that we can unit-test it.
+    def evalExpressions(nodes: Seq[GraphNode],
+                        env: Map[String, WomValue]) : Map[String, WomValue] = {
+/*        val dbgGraph = nodes.map{node => WomPrettyPrint.apply(node) }.mkString("  \n")
+        Utils.appletLog(verbose,
+                        s"""|--- evalExpressions
+                            |env =
+                            |   ${env.mkString("  \n")}
+                            |graph =
+                            |   ${dbgGraph}
+                            |---
+                            |""".stripMargin)*/
         nodes.foldLeft(env) {
             // simple expression
             case (env, eNode: ExpressionNode) =>
@@ -298,27 +308,47 @@ case class WfFragRunner(wf: WorkflowDefinition,
                 }.toMap
 
                 // merge the vector of results, each of which is a map
-                val results : Map[String, Vector[WomValue]] =
-                    vm.foldLeft(Map.empty[String, Vector[WomValue]]) {
+                val initResults = resultTypes.map{
+                    case (key, WomArrayType(elemType)) => key -> (elemType, Vector.empty[WomValue])
+                    case (_, other) =>
+                        throw new AppInternalException(
+                            s"Unexpected class ${other.getClass}, ${other}")
+                }.toMap
+                val results : Map[String, (WomType, Vector[WomValue])] =
+                    vm.foldLeft(initResults) {
                         case (accu, m) =>
                             accu.map{
-                                case (key, arValues) =>
+                                case (key, (elemType, arValues)) =>
                                     val v : WomValue = m(key)
-                                    key -> (arValues :+ v)
+                                    val vCorrectlyTyped = elemType.coerceRawValue(v).get
+                                    key -> (elemType, (arValues :+ vCorrectlyTyped))
                             }.toMap
                     }
+
                 // Add the wom array type to each vector
-                results.map{ case (key, vv) =>
-                    val wType = resultTypes(key)
-                    key -> WomArray(wType, vv)
+                results.map{ case (key, (elemType, vv)) =>
+                    key -> WomArray(WomArrayType(elemType), vv)
                 }
+
+            // Input nodes for a subgraph
+            case (env, ogin: OuterGraphInputNode) =>
+                //Utils.appletLog(verbose, s"skipping ${ogin.getClass}")
+                env
+
+            // Output nodes from a subgraph
+            case (env, gon: GraphOutputNode) =>
+                //Utils.appletLog(verbose, s"skipping ${gon.getClass}")
+                env
 
             case (env, other) =>
                 val dbgGraph = nodes.map{node => WomPrettyPrint.apply(node) }.mkString("\n")
-                Utils.appletLog(true, s"""|Erro unimplemented type ${other.getClass} while evaluating expressions
+                Utils.appletLog(true, s"""|Error unimplemented type ${other.getClass} while evaluating expressions
                                           |
-                                          |env = ${env}
-                                          |graph = ${dbgGraph}
+                                          |env =
+                                          |${env}
+                                          |
+                                          |graph =
+                                          |${dbgGraph}
                                           |""".stripMargin)
                 throw new Exception(s"${other.getClass} not implemented yet")
         }

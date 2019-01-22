@@ -4,12 +4,12 @@ import cats.data.Validated.{Invalid, Valid}
 import common.validation.ErrorOr.ErrorOr
 import java.nio.file.{Path, Paths}
 import org.scalatest.{FlatSpec, Matchers}
-import spray.json._
 import wom.callable.{WorkflowDefinition}
 import wom.executable.WomBundle
+import wom.expression.WomExpression
 import wom.graph.expression._
 import wom.values._
-import wom.expression.WomExpression
+import wom.types._
 
 import dxWDL.util._
 
@@ -18,7 +18,7 @@ import dxWDL.util._
 // This tests the compiler Native mode, however, it creates
 // dnanexus applets and workflows that are not runnable.
 class WfFragRunnerTest extends FlatSpec with Matchers {
-    private val runtimeDebugLevel = 0
+    private val runtimeDebugLevel = 2
     //private val verbose = runtimeDebugLevel >= 1
     private val instanceTypeDB = InstanceTypeDB.genTestDB(false)
 
@@ -52,7 +52,7 @@ class WfFragRunnerTest extends FlatSpec with Matchers {
         }
     }
 
-    it should "second block in a linear workflow" in {
+    ignore should "second block in a linear workflow" in {
         val source : Path = pathFromBasename("wf_linear.wdl")
         val (dxPathConfig, dxIoFunctions) = setup()
 
@@ -83,19 +83,32 @@ class WfFragRunnerTest extends FlatSpec with Matchers {
 
     it should "evaluate a scatter without a call" in {
         val path = pathFromBasename("scatter_no_call.wdl")
-        val wdlCode = Utils.readFileContent(path)
+        val wfSourceCode = Utils.readFileContent(path)
 
         val (dxPathConfig, dxIoFunctions) = setup()
-        val wf : WorkflowDefinition = ParseWomSourceFile.parseWdlWorkflow(wdlCode)
-        val fragRunner = new WfFragRunner(wf, wdlCode,
+        val wf : WorkflowDefinition = ParseWomSourceFile.parseWdlWorkflow(wfSourceCode)
+        val fragRunner = new WfFragRunner(wf, wfSourceCode,
                                           instanceTypeDB,
                                           Map.empty[String, ExecLinkInfo],
                                           dxPathConfig,
                                           dxIoFunctions,
                                           runtimeDebugLevel)
 
+        val (_, subBlocks, _) = Block.splitIntoBlocks(wf.innerGraph, wfSourceCode)
+        val block = subBlocks(0)
+
         val env = Map.empty[String, WomValue]
-        val results : Map[String, JsValue] = fragRunner.apply(0, env)
-        Utils.ignore(results)
+        val results : Map[String, WomValue] = fragRunner.evalExpressions(block.nodes, env)
+        results should be(
+            Map("full_name" -> WomArray(
+                    WomArrayType(WomStringType),
+                    Vector(WomString("Michael_Manhaim"),
+                           WomString("Lukas_Manhaim"),
+                           WomString("Martin_Manhaim"),
+                           WomString("Shelly_Manhaim"),
+                           WomString("Amy_Manhaim"))
+
+                )
+            ))
     }
 }
