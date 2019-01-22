@@ -44,9 +44,9 @@ import spray.json._
 import wom.callable.{WorkflowDefinition}
 import wom.expression._
 import wom.graph._
+import wom.graph.GraphNodePort._
 import wom.graph.expression._
 import wom.values._
-import wom.values.WomArray.WomArrayLike
 import wom.types._
 
 import dxWDL.util._
@@ -276,36 +276,50 @@ case class WfFragRunner(wf: WorkflowDefinition,
             case(env, sctNode : ScatterNode) =>
                 assert(sctNode.scatterVariableNodes.size == 1)
                 val svNode: ScatterVariableNode = sctNode.scatterVariableNodes.head
-                val sctExprValue : WomValue =
-                    evaluateWomExpression(svNode.scatterExpressionNode.womExpression, svNode.womType, env)
-                val wArray : Seq[WomValue] = sctExprValue match {
-                    case wa : WomArray => wa.value
-                    case wal : WomArrayLike => wal.asArray.value
-                    case other => throw new AppInternalException(s"Unexpected class ${other.getClass}, ${other}")
+                val collectionRaw : WomValue =
+                    evaluateWomExpression(svNode.scatterExpressionNode.womExpression,
+                                          WomArrayType(svNode.womType),
+                                          env)
+                val collection : Seq[WomValue] = collectionRaw match {
+                    case x: WomArray => x.value
+                    case other => throw new AppInternalException(
+                        s"Unexpected class ${other.getClass}, ${other}")
                 }
+                // iterate on the collection
                 val vm : Vector[Map[String, WomValue]] =
-                    wArray.map{ v =>
+                    collection.map{ v =>
                         val envInner = env + (svNode.identifier.workflowLocalName -> v)
                         evalExpressions(sctNode.innerGraph.nodes.toSeq, envInner)
                     }.toVector
-                if (vm.isEmpty)
-                    Map.empty
-                else {
-                    // merge the vector of results, each of which is a map
-                    val results : Map[String, WomValue] = vm.tail.foldLeft(vm.head) {
+
+                val resultTypes : Map[String, WomArrayType] = sctNode.outputMapping.map{
+                    case scp : ScatterGathererPort =>
+                        scp.identifier.workflowLocalName -> scp.womType
+                }.toMap
+
+                // merge the vector of results, each of which is a map
+                val results : Map[String, Vector[WomValue]] =
+                    vm.foldLeft(Map.empty[String, Vector[WomValue]]) {
                         case (accu, m) =>
                             accu.map{
-                                case (key, WomArray(at, av)) =>
-                                    val v = m(key)
-                                    key -> WomArray(at, (av :+ v))
-                                case (_, other) => throw new AppInternalException(
-                                    s"Unexpected class ${other.getClass}, ${other}")
+                                case (key, arValues) =>
+                                    val v : WomValue = m(key)
+                                    key -> (arValues :+ v)
                             }.toMap
                     }
-                    results
+                // Add the wom array type to each vector
+                results.map{ case (key, vv) =>
+                    val wType = resultTypes(key)
+                    key -> WomArray(wType, vv)
                 }
 
             case (env, other) =>
+                val dbgGraph = nodes.map{node => WomPrettyPrint.apply(node) }.mkString("\n")
+                Utils.appletLog(true, s"""|Erro unimplemented type ${other.getClass} while evaluating expressions
+                                          |
+                                          |env = ${env}
+                                          |graph = ${dbgGraph}
+                                          |""".stripMargin)
                 throw new Exception(s"${other.getClass} not implemented yet")
         }
     }
