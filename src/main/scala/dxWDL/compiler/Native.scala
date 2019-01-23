@@ -18,18 +18,13 @@ case class Native(dxWDLrtId: String,
                   dxProject: DXProject,
                   dxObjDir: DxObjectDirectory,
                   instanceTypeDB: InstanceTypeDB,
-                  extras: Option[Extras],
-                  runtimeDebugLevel: Option[Int],
-                  leaveWorkflowsOpen: Boolean,
-                  force: Boolean,
-                  archive: Boolean,
-                  locked: Boolean,
-                  verbose: Verbose) {
+                  cOpt: CompilerOptions) {
     type ExecDict = Map[String, (IR.Callable, DxExec)]
     val execDictEmpty = Map.empty[String, (IR.Callable, DxExec)]
 
+    val verbose = cOpt.verbose
     val verbose2:Boolean = verbose.keywords contains "native"
-    val rtDebugLvl = runtimeDebugLevel.getOrElse(Utils.DEFAULT_RUNTIME_DEBUG_LEVEL)
+    val rtDebugLvl = cOpt.runtimeDebugLevel.getOrElse(Utils.DEFAULT_RUNTIME_DEBUG_LEVEL)
     lazy val runtimeLibrary:JsValue = getRuntimeLibrary()
 
     // Open the archive
@@ -144,8 +139,8 @@ case class Native(dxWDLrtId: String,
     }
 
     private def genSourceFiles(wdlCode:String,
-                       linkInfo: Option[String],
-                       dbInstance: Option[String]): String = {
+                               linkInfo: Option[String],
+                               dbInstance: Option[String]): String = {
         // UU64 encode the WDL script to avoid characters that interact
         // badly with bash
         val wdlCodeUu64 = base64Encode(wdlCode)
@@ -178,6 +173,7 @@ case class Native(dxWDLrtId: String,
         List(Some(part1), part2, part3).flatten.mkString("\n")
     }
 
+    //private def
     private def genBashScriptTaskBody(): String = {
         s"""|    # Keep track of streaming files. Each such file
             |    # is converted into a fifo, and a 'dx cat' process
@@ -365,10 +361,10 @@ case class Native(dxWDLrtId: String,
 
         if (buildRequired) {
             if (existingDxObjs.size > 0) {
-                if (archive) {
+                if (cOpt.archive) {
                     // archive the applet/workflow(s)
                     existingDxObjs.foreach(x => dxObjDir.archiveDxObject(x))
-                } else if (force) {
+                } else if (cOpt.force) {
                     // the dx:object exists, and needs to be removed. There
                     // may be several versions, all are removed.
                     val objs = existingDxObjs.map(_.dxObj)
@@ -471,7 +467,7 @@ case class Native(dxWDLrtId: String,
 
         // Start with the default dx-attribute section, and override
         // any field that is specified in the individual task section.
-        val extraRunSpec : Map[String, JsValue] = extras match {
+        val extraRunSpec : Map[String, JsValue] = cOpt.extras match {
             case None => Map.empty
             case Some(ext) => ext.defaultTaskDxAttributes match {
                 case None => Map.empty
@@ -481,7 +477,7 @@ case class Native(dxWDLrtId: String,
         val taskSpecificRunSpec : Map[String, JsValue] =
             if (applet.kind == IR.AppletKindTask) {
                 // A task can override the default dx attributes
-                extras match {
+                cOpt.extras match {
                     case None => Map.empty
                     case Some(ext) => ext.perTaskDxAttributes.get(applet.name) match {
                         case None => Map.empty
@@ -529,14 +525,14 @@ case class Native(dxWDLrtId: String,
     }
 
     def calcAccess(applet: IR.Applet) : JsValue = {
-        val extraAccess: DxAccess = extras match {
+        val extraAccess: DxAccess = cOpt.extras match {
             case None => DxAccess.empty
             case Some(ext) => ext.getDefaultAccess
         }
         val taskSpecificAccess : DxAccess =
             if (applet.kind == IR.AppletKindTask) {
                 // A task can override the default dx attributes
-                extras match {
+                cOpt.extras match {
                     case None => DxAccess.empty
                     case Some(ext) => ext.getTaskAccess(applet.name)
                 }
@@ -815,7 +811,7 @@ case class Native(dxWDLrtId: String,
         val dxwf = DXWorkflow.getInstance(id)
 
         // Close the workflow
-        if (!leaveWorkflowsOpen)
+        if (!cOpt.leaveWorkflowsOpen)
             dxwf.close()
         dxwf
     }
@@ -934,19 +930,13 @@ object Native {
               dxProject: DXProject,
               instanceTypeDB: InstanceTypeDB,
               dxObjDir: DxObjectDirectory,
-              extras: Option[Extras],
-              runtimeDebugLevel: Option[Int],
-              leaveWorkflowsOpen: Boolean,
-              force: Boolean,
-              archive: Boolean,
-              locked: Boolean,
-              verbose: Verbose) : CompilationResults = {
+              cOpt: CompilerOptions) : CompilationResults = {
+        val verbose = cOpt.verbose
         trace(verbose.on, "Native pass, generate dx:applets and dx:workflows")
         traceLevelInc()
 
         val ntv = new Native(dxWDLrtId, folder, dxProject, dxObjDir, instanceTypeDB,
-                             extras, runtimeDebugLevel,
-                             leaveWorkflowsOpen, force, archive, locked, verbose)
+                             cOpt)
         val retval = ntv.compile(ns)
         traceLevelDec()
         retval

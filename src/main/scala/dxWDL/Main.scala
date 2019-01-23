@@ -134,6 +134,9 @@ object Main extends App {
                     case "locked" =>
                         checkNumberOfArguments(keyword, 0, subargs)
                         (keyword, "")
+                    case "nativeDocker" =>
+                        checkNumberOfArguments(keyword, 0, subargs)
+                        (keyword, "")
                     case ("o"|"output"|"outputFile") =>
                         checkNumberOfArguments(keyword, 1, subargs)
                         ("outputFile", subargs.head)
@@ -340,6 +343,7 @@ object Main extends App {
                         inputs,
                         options contains "leaveWorkflowsOpen",
                         options contains "locked",
+                        options contains "nativeDocker",
                         options contains "projectWideReuse",
                         options contains "reorg",
                         runtimeDebugLevel,
