@@ -66,6 +66,7 @@ medium_test_list = [
 
     # docker image stored as an asset
     "platform_asset",
+#    "broad_genomics",
 
     # Setting defaults for tasks, not just workflows
     "population",
@@ -107,6 +108,8 @@ test_unlocked=["cast",
                "optionals",
                "strings",
                "toplevel_calls"]
+test_native_docker=["broad_genomics"]
+
 TestMetaData = namedtuple('TestMetaData', 'name kind')
 TestDesc = namedtuple('TestDesc', 'name kind wdl_source wdl_input dx_input results')
 
@@ -433,6 +436,8 @@ def compiler_per_test_flags(tname):
     else:
         flags.append("-inputs")
         flags.append(desc.wdl_input)
+    if tname in test_native_docker:
+        flags.append("-nativeDocker")
     return flags
 
 # Which project to use for a test

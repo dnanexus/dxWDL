@@ -1,5 +1,6 @@
 package dxWDL
 
+import com.dnanexus.IOClass
 import com.typesafe.config._
 import net.jcazevedo.moultingyaml._
 import org.scalatest.{FlatSpec, Matchers}
@@ -136,5 +137,43 @@ class UtilsTest extends FlatSpec with Matchers {
             r -> assetId
         }.toMap
         assets("aws:us-east-1") should equal("record-F5gyyXj0P26p9Jx12q3XY0qV")
+    }
+
+    it should "parse the job info file" in {
+        val jobInfo =
+            """|{
+               |            "inputSpec": [
+               |                {
+               |                    "name": "max_session_length",
+               |                    "class": "string",
+               |                    "optional": false,
+               |                    "label": "Maximum Session Length (suffixes allowed: s, m, h, d, w, M, y)",
+               |                    "default": "1h",
+               |                    "help": "The maximum length of time to keep the workstation running."
+               |                },
+               |                {
+               |                    "class": "array:file",
+               |                    "name": "fids",
+               |                    "help": "An optional list of files to download to the cloud workstation on startup.",
+               |                    "label": "Files",
+               |                    "optional": true
+               |                }
+               |            ],
+               |            "details": {},
+               |            "version": "1.0.2",
+               |            "installed": false,
+               |            "regionalOptions": {
+               |                "aws:us-east-1": {
+               |                    "resources": "container-BqvpV0Q0PxgpvZ4JF5qQ0BKY",
+               |                    "applet": "applet-BqvpV080QpJBvZ4JF5qQ0BKQ"
+               |                }
+               |            },
+               |            "openSource": true,
+               |            "dxapi": "1.0.0"
+               |}""".stripMargin
+
+        val results = Utils.parseInputSpec(jobInfo)
+        results should be(Map("max_session_length" -> DXIOParam(IOClass.STRING, false),
+                              "fids" -> DXIOParam(IOClass.ARRAY_OF_FILES, true)))
     }
 }

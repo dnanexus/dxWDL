@@ -1,6 +1,5 @@
 package dxWDL.runner
 
-import com.dnanexus.{IOClass}
 import dxWDL._
 import java.nio.file.{Path, Paths}
 import org.scalatest.{FlatSpec, Matchers}
@@ -92,13 +91,8 @@ class TaskTest extends FlatSpec with Matchers {
         val inputs = Map("hotel" -> wdlValueToWVL(WomString("Westin")),
                          "city" -> wdlValueToWVL(WomString("Seattle")),
                          "state" -> wdlValueToWVL(WomString("Washington")))
-        val inputSpec = Map("hotel" -> DXIOParam(IOClass.STRING, false),
-                           "city" -> DXIOParam(IOClass.STRING, false),
-                            "state" -> DXIOParam(IOClass.STRING, false))
-        val outputSpec = Map("retval" -> DXIOParam(IOClass.ARRAY_OF_STRINGS, false))
-
-        taskRunner.prolog(inputSpec, outputSpec, inputs)
-        val results = taskRunner.epilog(inputSpec, outputSpec, inputs)
+        taskRunner.prolog(inputs)
+        val results = taskRunner.epilog(inputs)
 
         results("retval") should equal(JsArray(JsString("Westin"),
                                                JsString("Seattle"),
@@ -109,13 +103,8 @@ class TaskTest extends FlatSpec with Matchers {
         val taskRunner = makeTaskRunner("TD.wdl")
 
         val inputs = Map("x" -> wdlValueToWVL(WomFloat(1.4)))
-        val inputSpec = Map("x" -> DXIOParam(IOClass.FLOAT, false))
-        val outputSpec = Map("x_floor" -> DXIOParam(IOClass.FLOAT, false),
-                             "x_ceil" -> DXIOParam(IOClass.FLOAT, false),
-                             "x_round" -> DXIOParam(IOClass.FLOAT, false))
-
-        taskRunner.prolog(inputSpec, outputSpec, inputs)
-        val results = taskRunner.epilog(inputSpec, outputSpec, inputs)
+        taskRunner.prolog(inputs)
+        val results = taskRunner.epilog(inputs)
 
         results("x_floor") should equal(JsNumber(1))
         results("x_ceil") should equal(JsNumber(2))

@@ -141,8 +141,6 @@ case class WorkflowOutputReorg(verbose: Boolean) {
     // The variables are passed through, so that workflow will
     // complete only after file movements are complete.
     def apply(nswf: WdlNamespaceWithWorkflow,
-              inputSpec: Map[String, DXIOParam],
-              outputSpec: Map[String, DXIOParam],
               wfInputs: Map[String, WdlVarLinks]) : Map[String, JsValue] = {
         Utils.appletLog(verbose, s"Initial inputs=\n${prettyPrint(wfInputs)}")
 

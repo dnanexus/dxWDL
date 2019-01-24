@@ -173,7 +173,32 @@ case class Native(dxWDLrtId: String,
         List(Some(part1), part2, part3).flatten.mkString("\n")
     }
 
-    //private def
+    private def dockerPreamble() : String = {
+        val exportBashVars = cOpt.extras match {
+            case None =>
+                s"export DOCKER_CMD=dx-docker"
+            case Some(extras) =>
+                (extras.dockerRegistery, cOpt.nativeDocker) match {
+                    case (None,false) =>
+                        s"export DOCKER_CMD=dx-docker"
+                    case (None,true) =>
+                        s"export DOCKER_CMD=docker"
+                    case (Some(_), false) =>
+                        throw new Exception("Docker registry can only work with native docker (not dx-docker)")
+                    case (Some(DockerRegistry(registry, username, credentials)), true) =>
+                        s"""|export DOCKER_CMD=docker
+                            |# Docker private registry information
+                            |export DOCKER_REGISTRY=${registry}
+                            |export DOCKER_USERNAME=${username}
+                            |export DOCKER_CREDENTIALS=${credentials}
+                            |""".stripMargin
+                }
+        }
+        s"""|# Docker definitions
+            |${exportBashVars}
+            |""".stripMargin
+    }
+
     private def genBashScriptTaskBody(): String = {
         s"""|    # Keep track of streaming files. Each such file
             |    # is converted into a fifo, and a 'dx cat' process
@@ -274,11 +299,15 @@ case class Native(dxWDLrtId: String,
             case IR.AppletKindTask =>
                 instanceType match {
                     case IR.InstanceTypeDefault | IR.InstanceTypeConst(_,_,_,_) =>
-                        s"""|main() {
+                        s"""|${dockerPreamble()}
+                            |
+                            |main() {
                             |${genBashScriptTaskBody()}
                             |}""".stripMargin
                     case IR.InstanceTypeRuntime =>
-                        s"""|main() {
+                        s"""|${dockerPreamble()}
+                            |
+                            |main() {
                             |    # check if this is the correct instance type
                             |    correctInstanceType=`java -jar $${DX_FS_ROOT}/dxWDL.jar internal taskCheckInstanceType $${DX_FS_ROOT}/source.wdl $${HOME} ${rtDebugLvl}`
                             |    if [[ $$correctInstanceType == "true" ]]; then
@@ -373,7 +402,8 @@ case class Native(dxWDLrtId: String,
                 } else {
                     val dxClass = existingDxObjs.head.dxClass
                     throw new Exception(s"""|${dxClass} ${name} already exists in
-                                            | ${dxProject.getId}:${folder}""".stripMargin)
+                                            |${dxProject.getId}:${folder}.
+                                            |""".stripMargin.replaceAll("\n", " "))
                 }
             }
             None

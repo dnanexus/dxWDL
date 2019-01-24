@@ -507,12 +507,13 @@ object Main extends App {
                              wdlDefPath: Path,
                              jobInputPath: Path,
                              jobOutputPath: Path,
+                             jobInfoPath : Path,
                              rtDebugLvl: Int): Termination = {
         val ns = WdlNamespace.loadUsingPath(wdlDefPath, None, None).get
         val cef = new CompilerErrorFormatter(wdlDefPath.toString, ns.terminalMap)
 
-        // Figure out input/output types
-        val (inputSpec, outputSpec) = Utils.loadExecInfo
+        // Figure out input types by reading the dnanexus-executable.json file
+        val inputSpec = Utils.parseInputSpec(Utils.readFileContent(jobInfoPath))
 
         // Parse the inputs, do not download files from the platform,
         // they will be passed as links.
@@ -529,7 +530,7 @@ object Main extends App {
             val task = taskOfNamespace(ns)
             val inputs = WdlVarLinks.loadJobInputsAsLinks(inputLines, inputSpec, Some(task))
             val r = runner.Task(task, instanceTypeDB, cef, rtDebugLvl)
-            val correctInstanceType:Boolean = r.checkInstanceType(inputSpec, outputSpec, inputs)
+            val correctInstanceType:Boolean = r.checkInstanceType(inputs)
             SuccessfulTermination(correctInstanceType.toString)
         } else {
             val outputFields: Map[String, JsValue] =
@@ -540,13 +541,13 @@ object Main extends App {
                     op match {
                         case InternalOp.TaskEpilog =>
                             val r = runner.Task(task, instanceTypeDB, cef, rtDebugLvl)
-                            r.epilog(inputSpec, outputSpec, inputs)
+                            r.epilog(inputs)
                         case InternalOp.TaskProlog =>
                             val r = runner.Task(task, instanceTypeDB, cef, rtDebugLvl)
-                            r.prolog(inputSpec, outputSpec, inputs)
+                            r.prolog(inputs)
                         case InternalOp.TaskRelaunch =>
                             val r = runner.Task(task, instanceTypeDB, cef, rtDebugLvl)
-                            r.relaunch(inputSpec, outputSpec, inputs)
+                            r.relaunch(inputs)
                     }
                 } else {
                     val inputs = WdlVarLinks.loadJobInputsAsLinks(inputLines, inputSpec, None)
@@ -555,15 +556,15 @@ object Main extends App {
                         case InternalOp.Collect =>
                             runner.WfFragment.apply(nswf,
                                                     instanceTypeDB,
-                                                    inputSpec, outputSpec, inputs, orgInputs,
+                                                    inputs, orgInputs,
                                                     RunnerWfFragmentMode.Collect, rtDebugLvl)
                         case InternalOp.WfFragment =>
                             runner.WfFragment.apply(nswf,
                                                     instanceTypeDB,
-                                                    inputSpec, outputSpec, inputs, orgInputs,
+                                                    inputs, orgInputs,
                                                     RunnerWfFragmentMode.Launch, rtDebugLvl)
                         case InternalOp.WorkflowOutputReorg =>
-                            runner.WorkflowOutputReorg(true).apply(nswf, inputSpec, outputSpec, inputs)
+                            runner.WorkflowOutputReorg(true).apply(nswf, inputs)
                     }
                 }
 
@@ -589,10 +590,10 @@ object Main extends App {
                 val wdlDefPath = Paths.get(args(1))
                 val homeDir = Paths.get(args(2))
                 val rtDebugLvl = parseRuntimeDebugLevel(args(3))
-                val (jobInputPath, jobOutputPath, jobErrorPath, _) =
+                val (jobInputPath, jobOutputPath, jobErrorPath, jobInfoPath) =
                     Utils.jobFilesOfHomeDir(homeDir)
                 try {
-                    appletAction(x, wdlDefPath, jobInputPath, jobOutputPath, rtDebugLvl)
+                    appletAction(x, wdlDefPath, jobInputPath, jobOutputPath, jobInfoPath, rtDebugLvl)
                 } catch {
                     case e : Throwable =>
                         writeJobError(jobErrorPath, e)
@@ -642,6 +643,8 @@ object Main extends App {
             |                             This allows modifying the workflows after the compiler is done.
             |                             As a general rule, it is better to close workflows.
             |      -locked                Create a locked-down workflow
+            |      -nativeDocker          Use native docker instead of dx-docker. To set up
+            |                             a private registry, use the Extras file.
             |      -p | -imports <string> Directory to search for imported WDL files
             |      -projectWideReuse      Look for existing applets/workflows in the entire project
             |                             before generating new ones. The normal search scope is the
