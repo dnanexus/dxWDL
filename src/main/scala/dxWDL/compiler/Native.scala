@@ -226,6 +226,13 @@ case class Native(dxWDLrtId: String,
             |    # download the credentials file and login. Do not expose the
             |    # credentials to the logs or to stdout.
             |    if [[ -n $${DOCKER_REGISTRY} ]]; then
+            |        # there has to be a single credentials file
+            |        num_lines=$$(dx ls $${DOCKER_CREDENTIALS} | wc --lines)
+            |        if [[ $$num_lines != 1 ]]; then
+            |            echo "There has to be exactly one credentials file, found $$num_lines."
+            |            dx ls -l $${DOCKER_CREDENTIALS}
+            |            exit 1
+            |        fi
             |        dx download $${DOCKER_CREDENTIALS} -o $${HOME}/docker_credentials
             |        cat $${HOME}/docker_credentials | docker login $${DOCKER_REGISTRY} -u $${DOCKER_USERNAME} --password-stdin
             |        rm -f $${HOME}/docker_credentials

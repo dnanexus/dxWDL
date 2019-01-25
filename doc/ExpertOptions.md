@@ -460,58 +460,12 @@ For an in depth discussion, please see [Missing Call Arguments](MissingCallArgum
 
 # Docker
 
-WDL works hand in hand with
-[docker](https://www.docker.com/). Standard docker images sometimes
-have problems executing, due to enhanced security on the platform.
-Therefore, by default,
+Standard docker images sometimes run into permissions problems executing
+on the platform, due to enhanced security, and strict
+Linux capability policies. Therefore, by default,
 [dx-docker](https://wiki.dnanexus.com/Developer-Tutorials/Using-Docker-Images)
 is used to run them instead. To use standard docker, add the command
 line flag `--nativeDocker`.
-
-## Setting a private registry
-
-If your images are stored in a private registry, add its information
-to the extras file, so that tasks will be able to pull images from it.
-For example:
-```
-{
-  "docker_registry" : {
-      "registry" : "foo.acme.com",
-       "username" : "perkins",
-       "credentials" : "dx://CornSequencing:/B/creds.txt"
-  }
-}
-```
-
-will setup the `foo.acme.com` registry, with user `perkins`. The
-credentials are stored in a platform file, so they can be replaced
-without recompiling. Care is taken, so that the credentials never
-appear in the applet logs. Compiling a workflow with this
-configuration sets it to use native docker, and all applets are given
-the `allProjects: VIEW` permission. This allows them to access the
-credentials file, even if it is stored on a different project.
-
-## Using a docker image on the platform
-
-Normally, docker images are public, and stored in publicly available
-web sites. This enables reproducibility across different tools and
-environments. However, if you have private docker image that you wish
-to store on the platform, dx-docker
-[create-asset](https://wiki.dnanexus.com/Developer-Tutorials/Using-Docker-Images)
-can be used. In order to use a private image, you can specify the
-docker attribute in the runtime section as:
-`dx://project-id:/image-name`.
-
-For example:
-```
-runtime {
-   docker: "dx://GenomeSequenceProject:/A/B/myOrgTools"
-}
-
-runtime {
-   docker: "dx://project-xxxx:record-yyyy"
-}
-```
 
 ## Setting a default docker image for all tasks
 
@@ -530,4 +484,49 @@ Then adding it to the compilation command line will add the `atac-seq` docker im
 tasks by default.
 ```console
 $ java -jar dxWDL-0.44.jar compile files.wdl -project project-xxxx -defaults files_input.json -extras taskAttrs.json
+```
+
+## Native docker and private registries
+
+If your images are stored in a private registry, add its information
+to the extras file, so that tasks will be able to pull images from it.
+For example:
+```
+{
+  "docker_registry" : {
+      "registry" : "foo.acme.com",
+       "username" : "perkins",
+       "credentials" : "dx://CornSequencing:/B/creds.txt"
+  }
+}
+```
+
+will setup the `foo.acme.com` registry, with user `perkins`. The
+credentials are stored in a platform file, so they can be replaced
+without recompiling. Care is taken so that the credentials never
+appear in the applet logs. Compiling a workflow with this
+configuration sets it to use native docker, and all applets are given
+the `allProjects: VIEW` permission. This allows them to access the
+credentials file, even if it is stored on a different project.
+
+## Storing a docker image as an asset
+
+Normally, [docker](https://www.docker.com/) images are public, and
+stored in publicly available web sites. This enables reproducibility
+across different tools and environments. However, if you have a
+docker image that you wish to store on the platform,
+[dx-docker create-asset](https://wiki.dnanexus.com/Developer-Tutorials/Using-Docker-Images)
+can be used. In order to use this asset, you can specify the
+docker attribute in the runtime section as:
+`dx://project-id:/image-name`.
+
+For example:
+```
+runtime {
+   docker: "dx://GenomeSequenceProject:/A/B/myOrgTools"
+}
+
+runtime {
+   docker: "dx://project-xxxx:record-yyyy"
+}
 ```

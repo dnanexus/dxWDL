@@ -238,7 +238,7 @@ object Utils {
         val inputSpecRaw : Vector[JsValue] = data.asJsObject.fields.get("inputSpec") match {
             case None => throw new Exception("missing inputSpec")
             case Some(JsArray(x)) => x.toVector
-            case other => throw new Exception(s"Malformed input spec object ${other}")
+            case Some(other) => throw new Exception(s"Malformed input spec object ${other.prettyPrint}")
         }
 
         inputSpecRaw.map{
@@ -246,15 +246,16 @@ object Utils {
                 val fields = inp.asJsObject.fields
                 val name = fields.get("name") match {
                     case Some(JsString(x)) => x
-                    case other => throw new Exception(s"Malformed input spec object ${inp}")
+                    case other => throw new Exception(s"Malformed input spec object ${inp.prettyPrint}")
                 }
                 val ioClass = fields.get("class") match {
                     case Some(JsString(x)) => IOClass.create(x)
-                    case other => throw new Exception(s"Malformed input spec object ${inp}")
+                    case other => throw new Exception(s"Malformed input spec object ${inp.prettyPrint}")
                 }
                 val optional: Boolean = fields.get("optional") match {
                     case Some(JsBoolean(b)) => b
-                    case other => throw new Exception(s"Malformed input spec object ${inp}")
+                    case None => false
+                    case other => throw new Exception(s"Malformed input spec object ${inp.prettyPrint}")
                 }
                 name -> DXIOParam(ioClass, optional)
         }.toMap
