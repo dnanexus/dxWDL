@@ -66,7 +66,7 @@ medium_test_list = [
 
     # docker image stored as an asset
     "platform_asset",
-#    "broad_genomics",
+    "broad_genomics",
 
     # Setting defaults for tasks, not just workflows
     "population",

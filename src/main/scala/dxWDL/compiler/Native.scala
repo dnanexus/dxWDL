@@ -25,6 +25,17 @@ case class Native(dxWDLrtId: String,
     val verbose = cOpt.verbose
     val verbose2:Boolean = verbose.keywords contains "native"
     val rtDebugLvl = cOpt.runtimeDebugLevel.getOrElse(Utils.DEFAULT_RUNTIME_DEBUG_LEVEL)
+
+    // Are we setting up a private docker registery?
+    val dockerRegisteryInfo : Option[DockerRegistery]= cOpt.extras match {
+        case None => None
+        case Some(extras) =>
+            extras.dockerRegistery match {
+                case None => None
+                case Some(x) => Some(x)
+            }
+    }
+
     lazy val runtimeLibrary:JsValue = getRuntimeLibrary()
 
     // Open the archive
@@ -173,34 +184,54 @@ case class Native(dxWDLrtId: String,
         List(Some(part1), part2, part3).flatten.mkString("\n")
     }
 
-    private def dockerPreamble() : String = {
-        val exportBashVars = cOpt.extras match {
-            case None =>
-                s"export DOCKER_CMD=dx-docker"
-            case Some(extras) =>
-                (extras.dockerRegistery, cOpt.nativeDocker) match {
-                    case (None,false) =>
-                        s"export DOCKER_CMD=dx-docker"
-                    case (None,true) =>
-                        s"export DOCKER_CMD=docker"
-                    case (Some(_), false) =>
-                        throw new Exception("Docker registry can only work with native docker (not dx-docker)")
-                    case (Some(DockerRegistry(registry, username, credentials)), true) =>
-                        s"""|export DOCKER_CMD=docker
-                            |# Docker private registry information
-                            |export DOCKER_REGISTRY=${registry}
-                            |export DOCKER_USERNAME=${username}
-                            |export DOCKER_CREDENTIALS=${credentials}
-                            |""".stripMargin
+    private def dockerPreamble(dockerImage: IR.DockerImage) : String = {
+        val dockerCmd = dockerImage match {
+            case IR.DockerImageNetwork if cOpt.nativeDocker => "docker"
+            case IR.DockerImageNetwork if dockerRegisteryInfo != None => "docker"
+            case _ => "dx-docker"
+        }
+        val exportBashVars = dockerRegisteryInfo match {
+            case None => ""
+            case Some(DockerRegistery(registry, username, credentials)) =>
+                // check that the credentials file is a valid platform path
+                try {
+                    val dxFile = DxPath.lookupDxURLFile(credentials)
+                    Utils.ignore(dxFile)
+                } catch {
+                    case e : Throwable =>
+                        throw new Exception(s"""|credentials has to point to a platform file.
+                                                |It is now:
+                                                |   ${credentials}
+                                                |Error:
+                                                |  ${e}
+                                                |""".stripMargin)
                 }
+
+                // strip the URL from the dx:// prefix, so we can use dx-download directly
+                val credentialsWithoutPrefix = credentials.substring(Utils.DX_URL_PREFIX.length)
+                s"""|# Docker private registry information
+                    |export DOCKER_REGISTRY=${registry}
+                    |export DOCKER_USERNAME=${username}
+                    |export DOCKER_CREDENTIALS=${credentialsWithoutPrefix}
+                    |""".stripMargin
         }
         s"""|# Docker definitions
+            |export DOCKER_CMD=${dockerCmd}
             |${exportBashVars}
             |""".stripMargin
     }
 
-    private def genBashScriptTaskBody(): String = {
-        s"""|    # Keep track of streaming files. Each such file
+    val bashScriptTaskBody: String =
+        s"""|    # if we need to set up a private docker registry,
+            |    # download the credentials file and login. Do not expose the
+            |    # credentials to the logs or to stdout.
+            |    if [[ -n $${DOCKER_REGISTRY} ]]; then
+            |        dx download $${DOCKER_CREDENTIALS} -o $${HOME}/docker_credentials
+            |        cat $${HOME}/docker_credentials | docker login $${DOCKER_REGISTRY} -u $${DOCKER_USERNAME} --password-stdin
+            |        rm -f $${HOME}/docker_credentials
+            |    fi
+            |
+            |    # Keep track of streaming files. Each such file
             |    # is converted into a fifo, and a 'dx cat' process
             |    # runs in the background.
             |    background_pids=()
@@ -268,7 +299,6 @@ case class Native(dxWDLrtId: String,
             |    # evaluate applet outputs, and upload result files
             |    java -jar $${DX_FS_ROOT}/dxWDL.jar internal taskEpilog $${DX_FS_ROOT}/source.wdl $${HOME} ${rtDebugLvl}
             |""".stripMargin.trim
-    }
 
     private def genBashScriptNonTask(miniCmd:String) : String = {
         s"""|main() {
@@ -286,26 +316,25 @@ case class Native(dxWDLrtId: String,
             |}""".stripMargin.trim
     }
 
-    private def genBashScript(appKind: IR.AppletKind,
-                              instanceType: IR.InstanceType,
+    private def genBashScript(applet: IR.Applet,
                               wdlCode: String,
                               linkInfo: Option[String],
                               dbInstance: Option[String]) : String = {
-        val body:String = appKind match {
+        val body:String = applet.kind match {
             case IR.AppletKindNative(_) =>
                 throw new Exception("Sanity: generating a bash script for a native applet")
             case IR.AppletKindWfFragment(_) =>
                 genBashScriptWfFragment()
             case IR.AppletKindTask =>
-                instanceType match {
+                applet.instanceType match {
                     case IR.InstanceTypeDefault | IR.InstanceTypeConst(_,_,_,_) =>
-                        s"""|${dockerPreamble()}
+                        s"""|${dockerPreamble(applet.docker)}
                             |
                             |main() {
-                            |${genBashScriptTaskBody()}
+                            |${bashScriptTaskBody}
                             |}""".stripMargin
                     case IR.InstanceTypeRuntime =>
-                        s"""|${dockerPreamble()}
+                        s"""|${dockerPreamble(applet.docker)}
                             |
                             |main() {
                             |    # check if this is the correct instance type
@@ -320,7 +349,7 @@ case class Native(dxWDLrtId: String,
                             |
                             |# We are on the correct instance type, run the task
                             |body() {
-                            |${genBashScriptTaskBody()}
+                            |${bashScriptTaskBody}
                             |}""".stripMargin.trim
                 }
             case IR.AppletKindWorkflowOutputReorg =>
@@ -457,7 +486,7 @@ case class Native(dxWDLrtId: String,
         val dbInstance = dbOpaque.toJson.prettyPrint
 
         // write the bash script
-        genBashScript(applet.kind, applet.instanceType,
+        genBashScript(applet,
                       wdlCode, linkInfo, Some(dbInstance))
     }
 
@@ -569,7 +598,14 @@ case class Native(dxWDLrtId: String,
             } else {
                 DxAccess.empty
             }
-        val taskAccess = extraAccess.merge(taskSpecificAccess)
+
+        // If we are using a private docker registry, add the allProjects: VIEW
+        // access to tasks.
+        val allProjectsAccess: DxAccess = dockerRegisteryInfo match {
+            case None => DxAccess.empty
+            case Some(_) => DxAccess(None, None, Some(AccessLevel.VIEW), None, None)
+        }
+        val taskAccess = extraAccess.merge(taskSpecificAccess).merge(allProjectsAccess)
 
         val access: DxAccess = applet.kind match {
             case IR.AppletKindTask =>

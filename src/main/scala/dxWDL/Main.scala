@@ -643,8 +643,7 @@ object Main extends App {
             |                             This allows modifying the workflows after the compiler is done.
             |                             As a general rule, it is better to close workflows.
             |      -locked                Create a locked-down workflow
-            |      -nativeDocker          Use native docker instead of dx-docker. To set up
-            |                             a private registry, use the Extras file.
+            |      -nativeDocker          Use native docker instead of dx-docker
             |      -p | -imports <string> Directory to search for imported WDL files
             |      -projectWideReuse      Look for existing applets/workflows in the entire project
             |                             before generating new ones. The normal search scope is the

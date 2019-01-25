@@ -316,46 +316,6 @@ $ java -jar dxWDL.jar dxni -apps -o my_apps.wdl
 The compiler will search for all the apps you can call, and create WDL
 tasks for them.
 
-## Using a docker image on the platform
-
-Normally, docker images are public, and stored in publicly available
-web sites. This enables reproducibility across different tools and
-environments. However, if you have private docker image that you wish
-to store on the platform, dx-docker
-[create-asset](https://wiki.dnanexus.com/Developer-Tutorials/Using-Docker-Images)
-can be used. In order to use a private image, you can specify the
-docker attribute in the runtime section as:
-`dx://project-id:/image-name`.
-
-For example:
-```
-runtime {
-   docker: "dx://GenomeSequenceProject:/A/B/myOrgTools"
-}
-
-runtime {
-   docker: "dx://project-xxxx:record-yyyy"
-}
-```
-
-## Setting a default docker image for all tasks
-
-Sometimes, you want to use a default docker image for tasks.
-The `extras` commad line flag can help achieve this. It takes a JSON file
-as an argument. For example, if `taskAttrs.json` is this file:
-```
-{
-    "default_runtime_attributes" : {
-      "docker" : "quay.io/encode-dcc/atac-seq-pipeline:v1"
-    }
-}
-```
-
-Then adding it to the compilation command line will add the `atac-seq` docker image to all
-tasks by default.
-```console
-$ java -jar dxWDL-0.44.jar compile files.wdl -project project-xxxx -defaults files_input.json -extras taskAttrs.json
-```
 
 ## Debugging an applet
 
@@ -496,3 +456,78 @@ into stage inputs. The `add` stage will have compulsory integer inputs
 `a` and `b`.
 
 For an in depth discussion, please see [Missing Call Arguments](MissingCallArguments.md).
+
+
+# Docker
+
+WDL works hand in hand with
+[docker](https://www.docker.com/). Standard docker images sometimes
+have problems executing, due to enhanced security on the platform.
+Therefore, by default,
+[dx-docker](https://wiki.dnanexus.com/Developer-Tutorials/Using-Docker-Images)
+is used to run them instead. To use standard docker, add the command
+line flag `--nativeDocker`.
+
+## Setting a private registry
+
+If your images are stored in a private registry, add its information
+to the extras file, so that tasks will be able to pull images from it.
+For example:
+```
+{
+  "docker_registry" : {
+      "registry" : "foo.acme.com",
+       "username" : "perkins",
+       "credentials" : "dx://CornSequencing:/B/creds.txt"
+  }
+}
+```
+
+will setup the `foo.acme.com` registry, with user `perkins`. The
+credentials are stored in a platform file, so they can be replaced
+without recompiling. Care is taken, so that the credentials never
+appear in the applet logs. Compiling a workflow with this
+configuration sets it to use native docker, and all applets are given
+the `allProjects: VIEW` permission. This allows them to access the
+credentials file, even if it is stored on a different project.
+
+## Using a docker image on the platform
+
+Normally, docker images are public, and stored in publicly available
+web sites. This enables reproducibility across different tools and
+environments. However, if you have private docker image that you wish
+to store on the platform, dx-docker
+[create-asset](https://wiki.dnanexus.com/Developer-Tutorials/Using-Docker-Images)
+can be used. In order to use a private image, you can specify the
+docker attribute in the runtime section as:
+`dx://project-id:/image-name`.
+
+For example:
+```
+runtime {
+   docker: "dx://GenomeSequenceProject:/A/B/myOrgTools"
+}
+
+runtime {
+   docker: "dx://project-xxxx:record-yyyy"
+}
+```
+
+## Setting a default docker image for all tasks
+
+Sometimes, you want to use a default docker image for tasks.
+The `extras` commad line flag can help achieve this. It takes a JSON file
+as an argument. For example, if `taskAttrs.json` is this file:
+```
+{
+    "default_runtime_attributes" : {
+      "docker" : "quay.io/encode-dcc/atac-seq-pipeline:v1"
+    }
+}
+```
+
+Then adding it to the compilation command line will add the `atac-seq` docker image to all
+tasks by default.
+```console
+$ java -jar dxWDL-0.44.jar compile files.wdl -project project-xxxx -defaults files_input.json -extras taskAttrs.json
+```

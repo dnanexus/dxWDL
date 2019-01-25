@@ -463,11 +463,6 @@ case class Task(task:WdlTask,
         val dockerRunScript =
             s"""|#!/bin/bash -ex
                 |
-                |# Login to docker registry if needed
-                |if [[ -n $${DOCKER_REGISTRY} ]]; then
-                |  echo $${DOCKER_CREDENTIALS} | docker login $${DOCKER_REGISTRY} -u $${DOCKER_USERNAME} --password-stdin
-                |fi
-                |
                 |#Run docker or dx-docker
                 |$${DOCKER_CMD} run --entrypoint /bin/bash -v ${DX_HOME}:${DX_HOME} ${imgName} $${HOME}/execution/meta/script
                 |""".stripMargin

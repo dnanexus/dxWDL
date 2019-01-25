@@ -320,9 +320,52 @@ class ExtrasTest extends FlatSpec with Matchers {
 
         val extras = Extras.parse(data, verbose)
         extras.dockerRegistery should be (
-            Some(DockerRegistry(
+            Some(DockerRegistery(
                      "foo.bar.dnanexus.com",
                      "perkins",
                      "The Bandersnatch has gotten loose")))
+    }
+
+    it should "recognize errors in docker registry section" in {
+        val data =
+            """|{
+               | "docker_registry" : {
+               |   "registry_my" : "foo.bar.dnanexus.com",
+               |   "username" : "perkins",
+               |   "credentials" : "BandersnatchOnTheLoose"
+               | }
+               |}
+               |""".stripMargin.parseJson
+        assertThrows[Exception] {
+            Extras.parse(data, verbose)
+        }
+    }
+
+    it should "recognize errors in docker registry section II" in {
+        val data =
+            """|{
+               | "docker_registry" : {
+               |   "registry" : "foo.bar.dnanexus.com",
+               |   "credentials" : "BandersnatchOnTheLoose"
+               | }
+               |}
+               |""".stripMargin.parseJson
+        assertThrows[Exception] {
+            Extras.parse(data, verbose)
+        }
+    }
+
+
+    it should "recognize errors in docker registry section III" in {
+        val data =
+            """|{
+               | "docker_registry" : {
+               |   "creds" : "XXX"
+               | }
+               |}
+               |""".stripMargin.parseJson
+        assertThrows[Exception] {
+            Extras.parse(data, verbose)
+        }
     }
 }

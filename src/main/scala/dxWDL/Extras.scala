@@ -167,14 +167,14 @@ case class DxRunSpec(access: Option[DxAccess],
     }
 }
 
-case class DockerRegistry(registry: String,
-                          username: String,
-                          credentials: String)
+case class DockerRegistery(registry: String,
+                           username: String,
+                           credentials: String)
 
 case class Extras(defaultRuntimeAttributes: Map[String, WdlExpression],
                   defaultTaskDxAttributes: Option[DxRunSpec],
                   perTaskDxAttributes: Map[String, DxRunSpec],
-                  dockerRegistery : Option[DockerRegistry]) {
+                  dockerRegistery : Option[DockerRegistery]) {
     def getDefaultAccess : DxAccess = {
         defaultTaskDxAttributes match {
             case None => DxAccess.empty
@@ -438,8 +438,8 @@ object Extras {
         return parseRunSpec(checkedParseObjectField(fields, "runSpec"))
     }
 
-    private def parseDockerRegistry(jsv: JsValue,
-                                    verbose: Verbose) : Option[DockerRegistry] = {
+    private def parseDockerRegistery(jsv: JsValue,
+                                     verbose: Verbose) : Option[DockerRegistery] = {
         if (jsv == JsNull)
             return None
         val fields = jsv.asJsObject.fields
@@ -459,7 +459,7 @@ object Extras {
         val registry = getSome("registry")
         val username = getSome("username")
         val credentials = getSome("credentials")
-        Some(DockerRegistry(registry, username, credentials))
+        Some(DockerRegistery(registry, username, credentials))
     }
 
     def parse(jsv: JsValue,
@@ -503,8 +503,8 @@ object Extras {
                    checkedParseObjectField(fields, "default_task_dx_attributes"),
                    verbose),
                perTaskDxAttrs,
-               parseDockerRegistry(
-                   checkedParseObjectField(fields, "docker_setup"),
+               parseDockerRegistery(
+                   checkedParseObjectField(fields, "docker_registry"),
                    verbose))
     }
 }
