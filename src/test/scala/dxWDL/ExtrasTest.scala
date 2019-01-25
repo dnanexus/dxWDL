@@ -319,8 +319,8 @@ class ExtrasTest extends FlatSpec with Matchers {
                |""".stripMargin.parseJson
 
         val extras = Extras.parse(data, verbose)
-        extras.dockerRegistery should be (
-            Some(DockerRegistery(
+        extras.dockerRegistry should be (
+            Some(DockerRegistry(
                      "foo.bar.dnanexus.com",
                      "perkins",
                      "The Bandersnatch has gotten loose")))

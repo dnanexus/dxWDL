@@ -26,11 +26,11 @@ case class Native(dxWDLrtId: String,
     val verbose2:Boolean = verbose.keywords contains "native"
     val rtDebugLvl = cOpt.runtimeDebugLevel.getOrElse(Utils.DEFAULT_RUNTIME_DEBUG_LEVEL)
 
-    // Are we setting up a private docker registery?
-    val dockerRegisteryInfo : Option[DockerRegistery]= cOpt.extras match {
+    // Are we setting up a private docker registry?
+    val dockerRegistryInfo : Option[DockerRegistry]= cOpt.extras match {
         case None => None
         case Some(extras) =>
-            extras.dockerRegistery match {
+            extras.dockerRegistry match {
                 case None => None
                 case Some(x) => Some(x)
             }
@@ -187,12 +187,12 @@ case class Native(dxWDLrtId: String,
     private def dockerPreamble(dockerImage: IR.DockerImage) : String = {
         val dockerCmd = dockerImage match {
             case IR.DockerImageNetwork if cOpt.nativeDocker => "docker"
-            case IR.DockerImageNetwork if dockerRegisteryInfo != None => "docker"
+            case IR.DockerImageNetwork if dockerRegistryInfo != None => "docker"
             case _ => "dx-docker"
         }
-        val exportBashVars = dockerRegisteryInfo match {
+        val exportBashVars = dockerRegistryInfo match {
             case None => ""
-            case Some(DockerRegistery(registry, username, credentials)) =>
+            case Some(DockerRegistry(registry, username, credentials)) =>
                 // check that the credentials file is a valid platform path
                 try {
                     val dxFile = DxPath.lookupDxURLFile(credentials)
@@ -226,6 +226,8 @@ case class Native(dxWDLrtId: String,
             |    # download the credentials file and login. Do not expose the
             |    # credentials to the logs or to stdout.
             |    if [[ -n $${DOCKER_REGISTRY} ]]; then
+            |        echo "Logging in to docker registry $${DOCKER_REGISTRY}, as user $${DOCKER_USERNAME}"
+            |
             |        # there has to be a single credentials file
             |        num_lines=$$(dx ls $${DOCKER_CREDENTIALS} | wc --lines)
             |        if [[ $$num_lines != 1 ]]; then
@@ -608,7 +610,7 @@ case class Native(dxWDLrtId: String,
 
         // If we are using a private docker registry, add the allProjects: VIEW
         // access to tasks.
-        val allProjectsAccess: DxAccess = dockerRegisteryInfo match {
+        val allProjectsAccess: DxAccess = dockerRegistryInfo match {
             case None => DxAccess.empty
             case Some(_) => DxAccess(None, None, Some(AccessLevel.VIEW), None, None)
         }

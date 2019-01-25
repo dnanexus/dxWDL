@@ -7,7 +7,7 @@ that the WDL runtime section will be ignored, the native definitions will be use
 - Fix bug when using [spaces in output files](https://github.com/dnanexus/dxWDL/issues/181)
 - Eliminate a job-describe API call from all tasks. This reduces overall platform load,
 which is important in volume workflows.
-- Support for [private docker registries](./doc/ExperOptions.md)
+- Support for [private docker registries](./doc/ExperOptions.md#Native-docker-and-private-registries)
 
 ## 0.78.1
 - Support the `restartableEntryPoints` applet option in the `extras` file.

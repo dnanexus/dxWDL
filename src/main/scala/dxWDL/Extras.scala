@@ -167,14 +167,14 @@ case class DxRunSpec(access: Option[DxAccess],
     }
 }
 
-case class DockerRegistery(registry: String,
+case class DockerRegistry(registry: String,
                            username: String,
                            credentials: String)
 
 case class Extras(defaultRuntimeAttributes: Map[String, WdlExpression],
                   defaultTaskDxAttributes: Option[DxRunSpec],
                   perTaskDxAttributes: Map[String, DxRunSpec],
-                  dockerRegistery : Option[DockerRegistery]) {
+                  dockerRegistry : Option[DockerRegistry]) {
     def getDefaultAccess : DxAccess = {
         defaultTaskDxAttributes match {
             case None => DxAccess.empty
@@ -438,8 +438,8 @@ object Extras {
         return parseRunSpec(checkedParseObjectField(fields, "runSpec"))
     }
 
-    private def parseDockerRegistery(jsv: JsValue,
-                                     verbose: Verbose) : Option[DockerRegistery] = {
+    private def parseDockerRegistry(jsv: JsValue,
+                                     verbose: Verbose) : Option[DockerRegistry] = {
         if (jsv == JsNull)
             return None
         val fields = jsv.asJsObject.fields
@@ -459,7 +459,7 @@ object Extras {
         val registry = getSome("registry")
         val username = getSome("username")
         val credentials = getSome("credentials")
-        Some(DockerRegistery(registry, username, credentials))
+        Some(DockerRegistry(registry, username, credentials))
     }
 
     def parse(jsv: JsValue,
@@ -503,7 +503,7 @@ object Extras {
                    checkedParseObjectField(fields, "default_task_dx_attributes"),
                    verbose),
                perTaskDxAttrs,
-               parseDockerRegistery(
+               parseDockerRegistry(
                    checkedParseObjectField(fields, "docker_registry"),
                    verbose))
     }
