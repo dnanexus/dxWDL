@@ -42,5 +42,5 @@ echo "(2) have permissions to create a repository for dnanexus"
 echo "echo PASSWORD | sudo docker login -u USERNAME --password-stdin"
 echo ""
 echo "pushing to docker hub"
-sudo docker push dnanexus/dxwdl:${version}
-sudo docker push dnanexus/dxwdl:latest
+# sudo docker push dnanexus/dxwdl:${version}
+# sudo docker push dnanexus/dxwdl:latest

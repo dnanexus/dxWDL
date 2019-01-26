@@ -1,3 +1,9 @@
 #!/bin/bash -e
 eval "$(dx env --bash)"
-sudo docker run --rm -e DX_SECURITY_CONTEXT="$DX_SECURITY_CONTEXT" -v $pwd:/tmp/workdir dnanexus/dxwdl "$@"
+sudo docker run --rm \
+     -e DX_SECURITY_CONTEXT="$DX_SECURITY_CONTEXT" \
+     -e DX_APISERVER_PROTOCOL="$DX_APISERVER_PROTOCOL" \
+     -e DX_APISERVER_HOST="$DX_APISERVER_HOST" \
+     -e DX_APISERVER_PORT=$DX_APISERVER_PORT \
+     -e DX_PROJECT_CONTEXT_ID="$DX_PROJECT_CONTEXT_ID" \
+     dnanexus/dxwdl "$@"
