@@ -307,13 +307,16 @@ case class WfFragRunner(wf: WorkflowDefinition,
                         scp.identifier.workflowLocalName -> scp.womType
                 }.toMap
 
-                // merge the vector of results, each of which is a map
-                val initResults = resultTypes.map{
+
+                // build a mapping from from result-key to its type
+                val initResults : Map[String, (WomType, Vector[WomValue])] = resultTypes.map{
                     case (key, WomArrayType(elemType)) => key -> (elemType, Vector.empty[WomValue])
                     case (_, other) =>
                         throw new AppInternalException(
                             s"Unexpected class ${other.getClass}, ${other}")
                 }.toMap
+
+                // merge the vector of results, each of which is a map
                 val results : Map[String, (WomType, Vector[WomValue])] =
                     vm.foldLeft(initResults) {
                         case (accu, m) =>
@@ -329,6 +332,9 @@ case class WfFragRunner(wf: WorkflowDefinition,
                 results.map{ case (key, (elemType, vv)) =>
                     key -> WomArray(WomArrayType(elemType), vv)
                 }
+
+            case (env, condNode: ConditionalNode) =>
+                throw new Exception("TODO")
 
             // Input nodes for a subgraph
             case (env, ogin: OuterGraphInputNode) =>

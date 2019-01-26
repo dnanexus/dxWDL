@@ -81,8 +81,33 @@ class WfFragRunnerTest extends FlatSpec with Matchers {
         value should be(WomInteger(9))
     }
 
-    it should "evaluate a scatter without a call" in {
+    ignore should "evaluate a scatter without a call" in {
         val path = pathFromBasename("scatter_no_call.wdl")
+        val wfSourceCode = Utils.readFileContent(path)
+
+        val (dxPathConfig, dxIoFunctions) = setup()
+        val wf : WorkflowDefinition = ParseWomSourceFile.parseWdlWorkflow(wfSourceCode)
+        val fragRunner = new WfFragRunner(wf, wfSourceCode,
+                                          instanceTypeDB,
+                                          Map.empty[String, ExecLinkInfo],
+                                          dxPathConfig,
+                                          dxIoFunctions,
+                                          runtimeDebugLevel)
+
+        val (_, subBlocks, _) = Block.splitIntoBlocks(wf.innerGraph, wfSourceCode)
+        val block = subBlocks(0)
+
+        val env = Map.empty[String, WomValue]
+        val results : Map[String, WomValue] = fragRunner.evalExpressions(block.nodes, env)
+        results should be(
+            Map("result" -> WomOptionalValue(
+                    WomStringType,
+                    Some(WomString("Mrs. Baggins"))
+                )))
+    }
+
+    it should "evaluate a conditional without a call" in {
+        val path = pathFromBasename("conditional_no_call.wdl")
         val wfSourceCode = Utils.readFileContent(path)
 
         val (dxPathConfig, dxIoFunctions) = setup()
@@ -111,4 +136,5 @@ class WfFragRunnerTest extends FlatSpec with Matchers {
                 )
             ))
     }
+
 }

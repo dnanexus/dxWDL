@@ -15,7 +15,9 @@ object WomPrettyPrint {
                 val ids = ssc.scatterVariableNodes.map{svn => svn.identifier.localName.value}
                 s"Scatter(${ids})"
 
-            case cond : ConditionalNode => s"Conditional(${cond.conditionExpression.womExpression.sourceString})"
+            case cond : ConditionalNode =>
+                s"Conditional(${cond.conditionExpression.womExpression.sourceString})"
+
             case call : CommandCallNode =>
                 val inputNames = call.inputPorts.map(_.name)
                 s"CommandCall(${call.identifier.localName.value}, ${inputNames})"
