@@ -9,8 +9,9 @@ RUN apt-get update && \
     apt-get install -y openjdk-8-jdk-headless
 
 # dxWDL
-WORKDIR /
 COPY dxWDL-$VERSION.jar /dxWDL.jar
 RUN chmod +x /dxWDL.jar
+RUN mkdir -p /tmp/workdir
 
+WORKDIR /tmp/workdir
 ENTRYPOINT ["java", "-jar", "/dxWDL.jar"]
