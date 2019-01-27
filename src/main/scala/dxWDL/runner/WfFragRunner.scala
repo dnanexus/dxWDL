@@ -390,7 +390,8 @@ case class WfFragRunner(wf: WorkflowDefinition,
 
 
     def apply(subBlockNr: Int,
-              env: Map[String, WomValue]) : Map[String, JsValue] = {
+              env: Map[String, WomValue],
+              runMode: RunnerWfFragmentMode.Value) : Map[String, JsValue] = {
         Utils.appletLog(verbose, s"dxWDL version: ${Utils.getVersion()}")
         Utils.appletLog(verbose, s"link info=${execLinkInfo}")
         Utils.appletLog(verbose, s"Workflow source code:")

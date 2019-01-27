@@ -22,7 +22,8 @@ object Main extends App {
         val Compile, Config, Internal, Version  = Value
     }
     object InternalOp extends Enumeration {
-        val WfFragment,
+        val Collect,
+            WfFragment,
             TaskCheckInstanceType, TaskEpilog, TaskProlog, TaskRelaunch = Value
 
         def isTaskOp(op: InternalOp.Value) = {
@@ -477,7 +478,9 @@ object Main extends App {
         val outputFields: Map[String, JsValue] =
             op match {
                 case InternalOp.WfFragment =>
-                    fragRunner.apply(meta.subBlockNr, meta.env)
+                    fragRunner.apply(meta.subBlockNr, meta.env, RunnerWfFragmentMode.Launch)
+                case InternalOp.Collect =>
+                    fragRunner.apply(meta.subBlockNr, meta.env, RunnerWfFragmentMode.Collect)
                 case _ =>
                     throw new Exception(s"Illegal task operation ${op}")
             }
