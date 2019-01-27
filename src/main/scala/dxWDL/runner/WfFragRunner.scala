@@ -284,6 +284,7 @@ case class WfFragRunner(wf: WorkflowDefinition,
 
             // scatter
             case(env, sctNode : ScatterNode) =>
+                // WDL has exactly one variable
                 assert(sctNode.scatterVariableNodes.size == 1)
                 val svNode: ScatterVariableNode = sctNode.scatterVariableNodes.head
                 val collectionRaw : WomValue =
@@ -333,8 +334,35 @@ case class WfFragRunner(wf: WorkflowDefinition,
                     key -> WomArray(WomArrayType(elemType), vv)
                 }
 
-            case (env, condNode: ConditionalNode) =>
-                throw new Exception("TODO")
+            case (env, cNode: ConditionalNode) =>
+                // evaluate the condition
+                val condValueRaw : WomValue =
+                    evaluateWomExpression(cNode.conditionExpression.womExpression,
+                                          WomBooleanType,
+                                          env)
+                val condValue : Boolean = condValueRaw match {
+                    case b: WomBoolean => b.value
+                    case other => throw new AppInternalException(
+                        s"Unexpected class ${other.getClass}, ${other}")
+                }
+                // build
+                val resultTypes : Map[String, WomType] = cNode.conditionalOutputPorts.map{
+                    case cop : ConditionalOutputPort =>
+                        cop.identifier.workflowLocalName -> Utils.stripOptional(cop.womType)
+                }.toMap
+                if (!condValue) {
+                    // condition is false, return None for all the values
+                    resultTypes.map{ case (key, womType) =>
+                        key -> WomOptionalValue(womType, None)
+                    }
+                } else {
+                    // condition is true, evaluate the internal block.
+                    val results = evalExpressions(cNode.innerGraph.nodes.toSeq, env)
+                    resultTypes.map{ case (key, womType) =>
+                        val value: Option[WomValue] = results.get(key)
+                        key -> WomOptionalValue(womType, value)
+                    }.toMap
+                }
 
             // Input nodes for a subgraph
             case (env, ogin: OuterGraphInputNode) =>

@@ -5,7 +5,4 @@ workflow conditional_no_call {
     if (flag) {
         String cats = "Mr. Baggins"
     }
-    output {
-        String? result = cats
-    }
 }
