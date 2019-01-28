@@ -1,6 +1,6 @@
 #!/bin/bash -e
 eval "$(dx env --bash)"
-docker run \
+sudo docker run \
      --rm \
      -e DX_SECURITY_CONTEXT="$DX_SECURITY_CONTEXT" \
      -e DX_APISERVER_PROTOCOL="$DX_APISERVER_PROTOCOL" \
