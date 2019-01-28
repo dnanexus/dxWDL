@@ -8,8 +8,15 @@ that the WDL runtime section will be ignored, the native definitions will be use
 - Eliminate a job-describe API call from all tasks. This reduces overall platform load,
 which is important in volume workflows.
 - Support for [private docker registries](./doc/ExperOptions.md#Native-docker-and-private-registries)
-- A [docker image](https://hub.docker.com/r/dnanexus/dxwdl) for running the compiler without
-needing to install dependencies.
+- A [docker image](https://hub.docker.com/r/dnanexus/dxwdl) for
+running the compiler without needing to install dependencies. You can
+use the
+[runc.sh](https://github.com/dnanexus/dxWDL/blob/native_docker/scripts/compiler_image/runc.sh)
+script to compile file `foo.wdl` like this:
+
+```bash
+$ runc.sh compile /path/to/foo.wdl -project project-xxxx
+```
 
 ## 0.78.1
 - Support the `restartableEntryPoints` applet option in the `extras` file.
