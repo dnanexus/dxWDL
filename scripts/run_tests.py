@@ -65,7 +65,7 @@ medium_test_list = [
     "optionals",
 
     # docker image tests
-    "platform_asset",
+#    "platform_asset",
     "broad_genomics",
     "private_registry",
 
@@ -110,7 +110,7 @@ test_unlocked=["cast",
                "strings",
                "toplevel_calls"]
 test_native_docker=["broad_genomics"]
-test_extras=["math2", "decl_mid_wf", "complex", "optionals"]
+test_extras=["instance_types"]
 test_private_registry=["private_registry"]
 
 TestMetaData = namedtuple('TestMetaData', 'name kind')

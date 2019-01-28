@@ -22,16 +22,7 @@
   },
 
   "per_task_dx_attributes" : {
-    "Add": {
-      "runSpec": {
-        "timeoutPolicy": {
-          "*": {
-            "minutes": 30
-          }
-        }
-      }
-    },
-    "Inc" : {
+    "DiskSpaceSpec" : {
       "runSpec": {
         "timeoutPolicy": {
           "*": {
@@ -40,6 +31,15 @@
         },
         "access" : {
           "project": "UPLOAD"
+        }
+      }
+    },
+    "DiskSpaceTaskDeclarations" : {
+      "runSpec": {
+        "timeoutPolicy": {
+          "*": {
+            "minutes": 30
+          }
         }
       }
     }
