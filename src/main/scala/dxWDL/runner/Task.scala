@@ -460,14 +460,14 @@ case class Task(task:WdlTask,
         // we can reach the result files, and upload them to
         // the platform.
         val DX_HOME = Utils.DX_HOME
-        val dockerCmd = s"""|dx-docker run --entrypoint /bin/bash
-                            |-v ${DX_HOME}:${DX_HOME}
-                            |${imgName}
-                            |$${HOME}/execution/meta/script""".stripMargin.replaceAll("\n", " ")
-        val dockerRunPath = getMetaDir().resolve("script.submit")
         val dockerRunScript =
             s"""|#!/bin/bash -ex
-                |${dockerCmd}""".stripMargin
+                |
+                |#Run docker or dx-docker
+                |$${DOCKER_CMD} run --entrypoint /bin/bash -v ${DX_HOME}:${DX_HOME} ${imgName} $${HOME}/execution/meta/script
+                |""".stripMargin
+
+        val dockerRunPath = getMetaDir().resolve("script.submit")
         Utils.appletLog(verbose, s"writing docker run script to ${dockerRunPath}")
         Utils.writeFileContent(dockerRunPath, dockerRunScript)
         dockerRunPath.toFile.setExecutable(true)
@@ -475,9 +475,7 @@ case class Task(task:WdlTask,
 
     // Calculate the input variables for the task, download the input files,
     // and build a shell script to run the command.
-    def prolog(inputSpec: Map[String, DXIOParam],
-               outputSpec: Map[String, DXIOParam],
-               inputWvls: Map[String, WdlVarLinks]) : Map[String, JsValue] = {
+    def prolog(inputWvls: Map[String, WdlVarLinks]) : Map[String, JsValue] = {
         Utils.appletLog(verbose, s"Prolog  debugLevel=${runtimeDebugLevel}")
         Utils.appletLog(verbose, s"dxWDL version: ${Utils.getVersion()}")
         if (maxVerboseLevel)
@@ -551,9 +549,7 @@ case class Task(task:WdlTask,
         Map.empty
     }
 
-    def epilog(inputSpec: Map[String, DXIOParam],
-               outputSpec: Map[String, DXIOParam],
-               inputs: Map[String, WdlVarLinks]) : Map[String, JsValue] = {
+    def epilog(inputs: Map[String, WdlVarLinks]) : Map[String, JsValue] = {
         Utils.appletLog(verbose, s"Epilog  debugLevel=${runtimeDebugLevel}")
         if (maxVerboseLevel)
             printDirStruct()
@@ -635,9 +631,7 @@ case class Task(task:WdlTask,
     /** Check if we are already on the correct instance type. This allows for avoiding unnecessary
       * relaunch operations.
       */
-    def checkInstanceType(inputSpec: Map[String, DXIOParam],
-                          outputSpec: Map[String, DXIOParam],
-                          inputWvls: Map[String, WdlVarLinks]) : Boolean = {
+    def checkInstanceType(inputWvls: Map[String, WdlVarLinks]) : Boolean = {
         // evaluate the runtime attributes
         // determine the instance type
         val requiredInstanceType:String = calcInstanceType(inputWvls)
@@ -666,9 +660,7 @@ case class Task(task:WdlTask,
     /** The runtime attributes need to be calculated at runtime. Evaluate them,
       *  determine the instance type [xxxx], and relaunch the job on [xxxx]
       */
-    def relaunch(inputSpec: Map[String, DXIOParam],
-                 outputSpec: Map[String, DXIOParam],
-                 inputWvls: Map[String, WdlVarLinks]) : Map[String, JsValue] = {
+    def relaunch(inputWvls: Map[String, WdlVarLinks]) : Map[String, JsValue] = {
         // evaluate the runtime attributes
         // determine the instance type
         val instanceType:String = calcInstanceType(inputWvls)

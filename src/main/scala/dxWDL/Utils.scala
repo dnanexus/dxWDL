@@ -233,21 +233,32 @@ object Utils {
     val objMapper : ObjectMapper = new ObjectMapper()
 
     // Get the dx:classes for inputs and outputs
-    def loadExecInfo : (Map[String, DXIOParam], Map[String, DXIOParam]) = {
-        val dxapp : DXApplet = dxEnv.getJob().describe().getApplet()
-        val desc : DXApplet.Describe = dxapp.describe()
-        val inputSpecRaw: List[InputParameter] = desc.getInputSpecification().asScala.toList
-        val inputSpec:Map[String, DXIOParam] = inputSpecRaw.map(
-            iSpec => iSpec.getName -> DXIOParam(iSpec.getIOClass, iSpec.isOptional)
-        ).toMap
-        val outputSpecRaw: List[OutputParameter] = desc.getOutputSpecification().asScala.toList
-        val outputSpec:Map[String, DXIOParam] = outputSpecRaw.map(
-            iSpec => iSpec.getName -> DXIOParam(iSpec.getIOClass, iSpec.isOptional)
-        ).toMap
+    def parseInputSpec(jobInfo: String) : Map[String, DXIOParam] = {
+        val data = jobInfo.parseJson
+        val inputSpecRaw : Vector[JsValue] = data.asJsObject.fields.get("inputSpec") match {
+            case None => throw new Exception("missing inputSpec")
+            case Some(JsArray(x)) => x.toVector
+            case Some(other) => throw new Exception(s"Malformed input spec object ${other.prettyPrint}")
+        }
 
-        // remove auxiliary fields
-        (inputSpec.filter{ case (fieldName,_) => !fieldName.endsWith(FLAT_FILES_SUFFIX) },
-         outputSpec.filter{ case (fieldName,_) => !fieldName.endsWith(FLAT_FILES_SUFFIX) })
+        inputSpecRaw.map{
+            case inp =>
+                val fields = inp.asJsObject.fields
+                val name = fields.get("name") match {
+                    case Some(JsString(x)) => x
+                    case other => throw new Exception(s"Malformed input spec object ${inp.prettyPrint}")
+                }
+                val ioClass = fields.get("class") match {
+                    case Some(JsString(x)) => IOClass.create(x)
+                    case other => throw new Exception(s"Malformed input spec object ${inp.prettyPrint}")
+                }
+                val optional: Boolean = fields.get("optional") match {
+                    case Some(JsBoolean(b)) => b
+                    case None => false
+                    case other => throw new Exception(s"Malformed input spec object ${inp.prettyPrint}")
+                }
+                name -> DXIOParam(ioClass, optional)
+        }.toMap
     }
 
     // Create a file from a string

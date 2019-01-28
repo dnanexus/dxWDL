@@ -1,11 +1,8 @@
-workflow platform_asset {
-    call image
-    output {
-        String result = image.result
-    }
-}
-
-task image {
+# Test that it is possible to save a docker image as
+# a platform image.
+#
+# Note: this assumes dx-docker.
+task platform_asset {
     command <<<
         echo "Major Major"
     >>>

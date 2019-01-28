@@ -928,8 +928,6 @@ object WfFragment {
 
     def apply(nswf: WdlNamespaceWithWorkflow,
               instanceTypeDB: InstanceTypeDB,
-              inputSpec: Map[String, DXIOParam],
-              outputSpec: Map[String, DXIOParam],
               inputs: Map[String, WdlVarLinks],
               orgInputs: JsValue,
               runMode: RunnerWfFragmentMode.Value,
@@ -939,7 +937,6 @@ object WfFragment {
         Utils.appletLog(verbose, s"Workflow source code:")
         val wdlCode: String = WdlPrettyPrinter(false, None).apply(nswf, 0).mkString("\n")
         Utils.appletLog(verbose, wdlCode, 10000)
-        //Utils.appletLog(verbose, s"Input spec: ${inputSpec}")
         Utils.appletLog(verbose, s"Inputs: ${inputs}")
         Utils.appletLog(verbose, s"runMode=${runMode}")
 
@@ -971,7 +968,6 @@ object WfFragment {
                     accu ++ fields.toMap
             }
 
-        //Utils.appletLog(verbose, s"outputSpec= ${outputSpec}")
         //Utils.appletLog(verbose, s"jsVarOutputs= ${jsVarOutputs}")
         jsVarOutputs
     }

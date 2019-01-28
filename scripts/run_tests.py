@@ -64,8 +64,10 @@ medium_test_list = [
     "modulo",
     "optionals",
 
-    # docker image stored as an asset
+    # docker image tests
     "platform_asset",
+    "broad_genomics",
+    "private_registry",
 
     # Setting defaults for tasks, not just workflows
     "population",
@@ -107,6 +109,10 @@ test_unlocked=["cast",
                "optionals",
                "strings",
                "toplevel_calls"]
+test_native_docker=["broad_genomics"]
+test_extras=["math2", "decl_mid_wf", "complex", "optionals"]
+test_private_registry=["private_registry"]
+
 TestMetaData = namedtuple('TestMetaData', 'name kind')
 TestDesc = namedtuple('TestDesc', 'name kind wdl_source wdl_input dx_input results')
 
@@ -433,6 +439,12 @@ def compiler_per_test_flags(tname):
     else:
         flags.append("-inputs")
         flags.append(desc.wdl_input)
+    if tname in test_native_docker:
+        flags.append("-nativeDocker")
+    if tname in test_extras:
+        flags += ["--extras", os.path.join(top_dir, "test/extras.json")]
+    if tname in test_private_registry:
+        flags += ["--extras", os.path.join(top_dir, "test/extras_private_registry.json")]
     return flags
 
 # Which project to use for a test
@@ -609,8 +621,6 @@ def main():
         compiler_flags.append("-verbose")
     if args.runtime_debug_level:
         compiler_flags += ["-runtimeDebugLevel", args.runtime_debug_level]
-
-    compiler_flags += ["--extras", os.path.join(top_dir, "test/extras.json")]
 
     if "call_native" in test_names:
         native_call_setup(project, applet_folder, version_id)
