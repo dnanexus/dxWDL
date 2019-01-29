@@ -473,8 +473,9 @@ object Main extends App {
         val wf = ParseWomSourceFile.parseWdlWorkflow(meta.wfSource)
         val fragRunner = new runner.WfFragRunner(wf, meta.wfSource, meta.instanceTypeDB,
                                                  meta.execLinkInfo,
-                                                 dxPathConfig, dxIoFunctions, rtDebugLvl)
-
+                                                 dxPathConfig, dxIoFunctions,
+                                                 inputsRaw,
+                                                 rtDebugLvl)
         val outputFields: Map[String, JsValue] =
             op match {
                 case InternalOp.WfFragment =>

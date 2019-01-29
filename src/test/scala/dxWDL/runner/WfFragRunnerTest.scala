@@ -4,6 +4,7 @@ import cats.data.Validated.{Invalid, Valid}
 import common.validation.ErrorOr.ErrorOr
 import java.nio.file.{Path, Paths}
 import org.scalatest.{FlatSpec, Matchers}
+import spray.json._
 import wom.callable.{WorkflowDefinition}
 import wom.executable.WomBundle
 import wom.expression.WomExpression
@@ -43,6 +44,7 @@ class WfFragRunnerTest extends FlatSpec with Matchers {
                                           Map.empty[String, ExecLinkInfo],
                                           dxPathConfig,
                                           dxIoFunctions,
+                                          JsNull,
                                           runtimeDebugLevel)
         (wf, fragRunner)
     }

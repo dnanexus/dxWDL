@@ -57,6 +57,7 @@ case class WfFragRunner(wf: WorkflowDefinition,
                         execLinkInfo: Map[String, ExecLinkInfo],
                         dxPathConfig : DxPathConfig,
                         dxIoFunctions : DxIoFunctions,
+                        inputsRaw : JsValue,
                         runtimeDebugLevel: Int) {
     private val verbose = runtimeDebugLevel >= 1
     //private val maxVerboseLevel = (runtimeDebugLevel == 2)
@@ -187,6 +188,7 @@ case class WfFragRunner(wf: WorkflowDefinition,
                          callNameHint: Option[String]) : (Int, DXExecution) = {
         val linkInfo = getCallLinkInfo(call)
         val callName = call.identifier.localName.value
+        val calleeName = call.callable.name
         val callInputs:JsValue = buildAppletInputs(call, linkInfo, env)
         Utils.appletLog(verbose, s"""|Call ${callName}
                                      |calleeName= ${calleeName}
@@ -398,28 +400,24 @@ case class WfFragRunner(wf: WorkflowDefinition,
     }
 
     // Launch a subjob to collect the outputs
-    private def launchCollectSubjob(childJobs: Vector[DXExecution],
-                                    calls: Vector[WdlCall],
+    def launchCollectSubjob(childJobs: Vector[DXExecution],
                                     exportTypes: Map[String, WomType]) : Map[String, WdlVarLinks] = {
         assert(!childJobs.isEmpty)
-                Utils.appletLog(verbose, s"""|launching collect subjob
-                                             |child jobs=${childJobs}""".stripMargin)
+        Utils.appletLog(verbose, s"""|launching collect subjob
+                                     |child jobs=${childJobs}""".stripMargin)
 
         // Run a sub-job with the "collect" entry point.
         // We need to provide the exact same inputs.
         val dxSubJob : DXJob = Utils.runSubJob("collect",
                                                Some(instanceTypeDB.defaultInstanceType),
-                                               orgInputs,
+                                               inputsRaw,
                                                childJobs)
 
         // Return promises (JBORs) for all the outputs. Since the signature of the sub-job
         // is exactly the same as the parent, we can immediately exit the parent job.
-        exportTypes.foldLeft(Map.empty[String, WdlVarLinks]) {
-            case (accu, (eVarName, t)) =>
-                val wvl = WdlVarLinks(t,
-                                      DeclAttrs.empty,
-                                      DxlExec(dxSubJob, eVarName))
-                accu + (eVarName -> wvl)
+        exportTypes.map{
+            case (eVarName, womType) =>
+                eVarName -> WdlVarLinks(womType, DxlExec(dxSubJob, eVarName))
         }.toMap
     }
 
@@ -428,12 +426,12 @@ case class WfFragRunner(wf: WorkflowDefinition,
     //  if (x > 1) {
     //      call Add { input: a=1, b=x+32 }
     //  }
-    private def execSimpleConditional(cond: ConditionalNode,
+    private def execSimpleConditional(cnNode: ConditionalNode,
                                       env: Map[String, WomValue],
                                       exportedVars: Set[String] ) : Map[String, JsValue] = {
         // Evaluate the condition
         val condValueRaw : WomValue =
-            evaluateWomExpression(cNode.conditionExpression.womExpression,
+            evaluateWomExpression(cnNode.conditionExpression.womExpression,
                                   WomBooleanType,
                                   env)
         val condValue : Boolean = condValueRaw match {
@@ -446,22 +444,37 @@ case class WfFragRunner(wf: WorkflowDefinition,
             processOutputs(env, Map.empty, exportedVars)
         } else {
             val taskInputs : Vector[TaskCallInputExpressionNode] =
-                cond.innerGraph.nodes.collect{
+                cnNode.innerGraph.nodes.collect{
                     case tcin : TaskCallInputExpressionNode => tcin
-                }
-            val calls = cond.innerGraph.nodes.collect {
-                callNode : CallNode => callNode
-            }
+                }.toVector
+            val calls = cnNode.innerGraph.nodes.collect {
+                case callNode : CallNode => callNode
+            }.toVector
             assert(calls.size == 1)
             val call = calls.head
 
             // evaluate the call inputs, and add to the environment
             val callEnv = evalExpressions(taskInputs, env)
             val (_, dxExec) = execCall(call, callEnv,  None)
-            if (
             val callResults: Map[String, WdlVarLinks] = genPromisesForCall(call, dxExec)
 
-            // Add optional to the types.
+            // Add optional modifier to the return types.
+            val exportedWvls = callResults.map{
+                case (key, WdlVarLinks(womType, dxl)) =>
+                    // be careful not to make double optionals
+                    val optionalType = womType match {
+                        case WomOptionalType(_) => womType
+                        case _ => WomOptionalType(womType)
+                    }
+                    key -> WdlVarLinks(optionalType, dxl)
+            }.toMap
+
+            // convert from WVL to JSON
+            exportedWvls.foldLeft(Map.empty[String, JsValue]) {
+                case (accu, (varName, wvl)) =>
+                    val fields = WdlVarLinks.genFields(wvl, varName)
+                    accu ++ fields.toMap
+            }.toMap
         }
     }
 
@@ -501,7 +514,7 @@ case class WfFragRunner(wf: WorkflowDefinition,
             case Block.Cond(cond, true) =>
                 execSimpleConditional(cond, env, exportedVars)
 
-            case Block.Scatter(sctNode, true) =>
+//            case Block.Scatter(sctNode, true) =>
 
             case other =>
                 throw new AppInternalException(s"Unhandled case ${other}")
