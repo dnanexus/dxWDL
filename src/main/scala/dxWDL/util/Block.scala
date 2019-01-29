@@ -283,7 +283,7 @@ object Block {
             return None
         val oneCall = calls.head
 
-        // All the other nodes have to the call inputs
+        // All the other nodes have to be call inputs
         val rest = block.nodes.toSet - oneCall
         val callInputs = oneCall.upstream.toSet
         if (rest != callInputs)
@@ -300,4 +300,88 @@ object Block {
         Some(oneCall)
     }
 
+
+    // Check if a block contains exactly one call
+    // examples:
+    //
+    //  if (x > 1) {
+    //      call Add { input: a=1, b=2 }
+    //  }
+    //
+    // These are NOT simple blocks:
+    // if (x > 1) {
+    //    call Multiple { ... }
+    //    call Add { ... }
+    // }
+    //
+    // scatter (n in names) {
+    //    String full_name = n + " Horowitz"
+    //    call Filter { input: prefix = fullName }
+    // }
+    //
+    def isSimpleSubblock(graph: Graph) : Boolean = {
+        val nodes = graph.nodes
+
+        // The block can't have conditional/scatter sub-blocks
+        val hasSubblocks = nodes.forall{
+            case _ : ScatterNode => true
+            case _ : ConditionalNode => true
+            case _ => false
+        }
+        if (hasSubblocks)
+            return false
+
+        // The block has to have one call
+        val calls : Seq[CallNode] = nodes.toSeq.collect{
+            case cNode : CallNode => cNode
+        }
+        if (calls.size > 1)
+            return false
+        assert(calls.size == 1)
+
+        // The only other kind of nodes could be inputs, outputs, and task input expressions.
+        nodes.forall{
+            case _: CallNode => true
+            case _: TaskCallInputExpressionNode => true
+            case _: OuterGraphInputNode => true
+            case _: GraphOutputNode => true
+            case _ => false
+        }
+    }
+
+    // A block can have expressions, input ports, and output ports in the beginning.
+    // The last node can be:
+    // 1) Expressions
+    // 2) Call
+    // 3) Conditional block
+    // 4) Scatter block
+    sealed trait Category
+    case object AllExpressions extends Category
+    case class Call(call: CallNode) extends Category
+    case class Cond(cond: ConditionalNode, simple: Boolean) extends Category
+    case class Scatter(scatter: ScatterNode, simple: Boolean) extends Category
+
+    def categorize(block: Block) : (Vector[GraphNode], Category) = {
+        assert(!block.nodes.isEmpty)
+        val allButLast : Vector[GraphNode] = block.nodes.dropRight(1)
+
+        // make sure there are no calls in the beginning of the block
+        val nrCalls = deepFindCalls(allButLast).size
+        if (nrCalls > 0)
+            throw new Exception(
+                s"""|There are ${nrCalls} calls at the beginning of the block.
+                    |However, there can be none""".stripMargin.replaceAll("\n", " "))
+
+        val lastNode = block.nodes.last
+        lastNode match {
+            case callNode: CallNode =>
+                (allButLast, Call(callNode))
+            case conditionalNode: ConditionalNode =>
+                (allButLast, Cond(conditionalNode, isSimpleSubblock(conditionalNode.innerGraph)))
+            case sctNode: ScatterNode =>
+                (allButLast, Scatter(sctNode, isSimpleSubblock(sctNode.innerGraph)))
+            case other =>
+                ((allButLast :+ other), AllExpressions)
+        }
+    }
 }
