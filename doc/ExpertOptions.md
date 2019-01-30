@@ -422,7 +422,7 @@ do that, add the following section to the extras file:
 ```
 
 A platform path can be used instead of an applet-id. Writing your own applet for reorganization
-purposes is tricky, and could cause data loss if you are not careful.
+purposes is tricky, and may cause files to be misplaced or outright deleted, if you are not careful.
 The applet:
 1. requires `CONTRIBUTE` project access, so it can move files and folders around.
 2. has to be idempotent, so that if the instance it runs on crashes, it can safely restart.
