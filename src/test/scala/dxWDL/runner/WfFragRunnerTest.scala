@@ -39,12 +39,14 @@ class WfFragRunnerTest extends FlatSpec with Matchers {
                                 dxIoFunctions: DxIoFunctions,
                                 wfSourceCode: String) : (WorkflowDefinition, WfFragRunner) = {
         val wf : WorkflowDefinition = ParseWomSourceFile.parseWdlWorkflow(wfSourceCode)
+        val fragInputOutput = new WfFragInputOutput(dxIoFunctions, null /*dxProject*/, runtimeDebugLevel)
         val fragRunner = new WfFragRunner(wf, wfSourceCode,
                                           instanceTypeDB,
                                           Map.empty[String, ExecLinkInfo],
                                           dxPathConfig,
                                           dxIoFunctions,
                                           JsNull,
+                                          fragInputOutput,
                                           runtimeDebugLevel)
         (wf, fragRunner)
     }

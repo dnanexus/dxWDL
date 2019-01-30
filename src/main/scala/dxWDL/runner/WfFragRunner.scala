@@ -59,9 +59,14 @@ case class WfFragRunner(wf: WorkflowDefinition,
                         dxPathConfig : DxPathConfig,
                         dxIoFunctions : DxIoFunctions,
                         inputsRaw : JsValue,
+                        fragInputOutput : WfFragInputOutput,
                         runtimeDebugLevel: Int) {
     private val verbose = runtimeDebugLevel >= 1
     //private val maxVerboseLevel = (runtimeDebugLevel == 2)
+    private val collectSubJobs = CollectSubJobs(fragInputOutput.jobInputOutput,
+                                                inputsRaw,
+                                                instanceTypeDB,
+                                                runtimeDebugLevel)
 
     var gSeqNum = 0
     private def launchSeqNum() : Int = {
@@ -399,31 +404,9 @@ case class WfFragRunner(wf: WorkflowDefinition,
         }
     }
 
-    // Launch a subjob to collect the outputs
-    private def launchCollectSubjob(childJobs: Vector[DXExecution],
-                                    exportTypes: Map[String, WomType]) : Map[String, WdlVarLinks] = {
-        assert(!childJobs.isEmpty)
-        Utils.appletLog(verbose, s"""|launching collect subjob
-                                     |child jobs=${childJobs}""".stripMargin)
-
-        // Run a sub-job with the "collect" entry point.
-        // We need to provide the exact same inputs.
-        val dxSubJob : DXJob = Utils.runSubJob("collect",
-                                               Some(instanceTypeDB.defaultInstanceType),
-                                               inputsRaw,
-                                               childJobs)
-
-        // Return promises (JBORs) for all the outputs. Since the signature of the sub-job
-        // is exactly the same as the parent, we can immediately exit the parent job.
-        exportTypes.map{
-            case (eVarName, womType) =>
-                eVarName -> WdlVarLinks(womType, DxlExec(dxSubJob, eVarName))
-        }.toMap
-    }
-
     // Get the call from inside the block
-    private def getInnerCallFromSimpleBlock(node: GraphNode) : CallNode = {
-        val calls = node.innerGraph.nodes.collect {
+    private def getInnerCallFromSimpleBlock(graph: Graph) : CallNode = {
+        val calls = graph.nodes.collect {
             case callNode : CallNode => callNode
         }.toVector
         assert(calls.size == 1)
@@ -455,7 +438,7 @@ case class WfFragRunner(wf: WorkflowDefinition,
                 cnNode.innerGraph.nodes.collect{
                     case tcin : TaskCallInputExpressionNode => tcin
                 }.toVector
-            val call = getInnerCallFromSimpleBlock(cnNode)
+            val call = getInnerCallFromSimpleBlock(cnNode.innerGraph)
 
             // evaluate the call inputs, and add to the environment
             val callEnv = evalExpressions(taskInputs, env)
@@ -514,7 +497,7 @@ case class WfFragRunner(wf: WorkflowDefinition,
                 s"Unexpected class ${other.getClass}, ${other}")
         }
         // There must be exactly one call
-        val call = getInnerCallFromSimpleBlock(sctNode)
+        val call = getInnerCallFromSimpleBlock(sctNode.innerGraph)
 
         // We will need to evaluate the task inputs
         val taskInputs : Vector[TaskCallInputExpressionNode] =
@@ -538,7 +521,7 @@ case class WfFragRunner(wf: WorkflowDefinition,
             case scp : ScatterGathererPort =>
                 scp.identifier.workflowLocalName -> scp.womType
         }.toMap
-        launchCollectSubjob(childJobs, resultTypes)
+        collectSubJobs.launch(childJobs, resultTypes)
     }
 
 
@@ -589,9 +572,29 @@ case class WfFragRunner(wf: WorkflowDefinition,
 
             // A subjob that collects results from scatters
             case RunnerWfFragmentMode.Collect =>
-                val childJobsComplete = Collect.executableFromSeqNum()
-                val call = getInnerCallFromSimpleBlock(sctNode)
-                Collect.aggregateResults(call, childJobsComplete)
+                val childJobsComplete = collectSubJobs.executableFromSeqNum()
+                category match {
+                    case Block.AllExpressions =>
+                        Map.empty
+
+                    // A single call at the end of the block
+                    case Block.Call(call: CallNode) =>
+                        val (_, dxExec) = execCall(call, env,  None)
+                        genPromisesForCall(call, dxExec)
+
+                    // A conditional at the end of the block, with a call inside it
+                    case Block.Cond(cnNode, true) =>
+                        execSimpleConditional(cnNode, env)
+
+                    // A scatter at the end of the block, with a call inside it
+                    case Block.Scatter(sctNode, true) =>
+                        val call = getInnerCallFromSimpleBlock(sctNode.innerGraph)
+                        collectSubJobs.aggregateResults(call, childJobsComplete)
+
+                    case other =>
+                        throw new AppInternalException(s"Unhandled case ${other}")
+                }
+
         }
 
         val jsOutputs : Map[String, JsValue] = processOutputs(env, subblockResults, exportedVars)

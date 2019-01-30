@@ -62,20 +62,48 @@ import com.dnanexus.{DXAPI, DXEnvironment, DXExecution, DXJob, DXSearch}
 import com.fasterxml.jackson.databind.JsonNode
 import scala.collection.JavaConverters._
 import spray.json._
-import wom.values._
+import wom.callable.Callable._
+import wom.graph._
 import wom.types._
+import wom.values._
 
 import dxWDL.util._
 
-object Collect {
+case class ChildExecDesc(execName: String,
+                         unqCallName: String,
+                         seqNum: Int,
+                         outputs: Map[String, JsValue],
+                         exec: DXExecution)
 
-    case class ChildExecDesc(execName: String,
-                             unqCallName: String,
-                             seqNum: Int,
-                             outputs: Map[String, JsValue],
-                             exec: DXExecution)
+case class CollectSubJobs(jobInputOutput : JobInputOutput,
+                          inputsRaw : JsValue,
+                          instanceTypeDB : InstanceTypeDB,
+                          runtimeDebugLevel: Int) {
+    private val verbose = runtimeDebugLevel >= 1
 
-    def findChildExecs() : Vector[DXExecution] = {
+    // Launch a subjob to collect the outputs
+    def launch(childJobs: Vector[DXExecution],
+               exportTypes: Map[String, WomType]) : Map[String, WdlVarLinks] = {
+        assert(!childJobs.isEmpty)
+        Utils.appletLog(verbose, s"""|launching collect subjob
+                                     |child jobs=${childJobs}""".stripMargin)
+
+        // Run a sub-job with the "collect" entry point.
+        // We need to provide the exact same inputs.
+        val dxSubJob : DXJob = Utils.runSubJob("collect",
+                                               Some(instanceTypeDB.defaultInstanceType),
+                                               inputsRaw,
+                                               childJobs)
+
+        // Return promises (JBORs) for all the outputs. Since the signature of the sub-job
+        // is exactly the same as the parent, we can immediately exit the parent job.
+        exportTypes.map{
+            case (eVarName, womType) =>
+                eVarName -> WdlVarLinks(womType, DxlExec(dxSubJob, eVarName))
+        }.toMap
+    }
+
+    private def findChildExecs() : Vector[DXExecution] = {
         // get the parent job
         val dxEnv = DXEnvironment.create()
         val dxJob = dxEnv.getJob()
@@ -94,7 +122,7 @@ object Collect {
 
     // Describe all the scatter child jobs. Use a bulk-describe
     // for efficiency.
-    def describeChildExecs(execs: Vector[DXExecution]) : Vector[ChildExecDesc] = {
+    private def describeChildExecs(execs: Vector[DXExecution]) : Vector[ChildExecDesc] = {
         val jobInfoReq:Vector[JsValue] = execs.map{ job =>
             JsObject(
                 "id" -> JsString(job.getId),
@@ -166,8 +194,7 @@ object Collect {
                     case None =>
                         throw new Exception(s"Need to handle optionals here womType=${womType}")
                     case Some(jsv) =>
-                        val wvl = WdlVarLinks.importFromDxExec(womType, jsv)
-                        wvl.
+                        jobInputOutput.unpackJobInput(womType, jsv)
                 }
             }.toVector
         WomArray(WomArrayType(womType), vec)
@@ -176,11 +203,14 @@ object Collect {
     // aggregate call results
     def aggregateResults(call: CallNode,
                          childJobsComplete: Vector[ChildExecDesc]) : Map[String, WdlVarLinks] = {
-        call.callable.outputs{ cot =>
+        call.callable.outputs.map{ cot : OutputDefinition =>
             val fullName = s"${call.identifier.workflowLocalName}.${cot.localName}"
             val womType = cot.womType
-            val value : WomValue = collectCallField(cot.name, womType, childJobsComplete)
-            fullName -> WdlVarLinks.importFromWDL(value.womType, value)
+            val value : WomValue = collectCallField(cot.name,
+                                                    womType,
+                                                    childJobsComplete)
+            val wvl = WdlVarLinks.importFromWDL(value.womType, value)
+            fullName ->  wvl
         }.toMap
     }
 }

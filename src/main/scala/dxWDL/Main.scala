@@ -475,6 +475,7 @@ object Main extends App {
                                                  meta.execLinkInfo,
                                                  dxPathConfig, dxIoFunctions,
                                                  inputsRaw,
+                                                 fragInputOutput,
                                                  rtDebugLvl)
         val outputFields: Map[String, JsValue] =
             op match {
