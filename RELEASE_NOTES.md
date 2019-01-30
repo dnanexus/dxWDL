@@ -18,6 +18,11 @@ script to compile file `foo.wdl` like this:
 $ runc.sh compile /path/to/foo.wdl -project project-xxxx
 ```
 
+- Instructions for how to replace the built in
+  [reorganize workflow outputs](./doc/ExpertOptions.md#Use-your-own-applet) applet,
+  with your [own](./doc/ExpertOptions.md#Handling-intermediate-workflow-outputs).
+
+
 ## 0.78.1
 - Support the `restartableEntryPoints` applet option in the `extras` file.
 
