@@ -18,9 +18,11 @@ script to compile file `foo.wdl` like this:
 $ runc.sh compile /path/to/foo.wdl -project project-xxxx
 ```
 
-- [Allow the user]((./doc/ExpertOptions.md#Use-your-own-applet) to set an applet for reorganizing the workflow
-  results. This is an alternative to the
-  [reorg](./doc/ExpertOptions.md#Handling-intermediate-workflow-outputs) applet.
+- Use a configurable applet to
+  [reorganize workflow outputs](./doc/ExpertOptions.md#Use-your-own-applet). This
+  is an alternative to the
+  [reorg](./doc/ExpertOptions.md#Handling-intermediate-workflow-outputs)
+  applet.
 
 
 ## 0.78.1
