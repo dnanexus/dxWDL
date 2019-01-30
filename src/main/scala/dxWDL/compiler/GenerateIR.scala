@@ -607,8 +607,6 @@ case class GenerateIR(callables: Map[String, IR.Callable],
         // as a first step, only handle straight line workflows
         if (!graph.workflowCalls.isEmpty)
             throw new Exception(s"Workflow ${wf.name} calls a subworkflow; currently not supported")
-        if (!graph.conditionals.isEmpty)
-            throw new Exception(s"Workflow ${wf.name} includes a conditional; currently not supported")
 
         // now we are sure the workflow is a simple straight line. It only contains
         // task calls.

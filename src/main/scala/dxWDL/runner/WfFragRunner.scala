@@ -39,6 +39,7 @@ import cats.data.Validated.{Invalid, Valid}
 import common.validation.ErrorOr.ErrorOr
 import com.dnanexus._
 import com.fasterxml.jackson.databind.JsonNode
+import java.nio.file.Paths
 import scala.collection.JavaConverters._
 import spray.json._
 import wom.callable.{WorkflowDefinition}
@@ -115,7 +116,7 @@ case class WfFragRunner(wf: WorkflowDefinition,
     private def processOutputs(womOutputs: Map[String, WomValue],
                                wvlOutputs: Map[String, WdlVarLinks],
                                exportedVars: Set[String]) : Map[String, JsValue] = {
-        Utils.appletLog(verbose, s"""|processOutput
+        Utils.appletLog(verbose, s"""|processOutputs
                                      |  exportedVars = ${exportedVars}
                                      |  womOutputs = ${womOutputs.keys}
                                      |  wvlOutputs = ${wvlOutputs.keys}
@@ -319,7 +320,6 @@ case class WfFragRunner(wf: WorkflowDefinition,
                         scp.identifier.workflowLocalName -> scp.womType
                 }.toMap
 
-
                 // build a mapping from from result-key to its type
                 val initResults : Map[String, (WomType, Vector[WomValue])] = resultTypes.map{
                     case (key, WomArrayType(elemType)) => key -> (elemType, Vector.empty[WomValue])
@@ -400,7 +400,7 @@ case class WfFragRunner(wf: WorkflowDefinition,
     }
 
     // Launch a subjob to collect the outputs
-    def launchCollectSubjob(childJobs: Vector[DXExecution],
+    private def launchCollectSubjob(childJobs: Vector[DXExecution],
                                     exportTypes: Map[String, WomType]) : Map[String, WdlVarLinks] = {
         assert(!childJobs.isEmpty)
         Utils.appletLog(verbose, s"""|launching collect subjob
@@ -421,14 +421,22 @@ case class WfFragRunner(wf: WorkflowDefinition,
         }.toMap
     }
 
+    // Get the call from inside the block
+    private def getInnerCallFromSimpleBlock(node: GraphNode) : CallNode = {
+        val calls = node.innerGraph.nodes.collect {
+            case callNode : CallNode => callNode
+        }.toVector
+        assert(calls.size == 1)
+        calls.head
+    }
+
     // Simple conditional subblock. For example:
     //
     //  if (x > 1) {
     //      call Add { input: a=1, b=x+32 }
     //  }
     private def execSimpleConditional(cnNode: ConditionalNode,
-                                      env: Map[String, WomValue],
-                                      exportedVars: Set[String] ) : Map[String, JsValue] = {
+                                      env: Map[String, WomValue]) : Map[String, WdlVarLinks] = {
         // Evaluate the condition
         val condValueRaw : WomValue =
             evaluateWomExpression(cnNode.conditionExpression.womExpression,
@@ -441,17 +449,13 @@ case class WfFragRunner(wf: WorkflowDefinition,
         }
         if (!condValue) {
             // Condition is false, no need to execute the call
-            processOutputs(env, Map.empty, exportedVars)
+            Map.empty
         } else {
             val taskInputs : Vector[TaskCallInputExpressionNode] =
                 cnNode.innerGraph.nodes.collect{
                     case tcin : TaskCallInputExpressionNode => tcin
                 }.toVector
-            val calls = cnNode.innerGraph.nodes.collect {
-                case callNode : CallNode => callNode
-            }.toVector
-            assert(calls.size == 1)
-            val call = calls.head
+            val call = getInnerCallFromSimpleBlock(cnNode)
 
             // evaluate the call inputs, and add to the environment
             val callEnv = evalExpressions(taskInputs, env)
@@ -459,7 +463,7 @@ case class WfFragRunner(wf: WorkflowDefinition,
             val callResults: Map[String, WdlVarLinks] = genPromisesForCall(call, dxExec)
 
             // Add optional modifier to the return types.
-            val exportedWvls = callResults.map{
+            callResults.map{
                 case (key, WdlVarLinks(womType, dxl)) =>
                     // be careful not to make double optionals
                     val optionalType = womType match {
@@ -468,15 +472,75 @@ case class WfFragRunner(wf: WorkflowDefinition,
                     }
                     key -> WdlVarLinks(optionalType, dxl)
             }.toMap
-
-            // convert from WVL to JSON
-            exportedWvls.foldLeft(Map.empty[String, JsValue]) {
-                case (accu, (varName, wvl)) =>
-                    val fields = WdlVarLinks.genFields(wvl, varName)
-                    accu ++ fields.toMap
-            }.toMap
         }
     }
+
+    // create a short, easy to read, description for a scatter element.
+    private def readableNameForScatterItem(item: WomValue) : Option[String] = {
+        item match {
+            case WomBoolean(_) | WomInteger(_) | WomFloat(_) =>
+                Some(item.toWomString)
+            case WomString(s) =>
+                Some(s)
+            case WomSingleFile(path) =>
+                val p = Paths.get(path).getFileName()
+                Some(p.toString)
+            case WomPair(l, r) =>
+                val ls = readableNameForScatterItem(l)
+                val rs = readableNameForScatterItem(r)
+                (ls, rs) match {
+                    case (Some(ls1), Some(rs1)) => Some(s"(${ls1}, ${rs1})")
+                    case _ => None
+                }
+            case WomOptionalValue(_, Some(x)) =>
+                readableNameForScatterItem(x)
+            case _ =>
+                None
+        }
+    }
+
+    private def execSimpleScatter(sctNode: ScatterNode,
+                                  env: Map[String, WomValue]) : Map[String, WdlVarLinks] = {
+        // WDL has exactly one variable
+        assert(sctNode.scatterVariableNodes.size == 1)
+        val svNode: ScatterVariableNode = sctNode.scatterVariableNodes.head
+        val collectionRaw : WomValue =
+            evaluateWomExpression(svNode.scatterExpressionNode.womExpression,
+                                  WomArrayType(svNode.womType),
+                                  env)
+        val collection : Seq[WomValue] = collectionRaw match {
+            case x: WomArray => x.value
+            case other => throw new AppInternalException(
+                s"Unexpected class ${other.getClass}, ${other}")
+        }
+        // There must be exactly one call
+        val call = getInnerCallFromSimpleBlock(sctNode)
+
+        // We will need to evaluate the task inputs
+        val taskInputs : Vector[TaskCallInputExpressionNode] =
+            sctNode.innerGraph.nodes.collect{
+                case tcin : TaskCallInputExpressionNode => tcin
+            }.toVector
+
+        // loop on the collection, call the applet in the inner loop
+        val childJobs : Vector[DXExecution] =
+            collection.map{ item =>
+                val innerEnv = env + (svNode.identifier.workflowLocalName -> item)
+                val callInputs = evalExpressions(taskInputs, innerEnv)
+                val callHint = readableNameForScatterItem(item)
+                val (_, dxExec) = execCall(call, callInputs, callHint)
+                dxExec
+            }.toVector
+
+        // Launch a subjob to collect and marshal the call results.
+        // Remove the declarations already calculated
+        val resultTypes : Map[String, WomArrayType] = sctNode.outputMapping.map{
+            case scp : ScatterGathererPort =>
+                scp.identifier.workflowLocalName -> scp.womType
+        }.toMap
+        launchCollectSubjob(childJobs, resultTypes)
+    }
+
 
     def apply(subBlockNr: Int,
               envInitial: Map[String, WomValue],
@@ -494,32 +558,43 @@ case class WfFragRunner(wf: WorkflowDefinition,
                                      |${block.prettyPrint}
                                      |""".stripMargin)
 
-        // The last node could be a call or a block. All the other nodes
-        // are expressions.
         val (otherNodes, category) = Block.categorize(block)
         val env = evalExpressions(otherNodes, envInitial)
         val exportedVars = exportedVarNames()
 
-        val jsOutputs: Map[String, JsValue] = category match {
-            case Block.AllExpressions =>
-                processOutputs(env, Map.empty, exportedVars)
+        val subblockResults : Map[String, WdlVarLinks] = runMode match {
+            case RunnerWfFragmentMode.Launch =>
+                // The last node could be a call or a block. All the other nodes
+                // are expressions.
+                category match {
+                    case Block.AllExpressions =>
+                        Map.empty
 
-            case Block.Call(call: CallNode) =>
-                // There is a single call,
-                // find the callee
-                val (_, dxExec) = execCall(call, env,  None)
-                val callResults: Map[String, WdlVarLinks] = genPromisesForCall(call, dxExec)
-                processOutputs(env, callResults, exportedVars)
+                    // A single call at the end of the block
+                    case Block.Call(call: CallNode) =>
+                        val (_, dxExec) = execCall(call, env,  None)
+                        genPromisesForCall(call, dxExec)
 
-            case Block.Cond(cond, true) =>
-                execSimpleConditional(cond, env, exportedVars)
+                    // A conditional at the end of the block, with a call inside it
+                    case Block.Cond(cnNode, true) =>
+                        execSimpleConditional(cnNode, env)
 
-//            case Block.Scatter(sctNode, true) =>
+                    // A scatter at the end of the block, with a call inside it
+                    case Block.Scatter(sctNode, true) =>
+                        execSimpleScatter(sctNode, env)
 
-            case other =>
-                throw new AppInternalException(s"Unhandled case ${other}")
+                    case other =>
+                        throw new AppInternalException(s"Unhandled case ${other}")
+                }
+
+            // A subjob that collects results from scatters
+            case RunnerWfFragmentMode.Collect =>
+                val childJobsComplete = Collect.executableFromSeqNum()
+                val call = getInnerCallFromSimpleBlock(sctNode)
+                Collect.aggregateResults(call, childJobsComplete)
         }
 
+        val jsOutputs : Map[String, JsValue] = processOutputs(env, subblockResults, exportedVars)
         val jsOutputsDbgStr = jsOutputs.mkString("\n")
         Utils.appletLog(verbose, s"""|JSON outputs:
                                      |${jsOutputsDbgStr}""".stripMargin)

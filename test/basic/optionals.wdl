@@ -1,7 +1,9 @@
 version 1.0
 
 task opt_MaybeInt {
-    Int? a
+    input {
+        Int? a
+    }
     command {
     }
     output {
@@ -19,10 +21,10 @@ workflow optionals {
     call opt_MaybeInt as mi2 { input: a=mi1.result}
 
     if (flag) {
-        call opt_MaybeInt as mi3 { input: i=rain }
+        call opt_MaybeInt as mi3 { input: a=rain }
     }
     if (flag || false) {
-        call opt_MaybeInt as mi4 { input: i=mi2.result }
+        call opt_MaybeInt as mi4 { input: a=mi2.result }
     }
 
 

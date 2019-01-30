@@ -62,6 +62,8 @@ import com.dnanexus.{DXAPI, DXEnvironment, DXExecution, DXJob, DXSearch}
 import com.fasterxml.jackson.databind.JsonNode
 import scala.collection.JavaConverters._
 import spray.json._
+import wom.values._
+import wom.types._
 
 import dxWDL.util._
 
@@ -70,7 +72,7 @@ object Collect {
     case class ChildExecDesc(execName: String,
                              unqCallName: String,
                              seqNum: Int,
-                             outputs: JsValue,
+                             outputs: Map[String, JsValue],
                              exec: DXExecution)
 
     def findChildExecs() : Vector[DXExecution] = {
@@ -132,11 +134,11 @@ object Collect {
                 case None => throw new Exception(s"No output field for a child job ${desc}")
                 case Some(o) => o
             }
-            ChildExecDesc(execName, unqCallName, seqNum, outputs, dxExec)
+            ChildExecDesc(execName, unqCallName, seqNum, outputs.asJsObject.fields, dxExec)
         }.toVector
     }
 
-    def executableFromSeqNum() : Map[Int, ChildExecDesc] = {
+    def executableFromSeqNum() : Vector[ChildExecDesc] = {
         // We cannot change the input fields, because this is a sub-job with the same
         // input/output spec as the parent scatter. Therefore, we need to computationally
         // figure out:
@@ -150,8 +152,35 @@ object Collect {
         val execDescs:Vector[ChildExecDesc] = describeChildExecs(childExecs)
         System.err.println(s"execDescs=${execDescs}")
 
-        execDescs.map{ desc =>
-            desc.seqNum -> desc
+        // sort from low to high sequence number
+        execDescs.sortWith(_.seqNum < _.seqNum)
+    }
+
+    // collect
+    private def collectCallField(name: String,
+                                 womType: WomType,
+                                 childJobsComplete: Vector[ChildExecDesc]) : WomValue = {
+        val vec : Vector[WomValue] =
+            childJobsComplete.map{ childExec =>
+                childExec.outputs.get(name) match {
+                    case None =>
+                        throw new Exception(s"Need to handle optionals here womType=${womType}")
+                    case Some(jsv) =>
+                        val wvl = WdlVarLinks.importFromDxExec(womType, jsv)
+                        wvl.
+                }
+            }.toVector
+        WomArray(WomArrayType(womType), vec)
+    }
+
+    // aggregate call results
+    def aggregateResults(call: CallNode,
+                         childJobsComplete: Vector[ChildExecDesc]) : Map[String, WdlVarLinks] = {
+        call.callable.outputs{ cot =>
+            val fullName = s"${call.identifier.workflowLocalName}.${cot.localName}"
+            val womType = cot.womType
+            val value : WomValue = collectCallField(cot.name, womType, childJobsComplete)
+            fullName -> WdlVarLinks.importFromWDL(value.womType, value)
         }.toMap
     }
 }
