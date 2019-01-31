@@ -5,7 +5,7 @@ import java.nio.file.{Path, Paths}
 import org.scalatest.{FlatSpec, Matchers}
 
 import org.scalatest.Tag
-object ScatterTest extends Tag("scatter")
+object EdgeTest extends Tag("edge")
 
 // These tests involve compilation -without- access to the platform.
 //
@@ -54,7 +54,7 @@ class GenerateIRTest extends FlatSpec with Matchers {
         Main.compile(path.toString :: cFlags) shouldBe a [Main.SuccessfulTerminationIR]
     }
 
-    it should "IR compile a workflow with a scatter without a call" taggedAs(ScatterTest) in {
+    it should "IR compile a workflow with a scatter without a call" in {
         val path = pathFromBasename("scatter_no_call.wdl")
         Main.compile(
 /*            List(path.toString, "--compileMode", "ir",
@@ -64,4 +64,14 @@ class GenerateIRTest extends FlatSpec with Matchers {
         ) shouldBe a [Main.SuccessfulTerminationIR]
     }
 
+    it should "IR compile optionals" taggedAs(EdgeTest) in {
+        val path = pathFromBasename("optionals.wdl")
+        Main.compile(
+            /*List(path.toString, "--compileMode", "ir",
+                 "--quiet",
+                 "--verbose",
+                 "--verboseKey", "GenerateIR")*/
+            path.toString :: cFlags
+        ) shouldBe a [Main.SuccessfulTerminationIR]
+    }
 }

@@ -574,25 +574,13 @@ case class WfFragRunner(wf: WorkflowDefinition,
             case RunnerWfFragmentMode.Collect =>
                 val childJobsComplete = collectSubJobs.executableFromSeqNum()
                 category match {
-                    case Block.AllExpressions =>
-                        Map.empty
-
-                    // A single call at the end of the block
-                    case Block.Call(call: CallNode) =>
-                        val (_, dxExec) = execCall(call, env,  None)
-                        genPromisesForCall(call, dxExec)
-
-                    // A conditional at the end of the block, with a call inside it
-                    case Block.Cond(cnNode, true) =>
-                        execSimpleConditional(cnNode, env)
-
                     // A scatter at the end of the block, with a call inside it
                     case Block.Scatter(sctNode, true) =>
                         val call = getInnerCallFromSimpleBlock(sctNode.innerGraph)
                         collectSubJobs.aggregateResults(call, childJobsComplete)
 
                     case other =>
-                        throw new AppInternalException(s"Unhandled case ${other}")
+                        throw new AppInternalException(s"Bad case ${other.getClass} ${other}")
                 }
 
         }

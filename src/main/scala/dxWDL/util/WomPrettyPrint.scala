@@ -9,14 +9,23 @@ import wom.types._
 
 object WomPrettyPrint {
 
-    def apply(node: GraphNode) : String = {
+    def apply(node: GraphNode,
+              indent : String = "") : String = {
         node match {
             case ssc : ScatterNode =>
                 val ids = ssc.scatterVariableNodes.map{svn => svn.identifier.localName.value}
-                s"Scatter(${ids})"
+                s"${indent}Scatter(${ids})"
 
             case cond : ConditionalNode =>
-                s"Conditional(${cond.conditionExpression.womExpression.sourceString})"
+                val inner =
+                    cond.innerGraph.nodes.map{ node =>
+                        apply(node, indent + "  ")
+                    }.mkString("\n")
+                s"""|Conditional(${cond.conditionExpression.womExpression.sourceString}) {
+                    |${inner}
+                    |}
+                    |""".stripMargin
+
 
             case call : CommandCallNode =>
                 val inputNames = call.inputPorts.map(_.name)
@@ -94,7 +103,7 @@ object WomPrettyPrint {
     }
 
     def apply(nodes: Seq[GraphNode]) : String = {
-        nodes.map(apply).mkString("\n")
+        nodes.map(node => apply(node)).mkString("\n")
     }
 
 //    def apply(inputDefs: Seq[InputDefinition]) : String = {

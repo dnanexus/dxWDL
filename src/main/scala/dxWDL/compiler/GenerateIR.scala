@@ -356,30 +356,27 @@ case class GenerateIR(callables: Map[String, IR.Callable],
     private def blockClosure(block: Block,
                              env : CallEnv,
                              dbg: String) : CallEnv = {
-        val inputPortsPerNode = block.nodes.map{ _.inputPorts }
-        val allInputPorts : Set[GraphNodePort.InputPort] =
-            inputPortsPerNode.foldLeft(Set.empty[GraphNodePort.InputPort]) {
-                case (accu, inputs) => accu ++ inputs
-            }
+        val allInputs = Block.closure(block)
 
         // ignore references to variables not defined in the environment. These
         // have to be block internal variables.
-        val closure = allInputPorts.flatMap { iPort =>
+        val closure = allInputs.flatMap { name =>
             // TODO: How do we get the fully qualified name from the input port?
-            lookupInEnv(iPort.name, env)
+            lookupInEnv(name, env)
         }.toMap
 
-/*        if (verbose2) {
-            val xtrnDesc = allInputPorts.map{
-                WomPrettyPrint.apply(_)
-            }.mkString(",")
-        Utils.trace(verbose2,
-                    s"""|blockClosure
-                        |   stage: ${dbg}
-                        |   external: ${xtrnDesc}
-                        |   env: ${env.keys}
-                        |   found: ${closure.keys}""".stripMargin)
- }*/
+        if (verbose2) {
+            val blockNodesDbg = block.nodes.map{
+                "    " + WomPrettyPrint.apply(_)
+            }.mkString("\n")
+            Utils.trace(verbose2,
+                        s"""|blockClosure
+                            |   stage: ${dbg}
+                            |   external: ${allInputs.mkString(",")}
+                            |   env: ${env.keys}
+                            |   nodes: ${blockNodesDbg}
+                            |   found: ${closure.keys}""".stripMargin)
+        }
         closure
     }
 
@@ -411,11 +408,13 @@ case class GenerateIR(callables: Map[String, IR.Callable],
                 CVar(ebop.identifier.localName.value, ebop.womType, None)
             case sctOp : GraphNodePort.ScatterGathererPort =>
                 CVar(sctOp.identifier.localName.value, sctOp.womType, None)
+            case cnop : GraphNodePort.ConditionalOutputPort =>
+                CVar(cnop.identifier.localName.value, cnop.womType, None)
             case other =>
                 throw new Exception(s"unhandled case ${other.getClass}")
         }.toVector
 
-/*        if (verbose2) {
+        if (verbose2) {
             val dependenciesDesc = dependencies.map{
                 "    " + WomPrettyPrint.apply(_)
             }.mkString("\n")
@@ -432,7 +431,7 @@ case class GenerateIR(callables: Map[String, IR.Callable],
                             |${portDesc}
                             |  ]
                             |  cVars: ${cVarDesc}""".stripMargin)
-        }*/
+        }
         cVars
     }
 
@@ -457,7 +456,6 @@ case class GenerateIR(callables: Map[String, IR.Callable],
             case (fqn, LinkedVar(cVar, _)) =>
                 cVar.copy(name = fqn)
         }.toVector
-
 
         // A reversible conversion mul.result --> mul___result. This
         // assumes the '___' symbol is not used anywhere in the original WDL script.

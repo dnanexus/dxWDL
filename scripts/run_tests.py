@@ -495,6 +495,8 @@ def main():
                            action="store_true", default=False)
     argparser.add_argument("--verbose", help="Verbose compilation",
                            action="store_true", default=False)
+    argparser.add_argument("--verbose-key", help="Verbose compilation",
+                           action="append", default=[])
     args = argparser.parse_args()
 
     print("top_dir={} test_dir={}".format(top_dir, test_dir))
@@ -549,6 +551,9 @@ def main():
         compiler_flags.append("-force")
     if args.verbose:
         compiler_flags.append("-verbose")
+    if args.verbose_key:
+        for key in args.verbose_key:
+            compiler_flags += ["-verboseKey", key]
     if args.runtime_debug_level:
         compiler_flags += ["-runtimeDebugLevel", args.runtime_debug_level]
 

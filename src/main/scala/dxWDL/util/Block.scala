@@ -349,9 +349,11 @@ object Block {
         }
     }
 
+    // These are the kinds of blocks that are run by the workflow-fragment-runner.
+    //
     // A block can have expressions, input ports, and output ports in the beginning.
     // The last node can be:
-    // 1) Expressions
+    // 1) Expression
     // 2) Call
     // 3) Conditional block
     // 4) Scatter block
@@ -383,5 +385,79 @@ object Block {
             case other =>
                 ((allButLast :+ other), AllExpressions)
         }
+    }
+
+    // Find all the inputs required for a block. For example,
+    // in the workflow:
+    //
+    // workflow optionals {
+    //   input {
+    //     Boolean flag
+    //   }
+    //   Int? rain = 13
+    //   if (flag) {
+    //     call opt_MaybeInt as mi3 { input: a=rain }
+    //   }
+    // }
+    //
+    // The conditional block:
+    //    if (flag) {
+    //     call opt_MaybeInt as mi3 { input: a=rain }
+    //    }
+    // requires "flag" and "rain".
+    //
+    def closure(block: Block) : Set[String] = {
+        // make a deep list of all the nodes inside the block
+        val allBlockNodes : Set[GraphNode] = block.nodes.map{
+            case sctNode: ScatterNode =>
+                sctNode.innerGraph.allNodes + sctNode
+            case cndNode: ConditionalNode =>
+                cndNode.innerGraph.allNodes + cndNode
+            case node : GraphNode =>
+                Set(node)
+        }.flatten.toSet
+
+        // Examine only the outer input nodes, check that they
+        // originate in a node outside the block.
+        def getInputsToGraph(graph: Graph) : Set[String] = {
+            graph.nodes.flatMap {
+                case ogin: OuterGraphInputNode =>
+                    /*System.err.println(s"""|ogin = ${ogin}
+                                           |owner = ${WomPrettyPrint.apply(ogin.linkToOuterGraphNode)}
+                                           |
+                                           |""".stripMargin)*/
+                    if (allBlockNodes contains ogin.linkToOuterGraphNode)
+                        None
+                    else
+                        Some(ogin.identifier.localName.value)
+                case _ => None
+            }.toSet
+        }
+        val allInputs :Set[String] = block.nodes.flatMap{
+            case scNode : ScatterNode =>
+                val scNodeInputs = scNode.inputPorts.flatMap{ inPort =>
+                    if (allBlockNodes contains inPort.graphNode) None
+                    else Some(inPort.name)
+                }
+                scNodeInputs ++ getInputsToGraph(scNode.innerGraph)
+            case cnNode : ConditionalNode =>
+                val cnInputs = cnNode.conditionExpression.inputPorts.flatMap{ inPort =>
+                    if (allBlockNodes contains inPort.graphNode) None
+                    else Some(inPort.name)
+                }
+                /*System.err.println(s"""|conditional node = ${WomPrettyPrint(cnNode)}
+                                       |inputPorts=${cnInputs}
+                                       |
+                                       |""".stripMargin)*/
+                cnInputs ++ getInputsToGraph(cnNode.innerGraph)
+            case node : GraphNode =>
+                val inputs = node.inputPorts.map(_.name)
+                /*System.err.println(s"""|node = ${WomPrettyPrint(node)}
+                                       |inputPorts=${inputs}
+                                       |
+                                       |""".stripMargin)*/
+                inputs
+        }.toSet
+        allInputs
     }
 }
