@@ -1,6 +1,8 @@
 #!/bin/bash -e
 eval "$(dx env --bash)"
-sudo docker run \
+DXWDL_VERSION=${DXWDL_VERSION:-latest}  # stamped to specific current version on deploys
+echo $DXWDL_VERSION
+docker run \
      --rm \
      -e DX_SECURITY_CONTEXT="$DX_SECURITY_CONTEXT" \
      -e DX_APISERVER_PROTOCOL="$DX_APISERVER_PROTOCOL" \
@@ -9,4 +11,4 @@ sudo docker run \
      -e DX_PROJECT_CONTEXT_ID="$DX_PROJECT_CONTEXT_ID" \
      --volume "$PWD":/workdir \
      --workdir /workdir \
-     dnanexus/dxwdl "$@"
+     dnanexus/dxwdl:${DXWDL_VERSION} "$@"

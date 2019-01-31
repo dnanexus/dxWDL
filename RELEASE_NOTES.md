@@ -1,5 +1,17 @@
 # Release Notes
 
+## 0.79.1
+
+- Version [docker-based runner script](https://github.com/dnanexus/dxWDL/tree/master/scripts/compiler_image/dxwdl)
+- Do not call sudo in runner script, in case system is set up not to require
+  sudo to run Docker.
+- Rename run script to `dxwdl` for elegance
+
+```
+$ export DXWDL_VERSION=0.79.1
+$ sudo dxwdl compile /path/to/foo.wdl -project project-xxx
+```
+
 ## 0.79
 - Support [per task dx-attributes](./doc/ExpertOptions.md#Setting-dnanexus-specific-attributes-for-tasks).
 - Report a warning for a non-empty runtime section in a native applet, instead of throwing an error. Note
@@ -11,7 +23,7 @@ which is important in volume workflows.
 - A [docker image](https://hub.docker.com/r/dnanexus/dxwdl) for
 running the compiler without needing to install dependencies. You can
 use the
-[runc.sh](https://github.com/dnanexus/dxWDL/blob/native_docker/scripts/compiler_image/runc.sh)
+[dxwdl](https://github.com/dnanexus/dxWDL/tree/master/scripts/compiler_image/dxwdl)
 script to compile file `foo.wdl` like this:
 
 ```bash
