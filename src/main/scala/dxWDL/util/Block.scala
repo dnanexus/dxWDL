@@ -121,8 +121,8 @@ object Block {
 
     // Find the toplevel graph node that contains this call
     private def findCallByName(callName: String,
-                               nodes: Set[GraphNode]) : GraphNode = {
-        val topNodeContainingCall = nodes.find{
+                               nodes: Set[GraphNode]) : Option[GraphNode] = {
+        nodes.find{
             case callNode: CallNode =>
                 callNode.identifier.localName.value == callName
             case cNode: ConditionalNode =>
@@ -130,10 +130,6 @@ object Block {
             case scNode: ScatterNode =>
                 graphContainsCall(callName, scNode.innerGraph.nodes)
             case _ => false
-        }
-        topNodeContainingCall match {
-            case None => throw new Exception(s"Could not find call ${callName}")
-            case Some(node) => node
         }
     }
 
@@ -167,6 +163,19 @@ object Block {
         ordered
     }
 
+    private def deepAncestors(node: GraphNode) : Set[GraphNode] = {
+        node match {
+            case cndNode: ConditionalNode =>
+                cndNode.upstreamAncestry ++
+                cndNode.innerGraph.nodes.flatMap(deepAncestors(_))
+            case sctNode: ScatterNode =>
+                sctNode.upstreamAncestry ++
+                sctNode.innerGraph.nodes.flatMap(deepAncestors(_))
+            case _ =>
+                node.upstreamAncestry
+        }
+    }
+
     // Sort the graph into a linear set of blocks, according to
     // dependencies.  Each block is itself sorted. The dependencies
     // impose a partial ordering on the graph. To make it correspond
@@ -177,15 +186,18 @@ object Block {
     // workflow foo {
     //    call A
     //    call B
+    //    call C
     // }
-    // the block splitting algorithm could generate:
+    // the block splitting algorithm could generate six permutions.
+    // For example:
     //
     //    1           2
-    //  [ call B ]  [ call A ]
+    //  [ call C ]  [ call A ]
     //  [ call A ]  [ call B ]
+    //  [ call B ]  [ call C ]
     //
-    // We prefer option #2 because it resembles the original.
-    def splitIntoBlocks(graph: Graph, wdlSourceCode: String) :
+    // We choose option #2 because it resembles the original.
+    def split(graph: Graph, wdlSourceCode: String) :
             (Vector[GraphInputNode],   // inputs
              Vector[Block], // blocks
              Vector[GraphOutputNode]) // outputs
@@ -199,11 +211,11 @@ object Block {
         // sort from low to high according to the source lines.
         val callsLoToHi : Vector[(String, Int)] = callToSrcLine.toVector.sortBy(_._2)
 
-        // The first block has the graph inputs
+        // separate out the inputs
         val inputBlock = graph.inputNodes.toVector
         rest --= inputBlock.toSet
 
-        // The last block has the graph outputs
+        // separate out the outputs
         val outputBlock = graph.outputNodes.toVector
         rest --= outputBlock.toSet
 
@@ -212,18 +224,26 @@ object Block {
         //
         for ((callName, _) <- callsLoToHi) {
             assert(!rest.isEmpty)
-            val node = findCallByName(callName, rest)
-            rest = rest - node
 
-            // Build a vector where the callNode comes LAST. Choose
-            // the nodes from the ones that have not been picked yet.
-            val ancestors = node.upstreamAncestry.intersect(rest)
-            val nodes: Vector[GraphNode] =
-                (partialSortByDep(ancestors) :+ node)
-                    .filter{ x => !x.isInstanceOf[GraphInputNode] }
-            val crnt = Block(nodes)
-            blocks :+= crnt
-            rest = rest -- nodes.toSet
+            findCallByName(callName, rest) match {
+                case None =>
+                    // we already accounted for this call. Several
+                    // calls can be in the same node. For example, a
+                    // scatter can has many calls inside its subgraph.
+                    ()
+                case Some(node) =>
+                    rest = rest - node
+
+                    // Build a vector where the callNode comes LAST. Choose
+                    // the nodes from the ones that have not been picked yet.
+                    val ancestors = deepAncestors(node).intersect(rest)
+                    val nodes: Vector[GraphNode] =
+                        (partialSortByDep(ancestors) :+ node)
+                            .filter{ x => !x.isInstanceOf[GraphInputNode] }
+                    val crnt = Block(nodes)
+                    blocks :+= crnt
+                    rest = rest -- nodes.toSet
+            }
         }
 
         val allBlocks =

@@ -571,7 +571,7 @@ case class GenerateIR(callables: Map[String, IR.Callable],
         // task calls.
 
         // Create a stage per call/scatter-block/declaration-block
-        val (inputNodes, subBlocks, outputNodes) = Block.splitIntoBlocks(graph, wfSource)
+        val (inputNodes, subBlocks, outputNodes) = Block.split(graph, wfSource)
 
         val wdlCodeGen = new WdlCodeGen(verbose)
 

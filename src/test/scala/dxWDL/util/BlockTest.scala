@@ -18,7 +18,7 @@ class BlockTest extends FlatSpec with Matchers {
         val path = pathFromBasename("util", "block_closure.wdl")
         val wfSourceCode = Utils.readFileContent(path)
         val wf : WorkflowDefinition = ParseWomSourceFile.parseWdlWorkflow(wfSourceCode)
-        val (_, subBlocks, _) = Block.splitIntoBlocks(wf.innerGraph, wfSourceCode)
+        val (_, subBlocks, _) = Block.split(wf.innerGraph, wfSourceCode)
 
         Block.closure(subBlocks(1)) should be(Set("flag", "rain"))
         Block.closure(subBlocks(2)) should be(Set("flag", "inc1.result"))
@@ -30,7 +30,7 @@ class BlockTest extends FlatSpec with Matchers {
         val path = pathFromBasename("util", "block_closure.wdl")
         val wfSourceCode = Utils.readFileContent(path)
         val wf : WorkflowDefinition = ParseWomSourceFile.parseWdlWorkflow(wfSourceCode)
-        val (_, subBlocks, _) = Block.splitIntoBlocks(wf.innerGraph, wfSourceCode)
+        val (_, subBlocks, _) = Block.split(wf.innerGraph, wfSourceCode)
 
         Block.outputs(subBlocks(1)) should be(Map("inc2.result" -> WomOptionalType(WomIntegerType)))
         Block.outputs(subBlocks(2)) should be(Map("inc3.result" -> WomOptionalType(WomIntegerType)))
@@ -41,14 +41,32 @@ class BlockTest extends FlatSpec with Matchers {
         )
     }
 
-    it should "calculate outputs correctly II" taggedAs(EdgeTest) in {
+    it should "calculate outputs correctly II" in {
         val path = pathFromBasename("compiler", "wf_linear.wdl")
         val wfSourceCode = Utils.readFileContent(path)
         val wf : WorkflowDefinition = ParseWomSourceFile.parseWdlWorkflow(wfSourceCode)
-        val (_, subBlocks, _) = Block.splitIntoBlocks(wf.innerGraph, wfSourceCode)
+        val (_, subBlocks, _) = Block.split(wf.innerGraph, wfSourceCode)
 
         Block.outputs(subBlocks(1)) should be(Map("z" -> WomIntegerType,
                                                   "mul.result" -> WomIntegerType))
         Block.closure(subBlocks(1)) should be(Set("add.result"))
+    }
+
+    it should "handle block zero" taggedAs(EdgeTest) in {
+        val path = pathFromBasename("util", "block_zero.wdl")
+        val wfSourceCode = Utils.readFileContent(path)
+        val wf : WorkflowDefinition = ParseWomSourceFile.parseWdlWorkflow(wfSourceCode)
+        val (inNodes, subBlocks, outNodes) = Block.split(wf.innerGraph, wfSourceCode)
+
+        Block.dbgPrint(inNodes, subBlocks, outNodes)
+        Block.outputs(subBlocks(0)) should be(Map("rain" -> WomOptionalType(WomIntegerType)))
+    }
+
+    it should "block with two calls or more" in {
+        val path = pathFromBasename("util", "block_with_three_calls.wdl")
+        val wfSourceCode = Utils.readFileContent(path)
+        val wf : WorkflowDefinition = ParseWomSourceFile.parseWdlWorkflow(wfSourceCode)
+        val (_, subBlocks, _) = Block.split(wf.innerGraph, wfSourceCode)
+        Utils.ignore(subBlocks)
     }
 }
