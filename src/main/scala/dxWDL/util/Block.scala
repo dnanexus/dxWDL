@@ -171,6 +171,10 @@ object Block {
             case sctNode: ScatterNode =>
                 sctNode.upstreamAncestry ++
                 sctNode.innerGraph.nodes.flatMap(deepAncestors(_))
+            case ogin: OuterGraphInputNode =>
+                // follow the indirection, this is not by default
+                val sourceNode = ogin.linkToOuterGraphNode
+                sourceNode.upstreamAncestry + sourceNode
             case _ =>
                 node.upstreamAncestry
         }
@@ -223,8 +227,6 @@ object Block {
         // the sort order from the origial code.
         //
         for ((callName, _) <- callsLoToHi) {
-            assert(!rest.isEmpty)
-
             findCallByName(callName, rest) match {
                 case None =>
                     // we already accounted for this call. Several
@@ -232,6 +234,7 @@ object Block {
                     // scatter can has many calls inside its subgraph.
                     ()
                 case Some(node) =>
+                    assert(!rest.isEmpty)
                     rest = rest - node
 
                     // Build a vector where the callNode comes LAST. Choose

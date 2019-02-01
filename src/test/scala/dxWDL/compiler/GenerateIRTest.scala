@@ -37,10 +37,10 @@ class GenerateIRTest extends FlatSpec with Matchers {
     it should "IR compile a linear WDL workflow" in {
         val path = pathFromBasename("wf_linear.wdl")
         Main.compile(
-            List(path.toString, "--compileMode", "ir",
+            /*List(path.toString, "--compileMode", "ir",
                  "--verbose",
-                 "--verboseKey", "GenerateIR")
-                //path.toString :: cFlags
+                 "--verboseKey", "GenerateIR")*/
+            path.toString :: cFlags
         ) shouldBe a [Main.SuccessfulTerminationIR]
     }
 
@@ -67,11 +67,11 @@ class GenerateIRTest extends FlatSpec with Matchers {
     it should "IR compile optionals" taggedAs(EdgeTest) in {
         val path = pathFromBasename("optionals.wdl")
         Main.compile(
-            List(path.toString, "--compileMode", "ir",
+            /*List(path.toString, "--compileMode", "ir",
                  "--quiet",
                  "--verbose",
-                 "--verboseKey", "GenerateIR")
-                //path.toString :: cFlags
+                 "--verboseKey", "GenerateIR")*/
+            path.toString :: cFlags
         ) shouldBe a [Main.SuccessfulTerminationIR]
     }
 }

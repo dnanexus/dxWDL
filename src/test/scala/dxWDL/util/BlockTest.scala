@@ -58,8 +58,10 @@ class BlockTest extends FlatSpec with Matchers {
         val wf : WorkflowDefinition = ParseWomSourceFile.parseWdlWorkflow(wfSourceCode)
         val (inNodes, subBlocks, outNodes) = Block.split(wf.innerGraph, wfSourceCode)
 
-        Block.dbgPrint(inNodes, subBlocks, outNodes)
-        Block.outputs(subBlocks(0)) should be(Map("rain" -> WomOptionalType(WomIntegerType)))
+        Block.outputs(subBlocks(0)) should be(
+            Map("rain" -> WomIntegerType,
+                "inc.result" -> WomOptionalType(WomIntegerType))
+        )
     }
 
     it should "block with two calls or more" in {
