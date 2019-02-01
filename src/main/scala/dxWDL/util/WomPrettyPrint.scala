@@ -55,6 +55,10 @@ object WomPrettyPrint {
             case svNode: ScatterVariableNode =>
                 val expr = svNode.scatterExpressionNode
                 s"ScatterVariableNode[OGIN](${svNode.identifier.localName.value}, ${expr.womExpression.sourceString}, ${expr.womType})"
+
+            case ogin : OuterGraphInputNode =>
+                s"OuterGraphInputNode(${ogin.identifier.localName.value})"
+
             case other =>
                 s"${other.getClass}"
         }

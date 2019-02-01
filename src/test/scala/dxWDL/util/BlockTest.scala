@@ -3,15 +3,19 @@ package dxWDL.util
 import java.nio.file.{Path, Paths}
 import org.scalatest.{FlatSpec, Matchers}
 import wom.callable.{WorkflowDefinition}
+import wom.types._
+
+import org.scalatest.Tag
+object EdgeTest extends Tag("edge")
 
 class BlockTest extends FlatSpec with Matchers {
-    private def pathFromBasename(basename: String) : Path = {
-        val p = getClass.getResource(s"/util/${basename}").getPath
+    private def pathFromBasename(dir: String, basename: String) : Path = {
+        val p = getClass.getResource(s"/${dir}/${basename}").getPath
         Paths.get(p)
     }
 
     it should "calculate closure correctly" in {
-        val path = pathFromBasename("block_closure.wdl")
+        val path = pathFromBasename("util", "block_closure.wdl")
         val wfSourceCode = Utils.readFileContent(path)
         val wf : WorkflowDefinition = ParseWomSourceFile.parseWdlWorkflow(wfSourceCode)
         val (_, subBlocks, _) = Block.splitIntoBlocks(wf.innerGraph, wfSourceCode)
@@ -20,5 +24,31 @@ class BlockTest extends FlatSpec with Matchers {
         Block.closure(subBlocks(2)) should be(Set("flag", "inc1.result"))
         Block.closure(subBlocks(3)) should be(Set("rain"))
         Block.closure(subBlocks(4)) should be(Set("rain", "inc1.result", "flag"))
+    }
+
+    it should "calculate outputs correctly" in {
+        val path = pathFromBasename("util", "block_closure.wdl")
+        val wfSourceCode = Utils.readFileContent(path)
+        val wf : WorkflowDefinition = ParseWomSourceFile.parseWdlWorkflow(wfSourceCode)
+        val (_, subBlocks, _) = Block.splitIntoBlocks(wf.innerGraph, wfSourceCode)
+
+        Block.outputs(subBlocks(1)) should be(Map("inc2.result" -> WomOptionalType(WomIntegerType)))
+        Block.outputs(subBlocks(2)) should be(Map("inc3.result" -> WomOptionalType(WomIntegerType)))
+        Block.outputs(subBlocks(3)) should be(Map("inc4.result" -> WomArrayType(WomIntegerType)))
+        Block.outputs(subBlocks(4)) should be(
+            Map("x" -> WomArrayType(WomIntegerType),
+                "inc5.result" -> WomArrayType(WomOptionalType(WomIntegerType)))
+        )
+    }
+
+    it should "calculate outputs correctly II" taggedAs(EdgeTest) in {
+        val path = pathFromBasename("compiler", "wf_linear.wdl")
+        val wfSourceCode = Utils.readFileContent(path)
+        val wf : WorkflowDefinition = ParseWomSourceFile.parseWdlWorkflow(wfSourceCode)
+        val (_, subBlocks, _) = Block.splitIntoBlocks(wf.innerGraph, wfSourceCode)
+
+        Block.outputs(subBlocks(1)) should be(Map("z" -> WomIntegerType,
+                                                  "mul.result" -> WomIntegerType))
+        Block.closure(subBlocks(1)) should be(Set("add.result"))
     }
 }

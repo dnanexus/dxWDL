@@ -336,7 +336,7 @@ case class GenerateIR(callables: Map[String, IR.Callable],
     // If the environment has a pair "p", then we want to be able to
     // to return "p" when looking for "p.left" or "p.right".
     //
-    private def lookupInEnv(fqn: String, env: CallEnv) : Option[(String, LinkedVar)] = {
+    private def lookupInEnvInner(fqn: String, env: CallEnv) : Option[(String, LinkedVar)] = {
         if (env contains fqn) {
             // exact match
             Some(fqn, env(fqn))
@@ -346,8 +346,21 @@ case class GenerateIR(callables: Map[String, IR.Callable],
             if (pos < 0) None
             else {
                 val lhs = fqn.substring(0, pos)
-                lookupInEnv(lhs, env)
+                lookupInEnvInner(lhs, env)
             }
+        }
+    }
+
+    // Lookup in the environment. Provide a human readable error message
+    // if the fully-qualified-name is not found.
+    private def lookupInEnv(fqn: String, env: CallEnv) : (String, LinkedVar) = {
+        lookupInEnvInner(fqn, env) match {
+            case None =>
+                Utils.error(s"""|fully-qualified-name:  ${fqn}
+                                |environment: ${env.keys.toVector.sorted}
+                                |""".stripMargin)
+                throw new Exception(s"Did not find ${fqn} in the environment")
+            case Some((name, lVar)) => (name, lVar)
         }
     }
 
@@ -356,83 +369,28 @@ case class GenerateIR(callables: Map[String, IR.Callable],
     private def blockClosure(block: Block,
                              env : CallEnv,
                              dbg: String) : CallEnv = {
-        val allInputs = Block.closure(block)
-
-        // ignore references to variables not defined in the environment. These
-        // have to be block internal variables.
-        val closure = allInputs.flatMap { name =>
-            // TODO: How do we get the fully qualified name from the input port?
-            lookupInEnv(name, env)
-        }.toMap
-
         if (verbose2) {
             val blockNodesDbg = block.nodes.map{
                 "    " + WomPrettyPrint.apply(_)
             }.mkString("\n")
             Utils.trace(verbose2,
-                        s"""|blockClosure
-                            |   stage: ${dbg}
-                            |   external: ${allInputs.mkString(",")}
-                            |   env: ${env.keys}
-                            |   nodes: ${blockNodesDbg}
-                            |   found: ${closure.keys}""".stripMargin)
+                        s"""|blockClosure nodes [
+                            |${blockNodesDbg}
+                            |]
+                            |""".stripMargin)
         }
+
+        val allInputs = Block.closure(block)
+        val closure = allInputs.map { name =>
+            lookupInEnv(name, env)
+        }.toMap
+
+        Utils.trace(verbose2,
+                    s"""|blockClosure II
+                        |   stage: ${dbg}
+                        |   external: ${allInputs.mkString(",")}
+                        |   found: ${closure.keys}""".stripMargin)
         closure
-    }
-
-    // Figure out all the outputs from a sequence of WDL statements.
-    //
-    // Note: The type outside a block is *different* than the type in
-    // the block.  For example, 'Int x' declared inside a scatter, is
-    // 'Array[Int] x' outside the scatter.
-    private def blockOutputs(block: Block,
-                             nextNodes: Set[GraphNode]) : Vector[CVar] = {
-        // figure what the rest of the graph depends on
-        val dependencies = nextNodes.flatMap{ _.upstream }
-
-        // nodes required downstream
-        val xtrnNodes : Set[GraphNode] = dependencies.intersect(block.nodes.toSet)
-
-        // Get the output ports for these nodes
-        val xtrnPorts : Set[GraphNodePort.OutputPort] =
-            xtrnNodes.map{ _.outputPorts}
-                .foldLeft(Set.empty[GraphNodePort.OutputPort]) {
-                case (accu, outputs) => accu ++ outputs }
-
-        // create a cVar definition from each WDL output port. The dx:stage
-        // will output these cVars.
-        val cVars = xtrnPorts.map{
-            case gnop : GraphNodePort.GraphNodeOutputPort =>
-                CVar(gnop.identifier.localName.value, gnop.womType, None)
-            case ebop : GraphNodePort.ExpressionBasedOutputPort =>
-                CVar(ebop.identifier.localName.value, ebop.womType, None)
-            case sctOp : GraphNodePort.ScatterGathererPort =>
-                CVar(sctOp.identifier.localName.value, sctOp.womType, None)
-            case cnop : GraphNodePort.ConditionalOutputPort =>
-                CVar(cnop.identifier.localName.value, cnop.womType, None)
-            case other =>
-                throw new Exception(s"unhandled case ${other.getClass}")
-        }.toVector
-
-        if (verbose2) {
-            val dependenciesDesc = dependencies.map{
-                "    " + WomPrettyPrint.apply(_)
-            }.mkString("\n")
-            val portDesc = xtrnPorts.map{
-                "    " + WomPrettyPrint.apply(_)
-            }.mkString("\n")
-            val cVarDesc = cVars.mkString(",")
-            Utils.trace(verbose2,
-                        s"""|blockOutputs
-                            |  dependencies: [
-                            |${dependenciesDesc}
-                            |  ]
-                            |  ports: [
-                            |${portDesc}
-                            |  ]
-                            |  cVars: ${cVarDesc}""".stripMargin)
-        }
-        cVars
     }
 
     // Build an applet to evaluate a WDL workflow fragment
@@ -441,7 +399,6 @@ case class GenerateIR(callables: Map[String, IR.Callable],
     // been checked in the Validate step.
     private def compileWfFragment(block: Block,
                                   blockNum : Int,
-                                  nextNodes : Set[GraphNode],
                                   env : CallEnv,
                                   wfName : String,
                                   wfSource_WDLv1 : WdlCodeSnippet) : (IR.Stage, IR.Applet) = {
@@ -464,8 +421,14 @@ case class GenerateIR(callables: Map[String, IR.Callable],
         // users from using variables with the ___ character sequence.
         val fqnDictTypes = inputVars.map{ cVar => cVar.dxVarName -> cVar.womType}.toMap
 
-        // To figure out the block outputs, we need the subsequent nodes.
-        val outputVars = blockOutputs(block, nextNodes)
+        // Figure out the block outputs
+        val outputs : Map[String, WomType] = Block.outputs(block)
+
+        // create a cVar definition from each block output. The dx:stage
+        // will output these cVars.
+        val outputVars = outputs.map{case (fqn, womType) =>
+            CVar(fqn, womType, None)
+        }.toVector
 
         // Make a list of all task/workflow calls made inside the block. We will need to link
         // to the equivalent dx:applets and dx:workflows.
@@ -522,6 +485,7 @@ case class GenerateIR(callables: Map[String, IR.Callable],
                     // All the variables are already in the environment, so there
                     // is no need to do any extra work. Compile directly into a workflow
                     // stage.
+                    Utils.trace(verbose.on, s"--- Compiling call ${call.callable.name} as stage")
                     val stage = compileCall(call, env)
 
                     // Add bindings for the output variables. This allows later calls to refer
@@ -534,10 +498,7 @@ case class GenerateIR(callables: Map[String, IR.Callable],
 
                 case None =>
                     // General case
-                    val nextNodes : Set[GraphNode] = remainingBlocks.foldLeft(Set.empty[GraphNode]) {
-                        case (accu, b) => accu ++ b.nodes.toSet
-                    }
-                    val (stage, apl) = compileWfFragment(block, blockNum, nextNodes ++ outputNodes,
+                    val (stage, apl) = compileWfFragment(block, blockNum,
                                                          env, wf.name, wfSourceStandAlone)
                     for (cVar <- stage.outputs) {
                         env = env + (cVar.name ->

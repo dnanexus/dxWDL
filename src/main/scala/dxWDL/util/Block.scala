@@ -33,6 +33,7 @@ package dxWDL.util
 import wom.expression.WomExpression
 import wom.graph._
 import wom.graph.expression._
+import wom.types._
 
 // A sorted group of graph nodes, that match some original
 // set of WDL statements.
@@ -417,15 +418,17 @@ object Block {
                 Set(node)
         }.flatten.toSet
 
+        // Examine an input port, and keep it only if it points outside the block.
+        def keepOnlyOutsideRefs(inPort : GraphNodePort.InputPort) : Option[String] = {
+            if (allBlockNodes contains inPort.upstream.graphNode) None
+            else Some(inPort.name)
+        }
+
         // Examine only the outer input nodes, check that they
         // originate in a node outside the block.
         def getInputsToGraph(graph: Graph) : Set[String] = {
             graph.nodes.flatMap {
                 case ogin: OuterGraphInputNode =>
-                    /*System.err.println(s"""|ogin = ${ogin}
-                                           |owner = ${WomPrettyPrint.apply(ogin.linkToOuterGraphNode)}
-                                           |
-                                           |""".stripMargin)*/
                     if (allBlockNodes contains ogin.linkToOuterGraphNode)
                         None
                     else
@@ -433,31 +436,49 @@ object Block {
                 case _ => None
             }.toSet
         }
+
         val allInputs :Set[String] = block.nodes.flatMap{
             case scNode : ScatterNode =>
-                val scNodeInputs = scNode.inputPorts.flatMap{ inPort =>
-                    if (allBlockNodes contains inPort.graphNode) None
-                    else Some(inPort.name)
-                }
+                val scNodeInputs = scNode.inputPorts.flatMap(keepOnlyOutsideRefs(_))
                 scNodeInputs ++ getInputsToGraph(scNode.innerGraph)
             case cnNode : ConditionalNode =>
-                val cnInputs = cnNode.conditionExpression.inputPorts.flatMap{ inPort =>
-                    if (allBlockNodes contains inPort.graphNode) None
-                    else Some(inPort.name)
-                }
-                /*System.err.println(s"""|conditional node = ${WomPrettyPrint(cnNode)}
-                                       |inputPorts=${cnInputs}
-                                       |
-                                       |""".stripMargin)*/
+                val cnInputs = cnNode.conditionExpression.inputPorts.flatMap(keepOnlyOutsideRefs(_))
                 cnInputs ++ getInputsToGraph(cnNode.innerGraph)
             case node : GraphNode =>
-                val inputs = node.inputPorts.map(_.name)
-                /*System.err.println(s"""|node = ${WomPrettyPrint(node)}
-                                       |inputPorts=${inputs}
-                                       |
-                                       |""".stripMargin)*/
-                inputs
+                node.inputPorts.flatMap(keepOnlyOutsideRefs(_))
         }.toSet
         allInputs
+    }
+
+    // Figure out all the outputs from a sequence of WDL statements.
+    //
+    // Note: The type outside a scatter/conditional block is *different* than the type in
+    // the block.  For example, 'Int x' declared inside a scatter, is
+    // 'Array[Int] x' outside the scatter.
+    //
+    def outputs(block: Block) : Map[String, WomType] = {
+        val xtrnPorts : Vector[GraphNodePort.OutputPort] =
+            block.nodes.map {
+                case node : ExposedExpressionNode =>
+                    node.outputPorts
+                case _ : ExpressionNode =>
+                    // an anonymous expression node, ignore it
+                    Set.empty
+                case node =>
+                    node.outputPorts
+            }.flatten
+
+        xtrnPorts.map{ outputPort =>
+            // Is this really the fully qualified name?
+            val fqn = outputPort.identifier.localName.value
+            val womType = outputPort match {
+                case gnop : GraphNodePort.GraphNodeOutputPort => gnop.womType
+                case ebop : GraphNodePort.ExpressionBasedOutputPort => ebop.womType
+                case sctOp : GraphNodePort.ScatterGathererPort => sctOp.womType
+                case cnop : GraphNodePort.ConditionalOutputPort => cnop.womType
+                case other => throw new Exception(s"unhandled case ${other.getClass}")
+            }
+            fqn -> womType
+        }.toMap
     }
 }
