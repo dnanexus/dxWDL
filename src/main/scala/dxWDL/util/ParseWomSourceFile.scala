@@ -1,9 +1,9 @@
 package dxWDL.util
 
 
-//import cats.data.Validated.{Invalid, Valid}
+import cats.data.Validated.{Invalid, Valid}
 import common.Checked
-//import common.transforms.CheckedAtoB
+import common.transforms.CheckedAtoB
 import com.typesafe.config.ConfigFactory
 import cromwell.core.path.{DefaultPathBuilder, Path}
 import cromwell.languages.util.ImportResolver._
@@ -26,24 +26,37 @@ object ParseWomSourceFile {
     // Record all files accessed while traversing imports. We wrap
     // the Cromwell importers, and write down every new file.
     //
-    // type ImportResolver = CheckedAtoB[String, WorkflowSource]
-    /*
-    def fileRecorder(allSources: HashMap[String, WorkflowSource],
-                     resolver: ImportResolver) : ImportResolver = {
-        CheckedAtoB.fromErrorOr { path : String =>
-            val request = ImportResolutionRequest(path, List(resolver))
-            val fileContent = resolver.resolver(request)
+    case class FileRecorderResolver(
+        allSources: HashMap[String, WorkflowSource],
+        lower: ImportResolver) extends ImportResolver {
 
-            // convert an 'EitherOr' to 'Validated'
-            fileContent match {
-                case Left(errors) =>
-                    Invalid(errors)
-                case Right(v) =>
-                    allSources(path) = v.source
-                    Valid(v.source)
+        def name = lower.name
+
+        protected def innerResolver(path: String,
+                                    currentResolvers: List[ImportResolver])
+                : Checked[ResolvedImportBundle] = ???
+
+        override def resolver: CheckedAtoB[ImportResolutionRequest, ResolvedImportBundle] = {
+            CheckedAtoB.fromErrorOr {
+                case request : ImportResolutionRequest =>
+                    val path = request.toResolve
+                    val bundleChk: Checked[ResolvedImportBundle] = lower.resolver(request)
+                    bundleChk match {
+                        case Left(errors) =>
+                            Invalid(errors)
+                        case Right(bundle) =>
+                            val fileContent = bundle.source
+                            // convert an 'EitherOr' to 'Validated'
+                            allSources(path) = fileContent
+                            Valid(bundle)
+                    }
             }
         }
-    } */
+    }
+
+    private def fileRecorder(allSources: HashMap[String, WorkflowSource],
+                             resolver: ImportResolver) : ImportResolver =
+        new FileRecorderResolver(allSources, resolver)
 
     private def getBundle(mainFile: Path): (Language.Value, WomBundle, Map[String, WorkflowSource]) = {
         // Resolves for:
@@ -57,9 +70,6 @@ object ParseWomSourceFile {
 
         val importResolvers: List[ImportResolver] =
             DirectoryResolver.localFilesystemResolvers(Some(mainFile)) :+ HttpResolver(relativeTo = None)
-        //val importResolversRecorded: List[ImportResolver] =
-        //    importResolvers.map{ impr => fileRecorder(allSources, impr) }
-
         val languageFactory =
             List(
                 new WdlDraft3LanguageFactory(ConfigFactory.empty()),
@@ -67,9 +77,16 @@ object ParseWomSourceFile {
                 .find(_.looksParsable(mainFileContents))
                 .getOrElse(new WdlDraft2LanguageFactory(ConfigFactory.empty())
             )
-
         val bundleChk: Checked[WomBundle] =
             languageFactory.getWomBundle(mainFileContents, "{}", importResolvers, List(languageFactory))
+
+        // We need to get all the sources sources
+        val importResolversRecorded: List[ImportResolver] =
+            importResolvers.map{ impr => fileRecorder(allSources, impr) }
+        val bundleChk__dummy: Checked[WomBundle] =
+            languageFactory.getWomBundle(mainFileContents, "{}", importResolversRecorded, List(languageFactory))
+        Utils.ignore(bundleChk__dummy)
+
         val bundle = bundleChk match {
             case Left(errors) => throw new Exception(s"""|WOM validation errors:
                                                          | ${errors}
@@ -84,21 +101,6 @@ object ParseWomSourceFile {
             case ("cwl", "1.0") => Language.CWLv1_0
             case (l,v) => throw new Exception(s"Unsupported language (${l}) version (${v})")
         }
-
-        // get the source files
-        //
-        // V1
-        /*val validatedWomNamespace = languageFactory.createExecutable(womBundle, "{}", NoIoFunctionSet)
-        val validated = validatedWomNamespace match {
-            case Left(errors) => throw new Exception(s"""|WOM validation errors:
-                                                         | ${errors}
-                                                         |""".stripMargin)
-            case Right(sources) => sources
-         }*/
-        //
-        // V2
-        //val validated = LanguageFactoryUtil.validateWomNamespace(executable, ioFunctions)
-        //val allSources = validated.importedFileContent
 
         (lang, bundle, allSources.toMap)
     }
