@@ -12,6 +12,7 @@
   * Update [releases](https://github.com/dnanexus-rnd/dxWDL/releases) github page,
   use the `Draft a new release` button.
   * Upload a dxWDL.jar file
+- Create a dxwdl docker image with `./scripts/compiler_image/build_compiler_docker_image.sh`
 
 ## Post release
 - Update the version number in `ref.conf`. We don't want

@@ -18,17 +18,10 @@ fi
 version=$(grep version ${conf_file} | awk '{print $3}' | sed 's/\"//g' )
 echo "dxwdl version is ${version}"
 
-# Make sure the jar file exists
-jar_file=$root_dir/dxWDL-${version}.jar
-if [[ ! -e ${jar_file} ]]; then
-    echo "jar file ${jar_file} is missing"
-    exit 1
-fi
-
-# Make a copy of the jar file, because the docker image needs it to be
-# -this- directory
+# To build the docker image, we need a copy of the jar file. We
+# download it from github to make sure we have an up to date version.
 rm -f dxWDL-${version}.jar
-cp $jar_file dxWDL-${version}.jar
+wget https://github.com/dnanexus/dxWDL/releases/download/${version}/dxWDL-${version}.jar
 
 echo "building a docker image"
 sudo docker build --build-arg VERSION=${version} -t dnanexus/dxwdl:${version} .
