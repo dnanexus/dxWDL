@@ -108,14 +108,62 @@ object Top {
                      cOpt.leaveWorkflowsOpen, cOpt.force, cOpt.archive, cOpt.locked, cOpt.verbose)
     }
 
+    // Check the uniqueness of tasks, Workflows, and Types
+    // merge everything into one bundle.
+    private def mergeIntoOneBundle(mainBundle: WomBundle,
+                                   subBundles: Vector[WomBundle]) : WomBundle = {
+        var allWorkflowTaskNames = Set.empty[String]
+        var allTypeAliases = Set.empty[String]
+
+        subBundles.foreach{ subBund =>
+            subBund.allCallables.foreach{ case (key, _) =>
+                if (allWorkflowTaskNames contains key) {
+                    System.out.println(s"""|${allWorkflowTaskNames}
+                                           |
+                                           |""".stripMargin)
+                    throw new Exception(s"${key} appears twice as a workflow/task")
+                }
+                allWorkflowTaskNames = allWorkflowTaskNames + key
+            }
+            subBund.typeAliases.foreach { case (key, _) =>
+                if (allTypeAliases contains key)
+                    throw new Exception(s"${key} type alias appears twice")
+                allTypeAliases = allTypeAliases + key
+            }
+        }
+        mainBundle.allCallables.foreach{ case (key, _) =>
+            if (allWorkflowTaskNames contains key) {
+                    System.out.println(s"""|${allWorkflowTaskNames}
+                                           |
+                                           |""".stripMargin)
+                throw new Exception(s"${key} appears twice as a workflow/task")
+            }
+            allWorkflowTaskNames = allWorkflowTaskNames + key
+        }
+        mainBundle.allCallables.foreach{ case (key, _) =>
+            if (allTypeAliases contains key)
+                throw new Exception(s"type alias ${key} appears twice")
+        }
+
+        // Merge all the bundles together
+        val allInOneCallables = subBundles.flatMap(_.allCallables) ++ mainBundle.allCallables
+        val allInOneTypeAliases = subBundles.flatMap(_.typeAliases) ++ mainBundle.typeAliases
+        WomBundle(mainBundle.primaryCallable,
+                  allInOneCallables.toMap,
+                  allInOneTypeAliases.toMap)
+    }
+
     // Compile IR only
     def applyOnlyIR(source: Path,
                     cOpt: CompilerOptions) : IR.Bundle = {
-        val (language, womBundle: WomBundle, allSources) = ParseWomSourceFile.apply(source)
+        val (language, womBundle: WomBundle, allSources, subBundles) = ParseWomSourceFile.apply(source)
+
+        // Check that each workflow/task appears just one
+        val everythingBundle = mergeIntoOneBundle(womBundle, subBundles)
 
         // Compile the WDL workflow into an Intermediate
         // Representation (IR)
-        val bundle: IR.Bundle = GenerateIR.apply(womBundle, allSources, language, cOpt.locked, cOpt.verbose)
+        val bundle: IR.Bundle = GenerateIR.apply(everythingBundle, allSources, language, cOpt.locked, cOpt.verbose)
 
         // generate dx inputs from the Cromwell-style input specification.
         cOpt.inputs.foreach{ path =>

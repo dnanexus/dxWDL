@@ -74,7 +74,8 @@ class WfFragRunnerTest extends FlatSpec with Matchers {
         val source : Path = pathFromBasename("wf_linear.wdl")
         val (dxPathConfig, dxIoFunctions) = setup()
 
-        val (language, womBundle: WomBundle, allSources) = ParseWomSourceFile.apply(source)
+        val (language, womBundle: WomBundle, allSources, subBundles) = ParseWomSourceFile.apply(source)
+        subBundles.size should be(0)
         val wfSource = allSources.values.head
 
         val wf: WorkflowDefinition = womBundle.primaryCallable match {

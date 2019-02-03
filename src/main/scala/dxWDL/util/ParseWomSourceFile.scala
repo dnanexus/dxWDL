@@ -58,7 +58,10 @@ object ParseWomSourceFile {
                              resolver: ImportResolver) : ImportResolver =
         new FileRecorderResolver(allSources, resolver)
 
-    private def getBundle(mainFile: Path): (Language.Value, WomBundle, Map[String, WorkflowSource]) = {
+    private def getBundle(mainFile: Path): (Language.Value,
+                                            WomBundle,
+                                            Map[String, WorkflowSource],
+                                            Vector[WomBundle]) = {
         // Resolves for:
         // - Where we run from
         // - Where the file is
@@ -66,10 +69,13 @@ object ParseWomSourceFile {
 
         val absPath = Paths.get(mainFile.toAbsolutePath.pathAsString)
         val mainFileContents = Files.readAllLines(absPath).asScala.mkString(System.lineSeparator())
-        allSources(mainFile.toString) = mainFileContents
 
+        // We need to get all the sources sources
         val importResolvers: List[ImportResolver] =
             DirectoryResolver.localFilesystemResolvers(Some(mainFile)) :+ HttpResolver(relativeTo = None)
+        val importResolversRecorded: List[ImportResolver] =
+            importResolvers.map{ impr => fileRecorder(allSources, impr) }
+
         val languageFactory =
             List(
                 new WdlDraft3LanguageFactory(ConfigFactory.empty()),
@@ -78,14 +84,7 @@ object ParseWomSourceFile {
                 .getOrElse(new WdlDraft2LanguageFactory(ConfigFactory.empty())
             )
         val bundleChk: Checked[WomBundle] =
-            languageFactory.getWomBundle(mainFileContents, "{}", importResolvers, List(languageFactory))
-
-        // We need to get all the sources sources
-        val importResolversRecorded: List[ImportResolver] =
-            importResolvers.map{ impr => fileRecorder(allSources, impr) }
-        val bundleChk__dummy: Checked[WomBundle] =
             languageFactory.getWomBundle(mainFileContents, "{}", importResolversRecorded, List(languageFactory))
-        Utils.ignore(bundleChk__dummy)
 
         val bundle = bundleChk match {
             case Left(errors) => throw new Exception(s"""|WOM validation errors:
@@ -102,18 +101,36 @@ object ParseWomSourceFile {
             case (l,v) => throw new Exception(s"Unsupported language (${l}) version (${v})")
         }
 
-        (lang, bundle, allSources.toMap)
+        // build wom bundles for all the references files
+        val subBundles : Vector[WomBundle] = allSources.map{
+            case wfSource =>
+                languageFactory.getWomBundle(mainFileContents,
+                                             "{}",
+                                             importResolvers,
+                                             List(languageFactory)) match {
+                    case Left(errors) => throw new Exception(s"""|WOM validation errors:
+                                                                 | ${errors}
+                                                                 |""".stripMargin)
+                    case Right(bundle) => bundle
+                }
+        }.toVector
+
+        allSources(mainFile.toString) = mainFileContents
+        (lang, bundle, allSources.toMap, subBundles)
     }
 
-    def apply(sourcePath: java.nio.file.Path) : (Language.Value, WomBundle, Map[String, WorkflowSource]) = {
+    def apply(sourcePath: java.nio.file.Path) : (Language.Value,
+                                                 WomBundle,
+                                                 Map[String, WorkflowSource],
+                                                 Vector[WomBundle]) = {
         val src : Path = DefaultPathBuilder.build(sourcePath)
-        val (lang, bundle, allSources) = getBundle(src)
+        val (lang, bundle, allSources, subBundles) = getBundle(src)
         lang match {
             case Language.CWLv1_0 =>
                 throw new Exception("CWL is not handled at the moment, only WDL is supported")
             case _ => ()
         }
-        (lang, bundle, allSources)
+        (lang, bundle, allSources, subBundles)
     }
 
 
