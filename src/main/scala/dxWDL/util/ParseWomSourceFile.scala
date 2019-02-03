@@ -101,10 +101,10 @@ object ParseWomSourceFile {
             case (l,v) => throw new Exception(s"Unsupported language (${l}) version (${v})")
         }
 
-        // build wom bundles for all the references files
+        // build wom bundles for all the referenced files
         val subBundles : Vector[WomBundle] = allSources.map{
-            case wfSource =>
-                languageFactory.getWomBundle(mainFileContents,
+            case (path, wfSource) =>
+                languageFactory.getWomBundle(wfSource,
                                              "{}",
                                              importResolvers,
                                              List(languageFactory)) match {
