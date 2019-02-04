@@ -1,5 +1,6 @@
 package dxWDL.compiler
 
+import scala.util.matching.Regex
 import wom.types._
 import wom.values._
 
@@ -132,6 +133,41 @@ task Add {
         }
     }
 
+    // A workflow can import other libraries:
+    //
+    // import "library.wdl" as lib
+    // workflow foo {
+    //   call lib.Multiply as mul { ... }
+    //   call lib.Add { ... }
+    //   call lib.Nice as nice { ... }
+    // }
+    //
+    // rewrite the workflow, and remove the calls to external libraries.
+    //
+    // workflow foo {
+    //   call Multiply as mul { ... }
+    //   call Add { ... }
+    //   call Nice as nice { ... }
+    // }
+    //
+    private val callLibrary: Regex = "^(\\s*)call(\\s+)(\\w+)\\.(\\w+)(\\s+)(.+)".r
+    private def flattenWorkflow(wdlWfSource: String) : String = {
+        val originalLines = wdlWfSource.split("\n").toList
+        val cleanLines = originalLines.map { line =>
+            val allMatches = callLibrary.findAllMatchIn(line).toList
+            assert(allMatches.size <= 1)
+            if (allMatches.isEmpty) {
+                line
+            } else {
+                val m = allMatches(0)
+                val callee : String = m.group(4)
+                val rest = m.group(6)
+                s"call ${callee} ${rest}"
+            }
+        }
+        cleanLines.mkString("\n")
+    }
+
 
     // A workflow must have definitions for all the tasks it
     // calls. However, a scatter calls tasks, that are missing from
@@ -162,11 +198,12 @@ task Add {
             case other =>
                 throw new Exception(s"Unsupported language version ${other}")
         }
+        val wfWithoutImportCalls = flattenWorkflow(originalWorkflowSource)
         val wdlWfSource = s"""|${versionString}
                               |
                               |${tasks}
                               |
-                              |${originalWorkflowSource}
+                              |${wfWithoutImportCalls}
                               |
                               |""".stripMargin
 

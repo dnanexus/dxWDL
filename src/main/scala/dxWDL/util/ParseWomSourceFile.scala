@@ -290,11 +290,23 @@ object ParseWomSourceFile {
     // }
     //
     // would return : [A, A2]
+    //
+    // When a workflow imports other namespaces, the syntax for calls
+    // is NAMESPACE.CALL_NAME. For example:
+    //
+    // import "library.wdl" as lib
+    // workflow foo {
+    //   call lib.Multiply as mul { ... }
+    // }
+    //
+    // The "callLine" regular expression will match occurrences of
+    // "callAsLine", so we are careful to find all aliased calls first
+    //
+    // Note that call names can include dot ('.').
+    private val callLine: Regex = "^(\\s*)call(\\s+)([\\w+,\\.]+)".r
+    private val callAsLine: Regex = "^(\\s*)call(\\s+)([\\w,\\.]+)(\\s+)as(\\s+)(\\w+)".r
+
     def scanForCalls(wdlWfSource: String) : Map[String, Int] = {
-        // The "callLine" regular expression will match occurrences of
-        // "callAsLine", so we are careful to find all aliased calls first
-        val callLine: Regex = "^(\\s*)call(\\s+)(\\w+)".r
-        val callAsLine: Regex = "^(\\s*)call(\\s+)(\\w+)(\\s+)as(\\s+)(\\w+)".r
         val wfLines = wdlWfSource.split("\n").toList
 
         val calls =  HashMap.empty[String, Int]
