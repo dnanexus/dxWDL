@@ -25,4 +25,9 @@ class WomTypeSerializationTest extends FlatSpec with Matchers {
                                      WomArrayType(WomLongType))
         WomTypeSerialization.fromString(WomTypeSerialization.toString(t)) should be (t)
     }
+
+    it should "handle pairs" in {
+        val t : WomType = WomPairType(WomIntegerType, WomStringType)
+        WomTypeSerialization.fromString(WomTypeSerialization.toString(t)) should be (t)
+    }
 }

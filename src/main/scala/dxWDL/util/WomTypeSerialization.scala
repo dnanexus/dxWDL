@@ -19,16 +19,20 @@ object WomTypeSerialization {
             case WomMaybeEmptyArrayType(memberType) =>
                 val inner = toString(memberType)
                 s"MaybeEmptyArray[${inner}]"
+            case WomMapType(keyType, valueType) =>
+                val k = toString(keyType)
+                val v = toString(valueType)
+                s"Map[$k, $v]"
             case WomNonEmptyArrayType(memberType) =>
                 val inner = toString(memberType)
                 s"NonEmptyArray[${inner}]"
             case WomOptionalType(memberType) =>
                 val inner = toString(memberType)
                 s"Option[$inner]"
-            case WomMapType(keyType, valueType) =>
-                val k = toString(keyType)
-                val v = toString(valueType)
-                s"Map[$k, $v]"
+            case WomPairType(lType, rType) =>
+                val ls = toString(lType)
+                val rs = toString(rType)
+                s"Pair[$ls, $rs]"
 
             // catch-all for other types not currently supported
             case _ =>
@@ -93,14 +97,19 @@ object WomTypeSerialization {
                 val inner = str.substring(openParen+1, closeParen)
                 outer match {
                     case "MaybeEmptyArray" => WomMaybeEmptyArrayType(fromString(inner))
-                    case "NonEmptyArray" => WomNonEmptyArrayType(fromString(inner))
-                    case "Option" => WomOptionalType(fromString(inner))
                     case "Map" =>
                         // split a string like "KK, VV" into (KK, VV)
                         val (ks, vs) = splitInTwo(inner)
                         val kt = fromString(ks)
                         val vt = fromString(vs)
                         WomMapType(kt, vt)
+                    case "NonEmptyArray" => WomNonEmptyArrayType(fromString(inner))
+                    case "Option" => WomOptionalType(fromString(inner))
+                    case "Pair" =>
+                        val (ls, rs) = splitInTwo(inner)
+                        val lt = fromString(ls)
+                        val rt = fromString(rs)
+                        WomPairType(lt, rt)
                 }
             case _ =>
                 throw new Exception(s"Cannot convert ${str} to a wom type")

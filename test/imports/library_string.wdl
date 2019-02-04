@@ -1,8 +1,11 @@
+version 1.0
+
 # Concatenate two string
 task Concat {
-    String x
-    String y
-
+    input {
+        String x
+        String y
+    }
     command {
         echo ${x}_${y}
     }
@@ -13,8 +16,9 @@ task Concat {
 
 # Concatenate array of strings
 task ConcatArray {
-    Array[String] words
-
+    input {
+        Array[String] words
+    }
     command {
         echo ${sep='_' words}
     }
@@ -25,7 +29,9 @@ task ConcatArray {
 
 # A task that sets a default for an optional input
 task MaybeString {
-    String? instrument = "french horn"
+    input {
+        String? instrument = "french horn"
+    }
     command {
     }
     output {

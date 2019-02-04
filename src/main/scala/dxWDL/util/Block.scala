@@ -211,7 +211,6 @@ object Block {
         var rest : Set[GraphNode] = graph.nodes
         var blocks = Vector.empty[Block]
         val callToSrcLine = ParseWomSourceFile.scanForCalls(wdlSourceCode)
-        System.out.println(s"${callToSrcLine}")
 
         // sort from low to high according to the source lines.
         val callsLoToHi : Vector[(String, Int)] = callToSrcLine.toVector.sortBy(_._2)

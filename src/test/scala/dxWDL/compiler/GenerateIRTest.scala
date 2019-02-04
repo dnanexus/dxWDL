@@ -71,7 +71,7 @@ class GenerateIRTest extends FlatSpec with Matchers {
     it should "support imports" taggedAs(EdgeTest) in {
         val path = pathFromBasename("check_imports.wdl")
         Main.compile(
-            path.toString :: dbgFlags
+            path.toString :: cFlags
         ) shouldBe a [Main.SuccessfulTerminationIR]
     }
 }
