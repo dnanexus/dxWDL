@@ -2,14 +2,14 @@
 
 ## 0.79.1
 
-- Version [docker-based runner script](https://github.com/dnanexus/dxWDL/tree/master/scripts/compiler_image/dxwdl)
+- Version [docker-based runner script](https://github.com/dnanexus/dxWDL/tree/master/scripts/compiler_image/run-dxwdl-docker)
 - Do not call sudo in runner script, in case system is set up not to require
   sudo to run Docker.
-- Rename run script to `dxwdl` for elegance
+- Rename run script to `run-dxwdl-docker`
 
 ```
 $ export DXWDL_VERSION=0.79.1
-$ sudo dxwdl compile /path/to/foo.wdl -project project-xxx
+$ sudo run-dxwdl-docker compile /path/to/foo.wdl -project project-xxx
 ```
 
 ## 0.79
