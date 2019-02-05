@@ -28,10 +28,13 @@ reserved_test_names=['M', 'All', 'list']
 
 medium_test_list = [
     "cast",
+    "dict",
     "instance_types",
     "linear_no_expressions",
     "linear",
-    "spaces_in_file_paths"
+    "optionals",
+    "spaces_in_file_paths",
+    "strings"
 ]
 
 tests_for_alt_project = [ "platform_asset" ]

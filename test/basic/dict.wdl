@@ -1,27 +1,5 @@
 version 1.0
 
-task Add {
-    input {
-        Int a
-        Int b
-    }
-    command {}
-    output {
-        Int result = a + b
-    }
-}
-
-task Multiply {
-    input {
-        Int a
-        Int b
-    }
-    command {}
-    output {
-        Int result = a * b
-    }
-}
-
 # create a map that has files as sub structures
 task createFruit {
     input {}
@@ -68,31 +46,9 @@ workflow dict {
     input {
         Map[String, Int] mSI
     }
-#    Map[Int, Int] mII = {1: 10, 2: 11}
-#    Map[Int, Float] mIF = {1: 1.2, 10: 113.0}
 
     call createFruit
     call createMultiFruit
-
-#    scatter (pair1 in mSI) {
-#        String valueSI = pair1.left
-#    }
-
-#    scatter (pair2 in mII) {
-#        Int valueII = pair2.right
-#    }
-
-#    scatter (pair3 in mIF) {
-#        call Add as add {
-#            input: a=pair3.left, b=5
-#        }
-#    }
-
-    # accessing members of a pair structure
-    Pair[Int, Int] p2 = (5, 8)
-    call Multiply as mul {
-        input: a=p2.left, b=p2.right
-    }
 
     Pair[String, String] v = ("carrots", "oranges")
     Pair[String, String] f = ("pear", "coconut")
@@ -101,9 +57,6 @@ workflow dict {
     }
 
     output {
-#        Array[String] keysSI = valueSI
-#        Array[Int] valuesII = valueII
-#        Array[Int] addition = add.result
-        Int mul_res = mul.result
+        Array[String] result = makeSalad.ingredients
     }
 }

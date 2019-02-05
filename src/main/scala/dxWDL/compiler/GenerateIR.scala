@@ -326,7 +326,7 @@ case class GenerateIR(callables: Map[String, IR.Callable],
             case _ =>
                 throw new Exception("sanity")
         }
-        s"frag_${name}"
+        s"wfFragment ${name}"
     }
 
     // Check if the environment has a variable with a binding for

@@ -63,6 +63,8 @@ object DxPath {
 
     private def lookupObject(dxProject: DXProject,
                              objName: String): DXDataObject = {
+        // If the object is a file-id (or something like it), then
+        // shortcut the expensive findDataObjects call.
         if (objName.startsWith("applet-")) {
             return DXApplet.getInstance(objName)
         }

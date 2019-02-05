@@ -183,10 +183,14 @@ object WdlVarLinks {
             throw new Exception("a double optional type")
         }
         def handleFile(path:String) : JsValue =  {
-            if (!path.startsWith(Utils.DX_URL_PREFIX))
-                throw new Exception(s"${path} is not a dx:file, cannot transfer it in this context.")
-            val dxFile = DxPath.lookupDxURLFile(path)
-            Utils.dxFileToJsValue(dxFile)
+            Furl.parse(path) match {
+                case FurlDx(path) =>
+                    val dxFile = DxPath.lookupDxURLFile(path)
+                    Utils.dxFileToJsValue(dxFile)
+                case FurlLocal(path) =>
+                    // A local file.
+                    JsString(path)
+            }
         }
         (womType, womValue) match {
             // Base case: primitive types
