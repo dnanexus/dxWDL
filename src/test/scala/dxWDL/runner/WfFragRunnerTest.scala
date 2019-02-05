@@ -8,6 +8,7 @@ import spray.json._
 import wom.callable.{WorkflowDefinition}
 import wom.executable.WomBundle
 import wom.expression.WomExpression
+import wom.graph._
 import wom.graph.expression._
 import wom.values._
 import wom.types._
@@ -159,9 +160,15 @@ class WfFragRunnerTest extends FlatSpec with Matchers {
         val path = pathFromBasename("strings.wdl")
         val wfSourceCode = Utils.readFileContent(path)
         val wf : WorkflowDefinition = ParseWomSourceFile.parseWdlWorkflow(wfSourceCode)
-        val (_, subBlocks, _) = Block.split(wf.innerGraph, wfSourceCode)
-        for (block <- subBlocks) {
-            System.out.println(WomPrettyPrintApproxWDL.apply(block.nodes))
-        }
+
+        val sctNode = wf.innerGraph.scatters.head
+        val svNode: ScatterVariableNode = sctNode.scatterVariableNodes.head
+        /*System.out.println(s"""|name = ${svNode.identifier.localName.value}
+                               |       ${svNode.identifier.workflowLocalName}
+                               |       ${svNode.identifier.localName}
+                               |""".stripMargin)*/
+        svNode.identifier.localName.value should be("x")
+        svNode.identifier.workflowLocalName should be("x")
+        svNode.identifier.localName.toString should be ("LocalName(x)")
     }
 }

@@ -530,15 +530,12 @@ case class WfFragRunner(wf: WorkflowDefinition,
               runMode: RunnerWfFragmentMode.Value) : Map[String, JsValue] = {
         Utils.appletLog(verbose, s"dxWDL version: ${Utils.getVersion()}")
         Utils.appletLog(verbose, s"link info=${execLinkInfo}")
-        Utils.appletLog(verbose, s"Workflow source code:")
-        Utils.appletLog(verbose, wfSourceCode, 10000)
         Utils.appletLog(verbose, s"Environment: ${envInitial}")
 
         val (_, subBlocks, _) = Block.split(wf.innerGraph, wfSourceCode)
         val block = subBlocks(subBlockNr)
-
         Utils.appletLog(verbose, s"""|Block ${subBlockNr} to execute:
-                                     |${block.prettyPrint}
+                                     |${WomPrettyPrintApproxWDL(block.nodes)}
                                      |""".stripMargin)
 
         val (otherNodes, category) = Block.categorize(block)
