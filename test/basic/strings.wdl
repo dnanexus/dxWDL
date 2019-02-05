@@ -31,17 +31,6 @@ task processTsv {
     }
 }
 
-task collect {
-    input {
-        Array[String] line
-    }
-    command {
-    }
-    output {
-        Array[String] result = line
-    }
-}
-
 task processLine {
     input {
         Array[String] line
@@ -62,13 +51,9 @@ workflow strings {
     call createTsv
     call processTsv { input: words = createTsv.result }
     scatter (x in createTsv.result) {
-        call processLine as processLine {input : line=x}
+        call processLine {input : line=x}
     }
-    call collect {
-        input : line=processLine.result
-    }
-
     output {
-        Array[String] collect_result = collect.result
+        Array[String] result = processLine.result
     }
 }
