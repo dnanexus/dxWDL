@@ -154,4 +154,14 @@ class WfFragRunnerTest extends FlatSpec with Matchers {
                                    Map.empty[String, WomValue]) should
         be (Map("z" -> WomOptionalValue(WomMaybeEmptyArrayType(WomIntegerType),None)))
     }
+
+    it should "create proper names for scatter results" in {
+        val path = pathFromBasename("strings.wdl")
+        val wfSourceCode = Utils.readFileContent(path)
+        val wf : WorkflowDefinition = ParseWomSourceFile.parseWdlWorkflow(wfSourceCode)
+        val (_, subBlocks, _) = Block.split(wf.innerGraph, wfSourceCode)
+        for (block <- subBlocks) {
+            System.out.println(WomPrettyPrintApproxWDL.apply(block.nodes))
+        }
+    }
 }

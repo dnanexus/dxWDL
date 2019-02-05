@@ -1,3 +1,4 @@
 {
-  "strings.result": ["1", "2", "3 INPUT=4", "5", "6 INPUT=7 INPUT=8"]
+  "strings.result1": "1\n2\n3\t4\n5\n6\t7\t8",
+  "strings.result2": ["1", "2", "3 INPUT=4", "5", "6 INPUT=7 INPUT=8"]
 }

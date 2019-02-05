@@ -297,7 +297,7 @@ case class WfFragRunner(wf: WorkflowDefinition,
             case (env, eNode: ExpressionNode) =>
                 val value : WomValue =
                     evaluateWomExpression(eNode.womExpression, eNode.womType, env)
-                env + (eNode.identifier.workflowLocalName -> value)
+                env + (eNode.identifier.localName.value -> value)
 
             // scatter
             case(env, sctNode : ScatterNode) =>
@@ -316,13 +316,13 @@ case class WfFragRunner(wf: WorkflowDefinition,
                 // iterate on the collection
                 val vm : Vector[Map[String, WomValue]] =
                     collection.map{ v =>
-                        val envInner = env + (svNode.identifier.workflowLocalName -> v)
+                        val envInner = env + (svNode.identifier.localName.value -> v)
                         evalExpressions(sctNode.innerGraph.nodes.toSeq, envInner)
                     }.toVector
 
                 val resultTypes : Map[String, WomArrayType] = sctNode.outputMapping.map{
                     case scp : ScatterGathererPort =>
-                        scp.identifier.workflowLocalName -> scp.womType
+                        scp.identifier.localName.value -> scp.womType
                 }.toMap
 
                 // build a mapping from from result-key to its type
@@ -364,7 +364,7 @@ case class WfFragRunner(wf: WorkflowDefinition,
                 // build
                 val resultTypes : Map[String, WomType] = cNode.conditionalOutputPorts.map{
                     case cop : ConditionalOutputPort =>
-                        cop.identifier.workflowLocalName -> Utils.stripOptional(cop.womType)
+                        cop.identifier.localName.value -> Utils.stripOptional(cop.womType)
                 }.toMap
                 if (!condValue) {
                     // condition is false, return None for all the values
@@ -508,7 +508,7 @@ case class WfFragRunner(wf: WorkflowDefinition,
         // loop on the collection, call the applet in the inner loop
         val childJobs : Vector[DXExecution] =
             collection.map{ item =>
-                val innerEnv = env + (svNode.identifier.workflowLocalName -> item)
+                val innerEnv = env + (svNode.identifier.localName.value -> item)
                 val callInputs = evalExpressions(taskInputs, innerEnv)
                 val callHint = readableNameForScatterItem(item)
                 val (_, dxExec) = execCall(call, callInputs, callHint)
@@ -519,7 +519,7 @@ case class WfFragRunner(wf: WorkflowDefinition,
         // Remove the declarations already calculated
         val resultTypes : Map[String, WomArrayType] = sctNode.outputMapping.map{
             case scp : ScatterGathererPort =>
-                scp.identifier.workflowLocalName -> scp.womType
+                scp.identifier.localName.value -> scp.womType
         }.toMap
         collectSubJobs.launch(childJobs, resultTypes)
     }

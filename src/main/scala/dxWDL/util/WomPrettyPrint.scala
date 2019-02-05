@@ -109,9 +109,4 @@ object WomPrettyPrint {
     def apply(nodes: Seq[GraphNode]) : String = {
         nodes.map(node => apply(node)).mkString("\n")
     }
-
-//    def apply(inputDefs: Seq[InputDefinition]) : String = {
-//        inputDefs.map(apply).mkString("\n")
-//    }
-
 }
