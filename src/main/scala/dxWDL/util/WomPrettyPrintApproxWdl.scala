@@ -5,7 +5,7 @@ package dxWDL.util
 import wom.graph._
 import wom.graph.expression._
 
-object WomPrettyPrintApproxWDL {
+object WomPrettyPrintApproxWdl {
 
     def apply(node: GraphNode,
               indent : String = "") : Option[String] = {
@@ -35,7 +35,10 @@ object WomPrettyPrintApproxWDL {
                          |""".stripMargin)
 
             case call : CommandCallNode =>
-                val inputNames = call.inputPorts.map(_.name)
+                val inputNames = call.upstream.collect{
+                    case exprNode: ExpressionNode =>
+                        s"${exprNode.identifier.localName.value} = ${exprNode.womExpression.sourceString}"
+                }.mkString(",")
                 Some(s"${indent}call ${call.identifier.localName.value} { input: ${inputNames} }")
 
             case expr : ExposedExpressionNode =>

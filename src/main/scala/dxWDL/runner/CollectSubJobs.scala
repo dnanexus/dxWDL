@@ -204,13 +204,13 @@ case class CollectSubJobs(jobInputOutput : JobInputOutput,
     def aggregateResults(call: CallNode,
                          childJobsComplete: Vector[ChildExecDesc]) : Map[String, WdlVarLinks] = {
         call.callable.outputs.map{ cot : OutputDefinition =>
-            val fullName = s"${call.identifier.workflowLocalName}.${cot.localName}"
+            val fullName = s"${call.identifier.workflowLocalName}.${cot.name}"
             val womType = cot.womType
             val value : WomValue = collectCallField(cot.name,
                                                     womType,
                                                     childJobsComplete)
             val wvl = WdlVarLinks.importFromWDL(value.womType, value)
-            fullName ->  wvl
+            fullName -> wvl
         }.toMap
     }
 }

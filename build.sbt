@@ -57,24 +57,17 @@ logLevel in assembly := Level.Info
 assemblyOutputPath in assembly := file("applet_resources/resources/dxWDL.jar")
 assemblyMergeStrategy in assembly := customMergeStrategy.value
 
-val cromwellV = "37-46ed889-SNAP"
-//val cromwellV = "36"
+val cromwellV = "37"
 
 libraryDependencies ++= Seq(
     "org.broadinstitute" %% "cromwell-common" % cromwellV,
     "org.broadinstitute" %% "cromwell-core" % cromwellV,
     "org.broadinstitute" %% "cromwell-wom" % cromwellV,
     "org.broadinstitute" %% "cwl-v1-0" % cromwellV,
-//    "org.broadinstitute" %% "language-factory-core" % cromwellV,
     "org.broadinstitute" %% "wdl-draft2" % cromwellV,
-//    "org.broadinstitute" %% "cromwell-wdl-transforms-draft2" % cromwellV,
     "org.broadinstitute" %% "wdl-draft3" % cromwellV,
-//    "org.broadinstitute" %% "cromwell-wdl-transforms-draft3" % cromwellV,
-    "org.broadinstitute" %% "wdl-biscayne" % cromwellV,
-//    "org.broadinstitute" %% "cromwell-wdl-transforms-biscayne" % cromwellV,
-//    "org.broadinstitute" %% "cromwell-wdl-transforms-shared" % cromwellV,
+//    "org.broadinstitute" %% "wdl-biscayne" % cromwellV,
 
-    // "cromwell.languages.util"
     "io.spray" %% "spray-json" % "1.3.2",
     "net.jcazevedo" %% "moultingyaml" % "0.4.0",
     "com.typesafe" % "config" % "1.3.1",

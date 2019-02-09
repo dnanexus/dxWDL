@@ -535,12 +535,11 @@ case class WfFragRunner(wf: WorkflowDefinition,
         val (_, subBlocks, _) = Block.split(wf.innerGraph, wfSourceCode)
         val block = subBlocks(subBlockNr)
         Utils.appletLog(verbose, s"""|Block ${subBlockNr} to execute:
-                                     |${WomPrettyPrintApproxWDL(block.nodes)}
+                                     |${WomPrettyPrintApproxWdl(block.nodes)}
                                      |""".stripMargin)
 
         val (otherNodes, category) = Block.categorize(block)
         val env = evalExpressions(otherNodes, envInitial)
-        val exportedVars = exportedVarNames()
 
         val subblockResults : Map[String, WdlVarLinks] = runMode match {
             case RunnerWfFragmentMode.Launch =>
@@ -579,9 +578,9 @@ case class WfFragRunner(wf: WorkflowDefinition,
                     case other =>
                         throw new AppInternalException(s"Bad case ${other.getClass} ${other}")
                 }
-
         }
 
+        val exportedVars = exportedVarNames()
         val jsOutputs : Map[String, JsValue] = processOutputs(env, subblockResults, exportedVars)
         val jsOutputsDbgStr = jsOutputs.mkString("\n")
         Utils.appletLog(verbose, s"""|JSON outputs:

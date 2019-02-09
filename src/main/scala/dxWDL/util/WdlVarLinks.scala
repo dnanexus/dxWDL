@@ -360,24 +360,24 @@ object WdlVarLinks {
     def genFields(wvl : WdlVarLinks,
                   bindName: String,
                   encodeDots: Boolean = true) : List[(String, JsValue)] = {
+        def nodots(s: String) : String =
+            Utils.encodeAppletVarName(Utils.transformVarName(s))
         val bindEncName =
-            if (encodeDots)
-                Utils.encodeAppletVarName(Utils.transformVarName(bindName))
-            else
-                bindName
+            if (encodeDots) nodots(bindName)
+            else bindName
         def mkSimple() : (String, JsValue) = {
             val jsv : JsValue = wvl.dxlink match {
                 case DxlValue(jsn) => jsn
                 case DxlStage(dxStage, ioRef, varEncName) =>
                     ioRef match {
-                        case IORef.Input => dxStage.getInputReference(varEncName)
-                        case IORef.Output => dxStage.getOutputReference(varEncName)
+                        case IORef.Input => dxStage.getInputReference(nodots(varEncName))
+                        case IORef.Output => dxStage.getOutputReference(nodots(varEncName))
                     }
                 case DxlWorkflowInput(varEncName) =>
                     JsObject("$dnanexus_link" -> JsObject(
-                                 "workflowInputField" -> JsString(varEncName)))
+                                 "workflowInputField" -> JsString(nodots(varEncName))))
                 case DxlExec(dxJob, varEncName) =>
-                    Utils.makeEBOR(dxJob, varEncName)
+                    Utils.makeEBOR(dxJob, nodots(varEncName))
             }
             (bindEncName, jsv)
         }
