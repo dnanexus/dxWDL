@@ -379,7 +379,6 @@ case class GenerateIR(callables: Map[String, IR.Callable],
                             |]
                             |""".stripMargin)
         }
-
         val allInputs = Block.closure(block)
         val closure = allInputs.map { name =>
             lookupInEnv(name, env)

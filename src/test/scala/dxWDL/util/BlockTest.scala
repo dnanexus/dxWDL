@@ -5,9 +5,6 @@ import org.scalatest.{FlatSpec, Matchers}
 import wom.callable.{WorkflowDefinition}
 import wom.types._
 
-import org.scalatest.Tag
-object EdgeTest extends Tag("edge")
-
 class BlockTest extends FlatSpec with Matchers {
     private def pathFromBasename(dir: String, basename: String) : Path = {
         val p = getClass.getResource(s"/${dir}/${basename}").getPath
@@ -70,5 +67,29 @@ class BlockTest extends FlatSpec with Matchers {
         val wf : WorkflowDefinition = ParseWomSourceFile.parseWdlWorkflow(wfSourceCode)
         val (_, subBlocks, _) = Block.split(wf.innerGraph, wfSourceCode)
         Utils.ignore(subBlocks)
+    }
+
+    it should "calculate closure correctly for WDL draft-2" in {
+        val path = pathFromBasename("draft2", "block_closure.wdl")
+        val wfSourceCode = Utils.readFileContent(path)
+        val wf : WorkflowDefinition = ParseWomSourceFile.parseWdlWorkflow(wfSourceCode)
+        val (_, subBlocks, _) = Block.split(wf.innerGraph, wfSourceCode)
+
+        Block.closure(subBlocks(1)) should be(Set("flag", "rain"))
+        Block.closure(subBlocks(2)) should be(Set("flag", "inc1.result"))
+        Block.closure(subBlocks(3)) should be(Set("rain"))
+        Block.closure(subBlocks(4)) should be(Set("rain", "inc1.result", "flag"))
+    }
+
+    it should "calculate closure correctly for WDL draft-2 II" in {
+        val path = pathFromBasename("draft2", "shapes.wdl")
+        val wfSourceCode = Utils.readFileContent(path)
+        val wf : WorkflowDefinition = ParseWomSourceFile.parseWdlWorkflow(wfSourceCode)
+        val (inputNodes, subBlocks, outputNodes) = Block.split(wf.innerGraph, wfSourceCode)
+
+        Block.dbgPrint(inputNodes, subBlocks, outputNodes)
+
+        Block.closure(subBlocks(0)) should be(Set("num"))
+        Block.closure(subBlocks(1)) should be(Set.empty)
     }
 }
