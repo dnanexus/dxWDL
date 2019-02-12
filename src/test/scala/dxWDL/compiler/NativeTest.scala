@@ -12,8 +12,8 @@ import org.scalatest.tags.Slow
 // dnanexus applets and workflows that are not runnable.
 @Slow
 class NativeTest extends FlatSpec with Matchers {
-    private def pathFromBasename(basename: String) : Path = {
-        val p = getClass.getResource(s"/compiler/${basename}").getPath
+    private def pathFromBasename(dir: String, basename: String) : Path = {
+        val p = getClass.getResource(s"/${dir}/${basename}").getPath
         Paths.get(p)
     }
 
@@ -32,20 +32,20 @@ class NativeTest extends FlatSpec with Matchers {
                                  "-locked")
 
     it  should "Native compile a single WDL task" in {
-        val path = pathFromBasename("add.wdl")
+        val path = pathFromBasename("compiler", "add.wdl")
         val retval = Main.compile(path.toString :: compileFlags)
         retval shouldBe a [Main.SuccessfulTermination]
     }
 
     // linear workflow
     it  should "Native compile a linear WDL workflow without expressions" in {
-        val path = pathFromBasename("wf_linear_no_expr.wdl")
+        val path = pathFromBasename("compiler", "wf_linear_no_expr.wdl")
         val retval = Main.compile(path.toString :: compileFlags)
         retval shouldBe a [Main.SuccessfulTermination]
     }
 
     it  should "Native compile a linear WDL workflow" in {
-        val path = pathFromBasename("wf_linear.wdl")
+        val path = pathFromBasename("compiler", "wf_linear.wdl")
         val retval = Main.compile(path.toString
 //                                      :: "--verboseKey" :: "Native"
 //                                      :: "--verboseKey" :: "GenerateIR"
@@ -54,9 +54,17 @@ class NativeTest extends FlatSpec with Matchers {
     }
 
     it should "Native compile a workflow with a scatter without a call" in {
-        val path = pathFromBasename("scatter_no_call.wdl")
+        val path = pathFromBasename("compiler", "scatter_no_call.wdl")
         Main.compile(
             path.toString :: compileFlags
+        ) shouldBe a [Main.SuccessfulTermination]
+    }
+
+
+    it should "Native compile a draft2 workflow" taggedAs(EdgeTest) in {
+        val path = pathFromBasename("draft2", "shapes.wdl")
+        Main.compile(
+            path.toString :: "--force" :: compileFlags
         ) shouldBe a [Main.SuccessfulTermination]
     }
 }

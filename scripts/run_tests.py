@@ -33,6 +33,10 @@ medium_test_list = [
     "linear_no_expressions",
     "linear",
     "optionals",
+
+    # wdl draft-2
+    "shapes",
+
     "spaces_in_file_paths",
     "strings"
 ]

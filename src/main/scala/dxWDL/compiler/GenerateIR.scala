@@ -262,14 +262,28 @@ case class GenerateIR(callables: Map[String, IR.Callable],
         (cVar, IR.SArgWorkflowInput(cVar))
     }
 
+
     private def findInputByName(call: CallNode, cVar: CVar) : Option[TaskCallInputExpressionNode] = {
+        def getLocalName(exprNode : TaskCallInputExpressionNode) : String = {
+            // in an expression like:
+            //    call volume { input: i = 10 }
+            // the "i" parameter, under WDL draft-2, is compiled as "volume.i"
+            // under WDL version 1.0, it is compiled as "i"
+            var localName = exprNode.identifier.localName.value
+            if (localName.startsWith(call.callable.name + "."))
+                localName = localName.substring(call.callable.name.length + 1)
+            Utils.trace(verbose2,
+                        s"expr=${exprNode.identifier.localName.value} name=${localName}")
+            localName
+        }
         val callInputs = call.upstream.collect{
             case expr : TaskCallInputExpressionNode => expr
         }
-        callInputs.find{
+        val retval = callInputs.find{
             case expr : TaskCallInputExpressionNode =>
-                cVar.name == expr.identifier.localName.value
+                cVar.name == getLocalName(expr)
         }
+        retval
     }
 
     // compile a call into a stage in an IR.Workflow
@@ -379,7 +393,6 @@ case class GenerateIR(callables: Map[String, IR.Callable],
                             |]
                             |""".stripMargin)
         }
-
         val allInputs = Block.closure(block)
         val closure = allInputs.map { name =>
             lookupInEnv(name, env)
