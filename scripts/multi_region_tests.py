@@ -46,7 +46,7 @@ def run_workflow(dx_proj, test_folder, oid):
             return wf.run({},
                           project=dx_proj.get_id(),
                           folder=test_folder)
-        except Exception, e:
+        except Exception as e:
             print("exception message={}".format(e))
             return None
 
