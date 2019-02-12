@@ -266,10 +266,12 @@ case class GenerateIR(callables: Map[String, IR.Callable],
         val callInputs = call.upstream.collect{
             case expr : TaskCallInputExpressionNode => expr
         }
-        callInputs.find{
+        val retval = callInputs.find{
             case expr : TaskCallInputExpressionNode =>
-                cVar.name == expr.identifier.localName.value
+                cVar.name == expr.identifier.localName.value ||
+                (call.callable.name + "." + cVar.name) == expr.identifier.localName.value
         }
+        retval
     }
 
     // compile a call into a stage in an IR.Workflow

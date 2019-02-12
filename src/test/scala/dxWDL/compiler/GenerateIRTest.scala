@@ -78,7 +78,7 @@ class GenerateIRTest extends FlatSpec with Matchers {
             path.toString :: cFlags
         )
         retval shouldBe a [Main.SuccessfulTerminationIR]
-
+/*
         val primary = retval match {
             case Main.SuccessfulTerminationIR(ir) =>
                 ir.primaryCallable.get
@@ -101,7 +101,7 @@ class GenerateIRTest extends FlatSpec with Matchers {
                                |locked = ${wf.locked}
                                |kind = ${wf.kind}
                                |
-                               |""".stripMargin)
+                               |""".stripMargin)*/
     }
 
 }

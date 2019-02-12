@@ -87,8 +87,6 @@ class BlockTest extends FlatSpec with Matchers {
         val wf : WorkflowDefinition = ParseWomSourceFile.parseWdlWorkflow(wfSourceCode)
         val (inputNodes, subBlocks, outputNodes) = Block.split(wf.innerGraph, wfSourceCode)
 
-        Block.dbgPrint(inputNodes, subBlocks, outputNodes)
-
         Block.closure(subBlocks(0)) should be(Set("num"))
         Block.closure(subBlocks(1)) should be(Set.empty)
     }

@@ -4,14 +4,13 @@ import dxWDL.Main
 import dxWDL.util.DxPath
 import java.nio.file.{Path, Paths}
 import org.scalatest.{FlatSpec, Matchers}
-
-//import org.scalatest.tags.Slow
+import org.scalatest.tags.Slow
 
 // This test module requires being logged in to the platform.
 // It compiles WDL scripts without the runtime library.
 // This tests the compiler Native mode, however, it creates
 // dnanexus applets and workflows that are not runnable.
-//@Slow
+@Slow
 class NativeTest extends FlatSpec with Matchers {
     private def pathFromBasename(dir: String, basename: String) : Path = {
         val p = getClass.getResource(s"/${dir}/${basename}").getPath
