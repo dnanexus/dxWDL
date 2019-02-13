@@ -114,9 +114,6 @@ $ dx login
 $ run-dxwdl-docker compile xxxx.wdl --project MY_PROJECT
 ```
 
-This way, you don't need to install java, or the dxWDL jar file.
-
-
 # Additional information
 
 - [Advanced options](doc/ExpertOptions.md) explains additional compiler options
