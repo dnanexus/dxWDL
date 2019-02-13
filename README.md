@@ -101,6 +101,18 @@ dx run bam_chrom_counter -i0.file=file-xxxx
 At runtime this looks like this:
 ![this](doc/bam_chrom_counter.png)
 
+## Compiler docker image
+
+If you wish to avoid installing java and the dxWDL jar file, you can use
+the public docker image `dnanexus/dxwdl`, placed on dockerhub. The
+[run-dxwdl-docker](scripts/compiler_image/run-dxwdl-docker)
+script makes it easier to use. For example:
+
+```bash
+$ source environment
+$ dx login
+$ run-dxwdl-docker compile xxxx.wdl --project MY_PROJECT
+```
 
 # Additional information
 
