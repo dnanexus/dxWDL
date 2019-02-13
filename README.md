@@ -102,6 +102,20 @@ At runtime this looks like this:
 ![this](doc/bam_chrom_counter.png)
 
 
+If you wish to avoid installing java and the dxWDL jar file, you can use
+the public docker image `dnanexus/dxwdl`, placed on dockerhub. The
+[run-dxwdl-docker](scripts/compiler_image/run-dxwdl-docker)
+script makes it easier to use. For example:
+
+```bash
+$ source environment
+$ dx login
+$ run-dxwdl-docker compile xxxx.wdl --project MY_PROJECT
+```
+
+This way, you don't need to install java, or the dxWDL jar file.
+
+
 # Additional information
 
 - [Advanced options](doc/ExpertOptions.md) explains additional compiler options
