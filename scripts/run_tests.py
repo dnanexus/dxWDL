@@ -198,7 +198,7 @@ def read_json_file_maybe_empty(path):
 def find_test_from_exec(exec_obj):
     dx_desc = exec_obj.describe()
     exec_name = dx_desc["name"].split(' ')[0]
-    for tname, desc in test_files.iteritems():
+    for tname, desc in test_files.items():
         if desc.name == exec_name:
             return tname
     raise RuntimeError("Test for {} {} not found".format(exec_obj, exec_name))
@@ -229,7 +229,7 @@ def validate_result(tname, exec_outputs, key, expected_val):
             print("Field {} should be {}, actual = {}".format(field_name, expected_val, result))
             return False
         return True
-    except Exception, e:
+    except Exception as e:
         print("exception message={}".format(e))
         return False
 
@@ -264,7 +264,7 @@ def build_test(tname, project, folder, version_id, compiler_flags):
     cmdline += compiler_flags
     print(" ".join(cmdline))
     oid = subprocess.check_output(cmdline).strip()
-    return oid
+    return oid.decode("ascii")
 
 def ensure_dir(path):
     print("making sure that {} exists".format(path))
@@ -313,7 +313,7 @@ def run_executable(project, test_folder, tname, oid, delay_workspace_destruction
                                 name="{} {}".format(desc.name, git_revision),
                                 delay_workspace_destruction=delay_workspace_destruction,
                                 instance_type="mem1_ssd1_x4")
-        except Exception, e:
+        except Exception as e:
             print("exception message={}".format(e))
             return None
 
@@ -346,7 +346,7 @@ def extract_outputs(tname, exec_obj):
 def run_test_subset(project, runnable, test_folder, delay_workspace_destruction, no_wait):
     # Run the workflows
     test_exec_objs=[]
-    for tname, oid in runnable.iteritems():
+    for tname, oid in runnable.items():
         desc = test_files[tname]
         print("Running {} {} {}".format(desc.kind, desc.name, oid))
         anl = run_executable(project, test_folder, tname, oid, delay_workspace_destruction)
@@ -371,7 +371,7 @@ def run_test_subset(project, runnable, test_folder, delay_workspace_destruction,
         correct = True
         print("Checking results for workflow {}".format(test_desc.name))
 
-        for key, expected_val in shouldbe.iteritems():
+        for key, expected_val in shouldbe.items():
             correct = validate_result(tname, exec_outputs, key, expected_val)
         if correct:
             print("Analysis {} passed".format(tname))
@@ -413,7 +413,7 @@ def register_all_tests():
                     continue
                 try:
                     register_test(root, fname)
-                except Exception, e:
+                except Exception as e:
                     print("Skipping WDL file {} error={}".format(fname, e))
 
 
