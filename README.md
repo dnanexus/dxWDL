@@ -106,7 +106,7 @@ At runtime this looks like this:
 
 - [Advanced options](doc/ExpertOptions.md) explains additional compiler options
 - [Internals](doc/Internals.md) goes into compiler internals
-- [Howto](doc/Howto.md) examples for how to write good WDL code
+- [Tips and tricks](doc/Tips.md) commonly used patterns in WDL
 
 # Contributions
 

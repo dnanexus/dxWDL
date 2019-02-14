@@ -1,6 +1,6 @@
-# Writing good WDL code
+# Tips and tricks
 
-This page contains examples for writing good WDL code. Sometimes, the correct WDL way of
+This page contains examples of coding patterns in WDL. Sometimes, the correct WDL way of
 doing things is not immediately obvious, and here we provide some worked examples.
 
 ## Optional argument with a default
@@ -31,7 +31,7 @@ task hello {
 ## Assertions
 
 Currently, WDL does not have a way to throw exceptions, or report errors. A way around
-this limitation is to write a task `assert`
+this limitation is to write an `assert` task (suggested by [@mlin](https://github.com/mlin)).
 
 ```wdl
 task assert {
@@ -48,17 +48,17 @@ task assert {
 }
 ```
 
-And call it from a workflow when you want to check a condition.
+You can call it from a workflow when you want to check a condition.
 
 ```wdl
 workflow foo {
-    call assert { input: value= SOME_CONDITION,
-                         msg = YOUR_MESSAGE }
+    call assert { input: value= CONDITION_TO_CHECK,
+                         msg = ERROR_MESSAGE }
 }
 ```
 
 
-A method that works directly with the platform error reporting mechanism, suggested by <jeffrey.tratner@gmail.com>, is:
+A method that works directly with the platform error reporting mechanism, suggested by [@jtratner](https://github.com/jtratner), is:
 
 ```wdl
 workflow show_error {
