@@ -1,5 +1,10 @@
 # Release Notes
 
+## 0.80
+
+- Bug fix for `--reorg`
+- Update test scripts for python3
+
 ## 0.79.1
 
 - Version [docker-based runner script](https://github.com/dnanexus/dxWDL/tree/master/scripts/compiler_image/run-dxwdl-docker)

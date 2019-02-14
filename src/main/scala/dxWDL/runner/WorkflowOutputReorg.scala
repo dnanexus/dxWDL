@@ -138,13 +138,12 @@ case class WorkflowOutputReorg(verbose: Boolean) {
         YamlObject(m).print()
     }
 
-    // The variables are passed through, so that workflow will
-    // complete only after file movements are complete.
     def apply(nswf: WdlNamespaceWithWorkflow,
-              wfInputs: Map[String, WdlVarLinks]) : Map[String, JsValue] = {
-        Utils.appletLog(verbose, s"Initial inputs=\n${prettyPrint(wfInputs)}")
+              wfOutputs: Map[String, WdlVarLinks]) : Map[String, JsValue] = {
+        Utils.appletLog(verbose, s"Initial inputs=\n${prettyPrint(wfOutputs)}")
 
-        val wfOutputFiles: Vector[DXFile] = wfInputs.map{ case (_, wvl) =>
+        // Figure out the output variables from the workflow inputs
+        val wfOutputFiles: Vector[DXFile] = wfOutputs.map{ case (_, wvl) =>
             WdlVarLinks.findDxFiles(wvl)
         }.toVector.flatten
 
