@@ -66,7 +66,7 @@ def main():
 
     # Build the asset, and the compiler jar file.
     path_dict = dict(map(lambda kv: (kv[0], kv[1] + ":" + folder),
-                         project_dict.iteritems()))
+                         project_dict.items()))
     (jar_path, home_ad) = util.build(project, folder, version_id, top_dir, path_dict)
 
     if multi_region:

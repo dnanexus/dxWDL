@@ -149,7 +149,7 @@ def _gen_config_file(version_id, top_dir, project_dict):
     # Create a record for each region
     region_project_hocon = []
     all_regions = []
-    for region, dx_path in project_dict.iteritems():
+    for region, dx_path in project_dict.items():
         record = "\n".join(["  {",
                             '    region = "{}"'.format(region),
                             '    path = "{}"'.format(dx_path),
