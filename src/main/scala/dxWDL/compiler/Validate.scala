@@ -76,15 +76,33 @@ case class Validate(allErrors :  Queue[String],
     //     File Add_result = Add.result
     //   }
     private def validateWorkflowOutputs(workflow: WdlWorkflow) : Unit = {
-        if (workflow.noWorkflowOutputs) {
-            // Empty output section. Unlike Cromwell, we generate no outputs
-            allWarnings += ("Empty output section, no outputs will be generated")
-        }
-
         val wfOutputs: Vector[WorkflowOutput] =
             workflow.children.filter(x => x.isInstanceOf[WorkflowOutput])
                 .map(_.asInstanceOf[WorkflowOutput])
                 .toVector
+        try {
+            // Try to use the native wdl4s method for getting outputs from
+            // a workflow. This sometimes fails, hence the try/catch.
+            //
+            // This check catches cases of partial definitions, such as:
+            // output {
+            //    Add.result
+            // }
+            val wfOutputsWithExpansion = workflow.outputs
+            if (wfOutputs.size < wfOutputsWithExpansion.size) {
+                def nrPartialDefs = wfOutputsWithExpansion.size - wfOutputs.size
+                allWarnings += (s"""|The output section for workflow [${workflow.unqualifiedName}]
+                                    |contains ${nrPartialDefs} partial definitions"""
+                                    .stripMargin.replaceAll("\n", " "))
+                }
+        } catch {
+            case e: Throwable => ()
+        }
+
+        if (workflow.noWorkflowOutputs) {
+            // Empty output section. Unlike Cromwell, we generate no outputs
+            allWarnings += ("Empty output section, no outputs will be generated")
+        }
 
         // check for duplicate names. WDL is supposed to check for this, but this
         // did not work in Cromwell 30.2.
