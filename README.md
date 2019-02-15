@@ -6,9 +6,7 @@ and compiles it to an equivalent workflow on the DNAnexus platform.
 It provides a reasonably complete set of WDL features.
 WDL draft-2 is supported, with a few exceptions:
 * Calls with missing arguments have limited support
-* The ouput section:
-1. does not support expressions
-2. requires full definitions. For example:
+* The output section does not allow expressions, and requires full definitions. For example:
 ```wdl
 workflow foo {
   output {
@@ -17,7 +15,7 @@ workflow foo {
 }
 ```
 
-Instead of
+instead of:
 ```wdl
 workflow foo {
   output {
