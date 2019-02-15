@@ -104,6 +104,13 @@ class GenerateIRTest extends FlatSpec with Matchers {
                                |""".stripMargin)*/
     }
 
+    it should "expressions in an output block" in {
+        val path = pathFromBasename("compiler", "expr_output_block.wdl")
+        Main.compile(
+            path.toString :: cFlags
+        ) shouldBe a [Main.SuccessfulTerminationIR]
+    }
+
     ignore should "compile scatters over maps --- doesn't work in cromwell v37" in {
         val path = pathFromBasename("compiler", "dict2.wdl")
         Main.compile(
