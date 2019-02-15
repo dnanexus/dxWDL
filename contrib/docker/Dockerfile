@@ -4,8 +4,8 @@ FROM ubuntu:16.04
 
 # 1. DNANexus SDK (dx-toolkit)
 RUN apt-get update && apt-get install -y wget git openssl python python-dev g++ default-jdk
-RUN wget https://wiki.dnanexus.com/images/files/dx-toolkit-v0.255.0-ubuntu-14.04-amd64.tar.gz && \
-    tar -xzvf dx-toolkit-v0.255.0-ubuntu-14.04-amd64.tar.gz && \
+RUN wget https://wiki.dnanexus.com/images/files/dx-toolkit-v0.275.0-ubuntu-16.04-amd64.tar.gz && \
+    tar -xzvf dx-toolkit-v0.275.0-ubuntu-16.04-amd64.tar.gz && \
     /bin/bash -c "source /dx-toolkit/environment"  
 ENV PATH /dx-toolkit/bin:$PATH
 
