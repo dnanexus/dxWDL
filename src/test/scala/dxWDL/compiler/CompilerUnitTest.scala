@@ -6,6 +6,8 @@ import org.scalatest.{FlatSpec, Matchers}
 import org.scalatest.Inside._
 import wdl.draft2.model._
 
+import org.scalatest.Tag
+object EdgeTest extends Tag("edge")
 
 // These tests involve compilation -without- access to the platform.
 //
@@ -55,6 +57,17 @@ class CompilerUnitTest extends FlatSpec with Matchers {
         inside(retval) {
             case Main.UnsuccessfulTermination(errMsg) =>
                 errMsg should include ("Could not resolve")
+        }
+    }
+
+    it should "Report useful error for a partial workflow output definition" taggedAs(EdgeTest) in {
+        val path = pathFromBasename("partial_output_definition.wdl")
+        val retval = Main.compile(
+            List(path.toString, "--compileMode", "ir", "--quiet", "--fatalValidationWarnings")
+        )
+        inside(retval) {
+            case Main.UnsuccessfulTermination(errMsg) =>
+                errMsg should include ("The output section for workflow [partial_output_definition] contains 1 partial definitions")
         }
     }
 

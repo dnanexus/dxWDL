@@ -2,7 +2,31 @@
 
 ## 0.80
 
-- Bug fix for `--reorg`
+- The compiler emits a warning for partialy defined workflow
+outputs. For example, in workflow `foo`, the output `add.result` is
+partial, because it is not assigned to an output variable. Partial
+definitions are discarded during compilation, hence the warning.
+
+```wdl
+workflow foo {
+  call add { ... }
+  output {
+     add.result
+  }
+}
+```
+
+To avoid this problem, rewrite like this:
+
+```wdl
+workflow foo {
+  call add { ... }
+  output {
+     Int r = add.result
+  }
+}
+```
+
 - Update test scripts for python3
 
 ## 0.79.1
