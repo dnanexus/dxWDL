@@ -475,8 +475,7 @@ case class GenerateIR(callables: Map[String, IR.Callable],
     private def compileWorkflowLocked(wf: WorkflowDefinition,
                                       wfSourceStandAlone : WdlCodeSnippet,
                                       wfInputs: Vector[(CVar, SArg)],
-                                      subBlocks: Vector[Block],
-                                      outputNodes: Vector[GraphOutputNode])
+                                      subBlocks: Vector[Block])
             : (Vector[(IR.Stage, Option[IR.Applet])], CallEnv) =
     {
         Utils.trace(verbose.on, s"Compiling locked-down workflow ${wf.name}")
@@ -532,10 +531,7 @@ case class GenerateIR(callables: Map[String, IR.Callable],
     }
 
 
-    // TODO: Currently, expressions in the output section are not supported.
-    // We would need an extra rewrite step to support this. At the moment,
-    // it is simpler to ask the user to perform the rewrite herself.
-    private def buildWorkflowOutput(outputNode: GraphOutputNode, env: CallEnv) : (CVar, SArg) = {
+    private def buildSimpleWorkflowOutput(outputNode: GraphOutputNode, env: CallEnv) : (CVar, SArg) = {
         def getSArgFromEnv(source: String) : SArg = {
             env.get(source) match {
                 case None =>
@@ -552,17 +548,39 @@ case class GenerateIR(callables: Map[String, IR.Callable],
                 val cVar = CVar(id.workflowLocalName, womType, None)
                 val source = sourcePort.name
                 (cVar, getSArgFromEnv(source))
-            case expr :ExpressionBasedGraphOutputNode =>
-                if (!Block.isTrivialExpression(expr.womExpression))
-                    throw new Exception(s"""|Expressions are not supported as workflow outputs,
-                                            |${WomPrettyPrint.apply(expr)}.
-                                            |Please rewrite""".stripMargin.replaceAll("\n", " "))
+            case expr :ExpressionBasedGraphOutputNode if (Block.isTrivialExpression(expr.womExpression)) =>
                 val cVar = CVar(expr.graphOutputPort.name, expr.womType, None)
                 val source = expr.womExpression.sourceString
                 (cVar, getSArgFromEnv(source))
+            case expr :ExpressionBasedGraphOutputNode =>
+                // An expression that requires evaluation
+                throw new Exception(s"Internal error: non trivial expressions are handled elsewhere ${expr}")
             case other =>
                 throw new Exception(s"unhandled output ${other}")
         }
+    }
+
+    // Does this output require evaluation? If so, we will need to create
+    // another applet for this.
+    private def isSimpleOutput(outputNode: GraphOutputNode) : Boolean = {
+        outputNode match {
+            case PortBasedGraphOutputNode(id, womType, sourcePort) =>
+                true
+            case expr :ExpressionBasedGraphOutputNode if (Block.isTrivialExpression(expr.womExpression)) =>
+                true
+            case expr :ExpressionBasedGraphOutputNode =>
+                // An expression that requires evaluation
+                false
+            case other =>
+                throw new Exception(s"unhandled output class ${other}")
+        }
+    }
+
+    // Some of the outputs are expressions. We need an extra applet+stage
+    // to evaluate them.
+    private def buildOutputEvaluationStage(outputNodes : Vector[GraphOutputNode], env: CallEnv)
+            : (IR.Applet, IR.Stage, Vector[(CVar, SArg)]) = {
+        throw new Exception("TODO")
     }
 
     // Compile a (single) WDL workflow into a single dx:workflow.
@@ -600,14 +618,21 @@ case class GenerateIR(callables: Map[String, IR.Callable],
         // compile into dx:workflow inputs
         val wfInputs:Vector[(CVar, SArg)] = inputNodes.map(buildWorkflowInput).toVector
 
-        val (allStageInfo, env) = compileWorkflowLocked(wf, wfSourceStandAlone, wfInputs, subBlocks, outputNodes)
-
-        // compile into workflow outputs
-        val wfOutputs = outputNodes.map(node => buildWorkflowOutput(node, env)).toVector
-
+        val (allStageInfo, env) = compileWorkflowLocked(wf, wfSourceStandAlone, wfInputs, subBlocks)
         val (stages, auxApplets) = allStageInfo.unzip
-        val irwf = IR.Workflow(wf.name, wfInputs, wfOutputs, stages, locked, wfKind)
-        (irwf, auxApplets.flatten)
+
+        if (outputNodes.forall(isSimpleOutput)) {
+            // All the outputs are constants or variables, we can output them directly
+            val wfOutputs = outputNodes.map(node => buildSimpleWorkflowOutput(node, env)).toVector
+            val irwf = IR.Workflow(wf.name, wfInputs, wfOutputs, stages, locked, wfKind)
+            (irwf, auxApplets.flatten)
+        } else {
+            // Some of the outputs are expressions. We need an extra applet+stage
+            // to evaluate them.
+            val (outputEvalApplet, outputEvalStage, wfOutputs) = buildOutputEvaluationStage(outputNodes, env)
+            val irwf = IR.Workflow(wf.name, wfInputs, wfOutputs, stages :+ outputEvalStage, locked, wfKind)
+            (irwf, auxApplets.flatten :+ outputEvalApplet)
+        }
     }
 
     // Entry point for compiling tasks and workflows into IR
