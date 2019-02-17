@@ -212,4 +212,7 @@ task Add {
 
         WdlCodeSnippet(wdlWfSource)
     }
+
+    def taskEvalWorkflowOutputs(outputNodes : Vector[GraphOutputNode]) :
+            (CallableTaskDefinition, WdlCodeSnippet) = ???
 }
