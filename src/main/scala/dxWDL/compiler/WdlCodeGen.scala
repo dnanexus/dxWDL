@@ -1,6 +1,8 @@
 package dxWDL.compiler
 
 import scala.util.matching.Regex
+import wom.callable.{CallableTaskDefinition}
+import wom.graph._
 import wom.types._
 import wom.values._
 

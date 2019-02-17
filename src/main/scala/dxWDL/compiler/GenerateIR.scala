@@ -576,11 +576,43 @@ case class GenerateIR(callables: Map[String, IR.Callable],
         }
     }
 
-    // Some of the outputs are expressions. We need an extra applet+stage
+    // Some of the workflow outputs are expressions. We need an extra applet+stage
     // to evaluate them.
-    private def buildOutputEvaluationStage(outputNodes : Vector[GraphOutputNode], env: CallEnv)
+    private def buildOutputEvaluationStage(outputNodes : Vector[ExpressionBasedGraphOutputNode],
+                                           env: CallEnv)
             : (IR.Applet, IR.Stage, Vector[(CVar, SArg)]) = {
-        throw new Exception("TODO")
+        // Figure out what variables from the environment we need to pass
+        // into the applet.
+        val closure = Block.closure(outputNodes)
+        val inputVars : Vector[LinkedVar] = closure.map{ name =>
+            env.find{ case (key,_) => key == name } match {
+                case None => throw new Exception(s"could not find variable ${name} in the environment")
+                case Some(lVar) => lVar
+            }
+        }
+        val outputVars: Vector[CVar] = outputNodes.map { expr =>
+            CVar(expr.graphOutputPort.name, expr.womType, None)
+        }
+        val (taskDefinition, WdlCodeSnippet(wdlCode)) =
+            WdlCodeGen.taskEvalWorkflowOutputs(outputNodes)
+        val applet = IR.Applet(s"${wfName}_${Utils.OUTPUT_SECTION}",
+                               inputVars.map(_.cVar),
+                               outputVars,
+                               calcInstanceType(None),
+                               IR.DockerImageNone,
+                               IR.AppletKindTask(taskDefinition),
+                               wdlCode)
+
+        // define the extra stage we add to the workflow
+        val stage = Stage(Utils.OUTPUT_SECTION, genStageId(), applet.name,
+                          inputVars.map(_.sArg), outputVars)
+
+        // Link the output definitions to the stage execution
+        // at runtime.
+        val outputVarsFull = outputVars.map{ cVar =>
+            (cVar, SArgLink(stage.stageName, cVar))
+        }
+        (applet, stage, outputVarsFull)
     }
 
     // Compile a (single) WDL workflow into a single dx:workflow.
@@ -621,15 +653,23 @@ case class GenerateIR(callables: Map[String, IR.Callable],
         val (allStageInfo, env) = compileWorkflowLocked(wf, wfSourceStandAlone, wfInputs, subBlocks)
         val (stages, auxApplets) = allStageInfo.unzip
 
-        if (outputNodes.forall(isSimpleOutput)) {
-            // All the outputs are constants or variables, we can output them directly
-            val wfOutputs = outputNodes.map(node => buildSimpleWorkflowOutput(node, env)).toVector
-            val irwf = IR.Workflow(wf.name, wfInputs, wfOutputs, stages, locked, wfKind)
+        // Handle outputs that are constants or variables, we can output them directly
+        val simpleOutputNodes = outputNodes.filter(isSimpleOutput)
+        val simpleWfOutputs = simpleOutputNodes.map(node => buildSimpleWorkflowOutput(node, env)).toVector
+        if (simpleWfOutputs.size == outputNodes.size) {
+            val irwf = IR.Workflow(wf.name, wfInputs, simpleWfOutputs, stages, locked, wfKind)
             (irwf, auxApplets.flatten)
         } else {
             // Some of the outputs are expressions. We need an extra applet+stage
             // to evaluate them.
-            val (outputEvalApplet, outputEvalStage, wfOutputs) = buildOutputEvaluationStage(outputNodes, env)
+            val exprOutputNodes: Vector[ExpressionBasedGraphOutputNode] =
+                outputNodes.flatMap{ node =>
+                    if (isSimpleOutput(node)) None
+                    else Some(node.asInstanceOf[ExpressionBasedGraphOutputNode])
+                }
+            val (outputEvalApplet, outputEvalStage, exprWfOutputs) =
+                buildOutputEvaluationStage(exprOutputNodes, env)
+            val wfOutputs = simpleWfOutputs ++ exprWfOutputs
             val irwf = IR.Workflow(wf.name, wfInputs, wfOutputs, stages :+ outputEvalStage, locked, wfKind)
             (irwf, auxApplets.flatten :+ outputEvalApplet)
         }

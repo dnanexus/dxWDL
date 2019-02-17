@@ -504,4 +504,13 @@ object Block {
             fqn -> womType
         }.toMap
     }
+
+    // Figure out what variables from the environment we need to pass
+    // into the applet. In other words, the closure.
+    def closure(outputNodes : Vector[ExpressionBasedGraphOutputNode]) : Set[String] = {
+        outputNodes.foldLeft(Set.empty[String]) {
+            case (accu, expr : ExpressionBasedGraphOutputNode) =>
+                acc ++ expr.inputPorts.map(_.name)
+        }
+    }
 }

@@ -1,8 +1,8 @@
 version 1.0
 
-workflow task_eval_workflow_outputs {
+task task_eval_workflow_outputs {
     input {
-        Int a
+        Int a = 1
     }
     command {}
     output {
