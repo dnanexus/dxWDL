@@ -560,41 +560,28 @@ case class GenerateIR(callables: Map[String, IR.Callable],
         }
     }
 
-    // Does this output require evaluation? If so, we will need to create
-    // another applet for this.
-    private def isSimpleOutput(outputNode: GraphOutputNode) : Boolean = {
-        outputNode match {
-            case PortBasedGraphOutputNode(id, womType, sourcePort) =>
-                true
-            case expr :ExpressionBasedGraphOutputNode if (Block.isTrivialExpression(expr.womExpression)) =>
-                true
-            case expr :ExpressionBasedGraphOutputNode =>
-                // An expression that requires evaluation
-                false
-            case other =>
-                throw new Exception(s"unhandled output class ${other}")
-        }
-    }
-
     // Some of the workflow outputs are expressions. We need an extra applet+stage
     // to evaluate them.
-    private def buildOutputEvaluationStage(outputNodes : Vector[ExpressionBasedGraphOutputNode],
+    private def buildOutputEvaluationStage(wfName: String,
+                                           outputNodes : Vector[ExpressionBasedGraphOutputNode],
                                            env: CallEnv)
             : (IR.Applet, IR.Stage, Vector[(CVar, SArg)]) = {
         // Figure out what variables from the environment we need to pass
         // into the applet.
-        val closure = Block.closure(outputNodes)
+        val closure = Block.outputClosure(outputNodes)
         val inputVars : Vector[LinkedVar] = closure.map{ name =>
-            env.find{ case (key,_) => key == name } match {
+            val lVar = env.find{ case (key,_) => key == name } match {
                 case None => throw new Exception(s"could not find variable ${name} in the environment")
-                case Some(lVar) => lVar
+                case Some((_,lVar)) => lVar
             }
-        }
+            lVar
+        }.toVector
         val outputVars: Vector[CVar] = outputNodes.map { expr =>
             CVar(expr.graphOutputPort.name, expr.womType, None)
         }
+        val wdlCodeGen = new WdlCodeGen(verbose)
         val (taskDefinition, WdlCodeSnippet(wdlCode)) =
-            WdlCodeGen.taskEvalWorkflowOutputs(outputNodes)
+            wdlCodeGen.taskEvalWorkflowOutputs(outputNodes)
         val applet = IR.Applet(s"${wfName}_${Utils.OUTPUT_SECTION}",
                                inputVars.map(_.cVar),
                                outputVars,
@@ -604,13 +591,13 @@ case class GenerateIR(callables: Map[String, IR.Callable],
                                wdlCode)
 
         // define the extra stage we add to the workflow
-        val stage = Stage(Utils.OUTPUT_SECTION, genStageId(), applet.name,
-                          inputVars.map(_.sArg), outputVars)
+        val stage = IR.Stage(Utils.OUTPUT_SECTION, genStageId(), applet.name,
+                             inputVars.map(_.sArg), outputVars)
 
         // Link the output definitions to the stage execution
         // at runtime.
         val outputVarsFull = outputVars.map{ cVar =>
-            (cVar, SArgLink(stage.stageName, cVar))
+            (cVar, IR.SArgLink(stage.stageName, cVar))
         }
         (applet, stage, outputVarsFull)
     }
@@ -654,7 +641,7 @@ case class GenerateIR(callables: Map[String, IR.Callable],
         val (stages, auxApplets) = allStageInfo.unzip
 
         // Handle outputs that are constants or variables, we can output them directly
-        val simpleOutputNodes = outputNodes.filter(isSimpleOutput)
+        val simpleOutputNodes = outputNodes.filter(Block.isSimpleOutput)
         val simpleWfOutputs = simpleOutputNodes.map(node => buildSimpleWorkflowOutput(node, env)).toVector
         if (simpleWfOutputs.size == outputNodes.size) {
             val irwf = IR.Workflow(wf.name, wfInputs, simpleWfOutputs, stages, locked, wfKind)
@@ -664,11 +651,11 @@ case class GenerateIR(callables: Map[String, IR.Callable],
             // to evaluate them.
             val exprOutputNodes: Vector[ExpressionBasedGraphOutputNode] =
                 outputNodes.flatMap{ node =>
-                    if (isSimpleOutput(node)) None
+                    if (Block.isSimpleOutput(node)) None
                     else Some(node.asInstanceOf[ExpressionBasedGraphOutputNode])
                 }
             val (outputEvalApplet, outputEvalStage, exprWfOutputs) =
-                buildOutputEvaluationStage(exprOutputNodes, env)
+                buildOutputEvaluationStage(wf.name, exprOutputNodes, env)
             val wfOutputs = simpleWfOutputs ++ exprWfOutputs
             val irwf = IR.Workflow(wf.name, wfInputs, wfOutputs, stages :+ outputEvalStage, locked, wfKind)
             (irwf, auxApplets.flatten :+ outputEvalApplet)

@@ -505,12 +505,28 @@ object Block {
         }.toMap
     }
 
+    // Does this output require evaluation? If so, we will need to create
+    // another applet for this.
+    def isSimpleOutput(outputNode: GraphOutputNode) : Boolean = {
+        outputNode match {
+            case PortBasedGraphOutputNode(id, womType, sourcePort) =>
+                true
+            case expr :ExpressionBasedGraphOutputNode if (Block.isTrivialExpression(expr.womExpression)) =>
+                true
+            case expr :ExpressionBasedGraphOutputNode =>
+                // An expression that requires evaluation
+                false
+            case other =>
+                throw new Exception(s"unhandled output class ${other}")
+        }
+    }
+
     // Figure out what variables from the environment we need to pass
     // into the applet. In other words, the closure.
-    def closure(outputNodes : Vector[ExpressionBasedGraphOutputNode]) : Set[String] = {
+    def outputClosure(outputNodes : Vector[ExpressionBasedGraphOutputNode]) : Set[String] = {
         outputNodes.foldLeft(Set.empty[String]) {
             case (accu, expr : ExpressionBasedGraphOutputNode) =>
-                acc ++ expr.inputPorts.map(_.name)
+                accu ++ expr.inputPorts.map(_.name)
         }
     }
 }

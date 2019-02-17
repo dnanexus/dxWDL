@@ -3,6 +3,7 @@ package dxWDL.util
 import java.nio.file.{Path, Paths}
 import org.scalatest.{FlatSpec, Matchers}
 import wom.callable.{WorkflowDefinition}
+import wom.graph._
 import wom.types._
 
 class BlockTest extends FlatSpec with Matchers {
@@ -89,5 +90,19 @@ class BlockTest extends FlatSpec with Matchers {
 
         Block.closure(subBlocks(0)) should be(Set("num"))
         Block.closure(subBlocks(1)) should be(Set.empty)
+    }
+
+    it should "calculate closure for a workflow with expression outputs" in {
+        val path = pathFromBasename("compiler", "wf_with_output_expressions.wdl")
+        val wfSourceCode = Utils.readFileContent(path)
+        val wf : WorkflowDefinition = ParseWomSourceFile.parseWdlWorkflow(wfSourceCode)
+
+        val outputNodes = wf.innerGraph.outputNodes
+        val exprOutputNodes: Vector[ExpressionBasedGraphOutputNode] =
+            outputNodes.flatMap{ node =>
+                if (Block.isSimpleOutput(node)) None
+                else Some(node.asInstanceOf[ExpressionBasedGraphOutputNode])
+            }.toVector
+        Block.outputClosure(exprOutputNodes) should be (Set("a", "b"))
     }
 }
