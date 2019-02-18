@@ -1,7 +1,6 @@
 package dxWDL.compiler
 
 import scala.util.matching.Regex
-import wom.callable.{CallableTaskDefinition}
 import wom.graph._
 import wom.types._
 import wom.values._
@@ -170,6 +169,15 @@ task Add {
         cleanLines.mkString("\n")
     }
 
+        // A self contained WDL workflow
+    def versionString(language: Language.Value) : String = {
+        language match {
+            case Language.WDLvDraft2 => ""
+            case Language.WDLv1_0 => "version 1.0"
+            case other =>
+                throw new Exception(s"Unsupported language version ${other}")
+        }
+    }
 
     // A workflow must have definitions for all the tasks it
     // calls. However, a scatter calls tasks, that are missing from
@@ -193,15 +201,8 @@ task Add {
             }
         val tasks = taskStubs.map{case (name, wdlCode) => wdlCode.value}.mkString("\n\n")
 
-        // A self contained WDL workflow
-        val versionString = language match {
-            case Language.WDLvDraft2 => ""
-            case Language.WDLv1_0 => "version 1.0"
-            case other =>
-                throw new Exception(s"Unsupported language version ${other}")
-        }
         val wfWithoutImportCalls = flattenWorkflow(originalWorkflowSource)
-        val wdlWfSource = s"""|${versionString}
+        val wdlWfSource = s"""|${versionString(language)}
                               |
                               |${tasks}
                               |
@@ -215,6 +216,28 @@ task Add {
         WdlCodeSnippet(wdlWfSource)
     }
 
-    def taskEvalWorkflowOutputs(outputNodes : Vector[GraphOutputNode]) :
-            (CallableTaskDefinition, WdlCodeSnippet) = ???
+    def taskEvalWorkflowOutputs(taskName: String,
+                                inputVars: Vector[IR.CVar],
+                                outputNodes : Vector[ExpressionBasedGraphOutputNode],
+                                language: Language.Value) : WdlCodeSnippet = {
+        val inputs: Vector[String] = inputVars.map { cVar =>
+            s"    ${cVar.womType.toDisplayString} ${cVar.name}"
+        }
+        val outputs: Vector[String] = outputNodes.map { node =>
+            val name = node.identifier.localName.value
+            s"    ${node.womType.toDisplayString} ${name} = ${node.womExpression.sourceString}"
+        }
+        val wdlTaskCode = s"""|${versionString(language)}
+                              |
+                              |task ${taskName} {
+                              |  input {
+                              |    ${inputs.mkString("\n")}
+                              |  }
+                              |  command{}
+                              |  output {
+                              |    ${outputs.mkString("\n")}
+                              |  }
+                              |}""".stripMargin
+        WdlCodeSnippet(wdlTaskCode)
+    }
 }

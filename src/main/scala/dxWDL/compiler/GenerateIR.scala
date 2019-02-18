@@ -579,10 +579,14 @@ case class GenerateIR(callables: Map[String, IR.Callable],
         val outputVars: Vector[CVar] = outputNodes.map { expr =>
             CVar(expr.graphOutputPort.name, expr.womType, None)
         }
-        val wdlCodeGen = new WdlCodeGen(verbose)
-        val (taskDefinition, WdlCodeSnippet(wdlCode)) =
-            wdlCodeGen.taskEvalWorkflowOutputs(outputNodes)
-        val applet = IR.Applet(s"${wfName}_${Utils.OUTPUT_SECTION}",
+        val appletName = s"${wfName}_${Utils.OUTPUT_SECTION}"
+        val WdlCodeSnippet(wdlCode) =
+            WdlCodeGen(verbose).taskEvalWorkflowOutputs(appletName,
+                                                        inputVars.map(_.cVar),
+                                                        outputNodes,
+                                                        language)
+        val taskDefinition = ParseWomSourceFile.parseWdlTask(wdlCode)
+        val applet = IR.Applet(appletName,
                                inputVars.map(_.cVar),
                                outputVars,
                                calcInstanceType(None),
@@ -623,8 +627,6 @@ case class GenerateIR(callables: Map[String, IR.Callable],
         // Create a stage per call/scatter-block/declaration-block
         val (inputNodes, subBlocks, outputNodes) = Block.split(graph, wfSource)
 
-        val wdlCodeGen = new WdlCodeGen(verbose)
-
         // Make a list of all task/workflow calls made inside the block. We will need to link
         // to the equivalent dx:applets and dx:workflows.
         val callablesUsedInWorkflow : Vector[IR.Callable] =
@@ -632,6 +634,7 @@ case class GenerateIR(callables: Map[String, IR.Callable],
                 case cNode : CallNode =>
                     callables(cNode.callable.name)
             }.toVector
+        val wdlCodeGen = new WdlCodeGen(verbose)
         val wfSourceStandAlone = wdlCodeGen.standAloneWorkflow(wfSource, callablesUsedInWorkflow, language)
 
         // compile into dx:workflow inputs
