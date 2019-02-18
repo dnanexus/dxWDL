@@ -205,7 +205,7 @@ def build_test(tname, project, folder, version_id, compiler_flags):
     cmdline += compiler_flags
     print(" ".join(cmdline))
     oid = subprocess.check_output(cmdline).strip()
-    return oid.encode("ascii")
+    return oid.decode("ascii")
 
 def ensure_dir(path):
     print("making sure that {} exists".format(path))
