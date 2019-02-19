@@ -2,6 +2,7 @@
   */
 package dxWDL.compiler
 
+import com.dnanexus.{DXFile, DXDataObject, DXRecord}
 import dxWDL._
 import dxWDL.Utils
 import IR.{CVar, LinkedVar, SArg}
@@ -325,8 +326,17 @@ task Add {
                 wdlConst match {
                     case WomString(url) if url.startsWith(Utils.DX_URL_PREFIX) =>
                         // A constant image specified with a DX URL
-                        val dxRecord = DxPath.lookupDxURLRecord(url)
-                        IR.DockerImageDxAsset(dxRecord)
+                        val dxobj: DXDataObject = DxPath.lookupDxURL(url)
+                        dxobj match {
+                            case _ : DXRecord =>
+                                val dxRecord = dxobj.asInstanceOf[DXRecord]
+                                IR.DockerImageDxAsset(dxRecord)
+                            case _ : DXFile =>
+                                val dxfile = dxobj.asInstanceOf[DXFile]
+                                IR.DockerImageDxFile(dxfile)
+                            case _ =>
+                                throw new Exception(s"Found dx:object for docker image that is of the wrong type ${dxobj}")
+                        }
                     case _ =>
                         // Probably a public docker image
                         IR.DockerImageNetwork
@@ -343,6 +353,8 @@ task Add {
         val taskCleaned = docker match {
             case IR.DockerImageDxAsset(dxRecord) =>
                 WdlRewrite.taskReplaceDockerValue(task, dxRecord)
+            case IR.DockerImageDxFile(dxFile) =>
+                WdlRewrite.taskReplaceDockerValue(task, dxFile)
             case _ => task
         }
         val applet = IR.Applet(task.name,

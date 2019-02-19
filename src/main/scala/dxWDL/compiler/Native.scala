@@ -186,7 +186,7 @@ case class Native(dxWDLrtId: String,
 
     private def dockerPreamble(dockerImage: IR.DockerImage) : String = {
         val dockerCmd = dockerImage match {
-            case IR.DockerImageNetwork if cOpt.nativeDocker => "docker"
+            case _ if cOpt.nativeDocker => "docker"
             case IR.DockerImageNetwork if dockerRegistryInfo != None => "docker"
             case _ => "dx-docker"
         }
@@ -511,7 +511,7 @@ case class Native(dxWDLrtId: String,
     // Set the run spec.
     //
     private def calcRunSpec(applet: IR.Applet,
-                            bashScript: String) : JsValue = {
+                            bashScript: String) : (JsValue, JsValue) = {
         // find the dxWDL asset
         val instanceType:String = applet.instanceType match {
             case x : IR.InstanceTypeConst =>
@@ -557,11 +557,11 @@ case class Native(dxWDLrtId: String,
             }
         val runSpecWithExtras = runSpec ++ extraRunSpec ++ taskSpecificRunSpec
 
-        // If the docker image is a platform asset,
-        // add it to the asset-depends.
-        val dockerAssets: Option[JsValue] = applet.docker match {
-            case IR.DockerImageNone => None
-            case IR.DockerImageNetwork => None
+        // - If the docker image is a platform asset, add it to the asset-depends.
+        // - If the docker image is a tarball, add a link in the details field.
+        val (dockerAsset: Option[JsValue], dockerFile: Option[DXFile]) = applet.docker match {
+            case IR.DockerImageNone => (None, None)
+            case IR.DockerImageNetwork => (None, None)
             case IR.DockerImageDxAsset(dxRecord) =>
                 val desc = dxRecord.describe(DXDataObject.DescribeOptions.get.withDetails)
 
@@ -581,15 +581,27 @@ case class Native(dxWDLrtId: String,
                     throw new Exception(s"remote asset is in container ${rmtContainer.getId}, not a project")
                 val rmtProject = rmtContainer.asInstanceOf[DXProject]
                 Utils.cloneAsset(dxRecord, dxProject, pkgName, rmtProject, verbose)
-                Some(JsObject("name" -> JsString(pkgName),
-                              "id" -> jsValueOfJsonNode(pkgFile.getLinkAsJson)))
+                val asset = JsObject("name" -> JsString(pkgName),
+                                     "id" -> jsValueOfJsonNode(pkgFile.getLinkAsJson))
+                (Some(asset), None)
+
+            case IR.DockerImageDxFile(dxfile) =>
+                // A docker image stored as a tar ball in a platform file
+                (None, Some(dxfile))
         }
-        val bundledDepends = dockerAssets match {
+        val bundledDepends = dockerAsset match {
             case None => Vector(runtimeLibrary)
             case Some(img) => Vector(runtimeLibrary, img)
         }
-        JsObject(runSpecWithExtras +
-                     ("bundledDepends" -> JsArray(bundledDepends)))
+        val runSpecEverything = JsObject(runSpecWithExtras +
+                                   ("bundledDepends" -> JsArray(bundledDepends)))
+        val details = dockerFile match {
+            case None => JsNull
+            case Some(dxfile) =>
+                JsObject("details" ->
+                             JsObject("docker-image" -> Utils.dxFileToJsValue(dxfile)))
+        }
+        (runSpecEverything, details)
     }
 
     def calcAccess(applet: IR.Applet) : JsValue = {
@@ -652,11 +664,11 @@ case class Native(dxWDLrtId: String,
         val outputSpec : Vector[JsValue] = applet.outputs.map(cVar =>
             cVarToSpec(cVar)
         ).flatten.toVector
-        val runSpec : JsValue = calcRunSpec(applet, bashScript)
+        val (runSpec : JsValue, details: JsValue) = calcRunSpec(applet, bashScript)
         val access : JsValue = calcAccess(applet)
 
         // pack all the core arguments into a single request
-        val reqCore = Map(
+        var reqCore = Map(
             "name" -> JsString(applet.name),
             "inputSpec" -> JsArray(inputSpec),
             "outputSpec" -> JsArray(outputSpec),
@@ -664,14 +676,13 @@ case class Native(dxWDLrtId: String,
             "dxapi" -> JsString("1.0.0"),
             "tags" -> JsArray(JsString("dxWDL"))
         )
-        val reqWithAccess =
-            if (access == JsNull)
-                JsObject(reqCore)
-            else
-                JsObject(reqCore ++ Map("access" -> access))
+        if (details != JsNull)
+            reqCore += ("details" -> details)
+        if (access != JsNull)
+            reqCore += ("access" -> access)
 
         // Add a checksum
-        val (digest, req) = checksumReq(reqWithAccess)
+        val (digest, req) = checksumReq(JsObject(reqCore))
 
         // Add properties we do not want to fall under the checksum.
         // This allows, for example, moving the dx:executable, while

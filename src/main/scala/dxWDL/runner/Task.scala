@@ -18,11 +18,11 @@ task Add {
 
 package dxWDL.runner
 
-import com.dnanexus.{DXAPI, DXJob}
+import com.dnanexus.{DXAPI, DXJob, DXRecord, DXFile}
 import com.fasterxml.jackson.databind.JsonNode
 import common.validation.Validation._
 import dxWDL._
-import java.nio.file.{Path}
+import java.nio.file.{Path, Paths}
 import spray.json._
 import wdl.draft2.model.{Declaration, DeclarationInterface, WdlExpression, WdlTask}
 import wdl.draft2.model.types.WdlFlavoredWomType
@@ -342,19 +342,92 @@ case class Task(task:WdlTask,
         }
     }
 
+
+    // Read the manifest file from a docker tarball, and get the repository name.
+    //
+    // A manifest could look like this:
+    // [
+    //    {"Config":"4b778ee055da936b387080ba034c05a8fad46d8e50ee24f27dcd0d5166c56819.json",
+    //     "RepoTags":["ubuntu_18_04_minimal:latest"],
+    //     "Layers":[
+    //          "1053541ae4c67d0daa87babb7fe26bf2f5a3b29d03f4af94e9c3cb96128116f5/layer.tar",
+    //          "fb1542f1963e61a22f9416077bf5f999753cbf363234bf8c9c5c1992d9a0b97d/layer.tar",
+    //          "2652f5844803bcf8615bec64abd20959c023d34644104245b905bb9b08667c8d/layer.tar",
+    //          ]}
+    // ]
+    def readManifestGetDockerImageName(buf: String) : String = {
+        val jso = buf.parseJson
+        val elem = jso match {
+            case JsArray(elements) if elements.size >= 1 => elements.head
+            case other => throw new Exception(s"bad value ${other} for manifest, expecting non empty array")
+        }
+        val repo: String = elem.asJsObject.fields.get("RepoTags") match {
+            case None =>
+                throw new Exception("The repository is not specified for the image")
+            case Some(JsString(repo)) =>
+                repo
+            case Some(JsArray(elements)) =>
+                if (elements.isEmpty)
+                    throw new Exception("RepoTags has an empty array")
+                elements.head match {
+                    case JsString(repo) => repo
+                    case other => throw new Exception(s"bad value ${other} in RepoTags manifest field")
+                }
+            case other =>
+                throw new Exception(s"bad value ${other} in RepoTags manifest field")
+        }
+        repo
+    }
+
     private def dockerImage(env: Map[String, WomValue]) : Option[String] = {
         val dImg = dockerImageEval(env)
         dImg match {
             case Some(url) if url.startsWith(Utils.DX_URL_PREFIX) =>
-                // This is a record on the platform, created with
-                // dx-docker. Describe it with an API call, and get
-                // the docker image name.
                 Utils.appletLog(verbose, s"looking up dx:url ${url}")
-                val dxRecord = DxPath.lookupDxURLRecord(url)
-                Utils.appletLog(verbose, s"Found record ${dxRecord}")
-                val imageName = dxRecord.describe().getName
-                Utils.appletLog(verbose, s"Image name is ${imageName}")
-                Some(imageName)
+                val dxobj = DxPath.lookupDxURL(url)
+                dxobj match {
+                    case dxRecord : DXRecord =>
+                        // This is a record on the platform, created with
+                        // dx-docker. Describe it with an API call, and get
+                        // the docker image name.
+                        Utils.appletLog(verbose, s"Found record ${dxRecord}")
+                        val imageName = dxRecord.describe().getName
+                        Utils.appletLog(verbose, s"Image name is ${imageName}")
+                        Some(imageName)
+
+                    case dxFile : DXFile =>
+                        // a tarball created with "docker save".
+                        // 1. download it
+                        // 2. open the tar archive
+                        // 2. load into the local docker cache
+                        // 3. figure out the image name
+                        val fileName = dxFile.describe().getName
+                        val tarballDir = Paths.get(Utils.DOCKER_TARBALLS_DIR)
+                        Utils.safeMkdir(tarballDir)
+                        val localTar : Path = tarballDir.resolve(fileName)
+
+                        System.err.println(s"downloading docker tarball to ${localTar}")
+                        Utils.downloadFile(localTar, dxFile)
+
+                        System.err.println("figuring out the image name")
+                        val (mContent, _) = Utils.execCommand(s"tar --to-stdout -xf ${localTar} manifest.json")
+                        Utils.appletLog(verbose, s"""|manifest content:
+                                                     |${mContent}
+                                                     |""".stripMargin)
+                        val repo = readManifestGetDockerImageName(mContent)
+                        System.err.println(s"repository is ${repo}")
+
+                        Utils.appletLog(true, s"load tarball ${localTar} to docker")
+                        val (outstr,errstr) = Utils.execCommand(s"docker load --input ${localTar}")
+                        Utils.appletLog(verbose, s"""|output:
+                                                     |${outstr}
+                                                     |stderr:
+                                                     |${errstr}""".stripMargin)
+                        Some(repo)
+
+                    case other =>
+                        throw new Exception(s"unhandled DNAx object representing docker image ${other}")
+                }
             case _ => dImg
         }
     }
@@ -515,7 +588,6 @@ case class Task(task:WdlTask,
         val env: Map[String, WomValue] =
             evalDeclarations(task.declarations, envInput)
                 .map{ case (decl, v) => decl.unqualifiedName -> v}.toMap
-        val docker = dockerImage(env)
 
         // deal with files that need streaming
         if (bashSnippetVec.size > 0) {
@@ -530,6 +602,8 @@ case class Task(task:WdlTask,
 
         // Write shell script to a file. It will be executed by the dx-applet code
         writeBashScript(env)
+
+        val docker = dockerImage(env)
         docker match {
             case Some(img) =>
                 // write a script that launches the actual command inside a docker image.

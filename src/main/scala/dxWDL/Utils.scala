@@ -51,6 +51,7 @@ object Utils {
     val DECOMPOSE_MAX_NUM_RENAME_TRIES = 100
     val DISAMBIGUATION_DIRS_MAX_NUM = 10
     val DOWNLOAD_RETRY_LIMIT = 3
+    val DOCKER_TARBALLS_DIR = "/tmp/docker-tarballs"
     val DX_FUNCTIONS_FILES = "dx_functions_files.json"
     val DX_HOME = "/home/dnanexus"
     val DX_URL_PREFIX = "dx://"
@@ -495,7 +496,7 @@ object Utils {
     }
 
     // Run a child process and collect stdout and stderr into strings
-    def execCommand(cmdLine : String, timeout: Option[Int]) : (String, String) = {
+    def execCommand(cmdLine : String, timeout: Option[Int] = None) : (String, String) = {
         val cmds = Seq("/bin/sh", "-c", cmdLine)
         val outStream = new StringBuilder()
         val errStream = new StringBuilder()

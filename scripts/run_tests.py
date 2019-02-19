@@ -68,6 +68,7 @@ medium_test_list = [
     "platform_asset",
     "broad_genomics",
     "private_registry",
+    "native_docker_file_image",
 
     # Setting defaults for tasks, not just workflows
     "population",
@@ -109,7 +110,7 @@ test_unlocked=["cast",
                "optionals",
                "strings",
                "toplevel_calls"]
-test_native_docker=["broad_genomics"]
+test_native_docker=["broad_genomics", "native_docker_file_image"]
 test_extras=["instance_types"]
 test_private_registry=["private_registry"]
 
