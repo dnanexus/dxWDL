@@ -118,7 +118,7 @@ object DxPath {
 
 
     // strip the prefix, and the optional suffix
-    private def lookupDxURL(buf: String) : DXDataObject = {
+    def lookupDxURL(buf: String) : DXDataObject = {
         assert(buf.startsWith(DX_URL_PREFIX))
         val s = buf.substring(DX_URL_PREFIX.length)
         val index = s.lastIndexOf("::")

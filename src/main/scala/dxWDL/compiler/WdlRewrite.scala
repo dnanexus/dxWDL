@@ -10,7 +10,7 @@
 package dxWDL.compiler
 
 import dxWDL.Utils
-import com.dnanexus.{DXRecord}
+import com.dnanexus.{DXDataObject}
 import wdl.draft2.model._
 import wdl.draft2.model.AstTools
 import wdl.draft2.model.AstTools._
@@ -108,9 +108,9 @@ object WdlRewrite {
     // runtime search. For example:
     //
     //   dx://dxWDL_playground:/glnexus_internal  ->   dx://record-xxxx
-    def taskReplaceDockerValue(task:WdlTask, dxRecord:DXRecord) : WdlTask = {
+    def taskReplaceDockerValue(task:WdlTask, dxObj:DXDataObject) : WdlTask = {
         val attrs:Map[String, WdlExpression] = task.runtimeAttributes.attrs
-        val dxid = dxRecord.getId()
+        val dxid = dxObj.getId()
         val url:String = s""" "${Utils.DX_URL_PREFIX}${dxid}" """
         val urlExpr:WdlExpression = WdlExpression.fromString(url)
         val cleaned = attrs + ("docker" -> urlExpr)

@@ -8,7 +8,7 @@
 // We use YAML as a human readable representation of the IR.
 package dxWDL.compiler
 
-import com.dnanexus.DXRecord
+import com.dnanexus.{DXFile, DXRecord}
 import dxWDL.{DeclAttrs, Utils, WdlPrettyPrinter}
 import net.jcazevedo.moultingyaml._
 import spray.json._
@@ -62,11 +62,13 @@ object IR {
     //  None:    no image
     //  Network: the image resides on a network site and requires download
     //  DxAsset: the image is a platform asset
-    //
+    //  DxFile:  image is a tarball created with "docker save". It is
+    //           stored as a file.
     sealed trait DockerImage
     case object DockerImageNone extends DockerImage
     case object DockerImageNetwork extends DockerImage
     case class DockerImageDxAsset(asset: DXRecord) extends DockerImage
+    case class DockerImageDxFile(tarball: DXFile) extends DockerImage
 
     // A unified type representing a WDL workflow or a WDL applet.
     // This is useful when compiling WDL workflows, because they can
@@ -231,6 +233,9 @@ object IR {
                     case DockerImageDxAsset(dxAsset) =>
                         val assetJs = Utils.jsValueOfJsonNode(dxAsset.getLinkAsJson)
                         YamlObject(YamlString("asset") -> YamlString(assetJs.prettyPrint))
+                    case DockerImageDxFile(dxAsset) =>
+                        val assetJs = Utils.jsValueOfJsonNode(dxAsset.getLinkAsJson)
+                        YamlObject(YamlString("file") -> YamlString(assetJs.prettyPrint))
                 }
             def read(value: YamlValue) : DockerImage = value match {
                 case YamlString("None") => DockerImageNone

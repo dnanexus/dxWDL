@@ -471,12 +471,9 @@ For an in depth discussion, please see [Missing Call Arguments](MissingCallArgum
 
 # Docker
 
-Standard docker images sometimes run into permissions problems executing
-on the platform, due to enhanced security, and strict
-Linux capability policies. Therefore, by default,
-[dx-docker](https://wiki.dnanexus.com/Developer-Tutorials/Using-Docker-Images)
-is used to run them instead. To use standard docker, add the command
-line flag `--nativeDocker`.
+As of release 0.80, we moved to using docker, instead of
+[dx-docker](https://wiki.dnanexus.com/Developer-Tutorials/Using-Docker-Images). `dx-docker`
+is deprecated, although you can still use it with the `--useDxDocker` command line flag.
 
 ## Setting a default docker image for all tasks
 
@@ -497,7 +494,7 @@ tasks by default.
 $ java -jar dxWDL-0.44.jar compile files.wdl -project project-xxxx -defaults files_input.json -extras taskAttrs.json
 ```
 
-## Native docker and private registries
+## Private registries
 
 If your images are stored in a private registry, add its information
 to the extras file, so that tasks will be able to pull images from it.
@@ -520,24 +517,25 @@ configuration sets it to use native docker, and all applets are given
 the `allProjects: VIEW` permission. This allows them to access the
 credentials file, even if it is stored on a different project.
 
-## Storing a docker image as an asset
+## Storing a docker image as a file
 
 Normally, [docker](https://www.docker.com/) images are public, and
 stored in publicly available web sites. This enables reproducibility
 across different tools and environments. However, if you have a
 docker image that you wish to store on the platform,
-[dx-docker create-asset](https://wiki.dnanexus.com/Developer-Tutorials/Using-Docker-Images)
-can be used. In order to use this asset, you can specify the
-docker attribute in the runtime section as:
-`dx://project-id:/image-name`.
-
-For example:
+you can do `docker save`, followed by uploading the tar ball to platform file `file-xxxx`.
+Then, specify the docker attribute in the runtime section as
+`dx://file-xxxx`. Paths or file ids can be used, for example:
 ```
 runtime {
    docker: "dx://GenomeSequenceProject:/A/B/myOrgTools"
 }
 
 runtime {
-   docker: "dx://project-xxxx:record-yyyy"
+   docker: "dx://file-xxxx"
+}
+
+runtime {
+   docker: "dx://project-xxxx:file-yyyy"
 }
 ```

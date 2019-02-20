@@ -19,7 +19,7 @@ workflow files {
 #    call IgnoreAll
 
     call write_lines_bug {
-        input: files = [f, f1, f2]
+        input: files = [f, f1]
     }
 
     # Try an applet that streams two files
