@@ -1,0 +1,6 @@
+{
+  "write_lines_bug.files" : [
+    "dx://dxWDL_playground:/test_data/fileB",
+    "dx://dxWDL_playground:/test_data/fileC"
+  ]
+}
