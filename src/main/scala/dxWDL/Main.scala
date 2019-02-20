@@ -134,7 +134,7 @@ object Main extends App {
                     case "locked" =>
                         checkNumberOfArguments(keyword, 0, subargs)
                         (keyword, "")
-                    case "nativeDocker" =>
+                    case "useDxDocker" =>
                         checkNumberOfArguments(keyword, 0, subargs)
                         (keyword, "")
                     case ("o"|"output"|"outputFile") =>
@@ -343,7 +343,7 @@ object Main extends App {
                         inputs,
                         options contains "leaveWorkflowsOpen",
                         options contains "locked",
-                        options contains "nativeDocker",
+                        options contains "useDxDocker",
                         options contains "projectWideReuse",
                         options contains "reorg",
                         runtimeDebugLevel,
@@ -643,7 +643,7 @@ object Main extends App {
             |                             This allows modifying the workflows after the compiler is done.
             |                             As a general rule, it is better to close workflows.
             |      -locked                Create a locked-down workflow
-            |      -nativeDocker          Use native docker instead of dx-docker
+            |      -useDxDocker           Use native docker instead of dx-docker
             |      -p | -imports <string> Directory to search for imported WDL files
             |      -projectWideReuse      Look for existing applets/workflows in the entire project
             |                             before generating new ones. The normal search scope is the

@@ -186,13 +186,14 @@ case class Native(dxWDLrtId: String,
 
     private def dockerPreamble(dockerImage: IR.DockerImage) : String = {
         val dockerCmd = dockerImage match {
-            case _ if cOpt.nativeDocker => "docker"
-            case IR.DockerImageNetwork if dockerRegistryInfo != None => "docker"
-            case _ => "dx-docker"
+            case _ if cOpt.useDxDocker => "dx-docker"
+            case _ => "docker"
         }
         val exportBashVars = dockerRegistryInfo match {
             case None => ""
             case Some(DockerRegistry(registry, username, credentials)) =>
+                if (cOpt.useDxDocker)
+                    error("Using a docker registry is incompatible with dx-docker")
                 // check that the credentials file is a valid platform path
                 try {
                     val dxFile = DxPath.lookupDxURLFile(credentials)
@@ -563,6 +564,11 @@ case class Native(dxWDLrtId: String,
             case IR.DockerImageNone => (None, None)
             case IR.DockerImageNetwork => (None, None)
             case IR.DockerImageDxAsset(dxRecord) =>
+                if (!cOpt.useDxDocker)
+                    error(s"""|Assets containing a docker image can be created only with dx-docker.
+                              |However, this workflow uses docker, which is incompatible with dx-docker.
+                              |""".stripMargin.replaceAll("\n", " "))
+
                 val desc = dxRecord.describe(DXDataObject.DescribeOptions.get.withDetails)
 
                 // extract the archiveFileId field

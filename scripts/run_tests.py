@@ -110,7 +110,7 @@ test_unlocked=["cast",
                "optionals",
                "strings",
                "toplevel_calls"]
-test_native_docker=["broad_genomics", "native_docker_file_image"]
+test_dx_docker=["platform_asset", "files"]
 test_extras=["instance_types"]
 test_private_registry=["private_registry"]
 
@@ -440,8 +440,8 @@ def compiler_per_test_flags(tname):
     else:
         flags.append("-inputs")
         flags.append(desc.wdl_input)
-    if tname in test_native_docker:
-        flags.append("-nativeDocker")
+    if tname in test_dx_docker:
+        flags.append("-useDxDocker")
     if tname in test_extras:
         flags += ["--extras", os.path.join(top_dir, "test/extras.json")]
     if tname in test_private_registry:
