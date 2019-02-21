@@ -542,10 +542,10 @@ runtime {
 
 # Proxy configurations
 
-Some organizations place a proxy between the internal machines and
+Some organizations place a proxy between internal machines and
 external hosts. This is done for security, auditing, and caching
 purposes. In this case, the compiler cannot contact the dnanexus API
-servers directly, it must route its requests through the proxy. Do
+servers, unless is routes its requests through the proxy. Do
 achieve this, set the environment variable `HTTP_PROXY` (or
 `HTTPS_PROXY`) to point to the proxy. For example, if you perform the
 following on the command line shell:
