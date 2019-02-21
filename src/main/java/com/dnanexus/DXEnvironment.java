@@ -95,6 +95,7 @@ public class DXEnvironment {
         private boolean disableRetry;
         private int socketTimeout;
         private int connectionTimeout;
+        private String httpProxy;
 
         /**
          * Initializes a Builder object using JSON config in the file
@@ -116,6 +117,7 @@ public class DXEnvironment {
             workspaceId = templateEnvironment.workspaceId;
             projectContextId = templateEnvironment.projectContextId;
             disableRetry = templateEnvironment.disableRetry;
+            httpProxy = templateEnvironment.httpProxy;
         }
 
         private Builder(File jsonConfigFile) {
@@ -128,6 +130,7 @@ public class DXEnvironment {
             workspaceId = null;
             projectContextId = null;
             disableRetry = false;
+            httpProxy = null;
 
             // (2) JSON file
             if (jsonConfigFile.exists()) {
@@ -164,6 +167,13 @@ public class DXEnvironment {
                     if (getIntValue(jsonConfig, "DX_CONNECTION_TIMEOUT") != 0) {
                         connectionTimeout = getIntValue(jsonConfig, "DX_CONNECTION_TIMEOUT");
                     }
+                    if (getTextValue(jsonConfig, "HTTP_PROXY") != null) {
+                        httpProxy = getTextValue(jsonConfig, "HTTP_PROXY");
+                    }
+                    if (getTextValue(jsonConfig, "HTTPS_PROXY") != null) {
+                        httpProxy = getTextValue(jsonConfig, "HTTPS_PROXY");
+                    }
+
                 } catch (IOException e) {
                     System.err.println("WARNING: JSON config file " + jsonConfigFile.getPath()
                             + " could not be parsed, skipping it");
@@ -201,6 +211,12 @@ public class DXEnvironment {
             if (sysEnv.containsKey("DX_CONNECTION_TIMEOUT")) {
                 connectionTimeout = Integer.valueOf(sysEnv.get("DX_CONNECTION_TIMEOUT"));
             }
+            if (sysEnv.containsKey("HTTP_PROXY")) {
+                httpProxy = sysEnv.get("HTTP_PROXY");
+            }
+            if (sysEnv.containsKey("HTTPS_PROXY")) {
+                httpProxy = sysEnv.get("HTTPS_PROXY");
+            }
 
             try {
                 if (securityContextTxt != null) {
@@ -222,7 +238,7 @@ public class DXEnvironment {
         public DXEnvironment build() {
             return new DXEnvironment(apiserverHost, apiserverPort, apiserverProtocol,
                                      securityContext, jobId, workspaceId, projectContextId, disableRetry,
-                                     socketTimeout, connectionTimeout);
+                                     socketTimeout, connectionTimeout, httpProxy);
         }
 
         /**
@@ -362,6 +378,18 @@ public class DXEnvironment {
             this.socketTimeout = socketTimeout;
             return this;
         }
+
+        /**
+         * Sets the HTTP proxy server
+         *
+         * @param httpProxy String
+         *
+         * @return the same Builder object
+         */
+        public Builder setHttpProxy(String httpProxy) {
+            this.httpProxy = httpProxy;
+            return this;
+        }
     }
 
     private final String apiserverHost;
@@ -374,6 +402,7 @@ public class DXEnvironment {
     private final boolean disableRetry;
     private int socketTimeout;
     private int connectionTimeout;
+    private final String httpProxy;
 
     private static final JsonFactory jsonFactory = new MappingJsonFactory();
     /**
@@ -396,7 +425,7 @@ public class DXEnvironment {
         }
         return value.asText();
     }
-    
+
     private static int getIntValue(JsonNode jsonNode, String key) {
         JsonNode value = jsonNode.get(key);
         if (value == null || value.isNull()) {
@@ -407,7 +436,7 @@ public class DXEnvironment {
 
     private DXEnvironment(String apiserverHost, String apiserverPort, String apiserverProtocol,
                           JsonNode securityContext, String jobId, String workspaceId, String projectContextId, boolean
-            disableRetry, int socketTimeout, int connectionTimeout) {
+                          disableRetry, int socketTimeout, int connectionTimeout, String httpProxy) {
         this.apiserverHost = apiserverHost;
         this.apiserverPort = apiserverPort;
         this.apiserverProtocol = apiserverProtocol;
@@ -418,6 +447,7 @@ public class DXEnvironment {
         this.disableRetry = disableRetry;
         this.socketTimeout = socketTimeout;
         this.connectionTimeout = connectionTimeout;
+        this.httpProxy = httpProxy;
 
         // TODO: additional validation on the project/workspace, and check that
         // apiserverProtocol is either "http" or "https".
@@ -509,6 +539,10 @@ public class DXEnvironment {
      */
     public int getSocketTimeout() {
         return this.socketTimeout;
+    }
+
+    public String getHttpProxy() {
+        return this.httpProxy;
     }
 
     /**

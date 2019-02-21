@@ -21,6 +21,7 @@ import java.nio.charset.Charset;
 
 import org.apache.http.Header;
 import org.apache.http.HttpEntity;
+import org.apache.http.HttpHost;
 import org.apache.http.HttpResponse;
 import org.apache.http.HttpStatus;
 import org.apache.http.client.HttpClient;
@@ -151,13 +152,25 @@ public class DXHTTPRequest {
         this.securityContext = env.getSecurityContextJson();
         this.apiserver = env.getApiserverPath();
         this.disableRetry = env.isRetryDisabled();
-        //These timeouts prevent stuck of requests
-        RequestConfig requestConfig = RequestConfig.custom().setConnectTimeout(env.getConnectionTimeout()).setSocketTimeout(env.getSocketTimeout()).build();
+
+        // These timeouts prevent requests getting stuck
+        RequestConfig.Builder reqBuilder = RequestConfig.custom()
+            .setConnectTimeout(env.getConnectionTimeout())
+            .setSocketTimeout(env.getSocketTimeout());
+
+        // Configure a proxy if requested
+        String proxy = env.getHttpProxy();
+        if (proxy != null) {
+            HttpHost proxyHost = HttpHost.create(proxy);
+            reqBuilder.setProxy(proxyHost);
+        }
+        RequestConfig requestConfig = reqBuilder.build();
+
         this.httpclient = HttpClientBuilder.create().setUserAgent(USER_AGENT).setDefaultRequestConfig(requestConfig).build();
     }
 
     /**
-     * Allows custom DXHTTPRequest to setup overridden httpClient 
+     * Allows custom DXHTTPRequest to setup overridden httpClient
      */
     protected HttpClient getHttpClient() {
         return this.httpclient;
