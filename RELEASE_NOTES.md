@@ -3,7 +3,7 @@
 
 ## 0.81
 
-- Proxy configuration. If your organization interposes a proxy between the internal machines and external hosts, you can set the environment variable `HTTP_PROXY` (or `HTTPS_PROXY`) to point to the proxy. The compiler will pass all of its dnanexus API calls through that proxy. For example, if you perform the following on the command line shell:
+- [Proxy configuration](./doc/ExpertOptions.md#Proxy-configurations). If your organization interposes a proxy between the internal machines and external hosts, you can set the environment variable `HTTP_PROXY` (or `HTTPS_PROXY`) to point to the proxy. The compiler will pass all of its dnanexus API calls through that proxy. For example, if you perform the following on the command line shell:
 
 ```bash
 $ export HTTP_PROXY = proxy.acme.com:8080
