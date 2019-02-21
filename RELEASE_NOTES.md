@@ -1,5 +1,10 @@
 # Release Notes
 
+
+## 0.81
+
+- Proxy support
+
 ## 0.80
 
 - Native docker is now the default. If you still want to use [dx-docker](https://wiki.dnanexus.com/Developer-Tutorials/Using-Docker-Images), the `-useDxDocker` flag is available. In order to store a docker image on the platform, you can do `docker save`, and upload the tarball to a file. More details are provided in the [export options](./doc/ExpertOptions.md#Docker).
