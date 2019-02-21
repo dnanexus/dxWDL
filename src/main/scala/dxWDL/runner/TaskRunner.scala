@@ -44,6 +44,17 @@ case class TaskRunner(task: CallableTaskDefinition,
     private val verbose = (runtimeDebugLevel >= 1)
     private val maxVerboseLevel = (runtimeDebugLevel == 2)
 
+    // check if the command section is empty
+    val commandSectionEmpty: Boolean = {
+        try {
+            val commandTemplate = task.commandTemplateString(Map.empty[InputDefinition, WomValue])
+            commandTemplate.trim.isEmpty
+        } catch {
+            case _: Throwable =>
+                false
+        }
+    }
+
     def getErrorOr[A](value: ErrorOr[A]) : A = {
         value match {
             case Valid(x) => x
@@ -76,8 +87,10 @@ case class TaskRunner(task: CallableTaskDefinition,
         val (locInputsM, dxUrlM) = json match {
             case JsObject(m) =>
                 (m.get("localizedInputs"), m.get("dxUrl2path")) match {
-                    case (Some(JsObject(env_m)), Some(JsObject(path_m))) => (env_m, path_m)
-                    case (_, _) => throw new Exception("Malformed environment serialized to disk")
+                    case (Some(JsObject(env_m)), Some(JsObject(path_m))) =>
+                        (env_m, path_m)
+                    case (_, _) =>
+                        throw new Exception("Malformed environment serialized to disk")
                 }
             case _ => throw new Exception("Malformed environment serialized to disk")
         }
@@ -153,19 +166,7 @@ case class TaskRunner(task: CallableTaskDefinition,
     // Write the core bash script into a file. In some cases, we
     // need to run some shell setup statements before and after this
     // script.
-    private def writeBashScript(inputEnv: Map[InputDefinition, WomValue],
-                                runtimeEnvironment: RuntimeEnvironment) : Unit = {
-        // instantiate the command
-        // TODO: [env] has to be of type:
-        //   type WomEvaluatedCallInputs = Map[InputDefinition, WomValue]
-        val womInstantiation = getErrorOr(task.instantiateCommand(inputEnv,
-                                                                  dxIoFunctions,
-                                                                  identity,
-                                                                  runtimeEnvironment))
-
-        //val command = womInstantiation.head.commandString
-        val command = womInstantiation.commandString
-
+    private def writeBashScript(command: String) : Unit = {
         // This is based on Cromwell code from
         // [BackgroundAsyncJobExecutionActor.scala].  Generate a bash
         // script that captures standard output, and standard
@@ -267,10 +268,22 @@ case class TaskRunner(task: CallableTaskDefinition,
         Utils.appletLog(verbose, taskSourceCode, 10000)
         Utils.appletLog(verbose, s"inputs: ${inputsDbg(taskInputs)}")
 
+        if (commandSectionEmpty) {
+            // The command section is empty, there is no need to setup docker,
+            // or download files.
+            val inputs = taskInputs.map{ case (inpDfn, value) =>
+                inpDfn.name -> value
+            }.toMap
+            // write an empty bash script
+            writeBashScript("")
+            return (inputs, Map.empty)
+        }
+
         // Download all input files.
         //
         // Note: this may be overly conservative,
         // because some of the files may not actually be accessed.
+
         val (localizedInputs, dxUrl2path) = jobInputOutput.localizeFiles(taskInputs,
                                                                          dxPathConfig.inputFilesDir)
         val inputs = localizedInputs.map{ case (inpDfn, value) =>
@@ -278,9 +291,16 @@ case class TaskRunner(task: CallableTaskDefinition,
         }.toMap
         val docker = dockerImage(inputs)
 
-        // Write shell script to a file. It will be executed by the dx-applet shell code.
+        // instantiate the command
         val runtimeEnvironment = getRuntimeEnvironment()
-        writeBashScript(localizedInputs, runtimeEnvironment)
+        val womInstantiation = getErrorOr(task.instantiateCommand(localizedInputs,
+                                                                  dxIoFunctions,
+                                                                  identity,
+                                                                  runtimeEnvironment))
+        val command = womInstantiation.commandString
+
+        // Write shell script to a file. It will be executed by the dx-applet shell code.
+        writeBashScript(command)
         docker match {
             case Some(img) =>
                 // write a script that launches the actual command inside a docker image.
@@ -293,7 +313,8 @@ case class TaskRunner(task: CallableTaskDefinition,
     }
 
     def epilog(localizedInputValues: Map[String, WomValue],
-               dxUrl2path: Map[Furl, Path]) : Map[String, JsValue] = {
+               dxUrl2path: Map[Furl, Path],
+               ) : Map[String, JsValue] = {
         Utils.appletLog(verbose, s"Epilog  debugLevel=${runtimeDebugLevel}")
         if (maxVerboseLevel)
             printDirStruct()
@@ -323,8 +344,15 @@ case class TaskRunner(task: CallableTaskDefinition,
                 outDef.name -> value
         }.toMap
 
-        // Upload output files to the platform.
-        val outputs : Map[String, WomValue] = jobInputOutput.delocalizeFiles(outputsLocal, dxUrl2path)
+        val outputs : Map[String, WomValue] =
+            if (commandSectionEmpty) {
+                // the command section is empty, so there is no manipulation of local files.
+                // we do not upload or download files.
+                outputsLocal
+            } else {
+                // Upload output files to the platform.
+                jobInputOutput.delocalizeFiles(outputsLocal, dxUrl2path)
+            }
 
         // convert the WDL values to JSON
         val outputFields:Map[String, JsValue] = outputs.map {

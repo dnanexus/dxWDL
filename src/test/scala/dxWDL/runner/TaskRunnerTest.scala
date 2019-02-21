@@ -84,7 +84,7 @@ class TaskRunnerTest extends FlatSpec with Matchers {
 
     // Parse the WDL source code, and extract the single task that is supposed to be there.
     // Also return the source script itself, verbatim.
-    private def runTask(wdlName: String) : Unit = {
+    private def runTask(wdlName: String) : TaskRunner = {
         val wdlCode : Path = pathFromBasename(s"${wdlName}.wdl")
 
         // load the inputs
@@ -157,6 +157,9 @@ class TaskRunnerTest extends FlatSpec with Matchers {
             case None => ()
             case Some(exp) => outputFields should be(exp)
         }
+
+        // return the task structure
+        taskRunner
     }
 
     it should "execute a simple WDL task" in {
@@ -184,7 +187,8 @@ class TaskRunnerTest extends FlatSpec with Matchers {
     }
 
     it should "localize a file to a task" in {
-        runTask("cgrep")
+        val taskRunner = runTask("cgrep")
+        taskRunner.commandSectionEmpty should be (false)
     }
 
     it should "handle type coercion" in {
@@ -201,5 +205,10 @@ class TaskRunnerTest extends FlatSpec with Matchers {
 
     it should "write_tsv" in {
         runTask("write_tsv_x")
+    }
+
+    it should "optimize task with an empty command section" in {
+        val task = runTask("empty_command_section")
+        task.commandSectionEmpty should be(true)
     }
 }
