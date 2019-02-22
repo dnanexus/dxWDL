@@ -1,5 +1,17 @@
 # Release Notes
 
+
+## 0.81
+
+- [Proxy configuration](./doc/ExpertOptions.md#Proxy-configurations). If your organization interposes a proxy between the internal machines and external hosts, you can set the environment variable `HTTP_PROXY` (or `HTTPS_PROXY`) to point to the proxy. The compiler will pass all of its dnanexus API calls through that proxy. For example, if you perform the following on the command line shell:
+
+```bash
+$ export HTTP_PROXY = proxy.acme.com:8080
+$ java -jar dxWDL.jar ...
+```
+
+the compiler will route all requests through the machine `proxy.acme.com` on port `8080`.
+
 ## 0.80
 
 - Native docker is now the default. If you still want to use [dx-docker](https://wiki.dnanexus.com/Developer-Tutorials/Using-Docker-Images), the `-useDxDocker` flag is available. In order to store a docker image on the platform, you can do `docker save`, and upload the tarball to a file. More details are provided in the [export options](./doc/ExpertOptions.md#Docker).

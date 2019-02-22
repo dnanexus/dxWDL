@@ -1,0 +1,4 @@
+{
+  "write_lines_bug.result" :
+  "/home/dnanexus/execution/inputs/fileB\n/home/dnanexus/execution/inputs/fileC\n/home/dnanexus/execution/inputs/1/fileC"
+}

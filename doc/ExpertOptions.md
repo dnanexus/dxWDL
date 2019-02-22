@@ -539,3 +539,20 @@ runtime {
    docker: "dx://project-xxxx:file-yyyy"
 }
 ```
+
+# Proxy configurations
+
+Some organizations place a proxy between internal machines and
+external hosts. This is done for security, auditing, and caching
+purposes. In this case, the compiler cannot contact the dnanexus API
+servers, unless is routes its requests through the proxy. Do
+achieve this, set the environment variable `HTTP_PROXY` (or
+`HTTPS_PROXY`) to point to the proxy. For example, if you perform the
+following on the command line shell:
+
+```bash
+$ export HTTP_PROXY = proxy.acme.com:8080
+$ java -jar dxWDL.jar compile ...
+```
+
+the compiler will send all requests through the machine `proxy.acme.com` on port `8080`.
