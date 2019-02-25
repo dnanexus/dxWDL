@@ -13,7 +13,9 @@ class GenerateIRTest extends FlatSpec with Matchers {
     }
 
     // task compilation
-    private val cFlags = List("--compileMode", "ir", "-quiet", "-fatalValidationWarnings")
+    private val cFlags = List("--compileMode", "ir", "-quiet", "-fatalValidationWarnings",
+                              "--locked")
+    private val cFlagsUnlocked = List("--compileMode", "ir", "-quiet", "-fatalValidationWarnings")
     val dbgFlags = List("--compileMode", "ir",
                         "--verbose",
                         "--verboseKey", "GenerateIR")
@@ -38,6 +40,14 @@ class GenerateIRTest extends FlatSpec with Matchers {
         val path = pathFromBasename("compiler", "wf_linear.wdl")
         Main.compile(
             path.toString :: cFlags
+        ) shouldBe a [Main.SuccessfulTerminationIR]
+    }
+
+
+    it should "IR compile unlocked workflow" in {
+        val path = pathFromBasename("compiler", "wf_linear.wdl")
+        Main.compile(
+            path.toString :: cFlagsUnlocked
         ) shouldBe a [Main.SuccessfulTerminationIR]
     }
 
@@ -117,5 +127,4 @@ class GenerateIRTest extends FlatSpec with Matchers {
             path.toString :: cFlags
         ) shouldBe a [Main.SuccessfulTerminationIR]
     }
-
 }

@@ -138,11 +138,6 @@ object IR {
                      inputs: Vector[SArg],
                      outputs: Vector[CVar])
 
-    // Is this the entrypoint, or a sub-workflow?
-    object WorkflowKind extends Enumeration {
-        val TopLevel, Sub  = Value
-    }
-
     /** A workflow output is linked to the stage that
       *  generated it.
       */
@@ -150,8 +145,7 @@ object IR {
                         inputs: Vector[(CVar,SArg)],
                         outputs: Vector[(CVar,SArg)],
                         stages: Vector[Stage],
-                        locked: Boolean,
-                        kind: WorkflowKind.Value) extends Callable {
+                        locked: Boolean) extends Callable {
         def inputVars = inputs.map{ case (cVar,_) => cVar }.toVector
         def outputVars = outputs.map{ case (cVar,_) => cVar }.toVector
     }
