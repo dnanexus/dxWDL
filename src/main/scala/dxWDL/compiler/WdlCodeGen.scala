@@ -250,12 +250,12 @@ task Add {
     //
     // applet common {
     //   input {
-    //     Int ____quality
-    //     String ____referenceGenome
+    //     Int quality
+    //     String referenceGenome
     //   }
     //   output {
-    //     Int quality = ____quality
-    //     String referenceGenome = ____referenceGenome
+    //     Int ____quality = quality
+    //     String ____referenceGenome = referenceGenome
     //   }
     // }
     //
@@ -263,7 +263,7 @@ task Add {
     // as an output.
     def taskWorkflowInputsAsApplet(taskName : String,
                                    inputVars: Vector[IR.CVar],
-                                   language) : WdlCodeSnippet = {
+                                   language: Language.Value) : WdlCodeSnippet = {
         val inputs: Vector[String] = inputVars.map { cVar =>
             s"    ${cVar.womType.toDisplayString} ____${cVar.name}"
         }
