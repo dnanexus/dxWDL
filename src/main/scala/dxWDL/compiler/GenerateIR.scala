@@ -16,11 +16,6 @@ import wom.values._
 import dxWDL.util._
 import IR.{CVar, SArg}
 
-// Is this the entrypoint, or a sub-workflow?
-object WorkflowKind extends Enumeration {
-    val TopLevel, Sub  = Value
-}
-
 private case class NameBox(verbose: Verbose) {
     // never allow the reserved words
     private var namesUsed:Set[String] = Set.empty
@@ -240,8 +235,8 @@ case class GenerateIR(callables: Map[String, IR.Callable],
     //   ...
     // }
     // We handle only the case where the default is a constant.
-    def buildWorkflowInput(input: GraphInputNode) : (CVar,SArg) = {
-        val cVar = input match {
+    def buildWorkflowInput(input: GraphInputNode) : CVar = {
+        input match {
             case RequiredGraphInputNode(id, womType, nameInInputSet, valueMapper) =>
                 CVar(id.workflowLocalName, womType, None)
 
@@ -261,8 +256,6 @@ case class GenerateIR(callables: Map[String, IR.Callable],
             case other =>
                 throw new Exception(s"unhandled input ${other}")
         }
-
-        (cVar, IR.SArgWorkflowInput(cVar))
     }
 
 
@@ -610,39 +603,16 @@ case class GenerateIR(callables: Map[String, IR.Callable],
         (applet, stage, outputVarsFull)
     }
 
-    // Compile a (single) WDL workflow into a single dx:workflow.
-    //
-    // There are cases where we are going to need to generate dx:subworkflows.
-    // This is not handled currently.
-    private def compileLockedWorkflow(wf: WorkflowDefinition,
-                                      wfSource: String) : (IR.Workflow, Vector[IR.Applet]) =
+    private def compileWorkflowLocked(wf: WorkflowDefinition,
+                                      inputNode: Vector[GraphInputNode],
+                                      wfSourceStandAlone : String,
+                                      subBlocks : Vector[Block]) : (IR.Workflow, Vector[IR.Applet]) =
     {
-        Utils.trace(verbose.on, s"compiling workflow ${wf.name}")
-
-        val graph = wf.innerGraph
-
-        // as a first step, only handle straight line workflows
-        if (!graph.workflowCalls.isEmpty)
-            throw new Exception(s"Workflow ${wf.name} calls a subworkflow; currently not supported")
-
-        // now we are sure the workflow is a simple straight line. It only contains
-        // task calls.
-
-        // Create a stage per call/scatter-block/declaration-block
-        val (inputNodes, subBlocks, outputNodes) = Block.split(graph, wfSource)
-
-        // Make a list of all task/workflow calls made inside the block. We will need to link
-        // to the equivalent dx:applets and dx:workflows.
-        val callablesUsedInWorkflow : Vector[IR.Callable] =
-            graph.allNodes.collect {
-                case cNode : CallNode =>
-                    callables(cNode.callable.name)
-            }.toVector
-        val wdlCodeGen = new WdlCodeGen(verbose)
-        val wfSourceStandAlone = wdlCodeGen.standAloneWorkflow(wfSource, callablesUsedInWorkflow, language)
-
-        // compile into dx:workflow inputs
-        val wfInputs:Vector[(CVar, SArg)] = inputNodes.map(buildWorkflowInput).toVector
+        val wfInputs:Vector[(CVar, SArg)] = inputNodes.map{
+            case iNode =>
+                val cVar = buildWorkflowInput(iNode)
+                (cVar, IR.SArgWorkflowInput(cVar))
+        }.toVector
 
         val (allStageInfo, env) = assembleBackbone(wf, wfSourceStandAlone, wfInputs, subBlocks)
         val (stages, auxApplets) = allStageInfo.unzip
@@ -669,50 +639,92 @@ case class GenerateIR(callables: Map[String, IR.Callable],
         }
     }
 
+
     // Create a preliminary applet to handle workflow input/outputs. This is
     // used only in the absence of workflow-level inputs/outputs.
-    def compileCommonApplet(inputs: Vector[(CVar, SArg)]) : (IR.Stage, IR.Applet) = {
-        val appletName = nameBox.chooseUniqueName(Utils.COMMON)
+    def compileCommonApplet(wfName: String,
+                            inputs: Vector[CVar]) : (IR.Stage, IR.Applet) = {
+        val appletName = s"${wfName}_${Utils.COMMON}"
         Utils.trace(verbose.on, s"Compiling common applet ${appletName}")
 
         val inputVars : Vector[CVar] = inputs.map{ case (cVar, _) => cVar }
         val outputVars: Vector[CVar] = inputVars
-        val declarations: Seq[Declaration] = inputs.map { case (cVar,_) =>
-            WdlRewrite.declaration(cVar.womType, cVar.name, None)
-        }
-        val wfOutputs: Vector[WorkflowOutput] = outputVars.map{ cVar =>
-            WdlRewrite.workflowOutput(cVar.dxVarName,
-                                      cVar.womType,
-                                      WdlExpression.fromString(cVar.name))
-        }
-
-        val wf = WdlRewrite.workflowGenEmpty("w")
-        wf.children = declarations ++ wfOutputs
-        val wdlCode = WdlRewrite.namespace(wf, Vector.empty)
-
-        // We need minimal compute resources, use the default instance type
-        val applet = IR.Applet(appletNamePrefix ++ appletName,
+        val WdlCodeSnippet(wdlCode) =
+            WdlCodeGen(verbose).taskWorkflowInputsAsApplet(appletName,
+                                                           inputVars,
+                                                           language)
+        val taskDefinition = ParseWomSourceFile.parseWdlTask(wdlCode)
+        val applet = IR.Applet(appletName,
                                inputVars,
                                outputVars,
                                calcInstanceType(None),
                                IR.DockerImageNone,
-                               IR.AppletKindWfFragment(Map.empty),
+                               IR.AppletKindTask(taskDefinition),
                                wdlCode)
-        verifyWdlCodeIsLegal(applet.ns)
 
         val sArgs: Vector[SArg] = inputs.map{ _ => IR.SArgEmpty}.toVector
         (IR.Stage(Utils.COMMON, None, genStageId(), applet.name, sArgs, outputVars),
          applet)
     }
 
-    private def compileRegularWorkflow(wf: WorkflowDefinition,
-                                       wfSource: String) : (IR.Workflow, Vector[IR.Applet]) = {
-        val (irwf, applets) = compileLockedWorkflow(wf, wfSource)
+    private def compileWorkflowRegular(wf: WorkflowDefinition,
+                                       inputNodes: Vector[GraphInputNode],
+                                       wfSourceStandAlone : String,
+                                       subBlocks : Vector[Block]) : (IR.Workflow, Vector[IR.Applet]) =
+    {
+        // Create a special applet+stage for the inputs. This is a substitute for
+        // workflow inputs. We now call the workflow outputs, "semiWfOutputs". This is because
+        // they are references to the outputs of this first applet.
 
-        // convert the inputs into an applet+stage
+        // compile into dx:workflow inputs
+        val wfInputs:Vector[CVar] = inputNodes.map(buildWorkflowInput(_))
+        val (commonApl, commonStg) = compileCommonApplet(wf.name, wfInputs)
 
+        //val (irwf, applets) = compileLockedWorkflow(wf, wfSource)
 
         // convert the outputs into an applet+stage
+        throw new Exception("unimplemented")
+    }
+
+
+    // Compile a (single) WDL workflow into a single dx:workflow.
+    //
+    // There are cases where we are going to need to generate dx:subworkflows.
+    // This is not handled currently.
+    private def compileWorkflow(wf: WorkflowDefinition,
+                                wfSource: String,
+                                locked: Boolean) : (IR.Workflow, Vector[IR.Applet]) =
+    {
+        Utils.trace(verbose.on, s"compiling workflow ${wf.name}")
+
+        val graph = wf.innerGraph
+
+        // as a first step, only handle straight line workflows
+        if (!graph.workflowCalls.isEmpty)
+            throw new Exception(s"Workflow ${wf.name} calls a subworkflow; currently not supported")
+
+        // now we are sure the workflow is a simple straight line. It only contains
+        // task calls.
+
+        // Create a stage per call/scatter-block/declaration-block
+        val (inputNodes, subBlocks, outputNodes) = Block.split(graph, wfSource)
+
+        // Make a list of all task/workflow calls made inside the block. We will need to link
+        // to the equivalent dx:applets and dx:workflows.
+        val callablesUsedInWorkflow : Vector[IR.Callable] =
+            graph.allNodes.collect {
+                case cNode : CallNode =>
+                    callables(cNode.callable.name)
+            }.toVector
+        val wdlCodeGen = new WdlCodeGen(verbose)
+        val wfSourceStandAlone = wdlCodeGen.standAloneWorkflow(wfSource, callablesUsedInWorkflow, language)
+
+        // compile into dx:workflow inputs
+        if (locked) {
+            compileWorkflowLocked(wf, inputNodes, wfSourceStandAlone, subBlocks)
+        } else {
+            compileWorkflowRegular(wf, inputNodes, wfSourceStandAlone, subBlocks)
+        }
     }
 
     // Entry point for compiling tasks and workflows into IR
@@ -737,10 +749,8 @@ case class GenerateIR(callables: Map[String, IR.Callable],
                 workflowDir.get(wf.name) match {
                     case None =>
                         throw new Exception(s"Did not find sources for workflow ${wf.name}")
-                    case Some(wfSource) if locked =>
-                        compileLockedWorkflow(wf, wfSource)
                     case Some(wfSource) =>
-                        compileRegularWorkflow(wf, wfSource)
+                        compileWorkflow(wf, wfSource, locked)
                 }
             case x =>
                 throw new Exception(s"""|Can't compile: ${callable.name}, class=${callable.getClass}

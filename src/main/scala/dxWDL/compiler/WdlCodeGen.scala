@@ -240,4 +240,49 @@ task Add {
                               |}""".stripMargin
         WdlCodeSnippet(wdlTaskCode)
     }
+
+    // We have an unlocked workflow, and need an applet to aggregate all the inputs.
+    // If this inputs are:
+    //   Int quality
+    //   String referenceGenome
+    //
+    // We need an applet like this:
+    //
+    // applet common {
+    //   input {
+    //     Int ____quality
+    //     String ____referenceGenome
+    //   }
+    //   output {
+    //     Int quality = ____quality
+    //     String referenceGenome = ____referenceGenome
+    //   }
+    // }
+    //
+    // We need to circumvent the WDL restriction that an output cannot have the same name
+    // as an output.
+    def taskWorkflowInputsAsApplet(taskName : String,
+                                   inputVars: Vector[IR.CVar],
+                                   language) : WdlCodeSnippet = {
+        val inputs: Vector[String] = inputVars.map { cVar =>
+            s"    ${cVar.womType.toDisplayString} ____${cVar.name}"
+        }
+        val outputs: Vector[String] = inputVars.map { cVar =>
+            val name = cVar.name
+            s"    ${cVar.womType.toDisplayString} ${name} = ____${cVar.name}"
+        }
+        val wdlTaskCode = s"""|${versionString(language)}
+                              |
+                              |task ${taskName} {
+                              |  input {
+                              |    ${inputs.mkString("\n")}
+                              |  }
+                              |  command{}
+                              |  output {
+                              |    ${outputs.mkString("\n")}
+                              |  }
+                              |}""".stripMargin
+        WdlCodeSnippet(wdlTaskCode)
+    }
+
 }
