@@ -89,7 +89,7 @@ workflow files {
     }
 
    output {
-       String write_lines_bug_result = write_lines_bug.result
+       # String write_lines_bug_result = write_lines_bug.result
        Int diff1_result = diff1.result
        Int diff2_result = diff2.result
        Array[File] FindFiles_texts = FindFiles.texts
@@ -103,6 +103,8 @@ workflow files {
 }
 
 
+# This is commented out, because there is some problem running it
+# with docker.
 task write_lines_bug {
     Array[File] files
 

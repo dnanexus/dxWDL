@@ -110,7 +110,7 @@ test_unlocked=["cast",
                "optionals",
                "strings",
                "toplevel_calls"]
-test_dx_docker=["platform_asset", "files"]
+test_dx_docker=["platform_asset"]
 test_extras=["instance_types"]
 test_private_registry=["private_registry"]
 
