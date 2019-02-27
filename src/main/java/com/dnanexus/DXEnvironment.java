@@ -19,6 +19,7 @@ package com.dnanexus;
 import java.io.File;
 import java.io.IOException;
 import java.util.Map;
+import org.apache.http.HttpHost;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -117,7 +118,8 @@ public class DXEnvironment {
             workspaceId = templateEnvironment.workspaceId;
             projectContextId = templateEnvironment.projectContextId;
             disableRetry = templateEnvironment.disableRetry;
-            httpProxy = templateEnvironment.httpProxy;
+            if (templateEnvironment.proxy != null)
+                httpProxy = templateEnvironment.proxy.rawDefinition;
         }
 
         private Builder(File jsonConfigFile) {
@@ -399,6 +401,26 @@ public class DXEnvironment {
         }
     }
 
+    public static class ProxyDesc {
+        HttpHost host;
+        Boolean authRequired;
+        String username;
+        String password;
+        String rawDefinition;
+
+        ProxyDesc(HttpHost host,
+                  Boolean authRequired,
+                  String username,
+                  String password,
+                  String rawDefinition) {
+            this.host = host;
+            this.authRequired = authRequired;
+            this.username = username;
+            this.password = password;
+            this.rawDefinition = rawDefinition;
+        }
+    }
+
     private final String apiserverHost;
     private final String apiserverPort;
     private final String apiserverProtocol;
@@ -409,7 +431,7 @@ public class DXEnvironment {
     private final boolean disableRetry;
     private int socketTimeout;
     private int connectionTimeout;
-    private final String httpProxy;
+    private final ProxyDesc proxy;
 
     private static final JsonFactory jsonFactory = new MappingJsonFactory();
     /**
@@ -454,7 +476,7 @@ public class DXEnvironment {
         this.disableRetry = disableRetry;
         this.socketTimeout = socketTimeout;
         this.connectionTimeout = connectionTimeout;
-        this.httpProxy = httpProxy;
+        this.proxy = parseProxyDefinition(httpProxy);
 
         // TODO: additional validation on the project/workspace, and check that
         // apiserverProtocol is either "http" or "https".
@@ -548,8 +570,48 @@ public class DXEnvironment {
         return this.socketTimeout;
     }
 
-    public String getHttpProxy() {
-        return this.httpProxy;
+    /**
+     * Parse the proxy definition. This could take one of several forms:
+     *    localhost:3128
+     *    http://localhost:3128
+     *    https://localhost:3128
+     *    https://dnanexus:welcome@localhost:3128
+     */
+    public ProxyDesc parseProxyDefinition(String proxyDfn) {
+        if (proxyDfn == null)
+            return null;
+
+        // Configure a proxy
+        boolean authRequired = proxyDfn.contains("@");
+        if (!authRequired) {
+            HttpHost proxyHost = HttpHost.create(proxyDfn);
+            return new ProxyDesc(proxyHost, false, null, null, proxyDfn);
+        }
+
+        // We need to authenticate with a username and password.
+        // The format is something like this: "https://dnanexus:welcome@localhost:3128"
+
+        // setup the proxy host ("localhost:3128")
+        String proxyHostWithPort = proxyDfn.substring(proxyDfn.indexOf('@') + 1);
+        HttpHost proxyHost = HttpHost.create(proxyHostWithPort);
+
+        // strip out the "dnanexus:welcome" portion.
+        String userPass = proxyDfn.substring(0, proxyDfn.indexOf('@') - 1);
+        if (userPass.contains("://"))
+            userPass = userPass.substring(userPass.indexOf("://") + 3);
+        if (!userPass.contains(":"))
+            throw new RuntimeException("proxy definition (" + proxyDfn +
+                                       ") does not specify a user:password tuple");
+        String user = userPass.substring(0, userPass.indexOf(':') - 1);
+        String pass = userPass.substring(userPass.indexOf(':') +1);
+        return new ProxyDesc(proxyHost, true, user, pass, proxyDfn);
+    }
+
+    /**
+     * Returns the proxy
+     */
+    public ProxyDesc getProxy() {
+        return this.proxy;
     }
 
     /**

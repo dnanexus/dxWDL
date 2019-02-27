@@ -228,11 +228,11 @@ def main():
         # make sure that squid is installed and running
         setup()
 
-        test_deny(project, folder, version_id)
-        test_allow(project, folder, version_id)
-        test_allow_auth(project, folder, version_id)
-#        test_network_blocking(project, folder, version_id)
-#        test_squid_allows_bypassing_firewall(project, folder, version_id)
+#        test_deny(project, folder, version_id)
+#        test_allow(project, folder, version_id)
+#        test_allow_auth(project, folder, version_id)
+        test_network_blocking(project, folder, version_id)
+        test_squid_allows_bypassing_firewall(project, folder, version_id)
     finally:
         print("Test complete")
         shutdown()

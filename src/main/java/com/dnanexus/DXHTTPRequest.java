@@ -162,44 +162,29 @@ public class DXHTTPRequest {
             .setConnectTimeout(env.getConnectionTimeout())
             .setSocketTimeout(env.getSocketTimeout());
 
-        String proxy = env.getHttpProxy();
-        if (proxy == null) {
+        DXEnvironment.ProxyDesc proxyDesc = env.getProxy();
+        if (proxyDesc == null) {
             RequestConfig requestConfig = reqBuilder.build();
             this.httpclient = HttpClientBuilder.create().setUserAgent(USER_AGENT).setDefaultRequestConfig(requestConfig).build();
             return;
         }
 
         // Configure a proxy
-        boolean authRequired = proxy.contains("@");
-        if (!authRequired) {
-            HttpHost proxyHost = HttpHost.create(proxy);
-            reqBuilder.setProxy(proxyHost);
+        if (!proxyDesc.authRequired) {
+            reqBuilder.setProxy(proxyDesc.host);
             RequestConfig requestConfig = reqBuilder.build();
             this.httpclient = HttpClientBuilder.create().setUserAgent(USER_AGENT).setDefaultRequestConfig(requestConfig).build();
             return;
         }
 
         // We need to authenticate with a username and password.
-        // The format is something like this: "https://dnanexus:welcome@localhost:3128"
-
-        // setup the proxy host ("localhost:3128")
-        String proxyHostWithPort = proxy.substring(proxy.indexOf('@') + 1);
-        HttpHost proxyHost = HttpHost.create(proxyHostWithPort);
-        reqBuilder.setProxy(proxyHost);
-
-        // strip out the "dnanexus:welcome" portion.
-        String userPass = proxy.substring(0, proxy.indexOf('@') - 1);
-        if (userPass.contains("://"))
-            userPass = userPass.substring(userPass.indexOf("://") + 3);
-        if (!userPass.contains(":"))
-            throw new DXHTTPException(new IOException("proxy definition does specify a user:password tuple"));
-        String user = userPass.substring(0, userPass.indexOf(':') - 1);
-        String pass = userPass.substring(userPass.indexOf(':') +1);
+        reqBuilder.setProxy(proxyDesc.host);
 
         // specify the user/password in the configuration
         CredentialsProvider credsProvider = new BasicCredentialsProvider();
-        credsProvider.setCredentials(new AuthScope(proxyHost),
-                                     new UsernamePasswordCredentials(user, pass));
+        credsProvider.setCredentials(new AuthScope(proxyDesc.host),
+                                     new UsernamePasswordCredentials(proxyDesc.username,
+                                                                     proxyDesc.password));
 
         RequestConfig requestConfig = reqBuilder.build();
         this.httpclient = HttpClientBuilder.create()
