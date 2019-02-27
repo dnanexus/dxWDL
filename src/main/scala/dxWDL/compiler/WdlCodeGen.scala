@@ -216,31 +216,6 @@ task Add {
         WdlCodeSnippet(wdlWfSource)
     }
 
-    def taskEvalWorkflowOutputs(taskName: String,
-                                inputVars: Vector[IR.CVar],
-                                outputNodes : Vector[ExpressionBasedGraphOutputNode],
-                                language: Language.Value) : WdlCodeSnippet = {
-        val inputs: Vector[String] = inputVars.map { cVar =>
-            s"    ${cVar.womType.toDisplayString} ${cVar.name}"
-        }
-        val outputs: Vector[String] = outputNodes.map { node =>
-            val name = node.identifier.localName.value
-            s"    ${node.womType.toDisplayString} ${name} = ${node.womExpression.sourceString}"
-        }
-        val wdlTaskCode = s"""|${versionString(language)}
-                              |
-                              |task ${taskName} {
-                              |  input {
-                              |    ${inputs.mkString("\n")}
-                              |  }
-                              |  command{}
-                              |  output {
-                              |    ${outputs.mkString("\n")}
-                              |  }
-                              |}""".stripMargin
-        WdlCodeSnippet(wdlTaskCode)
-    }
-
     // We have an unlocked workflow, and need an applet to aggregate all the inputs.
     // If this inputs are:
     //   Int quality
@@ -254,8 +229,8 @@ task Add {
     //     String referenceGenome
     //   }
     //   output {
-    //     Int ____quality = quality
-    //     String ____referenceGenome = referenceGenome
+    //     Int xxx_quality = quality
+    //     String xxx_referenceGenome = referenceGenome
     //   }
     // }
     //
@@ -265,11 +240,10 @@ task Add {
                                    inputVars: Vector[IR.CVar],
                                    language: Language.Value) : WdlCodeSnippet = {
         val inputs: Vector[String] = inputVars.map { cVar =>
-            s"    ${cVar.womType.toDisplayString} ____${cVar.name}"
+            s"    ${cVar.womType.toDisplayString} ${cVar.name}"
         }
         val outputs: Vector[String] = inputVars.map { cVar =>
-            val name = cVar.name
-            s"    ${cVar.womType.toDisplayString} ${name} = ____${cVar.name}"
+            s"    ${cVar.womType.toDisplayString} xxx_${cVar.name} = ${cVar.name}"
         }
         val wdlTaskCode = s"""|${versionString(language)}
                               |
@@ -285,4 +259,35 @@ task Add {
         WdlCodeSnippet(wdlTaskCode)
     }
 
+    def taskWorkflowOutputsAsApplet(taskName : String,
+                                    inputVars: Vector[IR.CVar],
+                                    outputNodes: Vector[GraphOutputNode],
+                                    language: Language.Value) : WdlCodeSnippet = {
+        val inputs: Vector[String] = inputVars.map { cVar =>
+            s"    ${cVar.womType.toDisplayString} ${cVar.name}"
+        }
+        val outputs: Vector[String] = outputNodes.map {
+            case PortBasedGraphOutputNode(id, womType, sourcePort) =>
+                val name = id.workflowLocalName
+                s"    ${womType.toDisplayString} xxx_${name} = ${name}"
+            case expr :ExpressionBasedGraphOutputNode =>
+                val name = expr.identifier.localName.value
+                s"    ${expr.womType.toDisplayString} xxx_${name} = ${expr.womExpression.sourceString}"
+            case other =>
+                throw new Exception(s"unhandled output ${other}")
+        }
+
+        val wdlTaskCode = s"""|${versionString(language)}
+                              |
+                              |task ${taskName} {
+                              |  input {
+                              |    ${inputs.mkString("\n")}
+                              |  }
+                              |  command{}
+                              |  output {
+                              |    ${outputs.mkString("\n")}
+                              |  }
+                              |}""".stripMargin
+        WdlCodeSnippet(wdlTaskCode)
+    }
 }
