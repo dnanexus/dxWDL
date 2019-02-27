@@ -24,10 +24,14 @@ import org.apache.http.HttpEntity;
 import org.apache.http.HttpHost;
 import org.apache.http.HttpResponse;
 import org.apache.http.HttpStatus;
+import org.apache.http.auth.AuthScope;
+import org.apache.http.auth.UsernamePasswordCredentials;
+import org.apache.http.client.CredentialsProvider;
 import org.apache.http.client.HttpClient;
 import org.apache.http.client.config.RequestConfig;
 import org.apache.http.client.methods.HttpPost;
 import org.apache.http.entity.StringEntity;
+import org.apache.http.impl.client.BasicCredentialsProvider;
 import org.apache.http.impl.client.HttpClientBuilder;
 import org.apache.http.util.EntityUtils;
 
@@ -153,20 +157,41 @@ public class DXHTTPRequest {
         this.apiserver = env.getApiserverPath();
         this.disableRetry = env.isRetryDisabled();
 
-        // These timeouts prevent requests getting stuck
+        // These timeouts prevent requests from getting stuck
         RequestConfig.Builder reqBuilder = RequestConfig.custom()
             .setConnectTimeout(env.getConnectionTimeout())
             .setSocketTimeout(env.getSocketTimeout());
 
-        // Configure a proxy if requested
-        String proxy = env.getHttpProxy();
-        if (proxy != null) {
-            HttpHost proxyHost = HttpHost.create(proxy);
-            reqBuilder.setProxy(proxyHost);
+        DXEnvironment.ProxyDesc proxyDesc = env.getProxy();
+        if (proxyDesc == null) {
+            RequestConfig requestConfig = reqBuilder.build();
+            this.httpclient = HttpClientBuilder.create().setUserAgent(USER_AGENT).setDefaultRequestConfig(requestConfig).build();
+            return;
         }
-        RequestConfig requestConfig = reqBuilder.build();
 
-        this.httpclient = HttpClientBuilder.create().setUserAgent(USER_AGENT).setDefaultRequestConfig(requestConfig).build();
+        // Configure a proxy
+        if (!proxyDesc.authRequired) {
+            reqBuilder.setProxy(proxyDesc.host);
+            RequestConfig requestConfig = reqBuilder.build();
+            this.httpclient = HttpClientBuilder.create().setUserAgent(USER_AGENT).setDefaultRequestConfig(requestConfig).build();
+            return;
+        }
+
+        // We need to authenticate with a username and password.
+        reqBuilder.setProxy(proxyDesc.host);
+
+        // specify the user/password in the configuration
+        CredentialsProvider credsProvider = new BasicCredentialsProvider();
+        credsProvider.setCredentials(new AuthScope(proxyDesc.host),
+                                     new UsernamePasswordCredentials(proxyDesc.username,
+                                                                     proxyDesc.password));
+
+        RequestConfig requestConfig = reqBuilder.build();
+        this.httpclient = HttpClientBuilder.create()
+            .setDefaultCredentialsProvider(credsProvider)
+            .setUserAgent(USER_AGENT)
+            .setDefaultRequestConfig(requestConfig)
+            .build();
     }
 
     /**
@@ -437,6 +462,9 @@ public class DXHTTPRequest {
             // of attempts allowed is NUM_RETRIES + 1 (the first attempt, plus up to NUM_RETRIES
             // retries). So there is at least one more retry left; sleep before we retry.
             assert attempts <= NUM_RETRIES;
+
+            if (this.disableRetry)
+                throw new RuntimeException("Retry disabled");
 
             sleep(timeoutSeconds);
             timeoutSeconds *= 2;
