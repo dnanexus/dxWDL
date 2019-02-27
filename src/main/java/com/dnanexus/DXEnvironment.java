@@ -167,6 +167,10 @@ public class DXEnvironment {
                     if (getIntValue(jsonConfig, "DX_CONNECTION_TIMEOUT") != 0) {
                         connectionTimeout = getIntValue(jsonConfig, "DX_CONNECTION_TIMEOUT");
                     }
+                    if (getTextValue(jsonConfig, "DX_DISABLE_RETRY") != null) {
+                        //disableRetry = getBooleanValue(jsonConfig, "DX_DISABLE_RETRY");
+                        disableRetry = jsonConfig.findValue("DX_DISABLE_RETRY").asBoolean();
+                    }
                     if (getTextValue(jsonConfig, "HTTP_PROXY") != null) {
                         httpProxy = getTextValue(jsonConfig, "HTTP_PROXY");
                     }
@@ -210,6 +214,9 @@ public class DXEnvironment {
             }
             if (sysEnv.containsKey("DX_CONNECTION_TIMEOUT")) {
                 connectionTimeout = Integer.valueOf(sysEnv.get("DX_CONNECTION_TIMEOUT"));
+            }
+            if (sysEnv.containsKey("DX_DISABLE_RETRY")) {
+                disableRetry = Boolean.valueOf(sysEnv.get("DX_DISABLE_RETRY"));
             }
             if (sysEnv.containsKey("HTTP_PROXY")) {
                 httpProxy = sysEnv.get("HTTP_PROXY");

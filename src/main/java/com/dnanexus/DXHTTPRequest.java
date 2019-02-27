@@ -24,10 +24,14 @@ import org.apache.http.HttpEntity;
 import org.apache.http.HttpHost;
 import org.apache.http.HttpResponse;
 import org.apache.http.HttpStatus;
+import org.apache.http.auth.AuthScope;
+import org.apache.http.auth.UsernamePasswordCredentials;
+import org.apache.http.client.CredentialsProvider;
 import org.apache.http.client.HttpClient;
 import org.apache.http.client.config.RequestConfig;
 import org.apache.http.client.methods.HttpPost;
 import org.apache.http.entity.StringEntity;
+import org.apache.http.impl.client.BasicCredentialsProvider;
 import org.apache.http.impl.client.HttpClientBuilder;
 import org.apache.http.util.EntityUtils;
 
@@ -153,20 +157,56 @@ public class DXHTTPRequest {
         this.apiserver = env.getApiserverPath();
         this.disableRetry = env.isRetryDisabled();
 
-        // These timeouts prevent requests getting stuck
+        // These timeouts prevent requests from getting stuck
         RequestConfig.Builder reqBuilder = RequestConfig.custom()
             .setConnectTimeout(env.getConnectionTimeout())
             .setSocketTimeout(env.getSocketTimeout());
 
-        // Configure a proxy if requested
         String proxy = env.getHttpProxy();
-        if (proxy != null) {
+        if (proxy == null) {
+            RequestConfig requestConfig = reqBuilder.build();
+            this.httpclient = HttpClientBuilder.create().setUserAgent(USER_AGENT).setDefaultRequestConfig(requestConfig).build();
+            return;
+        }
+
+        // Configure a proxy
+        boolean authRequired = proxy.contains("@");
+        if (!authRequired) {
             HttpHost proxyHost = HttpHost.create(proxy);
             reqBuilder.setProxy(proxyHost);
+            RequestConfig requestConfig = reqBuilder.build();
+            this.httpclient = HttpClientBuilder.create().setUserAgent(USER_AGENT).setDefaultRequestConfig(requestConfig).build();
+            return;
         }
-        RequestConfig requestConfig = reqBuilder.build();
 
-        this.httpclient = HttpClientBuilder.create().setUserAgent(USER_AGENT).setDefaultRequestConfig(requestConfig).build();
+        // We need to authenticate with a username and password.
+        // The format is something like this: "https://dnanexus:welcome@localhost:3128"
+
+        // setup the proxy host ("localhost:3128")
+        String proxyHostWithPort = proxy.substring(proxy.indexOf('@') + 1);
+        HttpHost proxyHost = HttpHost.create(proxyHostWithPort);
+        reqBuilder.setProxy(proxyHost);
+
+        // strip out the "dnanexus:welcome" portion.
+        String userPass = proxy.substring(0, proxy.indexOf('@') - 1);
+        if (userPass.contains("://"))
+            userPass = userPass.substring(userPass.indexOf("://") + 3);
+        if (!userPass.contains(":"))
+            throw new DXHTTPException(new IOException("proxy definition does specify a user:password tuple"));
+        String user = userPass.substring(0, userPass.indexOf(':') - 1);
+        String pass = userPass.substring(userPass.indexOf(':') +1);
+
+        // specify the user/password in the configuration
+        CredentialsProvider credsProvider = new BasicCredentialsProvider();
+        credsProvider.setCredentials(new AuthScope(proxyHost),
+                                     new UsernamePasswordCredentials(user, pass));
+
+        RequestConfig requestConfig = reqBuilder.build();
+        this.httpclient = HttpClientBuilder.create()
+            .setDefaultCredentialsProvider(credsProvider)
+            .setUserAgent(USER_AGENT)
+            .setDefaultRequestConfig(requestConfig)
+            .build();
     }
 
     /**
@@ -437,6 +477,9 @@ public class DXHTTPRequest {
             // of attempts allowed is NUM_RETRIES + 1 (the first attempt, plus up to NUM_RETRIES
             // retries). So there is at least one more retry left; sleep before we retry.
             assert attempts <= NUM_RETRIES;
+
+            if (this.disableRetry)
+                throw new RuntimeException("Retry disabled");
 
             sleep(timeoutSeconds);
             timeoutSeconds *= 2;

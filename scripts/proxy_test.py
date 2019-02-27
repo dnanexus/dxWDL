@@ -55,10 +55,14 @@ def shutdown():
 # Compile a simple workflow.
 #
 # Note: the HTTP_PROXY environment variable points to the local squid
-def compile(project, folder, version_id, with_proxy):
+def compile(project, folder, version_id, proxy = None):
     print("Compiling hello.wdl")
-    if with_proxy:
-        os.environ["HTTP_PROXY"] = "localhost:3128"
+    os.environ["DX_DISABLE_RETRY"] = "TRUE"
+    if proxy is not None:
+        if proxy == "auth":
+            os.environ["HTTP_PROXY"] = "https://dnanexus:welcome@localhost:3128"
+        else:
+            os.environ["HTTP_PROXY"] = "localhost:3128"
     cmdline = [
         "java", "-jar",
         os.path.join(top_dir, "dxWDL-{}.jar".format(version_id)),
@@ -89,7 +93,7 @@ def test_deny(project, folder, version_id):
     subprocess.check_output(["sudo", "service", "squid", "reload"])
     succeeded = True
     try:
-        compile(project, folder, version_id, True)
+        compile(project, folder, version_id, proxy="regular")
     except Exception as e:
         succeeded = False
     if succeeded:
@@ -108,7 +112,7 @@ def test_allow(project, folder, version_id):
     subprocess.check_output(["sudo", "service", "squid", "reload"])
     succeeded = True
     try:
-        compile(project, folder, version_id, True)
+        compile(project, folder, version_id, proxy="regular")
     except Exception as e:
         print(e)
         succeeded = False
@@ -118,13 +122,34 @@ def test_allow(project, folder, version_id):
         print("Error: requests are allowed through the proxy, however, the API servers are unreachable")
         exit(1)
 
+
+# test 2.1:
+# The squid configuration requires authorization. The compiler should succeed
+def test_allow_auth(project, folder, version_id):
+    subprocess.check_output(["sudo", "cp",
+                             os.path.join(here, "squid_allow_authorized.conf"),
+                             "/etc/squid/squid.conf"
+                             ])
+    subprocess.check_output(["sudo", "service", "squid", "reload"])
+    succeeded = True
+    try:
+        compile(project, folder, version_id, proxy="auth")
+    except Exception as e:
+        print(e)
+        succeeded = False
+    if succeeded:
+        print("Correct: authorized http requests are passing through the proxy")
+    else:
+        print("Error: authorized requests are allowed through the proxy, however, the API servers are unreachable")
+        exit(1)
+
 # test 3:
 # block https access for this user, the compiler should fail.
 def test_network_blocking(project, folder, version_id):
     iptables_block_user()
     succeeded = True
     try:
-        compile(project, folder, version_id, False)
+        compile(project, folder, version_id, proxy=None)
     except Exception as e:
         succeeded = False
     iptables_clean()
@@ -153,7 +178,7 @@ def test_squid_allows_bypassing_firewall(project, folder, version_id):
     iptables_block_user()
     succeeded = True
     try:
-        compile(project, folder, version_id, True)
+        compile(project, folder, version_id, proxy="regular")
     except Exception as e:
         print(e)
         succeeded = False
@@ -183,30 +208,31 @@ def main():
 
     print("top_dir={} test_dir={}".format(top_dir, test_dir))
 
-    # make sure that squid is installed and running
-    setup()
+    version_id = util.get_version_id(top_dir)
+    project = util.get_project(args.project)
+    if project is None:
+        raise RuntimeError("Could not find project {}".format(args.project))
+    folder = build_dirs(project, version_id)
+    print("project: {} ({})".format(project.name, project.get_id()))
+    print("folder: {}".format(folder))
+
+    test_dict = {
+        "aws:us-east-1" :  project.name + ":" + folder
+    }
+
+    # build the dxWDL jar file, only on us-east-1
+    if not args.do_not_build:
+        util.build(project, folder, version_id, top_dir, test_dict)
 
     try:
-        version_id = util.get_version_id(top_dir)
-        project = util.get_project(args.project)
-        if project is None:
-            raise RuntimeError("Could not find project {}".format(args.project))
-        folder = build_dirs(project, version_id)
-        print("project: {} ({})".format(project.name, project.get_id()))
-        print("folder: {}".format(folder))
+        # make sure that squid is installed and running
+        setup()
 
-        test_dict = {
-            "aws:us-east-1" :  project.name + ":" + folder
-        }
-
-        # build the dxWDL jar file, only on us-east-1
-        if not args.do_not_build:
-            util.build(project, folder, version_id, top_dir, test_dict)
-
-#        test_deny(project, folder, version_id)
-#        test_allow(project, folder, version_id)
-        test_network_blocking(project, folder, version_id)
-        test_squid_allows_bypassing_firewall(project, folder, version_id)
+        test_deny(project, folder, version_id)
+        test_allow(project, folder, version_id)
+        test_allow_auth(project, folder, version_id)
+#        test_network_blocking(project, folder, version_id)
+#        test_squid_allows_bypassing_firewall(project, folder, version_id)
     finally:
         print("Test complete")
         shutdown()
