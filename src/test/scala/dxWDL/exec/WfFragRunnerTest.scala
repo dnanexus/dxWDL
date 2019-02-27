@@ -1,4 +1,4 @@
-package dxWDL.runner
+package dxWDL.exec
 
 import cats.data.Validated.{Invalid, Valid}
 import common.validation.ErrorOr.ErrorOr

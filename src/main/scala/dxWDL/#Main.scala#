@@ -477,7 +477,8 @@ object Main extends App {
         val ast_pp = json.prettyPrint
         Utils.writeFileContent(jobOutputPath, ast_pp)
 
-        SuccessfulTermination(s"success")
+ SuccessfulTermination(s"success ${op}")*/
+        throw new Exception("TODO")
     }
 
     // Execute a part of a workflow

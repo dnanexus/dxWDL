@@ -55,7 +55,7 @@ the same as the scatter output type.
 
 Note: the compiler ensures that the scatter will call exactly one call.
   */
-package dxWDL.runner
+package dxWDL.exec
 
 // DX bindings
 import com.dnanexus.{DXAPI, DXEnvironment, DXExecution, DXJob, DXSearch}

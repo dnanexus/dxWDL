@@ -1,4 +1,4 @@
-package dxWDL.runner
+package dxWDL.exec
 
 import java.nio.file.{Files, Path, Paths}
 import org.scalatest.{FlatSpec, Matchers}

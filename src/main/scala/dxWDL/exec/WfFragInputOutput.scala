@@ -1,4 +1,4 @@
-package dxWDL.runner
+package dxWDL.exec
 
 import com.dnanexus.DXProject
 import spray.json._

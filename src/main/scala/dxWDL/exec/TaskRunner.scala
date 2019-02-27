@@ -16,7 +16,7 @@ task Add {
 
   */
 
-package dxWDL.runner
+package dxWDL.exec
 
 import cats.data.Validated.{Invalid, Valid}
 import com.dnanexus.{DXAPI, DXJob}

@@ -182,6 +182,12 @@ case class Native(dxWDLrtId: Option[String],
             |}""".stripMargin.trim
     }
 
+    private def genBashScriptEvalOnly() : String = {
+        s"""|main() {
+            |    java -jar $${DX_FS_ROOT}/dxWDL.jar internal evalOnly $${HOME} ${rtDebugLvl}
+            |}""".stripMargin.trim
+    }
+
     private def genBashScript(appKind: IR.AppletKind,
                               instanceType: IR.InstanceType) : String = {
         val body:String = appKind match {
@@ -189,6 +195,8 @@ case class Native(dxWDLrtId: Option[String],
                 throw new Exception("Sanity: generating a bash script for a native applet")
             case IR.AppletKindWfFragment(_, _, _) =>
                 genBashScriptWfFragment()
+            case IR.AppletKindEvalOnly(_) =>
+                genBashScriptEvalOnly()
             case IR.AppletKindTask(_) =>
                 instanceType match {
                     case IR.InstanceTypeDefault | IR.InstanceTypeConst(_,_,_,_) =>

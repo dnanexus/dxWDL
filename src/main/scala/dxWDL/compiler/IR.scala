@@ -10,7 +10,7 @@ package dxWDL.compiler
 
 import com.dnanexus.DXRecord
 import dxWDL.util.{DXWorkflowStage, Utils}
-import wom.callable.CallableTaskDefinition
+import wom.callable.{CallableTaskDefinition, WorkflowDefinition}
 import wom.types.WomType
 import wom.values.WomValue
 
@@ -86,12 +86,15 @@ object IR {
 
     // There are several kinds of applets
     //   Native:     a native platform applet
-    //   WfFragment: WDL workflow fragment, can included nested if/scatter blocks
     //   Task:       call a task, execute a shell command (usually)
+    //   EvalOnly    evaluate a workflow that has no calls. It can have an output
+    //               section with expressions.
+    //   WfFragment: WDL workflow fragment, can included nested if/scatter blocks
     //   WorkflowOutputReorg: move intermediate result files to a subdirectory.
     sealed trait AppletKind
     case class  AppletKindNative(id: String) extends AppletKind
     case class  AppletKindTask(task: CallableTaskDefinition) extends AppletKind
+    case class  AppletKindEvalOnly(wf: WorkflowDefinition) extends AppletKind
     case class  AppletKindWfFragment(calls: Vector[String],
                                      subBlockNum: Int,
                                      fqnDictTypes: Map[String, WomType]) extends AppletKind

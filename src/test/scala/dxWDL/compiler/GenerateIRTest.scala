@@ -44,7 +44,7 @@ class GenerateIRTest extends FlatSpec with Matchers {
     }
 
 
-    it should "IR compile unlocked workflow" in {
+    it should "IR compile unlocked workflow" taggedAs(EdgeTest) in {
         val path = pathFromBasename("compiler", "wf_linear.wdl")
         Main.compile(
             path.toString :: cFlagsUnlocked
@@ -82,7 +82,7 @@ class GenerateIRTest extends FlatSpec with Matchers {
         ) shouldBe a [Main.SuccessfulTerminationIR]
     }
 
-    it should "IR compile a draft2 workflow" taggedAs(EdgeTest) in {
+    it should "IR compile a draft2 workflow" in {
         val path = pathFromBasename("draft2", "shapes.wdl")
         val retval = Main.compile(
             path.toString :: cFlags

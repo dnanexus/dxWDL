@@ -39,11 +39,11 @@ object Utils {
     val MAX_STAGE_NAME_LEN = 60       // maximal length of a workflow stage name
     val MAX_NUM_FILES_MOVE_LIMIT = 1000
     val OUTPUT_SECTION = "outputs"
+    val OUTPUT_VAR_PREFIX = "xyz_"
     val REORG = "reorg"
     val META_INFO = "_metaInfo"
     val RESERVED_APPLET_INPUT_NAMES = Set(META_INFO)
     val UBUNTU_VERSION = "16.04"
-
     var traceLevel = 0
 
     lazy val dxEnv = DXEnvironment.create()
@@ -498,7 +498,7 @@ object Utils {
         }
     }
 
-    private def genNSpaces(n: Int) = s"${" " * n}"
+    def genNSpaces(n: Int) = s"${" " * n}"
 
     def traceLevelSet(i: Int) : Unit = {
         traceLevel = i

@@ -221,9 +221,9 @@ task Add {
     //   Int quality
     //   String referenceGenome
     //
-    // We need an applet like this:
+    // We need an applet like this to evaluate:
     //
-    // applet common {
+    // workflow common {
     //   input {
     //     Int quality
     //     String referenceGenome
@@ -236,58 +236,127 @@ task Add {
     //
     // We need to circumvent the WDL restriction that an output cannot have the same name
     // as an output.
-    def taskWorkflowInputsAsApplet(taskName : String,
-                                   inputVars: Vector[IR.CVar],
-                                   language: Language.Value) : WdlCodeSnippet = {
+    def evalOnlyWfFromWorkflowInputs(name : String,
+                                     inputVars: Vector[IR.CVar],
+                                     language: Language.Value) : WdlCodeSnippet = {
         val inputs: Vector[String] = inputVars.map { cVar =>
-            s"    ${cVar.womType.toDisplayString} ${cVar.name}"
+            s"${cVar.womType.toDisplayString} ${cVar.dxVarName}"
         }
+        val prefix = Utils.OUTPUT_VAR_PREFIX
         val outputs: Vector[String] = inputVars.map { cVar =>
-            s"    ${cVar.womType.toDisplayString} xxx_${cVar.name} = ${cVar.name}"
+            s"${cVar.womType.toDisplayString} ${prefix}${cVar.dxVarName} = ${cVar.dxVarName}"
         }
-        val wdlTaskCode = s"""|${versionString(language)}
-                              |
-                              |task ${taskName} {
-                              |  input {
-                              |    ${inputs.mkString("\n")}
-                              |  }
-                              |  command{}
-                              |  output {
-                              |    ${outputs.mkString("\n")}
-                              |  }
-                              |}""".stripMargin
-        WdlCodeSnippet(wdlTaskCode)
+
+        val twoSpaces = Utils.genNSpaces(2)
+        val fourSpaces = Utils.genNSpaces(4)
+        val code = language match {
+            case Language.WDLvDraft2 =>
+                // Draft-2 does not support the input block.
+                s"""|workflow ${name} {
+                    |${inputs.map(x => twoSpaces + x).mkString("\n")}
+                    |  output {
+                    |${outputs.map(x => fourSpaces + x).mkString("\n")}
+                    |  }
+                    |}""".stripMargin
+            case Language.WDLv1_0 =>
+                s"""|${versionString(language)}
+                    |
+                    |workflow ${name} {
+                    |  input {
+                    |${inputs.map(x => fourSpaces + x).mkString("\n")}
+                    |  }
+                    |  output {
+                    |${outputs.map(x => fourSpaces + x).mkString("\n")}
+                    |  }
+                    |}""".stripMargin
+            case other =>
+                throw new Exception(s"Unsupported language version ${other}")
+        }
+        WdlCodeSnippet(code)
     }
 
-    def taskWorkflowOutputsAsApplet(taskName : String,
-                                    inputVars: Vector[IR.CVar],
-                                    outputNodes: Vector[GraphOutputNode],
-                                    language: Language.Value) : WdlCodeSnippet = {
+    // The inputs and outputs for this mini-workflows are likely to
+    // be the same. We add a unique prefix to the outputs, which
+    // is stripped at runtime.
+    //
+    // For example, this is illegal:
+    // workflow foo {
+    //   input {
+    //     Int errorRate
+    //   }
+    //   output {
+    //     Int errorRate = errorRate
+    //   }
+    // }
+    //
+    // So we rewrite it as:
+    // workflow foo {
+    //   input {
+    //     Int errorRate
+    //   }
+    //   output {
+    //     Int xyz_errorRate = errorRate
+    //   }
+    // }
+    //
+    // At runtime we strip the "xyz_" prefix.
+    //
+    // Note: this still doesn't handle the case of outputs
+    // referencing each other. For example, foo will fail.
+    //
+    // workflow foo {
+    //   input {
+    //      Int a
+    //   }
+    //   output {
+    //      Int x = a + 1
+    //      Int y = x + 7
+    //   }
+    // }
+    def evalOnlyWfFromWorkflowOutputs(name : String,
+                                      inputVars: Vector[IR.CVar],
+                                      outputNodes: Vector[GraphOutputNode],
+                                      language: Language.Value) : WdlCodeSnippet = {
         val inputs: Vector[String] = inputVars.map { cVar =>
-            s"    ${cVar.womType.toDisplayString} ${cVar.name}"
+            s"${cVar.womType.toDisplayString} ${cVar.dxVarName}"
         }
+        val prefix = Utils.OUTPUT_VAR_PREFIX
         val outputs: Vector[String] = outputNodes.map {
             case PortBasedGraphOutputNode(id, womType, sourcePort) =>
                 val name = id.workflowLocalName
-                s"    ${womType.toDisplayString} xxx_${name} = ${name}"
+                s"${womType.toDisplayString} ${prefix}${name} = ${name}"
             case expr :ExpressionBasedGraphOutputNode =>
                 val name = expr.identifier.localName.value
-                s"    ${expr.womType.toDisplayString} xxx_${name} = ${expr.womExpression.sourceString}"
+                s"${expr.womType.toDisplayString} ${prefix}${name} = ${expr.womExpression.sourceString}"
             case other =>
                 throw new Exception(s"unhandled output ${other}")
         }
 
-        val wdlTaskCode = s"""|${versionString(language)}
-                              |
-                              |task ${taskName} {
-                              |  input {
-                              |    ${inputs.mkString("\n")}
-                              |  }
-                              |  command{}
-                              |  output {
-                              |    ${outputs.mkString("\n")}
-                              |  }
-                              |}""".stripMargin
-        WdlCodeSnippet(wdlTaskCode)
+        val twoSpaces = Utils.genNSpaces(2)
+        val fourSpaces = Utils.genNSpaces(4)
+        val code = language match {
+            case Language.WDLvDraft2 =>
+                // Draft-2 does not support the input block.
+                s"""|workflow ${name} {
+                    |${inputs.map(x => twoSpaces + x).mkString("\n")}
+                    |  output {
+                    |${outputs.map(x => fourSpaces + x).mkString("\n")}
+                    |  }
+                    |}""".stripMargin
+            case Language.WDLv1_0 =>
+                s"""|${versionString(language)}
+                    |
+                    |workflow ${name} {
+                    |  input {
+                    |${inputs.map(x => fourSpaces + x).mkString("\n")}
+                    |  }
+                    |  output {
+                    |${outputs.map(x => fourSpaces + x).mkString("\n")}
+                    |  }
+                    |}""".stripMargin
+            case other =>
+                throw new Exception(s"Unsupported language version ${other}")
+        }
+        WdlCodeSnippet(code)
     }
 }
