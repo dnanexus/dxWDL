@@ -1,5 +1,10 @@
 # Release Notes
 
+## 0.81.1
+- Supporting proxy configuration with user and password. For example:
+```
+$ export HTTPS_PROXY = https://john_smith:welcome1@proxy.acme.com:8080
+```
 
 ## 0.81
 
