@@ -632,9 +632,8 @@ public class DXEnvironment {
         String user = userPass.substring(0, userPass.indexOf(':') - 1);
         String pass = userPass.substring(userPass.indexOf(':') +1);
 
-        System.err.format("dxjava: proxyMethod=%s proxyDomain=%s\n", proxyMethod, proxyDomain);
         if (proxyMethod.toLowerCase().equals("ntlm")) {
-            System.err.format("dxjava: NTLM chosen\n");
+            doDebug("NTLM authentication method specified", null);
             return new ProxyDesc(proxyHost, true, user, pass, proxyDfn, "ntlm", proxyDomain);
         } else {
             return new ProxyDesc(proxyHost, true, user, pass, proxyDfn, null, null);
