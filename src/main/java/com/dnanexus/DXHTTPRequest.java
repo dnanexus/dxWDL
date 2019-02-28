@@ -185,7 +185,6 @@ public class DXHTTPRequest {
         CredentialsProvider credsProvider = new BasicCredentialsProvider();
         if (proxyDesc.method.equals("ntlm")) {
             // NTLM: windows NT authentication, with Kerberos
-            System.err.format("dxjava: NTLM proxyDomain=%s\n", proxyDesc.domain);
             String localHostname;
             try {
                 localHostname = java.net.InetAddress.getLocalHost().getHostName();

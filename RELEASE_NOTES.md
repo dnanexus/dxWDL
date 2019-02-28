@@ -1,7 +1,15 @@
 # Release Notes
 
 ## 0.81.2
-- Support NTLM proxies.
+- Support NTLM proxies. If your organization is configured with an NTLM proxy,
+you can use it like this:
+```
+$ export HTTP_PROXY_METHOD=ntlm
+$ export HTTP_PROXY_DOMAIN = acme.com
+$ export HTTP_PROXY = https://john_smith:welcome1@proxy.acme.com:8080
+$ java -jar dxWDL.jar ...
+```
+
 
 ## 0.81.1
 - Supporting proxy configuration with user and password. For example:

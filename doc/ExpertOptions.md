@@ -556,3 +556,11 @@ $ java -jar dxWDL.jar compile ...
 ```
 
 the compiler will send all requests through the machine `proxy.acme.com` on port `8080`.
+
+If an a proxy with NTLM authentication is used, the following configuration is required:
+```
+$ export HTTP_PROXY_METHOD=ntlm
+$ export HTTP_PROXY_DOMAIN = acme.com
+$ export HTTP_PROXY = https://john_smith:welcome1@proxy.acme.com:8080
+$ java -jar dxWDL.jar compile ...
+```
