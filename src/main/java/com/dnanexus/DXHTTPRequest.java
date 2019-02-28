@@ -26,6 +26,7 @@ import org.apache.http.HttpResponse;
 import org.apache.http.HttpStatus;
 import org.apache.http.auth.AuthScope;
 import org.apache.http.auth.UsernamePasswordCredentials;
+import org.apache.http.auth.NTCredentials;
 import org.apache.http.client.CredentialsProvider;
 import org.apache.http.client.HttpClient;
 import org.apache.http.client.config.RequestConfig;
@@ -182,9 +183,30 @@ public class DXHTTPRequest {
 
         // specify the user/password in the configuration
         CredentialsProvider credsProvider = new BasicCredentialsProvider();
-        credsProvider.setCredentials(new AuthScope(proxyDesc.host),
-                                     new UsernamePasswordCredentials(proxyDesc.username,
-                                                                     proxyDesc.password));
+        if (proxyDesc.method == "ntlm") {
+            // NTLM: windows NT authentication, with Kerberos
+            System.err.format("dxjava: NTLM proxyDomain=%s\n", proxyDesc.domain);
+            String localHostname;
+            try {
+                localHostname = java.net.InetAddress.getLocalHost().getHostName();
+            } catch (java.net.UnknownHostException e) {
+                throw new RuntimeException(e);
+            }
+            credsProvider.setCredentials(
+                new AuthScope(proxyDesc.host.getHostName(),
+                              proxyDesc.host.getPort(),
+                              AuthScope.ANY_REALM,
+                              "ntlm"),
+                new NTCredentials(proxyDesc.username,
+                                  proxyDesc.password,
+                                  localHostname,
+                                  proxyDesc.domain));
+        } else {
+            // Default authentication
+            credsProvider.setCredentials(new AuthScope(proxyDesc.host),
+                                         new UsernamePasswordCredentials(proxyDesc.username,
+                                                                         proxyDesc.password));
+        }
 
         RequestConfig requestConfig = reqBuilder.build();
         this.httpclient = HttpClientBuilder.create()

@@ -1,5 +1,8 @@
 # Release Notes
 
+## 0.81.2
+- Support NTLM proxies.
+
 ## 0.81.1
 - Supporting proxy configuration with user and password. For example:
 ```
