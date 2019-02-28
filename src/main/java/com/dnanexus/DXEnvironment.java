@@ -97,6 +97,8 @@ public class DXEnvironment {
         private int socketTimeout;
         private int connectionTimeout;
         private String httpProxy;
+        private String httpProxyMethod;
+        private String httpProxyDomain;
 
         /**
          * Initializes a Builder object using JSON config in the file
@@ -118,8 +120,11 @@ public class DXEnvironment {
             workspaceId = templateEnvironment.workspaceId;
             projectContextId = templateEnvironment.projectContextId;
             disableRetry = templateEnvironment.disableRetry;
-            if (templateEnvironment.proxy != null)
+            if (templateEnvironment.proxy != null) {
                 httpProxy = templateEnvironment.proxy.rawDefinition;
+                httpProxyMethod = templateEnvironment.proxy.method;
+                httpProxyDomain = templateEnvironment.proxy.domain;
+            }
         }
 
         private Builder(File jsonConfigFile) {
@@ -133,6 +138,8 @@ public class DXEnvironment {
             projectContextId = null;
             disableRetry = false;
             httpProxy = null;
+            httpProxyMethod = null;
+            httpProxyDomain = null;
 
             // (2) JSON file
             if (jsonConfigFile.exists()) {
@@ -178,6 +185,12 @@ public class DXEnvironment {
                     }
                     if (getTextValue(jsonConfig, "HTTPS_PROXY") != null) {
                         httpProxy = getTextValue(jsonConfig, "HTTPS_PROXY");
+                    }
+                    if (getTextValue(jsonConfig, "HTTP_PROXY_METHOD") != null) {
+                        httpProxyMethod = getTextValue(jsonConfig, "HTTP_PROXY_METHOD");
+                    }
+                    if (getTextValue(jsonConfig, "HTTP_PROXY_DOMAIN") != null) {
+                        httpProxyDomain = getTextValue(jsonConfig, "HTTP_PROXY_DOMAIN");
                     }
 
                 } catch (IOException e) {
@@ -226,6 +239,12 @@ public class DXEnvironment {
             if (sysEnv.containsKey("HTTPS_PROXY")) {
                 httpProxy = sysEnv.get("HTTPS_PROXY");
             }
+            if (sysEnv.containsKey("HTTP_PROXY_METHOD")) {
+                httpProxyMethod = sysEnv.get("HTTP_PROXY_METHOD");
+            }
+            if (sysEnv.containsKey("HTTP_PROXY_DOMAIN")) {
+                httpProxyDomain = sysEnv.get("HTTP_PROXY_DOMAIN");
+            }
 
             try {
                 if (securityContextTxt != null) {
@@ -247,7 +266,8 @@ public class DXEnvironment {
         public DXEnvironment build() {
             return new DXEnvironment(apiserverHost, apiserverPort, apiserverProtocol,
                                      securityContext, jobId, workspaceId, projectContextId, disableRetry,
-                                     socketTimeout, connectionTimeout, httpProxy);
+                                     socketTimeout, connectionTimeout,
+                                     httpProxy, httpProxyMethod, httpProxyDomain);
         }
 
         /**
@@ -407,17 +427,23 @@ public class DXEnvironment {
         String username;
         String password;
         String rawDefinition;
+        String method;   // NTLM, or user-password are supported.
+        String domain;   // Currently used just for NTLM
 
         ProxyDesc(HttpHost host,
                   Boolean authRequired,
                   String username,
                   String password,
-                  String rawDefinition) {
+                  String rawDefinition,
+                  String method,
+                  String domain) {
             this.host = host;
             this.authRequired = authRequired;
             this.username = username;
             this.password = password;
             this.rawDefinition = rawDefinition;
+            this.method = method;
+            this.domain = domain;
         }
     }
 
@@ -465,7 +491,8 @@ public class DXEnvironment {
 
     private DXEnvironment(String apiserverHost, String apiserverPort, String apiserverProtocol,
                           JsonNode securityContext, String jobId, String workspaceId, String projectContextId, boolean
-                          disableRetry, int socketTimeout, int connectionTimeout, String httpProxy) {
+                          disableRetry, int socketTimeout, int connectionTimeout,
+                          String httpProxy, String httpProxyMethod, String httpProxyDomain) {
         this.apiserverHost = apiserverHost;
         this.apiserverPort = apiserverPort;
         this.apiserverProtocol = apiserverProtocol;
@@ -476,7 +503,7 @@ public class DXEnvironment {
         this.disableRetry = disableRetry;
         this.socketTimeout = socketTimeout;
         this.connectionTimeout = connectionTimeout;
-        this.proxy = parseProxyDefinition(httpProxy);
+        this.proxy = parseProxyDefinition(httpProxy, httpProxyMethod, httpProxyDomain);
 
         // TODO: additional validation on the project/workspace, and check that
         // apiserverProtocol is either "http" or "https".
@@ -577,7 +604,7 @@ public class DXEnvironment {
      *    https://localhost:3128
      *    https://dnanexus:welcome@localhost:3128
      */
-    public ProxyDesc parseProxyDefinition(String proxyDfn) {
+    public ProxyDesc parseProxyDefinition(String proxyDfn, String proxyMethod, String proxyDomain) {
         if (proxyDfn == null)
             return null;
 
@@ -585,7 +612,7 @@ public class DXEnvironment {
         boolean authRequired = proxyDfn.contains("@");
         if (!authRequired) {
             HttpHost proxyHost = HttpHost.create(proxyDfn);
-            return new ProxyDesc(proxyHost, false, null, null, proxyDfn);
+            return new ProxyDesc(proxyHost, false, null, null, proxyDfn, null, null);
         }
 
         // We need to authenticate with a username and password.
@@ -604,7 +631,13 @@ public class DXEnvironment {
                                        ") does not specify a user:password tuple");
         String user = userPass.substring(0, userPass.indexOf(':') - 1);
         String pass = userPass.substring(userPass.indexOf(':') +1);
-        return new ProxyDesc(proxyHost, true, user, pass, proxyDfn);
+
+        if (proxyMethod.toLowerCase().equals("ntlm")) {
+            doDebug("NTLM authentication method specified", null);
+            return new ProxyDesc(proxyHost, true, user, pass, proxyDfn, "ntlm", proxyDomain);
+        } else {
+            return new ProxyDesc(proxyHost, true, user, pass, proxyDfn, null, null);
+        }
     }
 
     /**

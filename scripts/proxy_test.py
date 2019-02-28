@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 import argparse
 import copy
+from termcolor import colored, cprint
 import fnmatch
 import getpass
 import json
@@ -46,6 +47,13 @@ def setup():
         print("$ sudo apt-get install squid3")
         exit(1)
 
+def squid_reload(config_file_path):
+    subprocess.check_output(["sudo", "cp",
+                             config_file_path,
+                             "/etc/squid/squid.conf"
+    ])
+    subprocess.check_output(["sudo", "service", "squid", "reload"])
+
 def shutdown():
     iptables_clean()
     print("shutdown sequence: stop squid, and copy the original configuration file.")
@@ -61,6 +69,11 @@ def compile(project, folder, version_id, proxy = None):
     if proxy is not None:
         if proxy == "auth":
             os.environ["HTTP_PROXY"] = "https://dnanexus:welcome@localhost:3128"
+        elif proxy == "ntlm":
+            print("ntlm method setup")
+            os.environ["HTTP_PROXY"] = "https://dnanexus:welcome@localhost:3128"
+            os.environ["HTTP_PROXY_METHOD"] = "ntlm"
+            os.environ["HTTP_PROXY_DOMAIN"] = "dnanexus.com"
         else:
             os.environ["HTTP_PROXY"] = "localhost:3128"
     cmdline = [
@@ -86,11 +99,9 @@ def build_dirs(project, version_id):
 # test 1:
 # The squid configuration has a deny-all. The compiler should fail.
 def test_deny(project, folder, version_id):
-    subprocess.check_output(["sudo", "cp",
-                             os.path.join(here, "squid_disallow_all.conf"),
-                             "/etc/squid/squid.conf"
-                             ])
-    subprocess.check_output(["sudo", "service", "squid", "reload"])
+    cprint("test deny", "yellow")
+    squid_reload(os.path.join(here, "squid_disallow_all.conf"))
+
     succeeded = True
     try:
         compile(project, folder, version_id, proxy="regular")
@@ -101,15 +112,14 @@ def test_deny(project, folder, version_id):
         exit(1)
     else:
         print("Correct: when blocking http requests, the compiler can't reach the api servers")
+        print()
 
 # test 2:
 # The squid configuration has an allow-all. The compiler should succeed
 def test_allow(project, folder, version_id):
-    subprocess.check_output(["sudo", "cp",
-                             os.path.join(here, "squid_allow_all.conf"),
-                             "/etc/squid/squid.conf"
-                             ])
-    subprocess.check_output(["sudo", "service", "squid", "reload"])
+    cprint("test allow", "yellow")
+    squid_reload(os.path.join(here, "squid_allow_all.conf"))
+
     succeeded = True
     try:
         compile(project, folder, version_id, proxy="regular")
@@ -118,19 +128,17 @@ def test_allow(project, folder, version_id):
         succeeded = False
     if succeeded:
         print("Correct: http requests are passing through the proxy, reaching the apiserver")
+        print()
     else:
         print("Error: requests are allowed through the proxy, however, the API servers are unreachable")
         exit(1)
 
-
 # test 2.1:
 # The squid configuration requires authorization. The compiler should succeed
 def test_allow_auth(project, folder, version_id):
-    subprocess.check_output(["sudo", "cp",
-                             os.path.join(here, "squid_allow_authorized.conf"),
-                             "/etc/squid/squid.conf"
-                             ])
-    subprocess.check_output(["sudo", "service", "squid", "reload"])
+    cprint("test allow only authenticated access", "yellow")
+    squid_reload(os.path.join(here, "squid_allow_authorized.conf"))
+
     succeeded = True
     try:
         compile(project, folder, version_id, proxy="auth")
@@ -139,13 +147,34 @@ def test_allow_auth(project, folder, version_id):
         succeeded = False
     if succeeded:
         print("Correct: authorized http requests are passing through the proxy")
+        print()
     else:
         print("Error: authorized requests are allowed through the proxy, however, the API servers are unreachable")
         exit(1)
 
+# test 2.1:
+# The squid configuration requires authorization. The compiler should succeed
+def test_ntlm_auth(project, folder, version_id):
+    cprint("test NTLM access", "yellow")
+    squid_reload(os.path.join(here, "squid_allow_authorized.conf"))
+
+    succeeded = True
+    try:
+        compile(project, folder, version_id, proxy="ntlm")
+    except Exception as e:
+        print(e)
+        succeeded = False
+    if succeeded:
+        print("Error: NTLM should not work")
+        exit(1)
+    else:
+        print("Correct: NTLM authorized does not work with squid")
+        print()
+
 # test 3:
 # block https access for this user, the compiler should fail.
 def test_network_blocking(project, folder, version_id):
+    cprint("test network blocking", "yellow")
     iptables_block_user()
     succeeded = True
     try:
@@ -160,14 +189,14 @@ def test_network_blocking(project, folder, version_id):
         exit(1)
     else:
         print("Correct: user can be blocked from accessing the network")
-
+        print()
 
 # test 3:
 # set squid as a proxy,
 # block https access for this user.
 # This is supposed to succeed.
 def test_squid_allows_bypassing_firewall(project, folder, version_id):
-    # run squid
+    cprint("test squid allows bypassing firewall", "yellow")
     subprocess.check_output(["sudo", "cp",
                              os.path.join(here, "squid_allow_all.conf"),
                              "/etc/squid/squid.conf"
@@ -188,10 +217,10 @@ def test_squid_allows_bypassing_firewall(project, folder, version_id):
     if succeeded:
         print("Correct: setting a proxy allows network access, when"
               " direct access is blocked")
+        print()
     else:
         print("Error: compiler was not using the proxy, it was sneaking behind it")
         exit(1)
-
 
 ######################################################################
 ## Program entry point
@@ -229,10 +258,11 @@ def main():
         setup()
 
 #        test_deny(project, folder, version_id)
-#        test_allow(project, folder, version_id)
+        test_allow(project, folder, version_id)
 #        test_allow_auth(project, folder, version_id)
-        test_network_blocking(project, folder, version_id)
-        test_squid_allows_bypassing_firewall(project, folder, version_id)
+        test_ntlm_auth(project, folder, version_id)
+#        test_network_blocking(project, folder, version_id)
+#        test_squid_allows_bypassing_firewall(project, folder, version_id)
     finally:
         print("Test complete")
         shutdown()
