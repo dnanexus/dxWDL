@@ -363,14 +363,22 @@ case class GenerateIR(callables: Map[String, IR.Callable],
 
     // Lookup in the environment. Provide a human readable error message
     // if the fully-qualified-name is not found.
-    private def lookupInEnv(fqn: String, env: CallEnv) : (String, LinkedVar) = {
+    private def lookupInEnv(fqn: String,
+                            womType: WomType,
+                            env: CallEnv) : Option[(String, LinkedVar)] = {
         lookupInEnvInner(fqn, env) match {
+            case None if Utils.isOptional(womType) =>
+                None
             case None =>
-                Utils.error(s"""|fully-qualified-name:  ${fqn}
+                /*Utils.error(s"""|fully-qualified-name:  ${fqn}
                                 |environment: ${env.keys.toVector.sorted}
-                                |""".stripMargin)
-                throw new Exception(s"Did not find ${fqn} in the environment")
-            case Some((name, lVar)) => (name, lVar)
+                 |""".stripMargin)*/
+                // A missing compulsory argument
+                Utils.warning(verbose,
+                              s"Missing argument ${fqn}, it will have to be provided at runtime")
+                None
+            case Some((name, lVar)) =>
+                Some((name, lVar))
         }
     }
 
@@ -390,8 +398,8 @@ case class GenerateIR(callables: Map[String, IR.Callable],
                             |""".stripMargin)
         }
         val allInputs = Block.closure(block)
-        val closure = allInputs.map { name =>
-            lookupInEnv(name, env)
+        val closure = allInputs.flatMap { case (name, womType) =>
+            lookupInEnv(name, womType, env)
         }.toMap
 
         Utils.trace(verbose2,

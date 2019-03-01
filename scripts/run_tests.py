@@ -49,6 +49,7 @@ test_defaults=[]
 test_unlocked=["cast",
                "linear",
                "shapes"]
+test_extras=["instance_types"]
 TestMetaData = namedtuple('TestMetaData', 'name kind')
 TestDesc = namedtuple('TestDesc', 'name kind wdl_source wdl_input dx_input results')
 
@@ -373,6 +374,8 @@ def compiler_per_test_flags(tname):
     else:
         flags.append("-inputs")
         flags.append(desc.wdl_input)
+    if tname in test_extras:
+        flags += ["--extras", os.path.join(top_dir, "test/extras.json")]
     return flags
 
 # Which project to use for a test
@@ -554,8 +557,6 @@ def main():
             compiler_flags += ["-verboseKey", key]
     if args.runtime_debug_level:
         compiler_flags += ["-runtimeDebugLevel", args.runtime_debug_level]
-
-    compiler_flags += ["--extras", os.path.join(top_dir, "test/extras.json")]
 
     if "call_native" in test_names:
         native_call_setup(project, applet_folder, version_id)

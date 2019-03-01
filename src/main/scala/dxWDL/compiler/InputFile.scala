@@ -21,16 +21,88 @@ This is the dx JSON input:
 package dxWDL.compiler
 
 import com.dnanexus.{DXDataObject, DXFile}
-import dxWDL.util.{DxPath, Utils, Verbose, WdlVarLinks}
-import IR.{CVar}
+import dxWDL.util._
+import IR.{CVar, SArg}
 import scala.collection.mutable.HashMap
 import java.nio.file.Path
 import spray.json._
 import wom.types._
+import wom.values._
 
 case class InputFile(verbose: Verbose) {
     val verbose2:Boolean = verbose.keywords contains "InputFile"
 
+    // Convert a job input to a WomValue. Do not download any files, convert them
+    // to a string representation. For example: dx://proj-xxxx:file-yyyy::/A/B/C.txt
+    //
+    private def womValueFromCromwellJSON(womType: WomType,
+                                         jsValue: JsValue) : WomValue = {
+        (womType, jsValue)  match {
+            // base case: primitive types
+            case (WomBooleanType, JsBoolean(b)) => WomBoolean(b.booleanValue)
+            case (WomIntegerType, JsNumber(bnm)) => WomInteger(bnm.intValue)
+            case (WomFloatType, JsNumber(bnm)) => WomFloat(bnm.doubleValue)
+            case (WomStringType, JsString(s)) => WomString(s)
+            case (WomSingleFileType, JsString(s)) => WomSingleFile(s)
+            case (WomSingleFileType, JsObject(_)) =>
+                // Convert the path in DNAx to a string. We can later
+                // decide if we want to download it or not
+                val dxFile = Utils.dxFileFromJsValue(jsValue)
+                val FurlDx(s) = FurlDx.dxFileToFurl(dxFile)
+                WomSingleFile(s)
+
+            // Maps. These are serialized as an object with a keys array and
+            // a values array.
+            case (WomMapType(keyType, valueType), _) =>
+                val fields = jsValue.asJsObject.fields
+                // [mJs] is a map from json key to json value
+                val mJs: Map[JsValue, JsValue] =
+                    (fields("keys"), fields("values")) match {
+                        case (JsArray(x), JsArray(y)) =>
+                            assert(x.length == y.length)
+                            (x zip y).toMap
+                        case _ => throw new Exception("Malformed JSON")
+                    }
+                val m: Map[WomValue, WomValue] = mJs.map {
+                    case (k:JsValue, v:JsValue) =>
+                        val kWom = womValueFromCromwellJSON(keyType, k)
+                        val vWom = womValueFromCromwellJSON(valueType, v)
+                        kWom -> vWom
+                }.toMap
+                WomMap(WomMapType(keyType, valueType), m)
+
+            case (WomPairType(lType, rType), JsObject(fields))
+                    if (List("left", "right").forall(fields contains _)) =>
+                val left = womValueFromCromwellJSON(lType, fields("left"))
+                val right = womValueFromCromwellJSON(rType, fields("right"))
+                WomPair(left, right)
+
+            case (WomObjectType, JsObject(fields)) =>
+                throw new Exception("WOM objects not supported")
+
+            // empty array
+            case (WomArrayType(t), JsNull) =>
+                WomArray(WomArrayType(t), List.empty[WomValue])
+
+            // array
+            case (WomArrayType(t), JsArray(vec)) =>
+                val wVec: Seq[WomValue] = vec.map{
+                    elem:JsValue => womValueFromCromwellJSON(t, elem)
+                }
+                WomArray(WomArrayType(t), wVec)
+
+            case (WomOptionalType(t), JsNull) =>
+                WomOptionalValue(t, None)
+            case (WomOptionalType(t), jsv) =>
+                val value = womValueFromCromwellJSON(t, jsv)
+                WomOptionalValue(t, Some(value))
+
+            case _ =>
+                throw new AppInternalException(
+                    s"Unsupported combination ${womType} ${jsValue.prettyPrint}"
+                )
+        }
+    }
 
     // Import a value specified in a Cromwell style JSON input
     // file. Assume that all the platform files have already been
@@ -42,8 +114,8 @@ case class InputFile(verbose: Verbose) {
     // into WDL files in all cases.
     // 2) JSON maps and WDL maps are slighly different. WDL maps can have
     // keys of any type, where JSON maps can only have string keys.
-    private def importFromCromwell(womType: WomType,
-                                   jsv: JsValue) : JsValue = {
+    private def jsValueFromCromwellJSON(womType: WomType,
+                                        jsv: JsValue) : JsValue = {
         (womType, jsv) match {
             // base case: primitive types
             case (WomBooleanType, JsBoolean(_)) => jsv
@@ -58,12 +130,12 @@ case class InputFile(verbose: Verbose) {
                 if (keyType != WomStringType)
                     throw new Exception("Importing a JSON object to a WDL map requires string keys")
                 JsObject(fields.map{ case (k,v) =>
-                             k -> importFromCromwell(valueType, v)
+                             k -> jsValueFromCromwellJSON(valueType, v)
                          })
 
             case (WomPairType(lType, rType), JsArray(Vector(l,r))) =>
-                val lJs = importFromCromwell(lType, l)
-                val rJs = importFromCromwell(rType, r)
+                val lJs = jsValueFromCromwellJSON(lType, l)
+                val rJs = jsValueFromCromwellJSON(rType, r)
                 JsObject("left" -> lJs, "right" -> rJs)
 
             case (WomObjectType, _) =>
@@ -75,11 +147,11 @@ case class InputFile(verbose: Verbose) {
 
             case (WomArrayType(t), JsArray(vec)) =>
                 JsArray(vec.map{
-                    elem => importFromCromwell(t, elem)
+                    elem => jsValueFromCromwellJSON(t, elem)
                 })
 
             case (WomOptionalType(t), (null|JsNull)) => JsNull
-            case (WomOptionalType(t), _) =>  importFromCromwell(t, jsv)
+            case (WomOptionalType(t), _) =>  jsValueFromCromwellJSON(t, jsv)
 
             case _ =>
                 throw new Exception(
@@ -115,7 +187,7 @@ case class InputFile(verbose: Verbose) {
     private def translateValue(cVar: CVar,
                                jsv: JsValue) : WdlVarLinks = {
         val jsWithDxLinks: JsValue = replaceURLsWithLinks(jsv)
-        val js2 = importFromCromwell(cVar.womType, jsWithDxLinks)
+        val js2 = jsValueFromCromwellJSON(cVar.womType, jsWithDxLinks)
         WdlVarLinks.importFromCromwellJSON(cVar.womType, js2)
     }
 
@@ -129,26 +201,161 @@ case class InputFile(verbose: Verbose) {
         inputFields
     }
 
+
+    private def getExactlyOnce(fields: HashMap[String, JsValue],
+                               fqn: String) : Option[JsValue] = {
+        fields.get(fqn) match {
+            case None =>
+                Utils.trace(verbose2, s"getExactlyOnce ${fqn} => None")
+                None
+            case Some(v:JsValue) =>
+                Utils.trace(verbose2, s"getExactlyOnce ${fqn} => Some(${v})")
+                fields -= fqn
+                Some(v)
+        }
+    }
+
+    // If a stage has defaults, set the SArg to a constant. The user
+    // can override it at runtime.
+    private def addDefaultsToStage(stg: IR.Stage,
+                                   prefix: String,
+                                   callee: IR.Callable,
+                                   defaultFields: HashMap[String, JsValue]) : IR.Stage = {
+        Utils.trace(verbose2, s"addDefaultToStage ${stg.stageName}")
+        val inputsFull:Vector[(SArg,CVar)] = stg.inputs.zipWithIndex.map{
+            case (sArg,idx) =>
+                val cVar = callee.inputVars(idx)
+                (sArg, cVar)
+        }
+        val inputsWithDefaults: Vector[SArg] = inputsFull.map{ case (sArg, cVar) =>
+            val fqn = s"${prefix}.${cVar.name}"
+            getExactlyOnce(defaultFields, fqn) match {
+                case None => sArg
+                case Some(dflt:JsValue) =>
+                    val w : WomValue = womValueFromCromwellJSON(cVar.womType, dflt)
+                    IR.SArgConst(w)
+            }
+        }
+        stg.copy(inputs = inputsWithDefaults)
+    }
+
+
+    // Set defaults for workflow inputs.
+    private def addDefaultsToWorkflowInputs(inputs:Vector[(CVar, SArg)],
+                                            wfName:String,
+                                            defaultFields: HashMap[String, JsValue])
+            : Vector[(CVar, SArg)] = {
+        inputs.map { case (cVar, sArg) =>
+            val fqn = s"${wfName}.${cVar.name}"
+            val sArgDflt = getExactlyOnce(defaultFields, fqn) match {
+                case None => sArg
+                case Some(dflt:JsValue) =>
+                    val w : WomValue = womValueFromCromwellJSON(cVar.womType, dflt)
+                    IR.SArgConst(w)
+            }
+            (cVar, sArgDflt)
+        }.toVector
+    }
+
+    // set defaults for a task
+    private def embedDefaultsIntoTask(applet: IR.Applet,
+                                      defaultFields:HashMap[String,JsValue]) : IR.Applet = {
+        val inputsWithDefaults: Vector[CVar] = applet.inputs.map {
+            case cVar =>
+                val fqn = s"${applet.name}.${cVar.name}"
+                getExactlyOnce(defaultFields, fqn) match {
+                    case None =>
+                        cVar
+                    case Some(dflt:JsValue) =>
+                        val w : WomValue = womValueFromCromwellJSON(cVar.womType, dflt)
+                        cVar.copy(default = Some(w))
+                }
+        }.toVector
+        applet.copy(inputs = inputsWithDefaults)
+    }
+
+    // Embed default values into the workflow IR
+    //
+    // Make a sequential pass on the IR, figure out the fully qualified names
+    // of all CVar and SArgs. If they have a default value, add it as an attribute
+    // (DeclAttrs).
+    private def embedDefaultsIntoWorkflow(wf: IR.Workflow,
+                                          callables: Map[String, IR.Callable],
+                                          defaultFields:HashMap[String,JsValue]) : IR.Workflow = {
+        val wfWithDefaults =
+            if (wf.locked) {
+                // Locked workflows, we have workflow level inputs
+                val wfInputsWithDefaults = addDefaultsToWorkflowInputs(wf.inputs, wf.name,
+                                                                       defaultFields)
+                wf.copy(inputs = wfInputsWithDefaults)
+            } else {
+                // Workflow is unlocked, we don't have proper
+                // workflow level inputs. Instead, set the defaults in the COMMON stage
+
+                val stagesWithDefaults = wf.stages.map{ stg =>
+                    val callee:IR.Callable = callables(stg.calleeName)
+                    if (stg.stageName == Utils.COMMON) {
+                        addDefaultsToStage(stg, wf.name, callee, defaultFields)
+                    } else {
+                        addDefaultsToStage(stg, s"${wf.name}.${stg.stageName}", callee, defaultFields)
+                    }
+                }
+                wf.copy(stages = stagesWithDefaults)
+            }
+
+        // check that the stage order hasn't changed
+        val allStageNames = wf.stages.map{ stg => stg.stageName }.toVector
+        val embedAllStageNames = wfWithDefaults.stages.map{ stg => stg.stageName }.toVector
+        assert(allStageNames == embedAllStageNames)
+
+        wfWithDefaults
+    }
+
+    // Embed default values into the IR
+    //
+    // Make a sequential pass on the IR, figure out the fully qualified names
+    // of all CVar and SArgs. If they have a default value, embed it into the IR.
+    def embedDefaults(bundle: IR.Bundle,
+                      defaultInputs: Path) : IR.Bundle = {
+        Utils.trace(verbose.on, s"Embedding defaults into the IR")
+
+        // read the default inputs file (xxxx.json)
+        val wdlDefaults: JsObject = Utils.readFileContent(defaultInputs).parseJson.asJsObject
+        val defaultFields:HashMap[String,JsValue] = preprocessInputs(wdlDefaults)
+
+        val callablesWithDefaults = bundle.allCallables.map {
+            case (name, callable) =>
+                val callableWithDefaults = callable match {
+                    case applet : IR.Applet =>
+                        embedDefaultsIntoTask(applet, defaultFields)
+                    case subwf : IR.Workflow =>
+                        embedDefaultsIntoWorkflow(subwf, bundle.allCallables, defaultFields)
+                }
+                name -> callableWithDefaults
+        }.toMap
+        val primaryCallable = bundle.primaryCallable match {
+            case None => None
+            case Some(applet : IR.Applet) =>
+                Some(embedDefaultsIntoTask(applet, defaultFields))
+            case Some(wf : IR.Workflow) =>
+                Some(embedDefaultsIntoWorkflow(wf, bundle.allCallables, defaultFields))
+        }
+        if (!defaultFields.isEmpty) {
+            throw new Exception(s"""|Could not map all default fields.
+                                    |These were left: ${defaultFields}""".stripMargin)
+        }
+        bundle.copy(primaryCallable = primaryCallable,
+                    allCallables = callablesWithDefaults)
+    }
+
     // Converting a Cromwell style input JSON file, into a valid DNAx input file
     //
     case class CromwellInputFileState(inputFields: HashMap[String,JsValue],
                                       dxKeyValues: HashMap[String, JsValue]) {
-        private def getExactlyOnce(fqn: String) : Option[JsValue] = {
-            inputFields.get(fqn) match {
-                case None =>
-                    Utils.trace(verbose2, s"getExactlyOnce ${fqn} => None")
-                    None
-                case Some(v:JsValue) =>
-                    Utils.trace(verbose2, s"getExactlyOnce ${fqn} => Some(${v})")
-                    inputFields -= fqn
-                    Some(v)
-            }
-        }
-
         // If WDL variable fully qualified name [fqn] was provided in the
         // input file, set [stage.cvar] to its JSON value
         def checkAndBind(fqn:String, dxName:String, cVar:IR.CVar) : Unit = {
-            getExactlyOnce(fqn) match {
+            getExactlyOnce(inputFields, fqn) match {
                 case None => ()
                 case Some(jsv) =>
                     // Do not assign the value to any later stages.

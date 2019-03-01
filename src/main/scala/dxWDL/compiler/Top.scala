@@ -167,10 +167,14 @@ object Top {
         // Compile the WDL workflow into an Intermediate
         // Representation (IR)
         val bundle: IR.Bundle = GenerateIR.apply(everythingBundle, allSources, language, cOpt.locked, cOpt.verbose)
+        val bundle2: IR.Bundle = cOpt.defaults match {
+            case None => bundle
+            case Some(path) => InputFile(cOpt.verbose).embedDefaults(bundle, path)
+        }
 
         // generate dx inputs from the Cromwell-style input specification.
         cOpt.inputs.foreach{ path =>
-            val dxInputs = InputFile(cOpt.verbose).dxFromCromwell(bundle, path)
+            val dxInputs = InputFile(cOpt.verbose).dxFromCromwell(bundle2, path)
             // write back out as xxxx.dx.json
             val filename = Utils.replaceFileSuffix(path, ".dx.json")
             val parent = path.getParent
@@ -180,7 +184,7 @@ object Top {
             Utils.writeFileContent(dxInputFile, dxInputs.prettyPrint)
             Utils.trace(cOpt.verbose.on, s"Wrote dx JSON input file ${dxInputFile}")
         }
-        bundle
+        bundle2
     }
 
     // Compile up to native dx applets and workflows

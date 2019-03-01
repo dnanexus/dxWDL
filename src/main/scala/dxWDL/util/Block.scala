@@ -430,7 +430,7 @@ object Block {
     //    }
     // requires "flag" and "rain".
     //
-    def closure(block: Block) : Set[String] = {
+    def closure(block: Block) : Map[String, WomType] = {
         // make a deep list of all the nodes inside the block
         val allBlockNodes : Set[GraphNode] = block.nodes.map{
             case sctNode: ScatterNode =>
@@ -442,25 +442,25 @@ object Block {
         }.flatten.toSet
 
         // Examine an input port, and keep it only if it points outside the block.
-        def keepOnlyOutsideRefs(inPort : GraphNodePort.InputPort) : Option[String] = {
+        def keepOnlyOutsideRefs(inPort : GraphNodePort.InputPort) : Option[(String, WomType)] = {
             if (allBlockNodes contains inPort.upstream.graphNode) None
-            else Some(inPort.name)
+            else Some((inPort.name, inPort.womType))
         }
 
         // Examine only the outer input nodes, check that they
         // originate in a node outside the block.
-        def getInputsToGraph(graph: Graph) : Set[String] = {
+        def getInputsToGraph(graph: Graph) : Map[String, WomType] = {
             graph.nodes.flatMap {
                 case ogin: OuterGraphInputNode =>
                     if (allBlockNodes contains ogin.linkToOuterGraphNode)
                         None
                     else
-                        Some(ogin.identifier.localName.value)
+                        Some((ogin.identifier.localName.value, ogin.womType))
                 case _ => None
-            }.toSet
+            }.toMap
         }
 
-        val allInputs :Set[String] = block.nodes.flatMap{
+        block.nodes.flatMap{
             case scNode : ScatterNode =>
                 val scNodeInputs = scNode.inputPorts.flatMap(keepOnlyOutsideRefs(_))
                 scNodeInputs ++ getInputsToGraph(scNode.innerGraph)
@@ -469,8 +469,7 @@ object Block {
                 cnInputs ++ getInputsToGraph(cnNode.innerGraph)
             case node : GraphNode =>
                 node.inputPorts.flatMap(keepOnlyOutsideRefs(_))
-        }.toSet
-        allInputs
+        }.toMap
     }
 
     // Figure out all the outputs from a sequence of WDL statements.
