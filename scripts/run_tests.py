@@ -45,15 +45,10 @@ tests_for_alt_project = [ "platform_asset" ]
 
 # Tests with the reorg flags
 test_reorg=["files", "math"]
-test_defaults=["files", "math", "population"]
+test_defaults=[]
 test_unlocked=["cast",
-               "call_with_defaults1",
-               "files",
-               "hello",
-               "math",
-               "optionals",
-               "strings",
-               "toplevel_calls"]
+               "linear",
+               "shapes"]
 TestMetaData = namedtuple('TestMetaData', 'name kind')
 TestDesc = namedtuple('TestDesc', 'name kind wdl_source wdl_input dx_input results')
 
