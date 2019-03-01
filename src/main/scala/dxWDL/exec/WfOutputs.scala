@@ -7,22 +7,22 @@ import cats.data.Validated.{Invalid, Valid}
 import common.validation.ErrorOr.ErrorOr
 import spray.json._
 import wom.callable.{WorkflowDefinition}
-import wom.callable.Callable.OutputDefinition
-import wom.expression._
+import wom.expression.WomExpression
+import wom.graph._
 import wom.values._
 import wom.types._
 
 import dxWDL.util._
 
-case class WfEvalOnlyRunner(wf: WorkflowDefinition,
-                            wfSourceCode: String,
-                            instanceTypeDB: InstanceTypeDB,
-                            execLinkInfo: Map[String, ExecLinkInfo],
-                            dxPathConfig : DxPathConfig,
-                            dxIoFunctions : DxIoFunctions,
-                            inputsRaw : JsValue,
-                            fragInputOutput : WfFragInputOutput,
-                            runtimeDebugLevel: Int) {
+case class WfOutputs(wf: WorkflowDefinition,
+                     wfSourceCode: String,
+                     instanceTypeDB: InstanceTypeDB,
+                     execLinkInfo: Map[String, ExecLinkInfo],
+                     dxPathConfig : DxPathConfig,
+                     dxIoFunctions : DxIoFunctions,
+                     inputsRaw : JsValue,
+                     fragInputOutput : WfFragInputOutput,
+                     runtimeDebugLevel: Int) {
     private val verbose = runtimeDebugLevel >= 1
     //private val maxVerboseLevel = (runtimeDebugLevel == 2)
 
@@ -46,31 +46,47 @@ case class WfEvalOnlyRunner(wf: WorkflowDefinition,
 
     def apply(envInitial: Map[String, WomValue]) : Map[String, JsValue] = {
         Utils.appletLog(verbose, s"dxWDL version: ${Utils.getVersion()}")
-        Utils.appletLog(verbose, s"link info=${execLinkInfo}")
         Utils.appletLog(verbose, s"Environment: ${envInitial}")
 
-        assert(wf.innerGraph.nodes.isEmpty)
+        val outputNodes : Vector[GraphOutputNode] = wf.innerGraph.outputNodes.toVector
+        val dbgOutputs = outputNodes.map{
+            WomPrettyPrintApproxWdl.apply(_)
+        }.mkString("\n")
+        Utils.appletLog(verbose, s"""|Evaluating workflow outputs
+                                     |${dbgOutputs}
+                                     |""".stripMargin)
 
         // Evaluate the output declarations. Add outputs evaluated to
         // the environment, so they can be referenced by expressions in the next
         // lines.
         var envFull = envInitial
-        val outputs: Map[String, WomValue] = wf.outputs.map{
-            case (outDef: OutputDefinition) =>
-                val value = evaluateWomExpression(outDef.expression,
-                                                  outDef.womType,
+        val outputs: Map[String, WomValue] = outputNodes.map{
+            case PortBasedGraphOutputNode(id, womType, sourcePort) =>
+                val value = envFull.get(sourcePort.name) match {
+                    case None =>
+                        throw new Exception(s"could not find ${sourcePort}")
+                    case Some(value) =>
+                        value
+                }
+                val name = id.workflowLocalName
+                envFull += (name -> value)
+                name -> value
+
+            case expr :ExpressionBasedGraphOutputNode =>
+                val value = evaluateWomExpression(expr.womExpression,
+                                                  expr.womType,
                                                   envFull)
-                envFull += (outDef.name -> value)
-                outDef.name -> value
+                val name = expr.graphOutputPort.name
+                envFull += (name -> value)
+                name -> value
+
+            case other =>
+                throw new Exception(s"unhandled output ${other}")
         }.toMap
 
         // convert the WDL values to JSON
         val outputFields:Map[String, JsValue] = outputs.map {
-            case (fullOutputVarName, womValue) =>
-                // strip the prefix "xyz_"
-                assert(fullOutputVarName.startsWith(Utils.OUTPUT_VAR_PREFIX))
-                val outputVarName = fullOutputVarName.substring(Utils.OUTPUT_VAR_PREFIX.length)
-
+            case (outputVarName, womValue) =>
                 val wvl = WdlVarLinks.importFromWDL(womValue.womType, womValue)
                 WdlVarLinks.genFields(wvl, outputVarName)
         }.toList.flatten.toMap

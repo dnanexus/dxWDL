@@ -552,8 +552,11 @@ case class WfFragRunner(wf: WorkflowDefinition,
 
         val (_, subBlocks, _) = Block.split(wf.innerGraph, wfSourceCode)
         val block = subBlocks(subBlockNr)
+        val dbgBlock = block.nodes.map{
+            WomPrettyPrintApproxWdl.apply(_)
+        }.mkString("\n")
         Utils.appletLog(verbose, s"""|Block ${subBlockNr} to execute:
-                                     |${WomPrettyPrintApproxWdl(block.nodes)}
+                                     |${dbgBlock}
                                      |""".stripMargin)
 
         val (otherNodes, category) = Block.categorize(block)

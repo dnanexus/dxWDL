@@ -105,4 +105,15 @@ class BlockTest extends FlatSpec with Matchers {
             }.toVector
         Block.outputClosure(exprOutputNodes) should be (Set("a", "b"))
     }
+
+    it should "calculate output closure for a workflow" in {
+        val path = pathFromBasename("compiler", "cast.wdl")
+        val wfSourceCode = Utils.readFileContent(path)
+        val wf : WorkflowDefinition = ParseWomSourceFile.parseWdlWorkflow(wfSourceCode)
+        val outputNodes = wf.innerGraph.outputNodes.toVector
+        Block.outputClosure(outputNodes) should be (Set("Add.result",
+                                                        "SumArray.result",
+                                                        "SumArray2.result",
+                                                        "JoinMisc.result"))
+    }
 }

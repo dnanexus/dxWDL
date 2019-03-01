@@ -16,7 +16,9 @@ class WomPrettyPrintApproxWdlTest extends FlatSpec with Matchers {
         val path = pathFromBasename("block_closure.wdl")
         val wfSourceCode = Utils.readFileContent(path)
         val wf : WorkflowDefinition = ParseWomSourceFile.parseWdlWorkflow(wfSourceCode)
-        val s = WomPrettyPrintApproxWdl.apply(wf.innerGraph.nodes.toSeq)
+        val s = wf.innerGraph.nodes.map{
+            WomPrettyPrintApproxWdl.apply(_)
+        }.mkString("\n")
         System.out.println(s)
     }
 }

@@ -223,9 +223,31 @@ case class InputFile(verbose: Verbose) {
             case Some(wf : IR.Workflow) if wf.stages.isEmpty =>
                 // edge case: workflow, with zero stages
                 ()
+
             case Some(wf : IR.Workflow) =>
-                // unlocked workflow with at least one stage
-                throw new NotImplementedError("unlocked workflows")
+                // unlocked workflow with at least one stage.
+                // Workflow inputs go into the common stage
+                val commonStage = wf.stages.head.id.getId
+                wf.inputs.foreach { case (cVar, _) =>
+                    val fqn = s"${wf.name}.${cVar.name}"
+                    val dxName = s"${commonStage}.${cVar.name}"
+                    cif.checkAndBind(fqn, dxName, cVar)
+                }
+
+                // Inputs for top level calls
+                val auxStages = Set(Utils.COMMON, Utils.OUTPUT_SECTION, Utils.REORG)
+                val middleStages = wf.stages.filter{ stg =>
+                    !(auxStages contains stg.stageName)
+                }
+                middleStages.foreach{ stg =>
+                    // Find the input definitions for the stage, by locating the callee
+                    val callee : IR.Callable = bundle.allCallables(stg.calleeName)
+                    callee.inputVars.foreach { cVar =>
+                        val fqn = s"${wf.name}.${stg.stageName}.${cVar.name}"
+                        val dxName = s"${stg.id.getId}.${cVar.name}"
+                        cif.checkAndBind(fqn, dxName, cVar)
+                    }
+                }
 
             case other =>
                 throw new Exception(s"Unknown case ${other.getClass}")
