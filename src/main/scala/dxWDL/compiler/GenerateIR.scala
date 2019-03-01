@@ -41,8 +41,6 @@ private case class NameBox(verbose: Verbose) {
 
 case class GenerateIR(callables: Map[String, IR.Callable],
                       language: Language.Value,
-                      locked: Boolean,
-                      wfKind: IR.WorkflowKind.Value,
                       verbose: Verbose) {
     val verbose2 : Boolean = verbose.keywords contains "GenerateIR"
     private val nameBox = NameBox(verbose)
@@ -237,8 +235,8 @@ case class GenerateIR(callables: Map[String, IR.Callable],
     //   ...
     // }
     // We handle only the case where the default is a constant.
-    def buildWorkflowInput(input: GraphInputNode) : (CVar,SArg) = {
-        val cVar = input match {
+    def buildWorkflowInput(input: GraphInputNode) : CVar = {
+        input match {
             case RequiredGraphInputNode(id, womType, nameInInputSet, valueMapper) =>
                 CVar(id.workflowLocalName, womType, None)
 
@@ -258,8 +256,6 @@ case class GenerateIR(callables: Map[String, IR.Callable],
             case other =>
                 throw new Exception(s"unhandled input ${other}")
         }
-
-        (cVar, IR.SArgWorkflowInput(cVar))
     }
 
 
@@ -414,7 +410,7 @@ case class GenerateIR(callables: Map[String, IR.Callable],
                                   blockNum : Int,
                                   env : CallEnv,
                                   wfName : String,
-                                  wfSource_WDLv1 : WdlCodeSnippet) : (IR.Stage, IR.Applet) = {
+                                  wfSourceStandAlone : WdlCodeSnippet) : (IR.Stage, IR.Applet) = {
         val baseName = createBlockName(block)
         val stageName = nameBox.chooseUniqueName(baseName)
         Utils.trace(verbose.on, s"--- Compiling wfFragment ${stageName}")
@@ -450,7 +446,7 @@ case class GenerateIR(callables: Map[String, IR.Callable],
         }.toVector
 
         // generate a new WDL script just for this sub-block
-        val wdlCode = wfSource_WDLv1.value
+        val wdlCode = wfSourceStandAlone.value
         //Utils.trace(verbose2, wdlCode)
 
         val applet = IR.Applet(s"${wfName}_${stageName}",
@@ -469,16 +465,17 @@ case class GenerateIR(callables: Map[String, IR.Callable],
          applet)
     }
 
-    // Compile a workflow, having compiled the independent tasks.
-    // This is a locked-down workflow, we have workflow level inputs
-    // and outputs.
-    private def compileWorkflowLocked(wf: WorkflowDefinition,
-                                      wfSourceStandAlone : WdlCodeSnippet,
-                                      wfInputs: Vector[(CVar, SArg)],
-                                      subBlocks: Vector[Block])
+    // Assemble the backbone of a workflow, having compiled the
+    // independent tasks.  This is shared between locked and unlocked
+    // workflows. At this point we we have workflow level inputs and
+    // outputs.
+    private def assembleBackbone(wf: WorkflowDefinition,
+                                 wfSourceStandAlone : WdlCodeSnippet,
+                                 wfInputs: Vector[(CVar, SArg)],
+                                 subBlocks: Vector[Block])
             : (Vector[(IR.Stage, Option[IR.Applet])], CallEnv) =
     {
-        Utils.trace(verbose.on, s"Compiling locked-down workflow ${wf.name}")
+        Utils.trace(verbose.on, s"Assembling workfow backbone ${wf.name}")
 
         var env : CallEnv = wfInputs.map { case (cVar,sArg) =>
             cVar.name -> LinkedVar(cVar, sArg)
@@ -503,8 +500,9 @@ case class GenerateIR(callables: Map[String, IR.Callable],
                     // Add bindings for the output variables. This allows later calls to refer
                     // to these results.
                     for (cVar <- stage.outputs) {
-                        env = env + (call.identifier.localName.value ++ "." + cVar.name ->
-                                         LinkedVar(cVar, IR.SArgLink(stage.stageName, cVar)))
+                        val fqn = call.identifier.localName.value ++ "." + cVar.name
+                        val cVarFqn = cVar.copy(name = fqn)
+                        env = env + (fqn -> LinkedVar(cVarFqn, IR.SArgLink(stage.stageName, cVar)))
                     }
                     (stage, None)
 
@@ -560,15 +558,44 @@ case class GenerateIR(callables: Map[String, IR.Callable],
         }
     }
 
-    // Some of the workflow outputs are expressions. We need an extra applet+stage
-    // to evaluate them.
-    private def buildOutputEvaluationStage(wfName: String,
-                                           outputNodes : Vector[ExpressionBasedGraphOutputNode],
-                                           env: CallEnv)
-            : (IR.Applet, IR.Stage, Vector[(CVar, SArg)]) = {
+
+    // Create a preliminary applet to handle workflow input/outputs. This is
+    // used only in the absence of workflow-level inputs/outputs.
+    def buildCommonApplet(wfName: String,
+                          wfSourceStandAlone: WdlCodeSnippet,
+                          inputVars: Vector[CVar]) : (IR.Stage, IR.Applet) = {
+        val appletName = s"${wfName}_${Utils.COMMON}"
+        Utils.trace(verbose.on, s"Compiling common applet ${appletName}")
+
+        val WdlCodeSnippet(wdlCode) = wfSourceStandAlone
+        val outputVars: Vector[CVar] = inputVars
+        val applet = IR.Applet(appletName,
+                               inputVars,
+                               outputVars,
+                               calcInstanceType(None),
+                               IR.DockerImageNone,
+                               IR.AppletKindWfInputs,
+                               wdlCode)
+
+        val sArgs: Vector[SArg] = inputVars.map{ _ => IR.SArgEmpty}.toVector
+        (IR.Stage(Utils.COMMON, genStageId(), applet.name, sArgs, outputVars),
+         applet)
+    }
+
+    // There are two reasons to be build a special output section:
+    // 1. Locked workflow: some of the workflow outputs are expressions.
+    //    We need an extra applet+stage to evaluate them.
+    // 2. Unlocked workflow: there are no workflow outputs, so we create
+    //    them artificially with a separate stage that collects the outputs.
+    private def buildOutputStage(wfName: String,
+                                 wfSourceStandAlone : WdlCodeSnippet,
+                                 outputNodes : Vector[GraphOutputNode],
+                                 env: CallEnv)
+            : (IR.Stage, IR.Applet) = {
         // Figure out what variables from the environment we need to pass
         // into the applet.
         val closure = Block.outputClosure(outputNodes)
+
         val inputVars : Vector[LinkedVar] = closure.map{ name =>
             val lVar = env.find{ case (key,_) => key == name } match {
                 case None => throw new Exception(s"could not find variable ${name} in the environment")
@@ -576,42 +603,118 @@ case class GenerateIR(callables: Map[String, IR.Callable],
             }
             lVar
         }.toVector
-        val outputVars: Vector[CVar] = outputNodes.map { expr =>
-            CVar(expr.graphOutputPort.name, expr.womType, None)
-        }
+        Utils.trace(verbose.on, s"inputVars=${inputVars.map(_.cVar)}")
+
+        // build definitions of the output variables
+        val outputVars: Vector[CVar] = outputNodes.map {
+            case PortBasedGraphOutputNode(id, womType, sourcePort) =>
+                CVar(id.workflowLocalName, womType, None)
+            case expr :ExpressionBasedGraphOutputNode =>
+                CVar(expr.graphOutputPort.name, expr.womType, None)
+            case other =>
+                throw new Exception(s"unhandled output ${other}")
+        }.toVector
+
+        val WdlCodeSnippet(wdlCode) = wfSourceStandAlone
         val appletName = s"${wfName}_${Utils.OUTPUT_SECTION}"
-        val WdlCodeSnippet(wdlCode) =
-            WdlCodeGen(verbose).taskEvalWorkflowOutputs(appletName,
-                                                        inputVars.map(_.cVar),
-                                                        outputNodes,
-                                                        language)
-        val taskDefinition = ParseWomSourceFile.parseWdlTask(wdlCode)
         val applet = IR.Applet(appletName,
                                inputVars.map(_.cVar),
                                outputVars,
                                calcInstanceType(None),
                                IR.DockerImageNone,
-                               IR.AppletKindTask(taskDefinition),
+                               IR.AppletKindWfOutputs,
                                wdlCode)
 
         // define the extra stage we add to the workflow
-        val stage = IR.Stage(Utils.OUTPUT_SECTION, genStageId(), applet.name,
-                             inputVars.map(_.sArg), outputVars)
-
-        // Link the output definitions to the stage execution
-        // at runtime.
-        val outputVarsFull = outputVars.map{ cVar =>
-            (cVar, IR.SArgLink(stage.stageName, cVar))
-        }
-        (applet, stage, outputVarsFull)
+        (IR.Stage(Utils.OUTPUT_SECTION, genStageId(Some("last")), applet.name,
+                  inputVars.map(_.sArg), outputVars),
+         applet)
     }
+
+    private def compileWorkflowLocked(wf: WorkflowDefinition,
+                                      inputNodes: Vector[GraphInputNode],
+                                      outputNodes: Vector[GraphOutputNode],
+                                      wfSourceStandAlone : WdlCodeSnippet,
+                                      subBlocks : Vector[Block]) : (IR.Workflow, Vector[IR.Applet]) =
+    {
+        val wfInputs:Vector[(CVar, SArg)] = inputNodes.map{
+            case iNode =>
+                val cVar = buildWorkflowInput(iNode)
+                (cVar, IR.SArgWorkflowInput(cVar))
+        }.toVector
+
+        val (allStageInfo, env) = assembleBackbone(wf, wfSourceStandAlone, wfInputs, subBlocks)
+        val (stages, auxApplets) = allStageInfo.unzip
+
+        // Handle outputs that are constants or variables, we can output them directly
+        if (outputNodes.forall(Block.isSimpleOutput)) {
+            val simpleWfOutputs = outputNodes.map(node => buildSimpleWorkflowOutput(node, env)).toVector
+            val irwf = IR.Workflow(wf.name, wfInputs, simpleWfOutputs, stages, true)
+            (irwf, auxApplets.flatten)
+        } else {
+            // Some of the outputs are expressions. We need an extra applet+stage
+            // to evaluate them.
+            val (outputStage, outputApplet) = buildOutputStage(wf.name, wfSourceStandAlone, outputNodes, env)
+            val wfOutputs = outputStage.outputs.map{ cVar =>
+                (cVar, IR.SArgLink(outputStage.stageName, cVar))
+            }
+            val irwf = IR.Workflow(wf.name, wfInputs, wfOutputs, stages :+ outputStage, true)
+            (irwf, auxApplets.flatten :+ outputApplet)
+        }
+    }
+
+
+    private def compileWorkflowRegular(wf: WorkflowDefinition,
+                                       inputNodes: Vector[GraphInputNode],
+                                       outputNodes: Vector[GraphOutputNode],
+                                       wfSourceStandAlone : WdlCodeSnippet,
+                                       subBlocks : Vector[Block])
+            : (IR.Workflow, Vector[IR.Applet]) =
+    {
+        // Create a special applet+stage for the inputs. This is a substitute for
+        // workflow inputs. We now call the workflow inputs, "fauxWfInputs". This is because
+        // they are references to the outputs of this first applet.
+
+        // compile into dx:workflow inputs
+        val wfInputDefs:Vector[CVar] = inputNodes.map{
+            case iNode => buildWorkflowInput(iNode)
+        }.toVector
+        val (commonStg, commonApplet) = buildCommonApplet(wf.name, wfSourceStandAlone, wfInputDefs)
+        val fauxWfInputs:Vector[(CVar, SArg)] = commonStg.outputs.map{
+            case cVar: CVar =>
+                val sArg = IR.SArgLink(commonStg.stageName, cVar)
+                (cVar, sArg)
+        }.toVector
+
+        val (allStageInfo, env) = assembleBackbone(wf, wfSourceStandAlone, fauxWfInputs, subBlocks)
+        val (stages: Vector[IR.Stage], auxApplets) = allStageInfo.unzip
+
+        // convert the outputs into an applet+stage
+        val (outputStage, outputApplet) = buildOutputStage(wf.name, wfSourceStandAlone,
+                                                          outputNodes, env)
+
+        val wfInputs = wfInputDefs.map{ cVar =>
+            (cVar, IR.SArgEmpty)
+        }
+        val wfOutputs = outputStage.outputs.map{ cVar =>
+            (cVar, IR.SArgLink(outputStage.stageName, cVar))
+        }
+        val irwf = IR.Workflow(wf.name,
+                               wfInputs.toVector,
+                               wfOutputs.toVector,
+                               commonStg +: stages :+ outputStage,
+                               false)
+        (irwf, commonApplet +: auxApplets.flatten :+ outputApplet)
+    }
+
 
     // Compile a (single) WDL workflow into a single dx:workflow.
     //
     // There are cases where we are going to need to generate dx:subworkflows.
     // This is not handled currently.
-    def compileWorkflow(wf: WorkflowDefinition,
-                        wfSource: String) : (IR.Workflow, Vector[IR.Applet]) =
+    private def compileWorkflow(wf: WorkflowDefinition,
+                                wfSource: String,
+                                locked: Boolean) : (IR.Workflow, Vector[IR.Applet]) =
     {
         Utils.trace(verbose.on, s"compiling workflow ${wf.name}")
 
@@ -634,39 +737,21 @@ case class GenerateIR(callables: Map[String, IR.Callable],
                 case cNode : CallNode =>
                     callables(cNode.callable.name)
             }.toVector
-        val wdlCodeGen = new WdlCodeGen(verbose)
-        val wfSourceStandAlone = wdlCodeGen.standAloneWorkflow(wfSource, callablesUsedInWorkflow, language)
+        val wfSourceStandAlone = WdlCodeGen(verbose).standAloneWorkflow(wfSource,
+                                                                        callablesUsedInWorkflow,
+                                                                        language)
 
         // compile into dx:workflow inputs
-        val wfInputs:Vector[(CVar, SArg)] = inputNodes.map(buildWorkflowInput).toVector
-
-        val (allStageInfo, env) = compileWorkflowLocked(wf, wfSourceStandAlone, wfInputs, subBlocks)
-        val (stages, auxApplets) = allStageInfo.unzip
-
-        // Handle outputs that are constants or variables, we can output them directly
-        val simpleOutputNodes = outputNodes.filter(Block.isSimpleOutput)
-        val simpleWfOutputs = simpleOutputNodes.map(node => buildSimpleWorkflowOutput(node, env)).toVector
-        if (simpleWfOutputs.size == outputNodes.size) {
-            val irwf = IR.Workflow(wf.name, wfInputs, simpleWfOutputs, stages, locked, wfKind)
-            (irwf, auxApplets.flatten)
+        if (locked) {
+            compileWorkflowLocked(wf, inputNodes, outputNodes, wfSourceStandAlone, subBlocks)
         } else {
-            // Some of the outputs are expressions. We need an extra applet+stage
-            // to evaluate them.
-            val exprOutputNodes: Vector[ExpressionBasedGraphOutputNode] =
-                outputNodes.flatMap{ node =>
-                    if (Block.isSimpleOutput(node)) None
-                    else Some(node.asInstanceOf[ExpressionBasedGraphOutputNode])
-                }
-            val (outputEvalApplet, outputEvalStage, exprWfOutputs) =
-                buildOutputEvaluationStage(wf.name, exprOutputNodes, env)
-            val wfOutputs = simpleWfOutputs ++ exprWfOutputs
-            val irwf = IR.Workflow(wf.name, wfInputs, wfOutputs, stages :+ outputEvalStage, locked, wfKind)
-            (irwf, auxApplets.flatten :+ outputEvalApplet)
+            compileWorkflowRegular(wf, inputNodes, outputNodes, wfSourceStandAlone, subBlocks)
         }
     }
 
     // Entry point for compiling tasks and workflows into IR
     def compileCallable(callable: Callable,
+                        locked: Boolean,
                         taskDir: Map[String, String],
                         workflowDir: Map[String, String]) : (IR.Callable, Vector[IR.Applet]) = {
         def compileTask2(task : CallableTaskDefinition) = {
@@ -687,7 +772,7 @@ case class GenerateIR(callables: Map[String, IR.Callable],
                     case None =>
                         throw new Exception(s"Did not find sources for workflow ${wf.name}")
                     case Some(wfSource) =>
-                        compileWorkflow(wf, wfSource)
+                        compileWorkflow(wf, wfSource, locked)
                 }
             case x =>
                 throw new Exception(s"""|Can't compile: ${callable.name}, class=${callable.getClass}
@@ -788,10 +873,26 @@ object GenerateIR {
         var allCallables = Map.empty[String, IR.Callable]
         var allCallablesSorted = Vector.empty[IR.Callable]
 
-        for (callable <- depOrder) {
-            val gir = GenerateIR(allCallables, language, locked, IR.WorkflowKind.TopLevel, verbose)
-            val (exec, auxApplets) = gir.compileCallable(callable, taskDir, workflowDir)
+        // Only the toplevel workflow may be unlocked. This happens
+        // only if the user specifically compiles it as "unlocked".
+        def isLocked(callable: Callable): Boolean = {
+            (callable, womBundle.primaryCallable) match {
+                case (wf: WorkflowDefinition, Some(wf2: WorkflowDefinition)) =>
+                    if (wf.name == wf2.name)
+                        locked
+                    else
+                        true
+                case (_, _) =>
+                    true
+            }
+        }
 
+        for (callable <- depOrder) {
+            val gir = GenerateIR(allCallables, language, verbose)
+            val (exec, auxApplets) = gir.compileCallable(callable,
+                                                         isLocked(callable),
+                                                         taskDir,
+                                                         workflowDir)
             allCallables = allCallables ++ (auxApplets.map{ apl => apl.name -> apl}.toMap)
             allCallables = allCallables + (exec.name -> exec)
 

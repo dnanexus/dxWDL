@@ -43,7 +43,6 @@ object Utils {
     val META_INFO = "_metaInfo"
     val RESERVED_APPLET_INPUT_NAMES = Set(META_INFO)
     val UBUNTU_VERSION = "16.04"
-
     var traceLevel = 0
 
     lazy val dxEnv = DXEnvironment.create()
@@ -498,7 +497,7 @@ object Utils {
         }
     }
 
-    private def genNSpaces(n: Int) = s"${" " * n}"
+    def genNSpaces(n: Int) = s"${" " * n}"
 
     def traceLevelSet(i: Int) : Unit = {
         traceLevel = i

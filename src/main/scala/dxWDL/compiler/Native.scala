@@ -182,6 +182,12 @@ case class Native(dxWDLrtId: Option[String],
             |}""".stripMargin.trim
     }
 
+    private def genBashScriptCmd(cmd: String) : String = {
+        s"""|main() {
+            |    java -jar $${DX_FS_ROOT}/dxWDL.jar internal ${cmd} $${HOME} ${rtDebugLvl}
+            |}""".stripMargin.trim
+    }
+
     private def genBashScript(appKind: IR.AppletKind,
                               instanceType: IR.InstanceType) : String = {
         val body:String = appKind match {
@@ -189,6 +195,10 @@ case class Native(dxWDLrtId: Option[String],
                 throw new Exception("Sanity: generating a bash script for a native applet")
             case IR.AppletKindWfFragment(_, _, _) =>
                 genBashScriptWfFragment()
+            case IR.AppletKindWfInputs =>
+                genBashScriptCmd("wfInputs")
+            case IR.AppletKindWfOutputs =>
+                genBashScriptCmd("wfOutputs")
             case IR.AppletKindTask(_) =>
                 instanceType match {
                     case IR.InstanceTypeDefault | IR.InstanceTypeConst(_,_,_,_) =>
@@ -470,6 +480,39 @@ case class Native(dxWDLrtId: Option[String],
                             fqnDictTypes.map{ case (k,t) =>
                                 val tStr = WomTypeSerialization.toString(t)
                                 k -> JsString(tStr)
+                            }.toMap)
+                    )
+                    Some(JsObject("name" -> JsString(Utils.META_INFO),
+                                  "class" -> JsString("hash"),
+                                  "default" -> hardCodedFragInfo))
+
+
+                case IR.AppletKindWfInputs =>
+                    // meta information used for running workflow fragments
+                    val hardCodedFragInfo = JsObject(
+                        "womSourceCode" -> JsString(Utils.base64Encode(applet.womSourceCode)),
+                        "instanceTypeDB" -> JsString(Utils.base64Encode(dbInstance)),
+                        "fqnDictTypes" -> JsObject(
+                            applet.inputVars.map{
+                                case cVar =>
+                                    val tStr = WomTypeSerialization.toString(cVar.womType)
+                                    cVar.name -> JsString(tStr)
+                            }.toMap)
+                    )
+                    Some(JsObject("name" -> JsString(Utils.META_INFO),
+                                  "class" -> JsString("hash"),
+                                  "default" -> hardCodedFragInfo))
+
+                case IR.AppletKindWfOutputs =>
+                    // meta information used for running workflow fragments
+                    val hardCodedFragInfo = JsObject(
+                        "womSourceCode" -> JsString(Utils.base64Encode(applet.womSourceCode)),
+                        "instanceTypeDB" -> JsString(Utils.base64Encode(dbInstance)),
+                        "fqnDictTypes" -> JsObject(
+                            applet.inputVars.map{
+                                case cVar =>
+                                    val tStr = WomTypeSerialization.toString(cVar.womType)
+                                    cVar.name -> JsString(tStr)
                             }.toMap)
                     )
                     Some(JsObject("name" -> JsString(Utils.META_INFO),

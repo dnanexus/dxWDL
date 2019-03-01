@@ -86,8 +86,10 @@ object IR {
 
     // There are several kinds of applets
     //   Native:     a native platform applet
-    //   WfFragment: WDL workflow fragment, can included nested if/scatter blocks
     //   Task:       call a task, execute a shell command (usually)
+    //   WfFragment: WDL workflow fragment, can included nested if/scatter blocks
+    //   WfInputs:   handle workflow inputs for unlocked workflows
+    //   WfOutputs:  evaluate workflow outputs
     //   WorkflowOutputReorg: move intermediate result files to a subdirectory.
     sealed trait AppletKind
     case class  AppletKindNative(id: String) extends AppletKind
@@ -95,6 +97,8 @@ object IR {
     case class  AppletKindWfFragment(calls: Vector[String],
                                      subBlockNum: Int,
                                      fqnDictTypes: Map[String, WomType]) extends AppletKind
+    case object AppletKindWfInputs extends AppletKind
+    case object AppletKindWfOutputs extends AppletKind
     case object AppletKindWorkflowOutputReorg extends AppletKind
 
     /** @param name          Name of applet
@@ -138,11 +142,6 @@ object IR {
                      inputs: Vector[SArg],
                      outputs: Vector[CVar])
 
-    // Is this the entrypoint, or a sub-workflow?
-    object WorkflowKind extends Enumeration {
-        val TopLevel, Sub  = Value
-    }
-
     /** A workflow output is linked to the stage that
       *  generated it.
       */
@@ -150,8 +149,7 @@ object IR {
                         inputs: Vector[(CVar,SArg)],
                         outputs: Vector[(CVar,SArg)],
                         stages: Vector[Stage],
-                        locked: Boolean,
-                        kind: WorkflowKind.Value) extends Callable {
+                        locked: Boolean) extends Callable {
         def inputVars = inputs.map{ case (cVar,_) => cVar }.toVector
         def outputVars = outputs.map{ case (cVar,_) => cVar }.toVector
     }

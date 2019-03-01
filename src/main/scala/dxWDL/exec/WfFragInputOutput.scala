@@ -1,4 +1,4 @@
-package dxWDL.runner
+package dxWDL.exec
 
 import com.dnanexus.DXProject
 import spray.json._
@@ -24,6 +24,7 @@ case class WfFragInputOutput(dxIoFunctions : DxIoFunctions,
             (Map[String, ExecLinkInfo], Int, Map[String, WomType]) = {
         // meta information used for running workflow fragments
         val execLinkInfo: Map[String, ExecLinkInfo] = metaInfo.get("execLinkInfo") match {
+            case None => Map.empty
             case Some(JsObject(fields)) =>
                 fields.map{
                     case (key, ali) =>
@@ -31,8 +32,9 @@ case class WfFragInputOutput(dxIoFunctions : DxIoFunctions,
                 }.toMap
             case other => throw new Exception(s"Bad value ${other}")
         }
-        val subBlockNum: Int = metaInfo("subBlockNum") match {
-            case JsNumber(i) => i.toInt
+        val subBlockNum: Int = metaInfo.get("subBlockNum") match {
+            case None => 0
+            case Some(JsNumber(i)) => i.toInt
             case other => throw new Exception(s"Bad value ${other}")
         }
         val fqnDictTypes : Map[String, WomType] = metaInfo.get("fqnDictTypes") match {

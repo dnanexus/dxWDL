@@ -523,10 +523,15 @@ object Block {
 
     // Figure out what variables from the environment we need to pass
     // into the applet. In other words, the closure.
-    def outputClosure(outputNodes : Vector[ExpressionBasedGraphOutputNode]) : Set[String] = {
+    def outputClosure(outputNodes : Vector[GraphOutputNode]) : Set[String] = {
         outputNodes.foldLeft(Set.empty[String]) {
+            case (accu, PortBasedGraphOutputNode(id, womType, sourcePort)) =>
+                accu + sourcePort.name
             case (accu, expr : ExpressionBasedGraphOutputNode) =>
                 accu ++ expr.inputPorts.map(_.name)
+            case other =>
+                throw new Exception(s"unhandled output ${other}")
+
         }
     }
 }

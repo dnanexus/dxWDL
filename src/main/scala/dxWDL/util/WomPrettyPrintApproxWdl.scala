@@ -2,8 +2,10 @@
   */
 package dxWDL.util
 
+import wom.callable.Callable._
 import wom.graph._
 import wom.graph.expression._
+import wom.types._
 
 object WomPrettyPrintApproxWdl {
 
@@ -49,7 +51,24 @@ object WomPrettyPrintApproxWdl {
         }
     }
 
-    def apply(nodes: Seq[GraphNode]) : String = {
-        nodes.flatMap(node => apply(node)).mkString("\n")
+    def apply(inputDef : InputDefinition) : String = {
+        inputDef match {
+            case RequiredInputDefinition(iName, womType, _, _) =>
+                s"${womType.toDisplayString} ${iName}"
+
+            case InputDefinitionWithDefault(iName, womType, defaultExpr, _, _) =>
+                s"${womType.toDisplayString} ${iName} = ${defaultExpr.sourceString}"
+
+            // An input whose value should always be calculated from the default, and is
+            // not allowed to be overridden.
+            case FixedInputDefinition(iName, womType, defaultExpr, _, _) =>
+                s"${womType.toDisplayString} ${iName} = ${defaultExpr.sourceString}"
+
+            case OptionalInputDefinition(iName, WomOptionalType(womType), _, _) =>
+                s"${womType.toDisplayString}? ${iName}"
+
+            case other =>
+                throw new Exception(s"${other} not handled")
+        }
     }
 }

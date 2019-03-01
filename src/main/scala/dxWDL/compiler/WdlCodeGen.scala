@@ -1,7 +1,6 @@
 package dxWDL.compiler
 
 import scala.util.matching.Regex
-import wom.graph._
 import wom.types._
 import wom.values._
 
@@ -214,30 +213,5 @@ task Add {
         ParseWomSourceFile.validateWdlWorkflow(wdlWfSource, language)
 
         WdlCodeSnippet(wdlWfSource)
-    }
-
-    def taskEvalWorkflowOutputs(taskName: String,
-                                inputVars: Vector[IR.CVar],
-                                outputNodes : Vector[ExpressionBasedGraphOutputNode],
-                                language: Language.Value) : WdlCodeSnippet = {
-        val inputs: Vector[String] = inputVars.map { cVar =>
-            s"    ${cVar.womType.toDisplayString} ${cVar.name}"
-        }
-        val outputs: Vector[String] = outputNodes.map { node =>
-            val name = node.identifier.localName.value
-            s"    ${node.womType.toDisplayString} ${name} = ${node.womExpression.sourceString}"
-        }
-        val wdlTaskCode = s"""|${versionString(language)}
-                              |
-                              |task ${taskName} {
-                              |  input {
-                              |    ${inputs.mkString("\n")}
-                              |  }
-                              |  command{}
-                              |  output {
-                              |    ${outputs.mkString("\n")}
-                              |  }
-                              |}""".stripMargin
-        WdlCodeSnippet(wdlTaskCode)
     }
 }
