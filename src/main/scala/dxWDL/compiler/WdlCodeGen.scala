@@ -133,6 +133,57 @@ task Add {
         }
     }
 
+    def genDnanexusAppletStub(id: String,
+                              appletName: String,
+                              inputSpec: Map[String, WomType],
+                              outputSpec: Map[String, WomType],
+                              language: Language.Value) : WdlCodeSnippet = {
+        val inputs = inputSpec.map{ case (name, womType) =>
+            s"    ${womType.toDisplayString} ${name}"
+        }.mkString("\n")
+        val outputs = outputSpec.map{ cVar =>
+            val defaultVal = genDefaultValueOfType(cVar.womType)
+            s"    ${cVar.womType.toDisplayString} ${cVar.name} = ${defaultVal.toWomString}"
+        }.mkString("\n")
+
+        val runtimeSection =
+            s"""|  runtime {
+                |     type : "native"
+                |     id : "${id}"
+                |  }""".stripMargin
+
+        language match {
+            case Language.WDLvDraft2 =>
+                // Draft-2 does not support the input block.
+                WdlCodeSnippet(
+                    s"""|task ${callable.name} {
+                        |${inputs}
+                        |
+                        |  command {}
+                        |  output {
+                        |${outputs}
+                        |  }
+                        |${runtimeSection}
+                        |}""".stripMargin
+                )
+            case Language.WDLv1_0 =>
+                WdlCodeSnippet(
+                    s"""|task ${callable.name} {
+                        |  input {
+                        |${inputs}
+                        |  }
+                        |  command {}
+                        |  output {
+                        |${outputs}
+                        |  }
+                        |${runtimeSection}
+                        |}""".stripMargin
+                )
+            case other =>
+                throw new Exception(s"Unsupported language version ${other}")
+        }
+    }
+
     // A workflow can import other libraries:
     //
     // import "library.wdl" as lib

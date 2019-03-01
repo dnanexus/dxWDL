@@ -19,7 +19,7 @@ object Main extends App {
     type OptionsMap = Map[String, List[String]]
 
     object Actions extends Enumeration {
-        val Compile, Config, Internal, Version  = Value
+        val Compile, Config, DXNI, Internal, Version  = Value
     }
     object InternalOp extends Enumeration {
         val Collect,
@@ -27,6 +27,12 @@ object Main extends App {
             WfFragment,
             TaskCheckInstanceType, TaskEpilog, TaskProlog, TaskRelaunch = Value
     }
+
+    case class DxniOptions(apps: Boolean,
+                           force: Boolean,
+                           outputFile: Option[Path],
+                           recursive: Boolean,
+                           verbose: Verbose)
 
     // This directory exists only at runtime in the cloud. Beware of using
     // it in code paths that run at compile time.
@@ -345,6 +351,26 @@ object Main extends App {
                         verbose)
     }
 
+    private def dxniOptions(options: OptionsMap) : DxniOptions = {
+        val outputFile: Option[Path] = options.get("outputFile") match {
+            case None => None
+            case Some(List(p)) => Some(Paths.get(p))
+            case _ => throw new Exception("only one output file can be specified")
+        }
+        val verboseKeys: Set[String] = options.get("verbose") match {
+            case None => Set.empty
+            case Some(modulesToTrace) => modulesToTrace.toSet
+        }
+        val verbose = Verbose(options contains "verbose",
+                              options contains "quiet",
+                              verboseKeys)
+        DxniOptions(options contains "apps",
+                    options contains "force",
+                    outputFile,
+                    options contains "recursive",
+                    verbose)
+    }
+
     def compile(args: Seq[String]): Termination = {
         if (args.isEmpty)
             return BadUsageTermination("WDL file to compile is missing")
@@ -382,6 +408,70 @@ object Main extends App {
                     e.getMessage)
             case e : Throwable =>
                 return UnsuccessfulTermination(Utils.exceptionToString(e))
+        }
+    }
+
+    private def dxniApplets(options: OptionsMap,
+                            dOpt: DxniOptions,
+                            outputFile: Path): Termination = {
+        val (dxProject, folder) =
+            try {
+                pathOptions(options, dOpt.verbose)
+            } catch {
+                case e: Throwable =>
+                    return BadUsageTermination(Utils.exceptionToString(e))
+            }
+
+        // Validate the folder. It would have been nicer to be able
+        // to check if a folder exists, instead of validating by
+        // listing its contents, which could be very large.
+        try {
+            dxProject.listFolder(folder)
+        } catch {
+            case e : Throwable =>
+                return UnsuccessfulTermination(s"Folder ${folder} is invalid")
+        }
+
+        try {
+            compiler.DxNI.apply(dxProject, folder, outputFile, dOpt.recursive, dOpt.force, dOpt.verbose)
+            SuccessfulTermination("")
+        } catch {
+            case e : Throwable =>
+                return UnsuccessfulTermination(Utils.exceptionToString(e))
+        }
+    }
+
+    private def dxniApps(options: OptionsMap,
+                         dOpt: DxniOptions,
+                         outputFile: Path): Termination = {
+        try {
+            compiler.DxNI.applyApps(outputFile, dOpt.force, dOpt.verbose)
+            SuccessfulTermination("")
+        } catch {
+            case e : Throwable =>
+                return UnsuccessfulTermination(Utils.exceptionToString(e))
+        }
+    }
+
+    private def dxni(args: Seq[String]): Termination = {
+        try {
+            val options = parseCmdlineOptions(args.toList)
+            if (options contains "help")
+                return BadUsageTermination("")
+
+            val dOpt = dxniOptions(options)
+            val output = dOpt.outputFile match {
+                case None => throw new Exception("Output file not specified")
+                case Some(x) => x
+            }
+
+            if (dOpt.apps)
+                dxniApps(options, dOpt, output)
+            else
+                dxniApplets(options, dOpt, output)
+        } catch {
+            case e: Throwable =>
+                return BadUsageTermination(Utils.exceptionToString(e))
         }
     }
 
@@ -561,6 +651,7 @@ object Main extends App {
             case Some(x) => x match {
                 case Actions.Compile => compile(args.tail)
                 case Actions.Config => SuccessfulTermination(ConfigFactory.load().toString)
+                case Actions.DXNI => dxni(args.tail)
                 case Actions.Internal => internalOp(args.tail)
                 case Actions.Version => SuccessfulTermination(Utils.getVersion())
             }
