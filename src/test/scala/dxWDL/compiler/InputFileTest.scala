@@ -63,17 +63,39 @@ class InputFileTest extends FlatSpec with Matchers {
         }
     }
 
-    /*
     it should "build defaults into applet underneath workflow" in {
         val wdlCode = pathFromBasename("population.wdl")
         val defaults = pathFromBasename("population_inputs.json")
         val retval = Main.compile(
-            List(wdlCode.toString, "--compileMode", "ir", "-quiet",
+            List(wdlCode.toString, "--compileMode", "ir",
                  "-defaults", defaults.toString)
         )
         retval shouldBe a [Main.SuccessfulTerminationIR]
     }
 
+    it should "handle inputs specified in the json file, but missing in the workflow" taggedAs(EdgeTest) in {
+        val wdlCode = pathFromBasename("missing_args.wdl")
+        val inputs = pathFromBasename("missing_args_inputs.json")
+
+        Main.compile(
+            List(wdlCode.toString, "--compileMode", "ir", "-quiet",
+                 "-inputs", inputs.toString)
+        ) shouldBe a [Main.SuccessfulTerminationIR]
+
+        // inputs as defaults
+        Main.compile(
+            List(wdlCode.toString, "--compileMode", "ir", "-quiet",
+                 "-defaults", inputs.toString)
+        ) shouldBe a [Main.SuccessfulTerminationIR]
+
+        // Input to an applet
+        Main.compile(
+            List(wdlCode.toString, "--compileMode", "ir", "--locked",
+                 "-quiet", "-inputs", inputs.toString)
+        ) shouldBe a [Main.SuccessfulTerminationIR]
+    }
+
+    /*
     it should "build defaults into subworkflows" in {
         val wdlCode = pathFromBasename("L3.wdl")
         val defaults = pathFromBasename("L3_inputs.json")
@@ -93,27 +115,5 @@ class InputFileTest extends FlatSpec with Matchers {
         )
         retval shouldBe a [Main.SuccessfulTerminationIR]
     }
-
-    it should "handle inputs specified in the json file, but missing in the workflow" in {
-        val wdlCode = pathFromBasename("missing_args.wdl")
-        val inputs = pathFromBasename("missing_args_inputs.json")
-        Main.compile(
-            List(wdlCode.toString, "--compileMode", "ir", "-quiet",
-                 "-inputs", inputs.toString)
-        ) shouldBe a [Main.SuccessfulTerminationIR]
-
-        // inputs as defaults
-        Main.compile(
-            List(wdlCode.toString, "--compileMode", "ir", "-quiet",
-                 "-defaults", inputs.toString)
-        ) shouldBe a [Main.SuccessfulTerminationIR]
-
-        // Locked mode should fail, because we provide an input to
-        // an intermediate stage.
-        Main.compile(
-            List(wdlCode.toString, "--compileMode", "ir", "--locked", "-quiet",
-                 "-defaults", inputs.toString)
-        ) shouldBe a [Main.UnsuccessfulTermination]
-    }
- */
+     */
 }
