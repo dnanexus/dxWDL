@@ -75,6 +75,13 @@ object Utils {
         p
     }
 
+    def getUnqualifiedName(fqn: String) : String = {
+        if (fqn contains ".")
+            fqn.split("\\.").last
+        else
+            fqn
+    }
+
     // Is this a WDL type that maps to a native DX type?
     def isNativeDxType(wdlType: WomType) : Boolean = {
         wdlType match {

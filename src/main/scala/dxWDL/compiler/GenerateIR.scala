@@ -286,7 +286,7 @@ case class GenerateIR(callables: Map[String, IR.Callable],
     private def compileCall(call: CallNode,
                             env : CallEnv) : IR.Stage = {
         // Find the callee
-        val calleeName = call.callable.name
+        val calleeName = Utils.getUnqualifiedName(call.callable.name)
         val callee: IR.Callable = callables(calleeName)
 
         // Extract the input values/links from the environment
@@ -450,7 +450,7 @@ case class GenerateIR(callables: Map[String, IR.Callable],
         // Make a list of all task/workflow calls made inside the block. We will need to link
         // to the equivalent dx:applets and dx:workflows.
         val allCallNames = Block.deepFindCalls(block.nodes).map{ cNode =>
-            cNode.callable.name
+            Utils.getUnqualifiedName(cNode.callable.name)
         }.toVector
 
         // generate a new WDL script just for this sub-block
@@ -743,7 +743,8 @@ case class GenerateIR(callables: Map[String, IR.Callable],
         val callablesUsedInWorkflow : Vector[IR.Callable] =
             graph.allNodes.collect {
                 case cNode : CallNode =>
-                    callables(cNode.callable.name)
+                    val localname = Utils.getUnqualifiedName(cNode.callable.name)
+                    callables(localname)
             }.toVector
         val wfSourceStandAlone = WdlCodeGen(verbose).standAloneWorkflow(wfSource,
                                                                         callablesUsedInWorkflow,
@@ -806,11 +807,17 @@ object GenerateIR {
                     val callNodes : Vector[CallNode] = nodes.collect{
                         case cNode: CallNode => cNode
                     }.toVector
-                    callNodes.map{ cNode =>  cNode.callable.name }.toSet
+                    callNodes.map{ cNode =>
+                        // The name is fully qualified, for example, lib.add, lib.concat.
+                        // We need the task/workflow itself ("add", "concat"). We are
+                        // assuming that the namespace can be flattened; there are
+                        // no lib.add and lib2.add.
+                        Utils.getUnqualifiedName(cNode.callable.name)
+                    }.toSet
                 case other =>
                     throw new Exception(s"Don't know how to deal with class ${other.getClass.getSimpleName}")
             }
-            callable.name -> deps
+            Utils.getUnqualifiedName(callable.name) -> deps
         }.toMap
 
         // Find executables such that all of their dependencies are
@@ -820,6 +827,7 @@ object GenerateIR {
             val readyNames = ready.map(_.name).toSet
             val satisfiedCallables = callables.filter{ c =>
                 val deps = immediateDeps(c.name)
+                Utils.trace(verbose.on, s"immediateDeps(${c.name}) = ${deps}")
                 deps.subsetOf(readyNames)
             }
             if (satisfiedCallables.isEmpty)
@@ -831,7 +839,8 @@ object GenerateIR {
         var crnt = allCallables
         while (!crnt.isEmpty) {
             Utils.trace(verbose.on, s"""|  accu=${accu.map(_.name)}
-                                        |  crnt=${crnt.map(_.name)}""".stripMargin)
+                                        |  crnt=${crnt.map(_.name)}
+                                        |""".stripMargin)
             val execsToCompile = next(crnt, accu)
             accu = accu ++ execsToCompile
             val alreadyCompiled: Set[String] = accu.map(_.name).toSet
@@ -911,7 +920,7 @@ object GenerateIR {
         // We already compiled all the individual wdl:tasks and
         // wdl:workflows, let's find the entrypoint.
         val primary = womBundle.primaryCallable.map{ callable =>
-            allCallables(callable.name)
+            allCallables(Utils.getUnqualifiedName(callable.name))
         }
         val allCallablesSorted2 = allCallablesSorted.map{_.name}
         Utils.trace(verbose.on, s"allCallablesSorted=${allCallablesSorted2}")
