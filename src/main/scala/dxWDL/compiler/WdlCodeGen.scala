@@ -143,7 +143,7 @@ task Add {
         }.mkString("\n")
         val outputs = outputSpec.map{ case (name, womType) =>
             val defaultVal = genDefaultValueOfType(womType)
-            s"    ${womType.toDisplayString} $name} = ${defaultVal.toWomString}"
+            s"    ${womType.toDisplayString} $name = ${defaultVal.toWomString}"
         }.mkString("\n")
 
         val runtimeSection =
