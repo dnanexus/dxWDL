@@ -32,6 +32,7 @@ object Main extends App {
                            force: Boolean,
                            outputFile: Option[Path],
                            recursive: Boolean,
+                           language: Language.Value,
                            verbose: Verbose)
 
     // This directory exists only at runtime in the cloud. Beware of using
@@ -361,6 +362,18 @@ object Main extends App {
             case None => Set.empty
             case Some(modulesToTrace) => modulesToTrace.toSet
         }
+        val language = options.get("language") match {
+            case None => Language.WDLvDraft2
+            case Some(List(buf)) =>
+                val bufNorm = buf.toLowerCase.replaceAll(".", "").replaceAll("_", "")
+                if (bufNorm.startsWith("wdldraft2"))
+                    Language.WDLvDraft2
+                else if (bufNorm.startsWith("wdlv1"))
+                    Language.WDLv1_0
+                else
+                    throw new Exception(s"unknown language ${bufNorm}. Supported: WDL_draft2, WDL_v1")
+            case _ => throw new Exception("only one language can be specified")
+        }
         val verbose = Verbose(options contains "verbose",
                               options contains "quiet",
                               verboseKeys)
@@ -368,6 +381,7 @@ object Main extends App {
                     options contains "force",
                     outputFile,
                     options contains "recursive",
+                    language,
                     verbose)
     }
 
@@ -433,7 +447,10 @@ object Main extends App {
         }
 
         try {
-            compiler.DxNI.apply(dxProject, folder, outputFile, dOpt.recursive, dOpt.force, dOpt.verbose)
+            compiler.DxNI.apply(dxProject, folder, outputFile,
+                                dOpt.recursive, dOpt.force,
+                                dOpt.language,
+                                dOpt.verbose)
             SuccessfulTermination("")
         } catch {
             case e : Throwable =>
@@ -445,7 +462,7 @@ object Main extends App {
                          dOpt: DxniOptions,
                          outputFile: Path): Termination = {
         try {
-            compiler.DxNI.applyApps(outputFile, dOpt.force, dOpt.verbose)
+            compiler.DxNI.applyApps(outputFile, dOpt.force, dOpt.language, dOpt.verbose)
             SuccessfulTermination("")
         } catch {
             case e : Throwable =>
@@ -685,6 +702,16 @@ object Main extends App {
             |                             job log at runtime. Zero means write the minimum,
             |                             one is the default, and two is for internal debugging.
             |
+            |  dxni
+            |    Dx Native call Interface. Create stubs for calling dx
+            |    executables (apps/applets/workflows), and store them as WDL
+            |    tasks in a local file. Allows calling existing platform executables
+            |    without modification. Default is to look for applets.
+            |    options:
+            |      -apps                  Search only for global apps.
+            |      -o <string>            Destination file for WDL task definitions
+            |      -r | recursive         Recursive search
+            |      -language <string>     Which language to use? (wdl_draft2, wdl_v1.0
             |
             |Common options
             |    -destination             Full platform path (project:/folder)

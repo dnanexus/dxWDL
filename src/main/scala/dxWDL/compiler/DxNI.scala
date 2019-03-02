@@ -47,10 +47,8 @@ import com.dnanexus._
 import com.fasterxml.jackson.databind.JsonNode
 import java.nio.file.{Files, Path}
 import scala.collection.JavaConverters._
-import scala.util.{Failure, Success}
 import scala.util.matching.Regex
 import spray.json._
-import wdl.draft2.model.{WdlTask, WdlNamespace}
 import wom.types._
 
 import dxWDL.util._
@@ -134,9 +132,9 @@ case class DxNI(verbose: Verbose,
     // applet-ids.
     //
     // If the folder is not a valid path, an empty list will be returned.
-    def search(dxProject: DXProject,
-               folder: String,
-               recursive: Boolean) : Vector[WdlTask] = {
+    private def search(dxProject: DXProject,
+                       folder: String,
+                       recursive: Boolean) : Vector[String] = {
         val dxAppletsInFolder: Seq[DXApplet] =
             if (recursive) {
                 DXSearch.findDataObjects()
@@ -176,11 +174,13 @@ case class DxNI(verbose: Verbose,
                     val bothStr = "[" + both.mkString(", ") + "]"
                     throw new Exception(s"""Parameters ${bothStr} used as both input and output in applet ${aplName}""")
                 }
-                val task = WdlCodeGen(verbose).genDnanexusAppletStub(
+                val WdlCodeSnippet(taskCode) = WdlCodeGen(verbose).genDnanexusAppletStub(
                     apl.getId, aplName,
                     inputSpec, outputSpec,
                     language)
-                Some(task)
+                val task = ParseWomSourceFile.parseWdlTask(taskCode)
+                Utils.ignore(task)
+                Some(taskCode)
             } catch {
                 case e : Throwable =>
                     Utils.warning(verbose, s"Unable to construct a WDL interface for applet ${aplName}")
@@ -299,7 +299,7 @@ case class DxNI(verbose: Verbose,
         DxApp(normName, id, inputSpec, outputSpec)
     }
 
-    private def appToWdlInterface(dxApp: DxApp) : WdlTask = {
+    private def appToWdlInterface(dxApp: DxApp) : String = {
         val inputSpec:Map[String, WomType] =
             dxApp.inputSpec.map{ case (_,ioSpec) =>
                 ioSpec.name -> wdlTypeOfIOClass(dxApp.name, ioSpec.name,
@@ -321,19 +321,17 @@ case class DxNI(verbose: Verbose,
             throw new Exception(s"""|Parameters ${bothStr} used as both input and
                                     |output in applet ${dxApp.name}""".stripMargin.replaceAll("\n", " "))
         }
-        val task = genAppletStub(dxApp.id, dxApp.name, inputSpec, outputSpec)
-
-        // make sure the task can be pretty printed
-        val lines: String = WdlPrettyPrinter(false, None).apply(task, 0).mkString("\n")
-        WdlNamespace.loadUsingSource(lines, None, None) match {
-            case Success(_) => ()
-            case Failure(_) => throw new Exception(s"The WDL header for app ${dxApp.name} cannot be pretty printed")
-        }
-        task
+        val WdlCodeSnippet(taskCode) = WdlCodeGen(verbose).genDnanexusAppletStub(
+            dxApp.id, dxApp.name,
+            inputSpec, outputSpec,
+            language)
+        val task = ParseWomSourceFile.parseWdlTask(taskCode)
+        Utils.ignore(task)
+        taskCode
     }
 
     // Search for global apps
-    def searchApps: Vector[WdlTask] = {
+    def searchApps: Vector[String] = {
         val req = JsObject("published" -> JsBoolean(true),
                            "describe" -> JsObject("inputSpec" -> JsBoolean(true),
                                                   "outputSpec" -> JsBoolean(true)),
@@ -369,16 +367,10 @@ case class DxNI(verbose: Verbose,
 
 
 object DxNI {
-    private def writeHeadersToFile(ns: WdlNamespace,
-                                   header: String,
+    private def writeHeadersToFile(header: String,
+                                   tasks : Vector[String],
                                    output: Path,
                                    force: Boolean) : Unit = {
-        // pretty print into a buffer
-        val lines: String = WdlPrettyPrinter(false, None)
-            .apply(ns, 0)
-            .mkString("\n")
-
-        val allLines = header + "\n" + lines
         if (Files.exists(output)) {
             if (!force) {
                 throw new Exception(s"""|Output file ${output.toString} already exists,
@@ -388,15 +380,10 @@ object DxNI {
             output.toFile().delete
         }
 
+        // pretty print into a buffer
+        val lines = tasks.mkString("\n\n")
+        val allLines = header + "\n" + lines
         Utils.writeFileContent(output, allLines)
-
-        // Validate the file
-        WdlNamespace.loadUsingSource(allLines, None, None) match {
-            case Success(_) => ()
-            case Failure(f) =>
-                Utils.error("DxNI generated WDL file contains errors")
-                throw f
-        }
     }
 
 
@@ -407,14 +394,14 @@ object DxNI {
               output: Path,
               recursive: Boolean,
               force: Boolean,
+              language: Language.Value,
               verbose: Verbose) : Unit = {
-        val dxni = DxNI(verbose)
-        val dxNativeTasks: Vector[WdlTask] = dxni.search(dxProject, folder, recursive)
+        val dxni = new DxNI(verbose, language)
+        val dxNativeTasks: Vector[String] = dxni.search(dxProject, folder, recursive)
         if (dxNativeTasks.isEmpty) {
             Utils.warning(verbose, s"Found no DX native applets in ${folder}")
             return
         }
-        val ns = WdlRewrite.namespace(dxNativeTasks)
         val projName = dxProject.describe.getName
 
         // add comment describing how the file was created
@@ -425,14 +412,15 @@ object DxNI {
                 |# folder = ${folder}
                 |""".stripMargin
 
-        writeHeadersToFile(ns, header, output, force)
+        writeHeadersToFile(header, dxNativeTasks, output, force)
     }
 
     def applyApps(output: Path,
                   force: Boolean,
+                  language: Language.Value,
                   verbose: Verbose) : Unit = {
-        val dxni = DxNI(verbose)
-        val dxAppsAsTasks: Vector[WdlTask] = dxni.searchApps
+        val dxni = new DxNI(verbose, language)
+        val dxAppsAsTasks: Vector[String] = dxni.searchApps
         if (dxAppsAsTasks.isEmpty) {
             Utils.warning(verbose, s"Found no DX global apps")
             return
@@ -440,9 +428,7 @@ object DxNI {
 
         // If there are many apps, we might end up with multiple definitions of
         // the same task. This gets rid of duplicates.
-        val m1 = dxAppsAsTasks.map{ task => task.name -> task }.toMap
-        val uniqueTasks: Vector[WdlTask] = m1.map{ case (_, task) => task}.toVector
-        val ns = WdlRewrite.namespace(uniqueTasks)
+        val uniqueTasks = dxAppsAsTasks.toSet.toVector
 
         // add comment describing how the file was created
         val header =
@@ -451,7 +437,7 @@ object DxNI {
                 |#
                 |""".stripMargin
 
-        writeHeadersToFile(ns, header, output, force)
+        writeHeadersToFile(header, uniqueTasks, output, force)
     }
 
 }

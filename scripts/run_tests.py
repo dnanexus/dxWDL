@@ -27,6 +27,10 @@ test_failing=set(["bad_status",
 reserved_test_names=['M', 'All', 'list']
 
 medium_test_list = [
+     # calling native dx applets/apps
+    "call_native",
+    #"call_native_app",
+
     "cast",
     "dict",
     "instance_types",

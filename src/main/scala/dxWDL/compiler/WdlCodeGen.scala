@@ -141,9 +141,9 @@ task Add {
         val inputs = inputSpec.map{ case (name, womType) =>
             s"    ${womType.toDisplayString} ${name}"
         }.mkString("\n")
-        val outputs = outputSpec.map{ cVar =>
-            val defaultVal = genDefaultValueOfType(cVar.womType)
-            s"    ${cVar.womType.toDisplayString} ${cVar.name} = ${defaultVal.toWomString}"
+        val outputs = outputSpec.map{ case (name, womType) =>
+            val defaultVal = genDefaultValueOfType(womType)
+            s"    ${womType.toDisplayString} $name} = ${defaultVal.toWomString}"
         }.mkString("\n")
 
         val runtimeSection =
@@ -156,7 +156,7 @@ task Add {
             case Language.WDLvDraft2 =>
                 // Draft-2 does not support the input block.
                 WdlCodeSnippet(
-                    s"""|task ${callable.name} {
+                    s"""|task ${appletName} {
                         |${inputs}
                         |
                         |  command {}
@@ -168,7 +168,7 @@ task Add {
                 )
             case Language.WDLv1_0 =>
                 WdlCodeSnippet(
-                    s"""|task ${callable.name} {
+                    s"""|task ${appletName} {
                         |  input {
                         |${inputs}
                         |  }
