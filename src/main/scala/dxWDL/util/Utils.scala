@@ -75,6 +75,11 @@ object Utils {
         p
     }
 
+    // Convert a fully qualified name to a local name.
+    // Examples:
+    //   SOURCE         RESULT
+    //   lib.concat     concat
+    //   lib.sum_list   sum_list
     def getUnqualifiedName(fqn: String) : String = {
         if (fqn contains ".")
             fqn.split("\\.").last

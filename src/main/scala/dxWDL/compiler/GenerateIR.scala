@@ -258,40 +258,51 @@ case class GenerateIR(callables: Map[String, IR.Callable],
         }
     }
 
-
-    private def findInputByName(call: CallNode, cVar: CVar) : Option[TaskCallInputExpressionNode] = {
-        def getLocalName(exprNode : TaskCallInputExpressionNode) : String = {
-            // in an expression like:
-            //    call volume { input: i = 10 }
-            // the "i" parameter, under WDL draft-2, is compiled as "volume.i"
-            // under WDL version 1.0, it is compiled as "i"
-            var localName = exprNode.identifier.localName.value
-            if (localName.startsWith(call.callable.name + "."))
-                localName = localName.substring(call.callable.name.length + 1)
-            Utils.trace(verbose2,
-                        s"expr=${exprNode.identifier.localName.value} name=${localName}")
-            localName
-        }
-        val callInputs = call.upstream.collect{
-            case expr : TaskCallInputExpressionNode => expr
-        }
+    // In a call like:
+    //   call lib.native_mk_list as mk_list {
+    //     input: a=x, b=5
+    //   }
+    // it maps callee input <a> to expression <x>. The expressions are
+    // trivial because this is a case where we can directly call an applet.
+    //
+    // Note that in an expression like:
+    //    call volume { input: i = 10 }
+    // the "i" parameter, under WDL draft-2, is compiled as "volume.i"
+    // under WDL version 1.0, it is compiled as "i"
+    //
+    private def findInputByName(callInputs: Seq[TaskCallInputExpressionNode],
+                                cVar: CVar) : Option[TaskCallInputExpressionNode] = {
         val retval = callInputs.find{
             case expr : TaskCallInputExpressionNode =>
-                cVar.name == getLocalName(expr)
+                //Utils.trace(verbose2, s"compare ${cVar.name} to ${expr.identifier.localName.value}")
+                cVar.name == Utils.getUnqualifiedName(expr.identifier.localName.value)
         }
         retval
     }
 
     // compile a call into a stage in an IR.Workflow
     private def compileCall(call: CallNode,
-                            env : CallEnv) : IR.Stage = {
+                            env : CallEnv,
+                            locked: Boolean) : IR.Stage = {
         // Find the callee
         val calleeName = Utils.getUnqualifiedName(call.callable.name)
         val callee: IR.Callable = callables(calleeName)
+        val callInputs: Seq[TaskCallInputExpressionNode] = call.upstream.collect{
+            case tcExpr : TaskCallInputExpressionNode => tcExpr
+        }.toSeq
 
         // Extract the input values/links from the environment
         val inputs: Vector[SArg] = callee.inputVars.map{ cVar =>
-            findInputByName(call, cVar) match {
+            findInputByName(callInputs, cVar) match {
+                case None if locked =>
+                    val envDbg = env.map{ case (name, lVar) =>
+                        s"  ${name} -> ${lVar.sArg}"
+                    }.mkString("\n")
+                    Utils.error(s"""|env =
+                                    |${envDbg}""".stripMargin)
+                    throw new Exception(
+                        s"""|input <${cVar.name}> to call <${call.fullyQualifiedName}>
+                            |is unspecified""".stripMargin.replaceAll("\n", " "))
                 case None =>
                     IR.SArgEmpty
                 case Some(tcInput) if Utils.isExpressionConst(tcInput.womExpression) =>
@@ -480,7 +491,8 @@ case class GenerateIR(callables: Map[String, IR.Callable],
     private def assembleBackbone(wf: WorkflowDefinition,
                                  wfSourceStandAlone : WdlCodeSnippet,
                                  wfInputs: Vector[(CVar, SArg)],
-                                 subBlocks: Vector[Block])
+                                 subBlocks: Vector[Block],
+                                 locked: Boolean)
             : (Vector[(IR.Stage, Option[IR.Applet])], CallEnv) =
     {
         Utils.trace(verbose.on, s"Assembling workfow backbone ${wf.name}")
@@ -503,7 +515,7 @@ case class GenerateIR(callables: Map[String, IR.Callable],
                     // is no need to do any extra work. Compile directly into a workflow
                     // stage.
                     Utils.trace(verbose.on, s"--- Compiling call ${call.callable.name} as stage")
-                    val stage = compileCall(call, env)
+                    val stage = compileCall(call, env, locked)
 
                     // Add bindings for the output variables. This allows later calls to refer
                     // to these results.
@@ -651,7 +663,7 @@ case class GenerateIR(callables: Map[String, IR.Callable],
                 (cVar, IR.SArgWorkflowInput(cVar))
         }.toVector
 
-        val (allStageInfo, env) = assembleBackbone(wf, wfSourceStandAlone, wfInputs, subBlocks)
+        val (allStageInfo, env) = assembleBackbone(wf, wfSourceStandAlone, wfInputs, subBlocks, true)
         val (stages, auxApplets) = allStageInfo.unzip
 
         // Handle outputs that are constants or variables, we can output them directly
@@ -694,7 +706,7 @@ case class GenerateIR(callables: Map[String, IR.Callable],
                 (cVar, sArg)
         }.toVector
 
-        val (allStageInfo, env) = assembleBackbone(wf, wfSourceStandAlone, fauxWfInputs, subBlocks)
+        val (allStageInfo, env) = assembleBackbone(wf, wfSourceStandAlone, fauxWfInputs, subBlocks, false)
         val (stages: Vector[IR.Stage], auxApplets) = allStageInfo.unzip
 
         // convert the outputs into an applet+stage

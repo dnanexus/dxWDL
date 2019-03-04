@@ -1,7 +1,7 @@
 import "dx_extern.wdl" as lib
 
 workflow call_native {
-    Int a
+    Int x
     String s
     Boolean flag
     File fileA
@@ -12,7 +12,7 @@ workflow call_native {
     call lib.native_sum_012 as sum_var3 { input: a=3, b=10 }
 
     call lib.native_mk_list as mk_list {
-        input: a=a, b=5
+        input: a=x, b=5
     }
     call lib.native_concat as concat {
         input: a=s, b="_zebra_fish"
@@ -20,12 +20,11 @@ workflow call_native {
 
     if (flag) {
         call lib.native_mk_list as mk_list2 {
-            input: a=a, b=a
+            input: a=x, b=x
         }
     }
     scatter (i in [1,2,3]) {
         call lib.native_sum as sum { input: a=i, b=i }
-        call lib.native_sum as sum2 { input: a=i }
     }
     call lib.native_diff as diff {
         input: a=fileA, b=fileB
@@ -39,7 +38,6 @@ workflow call_native {
         String concat_c = concat.c
         Array[Int]+? mk_list2_all = mk_list2.all
         Array[Int] sum_result = sum.result
-        Array[Int] sum2_result = sum2.result
         Boolean diff_equality = diff.equality
     }
 }

@@ -1,5 +1,5 @@
 {
-  "call_native.a" : 3,
+  "call_native.x" : 3,
   "call_native.s" : "octopus",
   "call_native.flag" : true,
   "call_native.fileA" : "dx://dxWDL_playground:/test_data/fileA",

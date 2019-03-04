@@ -25,12 +25,13 @@ class InputFileTest extends FlatSpec with Matchers {
     }
 
 
-    it should "deal with a locked workflow " in {
+    it should "deal with a locked workflow" taggedAs(EdgeTest) in {
         val wdlCode = pathFromBasename("math.wdl")
         val inputs = pathFromBasename("math_inputs.json")
         Main.compile(
-            List(wdlCode.toString, "-inputs", inputs.toString, "--locked")
-                ++ cFlags
+            List(wdlCode.toString, "-inputs", inputs.toString, "--locked"
+                 //, "--verbose", "--verboseKey", "GenerateIR"
+            ) ++ cFlags
         ) shouldBe a [Main.SuccessfulTerminationIR]
     }
 
@@ -73,7 +74,7 @@ class InputFileTest extends FlatSpec with Matchers {
         retval shouldBe a [Main.SuccessfulTerminationIR]
     }
 
-    it should "handle inputs specified in the json file, but missing in the workflow" taggedAs(EdgeTest) in {
+    it should "handle inputs specified in the json file, but missing in the workflow" in {
         val wdlCode = pathFromBasename("missing_args.wdl")
         val inputs = pathFromBasename("missing_args_inputs.json")
 
