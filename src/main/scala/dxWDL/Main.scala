@@ -139,6 +139,9 @@ object Main extends App {
                     case ("imports"|"p") =>
                         checkNumberOfArguments(keyword, 1, subargs)
                         (keyword, subargs.head)
+                    case "language" =>
+                        checkNumberOfArguments(keyword, 1, subargs)
+                        (keyword, subargs.head)
                     case "leaveWorkflowsOpen" =>
                         checkNumberOfArguments(keyword, 0, subargs)
                         (keyword, "")
@@ -365,10 +368,16 @@ object Main extends App {
         val language = options.get("language") match {
             case None => Language.WDLvDraft2
             case Some(List(buf)) =>
-                val bufNorm = buf.toLowerCase.replaceAll(".", "").replaceAll("_", "")
-                if (bufNorm.startsWith("wdldraft2"))
+                val bufNorm = buf.toLowerCase
+                    .replaceAll("\\.", "")
+                    .replaceAll("_", "")
+                    .replaceAll("-", "")
+                if (!bufNorm.startsWith("wdl"))
+                    throw new Exception(s"unknown language ${bufNorm}. Only WDL is supported")
+                val suffix = bufNorm.substring("wdl".length)
+                if (suffix contains "draft2")
                     Language.WDLvDraft2
-                else if (bufNorm.startsWith("wdlv1"))
+                else if (suffix contains ("10"))
                     Language.WDLv1_0
                 else
                     throw new Exception(s"unknown language ${bufNorm}. Supported: WDL_draft2, WDL_v1")
@@ -711,7 +720,7 @@ object Main extends App {
             |      -apps                  Search only for global apps.
             |      -o <string>            Destination file for WDL task definitions
             |      -r | recursive         Recursive search
-            |      -language <string>     Which language to use? (wdl_draft2, wdl_v1.0
+            |      -language <string>     Which language to use? (wdl_draft2, wdl_v1.0)
             |
             |Common options
             |    -destination             Full platform path (project:/folder)

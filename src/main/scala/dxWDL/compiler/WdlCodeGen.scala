@@ -146,8 +146,8 @@ task Add {
             s"    ${womType.toDisplayString} $name = ${defaultVal.toWomString}"
         }.mkString("\n")
 
-        val runtimeSection =
-            s"""|  runtime {
+        val metaSection =
+            s"""|  meta {
                 |     type : "native"
                 |     id : "${id}"
                 |  }""".stripMargin
@@ -163,7 +163,7 @@ task Add {
                         |  output {
                         |${outputs}
                         |  }
-                        |${runtimeSection}
+                        |${metaSection}
                         |}""".stripMargin
                 )
             case Language.WDLv1_0 =>
@@ -176,7 +176,7 @@ task Add {
                         |  output {
                         |${outputs}
                         |  }
-                        |${runtimeSection}
+                        |${metaSection}
                         |}""".stripMargin
                 )
             case other =>

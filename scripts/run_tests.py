@@ -28,7 +28,7 @@ reserved_test_names=['M', 'All', 'list']
 
 medium_test_list = [
      # calling native dx applets/apps
-    "call_native",
+#    "call_native",
     #"call_native_app",
 
     "cast",
@@ -415,6 +415,7 @@ def native_call_setup(project, applet_folder, version_id):
                 "--verbose",
                 "--folder", applet_folder,
                 "--project", project.get_id(),
+                "--language", "wdl_v1.0",
                 "--output", os.path.join(top_dir, "test/basic/dx_extern.wdl")]
     print(" ".join(cmdline))
     subprocess.check_output(cmdline)
@@ -440,6 +441,7 @@ def native_call_app_setup(version_id):
                 "dxni",
                 "--apps",
                 "--force",
+                "--language", "wdl_1.0",
                 "--output", header_file]
     print(" ".join(cmdline))
     subprocess.check_output(cmdline)

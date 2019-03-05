@@ -381,9 +381,6 @@ case class GenerateIR(callables: Map[String, IR.Callable],
             case None if Utils.isOptional(womType) =>
                 None
             case None =>
-                /*Utils.error(s"""|fully-qualified-name:  ${fqn}
-                                |environment: ${env.keys.toVector.sorted}
-                 |""".stripMargin)*/
                 // A missing compulsory argument
                 Utils.warning(verbose,
                               s"Missing argument ${fqn}, it will have to be provided at runtime")
