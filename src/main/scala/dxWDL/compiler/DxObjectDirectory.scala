@@ -17,7 +17,7 @@ import Utils.CHECKSUM_PROP
 case class DxObjectInfo(name:String,
                         crDate: LocalDateTime,
                         dxObj:DXDataObject,
-                        digest: String) {
+                        digest: Option[String]) {
     lazy val dxClass:String =
         dxObj.getClass.getSimpleName match {
             case "DXWorkflow" => "Workflow"
@@ -60,13 +60,14 @@ case class DxObjectDirectory(ns: IR.Bundle,
     // use map with information on each name.
     //
     // DXSearch.findDataObjects can be an expensive call, both on the server and client sides.
-    // We limit it by filtering on the CHECKSUM property, which is attached only to generated
-    // applets and workflows.
+    // We could limit it by filtering on the CHECKSUM property, which is attached only to generated
+    // applets and workflows. However, this would miss cases where an applet name is already in
+    // use by a regular dnanexus applet/workflow.
     private def bulkLookup() : HashMap[String, Vector[DxObjectInfo]] = {
         val t0 = System.nanoTime()
         val dxObjectsInFolder: List[DXDataObject] = DXSearch.findDataObjects()
             .inFolder(dxProject, folder)
-            .withProperty(CHECKSUM_PROP)
+//            .withProperty(CHECKSUM_PROP)
             .includeDescribeOutput(DXDataObject.DescribeOptions.get().withProperties())
             .execute().asList().asScala.toList
         val nrApplets = dxObjectsInFolder.count{ _.isInstanceOf[DXApplet] }
@@ -93,13 +94,9 @@ case class DxObjectDirectory(ns: IR.Bundle,
             val crLdt:LocalDateTime = LocalDateTime.ofInstant(crDate.toInstant(), ZoneId.systemDefault())
 
             val props: Map[String, String] = desc.getProperties().asScala.toMap
-            props.get(CHECKSUM_PROP) match {
-                case None =>
-                    None
-                case Some(digest) =>
-                    Some(DxObjectInfo(name, crLdt, dxObj, digest))
-            }
-        }.flatten
+            val chksum = props.get(CHECKSUM_PROP)
+            DxObjectInfo(name, crLdt, dxObj, chksum)
+        }
 
         // There could be multiple versions of the same applet/workflow, collect their
         // information in vectors
@@ -189,7 +186,7 @@ case class DxObjectDirectory(ns: IR.Bundle,
     }
 
     def insert(name:String, dxObj:DXDataObject, digest: String) : Unit = {
-        val aInfo = DxObjectInfo(name, LocalDateTime.now, dxObj, digest)
+        val aInfo = DxObjectInfo(name, LocalDateTime.now, dxObj, Some(digest))
         objDir(name) = Vector(aInfo)
     }
 

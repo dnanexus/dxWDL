@@ -415,7 +415,7 @@ def native_call_setup(project, applet_folder, version_id):
                 "--verbose",
                 "--folder", applet_folder,
                 "--project", project.get_id(),
-                "--language", "wdl_v1.0",
+                "--language", "wdl_draft2",
                 "--output", os.path.join(top_dir, "test/basic/dx_extern.wdl")]
     print(" ".join(cmdline))
     subprocess.check_output(cmdline)
@@ -441,7 +441,7 @@ def native_call_app_setup(version_id):
                 "dxni",
                 "--apps",
                 "--force",
-                "--language", "wdl_1.0",
+                "--language", "wdl_draft2",
                 "--output", header_file]
     print(" ".join(cmdline))
     subprocess.check_output(cmdline)

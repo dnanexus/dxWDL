@@ -294,14 +294,17 @@ case class GenerateIR(callables: Map[String, IR.Callable],
         // Extract the input values/links from the environment
         val inputs: Vector[SArg] = callee.inputVars.map{ cVar =>
             findInputByName(callInputs, cVar) match {
+                case None if Utils.isOptional(cVar.womType) =>
+                    // optional argument that is not provided
+                    IR.SArgEmpty
                 case None if locked =>
                     val envDbg = env.map{ case (name, lVar) =>
                         s"  ${name} -> ${lVar.sArg}"
                     }.mkString("\n")
-                    Utils.error(s"""|env =
-                                    |${envDbg}""".stripMargin)
+                    Utils.trace(verbose.on, s"""|env =
+                                                |${envDbg}""".stripMargin)
                     throw new Exception(
-                        s"""|input <${cVar.name}> to call <${call.fullyQualifiedName}>
+                        s"""|input <${cVar.name}, ${cVar.womType}> to call <${call.fullyQualifiedName}>
                             |is unspecified""".stripMargin.replaceAll("\n", " "))
                 case None =>
                     IR.SArgEmpty
@@ -551,9 +554,9 @@ case class GenerateIR(callables: Map[String, IR.Callable],
             env.get(source) match {
                 case None =>
                     val envDesc = env.mkString("\n")
-                    Utils.error(s"""|env=[
-                                    |${envDesc}
-                                    |]""".stripMargin)
+                    Utils.trace(verbose.on, s"""|env=[
+                                             |${envDesc}
+                                             |]""".stripMargin)
                     throw new Exception(s"Sanity: could not find ${source} in the workflow environment")
                 case Some(lVar) => lVar.sArg
             }

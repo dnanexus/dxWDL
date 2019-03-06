@@ -308,9 +308,12 @@ object Block {
         val oneCall = calls.head
 
         // All the other nodes have to be call inputs
+        //
+        // Some of the inputs may be missing, which is why we
+        // have the -subsetOf- call.
         val rest = block.nodes.toSet - oneCall
         val callInputs = oneCall.upstream.toSet
-        if (rest != callInputs)
+        if (!rest.subsetOf(callInputs))
             return None
 
         // The call inputs have to be simple expressions
@@ -318,7 +321,6 @@ object Block {
             case expr: TaskCallInputExpressionNode => isTrivialExpression(expr.womExpression)
             case _ => false
         }
-
         if (!allSimple)
             return None
         Some(oneCall)

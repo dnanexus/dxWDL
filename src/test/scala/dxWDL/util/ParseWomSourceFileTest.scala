@@ -2,6 +2,7 @@ package dxWDL.util
 
 import org.scalatest.{FlatSpec, Matchers}
 import org.scalatest.Inside._
+import wom.callable.CallableTaskDefinition
 
 // These tests involve compilation -without- access to the platform.
 //
@@ -100,4 +101,54 @@ class ParseWomSourceFileTest extends FlatSpec with Matchers {
                 x should include ("echo $((${a} + ${b}))")
         }
     }
+
+    it should "parse the meta section in wdl draft2" in {
+        val srcCode =
+            """|task native_sum_012 {
+               |  Int? a
+               |  Int? b
+               |  command {}
+               |  output {
+               |    Int result = 0
+               |  }
+               |  meta {
+               |     type : "native"
+               |     id : "applet-xxxx"
+               |  }
+               |}
+               |
+               |""".stripMargin
+
+        val task : CallableTaskDefinition = ParseWomSourceFile.parseWdlTask(srcCode)
+        Utils.ignore(task)
+        task.meta shouldBe (Map("type" -> "native",
+                                "id" -> "applet-xxxx"))
+    }
+
+    ignore should "parse the meta section in wdl 1.0 --- doesn't work in cromwell v37" in {
+        val srcCode =
+            """|version 1.0
+               |
+               |task native_sum_012 {
+               |  input {
+               |    Int? a
+               |    Int? b
+               |  }
+               |  command {}
+               |  output {
+               |    Int result = 0
+               |  }
+               |  meta {
+               |     type : "native"
+               |     id : "applet-xxxx"
+               |  }
+               |}
+               |
+               |""".stripMargin
+
+        val task : CallableTaskDefinition = ParseWomSourceFile.parseWdlTask(srcCode)
+        task.meta shouldBe (Map("type" -> "native",
+                                "id" -> "applet-xxxx"))
+    }
+
 }
