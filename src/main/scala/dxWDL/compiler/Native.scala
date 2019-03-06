@@ -270,13 +270,16 @@ case class Native(dxWDLrtId: Option[String],
             case 1 =>
                 // Check if applet code has changed
                 val dxObjInfo = existingDxObjs.head
-                val dxClass:String = dxObjInfo.dxClass
-                if (digest != dxObjInfo.digest) {
-                    Utils.trace(verbose.on, s"${dxClass} ${name} has changed, rebuild required")
-                    true
-                } else {
-                    Utils.trace(verbose.on, s"${dxClass} ${name} has not changed")
-                    false
+                dxObjInfo.digest match {
+                    case None =>
+                        throw new Exception(s"There is an existing non-dxWDL applet ${name}")
+                    case Some(digest2) if digest != digest2 =>
+                        Utils.trace(verbose.on,
+                                    s"${dxObjInfo.dxClass} ${name} has changed, rebuild required")
+                        true
+                    case Some(_) =>
+                        Utils.trace(verbose.on, s"${dxObjInfo.dxClass} ${name} has not changed")
+                        false
                 }
             case _ =>
                 val dxClass = existingDxObjs.head.dxClass

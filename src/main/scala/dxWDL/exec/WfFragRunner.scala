@@ -301,12 +301,7 @@ case class WfFragRunner(wf: WorkflowDefinition,
             // under WDL version 1.0, it is compiled as "i".
             // We just want the "i" component.
             case (env, tcNode : TaskCallInputExpressionNode) if callNode != None =>
-                val call = callNode.get
-                val localName =
-                    if (tcNode.localName.startsWith(call.callable.name + "."))
-                        tcNode.localName.substring(call.callable.name.length + 1)
-                    else
-                        tcNode.localName
+                val localName = Utils.getUnqualifiedName(tcNode.localName)
                 val value : WomValue =
                     evaluateWomExpression(tcNode.womExpression, tcNode.womType, env)
                 env + (localName -> value)

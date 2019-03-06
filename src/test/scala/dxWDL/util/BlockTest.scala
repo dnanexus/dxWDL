@@ -50,7 +50,7 @@ class BlockTest extends FlatSpec with Matchers {
         Block.closure(subBlocks(1)).keys.toSet should be(Set("add.result"))
     }
 
-    it should "handle block zero" taggedAs(EdgeTest) in {
+    it should "handle block zero" in {
         val path = pathFromBasename("util", "block_zero.wdl")
         val wfSourceCode = Utils.readFileContent(path)
         val wf : WorkflowDefinition = ParseWomSourceFile.parseWdlWorkflow(wfSourceCode)
@@ -115,5 +115,16 @@ class BlockTest extends FlatSpec with Matchers {
                                                         "SumArray.result",
                                                         "SumArray2.result",
                                                         "JoinMisc.result"))
+    }
+
+    it should "identify simple calls even if they have optionals" taggedAs(EdgeTest) in {
+        val path = pathFromBasename("util", "missing_inputs_to_direct_call.wdl")
+        val wfSourceCode = Utils.readFileContent(path)
+        val wf : WorkflowDefinition = ParseWomSourceFile.parseWdlWorkflow(wfSourceCode)
+        val (inputNodes, subBlocks, outputNodes) = Block.split(wf.innerGraph, wfSourceCode)
+
+        Block.isSimpleCall(subBlocks(0)) shouldBe a [Some[_]]
+        Block.isSimpleCall(subBlocks(1)) shouldBe a [Some[_]]
+        Block.isSimpleCall(subBlocks(2)) shouldBe a [Some[_]]
     }
 }

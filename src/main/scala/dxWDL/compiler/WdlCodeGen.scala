@@ -133,6 +133,57 @@ task Add {
         }
     }
 
+    def genDnanexusAppletStub(id: String,
+                              appletName: String,
+                              inputSpec: Map[String, WomType],
+                              outputSpec: Map[String, WomType],
+                              language: Language.Value) : WdlCodeSnippet = {
+        val inputs = inputSpec.map{ case (name, womType) =>
+            s"    ${womType.toDisplayString} ${name}"
+        }.mkString("\n")
+        val outputs = outputSpec.map{ case (name, womType) =>
+            val defaultVal = genDefaultValueOfType(womType)
+            s"    ${womType.toDisplayString} $name = ${defaultVal.toWomString}"
+        }.mkString("\n")
+
+        val metaSection =
+            s"""|  meta {
+                |     type : "native"
+                |     id : "${id}"
+                |  }""".stripMargin
+
+        language match {
+            case Language.WDLvDraft2 =>
+                // Draft-2 does not support the input block.
+                WdlCodeSnippet(
+                    s"""|task ${appletName} {
+                        |${inputs}
+                        |
+                        |  command {}
+                        |  output {
+                        |${outputs}
+                        |  }
+                        |${metaSection}
+                        |}""".stripMargin
+                )
+            case Language.WDLv1_0 =>
+                WdlCodeSnippet(
+                    s"""|task ${appletName} {
+                        |  input {
+                        |${inputs}
+                        |  }
+                        |  command {}
+                        |  output {
+                        |${outputs}
+                        |  }
+                        |${metaSection}
+                        |}""".stripMargin
+                )
+            case other =>
+                throw new Exception(s"Unsupported language version ${other}")
+        }
+    }
+
     // A workflow can import other libraries:
     //
     // import "library.wdl" as lib

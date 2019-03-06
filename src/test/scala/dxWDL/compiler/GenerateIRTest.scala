@@ -127,4 +127,11 @@ class GenerateIRTest extends FlatSpec with Matchers {
             path.toString :: cFlags
         ) shouldBe a [Main.SuccessfulTerminationIR]
     }
+
+    it should "skip missing optional arguments" in {
+        val path = pathFromBasename("util", "missing_inputs_to_direct_call.wdl")
+        Main.compile(
+            path.toString :: cFlags
+        ) shouldBe a [Main.SuccessfulTerminationIR]
+    }
 }

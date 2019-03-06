@@ -25,12 +25,13 @@ class InputFileTest extends FlatSpec with Matchers {
     }
 
 
-    it should "deal with a locked workflow " in {
+    it should "deal with a locked workflow" in {
         val wdlCode = pathFromBasename("math.wdl")
         val inputs = pathFromBasename("math_inputs.json")
         Main.compile(
-            List(wdlCode.toString, "-inputs", inputs.toString, "--locked")
-                ++ cFlags
+            List(wdlCode.toString, "-inputs", inputs.toString, "--locked"
+                 //, "--verbose", "--verboseKey", "GenerateIR"
+            ) ++ cFlags
         ) shouldBe a [Main.SuccessfulTerminationIR]
     }
 
@@ -88,9 +89,21 @@ class InputFileTest extends FlatSpec with Matchers {
                  "-defaults", inputs.toString)
         ) shouldBe a [Main.SuccessfulTerminationIR]
 
-        // Input to an applet
-        Main.compile(
+        // Input to an applet.
+        // Missing argument in a locked workflow should throw an exception.
+        val retval = Main.compile(
             List(wdlCode.toString, "--compileMode", "ir", "--locked",
+                 "-quiet", "-inputs", inputs.toString)
+        )
+        inside(retval) {
+            case Main.UnsuccessfulTermination(errMsg) =>
+                errMsg should include ("input")
+                errMsg should include ("to call <missing_args.Add> is unspecified")
+        }
+
+        // Missing arguments are legal in an unlocked workflow
+        Main.compile(
+            List(wdlCode.toString, "--compileMode", "ir",
                  "-quiet", "-inputs", inputs.toString)
         ) shouldBe a [Main.SuccessfulTerminationIR]
     }
