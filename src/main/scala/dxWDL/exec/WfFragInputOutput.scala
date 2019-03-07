@@ -1,6 +1,6 @@
 package dxWDL.exec
 
-import com.dnanexus.DXProject
+import com.dnanexus.{DXFile, DXProject}
 import spray.json._
 import wom.types._
 import wom.values._
@@ -92,5 +92,36 @@ case class WfFragInputOutput(dxIoFunctions : DxIoFunctions,
                     subBlockNr,
                     env,
                     execLinkInfo)
+    }
+
+    // find all the dx:files that are referenced from the inputs
+    def findRefDxFiles(inputs : JsValue) : Vector[DXFile] = {
+        val fields : Map[String, JsValue] = inputs
+            .asJsObject.fields
+            .filter{ case (fieldName,_) => !fieldName.endsWith(Utils.FLAT_FILES_SUFFIX) }
+
+        // Extract the meta information needed to setup the closure
+        // for the subblock
+        val metaInfo: Map[String, JsValue] =
+            fields.get(META_INFO) match {
+                case Some(JsObject(fields)) => fields
+                case other =>
+                    throw new Exception(
+                        s"JSON object has bad value ${other} for field ${META_INFO}")
+            }
+        val (execLinkInfo, subBlockNr, fqnDictTypes) = loadWorkflowMetaInfo(metaInfo)
+
+        // What remains are inputs from other stages. Convert from JSON
+        // to wom values
+        val regularFields = fields - META_INFO
+        regularFields.map{
+            case (name, jsValue) =>
+                val fqn = Utils.revTransformVarName(name)
+                val womType = fqnDictTypes.get(fqn) match {
+                    case None => throw new Exception(s"Did not find variable ${fqn} (${name}) in the block environment")
+                    case Some(x) => x
+                }
+                jobInputOutput.unpackJobInputFindRefFiles(womType, jsValue)
+        }.toVector.flatten
     }
 }

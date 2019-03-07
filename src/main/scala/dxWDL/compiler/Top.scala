@@ -166,7 +166,8 @@ object Top {
 
         // Compile the WDL workflow into an Intermediate
         // Representation (IR)
-        val bundle: IR.Bundle = GenerateIR.apply(everythingBundle, allSources, language, cOpt.locked, cOpt.verbose)
+        val bundle: IR.Bundle = GenerateIR.apply(everythingBundle, allSources, language,
+                                                 cOpt.locked, cOpt.reorg, cOpt.verbose)
         val bundle2: IR.Bundle = cOpt.defaults match {
             case None => bundle
             case Some(path) => InputFile(cOpt.verbose).embedDefaults(bundle, path)

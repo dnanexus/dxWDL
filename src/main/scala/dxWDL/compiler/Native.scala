@@ -199,6 +199,8 @@ case class Native(dxWDLrtId: Option[String],
                 genBashScriptCmd("wfInputs")
             case IR.AppletKindWfOutputs =>
                 genBashScriptCmd("wfOutputs")
+            case IR.AppletKindWorkflowOutputReorg =>
+                genBashScriptCmd("workflowOutputReorg")
             case IR.AppletKindTask(_) =>
                 instanceType match {
                     case IR.InstanceTypeDefault | IR.InstanceTypeConst(_,_,_,_) =>
@@ -222,8 +224,6 @@ case class Native(dxWDLrtId: Option[String],
                             |${genBashScriptTaskBody()}
                             |}""".stripMargin.trim
                 }
-            case IR.AppletKindWorkflowOutputReorg =>
-                throw new NotImplementedError("need to implement workflow file reorg")
         }
         s"""|#!/bin/bash -ex
             |

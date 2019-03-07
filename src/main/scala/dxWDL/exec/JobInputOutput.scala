@@ -202,6 +202,20 @@ case class JobInputOutput(dxIoFunctions : DxIoFunctions,
         jobInputToWomValue(womType, jsv2)
     }
 
+    def unpackJobInputFindRefFiles(womType: WomType, jsv: JsValue) : Vector[DXFile] = {
+        val jsv2: JsValue =
+            if (Utils.isNativeDxType(womType)) {
+                jsv
+            } else {
+                // unpack the hash with which complex JSON values are
+                // wrapped in dnanexus.
+                val (womType2, jsv1) = unmarshalHash(jsv)
+                assert(womType2 == womType)
+                jsv1
+            }
+        WdlVarLinks.findDxFiles(jsv2)
+    }
+
     private def evaluateWomExpression(expr: WomExpression,
                                       womType: WomType,
                                       env: Map[String, WomValue]) : WomValue = {
