@@ -93,12 +93,12 @@ object WomPrettyPrint {
 
             // An input definition that has a default value supplied.
             // Typical WDL example would be a declaration like: "Int x = 5"
-            case InputDefinitionWithDefault(iName, womType, defaultExpr, _, _) =>
+            case OverridableInputDefinitionWithDefault(iName, womType, defaultExpr, _, _) =>
                 s"InputDefinitionWithDefault(${iName}, ${womType})"
 
             // An input whose value should always be calculated from the default, and is
             // not allowed to be overridden.
-            case FixedInputDefinition(iName, womType, defaultExpr, _, _) =>
+            case FixedInputDefinitionWithDefault(iName, womType, defaultExpr, _, _) =>
                 s"FixedInputDefinition(${iName}, ${womType},  default=${defaultExpr})"
 
             case OptionalInputDefinition(iName, WomOptionalType(womType), _, _) =>

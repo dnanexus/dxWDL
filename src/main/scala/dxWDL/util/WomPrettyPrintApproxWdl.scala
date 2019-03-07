@@ -54,18 +54,18 @@ object WomPrettyPrintApproxWdl {
     def apply(inputDef : InputDefinition) : String = {
         inputDef match {
             case RequiredInputDefinition(iName, womType, _, _) =>
-                s"${womType.toDisplayString} ${iName}"
+                s"${womType.stableName} ${iName}"
 
-            case InputDefinitionWithDefault(iName, womType, defaultExpr, _, _) =>
-                s"${womType.toDisplayString} ${iName} = ${defaultExpr.sourceString}"
+            case OverridableInputDefinitionWithDefault(iName, womType, defaultExpr, _, _) =>
+                s"${womType.stableName} ${iName} = ${defaultExpr.sourceString}"
 
             // An input whose value should always be calculated from the default, and is
             // not allowed to be overridden.
-            case FixedInputDefinition(iName, womType, defaultExpr, _, _) =>
-                s"${womType.toDisplayString} ${iName} = ${defaultExpr.sourceString}"
+            case FixedInputDefinitionWithDefault(iName, womType, defaultExpr, _, _) =>
+                s"${womType.stableName} ${iName} = ${defaultExpr.sourceString}"
 
             case OptionalInputDefinition(iName, WomOptionalType(womType), _, _) =>
-                s"${womType.toDisplayString}? ${iName}"
+                s"${womType.stableName}? ${iName}"
 
             case other =>
                 throw new Exception(s"${other} not handled")

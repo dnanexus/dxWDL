@@ -209,7 +209,7 @@ case class TaskRunner(task: CallableTaskDefinition,
         // Map the home directory into the container, so that
         // we can reach the result files, and upload them to
         // the platform.
-        val dockerCmd = s"""|dx-docker run --entrypoint /bin/bash
+        val dockerCmd = s"""|docker run --entrypoint /bin/bash
                             |-v ${dxPathConfig.homeDir.toString}:${dxPathConfig.homeDir.toString}
                             |${imgName}
                             |${dxPathConfig.script}""".stripMargin.replaceAll("\n", " ")

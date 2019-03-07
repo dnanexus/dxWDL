@@ -279,7 +279,7 @@ object WdlVarLinks {
                     if (womType == null)
                         "null"
                     else
-                        womType.toDisplayString
+                        womType.stableName
                 val womValueStr =
                     if (womValue == null)
                         "null"

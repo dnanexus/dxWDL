@@ -70,7 +70,7 @@ object WomValueSerialization {
             case (_, WomOptionalValue(_,None)) => JsNull
 
             case (_,_) => throw new Exception(
-                s"""|Unsupported combination type=(${t.toDisplayString},${t})
+                s"""|Unsupported combination type=(${t.stableName},${t})
                     |value=(${w.toWomString}, ${w})"""
                     .stripMargin.replaceAll("\n", " "))
         }
@@ -141,7 +141,7 @@ object WomValueSerialization {
 
             case _ =>
                 throw new AppInternalException(
-                    s"Unsupported combination ${t.toDisplayString} ${jsv.prettyPrint}"
+                    s"Unsupported combination ${t.stableName} ${jsv.prettyPrint}"
                 )
         }
     }

@@ -36,7 +36,7 @@ object WomTypeSerialization {
 
             // catch-all for other types not currently supported
             case _ =>
-                throw new Exception(s"Unsupported WOM type ${t}, ${t.toDisplayString}")
+                throw new Exception(s"Unsupported WOM type ${t}, ${t.stableName}")
         }
     }
 

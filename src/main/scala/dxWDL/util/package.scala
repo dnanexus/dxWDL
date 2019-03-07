@@ -114,10 +114,10 @@ object ExecLinkInfo {
             // Serialize applet input definitions, so they could be used
             // at runtime.
         val appInputDefs: Map[String, JsString] = ali.inputs.map{
-            case (name, womType) => name -> JsString(womType.toDisplayString)
+            case (name, womType) => name -> JsString(womType.stableName)
         }.toMap
         val appOutputDefs: Map[String, JsString] = ali.outputs.map{
-            case (name, womType) => name -> JsString(womType.toDisplayString)
+            case (name, womType) => name -> JsString(womType.stableName)
         }.toMap
         JsObject(
             "id" -> JsString(ali.dxExec.getId),

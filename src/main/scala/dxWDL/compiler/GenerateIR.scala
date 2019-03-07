@@ -133,7 +133,7 @@ case class GenerateIR(callables: Map[String, IR.Callable],
             case RequiredInputDefinition(iName, womType, _, _) =>
                 Some(CVar(iName.value, womType, None))
 
-            case InputDefinitionWithDefault(iName, womType, defaultExpr, _, _) =>
+            case OverridableInputDefinitionWithDefault(iName, womType, defaultExpr, _, _) =>
                 Utils.ifConstEval(defaultExpr) match {
                     case None =>
                         // This is a task "input" of the form:
@@ -147,7 +147,7 @@ case class GenerateIR(callables: Map[String, IR.Callable],
 
             // An input whose value should always be calculated from the default, and is
             // not allowed to be overridden.
-            case FixedInputDefinition(iName, womType, defaultExpr, _, _) =>
+            case FixedInputDefinitionWithDefault(iName, womType, defaultExpr, _, _) =>
                 None
 
             case OptionalInputDefinition(iName, WomOptionalType(womType), _, _) =>

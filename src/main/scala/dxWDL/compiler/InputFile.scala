@@ -141,7 +141,7 @@ case class InputFile(verbose: Verbose) {
             case (WomObjectType, _) =>
                 throw new Exception(
                     s"""|WDL Objects are not supported when converting from JSON inputs
-                        |type = ${womType.toDisplayString}
+                        |type = ${womType}
                         |value = ${jsv.prettyPrint}
                         |""".stripMargin.trim)
 
@@ -156,7 +156,7 @@ case class InputFile(verbose: Verbose) {
             case _ =>
                 throw new Exception(
                     s"""|Unsupported/Invalid type/JSON combination in input file
-                        |  womType= ${womType.toDisplayString}
+                        |  womType= ${womType}
                         |  JSON= ${jsv.prettyPrint}""".stripMargin.trim)
         }
     }
