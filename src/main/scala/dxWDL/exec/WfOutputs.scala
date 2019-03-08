@@ -16,12 +16,8 @@ import dxWDL.util._
 
 case class WfOutputs(wf: WorkflowDefinition,
                      wfSourceCode: String,
-                     instanceTypeDB: InstanceTypeDB,
-                     execLinkInfo: Map[String, ExecLinkInfo],
                      dxPathConfig : DxPathConfig,
                      dxIoFunctions : DxIoFunctions,
-                     inputsRaw : JsValue,
-                     fragInputOutput : WfFragInputOutput,
                      runtimeDebugLevel: Int) {
     private val verbose = runtimeDebugLevel >= 1
     //private val maxVerboseLevel = (runtimeDebugLevel == 2)

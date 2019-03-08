@@ -4,6 +4,7 @@ package dxWDL.util
 import cats.data.Validated.{Invalid, Valid}
 import common.Checked
 import common.transforms.CheckedAtoB
+import common.validation.ErrorOr._
 import com.typesafe.config.ConfigFactory
 import cromwell.core.path.{DefaultPathBuilder, Path}
 import cromwell.languages.util.ImportResolver._
@@ -52,6 +53,8 @@ object ParseWomSourceFile {
                     }
             }
         }
+
+        override def cleanupIfNecessary(): ErrorOr[Unit] = ???
     }
 
     private def fileRecorder(allSources: HashMap[String, WorkflowSource],

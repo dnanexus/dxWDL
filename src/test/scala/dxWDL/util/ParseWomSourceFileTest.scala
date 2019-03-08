@@ -120,12 +120,11 @@ class ParseWomSourceFileTest extends FlatSpec with Matchers {
                |""".stripMargin
 
         val task : CallableTaskDefinition = ParseWomSourceFile.parseWdlTask(srcCode)
-        Utils.ignore(task)
         task.meta shouldBe (Map("type" -> "native",
                                 "id" -> "applet-xxxx"))
     }
 
-    ignore should "parse the meta section in wdl 1.0 --- doesn't work in cromwell v37" in {
+    ignore should "parse the meta section in wdl 1.0 --- doesn't work in cromwell v37,v38" in {
         val srcCode =
             """|version 1.0
                |

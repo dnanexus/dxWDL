@@ -202,6 +202,20 @@ case class JobInputOutput(dxIoFunctions : DxIoFunctions,
         jobInputToWomValue(womType, jsv2)
     }
 
+    def unpackJobInputFindRefFiles(womType: WomType, jsv: JsValue) : Vector[DXFile] = {
+        val jsv2: JsValue =
+            if (Utils.isNativeDxType(womType)) {
+                jsv
+            } else {
+                // unpack the hash with which complex JSON values are
+                // wrapped in dnanexus.
+                val (womType2, jsv1) = unmarshalHash(jsv)
+                assert(womType2 == womType)
+                jsv1
+            }
+        WdlVarLinks.findDxFiles(jsv2)
+    }
+
     private def evaluateWomExpression(expr: WomExpression,
                                       womType: WomType,
                                       env: Map[String, WomValue]) : WomValue = {
@@ -253,7 +267,7 @@ case class JobInputOutput(dxIoFunctions : DxIoFunctions,
 
                     // An input definition that has a default value supplied.
                     // Typical WDL example would be a declaration like: "Int x = 5"
-                    case InputDefinitionWithDefault(iName, womType, defaultExpr, _, _) =>
+                    case OverridableInputDefinitionWithDefault(iName, womType, defaultExpr, _, _) =>
                         fields.get(iName.value) match {
                             case None =>
                                 // use the default expression
@@ -264,7 +278,7 @@ case class JobInputOutput(dxIoFunctions : DxIoFunctions,
 
                     // An input whose value should always be calculated from the default, and is
                     // not allowed to be overridden.
-                    case FixedInputDefinition(iName, womType, defaultExpr, _, _) =>
+                    case FixedInputDefinitionWithDefault(iName, womType, defaultExpr, _, _) =>
                         fields.get(iName.value) match {
                             case None => ()
                             case Some(_) =>

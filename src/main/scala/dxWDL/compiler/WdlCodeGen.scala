@@ -50,7 +50,7 @@ case class WdlCodeGen(verbose: Verbose) {
 
             case WomPairType(lType, rType) => WomPair(genDefaultValueOfType(lType),
                                                       genDefaultValueOfType(rType))
-            case _ => throw new Exception(s"Unhandled type ${wdlType.toDisplayString}")
+            case _ => throw new Exception(s"Unhandled type ${wdlType}")
         }
     }
 
@@ -95,12 +95,12 @@ task Add {
                         .stripMargin)*/
 
         val inputs = callable.inputVars.map{ cVar =>
-            s"    ${cVar.womType.toDisplayString} ${cVar.name}"
+            s"    ${cVar.womType.stableName} ${cVar.name}"
         }.mkString("\n")
 
         val outputs = callable.outputVars.map{ cVar =>
             val defaultVal = genDefaultValueOfType(cVar.womType)
-            s"    ${cVar.womType.toDisplayString} ${cVar.name} = ${defaultVal.toWomString}"
+            s"    ${cVar.womType.stableName} ${cVar.name} = ${defaultVal.toWomString}"
         }.mkString("\n")
 
         language match {
@@ -139,11 +139,11 @@ task Add {
                               outputSpec: Map[String, WomType],
                               language: Language.Value) : WdlCodeSnippet = {
         val inputs = inputSpec.map{ case (name, womType) =>
-            s"    ${womType.toDisplayString} ${name}"
+            s"    ${womType.stableName} ${name}"
         }.mkString("\n")
         val outputs = outputSpec.map{ case (name, womType) =>
             val defaultVal = genDefaultValueOfType(womType)
-            s"    ${womType.toDisplayString} $name = ${defaultVal.toWomString}"
+            s"    ${womType.stableName} $name = ${defaultVal.toWomString}"
         }.mkString("\n")
 
         val metaSection =

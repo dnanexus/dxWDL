@@ -7,7 +7,6 @@ import scala.collection.mutable.HashMap
 import spray.json._
 
 import dxWDL.util._
-import dxWDL.compiler.Top
 
 object Main extends App {
     sealed trait Termination
@@ -23,7 +22,7 @@ object Main extends App {
     }
     object InternalOp extends Enumeration {
         val Collect,
-            WfOutputs, WfInputs,
+            WfOutputs, WfInputs, WorkflowOutputReorg,
             WfFragment,
             TaskCheckInstanceType, TaskEpilog, TaskProlog, TaskRelaunch = Value
     }
@@ -413,14 +412,14 @@ object Main extends App {
 
             cOpt.compileMode match {
                 case CompilerFlag.IR =>
-                    val ir: compiler.IR.Bundle = Top.applyOnlyIR(sourceFile, cOpt)
+                    val ir: compiler.IR.Bundle = compiler.Top.applyOnlyIR(sourceFile, cOpt)
                     return SuccessfulTerminationIR(ir)
 
                 case CompilerFlag.All
                        | CompilerFlag.NativeWithoutRuntimeAsset =>
                     val (dxProject, folder) = pathOptions(options, cOpt.verbose)
                     val dxPathConfig = DxPathConfig.apply(baseDNAxDir, cOpt.verbose.on)
-                    val retval = Top.apply(sourceFile, folder, dxProject, dxPathConfig, cOpt)
+                    val retval = compiler.Top.apply(sourceFile, folder, dxProject, dxPathConfig, cOpt)
                     val desc = retval.getOrElse("")
                     return SuccessfulTermination(desc)
             }
@@ -599,21 +598,17 @@ object Main extends App {
                                                            rtDebugLvl)
                     fragRunner.apply(meta.subBlockNr, meta.env, RunnerWfFragmentMode.Collect)
                 case InternalOp.WfInputs =>
-                    val wfInputs = new exec.WfInputs(wf, meta.wfSource, meta.instanceTypeDB,
-                                                     meta.execLinkInfo,
-                                                     dxPathConfig, dxIoFunctions,
-                                                     inputsRaw,
-                                                     fragInputOutput,
-                                                     rtDebugLvl)
+                    val wfInputs = new exec.WfInputs(wf, meta.wfSource,rtDebugLvl)
                     wfInputs.apply(meta.env)
                 case InternalOp.WfOutputs =>
-                    val wfOutputs = new exec.WfOutputs(wf, meta.wfSource, meta.instanceTypeDB,
-                                                       meta.execLinkInfo,
+                    val wfOutputs = new exec.WfOutputs(wf, meta.wfSource,
                                                        dxPathConfig, dxIoFunctions,
-                                                       inputsRaw,
-                                                       fragInputOutput,
                                                        rtDebugLvl)
                     wfOutputs.apply(meta.env)
+                case InternalOp.WorkflowOutputReorg =>
+                    val wfReorg = new exec.WorkflowOutputReorg(wf, meta.wfSource, rtDebugLvl)
+                    val refDxFiles = fragInputOutput.findRefDxFiles(inputsRaw)
+                    wfReorg.apply(refDxFiles)
                 case _ =>
                     throw new Exception(s"Illegal workflow fragment operation ${op}")
             }
@@ -644,7 +639,8 @@ object Main extends App {
                         case InternalOp.Collect |
                                 InternalOp.WfFragment |
                                 InternalOp.WfInputs |
-                                InternalOp.WfOutputs =>
+                                InternalOp.WfOutputs |
+                                InternalOp.WorkflowOutputReorg =>
                             workflowFragAction(op, jobInputPath, jobOutputPath,
                                                dxPathConfig, dxIoFunctions, rtDebugLvl)
                         case InternalOp.TaskCheckInstanceType|
