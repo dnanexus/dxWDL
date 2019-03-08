@@ -658,7 +658,7 @@ case class GenerateIR(callables: Map[String, IR.Callable],
     private def buildReorgStage(wfName: String,
                                 wfSourceStandAlone : WdlCodeSnippet,
                                 wfOutputs: Vector[(CVar, SArg)]) : (IR.Stage, IR.Applet) = {
-        val appletName = s"${wfName}_${Utils.OUTPUT_SECTION}"
+        val appletName = s"${wfName}_${Utils.REORG}"
         Utils.trace(verbose.on, s"Compiling output reorganization applet ${appletName}")
 
         // We need minimal compute resources, use the default instance type

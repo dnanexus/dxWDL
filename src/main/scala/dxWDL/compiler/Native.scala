@@ -490,23 +490,9 @@ case class Native(dxWDLrtId: Option[String],
                                   "default" -> hardCodedFragInfo))
 
 
-                case IR.AppletKindWfInputs =>
-                    // meta information used for running workflow fragments
-                    val hardCodedFragInfo = JsObject(
-                        "womSourceCode" -> JsString(Utils.base64Encode(applet.womSourceCode)),
-                        "instanceTypeDB" -> JsString(Utils.base64Encode(dbInstance)),
-                        "fqnDictTypes" -> JsObject(
-                            applet.inputVars.map{
-                                case cVar =>
-                                    val tStr = WomTypeSerialization.toString(cVar.womType)
-                                    cVar.name -> JsString(tStr)
-                            }.toMap)
-                    )
-                    Some(JsObject("name" -> JsString(Utils.META_INFO),
-                                  "class" -> JsString("hash"),
-                                  "default" -> hardCodedFragInfo))
-
-                case IR.AppletKindWfOutputs =>
+                case IR.AppletKindWfInputs |
+                        IR.AppletKindWfOutputs |
+                        IR.AppletKindWorkflowOutputReorg =>
                     // meta information used for running workflow fragments
                     val hardCodedFragInfo = JsObject(
                         "womSourceCode" -> JsString(Utils.base64Encode(applet.womSourceCode)),
@@ -532,7 +518,7 @@ case class Native(dxWDLrtId: Option[String],
                                   "class" -> JsString("hash"),
                                   "default" -> hardCodedTaskInfo))
 
-                case _ =>
+                case IR.AppletKindNative(_) =>
                     None
             }
         val outputSpec : Vector[JsValue] = applet.outputs.map(cVar =>

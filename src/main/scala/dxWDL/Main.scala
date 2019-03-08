@@ -639,7 +639,8 @@ object Main extends App {
                         case InternalOp.Collect |
                                 InternalOp.WfFragment |
                                 InternalOp.WfInputs |
-                                InternalOp.WfOutputs =>
+                                InternalOp.WfOutputs |
+                                InternalOp.WorkflowOutputReorg =>
                             workflowFragAction(op, jobInputPath, jobOutputPath,
                                                dxPathConfig, dxIoFunctions, rtDebugLvl)
                         case InternalOp.TaskCheckInstanceType|
