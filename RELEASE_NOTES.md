@@ -1,5 +1,9 @@
 # Release Notes
 
+## 0.81.3
+- Bug fix for native docker. There was a problem when a docker image was using an internally defined
+user; it didn't have the necessary permissions to create output files on the worker.
+
 ## 0.81.2
 - Support NTLM proxies. If your organization is configured with an NTLM proxy,
 you can use it like this:

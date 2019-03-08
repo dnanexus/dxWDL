@@ -539,7 +539,7 @@ case class Task(task:WdlTask,
                 |# Run docker or dx-docker
                 |
                 |extraFlags=""
-                |if [ $${{DOCKER_CMD}} == "docker" ]; then
+                |if [ $${DOCKER_CMD} == "docker" ]; then
                 |    # Run the container under the dnanexus user, so it will have permissions to read/write
                 |    # files in the home directory. This is required in cases where the container uses a
                 |    # different user.
