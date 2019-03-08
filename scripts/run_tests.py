@@ -65,7 +65,7 @@ medium_test_list = [
     "optionals",
 
     # docker image tests
-#    "platform_asset",
+    "platform_asset",
     "broad_genomics",
     "private_registry",
     "native_docker_file_image",
