@@ -536,8 +536,17 @@ case class Task(task:WdlTask,
         val dockerRunScript =
             s"""|#!/bin/bash -ex
                 |
-                |#Run docker or dx-docker
-                |$${DOCKER_CMD} run --entrypoint /bin/bash -v ${DX_HOME}:${DX_HOME} ${imgName} $${HOME}/execution/meta/script
+                |# Run docker or dx-docker
+                |
+                |extraFlags=""
+                |if [ $${{DOCKER_CMD}} == "docker" ]; then
+                |    # Run the container under the dnanexus user, so it will have permissions to read/write
+                |    # files in the home directory. This is required in cases where the container uses a
+                |    # different user.
+                |    extraFlags="--user $$(id -u):$$(id -g)"
+                |fi
+                |
+                |$${DOCKER_CMD} run $${extraFlags} --entrypoint /bin/bash -v ${DX_HOME}:${DX_HOME} ${imgName} $${HOME}/execution/meta/script
                 |""".stripMargin
 
         val dockerRunPath = getMetaDir().resolve("script.submit")

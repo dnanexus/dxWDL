@@ -69,6 +69,7 @@ medium_test_list = [
     "broad_genomics",
     "private_registry",
     "native_docker_file_image",
+    "samtools_count",
 
     # Setting defaults for tasks, not just workflows
     "population",
