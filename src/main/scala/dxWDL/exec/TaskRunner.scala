@@ -313,8 +313,7 @@ case class TaskRunner(task: CallableTaskDefinition,
     }
 
     def epilog(localizedInputValues: Map[String, WomValue],
-               dxUrl2path: Map[Furl, Path],
-               ) : Map[String, JsValue] = {
+               dxUrl2path: Map[Furl, Path]) : Map[String, JsValue] = {
         Utils.appletLog(verbose, s"Epilog  debugLevel=${runtimeDebugLevel}")
         if (maxVerboseLevel)
             printDirStruct()
