@@ -134,4 +134,11 @@ class GenerateIRTest extends FlatSpec with Matchers {
             path.toString :: cFlags
         ) shouldBe a [Main.SuccessfulTerminationIR]
     }
+
+    it should "handle calling subworkflows" in {
+        val path = pathFromBasename("subworkflows", "trains.wdl")
+        Main.compile(
+            path.toString :: cFlags
+        ) shouldBe a [Main.SuccessfulTerminationIR]
+    }
 }
