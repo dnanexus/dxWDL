@@ -463,10 +463,7 @@ case class GenerateIR(callables: Map[String, IR.Callable],
         val allCallNames = Block.deepFindCalls(block.nodes).map{ cNode =>
             Utils.getUnqualifiedName(cNode.callable.name)
         }.toVector
-
-        // generate a new WDL script just for this sub-block
-        val wdlCode = wfSourceStandAlone.value
-        //Utils.trace(verbose2, wdlCode)
+        //assert(allCallNames == 1)
 
         val applet = IR.Applet(s"${wfName}_${stageName}",
                                inputVars,
@@ -474,7 +471,7 @@ case class GenerateIR(callables: Map[String, IR.Callable],
                                calcInstanceType(None),
                                IR.DockerImageNone,
                                IR.AppletKindWfFragment(allCallNames, blockNum, fqnDictTypes),
-                               wdlCode)
+                               wfSourceStandAlone.value)
         val sArgs : Vector[SArg] = closure.map {
             case (_, LinkedVar(_, sArg)) => sArg
         }.toVector
