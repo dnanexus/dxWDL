@@ -415,8 +415,8 @@ object WdlVarLinks {
                     )
                 case DxlExec(dxJob, varEncName) =>
                     val varEncName_F = varEncName + Utils.FLAT_FILES_SUFFIX
-                    Map(bindEncName -> Utils.makeEBOR(dxJob, varEncName),
-                        bindEncName_F -> Utils.makeEBOR(dxJob, varEncName_F))
+                    Map(bindEncName -> Utils.makeEBOR(dxJob, nodots(varEncName)),
+                        bindEncName_F -> Utils.makeEBOR(dxJob, nodots(varEncName_F)))
             }
         }
 

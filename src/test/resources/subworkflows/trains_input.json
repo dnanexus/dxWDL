@@ -1,0 +1,4 @@
+{
+  "trains.prefixes" : ["xxx_", "yyy_"],
+  "trains.ranges" : ["0--1000", "10000--88000"]
+}
