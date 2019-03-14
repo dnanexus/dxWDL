@@ -11,7 +11,7 @@ import dxWDL.util._
 object Main extends App {
     sealed trait Termination
     case class SuccessfulTermination(output: String) extends Termination
-    case class SuccessfulTerminationIR(ir: dxWDL.compiler.IR.Bundle) extends Termination
+    case class SuccessfulTerminationIR(bundle: dxWDL.compiler.IR.Bundle) extends Termination
     case class UnsuccessfulTermination(output: String) extends Termination
     case class BadUsageTermination(info: String) extends Termination
 
