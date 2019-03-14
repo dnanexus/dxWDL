@@ -6,7 +6,7 @@ workflow trains {
     Array[String] ranges
 
     scatter (p in prefixes) {
-        call lib.check_route {
+        call lib.check_route as check_route {
             input: prefix=p,
                    ranges=ranges
         }
