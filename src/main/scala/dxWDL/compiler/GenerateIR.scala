@@ -398,7 +398,7 @@ case class GenerateIR(callables: Map[String, IR.Callable],
     private def blockClosure(block: Block,
                              env : CallEnv,
                              dbg: String) : CallEnv = {
-        if (verbose2) {
+/*        if (verbose2) {
             val blockNodesDbg = block.nodes.map{
                 "    " + WomPrettyPrint.apply(_)
             }.mkString("\n")
@@ -407,17 +407,17 @@ case class GenerateIR(callables: Map[String, IR.Callable],
                             |${blockNodesDbg}
                             |]
                             |""".stripMargin)
-        }
+        }*/
         val allInputs = Block.closure(block)
         val closure = allInputs.flatMap { case (name, womType) =>
             lookupInEnv(name, womType, env)
         }.toMap
 
-        Utils.trace(verbose2,
+/*        Utils.trace(verbose2,
                     s"""|blockClosure II
                         |   stage: ${dbg}
                         |   external: ${allInputs.mkString(",")}
-                        |   found: ${closure.keys}""".stripMargin)
+                        |   found: ${closure.keys}""".stripMargin) */
         closure
     }
 
@@ -766,15 +766,9 @@ case class GenerateIR(callables: Map[String, IR.Callable],
 
         val graph = wf.innerGraph
 
-        // as a first step, only handle straight line workflows
-        if (!graph.workflowCalls.isEmpty)
-            throw new Exception(s"Workflow ${wf.name} calls a subworkflow; currently not supported")
-
-        // now we are sure the workflow is a simple straight line. It only contains
-        // task calls.
-
         // Create a stage per call/scatter-block/declaration-block
         val (inputNodes, subBlocks, outputNodes) = Block.split(graph, wfSource)
+        //Block.dbgPrint(inputNodes, subBlocks, outputNodes)
 
         // Make a list of all task/workflow calls made inside the block. We will need to link
         // to the equivalent dx:applets and dx:workflows.
@@ -876,7 +870,7 @@ object GenerateIR {
             val readyNames = ready.map(_.name).toSet
             val satisfiedCallables = callables.filter{ c =>
                 val deps = immediateDeps(c.name)
-                Utils.trace(verbose.on, s"immediateDeps(${c.name}) = ${deps}")
+                //Utils.trace(verbose.on, s"immediateDeps(${c.name}) = ${deps}")
                 deps.subsetOf(readyNames)
             }
             if (satisfiedCallables.isEmpty)
@@ -887,9 +881,9 @@ object GenerateIR {
         var accu = Vector.empty[Callable]
         var crnt = allCallables
         while (!crnt.isEmpty) {
-            Utils.trace(verbose.on, s"""|  accu=${accu.map(_.name)}
+            /*Utils.trace(verbose.on, s"""|  accu=${accu.map(_.name)}
                                         |  crnt=${crnt.map(_.name)}
-                                        |""".stripMargin)
+                                        |""".stripMargin)*/
             val execsToCompile = next(crnt, accu)
             accu = accu ++ execsToCompile
             val alreadyCompiled: Set[String] = accu.map(_.name).toSet

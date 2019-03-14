@@ -67,7 +67,15 @@ class BlockTest extends FlatSpec with Matchers {
         val wfSourceCode = Utils.readFileContent(path)
         val wf : WorkflowDefinition = ParseWomSourceFile.parseWdlWorkflow(wfSourceCode)
         val (_, subBlocks, _) = Block.split(wf.innerGraph, wfSourceCode)
-        Utils.ignore(subBlocks)
+        subBlocks.size should be(1)
+    }
+
+    it should "split a block with an expression after a call" in {
+        val path = pathFromBasename("util", "expression_after_call.wdl")
+        val wfSourceCode = Utils.readFileContent(path)
+        val wf : WorkflowDefinition = ParseWomSourceFile.parseWdlWorkflow(wfSourceCode)
+        val (_, subBlocks, _) = Block.split(wf.innerGraph, wfSourceCode)
+        subBlocks.size should be(2)
     }
 
     it should "calculate closure correctly for WDL draft-2" in {

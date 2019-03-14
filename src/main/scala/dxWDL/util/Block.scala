@@ -266,21 +266,21 @@ object Block {
             : Unit = {
         System.out.println("Inputs [")
         inputNodes.foreach{ node =>
-            val desc = WomPrettyPrint.apply(node)
+            val desc = WomPrettyPrintApproxWdl.apply(node)
             System.out.println(s"  ${desc}")
         }
         System.out.println("]")
         subBlocks.foreach{ block =>
             System.out.println("Block [")
             block.nodes.foreach{ node =>
-                val desc = WomPrettyPrint.apply(node)
+                val desc = WomPrettyPrintApproxWdl.apply(node)
                 System.out.println(s"  ${desc}")
             }
             System.out.println("]")
         }
         System.out.println("Output [")
         outputNodes.foreach{ node =>
-            val desc = WomPrettyPrint.apply(node)
+            val desc = WomPrettyPrintApproxWdl.apply(node)
             System.out.println(s"  ${desc}")
         }
         System.out.println("]")

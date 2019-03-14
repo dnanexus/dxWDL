@@ -1,8 +1,9 @@
 package dxWDL.compiler
 
-import dxWDL.Main
 import java.nio.file.{Path, Paths}
 import org.scalatest.{FlatSpec, Matchers}
+
+import dxWDL.Main
 
 // These tests involve compilation -without- access to the platform.
 //
@@ -18,7 +19,8 @@ class GenerateIRTest extends FlatSpec with Matchers {
     private val cFlagsUnlocked = List("--compileMode", "ir", "-quiet", "-fatalValidationWarnings")
     val dbgFlags = List("--compileMode", "ir",
                         "--verbose",
-                        "--verboseKey", "GenerateIR")
+                        "--verboseKey", "GenerateIR",
+                        "--locked")
 
     it should "IR compile a single WDL task" in {
         val path = pathFromBasename("compiler", "add.wdl")
@@ -44,7 +46,7 @@ class GenerateIRTest extends FlatSpec with Matchers {
     }
 
 
-    it should "IR compile unlocked workflow" taggedAs(EdgeTest) in {
+    it should "IR compile unlocked workflow" in {
         val path = pathFromBasename("compiler", "wf_linear.wdl")
         Main.compile(
             path.toString :: cFlagsUnlocked
@@ -135,10 +137,20 @@ class GenerateIRTest extends FlatSpec with Matchers {
         ) shouldBe a [Main.SuccessfulTerminationIR]
     }
 
-    it should "handle calling subworkflows" in {
+    it should "handle calling subworkflows" taggedAs(EdgeTest) in {
         val path = pathFromBasename("subworkflows", "trains.wdl")
-        Main.compile(
-            path.toString :: cFlags
-        ) shouldBe a [Main.SuccessfulTerminationIR]
+        val retval = Main.compile(
+            path.toString :: dbgFlags
+        )
+        retval shouldBe a [Main.SuccessfulTerminationIR]
+        val irwf = retval match {
+            case Main.SuccessfulTerminationIR(irwf) => irwf
+            case _ => throw new Exception("sanity")
+        }
+        val primaryWf : IR.Workflow = irwf.primaryCallable match {
+            case Some(wf : IR.Workflow) => wf
+            case _ => throw new Exception("sanity")
+        }
+        primaryWf.stages.size shouldBe(2)
     }
 }

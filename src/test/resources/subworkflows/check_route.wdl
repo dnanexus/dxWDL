@@ -1,6 +1,10 @@
+version 1.0
+
 workflow check_route {
-    String prefix
-    Array[String] ranges
+    input {
+        String prefix
+        Array[String] ranges
+    }
 
     scatter (range in ranges) {
         call Concat as concat1 {
@@ -17,9 +21,10 @@ workflow check_route {
 
 # Concatenate two string
 task Concat {
-    String x
-    String y
-
+    input {
+        String x
+        String y
+    }
     command {
         echo ${x}_${y}
     }
