@@ -538,12 +538,15 @@ case class WfFragRunner(wf: WorkflowDefinition,
     }
 
 
-    def apply(subBlockNr: Int,
+    def apply(blockPath: Vector[Int],
               envInitial: Map[String, WomValue],
               runMode: RunnerWfFragmentMode.Value) : Map[String, JsValue] = {
         Utils.appletLog(verbose, s"dxWDL version: ${Utils.getVersion()}")
         Utils.appletLog(verbose, s"link info=${execLinkInfo}")
         Utils.appletLog(verbose, s"Environment: ${envInitial}")
+
+        // TODO. This handles only the case where the path is of depth 1.
+        val subBlockNr = blockPath(0)
 
         val (_, subBlocks, _) = Block.split(wf.innerGraph, wfSourceCode)
         val block = subBlocks(subBlockNr)

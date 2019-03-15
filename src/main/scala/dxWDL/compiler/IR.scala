@@ -95,7 +95,7 @@ object IR {
     case class  AppletKindNative(id: String) extends AppletKind
     case class  AppletKindTask(task: CallableTaskDefinition) extends AppletKind
     case class  AppletKindWfFragment(calls: Vector[String],
-                                     subBlockNum: Int,
+                                     blockPath: Vector[Int],
                                      fqnDictTypes: Map[String, WomType]) extends AppletKind
     case object AppletKindWfInputs extends AppletKind
     case object AppletKindWfOutputs extends AppletKind

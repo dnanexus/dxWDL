@@ -425,8 +425,12 @@ case class GenerateIR(callables: Map[String, IR.Callable],
     //
     // Note: all the calls have the compulsory arguments, this has
     // been checked in the Validate step.
+    //
+    // The [blockPath] argument keeps track of which block this fragment represents.
+    // A top level block is a number. A sub-block of a top-level block is a vector of two
+    // numbers, etc.
     private def compileWfFragment(block: Block,
-                                  blockNum : Int,
+                                  blockPath: Vector[Int],
                                   env : CallEnv,
                                   wfName : String,
                                   wfSourceStandAlone : WdlCodeSnippet) : (IR.Stage, IR.Applet) = {
@@ -470,7 +474,7 @@ case class GenerateIR(callables: Map[String, IR.Callable],
                                outputVars,
                                calcInstanceType(None),
                                IR.DockerImageNone,
-                               IR.AppletKindWfFragment(allCallNames, blockNum, fqnDictTypes),
+                               IR.AppletKindWfFragment(allCallNames, blockPath, fqnDictTypes),
                                wfSourceStandAlone.value)
         val sArgs : Vector[SArg] = closure.map {
             case (_, LinkedVar(_, sArg)) => sArg
@@ -488,6 +492,7 @@ case class GenerateIR(callables: Map[String, IR.Callable],
     private def assembleBackbone(wf: WorkflowDefinition,
                                  wfSourceStandAlone : WdlCodeSnippet,
                                  wfInputs: Vector[(CVar, SArg)],
+                                 blockPath: Vector[Int],
                                  subBlocks: Vector[Block],
                                  locked: Boolean)
             : (Vector[(IR.Stage, Option[IR.Applet])], CallEnv) =
@@ -529,7 +534,8 @@ case class GenerateIR(callables: Map[String, IR.Callable],
                         Block.Cond(_) |
                         Block.Scatter(_) =>
                     // A simple block that requires just one applet
-                    val (stage, apl) = compileWfFragment(block, blockNum,
+                    val (stage, apl) = compileWfFragment(block,
+                                                         blockPath :+ blockNum,
                                                          env, wf.name, wfSourceStandAlone)
                     for (cVar <- stage.outputs) {
                         env = env + (cVar.name ->
@@ -687,6 +693,7 @@ case class GenerateIR(callables: Map[String, IR.Callable],
                                       inputNodes: Vector[GraphInputNode],
                                       outputNodes: Vector[GraphOutputNode],
                                       wfSourceStandAlone : WdlCodeSnippet,
+                                      blockPath: Vector[Int],
                                       subBlocks : Vector[Block]) :
             (IR.Workflow, Vector[IR.Applet], Vector[(CVar, SArg)]) =
     {
@@ -696,7 +703,8 @@ case class GenerateIR(callables: Map[String, IR.Callable],
                 (cVar, IR.SArgWorkflowInput(cVar))
         }.toVector
 
-        val (allStageInfo, env) = assembleBackbone(wf, wfSourceStandAlone, wfInputs, subBlocks, true)
+        val (allStageInfo, env) = assembleBackbone(wf, wfSourceStandAlone, wfInputs,
+                                                   blockPath, subBlocks, true)
         val (stages, auxApplets) = allStageInfo.unzip
 
         // Handle outputs that are constants or variables, we can output them directly
@@ -721,6 +729,7 @@ case class GenerateIR(callables: Map[String, IR.Callable],
                                        inputNodes: Vector[GraphInputNode],
                                        outputNodes: Vector[GraphOutputNode],
                                        wfSourceStandAlone : WdlCodeSnippet,
+                                       blockPath: Vector[Int],
                                        subBlocks : Vector[Block])
             : (IR.Workflow, Vector[IR.Applet], Vector[(CVar, SArg)]) =
     {
@@ -739,7 +748,8 @@ case class GenerateIR(callables: Map[String, IR.Callable],
                 (cVar, sArg)
         }.toVector
 
-        val (allStageInfo, env) = assembleBackbone(wf, wfSourceStandAlone, fauxWfInputs, subBlocks, false)
+        val (allStageInfo, env) = assembleBackbone(wf, wfSourceStandAlone, fauxWfInputs,
+                                                   blockPath, subBlocks, false)
         val (stages: Vector[IR.Stage], auxApplets) = allStageInfo.unzip
 
         // convert the outputs into an applet+stage
@@ -768,7 +778,8 @@ case class GenerateIR(callables: Map[String, IR.Callable],
     private def compileWorkflow(wf: WorkflowDefinition,
                                 wfSource: String,
                                 locked: Boolean,
-                                reorg: Boolean) : (IR.Workflow, Vector[IR.Applet]) =
+                                reorg: Boolean,
+                                blockPath: Vector[Int]) : (IR.Workflow, Vector[IR.Applet]) =
     {
         Utils.trace(verbose.on, s"compiling workflow ${wf.name}")
 
@@ -793,9 +804,11 @@ case class GenerateIR(callables: Map[String, IR.Callable],
         // compile into an IR workflow
         val (irwf, applets, wfOutputs) =
             if (locked) {
-                compileWorkflowLocked(wf, inputNodes, outputNodes, wfSourceStandAlone, subBlocks)
+                compileWorkflowLocked(wf, inputNodes, outputNodes, wfSourceStandAlone,
+                                      blockPath, subBlocks)
             } else {
-                compileWorkflowRegular(wf, inputNodes, outputNodes, wfSourceStandAlone, subBlocks)
+                compileWorkflowRegular(wf, inputNodes, outputNodes, wfSourceStandAlone,
+                                       blockPath, subBlocks)
             }
 
         // Add a workflow reorg applet if necessary
@@ -832,7 +845,7 @@ case class GenerateIR(callables: Map[String, IR.Callable],
                     case None =>
                         throw new Exception(s"Did not find sources for workflow ${wf.name}")
                     case Some(wfSource) =>
-                        compileWorkflow(wf, wfSource, locked, reorg)
+                        compileWorkflow(wf, wfSource, locked, reorg, Vector.empty[Int])
                 }
             case x =>
                 throw new Exception(s"""|Can't compile: ${callable.name}, class=${callable.getClass}

@@ -588,7 +588,7 @@ object Main extends App {
                                                            inputsRaw,
                                                            fragInputOutput,
                                                            rtDebugLvl)
-                    fragRunner.apply(meta.subBlockNr, meta.env, RunnerWfFragmentMode.Launch)
+                    fragRunner.apply(meta.blockPath, meta.env, RunnerWfFragmentMode.Launch)
                 case InternalOp.Collect =>
                     val fragRunner = new exec.WfFragRunner(wf, meta.wfSource, meta.instanceTypeDB,
                                                            meta.execLinkInfo,
@@ -596,7 +596,7 @@ object Main extends App {
                                                            inputsRaw,
                                                            fragInputOutput,
                                                            rtDebugLvl)
-                    fragRunner.apply(meta.subBlockNr, meta.env, RunnerWfFragmentMode.Collect)
+                    fragRunner.apply(meta.blockPath, meta.env, RunnerWfFragmentMode.Collect)
                 case InternalOp.WfInputs =>
                     val wfInputs = new exec.WfInputs(wf, meta.wfSource,rtDebugLvl)
                     wfInputs.apply(meta.env)

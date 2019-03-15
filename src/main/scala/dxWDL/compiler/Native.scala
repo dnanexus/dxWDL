@@ -472,13 +472,13 @@ case class Native(dxWDLrtId: Option[String],
 
         val metaInfo : Option[JsValue] =
             applet.kind match {
-                case IR.AppletKindWfFragment(calls, subBlockNum, fqnDictTypes) =>
+                case IR.AppletKindWfFragment(calls, blockPath, fqnDictTypes) =>
                     // meta information used for running workflow fragments
                     val hardCodedFragInfo = JsObject(
                         "womSourceCode" -> JsString(Utils.base64Encode(applet.womSourceCode)),
                         "instanceTypeDB" -> JsString(Utils.base64Encode(dbInstance)),
                         "execLinkInfo" -> JsObject(linkInfo),
-                        "subBlockNum" -> JsNumber(subBlockNum),
+                        "blockPath" -> JsArray(blockPath.map(JsNumber(_))),
                         "fqnDictTypes" -> JsObject(
                             fqnDictTypes.map{ case (k,t) =>
                                 val tStr = WomTypeSerialization.toString(t)
