@@ -505,8 +505,9 @@ case class GenerateIR(callables: Map[String, IR.Callable],
             val block = remainingBlocks.head
             remainingBlocks = remainingBlocks.tail
 
-            val (stage, aplOpt) = Block.isSimpleCall(block) match {
-                case Some(call) =>
+            val (_, category) = Block.categorize(block)
+            val (stage, aplOpt) = category match {
+                case Block.CallDirect(call) =>
                     // The block contains exactly one call, with no extra declarations.
                     // All the variables are already in the environment, so there
                     // is no need to do any extra work. Compile directly into a workflow
@@ -523,8 +524,11 @@ case class GenerateIR(callables: Map[String, IR.Callable],
                     }
                     (stage, None)
 
-                case None =>
-                    // General case
+                case Block.AllExpressions |
+                        Block.CallWithEval(_) |
+                        Block.Cond(_) |
+                        Block.Scatter(_) =>
+                    // A simple block that requires just one applet
                     val (stage, apl) = compileWfFragment(block, blockNum,
                                                          env, wf.name, wfSourceStandAlone)
                     for (cVar <- stage.outputs) {
@@ -532,6 +536,10 @@ case class GenerateIR(callables: Map[String, IR.Callable],
                                          LinkedVar(cVar, IR.SArgLink(stage.stageName, cVar)))
                     }
                     (stage, Some(apl))
+
+                case Block.CondWithNesting(_) |
+                        Block.ScatterWithNesting(_) =>
+                    throw new Exception("unimplemented")
             }
             allStageInfo :+= (stage, aplOpt)
         }

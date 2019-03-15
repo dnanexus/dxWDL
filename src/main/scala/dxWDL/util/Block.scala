@@ -298,13 +298,13 @@ object Block {
     //   TaskCallInputExpressionNode(b, y, WomIntegerType, GraphNodeOutputPort(b))
     //   CommandCall(add, Set(a, b))
     // ]
-    def isSimpleCall(block: Block) : Option[CallNode] = {
+    private def isSimpleCall(block: Block) : Boolean = {
         // find the call
         val calls : Seq[CallNode] = block.nodes.collect{
             case cNode : CallNode => cNode
         }
         if (calls.size != 1)
-            return None
+            return false
         val oneCall = calls.head
 
         // All the other nodes have to be call inputs
@@ -314,16 +314,14 @@ object Block {
         val rest = block.nodes.toSet - oneCall
         val callInputs = oneCall.upstream.toSet
         if (!rest.subsetOf(callInputs))
-            return None
+            return false
 
-        // The call inputs have to be simple expressions
-        val allSimple = rest.forall{
+        // All the call inputs have to be simple expressions, if the call is
+        // to be called "simple"
+        rest.forall{
             case expr: TaskCallInputExpressionNode => isTrivialExpression(expr.womExpression)
             case _ => false
         }
-        if (!allSimple)
-            return None
-        Some(oneCall)
     }
 
 
@@ -345,8 +343,11 @@ object Block {
     //    call Filter { input: prefix = fullName }
     // }
     //
-    def isSimpleSubblock(graph: Graph) : Boolean = {
+    private def isSimpleSubblock(graph: Graph) : Boolean = {
         val nodes = graph.nodes
+        System.out.println(s"""|isSimpleSubblock
+                               |   ${Block(nodes.toVector).prettyPrint}
+                               |""".stripMargin)
 
         // The block can't have conditional/scatter sub-blocks
         val hasSubblocks = nodes.forall{
@@ -354,6 +355,7 @@ object Block {
             case _ : ConditionalNode => true
             case _ => false
         }
+        System.out.println("hasSubblocks")
         if (hasSubblocks)
             return false
 
@@ -361,11 +363,13 @@ object Block {
         val calls : Seq[CallNode] = nodes.toSeq.collect{
             case cNode : CallNode => cNode
         }
+        System.out.println(s"calls.size = ${calls.size}")
         if (calls.size > 1)
             return false
         assert(calls.size == 1)
 
         // The only other kind of nodes could be inputs, outputs, and task input expressions.
+        System.out.println(s"reached the end of the method")
         nodes.forall{
             case _: CallNode => true
             case _: TaskCallInputExpressionNode => true
@@ -385,9 +389,12 @@ object Block {
     // 4) Scatter block
     sealed trait Category
     case object AllExpressions extends Category
-    case class Call(call: CallNode) extends Category
-    case class Cond(cond: ConditionalNode, simple: Boolean) extends Category
-    case class Scatter(scatter: ScatterNode, simple: Boolean) extends Category
+    case class CallDirect(call: CallNode) extends Category
+    case class CallWithEval(call: CallNode) extends Category
+    case class Cond(cond: ConditionalNode) extends Category
+    case class CondWithNesting(cond: ConditionalNode) extends Category
+    case class Scatter(scatter: ScatterNode) extends Category
+    case class ScatterWithNesting(scatter: ScatterNode) extends Category
 
     def categorize(block: Block) : (Vector[GraphNode], Category) = {
         assert(!block.nodes.isEmpty)
@@ -402,14 +409,27 @@ object Block {
 
         val lastNode = block.nodes.last
         lastNode match {
+            case _ if deepFindCalls(Seq(lastNode)).isEmpty =>
+                // The block comprises of expressions only
+                ((allButLast :+ lastNode), AllExpressions)
+
             case callNode: CallNode =>
-                (allButLast, Call(callNode))
-            case conditionalNode: ConditionalNode =>
-                (allButLast, Cond(conditionalNode, isSimpleSubblock(conditionalNode.innerGraph)))
+                if (isSimpleCall(block))
+                    (allButLast, CallDirect(callNode))
+                else
+                    (allButLast, CallWithEval(callNode))
+
+            case condNode: ConditionalNode =>
+                if (isSimpleSubblock(condNode.innerGraph))
+                    (allButLast, Cond(condNode))
+                else
+                    (allButLast, CondWithNesting(condNode))
+
             case sctNode: ScatterNode =>
-                (allButLast, Scatter(sctNode, isSimpleSubblock(sctNode.innerGraph)))
-            case other =>
-                ((allButLast :+ other), AllExpressions)
+                if (isSimpleSubblock(sctNode.innerGraph))
+                    (allButLast, Scatter(sctNode))
+                else
+                    (allButLast, ScatterWithNesting(sctNode))
         }
     }
 

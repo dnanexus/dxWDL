@@ -137,7 +137,7 @@ class GenerateIRTest extends FlatSpec with Matchers {
         ) shouldBe a [Main.SuccessfulTerminationIR]
     }
 
-    it should "handle calling subworkflows" in {
+    it should "handle calling subworkflows" taggedAs(EdgeTest) in {
         val path = pathFromBasename("subworkflows", "trains.wdl")
         val retval = Main.compile(
             path.toString :: cFlags
@@ -154,8 +154,15 @@ class GenerateIRTest extends FlatSpec with Matchers {
         primaryWf.stages.size shouldBe(2)
     }
 
-    it should "compile a sub-block with several calls" taggedAs(EdgeTest) in {
+    it should "compile a sub-block with several calls" in {
         val path = pathFromBasename("compiler", "subblock_several_calls.wdl")
+        Main.compile(
+            path.toString :: cFlags
+        ) shouldBe a [Main.SuccessfulTerminationIR]
+    }
+
+    it should "compile two level nested workflow" in {
+        val path = pathFromBasename("nested", "two_levels.wdl")
         Main.compile(
             path.toString :: cFlags
         ) shouldBe a [Main.SuccessfulTerminationIR]
