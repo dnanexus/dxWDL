@@ -345,9 +345,6 @@ object Block {
     //
     private def isSimpleSubblock(graph: Graph) : Boolean = {
         val nodes = graph.nodes
-        System.out.println(s"""|isSimpleSubblock
-                               |   ${Block(nodes.toVector).prettyPrint}
-                               |""".stripMargin)
 
         // The block can't have conditional/scatter sub-blocks
         val hasSubblocks = nodes.forall{
@@ -355,7 +352,6 @@ object Block {
             case _ : ConditionalNode => true
             case _ => false
         }
-        System.out.println("hasSubblocks")
         if (hasSubblocks)
             return false
 
@@ -363,19 +359,20 @@ object Block {
         val calls : Seq[CallNode] = nodes.toSeq.collect{
             case cNode : CallNode => cNode
         }
-        System.out.println(s"calls.size = ${calls.size}")
         if (calls.size > 1)
             return false
         assert(calls.size == 1)
 
         // The only other kind of nodes could be inputs, outputs, and task input expressions.
-        System.out.println(s"reached the end of the method")
         nodes.forall{
             case _: CallNode => true
             case _: TaskCallInputExpressionNode => true
             case _: OuterGraphInputNode => true
             case _: GraphOutputNode => true
-            case _ => false
+            case _: PlainAnonymousExpressionNode => true
+            case other =>
+                //System.out.println(s"strange value ${other}")
+                false
         }
     }
 
