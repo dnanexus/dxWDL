@@ -546,6 +546,7 @@ case class WfFragRunner(wf: WorkflowDefinition,
         Utils.appletLog(verbose, s"Environment: ${envInitial}")
 
         // TODO. This handles only the case where the path is of depth 1.
+        assert(blockPath.size == 1)
         val subBlockNr = blockPath(0)
 
         val (_, subBlocks, _) = Block.split(wf.innerGraph, wfSourceCode)

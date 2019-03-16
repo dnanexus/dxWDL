@@ -462,26 +462,46 @@ case class GenerateIR(callables: Map[String, IR.Callable],
             CVar(fqn, womType, None)
         }.toVector
 
-        // Make a list of all task/workflow calls made inside the block. We will need to link
-        // to the equivalent dx:applets and dx:workflows.
-        val allCallNames = Block.deepFindCalls(block.nodes).map{ cNode =>
-            Utils.getUnqualifiedName(cNode.callable.name)
-        }.toVector
-        //assert(allCallNames == 1)
+        val callable : IR.Callable = match {
+            case Block.AllExpressions |
+                    Block.CallWithEval(_) |
+                    Block.Cond(_) |
+                    Block.Scatter(_) =>
+                // A simple block with no nested sub-blocks, and a single call.
+                //
+                // Make a list of all task/workflow calls made inside the block. We will need to link
+                // to the equivalent dx:applets and dx:workflows.
+                val allCallNames = Block.deepFindCalls(block.nodes).map{ cNode =>
+                    Utils.getUnqualifiedName(cNode.callable.name)
+                }.toVector
+                assert(allCallNames == 1)
+                IR.Applet(s"${wfName}_${stageName}",
+                          inputVars,
+                          outputVars,
+                          calcInstanceType(None),
+                          IR.DockerImageNone,
+                          IR.AppletKindWfFragment(allCallNames, blockPath, fqnDictTypes),
+                          wfSourceStandAlone.value)
 
-        val applet = IR.Applet(s"${wfName}_${stageName}",
-                               inputVars,
-                               outputVars,
-                               calcInstanceType(None),
-                               IR.DockerImageNone,
-                               IR.AppletKindWfFragment(allCallNames, blockPath, fqnDictTypes),
-                               wfSourceStandAlone.value)
+            case Block.CondWithNesting(_) |
+                    Block.ScatterWithNesting(_) =>
+                // A block complex enough to require a workflow.
+                // Recursively call into the compile-a-workflow method, and
+                // get a locked subworkflow
+                val (inputNodes, subBlocks, outputNodes) = Block.split(/*graph*/ block, wfSourceStandAlone.value)
+                val (subWf,auxApplet, _ ) = compileWorkflowLocked(wf,
+                                                  inputNodes: Vector[GraphInputNode],
+                                                  outputNodes: Vector[GraphOutputNode],
+                                                  wfSourceStandAlone,
+                                                  blockPath,
+                                                  subBlocks)
+        }
         val sArgs : Vector[SArg] = closure.map {
             case (_, LinkedVar(_, sArg)) => sArg
         }.toVector
 
         Utils.trace(verbose.on, "---")
-        (IR.Stage(stageName, genStageId(), applet.name, sArgs, outputVars),
+        (IR.Stage(stageName, genStageId(), callable.name, sArgs, outputVars),
          applet)
     }
 
@@ -529,11 +549,9 @@ case class GenerateIR(callables: Map[String, IR.Callable],
                     }
                     (stage, None)
 
-                case Block.AllExpressions |
-                        Block.CallWithEval(_) |
-                        Block.Cond(_) |
-                        Block.Scatter(_) =>
-                    // A simple block that requires just one applet
+                case _ =>
+                    //     A simple block that requires just one applet,
+                    // OR: A complex block that needs a subworkflow
                     val (stage, apl) = compileWfFragment(block,
                                                          blockPath :+ blockNum,
                                                          env, wf.name, wfSourceStandAlone)
@@ -542,10 +560,6 @@ case class GenerateIR(callables: Map[String, IR.Callable],
                                          LinkedVar(cVar, IR.SArgLink(stage.stageName, cVar)))
                     }
                     (stage, Some(apl))
-
-                case Block.CondWithNesting(_) |
-                        Block.ScatterWithNesting(_) =>
-                    throw new Exception("unimplemented")
             }
             allStageInfo :+= (stage, aplOpt)
         }
