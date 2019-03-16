@@ -487,14 +487,15 @@ case class GenerateIR(callables: Map[String, IR.Callable],
                     Block.ScatterWithNesting(_) =>
                 // A block complex enough to require a workflow.
                 // Recursively call into the compile-a-workflow method, and
-                // get a locked subworkflow
+                // get a locked subworkflow.
                 val (inputNodes, subBlocks, outputNodes) = Block.split(/*graph*/ block, wfSourceStandAlone.value)
                 val (subWf,auxApplet, _ ) = compileWorkflowLocked(wf,
-                                                  inputNodes: Vector[GraphInputNode],
-                                                  outputNodes: Vector[GraphOutputNode],
-                                                  wfSourceStandAlone,
-                                                  blockPath,
-                                                  subBlocks)
+                                                                  inputNodes: Vector[GraphInputNode],
+                                                                  outputNodes: Vector[GraphOutputNode],
+                                                                  wfSourceStandAlone,
+                                                                  blockPath,
+                                                                  subBlocks)
+                subwf
         }
         val sArgs : Vector[SArg] = closure.map {
             case (_, LinkedVar(_, sArg)) => sArg
