@@ -1,5 +1,8 @@
 # Release Notes
 
+## 0.81.4
+- Bug fix for complex cases where WDL files import each other.
+
 ## 0.81.3
 - Bug fix for native docker. There was a problem when a docker image was using an internally defined
 user; it didn't have the necessary permissions to create output files on the worker.
