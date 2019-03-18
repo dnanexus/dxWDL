@@ -20,15 +20,6 @@ case class Context(allSourceFiles: HashMap[String, WdlModule],
                    verbose: Verbose) {
     val verbose2:Boolean = verbose.keywords contains "NamespaceOps"
 
-    // Extract the last part of the name from a filename path.
-    //  "/A/B/C/foo.txt"   -> "foo.txt"
-    private def getFilename(path: String) : String = {
-        val i = path.lastIndexOf('/')
-        if (i == -1)
-            path
-        else
-            path.substring(i + 1)
-    }
     def makeResolver: Draft2ImportResolver = {
         // Make an immutable copy of the source files, to avoid buggy
         // behavior.
@@ -37,8 +28,8 @@ case class Context(allSourceFiles: HashMap[String, WdlModule],
         }.toMap
         // Index the source files by name, instead of their full path. This allows finding
         // source WDL files regardless of which import directory they come from.
-        val allSourcesByName = allSources.map{ case (k,v) => getFilename(k) -> v}.toMap
-        filename => allSourcesByName.get(getFilename(filename)) match {
+        val allSourcesByName = allSources.map{ case (k,v) => Utils.getFilename(k) -> v}.toMap
+        filename => allSourcesByName.get(Utils.getFilename(filename)) match {
             case None =>
                 val knownFiles = allSources.keys
                 throw new Exception(s"Unable to find ${filename}, known files are: ${knownFiles}")
@@ -170,32 +161,46 @@ case class Context(allSourceFiles: HashMap[String, WdlModule],
         }
         this.copy(allSourceFiles = hm)
     }
+
+    def prettyPrint: String = {
+        val shortNames = allSourceFiles.keys.map{ Utils.getFilename(_) }.toVector
+        "[" + shortNames.sorted.mkString(", ") + "]"
+    }
 }
 
 object Context {
-    def make(allWdlSources: Map[String, String],
+    def make(allWdlSourcesOrg: Map[String, String],
              toplevelWdlSourceFile: Path,
              verbose: Verbose) : Context = {
+        def allWdlSourcesShortNames = allWdlSourcesOrg.map{
+            case (path, wdlSource) =>
+                Utils.getFilename(path) -> wdlSource
+        }.toMap
+
         def resolver: Draft2ImportResolver = {
-            filename => allWdlSources.get(filename) match {
-                case None => throw new Exception(s"Unable to find ${filename}")
-                case Some(content) => content
-            }
+            case path =>
+                val filename = Utils.getFilename(path)
+                allWdlSourcesShortNames.get(filename) match {
+                    case None => throw new Exception(s"Unable to find ${filename}")
+                    case Some(content) => content
+                }
         }
 
         val hm = HashMap.empty[String, WdlModule]
-        allWdlSources.foreach{ case (name, wdlSourceCode) =>
+        allWdlSourcesOrg.foreach{ case (path, wdlSourceCode) =>
             WdlNamespace.loadUsingSource(wdlSourceCode,
                                          None, Some(List(resolver))) match {
-                case Failure(_) =>
+                case Failure(e) =>
                     // the WDL source does not parse, drop it
+                    Utils.error(s"WDL source for ${path} does not parse, dropping")
+                    Utils.error(e.toString)
                     ()
                 case Success(ns) =>
                     val workflow = ns match {
                         case _:WdlNamespaceWithoutWorkflow => None
                         case nswf:WdlNamespaceWithWorkflow => Some(nswf.workflow)
                     }
-                    hm(name) = WdlModule(workflow, ns.tasks.toVector, wdlSourceCode)
+                    hm(path) = WdlModule(workflow, ns.tasks.toVector, wdlSourceCode)
             }
         }
         new Context(hm, toplevelWdlSourceFile, verbose)

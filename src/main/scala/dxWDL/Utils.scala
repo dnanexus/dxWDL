@@ -102,6 +102,15 @@ object Utils {
 
     lazy val dxEnv = DXEnvironment.create()
 
+    // Extract the last part of the name from a filename path.
+    //  "/A/B/C/foo.txt"   -> "foo.txt"
+    def getFilename(path: String) : String = {
+        val i = path.lastIndexOf('/')
+        if (i == -1)
+            path
+        else
+            path.substring(i + 1)
+    }
 
     // The version lives in application.conf
     def getVersion() : String = {
