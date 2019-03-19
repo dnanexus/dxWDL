@@ -219,6 +219,8 @@ object Block {
         }
     }
 
+    // Split an entire workflow.
+    //
     // Sort the graph into a linear set of blocks, according to
     // dependencies.  Each block is itself sorted. The dependencies
     // impose a partial ordering on the graph. To make it correspond
@@ -240,9 +242,8 @@ object Block {
     //  [ call B ]  [ call C ]
     //
     // We choose option #2 because it resembles the original.
-    def split(graph: Graph,
-              callsLoToHi: Vector[(String, Int)]):
-            (Vector[GraphInputNode],   // inputs
+    def splitGraph(graph: Graph, callsLoToHi: Vector[(String, Int)]):
+            (Vector[GraphInputNode], // inputs
              Vector[Block], // blocks
              Vector[GraphOutputNode]) // outputs
     = {
@@ -296,9 +297,18 @@ object Block {
         (inputBlock, allBlocks, outputBlock)
     }
 
-    // Split a block from a larger workflow into sub-blocks.
-    def splitWfBlock(block: Block,
-                     callsLoToHi: Vector[(String, Int)]): Vector[Block] = ???
+    // An easy to use method that just takes the workflow source
+    def split(graph: Graph, wfSource: String) :  (Vector[GraphInputNode],   // inputs
+                                                  Vector[Block], // blocks
+                                                  Vector[GraphOutputNode]) // outputs
+    = {
+        val callToSrcLine = ParseWomSourceFile.scanForCalls(wfSource)
+
+        // sort from low to high according to the source lines.
+        val callsLoToHi : Vector[(String, Int)] = callToSrcLine.toVector.sortBy(_._2)
+
+        splitGraph(graph, callsLoToHi)
+    }
 
     def dbgPrint(inputNodes: Vector[GraphInputNode],   // inputs
                  subBlocks: Vector[Block], // blocks
@@ -424,14 +434,21 @@ object Block {
     // 2) Call
     // 3) Conditional block
     // 4) Scatter block
-    sealed trait Category
+    sealed trait Category {
+        def getInnerGraph : Graph =
+            throw new UnsupportedOperationException(s"$getClass does not implement getInnerGraph")
+    }
     case object AllExpressions extends Category
-    case class CallDirect(call: CallNode) extends Category
-    case class CallWithEval(call: CallNode) extends Category
-    case class Cond(cond: ConditionalNode) extends Category
-    case class CondWithNesting(cond: ConditionalNode) extends Category
-    case class Scatter(scatter: ScatterNode) extends Category
-    case class ScatterWithNesting(scatter: ScatterNode) extends Category
+    case class CallDirect(value: CallNode) extends Category
+    case class CallWithEval(value: CallNode) extends Category
+    case class Cond(value: ConditionalNode) extends Category
+    case class Scatter(value: ScatterNode) extends Category
+    case class CondWithNesting(value: ConditionalNode) extends Category {
+        override def getInnerGraph: Graph = value.innerGraph
+    }
+    case class ScatterWithNesting(value: ScatterNode) extends Category {
+        override def getInnerGraph: Graph = value.innerGraph
+    }
 
     def categorize(block: Block) : (Vector[GraphNode], Category) = {
         assert(!block.nodes.isEmpty)

@@ -549,7 +549,11 @@ case class WfFragRunner(wf: WorkflowDefinition,
         assert(blockPath.size == 1)
         val subBlockNr = blockPath(0)
 
-        val (_, subBlocks, _) = Block.split(wf.innerGraph, wfSourceCode)
+        // sort from low to high according to the source lines.
+        val callToSrcLine = ParseWomSourceFile.scanForCalls(wfSourceCode)
+        val callsLoToHi : Vector[(String, Int)] = callToSrcLine.toVector.sortBy(_._2)
+
+        val (_, subBlocks, _) = Block.splitGraph(wf.innerGraph, callsLoToHi)
         val block = subBlocks(subBlockNr)
         val dbgBlock = block.nodes.map{
             WomPrettyPrintApproxWdl.apply(_)
