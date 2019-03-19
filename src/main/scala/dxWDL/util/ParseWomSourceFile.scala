@@ -359,6 +359,7 @@ object ParseWomSourceFile {
         calls.toMap
     }
 
+
     // throw an exception if the workflow source is not valid WDL 1.0
     def validateWdlWorkflow(wdlWfSource: String,
                             language: Language.Value) : Unit = {

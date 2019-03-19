@@ -62,6 +62,45 @@ case class Block(nodes : Vector[GraphNode]) {
 }
 
 object Block {
+    // create a unique name for a workflow fragment
+    private var fragNum = 0
+    private def genFragId() : String = {
+        fragNum += 1
+        fragNum.toString
+    }
+
+    // Create a human readable name for a block of statements
+    //
+    // 1. Ignore all declarations
+    // 2. If there is a scatter/if, use that
+    // 3. Otherwise, there must be at least one call. Use the first one.
+    def createName(block: Block) : String = {
+        val coreStmts = block.nodes.filter{
+            case _: ScatterNode => true
+            case _: ConditionalNode => true
+            case _: CallNode => true
+            case _ => false
+        }
+
+        if (coreStmts.isEmpty)
+            return s"eval_${genFragId()}"
+        val name = coreStmts.head match {
+            case ssc : ScatterNode =>
+                val ids = ssc.scatterVariableNodes.map{
+                    svn => svn.identifier.localName.value
+                }.mkString(",")
+                s"scatter (${ids})"
+            case cond : ConditionalNode =>
+                s"if (${cond.conditionExpression.womExpression.sourceString})"
+            case call : CallNode =>
+                call.identifier.localName.value
+            case _ =>
+                throw new Exception("sanity")
+        }
+        s"wfFragment ${name}"
+    }
+
+
     // A trivial expression has no operators, it is either a constant WomValue
     // or a single identifier. For example: '5' and 'x' are trivial. 'x + y'
     // is not.
@@ -201,7 +240,8 @@ object Block {
     //  [ call B ]  [ call C ]
     //
     // We choose option #2 because it resembles the original.
-    def split(graph: Graph, wdlSourceCode: String) :
+    def split(graph: Graph,
+              callsLoToHi: Vector[(String, Int)]):
             (Vector[GraphInputNode],   // inputs
              Vector[Block], // blocks
              Vector[GraphOutputNode]) // outputs
@@ -210,10 +250,6 @@ object Block {
         assert(graph.nodes.size > 0)
         var rest : Set[GraphNode] = graph.nodes
         var blocks = Vector.empty[Block]
-        val callToSrcLine = ParseWomSourceFile.scanForCalls(wdlSourceCode)
-
-        // sort from low to high according to the source lines.
-        val callsLoToHi : Vector[(String, Int)] = callToSrcLine.toVector.sortBy(_._2)
 
         // separate out the inputs
         val inputBlock = graph.inputNodes.toVector
@@ -259,6 +295,10 @@ object Block {
         allBlocks.foreach{ b => b.validate() }
         (inputBlock, allBlocks, outputBlock)
     }
+
+    // Split a block from a larger workflow into sub-blocks.
+    def splitWfBlock(block: Block,
+                     callsLoToHi: Vector[(String, Int)]): Vector[Block] = ???
 
     def dbgPrint(inputNodes: Vector[GraphInputNode],   // inputs
                  subBlocks: Vector[Block], // blocks
