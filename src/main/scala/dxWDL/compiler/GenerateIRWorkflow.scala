@@ -61,6 +61,43 @@ case class GenerateIRWorkflow(wf : WorkflowDefinition,
         }
     }
 
+    // create a unique name for a workflow fragment
+    private var fragNum = 0
+    private def genFragId() : String = {
+        fragNum += 1
+        fragNum.toString
+    }
+
+    // Create a human readable name for a block of statements
+    //
+    // 1. Ignore all declarations
+    // 2. If there is a scatter/if, use that
+    // 3. Otherwise, there must be at least one call. Use the first one.
+    private def createBlockName(block: Block) : String = {
+        val coreStmts = block.nodes.filter{
+            case _: ScatterNode => true
+            case _: ConditionalNode => true
+            case _: CallNode => true
+            case _ => false
+        }
+
+        if (coreStmts.isEmpty)
+            return s"eval_${genFragId()}"
+        coreStmts.head match {
+            case ssc : ScatterNode =>
+                val ids = ssc.scatterVariableNodes.map{
+                    svn => svn.identifier.localName.value
+                }.mkString(",")
+                s"scatter (${ids})"
+            case cond : ConditionalNode =>
+                s"if (${cond.conditionExpression.womExpression.sourceString})"
+            case call : CallNode =>
+                s"wfFragment ${call.identifier.localName.value}"
+            case _ =>
+                throw new Exception("sanity")
+        }
+    }
+
     // Represent each workflow input with:
     // 1. CVar, for type declarations
     // 2. SVar, connecting it to the source of the input
@@ -266,7 +303,7 @@ case class GenerateIRWorkflow(wf : WorkflowDefinition,
     private def compileWfFragment(block: Block,
                                   blockPath: Vector[Int],
                                   env : CallEnv) : (IR.Stage, Vector[IR.Callable]) = {
-        val baseName = Block.createName(block)
+        val baseName = createBlockName(block)
         val stageName = nameBox.chooseUniqueName(baseName)
         Utils.trace(verbose.on, s"--- Compiling wfFragment ${stageName}")
 
@@ -335,7 +372,7 @@ case class GenerateIRWorkflow(wf : WorkflowDefinition,
 
         Utils.trace(verbose.on, "---")
         (IR.Stage(stageName, genStageId(), applet.name, sArgs, outputVars),
-         auxCallables)
+         applet +: auxCallables)
     }
 
     // Assemble the backbone of a workflow, having compiled the
@@ -607,7 +644,7 @@ case class GenerateIRWorkflow(wf : WorkflowDefinition,
     //
     // There are cases where we are going to need to generate dx:subworkflows.
     // This is not handled currently.
-    def apply(locked: Boolean, reorg: Boolean) : (IR.Workflow, Vector[IR.Callable]) =
+    private def apply2(locked: Boolean, reorg: Boolean) : (IR.Workflow, Vector[IR.Callable]) =
     {
         Utils.trace(verbose.on, s"compiling workflow ${wf.name}")
         val graph = wf.innerGraph
@@ -634,5 +671,28 @@ case class GenerateIRWorkflow(wf : WorkflowDefinition,
         } else {
             (irwf, irCallables)
         }
+    }
+
+
+    def apply(locked: Boolean, reorg: Boolean) : (IR.Workflow, Vector[IR.Callable]) = {
+        val (irwf, irCallables) = apply2(locked, reorg)
+
+        // sanity check
+        val callableNames: Set[String] =
+            irCallables.map(_.name).toSet ++ callables.map(_._1).toSet
+
+        irwf.stages.foreach {
+            case stage =>
+                if (!(callableNames contains stage.calleeName)) {
+                    throw new Exception(
+                        s"""|Generated bad workflow.
+                            |Stage <${stage.stageName}> calls <${stage.calleeName}> which is missing.
+                            |
+                            |stage names = ${irwf.stages.map(_.stageName)}
+                            |callables = ${callableNames}
+                            |""".stripMargin)
+                }
+        }
+        (irwf, irCallables)
     }
 }

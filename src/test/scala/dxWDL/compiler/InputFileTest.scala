@@ -80,6 +80,7 @@ class InputFileTest extends FlatSpec with Matchers {
 
         Main.compile(
             List(wdlCode.toString, "--compileMode", "ir", "-quiet",
+                 //"--verbose", "--verboseKey", "GenerateIR",
                  "-inputs", inputs.toString)
         ) shouldBe a [Main.SuccessfulTerminationIR]
 

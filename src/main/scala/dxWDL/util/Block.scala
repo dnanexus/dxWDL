@@ -62,45 +62,6 @@ case class Block(nodes : Vector[GraphNode]) {
 }
 
 object Block {
-    // create a unique name for a workflow fragment
-    private var fragNum = 0
-    private def genFragId() : String = {
-        fragNum += 1
-        fragNum.toString
-    }
-
-    // Create a human readable name for a block of statements
-    //
-    // 1. Ignore all declarations
-    // 2. If there is a scatter/if, use that
-    // 3. Otherwise, there must be at least one call. Use the first one.
-    def createName(block: Block) : String = {
-        val coreStmts = block.nodes.filter{
-            case _: ScatterNode => true
-            case _: ConditionalNode => true
-            case _: CallNode => true
-            case _ => false
-        }
-
-        if (coreStmts.isEmpty)
-            return s"eval_${genFragId()}"
-        val name = coreStmts.head match {
-            case ssc : ScatterNode =>
-                val ids = ssc.scatterVariableNodes.map{
-                    svn => svn.identifier.localName.value
-                }.mkString(",")
-                s"scatter (${ids})"
-            case cond : ConditionalNode =>
-                s"if (${cond.conditionExpression.womExpression.sourceString})"
-            case call : CallNode =>
-                call.identifier.localName.value
-            case _ =>
-                throw new Exception("sanity")
-        }
-        s"wfFragment ${name}"
-    }
-
-
     // A trivial expression has no operators, it is either a constant WomValue
     // or a single identifier. For example: '5' and 'x' are trivial. 'x + y'
     // is not.

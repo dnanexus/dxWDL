@@ -448,7 +448,11 @@ case class InputFile(verbose: Verbose) {
                 }
                 middleStages.foreach{ stg =>
                     // Find the input definitions for the stage, by locating the callee
-                    val callee : IR.Callable = bundle.allCallables(stg.calleeName)
+                    val callee : IR.Callable = bundle.allCallables.get(stg.calleeName) match {
+                        case None =>
+                            throw new Exception(s"callable ${stg.calleeName} is missing")
+                        case Some(x) => x
+                    }
                     callee.inputVars.foreach { cVar =>
                         val fqn = s"${wf.name}.${stg.stageName}.${cVar.name}"
                         val dxName = s"${stg.id.getId}.${cVar.name}"
