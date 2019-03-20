@@ -90,30 +90,6 @@ class GenerateIRTest extends FlatSpec with Matchers {
             path.toString :: cFlags
         )
         retval shouldBe a [Main.SuccessfulTerminationIR]
-/*
-        val primary = retval match {
-            case Main.SuccessfulTerminationIR(ir) =>
-                ir.primaryCallable.get
-            case _ =>
-                throw new Exception("sanity")
-        }
-
-        val wf = primary match {
-            case wf: IR.Workflow => wf
-            case _ => throw new Exception("sanity")
-        }
-
-        val stages = wf.stages.map{ stg =>
-            s"   ${stg}"
-        }.mkString("\n")
-        System.out.println(s"""|name = ${wf.name}
-                               |inputs = ${wf.inputs}
-                               |outputs = ${wf.outputs}
-                               |stages = \n${stages}
-                               |locked = ${wf.locked}
-                               |kind = ${wf.kind}
-                               |
-                               |""".stripMargin)*/
     }
 
     it should "expressions in an output block" in {
@@ -137,7 +113,7 @@ class GenerateIRTest extends FlatSpec with Matchers {
         ) shouldBe a [Main.SuccessfulTerminationIR]
     }
 
-    it should "handle calling subworkflows" taggedAs(EdgeTest) in {
+    it should "handle calling subworkflows" in {
         val path = pathFromBasename("subworkflows", "trains.wdl")
         val retval = Main.compile(
             path.toString :: cFlags
@@ -165,6 +141,13 @@ class GenerateIRTest extends FlatSpec with Matchers {
         val path = pathFromBasename("nested", "two_levels.wdl")
         Main.compile(
             path.toString :: cFlags
+        ) shouldBe a [Main.SuccessfulTerminationIR]
+    }
+
+    it should "missing workflow inputs" taggedAs(EdgeTest) in {
+        val path = pathFromBasename("input_file", "missing_args.wdl")
+        Main.compile(
+            path.toString :: List("--compileMode", "ir")
         ) shouldBe a [Main.SuccessfulTerminationIR]
     }
 }
