@@ -144,7 +144,7 @@ class GenerateIRTest extends FlatSpec with Matchers {
         ) shouldBe a [Main.SuccessfulTerminationIR]
     }
 
-    it should "missing workflow inputs" taggedAs(EdgeTest) in {
+    it should "missing workflow inputs" taggedAs(EdgeTag) in {
         val path = pathFromBasename("input_file", "missing_args.wdl")
         Main.compile(
             path.toString :: List("--compileMode", "ir")

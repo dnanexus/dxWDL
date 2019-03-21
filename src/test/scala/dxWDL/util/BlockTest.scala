@@ -137,7 +137,7 @@ class BlockTest extends FlatSpec with Matchers {
         }
     }
 
-    it should "categorize correctly calls to subworkflows" taggedAs(EdgeTest) in {
+    it should "categorize correctly calls to subworkflows" taggedAs(EdgeTag) in {
         val path = pathFromBasename("subworkflows", "trains.wdl")
         val (_, womBundle, sources, _) = ParseWomSourceFile.apply(path)
         val (_, wfSourceCode) = sources.find{ case (key, wdlCode) =>

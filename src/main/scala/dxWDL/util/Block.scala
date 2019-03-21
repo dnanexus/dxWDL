@@ -59,6 +59,42 @@ case class Block(nodes : Vector[GraphNode]) {
             throw new Exception(s"${numTopLeveleCalls} calls in block")
         }
     }
+
+    // Create a human readable name for a block of statements
+    //
+    // 1. Ignore all declarations
+    // 2. If there is a scatter/if, use that
+    // 3. if there is at least one call, use the first one.
+    //
+    // If the entire block is made up of expressions, return None
+    def makeName : Option[String] = {
+        val coreStmts = nodes.filter{
+            case _: ScatterNode => true
+            case _: ConditionalNode => true
+            case _: CallNode => true
+            case _ => false
+        }
+
+        if (coreStmts.isEmpty)
+            return None
+        val name = coreStmts.head match {
+            case ssc : ScatterNode =>
+                // WDL allows scatter on one element only
+                assert(ssc.scatterVariableNodes.size == 1)
+                val svNode: ScatterVariableNode = ssc.scatterVariableNodes.head
+                val collection = svNode.scatterExpressionNode.womExpression.sourceString
+                val name = svNode.identifier.localName.value
+                s"scatter (${name} in ${collection})"
+            case cond : ConditionalNode =>
+                s"if (${cond.conditionExpression.womExpression.sourceString})"
+            case call : CallNode =>
+                s"frag ${call.identifier.localName.value}"
+            case _ =>
+                throw new Exception("sanity")
+        }
+        return Some(name)
+    }
+
 }
 
 object Block {

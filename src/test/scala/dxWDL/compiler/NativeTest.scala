@@ -4,13 +4,12 @@ import dxWDL.Main
 import dxWDL.util.DxPath
 import java.nio.file.{Path, Paths}
 import org.scalatest.{FlatSpec, Matchers}
-import org.scalatest.tags.Slow
 
 // This test module requires being logged in to the platform.
 // It compiles WDL scripts without the runtime library.
 // This tests the compiler Native mode, however, it creates
 // dnanexus applets and workflows that are not runnable.
-@Slow
+
 class NativeTest extends FlatSpec with Matchers {
     private def pathFromBasename(dir: String, basename: String) : Path = {
         val p = getClass.getResource(s"/${dir}/${basename}").getPath
@@ -31,29 +30,27 @@ class NativeTest extends FlatSpec with Matchers {
                                  "-force",
                                  "-locked")
 
-    it  should "Native compile a single WDL task" in {
+    it should "Native compile a single WDL task" taggedAs(NativeTag) in {
         val path = pathFromBasename("compiler", "add.wdl")
         val retval = Main.compile(path.toString :: compileFlags)
         retval shouldBe a [Main.SuccessfulTermination]
     }
 
     // linear workflow
-    it  should "Native compile a linear WDL workflow without expressions" in {
+    it  should "Native compile a linear WDL workflow without expressions" taggedAs(NativeTag) in {
         val path = pathFromBasename("compiler", "wf_linear_no_expr.wdl")
         val retval = Main.compile(path.toString :: compileFlags)
         retval shouldBe a [Main.SuccessfulTermination]
     }
 
-    it  should "Native compile a linear WDL workflow" in {
+    it  should "Native compile a linear WDL workflow" taggedAs(NativeTag) in {
         val path = pathFromBasename("compiler", "wf_linear.wdl")
         val retval = Main.compile(path.toString
-//                                      :: "--verboseKey" :: "Native"
-//                                      :: "--verboseKey" :: "GenerateIR"
                                       :: compileFlags)
         retval shouldBe a [Main.SuccessfulTermination]
     }
 
-    it should "Native compile a workflow with a scatter without a call" in {
+    it should "Native compile a workflow with a scatter without a call" taggedAs(NativeTag) in {
         val path = pathFromBasename("compiler", "scatter_no_call.wdl")
         Main.compile(
             path.toString :: compileFlags
@@ -61,10 +58,21 @@ class NativeTest extends FlatSpec with Matchers {
     }
 
 
-    it should "Native compile a draft2 workflow" taggedAs(EdgeTest) in {
+    it should "Native compile a draft2 workflow" taggedAs(NativeTag) in {
         val path = pathFromBasename("draft2", "shapes.wdl")
         Main.compile(
             path.toString :: "--force" :: compileFlags
+        ) shouldBe a [Main.SuccessfulTermination]
+    }
+
+    it should "Native compile a workflow with one level nesting" taggedAs(NativeTag, EdgeTag) in {
+        val path = pathFromBasename("nested", "two_levels.wdl")
+        Main.compile(
+            path.toString :: "--force"
+                :: "--verbose"
+                :: "--verboseKey" :: "Native"
+                :: "--verboseKey" :: "GenerateIR"
+                :: compileFlags
         ) shouldBe a [Main.SuccessfulTermination]
     }
 }
