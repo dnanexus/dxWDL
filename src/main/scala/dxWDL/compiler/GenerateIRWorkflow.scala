@@ -289,15 +289,15 @@ case class GenerateIRWorkflow(wf : WorkflowDefinition,
         val (_, catg) = Block.categorize(block)
         val (innerCall, auxCallables) : (Option[String], Vector[IR.Callable]) = catg match {
             case Block.AllExpressions => (None, Vector.empty)
-            case _ : Block.CallDirect => throw new Exception(s"a direct call should not reach this stage")
-            case Block.CallWithEval(_) | Block.Cond(_) | Block.Scatter(_) =>
+            case Block.CallDirect(_) => throw new Exception(s"a direct call should not reach this stage")
+            case Block.CallCompound(_) | Block.Cond(_) | Block.Scatter(_) =>
                 // A simple block with no nested sub-blocks, and a single call.
                 val calls = Block.deepFindCalls(block.nodes).map{ cNode =>
                     Utils.getUnqualifiedName(cNode.callable.name)
                 }.toVector
                 assert(calls.size == 1)
                 (Some(calls.head), Vector.empty)
-            case Block.ScatterWithNesting(_) | Block.CondWithNesting(_) =>
+            case Block.ScatterSubblock(_) | Block.CondSubblock(_) =>
                 val innerGraph = catg.getInnerGraph
                 val (subwf, auxCallables) = compileNestedBlock(innerGraph, blockPath)
                 (Some(subwf.name), auxCallables :+ subwf)

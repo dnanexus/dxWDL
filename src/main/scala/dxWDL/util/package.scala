@@ -112,7 +112,8 @@ case class DxExec(id: String) {
 
 // Information used to link applets that call other applets. For example, a scatter
 // applet calls applets that implement tasks.
-case class ExecLinkInfo(inputs: Map[String, WomType],
+case class ExecLinkInfo(name: String,
+                        inputs: Map[String, WomType],
                         outputs: Map[String, WomType],
                         dxExec: DxExec)
 
@@ -127,21 +128,16 @@ object ExecLinkInfo {
             case (name, womType) => name -> JsString(womType.stableName)
         }.toMap
         JsObject(
-            "id" -> JsString(ali.dxExec.getId),
+            "name" -> JsString(ali.name),
             "inputs" -> JsObject(appInputDefs),
-            "outputs" -> JsObject(appOutputDefs)
+            "outputs" -> JsObject(appOutputDefs),
+            "id" -> JsString(ali.dxExec.getId)
         )
     }
 
     def readJson(aplInfo: JsValue, dxProject: DXProject) = {
-        val dxExec = aplInfo.asJsObject.fields("id") match {
-            case JsString(execId) =>
-                if (execId.startsWith("app-") ||
-                        execId.startsWith("applet-") ||
-                        execId.startsWith("workflow-"))
-                    DxExec(execId)
-                else
-                    throw new Exception(s"${execId} is not an app/applet/workflow")
+        val name = aplInfo.asJsObject.fields("name") match {
+            case JsString(x) => x
             case _ => throw new Exception("Bad JSON")
         }
         val inputDefs = aplInfo.asJsObject.fields("inputs").asJsObject.fields.map{
@@ -152,7 +148,17 @@ object ExecLinkInfo {
             case (key, JsString(womTypeStr)) => key -> WdlFlavoredWomType.fromDisplayString(womTypeStr)
             case _ => throw new Exception("Bad JSON")
         }.toMap
-        ExecLinkInfo(inputDefs, outputDefs, dxExec)
+        val dxExec = aplInfo.asJsObject.fields("id") match {
+            case JsString(execId) =>
+                if (execId.startsWith("app-") ||
+                        execId.startsWith("applet-") ||
+                        execId.startsWith("workflow-"))
+                    DxExec(execId)
+                else
+                    throw new Exception(s"${execId} is not an app/applet/workflow")
+            case _ => throw new Exception("Bad JSON")
+        }
+        ExecLinkInfo(name, inputDefs, outputDefs, dxExec)
     }
 }
 

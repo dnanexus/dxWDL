@@ -437,13 +437,13 @@ object Block {
     }
     case object AllExpressions extends Category
     case class CallDirect(value: CallNode) extends Category
-    case class CallWithEval(value: CallNode) extends Category
+    case class CallCompound(value: CallNode) extends Category
     case class Cond(value: ConditionalNode) extends Category
     case class Scatter(value: ScatterNode) extends Category
-    case class CondWithNesting(value: ConditionalNode) extends Category {
+    case class CondSubblock(value: ConditionalNode) extends Category {
         override def getInnerGraph: Graph = value.innerGraph
     }
-    case class ScatterWithNesting(value: ScatterNode) extends Category {
+    case class ScatterSubblock(value: ScatterNode) extends Category {
         override def getInnerGraph: Graph = value.innerGraph
     }
 
@@ -468,19 +468,19 @@ object Block {
                 if (isSimpleCall(block))
                     (allButLast, CallDirect(callNode))
                 else
-                    (allButLast, CallWithEval(callNode))
+                    (allButLast, CallCompound(callNode))
 
             case condNode: ConditionalNode =>
                 if (isSimpleSubblock(condNode.innerGraph))
                     (allButLast, Cond(condNode))
                 else
-                    (allButLast, CondWithNesting(condNode))
+                    (allButLast, CondSubblock(condNode))
 
             case sctNode: ScatterNode =>
                 if (isSimpleSubblock(sctNode.innerGraph))
                     (allButLast, Scatter(sctNode))
                 else
-                    (allButLast, ScatterWithNesting(sctNode))
+                    (allButLast, ScatterSubblock(sctNode))
         }
     }
 

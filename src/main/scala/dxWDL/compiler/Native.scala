@@ -321,7 +321,8 @@ case class Native(dxWDLrtId: Option[String],
         val callOutputDefs: Map[String, WomType] = irCall.outputVars.map{
             case CVar(name, wdlType, _) => (name -> wdlType)
         }.toMap
-        ExecLinkInfo(callInputDefs,
+        ExecLinkInfo(irCall.name,
+                     callInputDefs,
                      callOutputDefs,
                      dxObj)
     }
