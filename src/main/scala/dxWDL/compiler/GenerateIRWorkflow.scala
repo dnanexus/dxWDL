@@ -12,29 +12,6 @@ import wom.values._
 import dxWDL.util._
 import IR.{CVar, SArg}
 
-private case class NameBox(verbose: Verbose) {
-    // never allow the reserved words
-    private var namesUsed:Set[String] = Set.empty
-
-    def chooseUniqueName(baseName: String) : String = {
-        if (!(namesUsed contains baseName)) {
-            namesUsed += baseName
-            return baseName
-        }
-
-        // Add [1,2,3 ...] to the original name, until finding
-        // an unused variable name
-        for (i <- 1 to Utils.MAX_NUM_RENAME_TRIES) {
-            val tentative = s"${baseName}${i}"
-            if (!(namesUsed contains tentative)) {
-                namesUsed += tentative
-                return tentative
-            }
-        }
-        throw new Exception(s"Could not find a unique name for ${baseName}")
-    }
-}
-
 case class GenerateIRWorkflow(wf : WorkflowDefinition,
                               wfSourceCode: String,
                               wfSourceStandAlone: String,
@@ -42,8 +19,7 @@ case class GenerateIRWorkflow(wf : WorkflowDefinition,
                               callables: Map[String, IR.Callable],
                               language: Language.Value,
                               verbose: Verbose) {
-    val verbose2 : Boolean = verbose.keywords contains "GenerateIR"
-    private val nameBox = NameBox(verbose)
+    val verbose2 : Boolean = verbose.containsKey("GenerateIR")
 
     private case class LinkedVar(cVar: CVar, sArg: SArg)
     private type CallEnv = Map[String, LinkedVar]
@@ -66,14 +42,6 @@ case class GenerateIRWorkflow(wf : WorkflowDefinition,
     private def genFragId() : String = {
         fragNum += 1
         fragNum.toString
-    }
-
-    // Create a human readable name for a block of statements
-    private def createBlockName(block: Block) : String = {
-        block.makeName match {
-            case None => "eval"
-            case Some(name) => nameBox.chooseUniqueName(name)
-        }
     }
 
     // Represent each workflow input with:
@@ -263,6 +231,7 @@ case class GenerateIRWorkflow(wf : WorkflowDefinition,
     private def compileNestedBlock(graph: Graph,
                                    blockPath: Vector[Int]) : (IR.Workflow, Vector[IR.Callable]) = {
         val (inputNodes, subBlocks, outputNodes) = Block.splitGraph(graph, callsLoToHi)
+        //Block.dbgPrint(inputNodes, subBlocks, outputNodes)
 
         val pathStr = blockPath.map(x => x.toString).mkString("_")
         val (subwf, auxCallables, _ ) = compileWorkflowLocked(wf.name + "_block_" + pathStr,
@@ -280,7 +249,10 @@ case class GenerateIRWorkflow(wf : WorkflowDefinition,
                                   block: Block,
                                   blockPath: Vector[Int],
                                   env : CallEnv) : (IR.Stage, Vector[IR.Callable]) = {
-        val stageName = createBlockName(block)
+        val stageName = block.makeName match {
+            case None => "eval"
+            case Some(name) => name
+        }
         Utils.trace(verbose.on, s"--- Compiling fragment <${stageName}> as stage")
 
         // Figure out the closure required for this block, out of the
@@ -359,7 +331,7 @@ case class GenerateIRWorkflow(wf : WorkflowDefinition,
                                  locked: Boolean)
             : (Vector[(IR.Stage, Vector[IR.Callable])], CallEnv) =
     {
-        Utils.trace(verbose.on, s"Assembling workfow backbone ${wf.name}")
+        Utils.trace(verbose.on, s"Assembling workfow backbone ${wfName}")
 
         var env : CallEnv = wfInputs.map { case (cVar,sArg) =>
             cVar.name -> LinkedVar(cVar, sArg)
@@ -420,7 +392,7 @@ case class GenerateIRWorkflow(wf : WorkflowDefinition,
     private def buildSimpleWorkflowOutput(outputNode: GraphOutputNode, env: CallEnv) : (CVar, SArg) = {
         outputNode match {
             case PortBasedGraphOutputNode(id, womType, sourcePort) =>
-                val cVar = CVar(id.workflowLocalName, womType, None)
+                val cVar = CVar(id.fullyQualifiedName.value, womType, None)
                 val source = sourcePort.name
                 (cVar, getSArgFromEnv(source, env))
             case expr :ExpressionBasedGraphOutputNode if (Block.isTrivialExpression(expr.womExpression)) =>

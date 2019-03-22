@@ -30,7 +30,7 @@ import wom.types._
 import wom.values._
 
 case class InputFile(verbose: Verbose) {
-    val verbose2:Boolean = verbose.keywords contains "InputFile"
+    val verbose2:Boolean = verbose.containsKey("InputFile")
 
     // Convert a job input to a WomValue. Do not download any files, convert them
     // to a string representation. For example: dx://proj-xxxx:file-yyyy::/A/B/C.txt

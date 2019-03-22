@@ -11,7 +11,7 @@ import dxWDL.util._
 import IR.CVar
 
 case class GenerateIRTask(verbose: Verbose) {
-    val verbose2 : Boolean = verbose.keywords contains "GenerateIR"
+    val verbose2 : Boolean = verbose.containsKey("GenerateIR")
 
     private class DynamicInstanceTypesException private(ex: Exception) extends RuntimeException(ex) {
         def this() = this(new RuntimeException("Runtime instance type calculation required"))

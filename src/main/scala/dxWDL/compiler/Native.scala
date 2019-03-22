@@ -31,7 +31,7 @@ case class Native(dxWDLrtId: Option[String],
     type ExecDict = Map[String, (IR.Callable, DxExec)]
     val execDictEmpty = Map.empty[String, (IR.Callable, DxExec)]
 
-    val verbose2:Boolean = verbose.keywords contains "native"
+    val verbose2:Boolean = verbose.containsKey("Native")
     val rtDebugLvl = runtimeDebugLevel.getOrElse(Utils.DEFAULT_RUNTIME_DEBUG_LEVEL)
 
     lazy val runtimeLibrary: Option[JsValue] =
@@ -713,6 +713,7 @@ case class Native(dxWDLrtId: Option[String],
     private def buildWorkflow(wf: IR.Workflow,
                               digest: String,
                               execDict: ExecDict) : DXWorkflow = {
+        trace(verbose2, s"build workflow ${wf.name}")
         val (stagesReq, stageDict) =
             wf.stages.foldLeft((Vector.empty[JsValue], Map.empty[String, DXWorkflowStage])) {
                 case ((stagesReq, stageDict), stg) =>
@@ -746,8 +747,15 @@ case class Native(dxWDLrtId: Option[String],
                 val wfOutputSpec:Vector[JsValue] = wf.outputs.map{ case (cVar,sArg) =>
                     buildWorkflowOutputSpec(cVar, sArg, stageDict)
                 }.flatten
-                trace(verbose2, s"workflow input spec=${wfInputSpec}")
-                trace(verbose2, s"workflow output spec=${wfOutputSpec}")
+
+                if (verbose2) {
+                    val inputSpecDbg = wfInputSpec.map("    " + _.toString).mkString("\n")
+                    trace(verbose2, s"""|input spec
+                                        |${inputSpecDbg}""".stripMargin)
+                    val outputSpecDbg = wfOutputSpec.map("    " + _.toString).mkString("\n")
+                    trace(verbose2, s"""|output spec
+                                        |${outputSpecDbg}""".stripMargin)
+                }
 
                 Map("inputs" -> JsArray(wfInputSpec),
                     "outputs" -> JsArray(wfOutputSpec))

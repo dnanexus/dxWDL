@@ -78,7 +78,14 @@ case class InstanceTypeReq(dxInstanceType: Option[String],
 //  quiet:      if true, do not print warnings and informational messages
 case class Verbose(on: Boolean,
                    quiet: Boolean,
-                   keywords: Set[String])
+                   keywords: Set[String]) {
+    lazy val keywordsLo = keywords.map(_.toLowerCase).toSet
+
+    // check in a case insensitive fashion
+    def containsKey(word: String) : Boolean = {
+        keywordsLo contains word.toLowerCase
+    }
+}
 
 
 // Packing of all compiler flags in an easy to digest

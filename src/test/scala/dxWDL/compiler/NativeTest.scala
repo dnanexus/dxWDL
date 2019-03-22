@@ -69,9 +69,9 @@ class NativeTest extends FlatSpec with Matchers {
         val path = pathFromBasename("nested", "two_levels.wdl")
         Main.compile(
             path.toString :: "--force"
-                :: "--verbose"
-                :: "--verboseKey" :: "Native"
-                :: "--verboseKey" :: "GenerateIR"
+//                :: "--verbose"
+//                :: "--verboseKey" :: "Native"
+//                :: "--verboseKey" :: "GenerateIR"
                 :: compileFlags
         ) shouldBe a [Main.SuccessfulTermination]
     }

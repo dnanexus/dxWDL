@@ -85,8 +85,11 @@ libraryDependencies ++= Seq(
 // to do this from the command line:
 // sbt testOnly -- -l native
 //
-//Test / testOptions += Tests.Argument("-l", "native")
+// comment out this line in order to allow native
+// tests
+Test / testOptions += Tests.Argument("-l", "native")
 
 Test / parallelExecution := false
 
+// comment out this line to enable tests in assembly
 test in assembly := {}
