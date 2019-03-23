@@ -42,7 +42,10 @@ medium_test_list = [
     "shapes",
 
     "spaces_in_file_paths",
-    "strings"
+    "strings",
+
+    # workflows with nested blocks
+    "two_levels"
 ]
 
 tests_for_alt_project = [ "platform_asset" ]

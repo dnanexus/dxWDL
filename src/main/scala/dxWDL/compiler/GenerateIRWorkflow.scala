@@ -76,6 +76,10 @@ case class GenerateIRWorkflow(wf : WorkflowDefinition,
             case ScatterVariableNode(id, expression: ExpressionNode , womType) =>
                 CVar(id.workflowLocalName, womType, None)
 
+            case ogin : OuterGraphInputNode =>
+                val womType = ogin.linkToOuterGraph.womType
+                CVar(ogin.identifier.workflowLocalName, womType, None)
+
             case other =>
                 throw new Exception(s"Unhandled type ${other.getClass}")
         }

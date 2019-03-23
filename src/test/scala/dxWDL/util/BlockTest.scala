@@ -137,7 +137,7 @@ class BlockTest extends FlatSpec with Matchers {
         }
     }
 
-    it should "categorize correctly calls to subworkflows" taggedAs(EdgeTag) in {
+    it should "categorize correctly calls to subworkflows" in {
         val path = pathFromBasename("subworkflows", "trains.wdl")
         val (_, womBundle, sources, _) = ParseWomSourceFile.apply(path)
         val (_, wfSourceCode) = sources.find{ case (key, wdlCode) =>
@@ -153,5 +153,42 @@ class BlockTest extends FlatSpec with Matchers {
 
         val (_, category) = Block.categorize(subBlocks(0))
         category shouldBe a [Block.Scatter]
+    }
+
+    it should "get subblocks" taggedAs(EdgeTag) in {
+        val path = pathFromBasename("nested", "two_levels.wdl")
+        val wfSourceCode = Utils.readFileContent(path)
+        val (_, womBundle, sources, _) = ParseWomSourceFile.apply(path)
+        val wf : WorkflowDefinition = ParseWomSourceFile.parseWdlWorkflow(wfSourceCode)
+
+        // sort from low to high according to the source lines.
+        val callToSrcLine = ParseWomSourceFile.scanForCalls(wfSourceCode)
+        val callsLoToHi : Vector[(String, Int)] = callToSrcLine.toVector.sortBy(_._2)
+
+        val graph = wf.innerGraph
+
+        val b0 = Block.getSubBlock(Vector(0), graph, callsLoToHi)
+        val (_, catg0) = Block.categorize(b0)
+        catg0 shouldBe a[Block.ScatterSubblock]
+
+        val b1 = Block.getSubBlock(Vector(1), graph, callsLoToHi)
+        val (_, catg1) = Block.categorize(b1)
+        catg1 shouldBe a[Block.Cond]
+
+        val b2 = Block.getSubBlock(Vector(2), graph, callsLoToHi)
+        val (_, catg2) = Block.categorize(b2)
+        catg2 shouldBe a[Block.CallDirect]
+
+        val b00 = Block.getSubBlock(Vector(0, 0), graph, callsLoToHi)
+        val (_, catg00) = Block.categorize(b00)
+        catg00 shouldBe a[Block.CallDirect]
+
+        val b01 = Block.getSubBlock(Vector(0, 1), graph, callsLoToHi)
+        val (_, catg01) = Block.categorize(b01)
+        catg01 shouldBe a[Block.CallDirect]
+
+        val b02 = Block.getSubBlock(Vector(0, 2), graph, callsLoToHi)
+        val (_, catg02) = Block.categorize(b02)
+        catg02 shouldBe a[Block.CallCompound]
     }
 }

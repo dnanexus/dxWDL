@@ -5,19 +5,19 @@ workflow two_levels {
     }
 
     scatter (i in [1,2,3]) {
-        call inc as inc1 { input: a = i}
-        call inc as inc2 { input: a = inc1.result }
+        call zinc as inc1 { input: a = i}
+        call zinc as inc2 { input: a = inc1.result }
 
         Int b = inc2.result
 
-        call inc as inc3 { input: a = b }
+        call zinc as inc3 { input: a = b }
     }
 
     if (true) {
-        call inc as inc4 { input: a = 3 }
+        call zinc as inc4 { input: a = 3 }
     }
 
-    call inc as inc5 {input: a=1}
+    call zinc as inc5 {input: a=1}
 
     output {
         Array[Int] a = inc3.result
@@ -27,7 +27,7 @@ workflow two_levels {
 }
 
 
-task inc {
+task zinc {
     input {
         Int a
     }

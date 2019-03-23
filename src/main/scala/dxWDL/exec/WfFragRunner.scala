@@ -574,7 +574,7 @@ case class WfFragRunner(wf: WorkflowDefinition,
 
         // There must be exactly one sub-workflow
         assert(execLinkInfo.size == 1)
-        val (name, linkInfo) = execLinkInfo.toVector.head
+        val (_, linkInfo) = execLinkInfo.toVector.head
 
         // loop on the collection, call the applet in the inner loop
         val childJobs : Vector[DXExecution] =
@@ -601,20 +601,16 @@ case class WfFragRunner(wf: WorkflowDefinition,
         Utils.appletLog(verbose, s"link info=${execLinkInfo}")
         Utils.appletLog(verbose, s"Environment: ${envInitial}")
 
-        // TODO. This handles only the case where the path is of depth 1.
-        assert(blockPath.size == 1)
-        val subBlockNr = blockPath(0)
-
         // sort from low to high according to the source lines.
         val callToSrcLine = ParseWomSourceFile.scanForCalls(wfSourceCode)
         val callsLoToHi : Vector[(String, Int)] = callToSrcLine.toVector.sortBy(_._2)
 
-        val (_, subBlocks, _) = Block.splitGraph(wf.innerGraph, callsLoToHi)
-        val block = subBlocks(subBlockNr)
+        // Find the fragment block to execute
+        val block = Block.getSubBlock(blockPath, wf.innerGraph, callsLoToHi)
         val dbgBlock = block.nodes.map{
             WomPrettyPrintApproxWdl.apply(_)
         }.mkString("\n")
-        Utils.appletLog(verbose, s"""|Block ${subBlockNr} to execute:
+        Utils.appletLog(verbose, s"""|Block ${blockPath} to execute:
                                      |${dbgBlock}
                                      |""".stripMargin)
 
@@ -665,6 +661,13 @@ case class WfFragRunner(wf: WorkflowDefinition,
                     case Block.Scatter(sctNode) =>
                         val call = getInnerCallFromSimpleBlock(sctNode.innerGraph)
                         collectSubJobs.aggregateResults(call, childJobsComplete)
+
+                    // A scatter with a complex sub-block, compiled as a sub-workflow
+                    // There must be exactly one sub-workflow
+                    case Block.ScatterSubblock(sctNode) =>
+                        assert(execLinkInfo.size == 1)
+                        val (_, linkInfo) = execLinkInfo.toVector.head
+                        collectSubJobs.aggregateResultsFromGeneratedSubWorkflow(linkInfo, childJobsComplete)
 
                     case other =>
                         throw new AppInternalException(s"Bad case ${other.getClass} ${other}")

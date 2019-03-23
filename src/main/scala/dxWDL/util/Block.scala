@@ -294,6 +294,7 @@ object Block {
         (inputBlock, allBlocks, outputBlock)
     }
 
+
     // An easy to use method that just takes the workflow source
     def split(graph: Graph, wfSource: String) :  (Vector[GraphInputNode],   // inputs
                                                   Vector[Block], // blocks
@@ -482,6 +483,21 @@ object Block {
                 else
                     (allButLast, ScatterSubblock(sctNode))
         }
+    }
+
+    def getSubBlock(path: Vector[Int],
+                    graph: Graph,
+                    callsLoToHi: Vector[(String, Int)]) : Block = {
+        assert(path.size >= 1)
+
+        val (_, blocks, _) = splitGraph(graph, callsLoToHi)
+        var subBlock = blocks(path.head)
+        for (i <- path.tail) {
+            val (_, catg) = categorize(subBlock)
+            val (_, blocks2, _) = splitGraph(catg.getInnerGraph, callsLoToHi)
+            subBlock = blocks2(i)
+        }
+        return subBlock
     }
 
     // Find all the inputs required for a block. For example,

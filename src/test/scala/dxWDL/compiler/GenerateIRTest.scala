@@ -137,6 +137,14 @@ class GenerateIRTest extends FlatSpec with Matchers {
         ) shouldBe a [Main.SuccessfulTerminationIR]
     }
 
+    it should "missing workflow inputs" in {
+        val path = pathFromBasename("input_file", "missing_args.wdl")
+        Main.compile(
+            path.toString :: List("--compileMode", "ir")
+        ) shouldBe a [Main.SuccessfulTerminationIR]
+    }
+
+    // Nested blocks
     it should "compile two level nested workflow" in {
         val path = pathFromBasename("nested", "two_levels.wdl")
         Main.compile(
@@ -144,10 +152,10 @@ class GenerateIRTest extends FlatSpec with Matchers {
         ) shouldBe a [Main.SuccessfulTerminationIR]
     }
 
-    it should "missing workflow inputs" taggedAs(EdgeTag) in {
-        val path = pathFromBasename("input_file", "missing_args.wdl")
+    it should "handle passing closure arguments to nested blocks" taggedAs(EdgeTag) in {
+        val path = pathFromBasename("nested", "param_passing.wdl")
         Main.compile(
-            path.toString :: List("--compileMode", "ir")
+            path.toString :: cFlags
         ) shouldBe a [Main.SuccessfulTerminationIR]
     }
 }
