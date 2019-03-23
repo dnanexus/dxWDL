@@ -489,6 +489,49 @@ case class WfFragRunner(wf: WorkflowDefinition,
         }
     }
 
+    // For example:
+    //
+    // if (flag) {
+    //   call zinc as inc3 { input: a = num}
+    //   call zinc as inc4 { input: a = num + 3 }
+    // }
+    //
+    private def execSubblockConConditional(cnNode: ConditionalNode,
+                                           env: Map[String, WomValue]) : Map[String, WdlVarLinks] = {
+        // Evaluate the condition
+        val condValueRaw : WomValue =
+            evaluateWomExpression(cnNode.conditionExpression.womExpression,
+                                  WomBooleanType,
+                                  env)
+        val condValue : Boolean = condValueRaw match {
+            case b: WomBoolean => b.value
+            case other => throw new AppInternalException(
+                s"Unexpected class ${other.getClass}, ${other}")
+        }
+        if (!condValue) {
+            // Condition is false, no need to execute the call
+            Map.empty
+        } else {
+            // There must be exactly one sub-workflow
+            assert(execLinkInfo.size == 1)
+            val (_, linkInfo) = execLinkInfo.toVector.head
+            val (_, dxExec) = execSubblockWorkflow(linkInfo, env, None)
+
+            // create promises for results
+            linkInfo.outputs.map{
+                case (varName, womType) =>
+                    // Add optional modifier to the return types.
+                    // be careful not to make double optionals
+                    val optionalType = womType match {
+                        case WomOptionalType(_) => womType
+                        case _ => WomOptionalType(womType)
+                    }
+                    varName -> WdlVarLinks(optionalType,
+                                           DxlExec(dxExec, varName))
+            }.toMap
+        }
+    }
+
     // create a short, easy to read, description for a scatter element.
     private def readableNameForScatterItem(item: WomValue) : Option[String] = {
         item match {
@@ -644,7 +687,7 @@ case class WfFragRunner(wf: WorkflowDefinition,
                         // a conditional with a subblock inside it. We need to
                         // call a subworkflow.
                     case Block.CondSubblock(cnNode) =>
-                        ???
+                        execSubblockConConditional(cnNode, env)
 
                     // a scatter with a subblock inside it. Iterate
                     // on the scatter variable, and call a sub-workflow

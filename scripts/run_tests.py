@@ -45,7 +45,8 @@ medium_test_list = [
     "strings",
 
     # workflows with nested blocks
-    "two_levels"
+    "two_levels",
+    "param_passing"
 ]
 
 tests_for_alt_project = [ "platform_asset" ]
