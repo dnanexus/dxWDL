@@ -10,7 +10,7 @@ import wom.types._
 object WomPrettyPrintApproxWdl {
 
     def apply(node: GraphNode,
-              indent : String = "") : Option[String] = {
+              indent : String = "") : String = {
         node match {
             case sct : ScatterNode =>
                 val varNames = sct.scatterVariableNodes.map{svn => svn.identifier.localName.value}
@@ -19,35 +19,47 @@ object WomPrettyPrintApproxWdl {
                 val svNode: ScatterVariableNode = sct.scatterVariableNodes.head
                 val collection = svNode.scatterExpressionNode.womExpression.sourceString
                 val innerBlock =
-                    sct.innerGraph.nodes.flatMap{ node =>
+                    sct.innerGraph.nodes.map{ node =>
                         apply(node, indent + "  ")
                     }.mkString("\n")
-                Some(s"""|${indent}scatter (${varName} in ${collection}) {
-                         |${innerBlock}
-                         |${indent}}""".stripMargin)
+                s"""|${indent}scatter (${varName} in ${collection}) {
+                    |${innerBlock}
+                    |${indent}}""".stripMargin
 
             case cnd : ConditionalNode =>
                 val innerBlock =
-                    cnd.innerGraph.nodes.flatMap{ node =>
+                    cnd.innerGraph.nodes.map{ node =>
                         apply(node, indent + "  ")
                     }.mkString("\n")
-                Some(s"""|${indent}if (${cnd.conditionExpression.womExpression.sourceString}) {
-                         |${innerBlock}
-                         |${indent}}
-                         |""".stripMargin)
+                s"""|${indent}if (${cnd.conditionExpression.womExpression.sourceString}) {
+                    |${innerBlock}
+                    |${indent}}
+                    |""".stripMargin
 
             case call : CommandCallNode =>
                 val inputNames = call.upstream.collect{
                     case exprNode: ExpressionNode =>
                         s"${exprNode.identifier.localName.value} = ${exprNode.womExpression.sourceString}"
                 }.mkString(",")
-                Some(s"${indent}call ${call.identifier.localName.value} { input: ${inputNames} }")
+                s"${indent}call ${call.identifier.localName.value} { input: ${inputNames} }"
+
+            case expr :ExpressionBasedGraphOutputNode =>
+                val exprSource = expr.womExpression.sourceString
+                s"${indent}${expr.womType.stableName} ${expr.identifier.localName.value} = ${exprSource}"
 
             case expr : ExposedExpressionNode =>
-                Some(s"${indent}${expr.identifier.localName.value} =  ${expr.womExpression.sourceString}")
+                s"${indent}${expr.identifier.localName.value} =  ${expr.womExpression.sourceString}"
+
+            case expr : ExpressionNode =>
+                expr.womExpression.sourceString
+
+            case _ : OuterGraphInputNode => ""
+
+            case PortBasedGraphOutputNode(id, womType, sourcePort) =>
+                s"${indent}${womType.stableName} ${id.localName.value} = ${sourcePort.name}"
 
             case other =>
-                None
+                other.toString
         }
     }
 

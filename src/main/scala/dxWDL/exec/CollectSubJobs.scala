@@ -184,18 +184,28 @@ case class CollectSubJobs(jobInputOutput : JobInputOutput,
         execDescs.sortWith(_.seqNum < _.seqNum)
     }
 
-    // collect
+    // collect field [name] from all child jobs, by looking at their
+    // outputs. Coerce to the correct [womType].
     private def collectCallField(name: String,
                                  womType: WomType,
                                  childJobsComplete: Vector[ChildExecDesc]) : WomValue = {
         val vec : Vector[WomValue] =
-            childJobsComplete.map{ childExec =>
-                childExec.outputs.get(name) match {
-                    case None =>
-                        throw new Exception(s"Need to handle optionals here womType=${womType}")
-                    case Some(jsv) =>
-                        jobInputOutput.unpackJobInput(womType, jsv)
-                }
+            childJobsComplete.flatMap{
+                case childExec =>
+                    val dxName = Utils.transformVarName(name)
+                    val fieldValue = childExec.outputs.get(dxName)
+                    (womType, fieldValue) match {
+                        case (WomOptionalType(_), None) =>
+                            // Optional field that has not been returned
+                            None
+                        case (WomOptionalType(_), Some(jsv)) =>
+                            Some(jobInputOutput.unpackJobInput(womType, jsv))
+                        case (_, None) =>
+                            // Required output that is missing
+                            throw new Exception(s"Could not find compulsory field <${name}> in results")
+                        case (_, Some(jsv)) =>
+                            Some(jobInputOutput.unpackJobInput(womType, jsv))
+                    }
             }.toVector
         WomArray(WomArrayType(womType), vec)
     }
@@ -211,6 +221,21 @@ case class CollectSubJobs(jobInputOutput : JobInputOutput,
                                                     childJobsComplete)
             val wvl = WdlVarLinks.importFromWDL(value.womType, value)
             fullName -> wvl
+        }.toMap
+    }
+
+    // collect results from a sub-workflow generated for the sole purpose of calculating
+    // a sub-block.
+    def aggregateResultsFromGeneratedSubWorkflow(execLinkInfo: ExecLinkInfo,
+                                                 childJobsComplete: Vector[ChildExecDesc])
+            : Map[String, WdlVarLinks] = {
+        execLinkInfo.outputs.map{
+            case (name, womType) =>
+                val value : WomValue = collectCallField(name,
+                                                        womType,
+                                                        childJobsComplete)
+                val wvl = WdlVarLinks.importFromWDL(value.womType, value)
+                name -> wvl
         }.toMap
     }
 }

@@ -13,12 +13,12 @@ task inc {
 
 # Check that we process correctly the first block.
 # In this case, it is:
-#  Int? rain = 13
+#  Int? rain = 41
 workflow block_with_three_calls {
     input {
         Boolean flag
     }
-    Int rain = 13
+    Int rain = 41
 
     if (flag) {
         call inc as inc1 { input: a=rain }

@@ -10,7 +10,7 @@ import dxWDL.util.Utils.META_INFO
 
 case class WfFragInput(wfSource: String,
                        instanceTypeDB: InstanceTypeDB,
-                       subBlockNr: Int,
+                       blockPath: Vector[Int],
                        env: Map[String, WomValue],
                        execLinkInfo : Map[String, ExecLinkInfo])
 
@@ -21,7 +21,7 @@ case class WfFragInputOutput(dxIoFunctions : DxIoFunctions,
     val jobInputOutput = JobInputOutput(dxIoFunctions, runtimeDebugLevel)
 
     private def loadWorkflowMetaInfo(metaInfo : Map[String, JsValue]) :
-            (Map[String, ExecLinkInfo], Int, Map[String, WomType]) = {
+            (Map[String, ExecLinkInfo], Vector[Int], Map[String, WomType]) = {
         // meta information used for running workflow fragments
         val execLinkInfo: Map[String, ExecLinkInfo] = metaInfo.get("execLinkInfo") match {
             case None => Map.empty
@@ -32,9 +32,13 @@ case class WfFragInputOutput(dxIoFunctions : DxIoFunctions,
                 }.toMap
             case other => throw new Exception(s"Bad value ${other}")
         }
-        val subBlockNum: Int = metaInfo.get("subBlockNum") match {
-            case None => 0
-            case Some(JsNumber(i)) => i.toInt
+        val blockPath: Vector[Int] = metaInfo.get("blockPath") match {
+            case None => Vector.empty
+            case Some(JsArray(arr)) =>
+                arr.map{
+                    case JsNumber(n) => n.toInt
+                    case _ => throw new Exception("Bad value ${arr}")
+                }.toVector
             case other => throw new Exception(s"Bad value ${other}")
         }
         val fqnDictTypes : Map[String, WomType] = metaInfo.get("fqnDictTypes") match {
@@ -50,7 +54,7 @@ case class WfFragInputOutput(dxIoFunctions : DxIoFunctions,
             case other => throw new Exception(s"Bad value ${other}")
         }
 
-        (execLinkInfo, subBlockNum, fqnDictTypes)
+        (execLinkInfo, blockPath, fqnDictTypes)
     }
 
     // 1. Convert the inputs to WOM values
@@ -72,7 +76,7 @@ case class WfFragInputOutput(dxIoFunctions : DxIoFunctions,
                     throw new Exception(
                         s"JSON object has bad value ${other} for field ${META_INFO}")
             }
-        val (execLinkInfo, subBlockNr, fqnDictTypes) = loadWorkflowMetaInfo(metaInfo)
+        val (execLinkInfo, blockPath, fqnDictTypes) = loadWorkflowMetaInfo(metaInfo)
 
         // What remains are inputs from other stages. Convert from JSON
         // to wom values
@@ -89,7 +93,7 @@ case class WfFragInputOutput(dxIoFunctions : DxIoFunctions,
 
         WfFragInput(wfSource,
                     instanceTypeDB,
-                    subBlockNr,
+                    blockPath,
                     env,
                     execLinkInfo)
     }
@@ -109,7 +113,7 @@ case class WfFragInputOutput(dxIoFunctions : DxIoFunctions,
                     throw new Exception(
                         s"JSON object has bad value ${other} for field ${META_INFO}")
             }
-        val (execLinkInfo, subBlockNr, fqnDictTypes) = loadWorkflowMetaInfo(metaInfo)
+        val (_, _, fqnDictTypes) = loadWorkflowMetaInfo(metaInfo)
 
         // What remains are inputs from other stages. Convert from JSON
         // to wom values

@@ -74,12 +74,13 @@ class InputFileTest extends FlatSpec with Matchers {
         retval shouldBe a [Main.SuccessfulTerminationIR]
     }
 
-    it should "handle inputs specified in the json file, but missing in the workflow" taggedAs(EdgeTest) in {
+    it should "handle inputs specified in the json file, but missing in the workflow" taggedAs(EdgeTag) in {
         val wdlCode = pathFromBasename("missing_args.wdl")
         val inputs = pathFromBasename("missing_args_inputs.json")
 
         Main.compile(
             List(wdlCode.toString, "--compileMode", "ir", "-quiet",
+                 //"--verbose", "--verboseKey", "GenerateIR",
                  "-inputs", inputs.toString)
         ) shouldBe a [Main.SuccessfulTerminationIR]
 

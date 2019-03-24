@@ -125,14 +125,70 @@ class BlockTest extends FlatSpec with Matchers {
                                                         "JoinMisc.result"))
     }
 
-    it should "identify simple calls even if they have optionals" taggedAs(EdgeTest) in {
+    it should "identify simple calls even if they have optionals" in {
         val path = pathFromBasename("util", "missing_inputs_to_direct_call.wdl")
         val wfSourceCode = Utils.readFileContent(path)
         val wf : WorkflowDefinition = ParseWomSourceFile.parseWdlWorkflow(wfSourceCode)
         val (inputNodes, subBlocks, outputNodes) = Block.split(wf.innerGraph, wfSourceCode)
 
-        Block.isSimpleCall(subBlocks(0)) shouldBe a [Some[_]]
-        Block.isSimpleCall(subBlocks(1)) shouldBe a [Some[_]]
-        Block.isSimpleCall(subBlocks(2)) shouldBe a [Some[_]]
+        for (i <- 0 to 2) {
+            val (_, category) = Block.categorize(subBlocks(i))
+            category shouldBe a [Block.CallDirect]
+        }
+    }
+
+    it should "categorize correctly calls to subworkflows" in {
+        val path = pathFromBasename("subworkflows", "trains.wdl")
+        val (_, womBundle, sources, _) = ParseWomSourceFile.apply(path)
+        val (_, wfSourceCode) = sources.find{ case (key, wdlCode) =>
+            key.endsWith("trains.wdl")
+        }.get
+
+        val wf : WorkflowDefinition = womBundle.primaryCallable match {
+            case Some(wf: WorkflowDefinition) => wf
+            case _ => throw new Exception("Could not find the workflow in the source")
+        }
+
+        val (inputNodes, subBlocks, outputNodes) = Block.split(wf.innerGraph, wfSourceCode)
+
+        val (_, category) = Block.categorize(subBlocks(0))
+        category shouldBe a [Block.Scatter]
+    }
+
+    it should "get subblocks" taggedAs(EdgeTag) in {
+        val path = pathFromBasename("nested", "two_levels.wdl")
+        val wfSourceCode = Utils.readFileContent(path)
+        val (_, womBundle, sources, _) = ParseWomSourceFile.apply(path)
+        val wf : WorkflowDefinition = ParseWomSourceFile.parseWdlWorkflow(wfSourceCode)
+
+        // sort from low to high according to the source lines.
+        val callToSrcLine = ParseWomSourceFile.scanForCalls(wfSourceCode)
+        val callsLoToHi : Vector[(String, Int)] = callToSrcLine.toVector.sortBy(_._2)
+
+        val graph = wf.innerGraph
+
+        val b0 = Block.getSubBlock(Vector(0), graph, callsLoToHi)
+        val (_, catg0) = Block.categorize(b0)
+        catg0 shouldBe a[Block.ScatterSubblock]
+
+        val b1 = Block.getSubBlock(Vector(1), graph, callsLoToHi)
+        val (_, catg1) = Block.categorize(b1)
+        catg1 shouldBe a[Block.Cond]
+
+        val b2 = Block.getSubBlock(Vector(2), graph, callsLoToHi)
+        val (_, catg2) = Block.categorize(b2)
+        catg2 shouldBe a[Block.CallDirect]
+
+        val b00 = Block.getSubBlock(Vector(0, 0), graph, callsLoToHi)
+        val (_, catg00) = Block.categorize(b00)
+        catg00 shouldBe a[Block.CallDirect]
+
+        val b01 = Block.getSubBlock(Vector(0, 1), graph, callsLoToHi)
+        val (_, catg01) = Block.categorize(b01)
+        catg01 shouldBe a[Block.CallDirect]
+
+        val b02 = Block.getSubBlock(Vector(0, 2), graph, callsLoToHi)
+        val (_, catg02) = Block.categorize(b02)
+        catg02 shouldBe a[Block.CallCompound]
     }
 }

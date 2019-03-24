@@ -59,6 +59,42 @@ case class Block(nodes : Vector[GraphNode]) {
             throw new Exception(s"${numTopLeveleCalls} calls in block")
         }
     }
+
+    // Create a human readable name for a block of statements
+    //
+    // 1. Ignore all declarations
+    // 2. If there is a scatter/if, use that
+    // 3. if there is at least one call, use the first one.
+    //
+    // If the entire block is made up of expressions, return None
+    def makeName : Option[String] = {
+        val coreStmts = nodes.filter{
+            case _: ScatterNode => true
+            case _: ConditionalNode => true
+            case _: CallNode => true
+            case _ => false
+        }
+
+        if (coreStmts.isEmpty)
+            return None
+        val name = coreStmts.head match {
+            case ssc : ScatterNode =>
+                // WDL allows scatter on one element only
+                assert(ssc.scatterVariableNodes.size == 1)
+                val svNode: ScatterVariableNode = ssc.scatterVariableNodes.head
+                val collection = svNode.scatterExpressionNode.womExpression.sourceString
+                val name = svNode.identifier.localName.value
+                s"scatter (${name} in ${collection})"
+            case cond : ConditionalNode =>
+                s"if (${cond.conditionExpression.womExpression.sourceString})"
+            case call : CallNode =>
+                s"frag ${call.identifier.localName.value}"
+            case _ =>
+                throw new Exception("sanity")
+        }
+        return Some(name)
+    }
+
 }
 
 object Block {
@@ -180,6 +216,8 @@ object Block {
         }
     }
 
+    // Split an entire workflow.
+    //
     // Sort the graph into a linear set of blocks, according to
     // dependencies.  Each block is itself sorted. The dependencies
     // impose a partial ordering on the graph. To make it correspond
@@ -201,8 +239,8 @@ object Block {
     //  [ call B ]  [ call C ]
     //
     // We choose option #2 because it resembles the original.
-    def split(graph: Graph, wdlSourceCode: String) :
-            (Vector[GraphInputNode],   // inputs
+    def splitGraph(graph: Graph, callsLoToHi: Vector[(String, Int)]):
+            (Vector[GraphInputNode], // inputs
              Vector[Block], // blocks
              Vector[GraphOutputNode]) // outputs
     = {
@@ -210,10 +248,6 @@ object Block {
         assert(graph.nodes.size > 0)
         var rest : Set[GraphNode] = graph.nodes
         var blocks = Vector.empty[Block]
-        val callToSrcLine = ParseWomSourceFile.scanForCalls(wdlSourceCode)
-
-        // sort from low to high according to the source lines.
-        val callsLoToHi : Vector[(String, Int)] = callToSrcLine.toVector.sortBy(_._2)
 
         // separate out the inputs
         val inputBlock = graph.inputNodes.toVector
@@ -260,6 +294,20 @@ object Block {
         (inputBlock, allBlocks, outputBlock)
     }
 
+
+    // An easy to use method that just takes the workflow source
+    def split(graph: Graph, wfSource: String) :  (Vector[GraphInputNode],   // inputs
+                                                  Vector[Block], // blocks
+                                                  Vector[GraphOutputNode]) // outputs
+    = {
+        val callToSrcLine = ParseWomSourceFile.scanForCalls(wfSource)
+
+        // sort from low to high according to the source lines.
+        val callsLoToHi : Vector[(String, Int)] = callToSrcLine.toVector.sortBy(_._2)
+
+        splitGraph(graph, callsLoToHi)
+    }
+
     def dbgPrint(inputNodes: Vector[GraphInputNode],   // inputs
                  subBlocks: Vector[Block], // blocks
                  outputNodes: Vector[GraphOutputNode]) // outputs
@@ -298,13 +346,13 @@ object Block {
     //   TaskCallInputExpressionNode(b, y, WomIntegerType, GraphNodeOutputPort(b))
     //   CommandCall(add, Set(a, b))
     // ]
-    def isSimpleCall(block: Block) : Option[CallNode] = {
+    private def isSimpleCall(block: Block) : Boolean = {
         // find the call
         val calls : Seq[CallNode] = block.nodes.collect{
             case cNode : CallNode => cNode
         }
         if (calls.size != 1)
-            return None
+            return false
         val oneCall = calls.head
 
         // All the other nodes have to be call inputs
@@ -314,16 +362,14 @@ object Block {
         val rest = block.nodes.toSet - oneCall
         val callInputs = oneCall.upstream.toSet
         if (!rest.subsetOf(callInputs))
-            return None
+            return false
 
-        // The call inputs have to be simple expressions
-        val allSimple = rest.forall{
+        // All the call inputs have to be simple expressions, if the call is
+        // to be called "simple"
+        rest.forall{
             case expr: TaskCallInputExpressionNode => isTrivialExpression(expr.womExpression)
             case _ => false
         }
-        if (!allSimple)
-            return None
-        Some(oneCall)
     }
 
 
@@ -345,7 +391,7 @@ object Block {
     //    call Filter { input: prefix = fullName }
     // }
     //
-    def isSimpleSubblock(graph: Graph) : Boolean = {
+    private def isSimpleSubblock(graph: Graph) : Boolean = {
         val nodes = graph.nodes
 
         // The block can't have conditional/scatter sub-blocks
@@ -371,7 +417,10 @@ object Block {
             case _: TaskCallInputExpressionNode => true
             case _: OuterGraphInputNode => true
             case _: GraphOutputNode => true
-            case _ => false
+            case _: PlainAnonymousExpressionNode => true
+            case other =>
+                //System.out.println(s"strange value ${other}")
+                false
         }
     }
 
@@ -383,11 +432,21 @@ object Block {
     // 2) Call
     // 3) Conditional block
     // 4) Scatter block
-    sealed trait Category
+    sealed trait Category {
+        def getInnerGraph : Graph =
+            throw new UnsupportedOperationException(s"$getClass does not implement getInnerGraph")
+    }
     case object AllExpressions extends Category
-    case class Call(call: CallNode) extends Category
-    case class Cond(cond: ConditionalNode, simple: Boolean) extends Category
-    case class Scatter(scatter: ScatterNode, simple: Boolean) extends Category
+    case class CallDirect(value: CallNode) extends Category
+    case class CallCompound(value: CallNode) extends Category
+    case class Cond(value: ConditionalNode) extends Category
+    case class Scatter(value: ScatterNode) extends Category
+    case class CondSubblock(value: ConditionalNode) extends Category {
+        override def getInnerGraph: Graph = value.innerGraph
+    }
+    case class ScatterSubblock(value: ScatterNode) extends Category {
+        override def getInnerGraph: Graph = value.innerGraph
+    }
 
     def categorize(block: Block) : (Vector[GraphNode], Category) = {
         assert(!block.nodes.isEmpty)
@@ -402,15 +461,43 @@ object Block {
 
         val lastNode = block.nodes.last
         lastNode match {
+            case _ if deepFindCalls(Seq(lastNode)).isEmpty =>
+                // The block comprises of expressions only
+                ((allButLast :+ lastNode), AllExpressions)
+
             case callNode: CallNode =>
-                (allButLast, Call(callNode))
-            case conditionalNode: ConditionalNode =>
-                (allButLast, Cond(conditionalNode, isSimpleSubblock(conditionalNode.innerGraph)))
+                if (isSimpleCall(block))
+                    (allButLast, CallDirect(callNode))
+                else
+                    (allButLast, CallCompound(callNode))
+
+            case condNode: ConditionalNode =>
+                if (isSimpleSubblock(condNode.innerGraph))
+                    (allButLast, Cond(condNode))
+                else
+                    (allButLast, CondSubblock(condNode))
+
             case sctNode: ScatterNode =>
-                (allButLast, Scatter(sctNode, isSimpleSubblock(sctNode.innerGraph)))
-            case other =>
-                ((allButLast :+ other), AllExpressions)
+                if (isSimpleSubblock(sctNode.innerGraph))
+                    (allButLast, Scatter(sctNode))
+                else
+                    (allButLast, ScatterSubblock(sctNode))
         }
+    }
+
+    def getSubBlock(path: Vector[Int],
+                    graph: Graph,
+                    callsLoToHi: Vector[(String, Int)]) : Block = {
+        assert(path.size >= 1)
+
+        val (_, blocks, _) = splitGraph(graph, callsLoToHi)
+        var subBlock = blocks(path.head)
+        for (i <- path.tail) {
+            val (_, catg) = categorize(subBlock)
+            val (_, blocks2, _) = splitGraph(catg.getInnerGraph, callsLoToHi)
+            subBlock = blocks2(i)
+        }
+        return subBlock
     }
 
     // Find all the inputs required for a block. For example,

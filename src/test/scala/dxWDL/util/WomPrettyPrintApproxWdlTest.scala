@@ -3,9 +3,7 @@ package dxWDL.util
 import java.nio.file.{Path, Paths}
 import org.scalatest.{FlatSpec, Matchers}
 import wom.callable.{WorkflowDefinition}
-import org.scalatest.tags.Slow
 
-@Slow
 class WomPrettyPrintApproxWdlTest extends FlatSpec with Matchers {
     private def pathFromBasename(basename: String) : Path = {
         val p = getClass.getResource(s"/util/${basename}").getPath
@@ -19,6 +17,6 @@ class WomPrettyPrintApproxWdlTest extends FlatSpec with Matchers {
         val s = wf.innerGraph.nodes.map{
             WomPrettyPrintApproxWdl.apply(_)
         }.mkString("\n")
-        System.out.println(s)
+        Utils.ignore(s)
     }
 }

@@ -8,7 +8,7 @@ workflow missing_args {
     call Add {input: a = prime}
     call MaybeInt
 
-    # not a toplevel calls
+    # not a toplevel call
     if (flag) {
         call Add as add2 {input: a=2, b = 3 }
     }

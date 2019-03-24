@@ -80,8 +80,16 @@ libraryDependencies ++= Seq(
 // If an exception is thrown during tests, show the full
 // stack trace, by adding the "-oF" option to the list.
 //
-//Test / testOptions += Tests.Argument(TestFrameworks.ScalaCheck,
-//                                     "-l", "dxWDL.compiler.NativeTest")
-Test / testOptions += Tests.Argument("-l", "org.scalatest.tags.Slow")
+
+// exclude the native tests, they are slow.
+// to do this from the command line:
+// sbt testOnly -- -l native
+//
+// comment out this line in order to allow native
+// tests
+Test / testOptions += Tests.Argument("-l", "native")
 
 Test / parallelExecution := false
+
+// comment out this line to enable tests in assembly
+test in assembly := {}

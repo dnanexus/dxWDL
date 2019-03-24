@@ -90,30 +90,6 @@ class GenerateIRTest extends FlatSpec with Matchers {
             path.toString :: cFlags
         )
         retval shouldBe a [Main.SuccessfulTerminationIR]
-/*
-        val primary = retval match {
-            case Main.SuccessfulTerminationIR(ir) =>
-                ir.primaryCallable.get
-            case _ =>
-                throw new Exception("sanity")
-        }
-
-        val wf = primary match {
-            case wf: IR.Workflow => wf
-            case _ => throw new Exception("sanity")
-        }
-
-        val stages = wf.stages.map{ stg =>
-            s"   ${stg}"
-        }.mkString("\n")
-        System.out.println(s"""|name = ${wf.name}
-                               |inputs = ${wf.inputs}
-                               |outputs = ${wf.outputs}
-                               |stages = \n${stages}
-                               |locked = ${wf.locked}
-                               |kind = ${wf.kind}
-                               |
-                               |""".stripMargin)*/
     }
 
     it should "expressions in an output block" in {
@@ -137,10 +113,10 @@ class GenerateIRTest extends FlatSpec with Matchers {
         ) shouldBe a [Main.SuccessfulTerminationIR]
     }
 
-    it should "handle calling subworkflows" taggedAs(EdgeTest) in {
+    it should "handle calling subworkflows" in {
         val path = pathFromBasename("subworkflows", "trains.wdl")
         val retval = Main.compile(
-            path.toString :: dbgFlags
+            path.toString :: cFlags
         )
         retval shouldBe a [Main.SuccessfulTerminationIR]
         val irwf = retval match {
@@ -152,5 +128,34 @@ class GenerateIRTest extends FlatSpec with Matchers {
             case _ => throw new Exception("sanity")
         }
         primaryWf.stages.size shouldBe(2)
+    }
+
+    it should "compile a sub-block with several calls" in {
+        val path = pathFromBasename("compiler", "subblock_several_calls.wdl")
+        Main.compile(
+            path.toString :: cFlags
+        ) shouldBe a [Main.SuccessfulTerminationIR]
+    }
+
+    it should "missing workflow inputs" in {
+        val path = pathFromBasename("input_file", "missing_args.wdl")
+        Main.compile(
+            path.toString :: List("--compileMode", "ir")
+        ) shouldBe a [Main.SuccessfulTerminationIR]
+    }
+
+    // Nested blocks
+    it should "compile two level nested workflow" in {
+        val path = pathFromBasename("nested", "two_levels.wdl")
+        Main.compile(
+            path.toString :: cFlags
+        ) shouldBe a [Main.SuccessfulTerminationIR]
+    }
+
+    it should "handle passing closure arguments to nested blocks" taggedAs(EdgeTag) in {
+        val path = pathFromBasename("nested", "param_passing.wdl")
+        Main.compile(
+            path.toString :: cFlags
+        ) shouldBe a [Main.SuccessfulTerminationIR]
     }
 }

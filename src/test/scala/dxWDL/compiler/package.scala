@@ -1,4 +1,5 @@
 package dxWDL.compiler
 
 import org.scalatest.Tag
-object EdgeTest extends Tag("edge")
+object EdgeTag extends Tag("edge")
+object NativeTag extends Tag("native")

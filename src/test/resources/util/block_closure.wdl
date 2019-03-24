@@ -17,7 +17,7 @@ workflow block_closure {
     input {
         Boolean flag
     }
-    Int rain = 13
+    Int rain = 17
 
     call inc as inc1 { input: a=rain }
 

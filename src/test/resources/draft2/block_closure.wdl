@@ -13,7 +13,7 @@ task inc {
 
 workflow block_closure {
     Boolean flag
-    Int rain = 13
+    Int rain = 1023
 
     call inc as inc1 { input: a=rain }
 

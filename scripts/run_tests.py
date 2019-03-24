@@ -42,7 +42,11 @@ medium_test_list = [
     "shapes",
 
     "spaces_in_file_paths",
-    "strings"
+    "strings",
+
+    # workflows with nested blocks
+    "two_levels",
+    "param_passing"
 ]
 
 tests_for_alt_project = [ "platform_asset" ]
@@ -498,8 +502,10 @@ def main():
                            help="printing verbosity of task/workflow runner, {0,1,2}")
     argparser.add_argument("--test", help="Run a test, or a subgroup of tests",
                            action="append", default=[])
-    argparser.add_argument("--test-list", help="Print a list of available tests",
-                           action="store_true", default=False)
+    argparser.add_argument("--list", "--test-list", help="Print a list of available tests",
+                           action="store_true",
+                           dest="test_list",
+                           default=False)
     argparser.add_argument("--verbose", help="Verbose compilation",
                            action="store_true", default=False)
     argparser.add_argument("--verbose-key", help="Verbose compilation",
