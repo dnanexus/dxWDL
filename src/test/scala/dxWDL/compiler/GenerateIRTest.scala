@@ -152,8 +152,15 @@ class GenerateIRTest extends FlatSpec with Matchers {
         ) shouldBe a [Main.SuccessfulTerminationIR]
     }
 
-    it should "handle passing closure arguments to nested blocks" taggedAs(EdgeTag) in {
+    it should "handle passing closure arguments to nested blocks" in {
         val path = pathFromBasename("nested", "param_passing.wdl")
+        Main.compile(
+            path.toString :: cFlags
+        ) shouldBe a [Main.SuccessfulTerminationIR]
+    }
+
+    it should "handle various conditionals" taggedAs(EdgeTag) in {
+        val path = pathFromBasename("draft2", "conditionals_base.wdl")
         Main.compile(
             path.toString :: cFlags
         ) shouldBe a [Main.SuccessfulTerminationIR]

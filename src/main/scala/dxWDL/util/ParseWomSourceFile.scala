@@ -356,7 +356,13 @@ object ParseWomSourceFile {
         // make sure there are no duplicate lines
         val sourceLines = calls.values.toVector
         assert(sourceLines.size == sourceLines.toSet.size)
-        calls.toMap
+
+        // We are using the flat-namespace assumption here. There is a single
+        // definition for each WDL task and workflow.
+        calls.map{ case (callFqn, lineNr) =>
+            val callUnqualifiedName = Utils.getUnqualifiedName(callFqn)
+            (callUnqualifiedName, lineNr)
+        }.toMap
     }
 
 

@@ -3,6 +3,7 @@ package dxWDL.util
 import java.nio.file.{Path, Paths}
 import org.scalatest.{FlatSpec, Matchers}
 import wom.callable.{WorkflowDefinition}
+import wom.executable.WomBundle
 import wom.graph._
 import wom.types._
 
@@ -18,6 +19,10 @@ class BlockTest extends FlatSpec with Matchers {
         val wf : WorkflowDefinition = ParseWomSourceFile.parseWdlWorkflow(wfSourceCode)
         val (_, subBlocks, _) = Block.split(wf.innerGraph, wfSourceCode)
 
+        /*System.out.println(s"""|block #0 =
+                               |${subBlocks(0).prettyPrintApproxWdl}}
+                               |""".stripMargin)*/
+        Block.closure(subBlocks(0)).keys.toSet should be(Set.empty)
         Block.closure(subBlocks(1)).keys.toSet should be(Set("flag", "rain"))
         Block.closure(subBlocks(2)).keys.toSet should be(Set("flag", "inc1.result"))
         Block.closure(subBlocks(3)).keys.toSet should be(Set("rain"))
@@ -155,7 +160,7 @@ class BlockTest extends FlatSpec with Matchers {
         category shouldBe a [Block.Scatter]
     }
 
-    it should "get subblocks" taggedAs(EdgeTag) in {
+    it should "get subblocks" in {
         val path = pathFromBasename("nested", "two_levels.wdl")
         val wfSourceCode = Utils.readFileContent(path)
         val (_, womBundle, sources, _) = ParseWomSourceFile.apply(path)
@@ -190,5 +195,31 @@ class BlockTest extends FlatSpec with Matchers {
         val b02 = Block.getSubBlock(Vector(0, 2), graph, callsLoToHi)
         val (_, catg02) = Block.categorize(b02)
         catg02 shouldBe a[Block.CallCompound]
+    }
+
+    it should "handle calls to imported modules" taggedAs(EdgeTag) in {
+        val path = pathFromBasename("draft2", "conditionals1.wdl")
+        val (language, womBundle: WomBundle, allSources, subBundles) = ParseWomSourceFile.apply(path)
+
+        val (_, wfSource) = allSources.find {
+            case (name, _) => name.endsWith("conditionals1.wdl")
+        }.get
+
+        val wf: WorkflowDefinition = womBundle.primaryCallable match {
+            case Some(wf: WorkflowDefinition) => wf
+            case _ => throw new Exception("sanity")
+        }
+        val graph = wf.innerGraph
+        val (inputNodes, subBlocks, outputNodes) = Block.split(graph, wfSource)
+
+        for (i <- 0 to (subBlocks.length - 1)) {
+            val b = subBlocks(i)
+/*            System.out.println(s"""|BLOCK #${i} = [
+                                   |${b.prettyPrintApproxWdl}
+                                   |]
+                                   |""".stripMargin)*/
+            val (_, catg) = Block.categorize(b)
+            Utils.ignore(catg)
+        }
     }
 }

@@ -22,11 +22,11 @@ test_dir = os.path.join(os.path.abspath(top_dir), "test")
 git_revision = subprocess.check_output(["git", "describe", "--always", "--dirty", "--tags"]).strip()
 test_files={}
 test_failing=set(["bad_status",
-                  #"bad_status2",
+                  "bad_status2",
                   "missing_output"])
-reserved_test_names=['M', 'All', 'list']
+reserved_test_names=['M', 'L', 'draft2', 'All', 'list']
 
-medium_test_list = [
+wdl_v1_list = [
      # calling native dx applets/apps
     "call_native",
     #"call_native_app",
@@ -38,9 +38,6 @@ medium_test_list = [
     "linear",
     "optionals",
 
-    # wdl draft-2
-    "shapes",
-
     "spaces_in_file_paths",
     "strings",
 
@@ -49,12 +46,46 @@ medium_test_list = [
     "param_passing"
 ]
 
+# wdl draft-2
+draft2_basic = [
+    "advanced",
+    "bad_status",
+    "bad_status2",
+    "call_with_defaults1",
+    "call_with_defaults2",
+    "conditionals_base",
+    "decl_mid_wf",
+    "files",
+    "files_with_the_same_name",
+    "hello",
+    "math",
+    "shapes"
+]
+
+draft2_subworkflows = [
+    "conditionals2",
+    "modulo",
+    "movies",
+    "subblocks2",
+    "subblocks",
+    "var_type_change"
+]
+
+draft2_test_list = draft2_basic + draft2_subworkflows
+
+medium_test_list= wdl_v1_list
+large_test_list= draft2_test_list + wdl_v1_list
+
 tests_for_alt_project = [ "platform_asset" ]
 
 # Tests with the reorg flags
 test_reorg=["dict", "linear"]
 test_defaults=[]
 test_unlocked=["cast",
+               "call_with_defaults1",
+               "files",
+               "hello",
+               "optionals",
                "linear",
                "shapes"]
 test_extras=["instance_types"]
@@ -331,6 +362,10 @@ def print_test_list():
 def choose_tests(test_name):
     if test_name == 'M':
         return medium_test_list
+    if test_name == 'L':
+        return large_test_list
+    if test_name == 'draft2':
+        return draft2_test_list
     if test_name == 'All':
         return test_files.keys()
     if test_name in test_files.keys():

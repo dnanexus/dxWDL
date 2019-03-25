@@ -47,6 +47,12 @@ case class Block(nodes : Vector[GraphNode]) {
             |]""".stripMargin
     }
 
+    def prettyPrintApproxWdl: String = {
+        nodes.map{
+            WomPrettyPrintApproxWdl.apply(_)
+        }.mkString("\n")
+    }
+
     // Check that this block is valid.
     // 1) It can have zero or one top-level calls
     def validate() : Unit = {
@@ -158,7 +164,7 @@ object Block {
     // Find the toplevel graph node that contains this call
     private def findCallByName(callName: String,
                                nodes: Set[GraphNode]) : Option[GraphNode] = {
-        nodes.find{
+        val gnode: Option[GraphNode] = nodes.find{
             case callNode: CallNode =>
                 callNode.identifier.localName.value == callName
             case cNode: ConditionalNode =>
@@ -167,6 +173,16 @@ object Block {
                 graphContainsCall(callName, scNode.innerGraph.nodes)
             case _ => false
         }
+/*        gnode match {
+            case None =>
+                System.out.println(s"findCallByName(${callName}) failed")
+            case Some(x) =>
+                System.out.println(s"""|findCallByName(${callName})
+                                       |${WomPrettyPrintApproxWdl.apply(x)}
+                                       |
+                                       |""".stripMargin)
+        }*/
+        gnode
     }
 
     private def pickTopNodes(nodes: Set[GraphNode]) = {
@@ -244,7 +260,6 @@ object Block {
              Vector[Block], // blocks
              Vector[GraphOutputNode]) // outputs
     = {
-        //System.out.println(s"SplitIntoBlocks ${nodes.size} nodes")
         assert(graph.nodes.size > 0)
         var rest : Set[GraphNode] = graph.nodes
         var blocks = Vector.empty[Block]
@@ -265,7 +280,7 @@ object Block {
                 case None =>
                     // we already accounted for this call. Several
                     // calls can be in the same node. For example, a
-                    // scatter can has many calls inside its subgraph.
+                    // scatter can have many calls inside its subgraph.
                     ()
                 case Some(node) =>
                     assert(!rest.isEmpty)
@@ -311,27 +326,29 @@ object Block {
     def dbgPrint(inputNodes: Vector[GraphInputNode],   // inputs
                  subBlocks: Vector[Block], // blocks
                  outputNodes: Vector[GraphOutputNode]) // outputs
-            : Unit = {
-        System.out.println("Inputs [")
-        inputNodes.foreach{ node =>
-            val desc = WomPrettyPrintApproxWdl.apply(node)
-            System.out.println(s"  ${desc}")
-        }
-        System.out.println("]")
-        subBlocks.foreach{ block =>
-            System.out.println("Block [")
-            block.nodes.foreach{ node =>
-                val desc = WomPrettyPrintApproxWdl.apply(node)
-                System.out.println(s"  ${desc}")
-            }
-            System.out.println("]")
-        }
-        System.out.println("Output [")
-        outputNodes.foreach{ node =>
-            val desc = WomPrettyPrintApproxWdl.apply(node)
-            System.out.println(s"  ${desc}")
-        }
-        System.out.println("]")
+            : String = {
+        val inputs = inputNodes.map{ node =>
+            WomPrettyPrintApproxWdl.apply(node)
+        }.mkString("\n")
+        val blocks = subBlocks.map{ block =>
+            val body = block.nodes.map{ node =>
+                WomPrettyPrintApproxWdl.apply(node)
+            }.mkString("\n")
+            s"""|Block [
+                |${body}
+                |]""".stripMargin
+        }.mkString("\n")
+        val outputs= outputNodes.map{ node =>
+            WomPrettyPrintApproxWdl.apply(node)
+        }.mkString("\n")
+
+        s"""|Inputs ["
+            |${inputs}
+            |]
+            |${blocks}
+            |Output [
+            |${outputs}
+            |]""".stripMargin
     }
 
     // A block of nodes that represents a call with no subexpressions. These
@@ -457,7 +474,10 @@ object Block {
         if (nrCalls > 0)
             throw new Exception(
                 s"""|There are ${nrCalls} calls at the beginning of the block.
-                    |However, there can be none""".stripMargin.replaceAll("\n", " "))
+                    |However, there can be none.
+                    |
+                    |${block.prettyPrintApproxWdl}
+                    |""".stripMargin)
 
         val lastNode = block.nodes.last
         lastNode match {

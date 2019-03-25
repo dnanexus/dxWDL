@@ -597,6 +597,7 @@ case class GenerateIRWorkflow(wf : WorkflowDefinition,
 
         // Create a stage per call/scatter-block/declaration-block
         val (inputNodes, subBlocks, outputNodes) = Block.splitGraph(graph, callsLoToHi)
+        Block.dbgPrint(inputNodes, subBlocks, outputNodes)
 
         // compile into an IR workflow
         val (irwf, irCallables, wfOutputs) =

@@ -1,0 +1,9 @@
+{
+  "files.diff2_result" : 281,
+  "files.colocation_result" : "False",
+  "files.FileArraySize_result" : [4, 6],
+  "files.head_result" : ["Nut", "Nut", "Nut", "Nut"],
+  "files.TsvReadTable_result" :  {"womType": "Array[Array[String]]",
+                                  "value": [["11", "12", "13"], ["21", "22", "23"]]},
+  "files.fruits" : ["apple","banana","lemon","grapefruit","pumpkin"]
+}
