@@ -64,26 +64,15 @@ case class GenerateIRWorkflow(wf : WorkflowDefinition,
                 assert(womType.isInstanceOf[WomOptionalType])
                 CVar(id.workflowLocalName, womType, None)
 
-            case OptionalGraphInputNodeWithDefault(id, womType, defaultExpr : WomExpression, nameInInputSet, valueMapper) =>
-                val defaultValue: WomValue = Utils.ifConstEval(defaultExpr) match {
-                    case None => throw new Exception(s"""|default expression in input should be a constant
-                                                         | ${input}
-                                                         |""".stripMargin)
+            case OptionalGraphInputNodeWithDefault(id, womType, defaultExpr : WomExpression,
+                                                   nameInInputSet, valueMapper) =>
+                val defaultValue: WomValue = WomValueAnalysis.ifConstEval(womType, defaultExpr) match {
+                    case None => throw new Exception(
+                        s"""|default expression in input should be a constant
+                            | ${input}
+                            |""".stripMargin)
                     case Some(value) => value
                 }
-                // A file can't have a constant string as an input, this has to
-                // be a dnanexus link.
-                /*
-                val defaultValue : Option[WomValue] =
-                    (womType, defaultValue) match {
-                        case WomSingleFile, WomString(s) =>
-                            if (Furl.parse(s).isInstanceOf[FurlLocal])
-                                None
-                            else
-                                Some(defaultValue)
-                        case (_, _) =>
-                            Some(defaultValue)
-                    }*/
                 CVar(id.workflowLocalName, womType, Some(defaultValue))
 
             case ScatterVariableNode(id, expression: ExpressionNode , womType) =>
@@ -148,8 +137,8 @@ case class GenerateIRWorkflow(wf : WorkflowDefinition,
                             |is unspecified. This is illegal in a locked workflow.""".stripMargin.replaceAll("\n", " "))
                 case None =>
                     IR.SArgEmpty
-                case Some(tcInput) if Utils.isExpressionConst(tcInput.womExpression) =>
-                    IR.SArgConst(Utils.evalConst(tcInput.womExpression))
+                case Some(tcInput) if WomValueAnalysis.isExpressionConst(cVar.womType, tcInput.womExpression) =>
+                    IR.SArgConst(WomValueAnalysis.evalConst(cVar.womType, tcInput.womExpression))
                 case Some(tcInput) =>
                     val exprSourceString = tcInput.womExpression.sourceString
                     val lVar = env(exprSourceString)
@@ -412,7 +401,7 @@ case class GenerateIRWorkflow(wf : WorkflowDefinition,
                 val cVar = CVar(id.fullyQualifiedName.value, womType, None)
                 val source = sourcePort.name
                 (cVar, getSArgFromEnv(source, env))
-            case expr :ExpressionBasedGraphOutputNode if (Block.isTrivialExpression(expr.womExpression)) =>
+            case expr :ExpressionBasedGraphOutputNode if (Block.isTrivialExpression(expr.womType, expr.womExpression)) =>
                 val cVar = CVar(expr.graphOutputPort.name, expr.womType, None)
                 val source = expr.womExpression.sourceString
                 (cVar, getSArgFromEnv(source, env))

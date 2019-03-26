@@ -107,11 +107,12 @@ object Block {
     // A trivial expression has no operators, it is either a constant WomValue
     // or a single identifier. For example: '5' and 'x' are trivial. 'x + y'
     // is not.
-    def isTrivialExpression(expr: WomExpression) : Boolean = {
+    def isTrivialExpression(womType: WomType,
+                            expr: WomExpression) : Boolean = {
         val inputs = expr.inputs
         if (inputs.size > 1)
             return false
-        if (Utils.isExpressionConst(expr))
+        if (WomValueAnalysis.isExpressionConst(womType, expr))
             return true
         // The expression may have one input, but could still have an operator.
         // For example: x+1, x + x.
@@ -125,7 +126,8 @@ object Block {
         node match {
             case call : CallNode =>
                 call.inputDefinitionMappings.forall{
-                    case (_, expr: WomExpression) => isTrivialExpression(expr)
+                    case (inputDef, expr: WomExpression) =>
+                        isTrivialExpression(inputDef.womType, expr)
                     case (_, _) => true
                 }
             case _ => false
@@ -384,7 +386,8 @@ object Block {
         // All the call inputs have to be simple expressions, if the call is
         // to be called "simple"
         rest.forall{
-            case expr: TaskCallInputExpressionNode => isTrivialExpression(expr.womExpression)
+            case expr: TaskCallInputExpressionNode =>
+                isTrivialExpression(expr.womType, expr.womExpression)
             case _ => false
         }
     }
@@ -602,13 +605,7 @@ object Block {
         xtrnPorts.map{ outputPort =>
             // Is this really the fully qualified name?
             val fqn = outputPort.identifier.localName.value
-            val womType = outputPort match {
-                case gnop : GraphNodePort.GraphNodeOutputPort => gnop.womType
-                case ebop : GraphNodePort.ExpressionBasedOutputPort => ebop.womType
-                case sctOp : GraphNodePort.ScatterGathererPort => sctOp.womType
-                case cnop : GraphNodePort.ConditionalOutputPort => cnop.womType
-                case other => throw new Exception(s"unhandled case ${other.getClass}")
-            }
+            val womType = outputPort.womType
             fqn -> womType
         }.toMap
     }
@@ -619,7 +616,7 @@ object Block {
         outputNode match {
             case PortBasedGraphOutputNode(id, womType, sourcePort) =>
                 true
-            case expr :ExpressionBasedGraphOutputNode if (Block.isTrivialExpression(expr.womExpression)) =>
+            case expr :ExpressionBasedGraphOutputNode if (Block.isTrivialExpression(expr.womType, expr.womExpression)) =>
                 true
             case expr :ExpressionBasedGraphOutputNode =>
                 // An expression that requires evaluation

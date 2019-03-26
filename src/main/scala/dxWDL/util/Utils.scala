@@ -1,11 +1,9 @@
 package dxWDL.util
 
-import cats.data.Validated.{Invalid, Valid}
 import com.dnanexus._
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.databind.JsonNode
 import com.typesafe.config._
-import common.validation.ErrorOr.ErrorOr
 import java.io.{ByteArrayOutputStream, ByteArrayInputStream}
 import java.nio.charset.{StandardCharsets}
 import java.nio.file.{Path, Paths, Files}
@@ -16,10 +14,7 @@ import scala.concurrent._
 import ExecutionContext.Implicits.global
 import scala.sys.process._
 import spray.json._
-import wom.expression._
 import wom.types._
-import wom.values._
-
 
 object Utils {
     val APPLET_LOG_MSG_LIMIT = 1000
@@ -117,39 +112,6 @@ object Utils {
             // A tricky, but important case, is `Array[File]+?`. This
             // cannot be converted into a dx file array, unfortunately.
             case _ => false
-        }
-    }
-
-
-    // Check if the WDL expression is a constant. If so, calculate and return it.
-    // Otherwise, return None.
-    //
-    // These are used for evaluating if a WOM expression is constant.
-    // Ideally, we should not be using any of the IO functions, since
-    // these checks may be part of the compilation process.
-    private lazy val dxPathConfig = DxPathConfig(Paths.get("/tmp/"), false)
-    private lazy val dxIoFunctions = DxIoFunctions(dxPathConfig, 0)
-
-    def ifConstEval(expr: WomExpression) : Option[WomValue] = {
-        val result: ErrorOr[WomValue] =
-            expr.evaluateValue(Map.empty[String, WomValue], dxIoFunctions)
-        result match {
-            case Invalid(_) => None
-            case Valid(x: WomValue) => Some(x)
-        }
-    }
-
-    def isExpressionConst(expr: WomExpression) : Boolean = {
-        ifConstEval(expr) match {
-            case None => false
-            case Some(_) => true
-        }
-    }
-
-    def evalConst(expr: WomExpression) : WomValue = {
-        ifConstEval(expr) match {
-            case None => throw new Exception(s"Expression ${expr} is not a WDL constant")
-            case Some(wdlValue) => wdlValue
         }
     }
 
