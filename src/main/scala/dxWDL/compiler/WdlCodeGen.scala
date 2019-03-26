@@ -18,7 +18,7 @@ case class WdlCodeGen(verbose: Verbose) {
             case WomIntegerType => WomInteger(0)
             case WomFloatType => WomFloat(0.0)
             case WomStringType => WomString("")
-            case WomSingleFileType => WomSingleFile("")
+            case WomSingleFileType => WomSingleFile("dummy.txt")
 
                 // We could convert an optional to a null value, but that causes
                 // problems for the pretty printer.

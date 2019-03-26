@@ -201,13 +201,13 @@ object ParseWomSourceFile {
 
 
     private def findNextTask(lines: List[String]) : Option[(List[String], String, String)] = {
-        val taskStartLine: Regex = "^(\\s*)task(\\s+)(\\w+)(\\s+)\\{".r
+        val taskStartLine: Regex = "^(\\s*)task(\\s+)(\\w+)(\\s*)\\{".r
         val taskEndLine: Regex = "^}(\\s)*$".r
         findWdlElement(lines, taskStartLine, taskEndLine)
     }
 
     private def findNextWorkflow(lines: List[String]) : Option[(List[String], String, String)] = {
-        val workflowStartLine: Regex = "^(\\s*)workflow(\\s+)(\\w+)(\\s+)\\{".r
+        val workflowStartLine: Regex = "^(\\s*)workflow(\\s+)(\\w+)(\\s*)\\{".r
         val workflowEndLine: Regex = "^}(\\s)*$".r
         findWdlElement(lines, workflowStartLine, workflowEndLine)
     }

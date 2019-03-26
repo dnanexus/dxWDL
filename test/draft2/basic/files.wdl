@@ -93,7 +93,6 @@ workflow files {
        Int diff1_result = diff1.result
        Int diff2_result = diff2.result
        Array[File] FindFiles_texts = FindFiles.texts
-       File? FindFiles_missing = FindFiles.missing
        String colocation_result = colocation.result
        Array[Int] FileArraySize_result = FileArraySize.result
        Array[String] head_result = head.result
@@ -146,7 +145,6 @@ task z_FindFiles {
     output {
         Array[File] texts = glob("*.txt")
         Array[File] hotels = glob("H/*.hotel")
-        File? missing = "NoFileHere.txt"
     }
 }
 

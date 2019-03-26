@@ -71,6 +71,19 @@ case class GenerateIRWorkflow(wf : WorkflowDefinition,
                                                          |""".stripMargin)
                     case Some(value) => value
                 }
+                // A file can't have a constant string as an input, this has to
+                // be a dnanexus link.
+                /*
+                val defaultValue : Option[WomValue] =
+                    (womType, defaultValue) match {
+                        case WomSingleFile, WomString(s) =>
+                            if (Furl.parse(s).isInstanceOf[FurlLocal])
+                                None
+                            else
+                                Some(defaultValue)
+                        case (_, _) =>
+                            Some(defaultValue)
+                    }*/
                 CVar(id.workflowLocalName, womType, Some(defaultValue))
 
             case ScatterVariableNode(id, expression: ExpressionNode , womType) =>
