@@ -4,6 +4,8 @@ import java.nio.file.{Path, Paths}
 import org.scalatest.{FlatSpec, Matchers}
 
 import dxWDL.Main
+import dxWDL.util._
+import wom.callable.{WorkflowDefinition}
 
 // These tests involve compilation -without- access to the platform.
 //
@@ -159,10 +161,54 @@ class GenerateIRTest extends FlatSpec with Matchers {
         ) shouldBe a [Main.SuccessfulTerminationIR]
     }
 
-    it should "handle various conditionals" taggedAs(EdgeTag) in {
+    it should "handle various conditionals" in {
         val path = pathFromBasename("draft2", "conditionals_base.wdl")
         Main.compile(
             path.toString :: cFlags
         ) shouldBe a [Main.SuccessfulTerminationIR]
+    }
+
+    it should "compile a workflow calling a subworkflow as a direct call"  taggedAs(EdgeTag) in {
+        val path = pathFromBasename("draft2", "movies.wdl")
+        val bundle : IR.Bundle = Main.compile(path.toString :: dbgFlags) match {
+            case Main.SuccessfulTerminationIR(bundle) => bundle
+            case _ => throw new Exception(s"Failed to compile ${path}")
+        }
+        val (stage, applet) : (IR.Stage, IR.Applet) = bundle.primaryCallable match {
+            case Some(wf: IR.Workflow) =>
+                val stage  = wf.stages.head
+                val applet = bundle.allCallables(stage.calleeName) match {
+                    case apl : IR.Applet => apl
+                    case _ => throw new Exception("bad value")
+                }
+                (stage, applet)
+            case _ => throw new Exception("bad value in bundle")
+        }
+        applet.kind shouldBe a[IR.AppletKindWfFragment]
+        stage.stageName shouldBe ("review")
+        applet.name shouldBe ("review")
+
+        val wfSourceCode = applet.womSourceCode
+
+        val wf : WorkflowDefinition = ParseWomSourceFile.parseWdlWorkflow(wfSourceCode)
+
+        // sort from low to high according to the source lines.
+        val callToSrcLine = ParseWomSourceFile.scanForCalls(wfSourceCode)
+        val callsLoToHi : Vector[(String, Int)] = callToSrcLine.toVector.sortBy(_._2)
+
+        // Find the fragment block to execute
+        val block = Block.getSubBlock(Vector(0), wf.innerGraph, callsLoToHi)
+
+        /*
+        val dbgBlock = block.nodes.map{
+            WomPrettyPrintApproxWdl.apply(_)
+        }.mkString("\n")
+        System.out.println(s"""|Block:
+                               |${dbgBlock}
+                               |""".stripMargin)
+         */
+
+        val (_, category) = Block.categorize(block)
+        category shouldBe a[Block.CallDirect]
     }
 }

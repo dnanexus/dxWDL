@@ -259,7 +259,7 @@ case class GenerateIRWorkflow(wf : WorkflowDefinition,
             case None => "eval"
             case Some(name) => name
         }
-        Utils.trace(verbose.on, s"--- Compiling fragment <${stageName}> as stage")
+        Utils.trace(verbose.on, s"Compiling fragment <${stageName}> as stage")
 
         // Figure out the closure required for this block, out of the
         // environment
@@ -321,7 +321,6 @@ case class GenerateIRWorkflow(wf : WorkflowDefinition,
             case (_, LinkedVar(_, sArg)) => sArg
         }.toVector
 
-        Utils.trace(verbose.on, "---")
         (IR.Stage(stageName, genStageId(), applet.name, sArgs, outputVars),
          auxCallables :+ applet)
     }
@@ -351,13 +350,14 @@ case class GenerateIRWorkflow(wf : WorkflowDefinition,
             remainingBlocks = remainingBlocks.tail
 
             val (_, category) = Block.categorize(block)
+            Utils.trace(verbose.on, s"  category = ${category}")
             val (stage, auxCallables) = category match {
                 case Block.CallDirect(call) =>
                     // The block contains exactly one call, with no extra declarations.
                     // All the variables are already in the environment, so there
                     // is no need to do any extra work. Compile directly into a workflow
                     // stage.
-                    Utils.trace(verbose.on, s"--- Compiling call ${call.callable.name} as stage")
+                    Utils.trace(verbose.on, s"Compiling call ${call.callable.name} as stage")
                     val stage = compileCall(call, env, locked)
 
                     // Add bindings for the output variables. This allows later calls to refer
@@ -389,8 +389,8 @@ case class GenerateIRWorkflow(wf : WorkflowDefinition,
             s"    Stage(${stage.stageName}, callee=${stage.calleeName})"
         }.mkString("\n")
         Utils.trace(verbose2, s"""|stages for workflow ${wfName} =
-                                  |${stagesDbgStr}
-                                  |""".stripMargin)
+                                  |${stagesDbgStr}"""
+                        .stripMargin)
         (allStageInfo, env)
     }
 
@@ -595,6 +595,7 @@ case class GenerateIRWorkflow(wf : WorkflowDefinition,
     private def apply2(locked: Boolean, reorg: Boolean) : (IR.Workflow, Vector[IR.Callable]) =
     {
         Utils.trace(verbose.on, s"compiling workflow ${wf.name}")
+        Utils.traceLevelInc()
         val graph = wf.innerGraph
 
         // Create a stage per call/scatter-block/declaration-block
@@ -611,15 +612,18 @@ case class GenerateIRWorkflow(wf : WorkflowDefinition,
             }
 
         // Add a workflow reorg applet if necessary
-        if (reorg) {
-            val (reorgStage, reorgApl) = buildReorgStage(wf.name,
-                                                         wfSourceStandAlone,
-                                                         wfOutputs)
-            (irwf.copy(stages = irwf.stages :+ reorgStage),
-             irCallables :+ reorgApl)
-        } else {
-            (irwf, irCallables)
-        }
+        val (wf2, apl2)  =
+            if (reorg) {
+                val (reorgStage, reorgApl) = buildReorgStage(wf.name,
+                                                             wfSourceStandAlone,
+                                                             wfOutputs)
+                (irwf.copy(stages = irwf.stages :+ reorgStage),
+                 irCallables :+ reorgApl)
+            } else {
+                (irwf, irCallables)
+            }
+        Utils.traceLevelDec()
+        (wf2, apl2)
     }
 
 
@@ -642,13 +646,13 @@ case class GenerateIRWorkflow(wf : WorkflowDefinition,
                             |""".stripMargin)
                 }
         }
-
+/*
         val dbg = irCallables.map{
             case wf: IR.Workflow => s"Workflow(${wf.name})"
             case apl: IR.Applet => s"Applet(${apl.name})"
         }.mkString(", ")
         Utils.trace(verbose.on, s"created auxiliaries: ${dbg}")
-
+ */
         (irwf, irCallables)
     }
 }

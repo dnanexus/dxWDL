@@ -370,8 +370,10 @@ object Block {
         val calls : Seq[CallNode] = block.nodes.collect{
             case cNode : CallNode => cNode
         }
-        if (calls.size != 1)
+        if (calls.size != 1) {
+            System.out.println("=== calls.size != 1")
             return false
+        }
         val oneCall = calls.head
 
         // All the other nodes have to be call inputs
@@ -380,16 +382,21 @@ object Block {
         // have the -subsetOf- call.
         val rest = block.nodes.toSet - oneCall
         val callInputs = oneCall.upstream.toSet
-        if (!rest.subsetOf(callInputs))
+        if (!rest.subsetOf(callInputs)) {
+            System.out.println("=== missing inputs")
             return false
+        }
 
         // All the call inputs have to be simple expressions, if the call is
         // to be called "simple"
-        rest.forall{
+        val retval = rest.forall{
             case expr: TaskCallInputExpressionNode =>
                 isTrivialExpression(expr.womType, expr.womExpression)
             case _ => false
         }
+        if (!retval)
+            System.out.println("=== !retval")
+        retval
     }
 
 
