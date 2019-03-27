@@ -111,7 +111,7 @@ class WfFragRunnerTest extends FlatSpec with Matchers {
         val block = subBlocks(0)
 
         val env = Map.empty[String, WomValue]
-        val results : Map[String, WomValue] = fragRunner.evalExpressions(block.nodes, env, None)
+        val results : Map[String, WomValue] = fragRunner.evalExpressions(block.nodes, env)
         results should be(
             Map("full_name" -> WomArray(
                     WomArrayType(WomStringType),
@@ -135,7 +135,7 @@ class WfFragRunnerTest extends FlatSpec with Matchers {
         val block = subBlocks(0)
 
         val env = Map.empty[String, WomValue]
-        val results : Map[String, WomValue] = fragRunner.evalExpressions(block.nodes, env, None)
+        val results : Map[String, WomValue] = fragRunner.evalExpressions(block.nodes, env)
         results should be(
             Map("cats" -> WomOptionalValue(
                     WomStringType,
@@ -151,10 +151,9 @@ class WfFragRunnerTest extends FlatSpec with Matchers {
         val (wf, fragRunner) = setupFragRunner(dxPathConfig, dxIoFunctions, wfSourceCode)
         val (_, subBlocks, _) = Block.split(wf.innerGraph, wfSourceCode)
 
-        fragRunner.evalExpressions(subBlocks(0).nodes,
-                                   Map.empty[String, WomValue],
-                                   None) should
-        be (Map("z" -> WomOptionalValue(WomMaybeEmptyArrayType(WomIntegerType),None)))
+        val results = fragRunner.evalExpressions(subBlocks(0).nodes,
+                                                 Map.empty[String, WomValue])
+        results should be (Map("z" -> WomOptionalValue(WomMaybeEmptyArrayType(WomIntegerType),None)))
     }
 
     it should "create proper names for scatter results" in {
@@ -173,7 +172,7 @@ class WfFragRunnerTest extends FlatSpec with Matchers {
         svNode.identifier.localName.toString should be ("LocalName(x)")
     }
 
-/*    it should "handle draft-2" in {
+    it should "Make sure calls cannot be handled by evalExpressions" in {
         val path = pathFromBasename("draft2", "shapes.wdl")
         val wfSourceCode = Utils.readFileContent(path)
 
@@ -181,8 +180,25 @@ class WfFragRunnerTest extends FlatSpec with Matchers {
         val (wf, fragRunner) = setupFragRunner(dxPathConfig, dxIoFunctions, wfSourceCode)
         val (_, subBlocks, _) = Block.split(wf.innerGraph, wfSourceCode)
 
-        fragRunner.evalExpressions(subBlocks(1).nodes,
-                                   Map.empty[String, WomValue]) should
-        be (Map("i" -> WomInteger(10)))
-    }*/
+        // Make sure an exception is thrown if eval-expressions is called with
+        // a wdl-call.
+        assertThrows[Exception] {
+            fragRunner.evalExpressions(subBlocks(1).nodes,
+                                       Map.empty[String, WomValue])
+        }
+    }
+
+    it should "handles draft2" taggedAs(EdgeTest) in {
+        val path = pathFromBasename("draft2", "conditionals2.wdl")
+        val wfSourceCode = Utils.readFileContent(path)
+
+        val (dxPathConfig, dxIoFunctions) = setup()
+        val (wf, fragRunner) = setupFragRunner(dxPathConfig, dxIoFunctions, wfSourceCode)
+        val (_, subBlocks, _) = Block.split(wf.innerGraph, wfSourceCode)
+/*
+        val results = fragRunner.evalExpressions(subBlocks(0).nodes,
+                                                 Map.empty[String, WomValue])
+ Utils.ignore(results)*/
+        Utils.ignore(subBlocks)
+    }
 }
