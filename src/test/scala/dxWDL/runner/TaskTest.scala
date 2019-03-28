@@ -16,8 +16,8 @@ class TaskTest extends FlatSpec with Matchers {
     private val instanceTypeDB = InstanceTypeDB.genTestDB(true)
 
 
-    private def wdlValueToWVL(value: WomValue) : WdlVarLinks =
-        WdlVarLinks.importFromWDL(value.womType, DeclAttrs.empty, value, IODirection.Zero)
+    private def wdlValueToWVL(varName: String, value: WomValue) : WdlVarLinks =
+        WdlVarLinks.importFromWDL(varName, value.womType, DeclAttrs.empty, value, IODirection.Zero)
 
     private def makeOptional(value: WomValue) : WomValue =
         WomOptionalValue(value.womType, Some(value))
@@ -70,8 +70,8 @@ class TaskTest extends FlatSpec with Matchers {
     it should "calculate instance types" in {
         val taskRunner = makeTaskRunner("TA.wdl")
 
-        val inputs = Map("cpu" -> wdlValueToWVL(makeOptional(WomInteger(4))),
-                         "disks" -> wdlValueToWVL(makeOptional(WomString("50"))))
+        val inputs = Map("cpu" -> wdlValueToWVL("cpu", makeOptional(WomInteger(4))),
+                         "disks" -> wdlValueToWVL("disks", makeOptional(WomString("50"))))
         val instanceType = taskRunner.calcInstanceType(inputs)
         instanceType should equal("mem1_ssd1_x4")
     }
@@ -79,8 +79,8 @@ class TaskTest extends FlatSpec with Matchers {
     it should "calculate instance types with task declarations" in {
         val taskRunner = makeTaskRunner("TC.wdl")
 
-        val inputs = Map("base_mem_mb" -> wdlValueToWVL(WomInteger(5 * 1024)),
-                         "disk_gb" -> wdlValueToWVL(WomInteger(2)))
+        val inputs = Map("base_mem_mb" -> wdlValueToWVL("base_mem_mb", WomInteger(5 * 1024)),
+                         "disk_gb" -> wdlValueToWVL("disk_gb", WomInteger(2)))
         val instanceType = taskRunner.calcInstanceType(inputs)
         instanceType should equal("mem2_ssd1_x8")
     }
@@ -88,9 +88,9 @@ class TaskTest extends FlatSpec with Matchers {
     it should "evaluate a task with an empty command" in {
         val taskRunner = makeTaskRunner("TB.wdl")
 
-        val inputs = Map("hotel" -> wdlValueToWVL(WomString("Westin")),
-                         "city" -> wdlValueToWVL(WomString("Seattle")),
-                         "state" -> wdlValueToWVL(WomString("Washington")))
+        val inputs = Map("hotel" -> wdlValueToWVL("hotel", WomString("Westin")),
+                         "city" -> wdlValueToWVL("city", WomString("Seattle")),
+                         "state" -> wdlValueToWVL("state", WomString("Washington")))
         taskRunner.prolog(inputs)
         val results = taskRunner.epilog(inputs)
 
@@ -102,7 +102,7 @@ class TaskTest extends FlatSpec with Matchers {
     it should "correctly call the {floor, ceil, round} stdlib function" in {
         val taskRunner = makeTaskRunner("TD.wdl")
 
-        val inputs = Map("x" -> wdlValueToWVL(WomFloat(1.4)))
+        val inputs = Map("x" -> wdlValueToWVL("x", WomFloat(1.4)))
         taskRunner.prolog(inputs)
         val results = taskRunner.epilog(inputs)
 

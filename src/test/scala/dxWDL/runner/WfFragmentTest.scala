@@ -18,8 +18,8 @@ class WfFragmentTest extends FlatSpec with Matchers {
     private def wdlValueFromWVL(wvl: WdlVarLinks) : WomValue =
         WdlVarLinks.eval(wvl, IOMode.Remote, IODirection.Zero)
 
-    private def wdlValueToWVL(value: WomValue) : WdlVarLinks =
-        WdlVarLinks.importFromWDL(value.womType, DeclAttrs.empty, value, IODirection.Zero)
+    private def wdlValueToWVL(varName: String, value: WomValue) : WdlVarLinks =
+        WdlVarLinks.importFromWDL(varName, value.womType, DeclAttrs.empty, value, IODirection.Zero)
 
     private def makeOptional(value: WomValue) : WomValue = {
         WomOptionalValue(value.womType, Some(value))
@@ -154,7 +154,7 @@ class WfFragmentTest extends FlatSpec with Matchers {
 
     it should "handle missing values in select_first/defined" in {
         val inputs = Map("flag" ->
-                             wdlValueToWVL(makeOptionalNone(WomBooleanType)))
+                             wdlValueToWVL("flag", makeOptionalNone(WomBooleanType)))
         val results: Map[String, WomValue] = evalWorkflow("select.wdl", inputs)
 
         results.keys.toVector should contain("x")
@@ -166,7 +166,7 @@ class WfFragmentTest extends FlatSpec with Matchers {
 
     it should "handle missing values in select_first" in {
         val inputs = Map("x" ->
-                             wdlValueToWVL(makeOptionalNone(WomIntegerType)))
+                             wdlValueToWVL("x", makeOptionalNone(WomIntegerType)))
         val results: Map[String, WomValue] = evalWorkflow("select2.wdl", inputs)
 
         results.keys.toVector should contain("y")

@@ -258,8 +258,8 @@ case class WfFragment(nswf: WdlNamespaceWithWorkflow,
     private def wdlValueFromWVL(wvl: WdlVarLinks) : WomValue =
         WdlVarLinks.eval(wvl, IOMode.Remote, IODirection.Zero)
 
-    private def wdlValueToWVL(t:WomType, wdlValue:WomValue) : WdlVarLinks = {
-        WdlVarLinks.importFromWDL(t, DeclAttrs.empty, wdlValue, IODirection.Zero)
+    private def wdlValueToWVL(name: String, t:WomType, wdlValue:WomValue) : WdlVarLinks = {
+        WdlVarLinks.importFromWDL(name, t, DeclAttrs.empty, wdlValue, IODirection.Zero)
     }
 
     private def lookupInEnv(env: Env)(varName : String) : WomValue = {
@@ -309,7 +309,7 @@ case class WfFragment(nswf: WdlNamespaceWithWorkflow,
 
         val wvlInputs = inputs.map{ case (name, womValue) =>
             val womType = linkInfo.inputs(name)
-            name -> wdlValueToWVL(womType, womValue)
+            name -> wdlValueToWVL(name, womType, womValue)
         }.toMap
 
         val m = wvlInputs.foldLeft(Map.empty[String, JsValue]) {
@@ -857,7 +857,7 @@ case class WfFragment(nswf: WdlNamespaceWithWorkflow,
 
                 val declOutputs = envEnd.decls.flatMap{
                     case (varName, ElemWom(_,womType, value)) if exportTypes contains varName =>
-                        Some(varName -> wdlValueToWVL(womType, value))
+                        Some(varName -> wdlValueToWVL(varName, womType, value))
                     case (_,_) =>
                         None
                 }.toMap
@@ -890,7 +890,7 @@ case class WfFragment(nswf: WdlNamespaceWithWorkflow,
                                 val fullName = s"${call.unqualifiedName}_${cot.unqualifiedName}"
                                 val womType = exportTypes(fullName)
                                 val value: WomValue = collectCallField(cot.unqualifiedName, womType, aggr)
-                                fullName -> wdlValueToWVL(womType, value)
+                                fullName -> wdlValueToWVL(fullName, womType, value)
                             }.toMap
                             accu ++ fields
                     }

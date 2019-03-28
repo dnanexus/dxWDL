@@ -1,5 +1,10 @@
 # Release Notes
 
+## 0.81.5
+- Adding debug information to conversions from JSON to WDL variables. This helps
+track down runtime problems with missing variables that a task is expecting. Previously,
+we didn't know which variable was having a problem.
+
 ## 0.81.4
 - Bug fix for complex cases where WDL files import each other.
 

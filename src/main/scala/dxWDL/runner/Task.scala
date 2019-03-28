@@ -649,7 +649,8 @@ case class Task(task:WdlTask,
         // Upload any output files to the platform.
         val wvlOutputs:Map[String, WdlVarLinks] = outputs.map{ case (decl, wdlValue) =>
             // The declaration type is sometimes more accurate than the type of the wdlValue
-            val wvl = WdlVarLinks.importFromWDL(decl.womType,
+            val wvl = WdlVarLinks.importFromWDL(decl.unqualifiedName,
+                                                decl.womType,
                                                 DeclAttrs.empty, wdlValue, IODirection.Upload)
             decl.unqualifiedName -> wvl
         }.toMap
