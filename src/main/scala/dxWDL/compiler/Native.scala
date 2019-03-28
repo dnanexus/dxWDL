@@ -74,7 +74,8 @@ case class Native(dxWDLrtId: String,
         val defaultVals:Map[String, JsValue] = cVar.attrs.getDefault match {
             case None => Map.empty
             case Some(wdlValue) =>
-                val wvl = WdlVarLinks.importFromWDL(cVar.womType,
+                val wvl = WdlVarLinks.importFromWDL(name,
+                                                    cVar.womType,
                                                     DeclAttrs.empty,
                                                     wdlValue,
                                                     IODirection.Zero)
@@ -758,7 +759,8 @@ case class Native(dxWDLrtId: String,
                         // in a value at runtime.
                         m
                     case IR.SArgConst(wValue) =>
-                        val wvl = WdlVarLinks.importFromWDL(cVar.womType, cVar.attrs, wValue, IODirection.Zero)
+                        val wvl = WdlVarLinks.importFromWDL(cVar.dxVarName, cVar.womType,
+                                                            cVar.attrs, wValue, IODirection.Zero)
                         val fields = WdlVarLinks.genFields(wvl, cVar.dxVarName)
                         m ++ fields.toMap
                     case IR.SArgLink(stageName, argName) =>

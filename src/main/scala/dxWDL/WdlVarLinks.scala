@@ -359,12 +359,14 @@ object WdlVarLinks {
     // 1. Make a pass on the object, upload any files, and keep an in-memory JSON representation
     // 2. In memory we have a, potentially very large, JSON value. This can be handled pretty
     //    well by the platform as a dx:hash.
-    private def jsFromWomValue(womType: WomType,
+    private def jsFromWomValue(varName: String,
+                               womType: WomType,
                                womValue: WomValue,
                                ioDir: IODirection.Value) : JsValue = {
         if (isDoubleOptional(womType) ||
                 isDoubleOptional(womValue.womType)) {
             System.err.println(s"""|jsFromWomValue
+                                   |    name=${varName}
                                    |    type=${womType.toDisplayString}
                                    |    val=${womValue.toWomString}
                                    |    val.type=${womValue.womType.toDisplayString}
@@ -417,15 +419,15 @@ object WdlVarLinks {
             case (WomFloatType, WomString(s)) => JsNumber(s.toFloat)
 
             case (WomPairType(lType, rType), WomPair(l,r)) =>
-                val lJs = jsFromWomValue(lType, l, ioDir)
-                val rJs = jsFromWomValue(rType, r, ioDir)
+                val lJs = jsFromWomValue(varName, lType, l, ioDir)
+                val rJs = jsFromWomValue(varName, rType, r, ioDir)
                 JsObject("left" -> lJs, "right" -> rJs)
 
             case (WomMapType(WomStringType, valueType), WomMap(_, m)) =>
                 // keys are strings
                 JsObject(m.map{
                              case (WomString(k), v) =>
-                                 k -> jsFromWomValue(valueType, v, ioDir)
+                                 k -> jsFromWomValue(varName, valueType, v, ioDir)
                              case (k,_) =>
                                  throw new Exception(s"key ${k.toWomString} should be a WomString")
                          }.toMap)
@@ -437,9 +439,9 @@ object WdlVarLinks {
             case (WomMapType(keyType, valueType), WomMap(_, m)) =>
                 // general case
                 val keys:WomValue = WomArray(WomArrayType(keyType), m.keys.toVector)
-                val kJs = jsFromWomValue(keys.womType, keys, ioDir)
+                val kJs = jsFromWomValue(varName, keys.womType, keys, ioDir)
                 val values:WomValue = WomArray(WomArrayType(valueType), m.values.toVector)
-                val vJs = jsFromWomValue(values.womType, values, ioDir)
+                val vJs = jsFromWomValue(varName, values.womType, values, ioDir)
                 JsObject("keys" -> kJs, "values" -> vJs)
 
             // Arrays: these come after maps, because there is an automatic coercion from
@@ -453,7 +455,7 @@ object WdlVarLinks {
 
             // Non empty array
             case (WomArrayType(t), WomArray(_, elems)) =>
-                val jsVals = elems.map{ x => jsFromWomValue(t, x, ioDir) }
+                val jsVals = elems.map{ x => jsFromWomValue(varName, t, x, ioDir) }
                 JsArray(jsVals.toVector)
 
             // keys are strings, requiring no conversion. Because objects
@@ -461,19 +463,19 @@ object WdlVarLinks {
             case (WomObjectType, WomObject(m: Map[String, WomValue], _)) =>
                 val jsm:Map[String, JsValue] = m.map{ case (key, w:WomValue) =>
                     key -> JsObject("type" -> JsString(w.womType.toDisplayString),
-                                    "value" -> jsFromWomValue(w.womType, w, ioDir))
+                                    "value" -> jsFromWomValue(varName, w.womType, w, ioDir))
                 }.toMap
                 JsObject(jsm)
 
             // Strip optional type
             case (WomOptionalType(t), WomOptionalValue(_,Some(w))) =>
-                jsFromWomValue(t, w, ioDir)
+                jsFromWomValue(varName, t, w, ioDir)
             case (WomOptionalType(t), WomOptionalValue(_,None)) =>
                 JsNull
             case (WomOptionalType(t), w) =>
-                jsFromWomValue(t, w, ioDir)
+                jsFromWomValue(varName, t, w, ioDir)
             case (t, WomOptionalValue(_,Some(w))) =>
-                jsFromWomValue(t, w, ioDir)
+                jsFromWomValue(varName, t, w, ioDir)
 
             case (_,_) =>
                 val womTypeStr =
@@ -487,17 +489,19 @@ object WdlVarLinks {
                     else
                         s"(${womValue.toWomString}, ${womValue.womType.toDisplayString})"
                 throw new Exception(s"""|Unsupported combination:
+                                        |    name:     ${varName}
                                         |    womType:  ${womTypeStr}
                                         |    womValue: ${womValueStr}""".stripMargin)
         }
     }
 
     // import a WDL value
-    def importFromWDL(womType: WomType,
+    def importFromWDL(varName: String,
+                      womType: WomType,
                       attrs: DeclAttrs,
                       womValue: WomValue,
                       ioDir: IODirection.Value) : WdlVarLinks = {
-        val jsValue = jsFromWomValue(womType, womValue, ioDir)
+        val jsValue = jsFromWomValue(varName, womType, womValue, ioDir)
         WdlVarLinks(womType, attrs, DxlValue(jsValue))
     }
 
