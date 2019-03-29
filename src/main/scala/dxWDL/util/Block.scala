@@ -164,8 +164,8 @@ object Block {
     }
 
     // Find the toplevel graph node that contains this call
-    private def findCallByName(callName: String,
-                               nodes: Set[GraphNode]) : Option[GraphNode] = {
+    def findCallByName(callName: String,
+                       nodes: Set[GraphNode]) : Option[GraphNode] = {
         val gnode: Option[GraphNode] = nodes.find{
             case callNode: CallNode =>
                 callNode.identifier.localName.value == callName

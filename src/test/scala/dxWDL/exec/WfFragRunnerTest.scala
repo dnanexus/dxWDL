@@ -231,16 +231,45 @@ class WfFragRunnerTest extends FlatSpec with Matchers {
                             WomOptionalValue(WomIntegerType, Some(WomInteger(100))))))
     }
 
-    it should "evaluate call inputs properly" taggedAs(EdgeTest) in {
-        val path = pathFromBasename("draft2", "conditionals1.wdl")
-        val wfSourceCode = Utils.readFileContent(path)
 
+    // find the call
+    private def findCallByName(callName: String,
+                               graph: Graph) : CallNode = {
+        val allCalls = graph.allNodes.collect{
+            case call: CallNode => call
+        }
+        val callNode = allCalls.find{
+            case callNode: CallNode =>
+                callNode.identifier.localName.value == callName
+        }
+        callNode match {
+            case None => throw new Exception(s"call ${callName} not found")
+            case Some(x : CallNode) => x
+            case Some(other) => throw new Exception(s"call ${callName} found with wrong class ${other}")
+        }
+    }
+
+    it should "evaluate call inputs properly" taggedAs(EdgeTest) in {
+        val path = pathFromBasename("draft2", "various_calls.wdl")
+        val wfSourceCode = Utils.readFileContent(path)
         val (dxPathConfig, dxIoFunctions) = setup()
         val (wf, fragRunner) = setupFragRunner(dxPathConfig, dxIoFunctions, wfSourceCode)
-        val (_, subBlocks, _) = Block.split(wf.innerGraph, wfSourceCode)
 
-        /*val results = fragRunner.evalExpressions(subBlocks(0).nodes,
-                                                 Map.empty[String, WomValue])
-        results.keys should be(Set("powers10", "i1", "i2", "i3"))*/
+        val call1 = findCallByName("MaybeInt", wf.innerGraph)
+        val callInputs1: Map[String, WomValue] = fragRunner.evalCallInputs(call1,
+                                                                           Map("i" -> WomInteger(1)))
+        callInputs1 should be(Map("a" -> WomOptionalValue(WomIntegerType,
+                                                          Some(WomInteger(1)))))
+
+        val call2 = findCallByName("ManyArgs", wf.innerGraph)
+        val callInputs2: Map[String, WomValue] = fragRunner.evalCallInputs(
+            call2,
+            Map("powers10"-> WomArray(WomArrayType(WomIntegerType),
+                                      Vector(WomInteger(1), WomInteger(10)))
+            ))
+
+        callInputs2 should be(Map("a" -> WomString("hello"),
+                                  "b" -> WomArray(WomArrayType(WomIntegerType),
+                                                  Vector(WomInteger(1), WomInteger(10)))))
     }
 }
