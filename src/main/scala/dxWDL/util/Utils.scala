@@ -19,7 +19,6 @@ import wom.types._
 object Utils {
     val APPLET_LOG_MSG_LIMIT = 1000
     val CHECKSUM_PROP = "dxWDL_checksum"
-    val COMMON = "common"
     val DEFAULT_INSTANCE_TYPE = "mem1_ssd1_x4"
     val DEFAULT_RUNTIME_DEBUG_LEVEL = 1
     val DX_URL_PREFIX = "dx://"
@@ -33,8 +32,6 @@ object Utils {
     val MAX_STRING_LEN = 8 * 1024     // Long strings cause problems with bash and the UI
     val MAX_STAGE_NAME_LEN = 60       // maximal length of a workflow stage name
     val MAX_NUM_FILES_MOVE_LIMIT = 1000
-    val OUTPUT_SECTION = "outputs"
-    val REORG = "reorg"
     val META_INFO = "_metaInfo"
     val RESERVED_APPLET_INPUT_NAMES = Set(META_INFO)
     val UBUNTU_VERSION = "16.04"

@@ -199,6 +199,26 @@ class BlockTest extends FlatSpec with Matchers {
         catg02 shouldBe a[Block.CallCompound]
     }
 
+    it should "handle calls to imported modules II" taggedAs(EdgeTest) in {
+        val path = pathFromBasename("draft2", "block_category.wdl")
+        val (language, womBundle: WomBundle, allSources, _) = ParseWomSourceFile.apply(path)
+
+        val (_, wfSource) = allSources.find {
+            case (name, _) => name.endsWith("block_category.wdl")
+        }.get
+
+        val wf: WorkflowDefinition = womBundle.primaryCallable match {
+            case Some(wf: WorkflowDefinition) => wf
+            case _ => throw new Exception("sanity")
+        }
+        val graph = wf.innerGraph
+        val (inputNodes, subBlocks, outputNodes) = Block.split(graph, wfSource)
+
+        val b = subBlocks(0)
+        val (_, catg) = Block.categorize(b)
+        catg shouldBe a[Block.Cond]
+    }
+
     it should "handle calls to imported modules" in {
         val path = pathFromBasename("draft2", "conditionals1.wdl")
         val (language, womBundle: WomBundle, allSources, _) = ParseWomSourceFile.apply(path)
@@ -225,7 +245,7 @@ class BlockTest extends FlatSpec with Matchers {
         }
     }
 
-    it should "compile a workflow calling a subworkflow as a direct call"  taggedAs(EdgeTest) in {
+    it should "compile a workflow calling a subworkflow as a direct call" in {
         val path = pathFromBasename("draft2", "movies.wdl")
         val (language, womBundle: WomBundle, allSources, _) = ParseWomSourceFile.apply(path)
 
@@ -259,7 +279,7 @@ class BlockTest extends FlatSpec with Matchers {
     }
 
 
-    it should "sort a block correctly in the presence of conditionals" taggedAs(EdgeTest) in {
+    it should "sort a block correctly in the presence of conditionals" in {
         val path = pathFromBasename("draft2", "conditionals3.wdl")
         val wfSourceCode = Utils.readFileContent(path)
         val wf : WorkflowDefinition = ParseWomSourceFile.parseWdlWorkflow(wfSourceCode)
@@ -273,21 +293,24 @@ class BlockTest extends FlatSpec with Matchers {
         exprVec.size should be(1)
         val arrayCalc : ExposedExpressionNode = exprVec.head
         arrayCalc.womExpression.sourceString should be("[i1, i2, i3]")
+    }
 
-        // All this looks good
-/*        val s = WomPrettyPrint.apply(arrayCalc)
-        System.out.println(s"node = ${s}")
-        System.out.println("upstream ancestry")
-        val dependencies: Set[GraphNode] = arrayCalc.upstreamAncestry
-        dependencies.foreach{ n =>
-            System.out.println(WomPrettyPrint.apply(n))
+    it should "find the correct number of scatters" in {
+        val path = pathFromBasename("draft2", "conditionals_base.wdl")
+        val (_, womBundle: WomBundle, allSources, _) = ParseWomSourceFile.apply(path)
+
+        val (_, wfSource) = allSources.find {
+            case (name, _) => name.endsWith("conditionals_base.wdl")
+        }.get
+
+        val wf: WorkflowDefinition = womBundle.primaryCallable match {
+            case Some(wf: WorkflowDefinition) => wf
+            case _ => throw new Exception("sanity")
         }
-
-        System.out.println(b0.prettyPrint)
-
-/*        for (i <- 0 to b0.nodes.length - 1) {
-            val n = b0.nodes(i)
-            System.out.println(s"node ${i} = ${WomPrettyPrint.apply(n)}")
-        }*/ */
+        val nodes = wf.innerGraph.allNodes
+        val scatters : Set[ScatterNode] = nodes.collect{
+            case n : ScatterNode => n
+        }
+        scatters.size should be(1)
     }
 }

@@ -437,10 +437,9 @@ object Block {
         // The only other kind of nodes could be inputs, outputs, and task input expressions.
         nodes.forall{
             case _: CallNode => true
-            case _: TaskCallInputExpressionNode => true
-            case _: OuterGraphInputNode => true
+            case _: GraphInputNode => true
             case _: GraphOutputNode => true
-            case _: PlainAnonymousExpressionNode => true
+            case _: AnonymousExpressionNode => true
             case other => false
         }
     }
@@ -456,6 +455,15 @@ object Block {
     sealed trait Category {
         def getInnerGraph : Graph =
             throw new UnsupportedOperationException(s"$getClass does not implement getInnerGraph")
+        override def toString : String = {
+            // convert Block$Cond to Cond
+            val fullClassName = this.getClass.toString
+            val index = fullClassName.lastIndexOf('$')
+            if (index == -1)
+                fullClassName
+            else
+                fullClassName.substring(index + 1)
+        }
     }
     case object AllExpressions extends Category
     case class CallDirect(value: CallNode) extends Category

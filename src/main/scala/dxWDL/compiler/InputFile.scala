@@ -22,7 +22,7 @@ package dxWDL.compiler
 
 import com.dnanexus.{DXDataObject, DXFile}
 import dxWDL.util._
-import IR.{CVar, SArg}
+import IR.{CVar, SArg, COMMON, OUTPUT_SECTION, REORG}
 import scala.collection.mutable.HashMap
 import java.nio.file.Path
 import spray.json._
@@ -221,7 +221,7 @@ case class InputFile(verbose: Verbose) {
                                    prefix: String,
                                    callee: IR.Callable,
                                    defaultFields: HashMap[String, JsValue]) : IR.Stage = {
-        Utils.trace(verbose2, s"addDefaultToStage ${stg.stageName}")
+        Utils.trace(verbose2, s"addDefaultToStage ${stg.id.getId}, ${stg.description}")
         val inputsFull:Vector[(SArg,CVar)] = stg.inputs.zipWithIndex.map{
             case (sArg,idx) =>
                 val cVar = callee.inputVars(idx)
@@ -294,18 +294,18 @@ case class InputFile(verbose: Verbose) {
 
                 val stagesWithDefaults = wf.stages.map{ stg =>
                     val callee:IR.Callable = callables(stg.calleeName)
-                    if (stg.stageName == Utils.COMMON) {
+                    if (stg.id.getId == s"stage-${COMMON}") {
                         addDefaultsToStage(stg, wf.name, callee, defaultFields)
                     } else {
-                        addDefaultsToStage(stg, s"${wf.name}.${stg.stageName}", callee, defaultFields)
+                        addDefaultsToStage(stg, s"${wf.name}.${stg.id.getId}", callee, defaultFields)
                     }
                 }
                 wf.copy(stages = stagesWithDefaults)
             }
 
         // check that the stage order hasn't changed
-        val allStageNames = wf.stages.map{ stg => stg.stageName }.toVector
-        val embedAllStageNames = wfWithDefaults.stages.map{ stg => stg.stageName }.toVector
+        val allStageNames = wf.stages.map{ _.id }.toVector
+        val embedAllStageNames = wfWithDefaults.stages.map{ _.id }.toVector
         assert(allStageNames == embedAllStageNames)
 
         wfWithDefaults
@@ -442,9 +442,11 @@ case class InputFile(verbose: Verbose) {
                 }
 
                 // Inputs for top level calls
-                val auxStages = Set(Utils.COMMON, Utils.OUTPUT_SECTION, Utils.REORG)
+                val auxStages = Set(s"stage-${COMMON}",
+                                    s"stage-${OUTPUT_SECTION}",
+                                    s"stage-${REORG}")
                 val middleStages = wf.stages.filter{ stg =>
-                    !(auxStages contains stg.stageName)
+                    !(auxStages contains stg.id.getId)
                 }
                 middleStages.foreach{ stg =>
                     // Find the input definitions for the stage, by locating the callee
@@ -454,7 +456,7 @@ case class InputFile(verbose: Verbose) {
                         case Some(x) => x
                     }
                     callee.inputVars.foreach { cVar =>
-                        val fqn = s"${wf.name}.${stg.stageName}.${cVar.name}"
+                        val fqn = s"${wf.name}.${stg.id.getId}.${cVar.name}"
                         val dxName = s"${stg.id.getId}.${cVar.name}"
                         cif.checkAndBind(fqn, dxName, cVar)
                     }

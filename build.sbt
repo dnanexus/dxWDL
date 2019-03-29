@@ -57,7 +57,7 @@ logLevel in assembly := Level.Info
 assemblyOutputPath in assembly := file("applet_resources/resources/dxWDL.jar")
 assemblyMergeStrategy in assembly := customMergeStrategy.value
 
-val cromwellV = "38"
+val cromwellV = "39"
 
 libraryDependencies ++= Seq(
     "org.broadinstitute" %% "cromwell-common" % cromwellV,
@@ -92,4 +92,4 @@ Test / testOptions += Tests.Argument("-l", "native")
 Test / parallelExecution := false
 
 // comment out this line to enable tests in assembly
-test in assembly := {}
+//test in assembly := {}

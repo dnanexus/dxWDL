@@ -47,22 +47,19 @@ wdl_v1_list = [
 ]
 
 # wdl draft-2
-draft2_basic = [
+draft2_test_list = [
     "advanced",
     "bad_status",
     "bad_status2",
     "call_with_defaults1",
     "call_with_defaults2",
     "conditionals_base",
-    "decl_mid_wf",
     "files",
     "files_with_the_same_name",
     "hello",
-    "math",
-    "shapes"
-]
+    "shapes",
 
-draft2_subworkflows = [
+    # subworkflows
     "conditionals2",
     "modulo",
     "movies",
@@ -70,8 +67,6 @@ draft2_subworkflows = [
     "subblocks",
     "var_type_change"
 ]
-
-draft2_test_list = draft2_basic + draft2_subworkflows
 
 medium_test_list= wdl_v1_list
 large_test_list= draft2_test_list + wdl_v1_list
@@ -187,7 +182,10 @@ def validate_result(tname, exec_outputs, key, expected_val):
     # output "count":
     #    'math.count' -> count
     exec_name = key.split('.')[0]
-    field_name = key.split('.')[1]
+    field_name_parts = key.split('.')[1:]
+
+    # convert dots to ___
+    field_name = "___".join(field_name_parts)
     if exec_name != tname:
         raise RuntimeError("Key {} is invalid, must start with {} name".format(key, desc.kind))
     try:
@@ -311,9 +309,9 @@ def extract_outputs(tname, exec_obj):
             stages = exec_obj['stages']
             for snum in range(len(stages)):
                 crnt = stages[snum]
-                if crnt['id'] == 'stage-last':
+                if crnt['id'] == 'stage-outputs':
                     return stages[snum]['execution']['output']
-            raise RuntimeError("Analysis for test {} does not have stage 'last'".format(tname))
+            raise RuntimeError("Analysis for test {} does not have stage 'outputs'".format(tname))
     elif desc.kind == "applet":
         return exec_obj['output']
     else:

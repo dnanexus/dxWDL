@@ -160,14 +160,7 @@ class GenerateIRTest extends FlatSpec with Matchers {
         ) shouldBe a [Main.SuccessfulTerminationIR]
     }
 
-    it should "handle various conditionals" in {
-        val path = pathFromBasename("draft2", "conditionals_base.wdl")
-        Main.compile(
-            path.toString :: cFlags
-        ) shouldBe a [Main.SuccessfulTerminationIR]
-    }
-
-    it should "compile a workflow calling a subworkflow as a direct call"  taggedAs(EdgeTest) in {
+    it should "compile a workflow calling a subworkflow as a direct call" in {
         val path = pathFromBasename("draft2", "movies.wdl")
         val bundle : IR.Bundle = Main.compile(path.toString :: cFlags) match {
             case Main.SuccessfulTerminationIR(bundle) => bundle
@@ -181,6 +174,26 @@ class GenerateIRTest extends FlatSpec with Matchers {
             case _ => throw new Exception("bad value in bundle")
         }
         val stage = wf.stages.head
-        stage.stageName shouldBe ("review")
+        stage.description shouldBe ("review")
+    }
+
+    it should "three nesting levels" taggedAs(EdgeTest) in {
+        val path = pathFromBasename("nested", "three_levels.wdl")
+        val retval = Main.compile(
+            path.toString
+//                :: "--verbose"
+//                :: "--verboseKey" :: "GenerateIR"
+                :: cFlags
+        )
+        retval shouldBe a [Main.SuccessfulTerminationIR]
+        val callable : IR.Callable = retval match {
+            case Main.SuccessfulTerminationIR(ir) => ir.primaryCallable.get
+            case _ => throw new Exception("sanity")
+        }
+        val wf = callable match {
+            case wf : IR.Workflow => wf
+            case _ => throw new Exception("sanity")
+        }
+        Utils.ignore(wf)
     }
 }

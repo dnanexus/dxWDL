@@ -3,7 +3,7 @@ import "library_math.wdl" as lib
 workflow conditionals_base {
     # Return null from an optional
     if (true) {
-        call lib.MaybeInt as empty
+        call lib.z_MaybeInt as mi1
     }
     if (true) {
         call nonEmptyArray
@@ -24,12 +24,12 @@ workflow conditionals_base {
 
     # scatter that returns an optional type
     scatter (i in powers10) {
-        call lib.MaybeInt { input: a=i }
+        call lib.z_MaybeInt as mi2 { input: a=i }
     }
-    Array[Int] r =select_all(MaybeInt.result)
+    Array[Int] r =select_all(mi2.result)
 
     output {
-        Int? e = empty.result
+        Int? e = mi1.result
         Array[Int] results = r
         Array[Int]+? nea = nonEmptyArray.results
     }

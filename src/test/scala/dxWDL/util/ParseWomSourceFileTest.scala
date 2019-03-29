@@ -124,7 +124,7 @@ class ParseWomSourceFileTest extends FlatSpec with Matchers {
                                 "id" -> "applet-xxxx"))
     }
 
-    ignore should "parse the meta section in wdl 1.0 --- doesn't work in cromwell v37,v38" in {
+    it should "parse the meta section in wdl 1.0" in {
         val srcCode =
             """|version 1.0
                |

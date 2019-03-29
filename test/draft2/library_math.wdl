@@ -37,3 +37,13 @@ task z_mul {
         Int result = read_int(stdout())
     }
 }
+
+
+task z_MaybeInt {
+    Int? a
+    command {
+    }
+    output {
+        Int? result = a
+    }
+}

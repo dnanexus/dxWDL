@@ -16,11 +16,7 @@ workflow files {
 #    }
 
     # Create an applet that ignores every input file
-#    call IgnoreAll
-
-    call write_lines_bug {
-        input: files = [f, f1]
-    }
+    call IgnoreAll { input: files = [] }
 
     # Try an applet that streams two files
     call lib.diff as diff1 {
@@ -89,7 +85,6 @@ workflow files {
     }
 
    output {
-       # String write_lines_bug_result = write_lines_bug.result
        Int diff1_result = diff1.result
        Int diff2_result = diff2.result
        Array[File] FindFiles_texts = FindFiles.texts
@@ -101,23 +96,6 @@ workflow files {
    }
 }
 
-
-# This is commented out, because there is some problem running it
-# with docker.
-task write_lines_bug {
-    Array[File] files
-
-    command <<<
-    filenames=${write_lines(files)}
-    cat $filenames
-    >>>
-    output {
-        String result = read_string(stdout())
-    }
-    runtime {
-        docker: "ubuntu:16.04"
-    }
-}
 
 # Trying out file copy operations
 task z_Copy {

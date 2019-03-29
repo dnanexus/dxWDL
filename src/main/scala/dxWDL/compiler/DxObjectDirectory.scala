@@ -76,7 +76,7 @@ case class DxObjectDirectory(ns: IR.Bundle,
         val diffMSec = (t1 -t0) / (1000 * 1000)
         Utils.trace(verbose.on,
                     s"""|Found ${nrApplets} applets and ${nrWorkflows}
-                        |workflows in ${dxProject.getId}/${folder} (${diffMSec} millisec)"""
+                        |workflows in ${dxProject.getId} folder=${folder} (${diffMSec} millisec)"""
                         .stripMargin.replaceAll("\n", " "))
 
         // Leave only dx:objects that could belong to the workflow
@@ -139,7 +139,7 @@ case class DxObjectDirectory(ns: IR.Bundle,
         val t1 = System.nanoTime()
         val diffMSec = (t1 -t0) / (1000 * 1000)
         Utils.trace(verbose.on,
-                    s"Found ${nrApplets} applets in project (${diffMSec} millisec)")
+                    s"Found ${nrApplets} applets in project ${dxProject.getId} (${diffMSec} millisec)")
 
         val hm = HashMap.empty[String, Vector[(DXDataObject, DXDataObject.Describe)]]
         dxAppletsInProject.foreach{ dxApplet =>

@@ -26,9 +26,10 @@ class NativeTest extends FlatSpec with Matchers {
                                         |the platform""".stripMargin)
         }
     lazy val cFlags = List("-compileMode", "NativeWithoutRuntimeAsset",
-                                 "-project", dxTestProject.getId,
-                                 "-force",
-                                 "-locked")
+                           "-project", dxTestProject.getId,
+                           "-folder", "/unit_tests",
+                           "-force",
+                           "-locked")
 
     it should "Native compile a single WDL task" taggedAs(NativeTestXX) in {
         val path = pathFromBasename("compiler", "add.wdl")
@@ -72,7 +73,7 @@ class NativeTest extends FlatSpec with Matchers {
         ) shouldBe a [Main.SuccessfulTermination]
     }
 
-    it should "handle various conditionals" taggedAs(EdgeTest) in {
+    it should "handle various conditionals" taggedAs(NativeTestXX, EdgeTest) in {
         val path = pathFromBasename("draft2", "conditionals_base.wdl")
         Main.compile(
             path.toString
