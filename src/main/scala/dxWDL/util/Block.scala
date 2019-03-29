@@ -47,6 +47,12 @@ case class Block(nodes : Vector[GraphNode]) {
             |]""".stripMargin
     }
 
+    def prettyPrintApproxWdl: String = {
+        nodes.map{
+            WomPrettyPrintApproxWdl.apply(_)
+        }.mkString("\n")
+    }
+
     // Check that this block is valid.
     // 1) It can have zero or one top-level calls
     def validate() : Unit = {
@@ -101,11 +107,12 @@ object Block {
     // A trivial expression has no operators, it is either a constant WomValue
     // or a single identifier. For example: '5' and 'x' are trivial. 'x + y'
     // is not.
-    def isTrivialExpression(expr: WomExpression) : Boolean = {
+    def isTrivialExpression(womType: WomType,
+                            expr: WomExpression) : Boolean = {
         val inputs = expr.inputs
         if (inputs.size > 1)
             return false
-        if (Utils.isExpressionConst(expr))
+        if (WomValueAnalysis.isExpressionConst(womType, expr))
             return true
         // The expression may have one input, but could still have an operator.
         // For example: x+1, x + x.
@@ -119,7 +126,8 @@ object Block {
         node match {
             case call : CallNode =>
                 call.inputDefinitionMappings.forall{
-                    case (_, expr: WomExpression) => isTrivialExpression(expr)
+                    case (inputDef, expr: WomExpression) =>
+                        isTrivialExpression(inputDef.womType, expr)
                     case (_, _) => true
                 }
             case _ => false
@@ -156,9 +164,9 @@ object Block {
     }
 
     // Find the toplevel graph node that contains this call
-    private def findCallByName(callName: String,
-                               nodes: Set[GraphNode]) : Option[GraphNode] = {
-        nodes.find{
+    def findCallByName(callName: String,
+                       nodes: Set[GraphNode]) : Option[GraphNode] = {
+        val gnode: Option[GraphNode] = nodes.find{
             case callNode: CallNode =>
                 callNode.identifier.localName.value == callName
             case cNode: ConditionalNode =>
@@ -167,6 +175,16 @@ object Block {
                 graphContainsCall(callName, scNode.innerGraph.nodes)
             case _ => false
         }
+/*        gnode match {
+            case None =>
+                System.out.println(s"findCallByName(${callName}) failed")
+            case Some(x) =>
+                System.out.println(s"""|findCallByName(${callName})
+                                       |${WomPrettyPrintApproxWdl.apply(x)}
+                                       |
+                                       |""".stripMargin)
+        }*/
+        gnode
     }
 
     private def pickTopNodes(nodes: Set[GraphNode]) = {
@@ -244,7 +262,6 @@ object Block {
              Vector[Block], // blocks
              Vector[GraphOutputNode]) // outputs
     = {
-        //System.out.println(s"SplitIntoBlocks ${nodes.size} nodes")
         assert(graph.nodes.size > 0)
         var rest : Set[GraphNode] = graph.nodes
         var blocks = Vector.empty[Block]
@@ -265,7 +282,7 @@ object Block {
                 case None =>
                     // we already accounted for this call. Several
                     // calls can be in the same node. For example, a
-                    // scatter can has many calls inside its subgraph.
+                    // scatter can have many calls inside its subgraph.
                     ()
                 case Some(node) =>
                     assert(!rest.isEmpty)
@@ -286,7 +303,8 @@ object Block {
         val allBlocks =
             if (rest.size > 0) {
                 // Add an additional block for anything not belonging to the calls
-                blocks :+ Block(rest.toVector)
+                val lastBlock = partialSortByDep(rest)
+                blocks :+ Block(lastBlock)
             } else {
                 blocks
             }
@@ -311,27 +329,29 @@ object Block {
     def dbgPrint(inputNodes: Vector[GraphInputNode],   // inputs
                  subBlocks: Vector[Block], // blocks
                  outputNodes: Vector[GraphOutputNode]) // outputs
-            : Unit = {
-        System.out.println("Inputs [")
-        inputNodes.foreach{ node =>
-            val desc = WomPrettyPrintApproxWdl.apply(node)
-            System.out.println(s"  ${desc}")
-        }
-        System.out.println("]")
-        subBlocks.foreach{ block =>
-            System.out.println("Block [")
-            block.nodes.foreach{ node =>
-                val desc = WomPrettyPrintApproxWdl.apply(node)
-                System.out.println(s"  ${desc}")
-            }
-            System.out.println("]")
-        }
-        System.out.println("Output [")
-        outputNodes.foreach{ node =>
-            val desc = WomPrettyPrintApproxWdl.apply(node)
-            System.out.println(s"  ${desc}")
-        }
-        System.out.println("]")
+            : String = {
+        val inputs = inputNodes.map{ node =>
+            WomPrettyPrintApproxWdl.apply(node)
+        }.mkString("\n")
+        val blocks = subBlocks.map{ block =>
+            val body = block.nodes.map{ node =>
+                WomPrettyPrintApproxWdl.apply(node)
+            }.mkString("\n")
+            s"""|Block [
+                |${body}
+                |]""".stripMargin
+        }.mkString("\n")
+        val outputs= outputNodes.map{ node =>
+            WomPrettyPrintApproxWdl.apply(node)
+        }.mkString("\n")
+
+        s"""|Inputs ["
+            |${inputs}
+            |]
+            |${blocks}
+            |Output [
+            |${outputs}
+            |]""".stripMargin
     }
 
     // A block of nodes that represents a call with no subexpressions. These
@@ -366,10 +386,13 @@ object Block {
 
         // All the call inputs have to be simple expressions, if the call is
         // to be called "simple"
-        rest.forall{
-            case expr: TaskCallInputExpressionNode => isTrivialExpression(expr.womExpression)
-            case _ => false
+        val retval = rest.forall{
+            case expr: ExpressionNode =>
+                isTrivialExpression(expr.womType, expr.womExpression)
+            case other =>
+                false
         }
+        retval
     }
 
 
@@ -414,13 +437,10 @@ object Block {
         // The only other kind of nodes could be inputs, outputs, and task input expressions.
         nodes.forall{
             case _: CallNode => true
-            case _: TaskCallInputExpressionNode => true
-            case _: OuterGraphInputNode => true
+            case _: GraphInputNode => true
             case _: GraphOutputNode => true
-            case _: PlainAnonymousExpressionNode => true
-            case other =>
-                //System.out.println(s"strange value ${other}")
-                false
+            case _: AnonymousExpressionNode => true
+            case other => false
         }
     }
 
@@ -435,6 +455,15 @@ object Block {
     sealed trait Category {
         def getInnerGraph : Graph =
             throw new UnsupportedOperationException(s"$getClass does not implement getInnerGraph")
+        override def toString : String = {
+            // convert Block$Cond to Cond
+            val fullClassName = this.getClass.toString
+            val index = fullClassName.lastIndexOf('$')
+            if (index == -1)
+                fullClassName
+            else
+                fullClassName.substring(index + 1)
+        }
     }
     case object AllExpressions extends Category
     case class CallDirect(value: CallNode) extends Category
@@ -457,7 +486,10 @@ object Block {
         if (nrCalls > 0)
             throw new Exception(
                 s"""|There are ${nrCalls} calls at the beginning of the block.
-                    |However, there can be none""".stripMargin.replaceAll("\n", " "))
+                    |However, there can be none.
+                    |
+                    |${block.prettyPrintApproxWdl}
+                    |""".stripMargin)
 
         val lastNode = block.nodes.last
         lastNode match {
@@ -582,13 +614,7 @@ object Block {
         xtrnPorts.map{ outputPort =>
             // Is this really the fully qualified name?
             val fqn = outputPort.identifier.localName.value
-            val womType = outputPort match {
-                case gnop : GraphNodePort.GraphNodeOutputPort => gnop.womType
-                case ebop : GraphNodePort.ExpressionBasedOutputPort => ebop.womType
-                case sctOp : GraphNodePort.ScatterGathererPort => sctOp.womType
-                case cnop : GraphNodePort.ConditionalOutputPort => cnop.womType
-                case other => throw new Exception(s"unhandled case ${other.getClass}")
-            }
+            val womType = outputPort.womType
             fqn -> womType
         }.toMap
     }
@@ -599,7 +625,7 @@ object Block {
         outputNode match {
             case PortBasedGraphOutputNode(id, womType, sourcePort) =>
                 true
-            case expr :ExpressionBasedGraphOutputNode if (Block.isTrivialExpression(expr.womExpression)) =>
+            case expr :ExpressionBasedGraphOutputNode if (Block.isTrivialExpression(expr.womType, expr.womExpression)) =>
                 true
             case expr :ExpressionBasedGraphOutputNode =>
                 // An expression that requires evaluation

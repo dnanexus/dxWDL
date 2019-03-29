@@ -96,7 +96,8 @@ case class JobInputOutput(dxIoFunctions : DxIoFunctions,
     // Convert a job input to a WomValue. Do not download any files, convert them
     // to a string representation. For example: dx://proj-xxxx:file-yyyy::/A/B/C.txt
     //
-    private def jobInputToWomValue(womType: WomType,
+    private def jobInputToWomValue(name: String,
+                                   womType: WomType,
                                    jsValue: JsValue) : WomValue = {
         (womType, jsValue)  match {
             // base case: primitive types
@@ -126,16 +127,16 @@ case class JobInputOutput(dxIoFunctions : DxIoFunctions,
                     }
                 val m: Map[WomValue, WomValue] = mJs.map {
                     case (k:JsValue, v:JsValue) =>
-                        val kWom = jobInputToWomValue(keyType, k)
-                        val vWom = jobInputToWomValue(valueType, v)
+                        val kWom = jobInputToWomValue(name, keyType, k)
+                        val vWom = jobInputToWomValue(name, valueType, v)
                         kWom -> vWom
                 }.toMap
                 WomMap(WomMapType(keyType, valueType), m)
 
             case (WomPairType(lType, rType), JsObject(fields))
                     if (List("left", "right").forall(fields contains _)) =>
-                val left = jobInputToWomValue(lType, fields("left"))
-                val right = jobInputToWomValue(rType, fields("right"))
+                val left = jobInputToWomValue(name, lType, fields("left"))
+                val right = jobInputToWomValue(name, rType, fields("right"))
                 WomPair(left, right)
 
             case (WomObjectType, JsObject(fields)) =>
@@ -148,20 +149,23 @@ case class JobInputOutput(dxIoFunctions : DxIoFunctions,
             // array
             case (WomArrayType(t), JsArray(vec)) =>
                 val wVec: Seq[WomValue] = vec.map{
-                    elem:JsValue => jobInputToWomValue(t, elem)
+                    elem:JsValue => jobInputToWomValue(name, t, elem)
                 }
                 WomArray(WomArrayType(t), wVec)
 
             case (WomOptionalType(t), JsNull) =>
                 WomOptionalValue(t, None)
             case (WomOptionalType(t), jsv) =>
-                val value = jobInputToWomValue(t, jsv)
+                val value = jobInputToWomValue(name, t, jsv)
                 WomOptionalValue(t, Some(value))
 
             case _ =>
                 throw new AppInternalException(
-                    s"Unsupported combination ${womType} ${jsValue.prettyPrint}"
-                )
+                    s"""|Unsupported combination
+                        |  name:    ${name}
+                        |  womType: ${womType}
+                        |  JSON:    ${jsValue.prettyPrint}
+                        |""".stripMargin)
         }
     }
 
@@ -188,7 +192,7 @@ case class JobInputOutput(dxIoFunctions : DxIoFunctions,
         }
     }
 
-    def unpackJobInput(womType: WomType, jsv: JsValue) : WomValue = {
+    def unpackJobInput(name: String, womType: WomType, jsv: JsValue) : WomValue = {
         val jsv2: JsValue =
             if (Utils.isNativeDxType(womType)) {
                 jsv
@@ -199,7 +203,7 @@ case class JobInputOutput(dxIoFunctions : DxIoFunctions,
                 assert(womType2 == womType)
                 jsv1
             }
-        jobInputToWomValue(womType, jsv2)
+        jobInputToWomValue(name, womType, jsv2)
     }
 
     def unpackJobInputFindRefFiles(womType: WomType, jsv: JsValue) : Vector[DXFile] = {
@@ -262,7 +266,7 @@ case class JobInputOutput(dxIoFunctions : DxIoFunctions,
                                 throw new Exception(s"Input ${iName} is required but not provided")
                             case Some(x : JsValue) =>
                                 // Conversion from JSON to WomValue
-                                unpackJobInput(womType, x)
+                                unpackJobInput(iName.value, womType, x)
                         }
 
                     // An input definition that has a default value supplied.
@@ -273,7 +277,7 @@ case class JobInputOutput(dxIoFunctions : DxIoFunctions,
                                 // use the default expression
                                 evaluateWomExpression(defaultExpr, womType, accuValues)
                             case Some(x : JsValue) =>
-                                unpackJobInput(womType, x)
+                                unpackJobInput(iName.value, womType, x)
                         }
 
                     // An input whose value should always be calculated from the default, and is
@@ -303,7 +307,7 @@ case class JobInputOutput(dxIoFunctions : DxIoFunctions,
                                 // the input is null
                                 WomOptionalValue(womType, None)
                             case Some(x) =>
-                                val value:WomValue = unpackJobInput(womType, x)
+                                val value:WomValue = unpackJobInput(iName.value, womType, x)
                                 WomOptionalValue(womType, Some(value))
                         }
                 }

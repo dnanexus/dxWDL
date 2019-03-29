@@ -15,6 +15,11 @@ import wom.types.WomType
 import wom.values.WomValue
 
 object IR {
+    // stages that the compiler uses in generated DNAx workflows
+    val COMMON = "common"
+    val OUTPUT_SECTION = "outputs"
+    val REORG = "reorg"
+
     // Compile time representation of a variable. Used also as
     // an applet argument.
     //
@@ -128,15 +133,15 @@ object IR {
     sealed trait SArg
     case object SArgEmpty extends SArg
     case class SArgConst(wdlValue: WomValue) extends SArg
-    case class SArgLink(stageName: String, argName: CVar) extends SArg
+    case class SArgLink(stageId: DXWorkflowStage, argName: CVar) extends SArg
     case class SArgWorkflowInput(argName: CVar) extends SArg
 
     // A stage can call an applet or a workflow.
     //
-    // Note: the name may contain dots, parentheses, and other special
+    // Note: the description may contain dots, parentheses, and other special
     // symbols. It is shown to the user on the UI. The [id] is unique
     // across the workflow.
-    case class Stage(stageName: String,
+    case class Stage(description: String,
                      id: DXWorkflowStage,
                      calleeName: String,
                      inputs: Vector[SArg],

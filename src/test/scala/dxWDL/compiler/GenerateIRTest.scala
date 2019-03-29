@@ -4,6 +4,7 @@ import java.nio.file.{Path, Paths}
 import org.scalatest.{FlatSpec, Matchers}
 
 import dxWDL.Main
+import dxWDL.util.Utils
 
 // These tests involve compilation -without- access to the platform.
 //
@@ -152,10 +153,47 @@ class GenerateIRTest extends FlatSpec with Matchers {
         ) shouldBe a [Main.SuccessfulTerminationIR]
     }
 
-    it should "handle passing closure arguments to nested blocks" taggedAs(EdgeTag) in {
+    it should "handle passing closure arguments to nested blocks" in {
         val path = pathFromBasename("nested", "param_passing.wdl")
         Main.compile(
             path.toString :: cFlags
         ) shouldBe a [Main.SuccessfulTerminationIR]
+    }
+
+    it should "compile a workflow calling a subworkflow as a direct call" in {
+        val path = pathFromBasename("draft2", "movies.wdl")
+        val bundle : IR.Bundle = Main.compile(path.toString :: cFlags) match {
+            case Main.SuccessfulTerminationIR(bundle) => bundle
+            case other =>
+                Utils.error(other.toString)
+                throw new Exception(s"Failed to compile ${path}")
+        }
+        val wf : IR.Workflow = bundle.primaryCallable match {
+            case Some(wf: IR.Workflow) =>
+                wf
+            case _ => throw new Exception("bad value in bundle")
+        }
+        val stage = wf.stages.head
+        stage.description shouldBe ("review")
+    }
+
+    it should "three nesting levels" taggedAs(EdgeTest) in {
+        val path = pathFromBasename("nested", "three_levels.wdl")
+        val retval = Main.compile(
+            path.toString
+//                :: "--verbose"
+//                :: "--verboseKey" :: "GenerateIR"
+                :: cFlags
+        )
+        retval shouldBe a [Main.SuccessfulTerminationIR]
+        val callable : IR.Callable = retval match {
+            case Main.SuccessfulTerminationIR(ir) => ir.primaryCallable.get
+            case _ => throw new Exception("sanity")
+        }
+        val wf = callable match {
+            case wf : IR.Workflow => wf
+            case _ => throw new Exception("sanity")
+        }
+        Utils.ignore(wf)
     }
 }

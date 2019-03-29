@@ -70,7 +70,7 @@ case class GenerateIRTask(verbose: Verbose) {
                 Some(CVar(iName.value, womType, None))
 
             case OverridableInputDefinitionWithDefault(iName, womType, defaultExpr, _, _) =>
-                Utils.ifConstEval(defaultExpr) match {
+                WomValueAnalysis.ifConstEval(womType, defaultExpr) match {
                     case None =>
                         // This is a task "input" of the form:
                         //    Int y = x + 3
@@ -93,7 +93,7 @@ case class GenerateIRTask(verbose: Verbose) {
         // create dx:applet outputs
         val outputs : Vector[CVar] = task.outputs.map{
             case OutputDefinition(id, womType, expr) =>
-                val defaultValue = Utils.ifConstEval(expr) match {
+                val defaultValue = WomValueAnalysis.ifConstEval(womType, expr) match {
                     case None =>
                         // This is an expression to be evaluated at runtime
                         None
@@ -123,8 +123,8 @@ case class GenerateIRTask(verbose: Verbose) {
         val docker = task.runtimeAttributes.attributes.get("docker") match {
             case None =>
                 IR.DockerImageNone
-            case Some(expr) if Utils.isExpressionConst(expr) =>
-                val wdlConst = Utils.evalConst(expr)
+            case Some(expr) if WomValueAnalysis.isExpressionConst(WomStringType, expr) =>
+                val wdlConst = WomValueAnalysis.evalConst(WomStringType, expr)
                 wdlConst match {
                     case WomString(url) if url.startsWith(Utils.DX_URL_PREFIX) =>
                         // A constant image specified with a DX URL

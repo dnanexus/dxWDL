@@ -1,0 +1,6 @@
+{
+  "files.f": "dx://dxWDL_playground:/test_data/fileB",
+  "files.f1": "dx://dxWDL_playground:/test_data/fileC",
+  "files.f2": "dx://dxWDL_playground:/test_data/1/fileC",
+  "files.fruit_list": "dx://dxWDL_playground:/test_data/fruit_list.txt"
+}

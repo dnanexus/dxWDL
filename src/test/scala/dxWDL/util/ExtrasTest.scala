@@ -4,7 +4,8 @@ import com.dnanexus.AccessLevel
 import org.scalatest.{FlatSpec, Matchers}
 import spray.json._
 import wom.expression.WomExpression
-import wom.values.WomString
+import wom.types._
+import wom.values._
 
 class ExtrasTest extends FlatSpec with Matchers {
     val verbose = Verbose(false, true, Set.empty)
@@ -219,7 +220,8 @@ class ExtrasTest extends FlatSpec with Matchers {
             case None =>
                 throw new Exception("Wrong type for dockerOpt")
             case Some(docker) =>
-                Utils.evalConst(docker) should equal (WomString("quay.io/encode-dcc/atac-seq-pipeline:v1"))
+                WomValueAnalysis.evalConst(WomStringType, docker) should equal (WomString("quay.io/encode-dcc/atac-seq-pipeline:v1"))
+
         }
     }
 

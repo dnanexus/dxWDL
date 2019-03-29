@@ -199,12 +199,12 @@ case class CollectSubJobs(jobInputOutput : JobInputOutput,
                             // Optional field that has not been returned
                             None
                         case (WomOptionalType(_), Some(jsv)) =>
-                            Some(jobInputOutput.unpackJobInput(womType, jsv))
+                            Some(jobInputOutput.unpackJobInput(name, womType, jsv))
                         case (_, None) =>
                             // Required output that is missing
                             throw new Exception(s"Could not find compulsory field <${name}> in results")
                         case (_, Some(jsv)) =>
-                            Some(jobInputOutput.unpackJobInput(womType, jsv))
+                            Some(jobInputOutput.unpackJobInput(name, womType, jsv))
                     }
             }.toVector
         WomArray(WomArrayType(womType), vec)

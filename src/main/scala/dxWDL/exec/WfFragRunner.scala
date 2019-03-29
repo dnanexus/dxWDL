@@ -80,8 +80,18 @@ case class WfFragRunner(wf: WorkflowDefinition,
         val result: ErrorOr[WomValue] =
             expr.evaluateValue(env, dxIoFunctions)
         val value = result match {
-            case Invalid(errors) => throw new Exception(
-                s"Failed to evaluate expression ${expr} with ${errors}")
+            case Invalid(errors) =>
+                val envDbg = env.map{
+                    case (key, value) => s"    ${key} -> ${value.toString}"
+                }.mkString("\n")
+                throw new Exception(
+                    s"""|Failed to evaluate expression ${expr.sourceString}
+                        |Errors:
+                        |${errors}
+                        |
+                        |Environment:
+                        |${envDbg}
+                        |""".stripMargin)
             case Valid(x: WomValue) => x
         }
 
@@ -251,15 +261,15 @@ case class WfFragRunner(wf: WorkflowDefinition,
     }
 
     private def execCall(call: CallNode,
-                         env: Map[String, WomValue],
+                         callInputs: Map[String, WomValue],
                          callNameHint: Option[String]) : (Int, DXExecution) = {
         val linkInfo = getCallLinkInfo(call)
         val callName = call.identifier.localName.value
         val calleeName = call.callable.name
-        val callInputs:JsValue = buildCallInputs(callName, linkInfo, env)
+        val callInputsJSON : JsValue = buildCallInputs(callName, linkInfo, callInputs)
         Utils.appletLog(verbose, s"""|Call ${callName}
                                      |calleeName= ${calleeName}
-                                     |inputs = ${callInputs}""".stripMargin)
+                                     |inputs = ${callInputsJSON}""".stripMargin)
 
         // We may need to run a collect subjob. Add the call
         // name, and the sequence number, to each execution invocation,
@@ -269,7 +279,7 @@ case class WfFragRunner(wf: WorkflowDefinition,
             case None => call.identifier.localName.value
             case Some(hint) => s"${callName} ${hint}"
         }
-        execDNAxExecutable(linkInfo.dxExec.getId, dbgName, callName, callInputs)
+        execDNAxExecutable(linkInfo.dxExec.getId, dbgName, callName, callInputsJSON)
     }
 
     private def execSubblockWorkflow(linkInfo: ExecLinkInfo,
@@ -298,39 +308,63 @@ case class WfFragRunner(wf: WorkflowDefinition,
         }.toMap
     }
 
+    // task input expression. The issue here is a mismatch between WDL draft-2 and version 1.0.
+    // in an expression like:
+    //    call volume { input: i = 10 }
+    // the "i" parameter, under WDL draft-2, is compiled as "volume.i"
+    // under WDL version 1.0, it is compiled as "i".
+    // We just want the "i" component.
+    def evalCallInputs(call: CallNode,
+                       env: Map[String, WomValue]) : Map[String, WomValue] = {
+        // Find the type required for a call input
+        def findWomType(paramName: String) : WomType = {
+            val retval = call.inputDefinitionMappings.find{
+                case (iDef, iDefPtr) =>
+                    (iDef.localName.value == paramName) ||
+                        (Utils.getUnqualifiedName(iDef.localName.value) == paramName)
+            }
+            retval match {
+                case None => throw new Exception(s"Could not find ${paramName}")
+                case Some((iDef, iDefPtr)) =>
+                    iDef.womType
+            }
+        }
+        call.upstream.collect{
+            case exprNode: ExpressionNode =>
+                val paramName = Utils.getUnqualifiedName(exprNode.identifier.localName.value)
+                val expression = exprNode.womExpression
+                val womType = findWomType(paramName)
+                paramName -> evaluateWomExpression(expression, womType, env)
+        }.toMap
+    }
+
     // This method is exposed so that we can unit-test it.
     def evalExpressions(nodes: Seq[GraphNode],
-                        env: Map[String, WomValue],
-                        callNode : Option[CallNode]) : Map[String, WomValue] = {
-/*        val dbgGraph = nodes.map{node => WomPrettyPrint.apply(node) }.mkString("  \n")
-        Utils.appletLog(verbose,
-                        s"""|--- evalExpressions
-                            |env =
-                            |   ${env.mkString("  \n")}
-                            |graph =
-                            |   ${dbgGraph}
-                            |---
-                            |""".stripMargin)*/
+                        env: Map[String, WomValue]) : Map[String, WomValue] = {
+        /*if (verbose) {
+            val dbgGraph = nodes.map{node => WomPrettyPrint.apply(node) }.mkString("  \n")
+        Utils.trace(verbose,
+                    s"""|--- evalExpressions
+                        |env =
+                        |   ${env.mkString("  \n")}
+                        |graph =
+                        |   ${dbgGraph}
+                        |---
+                        |""".stripMargin) */
         nodes.foldLeft(env) {
-            // task input expression. The issue here is a mismatch between WDL draft-2 and version 1.0.
-            // in an expression like:
-            //    call volume { input: i = 10 }
-            // the "i" parameter, under WDL draft-2, is compiled as "volume.i"
-            // under WDL version 1.0, it is compiled as "i".
-            // We just want the "i" component.
-            case (env, tcNode : TaskCallInputExpressionNode) if callNode != None =>
-                val localName = Utils.getUnqualifiedName(tcNode.localName)
-                val value : WomValue =
-                    evaluateWomExpression(tcNode.womExpression, tcNode.womType, env)
-                env + (localName -> value)
-
             // simple expression
-            case (env, eNode: ExpressionNode) =>
+            case (env, eNode: ExposedExpressionNode) =>
                 val value : WomValue =
                     evaluateWomExpression(eNode.womExpression, eNode.womType, env)
                 env + (eNode.identifier.localName.value -> value)
 
+            case (env, _ : ExpressionNode) =>
+                // create an ephemeral expression, not visible in the environment
+                env
+
             // scatter
+            // scatter (K in collection) {
+            // }
             case(env, sctNode : ScatterNode) =>
                 // WDL has exactly one variable
                 assert(sctNode.scatterVariableNodes.size == 1)
@@ -344,11 +378,13 @@ case class WfFragRunner(wf: WorkflowDefinition,
                     case other => throw new AppInternalException(
                         s"Unexpected class ${other.getClass}, ${other}")
                 }
+
                 // iterate on the collection
+                val iterVarName = svNode.identifier.localName.value
                 val vm : Vector[Map[String, WomValue]] =
                     collection.map{ v =>
-                        val envInner = env + (svNode.identifier.localName.value -> v)
-                        evalExpressions(sctNode.innerGraph.nodes.toSeq, envInner, callNode)
+                        val envInner = env + (iterVarName -> v)
+                        evalExpressions(sctNode.innerGraph.nodes.toSeq, envInner)
                     }.toVector
 
                 val resultTypes : Map[String, WomArrayType] = sctNode.outputMapping.map{
@@ -377,9 +413,10 @@ case class WfFragRunner(wf: WorkflowDefinition,
                     }
 
                 // Add the wom array type to each vector
-                results.map{ case (key, (elemType, vv)) =>
+                val fullResults = results.map{ case (key, (elemType, vv)) =>
                     key -> WomArray(WomArrayType(elemType), vv)
                 }
+                env ++ fullResults
 
             case (env, cNode: ConditionalNode) =>
                 // evaluate the condition
@@ -397,19 +434,21 @@ case class WfFragRunner(wf: WorkflowDefinition,
                     case cop : ConditionalOutputPort =>
                         cop.identifier.localName.value -> Utils.stripOptional(cop.womType)
                 }.toMap
-                if (!condValue) {
-                    // condition is false, return None for all the values
-                    resultTypes.map{ case (key, womType) =>
-                        key -> WomOptionalValue(womType, None)
+                val fullResults : Map[String, WomValue] =
+                    if (!condValue) {
+                        // condition is false, return None for all the values
+                        resultTypes.map{ case (key, womType) =>
+                            key -> WomOptionalValue(womType, None)
+                        }
+                    } else {
+                        // condition is true, evaluate the internal block.
+                        val results = evalExpressions(cNode.innerGraph.nodes.toSeq, env)
+                        resultTypes.map{ case (key, womType) =>
+                            val value: Option[WomValue] = results.get(key)
+                            key -> WomOptionalValue(womType, value)
+                        }
                     }
-                } else {
-                    // condition is true, evaluate the internal block.
-                    val results = evalExpressions(cNode.innerGraph.nodes.toSeq, env, callNode)
-                    resultTypes.map{ case (key, womType) =>
-                        val value: Option[WomValue] = results.get(key)
-                        key -> WomOptionalValue(womType, value)
-                    }.toMap
-                }
+                env ++ fullResults
 
             // Input nodes for a subgraph
             case (env, ogin: OuterGraphInputNode) =>
@@ -420,6 +459,9 @@ case class WfFragRunner(wf: WorkflowDefinition,
             case (env, gon: GraphOutputNode) =>
                 //Utils.appletLog(verbose, s"skipping ${gon.getClass}")
                 env
+
+            case (env, other: CallNode) =>
+                throw new Exception(s"calls (${other}) cannot be evaluated as expressions")
 
             case (env, other) =>
                 val dbgGraph = nodes.map{node => WomPrettyPrint.apply(node) }.mkString("\n")
@@ -465,15 +507,11 @@ case class WfFragRunner(wf: WorkflowDefinition,
             // Condition is false, no need to execute the call
             Map.empty
         } else {
-            val taskInputs : Vector[TaskCallInputExpressionNode] =
-                cnNode.innerGraph.nodes.collect{
-                    case tcin : TaskCallInputExpressionNode => tcin
-                }.toVector
             val call = getInnerCallFromSimpleBlock(cnNode.innerGraph)
 
             // evaluate the call inputs, and add to the environment
-            val callEnv = evalExpressions(taskInputs, env, Some(call))
-            val (_, dxExec) = execCall(call, callEnv,  None)
+            val callInputs = evalCallInputs(call, env)
+            val (_, dxExec) = execCall(call, callInputs,  None)
             val callResults: Map[String, WdlVarLinks] = genPromisesForCall(call, dxExec)
 
             // Add optional modifier to the return types.
@@ -573,17 +611,11 @@ case class WfFragRunner(wf: WorkflowDefinition,
         // There must be exactly one call
         val call = getInnerCallFromSimpleBlock(sctNode.innerGraph)
 
-        // We will need to evaluate the task inputs
-        val taskInputs : Vector[TaskCallInputExpressionNode] =
-            sctNode.innerGraph.nodes.collect{
-                case tcin : TaskCallInputExpressionNode => tcin
-            }.toVector
-
         // loop on the collection, call the applet in the inner loop
         val childJobs : Vector[DXExecution] =
             collection.map{ item =>
                 val innerEnv = env + (svNode.identifier.localName.value -> item)
-                val callInputs = evalExpressions(taskInputs, innerEnv, Some(call))
+                val callInputs = evalCallInputs(call, innerEnv)
                 val callHint = readableNameForScatterItem(item)
                 val (_, dxExec) = execCall(call, callInputs, callHint)
                 dxExec
@@ -655,10 +687,11 @@ case class WfFragRunner(wf: WorkflowDefinition,
         }.mkString("\n")
         Utils.appletLog(verbose, s"""|Block ${blockPath} to execute:
                                      |${dbgBlock}
+                                     |
                                      |""".stripMargin)
 
         val (otherNodes, category) = Block.categorize(block)
-        val env = evalExpressions(otherNodes, envInitial, None)
+        val env = evalExpressions(otherNodes, envInitial)
 
         val subblockResults : Map[String, WdlVarLinks] = runMode match {
             case RunnerWfFragmentMode.Launch =>
@@ -673,7 +706,8 @@ case class WfFragRunner(wf: WorkflowDefinition,
 
                     // A single call at the end of the block
                     case Block.CallCompound(call: CallNode) =>
-                        val (_, dxExec) = execCall(call, env,  None)
+                        val callInputs = evalCallInputs(call, env)
+                        val (_, dxExec) = execCall(call, callInputs,  None)
                         genPromisesForCall(call, dxExec)
 
                     // A conditional at the end of the block, with a call inside it

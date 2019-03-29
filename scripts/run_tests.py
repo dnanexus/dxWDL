@@ -22,11 +22,11 @@ test_dir = os.path.join(os.path.abspath(top_dir), "test")
 git_revision = subprocess.check_output(["git", "describe", "--always", "--dirty", "--tags"]).strip()
 test_files={}
 test_failing=set(["bad_status",
-                  #"bad_status2",
+                  "bad_status2",
                   "missing_output"])
-reserved_test_names=['M', 'All', 'list']
+reserved_test_names=['M', 'L', 'draft2', 'All', 'list']
 
-medium_test_list = [
+wdl_v1_list = [
      # calling native dx applets/apps
     "call_native",
     #"call_native_app",
@@ -38,9 +38,6 @@ medium_test_list = [
     "linear",
     "optionals",
 
-    # wdl draft-2
-    "shapes",
-
     "spaces_in_file_paths",
     "strings",
 
@@ -49,12 +46,41 @@ medium_test_list = [
     "param_passing"
 ]
 
+# wdl draft-2
+draft2_test_list = [
+    "advanced",
+    "bad_status",
+    "bad_status2",
+    "call_with_defaults1",
+    "call_with_defaults2",
+    "conditionals_base",
+    "files",
+    "files_with_the_same_name",
+    "hello",
+    "shapes",
+
+    # subworkflows
+    "conditionals2",
+    "modulo",
+    "movies",
+    "subblocks2",
+    "subblocks",
+    "var_type_change"
+]
+
+medium_test_list= wdl_v1_list
+large_test_list= draft2_test_list + wdl_v1_list
+
 tests_for_alt_project = [ "platform_asset" ]
 
 # Tests with the reorg flags
 test_reorg=["dict", "linear"]
 test_defaults=[]
 test_unlocked=["cast",
+               "call_with_defaults1",
+               "files",
+               "hello",
+               "optionals",
                "linear",
                "shapes"]
 test_extras=["instance_types"]
@@ -156,7 +182,10 @@ def validate_result(tname, exec_outputs, key, expected_val):
     # output "count":
     #    'math.count' -> count
     exec_name = key.split('.')[0]
-    field_name = key.split('.')[1]
+    field_name_parts = key.split('.')[1:]
+
+    # convert dots to ___
+    field_name = "___".join(field_name_parts)
     if exec_name != tname:
         raise RuntimeError("Key {} is invalid, must start with {} name".format(key, desc.kind))
     try:
@@ -280,9 +309,9 @@ def extract_outputs(tname, exec_obj):
             stages = exec_obj['stages']
             for snum in range(len(stages)):
                 crnt = stages[snum]
-                if crnt['id'] == 'stage-last':
+                if crnt['id'] == 'stage-outputs':
                     return stages[snum]['execution']['output']
-            raise RuntimeError("Analysis for test {} does not have stage 'last'".format(tname))
+            raise RuntimeError("Analysis for test {} does not have stage 'outputs'".format(tname))
     elif desc.kind == "applet":
         return exec_obj['output']
     else:
@@ -331,6 +360,10 @@ def print_test_list():
 def choose_tests(test_name):
     if test_name == 'M':
         return medium_test_list
+    if test_name == 'L':
+        return large_test_list
+    if test_name == 'draft2':
+        return draft2_test_list
     if test_name == 'All':
         return test_files.keys()
     if test_name in test_files.keys():

@@ -88,7 +88,7 @@ case class WfFragInputOutput(dxIoFunctions : DxIoFunctions,
                     case None => throw new Exception(s"Did not find variable ${fqn} (${name}) in the block environment")
                     case Some(x) => x
                 }
-                fqn -> jobInputOutput.unpackJobInput(womType, jsValue)
+                fqn -> jobInputOutput.unpackJobInput(fqn, womType, jsValue)
         }.toMap
 
         WfFragInput(wfSource,

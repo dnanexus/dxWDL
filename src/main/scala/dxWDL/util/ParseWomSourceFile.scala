@@ -201,13 +201,13 @@ object ParseWomSourceFile {
 
 
     private def findNextTask(lines: List[String]) : Option[(List[String], String, String)] = {
-        val taskStartLine: Regex = "^(\\s*)task(\\s+)(\\w+)(\\s+)\\{".r
+        val taskStartLine: Regex = "^(\\s*)task(\\s+)(\\w+)(\\s*)\\{".r
         val taskEndLine: Regex = "^}(\\s)*$".r
         findWdlElement(lines, taskStartLine, taskEndLine)
     }
 
     private def findNextWorkflow(lines: List[String]) : Option[(List[String], String, String)] = {
-        val workflowStartLine: Regex = "^(\\s*)workflow(\\s+)(\\w+)(\\s+)\\{".r
+        val workflowStartLine: Regex = "^(\\s*)workflow(\\s+)(\\w+)(\\s*)\\{".r
         val workflowEndLine: Regex = "^}(\\s)*$".r
         findWdlElement(lines, workflowStartLine, workflowEndLine)
     }
@@ -356,7 +356,13 @@ object ParseWomSourceFile {
         // make sure there are no duplicate lines
         val sourceLines = calls.values.toVector
         assert(sourceLines.size == sourceLines.toSet.size)
-        calls.toMap
+
+        // We are using the flat-namespace assumption here. There is a single
+        // definition for each WDL task and workflow.
+        calls.map{ case (callFqn, lineNr) =>
+            val callUnqualifiedName = Utils.getUnqualifiedName(callFqn)
+            (callUnqualifiedName, lineNr)
+        }.toMap
     }
 
 

@@ -607,8 +607,7 @@ case class Native(dxWDLrtId: Option[String],
     // Calculate the stage inputs from the call closure
     //
     // It comprises mappings from variable name to WomType.
-    private def genStageInputs(inputs: Vector[(CVar, SArg)],
-                               stageDict: Map[String, DXWorkflowStage]) : JsValue = {
+    private def genStageInputs(inputs: Vector[(CVar, SArg)]) : JsValue = {
         val jsInputs:Map[String, JsValue] = inputs.foldLeft(Map.empty[String, JsValue]){
             case (m, (cVar, sArg)) =>
                 sArg match {
@@ -621,8 +620,7 @@ case class Native(dxWDLrtId: Option[String],
                         val wvl = WdlVarLinks.importFromWDL(cVar.womType, wValue)
                         val fields = WdlVarLinks.genFields(wvl, cVar.dxVarName)
                         m ++ fields.toMap
-                    case IR.SArgLink(stageName, argName) =>
-                        val dxStage = stageDict(stageName)
+                    case IR.SArgLink(dxStage, argName) =>
                         val wvl = WdlVarLinks(cVar.womType,
                                               DxlStage(dxStage, IORef.Output, argName.dxVarName))
                         val fields = WdlVarLinks.genFields(wvl, cVar.dxVarName)
@@ -643,9 +641,7 @@ case class Native(dxWDLrtId: Option[String],
     // creating a vector of JSON values from each input.
     //
     private def buildWorkflowInputSpec(cVar:CVar,
-                                       sArg:SArg,
-                                       stageDict: Map[String, DXWorkflowStage])
-            : Vector[JsValue] = {
+                                       sArg:SArg) : Vector[JsValue] = {
         // deal with default values
         val sArgDefault: Option[WomValue] = sArg match {
             case IR.SArgConst(wdlValue) =>
@@ -667,9 +663,7 @@ case class Native(dxWDLrtId: Option[String],
 
     // Note: a single WDL output can generate one or two JSON outputs.
     private def buildWorkflowOutputSpec(cVar:CVar,
-                                        sArg:SArg,
-                                        stageDict: Map[String, DXWorkflowStage])
-            : Vector[JsValue] = {
+                                        sArg:SArg) : Vector[JsValue] = {
         val oSpec: Vector[JsValue] = cVarToSpec(cVar)
 
         // add the field names, to help index this structure
@@ -685,9 +679,7 @@ case class Native(dxWDLrtId: Option[String],
             case IR.SArgConst(wdlValue) =>
                 // constant
                 throw new Exception(s"Constant workflow outputs not currently handled (${cVar}, ${sArg}, ${wdlValue})")
-            case IR.SArgLink(stageName, argName: CVar) =>
-                // output is from an intermediate stage
-                val dxStage = stageDict(stageName)
+            case IR.SArgLink(dxStage, argName: CVar) =>
                 val wvl = WdlVarLinks(cVar.womType,
                                       DxlStage(dxStage, IORef.Output, argName.dxVarName))
                 WdlVarLinks.genFields(wvl, cVar.dxVarName)
@@ -715,20 +707,19 @@ case class Native(dxWDLrtId: Option[String],
                               digest: String,
                               execDict: ExecDict) : DXWorkflow = {
         trace(verbose2, s"build workflow ${wf.name}")
-        val (stagesReq, stageDict) =
-            wf.stages.foldLeft((Vector.empty[JsValue], Map.empty[String, DXWorkflowStage])) {
-                case ((stagesReq, stageDict), stg) =>
+        val stagesReq =
+            wf.stages.foldLeft(Vector.empty[JsValue]) {
+                case (stagesReq, stg) =>
                     val (irApplet,dxExec) = execDict(stg.calleeName)
                     val linkedInputs : Vector[(CVar, SArg)] = irApplet.inputVars zip stg.inputs
-                    val inputs = genStageInputs(linkedInputs, stageDict)
+                    val inputs = genStageInputs(linkedInputs)
                     // convert the per-stage metadata into JSON
                     val stageReqDesc = JsObject(
                         "id" -> JsString(stg.id.getId),
                         "executable" -> JsString(dxExec.getId),
-                        "name" -> JsString(stg.stageName),
+                        "name" -> JsString(stg.id.getId),
                         "input" -> inputs)
-                    (stagesReq :+ stageReqDesc,
-                     stageDict ++ Map(stg.stageName -> stg.id))
+                    stagesReq :+ stageReqDesc
             }
 
         // pack all the arguments into a single API call
@@ -743,10 +734,10 @@ case class Native(dxWDLrtId: Option[String],
             if (wf.locked) {
                 // Locked workflows have well defined inputs and outputs
                 val wfInputSpec:Vector[JsValue] = wf.inputs.map{ case (cVar,sArg) =>
-                    buildWorkflowInputSpec(cVar, sArg, stageDict)
+                    buildWorkflowInputSpec(cVar, sArg)
                 }.flatten
                 val wfOutputSpec:Vector[JsValue] = wf.outputs.map{ case (cVar,sArg) =>
-                    buildWorkflowOutputSpec(cVar, sArg, stageDict)
+                    buildWorkflowOutputSpec(cVar, sArg)
                 }.flatten
 
                 if (verbose2) {

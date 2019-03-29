@@ -2,8 +2,11 @@ package dxWDL.util
 
 import java.nio.file.{Path, Paths}
 import org.scalatest.{FlatSpec, Matchers}
+
 import wom.callable.{WorkflowDefinition}
+import wom.executable.WomBundle
 import wom.graph._
+import wom.graph.expression._
 import wom.types._
 
 class BlockTest extends FlatSpec with Matchers {
@@ -18,6 +21,10 @@ class BlockTest extends FlatSpec with Matchers {
         val wf : WorkflowDefinition = ParseWomSourceFile.parseWdlWorkflow(wfSourceCode)
         val (_, subBlocks, _) = Block.split(wf.innerGraph, wfSourceCode)
 
+        /*System.out.println(s"""|block #0 =
+                               |${subBlocks(0).prettyPrintApproxWdl}}
+                               |""".stripMargin)*/
+        Block.closure(subBlocks(0)).keys.toSet should be(Set.empty)
         Block.closure(subBlocks(1)).keys.toSet should be(Set("flag", "rain"))
         Block.closure(subBlocks(2)).keys.toSet should be(Set("flag", "inc1.result"))
         Block.closure(subBlocks(3)).keys.toSet should be(Set("rain"))
@@ -155,7 +162,7 @@ class BlockTest extends FlatSpec with Matchers {
         category shouldBe a [Block.Scatter]
     }
 
-    it should "get subblocks" taggedAs(EdgeTag) in {
+    it should "get subblocks" in {
         val path = pathFromBasename("nested", "two_levels.wdl")
         val wfSourceCode = Utils.readFileContent(path)
         val (_, womBundle, sources, _) = ParseWomSourceFile.apply(path)
@@ -190,5 +197,120 @@ class BlockTest extends FlatSpec with Matchers {
         val b02 = Block.getSubBlock(Vector(0, 2), graph, callsLoToHi)
         val (_, catg02) = Block.categorize(b02)
         catg02 shouldBe a[Block.CallCompound]
+    }
+
+    it should "handle calls to imported modules II" taggedAs(EdgeTest) in {
+        val path = pathFromBasename("draft2", "block_category.wdl")
+        val (language, womBundle: WomBundle, allSources, _) = ParseWomSourceFile.apply(path)
+
+        val (_, wfSource) = allSources.find {
+            case (name, _) => name.endsWith("block_category.wdl")
+        }.get
+
+        val wf: WorkflowDefinition = womBundle.primaryCallable match {
+            case Some(wf: WorkflowDefinition) => wf
+            case _ => throw new Exception("sanity")
+        }
+        val graph = wf.innerGraph
+        val (inputNodes, subBlocks, outputNodes) = Block.split(graph, wfSource)
+
+        val b = subBlocks(0)
+        val (_, catg) = Block.categorize(b)
+        catg shouldBe a[Block.Cond]
+    }
+
+    it should "handle calls to imported modules" in {
+        val path = pathFromBasename("draft2", "conditionals1.wdl")
+        val (language, womBundle: WomBundle, allSources, _) = ParseWomSourceFile.apply(path)
+
+        val (_, wfSource) = allSources.find {
+            case (name, _) => name.endsWith("conditionals1.wdl")
+        }.get
+
+        val wf: WorkflowDefinition = womBundle.primaryCallable match {
+            case Some(wf: WorkflowDefinition) => wf
+            case _ => throw new Exception("sanity")
+        }
+        val graph = wf.innerGraph
+        val (inputNodes, subBlocks, outputNodes) = Block.split(graph, wfSource)
+
+        for (i <- 0 to (subBlocks.length - 1)) {
+            val b = subBlocks(i)
+/*            System.out.println(s"""|BLOCK #${i} = [
+                                   |${b.prettyPrintApproxWdl}
+                                   |]
+                                   |""".stripMargin)*/
+            val (_, catg) = Block.categorize(b)
+            Utils.ignore(catg)
+        }
+    }
+
+    it should "compile a workflow calling a subworkflow as a direct call" in {
+        val path = pathFromBasename("draft2", "movies.wdl")
+        val (language, womBundle: WomBundle, allSources, _) = ParseWomSourceFile.apply(path)
+
+        val (_, wfSource) = allSources.find {
+            case (name, _) => name.endsWith("movies.wdl")
+        }.get
+
+        val wf: WorkflowDefinition = womBundle.primaryCallable match {
+            case Some(wf: WorkflowDefinition) => wf
+            case _ => throw new Exception("sanity")
+        }
+
+        // sort from low to high according to the source lines.
+        val callToSrcLine = ParseWomSourceFile.scanForCalls(wfSource)
+        val callsLoToHi : Vector[(String, Int)] = callToSrcLine.toVector.sortBy(_._2)
+
+        // Find the fragment block to execute
+        val block = Block.getSubBlock(Vector(0), wf.innerGraph, callsLoToHi)
+
+        /*
+        val dbgBlock = block.nodes.map{
+            WomPrettyPrintApproxWdl.apply(_)
+        }.mkString("\n")
+        System.out.println(s"""|Block:
+                               |${dbgBlock}
+                               |""".stripMargin)
+         */
+
+        val (_, category) = Block.categorize(block)
+        category shouldBe a[Block.CallDirect]
+    }
+
+
+    it should "sort a block correctly in the presence of conditionals" in {
+        val path = pathFromBasename("draft2", "conditionals3.wdl")
+        val wfSourceCode = Utils.readFileContent(path)
+        val wf : WorkflowDefinition = ParseWomSourceFile.parseWdlWorkflow(wfSourceCode)
+
+        val (_, subBlocks, _) = Block.split(wf.innerGraph, wfSourceCode)
+        val b0 = subBlocks(0)
+
+        val exprVec : Vector[ExposedExpressionNode] = b0.nodes.collect{
+            case node : ExposedExpressionNode => node
+        }
+        exprVec.size should be(1)
+        val arrayCalc : ExposedExpressionNode = exprVec.head
+        arrayCalc.womExpression.sourceString should be("[i1, i2, i3]")
+    }
+
+    it should "find the correct number of scatters" in {
+        val path = pathFromBasename("draft2", "conditionals_base.wdl")
+        val (_, womBundle: WomBundle, allSources, _) = ParseWomSourceFile.apply(path)
+
+        val (_, wfSource) = allSources.find {
+            case (name, _) => name.endsWith("conditionals_base.wdl")
+        }.get
+
+        val wf: WorkflowDefinition = womBundle.primaryCallable match {
+            case Some(wf: WorkflowDefinition) => wf
+            case _ => throw new Exception("sanity")
+        }
+        val nodes = wf.innerGraph.allNodes
+        val scatters : Set[ScatterNode] = nodes.collect{
+            case n : ScatterNode => n
+        }
+        scatters.size should be(1)
     }
 }

@@ -9,8 +9,8 @@ import wom.types._
 
 object WomPrettyPrintApproxWdl {
 
-    def apply(node: GraphNode,
-              indent : String = "") : String = {
+    private def applyGNode(node: GraphNode,
+                           indent : String) : Option[String] = {
         node match {
             case sct : ScatterNode =>
                 val varNames = sct.scatterVariableNodes.map{svn => svn.identifier.localName.value}
@@ -19,47 +19,70 @@ object WomPrettyPrintApproxWdl {
                 val svNode: ScatterVariableNode = sct.scatterVariableNodes.head
                 val collection = svNode.scatterExpressionNode.womExpression.sourceString
                 val innerBlock =
-                    sct.innerGraph.nodes.map{ node =>
-                        apply(node, indent + "  ")
+                    sct.innerGraph.nodes.flatMap{ node =>
+                        applyGNode(node, indent + "  ")
                     }.mkString("\n")
-                s"""|${indent}scatter (${varName} in ${collection}) {
-                    |${innerBlock}
-                    |${indent}}""".stripMargin
+                Some(s"""|${indent}scatter (${varName} in ${collection}) {
+                         |${innerBlock}
+                         |${indent}}
+                         |""".stripMargin)
 
             case cnd : ConditionalNode =>
                 val innerBlock =
-                    cnd.innerGraph.nodes.map{ node =>
-                        apply(node, indent + "  ")
+                    cnd.innerGraph.nodes.flatMap{ node =>
+                        applyGNode(node, indent + "  ")
                     }.mkString("\n")
-                s"""|${indent}if (${cnd.conditionExpression.womExpression.sourceString}) {
-                    |${innerBlock}
-                    |${indent}}
-                    |""".stripMargin
+                Some(s"""|${indent}if (${cnd.conditionExpression.womExpression.sourceString}) {
+                         |${innerBlock}
+                         |${indent}}
+                         |""".stripMargin)
 
             case call : CommandCallNode =>
                 val inputNames = call.upstream.collect{
                     case exprNode: ExpressionNode =>
-                        s"${exprNode.identifier.localName.value} = ${exprNode.womExpression.sourceString}"
+                        val paramName = Utils.getUnqualifiedName(exprNode.identifier.localName.value)
+                        s"${paramName} = ${exprNode.womExpression.sourceString}"
                 }.mkString(",")
-                s"${indent}call ${call.identifier.localName.value} { input: ${inputNames} }"
+                val calleeName = Utils.getUnqualifiedName(call.callable.name)
+                val callName = call.identifier.localName.value
+                val inputs =
+                    if (inputNames.isEmpty) ""
+                    else s"{ input: ${inputNames} }"
+                if (callName == calleeName)
+                    Some(s"${indent}call ${callName} ${inputs}")
+                else
+                    Some(s"${indent}call ${calleeName} as ${callName} ${inputs}")
 
             case expr :ExpressionBasedGraphOutputNode =>
                 val exprSource = expr.womExpression.sourceString
-                s"${indent}${expr.womType.stableName} ${expr.identifier.localName.value} = ${exprSource}"
+                Some(s"${indent}${expr.womType.stableName} ${expr.identifier.localName.value} = ${exprSource}")
 
             case expr : ExposedExpressionNode =>
-                s"${indent}${expr.identifier.localName.value} =  ${expr.womExpression.sourceString}"
+                Some(s"${indent}${expr.identifier.localName.value} =  ${expr.womExpression.sourceString}")
 
             case expr : ExpressionNode =>
-                expr.womExpression.sourceString
+                //Some(expr.womExpression.sourceString)
+                None
 
-            case _ : OuterGraphInputNode => ""
+            case _ : OuterGraphInputNode =>
+                None
 
             case PortBasedGraphOutputNode(id, womType, sourcePort) =>
-                s"${indent}${womType.stableName} ${id.localName.value} = ${sourcePort.name}"
+                //s"${indent}${womType.stableName} ${id.localName.value} = ${sourcePort.name}"
+                None
+
+            case _ : GraphInputNode =>
+                None
 
             case other =>
-                other.toString
+                Some(other.toString)
+        }
+    }
+
+    def apply(node: GraphNode) : String = {
+        applyGNode(node, "") match {
+            case None => ""
+            case Some(x) => x
         }
     }
 
