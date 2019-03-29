@@ -18,7 +18,7 @@ workflow three_levels {
 
 
     output {
-        c1.result
+        Int? result = c1.result
     }
 }
 

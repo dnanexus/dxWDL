@@ -396,9 +396,12 @@ object Block {
     }
 
 
-    // Check if a block contains exactly one call
+    // A simple block has one toplevel statement
+    // that requires a job.
+    //
     // examples:
     //
+    //  Int x = k + 1
     //  if (x > 1) {
     //      call Add { input: a=1, b=2 }
     //  }
