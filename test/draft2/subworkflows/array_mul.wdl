@@ -7,7 +7,7 @@ workflow array_mul {
     Int a
 
     scatter (i in range(n)) {
-        call lib.mul as mul {
+        call lib.z_mul as mul {
             input: n=n, a=a, b=i
         }
     }

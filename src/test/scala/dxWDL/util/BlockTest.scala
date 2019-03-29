@@ -2,9 +2,11 @@ package dxWDL.util
 
 import java.nio.file.{Path, Paths}
 import org.scalatest.{FlatSpec, Matchers}
+
 import wom.callable.{WorkflowDefinition}
 import wom.executable.WomBundle
 import wom.graph._
+import wom.graph.expression._
 import wom.types._
 
 class BlockTest extends FlatSpec with Matchers {
@@ -197,9 +199,9 @@ class BlockTest extends FlatSpec with Matchers {
         catg02 shouldBe a[Block.CallCompound]
     }
 
-    it should "handle calls to imported modules" taggedAs(EdgeTag) in {
+    it should "handle calls to imported modules" in {
         val path = pathFromBasename("draft2", "conditionals1.wdl")
-        val (language, womBundle: WomBundle, allSources, subBundles) = ParseWomSourceFile.apply(path)
+        val (language, womBundle: WomBundle, allSources, _) = ParseWomSourceFile.apply(path)
 
         val (_, wfSource) = allSources.find {
             case (name, _) => name.endsWith("conditionals1.wdl")
@@ -221,5 +223,71 @@ class BlockTest extends FlatSpec with Matchers {
             val (_, catg) = Block.categorize(b)
             Utils.ignore(catg)
         }
+    }
+
+    it should "compile a workflow calling a subworkflow as a direct call"  taggedAs(EdgeTest) in {
+        val path = pathFromBasename("draft2", "movies.wdl")
+        val (language, womBundle: WomBundle, allSources, _) = ParseWomSourceFile.apply(path)
+
+        val (_, wfSource) = allSources.find {
+            case (name, _) => name.endsWith("movies.wdl")
+        }.get
+
+        val wf: WorkflowDefinition = womBundle.primaryCallable match {
+            case Some(wf: WorkflowDefinition) => wf
+            case _ => throw new Exception("sanity")
+        }
+
+        // sort from low to high according to the source lines.
+        val callToSrcLine = ParseWomSourceFile.scanForCalls(wfSource)
+        val callsLoToHi : Vector[(String, Int)] = callToSrcLine.toVector.sortBy(_._2)
+
+        // Find the fragment block to execute
+        val block = Block.getSubBlock(Vector(0), wf.innerGraph, callsLoToHi)
+
+        /*
+        val dbgBlock = block.nodes.map{
+            WomPrettyPrintApproxWdl.apply(_)
+        }.mkString("\n")
+        System.out.println(s"""|Block:
+                               |${dbgBlock}
+                               |""".stripMargin)
+         */
+
+        val (_, category) = Block.categorize(block)
+        category shouldBe a[Block.CallDirect]
+    }
+
+
+    it should "sort a block correctly in the presence of conditionals" taggedAs(EdgeTest) in {
+        val path = pathFromBasename("draft2", "conditionals3.wdl")
+        val wfSourceCode = Utils.readFileContent(path)
+        val wf : WorkflowDefinition = ParseWomSourceFile.parseWdlWorkflow(wfSourceCode)
+
+        val (_, subBlocks, _) = Block.split(wf.innerGraph, wfSourceCode)
+        val b0 = subBlocks(0)
+
+        val exprVec : Vector[ExposedExpressionNode] = b0.nodes.collect{
+            case node : ExposedExpressionNode => node
+        }
+        exprVec.size should be(1)
+        val arrayCalc : ExposedExpressionNode = exprVec.head
+        arrayCalc.womExpression.sourceString should be("[i1, i2, i3]")
+
+        // All this looks good
+/*        val s = WomPrettyPrint.apply(arrayCalc)
+        System.out.println(s"node = ${s}")
+        System.out.println("upstream ancestry")
+        val dependencies: Set[GraphNode] = arrayCalc.upstreamAncestry
+        dependencies.foreach{ n =>
+            System.out.println(WomPrettyPrint.apply(n))
+        }
+
+        System.out.println(b0.prettyPrint)
+
+/*        for (i <- 0 to b0.nodes.length - 1) {
+            val n = b0.nodes(i)
+            System.out.println(s"node ${i} = ${WomPrettyPrint.apply(n)}")
+        }*/ */
     }
 }

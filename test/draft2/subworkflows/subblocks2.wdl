@@ -6,7 +6,7 @@ workflow subblocks2 {
     Int n = 7
 
     scatter (i in numbers) {
-        call lib.add { input: a=i, b=1, n=n }
+        call lib.z_add as add { input: a=i, b=1, n=n }
         Int m = add.result + 2
     }
 

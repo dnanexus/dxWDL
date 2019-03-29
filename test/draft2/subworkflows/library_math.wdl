@@ -1,5 +1,5 @@
 # library of math module N
-task add {
+task z_add {
     Int n
     Int a
     Int b
@@ -12,7 +12,7 @@ task add {
     }
 }
 
-task sub {
+task z_sub {
     Int n
     Int a
     Int b
@@ -25,7 +25,7 @@ task sub {
     }
 }
 
-task mul {
+task z_mul {
     Int n
     Int a
     Int b

@@ -112,16 +112,23 @@ class WfFragRunnerTest extends FlatSpec with Matchers {
 
         val env = Map.empty[String, WomValue]
         val results : Map[String, WomValue] = fragRunner.evalExpressions(block.nodes, env)
+        results.keys should be(Set("names", "full_name"))
         results should be(
-            Map("full_name" -> WomArray(
+            Map(
+                "names" -> WomArray(
+                    WomArrayType(WomStringType),
+                    Vector(WomString("Michael"),
+                           WomString("Lukas"),
+                           WomString("Martin"),
+                           WomString("Shelly"),
+                           WomString("Amy"))),
+                "full_name" -> WomArray(
                     WomArrayType(WomStringType),
                     Vector(WomString("Michael_Manhaim"),
                            WomString("Lukas_Manhaim"),
                            WomString("Martin_Manhaim"),
                            WomString("Shelly_Manhaim"),
-                           WomString("Amy_Manhaim"))
-
-                )
+                           WomString("Amy_Manhaim")))
             ))
     }
 
@@ -137,7 +144,8 @@ class WfFragRunnerTest extends FlatSpec with Matchers {
         val env = Map.empty[String, WomValue]
         val results : Map[String, WomValue] = fragRunner.evalExpressions(block.nodes, env)
         results should be(
-            Map("cats" -> WomOptionalValue(
+            Map("flag" -> WomBoolean(true),
+                "cats" -> WomOptionalValue(
                     WomStringType,
                     Some(WomString("Mr. Baggins"))
                 )))
@@ -188,7 +196,7 @@ class WfFragRunnerTest extends FlatSpec with Matchers {
         }
     }
 
-    it should "handles draft2" taggedAs(EdgeTest) in {
+    it should "handles draft2" in {
         val path = pathFromBasename("draft2", "conditionals2.wdl")
         val wfSourceCode = Utils.readFileContent(path)
 
@@ -200,5 +208,39 @@ class WfFragRunnerTest extends FlatSpec with Matchers {
                                                  Map.empty[String, WomValue])
  Utils.ignore(results)*/
         Utils.ignore(subBlocks)
+    }
+
+    it should "evaluate expressions that define variables" in {
+        val path = pathFromBasename("draft2", "conditionals3.wdl")
+        val wfSourceCode = Utils.readFileContent(path)
+
+        val (dxPathConfig, dxIoFunctions) = setup()
+        val (wf, fragRunner) = setupFragRunner(dxPathConfig, dxIoFunctions, wfSourceCode)
+        val (_, subBlocks, _) = Block.split(wf.innerGraph, wfSourceCode)
+
+        val results = fragRunner.evalExpressions(subBlocks(0).nodes,
+                                                 Map.empty[String, WomValue])
+        results.keys should be(Set("powers10", "i1", "i2", "i3"))
+        results("i1") should be(WomOptionalValue(WomIntegerType, Some(WomInteger(1))))
+        results("i2") should be(WomOptionalValue(WomIntegerType, None))
+        results("i3") should be(WomOptionalValue(WomIntegerType, Some(WomInteger(100))))
+        results("powers10") should be(
+            WomArray(WomArrayType(WomOptionalType(WomIntegerType)),
+                     Vector(WomOptionalValue(WomIntegerType, Some(WomInteger(1))),
+                            WomOptionalValue(WomIntegerType, None),
+                            WomOptionalValue(WomIntegerType, Some(WomInteger(100))))))
+    }
+
+    it should "evaluate call inputs properly" taggedAs(EdgeTest) in {
+        val path = pathFromBasename("draft2", "conditionals1.wdl")
+        val wfSourceCode = Utils.readFileContent(path)
+
+        val (dxPathConfig, dxIoFunctions) = setup()
+        val (wf, fragRunner) = setupFragRunner(dxPathConfig, dxIoFunctions, wfSourceCode)
+        val (_, subBlocks, _) = Block.split(wf.innerGraph, wfSourceCode)
+
+        /*val results = fragRunner.evalExpressions(subBlocks(0).nodes,
+                                                 Map.empty[String, WomValue])
+        results.keys should be(Set("powers10", "i1", "i2", "i3"))*/
     }
 }

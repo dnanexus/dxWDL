@@ -30,27 +30,27 @@ class NativeTest extends FlatSpec with Matchers {
                                  "-force",
                                  "-locked")
 
-    it should "Native compile a single WDL task" taggedAs(NativeTag) in {
+    it should "Native compile a single WDL task" taggedAs(NativeTestXX) in {
         val path = pathFromBasename("compiler", "add.wdl")
         val retval = Main.compile(path.toString :: compileFlags)
         retval shouldBe a [Main.SuccessfulTermination]
     }
 
     // linear workflow
-    it  should "Native compile a linear WDL workflow without expressions" taggedAs(NativeTag) in {
+    it  should "Native compile a linear WDL workflow without expressions" taggedAs(NativeTestXX) in {
         val path = pathFromBasename("compiler", "wf_linear_no_expr.wdl")
         val retval = Main.compile(path.toString :: compileFlags)
         retval shouldBe a [Main.SuccessfulTermination]
     }
 
-    it  should "Native compile a linear WDL workflow" taggedAs(NativeTag) in {
+    it  should "Native compile a linear WDL workflow" taggedAs(NativeTestXX) in {
         val path = pathFromBasename("compiler", "wf_linear.wdl")
         val retval = Main.compile(path.toString
                                       :: compileFlags)
         retval shouldBe a [Main.SuccessfulTermination]
     }
 
-    it should "Native compile a workflow with a scatter without a call" taggedAs(NativeTag) in {
+    it should "Native compile a workflow with a scatter without a call" taggedAs(NativeTestXX) in {
         val path = pathFromBasename("compiler", "scatter_no_call.wdl")
         Main.compile(
             path.toString :: compileFlags
@@ -58,14 +58,14 @@ class NativeTest extends FlatSpec with Matchers {
     }
 
 
-    it should "Native compile a draft2 workflow" taggedAs(NativeTag) in {
+    it should "Native compile a draft2 workflow" taggedAs(NativeTestXX) in {
         val path = pathFromBasename("draft2", "shapes.wdl")
         Main.compile(
             path.toString :: "--force" :: compileFlags
         ) shouldBe a [Main.SuccessfulTermination]
     }
 
-    it should "Native compile a workflow with one level nesting" taggedAs(NativeTag, EdgeTag) in {
+    it should "Native compile a workflow with one level nesting" taggedAs(NativeTestXX, EdgeTest) in {
         val path = pathFromBasename("nested", "two_levels.wdl")
         Main.compile(
             path.toString :: "--force"

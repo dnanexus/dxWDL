@@ -7,7 +7,7 @@ workflow array_add {
     Int a
 
     scatter (i in range(n)) {
-        call lib.add as add {
+        call lib.z_add as add {
             input: n=n, a=a, b=i
         }
     }

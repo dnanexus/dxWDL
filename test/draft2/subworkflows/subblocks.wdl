@@ -6,15 +6,15 @@ workflow subblocks {
     Int n = 7
 
     scatter (i in numbers) {
-        call lib.add { input: a=i, b=1, n=n }
+        call lib.z_add as add { input: a=i, b=1, n=n }
 
         Int k = add.result + 2
 
-        call lib.sub { input: a=k, b=3, n=n }
+        call lib.z_sub as sub { input: a=k, b=3, n=n }
 
         Int j = sub.result * 2
 
-        call lib.mul { input: a=j, b=1, n=n }
+        call lib.z_mul as mul { input: a=j, b=1, n=n }
     }
 
     output {

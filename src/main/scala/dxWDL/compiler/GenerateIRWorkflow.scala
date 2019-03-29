@@ -99,11 +99,11 @@ case class GenerateIRWorkflow(wf : WorkflowDefinition,
     // the "i" parameter, under WDL draft-2, is compiled as "volume.i"
     // under WDL version 1.0, it is compiled as "i"
     //
-    private def findInputByName(callInputs: Seq[TaskCallInputExpressionNode],
-                                cVar: CVar) : Option[TaskCallInputExpressionNode] = {
+    private def findInputByName(callInputs: Seq[AnonymousExpressionNode],
+                                cVar: CVar) : Option[AnonymousExpressionNode] = {
         val retval = callInputs.find{
-            case expr : TaskCallInputExpressionNode =>
-                //Utils.trace(verbose2, s"compare ${cVar.name} to ${expr.identifier.localName.value}")
+            case expr : AnonymousExpressionNode =>
+                Utils.trace(verbose2, s"compare ${cVar.name} to ${expr.identifier.localName.value}")
                 cVar.name == Utils.getUnqualifiedName(expr.identifier.localName.value)
         }
         retval
@@ -116,8 +116,8 @@ case class GenerateIRWorkflow(wf : WorkflowDefinition,
         // Find the callee
         val calleeName = Utils.getUnqualifiedName(call.callable.name)
         val callee: IR.Callable = callables(calleeName)
-        val callInputs: Seq[TaskCallInputExpressionNode] = call.upstream.collect{
-            case tcExpr : TaskCallInputExpressionNode => tcExpr
+        val callInputs: Seq[AnonymousExpressionNode] = call.upstream.collect{
+            case tcExpr : AnonymousExpressionNode => tcExpr
         }.toSeq
 
         // Extract the input values/links from the environment
@@ -341,6 +341,7 @@ case class GenerateIRWorkflow(wf : WorkflowDefinition,
         var env : CallEnv = wfInputs.map { case (cVar,sArg) =>
             cVar.name -> LinkedVar(cVar, sArg)
         }.toMap
+
         var allStageInfo = Vector.empty[(IR.Stage, Vector[IR.Callable])]
         var remainingBlocks = subBlocks
 
@@ -350,7 +351,6 @@ case class GenerateIRWorkflow(wf : WorkflowDefinition,
             remainingBlocks = remainingBlocks.tail
 
             val (_, category) = Block.categorize(block)
-            Utils.trace(verbose.on, s"  category = ${category}")
             val (stage, auxCallables) = category match {
                 case Block.CallDirect(call) =>
                     // The block contains exactly one call, with no extra declarations.

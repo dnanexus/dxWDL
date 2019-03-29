@@ -303,7 +303,8 @@ object Block {
         val allBlocks =
             if (rest.size > 0) {
                 // Add an additional block for anything not belonging to the calls
-                blocks :+ Block(rest.toVector)
+                val lastBlock = partialSortByDep(rest)
+                blocks :+ Block(lastBlock)
             } else {
                 blocks
             }
@@ -370,10 +371,8 @@ object Block {
         val calls : Seq[CallNode] = block.nodes.collect{
             case cNode : CallNode => cNode
         }
-        if (calls.size != 1) {
-            System.out.println("=== calls.size != 1")
+        if (calls.size != 1)
             return false
-        }
         val oneCall = calls.head
 
         // All the other nodes have to be call inputs
@@ -382,20 +381,17 @@ object Block {
         // have the -subsetOf- call.
         val rest = block.nodes.toSet - oneCall
         val callInputs = oneCall.upstream.toSet
-        if (!rest.subsetOf(callInputs)) {
-            System.out.println("=== missing inputs")
+        if (!rest.subsetOf(callInputs))
             return false
-        }
 
         // All the call inputs have to be simple expressions, if the call is
         // to be called "simple"
         val retval = rest.forall{
-            case expr: TaskCallInputExpressionNode =>
+            case expr: ExpressionNode =>
                 isTrivialExpression(expr.womType, expr.womExpression)
-            case _ => false
+            case other =>
+                false
         }
-        if (!retval)
-            System.out.println("=== !retval")
         retval
     }
 
@@ -445,9 +441,7 @@ object Block {
             case _: OuterGraphInputNode => true
             case _: GraphOutputNode => true
             case _: PlainAnonymousExpressionNode => true
-            case other =>
-                //System.out.println(s"strange value ${other}")
-                false
+            case other => false
         }
     }
 

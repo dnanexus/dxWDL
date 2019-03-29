@@ -6,8 +6,8 @@ workflow conditionals2 {
     Int n = 7
 
     if (flag) {
-        call lib.add { input: a=5, b=1, n=n }
-        call lib.add as add2 {input: a=3, b=2, n=n }
+        call lib.z_add as add { input: a=5, b=1, n=n }
+        call lib.z_add as add2 {input: a=3, b=2, n=n }
         call genFile { input: str="Jabberwocky" }
     }
 
@@ -15,7 +15,7 @@ workflow conditionals2 {
 
     scatter (i in [1, 3, 5]) {
         Int k = select_first([add2.result])
-        call lib.mul {input: a=i, b=k, n=n}
+        call lib.z_mul as mul {input: a=i, b=k, n=n}
     }
 
     output {
