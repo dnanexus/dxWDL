@@ -396,46 +396,62 @@ object Block {
     }
 
 
-    // A simple block has one toplevel statement
-    // that requires a job.
-    //
-    // examples:
-    //
-    //  Int x = k + 1
-    //  if (x > 1) {
-    //      call Add { input: a=1, b=2 }
-    //  }
-    //
-    // These are NOT simple blocks:
-    // if (x > 1) {
-    //    call Multiple { ... }
-    //    call Add { ... }
-    // }
-    //
-    // scatter (n in names) {
-    //    String full_name = n + " Horowitz"
-    //    call Filter { input: prefix = fullName }
-    // }
-    //
+    /*
+     A simple block has one toplevel statement, it can
+     be executed in one job.
+
+     Examples for simple blocks
+
+     -- Just expressions
+     String s = "hello world"
+     Int i = 13
+     Float x = z + 4
+
+     -- One top level if
+     Int x = k + 1
+     if (x > 1) {
+       call Add { input: a=1, b=2 }
+     }
+
+     -- one top level If, we'll need a subworkflow for the inner
+        section
+     if (x > 1) {
+       call Multiple { ... }
+       call Add { ... }
+     }
+
+     -- one top level scatter
+     scatter (n in names) {
+       String full_name = n + " Horowitz"
+       call Filter { input: prefix = fullName }
+     }
+
+     These are NOT simple blocks:
+
+     -- a subworkflow is required to run the three calls
+     call Add { input: a=4, b=14}
+     call Sub { input: a=4, b=14}
+     call Inc { input: Sub.result }
+
+     -- a subworkflow to connect the two fragments
+     if (x > 1) {
+        call Inc {input: a=x }
+     }
+     if (x > 3) {
+        call Dec {input: a=x }
+     }
+     */
     private def isSimpleSubblock(graph: Graph) : Boolean = {
         val nodes = graph.nodes
 
-        // The block can't have conditional/scatter sub-blocks
-        val hasSubblocks = nodes.forall{
-            case _ : ScatterNode => true
-            case _ : ConditionalNode => true
-            case _ => false
-        }
-        if (hasSubblocks)
-            return false
+        val numCalls = nodes.collect(x : CallNode => x).size
+        val numScatters = nodes.collect(x : ScatterNode => x).size
+        val numConds = nodes.collect(x : ConditionalNode => x).size
 
-        // The block has to have one call
-        val calls : Seq[CallNode] = nodes.toSeq.collect{
-            case cNode : CallNode => cNode
-        }
-        if (calls.size > 1)
+        if (numCalls + numScatters + numConds == 0)
+            return true
+        if (numCalls + numScatters + numConds > 1)
             return false
-        assert(calls.size == 1)
 
         // The only other kind of nodes could be inputs, outputs, and task input expressions.
         nodes.forall{
