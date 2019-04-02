@@ -71,10 +71,13 @@ class GenerateIRTest extends FlatSpec with Matchers {
         ) shouldBe a [Main.SuccessfulTerminationIR]
     }
 
-    it should "IR compile optionals" in {
+    it should "IR compile optionals" taggedAs(EdgeTest) in {
         val path = pathFromBasename("compiler", "optionals.wdl")
         Main.compile(
-            path.toString :: cFlags
+            path.toString
+//                :: "--verbose"
+//                :: "--verboseKey" :: "GenerateIR"
+                :: cFlags
         ) shouldBe a [Main.SuccessfulTerminationIR]
     }
 
@@ -177,7 +180,7 @@ class GenerateIRTest extends FlatSpec with Matchers {
         stage.description shouldBe ("review")
     }
 
-    it should "three nesting levels" taggedAs(EdgeTest) in {
+    it should "three nesting levels" in {
         val path = pathFromBasename("nested", "three_levels.wdl")
         val retval = Main.compile(
             path.toString

@@ -477,56 +477,6 @@ case class WfFragRunner(wf: WorkflowDefinition,
         }
     }
 
-    // Get the call from inside the block
-    private def getInnerCallFromSimpleBlock(graph: Graph) : CallNode = {
-        val calls = graph.nodes.collect {
-            case callNode : CallNode => callNode
-        }.toVector
-        assert(calls.size == 1)
-        calls.head
-    }
-
-    // Simple conditional subblock. For example:
-    //
-    //  if (x > 1) {
-    //      call Add { input: a=1, b=x+32 }
-    //  }
-    private def execSimpleConditional(cnNode: ConditionalNode,
-                                      env: Map[String, WomValue]) : Map[String, WdlVarLinks] = {
-        // Evaluate the condition
-        val condValueRaw : WomValue =
-            evaluateWomExpression(cnNode.conditionExpression.womExpression,
-                                  WomBooleanType,
-                                  env)
-        val condValue : Boolean = condValueRaw match {
-            case b: WomBoolean => b.value
-            case other => throw new AppInternalException(
-                s"Unexpected class ${other.getClass}, ${other}")
-        }
-        if (!condValue) {
-            // Condition is false, no need to execute the call
-            Map.empty
-        } else {
-            val call = getInnerCallFromSimpleBlock(cnNode.innerGraph)
-
-            // evaluate the call inputs, and add to the environment
-            val callInputs = evalCallInputs(call, env)
-            val (_, dxExec) = execCall(call, callInputs,  None)
-            val callResults: Map[String, WdlVarLinks] = genPromisesForCall(call, dxExec)
-
-            // Add optional modifier to the return types.
-            callResults.map{
-                case (key, WdlVarLinks(womType, dxl)) =>
-                    // be careful not to make double optionals
-                    val optionalType = womType match {
-                        case WomOptionalType(_) => womType
-                        case _ => WomOptionalType(womType)
-                    }
-                    key -> WdlVarLinks(optionalType, dxl)
-            }.toMap
-        }
-    }
-
     // For example:
     //
     // if (flag) {
@@ -534,8 +484,8 @@ case class WfFragRunner(wf: WorkflowDefinition,
     //   call zinc as inc4 { input: a = num + 3 }
     // }
     //
-    private def execSubblockConConditional(cnNode: ConditionalNode,
-                                           env: Map[String, WomValue]) : Map[String, WdlVarLinks] = {
+    private def execConditional(cnNode: ConditionalNode,
+                                env: Map[String, WomValue]) : Map[String, WdlVarLinks] = {
         // Evaluate the condition
         val condValueRaw : WomValue =
             evaluateWomExpression(cnNode.conditionExpression.womExpression,
@@ -594,46 +544,10 @@ case class WfFragRunner(wf: WorkflowDefinition,
         }
     }
 
-    private def execSimpleScatter(sctNode: ScatterNode,
-                                  env: Map[String, WomValue]) : Map[String, WdlVarLinks] = {
-        // WDL has exactly one variable
-        assert(sctNode.scatterVariableNodes.size == 1)
-        val svNode: ScatterVariableNode = sctNode.scatterVariableNodes.head
-        val collectionRaw : WomValue =
-            evaluateWomExpression(svNode.scatterExpressionNode.womExpression,
-                                  WomArrayType(svNode.womType),
-                                  env)
-        val collection : Seq[WomValue] = collectionRaw match {
-            case x: WomArray => x.value
-            case other => throw new AppInternalException(
-                s"Unexpected class ${other.getClass}, ${other}")
-        }
-        // There must be exactly one call
-        val call = getInnerCallFromSimpleBlock(sctNode.innerGraph)
 
-        // loop on the collection, call the applet in the inner loop
-        val childJobs : Vector[DXExecution] =
-            collection.map{ item =>
-                val innerEnv = env + (svNode.identifier.localName.value -> item)
-                val callInputs = evalCallInputs(call, innerEnv)
-                val callHint = readableNameForScatterItem(item)
-                val (_, dxExec) = execCall(call, callInputs, callHint)
-                dxExec
-            }.toVector
-
-        // Launch a subjob to collect and marshal the call results.
-        // Remove the declarations already calculated
-        val resultTypes : Map[String, WomArrayType] = sctNode.outputMapping.map{
-            case scp : ScatterGathererPort =>
-                scp.identifier.localName.value -> scp.womType
-        }.toMap
-        collectSubJobs.launch(childJobs, resultTypes)
-    }
-
-
-    private def execScatterSubblock(sctNode: ScatterNode,
-                                    callsLoToHi : Vector[(String, Int)],
-                                    env: Map[String, WomValue]) : Map[String, WdlVarLinks] = {
+    private def execScatter(sctNode: ScatterNode,
+                            callsLoToHi : Vector[(String, Int)],
+                            env: Map[String, WomValue]) : Map[String, WdlVarLinks] = {
         // WDL has exactly one variable
         assert(sctNode.scatterVariableNodes.size == 1)
         val svNode: ScatterVariableNode = sctNode.scatterVariableNodes.head
@@ -690,58 +604,45 @@ case class WfFragRunner(wf: WorkflowDefinition,
                                      |
                                      |""".stripMargin)
 
-        val (otherNodes, category) = Block.categorize(block)
-        val env = evalExpressions(otherNodes, envInitial)
+        val catg = Block.categorize(block)
+        val env = evalExpressions(catg.nodes, envInitial)
 
         val subblockResults : Map[String, WdlVarLinks] = runMode match {
             case RunnerWfFragmentMode.Launch =>
                 // The last node could be a call or a block. All the other nodes
                 // are expressions.
-                category match {
-                    case Block.AllExpressions =>
+                catg match {
+                    case Block.AllExpressions(_) =>
                         Map.empty
 
-                    case Block.CallDirect(_) =>
+                    case Block.CallDirect(_,_) =>
                         throw new Exception("sanity, shouldn't reach this state")
 
                     // A single call at the end of the block
-                    case Block.CallCompound(call: CallNode) =>
+                    case Block.CallCompound(_, call: CallNode) =>
                         val callInputs = evalCallInputs(call, env)
                         val (_, dxExec) = execCall(call, callInputs,  None)
                         genPromisesForCall(call, dxExec)
 
-                    // A conditional at the end of the block, with a call inside it
-                    case Block.Cond(cnNode) =>
-                        execSimpleConditional(cnNode, env)
-
-                    // A scatter at the end of the block, with a call inside it
-                    case Block.Scatter(sctNode) =>
-                        execSimpleScatter(sctNode, env)
-
-                        // a conditional with a subblock inside it. We need to
-                        // call a subworkflow.
-                    case Block.CondSubblock(cnNode) =>
-                        execSubblockConConditional(cnNode, env)
+                    // a conditional with a subblock inside it. We may need to
+                    // call a subworkflow.
+                    case Block.Cond(_, cnNode) =>
+                        execConditional(cnNode, env)
 
                     // a scatter with a subblock inside it. Iterate
-                    // on the scatter variable, and call a sub-workflow
+                    // on the scatter variable, and call an applet/subworkflow
                     // for each value.
-                    case Block.ScatterSubblock(sctNode) =>
-                        execScatterSubblock(sctNode, callsLoToHi, env)
+                    case Block.Scatter(_, sctNode) =>
+                        execScatter(sctNode, callsLoToHi, env)
                 }
 
             // A subjob that collects results from scatters
             case RunnerWfFragmentMode.Collect =>
                 val childJobsComplete = collectSubJobs.executableFromSeqNum()
-                category match {
-                    // A scatter at the end of the block, with a call inside it
-                    case Block.Scatter(sctNode) =>
-                        val call = getInnerCallFromSimpleBlock(sctNode.innerGraph)
-                        collectSubJobs.aggregateResults(call, childJobsComplete)
-
-                    // A scatter with a complex sub-block, compiled as a sub-workflow
-                    // There must be exactly one sub-workflow
-                    case Block.ScatterSubblock(sctNode) =>
+                catg match {
+                    // A scatter with a subblock, which may be compiled as a subworkflow.
+                    // There must be exactly one subworkflow.
+                    case Block.Scatter(_, sctNode) =>
                         assert(execLinkInfo.size == 1)
                         val (_, linkInfo) = execLinkInfo.toVector.head
                         collectSubJobs.aggregateResultsFromGeneratedSubWorkflow(linkInfo, childJobsComplete)

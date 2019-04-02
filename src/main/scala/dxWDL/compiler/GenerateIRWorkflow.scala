@@ -208,41 +208,62 @@ case class GenerateIRWorkflow(wf : WorkflowDefinition,
     private def blockClosure(block: Block,
                              env : CallEnv,
                              dbg: String) : CallEnv = {
-/*        if (verbose2) {
-            val blockNodesDbg = block.nodes.map{
-                "    " + WomPrettyPrint.apply(_)
-            }.mkString("\n")
-            Utils.trace(verbose2,
-                        s"""|blockClosure nodes [
-                            |${blockNodesDbg}
-                            |]
-                            |""".stripMargin)
-        }*/
         val allInputs = Block.closure(block)
-        val closure = allInputs.flatMap { case (name, womType) =>
+        allInputs.flatMap { case (name, womType) =>
             lookupInEnv(name, womType, env)
         }.toMap
-
-/*        Utils.trace(verbose2,
-                    s"""|blockClosure II
-                        |   stage: ${dbg}
-                        |   external: ${allInputs.mkString(",")}
-                        |   found: ${closure.keys}""".stripMargin) */
-        closure
     }
 
-    // A block complex enough to require a workflow.
-    // Recursively call into the asssemble-backbone method, and
+    // A block inside a conditional or scatter. If it is simple,
+    // we can use a direct call. Otherwise, recursively call into the asssemble-backbone method, and
     // get a locked subworkflow.
-    private def compileNestedBlock(graph: Graph,
-                                   blockPath: Vector[Int]) : (IR.Workflow, Vector[IR.Callable]) = {
+    private def compileNestedBlock(wfName: String,
+                                   graph: Graph,
+                                   blockPath: Vector[Int],
+                                   env: CallEnv) : (IR.Callable, Vector[IR.Callable]) = {
         val (inputNodes, subBlocks, outputNodes) = Block.splitGraph(graph, callsLoToHi)
+        assert(subBlocks.size > 0)
 
-        val pathStr = blockPath.map(x => x.toString).mkString("_")
-        val (subwf, auxCallables, _ ) = compileWorkflowLocked(wf.name + "_block_" + pathStr,
-                                                              inputNodes, outputNodes,
-                                                              blockPath, subBlocks)
-        (subwf, auxCallables)
+        def compileOneCall(cNode: CallNode) = {
+            val callName = Utils.getUnqualifiedName(cNode.callable.name)
+            Utils.trace(verbose2, s"Exactly one call ${callName}")
+            callables.get(callName) match {
+                case None => throw new Exception(s"Call ${callName} has not been compiled previously")
+                case Some(x) => (x, Vector.empty)
+            }
+        }
+
+        if (subBlocks.size == 1) {
+            Block.categorize(subBlocks(0)) match {
+                case Block.CallDirect(_, cNode) =>
+                    // There is an existing applet that does this.
+                    // No need to compile it again
+                    compileOneCall(cNode)
+                case Block.CallCompound(_, cNode) =>
+                    compileOneCall(cNode)
+                case _ =>
+                    // At runtime, we will need to execute a workflow
+                    // fragment. This requires an applet.
+                    val (stage, aux) = compileWfFragment(wfName,
+                                                         subBlocks(0),
+                                                         blockPath :+ 0,
+                                                         env)
+                    val fragName = stage.calleeName
+                    val main = aux.find(_.name == fragName) match {
+                        case None => throw new Exception(s"Could not find ${fragName}")
+                        case Some(x) => x
+                    }
+                    (main, aux)
+            }
+        } else {
+            // there are several subblocks, we need a subworkflow to string them
+            // together.
+            val pathStr = blockPath.map(x => x.toString).mkString("_")
+            val (subwf, auxCallables, _ ) = compileWorkflowLocked(wfName + "_block_" + pathStr,
+                                                                  inputNodes, outputNodes,
+                                                                  blockPath, subBlocks)
+            (subwf, auxCallables)
+        }
     }
 
     // Build an applet to evaluate a WDL workflow fragment
@@ -291,23 +312,20 @@ case class GenerateIRWorkflow(wf : WorkflowDefinition,
         //
         // Figure out the name of the callable; we need to link with it when we
         // get to the native phase.
-        val (_, catg) = Block.categorize(block)
-        Utils.trace(verbose2, s"""|category : ${catg.toString}
+        val catg = Block.categorize(block)
+        Utils.trace(verbose2, s"""|category : ${Block.Category.toString(catg)}
                                   |""".stripMargin)
         val (innerCall, auxCallables) : (Option[String], Vector[IR.Callable]) = catg match {
-            case Block.AllExpressions => (None, Vector.empty)
-            case Block.CallDirect(_) => throw new Exception(s"a direct call should not reach this stage")
-            case Block.CallCompound(_) | Block.Cond(_) | Block.Scatter(_) =>
-                // A simple block with no nested sub-blocks, and a single call.
-                val calls = Block.deepFindCalls(block.nodes).map{ cNode =>
-                    Utils.getUnqualifiedName(cNode.callable.name)
-                }.toVector
-                assert(calls.size == 1)
-                (Some(calls.head), Vector.empty)
-            case Block.ScatterSubblock(_) | Block.CondSubblock(_) =>
-                val innerGraph = catg.getInnerGraph
-                val (subwf, auxCallables) = compileNestedBlock(innerGraph, blockPath)
-                (Some(subwf.name), auxCallables :+ subwf)
+            case Block.AllExpressions(_) => (None, Vector.empty)
+            case Block.CallDirect(_,_) => throw new Exception(s"a direct call should not reach this stage")
+            case Block.CallCompound(_, cNode) =>
+                // A block with no nested sub-blocks, and a single call.
+                val callName = Utils.getUnqualifiedName(cNode.callable.name)
+                (Some(callName), Vector.empty)
+            case Block.Cond(_,_) | Block.Scatter(_,_) =>
+                val innerGraph = Block.Category.getInnerGraph(catg)
+                val (callable, aux) = compileNestedBlock(wfName, innerGraph, blockPath, env)
+                (Some(callable.name), aux :+ callable)
         }
 
         val applet = IR.Applet(s"${wfName}_frag_${genFragId()}",
@@ -352,9 +370,8 @@ case class GenerateIRWorkflow(wf : WorkflowDefinition,
             val block = remainingBlocks.head
             remainingBlocks = remainingBlocks.tail
 
-            val (_, category) = Block.categorize(block)
-            val (stage, auxCallables) = category match {
-                case Block.CallDirect(call) =>
+            val (stage, auxCallables) = Block.categorize(block) match {
+                case Block.CallDirect(_, call) =>
                     // The block contains exactly one call, with no extra declarations.
                     // All the variables are already in the environment, so there
                     // is no need to do any extra work. Compile directly into a workflow

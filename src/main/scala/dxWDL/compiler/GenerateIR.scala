@@ -204,16 +204,20 @@ object GenerateIR {
             allCallablesSorted = allCallablesSorted ++ auxCallables :+ exec
         }
 
+        // There could be duplicates, remove them here
+        allCallablesSorted = allCallablesSorted.distinct
+
         // We already compiled all the individual wdl:tasks and
         // wdl:workflows, let's find the entrypoint.
         val primary = womBundle.primaryCallable.map{ callable =>
             allCallables(Utils.getUnqualifiedName(callable.name))
         }
-        val allCallablesSorted2 = allCallablesSorted.map{_.name}
-        Utils.trace(verbose.on, s"allCallablesSorted=${allCallablesSorted2}")
-        assert(allCallables.size == allCallablesSorted2.size)
+        val allCallablesSortedNames = allCallablesSorted.map{_.name}
+        Utils.trace(verbose.on, s"allCallables=${allCallables.map(_._1)}")
+        Utils.trace(verbose.on, s"allCallablesSorted=${allCallablesSortedNames}")
+        assert(allCallables.size == allCallablesSortedNames.size)
 
         Utils.traceLevelDec()
-        IR.Bundle(primary, allCallables, allCallablesSorted2)
+        IR.Bundle(primary, allCallables, allCallablesSortedNames)
     }
 }

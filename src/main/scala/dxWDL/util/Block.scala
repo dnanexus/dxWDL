@@ -26,6 +26,51 @@ or 3) scatter with one or more calls inside it.
      2        [call y]
      3        [call z]
      4        [String buf, Float x, scatter]
+
+
+A block has one toplevel statement, it can
+be executed in one job.
+
+Examples for simple blocks
+
+  -- Just expressions
+     String s = "hello world"
+     Int i = 13
+     Float x = z + 4
+
+  -- One top level if
+     Int x = k + 1
+     if (x > 1) {
+       call Add { input: a=1, b=2 }
+     }
+
+   -- one top level If, we'll need a subworkflow for the inner
+        section
+     if (x > 1) {
+       call Multiple { ... }
+       call Add { ... }
+     }
+
+   -- one top level scatter
+     scatter (n in names) {
+       String full_name = n + " Horowitz"
+       call Filter { input: prefix = fullName }
+     }
+
+These are not blocks, because we need a subworkflow to run them:
+
+  -- three calls
+     call Add { input: a=4, b=14}
+     call Sub { input: a=4, b=14}
+     call Inc { input: Sub.result }
+
+  -- two consecutive fragments
+     if (x > 1) {
+        call Inc {input: a=x }
+     }
+     if (x > 3) {
+        call Dec {input: a=x }
+     }
 */
 
 package dxWDL.util
@@ -54,16 +99,11 @@ case class Block(nodes : Vector[GraphNode]) {
     }
 
     // Check that this block is valid.
-    // 1) It can have zero or one top-level calls
     def validate() : Unit = {
-        val topLevelCalls: Vector[CallNode] = nodes.collect{
-            case x:CallNode => x
-        }.toVector
-        val numTopLeveleCalls = topLevelCalls.size
-        if (numTopLeveleCalls > 1) {
-            Utils.error(this.prettyPrint)
-            throw new Exception(s"${numTopLeveleCalls} calls in block")
-        }
+        // There can be no calls in the first nodes
+        val allButLast : Vector[GraphNode] = this.nodes.dropRight(1)
+        val allCalls = Block.deepFindCalls(allButLast)
+        assert(allCalls.size == 0)
     }
 
     // Create a human readable name for a block of statements
@@ -132,20 +172,6 @@ object Block {
                 }
             case _ => false
         }
-    }
-
-    // Deep search for all calls in a graph
-    def deepFindCalls(nodes: Seq[GraphNode]) : Vector[CallNode] = {
-        nodes.foldLeft(Vector.empty[CallNode]) {
-            case (accu: Vector[CallNode], call:CallNode) =>
-                accu :+ call
-            case (accu, ssc:ScatterNode) =>
-                accu ++ deepFindCalls(ssc.innerGraph.nodes.toVector)
-            case (accu, ifStmt:ConditionalNode) =>
-                accu ++ deepFindCalls(ifStmt.innerGraph.nodes.toVector)
-            case (accu, _) =>
-                accu
-        }.toVector
     }
 
     // Is the call [callName] invoked in one of the nodes, or their
@@ -313,7 +339,7 @@ object Block {
     }
 
 
-    // An easy to use method that just takes the workflow source
+    // An easy to use method that takes the workflow source
     def split(graph: Graph, wfSource: String) :  (Vector[GraphInputNode],   // inputs
                                                   Vector[Block], // blocks
                                                   Vector[GraphOutputNode]) // outputs
@@ -326,9 +352,11 @@ object Block {
         splitGraph(graph, callsLoToHi)
     }
 
-    def dbgPrint(inputNodes: Vector[GraphInputNode],   // inputs
-                 subBlocks: Vector[Block], // blocks
-                 outputNodes: Vector[GraphOutputNode]) // outputs
+    // A debugging method, to display a block in a human readable
+    // fashion.
+    def dbgToString(inputNodes: Vector[GraphInputNode],   // inputs
+                    subBlocks: Vector[Block], // blocks
+                    outputNodes: Vector[GraphOutputNode]) // outputs
             : String = {
         val inputs = inputNodes.map{ node =>
             WomPrettyPrintApproxWdl.apply(node)
@@ -387,7 +415,7 @@ object Block {
         // All the call inputs have to be simple expressions, if the call is
         // to be called "simple"
         val retval = rest.forall{
-            case expr: ExpressionNode =>
+            case expr: AnonymousExpressionNode =>
                 isTrivialExpression(expr.womType, expr.womExpression)
             case other =>
                 false
@@ -395,72 +423,18 @@ object Block {
         retval
     }
 
-
-    /*
-     A simple block has one toplevel statement, it can
-     be executed in one job.
-
-     Examples for simple blocks
-
-     -- Just expressions
-     String s = "hello world"
-     Int i = 13
-     Float x = z + 4
-
-     -- One top level if
-     Int x = k + 1
-     if (x > 1) {
-       call Add { input: a=1, b=2 }
-     }
-
-     -- one top level If, we'll need a subworkflow for the inner
-        section
-     if (x > 1) {
-       call Multiple { ... }
-       call Add { ... }
-     }
-
-     -- one top level scatter
-     scatter (n in names) {
-       String full_name = n + " Horowitz"
-       call Filter { input: prefix = fullName }
-     }
-
-     These are NOT simple blocks:
-
-     -- a subworkflow is required to run the three calls
-     call Add { input: a=4, b=14}
-     call Sub { input: a=4, b=14}
-     call Inc { input: Sub.result }
-
-     -- a subworkflow to connect the two fragments
-     if (x > 1) {
-        call Inc {input: a=x }
-     }
-     if (x > 3) {
-        call Dec {input: a=x }
-     }
-     */
-    private def isSimpleSubblock(graph: Graph) : Boolean = {
-        val nodes = graph.nodes
-
-        val numCalls = nodes.collect(x : CallNode => x).size
-        val numScatters = nodes.collect(x : ScatterNode => x).size
-        val numConds = nodes.collect(x : ConditionalNode => x).size
-
-        if (numCalls + numScatters + numConds == 0)
-            return true
-        if (numCalls + numScatters + numConds > 1)
-            return false
-
-        // The only other kind of nodes could be inputs, outputs, and task input expressions.
-        nodes.forall{
-            case _: CallNode => true
-            case _: GraphInputNode => true
-            case _: GraphOutputNode => true
-            case _: AnonymousExpressionNode => true
-            case other => false
-        }
+    // Deep search for all calls in a graph
+    def deepFindCalls(nodes: Seq[GraphNode]) : Vector[CallNode] = {
+        nodes.foldLeft(Vector.empty[CallNode]) {
+            case (accu: Vector[CallNode], call:CallNode) =>
+                accu :+ call
+            case (accu, ssc:ScatterNode) =>
+                accu ++ deepFindCalls(ssc.innerGraph.nodes.toVector)
+            case (accu, ifStmt:ConditionalNode) =>
+                accu ++ deepFindCalls(ifStmt.innerGraph.nodes.toVector)
+            case (accu, _) =>
+                accu
+        }.toVector
     }
 
     // These are the kinds of blocks that are run by the workflow-fragment-runner.
@@ -472,11 +446,27 @@ object Block {
     // 3) Conditional block
     // 4) Scatter block
     sealed trait Category {
-        def getInnerGraph : Graph =
-            throw new UnsupportedOperationException(s"$getClass does not implement getInnerGraph")
-        override def toString : String = {
+        val nodes: Vector[GraphNode]
+    }
+    case class AllExpressions(override val nodes: Vector[GraphNode]) extends Category
+    case class CallDirect(override val nodes: Vector[GraphNode], value: CallNode) extends Category
+    case class CallCompound(override val nodes: Vector[GraphNode], value: CallNode) extends Category
+    case class Cond(override val nodes: Vector[GraphNode], value: ConditionalNode) extends Category
+    case class Scatter(override val nodes: Vector[GraphNode], value: ScatterNode) extends Category
+
+    object Category {
+        def getInnerGraph(catg: Category) : Graph = {
+            catg match {
+                case AllExpressions(_) | CallDirect(_, _) | CallCompound(_, _) =>
+                    throw new UnsupportedOperationException(
+                        s"${catg.getClass.toString} does not implement getInnerGraph")
+                case cond: Cond => cond.value.innerGraph
+                case sct: Scatter => sct.value.innerGraph
+            }
+        }
+        def toString(catg: Category) : String = {
             // convert Block$Cond to Cond
-            val fullClassName = this.getClass.toString
+            val fullClassName = catg.getClass.toString
             val index = fullClassName.lastIndexOf('$')
             if (index == -1)
                 fullClassName
@@ -484,55 +474,27 @@ object Block {
                 fullClassName.substring(index + 1)
         }
     }
-    case object AllExpressions extends Category
-    case class CallDirect(value: CallNode) extends Category
-    case class CallCompound(value: CallNode) extends Category
-    case class Cond(value: ConditionalNode) extends Category
-    case class Scatter(value: ScatterNode) extends Category
-    case class CondSubblock(value: ConditionalNode) extends Category {
-        override def getInnerGraph: Graph = value.innerGraph
-    }
-    case class ScatterSubblock(value: ScatterNode) extends Category {
-        override def getInnerGraph: Graph = value.innerGraph
-    }
 
-    def categorize(block: Block) : (Vector[GraphNode], Category) = {
+    def categorize(block: Block) : Category = {
         assert(!block.nodes.isEmpty)
         val allButLast : Vector[GraphNode] = block.nodes.dropRight(1)
-
-        // make sure there are no calls in the beginning of the block
-        val nrCalls = deepFindCalls(allButLast).size
-        if (nrCalls > 0)
-            throw new Exception(
-                s"""|There are ${nrCalls} calls at the beginning of the block.
-                    |However, there can be none.
-                    |
-                    |${block.prettyPrintApproxWdl}
-                    |""".stripMargin)
-
         val lastNode = block.nodes.last
         lastNode match {
             case _ if deepFindCalls(Seq(lastNode)).isEmpty =>
                 // The block comprises of expressions only
-                ((allButLast :+ lastNode), AllExpressions)
+                AllExpressions(allButLast :+ lastNode)
+
+            case callNode: CallNode if isSimpleCall(block) =>
+                CallDirect(allButLast, callNode)
 
             case callNode: CallNode =>
-                if (isSimpleCall(block))
-                    (allButLast, CallDirect(callNode))
-                else
-                    (allButLast, CallCompound(callNode))
+                CallCompound(allButLast, callNode)
 
             case condNode: ConditionalNode =>
-                if (isSimpleSubblock(condNode.innerGraph))
-                    (allButLast, Cond(condNode))
-                else
-                    (allButLast, CondSubblock(condNode))
+                Cond(allButLast, condNode)
 
             case sctNode: ScatterNode =>
-                if (isSimpleSubblock(sctNode.innerGraph))
-                    (allButLast, Scatter(sctNode))
-                else
-                    (allButLast, ScatterSubblock(sctNode))
+                Scatter(allButLast, sctNode)
         }
     }
 
@@ -544,8 +506,9 @@ object Block {
         val (_, blocks, _) = splitGraph(graph, callsLoToHi)
         var subBlock = blocks(path.head)
         for (i <- path.tail) {
-            val (_, catg) = categorize(subBlock)
-            val (_, blocks2, _) = splitGraph(catg.getInnerGraph, callsLoToHi)
+            val catg = categorize(subBlock)
+            val innerGraph = Category.getInnerGraph(catg)
+            val (_, blocks2, _) = splitGraph(innerGraph, callsLoToHi)
             subBlock = blocks2(i)
         }
         return subBlock
