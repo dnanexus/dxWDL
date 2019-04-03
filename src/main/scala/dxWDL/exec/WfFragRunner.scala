@@ -267,23 +267,23 @@ case class WfFragRunner(wf: WorkflowDefinition,
         }
     }
 
-    private def processOutputs(womOutputs: Map[String, WomValue],
-                               wvlOutputs: Map[String, WdlVarLinks],
+    private def processOutputs(env: Map[String, WomValue],
+                               fragResults: Map[String, WdlVarLinks],
                                exportedVars: Set[String]) : Map[String, JsValue] = {
         Utils.appletLog(verbose, s"""|processOutputs
+                                     |  env = ${env.keys}
+                                     |  fragResults = ${fragResults.keys}
                                      |  exportedVars = ${exportedVars}
-                                     |  womOutputs = ${womOutputs.keys}
-                                     |  wvlOutputs = ${wvlOutputs.keys}
                                      |""".stripMargin)
 
         // convert the WOM values to WVLs
-        val womWvlOutputs = womOutputs.map{
+        val envWvl = env.map{
             case (name, value) =>
                 name -> WdlVarLinks.importFromWDL(value.womType, value)
         }.toMap
 
         // filter anything that should not be exported.
-        val exportedWvls = (womWvlOutputs ++ wvlOutputs).filter{
+        val exportedWvls = (envWvl ++ fragResults).filter{
             case (name, wvl) => exportedVars contains name
         }
 
@@ -400,17 +400,15 @@ case class WfFragRunner(wf: WorkflowDefinition,
     }
 
     private def execCall(call: CallNode,
-                         env: Map[String, WomValue],
+                         callInputs: Map[String, WomValue],
                          callNameHint: Option[String]) : (Int, DXExecution) = {
-        val callInputs = evalCallInputs(call, env)
-
         val linkInfo = getCallLinkInfo(call)
         val callName = call.identifier.localName.value
-        val calleeName = call.callable.name
+        //val calleeName = call.callable.name
         val callInputsJSON : JsValue = buildCallInputs(callName, linkInfo, callInputs)
-        Utils.appletLog(verbose, s"""|Call ${callName}
+/*        Utils.appletLog(verbose, s"""|Call ${callName}
                                      |calleeName= ${calleeName}
-                                     |inputs = ${callInputsJSON}""".stripMargin)
+                                     |inputs = ${callInputsJSON}""".stripMargin)*/
 
         // We may need to run a collect subjob. Add the call
         // name, and the sequence number, to each execution invocation,
@@ -445,10 +443,6 @@ case class WfFragRunner(wf: WorkflowDefinition,
     // We just want the "i" component.
     def evalCallInputs(call: CallNode,
                        env: Map[String, WomValue]) : Map[String, WomValue] = {
-        Utils.appletLog(verbose, s"""|evalCallInputs, env:
-                                     |${env.mkString("\n")}
-                                     |""".stripMargin )
-
         // Find the type required for a call input
         def findWomType(paramName: String) : WomType = {
             val retval = call.inputDefinitionMappings.find{
@@ -577,6 +571,10 @@ case class WfFragRunner(wf: WorkflowDefinition,
                 }
             case WomOptionalValue(_, Some(x)) =>
                 readableNameForScatterItem(x)
+            case WomArray(_, arrValues) =>
+                val arrBeginning = arrValues.slice(0, 3)
+                val elements = arrBeginning.flatMap(readableNameForScatterItem(_))
+                Some("[" + elements.mkString(", ") + "]")
             case _ =>
                 None
         }
@@ -610,7 +608,12 @@ case class WfFragRunner(wf: WorkflowDefinition,
             case scp : ScatterGathererPort =>
                 scp.identifier.localName.value -> scp.womType
         }.toMap
-        collectSubJobs.launch(childJobs, resultTypes)
+        val promises = collectSubJobs.launch(childJobs, resultTypes)
+        val promisesStr = promises.mkString("\n")
+
+        Utils.appletLog(verbose, s"resultTypes=${resultTypes}")
+        Utils.appletLog(verbose, s"promises=${promisesStr}")
+        promises
     }
 
     private def execScatterCall(sctNode: ScatterNode,
@@ -624,8 +627,8 @@ case class WfFragRunner(wf: WorkflowDefinition,
                 val innerEnv = env + (svNode.identifier.localName.value -> item)
                 val callInputs = evalCallInputs(call, innerEnv)
                 val callHint = readableNameForScatterItem(item)
-                val (_, dxExec) = execCall(call, callInputs, callHint)
-                dxExec
+                val (_, dxJob) = execCall(call, callInputs, callHint)
+                dxJob
             }.toVector
 
         collectScatter(sctNode, childJobs)
@@ -651,8 +654,8 @@ case class WfFragRunner(wf: WorkflowDefinition,
 
                 // The subblock is complex, and requires a fragment, or a subworkflow
                 val callInputs:JsValue = buildCallInputs(linkInfo.name, linkInfo, innerEnv)
-                val (_, dxExec) = execDNAxExecutable(linkInfo.dxExec.getId, dbgName, linkInfo.name, callInputs)
-                dxExec
+                val (_, dxJob) = execDNAxExecutable(linkInfo.dxExec.getId, dbgName, linkInfo.name, callInputs)
+                dxJob
             }.toVector
 
         collectScatter(sctNode, childJobs)
@@ -695,7 +698,7 @@ case class WfFragRunner(wf: WorkflowDefinition,
         val catg = Block.categorize(block)
         val env = evalExpressions(catg.nodes, envInitial)
 
-        val subblockResults : Map[String, WdlVarLinks] = runMode match {
+        val fragResults : Map[String, WdlVarLinks] = runMode match {
             case RunnerWfFragmentMode.Launch =>
                 // The last node could be a call or a block. All the other nodes
                 // are expressions.
@@ -708,7 +711,8 @@ case class WfFragRunner(wf: WorkflowDefinition,
 
                     // A single call at the end of the block
                     case Block.CallCompound(_, call: CallNode) =>
-                        val (_, dxExec) = execCall(call, env,  None)
+                        val callInputs = evalCallInputs(call, env)
+                        val (_, dxExec) = execCall(call, callInputs,  None)
                         genPromisesForCall(call, dxExec)
 
                     // a conditional with a subblock inside it. We may need to
@@ -742,21 +746,27 @@ case class WfFragRunner(wf: WorkflowDefinition,
             // A subjob that collects results from scatters
             case RunnerWfFragmentMode.Collect =>
                 val childJobsComplete = collectSubJobs.executableFromSeqNum()
-                catg match {
-                    // A scatter with a subblock, which may be compiled as a subworkflow.
-                    // There must be exactly one subworkflow.
-                    case Block.Scatter(_, sctNode) =>
+                val sctNode = catg match {
+                    case Block.Scatter(_, sctNode) => sctNode
+                    case other =>
+                        throw new AppInternalException(s"Bad case ${other.getClass} ${other}")
+                }
+
+                graphContainsJustOneCall(sctNode.innerGraph) match {
+                    case None =>
+                        // A scatter with a complex sub-block, compiled as a sub-workflow
+                        // There must be exactly one sub-workflow
                         assert(execLinkInfo.size == 1)
                         val (_, linkInfo) = execLinkInfo.toVector.head
                         collectSubJobs.aggregateResultsFromGeneratedSubWorkflow(linkInfo, childJobsComplete)
-
-                    case other =>
-                        throw new AppInternalException(s"Bad case ${other.getClass} ${other}")
+                    case Some(call) =>
+                        // scatter with a single call
+                        collectSubJobs.aggregateResults(call, childJobsComplete)
                 }
         }
 
         val exportedVars = exportedVarNames()
-        val jsOutputs : Map[String, JsValue] = processOutputs(env, subblockResults, exportedVars)
+        val jsOutputs : Map[String, JsValue] = processOutputs(env, fragResults, exportedVars)
         val jsOutputsDbgStr = jsOutputs.mkString("\n")
         Utils.appletLog(verbose, s"""|JSON outputs:
                                      |${jsOutputsDbgStr}""".stripMargin)
