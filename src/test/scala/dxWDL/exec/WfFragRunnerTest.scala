@@ -279,7 +279,7 @@ class WfFragRunnerTest extends FlatSpec with Matchers {
         val (dxPathConfig, dxIoFunctions) = setup()
         val (wf, fragRunner) = setupFragRunner(dxPathConfig, dxIoFunctions, wfSourceCode)
 
-        val inc4Call = findCallByName("inc4", wf.innerGraph)
+        val inc4Call = findCallByName("inc5", wf.innerGraph)
 
         val args = fragRunner.evalCallInputs(inc4Call, Map.empty)
         args shouldBe (Map("a" -> WomInteger(3)))

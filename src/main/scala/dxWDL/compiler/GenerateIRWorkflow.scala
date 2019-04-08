@@ -195,8 +195,10 @@ case class GenerateIRWorkflow(wf : WorkflowDefinition,
                 None
             case None =>
                 // A missing compulsory argument
-                Utils.warning(verbose,
-                              s"Missing argument ${fqn}, it will have to be provided at runtime")
+//                Utils.warning(verbose,
+//                              s"Missing argument ${fqn}, it will have to be provided at runtime")
+                System.out.println(
+                    s"Missing argument ${fqn}, it will have to be provided at runtime")
                 None
             case Some((name, lVar)) =>
                 Some((name, lVar))
@@ -224,37 +226,29 @@ case class GenerateIRWorkflow(wf : WorkflowDefinition,
         val (inputNodes, subBlocks, outputNodes) = Block.splitGraph(graph, callsLoToHi)
         assert(subBlocks.size > 0)
 
-        def compileOneCall(cNode: CallNode) = {
-            val callName = Utils.getUnqualifiedName(cNode.callable.name)
-            Utils.trace(verbose2, s"Exactly one call ${callName}")
-            callables.get(callName) match {
-                case None => throw new Exception(s"Call ${callName} has not been compiled previously")
-                case Some(x) => (x, Vector.empty)
-            }
-        }
-
         if (subBlocks.size == 1) {
             Block.categorize(subBlocks(0)) match {
-                case Block.CallDirect(_, cNode) =>
-                    // There is an existing applet that does this.
-                    // No need to compile it again
-                    compileOneCall(cNode)
-                case Block.CallCompound(_, cNode) =>
-                    compileOneCall(cNode)
-                case _ =>
-                    // At runtime, we will need to execute a workflow
-                    // fragment. This requires an applet.
-                    val (stage, aux) = compileWfFragment(wfName,
-                                                         subBlocks(0),
-                                                         blockPath :+ 0,
-                                                         env)
-                    val fragName = stage.calleeName
-                    val main = aux.find(_.name == fragName) match {
-                        case None => throw new Exception(s"Could not find ${fragName}")
-                        case Some(x) => x
-                    }
-                    (main, aux)
+                case Block.CallDirect(_,_) | Block.CallWithSubexpressions(_, _) =>
+                    throw new Exception("sanity")
+                case _ => ()
             }
+
+            // At runtime, we will need to execute a workflow
+            // fragment. This requires an applet.
+            //
+            // This is a recursive call, to compile a  potentially
+            // complex sub-block. It could have many calls generating
+            // many applets and subworkflows.
+            val (stage, aux) = compileWfFragment(wfName,
+                                                 subBlocks(0),
+                                                 blockPath :+ 0,
+                                                 env)
+            val fragName = stage.calleeName
+            val main = aux.find(_.name == fragName) match {
+                case None => throw new Exception(s"Could not find ${fragName}")
+                case Some(x) => x
+            }
+            (main, aux)
         } else {
             // there are several subblocks, we need a subworkflow to string them
             // together.
@@ -315,16 +309,38 @@ case class GenerateIRWorkflow(wf : WorkflowDefinition,
         val catg = Block.categorize(block)
         Utils.trace(verbose2, s"""|category : ${Block.Category.toString(catg)}
                                   |""".stripMargin)
+
         val (innerCall, auxCallables) : (Option[String], Vector[IR.Callable]) = catg match {
             case Block.AllExpressions(_) => (None, Vector.empty)
             case Block.CallDirect(_,_) => throw new Exception(s"a direct call should not reach this stage")
-            case Block.CallCompound(_, cNode) =>
-                // A block with no nested sub-blocks, and a single call.
-                val callName = Utils.getUnqualifiedName(cNode.callable.name)
-                (Some(callName), Vector.empty)
-            case Block.Cond(_,_) | Block.Scatter(_,_) =>
-                val innerGraph = Block.Category.getInnerGraph(catg)
-                val (callable, aux) = compileNestedBlock(wfName, innerGraph, blockPath, env)
+
+            // A block with no nested sub-blocks, and a single call.
+            case Block.CallWithSubexpressions(_, cNode) =>
+                (Some(Utils.getUnqualifiedName(cNode.callable.name)), Vector.empty)
+            case Block.CallFragment(_, cNode) =>
+                (Some(Utils.getUnqualifiedName(cNode.callable.name)), Vector.empty)
+
+            // A conditional/scatter with exactly one call in the sub-block.
+                // Can be executed by a fragment.
+            case Block.CondOneCall(_, _, cNode) =>
+                (Some(Utils.getUnqualifiedName(cNode.callable.name)), Vector.empty)
+            case Block.ScatterOneCall(_, _, cNode) =>
+                (Some(Utils.getUnqualifiedName(cNode.callable.name)), Vector.empty)
+
+            case Block.CondFullBlock(_, condNode) =>
+                val (callable, aux) = compileNestedBlock(wfName, condNode.innerGraph,
+                                                         blockPath, env)
+                (Some(callable.name), aux :+ callable)
+
+            case Block.ScatterFullBlock(_,sctNode) =>
+                // add the iteration variable to the inner environment
+                assert(sctNode.scatterVariableNodes.size == 1)
+                val svNode: ScatterVariableNode = sctNode.scatterVariableNodes.head
+                val iterVarName = svNode.identifier.localName.value
+                val cVar = CVar(iterVarName, svNode.womType, None)
+                val innerEnv = env + (iterVarName -> LinkedVar(cVar, IR.SArgEmpty))
+                val (callable, aux) = compileNestedBlock(wfName, sctNode.innerGraph,
+                                                         blockPath, innerEnv)
                 (Some(callable.name), aux :+ callable)
         }
 

@@ -3,7 +3,7 @@ import "library_math.wdl" as lib
 workflow block_category {
     # Return null from an optional
     if (true) {
-        call lib.MaybeInt as empty
+        call lib.z_MaybeInt as empty
     }
     if (true) {
         call nonEmptyArray

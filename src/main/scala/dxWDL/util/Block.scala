@@ -394,9 +394,10 @@ object Block {
     //   TaskCallInputExpressionNode(b, y, WomIntegerType, GraphNodeOutputPort(b))
     //   CommandCall(add, Set(a, b))
     // ]
-    private def isSimpleCall(block: Block) : Boolean = {
+    private def isSimpleCall(nodes: Seq[GraphNode],
+                             trivialExpressionsOnly : Boolean) : Boolean = {
         // find the call
-        val calls : Seq[CallNode] = block.nodes.collect{
+        val calls : Seq[CallNode] = nodes.collect{
             case cNode : CallNode => cNode
         }
         if (calls.size != 1)
@@ -407,20 +408,39 @@ object Block {
         //
         // Some of the inputs may be missing, which is why we
         // have the -subsetOf- call.
-        val rest = block.nodes.toSet - oneCall
-        val callInputs = oneCall.upstream.toSet
-        if (!rest.subsetOf(callInputs))
-            return false
+        val rest = nodes.toSet - oneCall
+        //val callInputs = oneCall.upstream.toSet
+        //if (!rest.subsetOf(callInputs))
+        //return false
 
         // All the call inputs have to be simple expressions, if the call is
         // to be called "simple"
         val retval = rest.forall{
             case expr: AnonymousExpressionNode =>
-                isTrivialExpression(expr.womType, expr.womExpression)
+                if (trivialExpressionsOnly)
+                    isTrivialExpression(expr.womType, expr.womExpression)
+                else
+                    true
+
+            // These are ignored
+            case _ : PortBasedGraphOutputNode =>
+                true
+            case _ : GraphInputNode =>
+                true
+
             case other =>
                 false
         }
         retval
+    }
+
+
+    private def getOneCall(graph: Graph) : CallNode = {
+        val calls = graph.nodes.collect{
+            case node : CallNode => node
+        }
+        assert(calls.size == 1)
+        calls.head
     }
 
     // Deep search for all calls in a graph
@@ -440,28 +460,54 @@ object Block {
     // These are the kinds of blocks that are run by the workflow-fragment-runner.
     //
     // A block can have expressions, input ports, and output ports in the beginning.
-    // The last node can be:
-    // 1) Expression
-    // 2) Call
-    // 3) Conditional block
-    // 4) Scatter block
+    // The block can be one of these types:
+    //
+    //   Purely expressions (no asynchronous calls at any nesting level).
+    //
+    //   Call
+    //      - with no subexpressions to evaluate
+    //      - with subexpressions requiring evaluation
+    //      - Fragment with expressions and one call
+    //
+    //   Conditional block
+    //      - with exactly one call
+    //      - a complex subblock
+    //
+    //   Scatter block
+    //      - with exactly one call
+    //      - with a complex subblock
+    //
+    //   Compound
+    //      contains multiple calls and/or dependencies
     sealed trait Category {
         val nodes: Vector[GraphNode]
     }
     case class AllExpressions(override val nodes: Vector[GraphNode]) extends Category
-    case class CallDirect(override val nodes: Vector[GraphNode], value: CallNode) extends Category
-    case class CallCompound(override val nodes: Vector[GraphNode], value: CallNode) extends Category
-    case class Cond(override val nodes: Vector[GraphNode], value: ConditionalNode) extends Category
-    case class Scatter(override val nodes: Vector[GraphNode], value: ScatterNode) extends Category
+    case class CallDirect(override val nodes: Vector[GraphNode],
+                          value: CallNode) extends Category
+    case class CallWithSubexpressions(override val nodes: Vector[GraphNode],
+                                      value: CallNode) extends Category
+    case class CallFragment(override val nodes: Vector[GraphNode],
+                            value: CallNode) extends Category
+    case class CondOneCall(override val nodes: Vector[GraphNode],
+                           value: ConditionalNode,
+                           call: CallNode) extends Category
+    case class CondFullBlock(override val nodes: Vector[GraphNode],
+                             value: ConditionalNode) extends Category
+    case class ScatterOneCall(override val nodes: Vector[GraphNode],
+                              value: ScatterNode,
+                              call: CallNode) extends Category
+    case class ScatterFullBlock(override val nodes: Vector[GraphNode],
+                                value: ScatterNode) extends Category
 
     object Category {
         def getInnerGraph(catg: Category) : Graph = {
             catg match {
-                case AllExpressions(_) | CallDirect(_, _) | CallCompound(_, _) =>
+                case cond: CondFullBlock => cond.value.innerGraph
+                case sct: ScatterFullBlock => sct.value.innerGraph
+                case other =>
                     throw new UnsupportedOperationException(
-                        s"${catg.getClass.toString} does not implement getInnerGraph")
-                case cond: Cond => cond.value.innerGraph
-                case sct: Scatter => sct.value.innerGraph
+                        s"${other.getClass.toString} does not have an inner graph")
             }
         }
         def toString(catg: Category) : String = {
@@ -478,23 +524,34 @@ object Block {
     def categorize(block: Block) : Category = {
         assert(!block.nodes.isEmpty)
         val allButLast : Vector[GraphNode] = block.nodes.dropRight(1)
+        assert(deepFindCalls(allButLast).isEmpty)
         val lastNode = block.nodes.last
         lastNode match {
             case _ if deepFindCalls(Seq(lastNode)).isEmpty =>
                 // The block comprises of expressions only
                 AllExpressions(allButLast :+ lastNode)
 
-            case callNode: CallNode if isSimpleCall(block) =>
-                CallDirect(allButLast, callNode)
-
             case callNode: CallNode =>
-                CallCompound(allButLast, callNode)
+                if (isSimpleCall(block.nodes, true))
+                    CallDirect(allButLast, callNode)
+                else if (isSimpleCall(block.nodes.toSeq, false))
+                    CallWithSubexpressions(allButLast, callNode)
+                else
+                    CallFragment(allButLast, callNode)
 
             case condNode: ConditionalNode =>
-                Cond(allButLast, condNode)
+                if (isSimpleCall(condNode.innerGraph.nodes.toSeq, false)) {
+                    CondOneCall(allButLast, condNode, getOneCall(condNode.innerGraph))
+                } else {
+                    CondFullBlock(allButLast, condNode)
+                }
 
             case sctNode: ScatterNode =>
-                Scatter(allButLast, sctNode)
+                if (isSimpleCall(sctNode.innerGraph.nodes.toSeq, false)) {
+                    ScatterOneCall(allButLast, sctNode, getOneCall(sctNode.innerGraph))
+                } else {
+                    ScatterFullBlock(allButLast, sctNode)
+                }
         }
     }
 

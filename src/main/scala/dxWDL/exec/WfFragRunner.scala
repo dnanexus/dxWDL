@@ -661,19 +661,6 @@ case class WfFragRunner(wf: WorkflowDefinition,
         collectScatter(sctNode, childJobs)
     }
 
-    // Does the the graph contain exactly one call? If so, return it
-    private def graphContainsJustOneCall(graph: Graph) : Option[CallNode] = {
-        val (_, blocks, _) = Block.split(graph, wfSourceCode)
-        if (blocks.size != 1)
-            return None
-
-        Block.categorize(blocks(0)) match {
-            case Block.CallDirect(_, cNode)  => Some(cNode)
-            case Block.CallCompound(_, cNode) => Some(cNode)
-            case _ => None
-        }
-    }
-
     def apply(blockPath: Vector[Int],
               envInitial: Map[String, WomValue],
               runMode: RunnerWfFragmentMode.Value) : Map[String, JsValue] = {
@@ -710,58 +697,57 @@ case class WfFragRunner(wf: WorkflowDefinition,
                         throw new Exception("sanity, shouldn't reach this state")
 
                     // A single call at the end of the block
-                    case Block.CallCompound(_, call: CallNode) =>
+                    case Block.CallWithSubexpressions(_, call: CallNode) =>
                         val callInputs = evalCallInputs(call, env)
                         val (_, dxExec) = execCall(call, callInputs,  None)
                         genPromisesForCall(call, dxExec)
 
-                    // a conditional with a subblock inside it. We may need to
-                    // call a subworkflow.
-                    case Block.Cond(_, cnNode) =>
-                        graphContainsJustOneCall(cnNode.innerGraph) match {
-                            case None =>
-                                // subworkflow or fragment
-                                execConditionalSubblock(cnNode, env)
-                            case Some(call) =>
-                                // The block contains a single call. We can execute it
-                                // right here, without another job.
-                                execConditionalCall(cnNode, call, env)
-                        }
+                    // The block contains a call and a bunch of expressions
+                    // that will be part of the output.
+                    case Block.CallFragment(_, call: CallNode) =>
+                        val callInputs = evalCallInputs(call, env)
+                        val (_, dxExec) = execCall(call, callInputs,  None)
+                        genPromisesForCall(call, dxExec)
+
+                    // The block contains a single call. We can execute it
+                    // right here, without another job.
+                    case Block.CondOneCall(_, cnNode, call) =>
+                        execConditionalCall(cnNode, call, env)
+
+                    // a conditional with a subblock inside it. We
+                    // need to call an applet or a subworkflow.
+                    case Block.CondFullBlock(_, cnNode) =>
+                        execConditionalSubblock(cnNode, env)
 
                     // a scatter with a subblock inside it. Iterate
-                    // on the scatter variable, and call an applet/subworkflow
+                    // on the scatter variable, and make the applet call
                     // for each value.
-                    case Block.Scatter(_, sctNode) =>
-                        graphContainsJustOneCall(sctNode.innerGraph) match {
-                            case None =>
-                                // subworkflow or fragment
-                                execScatterSubblock(sctNode, env)
-                            case Some(call) =>
-                                // The block contains a single call. We can execute it
-                                // right here, without another job.
-                                execScatterCall(sctNode, call, env)
-                        }
+                    case Block.ScatterOneCall(_, sctNode, call) =>
+                        execScatterCall(sctNode, call, env)
+
+                    // Same as previous case, but call a subworkflow
+                    // or fragment.
+                    case Block.ScatterFullBlock(_, sctNode) =>
+                        execScatterSubblock(sctNode, env)
                 }
 
             // A subjob that collects results from scatters
             case RunnerWfFragmentMode.Collect =>
                 val childJobsComplete = collectSubJobs.executableFromSeqNum()
-                val sctNode = catg match {
-                    case Block.Scatter(_, sctNode) => sctNode
-                    case other =>
-                        throw new AppInternalException(s"Bad case ${other.getClass} ${other}")
-                }
+                catg match {
+                    case Block.ScatterOneCall(_, sctNode, call) =>
+                        // scatter with a single call
+                        collectSubJobs.aggregateResults(call, childJobsComplete)
 
-                graphContainsJustOneCall(sctNode.innerGraph) match {
-                    case None =>
+                    case Block.ScatterFullBlock(_, sctNode) =>
                         // A scatter with a complex sub-block, compiled as a sub-workflow
                         // There must be exactly one sub-workflow
                         assert(execLinkInfo.size == 1)
                         val (_, linkInfo) = execLinkInfo.toVector.head
                         collectSubJobs.aggregateResultsFromGeneratedSubWorkflow(linkInfo, childJobsComplete)
-                    case Some(call) =>
-                        // scatter with a single call
-                        collectSubJobs.aggregateResults(call, childJobsComplete)
+
+                    case other =>
+                        throw new AppInternalException(s"Bad case ${other.getClass} ${other}")
                 }
         }
 
