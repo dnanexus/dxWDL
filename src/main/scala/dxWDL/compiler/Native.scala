@@ -788,9 +788,11 @@ case class Native(dxWDLrtId: Option[String],
         }
     }
 
-    def compile(bundle: IR.Bundle) : CompilationResults = {
-        // build applets and workflows if they aren't on the platform already
+    def apply(bundle: IR.Bundle) : CompilationResults = {
+        Utils.trace(verbose.on, "Native pass, generate dx:applets and dx:workflows")
+        Utils.traceLevelInc()
 
+        // build applets and workflows if they aren't on the platform already
         val execDict = bundle.dependencies.foldLeft(execDictEmpty) {
             case (accu, cName) =>
                 val execIr = bundle.allCallables(cName)
@@ -817,35 +819,8 @@ case class Native(dxWDLrtId: Option[String],
             }
         }
 
+        Utils.traceLevelDec()
         CompilationResults(primary,
                            execDict.map{ case (name, (_,dxExec)) => name -> dxExec }.toMap)
-    }
-}
-
-object Native {
-    def apply(ns: IR.Bundle,
-              dxWDLrtId: Option[String],
-              folder: String,
-              dxProject: DXProject,
-              instanceTypeDB: InstanceTypeDB,
-              dxPathConfig: DxPathConfig,
-              dxObjDir: DxObjectDirectory,
-              extras: Option[Extras],
-              runtimeDebugLevel: Option[Int],
-              leaveWorkflowsOpen: Boolean,
-              force: Boolean,
-              archive: Boolean,
-              locked: Boolean,
-              verbose: Verbose) : CompilationResults = {
-        Utils.trace(verbose.on, "Native pass, generate dx:applets and dx:workflows")
-        Utils.traceLevelInc()
-
-        val ntv = new Native(dxWDLrtId, folder, dxProject, dxObjDir,
-                             instanceTypeDB, dxPathConfig,
-                             extras, runtimeDebugLevel,
-                             leaveWorkflowsOpen, force, archive, locked, verbose)
-        val retval = ntv.compile(ns)
-        Utils.traceLevelDec()
-        retval
     }
 }

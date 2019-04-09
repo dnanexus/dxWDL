@@ -2,6 +2,7 @@ package dxWDL.compiler
 
 import java.nio.file.{Path, Paths}
 import org.scalatest.{FlatSpec, Matchers}
+import org.scalatest.Inside._
 
 import dxWDL.Main
 import dxWDL.util.Utils
@@ -180,7 +181,7 @@ class GenerateIRTest extends FlatSpec with Matchers {
         stage.description shouldBe ("review")
     }
 
-    it should "three nesting levels" taggedAs(EdgeTest) in {
+    it should "three nesting levels" in {
         val path = pathFromBasename("nested", "three_levels.wdl")
         val retval = Main.compile(
             path.toString
@@ -204,5 +205,21 @@ class GenerateIRTest extends FlatSpec with Matchers {
         level2 shouldBe a[IR.Workflow]
         val wfLevel2 = level2.asInstanceOf[IR.Workflow]
         wfLevel2.stages.size shouldBe(1)
+    }
+
+
+    it should "four nesting levels" taggedAs(EdgeTest) in {
+        val path = pathFromBasename("nested", "four_levels.wdl")
+        val retval = Main.compile(
+            path.toString
+                :: "--verbose"
+                :: "--verboseKey" :: "GenerateIR"
+                :: cFlags
+        )
+
+        inside(retval) {
+            case Main.UnsuccessfulTermination(errMsg) =>
+                errMsg should include ("nested scatter")
+        }
     }
 }

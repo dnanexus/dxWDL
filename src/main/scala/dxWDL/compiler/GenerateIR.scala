@@ -8,9 +8,10 @@ import wom.graph._
 
 import dxWDL.util._
 
-object GenerateIR {
-    def sortByDependencies(allCallables: Vector[Callable],
-                           verbose: Verbose) : Vector[Callable] = {
+case class GenerateIR(verbose: Verbose) {
+    val verbose2 : Boolean = verbose.containsKey("GenerateIR")
+
+    def sortByDependencies(allCallables: Vector[Callable]) : Vector[Callable] = {
         // figure out, for each element, what it depends on.
         // tasks don't depend on anything else. They are at the bottom of the dependency
         // tree.
@@ -23,12 +24,22 @@ object GenerateIR {
                     val callNodes : Vector[CallNode] = nodes.collect{
                         case cNode: CallNode => cNode
                     }.toVector
-                    callNodes.map{ cNode =>
-                        // The name is fully qualified, for example, lib.add, lib.concat.
-                        // We need the task/workflow itself ("add", "concat"). We are
-                        // assuming that the namespace can be flattened; there are
-                        // no lib.add and lib2.add.
-                        Utils.getUnqualifiedName(cNode.callable.name)
+
+                    callNodes.collect{
+                        case cNode : WorkflowCallNode =>
+                            // We need to ignore calls to scatters that converted by
+                            // wdl to internal workflows.
+                            val name = Utils.getUnqualifiedName(cNode.callable.name)
+                            if (name.startsWith("Scatter"))
+                                throw new Exception("nested scatters")
+                            name
+
+                        case cNode : CallNode =>
+                            // The name is fully qualified, for example, lib.add, lib.concat.
+                            // We need the task/workflow itself ("add", "concat"). We are
+                            // assuming that the namespace can be flattened; there are
+                            // no lib.add and lib2.add.
+                            Utils.getUnqualifiedName(cNode.callable.name)
                     }.toSet
                 case other =>
                     throw new Exception(s"Don't know how to deal with class ${other.getClass.getSimpleName}")
@@ -43,7 +54,7 @@ object GenerateIR {
             val readyNames = ready.map(_.name).toSet
             val satisfiedCallables = callables.filter{ c =>
                 val deps = immediateDeps(c.name)
-                //Utils.trace(verbose.on, s"immediateDeps(${c.name}) = ${deps}")
+                Utils.trace(verbose2, s"immediateDeps(${c.name}) = ${deps}")
                 deps.subsetOf(readyNames)
             }
             if (satisfiedCallables.isEmpty)
@@ -54,9 +65,8 @@ object GenerateIR {
         var accu = Vector.empty[Callable]
         var crnt = allCallables
         while (!crnt.isEmpty) {
-            /*Utils.trace(verbose.on, s"""|  accu=${accu.map(_.name)}
-                                        |  crnt=${crnt.map(_.name)}
-                                        |""".stripMargin)*/
+            Utils.trace(verbose2, s"accu=${accu.map(_.name)}")
+            Utils.trace(verbose2, s"crnt=${crnt.map(_.name)}")
             val execsToCompile = next(crnt, accu)
             accu = accu ++ execsToCompile
             val alreadyCompiled: Set[String] = accu.map(_.name).toSet
@@ -71,8 +81,7 @@ object GenerateIR {
                                 callables: Map[String, IR.Callable],
                                 language: Language.Value,
                                 locked : Boolean,
-                                reorg : Boolean,
-                                verbose: Verbose) : (IR.Workflow, Vector[IR.Callable]) = {
+                                reorg : Boolean) : (IR.Workflow, Vector[IR.Callable]) = {
         val callToSrcLine = ParseWomSourceFile.scanForCalls(wfSource)
 
         // sort from low to high according to the source lines.
@@ -82,6 +91,15 @@ object GenerateIR {
         // to the equivalent dx:applets and dx:workflows.
         val callablesUsedInWorkflow : Vector[IR.Callable] =
             wf.graph.allNodes.collect {
+                case cNode : WorkflowCallNode =>
+                    // We need to ignore calls to scatters that converted by
+                    // wdl to internal workflows.
+                    val localName = Utils.getUnqualifiedName(cNode.callable.name)
+                    if (localName.startsWith("Scatter"))
+                        throw new Exception("""|The workflow contains a nested scatter, it is not
+                                               |handled currently due to a cromwell WOM library issue
+                                               |""".stripMargin.replaceAll("\n", " "))
+                    callables(localName)
                 case cNode : CallNode =>
                     val localname = Utils.getUnqualifiedName(cNode.callable.name)
                     callables(localname)
@@ -104,8 +122,7 @@ object GenerateIR {
                                 callables: Map[String, IR.Callable],
                                 language: Language.Value,
                                 locked: Boolean,
-                                reorg: Boolean,
-                                verbose: Verbose) : (IR.Callable, Vector[IR.Callable]) = {
+                                reorg: Boolean) : (IR.Callable, Vector[IR.Callable]) = {
         def compileTask2(task : CallableTaskDefinition) = {
             val taskSourceCode = taskDir.get(task.name) match {
                 case None => throw new Exception(s"Did not find task ${task.name}")
@@ -124,7 +141,7 @@ object GenerateIR {
                     case None =>
                         throw new Exception(s"Did not find sources for workflow ${wf.name}")
                     case Some(wfSource) =>
-                        compileWorkflow(wf, wfSource, callables, language, locked, reorg, verbose)
+                        compileWorkflow(wf, wfSource, callables, language, locked, reorg)
                 }
             case x =>
                 throw new Exception(s"""|Can't compile: ${callable.name}, class=${callable.getClass}
@@ -138,8 +155,7 @@ object GenerateIR {
               allSources: Map[String, WorkflowSource],
               language: Language.Value,
               locked: Boolean,
-              reorg: Boolean,
-              verbose: Verbose) : IR.Bundle = {
+              reorg: Boolean) : IR.Bundle = {
         Utils.trace(verbose.on, s"IR pass")
         Utils.traceLevelInc()
 
@@ -152,7 +168,7 @@ object GenerateIR {
                 val d = ParseWomSourceFile.scanForTasks(language, srcCode)
                 accu ++ d
         }
-        Utils.trace(verbose.on, s" tasks=${taskDir.keys}")
+        Utils.trace(verbose.on, s"tasks=${taskDir.keys}")
 
         val workflowDir = allSources.foldLeft(Map.empty[String, String]) {
             case (accu, (filename, srcCode)) =>
@@ -164,11 +180,12 @@ object GenerateIR {
                 }
         }
         Utils.trace(verbose.on,
-                    s" sortByDependencies ${womBundle.allCallables.values.map{_.name}}")
-        val depOrder : Vector[Callable] = sortByDependencies(womBundle.allCallables.values.toVector,
-                                                             verbose)
+                    s"sortByDependencies ${womBundle.allCallables.values.map{_.name}}")
+        Utils.traceLevelInc()
+        val depOrder : Vector[Callable] = sortByDependencies(womBundle.allCallables.values.toVector)
         Utils.trace(verbose.on,
                     s"depOrder =${depOrder.map{_.name}}")
+        Utils.traceLevelDec()
 
         // compile the tasks/workflows from bottom to top.
         var allCallables = Map.empty[String, IR.Callable]
@@ -195,8 +212,7 @@ object GenerateIR {
                                                        allCallables,
                                                        language,
                                                        isLocked(callable),
-                                                       reorg,
-                                                       verbose)
+                                                       reorg)
             allCallables = allCallables ++ (auxCallables.map{ apl => apl.name -> apl}.toMap)
             allCallables = allCallables + (exec.name -> exec)
 

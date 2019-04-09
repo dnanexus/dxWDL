@@ -103,7 +103,7 @@ case class GenerateIRWorkflow(wf : WorkflowDefinition,
                                 cVar: CVar) : Option[AnonymousExpressionNode] = {
         val retval = callInputs.find{
             case expr : AnonymousExpressionNode =>
-                Utils.trace(verbose2, s"compare ${cVar.name} to ${expr.identifier.localName.value}")
+                //Utils.trace(verbose2, s"compare ${cVar.name} to ${expr.identifier.localName.value}")
                 cVar.name == Utils.getUnqualifiedName(expr.identifier.localName.value)
         }
         retval
@@ -195,10 +195,8 @@ case class GenerateIRWorkflow(wf : WorkflowDefinition,
                 None
             case None =>
                 // A missing compulsory argument
-//                Utils.warning(verbose,
-//                              s"Missing argument ${fqn}, it will have to be provided at runtime")
-                System.out.println(
-                    s"Missing argument ${fqn}, it will have to be provided at runtime")
+                Utils.warning(verbose,
+                              s"Missing argument ${fqn}, it will have to be provided at runtime")
                 None
             case Some((name, lVar)) =>
                 Some((name, lVar))
