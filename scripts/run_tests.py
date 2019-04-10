@@ -46,6 +46,15 @@ wdl_v1_list = [
     "param_passing"
 ]
 
+
+# docker image tests
+docker_test_list = [
+    "broad_genomics",
+    "private_registry",
+    "native_docker_file_image",
+    "samtools_count"
+]
+
 # wdl draft-2
 draft2_test_list = [
     "advanced",
@@ -68,8 +77,8 @@ draft2_test_list = [
     "var_type_change"
 ]
 
-medium_test_list= wdl_v1_list
-large_test_list= draft2_test_list + wdl_v1_list
+medium_test_list= wdl_v1_list + docker_test_list
+large_test_list= draft2_test_list + wdl_v1_list + docker_test_list
 
 tests_for_alt_project = [ "platform_asset" ]
 
@@ -84,6 +93,7 @@ test_unlocked=["cast",
                "linear",
                "shapes"]
 test_extras=["instance_types"]
+test_private_registry=["private_registry"]
 TestMetaData = namedtuple('TestMetaData', 'name kind')
 TestDesc = namedtuple('TestDesc', 'name kind wdl_source wdl_input dx_input results')
 
@@ -364,6 +374,8 @@ def choose_tests(test_name):
         return large_test_list
     if test_name == 'draft2':
         return draft2_test_list
+    if test_name == 'docker':
+        return docker_test_list
     if test_name == 'All':
         return test_files.keys()
     if test_name in test_files.keys():
@@ -417,6 +429,8 @@ def compiler_per_test_flags(tname):
         flags.append(desc.wdl_input)
     if tname in test_extras:
         flags += ["--extras", os.path.join(top_dir, "test/extras.json")]
+    if tname in test_private_registry:
+        flags += ["--extras", os.path.join(top_dir, "test/extras_private_registry.json")]
     return flags
 
 # Which project to use for a test

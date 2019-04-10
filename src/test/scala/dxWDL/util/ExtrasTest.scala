@@ -8,7 +8,22 @@ import wom.types._
 import wom.values._
 
 class ExtrasTest extends FlatSpec with Matchers {
-    val verbose = Verbose(false, true, Set.empty)
+    val verbose = Verbose(true, true, Set.empty)
+
+
+    it should "recognize restartable entry points" in {
+        val runtimeAttrs : JsValue =
+            """|{
+               |  "default_task_dx_attributes" : {
+               |     "runSpec" : {
+               |       "restartableEntryPoints": "all"
+               |     }
+               |  }
+               |}""".stripMargin.parseJson
+
+        val extras = Extras.parse(runtimeAttrs, verbose)
+        extras.defaultTaskDxAttributes should be (Some(DxRunSpec(None, None, Some("all"), None)))
+    }
 
     it should "invalid runSpec I" in {
         val ex1 =
@@ -100,16 +115,18 @@ class ExtrasTest extends FlatSpec with Matchers {
 
         val js = runSpecValid.parseJson
         val extras = Extras.parse(js, verbose)
-        extras.defaultTaskDxAttributes should be (Some(DxRunSpec(Some(DxExecPolicy(Some(Map("*" -> 3)),
-                                                                                   None)),
-                                                                 Some(DxTimeout(None,
-                                                                                Some(12),
-                                                                                None)),
-                                                                 Some(DxAccess(Some(Vector("*")),
-                                                                               Some(AccessLevel.CONTRIBUTE),
-                                                                               Some(AccessLevel.VIEW),
-                                                                               Some(true),
-                                                                               None))
+        extras.defaultTaskDxAttributes should be (Some(DxRunSpec(
+                                                           Some(DxAccess(Some(Vector("*")),
+                                                                         Some(AccessLevel.CONTRIBUTE),
+                                                                         Some(AccessLevel.VIEW),
+                                                                         Some(true),
+                                                                         None)),
+                                                           Some(DxExecPolicy(Some(Map("*" -> 3)),
+                                                                             None)),
+                                                           None,
+                                                           Some(DxTimeout(None,
+                                                                          Some(12),
+                                                                          None))
                                                        )))
     }
 
@@ -137,6 +154,7 @@ class ExtrasTest extends FlatSpec with Matchers {
 
         val restartPolicy = Map("UnresponsiveWorker" -> 2, "JMInternalError" -> 0, "ExecutionError" -> 4)
         extras.defaultTaskDxAttributes should be (Some(DxRunSpec(
+                                                           None,
                                                            Some(DxExecPolicy(Some(restartPolicy), Some(5))),
                                                            None,
                                                            None)
@@ -220,8 +238,7 @@ class ExtrasTest extends FlatSpec with Matchers {
             case None =>
                 throw new Exception("Wrong type for dockerOpt")
             case Some(docker) =>
-                WomValueAnalysis.evalConst(WomStringType, docker) should equal (WomString("quay.io/encode-dcc/atac-seq-pipeline:v1"))
-
+                 WomValueAnalysis.evalConst(WomStringType, docker) should equal (WomString("quay.io/encode-dcc/atac-seq-pipeline:v1"))
         }
     }
 
@@ -236,5 +253,120 @@ class ExtrasTest extends FlatSpec with Matchers {
 
         val extrasEmpty = Extras.parse(rtEmpty, verbose)
         extrasEmpty.defaultRuntimeAttributes should equal(Map.empty)
+    }
+
+    it should "accept per task attributes" in {
+        val runSpec : JsValue =
+            """|{
+               | "default_task_dx_attributes" : {
+               |   "runSpec": {
+               |     "timeoutPolicy": {
+               |        "*": {
+               |          "hours": 12
+               |        }
+               |     }
+               |   }
+               |  },
+               | "per_task_dx_attributes" : {
+               |   "Add": {
+               |      "runSpec": {
+               |        "timeoutPolicy": {
+               |          "*": {
+               |             "minutes": 30
+               |          }
+               |        }
+               |      }
+               |    },
+               |    "Multiply" : {
+               |      "runSpec": {
+               |        "timeoutPolicy": {
+               |          "*": {
+               |            "minutes": 30
+               |          }
+               |        },
+               |        "access" : {
+               |          "project": "UPLOAD"
+               |        }
+               |      }
+               |    }
+               |  }
+               |}
+               |""".stripMargin.parseJson
+
+        val extras = Extras.parse(runSpec, verbose)
+        extras.defaultTaskDxAttributes should be (
+            Some(DxRunSpec(
+                     None,
+                     None,
+                     None,
+                     Some(DxTimeout(None, Some(12), None))
+                 )))
+        extras.perTaskDxAttributes should be (
+            Map("Multiply" -> DxRunSpec(Some(DxAccess(None, Some(AccessLevel.UPLOAD), None, None, None)),
+                                        None, None, Some(DxTimeout(None, None, Some(30)))),
+                "Add" -> DxRunSpec(None, None, None, Some(DxTimeout(None, None, Some(30)))))
+        )
+    }
+
+    it should "parse the docker registry section" in {
+        val data =
+            """|{
+               | "docker_registry" : {
+               |   "registry" : "foo.bar.dnanexus.com",
+               |   "username" : "perkins",
+               |   "credentials" : "The Bandersnatch has gotten loose"
+               | }
+               |}
+               |""".stripMargin.parseJson
+
+        val extras = Extras.parse(data, verbose)
+        extras.dockerRegistry should be (
+            Some(DockerRegistry(
+                     "foo.bar.dnanexus.com",
+                     "perkins",
+                     "The Bandersnatch has gotten loose")))
+    }
+
+    it should "recognize errors in docker registry section" in {
+        val data =
+            """|{
+               | "docker_registry" : {
+               |   "registry_my" : "foo.bar.dnanexus.com",
+               |   "username" : "perkins",
+               |   "credentials" : "BandersnatchOnTheLoose"
+               | }
+               |}
+               |""".stripMargin.parseJson
+        assertThrows[Exception] {
+            Extras.parse(data, verbose)
+        }
+    }
+
+    it should "recognize errors in docker registry section II" in {
+        val data =
+            """|{
+               | "docker_registry" : {
+               |   "registry" : "foo.bar.dnanexus.com",
+               |   "credentials" : "BandersnatchOnTheLoose"
+               | }
+               |}
+               |""".stripMargin.parseJson
+        assertThrows[Exception] {
+            Extras.parse(data, verbose)
+        }
+    }
+
+
+    it should "recognize errors in docker registry section III" in {
+        val data =
+            """|{
+               | "docker_registry" : {
+               |   "creds" : "XXX"
+               | }
+               |}
+               |""".stripMargin.parseJson
+        assertThrows[Exception] {
+            Extras.parse(data, verbose)
+        }
     }
 }

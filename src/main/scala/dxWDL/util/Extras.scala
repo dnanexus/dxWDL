@@ -143,9 +143,10 @@ object DxAccess {
     val empty = DxAccess(None, None, None, None, None)
 }
 
-case class DxRunSpec(execPolicy: Option[DxExecPolicy],
-                     timeoutPolicy: Option[DxTimeout],
-                     access: Option[DxAccess]) {
+case class DxRunSpec(access: Option[DxAccess],
+                     execPolicy: Option[DxExecPolicy],
+                     restartableEntryPoints: Option[String],
+                     timeoutPolicy: Option[DxTimeout]) {
     // The access field DOES NOT go into the run-specification in the API
     // call. It does fit, however, in dxapp.json.
     def toRunSpecJson : Map[String, JsValue] = {
@@ -154,29 +155,65 @@ case class DxRunSpec(execPolicy: Option[DxExecPolicy],
             case Some(execPolicy) =>
                 execPolicy.toJson
         }
+        val restartableEntryPointsFields = restartableEntryPoints match {
+            case None => Map.empty
+            case Some(value: String) => Map("restartableEntryPoints" -> JsString(value))
+        }
         val timeoutFields = timeoutPolicy match {
             case None => Map.empty
             case Some(execPolicy) => execPolicy.toJson
         }
-        execPolicyFields ++ timeoutFields
+        execPolicyFields ++ restartableEntryPointsFields ++ timeoutFields
     }
 }
 
+case class DockerRegistry(registry: String,
+                           username: String,
+                           credentials: String)
+
 case class Extras(defaultRuntimeAttributes: Map[String, WomExpression],
-                  defaultTaskDxAttributes: Option[DxRunSpec])
+                  defaultTaskDxAttributes: Option[DxRunSpec],
+                  perTaskDxAttributes: Map[String, DxRunSpec],
+                  dockerRegistry : Option[DockerRegistry]) {
+    def getDefaultAccess : DxAccess = {
+        defaultTaskDxAttributes match {
+            case None => DxAccess.empty
+            case Some(dta) => dta.access match {
+                case None => DxAccess.empty
+                case Some(access) => access
+            }
+        }
+    }
+
+    def getTaskAccess(taskName: String) : DxAccess = {
+        perTaskDxAttributes.get(taskName) match {
+            case None => DxAccess.empty
+            case Some(dta) => dta.access match {
+                case None => DxAccess.empty
+                case Some(access) => access
+            }
+        }
+    }
+
+}
 
 object Extras {
     val DX_INSTANCE_TYPE_ATTR = "dx_instance_type"
-    val EXTRA_ATTRS = Set("default_runtime_attributes", "default_task_dx_attributes")
+    val DOCKER_REGISTRY_ATTRS = Set("username", "registry", "credentials")
+    val EXTRA_ATTRS = Set("default_runtime_attributes",
+                          "default_task_dx_attributes",
+                          "per_task_dx_attributes",
+                          "docker_registry")
     val RUNTIME_ATTRS = Set(DX_INSTANCE_TYPE_ATTR, "memory", "disks", "cpu", "docker")
-    val TASK_DX_ATTRS = Set("runSpec")
-    val RUN_SPEC_ATTRS = Set("executionPolicy", "timeoutPolicy", "access")
+    val RUN_SPEC_ATTRS = Set("access", "executionPolicy", "restartableEntryPoints", "timeoutPolicy")
     val RUN_SPEC_ACCESS_ATTRS = Set("network", "project", "allProjects", "developer", "projectCreation")
     val RUN_SPEC_TIMEOUT_ATTRS = Set("days", "hours", "minutes")
     val RUN_SPEC_EXEC_POLICY_ATTRS = Set("restartOn", "maxRestarts")
     val RUN_SPEC_EXEC_POLICY_RESTART_ON_ATTRS = Set("ExecutionError", "UnresponsiveWorker",
                                                     "JMInternalError", "AppInternalError",
                                                     "JobTimeoutExceeded", "*")
+    val TASK_DX_ATTRS = Set("runSpec")
+
 
     private def wdlExpressionFromJsValue(jsv: JsValue) : WomExpression = {
         val wValue: WomValue = jsv match {
@@ -185,7 +222,6 @@ object Extras {
             case JsString(s) => WomString(s)
             case other => throw new Exception(s"Unsupported json value ${other}")
         }
-        //WomExpression.fromString(wValue.toWomString)
         ValueAsAnExpression(wValue)
     }
 
@@ -371,9 +407,20 @@ object Extras {
                                         |""".stripMargin.replaceAll("\n", ""))
 
         }
-        return Some(DxRunSpec(parseExecutionPolicy(checkedParseObjectField(fields, "executionPolicy")),
-                              parseTimeoutPolicy(checkedParseObjectField(fields, "timeoutPolicy")),
-                              parseAccess(checkedParseObjectField(fields, "access"))))
+
+        val restartable : Option[String] =
+            checkedParseStringField(fields, "restartableEntryPoints") match  {
+                case None => None
+                case Some(str) if List("all", "master") contains str => Some(str)
+                case Some(str) => throw new Exception(s"Unsupported restartableEntryPoints value ${str}")
+            }
+        return Some(DxRunSpec(
+                        parseAccess(checkedParseObjectField(fields, "access")),
+                        parseExecutionPolicy(checkedParseObjectField(fields, "executionPolicy")),
+                        restartable,
+                        parseTimeoutPolicy(checkedParseObjectField(fields, "timeoutPolicy"))
+                    ))
+
     }
 
     private def parseTaskDxAttrs(jsv: JsValue,
@@ -391,6 +438,29 @@ object Extras {
         return parseRunSpec(checkedParseObjectField(fields, "runSpec"))
     }
 
+    private def parseDockerRegistry(jsv: JsValue,
+                                     verbose: Verbose) : Option[DockerRegistry] = {
+        if (jsv == JsNull)
+            return None
+        val fields = jsv.asJsObject.fields
+        for (k <- fields.keys) {
+            if (!(DOCKER_REGISTRY_ATTRS contains k))
+                throw new Exception(s"""|Unsupported docker registry attribute ${k},
+                                        |we currently support ${DOCKER_REGISTRY_ATTRS}
+                                        |""".stripMargin.replaceAll("\n", ""))
+
+        }
+        def getSome(fieldName : String) : String = {
+            checkedParseStringField(fields, fieldName) match {
+                case None => throw new Exception(s"${fieldName} must be specified in the docker section")
+                case Some(x) => x
+            }
+        }
+        val registry = getSome("registry")
+        val username = getSome("username")
+        val credentials = getSome("credentials")
+        Some(DockerRegistry(registry, username, credentials))
+    }
 
     def parse(jsv: JsValue,
               verbose: Verbose) : Extras = {
@@ -406,11 +476,35 @@ object Extras {
                                         |we currently support ${EXTRA_ATTRS}
                                         |""".stripMargin.replaceAll("\n", ""))
         }
+
+        // parse the individual task dx attributes
+        val perTaskDxAttrs : Map[String, DxRunSpec] =
+            checkedParseObjectField(fields, "per_task_dx_attributes") match {
+                case JsNull =>
+                    Map.empty[String, DxRunSpec]
+                case jsObj =>
+                    val fields = jsObj.asJsObject.fields
+                    fields.foldLeft(Map.empty[String, DxRunSpec]){
+                        case (accu, (name, jsValue)) =>
+                            val dxAttrs = parseTaskDxAttrs(jsValue, verbose)
+                            dxAttrs match {
+                                case None =>
+                                    accu
+                                case Some(attrs) =>
+                                    accu + (name -> attrs)
+                            }
+                    }
+            }
+
         Extras(parseRuntimeAttrs(
                    checkedParseObjectField(fields, "default_runtime_attributes"),
                    verbose),
                parseTaskDxAttrs(
                    checkedParseObjectField(fields, "default_task_dx_attributes"),
+                   verbose),
+               perTaskDxAttrs,
+               parseDockerRegistry(
+                   checkedParseObjectField(fields, "docker_registry"),
                    verbose))
     }
 }

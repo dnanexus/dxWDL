@@ -148,8 +148,7 @@ object DxPath {
         dxObj.asInstanceOf[DXFile]
     }
 
-    def dxRecordToURL(dxRecord: DXRecord) : String = {
-        val dxid = dxRecord.getId()
-        s"${DX_URL_PREFIX}${dxid}"
+    def dxDataObjectToURL(dxObj: DXDataObject) : String = {
+        s"${DX_URL_PREFIX}${dxObj.getId}"
     }
 }

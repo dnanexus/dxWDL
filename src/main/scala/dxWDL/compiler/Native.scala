@@ -28,11 +28,21 @@ case class Native(dxWDLrtId: Option[String],
                   archive: Boolean,
                   locked: Boolean,
                   verbose: Verbose) {
-    type ExecDict = Map[String, (IR.Callable, DxExec)]
-    val execDictEmpty = Map.empty[String, (IR.Callable, DxExec)]
+    private type ExecDict = Map[String, (IR.Callable, DxExec)]
+    private val execDictEmpty = Map.empty[String, (IR.Callable, DxExec)]
 
-    val verbose2:Boolean = verbose.containsKey("Native")
-    val rtDebugLvl = runtimeDebugLevel.getOrElse(Utils.DEFAULT_RUNTIME_DEBUG_LEVEL)
+    private val verbose2:Boolean = verbose.containsKey("Native")
+    private val rtDebugLvl = runtimeDebugLevel.getOrElse(Utils.DEFAULT_RUNTIME_DEBUG_LEVEL)
+
+     // Are we setting up a private docker registry?
+    private val dockerRegistryInfo : Option[DockerRegistry]= extras match {
+        case None => None
+        case Some(extras) =>
+            extras.dockerRegistry match {
+                case None => None
+                case Some(x) => Some(x)
+            }
+    }
 
     lazy val runtimeLibrary: Option[JsValue] =
         dxWDLrtId match {
@@ -146,6 +156,38 @@ case class Native(dxWDLrtId: Option[String],
     }
 
 
+     private def dockerPreamble(dockerImage: IR.DockerImage) : String = {
+        val exportBashVars = dockerRegistryInfo match {
+            case None => ""
+            case Some(DockerRegistry(registry, username, credentials)) =>
+                // check that the credentials file is a valid platform path
+                try {
+                    val dxFile = DxPath.lookupDxURLFile(credentials)
+                    Utils.ignore(dxFile)
+                } catch {
+                    case e : Throwable =>
+                        throw new Exception(s"""|credentials has to point to a platform file.
+                                                |It is now:
+                                                |   ${credentials}
+                                                |Error:
+                                                |  ${e}
+                                                |""".stripMargin)
+                }
+
+                // strip the URL from the dx:// prefix, so we can use dx-download directly
+                val credentialsWithoutPrefix = credentials.substring(Utils.DX_URL_PREFIX.length)
+                s"""|# Docker private registry information
+                    |export DOCKER_REGISTRY=${registry}
+                    |export DOCKER_USERNAME=${username}
+                    |export DOCKER_CREDENTIALS=${credentialsWithoutPrefix}
+                    |""".stripMargin
+        }
+        s"""|# Docker definitions
+            |export DOCKER_CMD=docker
+            |${exportBashVars}
+            |""".stripMargin
+     }
+
     private def genBashScriptTaskBody(): String = {
         s"""|
             |    # evaluate input arguments, and download input files
@@ -188,9 +230,9 @@ case class Native(dxWDLrtId: Option[String],
             |}""".stripMargin.trim
     }
 
-    private def genBashScript(appKind: IR.AppletKind,
+    private def genBashScript(applet: IR.Applet,
                               instanceType: IR.InstanceType) : String = {
-        val body:String = appKind match {
+        val body:String = applet.kind match {
             case IR.AppletKindNative(_) =>
                 throw new Exception("Sanity: generating a bash script for a native applet")
             case IR.AppletKindWfFragment(_, _, _) =>
@@ -204,11 +246,15 @@ case class Native(dxWDLrtId: Option[String],
             case IR.AppletKindTask(_) =>
                 instanceType match {
                     case IR.InstanceTypeDefault | IR.InstanceTypeConst(_,_,_,_) =>
-                        s"""|main() {
+                        s"""|${dockerPreamble(applet.docker)}
+                            |
+                            |main() {
                             |${genBashScriptTaskBody()}
                             |}""".stripMargin
                     case IR.InstanceTypeRuntime =>
-                        s"""|main() {
+                        s"""|${dockerPreamble(applet.docker)}
+                            |
+                            |main() {
                             |    # check if this is the correct instance type
                             |    correctInstanceType=`java -jar $${DX_FS_ROOT}/dxWDL.jar internal taskCheckInstanceType $${HOME} ${rtDebugLvl}`
                             |    if [[ $$correctInstanceType == "true" ]]; then
@@ -338,11 +384,10 @@ case class Native(dxWDLrtId: Option[String],
 
     // Set the run spec.
     //
-    private def calcRunSpec(bashScript: String,
-                            iType: IR.InstanceType,
-                            docker: IR.DockerImage) : JsValue = {
+    private def calcRunSpec(applet: IR.Applet,
+                            bashScript: String) : (JsValue, JsValue) = {
         // find the dxWDL asset
-        val instanceType:String = iType match {
+        val instanceType:String = applet.instanceType match {
             case x : IR.InstanceTypeConst =>
                 val xDesc = InstanceTypeReq(x.dxInstanceType,
                                             x.memoryMB,
@@ -361,6 +406,9 @@ case class Native(dxWDLrtId: Option[String],
             "distribution" -> JsString("Ubuntu"),
             "release" -> JsString(Utils.UBUNTU_VERSION),
         )
+
+        // Start with the default dx-attribute section, and override
+        // any field that is specified in the individual task section.
         val extraRunSpec : Map[String, JsValue] = extras match {
             case None => Map.empty
             case Some(ext) => ext.defaultTaskDxAttributes match {
@@ -368,69 +416,76 @@ case class Native(dxWDLrtId: Option[String],
                 case Some(dta) => dta.toRunSpecJson
             }
         }
-        val runSpecWithExtras = runSpec ++ extraRunSpec
+        val taskSpecificRunSpec : Map[String, JsValue] =
+            if (applet.kind.isInstanceOf[IR.AppletKindTask]) {
+                // A task can override the default dx attributes
+                extras match {
+                    case None => Map.empty
+                    case Some(ext) => ext.perTaskDxAttributes.get(applet.name) match {
+                        case None => Map.empty
+                        case Some(dta) => dta.toRunSpecJson
+                    }
+                }
+            } else {
+                Map.empty
+            }
+        val runSpecWithExtras = runSpec ++ extraRunSpec ++ taskSpecificRunSpec
 
-        // If the docker image is a platform asset,
-        // add it to the asset-depends.
-        val dockerAssets: Option[JsValue] = docker match {
+        // - If the docker image is a tarball, add a link in the details field.
+        val dockerFile: Option[DXFile] = applet.docker match {
             case IR.DockerImageNone => None
             case IR.DockerImageNetwork => None
-            case IR.DockerImageDxAsset(_, dxRecord) =>
-                val desc = dxRecord.describe(DXDataObject.DescribeOptions.get.withDetails)
-
-                // extract the archiveFileId field
-                val details:JsValue = Utils.jsValueOfJsonNode(desc.getDetails(classOf[JsonNode]))
-                val pkgFile:DXFile = details.asJsObject.fields.get("archiveFileId") match {
-                    case Some(id) => Utils.dxFileFromJsValue(id)
-                    case _ => throw new Exception(s"Badly formatted record ${dxRecord}")
-                }
-                val pkgName = pkgFile.describe.getName
-
-                // Check if the asset points to a different
-                // project. If so, make sure we have an asset clone
-                // in -this- project.
-                val rmtContainer = desc.getProject
-                if (!rmtContainer.isInstanceOf[DXProject])
-                    throw new Exception(s"remote asset is in container ${rmtContainer.getId}, not a project")
-                val rmtProject = rmtContainer.asInstanceOf[DXProject]
-                Utils.cloneAsset(dxRecord, dxProject, pkgName, rmtProject, verbose)
-                Some(JsObject("name" -> JsString(pkgName),
-                              "id" -> Utils.jsValueOfJsonNode(pkgFile.getLinkAsJson)))
+            case IR.DockerImageDxFile(_, dxfile) =>
+                // A docker image stored as a tar ball in a platform file
+                Some(dxfile)
         }
-        runtimeLibrary match {
-            case None =>
-                // The runtime library is not provided. This is only for testing,
-                // because the applet will not be able to run.
-                JsObject(runSpecWithExtras)
-            case Some(rtLib) =>
-                val bundledDepends = dockerAssets match {
-                    case None => Vector(rtLib)
-                    case Some(img) => Vector(rtLib, img)
-                }
-                JsObject(runSpecWithExtras +
-                             ("bundledDepends" -> JsArray(bundledDepends)))
+        val bundledDepends = runtimeLibrary match {
+            case None => Map.empty
+            case Some(rtLib) => Map("bundledDepends" -> JsArray(Vector(rtLib)))
         }
+        val runSpecEverything = JsObject(runSpecWithExtras ++ bundledDepends)
+
+        val details = dockerFile match {
+            case None => JsNull
+            case Some(dxfile) =>
+                JsObject("details" ->
+                             JsObject("docker-image" -> Utils.dxFileToJsValue(dxfile)))
+        }
+        (runSpecEverything, details)
     }
 
-    def  calcAccess(applet: IR.Applet) : JsValue = {
+    def calcAccess(applet: IR.Applet) : JsValue = {
         val extraAccess: DxAccess = extras match {
             case None => DxAccess.empty
-            case Some(ext) => ext.defaultTaskDxAttributes match {
-                case None => DxAccess.empty
-                case Some(dta) => dta.access match {
-                    case None => DxAccess.empty
-                    case Some(access) => access
-                }
-            }
+            case Some(ext) => ext.getDefaultAccess
         }
+        val taskSpecificAccess : DxAccess =
+            if (applet.kind.isInstanceOf[IR.AppletKindTask]) {
+                // A task can override the default dx attributes
+                extras match {
+                    case None => DxAccess.empty
+                    case Some(ext) => ext.getTaskAccess(applet.name)
+                }
+            } else {
+                DxAccess.empty
+            }
+
+        // If we are using a private docker registry, add the allProjects: VIEW
+        // access to tasks.
+        val allProjectsAccess: DxAccess = dockerRegistryInfo match {
+            case None => DxAccess.empty
+            case Some(_) => DxAccess(None, None, Some(AccessLevel.VIEW), None, None)
+        }
+        val taskAccess = extraAccess.merge(taskSpecificAccess).merge(allProjectsAccess)
+
         val access: DxAccess = applet.kind match {
             case IR.AppletKindTask(_) =>
                 if (applet.docker == IR.DockerImageNetwork) {
                     // docker requires network access, because we are downloading
                     // the image from the network
-                    extraAccess.merge(DxAccess(Some(Vector("*")), None,  None,  None,  None))
+                    taskAccess.merge(DxAccess(Some(Vector("*")), None,  None,  None,  None))
                 } else {
-                    extraAccess
+                    taskAccess
                 }
             case IR.AppletKindWorkflowOutputReorg =>
                 // The WorkflowOutput applet requires higher permissions
@@ -440,7 +495,7 @@ case class Native(dxWDLrtId: Option[String],
                 // Even scatters need network access, because
                 // they spawn subjobs that (may) use dx-docker.
                 // We end up allowing all applets to use the network
-                extraAccess.merge(DxAccess(Some(Vector("*")), None,  None,  None,  None))
+                taskAccess.merge(DxAccess(Some(Vector("*")), None,  None,  None,  None))
         }
         val fields = access.toJson
         if (fields.isEmpty) JsNull
@@ -525,30 +580,29 @@ case class Native(dxWDLrtId: Option[String],
         val outputSpec : Vector[JsValue] = applet.outputs.map(cVar =>
             cVarToSpec(cVar)
         ).flatten.toVector
-        val runSpec : JsValue = calcRunSpec(bashScript, applet.instanceType, applet.docker)
+        val (runSpec : JsValue, details: JsValue) = calcRunSpec(applet, bashScript)
         val access : JsValue = calcAccess(applet)
 
-        // pack all the core arguments into a single request
-        val reqCore = Map(
-            "name" -> JsString(applet.name),
+         // pack all the core arguments into a single request
+        var reqCore = Map(
+	    "name" -> JsString(applet.name),
             "inputSpec" -> JsArray(inputSpec ++ metaInfo.toVector),
             "outputSpec" -> JsArray(outputSpec),
             "runSpec" -> runSpec,
             "dxapi" -> JsString("1.0.0"),
             "tags" -> JsArray(JsString("dxWDL"))
         )
-        val reqWithAccess =
-            if (access == JsNull)
-                JsObject(reqCore)
-            else
-                JsObject(reqCore ++ Map("access" -> access))
+        if (details != JsNull)
+            reqCore += ("details" -> details)
+        if (access != JsNull)
+            reqCore += ("access" -> access)
 
         // Add a checksum
-        val (digest, req) = checksumReq(reqWithAccess)
+        val (digest, req) = checksumReq(JsObject(reqCore))
 
         // Add properties we do not want to fall under the checksum.
         // This allows, for example, moving the dx:executable, while
-        // still being able to reuse it.
+	// still being able to reuse it.
         val reqWithEverything =
             JsObject(req.asJsObject.fields ++ Map(
                          "project" -> JsString(dxProject.getId),
@@ -577,7 +631,7 @@ case class Native(dxWDLrtId: Option[String],
         }.toMap
 
         // Build an applet script
-        val bashScript = genBashScript(applet.kind, applet.instanceType)
+        val bashScript = genBashScript(applet, applet.instanceType)
 
         // Calculate a checksum of the inputs that went into the
         // making of the applet.
