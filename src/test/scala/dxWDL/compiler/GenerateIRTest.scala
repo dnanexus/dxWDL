@@ -2,6 +2,7 @@ package dxWDL.compiler
 
 import java.nio.file.{Path, Paths}
 import org.scalatest.{FlatSpec, Matchers}
+import org.scalatest.Inside._
 
 import dxWDL.Main
 import dxWDL.util.Utils
@@ -74,7 +75,10 @@ class GenerateIRTest extends FlatSpec with Matchers {
     it should "IR compile optionals" in {
         val path = pathFromBasename("compiler", "optionals.wdl")
         Main.compile(
-            path.toString :: cFlags
+            path.toString
+//                :: "--verbose"
+//                :: "--verboseKey" :: "GenerateIR"
+                :: cFlags
         ) shouldBe a [Main.SuccessfulTerminationIR]
     }
 
@@ -177,7 +181,7 @@ class GenerateIRTest extends FlatSpec with Matchers {
         stage.description shouldBe ("review")
     }
 
-    it should "three nesting levels" taggedAs(EdgeTest) in {
+    it should "three nesting levels" in {
         val path = pathFromBasename("nested", "three_levels.wdl")
         val retval = Main.compile(
             path.toString
@@ -186,14 +190,36 @@ class GenerateIRTest extends FlatSpec with Matchers {
                 :: cFlags
         )
         retval shouldBe a [Main.SuccessfulTerminationIR]
-        val callable : IR.Callable = retval match {
-            case Main.SuccessfulTerminationIR(ir) => ir.primaryCallable.get
+        val bundle = retval match {
+            case Main.SuccessfulTerminationIR(ir) => ir
             case _ => throw new Exception("sanity")
         }
-        val wf = callable match {
+        val primary : IR.Callable = bundle.primaryCallable.get
+        val wf = primary match {
             case wf : IR.Workflow => wf
             case _ => throw new Exception("sanity")
         }
-        Utils.ignore(wf)
+        wf.stages.size shouldBe(1)
+
+        val level2 = bundle.allCallables(wf.name)
+        level2 shouldBe a[IR.Workflow]
+        val wfLevel2 = level2.asInstanceOf[IR.Workflow]
+        wfLevel2.stages.size shouldBe(1)
+    }
+
+
+    it should "four nesting levels" taggedAs(EdgeTest) in {
+        val path = pathFromBasename("nested", "four_levels.wdl")
+        val retval = Main.compile(
+            path.toString
+                :: "--verbose"
+                :: "--verboseKey" :: "GenerateIR"
+                :: cFlags
+        )
+
+        inside(retval) {
+            case Main.UnsuccessfulTermination(errMsg) =>
+                errMsg should include ("nested scatter")
+        }
     }
 }

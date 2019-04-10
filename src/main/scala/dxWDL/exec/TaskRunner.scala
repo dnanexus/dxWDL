@@ -436,7 +436,8 @@ case class TaskRunner(task: CallableTaskDefinition,
         val instanceType:String = calcInstanceType(inputs)
 
         // Run a sub-job with the "body" entry point, and the required instance type
-        val dxSubJob : DXJob = Utils.runSubJob("body", Some(instanceType), originalInputs, Vector.empty)
+        val dxSubJob : DXJob = Utils.runSubJob("body", Some(instanceType), originalInputs,
+                                               Vector.empty, maxVerboseLevel)
 
         // Return promises (JBORs) for all the outputs. Since the signature of the sub-job
         // is exactly the same as the parent, we can immediately exit the parent job.

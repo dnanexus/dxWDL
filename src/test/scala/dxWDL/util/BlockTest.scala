@@ -139,12 +139,11 @@ class BlockTest extends FlatSpec with Matchers {
         val (inputNodes, subBlocks, outputNodes) = Block.split(wf.innerGraph, wfSourceCode)
 
         for (i <- 0 to 2) {
-            val (_, category) = Block.categorize(subBlocks(i))
-            category shouldBe a [Block.CallDirect]
+            Block.categorize(subBlocks(i)) shouldBe a [Block.CallDirect]
         }
     }
 
-    it should "categorize correctly calls to subworkflows" in {
+    it should "categorize correctly calls to subworkflows" taggedAs(EdgeTest) in {
         val path = pathFromBasename("subworkflows", "trains.wdl")
         val (_, womBundle, sources, _) = ParseWomSourceFile.apply(path)
         val (_, wfSourceCode) = sources.find{ case (key, wdlCode) =>
@@ -158,8 +157,7 @@ class BlockTest extends FlatSpec with Matchers {
 
         val (inputNodes, subBlocks, outputNodes) = Block.split(wf.innerGraph, wfSourceCode)
 
-        val (_, category) = Block.categorize(subBlocks(0))
-        category shouldBe a [Block.Scatter]
+        Block.categorize(subBlocks(0)) shouldBe a [Block.ScatterOneCall]
     }
 
     it should "get subblocks" in {
@@ -175,31 +173,25 @@ class BlockTest extends FlatSpec with Matchers {
         val graph = wf.innerGraph
 
         val b0 = Block.getSubBlock(Vector(0), graph, callsLoToHi)
-        val (_, catg0) = Block.categorize(b0)
-        catg0 shouldBe a[Block.ScatterSubblock]
+        Block.categorize(b0) shouldBe a[Block.ScatterFullBlock]
 
         val b1 = Block.getSubBlock(Vector(1), graph, callsLoToHi)
-        val (_, catg1) = Block.categorize(b1)
-        catg1 shouldBe a[Block.Cond]
+        Block.categorize(b1) shouldBe a[Block.CondOneCall]
 
         val b2 = Block.getSubBlock(Vector(2), graph, callsLoToHi)
-        val (_, catg2) = Block.categorize(b2)
-        catg2 shouldBe a[Block.CallDirect]
+        Block.categorize(b2) shouldBe a[Block.CallDirect]
 
         val b00 = Block.getSubBlock(Vector(0, 0), graph, callsLoToHi)
-        val (_, catg00) = Block.categorize(b00)
-        catg00 shouldBe a[Block.CallDirect]
+        Block.categorize(b00) shouldBe a[Block.CallDirect]
 
         val b01 = Block.getSubBlock(Vector(0, 1), graph, callsLoToHi)
-        val (_, catg01) = Block.categorize(b01)
-        catg01 shouldBe a[Block.CallDirect]
+        Block.categorize(b01) shouldBe a[Block.CallDirect]
 
         val b02 = Block.getSubBlock(Vector(0, 2), graph, callsLoToHi)
-        val (_, catg02) = Block.categorize(b02)
-        catg02 shouldBe a[Block.CallCompound]
+        Block.categorize(b02) shouldBe a[Block.CallFragment]
     }
 
-    it should "handle calls to imported modules II" taggedAs(EdgeTest) in {
+    it should "handle calls to imported modules II" in {
         val path = pathFromBasename("draft2", "block_category.wdl")
         val (language, womBundle: WomBundle, allSources, _) = ParseWomSourceFile.apply(path)
 
@@ -214,9 +206,7 @@ class BlockTest extends FlatSpec with Matchers {
         val graph = wf.innerGraph
         val (inputNodes, subBlocks, outputNodes) = Block.split(graph, wfSource)
 
-        val b = subBlocks(0)
-        val (_, catg) = Block.categorize(b)
-        catg shouldBe a[Block.Cond]
+        Block.categorize(subBlocks(0)) shouldBe a[Block.CondOneCall]
     }
 
     it should "handle calls to imported modules" in {
@@ -240,7 +230,7 @@ class BlockTest extends FlatSpec with Matchers {
                                    |${b.prettyPrintApproxWdl}
                                    |]
                                    |""".stripMargin)*/
-            val (_, catg) = Block.categorize(b)
+            val catg = Block.categorize(b)
             Utils.ignore(catg)
         }
     }
@@ -274,8 +264,7 @@ class BlockTest extends FlatSpec with Matchers {
                                |""".stripMargin)
          */
 
-        val (_, category) = Block.categorize(block)
-        category shouldBe a[Block.CallDirect]
+        Block.categorize(block) shouldBe a[Block.CallDirect]
     }
 
 
@@ -312,5 +301,30 @@ class BlockTest extends FlatSpec with Matchers {
             case n : ScatterNode => n
         }
         scatters.size should be(1)
+    }
+
+    it should "sort a subblock properly" in {
+        val path = pathFromBasename("draft2", "conditionals4.wdl")
+        val (language, womBundle: WomBundle, allSources, _) = ParseWomSourceFile.apply(path)
+        val (_, wfSource) = allSources.find {
+            case (name, _) => name.endsWith("conditionals4.wdl")
+        }.get
+
+        val wf: WorkflowDefinition = womBundle.primaryCallable match {
+            case Some(wf: WorkflowDefinition) => wf
+            case _ => throw new Exception("sanity")
+        }
+
+        // sort from low to high according to the source lines.
+        val callToSrcLine = ParseWomSourceFile.scanForCalls(wfSource)
+        val callsLoToHi : Vector[(String, Int)] = callToSrcLine.toVector.sortBy(_._2)
+
+        // Find the fragment block to execute
+        val b = Block.getSubBlock(Vector(1), wf.innerGraph, callsLoToHi)
+/*        System.out.println(s"""|BLOCK #1 = [
+                               |${b.prettyPrintApproxWdl}
+                               |]
+ |""".stripMargin) */
+        Utils.ignore(b)
     }
 }

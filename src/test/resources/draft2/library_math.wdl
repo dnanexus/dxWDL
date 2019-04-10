@@ -1,111 +1,45 @@
-# A library of individual tasks. The plan is to import this file into
-#the workflows. This will avoid creating duplicate applets, and reduces compilation
-#time.
-task Add {
+# library of math module N
+task z_add {
+    Int n
     Int a
     Int b
 
-    command {
-        echo $((${a} + ${b}))
-    }
+    command <<<
+        python -c "print((${a} + ${b}) % ${n})"
+    >>>
     output {
         Int result = read_int(stdout())
     }
 }
 
-task Multiply {
+task z_sub {
+    Int n
     Int a
     Int b
 
-    command {
-        echo $((a * b))
-    }
-    output {
-        Int result = a * b
-    }
-}
-
-task Inc {
-    Int i
-
     command <<<
-        python -c "print(${i} + 1)"
+        python -c "print((${a} - ${b}) % ${n})"
     >>>
     output {
         Int result = read_int(stdout())
     }
 }
 
-task Sum {
-    Array[Int] ints
-
-    command <<<
-        python -c "print(${sep="+" ints})"
-    >>>
-    output {
-        Int result = read_int(stdout())
-    }
-}
-
-task Twice {
-    Int i
-
-    command <<<
-        python -c "print(${i} * 2)"
-    >>>
-    output {
-        Int result = read_int(stdout())
-    }
-}
-
-task Mod7 {
-    Int i
-
-    command <<<
-        python -c "print(${i} % 7)"
-    >>>
-    output {
-        Int result = read_int(stdout())
-    }
-}
-
-task IntOps {
+task z_mul {
+    Int n
     Int a
     Int b
 
-    command {
-    }
+    command <<<
+        python -c "print((${a} * ${b}) % ${n})"
+    >>>
     output {
-        Int mul = a * b
-        Int sum = a + b
-        Int sub = a - b
-        Int div = a / b
-        Int ai = a
-        Int bi = b
-        Int result = a * b + 1
+        Int result = read_int(stdout())
     }
 }
 
 
-# Create an array of integers from an integer.
-task RangeFromInt {
-    Int len
-    command {}
-    output {
-        Array[Int] result = range(len)
-    }
-}
-
-# checking behavior with empty arrays
-task ArrayLength {
-    Array[Int] ai
-    command {}
-    output {
-        Int result = length(ai)
-    }
-}
-
-task MaybeInt {
+task z_MaybeInt {
     Int? a
     command {
     }

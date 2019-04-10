@@ -169,7 +169,8 @@ object Utils {
     def runSubJob(entryPoint:String,
                   instanceType:Option[String],
                   inputs:JsValue,
-                  dependsOn: Vector[DXExecution]) : DXJob = {
+                  dependsOn: Vector[DXExecution],
+                  verbose: Boolean) : DXJob = {
         val fields = Map(
             "function" -> JsString(entryPoint),
             "input" -> inputs
@@ -189,7 +190,8 @@ object Utils {
                 Map("dependsOn" -> JsArray(execIds))
             }
         val req = JsObject(fields ++ instanceFields ++ dependsFields)
-        System.err.println(s"subjob request=${req.prettyPrint}")
+        appletLog(verbose, s"subjob request=${req.prettyPrint}")
+
         val retval: JsonNode = DXAPI.jobNew(jsonNodeOfJsValue(req), classOf[JsonNode])
         val info: JsValue =  jsValueOfJsonNode(retval)
         val id:String = info.asJsObject.fields.get("id") match {

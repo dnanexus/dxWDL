@@ -5,9 +5,9 @@ workflow conditionals1 {
 
     # scatter that returns an optional type
     scatter (i in powers10) {
-        call lib.MaybeInt { input: a=i }
+        call lib.z_MaybeInt as mi { input: a=i }
     }
-    Array[Int] r =select_all(MaybeInt.result)
+    Array[Int] r =select_all(mi.result)
 
     output {
         Array[Int] results = r

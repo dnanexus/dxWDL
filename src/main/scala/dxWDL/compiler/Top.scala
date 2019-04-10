@@ -100,12 +100,13 @@ object Top {
                                          cOpt.verbose)
 
         // Generate dx:applets and dx:workflow from the IR
-        Native.apply(bundle,
-                     dxWDLrtId, folder, dxProject,
-                     instanceTypeDB, runtimePathConfig, dxObjDir,
-                     cOpt.extras,
-                     cOpt.runtimeDebugLevel,
-                     cOpt.leaveWorkflowsOpen, cOpt.force, cOpt.archive, cOpt.locked, cOpt.verbose)
+        new Native(dxWDLrtId, folder, dxProject,
+                   dxObjDir,
+                   instanceTypeDB, runtimePathConfig,
+                   cOpt.extras,
+                   cOpt.runtimeDebugLevel,
+                   cOpt.leaveWorkflowsOpen,
+                   cOpt.force, cOpt.archive, cOpt.locked, cOpt.verbose).apply(bundle)
     }
 
     // Check the uniqueness of tasks, Workflows, and Types
@@ -166,8 +167,8 @@ object Top {
 
         // Compile the WDL workflow into an Intermediate
         // Representation (IR)
-        val bundle: IR.Bundle = GenerateIR.apply(everythingBundle, allSources, language,
-                                                 cOpt.locked, cOpt.reorg, cOpt.verbose)
+        val bundle: IR.Bundle = new GenerateIR(cOpt.verbose).apply(everythingBundle, allSources, language,
+                                                                   cOpt.locked, cOpt.reorg)
         val bundle2: IR.Bundle = cOpt.defaults match {
             case None => bundle
             case Some(path) => InputFile(cOpt.verbose).embedDefaults(bundle, path)

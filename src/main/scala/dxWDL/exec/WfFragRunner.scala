@@ -128,216 +128,6 @@ case class WfFragRunner(wf: WorkflowDefinition,
             .toSet
     }
 
-    private def processOutputs(womOutputs: Map[String, WomValue],
-                               wvlOutputs: Map[String, WdlVarLinks],
-                               exportedVars: Set[String]) : Map[String, JsValue] = {
-        Utils.appletLog(verbose, s"""|processOutputs
-                                     |  exportedVars = ${exportedVars}
-                                     |  womOutputs = ${womOutputs.keys}
-                                     |  wvlOutputs = ${wvlOutputs.keys}
-                                     |""".stripMargin)
-
-        // convert the WOM values to WVLs
-        val womWvlOutputs = womOutputs.map{
-            case (name, value) =>
-                name -> WdlVarLinks.importFromWDL(value.womType, value)
-        }.toMap
-
-        // filter anything that should not be exported.
-        val exportedWvls = (womWvlOutputs ++ wvlOutputs).filter{
-            case (name, wvl) => exportedVars contains name
-        }
-
-        // convert from WVL to JSON
-        //
-        // TODO: check for each variable if it should be output
-        exportedWvls.foldLeft(Map.empty[String, JsValue]) {
-            case (accu, (varName, wvl)) =>
-                val fields = WdlVarLinks.genFields(wvl, varName)
-                accu ++ fields.toMap
-        }.toMap
-    }
-
- /**
-      In the workflow below, we want to correctly pass the [k] value
-      to each [inc] Task invocation.
-    scatter (k in integers) {
-        call inc as inc {input: i=k}
-   }
-   */
-    private def buildCallInputs(callName: String,
-                                linkInfo: ExecLinkInfo,
-                                env : Map[String, WomValue]) : JsValue = {
-        Utils.appletLog(verbose, s"""|buildCallInputs (${callName})
-                                     |env:
-                                     |${env.mkString("\n")}
-                                     |""".stripMargin)
-
-        val inputs: Map[String, WomValue] = linkInfo.inputs.flatMap{
-            case (varName, wdlType) =>
-                env.get(varName) match {
-                    case None =>
-                        // No binding for this input. It might be optional,
-                        // it could have a default value. It could also actually be missing,
-                        // which will result in a platform error.
-                        None
-                    case Some(womValue) =>
-                        Some(varName -> womValue)
-                }
-        }
-
-        val wvlInputs = inputs.map{ case (name, womValue) =>
-            val womType = linkInfo.inputs(name)
-            name -> WdlVarLinks.importFromWDL(womType, womValue)
-        }.toMap
-
-        val m = wvlInputs.foldLeft(Map.empty[String, JsValue]) {
-            case (accu, (varName, wvl)) =>
-                val fields = WdlVarLinks.genFields(wvl, varName)
-                accu ++ fields.toMap
-        }
-        JsObject(m)
-    }
-
-    private def execDNAxExecutable(dxExecId: String,
-                                   dbgName: String,
-                                   callName: String,
-                                   callInputs : JsValue) : (Int, DXExecution) = {
-        val seqNum: Int = launchSeqNum()
-        val dxExec =
-            if (dxExecId.startsWith("app-")) {
-                val fields = Map(
-                    "name" -> JsString(dbgName),
-                    "input" -> callInputs,
-                    "properties" -> JsObject("call" ->  JsString(callName),
-                                             "seq_number" -> JsString(seqNum.toString))
-                )
-                val req = JsObject(fields)
-                val retval: JsonNode = DXAPI.appRun(dxExecId,
-                                                    Utils.jsonNodeOfJsValue(req),
-                                                    classOf[JsonNode])
-                val info: JsValue =  Utils.jsValueOfJsonNode(retval)
-                val id:String = info.asJsObject.fields.get("id") match {
-                    case Some(JsString(x)) => x
-                    case _ => throw new AppInternalException(
-                        s"Bad format returned from jobNew ${info.prettyPrint}")
-                }
-                DXJob.getInstance(id)
-            } else if (dxExecId.startsWith("applet-")) {
-                val applet = DXApplet.getInstance(dxExecId)
-                val fields = Map(
-                    "name" -> JsString(dbgName),
-                    "input" -> callInputs,
-                    "properties" -> JsObject("call" ->  JsString(callName),
-                                             "seq_number" -> JsString(seqNum.toString))
-                )
-                // TODO: If this is a task that specifies the instance type
-                // at runtime, launch it in the requested instance.
-                //
-                val req = JsObject(fields)
-                val retval: JsonNode = DXAPI.appletRun(applet.getId,
-                                                       Utils.jsonNodeOfJsValue(req),
-                                                       classOf[JsonNode])
-                val info: JsValue =  Utils.jsValueOfJsonNode(retval)
-                val id:String = info.asJsObject.fields.get("id") match {
-                    case Some(JsString(x)) => x
-                    case _ => throw new AppInternalException(
-                        s"Bad format returned from jobNew ${info.prettyPrint}")
-                }
-                DXJob.getInstance(id)
-            } else if (dxExecId.startsWith("workflow-")) {
-                val workflow = DXWorkflow.getInstance(dxExecId)
-                val dxAnalysis :DXAnalysis = workflow.newRun()
-                    .setRawInput(Utils.jsonNodeOfJsValue(callInputs))
-                    .setName(dbgName)
-                    .putProperty("call", callName)
-                    .putProperty("seq_number", seqNum.toString)
-                    .run()
-                dxAnalysis
-            } else {
-                throw new Exception(s"Unsupported execution ${dxExecId}")
-            }
-        (seqNum, dxExec)
-    }
-
-    private def execCall(call: CallNode,
-                         callInputs: Map[String, WomValue],
-                         callNameHint: Option[String]) : (Int, DXExecution) = {
-        val linkInfo = getCallLinkInfo(call)
-        val callName = call.identifier.localName.value
-        val calleeName = call.callable.name
-        val callInputsJSON : JsValue = buildCallInputs(callName, linkInfo, callInputs)
-        Utils.appletLog(verbose, s"""|Call ${callName}
-                                     |calleeName= ${calleeName}
-                                     |inputs = ${callInputsJSON}""".stripMargin)
-
-        // We may need to run a collect subjob. Add the call
-        // name, and the sequence number, to each execution invocation,
-        // so the collect subjob will be able to put the
-        // results back together.
-        val dbgName = callNameHint match {
-            case None => call.identifier.localName.value
-            case Some(hint) => s"${callName} ${hint}"
-        }
-        execDNAxExecutable(linkInfo.dxExec.getId, dbgName, callName, callInputsJSON)
-    }
-
-    private def execSubblockWorkflow(linkInfo: ExecLinkInfo,
-                                     env: Map[String, WomValue],
-                                     callNameHint: Option[String]) : (Int, DXExecution) = {
-        val callInputs:JsValue = buildCallInputs(linkInfo.name, linkInfo, env)
-
-        val dbgName = callNameHint match {
-            case None => linkInfo.name
-            case Some(hint) => s"${linkInfo.name} ${hint}"
-        }
-        execDNAxExecutable(linkInfo.dxExec.getId, dbgName, linkInfo.name, callInputs)
-    }
-
-    // create promises to this call. This allows returning
-    // from the parent job immediately.
-    private def genPromisesForCall(call: CallNode,
-                                   dxExec: DXExecution) : Map[String, WdlVarLinks] = {
-        val linkInfo = getCallLinkInfo(call)
-        val callName = call.identifier.localName.value
-        linkInfo.outputs.map{
-            case (varName, womType) =>
-                val oName = s"${callName}.${varName}"
-                oName -> WdlVarLinks(womType,
-                                     DxlExec(dxExec, varName))
-        }.toMap
-    }
-
-    // task input expression. The issue here is a mismatch between WDL draft-2 and version 1.0.
-    // in an expression like:
-    //    call volume { input: i = 10 }
-    // the "i" parameter, under WDL draft-2, is compiled as "volume.i"
-    // under WDL version 1.0, it is compiled as "i".
-    // We just want the "i" component.
-    def evalCallInputs(call: CallNode,
-                       env: Map[String, WomValue]) : Map[String, WomValue] = {
-        // Find the type required for a call input
-        def findWomType(paramName: String) : WomType = {
-            val retval = call.inputDefinitionMappings.find{
-                case (iDef, iDefPtr) =>
-                    (iDef.localName.value == paramName) ||
-                        (Utils.getUnqualifiedName(iDef.localName.value) == paramName)
-            }
-            retval match {
-                case None => throw new Exception(s"Could not find ${paramName}")
-                case Some((iDef, iDefPtr)) =>
-                    iDef.womType
-            }
-        }
-        call.upstream.collect{
-            case exprNode: ExpressionNode =>
-                val paramName = Utils.getUnqualifiedName(exprNode.identifier.localName.value)
-                val expression = exprNode.womExpression
-                val womType = findWomType(paramName)
-                paramName -> evaluateWomExpression(expression, womType, env)
-        }.toMap
-    }
-
     // This method is exposed so that we can unit-test it.
     def evalExpressions(nodes: Seq[GraphNode],
                         env: Map[String, WomValue]) : Map[String, WomValue] = {
@@ -477,23 +267,207 @@ case class WfFragRunner(wf: WorkflowDefinition,
         }
     }
 
-    // Get the call from inside the block
-    private def getInnerCallFromSimpleBlock(graph: Graph) : CallNode = {
-        val calls = graph.nodes.collect {
-            case callNode : CallNode => callNode
-        }.toVector
-        assert(calls.size == 1)
-        calls.head
+    private def processOutputs(env: Map[String, WomValue],
+                               fragResults: Map[String, WdlVarLinks],
+                               exportedVars: Set[String]) : Map[String, JsValue] = {
+        Utils.appletLog(verbose, s"""|processOutputs
+                                     |  env = ${env.keys}
+                                     |  fragResults = ${fragResults.keys}
+                                     |  exportedVars = ${exportedVars}
+                                     |""".stripMargin)
+
+        // convert the WOM values to WVLs
+        val envWvl = env.map{
+            case (name, value) =>
+                name -> WdlVarLinks.importFromWDL(value.womType, value)
+        }.toMap
+
+        // filter anything that should not be exported.
+        val exportedWvls = (envWvl ++ fragResults).filter{
+            case (name, wvl) => exportedVars contains name
+        }
+
+        // convert from WVL to JSON
+        //
+        // TODO: check for each variable if it should be output
+        exportedWvls.foldLeft(Map.empty[String, JsValue]) {
+            case (accu, (varName, wvl)) =>
+                val fields = WdlVarLinks.genFields(wvl, varName)
+                accu ++ fields.toMap
+        }.toMap
     }
 
-    // Simple conditional subblock. For example:
-    //
-    //  if (x > 1) {
-    //      call Add { input: a=1, b=x+32 }
-    //  }
-    private def execSimpleConditional(cnNode: ConditionalNode,
-                                      env: Map[String, WomValue]) : Map[String, WdlVarLinks] = {
-        // Evaluate the condition
+ /**
+      In the workflow below, we want to correctly pass the [k] value
+      to each [inc] Task invocation.
+    scatter (k in integers) {
+        call inc as inc {input: i=k}
+   }
+   */
+    private def buildCallInputs(callName: String,
+                                linkInfo: ExecLinkInfo,
+                                env : Map[String, WomValue]) : JsValue = {
+        Utils.appletLog(verbose, s"""|buildCallInputs (${callName})
+                                     |env:
+                                     |${env.mkString("\n")}
+                                     |""".stripMargin)
+
+        val inputs: Map[String, WomValue] = linkInfo.inputs.flatMap{
+            case (varName, wdlType) =>
+                env.get(varName) match {
+                    case None =>
+                        // No binding for this input. It might be optional,
+                        // it could have a default value. It could also actually be missing,
+                        // which will result in a platform error.
+                        None
+                    case Some(womValue) =>
+                        Some(varName -> womValue)
+                }
+        }
+
+        val wvlInputs = inputs.map{ case (name, womValue) =>
+            val womType = linkInfo.inputs(name)
+            name -> WdlVarLinks.importFromWDL(womType, womValue)
+        }.toMap
+
+        val m = wvlInputs.foldLeft(Map.empty[String, JsValue]) {
+            case (accu, (varName, wvl)) =>
+                val fields = WdlVarLinks.genFields(wvl, varName)
+                accu ++ fields.toMap
+        }
+        JsObject(m)
+    }
+
+    private def execDNAxExecutable(dxExecId: String,
+                                   dbgName: String,
+                                   callName: String,
+                                   callInputs : JsValue) : (Int, DXExecution) = {
+        val seqNum: Int = launchSeqNum()
+        val dxExec =
+            if (dxExecId.startsWith("app-")) {
+                val fields = Map(
+                    "name" -> JsString(dbgName),
+                    "input" -> callInputs,
+                    "properties" -> JsObject("call" ->  JsString(callName),
+                                             "seq_number" -> JsString(seqNum.toString))
+                )
+                val req = JsObject(fields)
+                val retval: JsonNode = DXAPI.appRun(dxExecId,
+                                                    Utils.jsonNodeOfJsValue(req),
+                                                    classOf[JsonNode])
+                val info: JsValue =  Utils.jsValueOfJsonNode(retval)
+                val id:String = info.asJsObject.fields.get("id") match {
+                    case Some(JsString(x)) => x
+                    case _ => throw new AppInternalException(
+                        s"Bad format returned from jobNew ${info.prettyPrint}")
+                }
+                DXJob.getInstance(id)
+            } else if (dxExecId.startsWith("applet-")) {
+                val applet = DXApplet.getInstance(dxExecId)
+                val fields = Map(
+                    "name" -> JsString(dbgName),
+                    "input" -> callInputs,
+                    "properties" -> JsObject("call" ->  JsString(callName),
+                                             "seq_number" -> JsString(seqNum.toString))
+                )
+                // TODO: If this is a task that specifies the instance type
+                // at runtime, launch it in the requested instance.
+                //
+                val req = JsObject(fields)
+                val retval: JsonNode = DXAPI.appletRun(applet.getId,
+                                                       Utils.jsonNodeOfJsValue(req),
+                                                       classOf[JsonNode])
+                val info: JsValue =  Utils.jsValueOfJsonNode(retval)
+                val id:String = info.asJsObject.fields.get("id") match {
+                    case Some(JsString(x)) => x
+                    case _ => throw new AppInternalException(
+                        s"Bad format returned from jobNew ${info.prettyPrint}")
+                }
+                DXJob.getInstance(id)
+            } else if (dxExecId.startsWith("workflow-")) {
+                val workflow = DXWorkflow.getInstance(dxExecId)
+                val dxAnalysis :DXAnalysis = workflow.newRun()
+                    .setRawInput(Utils.jsonNodeOfJsValue(callInputs))
+                    .setName(dbgName)
+                    .putProperty("call", callName)
+                    .putProperty("seq_number", seqNum.toString)
+                    .run()
+                dxAnalysis
+            } else {
+                throw new Exception(s"Unsupported execution ${dxExecId}")
+            }
+        (seqNum, dxExec)
+    }
+
+    private def execCall(call: CallNode,
+                         callInputs: Map[String, WomValue],
+                         callNameHint: Option[String]) : (Int, DXExecution) = {
+        val linkInfo = getCallLinkInfo(call)
+        val callName = call.identifier.localName.value
+        //val calleeName = call.callable.name
+        val callInputsJSON : JsValue = buildCallInputs(callName, linkInfo, callInputs)
+/*        Utils.appletLog(verbose, s"""|Call ${callName}
+                                     |calleeName= ${calleeName}
+                                     |inputs = ${callInputsJSON}""".stripMargin)*/
+
+        // We may need to run a collect subjob. Add the call
+        // name, and the sequence number, to each execution invocation,
+        // so the collect subjob will be able to put the
+        // results back together.
+        val dbgName = callNameHint match {
+            case None => call.identifier.localName.value
+            case Some(hint) => s"${callName} ${hint}"
+        }
+        execDNAxExecutable(linkInfo.dxExec.getId, dbgName, callName, callInputsJSON)
+    }
+
+    // create promises to this call. This allows returning
+    // from the parent job immediately.
+    private def genPromisesForCall(call: CallNode,
+                                   dxExec: DXExecution) : Map[String, WdlVarLinks] = {
+        val linkInfo = getCallLinkInfo(call)
+        val callName = call.identifier.localName.value
+        linkInfo.outputs.map{
+            case (varName, womType) =>
+                val oName = s"${callName}.${varName}"
+                oName -> WdlVarLinks(womType,
+                                     DxlExec(dxExec, varName))
+        }.toMap
+    }
+
+    // task input expression. The issue here is a mismatch between WDL draft-2 and version 1.0.
+    // in an expression like:
+    //    call volume { input: i = 10 }
+    // the "i" parameter, under WDL draft-2, is compiled as "volume.i"
+    // under WDL version 1.0, it is compiled as "i".
+    // We just want the "i" component.
+    def evalCallInputs(call: CallNode,
+                       env: Map[String, WomValue]) : Map[String, WomValue] = {
+        // Find the type required for a call input
+        def findWomType(paramName: String) : WomType = {
+            val retval = call.inputDefinitionMappings.find{
+                case (iDef, iDefPtr) =>
+                    (iDef.localName.value == paramName) ||
+                        (Utils.getUnqualifiedName(iDef.localName.value) == paramName)
+            }
+            retval match {
+                case None => throw new Exception(s"Could not find ${paramName}")
+                case Some((iDef, iDefPtr)) =>
+                    iDef.womType
+            }
+        }
+        call.upstream.collect{
+            case exprNode: ExpressionNode =>
+                val paramName = Utils.getUnqualifiedName(exprNode.identifier.localName.value)
+                val expression = exprNode.womExpression
+                val womType = findWomType(paramName)
+                paramName -> evaluateWomExpression(expression, womType, env)
+        }.toMap
+    }
+
+    // Evaluate the condition
+    private def evalCondition(cnNode: ConditionalNode,
+                              env: Map[String, WomValue]) : Boolean = {
         val condValueRaw : WomValue =
             evaluateWomExpression(cnNode.conditionExpression.womExpression,
                                   WomBooleanType,
@@ -503,12 +477,23 @@ case class WfFragRunner(wf: WorkflowDefinition,
             case other => throw new AppInternalException(
                 s"Unexpected class ${other.getClass}, ${other}")
         }
-        if (!condValue) {
+        condValue
+    }
+
+    // A subblock containing exactly one call.
+    // For example:
+    //
+    // if (flag) {
+    //   call zinc as inc3 { input: a = num}
+    // }
+    //
+    private def execConditionalCall(cnNode: ConditionalNode,
+                                    call: CallNode,
+                                    env: Map[String, WomValue]) : Map[String, WdlVarLinks] = {
+        if (!evalCondition(cnNode, env)) {
             // Condition is false, no need to execute the call
             Map.empty
         } else {
-            val call = getInnerCallFromSimpleBlock(cnNode.innerGraph)
-
             // evaluate the call inputs, and add to the environment
             val callInputs = evalCallInputs(call, env)
             val (_, dxExec) = execCall(call, callInputs,  None)
@@ -527,33 +512,30 @@ case class WfFragRunner(wf: WorkflowDefinition,
         }
     }
 
+    // A complex subblock requiring a fragment runner, or a subworkflow
     // For example:
     //
     // if (flag) {
     //   call zinc as inc3 { input: a = num}
     //   call zinc as inc4 { input: a = num + 3 }
+    //
+    //   Int b = inc4.result + 14
+    //   call zinc as inc5 { input: a = b * 4 }
     // }
     //
-    private def execSubblockConConditional(cnNode: ConditionalNode,
-                                           env: Map[String, WomValue]) : Map[String, WdlVarLinks] = {
-        // Evaluate the condition
-        val condValueRaw : WomValue =
-            evaluateWomExpression(cnNode.conditionExpression.womExpression,
-                                  WomBooleanType,
-                                  env)
-        val condValue : Boolean = condValueRaw match {
-            case b: WomBoolean => b.value
-            case other => throw new AppInternalException(
-                s"Unexpected class ${other.getClass}, ${other}")
-        }
-        if (!condValue) {
+    private def execConditionalSubblock(cnNode: ConditionalNode,
+                                        env: Map[String, WomValue]) : Map[String, WdlVarLinks] = {
+        if (!evalCondition(cnNode, env)) {
             // Condition is false, no need to execute the call
             Map.empty
         } else {
             // There must be exactly one sub-workflow
             assert(execLinkInfo.size == 1)
             val (_, linkInfo) = execLinkInfo.toVector.head
-            val (_, dxExec) = execSubblockWorkflow(linkInfo, env, None)
+
+            // The subblock is complex, and requires a fragment, or a subworkflow
+            val callInputs:JsValue = buildCallInputs(linkInfo.name, linkInfo, env)
+            val (_, dxExec) = execDNAxExecutable(linkInfo.dxExec.getId, linkInfo.name, linkInfo.name, callInputs)
 
             // create promises for results
             linkInfo.outputs.map{
@@ -589,13 +571,19 @@ case class WfFragRunner(wf: WorkflowDefinition,
                 }
             case WomOptionalValue(_, Some(x)) =>
                 readableNameForScatterItem(x)
+            case WomArray(_, arrValues) =>
+                val arrBeginning = arrValues.slice(0, 3)
+                val elements = arrBeginning.flatMap(readableNameForScatterItem(_))
+                Some("[" + elements.mkString(", ") + "]")
             case _ =>
                 None
         }
     }
 
-    private def execSimpleScatter(sctNode: ScatterNode,
-                                  env: Map[String, WomValue]) : Map[String, WdlVarLinks] = {
+    // Evaluate the collection on which we are scattering
+    private def evalScatterCollection(sctNode: ScatterNode,
+                                      env: Map[String, WomValue])
+            : (ScatterVariableNode, Seq[WomValue]) = {
         // WDL has exactly one variable
         assert(sctNode.scatterVariableNodes.size == 1)
         val svNode: ScatterVariableNode = sctNode.scatterVariableNodes.head
@@ -608,8 +596,30 @@ case class WfFragRunner(wf: WorkflowDefinition,
             case other => throw new AppInternalException(
                 s"Unexpected class ${other.getClass}, ${other}")
         }
-        // There must be exactly one call
-        val call = getInnerCallFromSimpleBlock(sctNode.innerGraph)
+        (svNode, collection)
+    }
+
+
+    // Launch a subjob to collect and marshal the call results.
+    // Remove the declarations already calculated
+    private def collectScatter(sctNode: ScatterNode,
+                               childJobs : Vector[DXExecution]) : Map[String, WdlVarLinks] = {
+        val resultTypes : Map[String, WomArrayType] = sctNode.outputMapping.map{
+            case scp : ScatterGathererPort =>
+                scp.identifier.localName.value -> scp.womType
+        }.toMap
+        val promises = collectSubJobs.launch(childJobs, resultTypes)
+        val promisesStr = promises.mkString("\n")
+
+        Utils.appletLog(verbose, s"resultTypes=${resultTypes}")
+        Utils.appletLog(verbose, s"promises=${promisesStr}")
+        promises
+    }
+
+    private def execScatterCall(sctNode: ScatterNode,
+                                call: CallNode,
+                                env: Map[String, WomValue]) : Map[String, WdlVarLinks] = {
+        val (svNode, collection) = evalScatterCollection(sctNode, env)
 
         // loop on the collection, call the applet in the inner loop
         val childJobs : Vector[DXExecution] =
@@ -617,35 +627,16 @@ case class WfFragRunner(wf: WorkflowDefinition,
                 val innerEnv = env + (svNode.identifier.localName.value -> item)
                 val callInputs = evalCallInputs(call, innerEnv)
                 val callHint = readableNameForScatterItem(item)
-                val (_, dxExec) = execCall(call, callInputs, callHint)
-                dxExec
+                val (_, dxJob) = execCall(call, callInputs, callHint)
+                dxJob
             }.toVector
 
-        // Launch a subjob to collect and marshal the call results.
-        // Remove the declarations already calculated
-        val resultTypes : Map[String, WomArrayType] = sctNode.outputMapping.map{
-            case scp : ScatterGathererPort =>
-                scp.identifier.localName.value -> scp.womType
-        }.toMap
-        collectSubJobs.launch(childJobs, resultTypes)
+        collectScatter(sctNode, childJobs)
     }
 
-
     private def execScatterSubblock(sctNode: ScatterNode,
-                                    callsLoToHi : Vector[(String, Int)],
                                     env: Map[String, WomValue]) : Map[String, WdlVarLinks] = {
-        // WDL has exactly one variable
-        assert(sctNode.scatterVariableNodes.size == 1)
-        val svNode: ScatterVariableNode = sctNode.scatterVariableNodes.head
-        val collectionRaw : WomValue =
-            evaluateWomExpression(svNode.scatterExpressionNode.womExpression,
-                                  WomArrayType(svNode.womType),
-                                  env)
-        val collection : Seq[WomValue] = collectionRaw match {
-            case x: WomArray => x.value
-            case other => throw new AppInternalException(
-                s"Unexpected class ${other.getClass}, ${other}")
-        }
+        val (svNode, collection) = evalScatterCollection(sctNode, env)
 
         // There must be exactly one sub-workflow
         assert(execLinkInfo.size == 1)
@@ -656,17 +647,18 @@ case class WfFragRunner(wf: WorkflowDefinition,
             collection.map{ item =>
                 val innerEnv = env + (svNode.identifier.localName.value -> item)
                 val callHint = readableNameForScatterItem(item)
-                val (_, dxExec) = execSubblockWorkflow(linkInfo, innerEnv, callHint)
-                dxExec
+                val dbgName = callHint  match {
+                    case None => linkInfo.name
+                    case Some(hint) => s"${linkInfo.name} ${hint}"
+                }
+
+                // The subblock is complex, and requires a fragment, or a subworkflow
+                val callInputs:JsValue = buildCallInputs(linkInfo.name, linkInfo, innerEnv)
+                val (_, dxJob) = execDNAxExecutable(linkInfo.dxExec.getId, dbgName, linkInfo.name, callInputs)
+                dxJob
             }.toVector
 
-        // Launch a subjob to collect and marshal the call results.
-        // Remove the declarations already calculated
-        val resultTypes : Map[String, WomArrayType] = sctNode.outputMapping.map{
-            case scp : ScatterGathererPort =>
-                scp.identifier.localName.value -> scp.womType
-        }.toMap
-        collectSubJobs.launch(childJobs, resultTypes)
+        collectScatter(sctNode, childJobs)
     }
 
     def apply(blockPath: Vector[Int],
@@ -690,58 +682,66 @@ case class WfFragRunner(wf: WorkflowDefinition,
                                      |
                                      |""".stripMargin)
 
-        val (otherNodes, category) = Block.categorize(block)
-        val env = evalExpressions(otherNodes, envInitial)
+        val catg = Block.categorize(block)
+        val env = evalExpressions(catg.nodes, envInitial)
 
-        val subblockResults : Map[String, WdlVarLinks] = runMode match {
+        val fragResults : Map[String, WdlVarLinks] = runMode match {
             case RunnerWfFragmentMode.Launch =>
                 // The last node could be a call or a block. All the other nodes
                 // are expressions.
-                category match {
-                    case Block.AllExpressions =>
+                catg match {
+                    case Block.AllExpressions(_) =>
                         Map.empty
 
-                    case Block.CallDirect(_) =>
+                    case Block.CallDirect(_,_) =>
                         throw new Exception("sanity, shouldn't reach this state")
 
                     // A single call at the end of the block
-                    case Block.CallCompound(call: CallNode) =>
+                    case Block.CallWithSubexpressions(_, call: CallNode) =>
                         val callInputs = evalCallInputs(call, env)
                         val (_, dxExec) = execCall(call, callInputs,  None)
                         genPromisesForCall(call, dxExec)
 
-                    // A conditional at the end of the block, with a call inside it
-                    case Block.Cond(cnNode) =>
-                        execSimpleConditional(cnNode, env)
+                    // The block contains a call and a bunch of expressions
+                    // that will be part of the output.
+                    case Block.CallFragment(_, call: CallNode) =>
+                        val callInputs = evalCallInputs(call, env)
+                        val (_, dxExec) = execCall(call, callInputs,  None)
+                        genPromisesForCall(call, dxExec)
 
-                    // A scatter at the end of the block, with a call inside it
-                    case Block.Scatter(sctNode) =>
-                        execSimpleScatter(sctNode, env)
+                    // The block contains a single call. We can execute it
+                    // right here, without another job.
+                    case Block.CondOneCall(_, cnNode, call) =>
+                        execConditionalCall(cnNode, call, env)
 
-                        // a conditional with a subblock inside it. We need to
-                        // call a subworkflow.
-                    case Block.CondSubblock(cnNode) =>
-                        execSubblockConConditional(cnNode, env)
+                    // a conditional with a subblock inside it. We
+                    // need to call an applet or a subworkflow.
+                    case Block.CondFullBlock(_, cnNode) =>
+                        execConditionalSubblock(cnNode, env)
 
                     // a scatter with a subblock inside it. Iterate
-                    // on the scatter variable, and call a sub-workflow
+                    // on the scatter variable, and make the applet call
                     // for each value.
-                    case Block.ScatterSubblock(sctNode) =>
-                        execScatterSubblock(sctNode, callsLoToHi, env)
+                    case Block.ScatterOneCall(_, sctNode, call) =>
+                        execScatterCall(sctNode, call, env)
+
+                    // Same as previous case, but call a subworkflow
+                    // or fragment.
+                    case Block.ScatterFullBlock(_, sctNode) =>
+                        execScatterSubblock(sctNode, env)
                 }
 
             // A subjob that collects results from scatters
             case RunnerWfFragmentMode.Collect =>
                 val childJobsComplete = collectSubJobs.executableFromSeqNum()
-                category match {
-                    // A scatter at the end of the block, with a call inside it
-                    case Block.Scatter(sctNode) =>
-                        val call = getInnerCallFromSimpleBlock(sctNode.innerGraph)
+                catg match {
+                    case Block.ScatterOneCall(_, sctNode, call) =>
+                        // scatter with a single call
                         collectSubJobs.aggregateResults(call, childJobsComplete)
 
-                    // A scatter with a complex sub-block, compiled as a sub-workflow
-                    // There must be exactly one sub-workflow
-                    case Block.ScatterSubblock(sctNode) =>
+                    case Block.ScatterFullBlock(_, sctNode) =>
+                        // A scatter with a complex sub-block, compiled as a sub-workflow
+                        // There must be exactly one sub-workflow
                         assert(execLinkInfo.size == 1)
                         val (_, linkInfo) = execLinkInfo.toVector.head
                         collectSubJobs.aggregateResultsFromGeneratedSubWorkflow(linkInfo, childJobsComplete)
@@ -752,7 +752,7 @@ case class WfFragRunner(wf: WorkflowDefinition,
         }
 
         val exportedVars = exportedVarNames()
-        val jsOutputs : Map[String, JsValue] = processOutputs(env, subblockResults, exportedVars)
+        val jsOutputs : Map[String, JsValue] = processOutputs(env, fragResults, exportedVars)
         val jsOutputsDbgStr = jsOutputs.mkString("\n")
         Utils.appletLog(verbose, s"""|JSON outputs:
                                      |${jsOutputsDbgStr}""".stripMargin)
