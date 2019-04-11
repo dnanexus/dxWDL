@@ -80,7 +80,12 @@ draft2_test_list = [
 medium_test_list= wdl_v1_list + docker_test_list
 large_test_list= draft2_test_list + wdl_v1_list + docker_test_list
 
-tests_for_alt_project = [ "platform_asset" ]
+test_suites = {
+    'M': medium_test_list,
+    'L': large_test_list,
+    'draft2': draft2_test_list,
+    'docker': docker_test_list
+}
 
 # Tests with the reorg flags
 test_reorg=["dict", "linear"]
@@ -367,26 +372,20 @@ def print_test_list():
     print("List of tests:\n  {}".format(ls))
 
 # Choose set set of tests to run
-def choose_tests(test_name):
-    if test_name == 'M':
-        return medium_test_list
-    if test_name == 'L':
-        return large_test_list
-    if test_name == 'draft2':
-        return draft2_test_list
-    if test_name == 'docker':
-        return docker_test_list
-    if test_name == 'All':
+def choose_tests(name):
+    if name in test_suites.keys():
+        return test_suites[name]
+    if name == 'All':
         return test_files.keys()
-    if test_name in test_files.keys():
-        return [test_name]
+    if name in test_files.keys():
+        return [name]
     # Last chance: check if the name is a prefix.
     # Accept it if there is exactly a single match.
-    matches = [key for key in test_files.keys() if key.startswith(test_name)]
+    matches = [key for key in test_files.keys() if key.startswith(name)]
     if len(matches) > 1:
-        raise RuntimeError("Too many matches for test prefix {} -> {}".format(test_name, matches))
+        raise RuntimeError("Too many matches for test prefix {} -> {}".format(name, matches))
     if len(matches) == 0:
-        raise RuntimeError("Test prefix {} is unknown".format(test_name))
+        raise RuntimeError("Test prefix {} is unknown".format(name))
     return matches
 
 # Find all the WDL test files, these are located in the 'test'
@@ -621,17 +620,6 @@ def main():
         native_call_setup(project, applet_folder, version_id)
     if "call_native_app" in test_names:
         native_call_app_setup(version_id)
-
-    # compile into an alternate project
-    alt_tests = list(set(test_names) & set(tests_for_alt_project))
-    if len(alt_tests) > 0:
-        alt_project = util.get_project("dxWDL_playground_2")
-        compile_tests_to_project(alt_project,
-                                 alt_tests,
-                                 applet_folder,
-                                 compiler_flags,
-                                 version_id,
-                                 args.lazy)
 
     try:
         # Compile the WDL files to dx:workflows and dx:applets

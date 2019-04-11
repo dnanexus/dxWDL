@@ -32,6 +32,46 @@ import wom.values._
 
 import dxWDL.util._
 
+// This object is used to allow easy testing of complex
+// methods internal to the TaskRunner.
+object TaskRunnerUtils {
+    // Read the manifest file from a docker tarball, and get the repository name.
+    //
+    // A manifest could look like this:
+    // [
+    //    {"Config":"4b778ee055da936b387080ba034c05a8fad46d8e50ee24f27dcd0d5166c56819.json",
+    //     "RepoTags":["ubuntu_18_04_minimal:latest"],
+    //     "Layers":[
+    //          "1053541ae4c67d0daa87babb7fe26bf2f5a3b29d03f4af94e9c3cb96128116f5/layer.tar",
+    //          "fb1542f1963e61a22f9416077bf5f999753cbf363234bf8c9c5c1992d9a0b97d/layer.tar",
+    //          "2652f5844803bcf8615bec64abd20959c023d34644104245b905bb9b08667c8d/layer.tar",
+    //          ]}
+    // ]
+    def readManifestGetDockerImageName(buf: String) : String = {
+        val jso = buf.parseJson
+	val elem = jso match {
+            case JsArray(elements) if elements.size >= 1 => elements.head
+            case other => throw new Exception(s"bad value ${other} for manifest, expecting non empty array")
+        }
+        val repo: String = elem.asJsObject.fields.get("RepoTags") match {
+            case None =>
+                throw new Exception("The repository is not specified for the image")
+            case Some(JsString(repo)) =>
+                repo
+            case Some(JsArray(elements)) =>
+                if (elements.isEmpty)
+                    throw new Exception("RepoTags has an empty array")
+                elements.head match {
+                    case JsString(repo) => repo
+                    case other => throw new Exception(s"bad value ${other} in RepoTags manifest field")
+                }
+            case other =>
+                throw new Exception(s"bad value ${other} in RepoTags manifest field")
+        }
+        repo
+    }
+}
+
 // We can't use the name Task, because that would confuse it with the
 // WDL language definition.
 case class TaskRunner(task: CallableTaskDefinition,
@@ -43,6 +83,7 @@ case class TaskRunner(task: CallableTaskDefinition,
                       runtimeDebugLevel: Int) {
     private val verbose = (runtimeDebugLevel >= 1)
     private val maxVerboseLevel = (runtimeDebugLevel == 2)
+    private val DOCKER_TARBALLS_DIR = "/tmp/docker-tarballs"
 
     // check if the command section is empty
     val commandSectionEmpty: Boolean = {
@@ -129,19 +170,40 @@ case class TaskRunner(task: CallableTaskDefinition,
         val dImg = dockerImageEval(env)
         dImg match {
             case Some(url) if url.startsWith(Utils.DX_URL_PREFIX) =>
-                // This is a record on the platform, created with
-                // dx-docker. Describe it with an API call, and get
-                // the docker image name.
+                // a tarball created with "docker save".
+                // 1. download it
+                // 2. open the tar archive
+                // 2. load into the local docker cache
+                // 3. figure out the image name
                 Utils.appletLog(verbose, s"looking up dx:url ${url}")
-                val dxRecord = DxPath.lookupDxURLRecord(url)
-                Utils.appletLog(verbose, s"Found record ${dxRecord}")
-                val imageName = dxRecord.describe().getName
-                Utils.appletLog(verbose, s"Image name is ${imageName}")
-                Some(imageName)
+                val dxFile = DxPath.lookupDxURLFile(url)
+		val fileName = dxFile.describe().getName
+                val tarballDir = Paths.get(DOCKER_TARBALLS_DIR)
+	        Utils.safeMkdir(tarballDir)
+                val localTar : Path = tarballDir.resolve(fileName)
+
+                System.err.println(s"downloading docker tarball to ${localTar}")
+                jobInputOutput.downloadFile(localTar, dxFile)
+
+                System.err.println("figuring out the image name")
+                val (mContent, _) = Utils.execCommand(s"tar --to-stdout -xf ${localTar} manifest.json")
+            	Utils.appletLog(verbose, s"""|manifest content:
+                                             |${mContent}
+                                             |""".stripMargin)
+                val repo = TaskRunnerUtils.readManifestGetDockerImageName(mContent)
+                System.err.println(s"repository is ${repo}")
+
+                Utils.appletLog(true, s"load tarball ${localTar} to docker")
+                val (outstr,errstr) = Utils.execCommand(s"docker load --input ${localTar}")
+                Utils.appletLog(verbose, s"""|output:
+                                             |${outstr}
+                                             |stderr:
+                                             |${errstr}""".stripMargin)
+                Some(repo)
+
             case _ => dImg
         }
     }
-
 
     private def getRuntimeEnvironment() : RuntimeEnvironment = {
         val mbean = ManagementFactory.getOperatingSystemMXBean().asInstanceOf[com.sun.management.OperatingSystemMXBean]
@@ -209,7 +271,13 @@ case class TaskRunner(task: CallableTaskDefinition,
         // Map the home directory into the container, so that
         // we can reach the result files, and upload them to
         // the platform.
+        //
+        // Run the container under the dnanexus user, so it will have
+        // permissions to read/write files in the home directory. This
+        // is required in cases where the container uses a different
+        // user.
         val dockerCmd = s"""|docker run --entrypoint /bin/bash
+                            |--user $$(id -u):$$(id -g)
                             |-v ${dxPathConfig.homeDir.toString}:${dxPathConfig.homeDir.toString}
                             |${imgName}
                             |${dxPathConfig.script}""".stripMargin.replaceAll("\n", " ")
