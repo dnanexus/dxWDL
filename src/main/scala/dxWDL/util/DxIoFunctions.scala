@@ -51,7 +51,7 @@ case class DxPathFunctions(config: DxPathConfig,
                 p.getFileName.toString
             case fdx : FurlDx =>
                 // perform an API call to get the file name
-                val (_, dxFile) = FurlDx.components(fdx)
+                val dxFile = FurlDx.getDxFile(fdx)
                 dxFile.describe().getName()
         }
 
@@ -84,9 +84,19 @@ case class DxIoFunctions(config: DxPathConfig,
     override def readFile(path: String, maxBytes: Option[Int], failOnOverflow: Boolean): Future[String] = {
         val content = Furl.parse(path) match {
             case FurlLocal(localPath) =>
-                Utils.readFileContent(Paths.get(localPath))
+                val p = Paths.get(localPath)
+                if (Files.exists(p)) {
+                    Utils.readFileContent(p)
+                } else {
+                    // stdout and stderr are "defined" as empty, even
+                    // if they have not been created.
+                    if (p == config.stdout || p == config.stderr)
+                        ""
+                    else
+                        throw new Exception(s"File ${p} does not exist")
+                }
             case fdx : FurlDx =>
-                val (_, dxFile) = FurlDx.components(fdx)
+                val dxFile = FurlDx.getDxFile(fdx)
                 Utils.downloadString(dxFile)
         }
         Future(content)
@@ -182,7 +192,7 @@ case class DxIoFunctions(config: DxPathConfig,
                 val p = Paths.get(localPath)
                 p.toFile.length
             case fdx : FurlDx =>
-                val (_, dxFile) = FurlDx.components(fdx)
+                val dxFile = FurlDx.getDxFile(fdx)
                 // perform an API call to get the size
                 dxFile.describe().getSize()
         }

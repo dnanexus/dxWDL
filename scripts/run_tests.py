@@ -28,11 +28,8 @@ reserved_test_names=['M', 'L', 'draft2', 'All', 'list']
 
 wdl_v1_list = [
      # calling native dx applets/apps
-    "call_native",
+    "call_native_v1",
 #    "call_native_app",
-
-    # multiple library imports in one WDL workflow
-#    "check_imports",
 
     "cast",
     "dict",
@@ -70,13 +67,19 @@ draft2_test_list = [
     "hello",
     "shapes",
 
+    # multiple library imports in one WDL workflow
+    "check_imports",
+
     # subworkflows
     "conditionals2",
     "modulo",
     "movies",
     "subblocks2",
     "subblocks",
-    "var_type_change"
+    "var_type_change",
+
+     # calling native dx applets/apps
+    "call_native"
 ]
 
 single_tasks_list = [
@@ -93,7 +96,8 @@ test_suites = {
     'L': large_test_list,
     'tasks' : single_tasks_list,
     'draft2': draft2_test_list,
-    'docker': docker_test_list
+    'docker': docker_test_list,
+    'native': ["call_native", "call_native_v1"]
 }
 
 # Tests with the reorg flags
@@ -153,7 +157,8 @@ def get_metadata(filename):
     if len(tasks) == 1:
         return TestMetaData(name = tasks[0],
                             kind = "applet")
-    if os.path.basename(filename).startswith("library_"):
+    if (os.path.basename(filename).startswith("library") or
+        os.path.basename(filename).startswith("dx_extern")):
         return
     raise RuntimeError("{} is not a valid WDL test, #tasks={}".format(filename, len(tasks)))
 
@@ -467,17 +472,23 @@ def native_call_setup(project, applet_folder, version_id):
             subprocess.check_output(cmdline)
 
     # build WDL wrapper tasks in test/dx_extern.wdl
-    cmdline = [ "java", "-jar",
-                os.path.join(top_dir, "dxWDL-{}.jar".format(version_id)),
-                "dxni",
-                "--force",
-                "--verbose",
-                "--folder", applet_folder,
-                "--project", project.get_id(),
-                "--language", "wdl_draft2",
-                "--output", os.path.join(top_dir, "test/basic/dx_extern.wdl")]
-    print(" ".join(cmdline))
-    subprocess.check_output(cmdline)
+    cmdline_common = [ "java", "-jar",
+                       os.path.join(top_dir, "dxWDL-{}.jar".format(version_id)),
+                       "dxni",
+                       "--force",
+                       "--verbose",
+                       "--folder", applet_folder,
+                       "--project", project.get_id()]
+
+    cmdline_draft2 = cmdline_common + [ "--language", "wdl_draft2",
+                                        "--output", os.path.join(top_dir, "test/draft2/dx_extern.wdl")]
+    print(" ".join(cmdline_draft2))
+    subprocess.check_output(cmdline_draft2)
+
+    cmdline_v1 = cmdline_common + [ "--language", "wdl_v1.0",
+                                    "--output", os.path.join(top_dir, "test/basic/dx_extern.wdl")]
+    print(" ".join(cmdline_v1))
+    subprocess.check_output(cmdline_v1)
 
 
 def native_call_app_setup(version_id):
@@ -625,7 +636,8 @@ def main():
     if args.runtime_debug_level:
         compiler_flags += ["-runtimeDebugLevel", args.runtime_debug_level]
 
-    if "call_native" in test_names:
+    #  is "native" included in one of the test names?
+    if any("native" in x for x in test_names):
         native_call_setup(project, applet_folder, version_id)
     if "call_native_app" in test_names:
         native_call_app_setup(version_id)

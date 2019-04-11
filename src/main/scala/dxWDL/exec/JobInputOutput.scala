@@ -510,7 +510,7 @@ case class JobInputOutput(dxIoFunctions : DxIoFunctions,
         // Right now, we are downloading the files one at a time
         furl2path.foreach{
             case (dxUrl : FurlDx, localPath) =>
-                val (_,dxFile) = FurlDx.components(dxUrl)
+                val dxFile = FurlDx.getDxFile(dxUrl)
                 downloadFile(localPath, dxFile)
             case (FurlLocal(path), _) =>
                 // The file is already local, nothing to do

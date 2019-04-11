@@ -1,0 +1,7 @@
+{
+  "call_native_v1.x" : 3,
+  "call_native_v1.s" : "octopus",
+  "call_native_v1.flag" : true,
+  "call_native_v1.fileA" : "dx://dxWDL_playground:/test_data/fileA",
+  "call_native_v1.fileB" : "dx://dxWDL_playground:/test_data/fileB"
+}

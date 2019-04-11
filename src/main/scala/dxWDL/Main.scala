@@ -43,9 +43,7 @@ object Main extends App {
     // job, the user is "dnanexus", and the home directory is
     // "/home/dnanexus".
     private def buildRuntimePathConfig(verbose: Boolean) : DxPathConfig = {
-        val dxPathConfig = DxPathConfig.apply(baseDNAxDir, verbose)
-        //dxPathConfig.createCleanDirs()
-        dxPathConfig
+        DxPathConfig.apply(baseDNAxDir, verbose)
     }
 
     private def normKey(s: String) : String= {
@@ -536,7 +534,6 @@ object Main extends App {
                 SuccessfulTermination(s"success ${op}")
 
             case InternalOp.TaskEpilog =>
-                dxPathConfig.ensureOutputFilesExist()
                 val (localizedInputs, dxUrl2path) = taskRunner.readEnvFromDisk()
                 val outputFields: Map[String, JsValue] = taskRunner.epilog(localizedInputs, dxUrl2path)
 

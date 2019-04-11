@@ -39,6 +39,9 @@ object Furl {
 }
 
 object FurlDx {
+    def getDxFile(furlDx: FurlDx) : DXFile =
+        DxPath.lookupDxURLFile(furlDx.value)
+
     def components(furlDx: FurlDx) : (String, DXFile) = {
         val dxFile = DxPath.lookupDxURLFile(furlDx.value)
 
@@ -61,6 +64,19 @@ object FurlDx {
 
     // Convert a dx-file to a string with the format:
     //   dx://proj-xxxx:file-yyyy::/A/B/C.txt
+    //
+    // This is needed for operations like:
+    //     File filename
+    //     String  = sub(filename, ".txt", "") + ".md"
+    // The standard library functions requires the file name to
+    // end with a posix-like name. It can't just be:
+    // "dx://file-xxxx", or "dx://proj-xxxx:file-yyyy". It needs
+    // to be something like:  dx://xxxx:yyyy:genome.txt, so that
+    // we can change the suffix.
+    //
+    // We need to change the standard so that the conversion from file to
+    // string is well defined, and requires an explicit conversion function.
+    //
     def dxFileToFurl(dxFile: DXFile) : FurlDx = {
         val desc = dxFile.describe
         val logicalName = s"${desc.getFolder}/${desc.getName}"
