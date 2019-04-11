@@ -1,6 +1,6 @@
 package dxWDL.util
 
-import java.nio.file.Path
+import java.nio.file.{Files, Path}
 
 // configuration of paths. This is used in several distinct and seemingly disjoint
 // cases:
@@ -52,6 +52,15 @@ case class DxPathConfig(
         Utils.safeMkdir(inputFilesDir)
         Utils.safeMkdir(outputFilesDir)
         Utils.safeMkdir(tmpDir)
+    }
+
+    def ensureOutputFilesExist() : Unit = {
+        // Make sure the stdout and stderr files exist, if
+        // they have not been created so far.
+        for (fl <- List(stdout, stderr)) {
+            if (!Files.exists(fl))
+                Files.createFile(fl)
+        }
     }
 }
 

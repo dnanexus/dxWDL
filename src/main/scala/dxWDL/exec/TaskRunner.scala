@@ -182,16 +182,16 @@ case class TaskRunner(task: CallableTaskDefinition,
 	        Utils.safeMkdir(tarballDir)
                 val localTar : Path = tarballDir.resolve(fileName)
 
-                System.err.println(s"downloading docker tarball to ${localTar}")
+                Utils.appletLog(verbose, s"downloading docker tarball to ${localTar}")
                 jobInputOutput.downloadFile(localTar, dxFile)
 
-                System.err.println("figuring out the image name")
+                Utils.appletLog(verbose, "figuring out the image name")
                 val (mContent, _) = Utils.execCommand(s"tar --to-stdout -xf ${localTar} manifest.json")
             	Utils.appletLog(verbose, s"""|manifest content:
                                              |${mContent}
                                              |""".stripMargin)
                 val repo = TaskRunnerUtils.readManifestGetDockerImageName(mContent)
-                System.err.println(s"repository is ${repo}")
+                Utils.appletLog(verbose, s"repository is ${repo}")
 
                 Utils.appletLog(true, s"load tarball ${localTar} to docker")
                 val (outstr,errstr) = Utils.execCommand(s"docker load --input ${localTar}")
@@ -276,14 +276,17 @@ case class TaskRunner(task: CallableTaskDefinition,
         // permissions to read/write files in the home directory. This
         // is required in cases where the container uses a different
         // user.
-        val dockerCmd = s"""|docker run --entrypoint /bin/bash
-                            |--user $$(id -u):$$(id -g)
-                            |-v ${dxPathConfig.homeDir.toString}:${dxPathConfig.homeDir.toString}
-                            |${imgName}
-                            |${dxPathConfig.script}""".stripMargin.replaceAll("\n", " ")
+        //
         val dockerRunScript =
             s"""|#!/bin/bash -ex
-                |${dockerCmd}""".stripMargin
+                |
+                |# This doesn't work for some reason, the user and group
+                |# are both zero.
+                |extraFlags="--user $$(id -u):$$(id -g)"
+                |
+                |docker run $${extraFlags} --entrypoint /bin/bash -v ${dxPathConfig.homeDir.toString}:${dxPathConfig.homeDir.toString} ${imgName} ${dxPathConfig.script}
+                |""".stripMargin
+
         Utils.appletLog(verbose, s"writing docker run script to ${dxPathConfig.dockerSubmitScript}")
         Utils.writeFileContent(dxPathConfig.dockerSubmitScript, dockerRunScript)
         dxPathConfig.dockerSubmitScript.toFile.setExecutable(true)

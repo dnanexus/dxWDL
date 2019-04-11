@@ -44,7 +44,7 @@ object Main extends App {
     // "/home/dnanexus".
     private def buildRuntimePathConfig(verbose: Boolean) : DxPathConfig = {
         val dxPathConfig = DxPathConfig.apply(baseDNAxDir, verbose)
-        dxPathConfig.createCleanDirs()
+        //dxPathConfig.createCleanDirs()
         dxPathConfig
     }
 
@@ -511,6 +511,9 @@ object Main extends App {
         val inputLines : String = Utils.readFileContent(jobInputPath)
         val originalInputs : JsValue = inputLines.parseJson
 
+        // Create empty directories, preparing for downloads
+        dxPathConfig.createCleanDirs()
+
         // setup the utility directories that the task-runner employs
         val jobInputOutput = new exec.JobInputOutput(dxIoFunctions, rtDebugLvl)
         val (taskSourceCode, instanceTypeDB) = jobInputOutput.loadMetaInfo(originalInputs)
@@ -533,6 +536,7 @@ object Main extends App {
                 SuccessfulTermination(s"success ${op}")
 
             case InternalOp.TaskEpilog =>
+                dxPathConfig.ensureOutputFilesExist()
                 val (localizedInputs, dxUrl2path) = taskRunner.readEnvFromDisk()
                 val outputFields: Map[String, JsValue] = taskRunner.epilog(localizedInputs, dxUrl2path)
 

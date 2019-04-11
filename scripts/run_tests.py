@@ -29,7 +29,10 @@ reserved_test_names=['M', 'L', 'draft2', 'All', 'list']
 wdl_v1_list = [
      # calling native dx applets/apps
     "call_native",
-    #"call_native_app",
+#    "call_native_app",
+
+    # multiple library imports in one WDL workflow
+#    "check_imports",
 
     "cast",
     "dict",
@@ -45,7 +48,6 @@ wdl_v1_list = [
     "two_levels",
     "param_passing"
 ]
-
 
 # docker image tests
 docker_test_list = [
@@ -77,12 +79,19 @@ draft2_test_list = [
     "var_type_change"
 ]
 
+single_tasks_list = [
+    "add3",
+    "diff2files",
+    "empty_stdout"
+]
+
 medium_test_list= wdl_v1_list + docker_test_list
-large_test_list= draft2_test_list + wdl_v1_list + docker_test_list
+large_test_list= draft2_test_list + wdl_v1_list + docker_test_list + single_tasks_list
 
 test_suites = {
     'M': medium_test_list,
     'L': large_test_list,
+    'tasks' : single_tasks_list,
     'draft2': draft2_test_list,
     'docker': docker_test_list
 }
