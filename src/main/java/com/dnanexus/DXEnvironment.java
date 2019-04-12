@@ -632,12 +632,12 @@ public class DXEnvironment {
         String user = userPass.substring(0, userPass.indexOf(':') - 1);
         String pass = userPass.substring(userPass.indexOf(':') +1);
 
-        if (proxyMethod.toLowerCase().equals("ntlm")) {
+        if (proxyMethod != null &&
+            proxyMethod.toLowerCase().equals("ntlm")) {
             doDebug("NTLM authentication method specified", null);
             return new ProxyDesc(proxyHost, true, user, pass, proxyDfn, "ntlm", proxyDomain);
-        } else {
-            return new ProxyDesc(proxyHost, true, user, pass, proxyDfn, null, null);
         }
+        return new ProxyDesc(proxyHost, true, user, pass, proxyDfn, null, null);
     }
 
     /**
