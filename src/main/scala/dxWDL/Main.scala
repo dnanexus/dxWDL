@@ -43,9 +43,7 @@ object Main extends App {
     // job, the user is "dnanexus", and the home directory is
     // "/home/dnanexus".
     private def buildRuntimePathConfig(verbose: Boolean) : DxPathConfig = {
-        val dxPathConfig = DxPathConfig.apply(baseDNAxDir, verbose)
-        dxPathConfig.createCleanDirs()
-        dxPathConfig
+        DxPathConfig.apply(baseDNAxDir, verbose)
     }
 
     private def normKey(s: String) : String= {
@@ -510,6 +508,9 @@ object Main extends App {
         // from the platform, we may not need to access them.
         val inputLines : String = Utils.readFileContent(jobInputPath)
         val originalInputs : JsValue = inputLines.parseJson
+
+        // Create empty directories, preparing for downloads
+        dxPathConfig.createCleanDirs()
 
         // setup the utility directories that the task-runner employs
         val jobInputOutput = new exec.JobInputOutput(dxIoFunctions, rtDebugLvl)

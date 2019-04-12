@@ -11,6 +11,7 @@ import os
 import re
 import sys
 import subprocess
+from termcolor import colored, cprint
 import time
 import util
 from dxpy.exceptions import DXJobFailureError
@@ -24,12 +25,11 @@ test_files={}
 test_failing=set(["bad_status",
                   "bad_status2",
                   "missing_output"])
-reserved_test_names=['M', 'L', 'draft2', 'All', 'list']
 
 wdl_v1_list = [
      # calling native dx applets/apps
-    "call_native",
-    #"call_native_app",
+    "call_native_v1",
+#    "call_native_app",
 
     "cast",
     "dict",
@@ -46,6 +46,14 @@ wdl_v1_list = [
     "param_passing"
 ]
 
+# docker image tests
+docker_test_list = [
+    "broad_genomics",
+    "private_registry",
+    "native_docker_file_image",
+    "samtools_count"
+]
+
 # wdl draft-2
 draft2_test_list = [
     "advanced",
@@ -59,19 +67,38 @@ draft2_test_list = [
     "hello",
     "shapes",
 
+    # multiple library imports in one WDL workflow
+    "multiple_imports",
+
     # subworkflows
     "conditionals2",
     "modulo",
     "movies",
     "subblocks2",
     "subblocks",
-    "var_type_change"
+    "var_type_change",
+
+     # calling native dx applets/apps
+    "call_native"
 ]
 
-medium_test_list= wdl_v1_list
-large_test_list= draft2_test_list + wdl_v1_list
+single_tasks_list = [
+    "add3",
+    "diff2files",
+    "empty_stdout"
+]
 
-tests_for_alt_project = [ "platform_asset" ]
+medium_test_list= wdl_v1_list + docker_test_list
+large_test_list= draft2_test_list + wdl_v1_list + docker_test_list + single_tasks_list
+
+test_suites = {
+    'M': medium_test_list,
+    'L': large_test_list,
+    'tasks' : single_tasks_list,
+    'draft2': draft2_test_list,
+    'docker': docker_test_list,
+    'native': ["call_native", "call_native_v1"]
+}
 
 # Tests with the reorg flags
 test_reorg=["dict", "linear"]
@@ -84,6 +111,7 @@ test_unlocked=["cast",
                "linear",
                "shapes"]
 test_extras=["instance_types"]
+test_private_registry=["private_registry"]
 TestMetaData = namedtuple('TestMetaData', 'name kind')
 TestDesc = namedtuple('TestDesc', 'name kind wdl_source wdl_input dx_input results')
 
@@ -129,15 +157,16 @@ def get_metadata(filename):
     if len(tasks) == 1:
         return TestMetaData(name = tasks[0],
                             kind = "applet")
-    if os.path.basename(filename).startswith("library_"):
+    if (os.path.basename(filename).startswith("library") or
+        os.path.basename(filename).startswith("dx_extern")):
         return
     raise RuntimeError("{} is not a valid WDL test, #tasks={}".format(filename, len(tasks)))
 
 # Register a test name, find its inputs and expected results files.
 def register_test(dir_path, tname):
     global test_files
-    if tname in reserved_test_names:
-        raise RuntimeError("Test name {} is reserved".format(tname))
+    if tname in test_suites.keys():
+        raise RuntimeError("Test name {} is already used by a test-suite, it is reserved".format(tname))
     wdl_file = os.path.join(dir_path, tname + ".wdl")
     metadata = get_metadata(wdl_file)
     desc = TestDesc(name = metadata.name,
@@ -191,7 +220,8 @@ def validate_result(tname, exec_outputs, key, expected_val):
     try:
         # get the actual results
         if field_name not in exec_outputs:
-            print("field {} missing from executable results {}".format(field_name, exec_outputs))
+            cprint("field {} missing from executable results {}".format(field_name, exec_outputs),
+                   "red")
             return False
         result = exec_outputs[field_name]
         if ((type(result) is list) and
@@ -199,8 +229,10 @@ def validate_result(tname, exec_outputs, key, expected_val):
             result.sort()
             expected_val.sort()
         if result != expected_val:
-            print("Analysis {} gave unexpected results".format(tname))
-            print("Field {} should be {}, actual = {}".format(field_name, expected_val, result))
+            cprint("Analysis {} gave unexpected results".format(tname),
+                   "red")
+            cprint("Field {} should be {}, actual = {}".format(field_name, expected_val, result),
+                   "red")
             return False
         return True
     except Exception as e:
@@ -357,24 +389,20 @@ def print_test_list():
     print("List of tests:\n  {}".format(ls))
 
 # Choose set set of tests to run
-def choose_tests(test_name):
-    if test_name == 'M':
-        return medium_test_list
-    if test_name == 'L':
-        return large_test_list
-    if test_name == 'draft2':
-        return draft2_test_list
-    if test_name == 'All':
+def choose_tests(name):
+    if name in test_suites.keys():
+        return test_suites[name]
+    if name == 'All':
         return test_files.keys()
-    if test_name in test_files.keys():
-        return [test_name]
+    if name in test_files.keys():
+        return [name]
     # Last chance: check if the name is a prefix.
     # Accept it if there is exactly a single match.
-    matches = [key for key in test_files.keys() if key.startswith(test_name)]
+    matches = [key for key in test_files.keys() if key.startswith(name)]
     if len(matches) > 1:
-        raise RuntimeError("Too many matches for test prefix {} -> {}".format(test_name, matches))
+        raise RuntimeError("Too many matches for test prefix {} -> {}".format(name, matches))
     if len(matches) == 0:
-        raise RuntimeError("Test prefix {} is unknown".format(test_name))
+        raise RuntimeError("Test prefix {} is unknown".format(name))
     return matches
 
 # Find all the WDL test files, these are located in the 'test'
@@ -417,6 +445,8 @@ def compiler_per_test_flags(tname):
         flags.append(desc.wdl_input)
     if tname in test_extras:
         flags += ["--extras", os.path.join(top_dir, "test/extras.json")]
+    if tname in test_private_registry:
+        flags += ["--extras", os.path.join(top_dir, "test/extras_private_registry.json")]
     return flags
 
 # Which project to use for a test
@@ -445,17 +475,23 @@ def native_call_setup(project, applet_folder, version_id):
             subprocess.check_output(cmdline)
 
     # build WDL wrapper tasks in test/dx_extern.wdl
-    cmdline = [ "java", "-jar",
-                os.path.join(top_dir, "dxWDL-{}.jar".format(version_id)),
-                "dxni",
-                "--force",
-                "--verbose",
-                "--folder", applet_folder,
-                "--project", project.get_id(),
-                "--language", "wdl_draft2",
-                "--output", os.path.join(top_dir, "test/basic/dx_extern.wdl")]
-    print(" ".join(cmdline))
-    subprocess.check_output(cmdline)
+    cmdline_common = [ "java", "-jar",
+                       os.path.join(top_dir, "dxWDL-{}.jar".format(version_id)),
+                       "dxni",
+                       "--force",
+                       "--verbose",
+                       "--folder", applet_folder,
+                       "--project", project.get_id()]
+
+    cmdline_draft2 = cmdline_common + [ "--language", "wdl_draft2",
+                                        "--output", os.path.join(top_dir, "test/draft2/dx_extern.wdl")]
+    print(" ".join(cmdline_draft2))
+    subprocess.check_output(cmdline_draft2)
+
+    cmdline_v1 = cmdline_common + [ "--language", "wdl_v1.0",
+                                    "--output", os.path.join(top_dir, "test/basic/dx_extern.wdl")]
+    print(" ".join(cmdline_v1))
+    subprocess.check_output(cmdline_v1)
 
 
 def native_call_app_setup(version_id):
@@ -603,21 +639,11 @@ def main():
     if args.runtime_debug_level:
         compiler_flags += ["-runtimeDebugLevel", args.runtime_debug_level]
 
-    if "call_native" in test_names:
+    #  is "native" included in one of the test names?
+    if any("native" in x for x in test_names):
         native_call_setup(project, applet_folder, version_id)
     if "call_native_app" in test_names:
         native_call_app_setup(version_id)
-
-    # compile into an alternate project
-    alt_tests = list(set(test_names) & set(tests_for_alt_project))
-    if len(alt_tests) > 0:
-        alt_project = util.get_project("dxWDL_playground_2")
-        compile_tests_to_project(alt_project,
-                                 alt_tests,
-                                 applet_folder,
-                                 compiler_flags,
-                                 version_id,
-                                 args.lazy)
 
     try:
         # Compile the WDL files to dx:workflows and dx:applets

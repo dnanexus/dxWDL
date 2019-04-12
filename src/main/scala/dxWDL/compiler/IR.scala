@@ -8,7 +8,7 @@
 // We use YAML as a human readable representation of the IR.
 package dxWDL.compiler
 
-import com.dnanexus.DXRecord
+import com.dnanexus.DXFile
 import dxWDL.util.{DXWorkflowStage, Utils}
 import wom.callable.CallableTaskDefinition
 import wom.types.WomType
@@ -77,7 +77,7 @@ object IR {
     sealed trait DockerImage
     case object DockerImageNone extends DockerImage
     case object DockerImageNetwork extends DockerImage
-    case class DockerImageDxAsset(url: String, asset: DXRecord) extends DockerImage
+    case class DockerImageDxFile(url: String, tarball: DXFile) extends DockerImage
 
     // A unified type representing a WDL workflow or a WDL applet.
     // This is useful when compiling WDL workflows, because they can

@@ -128,8 +128,8 @@ case class GenerateIRTask(verbose: Verbose) {
                 wdlConst match {
                     case WomString(url) if url.startsWith(Utils.DX_URL_PREFIX) =>
                         // A constant image specified with a DX URL
-                        val dxRecord = DxPath.lookupDxURLRecord(url)
-                        IR.DockerImageDxAsset(url, dxRecord)
+                        val dxfile = DxPath.lookupDxURLFile(url)
+                        IR.DockerImageDxFile(url, dxfile)
                     case _ =>
                         // Probably a public docker image
                         IR.DockerImageNetwork
@@ -144,9 +144,9 @@ case class GenerateIRTask(verbose: Verbose) {
         //
         //   dx://dxWDL_playground:/glnexus_internal  ->   dx://project-xxxx:record-yyyy
         val taskCleanedSourceCode = docker match {
-            case IR.DockerImageDxAsset(url, dxRecord) =>
-                val recordUrl = DxPath.dxRecordToURL(dxRecord)
-                taskSourceCode.replaceAll(url, recordUrl)
+            case IR.DockerImageDxFile(orgURL, dxFile) =>
+                val dxURL = DxPath.dxDataObjectToURL(dxFile)
+                taskSourceCode.replaceAll(orgURL, dxURL)
             case _ => taskSourceCode
         }
 

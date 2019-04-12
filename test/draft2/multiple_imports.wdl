@@ -1,13 +1,11 @@
-version 1.0
-
 import "library_math.wdl" as lib
 import "library_string.wdl" as lib_str
 
-workflow check_imports {
+workflow multiple_imports {
     # accessing members of a pair structure
     Pair[Int, Int] p2 = (5, 8)
-    call lib.Multiply as mul {
-        input: a=p2.left, b=p2.right
+    call lib.z_mul as mul {
+        input: a=p2.left, b=p2.right, n=100
     }
 
     Pair[String, String] v = ("carrots", "oranges")

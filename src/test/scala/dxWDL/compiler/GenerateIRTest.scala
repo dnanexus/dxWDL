@@ -184,10 +184,7 @@ class GenerateIRTest extends FlatSpec with Matchers {
     it should "three nesting levels" in {
         val path = pathFromBasename("nested", "three_levels.wdl")
         val retval = Main.compile(
-            path.toString
-//                :: "--verbose"
-//                :: "--verboseKey" :: "GenerateIR"
-                :: cFlags
+            path.toString :: cFlags
         )
         retval shouldBe a [Main.SuccessfulTerminationIR]
         val bundle = retval match {
@@ -211,12 +208,8 @@ class GenerateIRTest extends FlatSpec with Matchers {
     it should "four nesting levels" taggedAs(EdgeTest) in {
         val path = pathFromBasename("nested", "four_levels.wdl")
         val retval = Main.compile(
-            path.toString
-                :: "--verbose"
-                :: "--verboseKey" :: "GenerateIR"
-                :: cFlags
+            path.toString :: cFlags
         )
-
         inside(retval) {
             case Main.UnsuccessfulTermination(errMsg) =>
                 errMsg should include ("nested scatter")
