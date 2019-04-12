@@ -272,19 +272,34 @@ case class TaskRunner(task: CallableTaskDefinition,
         // we can reach the result files, and upload them to
         // the platform.
         //
-        // Run the container under the dnanexus user, so it will have
-        // permissions to read/write files in the home directory. This
-        // is required in cases where the container uses a different
-        // user.
-        //
         val dockerRunScript =
             s"""|#!/bin/bash -ex
                 |
-                |# This doesn't work for some reason, the user and group
-                |# are both zero.
+                |# make sure there is no preexisting Docker CID file
+                |rm -f ${dxPathConfig.dockerCid}
+                |
+                |# Run the container under a priviliged user, so it will have
+                |# permissions to read/write files in the home directory. This
+                |# is required in cases where the container uses a different
+                |# user.
                 |extraFlags="--user $$(id -u):$$(id -g)"
                 |
-                |docker run $${extraFlags} --entrypoint /bin/bash -v ${dxPathConfig.homeDir.toString}:${dxPathConfig.homeDir.toString} ${imgName} ${dxPathConfig.script}
+                |# run as in the original configuration
+                |docker run \\
+                |  --cidfile ${dxPathConfig.dockerCid} \\
+                |  $${extraFlags} \\
+                |  --entrypoint /bin/bash \\
+                |  -v ${dxPathConfig.homeDir}:${dxPathConfig.homeDir} \\
+                |  ${imgName} ${dxPathConfig.script.toString}
+                |
+                |# get the return code (working even if the container was detached)
+                |rc=$$(docker wait `cat ${dxPathConfig.dockerCid.toString}`)
+                |
+                |# remove the container after waiting
+                |docker rm `cat ${dxPathConfig.dockerCid.toString}`
+                |
+                |# return exit code
+                |exit $$rc
                 |""".stripMargin
 
         Utils.appletLog(verbose, s"writing docker run script to ${dxPathConfig.dockerSubmitScript}")

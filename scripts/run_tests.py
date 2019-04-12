@@ -11,6 +11,7 @@ import os
 import re
 import sys
 import subprocess
+from termcolor import colored, cprint
 import time
 import util
 from dxpy.exceptions import DXJobFailureError
@@ -24,7 +25,6 @@ test_files={}
 test_failing=set(["bad_status",
                   "bad_status2",
                   "missing_output"])
-reserved_test_names=['M', 'L', 'draft2', 'All', 'list']
 
 wdl_v1_list = [
      # calling native dx applets/apps
@@ -68,7 +68,7 @@ draft2_test_list = [
     "shapes",
 
     # multiple library imports in one WDL workflow
-    "check_imports",
+    "multiple_imports",
 
     # subworkflows
     "conditionals2",
@@ -165,8 +165,8 @@ def get_metadata(filename):
 # Register a test name, find its inputs and expected results files.
 def register_test(dir_path, tname):
     global test_files
-    if tname in reserved_test_names:
-        raise RuntimeError("Test name {} is reserved".format(tname))
+    if tname in test_suites.keys():
+        raise RuntimeError("Test name {} is already used by a test-suite, it is reserved".format(tname))
     wdl_file = os.path.join(dir_path, tname + ".wdl")
     metadata = get_metadata(wdl_file)
     desc = TestDesc(name = metadata.name,
@@ -220,7 +220,8 @@ def validate_result(tname, exec_outputs, key, expected_val):
     try:
         # get the actual results
         if field_name not in exec_outputs:
-            print("field {} missing from executable results {}".format(field_name, exec_outputs))
+            cprint("field {} missing from executable results {}".format(field_name, exec_outputs),
+                   "red")
             return False
         result = exec_outputs[field_name]
         if ((type(result) is list) and
@@ -228,8 +229,10 @@ def validate_result(tname, exec_outputs, key, expected_val):
             result.sort()
             expected_val.sort()
         if result != expected_val:
-            print("Analysis {} gave unexpected results".format(tname))
-            print("Field {} should be {}, actual = {}".format(field_name, expected_val, result))
+            cprint("Analysis {} gave unexpected results".format(tname),
+                   "red")
+            cprint("Field {} should be {}, actual = {}".format(field_name, expected_val, result),
+                   "red")
             return False
         return True
     except Exception as e:

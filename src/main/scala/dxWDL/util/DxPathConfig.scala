@@ -41,6 +41,9 @@ case class DxPathConfig(
     // to this file
     rcPath : Path,
 
+    // file where the docker container name is stored.
+    dockerCid : Path,
+
     // file for storing the state between prolog and epilog of the task runner
     runnerTaskEnv: Path,
     verbose: Boolean) {
@@ -68,6 +71,7 @@ object DxPathConfig {
         val script = metaDir.resolve("script")
         val dockerSubmitScript = metaDir.resolve("docker.submit")
         val rcPath = metaDir.resolve("rc")
+        val dockerCid = metaDir.resolve("dockerCid")
         val runnerTaskEnv = metaDir.resolve("taskEnv.json")
 
         DxPathConfig(homeDir,
@@ -80,6 +84,7 @@ object DxPathConfig {
                      dockerSubmitScript,
                      script,
                      rcPath,
+                     dockerCid,
                      runnerTaskEnv,
                      verbose)
     }
