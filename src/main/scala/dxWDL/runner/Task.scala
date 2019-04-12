@@ -533,6 +533,8 @@ case class Task(task:WdlTask,
         // we can reach the result files, and upload them to
         // the platform.
         val DX_HOME = Utils.DX_HOME
+        // ensure that docker hostname is the job ID to match existing
+        // dx-docker behavior and allow users to report errors more easily.
         val dockerRunScript =
             s"""|#!/bin/bash -ex
                 |
@@ -540,10 +542,10 @@ case class Task(task:WdlTask,
                 |
                 |extraFlags=""
                 |if [ $${DOCKER_CMD} == "docker" ]; then
-                |    # Run the container under the dnanexus user, so it will have permissions to read/write
-                |    # files in the home directory. This is required in cases where the container uses a
-                |    # different user.
-                |    extraFlags="--user $$(id -u):$$(id -g)"
+                |    # 1. Run the container under the dnanexus user, so it will have permissions to read/write
+                |    #    files in the home directory (e.g., when container uses a different user).
+                |    # 2. Set hostname to outer hostname to allow error reporting based on dx job ID.
+                |    extraFlags="--user $$(id -u):$$(id -g) --hostname $$(hostname)"
                 |fi
                 |
                 |$${DOCKER_CMD} run $${extraFlags} --entrypoint /bin/bash -v ${DX_HOME}:${DX_HOME} ${imgName} $${HOME}/execution/meta/script

@@ -70,6 +70,7 @@ medium_test_list = [
     "private_registry",
     "native_docker_file_image",
     "samtools_count",
+    "hostname_is_jobid",
 
     # Setting defaults for tasks, not just workflows
     "population",
