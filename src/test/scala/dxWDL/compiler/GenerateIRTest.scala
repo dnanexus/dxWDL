@@ -3,6 +3,7 @@ package dxWDL.compiler
 import java.nio.file.{Path, Paths}
 import org.scalatest.{FlatSpec, Matchers}
 import org.scalatest.Inside._
+import wom.callable.CallableTaskDefinition
 
 import dxWDL.Main
 import dxWDL.util.Utils
@@ -205,7 +206,7 @@ class GenerateIRTest extends FlatSpec with Matchers {
     }
 
 
-    it should "four nesting levels" taggedAs(EdgeTest) in {
+    it should "four nesting levels" in {
         val path = pathFromBasename("nested", "four_levels.wdl")
         val retval = Main.compile(
             path.toString :: cFlags
@@ -214,5 +215,29 @@ class GenerateIRTest extends FlatSpec with Matchers {
             case Main.UnsuccessfulTermination(errMsg) =>
                 errMsg should include ("nested scatter")
         }
+    }
+
+    it should "handle streaming files" taggedAs(EdgeTest) in {
+        val path = pathFromBasename("compiler", "streaming_files.wdl")
+        val retval = Main.compile(
+            path.toString :: cFlags
+        )
+        retval shouldBe a [Main.SuccessfulTerminationIR]
+        val bundle = retval match {
+            case Main.SuccessfulTerminationIR(ir) => ir
+            case _ => throw new Exception("sanity")
+        }
+
+        val cgrep = bundle.allCallables("cgrep") match {
+            case a : IR.Applet => a
+            case _ => throw new Exception("cgrep is not an applet")
+        }
+
+        val cgrepTask: CallableTaskDefinition = cgrep.kind match {
+            case IR.AppletKindTask(x) => x
+            case _ => throw new Exception("cgrep is not a task")
+        }
+
+        cgrepTask.parameterMeta shouldBe (Map("in_file" -> "stream"))
     }
 }
