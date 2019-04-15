@@ -3,7 +3,7 @@ package dxWDL.compiler
 import java.nio.file.{Path, Paths}
 import org.scalatest.{FlatSpec, Matchers}
 import org.scalatest.Inside._
-import wom.callable.CallableTaskDefinition
+import wom.callable.{CallableTaskDefinition, MetaValueElement}
 
 import dxWDL.Main
 import dxWDL.util.Utils
@@ -217,7 +217,7 @@ class GenerateIRTest extends FlatSpec with Matchers {
         }
     }
 
-    it should "handle streaming files" taggedAs(EdgeTest) in {
+    it should "handle streaming files" in {
         val path = pathFromBasename("compiler", "streaming_files.wdl")
         val retval = Main.compile(
             path.toString :: cFlags
@@ -239,5 +239,30 @@ class GenerateIRTest extends FlatSpec with Matchers {
         }
 
         cgrepTask.parameterMeta shouldBe (Map("in_file" -> "stream"))
+
+        val iDef = cgrepTask.inputs.find(_.name == "in_file").get
+        iDef.parameterMeta shouldBe (Some(MetaValueElement.MetaValueElementString("stream")))
+    }
+
+    it should "streaming on non files I" taggedAs(EdgeTest) in {
+        val path = pathFromBasename("compiler", "streaming_files_error1.wdl")
+        val retval = Main.compile(
+            path.toString :: cFlags
+        )
+        inside(retval) {
+            case Main.UnsuccessfulTermination(errMsg) =>
+                errMsg should include ("Only files that are task inputs can be declared streaming")
+        }
+    }
+
+    it should "streaming on non files II" taggedAs(EdgeTest) in {
+        val path = pathFromBasename("compiler", "streaming_files_error2.wdl")
+        val retval = Main.compile(
+            path.toString :: cFlags
+        )
+        inside(retval) {
+            case Main.UnsuccessfulTermination(errMsg) =>
+                errMsg should include ("Only files that are task inputs can be declared streaming")
+        }
     }
 }

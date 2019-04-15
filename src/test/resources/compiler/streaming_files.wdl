@@ -19,34 +19,3 @@ task cgrep {
         Int count = read_int(stdout())
     }
 }
-
-
-# Incorrect, can't mark an integer as streaming
-task add {
-    input {
-        Int a
-        Int b
-    }
-
-    parameter_meta {
-        a : "stream"
-    }
-    command {}
-    output {
-        Int result = a + b
-    }
-}
-
-# Incorrect, can't mark a file-array as streaming
-task sundry {
-    input {
-        Array[File] aF
-        File? oF
-    }
-
-    parameter_meta {
-        aF: "stream"
-        oF: "stream"
-    }
-    command {}
-}

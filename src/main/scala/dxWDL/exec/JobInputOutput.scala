@@ -466,6 +466,18 @@ case class JobInputOutput(dxIoFunctions : DxIoFunctions,
     }
 
 
+    // Figure out which files need to be streamed
+    private def areStreaming(inputs: Map[InputDefinition, WomValue]) : Set[Furl] = {
+        inputs.map{
+            case (iDef, womValue) =>
+                iDef.parameterMeta match {
+                    case Some(x) if x == "stream" =>
+                        findFiles(womValue)
+                    case _ =>
+                        Vector.empty
+                }
+        }.flatten.toSet
+    }
 
     // After applying [loadInputs] above, we have the job inputs in the correct format,
     // except for files. These are represented as dx URLs (dx://proj-xxxx:file-yyyy::/A/B/C.txt)
@@ -479,8 +491,11 @@ case class JobInputOutput(dxIoFunctions : DxIoFunctions,
     // A file may be referenced more than once, we want to download it
     // just once.
     def localizeFiles(inputs: Map[InputDefinition, WomValue],
-                      inputsDir: Path) : (Map[InputDefinition, WomValue], Map[Furl, Path]) = {
+                      inputsDir: Path) : (Map[InputDefinition, WomValue],
+                                          Map[Furl, Path],
+                                          Vector[String]) = {
         val fileURLs : Vector[Furl] = inputs.values.map(findFiles).flatten.toVector
+        val streamingFiles : Set[Furl] = areStreaming(inputs)
 
         // remove duplicates; we want to download each file just once
         val filesToDownload: Set[Furl] = fileURLs.toSet
@@ -508,10 +523,20 @@ case class JobInputOutput(dxIoFunctions : DxIoFunctions,
         // download the files from the cloud.
         // This could be done in parallel using the download agent.
         // Right now, we are downloading the files one at a time
+        var bashSnippets = Vector.empty[String]
         furl2path.foreach{
             case (dxUrl : FurlDx, localPath) =>
-                val dxFile = FurlDx.getDxFile(dxUrl)
-                downloadFile(localPath, dxFile)
+                if (streamingFiles contains dxUrl) {
+                    val dxFile = FurlDx.getDxFile(dxUrl)
+                    val snippet = s"""|mkfifo ${localPath}
+                                      |dx cat ${dxFile.getId} > ${localPath} &
+                                      |echo $$!
+                                      |""".stripMargin
+                    bashSnippets :+= snippet
+                } else {
+                    val dxFile = FurlDx.getDxFile(dxUrl)
+                    downloadFile(localPath, dxFile)
+                }
             case (FurlLocal(path), _) =>
                 // The file is already local, nothing to do
                 ()
@@ -523,7 +548,7 @@ case class JobInputOutput(dxIoFunctions : DxIoFunctions,
             inpDef -> v1
         }
 
-        (localizedInputs, furl2path)
+        (localizedInputs, furl2path, bashSnippets)
     }
 
     // We have task outputs, where files are stored locally. Upload the files to

@@ -365,13 +365,24 @@ case class TaskRunner(task: CallableTaskDefinition,
             return (inputs, Map.empty)
         }
 
-        // Download all input files.
+        // Download/stream all input files.
         //
         // Note: this may be overly conservative,
         // because some of the files may not actually be accessed.
+        val (localizedInputs, dxUrl2path, bashSnippetVec) =
+            jobInputOutput.localizeFiles(taskInputs, dxPathConfig.inputFilesDir)
 
-        val (localizedInputs, dxUrl2path) = jobInputOutput.localizeFiles(taskInputs,
-                                                                         dxPathConfig.inputFilesDir)
+        // deal with files that need streaming
+        if (bashSnippetVec.size > 0) {
+            // set up all the named pipes
+            val path = dxPathConfig.setupStreams
+            Utils.appletLog(maxVerboseLevel,
+                            s"writing bash script for stream(s) set up to ${path}")
+            val snippet = bashSnippetVec.mkString("\n")
+            Utils.writeFileContent(path, snippet)
+            path.toFile.setExecutable(true)
+        }
+
         val inputs = localizedInputs.map{ case (inpDfn, value) =>
             inpDfn.name -> value
         }.toMap
