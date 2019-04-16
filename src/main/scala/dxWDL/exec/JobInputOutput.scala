@@ -6,6 +6,7 @@ import common.validation.ErrorOr.ErrorOr
 import java.nio.file.{Files, Path, Paths}
 import spray.json._
 import wom.callable.Callable._
+import wom.callable.MetaValueElement._
 import wom.expression.WomExpression
 import wom.types._
 import wom.values._
@@ -15,6 +16,7 @@ import dxWDL.util.Utils.{META_INFO, FLAT_FILES_SUFFIX}
 
 case class JobInputOutput(dxIoFunctions : DxIoFunctions,
                           runtimeDebugLevel: Int) {
+    private val verbose = (runtimeDebugLevel >= 1)
 
     private val DOWNLOAD_RETRY_LIMIT = 3
     private val UPLOAD_RETRY_LIMIT = 3
@@ -471,7 +473,7 @@ case class JobInputOutput(dxIoFunctions : DxIoFunctions,
         inputs.map{
             case (iDef, womValue) =>
                 iDef.parameterMeta match {
-                    case Some(x) if x == "stream" =>
+                    case (Some(MetaValueElementString("stream"))) =>
                         findFiles(womValue)
                     case _ =>
                         Vector.empty
@@ -496,6 +498,7 @@ case class JobInputOutput(dxIoFunctions : DxIoFunctions,
                                           Vector[String]) = {
         val fileURLs : Vector[Furl] = inputs.values.map(findFiles).flatten.toVector
         val streamingFiles : Set[Furl] = areStreaming(inputs)
+        Utils.appletLog(verbose, s"streaming files = ${streamingFiles}")
 
         // remove duplicates; we want to download each file just once
         val filesToDownload: Set[Furl] = fileURLs.toSet

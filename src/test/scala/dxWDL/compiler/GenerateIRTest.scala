@@ -217,7 +217,7 @@ class GenerateIRTest extends FlatSpec with Matchers {
         }
     }
 
-    it should "handle streaming files" in {
+    it should "handle streaming files" taggedAs(EdgeTest) in {
         val path = pathFromBasename("compiler", "streaming_files.wdl")
         val retval = Main.compile(
             path.toString :: cFlags
@@ -228,20 +228,25 @@ class GenerateIRTest extends FlatSpec with Matchers {
             case _ => throw new Exception("sanity")
         }
 
-        val cgrep = bundle.allCallables("cgrep") match {
-            case a : IR.Applet => a
-            case _ => throw new Exception("cgrep is not an applet")
+        def getTaskByName(name: String) : CallableTaskDefinition = {
+            val applet = bundle.allCallables(name) match {
+                case a : IR.Applet => a
+                case _ => throw new Exception(s"${name} is not an applet")
+            }
+            val task: CallableTaskDefinition = applet.kind match {
+                case IR.AppletKindTask(x) => x
+                case _ => throw new Exception(s"${name} is not a task")
+            }
+            task
         }
 
-        val cgrepTask: CallableTaskDefinition = cgrep.kind match {
-            case IR.AppletKindTask(x) => x
-            case _ => throw new Exception("cgrep is not a task")
-        }
-
+        val cgrepTask = getTaskByName("cgrep")
         cgrepTask.parameterMeta shouldBe (Map("in_file" -> "stream"))
-
         val iDef = cgrepTask.inputs.find(_.name == "in_file").get
         iDef.parameterMeta shouldBe (Some(MetaValueElement.MetaValueElementString("stream")))
+
+        val diffTask = getTaskByName("diff")
+        diffTask.parameterMeta shouldBe (Map("a" -> "stream", "b" -> "stream"))
     }
 
     it should "streaming on non files I" taggedAs(EdgeTest) in {
