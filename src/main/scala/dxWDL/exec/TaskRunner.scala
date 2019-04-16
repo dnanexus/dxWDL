@@ -254,6 +254,14 @@ case class TaskRunner(task: CallableTaskDefinition,
                     |) \\
                     |  > >( tee ${dxPathConfig.stdout} ) \\
                     |  2> >( tee ${dxPathConfig.stderr} >&2 )
+                    |
+                    |# make sure the files are on stable storage
+                    |# before leaving. This helps with stdin and stdout
+                    |# that may be in the fifo queues.
+                    |(
+                    |    cd ${dxPathConfig.homeDir.toString}
+                    |    sync
+                    |)
                     |echo $$? > ${dxPathConfig.rcPath}
                     |""".stripMargin.trim + "\n"
             }
