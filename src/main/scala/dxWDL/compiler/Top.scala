@@ -8,9 +8,12 @@ import dxWDL.util._
 import dxWDL.util.Utils.DX_WDL_ASSET
 import java.nio.file.{Path, Paths}
 import scala.collection.JavaConverters._
+import wom.callable._
+import wom.types._
 import wom.executable.WomBundle
 
-object Top {
+case class Top(cOpt: CompilerOptions) {
+    val verbose = cOpt.verbose
 
     // The mapping from region to project name is list of (region, proj-name) pairs.
     // Get the project for this region.
@@ -34,8 +37,7 @@ object Top {
 
     // Find the runtime dxWDL asset with the correct version. Look inside the
     // project configured for this region.
-    private def getAssetId(region: String,
-                           verbose: Verbose) : String = {
+    private def getAssetId(region: String) : String = {
         val region2project = Utils.getRegions()
         val (projNameRt, folder)  = getProjectWithRuntimeLibrary(region2project, region)
         val dxProjRt = DxPath.lookupProject(projNameRt)
@@ -58,8 +60,7 @@ object Top {
     // be available to all subjobs we run.
     private def cloneRtLibraryToProject(region: String,
                                         dxWDLrtId: String,
-                                        dxProject: DXProject,
-                                        verbose: Verbose) : Unit = {
+                                        dxProject: DXProject) : Unit = {
         val region2project = Utils.getRegions()
         val (projNameRt, folder)  = getProjectWithRuntimeLibrary(region2project, region)
         val dxProjRt = DxPath.lookupProject(projNameRt)
@@ -74,8 +75,7 @@ object Top {
     private def compileNative(bundle: IR.Bundle,
                               folder: String,
                               dxProject: DXProject,
-                              runtimePathConfig: DxPathConfig,
-                              cOpt: CompilerOptions) : CompilationResults = {
+                              runtimePathConfig: DxPathConfig) : CompilationResults = {
         val dxWDLrtId: Option[String] = cOpt.compileMode match {
             case CompilerFlag.IR =>
                 throw new Exception("Invalid value IR for compilation mode")
@@ -87,17 +87,17 @@ object Top {
                 // get billTo and region from the project, then find the runtime asset
                 // in the current region.
                 val (billTo, region) = Utils.projectDescribeExtraInfo(dxProject)
-                val lrtId = getAssetId(region, cOpt.verbose)
-                cloneRtLibraryToProject(region, lrtId, dxProject, cOpt.verbose)
+                val lrtId = getAssetId(region)
+                cloneRtLibraryToProject(region, lrtId, dxProject)
                 Some(lrtId)
         }
         // get list of available instance types
-        val instanceTypeDB = InstanceTypeDB.query(dxProject, cOpt.verbose)
+        val instanceTypeDB = InstanceTypeDB.query(dxProject, verbose)
 
         // Efficiently build a directory of the currently existing applets.
         // We don't want to build them if we don't have to.
         val dxObjDir = DxObjectDirectory(bundle, dxProject, folder, cOpt.projectWideReuse,
-                                         cOpt.verbose)
+                                         verbose)
 
         // Generate dx:applets and dx:workflow from the IR
         new Native(dxWDLrtId, folder, dxProject,
@@ -107,6 +107,41 @@ object Top {
                    cOpt.runtimeDebugLevel,
                    cOpt.leaveWorkflowsOpen,
                    cOpt.force, cOpt.archive, cOpt.locked, cOpt.verbose).apply(bundle)
+    }
+
+
+    // check that streaming annotations are only done for files.
+    private def validate(callable: Callable) : Unit = {
+        callable match {
+            case wf: WorkflowDefinition =>
+                if (wf.parameterMeta.size > 0)
+                    Utils.warning(verbose, "dxWDL workflows ignore their parameter meta section")
+
+            case task: CallableTaskDefinition =>
+                task.inputs.foreach{
+                    case iDef : Callable.InputDefinition =>
+                        //iDef.parameterMeta --- this does not work on draft2
+                        task.parameterMeta.get(iDef.name) match {
+                            case None => ()
+                            case Some(x : String) if x == "stream"=>
+                                if (iDef.womType != WomSingleFileType) {
+                                    val msg =
+                                        s"""|Only files that are task inputs can be declared streaming.
+                                            |task = ${task.name}, input = ${iDef.name},
+                                            |womType = ${iDef.womType}
+                                            |""".stripMargin.replaceAll("\n", " ")
+                                    if (cOpt.fatalValidationWarnings)
+                                        throw new Exception(msg)
+                                    else
+                                        Utils.warning(verbose, msg)
+                                }
+                            case Some(other) => ()
+                        }
+                }
+
+            case other =>
+                throw new Exception(s"Unexpected object ${other}")
+        }
     }
 
     // Check the uniqueness of tasks, Workflows, and Types
@@ -158,12 +193,18 @@ object Top {
     }
 
     // Compile IR only
-    def applyOnlyIR(source: Path,
-                    cOpt: CompilerOptions) : IR.Bundle = {
+    def applyOnlyIR(source: Path) : IR.Bundle = {
         val (language, womBundle, allSources, subBundles) = ParseWomSourceFile.apply(source)
 
         // Check that each workflow/task appears just one
         val everythingBundle : WomBundle = mergeIntoOneBundle(womBundle, subBundles)
+
+        // validate
+        everythingBundle.allCallables.foreach{ case (_, c) => validate(c) }
+        everythingBundle.primaryCallable match {
+            case None => ()
+            case Some(x) => validate(x)
+        }
 
         // Compile the WDL workflow into an Intermediate
         // Representation (IR)
@@ -193,9 +234,8 @@ object Top {
     def apply(source: Path,
               folder: String,
               dxProject: DXProject,
-              runtimePathConfig: DxPathConfig,
-              cOpt: CompilerOptions) : Option[String] = {
-        val bundle: IR.Bundle = applyOnlyIR(source, cOpt)
+              runtimePathConfig: DxPathConfig) : Option[String] = {
+        val bundle: IR.Bundle = applyOnlyIR(source)
 
         // Up to this point, compilation does not require
         // the dx:project. This allows unit testing without
@@ -203,7 +243,7 @@ object Top {
         // pass the dx:project is required to establish
         // (1) the instance price list and database
         // (2) the output location of applets and workflows
-        val cResults = compileNative(bundle, folder, dxProject, runtimePathConfig, cOpt)
+        val cResults = compileNative(bundle, folder, dxProject, runtimePathConfig)
         val execIds = cResults.primaryCallable match {
             case None =>
                 cResults.execDict.map{ case (_, dxExec) => dxExec.getId }.mkString(",")

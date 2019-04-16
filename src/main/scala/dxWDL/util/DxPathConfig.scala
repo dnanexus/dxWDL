@@ -44,6 +44,9 @@ case class DxPathConfig(
     // file where the docker container name is stored.
     dockerCid : Path,
 
+    // bash commands for streaming files with 'dx cat' are located here
+    setupStreams : Path,
+
     // file for storing the state between prolog and epilog of the task runner
     runnerTaskEnv: Path,
     verbose: Boolean) {
@@ -70,6 +73,7 @@ object DxPathConfig {
         val stderr = metaDir.resolve("stderr")
         val script = metaDir.resolve("script")
         val dockerSubmitScript = metaDir.resolve("docker.submit")
+        val setupStreams = metaDir.resolve("setup_streams")
         val rcPath = metaDir.resolve("rc")
         val dockerCid = metaDir.resolve("dockerCid")
         val runnerTaskEnv = metaDir.resolve("taskEnv.json")
@@ -85,6 +89,7 @@ object DxPathConfig {
                      script,
                      rcPath,
                      dockerCid,
+                     setupStreams,
                      runnerTaskEnv,
                      verbose)
     }

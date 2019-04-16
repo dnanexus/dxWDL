@@ -407,17 +407,17 @@ object Main extends App {
 
         try {
             val cOpt = compilerOptions(options)
-
+            val top = compiler.Top(cOpt)
             cOpt.compileMode match {
                 case CompilerFlag.IR =>
-                    val ir: compiler.IR.Bundle = compiler.Top.applyOnlyIR(sourceFile, cOpt)
+                    val ir: compiler.IR.Bundle = top.applyOnlyIR(sourceFile)
                     return SuccessfulTerminationIR(ir)
 
                 case CompilerFlag.All
                        | CompilerFlag.NativeWithoutRuntimeAsset =>
                     val (dxProject, folder) = pathOptions(options, cOpt.verbose)
                     val dxPathConfig = DxPathConfig.apply(baseDNAxDir, cOpt.verbose.on)
-                    val retval = compiler.Top.apply(sourceFile, folder, dxProject, dxPathConfig, cOpt)
+                    val retval = top.apply(sourceFile, folder, dxProject, dxPathConfig)
                     val desc = retval.getOrElse("")
                     return SuccessfulTermination(desc)
             }

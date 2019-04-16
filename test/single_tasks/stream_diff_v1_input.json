@@ -1,0 +1,4 @@
+{
+  "stream_diff_v1.a": "dx://dxWDL_playground:/test_data/fileB",
+  "stream_diff_v1.b": "dx://dxWDL_playground:/test_data/fileC"
+}
