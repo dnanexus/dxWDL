@@ -217,7 +217,20 @@ class GenerateIRTest extends FlatSpec with Matchers {
         }
     }
 
-    it should "handle streaming files" taggedAs(EdgeTest) in {
+    private def getTaskByName(name: String,
+                              bundle: IR.Bundle) : CallableTaskDefinition = {
+        val applet = bundle.allCallables(name) match {
+            case a : IR.Applet => a
+            case _ => throw new Exception(s"${name} is not an applet")
+        }
+        val task: CallableTaskDefinition = applet.kind match {
+            case IR.AppletKindTask(x) => x
+            case _ => throw new Exception(s"${name} is not a task")
+        }
+        task
+    }
+
+    it should "handle streaming files" in {
         val path = pathFromBasename("compiler", "streaming_files.wdl")
         val retval = Main.compile(
             path.toString :: cFlags
@@ -228,28 +241,16 @@ class GenerateIRTest extends FlatSpec with Matchers {
             case _ => throw new Exception("sanity")
         }
 
-        def getTaskByName(name: String) : CallableTaskDefinition = {
-            val applet = bundle.allCallables(name) match {
-                case a : IR.Applet => a
-                case _ => throw new Exception(s"${name} is not an applet")
-            }
-            val task: CallableTaskDefinition = applet.kind match {
-                case IR.AppletKindTask(x) => x
-                case _ => throw new Exception(s"${name} is not a task")
-            }
-            task
-        }
-
-        val cgrepTask = getTaskByName("cgrep")
+        val cgrepTask = getTaskByName("cgrep", bundle)
         cgrepTask.parameterMeta shouldBe (Map("in_file" -> "stream"))
         val iDef = cgrepTask.inputs.find(_.name == "in_file").get
         iDef.parameterMeta shouldBe (Some(MetaValueElement.MetaValueElementString("stream")))
 
-        val diffTask = getTaskByName("diff")
+        val diffTask = getTaskByName("diff", bundle)
         diffTask.parameterMeta shouldBe (Map("a" -> "stream", "b" -> "stream"))
     }
 
-    it should "streaming on non files I" taggedAs(EdgeTest) in {
+    it should "emit warning for streaming on non files I" in {
         val path = pathFromBasename("compiler", "streaming_files_error1.wdl")
         val retval = Main.compile(
             path.toString :: cFlags
@@ -260,7 +261,7 @@ class GenerateIRTest extends FlatSpec with Matchers {
         }
     }
 
-    it should "streaming on non files II" taggedAs(EdgeTest) in {
+    it should "emit warning for streaming on non files II" in {
         val path = pathFromBasename("compiler", "streaming_files_error2.wdl")
         val retval = Main.compile(
             path.toString :: cFlags
@@ -269,5 +270,23 @@ class GenerateIRTest extends FlatSpec with Matchers {
             case Main.UnsuccessfulTermination(errMsg) =>
                 errMsg should include ("Only files that are task inputs can be declared streaming")
         }
+    }
+
+    it should "recognize the streaming annotation for wdl draft2" taggedAs(EdgeTest) in {
+        val path = pathFromBasename("draft2", "streaming.wdl")
+        val retval = Main.compile(
+            path.toString :: cFlags
+        )
+        retval shouldBe a [Main.SuccessfulTerminationIR]
+        val bundle = retval match {
+            case Main.SuccessfulTerminationIR(ir) => ir
+            case _ => throw new Exception("sanity")
+        }
+        val diffTask = getTaskByName("diff", bundle)
+        diffTask.parameterMeta shouldBe (Map("a" -> "stream", "b" -> "stream"))
+
+        // This doesn't work on draft2
+        //val iDef = diffTask.inputs.find(_.name == "a").get
+        //iDef.parameterMeta shouldBe (Some(MetaValueElement.MetaValueElementString("stream")))
     }
 }

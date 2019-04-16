@@ -120,9 +120,10 @@ case class Top(cOpt: CompilerOptions) {
             case task: CallableTaskDefinition =>
                 task.inputs.foreach{
                     case iDef : Callable.InputDefinition =>
-                        iDef.parameterMeta match {
+                        //iDef.parameterMeta --- this does not work on draft2
+                        task.parameterMeta.get(iDef.name) match {
                             case None => ()
-                            case Some(MetaValueElement.MetaValueElementString(x)) if x == "stream"=>
+                            case Some(x : String) if x == "stream"=>
                                 if (iDef.womType != WomSingleFileType) {
                                     val msg =
                                         s"""|Only files that are task inputs can be declared streaming.

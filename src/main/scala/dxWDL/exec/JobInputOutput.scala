@@ -6,7 +6,6 @@ import common.validation.ErrorOr.ErrorOr
 import java.nio.file.{Files, Path, Paths}
 import spray.json._
 import wom.callable.Callable._
-import wom.callable.MetaValueElement._
 import wom.expression.WomExpression
 import wom.types._
 import wom.values._
@@ -469,11 +468,14 @@ case class JobInputOutput(dxIoFunctions : DxIoFunctions,
 
 
     // Figure out which files need to be streamed
-    private def areStreaming(inputs: Map[InputDefinition, WomValue]) : Set[Furl] = {
+    private def areStreaming(parameterMeta: Map[String, String],
+                             inputs: Map[InputDefinition, WomValue]) : Set[Furl] = {
         inputs.map{
             case (iDef, womValue) =>
-                iDef.parameterMeta match {
-                    case (Some(MetaValueElementString("stream"))) =>
+                // This is better "iDef.parameterMeta", but it does not
+                // work on draft2.
+                parameterMeta.get(iDef.name) match {
+                    case (Some("stream")) =>
                         findFiles(womValue)
                     case _ =>
                         Vector.empty
@@ -492,12 +494,13 @@ case class JobInputOutput(dxIoFunctions : DxIoFunctions,
     // Notes:
     // A file may be referenced more than once, we want to download it
     // just once.
-    def localizeFiles(inputs: Map[InputDefinition, WomValue],
+    def localizeFiles(parameterMeta: Map[String, String],
+                      inputs: Map[InputDefinition, WomValue],
                       inputsDir: Path) : (Map[InputDefinition, WomValue],
                                           Map[Furl, Path],
                                           Vector[String]) = {
         val fileURLs : Vector[Furl] = inputs.values.map(findFiles).flatten.toVector
-        val streamingFiles : Set[Furl] = areStreaming(inputs)
+        val streamingFiles : Set[Furl] = areStreaming(parameterMeta, inputs)
         Utils.appletLog(verbose, s"streaming files = ${streamingFiles}")
 
         // remove duplicates; we want to download each file just once

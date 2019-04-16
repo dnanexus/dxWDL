@@ -4,14 +4,13 @@ dxWDL takes a bioinformatics pipeline written in the
 [Workflow Description Language (WDL)](http://www.openwdl.org/)
 and compiles it to an equivalent workflow on the DNAnexus platform.
 It provides a reasonably complete set of WDL features.
-WDL draft-2 is supported, with a few exceptions:
-* Expressions in the output section are not allowed
+WDL draft-2, and version 1.0 are supported, with a few exceptions:
 * Calls with missing arguments have limited support
+* `struct` is not supported
+* Nested scatters are not supported
 
-# Ongoing
-Work has started on supporting WDL version 1.0 using the WOM scala library,
-that is part of [Cromwell](https://github.com/broadinstitute/cromwell). A high level
-list of changes between draft-2 and version 1.0 is provided [here](doc/WdlVersionChanges.md).
+A high level list of changes between draft-2 and version 1.0 is
+provided [here](doc/WdlVersionChanges.md).
 
 ## Setup
 Prerequisites: DNAnexus platform account, dx-toolkit, java 8+, python 2.7.

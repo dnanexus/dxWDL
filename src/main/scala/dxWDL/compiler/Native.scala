@@ -217,8 +217,9 @@ case class Native(dxWDLrtId: Option[String],
             |    # We 'source' the sub-script here, because we
             |    # need to wait for the pids. This can only be done
             |    # for child processes (not grand-children).
-            |    if [[ -e $${HOME}/${dxPathConfig.setupStreams} ]]; then
-            |       source $${HOME}/${dxPathConfig.setupStreams} > $${HOME}/meta/background_pids.txt
+            |    if [[ -e ${dxPathConfig.setupStreams} ]]; then
+            |       cat ${dxPathConfig.setupStreams}
+            |       source ${dxPathConfig.setupStreams} > $${HOME}/meta/background_pids.txt
             |
             |       # reads the file line by line, and convert into a bash array
             |       mapfile -t background_pids < $${HOME}/meta/background_pids.txt
@@ -237,6 +238,34 @@ case class Native(dxWDLrtId: Option[String],
             |    else
             |        /bin/bash ${dxPathConfig.script}
             |    fi
+            |
+            |    # This section deals with streaming files.
+            |    #
+            |    # We cannot wait for all background processes to complete,
+            |    # because the worker process may not read one of the fifo streams.
+            |    # We want to make sure there were no abnormal terminations.
+            |    #
+            |    # Assumptions
+            |    #  1) 'dx cat' returns zero status when a user reads only the beginning
+            |    #  of a file
+            |    for pid in $${background_pids[@]}; do
+            |        p_status=0
+            |        p_status=`ps --pid $$pid --no-headers | wc -l`  || p_status=0
+            |
+            |        if [[ $$p_status == 0 ]]; then
+            |            # the process is already dead, check correct exit status
+            |            echo "wait $$pid"
+            |            rc=0
+            |            wait $$pid || rc=$$?
+            |            if [[ $$rc != 0 ]]; then
+            |                echo "Background download process $$pid failed"
+            |                exit $$rc
+            |            fi
+            |        else
+            |            echo "Warning: background download process $$pid is still running."
+            |            echo "Perhaps the worker process did not read it."
+            |        fi
+            |    done
             |
             |    #  check return code of the script
             |    rc=`cat ${dxPathConfig.rcPath}`

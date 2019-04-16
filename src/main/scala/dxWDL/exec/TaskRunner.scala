@@ -370,7 +370,7 @@ case class TaskRunner(task: CallableTaskDefinition,
         // Note: this may be overly conservative,
         // because some of the files may not actually be accessed.
         val (localizedInputs, dxUrl2path, bashSnippetVec) =
-            jobInputOutput.localizeFiles(taskInputs, dxPathConfig.inputFilesDir)
+            jobInputOutput.localizeFiles(task.parameterMeta, taskInputs, dxPathConfig.inputFilesDir)
 
         // deal with files that need streaming
         if (bashSnippetVec.size > 0) {
