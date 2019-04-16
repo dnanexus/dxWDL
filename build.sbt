@@ -57,28 +57,39 @@ logLevel in assembly := Level.Info
 assemblyOutputPath in assembly := file("applet_resources/resources/dxWDL.jar")
 assemblyMergeStrategy in assembly := customMergeStrategy.value
 
-val cromwellV = "35-fb4e1ec-SNAP"
+val cromwellV = "39"
 
 libraryDependencies ++= Seq(
     "org.broadinstitute" %% "cromwell-common" % cromwellV,
     "org.broadinstitute" %% "cromwell-core" % cromwellV,
     "org.broadinstitute" %% "cromwell-wom" % cromwellV,
     "org.broadinstitute" %% "cwl-v1-0" % cromwellV,
-    "org.broadinstitute" %% "language-factory-core" % cromwellV,
     "org.broadinstitute" %% "wdl-draft2" % cromwellV,
     "org.broadinstitute" %% "wdl-draft3" % cromwellV,
-    "org.broadinstitute" %% "wdl-biscayne" % cromwellV,
+//    "org.broadinstitute" %% "wdl-biscayne" % cromwellV,
 
-    // "cromwell.languages.util"
     "io.spray" %% "spray-json" % "1.3.2",
     "net.jcazevedo" %% "moultingyaml" % "0.4.0",
     "com.typesafe" % "config" % "1.3.1",
 
     //---------- Test libraries -------------------//
     "org.scalactic" %% "scalactic" % "3.0.1",
-    "org.scalatest" %% "scalatest" % "3.0.1" % "test"
+    "org.scalatest" %% "scalatest" % "3.0.1" % "test",
 )
 
 // If an exception is thrown during tests, show the full
-// stack trace
-//testOptions in Test += Tests.Argument("-oF")
+// stack trace, by adding the "-oF" option to the list.
+//
+
+// exclude the native tests, they are slow.
+// to do this from the command line:
+// sbt testOnly -- -l native
+//
+// comment out this line in order to allow native
+// tests
+Test / testOptions += Tests.Argument("-l", "native")
+
+Test / parallelExecution := false
+
+// comment out this line to enable tests in assembly
+//test in assembly := {}

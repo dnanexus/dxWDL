@@ -1,7 +1,10 @@
+version 1.0
+
 # Specify the disk space
 task DiskSpaceSpec {
-  Int disk_req_gb
-
+  input {
+    Int disk_req_gb
+  }
   command <<<
     lines=$(df -t btrfs | grep dev)
     size_kb=$(echo $lines | cut -d ' ' -f 2)
@@ -22,9 +25,10 @@ task DiskSpaceSpec {
 }
 
 task DiskSpaceTaskDeclarations {
-    Int dummy_arg
-    File fruits
-
+    input {
+        Int dummy_arg
+        File fruits
+    }
     # use provided disk number or dynamically size on our own,
     Int disk_req_gb = ceil(size(fruits, "GB")) + 50
 
@@ -49,8 +53,9 @@ task DiskSpaceTaskDeclarations {
 
 
 task MemorySpec {
-  Int memory_req_gb
-
+  input {
+     Int memory_req_gb
+  }
   command <<<
     line=$(cat /proc/meminfo | grep MemTotal)
     size_kb=$(echo $line | cut -d ' ' -f 2)
@@ -70,8 +75,9 @@ task MemorySpec {
 }
 
 task NumCoresSpec {
-  Int num_cores_req
-
+  input {
+     Int num_cores_req
+  }
   command {
     num_cores=$(grep -c ^processor /proc/cpuinfo)
     if [[ $num_cores -ge $num_cores_req ]]; then
@@ -89,8 +95,9 @@ task NumCoresSpec {
 }
 
 task RuntimeDockerChoice {
-  String imageName
-
+  input {
+    String imageName
+  }
   command {
     python <<CODE
     import os
@@ -108,7 +115,9 @@ task RuntimeDockerChoice {
 }
 
 task RuntimeDockerChoice2 {
-  String imageName
+  input {
+    String imageName
+  }
 
   command {
     python <<CODE
@@ -127,6 +136,7 @@ task RuntimeDockerChoice2 {
 }
 
 task Shortcut {
+    input {}
     command {
         line=$(cat /proc/meminfo | grep MemTotal)
         size_kb=$(echo $line | cut -d ' ' -f 2)
@@ -145,8 +155,10 @@ task Shortcut {
 
 
 workflow instance_types {
-    Int i
-    File fruits
+    input {
+        Int i
+        File fruits
+    }
 
     ### Disk space tests
     call DiskSpaceSpec { input: disk_req_gb=90 }

@@ -1,3 +1,5 @@
+version 1.0
+
 # Check that native docker works
 #
 task broad_genomics {

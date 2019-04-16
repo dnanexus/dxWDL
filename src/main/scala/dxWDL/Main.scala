@@ -2,38 +2,49 @@ package dxWDL
 
 import com.dnanexus.{DXProject}
 import com.typesafe.config._
-import dxWDL.compiler.IR
 import java.nio.file.{Path, Paths}
 import scala.collection.mutable.HashMap
 import spray.json._
-import spray.json.JsString
-import wdl.draft2.model.{WdlNamespace, WdlTask, WdlNamespaceWithWorkflow}
 
+import dxWDL.util._
 
 object Main extends App {
     sealed trait Termination
     case class SuccessfulTermination(output: String) extends Termination
-    case class SuccessfulTerminationIR(ir: IR.Namespace) extends Termination
+    case class SuccessfulTerminationIR(bundle: dxWDL.compiler.IR.Bundle) extends Termination
     case class UnsuccessfulTermination(output: String) extends Termination
     case class BadUsageTermination(info: String) extends Termination
 
     type OptionsMap = Map[String, List[String]]
 
     object Actions extends Enumeration {
-        val Compile, Config, DXNI, Internal, Version, Wom  = Value
+        val Compile, Config, DXNI, Internal, Version  = Value
     }
     object InternalOp extends Enumeration {
         val Collect,
+            WfOutputs, WfInputs, WorkflowOutputReorg,
             WfFragment,
-            TaskCheckInstanceType, TaskEpilog, TaskProlog, TaskRelaunch,
-            WorkflowOutputReorg = Value
+            TaskCheckInstanceType, TaskEpilog, TaskProlog, TaskRelaunch = Value
     }
 
     case class DxniOptions(apps: Boolean,
                            force: Boolean,
                            outputFile: Option[Path],
                            recursive: Boolean,
+                           language: Language.Value,
                            verbose: Verbose)
+
+    // This directory exists only at runtime in the cloud. Beware of using
+    // it in code paths that run at compile time.
+    private lazy val baseDNAxDir : Path = Paths.get("/home/dnanexus")
+
+    // Setup the standard paths used for applets. These are used at
+    // runtime, not at compile time. On the cloud instance running the
+    // job, the user is "dnanexus", and the home directory is
+    // "/home/dnanexus".
+    private def buildRuntimePathConfig(verbose: Boolean) : DxPathConfig = {
+        DxPathConfig.apply(baseDNAxDir, verbose)
+    }
 
     private def normKey(s: String) : String= {
         s.replaceAll("_", "").toUpperCase
@@ -64,7 +75,7 @@ object Main extends App {
 
     // parse extra command line arguments
     def parseCmdlineOptions(arglist: List[String]) : OptionsMap = {
-        def keywordValueIsList = Set("inputs", "imports", "verbose")
+        def keywordValueIsList = Set("inputs", "imports", "verboseKey")
         def normKeyword(word: String) : String = {
             // normalize a keyword, remove leading dashes
             // letters to lowercase.
@@ -104,9 +115,6 @@ object Main extends App {
                     case "destination" =>
                         checkNumberOfArguments(keyword, 1, subargs)
                         (keyword, subargs.head)
-                    case "destination_unicode" =>
-                        checkNumberOfArguments(keyword, 1, subargs)
-                        (keyword, subargs.head)
                     case "extras" =>
                         checkNumberOfArguments(keyword, 1, subargs)
                         (keyword, subargs.head)
@@ -128,13 +136,13 @@ object Main extends App {
                     case ("imports"|"p") =>
                         checkNumberOfArguments(keyword, 1, subargs)
                         (keyword, subargs.head)
+                    case "language" =>
+                        checkNumberOfArguments(keyword, 1, subargs)
+                        (keyword, subargs.head)
                     case "leaveWorkflowsOpen" =>
                         checkNumberOfArguments(keyword, 0, subargs)
                         (keyword, "")
                     case "locked" =>
-                        checkNumberOfArguments(keyword, 0, subargs)
-                        (keyword, "")
-                    case "useDxDocker" =>
                         checkNumberOfArguments(keyword, 0, subargs)
                         (keyword, "")
                     case ("o"|"output"|"outputFile") =>
@@ -159,11 +167,11 @@ object Main extends App {
                         checkNumberOfArguments(keyword, 1, subargs)
                         (keyword, subargs.head)
                     case "verbose" =>
-                        val retval =
-                            if (subargs.isEmpty) ""
-                            else if (subargs.length == 1) subargs.head
-                            else throw new Exception("Too many arguments to verbose flag")
-                        (keyword, retval)
+                        checkNumberOfArguments(keyword, 0, subargs)
+                        (keyword, "")
+                    case "verboseKey" =>
+                        checkNumberOfArguments(keyword, 1, subargs)
+                        (keyword, subargs.head)
                     case _ =>
                         throw new IllegalArgumentException(s"Unregonized keyword ${keyword}")
                 }
@@ -221,15 +229,9 @@ object Main extends App {
             case Some(List(p)) => Some(p)
             case _ => throw new Exception("sanity")
         }
-        var destinationOpt : Option[String] = options.get("destination") match {
+        val destinationOpt : Option[String] = options.get("destination") match {
             case None => None
             case Some(List(d)) => Some(d)
-            case Some(other) => throw new Exception(s"Invalid path syntex <${other}>")
-        }
-        options.get("destination_unicode") match {
-            case None => None
-            case Some(List(d)) =>
-                destinationOpt = Some(Utils.unicodeFromHex(d))
             case Some(other) => throw new Exception(s"Invalid path syntex <${other}>")
         }
 
@@ -295,7 +297,7 @@ object Main extends App {
     // the compiler flags
     private def compilerOptions(options: OptionsMap) : CompilerOptions = {
         // First: get the verbosity mode. It is used almost everywhere.
-        val verboseKeys: Set[String] = options.get("verbose") match {
+        val verboseKeys: Set[String] = options.get("verboseKey") match {
             case None => Set.empty
             case Some(modulesToTrace) => modulesToTrace.toSet
         }
@@ -304,8 +306,9 @@ object Main extends App {
                               verboseKeys)
 
         val compileMode: CompilerFlag.Value = options.get("compileMode") match {
-            case None => CompilerFlag.Default
-            case Some(List(x)) if (x.toLowerCase == "ir") => CompilerFlag.IR
+            case None => CompilerFlag.All
+            case Some(List(x)) if (x.toLowerCase == "IR".toLowerCase) => CompilerFlag.IR
+            case Some(List(x)) if (x.toLowerCase == "NativeWithoutRuntimeAsset".toLowerCase) => CompilerFlag.NativeWithoutRuntimeAsset
             case Some(other) => throw new Exception(s"unrecognized compiler flag ${other}")
         }
         val defaults: Option[Path] = options.get("defaults") match {
@@ -343,7 +346,6 @@ object Main extends App {
                         inputs,
                         options contains "leaveWorkflowsOpen",
                         options contains "locked",
-                        options contains "useDxDocker",
                         options contains "projectWideReuse",
                         options contains "reorg",
                         runtimeDebugLevel,
@@ -360,6 +362,24 @@ object Main extends App {
             case None => Set.empty
             case Some(modulesToTrace) => modulesToTrace.toSet
         }
+        val language = options.get("language") match {
+            case None => Language.WDLvDraft2
+            case Some(List(buf)) =>
+                val bufNorm = buf.toLowerCase
+                    .replaceAll("\\.", "")
+                    .replaceAll("_", "")
+                    .replaceAll("-", "")
+                if (!bufNorm.startsWith("wdl"))
+                    throw new Exception(s"unknown language ${bufNorm}. Only WDL is supported")
+                val suffix = bufNorm.substring("wdl".length)
+                if (suffix contains "draft2")
+                    Language.WDLvDraft2
+                else if (suffix contains ("10"))
+                    Language.WDLv1_0
+                else
+                    throw new Exception(s"unknown language ${bufNorm}. Supported: WDL_draft2, WDL_v1")
+            case _ => throw new Exception("only one language can be specified")
+        }
         val verbose = Verbose(options contains "verbose",
                               options contains "quiet",
                               verboseKeys)
@@ -367,11 +387,14 @@ object Main extends App {
                     options contains "force",
                     outputFile,
                     options contains "recursive",
+                    language,
                     verbose)
     }
 
     def compile(args: Seq[String]): Termination = {
-        val wdlSourceFile = args.head
+        if (args.isEmpty)
+            return BadUsageTermination("WDL file to compile is missing")
+        val sourceFile = Paths.get(args.head)
         val options =
             try {
                 parseCmdlineOptions(args.tail.toList)
@@ -381,16 +404,20 @@ object Main extends App {
             }
         if (options contains "help")
             return BadUsageTermination("")
+
         try {
             val cOpt = compilerOptions(options)
+            val top = compiler.Top(cOpt)
             cOpt.compileMode match {
                 case CompilerFlag.IR =>
-                    val ir: IR.Namespace = compiler.Top.applyOnlyIR(wdlSourceFile, cOpt)
+                    val ir: compiler.IR.Bundle = top.applyOnlyIR(sourceFile)
                     return SuccessfulTerminationIR(ir)
 
-                case CompilerFlag.Default =>
+                case CompilerFlag.All
+                       | CompilerFlag.NativeWithoutRuntimeAsset =>
                     val (dxProject, folder) = pathOptions(options, cOpt.verbose)
-                    val retval = compiler.Top.apply(wdlSourceFile, folder, dxProject, cOpt)
+                    val dxPathConfig = DxPathConfig.apply(baseDNAxDir, cOpt.verbose.on)
+                    val retval = top.apply(sourceFile, folder, dxProject, dxPathConfig)
                     val desc = retval.getOrElse("")
                     return SuccessfulTermination(desc)
             }
@@ -404,9 +431,9 @@ object Main extends App {
         }
     }
 
-    def dxniApplets(options: OptionsMap,
-                    dOpt: DxniOptions,
-                    outputFile: Path): Termination = {
+    private def dxniApplets(options: OptionsMap,
+                            dOpt: DxniOptions,
+                            outputFile: Path): Termination = {
         val (dxProject, folder) =
             try {
                 pathOptions(options, dOpt.verbose)
@@ -426,7 +453,10 @@ object Main extends App {
         }
 
         try {
-            compiler.DxNI.apply(dxProject, folder, outputFile, dOpt.recursive, dOpt.force, dOpt.verbose)
+            compiler.DxNI.apply(dxProject, folder, outputFile,
+                                dOpt.recursive, dOpt.force,
+                                dOpt.language,
+                                dOpt.verbose)
             SuccessfulTermination("")
         } catch {
             case e : Throwable =>
@@ -434,11 +464,11 @@ object Main extends App {
         }
     }
 
-    def dxniApps(options: OptionsMap,
-                 dOpt: DxniOptions,
-                 outputFile: Path): Termination = {
+    private def dxniApps(options: OptionsMap,
+                         dOpt: DxniOptions,
+                         outputFile: Path): Termination = {
         try {
-            compiler.DxNI.applyApps(outputFile, dOpt.force, dOpt.verbose)
+            compiler.DxNI.applyApps(outputFile, dOpt.force, dOpt.language, dOpt.verbose)
             SuccessfulTermination("")
         } catch {
             case e : Throwable =>
@@ -446,7 +476,7 @@ object Main extends App {
         }
     }
 
-    def dxni(args: Seq[String]): Termination = {
+    private def dxni(args: Seq[String]): Termination = {
         try {
             val options = parseCmdlineOptions(args.toList)
             if (options contains "help")
@@ -468,139 +498,170 @@ object Main extends App {
         }
     }
 
-    def wom(args: Seq[String]): Termination = {
-        val wdlSourceFile = args.head
-        val options =
-            try {
-                parseCmdlineOptions(args.tail.toList)
-            } catch {
-                case e : Throwable =>
-                    return BadUsageTermination(Utils.exceptionToString(e))
-            }
-        if (options contains "help")
-            return BadUsageTermination("")
-
-        val bundle = Wom.getBundle(wdlSourceFile)
-        SuccessfulTermination(bundle.toString)
-    }
-
-
-    // Extract the only task from a namespace
-    def taskOfNamespace(ns: WdlNamespace) : WdlTask = {
-        val numTasks = ns.tasks.length
-        if (numTasks != 1)
-            throw new Exception(s"WDL file contains ${numTasks} tasks, instead of 1")
-        ns.tasks.head
-    }
-
-    private def isTaskOp(op: InternalOp.Value) : Boolean = {
-        op match {
-            case InternalOp.TaskCheckInstanceType |
-                    InternalOp.TaskEpilog |
-                    InternalOp.TaskProlog |
-                    InternalOp.TaskRelaunch => true
-            case _ => false
-        }
-    }
-
-    private def appletAction(op: InternalOp.Value,
-                             wdlDefPath: Path,
-                             jobInputPath: Path,
-                             jobOutputPath: Path,
-                             jobInfoPath : Path,
-                             rtDebugLvl: Int): Termination = {
-        val ns = WdlNamespace.loadUsingPath(wdlDefPath, None, None).get
-        val cef = new CompilerErrorFormatter(wdlDefPath.toString, ns.terminalMap)
-
-        // Figure out input types by reading the dnanexus-executable.json file
-        val inputSpec = Utils.parseInputSpec(Utils.readFileContent(jobInfoPath))
-
-        // Parse the inputs, do not download files from the platform,
-        // they will be passed as links.
+    private def taskAction(op: InternalOp.Value,
+                           jobInputPath: Path,
+                           jobOutputPath: Path,
+                           dxPathConfig : DxPathConfig,
+                           dxIoFunctions : DxIoFunctions,
+                           rtDebugLvl: Int): Termination = {
+        // Parse the inputs, convert to WOM values. Delay downloading files
+        // from the platform, we may not need to access them.
         val inputLines : String = Utils.readFileContent(jobInputPath)
-        val orgInputs = inputLines.parseJson
+        val originalInputs : JsValue = inputLines.parseJson
 
-        // Figure out the available instance types, and their prices,
-        // by reading the file
-        val dbRaw = Utils.readFileContent(Paths.get("/" + Utils.INSTANCE_TYPE_DB_FILENAME))
-        val instanceTypeDB =dbRaw.parseJson.convertTo[InstanceTypeDB]
+        // Create empty directories, preparing for downloads
+        dxPathConfig.createCleanDirs()
 
-        if (op == InternalOp.TaskCheckInstanceType) {
-            // special operation to check if this task is on the right instance type
-            val task = taskOfNamespace(ns)
-            val inputs = WdlVarLinks.loadJobInputsAsLinks(inputLines, inputSpec, Some(task))
-            val r = runner.Task(task, instanceTypeDB, cef, rtDebugLvl)
-            val correctInstanceType:Boolean = r.checkInstanceType(inputs)
-            SuccessfulTermination(correctInstanceType.toString)
-        } else {
-            val outputFields: Map[String, JsValue] =
-                if (isTaskOp(op)) {
-                    // Running tasks
-                    val task = taskOfNamespace(ns)
-                    val inputs = WdlVarLinks.loadJobInputsAsLinks(inputLines, inputSpec, Some(task))
-                    op match {
-                        case InternalOp.TaskEpilog =>
-                            val r = runner.Task(task, instanceTypeDB, cef, rtDebugLvl)
-                            r.epilog(inputs)
-                        case InternalOp.TaskProlog =>
-                            val r = runner.Task(task, instanceTypeDB, cef, rtDebugLvl)
-                            r.prolog(inputs)
-                        case InternalOp.TaskRelaunch =>
-                            val r = runner.Task(task, instanceTypeDB, cef, rtDebugLvl)
-                            r.relaunch(inputs)
-                    }
-                } else {
-                    val inputs = WdlVarLinks.loadJobInputsAsLinks(inputLines, inputSpec, None)
-                    val nswf = ns.asInstanceOf[WdlNamespaceWithWorkflow]
-                    op match {
-                        case InternalOp.Collect =>
-                            runner.WfFragment.apply(nswf,
-                                                    instanceTypeDB,
-                                                    inputs, orgInputs,
-                                                    RunnerWfFragmentMode.Collect, rtDebugLvl)
-                        case InternalOp.WfFragment =>
-                            runner.WfFragment.apply(nswf,
-                                                    instanceTypeDB,
-                                                    inputs, orgInputs,
-                                                    RunnerWfFragmentMode.Launch, rtDebugLvl)
-                        case InternalOp.WorkflowOutputReorg =>
-                            runner.WorkflowOutputReorg(true).apply(nswf, inputs)
-                    }
-                }
+        // setup the utility directories that the task-runner employs
+        val jobInputOutput = new exec.JobInputOutput(dxIoFunctions, rtDebugLvl)
+        val (taskSourceCode, instanceTypeDB) = jobInputOutput.loadMetaInfo(originalInputs)
+        val task = ParseWomSourceFile.parseWdlTask(taskSourceCode)
+        val inputs = jobInputOutput.loadInputs(originalInputs, task)
+        val taskRunner = exec.TaskRunner(task, taskSourceCode, instanceTypeDB,
+                                           dxPathConfig, dxIoFunctions, jobInputOutput,
+                                           rtDebugLvl)
 
-            // write outputs, ignore null values, these could occur for optional
-            // values that were not specified.
-            val json = JsObject(outputFields.filter{
-                                    case (_,jsValue) => jsValue != null && jsValue != JsNull
-                                })
-            val ast_pp = json.prettyPrint
-            Utils.writeFileContent(jobOutputPath, ast_pp)
-            System.err.println(s"Wrote outputs ${ast_pp}")
+        // Running tasks
+        op match {
+            case InternalOp.TaskCheckInstanceType =>
+                // special operation to check if this task is on the right instance type
+                val correctInstanceType:Boolean = taskRunner.checkInstanceType(inputs)
+                SuccessfulTermination(correctInstanceType.toString)
 
-            SuccessfulTermination(s"success ${op}")
+            case InternalOp.TaskProlog =>
+                val (localizedInputs, dxUrl2path) = taskRunner.prolog(inputs)
+                taskRunner.writeEnvToDisk(localizedInputs, dxUrl2path)
+                SuccessfulTermination(s"success ${op}")
+
+            case InternalOp.TaskEpilog =>
+                val (localizedInputs, dxUrl2path) = taskRunner.readEnvFromDisk()
+                val outputFields: Map[String, JsValue] = taskRunner.epilog(localizedInputs, dxUrl2path)
+
+                // write outputs, ignore null values, these could occur for optional
+                // values that were not specified.
+                val json = JsObject(outputFields.filter{
+                                        case (_,jsValue) => jsValue != null && jsValue != JsNull
+                                    })
+                val ast_pp = json.prettyPrint
+                Utils.writeFileContent(jobOutputPath, ast_pp)
+                SuccessfulTermination(s"success ${op}")
+
+            case InternalOp.TaskRelaunch =>
+                val outputFields: Map[String, JsValue] = taskRunner.relaunch(inputs, originalInputs)
+                val json = JsObject(outputFields.filter{
+                                        case (_,jsValue) => jsValue != null && jsValue != JsNull
+                                    })
+                val ast_pp = json.prettyPrint
+                Utils.writeFileContent(jobOutputPath, ast_pp)
+                SuccessfulTermination(s"success ${op}")
+
+            case _ =>
+                UnsuccessfulTermination(s"Illegal task operation ${op}")
         }
+    }
+
+    // Execute a part of a workflow
+    private def workflowFragAction(op: InternalOp.Value,
+                                   jobInputPath: Path,
+                                   jobOutputPath: Path,
+                                   dxPathConfig : DxPathConfig,
+                                   dxIoFunctions : DxIoFunctions,
+                                   rtDebugLvl: Int): Termination = {
+        val dxProject = Utils.dxEnv.getProjectContext()
+
+        // Parse the inputs, convert to WOM values. Delay downloading files
+        // from the platform, we may not need to access them.
+        val inputLines : String = Utils.readFileContent(jobInputPath)
+        val inputsRaw : JsValue = inputLines.parseJson
+
+        // setup the utility directories that the frag-runner employs
+        val fragInputOutput = new exec.WfFragInputOutput(dxIoFunctions, dxProject, rtDebugLvl)
+
+        // process the inputs
+        val meta = fragInputOutput.loadInputs(inputsRaw)
+        val wf = ParseWomSourceFile.parseWdlWorkflow(meta.wfSource)
+        val outputFields: Map[String, JsValue] =
+            op match {
+                case InternalOp.WfFragment =>
+                    val fragRunner = new exec.WfFragRunner(wf, meta.wfSource, meta.instanceTypeDB,
+                                                           meta.execLinkInfo,
+                                                           dxPathConfig, dxIoFunctions,
+                                                           inputsRaw,
+                                                           fragInputOutput,
+                                                           rtDebugLvl)
+                    fragRunner.apply(meta.blockPath, meta.env, RunnerWfFragmentMode.Launch)
+                case InternalOp.Collect =>
+                    val fragRunner = new exec.WfFragRunner(wf, meta.wfSource, meta.instanceTypeDB,
+                                                           meta.execLinkInfo,
+                                                           dxPathConfig, dxIoFunctions,
+                                                           inputsRaw,
+                                                           fragInputOutput,
+                                                           rtDebugLvl)
+                    fragRunner.apply(meta.blockPath, meta.env, RunnerWfFragmentMode.Collect)
+                case InternalOp.WfInputs =>
+                    val wfInputs = new exec.WfInputs(wf, meta.wfSource,rtDebugLvl)
+                    wfInputs.apply(meta.env)
+                case InternalOp.WfOutputs =>
+                    val wfOutputs = new exec.WfOutputs(wf, meta.wfSource,
+                                                       dxPathConfig, dxIoFunctions,
+                                                       rtDebugLvl)
+                    wfOutputs.apply(meta.env)
+                case InternalOp.WorkflowOutputReorg =>
+                    val wfReorg = new exec.WorkflowOutputReorg(wf, meta.wfSource, rtDebugLvl)
+                    val refDxFiles = fragInputOutput.findRefDxFiles(inputsRaw)
+                    wfReorg.apply(refDxFiles)
+                case _ =>
+                    throw new Exception(s"Illegal workflow fragment operation ${op}")
+            }
+
+        // write outputs, ignore null values, these could occur for optional
+        // values that were not specified.
+        val json = JsObject(outputFields)
+        val ast_pp = json.prettyPrint
+        Utils.writeFileContent(jobOutputPath, ast_pp)
+
+        SuccessfulTermination(s"success ${op}")
     }
 
     def internalOp(args : Seq[String]) : Termination = {
-        val op = InternalOp.values find (x => normKey(x.toString) == normKey(args.head))
-        op match {
+        val operation = InternalOp.values find (x => normKey(x.toString) == normKey(args.head))
+        operation match {
             case None =>
                 UnsuccessfulTermination(s"unknown internal action ${args.head}")
-            case Some(x) if (args.length == 4) =>
-                val wdlDefPath = Paths.get(args(1))
-                val homeDir = Paths.get(args(2))
-                val rtDebugLvl = parseRuntimeDebugLevel(args(3))
-                val (jobInputPath, jobOutputPath, jobErrorPath, jobInfoPath) =
+            case Some(op) if args.length == 3 =>
+                val homeDir = Paths.get(args(1))
+                val rtDebugLvl = parseRuntimeDebugLevel(args(2))
+                val (jobInputPath, jobOutputPath, jobErrorPath, _) =
                     Utils.jobFilesOfHomeDir(homeDir)
+                val dxPathConfig = buildRuntimePathConfig(rtDebugLvl >= 1)
+                val dxIoFunctions = DxIoFunctions(dxPathConfig, rtDebugLvl)
                 try {
-                    appletAction(x, wdlDefPath, jobInputPath, jobOutputPath, jobInfoPath, rtDebugLvl)
+                    op match {
+                        case InternalOp.Collect |
+                                InternalOp.WfFragment |
+                                InternalOp.WfInputs |
+                                InternalOp.WfOutputs |
+                                InternalOp.WorkflowOutputReorg =>
+                            workflowFragAction(op, jobInputPath, jobOutputPath,
+                                               dxPathConfig, dxIoFunctions, rtDebugLvl)
+                        case InternalOp.TaskCheckInstanceType|
+                                InternalOp.TaskEpilog|
+                                InternalOp.TaskProlog|
+                                InternalOp.TaskRelaunch =>
+                            taskAction(op, jobInputPath, jobOutputPath,
+                                       dxPathConfig, dxIoFunctions, rtDebugLvl)
+                    }
                 } catch {
                     case e : Throwable =>
                         writeJobError(jobErrorPath, e)
                         UnsuccessfulTermination(s"failure running ${op}")
                 }
             case Some(_) =>
-                BadUsageTermination(s"All applet actions take a WDL file, and a home directory (${args})")
+                BadUsageTermination(s"""|Bad arguments to internal operation
+                                        |  ${args}
+                                        |Usage:
+                                        |  java -jar dxWDL.jar internal <action> <home dir> <debug level>
+                                        |""".stripMargin)
         }
     }
 
@@ -616,7 +677,6 @@ object Main extends App {
                 case Actions.DXNI => dxni(args.tail)
                 case Actions.Internal => internalOp(args.tail)
                 case Actions.Version => SuccessfulTermination(Utils.getVersion())
-                case Actions.Wom => wom(args.tail)
             }
         }
     }
@@ -635,15 +695,10 @@ object Main extends App {
             |      -compileMode <string>  Compilation mode, a debugging flag
             |      -defaults <string>     File with Cromwell formatted default values (JSON)
             |      -destination <string>  Output path on the platform for workflow
-            |      -destination_unicode <string>  destination in unicode encoded as hexadecimal
             |      -extras <string>       JSON formatted file with extra options, for example
             |                             default runtime options for tasks.
             |      -inputs <string>       File with Cromwell formatted inputs
-            |      -leaveWorkflowsOpen    leave workflows and subworkflows open, do not close them.
-            |                             This allows modifying the workflows after the compiler is done.
-            |                             As a general rule, it is better to close workflows.
             |      -locked                Create a locked-down workflow
-            |      -useDxDocker           Use native docker instead of dx-docker
             |      -p | -imports <string> Directory to search for imported WDL files
             |      -projectWideReuse      Look for existing applets/workflows in the entire project
             |                             before generating new ones. The normal search scope is the
@@ -662,9 +717,7 @@ object Main extends App {
             |      -apps                  Search only for global apps.
             |      -o <string>            Destination file for WDL task definitions
             |      -r | recursive         Recursive search
-            |
-            |  wom <WDL file>
-            |    Compile into the WOM model (experimental)
+            |      -language <string>     Which language to use? (wdl_draft2, wdl_v1.0)
             |
             |Common options
             |    -destination             Full platform path (project:/folder)
@@ -672,7 +725,8 @@ object Main extends App {
             |    -folder <string>         Platform folder
             |    -project <string>        Platform project
             |    -quiet                   Do not print warnings or informational outputs
-            |    -verbose [flag]          Print detailed progress reports
+            |    -verbose                 Print detailed progress reports
+            |    -verboseKey [module]     Detailed information for a specific module
             |""".stripMargin
 
     val termination = dispatchCommand(args)

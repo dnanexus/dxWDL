@@ -1,11 +1,6 @@
 {
-  "optionals.inc_result": 107,
-  "optionals.mi2_result" : 17,
-  "optionals.mi3_result" : 34,
-  "optionals.ms1_result" : "french horn",
-  "optionals.ms2_result" : "flute",
-  "optionals.mul2_result" : 20,
-  "optionals.add2_result": [9, 10],
-  "optionals.add3_result": [34, 34],
-  "optionals.inc2_result": 108
+  "optionals.r_mi1": 13,
+  "optionals.r_mi2": 13,
+  "optionals.r_mi3": 13,
+  "optionals.r_mi4": 13
 }

@@ -1,5 +1,7 @@
+version 1.0
+
 # Save a docker image to a platform file.
-    # Run this image on a worker.
+# Run this image on a worker.
 
 task native_docker_file_image {
     command {

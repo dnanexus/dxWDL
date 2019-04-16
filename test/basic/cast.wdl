@@ -1,22 +1,36 @@
-import "library_math.wdl" as lib
-import "library_sys_call.wdl" as lib_file
+version 1.0
+
+task AddV1 {
+    input {
+        Int a
+        Int b
+    }
+    command {
+        echo $((${a} + ${b}))
+    }
+    output {
+        Int result = read_int(stdout())
+    }
+}
 
 task EmptyArray {
-     Array[Int] fooAr
-
-     command {
-     }
-     output {
-       Array[Int] result=fooAr
-     }
+    input {
+        Array[Int] fooAr
+    }
+    command {
+    }
+    output {
+        Array[Int] result=fooAr
+    }
 }
 
 
 task SumArray {
-    Array[Int] ints
-
+    input {
+        Array[Int] numbers
+    }
     command <<<
-        python -c "print(${sep="+" ints})"
+        python -c "print(~{sep=" + " numbers})"
     >>>
     output {
         Int result = read_int(stdout())
@@ -24,11 +38,12 @@ task SumArray {
 }
 
 task JoinMisc {
-    Boolean b
-    Int i
-    Float x
-    String s
-
+    input {
+        Boolean b
+        Int i
+        Float x
+        String s
+    }
     command {
     }
     output {
@@ -37,9 +52,11 @@ task JoinMisc {
 }
 
 workflow cast {
-    Int i
-    String s
-    File foo
+    input {
+        Int i
+        String s
+        File foo
+    }
     Array[Int] iArr = [i]
     Array[String] sArr = [s]
     Array[File] fooArr = [foo]
@@ -47,14 +64,10 @@ workflow cast {
     # Handling of empty arrays as input/output
     call EmptyArray { input: fooAr=[] }
 
-    call lib_file.FileIdent as FileIdent { input: aF = foo }
-    File foo2 = FileIdent.result
-    Array[File] fArr2 = [foo2]
+    call AddV1 as Add { input: a=i, b=i }
+    call SumArray {input: numbers=iArr }
 
-    call lib.Add as Add { input: a=i, b=i }
-    call SumArray {input: ints=iArr }
-
-    call SumArray as SumArray2 {input: ints=[i] }
+    call SumArray as SumArray2 {input: numbers=[i] }
 
     # Check various rarely used types (float, boolean)
     Boolean b = true

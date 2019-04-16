@@ -1,10 +1,9 @@
 {
-  "call_native.sum_var1_result" : 200,
-  "call_native.sum_var2_result" : 103,
-  "call_native.sum_var3_result" : 13,
-  "call_native.mk_list_all" : [3, 5],
-  "call_native.concat_c" : "octopus_zebra_fish",
-  "call_native.mk_list2_all" : [3, 3],
-  "call_native.sum_result" : [2,4,6],
-  "call_native.sum2_result" : [1,2,3]
+  "call_native_v1.sum_var1_result" : 200,
+  "call_native_v1.sum_var2_result" : 103,
+  "call_native_v1.sum_var3_result" : 13,
+  "call_native_v1.mk_list_all" : [3, 5],
+  "call_native_v1.concat_c" : "octopus_zebra_fish",
+  "call_native_v1.mk_list2_all" : [3, 3],
+  "call_native_v1.sum_result" : [2,4,6]
 }

@@ -4,185 +4,16 @@
 package dxWDL.compiler
 
 import com.dnanexus.{DXDataObject, DXProject, DXRecord, DXSearch}
-import dxWDL.{CompilerOptions, CompilationResults, DxPath, InstanceTypeDB, Utils, Verbose}
-import dxWDL.Utils.DX_WDL_ASSET
-import java.nio.file.{Files, Path, Paths}
-import java.io.{FileWriter, PrintWriter}
+import dxWDL.util._
+import dxWDL.util.Utils.DX_WDL_ASSET
+import java.nio.file.{Path, Paths}
 import scala.collection.JavaConverters._
-import scala.collection.mutable.HashMap
-import scala.io.Source
-import scala.util.{Failure, Success}
-import wdl.draft2.model.{WdlExpression, WdlNamespace, Draft2ImportResolver}
+import wom.callable._
+import wom.types._
+import wom.executable.WomBundle
 
-// Load files from the local filesystem
-case class TopFileResolver(localWdlSourceFiles: Map[String, Path],
-                           fileIndex: HashMap[String, String]) {
-    def make : Draft2ImportResolver = { fullName =>
-        localWdlSourceFiles.get(fullName) match {
-            case None =>
-                throw new Exception(s"Unable to find ${fullName}")
-            case Some(path) =>
-                val wdlCode = Utils.readFileContent(path)
-                fileIndex(path.toString) = wdlCode
-                wdlCode
-        }
-    }
-}
-
-// The [languages.wdl.draft2.WdlDraft2LanguageFactory] module has the implementation
-// of the Cromwell http resolver.
-//
-// The full path is
-//    CROMWELL/languageFactories/language-factory-core/src/main/scala/cromwell/languages
-//    CROMWELL/languageFactories/wdl-draft2/src/main/scala/languages/wdl/draft2/WdlDraft2LanguageFactory.scala
-
-// Download files from the web, and record the contents in a mapping.
-case class TopHttpResolver(fileIndex: HashMap[String, String]) {
-    def make : Draft2ImportResolver = { url =>
-        fileIndex.get(url) match {
-            case None =>
-                val html = Source.fromURL(url)
-                val wdlCode = html.mkString
-                fileIndex(url) = wdlCode
-                wdlCode
-            case Some(wdlCode) =>
-                // file has already been downloaded; we assume the contents
-                // has not changed
-                wdlCode
-        }
-    }
-}
-
-
-object Top {
-    private def prettyPrintIR(wdlSourceFile : Path,
-                              extraSuffix: Option[String],
-                              irc: IR.Namespace,
-                              verbose: Boolean) : Unit = {
-        val suffix = extraSuffix match {
-            case None => ".ir.yaml"
-            case Some(x) => x + ".ir.yaml"
-        }
-        val trgName: String = Utils.replaceFileSuffix(wdlSourceFile, suffix)
-        val trgPath = Utils.appCompileDirPath.resolve(trgName).toFile
-        val yo = IR.yaml(irc)
-        val humanReadable = IR.prettyPrint(yo)
-        val fos = new FileWriter(trgPath)
-        val pw = new PrintWriter(fos)
-        pw.print(humanReadable)
-        pw.flush()
-        pw.close()
-        Utils.trace(verbose, s"Wrote intermediate representation to ${trgPath.toString}")
-    }
-
-    private def findSourcesInImportDirs(wdlSourceFile: Path,
-                                        imports: List[Path],
-                                        verbose: Verbose) : Map[String, Path] = {
-        Utils.trace(verbose.on, s"WDL import directories:  ${imports.toVector}")
-
-        // Find all the WDL files under a directory.
-        def getListOfFiles(dir: Path) : Map[String, Path] = {
-            if (Files.exists(dir) && Files.isDirectory(dir)) {
-                val files: List[Path] =
-                    Files.list(dir).iterator().asScala
-                        .filter(Files.isRegularFile(_))
-                        .filter(_.toString.endsWith(".wdl"))
-                        .toList
-                files.map{ path =>  path.toFile.getName -> path}.toMap
-            } else {
-                Map.empty
-            }
-        }
-
-        // Add the directory where the source file is in to the
-        // search path
-        def buildDirList : List[Path] = {
-            val parent:Path = wdlSourceFile.getParent()
-            val sourceDir =
-                if (parent == null) {
-                    // source file has no parent directory, use the
-                    // current directory instead
-                    Paths.get(System.getProperty("user.dir"))
-                } else {
-                    parent
-                }
-            sourceDir :: imports
-        }
-
-        val allWdlSourceFiles: Map[String, Path] =
-            buildDirList.foldLeft(Map.empty[String,Path]) {
-                case (accu, d) =>
-                    accu ++ getListOfFiles(d)
-            }
-
-        //val wdlFileNames = "{" + allWdlSourceFiles.keys.mkString(", ") + "}"
-        //Utils.trace(verbose.on, s"Files in search path=${wdlFileNames}")
-        allWdlSourceFiles
-    }
-
-    private def compileNamespaceOpsTree(wdlSourceFile : Path,
-                                        cOpt: CompilerOptions) : NamespaceOps.Tree = {
-        val importedFiles = HashMap.empty[String, String]
-        val localWdlSourceFiles : Map[String, Path] =
-            findSourcesInImportDirs(wdlSourceFile, cOpt.importDirs, cOpt.verbose)
-        val fileResolver = new TopFileResolver(localWdlSourceFiles, importedFiles)
-        val httpResolver = new TopHttpResolver(importedFiles)
-        val ns =
-            WdlNamespace.loadUsingPath(wdlSourceFile,
-                                       None,
-                                       Some(List(fileResolver.make, httpResolver.make))) match {
-                case Success(ns) => ns
-                case Failure(f) =>
-                    System.err.println("Error loading WDL source code")
-                    throw f
-            }
-
-        // Make sure the namespace doesn't use names or substrings
-        // that will give us problems.
-        Validate.apply(ns, cOpt.fatalValidationWarnings, cOpt.verbose)
-
-        Utils.trace(cOpt.verbose.on, s"imported files: ${importedFiles.keys}")
-        val ctx: Context = Context.make(importedFiles.toMap, wdlSourceFile, cOpt.verbose)
-        val defaultRuntimeAttributes = cOpt.extras match {
-            case None => Map.empty[String, WdlExpression]
-            case Some(xt) => xt.defaultRuntimeAttributes
-        }
-        val nsTree: NamespaceOps.Tree = NamespaceOps.load(ns, ctx, defaultRuntimeAttributes)
-        val ctxHdrs = ctx.makeHeaders
-
-        // Convert large sub-blocks to sub-workflows
-        Decompose.apply(nsTree, wdlSourceFile, ctxHdrs, cOpt.verbose)
-    }
-
-    private def compileIR(wdlSourceFile : Path,
-                          nsTree: NamespaceOps.Tree,
-                          cOpt: CompilerOptions) : IR.Namespace = {
-        // Compile the WDL workflow into an Intermediate
-        // Representation (IR)
-        val irNs = GenerateIR.apply(nsTree, cOpt.reorg, cOpt.locked, cOpt.verbose)
-        val irNs2: IR.Namespace = cOpt.defaults match {
-            case None => irNs
-            case Some(path) => InputFile(cOpt.verbose).embedDefaults(irNs, path)
-        }
-
-        // Write out the intermediate representation
-        prettyPrintIR(wdlSourceFile, None, irNs, cOpt.verbose.on)
-
-        // generate dx inputs from the Cromwell-style input specification.
-        cOpt.inputs.foreach{ path =>
-            val dxInputs = InputFile(cOpt.verbose).dxFromCromwell(irNs2, path)
-            // write back out as xxxx.dx.json
-            val filename = Utils.replaceFileSuffix(path, ".dx.json")
-            val parent = path.getParent
-            val dxInputFile =
-                if (parent != null) parent.resolve(filename)
-                else Paths.get(filename)
-            Utils.writeFileContent(dxInputFile, dxInputs.prettyPrint)
-            Utils.trace(cOpt.verbose.on, s"Wrote dx JSON input file ${dxInputFile}")
-        }
-        irNs2
-    }
-
+case class Top(cOpt: CompilerOptions) {
+    val verbose = cOpt.verbose
 
     // The mapping from region to project name is list of (region, proj-name) pairs.
     // Get the project for this region.
@@ -206,8 +37,7 @@ object Top {
 
     // Find the runtime dxWDL asset with the correct version. Look inside the
     // project configured for this region.
-    private def getAssetId(region: String,
-                           verbose: Verbose) : String = {
+    private def getAssetId(region: String) : String = {
         val region2project = Utils.getRegions()
         val (projNameRt, folder)  = getProjectWithRuntimeLibrary(region2project, region)
         val dxProjRt = DxPath.lookupProject(projNameRt)
@@ -230,8 +60,7 @@ object Top {
     // be available to all subjobs we run.
     private def cloneRtLibraryToProject(region: String,
                                         dxWDLrtId: String,
-                                        dxProject: DXProject,
-                                        verbose: Verbose) : Unit = {
+                                        dxProject: DXProject) : Unit = {
         val region2project = Utils.getRegions()
         val (projNameRt, folder)  = getProjectWithRuntimeLibrary(region2project, region)
         val dxProjRt = DxPath.lookupProject(projNameRt)
@@ -243,46 +72,170 @@ object Top {
     }
 
     // Backend compiler pass
-    private def compileNative(irNs: IR.Namespace,
+    private def compileNative(bundle: IR.Bundle,
                               folder: String,
                               dxProject: DXProject,
-                              cOpt: CompilerOptions) : CompilationResults = {
-        // get billTo and region from the project
-        val (billTo, region) = Utils.projectDescribeExtraInfo(dxProject)
-        val dxWDLrtId = getAssetId(region, cOpt.verbose)
-        cloneRtLibraryToProject(region, dxWDLrtId, dxProject, cOpt.verbose)
-
+                              runtimePathConfig: DxPathConfig) : CompilationResults = {
+        val dxWDLrtId: Option[String] = cOpt.compileMode match {
+            case CompilerFlag.IR =>
+                throw new Exception("Invalid value IR for compilation mode")
+            case CompilerFlag.NativeWithoutRuntimeAsset =>
+                // Testing mode, we don't need the runtime library to check native
+                // compilation.
+                None
+            case CompilerFlag.All =>
+                // get billTo and region from the project, then find the runtime asset
+                // in the current region.
+                val (billTo, region) = Utils.projectDescribeExtraInfo(dxProject)
+                val lrtId = getAssetId(region)
+                cloneRtLibraryToProject(region, lrtId, dxProject)
+                Some(lrtId)
+        }
         // get list of available instance types
-        val instanceTypeDB = InstanceTypeDB.query(dxProject, cOpt.verbose)
+        val instanceTypeDB = InstanceTypeDB.query(dxProject, verbose)
 
         // Efficiently build a directory of the currently existing applets.
         // We don't want to build them if we don't have to.
-        val dxObjDir = DxObjectDirectory(irNs, dxProject, folder, cOpt.projectWideReuse,
-                                         cOpt.verbose)
+        val dxObjDir = DxObjectDirectory(bundle, dxProject, folder, cOpt.projectWideReuse,
+                                         verbose)
 
         // Generate dx:applets and dx:workflow from the IR
-        Native.apply(irNs,
-                     dxWDLrtId, folder, dxProject, instanceTypeDB, dxObjDir,
-                     cOpt)
+        new Native(dxWDLrtId, folder, dxProject,
+                   dxObjDir,
+                   instanceTypeDB, runtimePathConfig,
+                   cOpt.extras,
+                   cOpt.runtimeDebugLevel,
+                   cOpt.leaveWorkflowsOpen,
+                   cOpt.force, cOpt.archive, cOpt.locked, cOpt.verbose).apply(bundle)
     }
 
 
+    // check that streaming annotations are only done for files.
+    private def validate(callable: Callable) : Unit = {
+        callable match {
+            case wf: WorkflowDefinition =>
+                if (wf.parameterMeta.size > 0)
+                    Utils.warning(verbose, "dxWDL workflows ignore their parameter meta section")
+
+            case task: CallableTaskDefinition =>
+                task.inputs.foreach{
+                    case iDef : Callable.InputDefinition =>
+                        //iDef.parameterMeta --- this does not work on draft2
+                        task.parameterMeta.get(iDef.name) match {
+                            case None => ()
+                            case Some(x : String) if x == "stream"=>
+                                if (iDef.womType != WomSingleFileType) {
+                                    val msg =
+                                        s"""|Only files that are task inputs can be declared streaming.
+                                            |task = ${task.name}, input = ${iDef.name},
+                                            |womType = ${iDef.womType}
+                                            |""".stripMargin.replaceAll("\n", " ")
+                                    if (cOpt.fatalValidationWarnings)
+                                        throw new Exception(msg)
+                                    else
+                                        Utils.warning(verbose, msg)
+                                }
+                            case Some(other) => ()
+                        }
+                }
+
+            case other =>
+                throw new Exception(s"Unexpected object ${other}")
+        }
+    }
+
+    // Check the uniqueness of tasks, Workflows, and Types
+    // merge everything into one bundle.
+    private def mergeIntoOneBundle(mainBundle: WomBundle,
+                                   subBundles: Vector[WomBundle]) : WomBundle = {
+        var allCallables = mainBundle.allCallables
+        var allTypeAliases = mainBundle.typeAliases
+
+        subBundles.foreach{ subBund =>
+            subBund.allCallables.foreach{ case (key, callable) =>
+                allCallables.get(key) match {
+                    case None =>
+                        allCallables = allCallables + (key -> callable)
+                    case Some(existing) if (existing != callable) =>
+                        Utils.error(s"""|${key} appears with two different callable definitions
+                                        |1)
+                                        |${callable}
+                                        |
+                                        |2)
+                                        |${existing}
+                                        |""".stripMargin)
+                        throw new Exception(s"${key} appears twice, with two different definitions")
+                    case _ => ()
+                }
+            }
+            subBund.typeAliases.foreach { case (key, definition) =>
+                allTypeAliases.get(key) match {
+                    case None =>
+                        allTypeAliases = allTypeAliases + (key -> definition)
+                    case Some(existing) =>
+                        Utils.error(s"""|${key} appears twice, with two different definitions
+                                        |1)
+                                        |${definition}
+                                        |
+                                        |2)
+                                        |${existing}
+                                        |""".stripMargin)
+                        throw new Exception(s"${key} type alias appears twice")
+                    case _ => ()
+                }
+            }
+        }
+
+        // Merge all the bundles together
+        WomBundle(mainBundle.primaryCallable,
+                  allCallables,
+                  allTypeAliases)
+    }
+
     // Compile IR only
-    def applyOnlyIR(wdlSourceFile: String,
-                    cOpt: CompilerOptions) : IR.Namespace = {
-        val path = Paths.get(wdlSourceFile)
-        val nsTree = compileNamespaceOpsTree(path, cOpt)
-        compileIR(path, nsTree, cOpt)
+    def applyOnlyIR(source: Path) : IR.Bundle = {
+        val (language, womBundle, allSources, subBundles) = ParseWomSourceFile.apply(source)
+
+        // Check that each workflow/task appears just one
+        val everythingBundle : WomBundle = mergeIntoOneBundle(womBundle, subBundles)
+
+        // validate
+        everythingBundle.allCallables.foreach{ case (_, c) => validate(c) }
+        everythingBundle.primaryCallable match {
+            case None => ()
+            case Some(x) => validate(x)
+        }
+
+        // Compile the WDL workflow into an Intermediate
+        // Representation (IR)
+        val bundle: IR.Bundle = new GenerateIR(cOpt.verbose).apply(everythingBundle, allSources, language,
+                                                                   cOpt.locked, cOpt.reorg)
+        val bundle2: IR.Bundle = cOpt.defaults match {
+            case None => bundle
+            case Some(path) => InputFile(cOpt.verbose).embedDefaults(bundle, path)
+        }
+
+        // generate dx inputs from the Cromwell-style input specification.
+        cOpt.inputs.foreach{ path =>
+            val dxInputs = InputFile(cOpt.verbose).dxFromCromwell(bundle2, path)
+            // write back out as xxxx.dx.json
+            val filename = Utils.replaceFileSuffix(path, ".dx.json")
+            val parent = path.getParent
+            val dxInputFile =
+                if (parent != null) parent.resolve(filename)
+                else Paths.get(filename)
+            Utils.writeFileContent(dxInputFile, dxInputs.prettyPrint)
+            Utils.trace(cOpt.verbose.on, s"Wrote dx JSON input file ${dxInputFile}")
+        }
+        bundle2
     }
 
     // Compile up to native dx applets and workflows
-    def apply(wdlSourceFile: String,
+    def apply(source: Path,
               folder: String,
               dxProject: DXProject,
-              cOpt: CompilerOptions) : Option[String] = {
-        val path = Paths.get(wdlSourceFile)
-        val nsTree = compileNamespaceOpsTree(path, cOpt)
-        val irNs = compileIR(path, nsTree, cOpt)
+              runtimePathConfig: DxPathConfig) : Option[String] = {
+        val bundle: IR.Bundle = applyOnlyIR(source)
 
         // Up to this point, compilation does not require
         // the dx:project. This allows unit testing without
@@ -290,8 +243,8 @@ object Top {
         // pass the dx:project is required to establish
         // (1) the instance price list and database
         // (2) the output location of applets and workflows
-        val cResults = compileNative(irNs, folder, dxProject, cOpt)
-        val execIds = cResults.entrypoint match {
+        val cResults = compileNative(bundle, folder, dxProject, runtimePathConfig)
+        val execIds = cResults.primaryCallable match {
             case None =>
                 cResults.execDict.map{ case (_, dxExec) => dxExec.getId }.mkString(",")
             case Some(wf) =>

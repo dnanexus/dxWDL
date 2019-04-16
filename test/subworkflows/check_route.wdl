@@ -8,15 +8,10 @@ workflow check_route {
               x=prefix,
               y=range
         }
-        call Concat as concat2 {
-            input:
-              x=concat1.result,
-              y=range
-        }
     }
 
     output {
-        Array[String] result = concat2.result
+        Array[String] result = concat1.result
     }
 }
 

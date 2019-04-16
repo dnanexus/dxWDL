@@ -1,3 +1,5 @@
+version 1.0
+
 # Test that it is possible to use a private docker registry.
 #
 task private_registry {

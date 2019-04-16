@@ -3,7 +3,7 @@
 package dxWDL.compiler
 
 import com.fasterxml.jackson.databind.JsonNode
-import dxWDL.{Utils, Verbose}
+import dxWDL.util.{Verbose, Utils}
 import com.dnanexus._
 import java.time.{LocalDateTime, ZoneId}
 import java.time.format.DateTimeFormatter
@@ -17,7 +17,7 @@ import Utils.CHECKSUM_PROP
 case class DxObjectInfo(name:String,
                         crDate: LocalDateTime,
                         dxObj:DXDataObject,
-                        digest: String) {
+                        digest: Option[String]) {
     lazy val dxClass:String =
         dxObj.getClass.getSimpleName match {
             case "DXWorkflow" => "Workflow"
@@ -29,7 +29,7 @@ case class DxObjectInfo(name:String,
 // Take a snapshot of the platform target path before the build starts.
 // Make an efficient directory of all the applets that exist there. Update
 // the directory when an applet is compiled.
-case class DxObjectDirectory(ns: IR.Namespace,
+case class DxObjectDirectory(ns: IR.Bundle,
                              dxProject:DXProject,
                              folder: String,
                              projectWideReuse: Boolean,
@@ -52,13 +52,7 @@ case class DxObjectDirectory(ns: IR.Namespace,
 
     // a list of all dx:workflow and dx:applet names used in this WDL workflow
     private def allExecutableNames: Set[String] = {
-        val allAppletNames: Set[String] = ns.applets.keys.toSet
-        val allWorkflowNames: Set[String] = ns.listWorkflows.map(_.name).toSet
-
-        val bothAplWf = allAppletNames.intersect(allWorkflowNames)
-        if (!bothAplWf.isEmpty)
-            throw new Exception(s"Illegal IR namespace, applet and workflow share names ${bothAplWf}")
-        allAppletNames ++ allWorkflowNames
+        ns.allCallables.keys.toSet
     }
 
     // Instead of looking up applets/workflows one by one, perform a bulk lookup, and
@@ -66,13 +60,14 @@ case class DxObjectDirectory(ns: IR.Namespace,
     // use map with information on each name.
     //
     // DXSearch.findDataObjects can be an expensive call, both on the server and client sides.
-    // We limit it by filtering on the CHECKSUM property, which is attached only to generated
-    // applets and workflows.
+    // We could limit it by filtering on the CHECKSUM property, which is attached only to generated
+    // applets and workflows. However, this would miss cases where an applet name is already in
+    // use by a regular dnanexus applet/workflow.
     private def bulkLookup() : HashMap[String, Vector[DxObjectInfo]] = {
         val t0 = System.nanoTime()
         val dxObjectsInFolder: List[DXDataObject] = DXSearch.findDataObjects()
             .inFolder(dxProject, folder)
-            .withProperty(CHECKSUM_PROP)
+//            .withProperty(CHECKSUM_PROP)
             .includeDescribeOutput(DXDataObject.DescribeOptions.get().withProperties())
             .execute().asList().asScala.toList
         val nrApplets = dxObjectsInFolder.count{ _.isInstanceOf[DXApplet] }
@@ -81,7 +76,7 @@ case class DxObjectDirectory(ns: IR.Namespace,
         val diffMSec = (t1 -t0) / (1000 * 1000)
         Utils.trace(verbose.on,
                     s"""|Found ${nrApplets} applets and ${nrWorkflows}
-                        |workflows in ${dxProject.getId}/${folder} (${diffMSec} millisec)"""
+                        |workflows in ${dxProject.getId} folder=${folder} (${diffMSec} millisec)"""
                         .stripMargin.replaceAll("\n", " "))
 
         // Leave only dx:objects that could belong to the workflow
@@ -99,13 +94,9 @@ case class DxObjectDirectory(ns: IR.Namespace,
             val crLdt:LocalDateTime = LocalDateTime.ofInstant(crDate.toInstant(), ZoneId.systemDefault())
 
             val props: Map[String, String] = desc.getProperties().asScala.toMap
-            props.get(CHECKSUM_PROP) match {
-                case None =>
-                    None
-                case Some(digest) =>
-                    Some(DxObjectInfo(name, crLdt, dxObj, digest))
-            }
-        }.flatten
+            val chksum = props.get(CHECKSUM_PROP)
+            DxObjectInfo(name, crLdt, dxObj, chksum)
+        }
 
         // There could be multiple versions of the same applet/workflow, collect their
         // information in vectors
@@ -148,7 +139,7 @@ case class DxObjectDirectory(ns: IR.Namespace,
         val t1 = System.nanoTime()
         val diffMSec = (t1 -t0) / (1000 * 1000)
         Utils.trace(verbose.on,
-                    s"Found ${nrApplets} applets in project (${diffMSec} millisec)")
+                    s"Found ${nrApplets} applets in project ${dxProject.getId} (${diffMSec} millisec)")
 
         val hm = HashMap.empty[String, Vector[(DXDataObject, DXDataObject.Describe)]]
         dxAppletsInProject.foreach{ dxApplet =>
@@ -195,7 +186,7 @@ case class DxObjectDirectory(ns: IR.Namespace,
     }
 
     def insert(name:String, dxObj:DXDataObject, digest: String) : Unit = {
-        val aInfo = DxObjectInfo(name, LocalDateTime.now, dxObj, digest)
+        val aInfo = DxObjectInfo(name, LocalDateTime.now, dxObj, Some(digest))
         objDir(name) = Vector(aInfo)
     }
 

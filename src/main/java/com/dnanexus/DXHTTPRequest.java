@@ -183,7 +183,7 @@ public class DXHTTPRequest {
 
         // specify the user/password in the configuration
         CredentialsProvider credsProvider = new BasicCredentialsProvider();
-        if (proxyDesc.method.equals("ntlm")) {
+        if (proxyDesc.method != null && proxyDesc.method.equals("ntlm")) {
             // NTLM: windows NT authentication, with Kerberos
             String localHostname;
             try {

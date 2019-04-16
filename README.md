@@ -4,31 +4,13 @@ dxWDL takes a bioinformatics pipeline written in the
 [Workflow Description Language (WDL)](http://www.openwdl.org/)
 and compiles it to an equivalent workflow on the DNAnexus platform.
 It provides a reasonably complete set of WDL features.
-WDL draft-2 is supported, with a few exceptions:
+WDL draft-2, and version 1.0 are supported, with a few exceptions:
 * Calls with missing arguments have limited support
-* The output section does not allow expressions, and requires full definitions. For example:
-```wdl
-workflow foo {
-  output {
-     String result = bar
-  }
-}
-```
+* `struct` is not supported
+* Nested scatters are not supported
 
-instead of:
-```wdl
-workflow foo {
-  output {
-     bar
-  }
-}
-```
-
-# Ongoing
-Work has started on supporting WDL version 1.0 using the WOM scala library,
-that is part of [Cromwell](https://github.com/broadinstitute/cromwell). A high level
-list of changes between draft-2 and version 1.0 is provided [here](doc/WdlVersionChanges.md).
-We plan to remove the limitations on the output section.
+A high level list of changes between draft-2 and version 1.0 is
+provided [here](doc/WdlVersionChanges.md).
 
 ## Setup
 Prerequisites: DNAnexus platform account, dx-toolkit, java 8+, python 2.7.
@@ -60,8 +42,8 @@ workflow bam_chrom_counter {
         }
     }
     output {
-        File bai = slice_bam.bai
-        Int count = count_bam.count
+        slice_bam.bai
+        count_bam.count
     }
 }
 
@@ -118,24 +100,12 @@ dx run bam_chrom_counter -i0.file=file-xxxx
 At runtime this looks like this:
 ![this](doc/bam_chrom_counter.png)
 
-## Compiler docker image
-
-If you wish to avoid installing java and the dxWDL jar file, you can use
-the public docker image `dnanexus/dxwdl`, placed on dockerhub. The
-[run-dxwdl-docker](scripts/compiler_image/run-dxwdl-docker)
-script makes it easier to use. For example:
-
-```bash
-$ source environment
-$ dx login
-$ run-dxwdl-docker compile xxxx.wdl --project MY_PROJECT
-```
 
 # Additional information
 
 - [Advanced options](doc/ExpertOptions.md) explains additional compiler options
 - [Internals](doc/Internals.md) goes into compiler internals
-- [Tips and tricks](doc/Tips.md) commonly used patterns in WDL
+- [Howto](doc/Howto.md) examples for how to write good WDL code
 
 # Contributions
 

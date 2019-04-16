@@ -1,11 +1,10 @@
 workflow math {
     Int x
 
-    scatter (i in [1, 2, 3 ]) {
-        call add {input: a=i, b=x}
-    }
+    call add {input: a=3, b=x}
+
     output {
-        Array[Int] result = add.result
+        Int result = add.result
     }
 }
 

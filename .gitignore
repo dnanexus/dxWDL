@@ -14,8 +14,8 @@ cromwell-workflow-logs/
 
 # DNAx JSON input files generated from WDL
 *.dx.json
-test/basic/dx_extern.wdl
-test/basic/dx_app_extern.wdl
+dx_extern.wdl
+dx_app_extern.wdl
 
 # jar files
 dxWDL*.jar
