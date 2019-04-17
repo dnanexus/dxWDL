@@ -370,10 +370,10 @@ WDL types, we run a collect sub-job that waits for the child jobs
 to complete, and returns an array of integers.
 
 
-### Subworkflows required
+### Two levels
 
 So far, we have seen fragments that include a sequence of
-declarations, followed by (1) a call, or (2) a conditional block, or
+declarations, followed by (1) a call, (2) a conditional block, or
 (3) a scatter block. It could be that the block includes more than a single call, for example:
 
 ```wdl
@@ -406,4 +406,4 @@ workflow two_levels {
 
 The scatter block requires a subworkflow that will chain together the
 calls `inc1`, `inc2`, and `inc3`. Note that `inc3` requires a fragment
-to evaluate declaration `b`.
+because it needs to evaluate and export declaration `b`.
