@@ -42,24 +42,24 @@ def wait_for_completion(test_exec_objs):
 
 # Run [workflow] on several inputs, return the analysis ID.
 def run_workflow(dx_proj, test_folder, oid):
-    def once():
-        try:
-            dx_proj.new_folder(test_folder, parents=True)
-            wf = dxpy.DXWorkflow(project=dx_proj.get_id(), dxid=oid)
-            return wf.run({},
-                          project=dx_proj.get_id(),
-                          folder=test_folder)
-        except Exception as e:
-            print("exception message={}".format(e))
-            return None
+#    def once():
+#    try:
+    dx_proj.new_folder(test_folder, parents=True)
+    wf = dxpy.DXWorkflow(project=dx_proj.get_id(), dxid=oid.decode("utf-8"))
+    return wf.run({},
+                  project=dx_proj.get_id(),
+                  folder=test_folder)
+#    except Exception as e:
+#        print("exception message={}".format(e))
+#        return None
 
-    for i in range(1,5):
-        retval = once()
-        if retval is not None:
-            return retval
-        print("Sleeping for 5 seconds before trying again")
-        time.sleep(5)
-    raise RuntimeError("running workflow")
+#    for i in range(1,5):
+#        retval = once()
+#        if retval is not None:
+#            return retval
+#        print("Sleeping for 5 seconds before trying again")
+#        time.sleep(5)
+#    raise RuntimeError("running workflow")
 
 # Build a workflow.
 #
@@ -88,7 +88,7 @@ def main():
     args = argparser.parse_args()
 
     version_id = util.get_version_id(top_dir)
-    wdl_source_file = os.path.join(test_dir, "basic/trivial.wdl")
+    wdl_source_file = os.path.join(test_dir, "multi_region/trivial.wdl")
     dx_objects = []
     test_exec_objs=[]
 
