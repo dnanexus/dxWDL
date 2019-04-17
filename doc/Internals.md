@@ -94,8 +94,8 @@ namespaces cannot be compiled by dxWDL.
 
 ## Compiling a task
 
-Simplifying corner cases, a task is compiled into an applet that has
-an equivalent signature. For example, a task such as:
+A task is compiled into an applet that has an equivalent
+signature. For example, a task such as:
 
 ```wdl
 task count_bam {
@@ -142,7 +142,7 @@ is compiled into an applet with the following `dxapp.json`:
 }
 ```
 
-The `code.sh` bash script run the docker image `quay.io/ucsc_cgl/samtools`. Under
+The `code.sh` bash script runs the docker image `quay.io/ucsc_cgl/samtools`. Under
 that image, it run the shell command `samtools view -c ${bam}`.
 
 ## Compiling workflows
@@ -216,8 +216,9 @@ workflow linear {
 It has no expressions, and no if/scatter blocks. It can be compiled directly to a dx:workflow,
 which schematically looks like this:
 
-- Inputs: x, y
-- Stage 1: call applet add(x, y)
-- Stage 2: call applet mul(add.result, 2)
-- Stage 3: call applet sub(mul.result, 1)
-- Outputs: sub.result
+
+| Inputs  |  x, y  |
+| Stage 1 | call applet add(x, y)  |
+| Stage 2 | call applet mul(add.result, 2) |
+| Stage 3 | call applet sub(mul.result, 1) |
+| Outputs | sub.result |
