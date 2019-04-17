@@ -51,7 +51,8 @@ docker_test_list = [
     "broad_genomics",
     "private_registry",
     "native_docker_file_image",
-    "samtools_count"
+    "samtools_count",
+    "hostname_is_jobid"
 ]
 
 # wdl draft-2

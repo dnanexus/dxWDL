@@ -67,8 +67,11 @@ workflow show_error {
 
 task make_error {
     command <<<
-        echo '{"error": {"type": "AppError", "message": "x must be at least 2"}}' > job_error.json
+        echo '{"error": {"type": "AppError", "message": "x must be at least 2' $(hostname)'"}}' > job_error.json
         exit 1
     >>>
 }
 ```
+
+(including the hostname in the error message allows the message to have the root
+job ID, facilitating debugging in complex workflows that may be deeply nested.)
