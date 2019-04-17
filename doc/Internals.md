@@ -217,8 +217,10 @@ It has no expressions, and no if/scatter blocks. It can be compiled directly to 
 which schematically looks like this:
 
 
+|-------  | -----  |
 | Inputs  |  x, y  |
 | Stage 1 | call applet add(x, y)  |
 | Stage 2 | call applet mul(add.result, 2) |
 | Stage 3 | call applet sub(mul.result, 1) |
 | Outputs | sub.result |
+|-------  | -----  |
