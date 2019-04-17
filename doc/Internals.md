@@ -94,7 +94,55 @@ namespaces cannot be compiled by dxWDL.
 
 ## Compiling a task
 
-TODO
+Simplifying corner cases, a task is compiled into an applet that has
+an equivalent signature. For example, a task such as:
+
+```wdl
+task count_bam {
+    input {
+        File bam
+    }
+    command <<<
+        samtools view -c ${bam}
+    >>>
+    runtime {
+        docker: "quay.io/ucsc_cgl/samtools"
+    }
+    output {
+        Int count = read_int(stdout())
+    }
+}
+```
+
+is compiled into an applet with the following `dxapp.json`:
+
+```json
+{
+  "name": "count_bam",
+  "dxapi": "1.0.0",
+  "version": "0.0.1",
+  "inputSpec": [
+    {
+      "name": "bam",
+      "class": "file"
+    }
+  ],
+  "outputSpec": [
+    {
+      "name": "count",
+      "class": "int"
+    }
+  ],
+  "runSpec": {
+    "interpreter": "bash",
+    "file": "code.sh",
+    "distribution": "Ubuntu",
+    "release": "16.04"
+  }
+}
+
+The `code.sh` bash script run the docker image `quay.io/ucsc_cgl/samtools`. Under
+that image, it run the shell command `samtools view -c ${bam}`.
 
 ## Compiling workflows
 
