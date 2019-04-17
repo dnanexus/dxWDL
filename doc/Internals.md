@@ -179,20 +179,19 @@ task mul {
   }
 }
 
-# Reduce an integer from another
-task sub {
+# Reduce add one to an integer
+task inc {
   input {
     Int a
-    Int b
   }
   command {}
   output {
-    Int result = a - b
+    Int result = a + 1
   }
 }
 ```
 
-### Base case
+### A linear workflow
 
 Examine workflow `linear` below:
 
@@ -205,7 +204,7 @@ workflow linear {
 
   call add {input: a = x, b = y }
   call mul {input: a = add.result, b = 2 }
-  call sub {input: a = mul.result, b = 1 }
+  call int {input: a = mul.result }
 
   output {
     Int result = sub.result
@@ -217,10 +216,60 @@ It has no expressions, and no if/scatter blocks. It can be compiled directly to 
 which schematically looks like this:
 
 
-| phase   |        | arguments |
+| phase   | call   | arguments |
 |-------  | -----  | ----      |
 | Inputs  |        |     x, y  |
-| Stage 1 | call applet add | x, y  |
-| Stage 2 | call applet mul | stage-1.result, 2 |
-| Stage 3 | call applet sub | stage-2.result, 1 |
+| Stage 1 | applet add | x, y  |
+| Stage 2 | applet mul | stage-1.result, 2 |
+| Stage 3 | applet inc | stage-2.result |
 | Outputs |        | sub.result |
+
+### Expressions
+
+Workflow `linear2` adds expressions.
+
+```wdl
+workflow linear2 {
+    input {
+        Int x
+        Int y
+    }
+
+    call add {
+        input: a=x, b=y
+    }
+
+    Int z = add.result + 1
+    call mul { input: a=z, b=5 }
+
+    call inc { input: i= z + mul.result + 8}
+
+    output {
+        Int result = inc.result
+    }
+}
+```
+
+DNAnexus workflows do not support expressions, therefore, we need to generate an applet,
+and run a job to evaluate each expression. Workflow `linear2` is compiled into:
+
+| phase   | call   | arguments |
+|-------  | -----  | ----      |
+| Inputs  |        |     x, y  |
+| Stage 1 | applet add | x, y  |
+| Stage 2 | applet fragment_mul | stage-1.result |
+| Stage 3 | applet fragment_inc | stage-2.result |
+| Outputs |        | sub.result |
+
+The `fragment_mul` applet performs this WDL snippet:
+
+```wdl
+    Int z = add.result + 1
+    call mul { input: a=z, b=5 }
+```
+
+It returns the variables `z` and `mul.result`.
+
+The `fragment_inc` applet performs: `call inc { input: i= z +
+mul.result + 8}`. It evaluates the expressions calls the `inc` applet,
+and returns a promise for the output `inc.result`.
