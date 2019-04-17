@@ -9,13 +9,13 @@ structure represention.
 - IR: generate Intermediate Code (_IR_) from the WOM representation
 - Native: start with IR and generate platform applets and workflow
 
-The main idea is to compile a WDL workflow into an equivalent DNAnexus
+A WDL workflow is compiled into an equivalent DNAnexus
 workflow, enabling running it on the platform. The basic mapping is:
 
 * A WDL task compiles to a DNAx applet (_dx:applet_).
 * A WDL workflow compiles to a DNAx workflow (_dx:workflow_)
 * A WDL call compiles to a dx workflow stage, and sometimes an auxiliary applet
-* Scatters and conditional blocks are compiled into workflow stages.
+* Scatters and conditional blocks are compiled into workflow stages, plus an auxiliary applet
 
 There are multiple obstacles to overcome. We wish to avoid creating a
 controlling applet that would run and manage a WDL workflow. Such an
@@ -40,7 +40,7 @@ the bash, stored in a database, etc.
 
 The type mapping for primitive types is:
 
-| WDL type       |  dxapp.json type |
+| WDL type       |  DNAx type |
 | -------------- |  --------------- |
 | Boolean        |   boolean |
 | Int            |   int  |
@@ -51,7 +51,7 @@ The type mapping for primitive types is:
 
 Optional primitives are mapped as follows:
 
-| WDL type       |  dxapp.json type | dxapp.json optional |
+| WDL type       |  DNAx type |  optional |
 | -------------- |  --------------- | -------------       |
 | Boolean?       |   boolean    | true |
 | Int?           |   int        | true |
@@ -64,7 +64,7 @@ Single dimensional arrays of WDL primitives are mapped to DNAx optional arrays, 
 it allows them to be empty. Had they been mapped to compulsory arrays, they
 would be required to have one element at least.
 
-| WDL type       |  dxapp.json type | dxapp.json optional |
+| WDL type       |  DNAX type | optional |
 | -------------- |  --------------- | -------------       |
 | Array[Boolean] |   array:boolean    | true |
 | Array[Int]     |   array:int  | true |
@@ -142,8 +142,8 @@ is compiled into an applet with the following `dxapp.json`:
 }
 ```
 
-The `code.sh` bash script runs the docker image `quay.io/ucsc_cgl/samtools`. Under
-that image, it run the shell command `samtools view -c ${bam}`.
+The `code.sh` bash script runs the docker image `quay.io/ucsc_cgl/samtools`,
+under which it run the shell command `samtools view -c ${bam}`.
 
 ## Compiling workflows
 
@@ -153,7 +153,7 @@ workflows. For simplicity, the values and types are WDL
 integers. Files, maps, arrays, and other types could be substituted,
 without changing the core concepts. The syntax of
 [WDL version 1.0](https://github.com/openwdl/wdl/blob/master/versions/1.0/SPEC.md)
-is used. The following tasks are called throughout:
+is used. The following tasks are called in the examples:
 
 ```wdl
 # Add two integers
@@ -180,7 +180,7 @@ task mul {
     }
 }
 
-# Reduce add one to an integer
+# Add one to an integer
 task inc {
     input {
         Int a
@@ -213,7 +213,7 @@ workflow linear {
 }
 ```
 
-It has no expressions, and no if/scatter blocks. It can be compiled directly to a dx:workflow,
+It has no expressions, and no if/scatter blocks. It is compiled directly to a dx:workflow,
 which schematically looks like this:
 
 
@@ -374,7 +374,7 @@ to complete, and returns an array of integers.
 
 So far, we have seen fragments that include a sequence of
 declarations, followed by (1) a call, (2) a conditional block, or
-(3) a scatter block. It could be that the block includes more than a single call, for example:
+(3) a scatter block. A block may include more than one call, for example:
 
 ```wdl
 workflow two_levels {
