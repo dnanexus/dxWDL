@@ -104,7 +104,8 @@ At runtime this looks like this:
 # Additional information
 
 - [Advanced options](doc/ExpertOptions.md) explains additional compiler options
-- [Internals](doc/Internals.md) goes into compiler internals
+- [Internals](doc/Internals.md) describes current compiler structure (_work in progress_)
+- [Internals v81](doc/Internals_v_081.md) describes design for version 0.81 and prior.
 - [Howto](doc/Howto.md) examples for how to write good WDL code
 
 # Contributions
