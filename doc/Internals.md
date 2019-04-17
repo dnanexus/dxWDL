@@ -270,6 +270,10 @@ The `fragment_mul` applet performs this WDL snippet:
 
 It returns the variables `z` and `mul.result`.
 
-The `fragment_inc` applet performs: `call inc { input: i= z +
-mul.result + 8}`. It evaluates the expressions calls the `inc` applet,
-and returns a promise for the output `inc.result`.
+The `fragment_inc` applet performs
+
+```wdl
+call inc { input: i= z + mul.result + 8}
+```
+
+It evaluates the expression, calls the `inc` applet, and returns a promise for the output `inc.result`.
