@@ -1,5 +1,11 @@
 # Release Notes
 
+## 1.01
+
+- Ensure that native docker uses the machine's hostname (i.e., the job ID) as
+  the hostname, matching the previous behavior of dx-docker. This allows
+  setting the job ID in error messages, helping debugging. Contributed by Jeff Tratner.
+
 ## 1.00
 - Support for WDL version 1.0, as well as draft-2. There are two features
 that are not yet supported: `struct`, and nested scatters. Work is ongoing

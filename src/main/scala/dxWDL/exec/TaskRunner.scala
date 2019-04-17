@@ -258,10 +258,8 @@ case class TaskRunner(task: CallableTaskDefinition,
                     |# make sure the files are on stable storage
                     |# before leaving. This helps with stdin and stdout
                     |# that may be in the fifo queues.
-                    |(
-                    |    cd ${dxPathConfig.homeDir.toString}
-                    |    sync
-                    |)
+                    |sync
+                    |
                     |echo $$? > ${dxPathConfig.rcPath}
                     |""".stripMargin.trim + "\n"
             }
@@ -290,7 +288,7 @@ case class TaskRunner(task: CallableTaskDefinition,
                 |# permissions to read/write files in the home directory. This
                 |# is required in cases where the container uses a different
                 |# user.
-                |extraFlags="--user $$(id -u):$$(id -g)"
+                |extraFlags="--user $$(id -u):$$(id -g) --hostname $$(hostname)"
                 |
                 |# run as in the original configuration
                 |docker run \\
