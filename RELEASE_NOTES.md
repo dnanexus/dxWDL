@@ -1,5 +1,10 @@
 # Release Notes
 
+## 1.00
+- Support for WDL version 1.0, as well as draft-2. There are two features
+that are not yet supported: `struct`, and nested scatters. Work is ongoing
+to address these omissions.
+
 ## 0.81.5
 - Adding debug information to conversions from JSON to WDL variables. This helps
 track down runtime problems with missing variables that a task is expecting. Previously,
