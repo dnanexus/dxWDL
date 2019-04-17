@@ -140,6 +140,7 @@ is compiled into an applet with the following `dxapp.json`:
     "release": "16.04"
   }
 }
+```
 
 The `code.sh` bash script run the docker image `quay.io/ucsc_cgl/samtools`. Under
 that image, it run the shell command `samtools view -c ${bam}`.
