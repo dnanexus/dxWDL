@@ -228,7 +228,7 @@ this:
 
 The compiler can generate applets that are able to fully process
 simple parts of a larger workflow. These are called *fragments*. A
-fragment comprises of a series of declarations followed by a (1) call,
+fragment comprises a series of declarations followed by a (1) call,
 or (2) a conditional block, or (3) a scatter block. For example,
 workflow `linear2` can be split into three fragments.
 
@@ -252,7 +252,7 @@ workflow linear2 {
 }
 ```
 
-Add can be called directly without additional fragments.
+Task `add` can be called directly, no fragment is required.
 
 Fragment *mul*
 ```wdl
@@ -276,8 +276,7 @@ Workflow `linear2` is compiled into:
 | Outputs |        | stage-3.result |
 
 
-Conditionals are an important part of WDL, they allow writing programs that depend on
-boolean flags and values. A simple example is shown in `optionals`:
+Workflow `optionals` uses conditional blocks. It can be broken down into two fragments.
 
 ```wdl
 workflow optionals {
@@ -300,8 +299,6 @@ workflow optionals {
     }
 }
 ```
-
-This is broken down into two fragments:
 
 Fragment 1:
 ```wdl
@@ -361,10 +358,9 @@ WDL types, we run a collect sub-job that waits for the child jobs to
 complete, and returns an array of integers.
 
 
-## The general case
+## Nested blocks
 
-So far, we have seen workflows that can be compiled a straight line
-series of dx:stages. WDL allows blocks of scatters and conditionals to
+WDL allows blocks of scatters and conditionals to
 be nested arbitrarily. Such complex workflows
 are broken down into fragments, and tied together with
 subworkflows. For example, in workflow `two_levels` the scatter block
@@ -398,4 +394,34 @@ workflow two_levels {
         Int c = inc5.result
     }
 }
+```
+
+It will be broken down into five fragments:
+
+Fragment *inc1*
+```wdl
+        call inc as inc1 { input: a = i}
+```
+
+Fragment *inc2*
+```wdl
+        call inc as inc2 { input: a = inc1.result }
+```
+
+Fragment *inc3*
+```wdl
+        Int b = inc2.result
+        call inc as inc3 { input: a = b }
+```
+
+Fragment *4*
+```wdl
+    if (true) {
+        call inc as inc4 { input: a = 3 }
+    }
+```
+
+Fragment *inc5*
+```wdl
+    call inc as inc5 {input: a=1}
 ```
