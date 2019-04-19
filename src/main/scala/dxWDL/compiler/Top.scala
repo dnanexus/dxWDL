@@ -4,13 +4,15 @@
 package dxWDL.compiler
 
 import com.dnanexus.{DXDataObject, DXProject, DXRecord, DXSearch}
-import dxWDL.util._
-import dxWDL.util.Utils.DX_WDL_ASSET
 import java.nio.file.{Path, Paths}
 import scala.collection.JavaConverters._
+
 import wom.callable._
-import wom.types._
 import wom.executable.WomBundle
+import wom.types._
+
+import dxWDL.util._
+import dxWDL.util.Utils.DX_WDL_ASSET
 
 case class Top(cOpt: CompilerOptions) {
     val verbose = cOpt.verbose
@@ -235,6 +237,7 @@ case class Top(cOpt: CompilerOptions) {
               folder: String,
               dxProject: DXProject,
               runtimePathConfig: DxPathConfig) : Option[String] = {
+        // generate IR
         val bundle: IR.Bundle = applyOnlyIR(source)
 
         // Up to this point, compilation does not require

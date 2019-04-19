@@ -271,13 +271,13 @@ object Utils {
         scala.io.Source.fromInputStream(inputStream).mkString
     }
 
-    def base64Encode(buf: String) : String = {
+    def gzipAndBase64Encode(buf: String) : String = {
         val bytes = buf.getBytes
         val gzBytes = gzipCompress(bytes)
         Base64.getEncoder.encodeToString(gzBytes)
     }
 
-    def base64Decode(buf64: String) : String = {
+    def base64DecodeAndGunzip(buf64: String) : String = {
         val ba : Array[Byte] = Base64.getDecoder.decode(buf64.getBytes)
         gzipDecompress(ba)
     }

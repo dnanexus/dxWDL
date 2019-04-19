@@ -8,9 +8,7 @@ import wom.values._
 import dxWDL.util._
 import dxWDL.util.Utils.META_INFO
 
-case class WfFragInput(wfSource: String,
-                       instanceTypeDB: InstanceTypeDB,
-                       blockPath: Vector[Int],
+case class WfFragInput(blockPath: Vector[Int],
                        env: Map[String, WomValue],
                        execLinkInfo : Map[String, ExecLinkInfo])
 
@@ -65,8 +63,6 @@ case class WfFragInputOutput(dxIoFunctions : DxIoFunctions,
             .asJsObject.fields
             .filter{ case (fieldName,_) => !fieldName.endsWith(Utils.FLAT_FILES_SUFFIX) }
 
-        val (wfSource, instanceTypeDB) = jobInputOutput.loadMetaInfo(inputs)
-
         // Extract the meta information needed to setup the closure
         // for the subblock
         val metaInfo: Map[String, JsValue] =
@@ -91,9 +87,7 @@ case class WfFragInputOutput(dxIoFunctions : DxIoFunctions,
                 fqn -> jobInputOutput.unpackJobInput(fqn, womType, jsValue)
         }.toMap
 
-        WfFragInput(wfSource,
-                    instanceTypeDB,
-                    blockPath,
+        WfFragInput(blockPath,
                     env,
                     execLinkInfo)
     }

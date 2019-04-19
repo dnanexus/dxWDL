@@ -499,6 +499,8 @@ object Main extends App {
     }
 
     private def taskAction(op: InternalOp.Value,
+                           taskSourceCode: String,
+                           instanceTypeDB: InstanceTypeDB,
                            jobInputPath: Path,
                            jobOutputPath: Path,
                            dxPathConfig : DxPathConfig,
@@ -509,17 +511,16 @@ object Main extends App {
         val inputLines : String = Utils.readFileContent(jobInputPath)
         val originalInputs : JsValue = inputLines.parseJson
 
-        // Create empty directories, preparing for downloads
-        dxPathConfig.createCleanDirs()
+        val task = ParseWomSourceFile.parseWdlTask(taskSourceCode)
 
         // setup the utility directories that the task-runner employs
+        dxPathConfig.createCleanDirs()
+
         val jobInputOutput = new exec.JobInputOutput(dxIoFunctions, rtDebugLvl)
-        val (taskSourceCode, instanceTypeDB) = jobInputOutput.loadMetaInfo(originalInputs)
-        val task = ParseWomSourceFile.parseWdlTask(taskSourceCode)
         val inputs = jobInputOutput.loadInputs(originalInputs, task)
         val taskRunner = exec.TaskRunner(task, taskSourceCode, instanceTypeDB,
-                                           dxPathConfig, dxIoFunctions, jobInputOutput,
-                                           rtDebugLvl)
+                                         dxPathConfig, dxIoFunctions, jobInputOutput,
+                                         rtDebugLvl)
 
         // Running tasks
         op match {
@@ -562,6 +563,8 @@ object Main extends App {
 
     // Execute a part of a workflow
     private def workflowFragAction(op: InternalOp.Value,
+                                   womSourceCode: String,
+                                   instanceTypeDB: InstanceTypeDB,
                                    jobInputPath: Path,
                                    jobOutputPath: Path,
                                    dxPathConfig : DxPathConfig,
@@ -579,11 +582,11 @@ object Main extends App {
 
         // process the inputs
         val meta = fragInputOutput.loadInputs(inputsRaw)
-        val wf = ParseWomSourceFile.parseWdlWorkflow(meta.wfSource)
+        val wf = ParseWomSourceFile.parseWdlWorkflow(womSourceCode)
         val outputFields: Map[String, JsValue] =
             op match {
                 case InternalOp.WfFragment =>
-                    val fragRunner = new exec.WfFragRunner(wf, meta.wfSource, meta.instanceTypeDB,
+                    val fragRunner = new exec.WfFragRunner(wf, womSourceCode, instanceTypeDB,
                                                            meta.execLinkInfo,
                                                            dxPathConfig, dxIoFunctions,
                                                            inputsRaw,
@@ -591,7 +594,7 @@ object Main extends App {
                                                            rtDebugLvl)
                     fragRunner.apply(meta.blockPath, meta.env, RunnerWfFragmentMode.Launch)
                 case InternalOp.Collect =>
-                    val fragRunner = new exec.WfFragRunner(wf, meta.wfSource, meta.instanceTypeDB,
+                    val fragRunner = new exec.WfFragRunner(wf, womSourceCode, instanceTypeDB,
                                                            meta.execLinkInfo,
                                                            dxPathConfig, dxIoFunctions,
                                                            inputsRaw,
@@ -599,15 +602,15 @@ object Main extends App {
                                                            rtDebugLvl)
                     fragRunner.apply(meta.blockPath, meta.env, RunnerWfFragmentMode.Collect)
                 case InternalOp.WfInputs =>
-                    val wfInputs = new exec.WfInputs(wf, meta.wfSource,rtDebugLvl)
+                    val wfInputs = new exec.WfInputs(wf, womSourceCode,rtDebugLvl)
                     wfInputs.apply(meta.env)
                 case InternalOp.WfOutputs =>
-                    val wfOutputs = new exec.WfOutputs(wf, meta.wfSource,
+                    val wfOutputs = new exec.WfOutputs(wf, womSourceCode,
                                                        dxPathConfig, dxIoFunctions,
                                                        rtDebugLvl)
                     wfOutputs.apply(meta.env)
                 case InternalOp.WorkflowOutputReorg =>
-                    val wfReorg = new exec.WorkflowOutputReorg(wf, meta.wfSource, rtDebugLvl)
+                    val wfReorg = new exec.WorkflowOutputReorg(wf, womSourceCode, rtDebugLvl)
                     val refDxFiles = fragInputOutput.findRefDxFiles(inputsRaw)
                     wfReorg.apply(refDxFiles)
                 case _ =>
@@ -635,6 +638,17 @@ object Main extends App {
                     Utils.jobFilesOfHomeDir(homeDir)
                 val dxPathConfig = buildRuntimePathConfig(rtDebugLvl >= 1)
                 val dxIoFunctions = DxIoFunctions(dxPathConfig, rtDebugLvl)
+
+                // Figure out the available instance types, and their prices,
+                // by reading the file
+                val dbRaw = Utils.readFileContent(dxPathConfig.instanceTypeDB)
+                val instanceTypeDB = dbRaw.parseJson.convertTo[InstanceTypeDB]
+
+                // Get the WOM source code (currently WDL, could be also CWL in the future)
+                var womSourceCodeEncoded = Utils.readFileContent(dxPathConfig.womSourceCodeEncoded)
+                womSourceCodeEncoded = womSourceCodeEncoded.substring(0, womSourceCodeEncoded.length - 1)
+                val womSourceCode = Utils.base64DecodeAndGunzip(womSourceCodeEncoded)
+
                 try {
                     op match {
                         case InternalOp.Collect |
@@ -642,13 +656,15 @@ object Main extends App {
                                 InternalOp.WfInputs |
                                 InternalOp.WfOutputs |
                                 InternalOp.WorkflowOutputReorg =>
-                            workflowFragAction(op, jobInputPath, jobOutputPath,
+                            workflowFragAction(op, womSourceCode, instanceTypeDB,
+                                               jobInputPath, jobOutputPath,
                                                dxPathConfig, dxIoFunctions, rtDebugLvl)
                         case InternalOp.TaskCheckInstanceType|
                                 InternalOp.TaskEpilog|
                                 InternalOp.TaskProlog|
                                 InternalOp.TaskRelaunch =>
-                            taskAction(op, jobInputPath, jobOutputPath,
+                            taskAction(op, womSourceCode, instanceTypeDB,
+                                       jobInputPath, jobOutputPath,
                                        dxPathConfig, dxIoFunctions, rtDebugLvl)
                     }
                 } catch {

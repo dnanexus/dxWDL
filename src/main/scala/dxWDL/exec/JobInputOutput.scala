@@ -316,32 +316,6 @@ case class JobInputOutput(dxIoFunctions : DxIoFunctions,
         }
     }
 
-    // Extract the meta information for the task:
-    // WOM source code, and the database of instance types
-    def loadMetaInfo(inputs: JsValue) : (String, InstanceTypeDB) = {
-        val fields : Map[String, JsValue] = inputs.asJsObject.fields
-
-        val metaInfo: Map[String, JsValue] =
-            fields.get(META_INFO) match {
-                case Some(JsObject(fields)) => fields
-                case other =>
-                    throw new Exception(
-                        s"JSON object has bad value ${other} for field ${META_INFO}")
-            }
-
-        val taskSource : String = metaInfo.get("womSourceCode") match {
-            case Some(JsString(src)) => Utils.base64Decode(src)
-            case other => throw new Exception(s"Bad value ${other}")
-        }
-        val instanceTypeDB : InstanceTypeDB = metaInfo.get("instanceTypeDB") match {
-            case Some(JsString(src)) =>
-                val dbRaw = Utils.base64Decode(src)
-                dbRaw.parseJson.convertTo[InstanceTypeDB]
-            case other => throw new Exception(s"Bad value ${other}")
-        }
-        (taskSource, instanceTypeDB)
-    }
-
     // find all file URLs in a Wom value
     private def findFiles(v : WomValue) : Vector[Furl] = {
         v match {

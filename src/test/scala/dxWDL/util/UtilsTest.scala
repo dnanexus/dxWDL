@@ -13,7 +13,7 @@ class UtilsTest extends FlatSpec with Matchers {
     }
 
     it should "Correctly encode and decode base64" in {
-        val encodeDecode = Utils.base64Decode(Utils.base64Encode(sentence))
+        val encodeDecode = Utils.base64DecodeAndGunzip(Utils.gzipAndBase64Encode(sentence))
         sentence should be (encodeDecode)
     }
 }
