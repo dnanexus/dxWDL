@@ -2,10 +2,10 @@
 
 ## 1.02
 - Removing the instance-type database from workflows and applet when it isn't needed.
-
+- Adding the WDL source code to workflow objects on the platform. It is stored in the details field, and
+can be [retrieved](./doc/ExpertOptions.md#Getting-WDL-workflow-source).
 
 ## 1.01
-
 - Ensure that native docker uses the machine's hostname (i.e., the job ID) as
   the hostname, matching the previous behavior of dx-docker. This allows
   setting the job ID in error messages, helping debugging. Contributed by Jeff Tratner.
