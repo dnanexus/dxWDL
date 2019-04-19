@@ -881,8 +881,9 @@ case class Native(dxWDLrtId: Option[String],
         // Add the workflow WOM source into the details field.
         // There could be JSON-invalid characters in the source code, so we use base64 encoding.
         // It could be quite large, so we use compression.
+        val womSourceCode =Utils.gzipAndBase64Encode(wf.womSourceCode)
         val workflowSource = Map("details" ->
-                                     JsString(Utils.gzipAndBase64Encode(wf.womSourceCode)))
+                                     JsArray(JsString(womSourceCode)))
 
         // pack all the arguments into a single API call
         val req = JsObject(reqFields ++ wfInputOutput ++ workflowSource)
@@ -891,7 +892,7 @@ case class Native(dxWDLrtId: Option[String],
         val dxwf = DXWorkflow.getInstance(id)
 
         // Close the workflow
-        if (leaveWorkflowsOpen)
+        if (!leaveWorkflowsOpen)
             dxwf.close()
         dxwf
     }
