@@ -4,14 +4,15 @@
 package dxWDL.compiler
 
 import com.dnanexus.{DXDataObject, DXProject, DXRecord, DXSearch}
-import dxWDL.util._
-import dxWDL.util.Utils.DX_WDL_ASSET
 import java.nio.file.{Path, Paths}
 import scala.collection.JavaConverters._
+
 import wom.callable._
-import wom.core.WorkflowSource
 import wom.executable.WomBundle
 import wom.types._
+
+import dxWDL.util._
+import dxWDL.util.Utils.DX_WDL_ASSET
 
 case class Top(cOpt: CompilerOptions) {
     val verbose = cOpt.verbose
@@ -194,9 +195,7 @@ case class Top(cOpt: CompilerOptions) {
     }
 
     // Compile IR only
-    def applyOnlyIR(source: Path) : (Language.Value,
-                                     Map[String, WorkflowSource],
-                                     IR.Bundle) = {
+    def applyOnlyIR(source: Path) : IR.Bundle = {
         val (language, womBundle, allSources, subBundles) = ParseWomSourceFile.apply(source)
 
         // Check that each workflow/task appears just one
@@ -208,15 +207,6 @@ case class Top(cOpt: CompilerOptions) {
             case None => ()
             case Some(x) => validate(x)
         }
-
-        // Make a list of workflow names, and their WOM sources
-        val wfSources = everythingBundle.allCallables.collect{
-            case (name, wf : WorkflowDefinition) =>
-                allSources.get(wf.name) match {
-                    case None =>
-                        throw new Exception(s"Could not find source for workflow ${wf.name}")
-                    case Some(wfSource) => name -> wfSource
-        }.toMap
 
         // Compile the WDL workflow into an Intermediate
         // Representation (IR)
@@ -239,7 +229,7 @@ case class Top(cOpt: CompilerOptions) {
             Utils.writeFileContent(dxInputFile, dxInputs.prettyPrint)
             Utils.trace(cOpt.verbose.on, s"Wrote dx JSON input file ${dxInputFile}")
         }
-        (language, wfSources, bundle2)
+        bundle2
     }
 
     // Compile up to native dx applets and workflows
@@ -248,20 +238,7 @@ case class Top(cOpt: CompilerOptions) {
               dxProject: DXProject,
               runtimePathConfig: DxPathConfig) : Option[String] = {
         // generate IR
-        val (_, wfSources, bundle: IR.Bundle) = applyOnlyIR(source)
-
-        // Upload the workflow source files. We want to link each
-        // DNAx workflow to the WDL source.
-        val workflowSourcesAsDxFiles : Map[String, DXFile] = wfSources.map{
-            case (name, womSourceCode) =>
-                val dxFile = DXFile.newFile()
-                    .setProject(dxProject)
-                    .setFolder(folder)
-                    .build()
-                dxFile.upload(uploadBytes)
-                dxFile.close() // do we need closeAndWait?
-                name -> dxFile
-        }.toMap
+        val bundle: IR.Bundle = applyOnlyIR(source)
 
         // Up to this point, compilation does not require
         // the dx:project. This allows unit testing without
@@ -269,9 +246,7 @@ case class Top(cOpt: CompilerOptions) {
         // pass the dx:project is required to establish
         // (1) the instance price list and database
         // (2) the output location of applets and workflows
-        val cResults = compileNative(bundle,
-                                     folder, dxProject, runtimePathConfig,
-                                     workflowSourcesAsDxFiles)
+        val cResults = compileNative(bundle, folder, dxProject, runtimePathConfig)
         val execIds = cResults.primaryCallable match {
             case None =>
                 cResults.execDict.map{ case (_, dxExec) => dxExec.getId }.mkString(",")

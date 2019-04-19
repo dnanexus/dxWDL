@@ -410,7 +410,7 @@ object Main extends App {
             val top = compiler.Top(cOpt)
             cOpt.compileMode match {
                 case CompilerFlag.IR =>
-                    val (_, _, ir: compiler.IR.Bundle) = top.applyOnlyIR(sourceFile)
+                    val ir: compiler.IR.Bundle = top.applyOnlyIR(sourceFile)
                     return SuccessfulTerminationIR(ir)
 
                 case CompilerFlag.All

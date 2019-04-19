@@ -8,6 +8,7 @@ import com.dnanexus._
 import java.security.MessageDigest
 import scala.collection.JavaConverters._
 import spray.json._
+
 import wom.types._
 import wom.values._
 
@@ -828,6 +829,7 @@ case class Native(dxWDLrtId: Option[String],
                               digest: String,
                               execDict: ExecDict) : DXWorkflow = {
         trace(verbose2, s"build workflow ${wf.name}")
+
         val stagesReq =
             wf.stages.foldLeft(Vector.empty[JsValue]) {
                 case (stagesReq, stg) =>
@@ -876,14 +878,21 @@ case class Native(dxWDLrtId: Option[String],
                 Map.empty
             }
 
+        // Add the workflow WOM source into the details field.
+        // There could be JSON-invalid characters in the source code, so we use base64 encoding.
+        // It could be quite large, so we use compression.
+        val workflowSource = Map("details" ->
+                                     JsString(Utils.gzipAndBase64Encode(wf.womSourceCode)))
+
         // pack all the arguments into a single API call
-        val req = JsObject(reqFields ++ wfInputOutput)
+        val req = JsObject(reqFields ++ wfInputOutput ++ workflowSource)
         val rep = DXAPI.workflowNew(jsonNodeOfJsValue(req), classOf[JsonNode])
         val id = apiParseReplyID(rep)
         val dxwf = DXWorkflow.getInstance(id)
 
         // Close the workflow
-        dxwf.close()
+        if (leaveWorkflowsOpen)
+            dxwf.close()
         dxwf
     }
 

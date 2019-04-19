@@ -206,7 +206,7 @@ class GenerateIRTest extends FlatSpec with Matchers {
     }
 
 
-    it should "four nesting levels" in {
+    it should "four nesting levels" taggedAs(EdgeTest) in {
         val path = pathFromBasename("nested", "four_levels.wdl")
         val retval = Main.compile(
             path.toString :: cFlags
@@ -272,7 +272,7 @@ class GenerateIRTest extends FlatSpec with Matchers {
         }
     }
 
-    it should "recognize the streaming annotation for wdl draft2" taggedAs(EdgeTest) in {
+    it should "recognize the streaming annotation for wdl draft2" in {
         val path = pathFromBasename("draft2", "streaming.wdl")
         val retval = Main.compile(
             path.toString :: cFlags
