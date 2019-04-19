@@ -27,6 +27,12 @@ case class DxPathConfig(
     // scratch space for WDL stdlib operations like "write_lines"
     tmpDir : Path,
 
+    // Where a JSON representation of the instance data base is stored
+    instanceTypeDB: Path,
+
+    // Source WOM code
+    womSourceCodeEncoded: Path,
+
     stdout: Path,
     stderr: Path,
 
@@ -69,6 +75,9 @@ object DxPathConfig {
         val outputFilesDir: Path = homeDir.resolve("outputs")
         val tmpDir : Path = homeDir.resolve("job_scratch_space")
 
+        val instanceTypeDB = homeDir.resolve("instance_type_db.json")
+        val womSourceCode = homeDir.resolve("source.wdl.uu64")
+
         val stdout = metaDir.resolve("stdout")
         val stderr = metaDir.resolve("stderr")
         val script = metaDir.resolve("script")
@@ -83,6 +92,10 @@ object DxPathConfig {
                      inputFilesDir,
                      outputFilesDir,
                      tmpDir,
+
+                     instanceTypeDB,
+                     womSourceCode,
+
                      stdout,
                      stderr,
                      dockerSubmitScript,

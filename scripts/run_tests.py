@@ -89,10 +89,24 @@ single_tasks_list = [
     "empty_stdout"
 ]
 
+# Tests run in continuous integration. We remove the native app test,
+# because we don't want to give permissions for creating platform apps.
+#ci_test_list = copy.deepcopy(medium_test_list)
+#ci_test_list.remove("call_native_app")
+#ci_test_list.remove("platform_asset")
+ci_test_list = [
+    "advanced",
+    "call_native",
+    "call_with_defaults1",
+    "cannes",
+    "files"
+]
+
 medium_test_list= wdl_v1_list + docker_test_list
 large_test_list= draft2_test_list + wdl_v1_list + docker_test_list + single_tasks_list
 
 test_suites = {
+    'CI': ci_test_list,
     'M': medium_test_list,
     'L': large_test_list,
     'tasks' : single_tasks_list,

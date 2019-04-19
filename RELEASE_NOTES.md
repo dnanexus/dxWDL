@@ -1,5 +1,9 @@
 # Release Notes
 
+## 1.02
+- Removing the instance-type database from workflows and applet when it isn't needed.
+
+
 ## 1.01
 
 - Ensure that native docker uses the machine's hostname (i.e., the job ID) as

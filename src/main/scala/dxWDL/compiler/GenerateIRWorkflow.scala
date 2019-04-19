@@ -559,7 +559,7 @@ case class GenerateIRWorkflow(wf : WorkflowDefinition,
         // Handle outputs that are constants or variables, we can output them directly
         if (outputNodes.forall(Block.isSimpleOutput)) {
             val simpleWfOutputs = outputNodes.map(node => buildSimpleWorkflowOutput(node, env)).toVector
-            val irwf = IR.Workflow(wfName, wfInputs, simpleWfOutputs, stages, true)
+            val irwf = IR.Workflow(wfName, wfInputs, simpleWfOutputs, stages, wfSourceCode, true)
             (irwf, auxCallables.flatten, simpleWfOutputs)
         } else {
             // Some of the outputs are expressions. We need an extra applet+stage
@@ -572,7 +572,9 @@ case class GenerateIRWorkflow(wf : WorkflowDefinition,
                 (cVar, IR.SArgLink(outputStage.id, cVar))
             }
             val irwf = IR.Workflow(wfName,
-                                   wfInputs, wfOutputs, stages :+ outputStage, true)
+                                   wfInputs, wfOutputs,
+                                   stages :+ outputStage,
+                                   wfSourceCode, true)
             (irwf, auxCallables.flatten :+ outputApplet, wfOutputs)
         }
     }
@@ -618,6 +620,7 @@ case class GenerateIRWorkflow(wf : WorkflowDefinition,
                                wfInputs.toVector,
                                wfOutputs.toVector,
                                commonStg +: stages :+ outputStage,
+                               wfSourceCode,
                                false)
         (irwf, commonApplet +: auxCallables.flatten :+ outputApplet, wfOutputs)
     }
