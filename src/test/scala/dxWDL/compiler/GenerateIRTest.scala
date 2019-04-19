@@ -105,7 +105,7 @@ class GenerateIRTest extends FlatSpec with Matchers {
         ) shouldBe a [Main.SuccessfulTerminationIR]
     }
 
-    ignore should "compile scatters over maps --- doesn't work in cromwell v37,v38" in {
+    it should "compile scatters over maps --- doesn't work in cromwell v37,v38" in {
         val path = pathFromBasename("compiler", "dict2.wdl")
         Main.compile(
             path.toString :: cFlags
