@@ -98,7 +98,7 @@ ci_test_list = [
     "advanced",
     "call_native",
     "call_with_defaults1",
-    "cannes",
+    "trains",
     "files"
 ]
 

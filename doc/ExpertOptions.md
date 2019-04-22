@@ -565,13 +565,14 @@ $ export HTTP_PROXY = https://john_smith:welcome1@proxy.acme.com:8080
 $ java -jar dxWDL.jar compile ...
 ```
 
-# Getting WDL workflow source
+# Getting WDL sources
 
-Assume workflow `foo` was compiled from `foo.wdl`, and you wish to
-recover the original workflow source code. The platform object `foo` includes a details
-field that contains the WDL source, in compressed form, uuencoded form. To extract it
-you can do:
+Compiled workflows and tasks include the original WDL source code in
+the details field. For example, examine workflow `foo` that was
+compiled from `foo.wdl`.  The platform object `foo` includes a details
+field that contains the WDL source, in compressed, uuencoded
+form. To extract it you can do:
 
 ```
-dx describe foo --details --json | jq '.details[0]' | sed 's/"//g' | base64 --decode | gunzip
+dx describe /builds/1.02/applets/hello --json --details | jq '.details | .womSourceCode' | sed 's/"//g' | base64 --decode | gunzip
 ```

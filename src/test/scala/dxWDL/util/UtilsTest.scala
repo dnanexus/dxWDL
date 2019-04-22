@@ -2,7 +2,6 @@ package dxWDL.util
 
 import org.scalatest.{FlatSpec, Matchers}
 
-
 class UtilsTest extends FlatSpec with Matchers {
     val sentence = "I am major major"
 
