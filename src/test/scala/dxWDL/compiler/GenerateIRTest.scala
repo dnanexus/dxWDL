@@ -289,4 +289,12 @@ class GenerateIRTest extends FlatSpec with Matchers {
         //val iDef = diffTask.inputs.find(_.name == "a").get
         //iDef.parameterMeta shouldBe (Some(MetaValueElement.MetaValueElementString("stream")))
     }
+
+    it should "handle an empty workflow" in {
+        val path = pathFromBasename("util", "empty_workflow.wdl")
+        val retval = Main.compile(
+            path.toString :: cFlags
+        )
+        retval shouldBe a [Main.SuccessfulTerminationIR]
+    }
 }

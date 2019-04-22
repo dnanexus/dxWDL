@@ -1,9 +1,10 @@
 # Release Notes
 
 ## 1.02
-- Removing the instance-type database from workflows and applet when it isn't needed.
-- Adding the WDL source code to workflow objects on the platform. It is stored in the details field, and
-can be [retrieved](./doc/ExpertOptions.md#Getting-WDL-workflow-source).
+- Removed the instance-type database, and wom source code from the inputs of applets.
+- Added the WDL source code to workflow and applet objects on the platform. It is stored in the details field, and
+can be easily [retrieved](./doc/ExpertOptions.md#Getting-WDL-sources).
+- Bug fixes
 
 ## 1.01
 - Ensure that native docker uses the machine's hostname (i.e., the job ID) as

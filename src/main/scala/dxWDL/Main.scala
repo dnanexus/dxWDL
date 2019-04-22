@@ -644,7 +644,7 @@ object Main extends App {
                 val dbRaw = Utils.readFileContent(dxPathConfig.instanceTypeDB)
                 val instanceTypeDB = dbRaw.parseJson.convertTo[InstanceTypeDB]
 
-                // Get the WOM source code (currently WDL, could be also CWL in the future)
+                   // Get the WOM source code (currently WDL, could be also CWL in the future)
                 var womSourceCodeEncoded = Utils.readFileContent(dxPathConfig.womSourceCodeEncoded)
                 womSourceCodeEncoded = womSourceCodeEncoded.substring(0, womSourceCodeEncoded.length - 1)
                 val womSourceCode = Utils.base64DecodeAndGunzip(womSourceCodeEncoded)

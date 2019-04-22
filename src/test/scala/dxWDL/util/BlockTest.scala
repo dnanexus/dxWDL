@@ -327,4 +327,12 @@ class BlockTest extends FlatSpec with Matchers {
  |""".stripMargin) */
         Utils.ignore(b)
     }
+
+    it should "handle an empty workflow" in {
+        val path = pathFromBasename("util", "empty_workflow.wdl")
+        val wfSourceCode = Utils.readFileContent(path)
+        val wf : WorkflowDefinition = ParseWomSourceFile.parseWdlWorkflow(wfSourceCode)
+        val (_, subBlocks, _) = Block.split(wf.innerGraph, wfSourceCode)
+        subBlocks.size shouldBe(0)
+    }
 }

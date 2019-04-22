@@ -337,7 +337,7 @@ case class Native(dxWDLrtId: Option[String],
                 }
         }
 
-        // Add the pricing model, and make the prices
+         // Add the pricing model, and make the prices
         // opaque.
         val dbOpaque = InstanceTypeDB.opaquePrices(instanceTypeDB)
         val dbOpaqueInstance = dbOpaque.toJson.prettyPrint
@@ -349,6 +349,9 @@ case class Native(dxWDLrtId: Option[String],
         s"""|#!/bin/bash -ex
             |
             |# write the WDL script into a file
+            |# We are making a local copy of the workflow/task source,
+            |# so that we wouldn't need to perform an API call to
+            |# access the details field.
             |cat >${dxPathConfig.womSourceCodeEncoded} <<'EOL'
             |${wdlCodeUu64}
             |EOL
@@ -471,6 +474,7 @@ case class Native(dxWDLrtId: Option[String],
     // Set the run spec.
     //
     private def calcRunSpec(applet: IR.Applet,
+                            details: Map[String, JsValue],
                             bashScript: String) : (JsValue, JsValue) = {
         // find the dxWDL asset
         val instanceType:String = applet.instanceType match {
@@ -531,13 +535,12 @@ case class Native(dxWDLrtId: Option[String],
         }
         val runSpecEverything = JsObject(runSpecWithExtras ++ bundledDepends)
 
-        val details = dockerFile match {
-            case None => JsNull
+        val details2 = dockerFile match {
+            case None => details
             case Some(dxfile) =>
-                JsObject("details" ->
-                             JsObject("docker-image" -> Utils.dxFileToJsValue(dxfile)))
+                details + ("docker-image" -> Utils.dxFileToJsValue(dxfile))
         }
-        (runSpecEverything, details)
+        (runSpecEverything, JsObject(details2))
     }
 
     def calcAccess(applet: IR.Applet) : JsValue = {
@@ -648,7 +651,14 @@ case class Native(dxWDLrtId: Option[String],
         val outputSpec : Vector[JsValue] = applet.outputs.map(cVar =>
             cVarToSpec(cVar)
         ).flatten.toVector
-        val (runSpec : JsValue, details: JsValue) = calcRunSpec(applet, bashScript)
+
+        // put the wom source code into the details field.
+        val womSourceCode = Utils.gzipAndBase64Encode(applet.womSourceCode)
+        val details1 = Map("womSourceCode" -> JsString(womSourceCode))
+
+        val (runSpec : JsValue, details2: JsValue) = calcRunSpec(applet,
+                                                                 details1,
+                                                                 bashScript)
         val access : JsValue = calcAccess(applet)
 
          // pack all the core arguments into a single request
@@ -658,10 +668,9 @@ case class Native(dxWDLrtId: Option[String],
             "outputSpec" -> JsArray(outputSpec),
             "runSpec" -> runSpec,
             "dxapi" -> JsString("1.0.0"),
-            "tags" -> JsArray(JsString("dxWDL"))
+            "tags" -> JsArray(JsString("dxWDL")),
+            "details" -> details2
         )
-        if (details != JsNull)
-            reqCore += ("details" -> details)
         if (access != JsNull)
             reqCore += ("access" -> access)
 
@@ -883,7 +892,7 @@ case class Native(dxWDLrtId: Option[String],
         // It could be quite large, so we use compression.
         val womSourceCode =Utils.gzipAndBase64Encode(wf.womSourceCode)
         val workflowSource = Map("details" ->
-                                     JsArray(JsString(womSourceCode)))
+                                     JsObject("womSourceCode" -> JsString(womSourceCode)))
 
         // pack all the arguments into a single API call
         val req = JsObject(reqFields ++ wfInputOutput ++ workflowSource)

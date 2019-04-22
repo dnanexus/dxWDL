@@ -30,7 +30,8 @@ case class DxPathConfig(
     // Where a JSON representation of the instance data base is stored
     instanceTypeDB: Path,
 
-    // Source WOM code
+    // Source WOM code. We could get it from the details field, but that
+    // would require an additional API call. This is a private copy.
     womSourceCodeEncoded: Path,
 
     stdout: Path,
@@ -76,7 +77,7 @@ object DxPathConfig {
         val tmpDir : Path = homeDir.resolve("job_scratch_space")
 
         val instanceTypeDB = homeDir.resolve("instance_type_db.json")
-        val womSourceCode = homeDir.resolve("source.wdl.uu64")
+        val womSourceCodeEncoded = homeDir.resolve("source.wdl.uu64")
 
         val stdout = metaDir.resolve("stdout")
         val stderr = metaDir.resolve("stderr")
@@ -93,10 +94,10 @@ object DxPathConfig {
                      outputFilesDir,
                      tmpDir,
 
-                     instanceTypeDB,
-                     womSourceCode,
+            instanceTypeDB,
+                     womSourceCodeEncoded,
 
-                     stdout,
+            stdout,
                      stderr,
                      dockerSubmitScript,
                      script,

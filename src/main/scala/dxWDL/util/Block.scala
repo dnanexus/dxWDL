@@ -288,7 +288,6 @@ object Block {
              Vector[Block], // blocks
              Vector[GraphOutputNode]) // outputs
     = {
-        assert(graph.nodes.size > 0)
         var rest : Set[GraphNode] = graph.nodes
         var blocks = Vector.empty[Block]
 
@@ -299,6 +298,9 @@ object Block {
         // separate out the outputs
         val outputBlock = graph.outputNodes.toVector
         rest --= outputBlock.toSet
+
+        if (graph.nodes.isEmpty)
+            return (inputBlock, Vector.empty, outputBlock)
 
         // Create a separate block for each call. This maintains
         // the sort order from the origial code.
