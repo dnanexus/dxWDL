@@ -30,6 +30,7 @@ import wom.callable.Callable.{InputDefinition, OutputDefinition}
 import wom.core.WorkflowSource
 import wom.values._
 
+import dxWDL.base._
 import dxWDL.util._
 
 // This object is used to allow easy testing of complex

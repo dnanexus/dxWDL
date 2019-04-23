@@ -5,6 +5,7 @@ import spray.json._
 import wom.types._
 import wom.values._
 
+import dxWDL.base._
 import dxWDL.util._
 import dxWDL.util.Utils.META_INFO
 

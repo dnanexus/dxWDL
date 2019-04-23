@@ -14,6 +14,8 @@ import spray.json._
 import wom.types._
 import wom.values._
 
+import dxWDL.base._
+
 // A union of all the different ways of building a value
 // from JSON passed by the platform.
 //
@@ -279,7 +281,7 @@ object WdlVarLinks {
                     if (womType == null)
                         "null"
                     else
-                        womType.stableName
+                        WomTypeSerialization.typeName(womType)
                 val womValueStr =
                     if (womValue == null)
                         "null"

@@ -10,6 +10,7 @@ import wom.expression.WomExpression
 import wom.types._
 import wom.values._
 
+import dxWDL.base._
 import dxWDL.util._
 import dxWDL.util.Utils.{META_INFO, FLAT_FILES_SUFFIX}
 

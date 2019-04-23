@@ -1,4 +1,4 @@
-package dxWDL.util
+package dxWDL.base
 
 import wom.types._
 
@@ -33,6 +33,12 @@ object WomTypeSerialization {
                 val ls = toString(lType)
                 val rs = toString(rType)
                 s"Pair[$ls, $rs]"
+
+            // structs
+            case WomCompositeType(_, None) =>
+                throw new Exception("unnamed struct")
+            case WomCompositeType(_, Some(structName)) =>
+                structName
 
             // catch-all for other types not currently supported
             case _ =>
@@ -113,6 +119,52 @@ object WomTypeSerialization {
                 }
             case _ =>
                 throw new Exception(s"Cannot convert ${str} to a wom type")
+        }
+    }
+
+
+    // Get a human readable type name
+    // Int ->   "Int"
+    // Array[Int] -> "Array[Int]"
+    def typeName(t: WomType) : String = {
+        t match {
+            // Base case: primitive types.
+            case WomNothingType => "Nothing"
+            case WomBooleanType => "Boolean"
+            case WomIntegerType => "Int"
+            case WomLongType => "Long"
+            case WomFloatType => "Float"
+            case WomStringType => "String"
+            case WomSingleFileType => "File"
+
+            // compound types
+            case WomMaybeEmptyArrayType(memberType) =>
+                val inner = typeName(memberType)
+                s"Array[${inner}]"
+            case WomMapType(keyType, valueType) =>
+                val k = typeName(keyType)
+                val v = typeName(valueType)
+                s"Map[$k, $v]"
+            case WomNonEmptyArrayType(memberType) =>
+                val inner = typeName(memberType)
+                s"Array[${inner}]+"
+            case WomOptionalType(memberType) =>
+                val inner = typeName(memberType)
+                s"$inner?"
+            case WomPairType(lType, rType) =>
+                val ls = typeName(lType)
+                val rs = typeName(rType)
+                s"Pair[$ls, $rs]"
+
+            // structs
+            case WomCompositeType(_, None) =>
+                throw new Exception("unnamed struct")
+            case WomCompositeType(_, Some(structName)) =>
+                structName
+
+            // catch-all for other types not currently supported
+            case _ =>
+                throw new Exception(s"Unsupported WOM type ${t}, ${t.stableName}")
         }
     }
 }

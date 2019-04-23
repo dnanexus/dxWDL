@@ -6,6 +6,8 @@ import spray.json._
 import wdl.draft2.model.types._
 import wom.types._
 
+import dxWDL.base.WomTypeSerialization.typeName
+
 // Exception used for AppInternError
 class AppInternalException private(ex: RuntimeException) extends RuntimeException(ex) {
     def this(message:String) = this(new RuntimeException(message))
@@ -117,15 +119,17 @@ case class ExecLinkInfo(name: String,
                         outputs: Map[String, WomType],
                         dxExec: DxExec)
 
+
+
 object ExecLinkInfo {
     def writeJson(ali: ExecLinkInfo) : JsValue = {
             // Serialize applet input definitions, so they could be used
             // at runtime.
         val appInputDefs: Map[String, JsString] = ali.inputs.map{
-            case (name, womType) => name -> JsString(womType.stableName)
+            case (name, womType) => name -> JsString(typeName(womType))
         }.toMap
         val appOutputDefs: Map[String, JsString] = ali.outputs.map{
-            case (name, womType) => name -> JsString(womType.stableName)
+            case (name, womType) => name -> JsString(typeName(womType))
         }.toMap
         JsObject(
             "name" -> JsString(ali.name),

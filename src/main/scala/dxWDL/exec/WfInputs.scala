@@ -7,6 +7,7 @@ import spray.json._
 import wom.callable.{WorkflowDefinition}
 import wom.values._
 
+import dxWDL.base._
 import dxWDL.util._
 
 case class WfInputs(wf: WorkflowDefinition,

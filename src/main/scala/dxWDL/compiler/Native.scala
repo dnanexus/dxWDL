@@ -12,6 +12,7 @@ import spray.json._
 import wom.types._
 import wom.values._
 
+import dxWDL.base.WomTypeSerialization
 import dxWDL.util._
 import dxWDL.util.Utils.{CHECKSUM_PROP, jsonNodeOfJsValue, trace}
 import IR.{CVar, SArg}

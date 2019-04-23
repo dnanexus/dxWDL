@@ -80,6 +80,8 @@ import wom.graph._
 import wom.graph.expression._
 import wom.types._
 
+import dxWDL.base._
+
 // A sorted group of graph nodes, that match some original
 // set of WDL statements.
 case class Block(nodes : Vector[GraphNode]) {

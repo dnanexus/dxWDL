@@ -50,6 +50,7 @@ import wom.graph.expression._
 import wom.values._
 import wom.types._
 
+import dxWDL.base._
 import dxWDL.util._
 
 case class WfFragRunner(wf: WorkflowDefinition,

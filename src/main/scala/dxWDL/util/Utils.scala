@@ -112,7 +112,6 @@ object Utils {
         }
     }
 
-
     // Create a file from a string
     def writeFileContent(path : Path, str : String) : Unit = {
         Files.write(path, str.getBytes(StandardCharsets.UTF_8))

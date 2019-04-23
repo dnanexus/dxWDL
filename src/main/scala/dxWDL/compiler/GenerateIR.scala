@@ -5,6 +5,7 @@ package dxWDL.compiler
 import wom.core.WorkflowSource
 import wom.callable.{Callable, CallableTaskDefinition, ExecutableTaskDefinition, WorkflowDefinition}
 import wom.graph._
+import wom.types._
 
 import dxWDL.util._
 
@@ -77,6 +78,7 @@ case class GenerateIR(verbose: Verbose) {
     }
 
     private def compileWorkflow(wf : WorkflowDefinition,
+                                typeAliases: Map[String, WomType],
                                 wfSource: String,
                                 callables: Map[String, IR.Callable],
                                 language: Language.Value,
@@ -106,9 +108,9 @@ case class GenerateIR(verbose: Verbose) {
             }.toVector
 
         val WdlCodeSnippet(wfSourceStandAlone) =
-            WdlCodeGen(verbose).standAloneWorkflow(wfSource,
-                                                   callablesUsedInWorkflow,
-                                                   language)
+            WdlCodeGen(verbose, typeAliases).standAloneWorkflow(wfSource,
+                                                                callablesUsedInWorkflow,
+                                                                language)
 
         val gir = new GenerateIRWorkflow(wf, wfSource, wfSourceStandAlone,
                                          callsLoToHi, callables, language, verbose)
@@ -117,6 +119,7 @@ case class GenerateIR(verbose: Verbose) {
 
     // Entry point for compiling tasks and workflows into IR
     private def compileCallable(callable: Callable,
+                                typeAliases: Map[String, WomType],
                                 taskDir: Map[String, String],
                                 workflowDir: Map[String, String],
                                 callables: Map[String, IR.Callable],
@@ -128,7 +131,7 @@ case class GenerateIR(verbose: Verbose) {
                 case None => throw new Exception(s"Did not find task ${task.name}")
                 case Some(x) => x
             }
-            GenerateIRTask(verbose).apply(task, taskSourceCode)
+            GenerateIRTask(verbose, typeAliases).apply(task, taskSourceCode)
         }
         callable match {
             case exec : ExecutableTaskDefinition =>
@@ -141,7 +144,7 @@ case class GenerateIR(verbose: Verbose) {
                     case None =>
                         throw new Exception(s"Did not find sources for workflow ${wf.name}")
                     case Some(wfSource) =>
-                        compileWorkflow(wf, wfSource, callables, language, locked, reorg)
+                        compileWorkflow(wf, typeAliases, wfSource, callables, language, locked, reorg)
                 }
             case x =>
                 throw new Exception(s"""|Can't compile: ${callable.name}, class=${callable.getClass}
@@ -207,6 +210,7 @@ case class GenerateIR(verbose: Verbose) {
 
         for (callable <- depOrder) {
             val (exec, auxCallables) = compileCallable(callable,
+                                                       womBundle.typeAliases,
                                                        taskDir,
                                                        workflowDir,
                                                        allCallables,

@@ -1,4 +1,4 @@
-package dxWDL.util
+package dxWDL.base
 
 import spray.json._
 import wom.values._
@@ -140,9 +140,7 @@ object WomValueSerialization {
                 WomOptionalValue(womFromJSON(t, jsv))
 
             case _ =>
-                throw new AppInternalException(
-                    s"Unsupported combination ${t.stableName} ${jsv.prettyPrint}"
-                )
+                throw new Exception(s"Unsupported combination ${t.stableName} ${jsv.prettyPrint}")
         }
     }
 
