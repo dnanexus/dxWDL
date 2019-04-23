@@ -543,7 +543,7 @@ case class Task(task:WdlTask,
                 |    # Run the container under the dnanexus user, so it will have permissions to read/write
                 |    # files in the home directory. This is required in cases where the container uses a
                 |    # different user.
-                |    extraFlags="--user $$(id -u):$$(id -g)"
+                |    extraFlags="--user $$(id -u):$$(id -g) --hostname $$(hostname)"
                 |fi
                 |
                 |$${DOCKER_CMD} run $${extraFlags} --entrypoint /bin/bash -v ${DX_HOME}:${DX_HOME} ${imgName} $${HOME}/execution/meta/script

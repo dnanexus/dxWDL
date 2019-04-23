@@ -1,5 +1,10 @@
 # Release Notes
 
+## 0.81.6
+- Ensure that native docker uses the machine's hostname (i.e., the job ID) as
+  the hostname, matching the previous behavior of dx-docker. This allows
+  setting the job ID in error messages, helping debugging. Contributed by Jeff Tratner.
+
 ## 0.81.5
 - Adding debug information to conversions from JSON to WDL variables. This helps
 track down runtime problems with missing variables that a task is expecting. Previously,
