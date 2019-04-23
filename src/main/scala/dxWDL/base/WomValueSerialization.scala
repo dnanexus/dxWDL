@@ -5,6 +5,7 @@ import wom.values._
 import wom.types._
 
 object WomValueSerialization {
+
     // Serialization of a WOM value to JSON
     private def womToJSON(t:WomType, w:WomValue) : JsValue = {
         (t, w)  match {
@@ -48,15 +49,6 @@ object WomValueSerialization {
                 val vJs = womToJSON(values.womType, values)
                 JsObject("keys" -> kJs, "values" -> vJs)
 
-            // keys are strings, requiring no conversion. We do
-            // need to carry the types are runtime.
-            case (WomObjectType, WomObject(m: Map[String, WomValue], _)) =>
-                JsObject(m.map{ case (k, v) =>
-                             k -> JsObject(
-                                 "type" -> JsString(WomTypeSerialization.toString(v.womType)),
-                                 "value" -> womToJSON(v.womType, v))
-                         }.toMap)
-
             case (WomPairType(lType, rType), WomPair(l,r)) =>
                 val lJs = womToJSON(lType, l)
                 val rJs = womToJSON(rType, r)
@@ -68,6 +60,16 @@ object WomValueSerialization {
 
             // missing value
             case (_, WomOptionalValue(_,None)) => JsNull
+
+            // keys are strings, requiring no conversion. We do
+            // need to carry the types are runtime.
+            case (WomCompositeType(typeMap, _), WomObject(m: Map[String, WomValue], _)) =>
+                val mJs : Map[String, JsValue] = m.map{
+                    case (key, v) =>
+                        val t: WomType = typeMap(key)
+                        key -> womToJSON(t, v)
+                }.toMap
+                JsObject(mJs)
 
             case (_,_) => throw new Exception(
                 s"""|Unsupported combination type=(${t.stableName},${t})
@@ -113,18 +115,6 @@ object WomValueSerialization {
                     case _ => throw new Exception(s"Malformed serialized map ${jsv}")
                 }
 
-            case (WomObjectType, JsObject(fields)) =>
-                val m: Map[String, WomValue] = fields.map{ case (k,v) =>
-                    val elem:WomValue =
-                        v.asJsObject.getFields("type", "value") match {
-                            case Seq(JsString(elemTypeStr), elemValue) =>
-                                val elemType:WomType = WomTypeSerialization.fromString(elemTypeStr)
-                                womFromJSON(elemType, elemValue)
-                        }
-                    k -> elem
-                }.toMap
-                WomObject(m)
-
             case (WomPairType(lType, rType), JsObject(_)) =>
                 jsv.asJsObject.getFields("left", "right") match {
                     case Seq(lJs, rJs) =>
@@ -133,6 +123,19 @@ object WomValueSerialization {
                         WomPair(left, right)
                     case _ => throw new Exception(s"Malformed serialized par ${jsv}")
                 }
+
+            // structs
+            case (WomCompositeType(typeMap, None), _) =>
+                throw new Exception("struct without a name")
+
+            case (WomCompositeType(typeMap, Some(structName)), JsObject(fields)) =>
+                val m: Map[String, WomValue] = fields.map{
+                    case (key, elemValue) =>
+                        val t : WomType = typeMap(key)
+                        val elem:WomValue = womFromJSON(t, elemValue)
+                        key -> elem
+                }.toMap
+                WomObject(m)
 
             case (WomOptionalType(t), JsNull) =>
                 WomOptionalValue(t, None)

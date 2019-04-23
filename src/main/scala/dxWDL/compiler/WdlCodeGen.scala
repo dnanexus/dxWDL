@@ -226,9 +226,6 @@ task Add {
 
     // Write valid WDL code that defines the type aliases we have.
     def typeAliasDefinitions : String = {
-        if (typeAliases.isEmpty)
-            return ""
-
         val snippetVec = typeAliases.map{
             case (name, WomCompositeType(typeMap, _)) =>
                 val fieldLines = typeMap.map{ case (fieldName, womType) =>
@@ -242,10 +239,7 @@ task Add {
             case (name, other) =>
                 throw new Exception(s"Unknown type alias ${name} ${other}")
         }
-        val defs = snippetVec.mkString("\n")
-        s"""|# struct definitions
-            |${defs}
-            |""".stripMargin
+        snippetVec.mkString("\n")
     }
 
     // A workflow must have definitions for all the tasks it
@@ -273,6 +267,7 @@ task Add {
         val wfWithoutImportCalls = flattenWorkflow(originalWorkflowSource)
         val wdlWfSource = s"""|${versionString(language)}
                               |
+                              |# struct definitions
                               |${typeAliasDefinitions}
                               |
                               |# Task headers

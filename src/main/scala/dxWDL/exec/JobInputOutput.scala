@@ -328,8 +328,6 @@ case class JobInputOutput(dxIoFunctions : DxIoFunctions,
                 }
             case WomPair(lf, rt) =>
                 findFiles(lf) ++ findFiles(rt)
-            case _ : WomObject =>
-                throw new Exception("WOM objects not supported")
 
             // empty array
             case (WomArray(_, value: Seq[WomValue])) =>
@@ -337,6 +335,12 @@ case class JobInputOutput(dxIoFunctions : DxIoFunctions,
 
             case (WomOptionalValue(_, Some(value))) =>
                 findFiles(value)
+
+            // structs
+            case WomObject(m, t) =>
+                m.map{
+                    case (k, v) => findFiles(v)
+                }.flatten.toVector
 
             case _ => Vector.empty
         }
@@ -401,9 +405,6 @@ case class JobInputOutput(dxIoFunctions : DxIoFunctions,
                 val right = translateFiles(r, translation)
                 WomPair(left, right)
 
-            case WomObject(_,_) =>
-                throw new Exception("WOM objects not supported")
-
             case WomArray(t: WomArrayType, a: Seq[WomValue]) =>
                 val a1 = a.map{ v => translateFiles(v, translation) }
                 WomArray(t, a1)
@@ -413,6 +414,12 @@ case class JobInputOutput(dxIoFunctions : DxIoFunctions,
             case WomOptionalValue(t, Some(v)) =>
                 val v1 = translateFiles(v, translation)
                 WomOptionalValue(t, Some(v1))
+
+            case WomObject(m,t) =>
+                val m2 = m.map{
+                    case (k, v) => k -> translateFiles(v, translation)
+                }.toMap
+                WomObject(m2, t)
 
             case _ =>
                 throw new AppInternalException(s"Unsupported wom value ${womValue}")
