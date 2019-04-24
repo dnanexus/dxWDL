@@ -10,7 +10,9 @@ import wom.values._
 import dxWDL.util._
 import IR.CVar
 
-case class GenerateIRTask(verbose: Verbose) {
+case class GenerateIRTask(verbose: Verbose,
+                          typeAliases: Map[String, WomType],
+                          language: Language.Value) {
     val verbose2 : Boolean = verbose.containsKey("GenerateIR")
 
     private class DynamicInstanceTypesException private(ex: Exception) extends RuntimeException(ex) {
@@ -149,6 +151,8 @@ case class GenerateIRTask(verbose: Verbose) {
                 taskSourceCode.replaceAll(orgURL, dxURL)
             case _ => taskSourceCode
         }
+        val WdlCodeSnippet(selfContainedSourceCode) =
+            WdlCodeGen(verbose, typeAliases).standAloneTask(taskCleanedSourceCode, language)
 
         IR.Applet(task.name,
                   inputs,
@@ -156,6 +160,6 @@ case class GenerateIRTask(verbose: Verbose) {
                   instanceType,
                   docker,
                   kind,
-                  taskCleanedSourceCode)
+                  selfContainedSourceCode)
     }
 }

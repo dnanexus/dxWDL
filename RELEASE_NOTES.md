@@ -5,6 +5,7 @@
 - Added the WDL source code to workflow and applet objects on the platform. It is stored in the details field, and
 can be easily [retrieved](./doc/ExpertOptions.md#Getting-WDL-sources).
 - Bug fixes
+- Initial support for the `struct` type
 
 ## 1.01
 - Ensure that native docker uses the machine's hostname (i.e., the job ID) as

@@ -4,13 +4,14 @@ import scala.util.matching.Regex
 import wom.types._
 import wom.values._
 
+import dxWDL.base.WomPrettyPrintApproxWdl.typeName
 import dxWDL.util._
-
 
 // A bunch of WDL source lines
 case class WdlCodeSnippet(value : String)
 
-case class WdlCodeGen(verbose: Verbose) {
+case class WdlCodeGen(verbose: Verbose,
+                      typeAliases: Map[String, WomType]) {
 
     private def genDefaultValueOfType(wdlType: WomType) : WomValue = {
         wdlType match {
@@ -24,13 +25,6 @@ case class WdlCodeGen(verbose: Verbose) {
                 // problems for the pretty printer.
                 // WomOptionalValue(wdlType, None)
             case WomOptionalType(t) => genDefaultValueOfType(t)
-
-            case WomObjectType =>
-                // This fails when trying to do a 'toWomString'
-                // operation.
-                //WomObject(Map("_" -> WomString("_")), WomObjectType)
-                WomObject(Map.empty)
-
 
                 // The WomMap type HAS to appear before the array types, because
                 // otherwise it is coerced into an array. The map has to
@@ -86,8 +80,8 @@ task Add {
    }
   }
 */
-    def appletStub(callable: IR.Callable,
-                   language: Language.Value) : WdlCodeSnippet = {
+    private def appletStub(callable: IR.Callable,
+                           language: Language.Value) : WdlCodeSnippet = {
         /*Utils.trace(verbose.on,
                     s"""|genAppletStub  callable=${callable.name}
                         |  inputs= ${callable.inputVars.map(_.name)}
@@ -95,12 +89,12 @@ task Add {
                         .stripMargin)*/
 
         val inputs = callable.inputVars.map{ cVar =>
-            s"    ${cVar.womType.stableName} ${cVar.name}"
+            s"    ${typeName(cVar.womType)} ${cVar.name}"
         }.mkString("\n")
 
         val outputs = callable.outputVars.map{ cVar =>
             val defaultVal = genDefaultValueOfType(cVar.womType)
-            s"    ${cVar.womType.stableName} ${cVar.name} = ${defaultVal.toWomString}"
+            s"    ${typeName(cVar.womType)} ${cVar.name} = ${defaultVal.toWomString}"
         }.mkString("\n")
 
         language match {
@@ -139,11 +133,11 @@ task Add {
                               outputSpec: Map[String, WomType],
                               language: Language.Value) : WdlCodeSnippet = {
         val inputs = inputSpec.map{ case (name, womType) =>
-            s"    ${womType.stableName} ${name}"
+            s"    ${typeName(womType)} ${name}"
         }.mkString("\n")
         val outputs = outputSpec.map{ case (name, womType) =>
             val defaultVal = genDefaultValueOfType(womType)
-            s"    ${womType.stableName} $name = ${defaultVal.toWomString}"
+            s"    ${typeName(womType)} $name = ${defaultVal.toWomString}"
         }.mkString("\n")
 
         val metaSection =
@@ -229,6 +223,44 @@ task Add {
         }
     }
 
+
+    // Write valid WDL code that defines the type aliases we have.
+    private def typeAliasDefinitions : String = {
+        val snippetVec = typeAliases.map{
+            case (name, WomCompositeType(typeMap, _)) =>
+                val fieldLines = typeMap.map{ case (fieldName, womType) =>
+                    s"    ${typeName(womType)} ${fieldName}"
+                }.mkString("\n")
+
+                s"""|struct ${name} {
+                    |${fieldLines}
+                    |}""".stripMargin
+
+            case (name, other) =>
+                throw new Exception(s"Unknown type alias ${name} ${other}")
+        }
+        snippetVec.mkString("\n")
+    }
+
+
+    def standAloneTask(originalTaskSource: String,
+                       language: Language.Value) : WdlCodeSnippet = {
+
+        val wdlWfSource = s"""|${versionString(language)}
+                              |
+                              |# struct definitions
+                              |${typeAliasDefinitions}
+                              |
+                              |# Task
+                              |${originalTaskSource}
+                              |""".stripMargin
+
+        // Make sure this is actually valid WDL 1.0
+        ParseWomSourceFile.validateWdlCode(wdlWfSource, language)
+
+        WdlCodeSnippet(wdlWfSource)
+    }
+
     // A workflow must have definitions for all the tasks it
     // calls. However, a scatter calls tasks, that are missing from
     // the WDL file we generate. To ameliorate this, we add stubs for
@@ -254,14 +286,19 @@ task Add {
         val wfWithoutImportCalls = flattenWorkflow(originalWorkflowSource)
         val wdlWfSource = s"""|${versionString(language)}
                               |
+                              |# struct definitions
+                              |${typeAliasDefinitions}
+                              |
+                              |# Task headers
                               |${tasks}
                               |
+                              |# Workflow with imports made local
                               |${wfWithoutImportCalls}
                               |
                               |""".stripMargin
 
         // Make sure this is actually valid WDL 1.0
-        ParseWomSourceFile.validateWdlWorkflow(wdlWfSource, language)
+        ParseWomSourceFile.validateWdlCode(wdlWfSource, language)
 
         WdlCodeSnippet(wdlWfSource)
     }

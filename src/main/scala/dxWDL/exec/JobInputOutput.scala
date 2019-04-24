@@ -10,12 +10,15 @@ import wom.expression.WomExpression
 import wom.types._
 import wom.values._
 
+import dxWDL.base._
 import dxWDL.util._
 import dxWDL.util.Utils.{META_INFO, FLAT_FILES_SUFFIX}
 
 case class JobInputOutput(dxIoFunctions : DxIoFunctions,
-                          runtimeDebugLevel: Int) {
+                          runtimeDebugLevel: Int,
+                          typeAliases: Map[String, WomType]) {
     private val verbose = (runtimeDebugLevel >= 1)
+    private val wdlVarLinksConverter = WdlVarLinksConverter(typeAliases)
 
     private val DOWNLOAD_RETRY_LIMIT = 3
     private val UPLOAD_RETRY_LIMIT = 3
@@ -140,9 +143,6 @@ case class JobInputOutput(dxIoFunctions : DxIoFunctions,
                 val right = jobInputToWomValue(name, rType, fields("right"))
                 WomPair(left, right)
 
-            case (WomObjectType, JsObject(fields)) =>
-                throw new Exception("WOM objects not supported")
-
             // empty array
             case (WomArrayType(t), JsNull) =>
                 WomArray(WomArrayType(t), List.empty[WomValue])
@@ -159,6 +159,18 @@ case class JobInputOutput(dxIoFunctions : DxIoFunctions,
             case (WomOptionalType(t), jsv) =>
                 val value = jobInputToWomValue(name, t, jsv)
                 WomOptionalValue(t, Some(value))
+
+            // structs
+            case (WomCompositeType(typeMap, None), _) =>
+                throw new Exception("struct without a name")
+
+            case (WomCompositeType(typeMap, Some(structName)), JsObject(fields)) =>
+                val m : Map[String, WomValue] = fields.map{
+                    case (key, jsValue) =>
+                        val t = typeMap(key)
+                        key -> jobInputToWomValue(key, t, jsValue)
+                }.toMap
+                WomObject(m, WomCompositeType(typeMap, Some(structName)))
 
             case _ =>
                 throw new AppInternalException(
@@ -177,7 +189,7 @@ case class JobInputOutput(dxIoFunctions : DxIoFunctions,
                 // An object, the type is embedded as a 'womType' field
                 fields.get("womType") match {
                     case Some(JsString(s)) =>
-                        val t = WomTypeSerialization.fromString(s)
+                        val t = WomTypeSerialization(typeAliases).fromString(s)
                         if (fields contains "value") {
                             // the value is encapsulated in the "value" field
                             (t, fields("value"))
@@ -218,7 +230,7 @@ case class JobInputOutput(dxIoFunctions : DxIoFunctions,
                 assert(womType2 == womType)
                 jsv1
             }
-        WdlVarLinks.findDxFiles(jsv2)
+        wdlVarLinksConverter.findDxFiles(jsv2)
     }
 
     private def evaluateWomExpression(expr: WomExpression,
@@ -248,9 +260,6 @@ case class JobInputOutput(dxIoFunctions : DxIoFunctions,
             .asJsObject.fields
             .filter{ case (fieldName,_) => !fieldName.endsWith(FLAT_FILES_SUFFIX) }
             .filter{ case (fieldName,_) => fieldName != META_INFO }
-
-        //System.out.println(s"inputLines=${inputLines}")
-        //System.out.println(s"fields=${fields}")
 
         // Get the declarations matching the input fields.
         // Create a mapping from each key to its WDL value
@@ -327,8 +336,6 @@ case class JobInputOutput(dxIoFunctions : DxIoFunctions,
                 }
             case WomPair(lf, rt) =>
                 findFiles(lf) ++ findFiles(rt)
-            case _ : WomObject =>
-                throw new Exception("WOM objects not supported")
 
             // empty array
             case (WomArray(_, value: Seq[WomValue])) =>
@@ -336,6 +343,12 @@ case class JobInputOutput(dxIoFunctions : DxIoFunctions,
 
             case (WomOptionalValue(_, Some(value))) =>
                 findFiles(value)
+
+            // structs
+            case WomObject(m, t) =>
+                m.map{
+                    case (k, v) => findFiles(v)
+                }.flatten.toVector
 
             case _ => Vector.empty
         }
@@ -400,9 +413,6 @@ case class JobInputOutput(dxIoFunctions : DxIoFunctions,
                 val right = translateFiles(r, translation)
                 WomPair(left, right)
 
-            case WomObject(_,_) =>
-                throw new Exception("WOM objects not supported")
-
             case WomArray(t: WomArrayType, a: Seq[WomValue]) =>
                 val a1 = a.map{ v => translateFiles(v, translation) }
                 WomArray(t, a1)
@@ -412,6 +422,12 @@ case class JobInputOutput(dxIoFunctions : DxIoFunctions,
             case WomOptionalValue(t, Some(v)) =>
                 val v1 = translateFiles(v, translation)
                 WomOptionalValue(t, Some(v1))
+
+            case WomObject(m,t) =>
+                val m2 = m.map{
+                    case (k, v) => k -> translateFiles(v, translation)
+                }.toMap
+                WomObject(m2, t)
 
             case _ =>
                 throw new AppInternalException(s"Unsupported wom value ${womValue}")

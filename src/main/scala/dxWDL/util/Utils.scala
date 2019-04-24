@@ -112,7 +112,6 @@ object Utils {
         }
     }
 
-
     // Create a file from a string
     def writeFileContent(path : Path, str : String) : Unit = {
         Files.write(path, str.getBytes(StandardCharsets.UTF_8))
@@ -417,22 +416,6 @@ object Utils {
         t match {
             case WomOptionalType(x) => stripOptional(x)
             case x => x
-        }
-    }
-
-    def makeOptional(t: WomType) : WomType = {
-        t match {
-            // If the type is already optional, don't make it
-            // double optional.
-            case WomOptionalType(_) => t
-            case _ => WomOptionalType(t)
-        }
-    }
-
-    def stripArray(t: WomType) : WomType = {
-        t match {
-            case WomArrayType(x) => x
-            case _ => throw new Exception(s"WDL type $t is not an array")
         }
     }
 

@@ -511,14 +511,14 @@ object Main extends App {
         val inputLines : String = Utils.readFileContent(jobInputPath)
         val originalInputs : JsValue = inputLines.parseJson
 
-        val task = ParseWomSourceFile.parseWdlTask(taskSourceCode)
+        val (task, typeAliases) = ParseWomSourceFile.parseWdlTask(taskSourceCode)
 
         // setup the utility directories that the task-runner employs
         dxPathConfig.createCleanDirs()
 
-        val jobInputOutput = new exec.JobInputOutput(dxIoFunctions, rtDebugLvl)
+        val jobInputOutput = new exec.JobInputOutput(dxIoFunctions, rtDebugLvl, typeAliases)
         val inputs = jobInputOutput.loadInputs(originalInputs, task)
-        val taskRunner = exec.TaskRunner(task, taskSourceCode, instanceTypeDB,
+        val taskRunner = exec.TaskRunner(task, taskSourceCode, typeAliases, instanceTypeDB,
                                          dxPathConfig, dxIoFunctions, jobInputOutput,
                                          rtDebugLvl)
 
@@ -577,12 +577,13 @@ object Main extends App {
         val inputLines : String = Utils.readFileContent(jobInputPath)
         val inputsRaw : JsValue = inputLines.parseJson
 
+        val (wf, typeAliases) = ParseWomSourceFile.parseWdlWorkflow(womSourceCode)
+
         // setup the utility directories that the frag-runner employs
-        val fragInputOutput = new exec.WfFragInputOutput(dxIoFunctions, dxProject, rtDebugLvl)
+        val fragInputOutput = new exec.WfFragInputOutput(dxIoFunctions, dxProject, rtDebugLvl, typeAliases)
 
         // process the inputs
         val meta = fragInputOutput.loadInputs(inputsRaw)
-        val wf = ParseWomSourceFile.parseWdlWorkflow(womSourceCode)
         val outputFields: Map[String, JsValue] =
             op match {
                 case InternalOp.WfFragment =>
@@ -602,15 +603,15 @@ object Main extends App {
                                                            rtDebugLvl)
                     fragRunner.apply(meta.blockPath, meta.env, RunnerWfFragmentMode.Collect)
                 case InternalOp.WfInputs =>
-                    val wfInputs = new exec.WfInputs(wf, womSourceCode,rtDebugLvl)
+                    val wfInputs = new exec.WfInputs(wf, womSourceCode, typeAliases, rtDebugLvl)
                     wfInputs.apply(meta.env)
                 case InternalOp.WfOutputs =>
-                    val wfOutputs = new exec.WfOutputs(wf, womSourceCode,
+                    val wfOutputs = new exec.WfOutputs(wf, womSourceCode, typeAliases,
                                                        dxPathConfig, dxIoFunctions,
                                                        rtDebugLvl)
                     wfOutputs.apply(meta.env)
                 case InternalOp.WorkflowOutputReorg =>
-                    val wfReorg = new exec.WorkflowOutputReorg(wf, womSourceCode, rtDebugLvl)
+                    val wfReorg = new exec.WorkflowOutputReorg(wf, womSourceCode, typeAliases, rtDebugLvl)
                     val refDxFiles = fragInputOutput.findRefDxFiles(inputsRaw)
                     wfReorg.apply(refDxFiles)
                 case _ =>

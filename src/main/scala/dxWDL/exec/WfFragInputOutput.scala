@@ -5,6 +5,7 @@ import spray.json._
 import wom.types._
 import wom.values._
 
+import dxWDL.base._
 import dxWDL.util._
 import dxWDL.util.Utils.META_INFO
 
@@ -14,9 +15,10 @@ case class WfFragInput(blockPath: Vector[Int],
 
 case class WfFragInputOutput(dxIoFunctions : DxIoFunctions,
                              dxProject: DXProject,
-                             runtimeDebugLevel: Int) {
+                             runtimeDebugLevel: Int,
+                             typeAliases: Map[String, WomType]) {
     val verbose = runtimeDebugLevel >= 1
-    val jobInputOutput = JobInputOutput(dxIoFunctions, runtimeDebugLevel)
+    val jobInputOutput = JobInputOutput(dxIoFunctions, runtimeDebugLevel, typeAliases)
 
     private def loadWorkflowMetaInfo(metaInfo : Map[String, JsValue]) :
             (Map[String, ExecLinkInfo], Vector[Int], Map[String, WomType]) = {
@@ -26,7 +28,7 @@ case class WfFragInputOutput(dxIoFunctions : DxIoFunctions,
             case Some(JsObject(fields)) =>
                 fields.map{
                     case (key, ali) =>
-                        key -> ExecLinkInfo.readJson(ali, dxProject)
+                        key -> ExecLinkInfo.readJson(ali, typeAliases)
                 }.toMap
             case other => throw new Exception(s"Bad value ${other}")
         }
@@ -45,7 +47,7 @@ case class WfFragInputOutput(dxIoFunctions : DxIoFunctions,
                     case (key, JsString(value)) =>
                         // Transform back to a fully qualified name with dots
                         val orgKeyName = Utils.revTransformVarName(key)
-                        val womType = WomTypeSerialization.fromString(value)
+                        val womType = WomTypeSerialization(typeAliases).fromString(value)
                         orgKeyName -> womType
                     case other => throw new Exception(s"Bad value ${other}")
                 }.toMap

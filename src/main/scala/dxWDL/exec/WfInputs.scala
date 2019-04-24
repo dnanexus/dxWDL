@@ -6,14 +6,18 @@ package dxWDL.exec
 import spray.json._
 import wom.callable.{WorkflowDefinition}
 import wom.values._
+import wom.types.WomType
 
+import dxWDL.base._
 import dxWDL.util._
 
 case class WfInputs(wf: WorkflowDefinition,
                     wfSourceCode: String,
+                    typeAliases: Map[String, WomType],
                     runtimeDebugLevel: Int) {
     private val verbose = runtimeDebugLevel >= 1
     //private val maxVerboseLevel = (runtimeDebugLevel == 2)
+    private val wdlVarLinksConverter = WdlVarLinksConverter(typeAliases)
 
     def apply(inputs: Map[String, WomValue]) : Map[String, JsValue] = {
         Utils.appletLog(verbose, s"dxWDL version: ${Utils.getVersion()}")
@@ -28,8 +32,8 @@ case class WfInputs(wf: WorkflowDefinition,
         // convert the WDL values to JSON
         val outputFields:Map[String, JsValue] = inputs.map {
             case (outputVarName, womValue) =>
-                val wvl = WdlVarLinks.importFromWDL(womValue.womType, womValue)
-                WdlVarLinks.genFields(wvl, outputVarName)
+                val wvl = wdlVarLinksConverter.importFromWDL(womValue.womType, womValue)
+                wdlVarLinksConverter.genFields(wvl, outputVarName)
         }.toList.flatten.toMap
         outputFields
     }

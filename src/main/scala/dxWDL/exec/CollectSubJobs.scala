@@ -78,9 +78,11 @@ case class ChildExecDesc(execName: String,
 case class CollectSubJobs(jobInputOutput : JobInputOutput,
                           inputsRaw : JsValue,
                           instanceTypeDB : InstanceTypeDB,
-                          runtimeDebugLevel: Int) {
+                          runtimeDebugLevel: Int,
+                          typeAliases: Map[String, WomType]) {
     //private val verbose = runtimeDebugLevel >= 1
     private val maxVerboseLevel = (runtimeDebugLevel == 2)
+    private val wdlVarLinksConverter = WdlVarLinksConverter(typeAliases)
 
     // Launch a subjob to collect the outputs
     def launch(childJobs: Vector[DXExecution],
@@ -219,7 +221,7 @@ case class CollectSubJobs(jobInputOutput : JobInputOutput,
             val value : WomValue = collectCallField(cot.name,
                                                     womType,
                                                     childJobsComplete)
-            val wvl = WdlVarLinks.importFromWDL(value.womType, value)
+            val wvl = wdlVarLinksConverter.importFromWDL(value.womType, value)
             fullName -> wvl
         }.toMap
     }
@@ -234,7 +236,7 @@ case class CollectSubJobs(jobInputOutput : JobInputOutput,
                 val value : WomValue = collectCallField(name,
                                                         womType,
                                                         childJobsComplete)
-                val wvl = WdlVarLinks.importFromWDL(value.womType, value)
+                val wvl = wdlVarLinksConverter.importFromWDL(value.womType, value)
                 name -> wvl
         }.toMap
     }

@@ -3,8 +3,9 @@ package dxWDL.util
 import com.dnanexus._
 import java.nio.file.Path
 import spray.json._
-import wdl.draft2.model.types._
-import wom.types._
+import wom.types.WomType
+
+import dxWDL.base._
 
 // Exception used for AppInternError
 class AppInternalException private(ex: RuntimeException) extends RuntimeException(ex) {
@@ -117,15 +118,20 @@ case class ExecLinkInfo(name: String,
                         outputs: Map[String, WomType],
                         dxExec: DxExec)
 
+
+
 object ExecLinkInfo {
-    def writeJson(ali: ExecLinkInfo) : JsValue = {
-            // Serialize applet input definitions, so they could be used
-            // at runtime.
+    // Serialize applet input definitions, so they could be used
+    // at runtime.
+    def writeJson(ali: ExecLinkInfo,
+                  typeAliases: Map[String, WomType]) : JsValue = {
+        val womTypeConverter = WomTypeSerialization(typeAliases)
+
         val appInputDefs: Map[String, JsString] = ali.inputs.map{
-            case (name, womType) => name -> JsString(womType.stableName)
+            case (name, womType) => name -> JsString(womTypeConverter.toString(womType))
         }.toMap
         val appOutputDefs: Map[String, JsString] = ali.outputs.map{
-            case (name, womType) => name -> JsString(womType.stableName)
+            case (name, womType) => name -> JsString(womTypeConverter.toString(womType))
         }.toMap
         JsObject(
             "name" -> JsString(ali.name),
@@ -135,17 +141,20 @@ object ExecLinkInfo {
         )
     }
 
-    def readJson(aplInfo: JsValue, dxProject: DXProject) = {
+    def readJson(aplInfo: JsValue,
+                 typeAliases: Map[String, WomType]) : ExecLinkInfo = {
+        val womTypeConverter = WomTypeSerialization(typeAliases)
+
         val name = aplInfo.asJsObject.fields("name") match {
             case JsString(x) => x
             case _ => throw new Exception("Bad JSON")
         }
         val inputDefs = aplInfo.asJsObject.fields("inputs").asJsObject.fields.map{
-            case (key, JsString(womTypeStr)) => key -> WdlFlavoredWomType.fromDisplayString(womTypeStr)
+            case (key, JsString(womTypeStr)) => key -> womTypeConverter.fromString(womTypeStr)
             case _ => throw new Exception("Bad JSON")
         }.toMap
         val outputDefs = aplInfo.asJsObject.fields("outputs").asJsObject.fields.map{
-            case (key, JsString(womTypeStr)) => key -> WdlFlavoredWomType.fromDisplayString(womTypeStr)
+            case (key, JsString(womTypeStr)) => key -> womTypeConverter.fromString(womTypeStr)
             case _ => throw new Exception("Bad JSON")
         }.toMap
         val dxExec = aplInfo.asJsObject.fields("id") match {

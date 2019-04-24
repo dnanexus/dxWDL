@@ -25,6 +25,11 @@ class TaskRunnerTest extends FlatSpec with Matchers {
         Paths.get(p)
     }
 
+/*    private def pathFromDirAndBasename(dirname: String, basename: String) : Path = {
+        val p = getClass.getResource(s"/${dirname}/${basename}").getPath
+        Paths.get(p)
+    }*/
+
     // Recursively go into a womValue, and add a base path to the file.
     // For example:
     //   foo.txt ---> /home/joe_heller/foo.txt
@@ -63,9 +68,6 @@ class TaskRunnerTest extends FlatSpec with Matchers {
                 val right = addBaseDir(r)
                 WomPair(left, right)
 
-            case WomObject(_,_) =>
-                throw new Exception("WOM objects not supported")
-
             case WomArray(t: WomArrayType, a: Seq[WomValue]) =>
                 val a1 = a.map{ v => addBaseDir(v) }
                 WomArray(t, a1)
@@ -75,6 +77,12 @@ class TaskRunnerTest extends FlatSpec with Matchers {
             case WomOptionalValue(t, Some(v)) =>
                 val v1 = addBaseDir(v)
                 WomOptionalValue(t, Some(v1))
+
+            case WomObject(m, t) =>
+                val m2 = m.map{ case (k, v) =>
+                    k -> addBaseDir(v)
+                }.toMap
+                WomObject(m2, t)
 
             case _ =>
                 throw new Exception(s"Unsupported wom value ${womValue}")
@@ -131,8 +139,9 @@ class TaskRunnerTest extends FlatSpec with Matchers {
         // Parse the inputs, convert to WOM values. Delay downloading files
         // from the platform, we may not need to access them.
         val dxIoFunctions = DxIoFunctions(dxPathConfig, runtimeDebugLevel)
-        val jobInputOutput = new JobInputOutput(dxIoFunctions, runtimeDebugLevel)
-        val taskRunner = TaskRunner(task, taskSourceCode, instanceTypeDB,
+        val jobInputOutput = new JobInputOutput(dxIoFunctions, runtimeDebugLevel, womBundle.typeAliases)
+        val taskRunner = TaskRunner(task, taskSourceCode, womBundle.typeAliases,
+                                    instanceTypeDB,
                                     dxPathConfig, dxIoFunctions, jobInputOutput, 0)
         val inputsRelPaths = taskRunner.jobInputOutput.loadInputs(JsObject(inputsOrg), task)
         val inputs = inputsRelPaths.map{
@@ -231,5 +240,9 @@ class TaskRunnerTest extends FlatSpec with Matchers {
 
         val repo = TaskRunnerUtils.readManifestGetDockerImageName(buf)
         repo should equal("ubuntu_18_04_minimal:latest")
+    }
+
+    it should "handle structs" taggedAs(EdgeTest) in {
+        runTask("Person2")
     }
 }

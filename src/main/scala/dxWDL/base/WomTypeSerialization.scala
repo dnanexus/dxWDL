@@ -1,9 +1,10 @@
-package dxWDL.util
+package dxWDL.base
 
 import wom.types._
 
 // Write a wom type as a string, and be able to convert back.
-object WomTypeSerialization {
+case class WomTypeSerialization(typeAliases: Map[String, WomType]) {
+
     def toString(t:WomType) : String = {
         t match {
             // Base case: primitive types.
@@ -33,6 +34,12 @@ object WomTypeSerialization {
                 val ls = toString(lType)
                 val rs = toString(rType)
                 s"Pair[$ls, $rs]"
+
+            // structs
+            case WomCompositeType(_, None) =>
+                throw new Exception("unnamed struct")
+            case WomCompositeType(_, Some(structName)) =>
+                structName
 
             // catch-all for other types not currently supported
             case _ =>
@@ -111,6 +118,10 @@ object WomTypeSerialization {
                         val rt = fromString(rs)
                         WomPairType(lt, rt)
                 }
+            case name if typeAliases contains name =>
+                // This must be a user defined type, look in the type-aliases.
+                typeAliases(name)
+
             case _ =>
                 throw new Exception(s"Cannot convert ${str} to a wom type")
         }

@@ -104,7 +104,7 @@ case class Top(cOpt: CompilerOptions) {
         // Generate dx:applets and dx:workflow from the IR
         new Native(dxWDLrtId, folder, dxProject,
                    dxObjDir,
-                   instanceTypeDB, runtimePathConfig,
+                   instanceTypeDB, runtimePathConfig, bundle.typeAliases,
                    cOpt.extras,
                    cOpt.runtimeDebugLevel,
                    cOpt.leaveWorkflowsOpen,
@@ -214,12 +214,12 @@ case class Top(cOpt: CompilerOptions) {
                                                                    cOpt.locked, cOpt.reorg)
         val bundle2: IR.Bundle = cOpt.defaults match {
             case None => bundle
-            case Some(path) => InputFile(cOpt.verbose).embedDefaults(bundle, path)
+            case Some(path) => InputFile(cOpt.verbose, everythingBundle.typeAliases).embedDefaults(bundle, path)
         }
 
         // generate dx inputs from the Cromwell-style input specification.
         cOpt.inputs.foreach{ path =>
-            val dxInputs = InputFile(cOpt.verbose).dxFromCromwell(bundle2, path)
+            val dxInputs = InputFile(cOpt.verbose, everythingBundle.typeAliases).dxFromCromwell(bundle2, path)
             // write back out as xxxx.dx.json
             val filename = Utils.replaceFileSuffix(path, ".dx.json")
             val parent = path.getParent

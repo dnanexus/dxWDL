@@ -28,8 +28,10 @@ import spray.json._
 import wom.callable.{CallableTaskDefinition, RuntimeEnvironment}
 import wom.callable.Callable.{InputDefinition, OutputDefinition}
 import wom.core.WorkflowSource
+import wom.types.WomType
 import wom.values._
 
+import dxWDL.base._
 import dxWDL.util._
 
 // This object is used to allow easy testing of complex
@@ -76,6 +78,7 @@ object TaskRunnerUtils {
 // WDL language definition.
 case class TaskRunner(task: CallableTaskDefinition,
                       taskSourceCode: WorkflowSource,  // for debugging/informational purposes only
+                      typeAliases: Map[String, WomType],
                       instanceTypeDB : InstanceTypeDB,
                       dxPathConfig : DxPathConfig,
                       dxIoFunctions : DxIoFunctions,
@@ -83,6 +86,7 @@ case class TaskRunner(task: CallableTaskDefinition,
                       runtimeDebugLevel: Int) {
     private val verbose = (runtimeDebugLevel >= 1)
     private val maxVerboseLevel = (runtimeDebugLevel == 2)
+    private val wdlVarLinksConverter = WdlVarLinksConverter(typeAliases)
     private val DOCKER_TARBALLS_DIR = "/tmp/docker-tarballs"
 
     // check if the command section is empty
@@ -107,7 +111,7 @@ case class TaskRunner(task: CallableTaskDefinition,
     def writeEnvToDisk(localizedInputs: Map[String, WomValue],
                        dxUrl2path: Map[Furl, Path]) : Unit = {
         val locInputsM : Map[String, JsValue] = localizedInputs.map{ case(name, v) =>
-            (name, WomValueSerialization.toJSON(v))
+            (name, WomValueSerialization(typeAliases).toJSON(v))
         }.toMap
         val dxUrlM : Map[String, JsValue] = dxUrl2path.map{
             case (FurlLocal(url), path) =>
@@ -136,7 +140,7 @@ case class TaskRunner(task: CallableTaskDefinition,
             case _ => throw new Exception("Malformed environment serialized to disk")
         }
         val localizedInputs = locInputsM.map{ case (key, jsVal) =>
-            key -> WomValueSerialization.fromJSON(jsVal)
+            key -> WomValueSerialization(typeAliases).fromJSON(jsVal)
         }.toMap
         val dxUrl2path = dxUrlM.map{
             case (key, JsString(path)) => Furl.parse(key) -> Paths.get(path)
@@ -459,8 +463,8 @@ case class TaskRunner(task: CallableTaskDefinition,
         // convert the WDL values to JSON
         val outputFields:Map[String, JsValue] = outputs.map {
             case (outputVarName, womValue) =>
-                val wvl = WdlVarLinks.importFromWDL(womValue.womType, womValue)
-                WdlVarLinks.genFields(wvl, outputVarName)
+                val wvl = wdlVarLinksConverter.importFromWDL(womValue.womType, womValue)
+                wdlVarLinksConverter.genFields(wvl, outputVarName)
         }.toList.flatten.toMap
         outputFields
     }
@@ -548,7 +552,7 @@ case class TaskRunner(task: CallableTaskDefinition,
             case (outDef: OutputDefinition) =>
                 val wvl = WdlVarLinks(outDef.womType,
                                       DxlExec(dxSubJob, outDef.name))
-                WdlVarLinks.genFields(wvl, outDef.name)
+                wdlVarLinksConverter.genFields(wvl, outDef.name)
         }.flatten.toMap
         outputs
     }

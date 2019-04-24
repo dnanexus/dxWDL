@@ -206,7 +206,7 @@ class GenerateIRTest extends FlatSpec with Matchers {
     }
 
 
-    it should "four nesting levels" taggedAs(EdgeTest) in {
+    it should "four nesting levels" in {
         val path = pathFromBasename("nested", "four_levels.wdl")
         val retval = Main.compile(
             path.toString :: cFlags
@@ -292,6 +292,14 @@ class GenerateIRTest extends FlatSpec with Matchers {
 
     it should "handle an empty workflow" in {
         val path = pathFromBasename("util", "empty_workflow.wdl")
+        val retval = Main.compile(
+            path.toString :: cFlags
+        )
+        retval shouldBe a [Main.SuccessfulTerminationIR]
+    }
+
+    it should "handle structs" taggedAs(EdgeTest) in {
+        val path = pathFromBasename("struct", "Person.wdl")
         val retval = Main.compile(
             path.toString :: cFlags
         )

@@ -1,4 +1,4 @@
-package dxWDL.util
+package dxWDL.base
 
 import java.nio.file.{Path, Paths}
 import org.scalatest.{FlatSpec, Matchers}
@@ -10,13 +10,18 @@ class WomPrettyPrintApproxWdlTest extends FlatSpec with Matchers {
         Paths.get(p)
     }
 
+
+    // Ignore a value. This is useful for avoiding warnings/errors
+    // on unused variables.
+    def ignore[A](value: A) : Unit = {}
+
     it should "print original WDL from block_closure.wdl" in {
         val path = pathFromBasename("block_closure.wdl")
-        val wfSourceCode = Utils.readFileContent(path)
-        val wf : WorkflowDefinition = ParseWomSourceFile.parseWdlWorkflow(wfSourceCode)
+        val wfSourceCode = scala.io.Source.fromFile(path.toFile).mkString
+        val (wf : WorkflowDefinition, typeAliases) = dxWDL.util.ParseWomSourceFile.parseWdlWorkflow(wfSourceCode)
         val s = wf.innerGraph.nodes.map{
             WomPrettyPrintApproxWdl.apply(_)
         }.mkString("\n")
-        Utils.ignore(s)
+        ignore(s)
     }
 }

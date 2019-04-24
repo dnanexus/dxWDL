@@ -29,8 +29,10 @@ import spray.json._
 import wom.types._
 import wom.values._
 
-case class InputFile(verbose: Verbose) {
+case class InputFile(verbose: Verbose,
+                     typeAliases: Map[String, WomType]) {
     val verbose2:Boolean = verbose.containsKey("InputFile")
+    private val wdlVarLinksConverter = WdlVarLinksConverter(typeAliases)
 
     // Convert a job input to a WomValue. Do not download any files, convert them
     // to a string representation. For example: dx://proj-xxxx:file-yyyy::/A/B/C.txt
@@ -77,9 +79,6 @@ case class InputFile(verbose: Verbose) {
                 val right = womValueFromCromwellJSON(rType, fields("right"))
                 WomPair(left, right)
 
-            case (WomObjectType, JsObject(fields)) =>
-                throw new Exception("WOM objects not supported")
-
             // empty array
             case (WomArrayType(t), JsNull) =>
                 WomArray(WomArrayType(t), List.empty[WomValue])
@@ -96,6 +95,17 @@ case class InputFile(verbose: Verbose) {
             case (WomOptionalType(t), jsv) =>
                 val value = womValueFromCromwellJSON(t, jsv)
                 WomOptionalValue(t, Some(value))
+
+            // structs
+            case (WomCompositeType(typeMap, Some(structName)), JsObject(fields)) =>
+                // convert each field
+                val m = fields.map {
+                    case (key, value) =>
+                        val t : WomType = typeMap(key)
+                        val elem: WomValue = womValueFromCromwellJSON(t, value)
+                        key -> elem
+                }.toMap
+                WomObject(m, WomCompositeType(typeMap, Some(structName)))
 
             case _ =>
                 throw new AppInternalException(
@@ -138,13 +148,6 @@ case class InputFile(verbose: Verbose) {
                 val rJs = jsValueFromCromwellJSON(rType, r)
                 JsObject("left" -> lJs, "right" -> rJs)
 
-            case (WomObjectType, _) =>
-                throw new Exception(
-                    s"""|WDL Objects are not supported when converting from JSON inputs
-                        |type = ${womType}
-                        |value = ${jsv.prettyPrint}
-                        |""".stripMargin.trim)
-
             case (WomArrayType(t), JsArray(vec)) =>
                 JsArray(vec.map{
                     elem => jsValueFromCromwellJSON(t, elem)
@@ -152,6 +155,17 @@ case class InputFile(verbose: Verbose) {
 
             case (WomOptionalType(t), (null|JsNull)) => JsNull
             case (WomOptionalType(t), _) =>  jsValueFromCromwellJSON(t, jsv)
+
+            // structs
+            case (WomCompositeType(typeMap, Some(structName)), JsObject(fields)) =>
+                // convert each field
+                val m = fields.map {
+                    case (key, value) =>
+                        val t : WomType = typeMap(key)
+                        val elem: JsValue = jsValueFromCromwellJSON(t, value)
+                        key -> elem
+                }.toMap
+                JsObject(m)
 
             case _ =>
                 throw new Exception(
@@ -188,7 +202,7 @@ case class InputFile(verbose: Verbose) {
                                jsv: JsValue) : WdlVarLinks = {
         val jsWithDxLinks: JsValue = replaceURLsWithLinks(jsv)
         val js2 = jsValueFromCromwellJSON(cVar.womType, jsWithDxLinks)
-        WdlVarLinks.importFromCromwellJSON(cVar.womType, js2)
+        wdlVarLinksConverter.importFromCromwellJSON(cVar.womType, js2)
     }
 
     // skip comment lines, these start with ##.
@@ -363,7 +377,7 @@ case class InputFile(verbose: Verbose) {
                      // are variable uses.
                     Utils.trace(verbose.on, s"${fqn} -> ${dxName}")
                     val wvl = translateValue(cVar, jsv)
-                    WdlVarLinks.genFields(wvl, dxName, encodeDots=false)
+                    wdlVarLinksConverter.genFields(wvl, dxName, encodeDots=false)
                         .foreach{ case (name, jsv) => dxKeyValues(name) = jsv }
             }
         }
