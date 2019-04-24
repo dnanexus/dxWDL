@@ -4,7 +4,7 @@ import spray.json._
 import wom.values._
 import wom.types._
 
-object WomValueSerialization {
+case class WomValueSerialization(typeAliases: Map[String, WomType]) {
 
     // Serialization of a WOM value to JSON
     private def womToJSON(t:WomType, w:WomValue) : JsValue = {
@@ -124,6 +124,11 @@ object WomValueSerialization {
                     case _ => throw new Exception(s"Malformed serialized par ${jsv}")
                 }
 
+            case (WomOptionalType(t), JsNull) =>
+                WomOptionalValue(t, None)
+            case (WomOptionalType(t), _) =>
+                WomOptionalValue(womFromJSON(t, jsv))
+
             // structs
             case (WomCompositeType(typeMap, None), _) =>
                 throw new Exception("struct without a name")
@@ -135,12 +140,7 @@ object WomValueSerialization {
                         val elem:WomValue = womFromJSON(t, elemValue)
                         key -> elem
                 }.toMap
-                WomObject(m)
-
-            case (WomOptionalType(t), JsNull) =>
-                WomOptionalValue(t, None)
-            case (WomOptionalType(t), _) =>
-                WomOptionalValue(womFromJSON(t, jsv))
+                WomObject(m, WomCompositeType(typeMap, Some(structName)))
 
             case _ =>
                 throw new Exception(s"Unsupported combination ${t.stableName} ${jsv.prettyPrint}")
@@ -149,14 +149,14 @@ object WomValueSerialization {
 
     // serialization routines
     def toJSON(w:WomValue) : JsValue = {
-        JsObject("womType" -> JsString(WomTypeSerialization.toString(w.womType)),
+        JsObject("womType" -> JsString(WomTypeSerialization(typeAliases).toString(w.womType)),
                  "womValue" -> womToJSON(w.womType, w))
     }
 
     def fromJSON(jsv:JsValue) : WomValue = {
         jsv.asJsObject.getFields("womType", "womValue") match {
             case Seq(JsString(typeStr), wValue) =>
-                val womType = WomTypeSerialization.fromString(typeStr)
+                val womType = WomTypeSerialization(typeAliases).fromString(typeStr)
                 womFromJSON(womType, wValue)
             case other => throw new DeserializationException(s"WomValue unexpected ${other}")
         }

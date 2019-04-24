@@ -419,22 +419,6 @@ object Utils {
         }
     }
 
-    def makeOptional(t: WomType) : WomType = {
-        t match {
-            // If the type is already optional, don't make it
-            // double optional.
-            case WomOptionalType(_) => t
-            case _ => WomOptionalType(t)
-        }
-    }
-
-    def stripArray(t: WomType) : WomType = {
-        t match {
-            case WomArrayType(x) => x
-            case _ => throw new Exception(s"WDL type $t is not an array")
-        }
-    }
-
     // Replace all special json characters from with a white space.
     def sanitize(s : String) : String = {
         def sanitizeChar(ch: Char) : String = ch match {

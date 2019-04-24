@@ -7,8 +7,24 @@ import wom.types._
 class WomValueSerializationTest extends FlatSpec with Matchers {
 
     it should "work on optional values" in {
-        val v : WomValue = WomOptionalValue(WomIntegerType,Some(WomInteger(13)))
+        val valueSerialize = WomValueSerialization(Map.empty)
 
-        WomValueSerialization.fromJSON(WomValueSerialization.toJSON(v)) should be(v)
+        val v : WomValue = WomOptionalValue(WomIntegerType,Some(WomInteger(13)))
+        valueSerialize.fromJSON(valueSerialize.toJSON(v)) should be(v)
+    }
+
+    it should "support structs" in {
+        val personType = WomCompositeType(Map("name" -> WomStringType,
+                                              "age" -> WomIntegerType),
+                                          Some("Person"))
+        val typeAliases: Map[String, WomType] = Map("Person" -> personType)
+
+        val bradly : WomValue = WomObject(Map("name" -> WomString("Bradly"),
+                                              "age" -> WomInteger(42)),
+                                          personType)
+
+        val valueSerialize = WomValueSerialization(typeAliases)
+
+        valueSerialize.fromJSON(valueSerialize.toJSON(bradly)) should be(bradly)
     }
 }

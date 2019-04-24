@@ -64,10 +64,12 @@ case class WfFragRunner(wf: WorkflowDefinition,
                         runtimeDebugLevel: Int) {
     private val verbose = runtimeDebugLevel >= 1
     //private val maxVerboseLevel = (runtimeDebugLevel == 2)
+    private val wdlVarLinksConverter = WdlVarLinksConverter(fragInputOutput.typeAliases)
     private val collectSubJobs = CollectSubJobs(fragInputOutput.jobInputOutput,
                                                 inputsRaw,
                                                 instanceTypeDB,
-                                                runtimeDebugLevel)
+                                                runtimeDebugLevel,
+                                                fragInputOutput.typeAliases)
 
     var gSeqNum = 0
     private def launchSeqNum() : Int = {
@@ -280,7 +282,7 @@ case class WfFragRunner(wf: WorkflowDefinition,
         // convert the WOM values to WVLs
         val envWvl = env.map{
             case (name, value) =>
-                name -> WdlVarLinks.importFromWDL(value.womType, value)
+                name -> wdlVarLinksConverter.importFromWDL(value.womType, value)
         }.toMap
 
         // filter anything that should not be exported.
@@ -293,7 +295,7 @@ case class WfFragRunner(wf: WorkflowDefinition,
         // TODO: check for each variable if it should be output
         exportedWvls.foldLeft(Map.empty[String, JsValue]) {
             case (accu, (varName, wvl)) =>
-                val fields = WdlVarLinks.genFields(wvl, varName)
+                val fields = wdlVarLinksConverter.genFields(wvl, varName)
                 accu ++ fields.toMap
         }.toMap
     }
@@ -328,12 +330,12 @@ case class WfFragRunner(wf: WorkflowDefinition,
 
         val wvlInputs = inputs.map{ case (name, womValue) =>
             val womType = linkInfo.inputs(name)
-            name -> WdlVarLinks.importFromWDL(womType, womValue)
+            name -> wdlVarLinksConverter.importFromWDL(womType, womValue)
         }.toMap
 
         val m = wvlInputs.foldLeft(Map.empty[String, JsValue]) {
             case (accu, (varName, wvl)) =>
-                val fields = WdlVarLinks.genFields(wvl, varName)
+                val fields = wdlVarLinksConverter.genFields(wvl, varName)
                 accu ++ fields.toMap
         }
         JsObject(m)

@@ -15,8 +15,10 @@ import dxWDL.util._
 import dxWDL.util.Utils.{META_INFO, FLAT_FILES_SUFFIX}
 
 case class JobInputOutput(dxIoFunctions : DxIoFunctions,
-                          runtimeDebugLevel: Int) {
+                          runtimeDebugLevel: Int,
+                          typeAliases: Map[String, WomType]) {
     private val verbose = (runtimeDebugLevel >= 1)
+    private val wdlVarLinksConverter = WdlVarLinksConverter(typeAliases)
 
     private val DOWNLOAD_RETRY_LIMIT = 3
     private val UPLOAD_RETRY_LIMIT = 3
@@ -141,9 +143,6 @@ case class JobInputOutput(dxIoFunctions : DxIoFunctions,
                 val right = jobInputToWomValue(name, rType, fields("right"))
                 WomPair(left, right)
 
-            case (WomObjectType, JsObject(fields)) =>
-                throw new Exception("WOM objects not supported")
-
             // empty array
             case (WomArrayType(t), JsNull) =>
                 WomArray(WomArrayType(t), List.empty[WomValue])
@@ -160,6 +159,18 @@ case class JobInputOutput(dxIoFunctions : DxIoFunctions,
             case (WomOptionalType(t), jsv) =>
                 val value = jobInputToWomValue(name, t, jsv)
                 WomOptionalValue(t, Some(value))
+
+            // structs
+            case (WomCompositeType(typeMap, None), _) =>
+                throw new Exception("struct without a name")
+
+            case (WomCompositeType(typeMap, Some(structName)), JsObject(fields)) =>
+                val m : Map[String, WomValue] = fields.map{
+                    case (key, jsValue) =>
+                        val t = typeMap(key)
+                        key -> jobInputToWomValue(key, t, jsValue)
+                }.toMap
+                WomObject(m, WomCompositeType(typeMap, Some(structName)))
 
             case _ =>
                 throw new AppInternalException(
@@ -178,7 +189,7 @@ case class JobInputOutput(dxIoFunctions : DxIoFunctions,
                 // An object, the type is embedded as a 'womType' field
                 fields.get("womType") match {
                     case Some(JsString(s)) =>
-                        val t = WomTypeSerialization.fromString(s)
+                        val t = WomTypeSerialization(typeAliases).fromString(s)
                         if (fields contains "value") {
                             // the value is encapsulated in the "value" field
                             (t, fields("value"))
@@ -219,7 +230,7 @@ case class JobInputOutput(dxIoFunctions : DxIoFunctions,
                 assert(womType2 == womType)
                 jsv1
             }
-        WdlVarLinks.findDxFiles(jsv2)
+        wdlVarLinksConverter.findDxFiles(jsv2)
     }
 
     private def evaluateWomExpression(expr: WomExpression,

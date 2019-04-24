@@ -4,7 +4,7 @@ import scala.util.matching.Regex
 import wom.types._
 import wom.values._
 
-import dxWDL.base.WomTypeSerialization.typeName
+import dxWDL.base.WomPrettyPrintApproxWdl.typeName
 import dxWDL.util._
 
 // A bunch of WDL source lines
@@ -225,7 +225,7 @@ task Add {
 
 
     // Write valid WDL code that defines the type aliases we have.
-    def typeAliasDefinitions : String = {
+    private def typeAliasDefinitions : String = {
         val snippetVec = typeAliases.map{
             case (name, WomCompositeType(typeMap, _)) =>
                 val fieldLines = typeMap.map{ case (fieldName, womType) =>
@@ -240,6 +240,25 @@ task Add {
                 throw new Exception(s"Unknown type alias ${name} ${other}")
         }
         snippetVec.mkString("\n")
+    }
+
+
+    def standAloneTask(originalTaskSource: String,
+                       language: Language.Value) : WdlCodeSnippet = {
+
+        val wdlWfSource = s"""|${versionString(language)}
+                              |
+                              |# struct definitions
+                              |${typeAliasDefinitions}
+                              |
+                              |# Task
+                              |${originalTaskSource}
+                              |""".stripMargin
+
+        // Make sure this is actually valid WDL 1.0
+        ParseWomSourceFile.validateWdlCode(wdlWfSource, language)
+
+        WdlCodeSnippet(wdlWfSource)
     }
 
     // A workflow must have definitions for all the tasks it
@@ -279,7 +298,7 @@ task Add {
                               |""".stripMargin
 
         // Make sure this is actually valid WDL 1.0
-        ParseWomSourceFile.validateWdlWorkflow(wdlWfSource, language)
+        ParseWomSourceFile.validateWdlCode(wdlWfSource, language)
 
         WdlCodeSnippet(wdlWfSource)
     }

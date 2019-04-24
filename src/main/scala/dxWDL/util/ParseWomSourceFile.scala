@@ -15,9 +15,11 @@ import languages.wdl.draft3.WdlDraft3LanguageFactory
 import scala.collection.JavaConverters._
 import scala.collection.mutable.HashMap
 import scala.util.matching.Regex
+
 import wom.callable.{CallableTaskDefinition, ExecutableTaskDefinition, WorkflowDefinition}
 import wom.core.WorkflowSource
 import wom.executable.WomBundle
+import wom.types._
 
 // Read, parse, and typecheck a WDL/CWL source file. This includes loading all imported files.
 object ParseWomSourceFile {
@@ -212,25 +214,6 @@ object ParseWomSourceFile {
         findWdlElement(lines, workflowStartLine, workflowEndLine)
     }
 
-    // add "version 1.0" or such to the WDL source code
-    private def addLanguageHeader(language: Language.Value,
-                                  sourceCode: String) : String = {
-        val header = language match {
-            case Language.WDLvDraft2 => ""
-            case Language.WDLv1_0 => "version 1.0"
-            case Language.CWLv1_0 => throw new NotImplementedError("CWL")
-        }
-
-        //System.out.println(s"language header = ${header}")
-        if (header.isEmpty) {
-            sourceCode
-        } else {
-            s"""|${header}
-                |
-                |${sourceCode}""".stripMargin
-        }
-    }
-
     // Go through one WDL source file, and return a map from task name
     // to its source code. Return an empty map if there are no tasks
     // in this file.
@@ -246,8 +229,7 @@ object ParseWomSourceFile {
             retval match {
                 case None => return taskDir.toMap
                 case Some((remainingLines, taskName, taskLines)) =>
-                    val taskWithLanguageVersion : String = addLanguageHeader(language, taskLines)
-                    taskDir(taskName) = taskWithLanguageVersion
+                    taskDir(taskName) = taskLines
                     lines = remainingLines
             }
         }
@@ -367,8 +349,8 @@ object ParseWomSourceFile {
 
 
     // throw an exception if the workflow source is not valid WDL 1.0
-    def validateWdlWorkflow(wdlWfSource: String,
-                            language: Language.Value) : Unit = {
+    def validateWdlCode(wdlWfSource: String,
+                        language: Language.Value) : Unit = {
         val languageFactory = language match {
             case Language.WDLv1_0 =>
                 new WdlDraft3LanguageFactory(ConfigFactory.empty())
@@ -393,7 +375,7 @@ object ParseWomSourceFile {
         }
     }
 
-    def parseWdlWorkflow(wfSource: String) : WorkflowDefinition = {
+    def parseWdlWorkflow(wfSource: String) : (WorkflowDefinition, Map[String, WomType])= {
         val languageFactory =
             if (wfSource.startsWith("version 1.0") ||
                     wfSource.startsWith("version draft-3")) {
@@ -411,7 +393,7 @@ object ParseWomSourceFile {
             case Right(bundle) => bundle
         }
         womBundle.primaryCallable match {
-            case Some(wf: WorkflowDefinition) => wf
+            case Some(wf: WorkflowDefinition) => (wf, womBundle.typeAliases)
             case _ => throw new Exception("Could not find the workflow in the source")
         }
     }
@@ -439,7 +421,7 @@ object ParseWomSourceFile {
         }
     }
 
-    def parseWdlTask(wfSource: String) : CallableTaskDefinition = {
+    def parseWdlTask(wfSource: String) : (CallableTaskDefinition, Map[String, WomType]) = {
         val languageFactory =
             if (wfSource.startsWith("version 1.0") ||
                     wfSource.startsWith("version draft-3")) {
@@ -456,6 +438,6 @@ object ParseWomSourceFile {
                                                          |""".stripMargin)
             case Right(bundle) => bundle
         }
-        getMainTask(womBundle)
+        (getMainTask(womBundle), womBundle.typeAliases)
     }
 }

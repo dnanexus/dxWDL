@@ -9,7 +9,6 @@ file type is very different between WDL and DNAx.
 package dxWDL.util
 
 import com.dnanexus.{DXFile, DXExecution}
-import net.jcazevedo.moultingyaml._
 import spray.json._
 import wom.types._
 import wom.values._
@@ -34,23 +33,7 @@ case class DxlExec(dxExec: DXExecution, varName: String) extends DxLink
 
 case class WdlVarLinks(womType: WomType, dxlink: DxLink)
 
-object WdlVarLinks {
-    // Human readable representation of a WdlVarLinks structure
-    def yaml(wvl: WdlVarLinks) : YamlObject = {
-        val (key, value) = wvl.dxlink match {
-            case DxlValue(jsn) =>
-                "JSON" -> jsn.prettyPrint
-            case DxlStage(dxStage, ioRef, varEncName) =>
-                "stageRef" -> varEncName
-            case DxlWorkflowInput(varEncName) =>
-                "workflowInput" -> varEncName
-            case DxlExec(dxExec, varEncName) =>
-                "execRef" -> varEncName
-        }
-        YamlObject(
-            YamlString("type") -> YamlString(WomTypeSerialization.toString(wvl.womType)),
-            YamlString(key) -> YamlString(value))
-    }
+case class WdlVarLinksConverter(typeAliases: Map[String, WomType]) {
 
     private def getRawJsValue(wvl: WdlVarLinks) : JsValue = {
         wvl.dxlink match {
@@ -107,59 +90,6 @@ object WdlVarLinks {
                 dxFiles.head
             case _ =>
                 throw new Exception("cannot get file-id from non-JSON")
-        }
-    }
-
-    private def unmarshalWomObject(m:Map[String, JsValue]) : Map[String, (WomType, JsValue)] = {
-        m.map{
-            case (key, JsObject(fields)) =>
-                if (!List("type", "value").forall(fields contains _))
-                    throw new Exception(
-                        s"JSON object ${JsObject(fields)} does not contain fields {type, value}")
-                val womType = fields("type") match {
-                    case JsString(s) => WomTypeSerialization.fromString(s)
-                    case other  => throw new Exception(s"type field is not a string (${other})")
-                }
-                key -> (womType, fields("value"))
-            case (key, other) =>
-                Utils.appletLog(true, s"Unmarshalling error for  JsObject=${JsObject(m)}")
-                throw new Exception(s"key=${key}, expecting ${other} to be a JsObject")
-        }.toMap
-    }
-
-    // Access a field in a complex WDL type, such as Pair, Map, Object.
-    private def memberAccessStep(wvl: WdlVarLinks, fieldName: String) : WdlVarLinks = {
-        val jsValue = getRawJsValue(wvl)
-        (wvl.womType, jsValue) match {
-            case (_:WomObject, JsObject(m)) =>
-                unmarshalWomObject(m).get(fieldName) match {
-                    case Some((womType,jsv)) => WdlVarLinks(womType, DxlValue(jsv))
-                    case None => throw new Exception(s"Unknown field ${fieldName} in object ${wvl}")
-                }
-            case (WomPairType(lType, rType), JsObject(fields))
-                    if (List("left", "right") contains fieldName) =>
-                WdlVarLinks(lType, DxlValue(fields(fieldName)))
-            case (WomOptionalType(t), _) =>
-                // strip optional type
-                val wvl1 = wvl.copy(womType = t)
-                memberAccessStep(wvl1, fieldName)
-
-            case _ =>
-                throw new Exception(s"member access to field ${fieldName} wvl=${wvl}")
-        }
-    }
-
-    // Multi step member access, appropriate for nested structures. For example:
-    //
-    // Pair[Int, Pair[String, File]] p
-    // File veggies = p.left.right
-    //
-    def memberAccess(wvl: WdlVarLinks, components: List[String]) : WdlVarLinks = {
-        components match {
-            case Nil => wvl
-            case head::tail =>
-                val wvl1 = memberAccessStep(wvl, head)
-                memberAccess(wvl1, tail)
         }
     }
 
@@ -257,15 +187,6 @@ object WdlVarLinks {
                 val jsVals = elems.map{ x => jsFromWomValue(t, x) }
                 JsArray(jsVals.toVector)
 
-            // keys are strings, requiring no conversion. Because objects
-            // are not statically typed, we need to carry the types at runtime.
-            case (WomObjectType, WomObject(m: Map[String, WomValue], _)) =>
-                val jsm:Map[String, JsValue] = m.map{ case (key, w:WomValue) =>
-                    key -> JsObject("type" -> JsString(WomTypeSerialization.toString(w.womType)),
-                                    "value" -> jsFromWomValue(w.womType, w))
-                }.toMap
-                JsObject(jsm)
-
             // Strip optional type
             case (WomOptionalType(t), WomOptionalValue(_,Some(w))) =>
                 jsFromWomValue(t, w)
@@ -276,12 +197,27 @@ object WdlVarLinks {
             case (t, WomOptionalValue(_,Some(w))) =>
                 jsFromWomValue(t, w)
 
+            // structs
+            case (WomCompositeType(typeMap, None), _) =>
+                throw new Exception("struct without a name")
+
+            case (WomCompositeType(typeMap, Some(structName)),
+                  WomObject(m: Map[String, WomValue], _)) =>
+                // Convert each of the elements
+                val mJs = m.map{ case (key, womValue) =>
+                    val elemType = typeMap(key)
+                    key -> jsFromWomValue(elemType, womValue)
+                }.toMap
+                // retain the struct name
+                JsObject("type" -> JsString(WomTypeSerialization(typeAliases).toString(womType)),
+                         "value" -> JsObject(mJs))
+
             case (_,_) =>
                 val womTypeStr =
                     if (womType == null)
                         "null"
                     else
-                        WomTypeSerialization.typeName(womType)
+                        WomPrettyPrintApproxWdl.typeName(womType)
                 val womValueStr =
                     if (womValue == null)
                         "null"
@@ -312,7 +248,7 @@ object WdlVarLinks {
                 // Embed the value into a JSON object
                 Map("value" -> jsVal)
         }
-        val typeStr = WomTypeSerialization.toString(womType)
+        val typeStr = WomTypeSerialization(typeAliases).toString(womType)
         val mWithType = m + ("womType" -> JsString(typeStr))
         JsObject(mWithType)
     }
@@ -323,7 +259,7 @@ object WdlVarLinks {
                 // An object, the type is embedded as a 'womType' field
                 fields.get("womType") match {
                     case Some(JsString(s)) =>
-                        val t = WomTypeSerialization.fromString(s)
+                        val t = WomTypeSerialization(typeAliases).fromString(s)
                         if (fields contains "value") {
                             // the value is encapsulated in the "value" field
                             (t, fields("value"))

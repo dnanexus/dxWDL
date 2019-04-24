@@ -131,7 +131,7 @@ case class GenerateIR(verbose: Verbose) {
                 case None => throw new Exception(s"Did not find task ${task.name}")
                 case Some(x) => x
             }
-            GenerateIRTask(verbose, typeAliases).apply(task, taskSourceCode)
+            GenerateIRTask(verbose, typeAliases, language).apply(task, taskSourceCode)
         }
         callable match {
             case exec : ExecutableTaskDefinition =>
@@ -238,6 +238,6 @@ case class GenerateIR(verbose: Verbose) {
         assert(allCallables.size == allCallablesSortedNames.size)
 
         Utils.traceLevelDec()
-        IR.Bundle(primary, allCallables, allCallablesSortedNames)
+        IR.Bundle(primary, allCallables, allCallablesSortedNames, womBundle.typeAliases)
     }
 }

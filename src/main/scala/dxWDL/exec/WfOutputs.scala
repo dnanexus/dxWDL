@@ -17,11 +17,13 @@ import dxWDL.util._
 
 case class WfOutputs(wf: WorkflowDefinition,
                      wfSourceCode: String,
+                     typeAliases : Map[String, WomType],
                      dxPathConfig : DxPathConfig,
                      dxIoFunctions : DxIoFunctions,
                      runtimeDebugLevel: Int) {
     private val verbose = runtimeDebugLevel >= 1
     //private val maxVerboseLevel = (runtimeDebugLevel == 2)
+    private val wdlVarLinksConverter = WdlVarLinksConverter(typeAliases)
 
     private def evaluateWomExpression(expr: WomExpression,
                                       womType: WomType,
@@ -84,8 +86,8 @@ case class WfOutputs(wf: WorkflowDefinition,
         // convert the WDL values to JSON
         val outputFields:Map[String, JsValue] = outputs.map {
             case (outputVarName, womValue) =>
-                val wvl = WdlVarLinks.importFromWDL(womValue.womType, womValue)
-                WdlVarLinks.genFields(wvl, outputVarName)
+                val wvl = wdlVarLinksConverter.importFromWDL(womValue.womType, womValue)
+                wdlVarLinksConverter.genFields(wvl, outputVarName)
         }.toList.flatten.toMap
         outputFields
     }

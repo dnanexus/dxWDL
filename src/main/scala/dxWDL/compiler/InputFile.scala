@@ -29,8 +29,10 @@ import spray.json._
 import wom.types._
 import wom.values._
 
-case class InputFile(verbose: Verbose) {
+case class InputFile(verbose: Verbose,
+                     typeAliases: Map[String, WomType]) {
     val verbose2:Boolean = verbose.containsKey("InputFile")
+    private val wdlVarLinksConverter = WdlVarLinksConverter(typeAliases)
 
     // Convert a job input to a WomValue. Do not download any files, convert them
     // to a string representation. For example: dx://proj-xxxx:file-yyyy::/A/B/C.txt
@@ -188,7 +190,7 @@ case class InputFile(verbose: Verbose) {
                                jsv: JsValue) : WdlVarLinks = {
         val jsWithDxLinks: JsValue = replaceURLsWithLinks(jsv)
         val js2 = jsValueFromCromwellJSON(cVar.womType, jsWithDxLinks)
-        WdlVarLinks.importFromCromwellJSON(cVar.womType, js2)
+        wdlVarLinksConverter.importFromCromwellJSON(cVar.womType, js2)
     }
 
     // skip comment lines, these start with ##.
@@ -363,7 +365,7 @@ case class InputFile(verbose: Verbose) {
                      // are variable uses.
                     Utils.trace(verbose.on, s"${fqn} -> ${dxName}")
                     val wvl = translateValue(cVar, jsv)
-                    WdlVarLinks.genFields(wvl, dxName, encodeDots=false)
+                    wdlVarLinksConverter.genFields(wvl, dxName, encodeDots=false)
                         .foreach{ case (name, jsv) => dxKeyValues(name) = jsv }
             }
         }

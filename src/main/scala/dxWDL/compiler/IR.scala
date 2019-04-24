@@ -165,5 +165,6 @@ object IR {
     // element (may) depend on all previous elements.
     case class Bundle(primaryCallable: Option[Callable],
                       allCallables: Map[String, Callable],
-                      dependencies: Vector[String])
+                      dependencies: Vector[String],
+                      typeAliases: Map[String, WomType])
 }

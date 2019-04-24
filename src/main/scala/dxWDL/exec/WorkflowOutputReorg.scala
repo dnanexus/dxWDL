@@ -12,13 +12,16 @@ import com.fasterxml.jackson.databind.node.ObjectNode
 import scala.collection.JavaConverters._
 import spray.json._
 import wom.callable.{WorkflowDefinition}
+import wom.types.WomType
 
 import dxWDL.util._
 
 case class WorkflowOutputReorg(wf: WorkflowDefinition,
                                wfSourceCode: String,
+                               typeAliases: Map[String, WomType],
                                runtimeDebugLevel: Int) {
     private val verbose = runtimeDebugLevel >= 1
+    private val wdlVarLinksConverter = WdlVarLinksConverter(typeAliases)
 
     // Efficiently get the names of many files. We
     // don't want to do a `describe` each one of them, instead,
@@ -63,8 +66,8 @@ case class WorkflowOutputReorg(wf: WorkflowDefinition,
             case Some(x) => x
         }
 
-        val fileOutputs : Set[DXFile] = WdlVarLinks.findDxFiles(outputs).toSet
-        val fileInputs: Set[DXFile] = WdlVarLinks.findDxFiles(inputs).toSet
+        val fileOutputs : Set[DXFile] = wdlVarLinksConverter.findDxFiles(outputs).toSet
+        val fileInputs: Set[DXFile] = wdlVarLinksConverter.findDxFiles(inputs).toSet
         val realOutputs:Set[DXFile] = fileOutputs.toSet -- fileInputs.toSet
         Utils.appletLog(verbose, s"analysis has ${fileOutputs.size} output files")
         Utils.appletLog(verbose, s"analysis has ${fileInputs.size} input files")

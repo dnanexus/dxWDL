@@ -23,6 +23,7 @@ case class Native(dxWDLrtId: Option[String],
                   dxObjDir: DxObjectDirectory,
                   instanceTypeDB: InstanceTypeDB,
                   dxPathConfig: DxPathConfig,
+                  typeAliases: Map[String, WomType],
                   extras: Option[Extras],
                   runtimeDebugLevel: Option[Int],
                   leaveWorkflowsOpen: Boolean,
@@ -35,6 +36,7 @@ case class Native(dxWDLrtId: Option[String],
 
     private val verbose2:Boolean = verbose.containsKey("Native")
     private val rtDebugLvl = runtimeDebugLevel.getOrElse(Utils.DEFAULT_RUNTIME_DEBUG_LEVEL)
+    private val wdlVarLinksConverter = WdlVarLinksConverter(typeAliases)
 
      // Are we setting up a private docker registry?
     private val dockerRegistryInfo : Option[DockerRegistry]= extras match {
@@ -85,8 +87,8 @@ case class Native(dxWDLrtId: Option[String],
         val defaultVals:Map[String, JsValue] = cVar.default match {
             case None => Map.empty
             case Some(wdlValue) =>
-                val wvl = WdlVarLinks.importFromWDL(cVar.womType, wdlValue)
-                WdlVarLinks.genFields(wvl, name).toMap
+                val wvl = wdlVarLinksConverter.importFromWDL(cVar.womType, wdlValue)
+                wdlVarLinksConverter.genFields(wvl, name).toMap
         }
         def jsMapFromDefault(name: String) : Map[String, JsValue] = {
             defaultVals.get(name) match {
@@ -610,7 +612,7 @@ case class Native(dxWDLrtId: Option[String],
         // create linking information
         val linkInfo : Map[String, JsValue] =
             aplLinks.map{ case (name, ali) =>
-                name -> ExecLinkInfo.writeJson(ali)
+                name -> ExecLinkInfo.writeJson(ali, typeAliases)
             }.toMap
 
         val metaInfo : Option[JsValue] =
@@ -622,7 +624,7 @@ case class Native(dxWDLrtId: Option[String],
                         "blockPath" -> JsArray(blockPath.map(JsNumber(_))),
                         "fqnDictTypes" -> JsObject(
                             fqnDictTypes.map{ case (k,t) =>
-                                val tStr = WomTypeSerialization.toString(t)
+                                val tStr = WomTypeSerialization(typeAliases).toString(t)
                                 k -> JsString(tStr)
                             }.toMap)
                     )
@@ -638,7 +640,7 @@ case class Native(dxWDLrtId: Option[String],
                         "fqnDictTypes" -> JsObject(
                             applet.inputVars.map{
                                 case cVar =>
-                                    val tStr = WomTypeSerialization.toString(cVar.womType)
+                                    val tStr = WomTypeSerialization(typeAliases).toString(cVar.womType)
                                     cVar.name -> JsString(tStr)
                             }.toMap)
                     )
@@ -749,18 +751,18 @@ case class Native(dxWDLrtId: Option[String],
                         // in a value at runtime.
                         m
                     case IR.SArgConst(wValue) =>
-                        val wvl = WdlVarLinks.importFromWDL(cVar.womType, wValue)
-                        val fields = WdlVarLinks.genFields(wvl, cVar.dxVarName)
+                        val wvl = wdlVarLinksConverter.importFromWDL(cVar.womType, wValue)
+                        val fields = wdlVarLinksConverter.genFields(wvl, cVar.dxVarName)
                         m ++ fields.toMap
                     case IR.SArgLink(dxStage, argName) =>
                         val wvl = WdlVarLinks(cVar.womType,
                                               DxlStage(dxStage, IORef.Output, argName.dxVarName))
-                        val fields = WdlVarLinks.genFields(wvl, cVar.dxVarName)
+                        val fields = wdlVarLinksConverter.genFields(wvl, cVar.dxVarName)
                         m ++ fields.toMap
                     case IR.SArgWorkflowInput(argName) =>
                         val wvl = WdlVarLinks(cVar.womType,
                                               DxlWorkflowInput(argName.dxVarName))
-                        val fields = WdlVarLinks.genFields(wvl, cVar.dxVarName)
+                        val fields = wdlVarLinksConverter.genFields(wvl, cVar.dxVarName)
                         m ++ fields.toMap
                 }
         }
@@ -814,11 +816,11 @@ case class Native(dxWDLrtId: Option[String],
             case IR.SArgLink(dxStage, argName: CVar) =>
                 val wvl = WdlVarLinks(cVar.womType,
                                       DxlStage(dxStage, IORef.Output, argName.dxVarName))
-                WdlVarLinks.genFields(wvl, cVar.dxVarName)
+                wdlVarLinksConverter.genFields(wvl, cVar.dxVarName)
             case IR.SArgWorkflowInput(argName: CVar) =>
                 val wvl = WdlVarLinks(cVar.womType,
                                       DxlWorkflowInput(argName.dxVarName))
-                WdlVarLinks.genFields(wvl, cVar.dxVarName)
+                wdlVarLinksConverter.genFields(wvl, cVar.dxVarName)
             case other =>
                 throw new Exception(s"Bad value for sArg ${other}")
         }
