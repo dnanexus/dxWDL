@@ -18,9 +18,8 @@ task printPerson {
 }
 
 workflow myWorkflow {
-    Person a = {
-        "name": "John",
-        "age": 30
+    input {
+        Person a
     }
     call printPerson {
         input: a = a

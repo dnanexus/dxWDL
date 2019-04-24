@@ -79,9 +79,6 @@ case class InputFile(verbose: Verbose,
                 val right = womValueFromCromwellJSON(rType, fields("right"))
                 WomPair(left, right)
 
-            case (WomObjectType, JsObject(fields)) =>
-                throw new Exception("WOM objects not supported")
-
             // empty array
             case (WomArrayType(t), JsNull) =>
                 WomArray(WomArrayType(t), List.empty[WomValue])
@@ -98,6 +95,17 @@ case class InputFile(verbose: Verbose,
             case (WomOptionalType(t), jsv) =>
                 val value = womValueFromCromwellJSON(t, jsv)
                 WomOptionalValue(t, Some(value))
+
+            // structs
+            case (WomCompositeType(typeMap, Some(structName)), JsObject(fields)) =>
+                // convert each field
+                val m = fields.map {
+                    case (key, value) =>
+                        val t : WomType = typeMap(key)
+                        val elem: WomValue = womValueFromCromwellJSON(t, value)
+                        key -> elem
+                }.toMap
+                WomObject(m, WomCompositeType(typeMap, Some(structName)))
 
             case _ =>
                 throw new AppInternalException(
@@ -140,13 +148,6 @@ case class InputFile(verbose: Verbose,
                 val rJs = jsValueFromCromwellJSON(rType, r)
                 JsObject("left" -> lJs, "right" -> rJs)
 
-            case (WomObjectType, _) =>
-                throw new Exception(
-                    s"""|WDL Objects are not supported when converting from JSON inputs
-                        |type = ${womType}
-                        |value = ${jsv.prettyPrint}
-                        |""".stripMargin.trim)
-
             case (WomArrayType(t), JsArray(vec)) =>
                 JsArray(vec.map{
                     elem => jsValueFromCromwellJSON(t, elem)
@@ -154,6 +155,17 @@ case class InputFile(verbose: Verbose,
 
             case (WomOptionalType(t), (null|JsNull)) => JsNull
             case (WomOptionalType(t), _) =>  jsValueFromCromwellJSON(t, jsv)
+
+            // structs
+            case (WomCompositeType(typeMap, Some(structName)), JsObject(fields)) =>
+                // convert each field
+                val m = fields.map {
+                    case (key, value) =>
+                        val t : WomType = typeMap(key)
+                        val elem: JsValue = jsValueFromCromwellJSON(t, value)
+                        key -> elem
+                }.toMap
+                JsObject(m)
 
             case _ =>
                 throw new Exception(

@@ -203,15 +203,6 @@ object Block {
                 graphContainsCall(callName, scNode.innerGraph.nodes)
             case _ => false
         }
-/*        gnode match {
-            case None =>
-                System.out.println(s"findCallByName(${callName}) failed")
-            case Some(x) =>
-                System.out.println(s"""|findCallByName(${callName})
-                                       |${WomPrettyPrintApproxWdl.apply(x)}
-                                       |
-                                       |""".stripMargin)
-        }*/
         gnode
     }
 

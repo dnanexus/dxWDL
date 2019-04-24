@@ -19,12 +19,9 @@ task printPerson {
 
 workflow wf_person {
     input {
+        Person a
     }
 
-    Person a = {
-        "name": "John",
-        "age": 30
-    }
     call printPerson {
         input: a = a
     }

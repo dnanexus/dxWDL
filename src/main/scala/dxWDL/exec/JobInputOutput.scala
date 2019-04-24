@@ -261,9 +261,6 @@ case class JobInputOutput(dxIoFunctions : DxIoFunctions,
             .filter{ case (fieldName,_) => !fieldName.endsWith(FLAT_FILES_SUFFIX) }
             .filter{ case (fieldName,_) => fieldName != META_INFO }
 
-        //System.out.println(s"inputLines=${inputLines}")
-        //System.out.println(s"fields=${fields}")
-
         // Get the declarations matching the input fields.
         // Create a mapping from each key to its WDL value
         callable.inputs.foldLeft(Map.empty[InputDefinition, WomValue]) {

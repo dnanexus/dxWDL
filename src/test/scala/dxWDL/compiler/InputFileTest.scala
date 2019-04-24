@@ -8,16 +8,16 @@ import org.scalatest.Inside._
 // These tests involve compilation -without- access to the platform.
 //
 class InputFileTest extends FlatSpec with Matchers {
-    private def pathFromBasename(basename: String) : Path = {
-        val p = getClass.getResource(s"/input_file/${basename}").getPath
+    private def pathFromBasename(dirname: String, basename: String) : Path = {
+        val p = getClass.getResource(s"/${dirname}/${basename}").getPath
         Paths.get(p)
     }
 
     val cFlags = List("--compileMode", "ir", "-quiet")
 
     it should "handle one task and two inputs" in {
-        val wdlCode = pathFromBasename("add.wdl")
-        val inputs = pathFromBasename("add_inputs.json")
+        val wdlCode = pathFromBasename("input_file", "add.wdl")
+        val inputs = pathFromBasename("input_file", "add_inputs.json")
         Main.compile(
             List(wdlCode.toString, "-inputs", inputs.toString)
                 ++ cFlags
@@ -26,8 +26,8 @@ class InputFileTest extends FlatSpec with Matchers {
 
 
     it should "deal with a locked workflow" in {
-        val wdlCode = pathFromBasename("math.wdl")
-        val inputs = pathFromBasename("math_inputs.json")
+        val wdlCode = pathFromBasename("input_file", "math.wdl")
+        val inputs = pathFromBasename("input_file", "math_inputs.json")
         Main.compile(
             List(wdlCode.toString, "-inputs", inputs.toString, "--locked"
                  //, "--verbose", "--verboseKey", "GenerateIR"
@@ -37,8 +37,8 @@ class InputFileTest extends FlatSpec with Matchers {
 
 
     it should "not compile for several applets without a workflow" in {
-        val wdlCode = pathFromBasename("several_tasks.wdl")
-        val inputs = pathFromBasename("several_tasks_inputs.json")
+        val wdlCode = pathFromBasename("input_file", "several_tasks.wdl")
+        val inputs = pathFromBasename("input_file", "several_tasks_inputs.json")
         val retval = Main.compile(
             List(wdlCode.toString, "-inputs", inputs.toString)
                 ++ cFlags
@@ -51,8 +51,8 @@ class InputFileTest extends FlatSpec with Matchers {
 
 
     it should "one input too many" in {
-        val wdlCode = pathFromBasename("math.wdl")
-        val inputs = pathFromBasename("math_inputs2.json")
+        val wdlCode = pathFromBasename("input_file", "math.wdl")
+        val inputs = pathFromBasename("input_file", "math_inputs2.json")
         val retval = Main.compile(
             List(wdlCode.toString, "-inputs", inputs.toString, "--locked")
                 ++ cFlags
@@ -65,8 +65,8 @@ class InputFileTest extends FlatSpec with Matchers {
     }
 
     it should "build defaults into applet underneath workflow" in {
-        val wdlCode = pathFromBasename("population.wdl")
-        val defaults = pathFromBasename("population_inputs.json")
+        val wdlCode = pathFromBasename("input_file", "population.wdl")
+        val defaults = pathFromBasename("input_file", "population_inputs.json")
         val retval = Main.compile(
             List(wdlCode.toString, "--compileMode", "ir",
                  "-defaults", defaults.toString)
@@ -74,9 +74,9 @@ class InputFileTest extends FlatSpec with Matchers {
         retval shouldBe a [Main.SuccessfulTerminationIR]
     }
 
-    it should "handle inputs specified in the json file, but missing in the workflow" taggedAs(EdgeTest) in {
-        val wdlCode = pathFromBasename("missing_args.wdl")
-        val inputs = pathFromBasename("missing_args_inputs.json")
+    it should "handle inputs specified in the json file, but missing in the workflow" in {
+        val wdlCode = pathFromBasename("input_file", "missing_args.wdl")
+        val inputs = pathFromBasename("input_file", "missing_args_inputs.json")
 
         Main.compile(
             List(wdlCode.toString, "--compileMode", "ir", "-quiet",
@@ -109,10 +109,22 @@ class InputFileTest extends FlatSpec with Matchers {
         ) shouldBe a [Main.SuccessfulTerminationIR]
     }
 
+
+    it should "support struct inputs" taggedAs(EdgeTest) in {
+        val wdlCode = pathFromBasename("struct", "Person.wdl")
+        val inputs = pathFromBasename("struct", "Person_input.json")
+
+        val retval = Main.compile(
+            List(wdlCode.toString, "--compileMode", "ir",
+                 "-inputs", inputs.toString)
+        )
+        retval shouldBe a [Main.SuccessfulTerminationIR]
+    }
+
     /*
     it should "build defaults into subworkflows" in {
-        val wdlCode = pathFromBasename("L3.wdl")
-        val defaults = pathFromBasename("L3_inputs.json")
+        val wdlCode = pathFromBasename("input_file", "L3.wdl")
+        val defaults = pathFromBasename("input_file", "L3_inputs.json")
         val retval = Main.compile(
             List(wdlCode.toString, "--compileMode", "ir", "-quiet",
                  "-defaults", defaults.toString)
@@ -121,8 +133,8 @@ class InputFileTest extends FlatSpec with Matchers {
     }
 
     it should "build defaults into subworkflows II" in {
-        val wdlCode = pathFromBasename("L3.wdl")
-        val defaults = pathFromBasename("L3_inputs.json")
+        val wdlCode = pathFromBasename("input_file", "L3.wdl")
+        val defaults = pathFromBasename("input_file", "L3_inputs.json")
         val retval = Main.compile(
             List(wdlCode.toString, "--compileMode", "ir", "--locked", "-quiet",
                  "-defaults", defaults.toString)
