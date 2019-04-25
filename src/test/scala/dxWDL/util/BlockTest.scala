@@ -335,4 +335,12 @@ class BlockTest extends FlatSpec with Matchers {
         val (_, subBlocks, _) = Block.split(wf.innerGraph, wfSourceCode)
         subBlocks.size shouldBe(0)
     }
+
+    it should "detect when inputs are used as outputs" in {
+        val path = pathFromBasename("util", "inputs_used_as_outputs.wdl")
+        val wfSourceCode = Utils.readFileContent(path)
+        val (wf : WorkflowDefinition, _) = ParseWomSourceFile.parseWdlWorkflow(wfSourceCode)
+        val (inputs, _, outputs) = Block.split(wf.innerGraph, wfSourceCode)
+        Block.inputsUsedAsOutputs(inputs, outputs) shouldBe(Set("lane"))
+    }
 }
