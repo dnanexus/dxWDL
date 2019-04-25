@@ -126,6 +126,11 @@ case class GenerateIRWorkflow(wf : WorkflowDefinition,
                 case None if Utils.isOptional(cVar.womType) =>
                     // optional argument that is not provided
                     IR.SArgEmpty
+
+                case None if cVar.default != None =>
+                    // argument that has a default, it can be omitted in the call
+                    IR.SArgEmpty
+
                 case None if locked =>
                     val envDbg = env.map{ case (name, lVar) =>
                         s"  ${name} -> ${lVar.sArg}"
@@ -135,10 +140,13 @@ case class GenerateIRWorkflow(wf : WorkflowDefinition,
                     throw new Exception(
                         s"""|input <${cVar.name}, ${cVar.womType}> to call <${call.fullyQualifiedName}>
                             |is unspecified. This is illegal in a locked workflow.""".stripMargin.replaceAll("\n", " "))
+
                 case None =>
                     IR.SArgEmpty
+
                 case Some(tcInput) if WomValueAnalysis.isExpressionConst(cVar.womType, tcInput.womExpression) =>
                     IR.SArgConst(WomValueAnalysis.evalConst(cVar.womType, tcInput.womExpression))
+
                 case Some(tcInput) =>
                     val exprSourceString = tcInput.womExpression.sourceString
                     val lVar = env(exprSourceString)

@@ -183,21 +183,29 @@ def register_test(dir_path, tname):
     if tname in test_suites.keys():
         raise RuntimeError("Test name {} is already used by a test-suite, it is reserved".format(tname))
     wdl_file = os.path.join(dir_path, tname + ".wdl")
+    if not os.path.exists(wdl_file):
+        raise RuntimeError("Test file {} does not exist".format(path))
     metadata = get_metadata(wdl_file)
-    desc = TestDesc(name = metadata.name,
-                    kind = metadata.kind,
-                    wdl_source= wdl_file,
-                    wdl_input= os.path.join(dir_path, tname + "_input.json"),
-                    dx_input= os.path.join(dir_path, tname + "_input.dx.json"),
-                    results= os.path.join(dir_path, tname + "_results.json"))
-    for path in [desc.wdl_source, desc.wdl_input]:
-        if not os.path.exists(path):
-            raise RuntimeError("Test file {} does not exist".format(path))
 
-    # Verify the validity of the JSON files
-    for path in [desc.wdl_input, desc.dx_input, desc.results]:
-        if os.path.exists(path):
-            verify_json_file(path)
+    wdl_input= os.path.join(dir_path, tname + "_input.json")
+    if os.path.exists(wdl_input):
+        # Verify the validity of the input file
+        verify_json_file(wdl_input)
+        desc = TestDesc(name = metadata.name,
+                        kind = metadata.kind,
+                        wdl_source= wdl_file,
+                        wdl_input= wdl_input,
+                        dx_input= os.path.join(dir_path, tname + "_input.dx.json"),
+                        results= os.path.join(dir_path, tname + "_results.json"))
+    else:
+        # empty input file
+        desc = TestDesc(name = metadata.name,
+                        kind = metadata.kind,
+                        wdl_source= wdl_file,
+                        wdl_input= None,
+                        dx_input= None,
+                        results= os.path.join(dir_path, tname + "_results.json"))
+
     test_files[tname] = desc
     desc
 
@@ -319,8 +327,10 @@ def run_executable(project, test_folder, tname, oid, delay_workspace_destruction
             desc = test_files[tname]
             if tname in test_defaults:
                 inputs = {}
+            elif desc.dx_input is None:
+                inputs = {}
             else:
-                inputs = read_json_file_maybe_empty(desc.dx_input)
+                inputs = read_json_file(desc.dx_input)
             project.new_folder(test_folder, parents=True)
             if desc.kind == "workflow":
                 exec_obj = dxpy.DXWorkflow(project=project.get_id(), dxid=oid)
@@ -456,8 +466,9 @@ def compiler_per_test_flags(tname):
         flags.append("-defaults")
         flags.append(desc.wdl_input)
     else:
-        flags.append("-inputs")
-        flags.append(desc.wdl_input)
+        if desc.wdl_input is not None:
+            flags.append("-inputs")
+            flags.append(desc.wdl_input)
     if tname in test_extras:
         flags += ["--extras", os.path.join(top_dir, "test/extras.json")]
     if tname in test_private_registry:
