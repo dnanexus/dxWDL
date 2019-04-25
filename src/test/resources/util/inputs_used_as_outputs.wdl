@@ -5,10 +5,7 @@ workflow inner {
         String lane
     }
 
-#    String tmp = lane
-
     output {
-#        String blah = tmp
         String blah = lane
     }
 }

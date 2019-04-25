@@ -682,4 +682,28 @@ object Block {
 
         }
     }
+
+    // is an output used directly as an input? For example, in the
+    // small workflow below, 'lane' is used in such a manner.
+    //
+    // This makes a difference, because in locked dx:workflows, it is
+    // not possible to access a workflow input directly from a workflow
+    // output. It is only allowed to access a stage input/output.
+    //
+    // workflow inner {
+    //   input {
+    //      String lane
+    //   }
+    //   output {
+    //      String blah = lane
+    //   }
+    // }
+    def inputsUsedAsOutputs( inputNodes : Vector[GraphInputNode],
+                             outputNodes : Vector[GraphOutputNode] ) : Set[String] = {
+        // Figure out all the variables needed to calculate the outputs
+        val outputs : Set[String] = outputClosure(outputNodes)
+        val inputs : Set[String] = inputNodes.map(iNode => iNode.identifier.localName.value).toSet
+        //System.out.println(s"inputsUsedAsOutputs: ${outputs} ${inputs}")
+        inputs.intersect(outputs)
+    }
 }

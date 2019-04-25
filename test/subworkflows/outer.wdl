@@ -7,11 +7,11 @@ workflow outer {
         String lane
     }
 
-    call lib.inner {
+    call lib.inner as inner {
         input: lane=lane
     }
 
     output {
-        String o = lane
+        String o = inner.blah
     }
 }

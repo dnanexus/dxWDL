@@ -556,8 +556,24 @@ case class GenerateIRWorkflow(wf : WorkflowDefinition,
         val (allStageInfo, env) = assembleBackbone(wfName, wfInputs, blockPath, subBlocks, true)
         val (stages, auxCallables) = allStageInfo.unzip
 
-        // Handle outputs that are constants or variables, we can output them directly
-        if (outputNodes.forall(Block.isSimpleOutput)) {
+        // Handle outputs that are constants or variables, we can output them directly.
+        //
+        // Is an output used directly as an input? For example, in the
+        // small workflow below, 'lane' is used in such a manner.
+        //
+        // workflow inner {
+        //   input {
+        //      String lane
+        //   }
+        //   output {
+        //      String blah = lane
+        //   }
+        // }
+        //
+        // In locked dx:workflows, it is illegal to access a workflow input directly from
+        // a workflow output. It is only allowed to access a stage input/output.
+        if (outputNodes.forall(Block.isSimpleOutput) &&
+                Block.inputsUsedAsOutputs(inputNodes, outputNodes).isEmpty) {
             val simpleWfOutputs = outputNodes.map(node => buildSimpleWorkflowOutput(node, env)).toVector
             val irwf = IR.Workflow(wfName, wfInputs, simpleWfOutputs, stages, wfSourceCode, true)
             (irwf, auxCallables.flatten, simpleWfOutputs)
