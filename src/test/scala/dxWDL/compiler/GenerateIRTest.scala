@@ -298,11 +298,17 @@ class GenerateIRTest extends FlatSpec with Matchers {
         retval shouldBe a [Main.SuccessfulTerminationIR]
     }
 
-    it should "handle structs" taggedAs(EdgeTest) in {
+    it should "handle structs" in {
         val path = pathFromBasename("struct", "Person.wdl")
         val retval = Main.compile(
             path.toString :: cFlags
         )
+        retval shouldBe a [Main.SuccessfulTerminationIR]
+    }
+
+    it should "recognize that an argument with a default can be omitted at the call size" taggedAs(EdgeTest) in {
+        val path = pathFromBasename("compiler", "call_level2.wdl")
+        val retval = Main.compile(path.toString :: cFlags)
         retval shouldBe a [Main.SuccessfulTerminationIR]
     }
 }
