@@ -440,6 +440,8 @@ def register_all_tests():
                 fname = os.path.splitext(base)[0]
                 if fname.startswith("library_"):
                     continue
+                if fname == "dx_extern":
+                    continue
                 try:
                     register_test(root, fname)
                 except Exception as e:

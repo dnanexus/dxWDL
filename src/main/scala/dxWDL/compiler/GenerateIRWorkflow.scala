@@ -379,6 +379,8 @@ case class GenerateIRWorkflow(wf : WorkflowDefinition,
     {
         Utils.trace(verbose.on, s"Assembling workflow backbone ${wfName}")
         Utils.traceLevelInc()
+        val inputNamesDbg = wfInputs.map{ case (cVar, _) => cVar.name }
+        Utils.trace(verbose.on, s"inputs= ${inputNamesDbg}")
 
         var env : CallEnv = wfInputs.map { case (cVar,sArg) =>
             cVar.name -> LinkedVar(cVar, sArg)
@@ -661,6 +663,8 @@ case class GenerateIRWorkflow(wf : WorkflowDefinition,
 
         // Create a stage per call/scatter-block/declaration-block
         val (inputNodes, subBlocks, outputNodes) = Block.splitGraph(graph, callsLoToHi)
+        val inputNamesDbg = inputNodes.map(_.identifier.fullyQualifiedName.value)
+        Utils.trace(verbose.on, s"inputs= ${inputNamesDbg}")
 
         // compile into an IR workflow
         val (irwf, irCallables, wfOutputs) =

@@ -285,7 +285,32 @@ object Block {
         var blocks = Vector.empty[Block]
 
         // separate out the inputs
-        val inputBlock = graph.inputNodes.toVector
+        val inputBlockRaw = graph.inputNodes.toVector
+
+        // remove non local inputs, propagated from inner calls.
+        // In this workflow:
+        //
+        // workflow inner_wf {
+        //     input {}
+        //     call foo
+        //     output {}
+        // }
+        //
+        // task foo {
+        //     input {
+        //         Boolean unpassed_arg_default = true
+        //     }
+        //     command {}
+        //     output {}
+        // }
+        // unpassed_arg_default becomes a inner_wf argument!
+        // It's name is inner_wf.foo.unpassed_arg_default, so we
+        // filter out any argument that has a dot it in.
+        val inputBlock = inputBlockRaw.filter{ inNode =>
+            val name = inNode.identifier.localName.value
+            !(name contains '.')
+        }.toVector
+
         rest --= inputBlock.toSet
 
         // separate out the outputs

@@ -143,7 +143,7 @@ class BlockTest extends FlatSpec with Matchers {
         }
     }
 
-    it should "categorize correctly calls to subworkflows" taggedAs(EdgeTest) in {
+    it should "categorize correctly calls to subworkflows" in {
         val path = pathFromBasename("subworkflows", "trains.wdl")
         val (_, womBundle, sources, _) = ParseWomSourceFile.apply(path)
         val (_, wfSourceCode) = sources.find{ case (key, wdlCode) =>
@@ -342,5 +342,19 @@ class BlockTest extends FlatSpec with Matchers {
         val (wf : WorkflowDefinition, _) = ParseWomSourceFile.parseWdlWorkflow(wfSourceCode)
         val (inputs, _, outputs) = Block.split(wf.innerGraph, wfSourceCode)
         Block.inputsUsedAsOutputs(inputs, outputs) shouldBe(Set("lane"))
+    }
+
+    it should "create correct inputs for a workflow with an unpassed argument" taggedAs(EdgeTest) in {
+        val path = pathFromBasename("bugs", "unpassed_argument_propagation.wdl")
+        val wfSourceCode = Utils.readFileContent(path)
+        val (wf : WorkflowDefinition, _) = ParseWomSourceFile.parseWdlWorkflow(wfSourceCode)
+        val (inputs, _, _) = Block.split(wf.innerGraph, wfSourceCode)
+        inputs.foreach{ inDef =>
+            System.out.println(inDef)
+            System.out.println("")
+        }
+
+        val names = inputs.map{ inDef => inDef.identifier.localName.value}.toSet
+        names shouldBe(Set.empty[String])
     }
 }

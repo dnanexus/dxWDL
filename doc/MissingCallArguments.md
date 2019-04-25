@@ -84,7 +84,7 @@ If a variable named `add_b` already exists, a new name is required for `add.b`.
 Each workflow can go through multiple rewrite steps, each of which may encounter
 naming collisions. For a complex workflow, the end result could be so different from
 the original, as to be unrecognizable. Because names are mangled, following what
-happens are runtime in the UI will be hard.
+happens at runtime in the UI will be hard.
 
 ## Compromise: toplevel calls compiled as stages
 

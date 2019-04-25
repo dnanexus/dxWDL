@@ -49,9 +49,11 @@ case class WdlCodeGen(verbose: Verbose,
     }
 
 /*
-Create a stub for an applet. This is an empty task
+Create a header for a task/workflow. This is an empty task
 that includes the input and output definitions. It is used
-to allow linking to native DNAx applets (and workflows in the future).
+to
+(1) allow linking to native DNAx applets (and workflows in the future).
+(2) make a WDL file stand-alone, without imports
 
 For example, the stub for the Add task:
 task Add {
@@ -80,10 +82,10 @@ task Add {
    }
   }
 */
-    private def appletStub(callable: IR.Callable,
+    private def taskHeader(callable: IR.Callable,
                            language: Language.Value) : WdlCodeSnippet = {
         /*Utils.trace(verbose.on,
-                    s"""|genAppletStub  callable=${callable.name}
+                    s"""|taskHeader  callable=${callable.name}
                         |  inputs= ${callable.inputVars.map(_.name)}
                         |  outputs= ${callable.outputVars.map(_.name)}"""
                         .stripMargin)*/
@@ -277,7 +279,7 @@ task Add {
                     accu
                 } else {
                     // no existing stub, create it
-                    val taskSourceCode =  appletStub(callable, language)
+                    val taskSourceCode =  taskHeader(callable, language)
                     accu + (callable.name -> taskSourceCode)
                 }
             }
