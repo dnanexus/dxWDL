@@ -6,7 +6,6 @@ and compiles it to an equivalent workflow on the DNAnexus platform.
 It provides a reasonably complete set of WDL features.
 WDL draft-2, and version 1.0 are supported, with a few exceptions:
 * Calls with missing arguments have limited support
-* `struct` is not supported
 * Nested scatters are not supported
 
 A high level list of changes between draft-2 and version 1.0 is

@@ -43,7 +43,10 @@ wdl_v1_list = [
 
     # workflows with nested blocks
     "two_levels",
-    "param_passing"
+    "param_passing",
+
+    # defaults and parameter passing
+    "top"
 ]
 
 # docker image tests
@@ -439,6 +442,8 @@ def register_all_tests():
                 base = os.path.basename(t_file)
                 fname = os.path.splitext(base)[0]
                 if fname.startswith("library_"):
+                    continue
+                if fname == "dx_extern":
                     continue
                 try:
                     register_test(root, fname)

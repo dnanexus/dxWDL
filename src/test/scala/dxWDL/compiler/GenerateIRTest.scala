@@ -146,7 +146,7 @@ class GenerateIRTest extends FlatSpec with Matchers {
     it should "missing workflow inputs" in {
         val path = pathFromBasename("input_file", "missing_args.wdl")
         Main.compile(
-            path.toString :: List("--compileMode", "ir")
+            path.toString :: List("--compileMode", "ir", "--quiet")
         ) shouldBe a [Main.SuccessfulTerminationIR]
     }
 
@@ -306,9 +306,19 @@ class GenerateIRTest extends FlatSpec with Matchers {
         retval shouldBe a [Main.SuccessfulTerminationIR]
     }
 
-    it should "recognize that an argument with a default can be omitted at the call size" taggedAs(EdgeTest) in {
+    it should "recognize that an argument with a default can be omitted at the call site" in {
         val path = pathFromBasename("compiler", "call_level2.wdl")
         val retval = Main.compile(path.toString :: cFlags)
         retval shouldBe a [Main.SuccessfulTerminationIR]
+    }
+
+    it should "check for reserved symbols" taggedAs(EdgeTest) in {
+        val path = pathFromBasename("compiler", "reserved.wdl")
+        val retval = Main.compile(path.toString :: cFlags)
+
+        inside(retval) {
+            case Main.UnsuccessfulTermination(errMsg) =>
+                errMsg should include ("reserved substring ___")
+        }
     }
 }

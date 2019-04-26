@@ -87,7 +87,7 @@ class WfFragRunnerTest extends FlatSpec with Matchers {
             case _ => throw new Exception("sanity")
         }
         val graph = wf.innerGraph
-        val (inputNodes, subBlocks, outputNodes) = Block.split(graph, wfSource)
+        val (inputNodes, _, subBlocks, outputNodes) = Block.split(graph, wfSource)
 
         val block = subBlocks(1)
 
@@ -110,7 +110,7 @@ class WfFragRunnerTest extends FlatSpec with Matchers {
 
         val (dxPathConfig, dxIoFunctions) = setup()
         val (wf, fragRunner) = setupFragRunner(dxPathConfig, dxIoFunctions, wfSourceCode)
-        val (_, subBlocks, _) = Block.split(wf.innerGraph, wfSourceCode)
+        val (_, _, subBlocks, _) = Block.split(wf.innerGraph, wfSourceCode)
         val block = subBlocks(0)
 
         val env = Map.empty[String, WomValue]
@@ -141,7 +141,7 @@ class WfFragRunnerTest extends FlatSpec with Matchers {
 
         val (dxPathConfig, dxIoFunctions) = setup()
         val (wf, fragRunner) = setupFragRunner(dxPathConfig, dxIoFunctions, wfSourceCode)
-        val (_, subBlocks, _) = Block.split(wf.innerGraph, wfSourceCode)
+        val (_, _, subBlocks, _) = Block.split(wf.innerGraph, wfSourceCode)
         val block = subBlocks(0)
 
         val env = Map.empty[String, WomValue]
@@ -160,7 +160,7 @@ class WfFragRunnerTest extends FlatSpec with Matchers {
 
         val (dxPathConfig, dxIoFunctions) = setup()
         val (wf, fragRunner) = setupFragRunner(dxPathConfig, dxIoFunctions, wfSourceCode)
-        val (_, subBlocks, _) = Block.split(wf.innerGraph, wfSourceCode)
+        val (_, _, subBlocks, _) = Block.split(wf.innerGraph, wfSourceCode)
 
         val results = fragRunner.evalExpressions(subBlocks(0).nodes,
                                                  Map.empty[String, WomValue])
@@ -189,7 +189,7 @@ class WfFragRunnerTest extends FlatSpec with Matchers {
 
         val (dxPathConfig, dxIoFunctions) = setup()
         val (wf, fragRunner) = setupFragRunner(dxPathConfig, dxIoFunctions, wfSourceCode)
-        val (_, subBlocks, _) = Block.split(wf.innerGraph, wfSourceCode)
+        val (_, _, subBlocks, _) = Block.split(wf.innerGraph, wfSourceCode)
 
         // Make sure an exception is thrown if eval-expressions is called with
         // a wdl-call.
@@ -205,7 +205,7 @@ class WfFragRunnerTest extends FlatSpec with Matchers {
 
         val (dxPathConfig, dxIoFunctions) = setup()
         val (wf, fragRunner) = setupFragRunner(dxPathConfig, dxIoFunctions, wfSourceCode)
-        val (_, subBlocks, _) = Block.split(wf.innerGraph, wfSourceCode)
+        val (_, _, subBlocks, _) = Block.split(wf.innerGraph, wfSourceCode)
 /*
         val results = fragRunner.evalExpressions(subBlocks(0).nodes,
                                                  Map.empty[String, WomValue])
@@ -219,7 +219,7 @@ class WfFragRunnerTest extends FlatSpec with Matchers {
 
         val (dxPathConfig, dxIoFunctions) = setup()
         val (wf, fragRunner) = setupFragRunner(dxPathConfig, dxIoFunctions, wfSourceCode)
-        val (_, subBlocks, _) = Block.split(wf.innerGraph, wfSourceCode)
+        val (_, _, subBlocks, _) = Block.split(wf.innerGraph, wfSourceCode)
 
         val results = fragRunner.evalExpressions(subBlocks(0).nodes,
                                                  Map.empty[String, WomValue])
@@ -294,7 +294,7 @@ class WfFragRunnerTest extends FlatSpec with Matchers {
 
         val (dxPathConfig, dxIoFunctions) = setup()
         val (wf, fragRunner) = setupFragRunner(dxPathConfig, dxIoFunctions, wfSourceCode)
-        val (_, subBlocks, _) = Block.split(wf.innerGraph, wfSourceCode)
+        val (_, _, subBlocks, _) = Block.split(wf.innerGraph, wfSourceCode)
 
         val results = fragRunner.evalExpressions(subBlocks(0).nodes,
                                                  Map.empty[String, WomValue])

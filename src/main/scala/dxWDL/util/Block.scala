@@ -75,6 +75,8 @@ These are not blocks, because we need a subworkflow to run them:
 
 package dxWDL.util
 
+import wom.callable.Callable
+import wom.callable.Callable._
 import wom.expression.WomExpression
 import wom.graph._
 import wom.graph.expression._
@@ -253,6 +255,36 @@ object Block {
         }
     }
 
+    // remove non local inputs, propagated from inner calls.
+    // In this workflow:
+    //
+    // workflow inner_wf {
+    //     input {}
+    //     call foo
+    //     output {}
+    // }
+    //
+    // task foo {
+    //     input {
+    //         Boolean unpassed_arg_default = true
+    //     }
+    //     command {}
+    //     output {}
+    // }
+    // unpassed_arg_default becomes a inner_wf argument, called
+    // 'inner_wf.foo.unpassed_arg_default'.
+    //
+    // As a result, we filter out any argument that has a dot it in.
+    private def distinguishTopLevelInputs(inputs : Seq[GraphInputNode]) :
+            (Vector[GraphInputNode], Vector[GraphInputNode]) = {
+        val (inner, topLevelInputs) = inputs.partition{ inNode =>
+            val name = inNode.identifier.localName.value
+            name contains '.'
+        }
+
+        (topLevelInputs.toVector, inner.toVector)
+    }
+
     // Split an entire workflow.
     //
     // Sort the graph into a linear set of blocks, according to
@@ -278,6 +310,7 @@ object Block {
     // We choose option #2 because it resembles the original.
     def splitGraph(graph: Graph, callsLoToHi: Vector[(String, Int)]):
             (Vector[GraphInputNode], // inputs
+             Vector[GraphInputNode], // missing inner inputs that propagate
              Vector[Block], // blocks
              Vector[GraphOutputNode]) // outputs
     = {
@@ -285,15 +318,15 @@ object Block {
         var blocks = Vector.empty[Block]
 
         // separate out the inputs
-        val inputBlock = graph.inputNodes.toVector
-        rest --= inputBlock.toSet
+        val (inputBlock, innerInputs) = distinguishTopLevelInputs(graph.inputNodes.toSeq)
+        rest --= graph.inputNodes.toSet
 
         // separate out the outputs
         val outputBlock = graph.outputNodes.toVector
-        rest --= outputBlock.toSet
+        rest --= graph.outputNodes.toSet
 
         if (graph.nodes.isEmpty)
-            return (inputBlock, Vector.empty, outputBlock)
+            return (inputBlock, innerInputs, Vector.empty, outputBlock)
 
         // Create a separate block for each call. This maintains
         // the sort order from the origial code.
@@ -330,12 +363,13 @@ object Block {
                 blocks
             }
         allBlocks.foreach{ b => b.validate() }
-        (inputBlock, allBlocks, outputBlock)
+        (inputBlock, innerInputs, allBlocks, outputBlock)
     }
 
 
     // An easy to use method that takes the workflow source
     def split(graph: Graph, wfSource: String) :  (Vector[GraphInputNode],   // inputs
+                                                  Vector[GraphInputNode],   // implicit inputs
                                                   Vector[Block], // blocks
                                                   Vector[GraphOutputNode]) // outputs
     = {
@@ -555,12 +589,12 @@ object Block {
                     callsLoToHi: Vector[(String, Int)]) : Block = {
         assert(path.size >= 1)
 
-        val (_, blocks, _) = splitGraph(graph, callsLoToHi)
+        val (_, _, blocks, _) = splitGraph(graph, callsLoToHi)
         var subBlock = blocks(path.head)
         for (i <- path.tail) {
             val catg = categorize(subBlock)
             val innerGraph = Category.getInnerGraph(catg)
-            val (_, blocks2, _) = splitGraph(innerGraph, callsLoToHi)
+            val (_, _, blocks2, _) = splitGraph(innerGraph, callsLoToHi)
             subBlock = blocks2(i)
         }
         return subBlock
@@ -585,7 +619,10 @@ object Block {
     //    }
     // requires "flag" and "rain".
     //
-    def closure(block: Block) : Map[String, WomType] = {
+    // Also, return a list of optional inputs, they can be omitted
+    // in source WDL code.
+    //
+    def closure(block: Block) : (Map[String, WomType], Set[String]) = {
         // make a deep list of all the nodes inside the block
         val allBlockNodes : Set[GraphNode] = block.nodes.map{
             case sctNode: ScatterNode =>
@@ -615,7 +652,7 @@ object Block {
             }.toMap
         }
 
-        block.nodes.flatMap{
+        val allInputs : Map[String, WomType] = block.nodes.flatMap{
             case scNode : ScatterNode =>
                 val scNodeInputs = scNode.inputPorts.flatMap(keepOnlyOutsideRefs(_))
                 scNodeInputs ++ getInputsToGraph(scNode.innerGraph)
@@ -625,6 +662,39 @@ object Block {
             case node : GraphNode =>
                 node.inputPorts.flatMap(keepOnlyOutsideRefs(_))
         }.toMap
+
+        // make list of call arguments that have defaults.
+        // In the example below, it is "unpassed_arg_default".
+        // It has a default, so it can be omitted.
+        //
+        // workflow inner_wf {
+        //     call foo
+        // }
+        //
+        // task foo {
+        //     input {
+        //         Boolean unpassed_arg_default = true
+        //     }
+        //     command {}
+        //     output {}
+        // }
+        //
+        val optionalInputs: Set[String] = block.nodes.flatMap{
+            case cNode : CallNode =>
+                val missingCallArgs = cNode.inputPorts.flatMap(keepOnlyOutsideRefs(_))
+                val callee: Callable = cNode.callable
+                missingCallArgs.flatMap{
+                    case (name, womType) =>
+                        val inputDef: InputDefinition = callee.inputs.find{
+                            case iDef : InputDefinition => iDef.name == name
+                        }.get
+                        if (inputDef.optional) Some(name)
+                        else None
+                }
+            case _ => None
+        }.toSet
+
+        (allInputs, optionalInputs)
     }
 
     // Figure out all the outputs from a sequence of WDL statements.

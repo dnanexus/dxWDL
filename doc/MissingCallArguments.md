@@ -84,11 +84,11 @@ If a variable named `add_b` already exists, a new name is required for `add.b`.
 Each workflow can go through multiple rewrite steps, each of which may encounter
 naming collisions. For a complex workflow, the end result could be so different from
 the original, as to be unrecognizable. Because names are mangled, following what
-happens are runtime in the UI will be hard.
+happens at runtime in the UI will be hard.
 
 ## Compromise: toplevel calls compiled as stages
 
-There is an import use case where leaving task arguments unbound is
+There is an important use case where leaving task arguments unbound is
 desirable. The `detect_virus` workflow below, is a simplified version
 of the real world worklfow
 [assemble_denovo_with_deplete_and_isnv_calling](https://github.com/broadinstitute/viral-ngs/blob/master/pipes/WDL/workflows/assemble_denovo_with_deplete_and_isnv_calling.wdl).

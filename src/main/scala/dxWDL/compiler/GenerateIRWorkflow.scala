@@ -197,14 +197,17 @@ case class GenerateIRWorkflow(wf : WorkflowDefinition,
     // if the fully-qualified-name is not found.
     private def lookupInEnv(fqn: String,
                             womType: WomType,
-                            env: CallEnv) : Option[(String, LinkedVar)] = {
+                            env: CallEnv,
+                            optional: Boolean) : Option[(String, LinkedVar)] = {
         lookupInEnvInner(fqn, env) match {
             case None if Utils.isOptional(womType) =>
                 None
             case None =>
-                // A missing compulsory argument
-                Utils.warning(verbose,
-                              s"Missing argument ${fqn}, it will have to be provided at runtime")
+                if (!optional) {
+                    // A missing compulsory argument
+                    Utils.warning(verbose,
+                                  s"Missing argument ${fqn}, it will have to be provided at runtime")
+                }
                 None
             case Some((name, lVar)) =>
                 Some((name, lVar))
@@ -216,9 +219,10 @@ case class GenerateIRWorkflow(wf : WorkflowDefinition,
     private def blockClosure(block: Block,
                              env : CallEnv,
                              dbg: String) : CallEnv = {
-        val allInputs = Block.closure(block)
+        val (allInputs, optionalArgNames) = Block.closure(block)
         allInputs.flatMap { case (name, womType) =>
-            lookupInEnv(name, womType, env)
+            val isOptionalArg = (optionalArgNames contains name)
+            lookupInEnv(name, womType, env, isOptionalArg)
         }.toMap
     }
 
@@ -229,7 +233,8 @@ case class GenerateIRWorkflow(wf : WorkflowDefinition,
                                    graph: Graph,
                                    blockPath: Vector[Int],
                                    env: CallEnv) : (IR.Callable, Vector[IR.Callable]) = {
-        val (inputNodes, subBlocks, outputNodes) = Block.splitGraph(graph, callsLoToHi)
+        val (inputNodes, _, subBlocks, outputNodes) =
+            Block.splitGraph(graph, callsLoToHi)
         assert(subBlocks.size > 0)
 
         if (subBlocks.size == 1) {
@@ -379,6 +384,8 @@ case class GenerateIRWorkflow(wf : WorkflowDefinition,
     {
         Utils.trace(verbose.on, s"Assembling workflow backbone ${wfName}")
         Utils.traceLevelInc()
+        val inputNamesDbg = wfInputs.map{ case (cVar, _) => cVar.name }
+        Utils.trace(verbose.on, s"inputs= ${inputNamesDbg}")
 
         var env : CallEnv = wfInputs.map { case (cVar,sArg) =>
             cVar.name -> LinkedVar(cVar, sArg)
@@ -660,7 +667,12 @@ case class GenerateIRWorkflow(wf : WorkflowDefinition,
         val graph = wf.innerGraph
 
         // Create a stage per call/scatter-block/declaration-block
-        val (inputNodes, subBlocks, outputNodes) = Block.splitGraph(graph, callsLoToHi)
+        val (inputNodes, innerInputNodes, subBlocks, outputNodes) = Block.splitGraph(graph, callsLoToHi)
+        for (iNode <- innerInputNodes) {
+            val name =  iNode.identifier.localName.value
+            Utils.warning(verbose,
+                          s"Argument ${name}, is not treated as an input, it cannot be set")
+        }
 
         // compile into an IR workflow
         val (irwf, irCallables, wfOutputs) =
