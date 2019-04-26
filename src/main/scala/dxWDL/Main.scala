@@ -1,6 +1,7 @@
 package dxWDL
 
-import com.dnanexus.{DXProject}
+import com.dnanexus._
+import com.fasterxml.jackson.databind.JsonNode
 import com.typesafe.config._
 import java.nio.file.{Path, Paths}
 import scala.collection.mutable.HashMap
@@ -627,6 +628,36 @@ object Main extends App {
         SuccessfulTermination(s"success ${op}")
     }
 
+
+    // Get the WOM source code (currently WDL, could be also CWL in the future)
+    // Parse the inputs, convert to WOM values.
+    //
+    // Note: this performs two API calls to get the details. Can we reduce this
+    // number?
+    private def retrieveSourceCode(jobInfoPath: Path) : String = {
+        val jobInfo = Utils.readFileContent(jobInfoPath).parseJson
+        val applet: DXApplet = jobInfo.asJsObject.fields.get("applet") match {
+            case None =>
+                Utils.trace(true,
+                            s"""|applet field not found locally, performing
+                                |an API call.
+                                |""".stripMargin)
+                val dxJob : DXJob = Utils.dxEnv.getJob()
+                dxJob.describe().getApplet()
+            case Some(JsString(x)) =>
+                DXApplet.getInstance(x)
+            case Some(other) =>
+                throw new Exception(s"malformed applet field ${other} in job info")
+        }
+
+        val descOptions = DXDataObject.DescribeOptions.get().withDetails
+        val details: JsValue = Utils.jsValueOfJsonNode(
+            applet.describe(descOptions).getDetails(classOf[JsonNode]))
+
+        val JsString(womSourceCodeEncoded) = details.asJsObject.fields("womSourceCode")
+        Utils.base64DecodeAndGunzip(womSourceCodeEncoded)
+    }
+
     def internalOp(args : Seq[String]) : Termination = {
         val operation = InternalOp.values find (x => normKey(x.toString) == normKey(args.head))
         operation match {
@@ -635,7 +666,7 @@ object Main extends App {
             case Some(op) if args.length == 3 =>
                 val homeDir = Paths.get(args(1))
                 val rtDebugLvl = parseRuntimeDebugLevel(args(2))
-                val (jobInputPath, jobOutputPath, jobErrorPath, _) =
+                val (jobInputPath, jobOutputPath, jobErrorPath, jobInfoPath) =
                     Utils.jobFilesOfHomeDir(homeDir)
                 val dxPathConfig = buildRuntimePathConfig(rtDebugLvl >= 1)
                 val dxIoFunctions = DxIoFunctions(dxPathConfig, rtDebugLvl)
@@ -645,10 +676,9 @@ object Main extends App {
                 val dbRaw = Utils.readFileContent(dxPathConfig.instanceTypeDB)
                 val instanceTypeDB = dbRaw.parseJson.convertTo[InstanceTypeDB]
 
-                   // Get the WOM source code (currently WDL, could be also CWL in the future)
-                var womSourceCodeEncoded = Utils.readFileContent(dxPathConfig.womSourceCodeEncoded)
-                womSourceCodeEncoded = womSourceCodeEncoded.substring(0, womSourceCodeEncoded.length - 1)
-                val womSourceCode = Utils.base64DecodeAndGunzip(womSourceCodeEncoded)
+                // Get the WOM source code (currently WDL, could be also CWL in the future)
+                // Parse the inputs, convert to WOM values.
+                val womSourceCode = retrieveSourceCode(jobInfoPath)
 
                 try {
                     op match {

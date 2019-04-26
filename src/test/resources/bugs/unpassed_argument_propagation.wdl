@@ -2,7 +2,11 @@ version 1.0
 
 workflow inner_wf {
     input {}
-    call foo
+
+    call foo as f1
+
+    call foo as f2 { input: unpassed_arg_default = false }
+
     output {}
 }
 

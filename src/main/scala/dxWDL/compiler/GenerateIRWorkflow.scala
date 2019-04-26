@@ -197,14 +197,17 @@ case class GenerateIRWorkflow(wf : WorkflowDefinition,
     // if the fully-qualified-name is not found.
     private def lookupInEnv(fqn: String,
                             womType: WomType,
-                            env: CallEnv) : Option[(String, LinkedVar)] = {
+                            env: CallEnv,
+                            optional: Boolean) : Option[(String, LinkedVar)] = {
         lookupInEnvInner(fqn, env) match {
             case None if Utils.isOptional(womType) =>
                 None
             case None =>
-                // A missing compulsory argument
-                Utils.warning(verbose,
-                              s"Missing argument ${fqn}, it will have to be provided at runtime")
+                if (!optional) {
+                    // A missing compulsory argument
+                    Utils.warning(verbose,
+                                  s"Missing argument ${fqn}, it will have to be provided at runtime")
+                }
                 None
             case Some((name, lVar)) =>
                 Some((name, lVar))
@@ -216,9 +219,10 @@ case class GenerateIRWorkflow(wf : WorkflowDefinition,
     private def blockClosure(block: Block,
                              env : CallEnv,
                              dbg: String) : CallEnv = {
-        val allInputs = Block.closure(block)
+        val (allInputs, optionalArgNames) = Block.closure(block)
         allInputs.flatMap { case (name, womType) =>
-            lookupInEnv(name, womType, env)
+            val isOptionalArg = (optionalArgNames contains name)
+            lookupInEnv(name, womType, env, isOptionalArg)
         }.toMap
     }
 

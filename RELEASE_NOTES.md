@@ -3,7 +3,7 @@
 ## 1.02
 - Removed the instance-type database, and wom source code from the inputs of applets.
 - Added the WDL source code to workflow and applet objects on the platform. It is stored in the details field, and
-can be easily [retrieved](./doc/ExpertOptions.md#Getting-WDL-sources).
+can be easily [retrieved](./doc/ExpertOptions.md#Getting-WDL-sources). It has been removed from the generated applet bash script.
 - Bug fixes
 - Initial support for the `struct` type
 - Bug fixes: https://github.com/dnanexus/dxWDL/issues/224, https://github.com/dnanexus/dxWDL/issues/227, https://github.com/dnanexus/dxWDL/issues/228

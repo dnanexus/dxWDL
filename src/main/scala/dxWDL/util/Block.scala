@@ -75,6 +75,8 @@ These are not blocks, because we need a subworkflow to run them:
 
 package dxWDL.util
 
+import wom.callable.Callable
+import wom.callable.Callable._
 import wom.expression.WomExpression
 import wom.graph._
 import wom.graph.expression._
@@ -617,7 +619,10 @@ object Block {
     //    }
     // requires "flag" and "rain".
     //
-    def closure(block: Block) : Map[String, WomType] = {
+    // Also, return a list of optional inputs, they can be omitted
+    // in source WDL code.
+    //
+    def closure(block: Block) : (Map[String, WomType], Set[String]) = {
         // make a deep list of all the nodes inside the block
         val allBlockNodes : Set[GraphNode] = block.nodes.map{
             case sctNode: ScatterNode =>
@@ -647,7 +652,7 @@ object Block {
             }.toMap
         }
 
-        block.nodes.flatMap{
+        val allInputs : Map[String, WomType] = block.nodes.flatMap{
             case scNode : ScatterNode =>
                 val scNodeInputs = scNode.inputPorts.flatMap(keepOnlyOutsideRefs(_))
                 scNodeInputs ++ getInputsToGraph(scNode.innerGraph)
@@ -657,6 +662,39 @@ object Block {
             case node : GraphNode =>
                 node.inputPorts.flatMap(keepOnlyOutsideRefs(_))
         }.toMap
+
+        // make list of call arguments that have defaults.
+        // In the example below, it is "unpassed_arg_default".
+        // It has a default, so it can be omitted.
+        //
+        // workflow inner_wf {
+        //     call foo
+        // }
+        //
+        // task foo {
+        //     input {
+        //         Boolean unpassed_arg_default = true
+        //     }
+        //     command {}
+        //     output {}
+        // }
+        //
+        val optionalInputs: Set[String] = block.nodes.flatMap{
+            case cNode : CallNode =>
+                val missingCallArgs = cNode.inputPorts.flatMap(keepOnlyOutsideRefs(_))
+                val callee: Callable = cNode.callable
+                missingCallArgs.flatMap{
+                    case (name, womType) =>
+                        val inputDef: InputDefinition = callee.inputs.find{
+                            case iDef : InputDefinition => iDef.name == name
+                        }.get
+                        if (inputDef.optional) Some(name)
+                        else None
+                }
+            case _ => None
+        }.toSet
+
+        (allInputs, optionalInputs)
     }
 
     // Figure out all the outputs from a sequence of WDL statements.

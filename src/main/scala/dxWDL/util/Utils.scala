@@ -287,7 +287,7 @@ object Utils {
         val jobInputPath = homeDir.resolve("job_input.json")
         val jobOutputPath = homeDir.resolve("job_output.json")
         val jobErrorPath = homeDir.resolve("job_error.json")
-        val jobInfoPath = homeDir.resolve("dnanexus-executable.json")
+        val jobInfoPath = homeDir.resolve("dnanexus-job.json")
         (jobInputPath, jobOutputPath, jobErrorPath, jobInfoPath)
     }
 

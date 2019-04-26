@@ -15,6 +15,11 @@ class BlockTest extends FlatSpec with Matchers {
         Paths.get(p)
     }
 
+    private def closureAll(b: Block) : Map[String, WomType] = {
+        val (cls, optionalArgs) = Block.closure(b)
+        cls
+    }
+
     it should "calculate closure correctly" in {
         val path = pathFromBasename("util", "block_closure.wdl")
         val wfSourceCode = Utils.readFileContent(path)
@@ -24,11 +29,11 @@ class BlockTest extends FlatSpec with Matchers {
         /*System.out.println(s"""|block #0 =
                                |${subBlocks(0).prettyPrintApproxWdl}}
                                |""".stripMargin)*/
-        Block.closure(subBlocks(0)).keys.toSet should be(Set.empty)
-        Block.closure(subBlocks(1)).keys.toSet should be(Set("flag", "rain"))
-        Block.closure(subBlocks(2)).keys.toSet should be(Set("flag", "inc1.result"))
-        Block.closure(subBlocks(3)).keys.toSet should be(Set("rain"))
-        Block.closure(subBlocks(4)).keys.toSet should be(Set("rain", "inc1.result", "flag"))
+        closureAll(subBlocks(0)).keys.toSet should be(Set.empty)
+        closureAll(subBlocks(1)).keys.toSet should be(Set("flag", "rain"))
+        closureAll(subBlocks(2)).keys.toSet should be(Set("flag", "inc1.result"))
+        closureAll(subBlocks(3)).keys.toSet should be(Set("rain"))
+        closureAll(subBlocks(4)).keys.toSet should be(Set("rain", "inc1.result", "flag"))
     }
 
     it should "calculate outputs correctly" in {
@@ -54,7 +59,7 @@ class BlockTest extends FlatSpec with Matchers {
 
         Block.outputs(subBlocks(1)) should be(Map("z" -> WomIntegerType,
                                                   "mul.result" -> WomIntegerType))
-        Block.closure(subBlocks(1)).keys.toSet should be(Set("add.result"))
+        closureAll(subBlocks(1)).keys.toSet should be(Set("add.result"))
     }
 
     it should "handle block zero" in {
@@ -91,10 +96,10 @@ class BlockTest extends FlatSpec with Matchers {
         val (wf : WorkflowDefinition, _) = ParseWomSourceFile.parseWdlWorkflow(wfSourceCode)
         val (_, _, subBlocks, _) = Block.split(wf.innerGraph, wfSourceCode)
 
-        Block.closure(subBlocks(1)).keys.toSet should be(Set("flag", "rain"))
-        Block.closure(subBlocks(2)).keys.toSet should be(Set("flag", "inc1.result"))
-        Block.closure(subBlocks(3)).keys.toSet should be(Set("rain"))
-        Block.closure(subBlocks(4)).keys.toSet should be(Set("rain", "inc1.result", "flag"))
+        closureAll(subBlocks(1)).keys.toSet should be(Set("flag", "rain"))
+        closureAll(subBlocks(2)).keys.toSet should be(Set("flag", "inc1.result"))
+        closureAll(subBlocks(3)).keys.toSet should be(Set("rain"))
+        closureAll(subBlocks(4)).keys.toSet should be(Set("rain", "inc1.result", "flag"))
     }
 
     it should "calculate closure correctly for WDL draft-2 II" in {
@@ -103,8 +108,8 @@ class BlockTest extends FlatSpec with Matchers {
         val (wf : WorkflowDefinition, _) = ParseWomSourceFile.parseWdlWorkflow(wfSourceCode)
         val (inputNodes, _, subBlocks, outputNodes) = Block.split(wf.innerGraph, wfSourceCode)
 
-        Block.closure(subBlocks(0)).keys.toSet should be(Set("num"))
-        Block.closure(subBlocks(1)).keys.toSet should be(Set.empty)
+        closureAll(subBlocks(0)).keys.toSet should be(Set("num"))
+        closureAll(subBlocks(1)).keys.toSet should be(Set.empty)
     }
 
     it should "calculate closure for a workflow with expression outputs" in {
@@ -360,6 +365,10 @@ class BlockTest extends FlatSpec with Matchers {
         val (wf : WorkflowDefinition, _) = ParseWomSourceFile.parseWdlWorkflow(wfSourceCode)
         val (_, _, subBlocks, _) = Block.split(wf.innerGraph, wfSourceCode)
 
-        Block.closure(subBlocks(0)).keys.toSet should be(Set.empty)
+        val (c0All, c0Optionals) = Block.closure(subBlocks(0))
+        c0All.keys.toSet should be(Set("unpassed_arg_default"))
+        c0Optionals should be(Set("unpassed_arg_default"))
+
+        closureAll(subBlocks(1)).keys.toSet should be(Set.empty)
     }
 }

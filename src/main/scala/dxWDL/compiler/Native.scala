@@ -345,19 +345,7 @@ case class Native(dxWDLrtId: Option[String],
         val dbOpaque = InstanceTypeDB.opaquePrices(instanceTypeDB)
         val dbOpaqueInstance = dbOpaque.toJson.prettyPrint
 
-        // UU64 encode the WDL script to avoid characters that interact
-        // badly with bash
-        val wdlCodeUu64 = Utils.gzipAndBase64Encode(applet.womSourceCode)
-
         s"""|#!/bin/bash -ex
-            |
-            |# write the WDL script into a file
-            |# We are making a local copy of the workflow/task source,
-            |# so that we wouldn't need to perform an API call to
-            |# access the details field.
-            |cat >${dxPathConfig.womSourceCodeEncoded} <<'EOL'
-            |${wdlCodeUu64}
-            |EOL
             |
             |# write the instance type DB in JSON format into
             |# a file under the meta directory
