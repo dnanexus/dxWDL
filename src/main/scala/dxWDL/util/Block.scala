@@ -253,6 +253,36 @@ object Block {
         }
     }
 
+    // remove non local inputs, propagated from inner calls.
+    // In this workflow:
+    //
+    // workflow inner_wf {
+    //     input {}
+    //     call foo
+    //     output {}
+    // }
+    //
+    // task foo {
+    //     input {
+    //         Boolean unpassed_arg_default = true
+    //     }
+    //     command {}
+    //     output {}
+    // }
+    // unpassed_arg_default becomes a inner_wf argument, called
+    // 'inner_wf.foo.unpassed_arg_default'.
+    //
+    // As a result, we filter out any argument that has a dot it in.
+    private def distinguishTopLevelInputs(inputs : Seq[GraphInputNode]) :
+            (Vector[GraphInputNode], Vector[GraphInputNode]) = {
+        val (inner, topLevelInputs) = inputs.partition{ inNode =>
+            val name = inNode.identifier.localName.value
+            name contains '.'
+        }
+
+        (topLevelInputs.toVector, inner.toVector)
+    }
+
     // Split an entire workflow.
     //
     // Sort the graph into a linear set of blocks, according to
@@ -278,6 +308,7 @@ object Block {
     // We choose option #2 because it resembles the original.
     def splitGraph(graph: Graph, callsLoToHi: Vector[(String, Int)]):
             (Vector[GraphInputNode], // inputs
+             Vector[GraphInputNode], // missing inner inputs that propagate
              Vector[Block], // blocks
              Vector[GraphOutputNode]) // outputs
     = {
@@ -285,40 +316,15 @@ object Block {
         var blocks = Vector.empty[Block]
 
         // separate out the inputs
-        val inputBlockRaw = graph.inputNodes.toVector
-
-        // remove non local inputs, propagated from inner calls.
-        // In this workflow:
-        //
-        // workflow inner_wf {
-        //     input {}
-        //     call foo
-        //     output {}
-        // }
-        //
-        // task foo {
-        //     input {
-        //         Boolean unpassed_arg_default = true
-        //     }
-        //     command {}
-        //     output {}
-        // }
-        // unpassed_arg_default becomes a inner_wf argument!
-        // It's name is inner_wf.foo.unpassed_arg_default, so we
-        // filter out any argument that has a dot it in.
-        val inputBlock = inputBlockRaw.filter{ inNode =>
-            val name = inNode.identifier.localName.value
-            !(name contains '.')
-        }.toVector
-
-        rest --= inputBlock.toSet
+        val (inputBlock, innerInputs) = distinguishTopLevelInputs(graph.inputNodes.toSeq)
+        rest --= graph.inputNodes.toSet
 
         // separate out the outputs
         val outputBlock = graph.outputNodes.toVector
-        rest --= outputBlock.toSet
+        rest --= graph.outputNodes.toSet
 
         if (graph.nodes.isEmpty)
-            return (inputBlock, Vector.empty, outputBlock)
+            return (inputBlock, innerInputs, Vector.empty, outputBlock)
 
         // Create a separate block for each call. This maintains
         // the sort order from the origial code.
@@ -355,12 +361,13 @@ object Block {
                 blocks
             }
         allBlocks.foreach{ b => b.validate() }
-        (inputBlock, allBlocks, outputBlock)
+        (inputBlock, innerInputs, allBlocks, outputBlock)
     }
 
 
     // An easy to use method that takes the workflow source
     def split(graph: Graph, wfSource: String) :  (Vector[GraphInputNode],   // inputs
+                                                  Vector[GraphInputNode],   // implicit inputs
                                                   Vector[Block], // blocks
                                                   Vector[GraphOutputNode]) // outputs
     = {
@@ -580,12 +587,12 @@ object Block {
                     callsLoToHi: Vector[(String, Int)]) : Block = {
         assert(path.size >= 1)
 
-        val (_, blocks, _) = splitGraph(graph, callsLoToHi)
+        val (_, _, blocks, _) = splitGraph(graph, callsLoToHi)
         var subBlock = blocks(path.head)
         for (i <- path.tail) {
             val catg = categorize(subBlock)
             val innerGraph = Category.getInnerGraph(catg)
-            val (_, blocks2, _) = splitGraph(innerGraph, callsLoToHi)
+            val (_, _, blocks2, _) = splitGraph(innerGraph, callsLoToHi)
             subBlock = blocks2(i)
         }
         return subBlock
