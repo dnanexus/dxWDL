@@ -43,7 +43,10 @@ wdl_v1_list = [
 
     # workflows with nested blocks
     "two_levels",
-    "param_passing"
+    "param_passing",
+
+    # defaults and parameter passing
+    "top"
 ]
 
 # docker image tests

@@ -1,6 +1,6 @@
 version 1.0
 
-workflow inner_wf {
+workflow unpassed_default_arg {
     input {
         Array[String] initial_arr = []
     }
@@ -12,8 +12,8 @@ workflow inner_wf {
     }
     call second_task {
         input:
-                input_metrics=initial_task.metrics,
-        non_input_decl=non_input_decl,
+          input_metrics=initial_task.metrics,
+          non_input_decl=non_input_decl,
     }
 
     output {

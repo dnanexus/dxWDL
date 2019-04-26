@@ -146,7 +146,7 @@ class GenerateIRTest extends FlatSpec with Matchers {
     it should "missing workflow inputs" in {
         val path = pathFromBasename("input_file", "missing_args.wdl")
         Main.compile(
-            path.toString :: List("--compileMode", "ir")
+            path.toString :: List("--compileMode", "ir", "--quiet")
         ) shouldBe a [Main.SuccessfulTerminationIR]
     }
 

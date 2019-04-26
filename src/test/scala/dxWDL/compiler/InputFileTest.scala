@@ -68,7 +68,7 @@ class InputFileTest extends FlatSpec with Matchers {
         val wdlCode = pathFromBasename("input_file", "population.wdl")
         val defaults = pathFromBasename("input_file", "population_inputs.json")
         val retval = Main.compile(
-            List(wdlCode.toString, "--compileMode", "ir",
+            List(wdlCode.toString, "--compileMode", "ir", "--quiet",
                  "-defaults", defaults.toString)
         )
         retval shouldBe a [Main.SuccessfulTerminationIR]

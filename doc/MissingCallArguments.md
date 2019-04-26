@@ -88,7 +88,7 @@ happens at runtime in the UI will be hard.
 
 ## Compromise: toplevel calls compiled as stages
 
-There is an import use case where leaving task arguments unbound is
+There is an important use case where leaving task arguments unbound is
 desirable. The `detect_virus` workflow below, is a simplified version
 of the real world worklfow
 [assemble_denovo_with_deplete_and_isnv_calling](https://github.com/broadinstitute/viral-ngs/blob/master/pipes/WDL/workflows/assemble_denovo_with_deplete_and_isnv_calling.wdl).

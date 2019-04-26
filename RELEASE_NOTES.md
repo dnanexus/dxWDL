@@ -6,7 +6,7 @@
 can be easily [retrieved](./doc/ExpertOptions.md#Getting-WDL-sources).
 - Bug fixes
 - Initial support for the `struct` type
-- Bug fixes: https://github.com/dnanexus/dxWDL/issues/224, https://github.com/dnanexus/dxWDL/issues/227
+- Bug fixes: https://github.com/dnanexus/dxWDL/issues/224, https://github.com/dnanexus/dxWDL/issues/227, https://github.com/dnanexus/dxWDL/issues/228
 
 ## 1.01
 - Ensure that native docker uses the machine's hostname (i.e., the job ID) as

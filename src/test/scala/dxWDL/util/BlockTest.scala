@@ -344,7 +344,7 @@ class BlockTest extends FlatSpec with Matchers {
         Block.inputsUsedAsOutputs(inputs, outputs) shouldBe(Set("lane"))
     }
 
-    it should "create correct inputs for a workflow with an unpassed argument" taggedAs(EdgeTest) in {
+    it should "create correct inputs for a workflow with an unpassed argument" in{
         val path = pathFromBasename("bugs", "unpassed_argument_propagation.wdl")
         val wfSourceCode = Utils.readFileContent(path)
         val (wf : WorkflowDefinition, _) = ParseWomSourceFile.parseWdlWorkflow(wfSourceCode)
@@ -352,5 +352,14 @@ class BlockTest extends FlatSpec with Matchers {
 
         val names = inputs.map{ inDef => inDef.identifier.localName.value}.toSet
         names shouldBe(Set.empty[String])
+    }
+
+    it should "account for arguments that have a default, but are not optional" taggedAs(EdgeTest) in {
+        val path = pathFromBasename("bugs", "unpassed_argument_propagation.wdl")
+        val wfSourceCode = Utils.readFileContent(path)
+        val (wf : WorkflowDefinition, _) = ParseWomSourceFile.parseWdlWorkflow(wfSourceCode)
+        val (_, _, subBlocks, _) = Block.split(wf.innerGraph, wfSourceCode)
+
+        Block.closure(subBlocks(0)).keys.toSet should be(Set.empty)
     }
 }

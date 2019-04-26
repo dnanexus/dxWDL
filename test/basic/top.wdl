@@ -1,14 +1,13 @@
 version 1.0
 
-import "imported.wdl"
+import "unpassed_default_arg.wdl" as lib
 
-# here's an overview of what we're doing
-workflow outer {
+workflow top {
     input {
         Array[String] arr
     }
 
-    call imported.inner_wf {
+    call lib.unpassed_default_arg {
         input:
             initial_arr=arr,
     }
