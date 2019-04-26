@@ -340,18 +340,7 @@ case class Native(dxWDLrtId: Option[String],
                 }
         }
 
-         // Add the pricing model, and make the prices
-        // opaque.
-        val dbOpaque = InstanceTypeDB.opaquePrices(instanceTypeDB)
-        val dbOpaqueInstance = dbOpaque.toJson.prettyPrint
-
         s"""|#!/bin/bash -ex
-            |
-            |# write the instance type DB in JSON format into
-            |# a file under the meta directory
-            |cat >${dxPathConfig.instanceTypeDB} <<'EOL'
-            |${dbOpaqueInstance}
-            |EOL
             |
             |${body}""".stripMargin
     }
@@ -644,8 +633,12 @@ case class Native(dxWDLrtId: Option[String],
         ).flatten.toVector
 
         // put the wom source code into the details field.
+        // Add the pricing model, and make the prices opaque.
         val womSourceCode = Utils.gzipAndBase64Encode(applet.womSourceCode)
-        val details1 = Map("womSourceCode" -> JsString(womSourceCode))
+        val dbOpaque = InstanceTypeDB.opaquePrices(instanceTypeDB)
+        val dbOpaqueInstance = Utils.gzipAndBase64Encode(dbOpaque.toJson.prettyPrint)
+        val details1 = Map("womSourceCode" -> JsString(womSourceCode),
+                           "instanceTypeDB" -> JsString(dbOpaqueInstance))
 
         val (runSpec : JsValue, details2: JsValue) = calcRunSpec(applet,
                                                                  details1,

@@ -311,4 +311,14 @@ class GenerateIRTest extends FlatSpec with Matchers {
         val retval = Main.compile(path.toString :: cFlags)
         retval shouldBe a [Main.SuccessfulTerminationIR]
     }
+
+    it should "check for reserved symbols" taggedAs(EdgeTest) in {
+        val path = pathFromBasename("compiler", "reserved.wdl")
+        val retval = Main.compile(path.toString :: cFlags)
+
+        inside(retval) {
+            case Main.UnsuccessfulTermination(errMsg) =>
+                errMsg should include ("reserved substring ___")
+        }
+    }
 }

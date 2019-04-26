@@ -629,12 +629,9 @@ object Main extends App {
     }
 
 
-    // Get the WOM source code (currently WDL, could be also CWL in the future)
-    // Parse the inputs, convert to WOM values.
-    //
-    // Note: this performs two API calls to get the details. Can we reduce this
-    // number?
-    private def retrieveSourceCode(jobInfoPath: Path) : String = {
+    // Get the WOM source code, and the instance type database from the
+    // details field stored on the platform
+    private def retrieveFromDetails(jobInfoPath: Path) : (String, InstanceTypeDB) = {
         val jobInfo = Utils.readFileContent(jobInfoPath).parseJson
         val applet: DXApplet = jobInfo.asJsObject.fields.get("applet") match {
             case None =>
@@ -655,7 +652,12 @@ object Main extends App {
             applet.describe(descOptions).getDetails(classOf[JsonNode]))
 
         val JsString(womSourceCodeEncoded) = details.asJsObject.fields("womSourceCode")
-        Utils.base64DecodeAndGunzip(womSourceCodeEncoded)
+        val womSourceCode = Utils.base64DecodeAndGunzip(womSourceCodeEncoded)
+
+        val JsString(instanceTypeDBEncoded) = details.asJsObject.fields("instanceTypeDB")
+        val dbRaw = Utils.base64DecodeAndGunzip(instanceTypeDBEncoded)
+        val instanceTypeDB = dbRaw.parseJson.convertTo[InstanceTypeDB]
+        (womSourceCode, instanceTypeDB)
     }
 
     def internalOp(args : Seq[String]) : Termination = {
@@ -671,14 +673,9 @@ object Main extends App {
                 val dxPathConfig = buildRuntimePathConfig(rtDebugLvl >= 1)
                 val dxIoFunctions = DxIoFunctions(dxPathConfig, rtDebugLvl)
 
-                // Figure out the available instance types, and their prices,
-                // by reading the file
-                val dbRaw = Utils.readFileContent(dxPathConfig.instanceTypeDB)
-                val instanceTypeDB = dbRaw.parseJson.convertTo[InstanceTypeDB]
-
                 // Get the WOM source code (currently WDL, could be also CWL in the future)
                 // Parse the inputs, convert to WOM values.
-                val womSourceCode = retrieveSourceCode(jobInfoPath)
+                val (womSourceCode, instanceTypeDB) = retrieveFromDetails(jobInfoPath)
 
                 try {
                     op match {

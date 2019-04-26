@@ -10,6 +10,7 @@ import scala.collection.JavaConverters._
 import wom.callable._
 import wom.executable.WomBundle
 import wom.types._
+import wom.graph.expression._
 
 import dxWDL.util._
 import dxWDL.util.Utils.DX_WDL_ASSET
@@ -111,6 +112,13 @@ case class Top(cOpt: CompilerOptions) {
                    cOpt.force, cOpt.archive, cOpt.locked, cOpt.verbose).apply(bundle)
     }
 
+    // check the declarations in [graph], and make sure they
+    // do not contain the reserved '___' substring.
+    private def checkDeclarations(varNames : Seq[String]) : Unit = {
+        for (varName <- varNames)
+            if (varName contains "___")
+                throw new Exception(s"Variable ${varName} is using the reserved substring ___")
+    }
 
     // check that streaming annotations are only done for files.
     private def validate(callable: Callable) : Unit = {
@@ -118,6 +126,11 @@ case class Top(cOpt: CompilerOptions) {
             case wf: WorkflowDefinition =>
                 if (wf.parameterMeta.size > 0)
                     Utils.warning(verbose, "dxWDL workflows ignore their parameter meta section")
+                val g = wf.innerGraph
+                checkDeclarations(g.inputNodes.map(_.localName).toSeq)
+                checkDeclarations(g.outputNodes.map(_.localName).toSeq)
+                val allDeclarations = g.allNodes.filter(_.isInstanceOf[ExposedExpressionNode])
+                checkDeclarations(allDeclarations.map(_.identifier.localName.value).toSeq)
 
             case task: CallableTaskDefinition =>
                 task.inputs.foreach{
@@ -140,6 +153,8 @@ case class Top(cOpt: CompilerOptions) {
                             case Some(other) => ()
                         }
                 }
+                checkDeclarations(task.inputs.map(_.name).toSeq)
+                checkDeclarations(task.outputs.map(_.name).toSeq)
 
             case other =>
                 throw new Exception(s"Unexpected object ${other}")
