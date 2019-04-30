@@ -373,9 +373,23 @@ case class WfFragRunner(wf: WorkflowDefinition,
                     "properties" -> JsObject("call" ->  JsString(callName),
                                              "seq_number" -> JsString(seqNum.toString))
                 )
-                // TODO: If this is a task that specifies the instance type
+
+                // If this is a task that specifies the instance type
                 // at runtime, launch it in the requested instance.
-                //
+/*                val instanceType = nswf.findTask(calleeName) match {
+                    case Some(task) if mayCalculateInstaceType(task) =>
+                        preCalcInstanceType(task, callInputsWvl)
+                    case _ => None
+                }
+                val instanceFields = instanceType match {
+                    case None => Map.empty
+                    case Some(iType) =>
+                        Map("systemRequirements" -> JsObject(
+                                "main" -> JsObject("instanceType" -> JsString(iType))
+                            ))
+                }
+                val req = JsObject(fields ++ instanceFields)*/
+
                 val req = JsObject(fields)
                 val retval: JsonNode = DXAPI.appletRun(applet.getId,
                                                        Utils.jsonNodeOfJsValue(req),
@@ -685,8 +699,23 @@ case class WfFragRunner(wf: WorkflowDefinition,
                                      |
                                      |""".stripMargin)
 
+        // Some of the inputs could be optional. If they are missing,
+        // add in a None value.
+        val (allInputs, _) = Block.closure(block)
+        val envInitialFilled : Map[String, WomValue] = allInputs.map { case (name, womType) =>
+            val value = envInitial.get(name) match {
+                case None if Utils.isOptional(womType) =>
+                    WomOptionalValue(womType, None)
+                case None =>
+                    throw new Exception(s"Missing input ${name} of type ${womType}")
+                case Some(x) =>
+                    x
+            }
+            name -> value
+        }.toMap
+
         val catg = Block.categorize(block)
-        val env = evalExpressions(catg.nodes, envInitial)
+        val env = evalExpressions(catg.nodes, envInitialFilled)
 
         val fragResults : Map[String, WdlVarLinks] = runMode match {
             case RunnerWfFragmentMode.Launch =>

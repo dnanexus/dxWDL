@@ -288,7 +288,7 @@ class WfFragRunnerTest extends FlatSpec with Matchers {
         args shouldBe (Map("a" -> WomInteger(3)))
     }
 
-    it should "expressions with structs" taggedAs(EdgeTest) in {
+    it should "expressions with structs" in {
         val path = pathFromBasename("frag_runner", "House.wdl")
         val wfSourceCode = Utils.readFileContent(path)
 
@@ -311,5 +311,8 @@ class WfFragRunnerTest extends FlatSpec with Matchers {
                                                                 "city" -> WomStringType),
                                                             Some("House"))
                                  ))
+    }
+
+    it should "fill in missing optionals" taggedAs(EdgeTest) in {
     }
 }

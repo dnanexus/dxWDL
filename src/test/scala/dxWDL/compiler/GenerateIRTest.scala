@@ -321,4 +321,10 @@ class GenerateIRTest extends FlatSpec with Matchers {
                 errMsg should include ("reserved substring ___")
         }
     }
+
+    ignore should "do nested scatters" in {
+        val path = pathFromBasename("compiler", "nested_scatter.wdl")
+        val retval = Main.compile(path.toString :: cFlags)
+        retval shouldBe a[Main.SuccessfulTerminationIR]
+    }
 }
