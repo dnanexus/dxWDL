@@ -578,7 +578,7 @@ object Main extends App {
         val inputLines : String = Utils.readFileContent(jobInputPath)
         val inputsRaw : JsValue = inputLines.parseJson
 
-        val (wf, typeAliases) = ParseWomSourceFile.parseWdlWorkflow(womSourceCode)
+        val (wf, taskDir, typeAliases) = ParseWomSourceFile.parseWdlWorkflow(womSourceCode)
 
         // setup the utility directories that the frag-runner employs
         val fragInputOutput = new exec.WfFragInputOutput(dxIoFunctions, dxProject, rtDebugLvl, typeAliases)
@@ -588,7 +588,8 @@ object Main extends App {
         val outputFields: Map[String, JsValue] =
             op match {
                 case InternalOp.WfFragment =>
-                    val fragRunner = new exec.WfFragRunner(wf, womSourceCode, instanceTypeDB,
+                    val fragRunner = new exec.WfFragRunner(wf, taskDir,
+                                                           womSourceCode, instanceTypeDB,
                                                            meta.execLinkInfo,
                                                            dxPathConfig, dxIoFunctions,
                                                            inputsRaw,
@@ -596,7 +597,8 @@ object Main extends App {
                                                            rtDebugLvl)
                     fragRunner.apply(meta.blockPath, meta.env, RunnerWfFragmentMode.Launch)
                 case InternalOp.Collect =>
-                    val fragRunner = new exec.WfFragRunner(wf, womSourceCode, instanceTypeDB,
+                    val fragRunner = new exec.WfFragRunner(wf, taskDir,
+                                                           womSourceCode, instanceTypeDB,
                                                            meta.execLinkInfo,
                                                            dxPathConfig, dxIoFunctions,
                                                            inputsRaw,

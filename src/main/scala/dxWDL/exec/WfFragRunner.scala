@@ -40,9 +40,8 @@ import common.validation.ErrorOr.ErrorOr
 import com.dnanexus._
 import com.fasterxml.jackson.databind.JsonNode
 import java.nio.file.Paths
-//import scala.collection.JavaConverters._
 import spray.json._
-import wom.callable.{WorkflowDefinition}
+import wom.callable.{CallableTaskDefinition, WorkflowDefinition}
 import wom.expression._
 import wom.graph._
 import wom.graph.GraphNodePort._
@@ -54,6 +53,7 @@ import dxWDL.base._
 import dxWDL.util._
 
 case class WfFragRunner(wf: WorkflowDefinition,
+                        taskDir : Map[String, CallableTaskDefinition],
                         wfSourceCode: String,
                         instanceTypeDB: InstanceTypeDB,
                         execLinkInfo: Map[String, ExecLinkInfo],

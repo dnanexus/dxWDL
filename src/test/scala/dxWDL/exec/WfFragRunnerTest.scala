@@ -38,12 +38,12 @@ class WfFragRunnerTest extends FlatSpec with Matchers {
     private def setupFragRunner(dxPathConfig: DxPathConfig,
                                 dxIoFunctions: DxIoFunctions,
                                 wfSourceCode: String) : (WorkflowDefinition, WfFragRunner) = {
-        val (wf : WorkflowDefinition, typeAliases) = ParseWomSourceFile.parseWdlWorkflow(wfSourceCode)
+        val (wf : WorkflowDefinition, taskDir, typeAliases) = ParseWomSourceFile.parseWdlWorkflow(wfSourceCode)
         val fragInputOutput = new WfFragInputOutput(dxIoFunctions,
                                                     null /*dxProject*/,
                                                     runtimeDebugLevel,
                                                     typeAliases)
-        val fragRunner = new WfFragRunner(wf, wfSourceCode,
+        val fragRunner = new WfFragRunner(wf, taskDir, wfSourceCode,
                                           instanceTypeDB,
                                           Map.empty[String, ExecLinkInfo],
                                           dxPathConfig,
@@ -169,7 +169,7 @@ class WfFragRunnerTest extends FlatSpec with Matchers {
     it should "create proper names for scatter results" in {
         val path = pathFromBasename("frag_runner", "strings.wdl")
         val wfSourceCode = Utils.readFileContent(path)
-        val (wf : WorkflowDefinition, _) = ParseWomSourceFile.parseWdlWorkflow(wfSourceCode)
+        val (wf : WorkflowDefinition, _, _) = ParseWomSourceFile.parseWdlWorkflow(wfSourceCode)
 
         val sctNode = wf.innerGraph.scatters.head
         val svNode: ScatterVariableNode = sctNode.scatterVariableNodes.head

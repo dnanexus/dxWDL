@@ -375,7 +375,13 @@ object ParseWomSourceFile {
         }
     }
 
-    def parseWdlWorkflow(wfSource: String) : (WorkflowDefinition, Map[String, WomType])= {
+    // Parse a Workflow source file. Return the:
+    //  * workflow definition
+    //  * directory of tasks
+    //  * directory of type aliases
+    def parseWdlWorkflow(wfSource: String) : (WorkflowDefinition,
+                                              Map[String, CallableTaskDefinition],
+                                              Map[String, WomType])= {
         val languageFactory =
             if (wfSource.startsWith("version 1.0") ||
                     wfSource.startsWith("version draft-3")) {
@@ -392,10 +398,19 @@ object ParseWomSourceFile {
                                                          |""".stripMargin)
             case Right(bundle) => bundle
         }
-        womBundle.primaryCallable match {
-            case Some(wf: WorkflowDefinition) => (wf, womBundle.typeAliases)
+        val wf = womBundle.primaryCallable match {
+            case Some(wf: WorkflowDefinition) => wf
             case _ => throw new Exception("Could not find the workflow in the source")
         }
+        val taskDir = womBundle.allCallables.flatMap{
+            case (name, callable) =>
+                callable match {
+                    case task : CallableTaskDefinition => Some(name -> task)
+                    case exec : ExecutableTaskDefinition => Some(name -> exec.callableTaskDefinition)
+                    case _ => None
+                }
+        }.toMap
+        (wf, taskDir, womBundle.typeAliases)
     }
 
     // Extract the only task from a namespace

@@ -108,9 +108,8 @@ case class GenerateIR(verbose: Verbose) {
             }.toVector
 
         val WdlCodeSnippet(wfSourceStandAlone) =
-            WdlCodeGen(verbose, typeAliases).standAloneWorkflow(wfSource,
-                                                                callablesUsedInWorkflow,
-                                                                language)
+            WdlCodeGen(verbose, typeAliases, language).standAloneWorkflow(wfSource,
+                                                                          callablesUsedInWorkflow)
 
         val gir = new GenerateIRWorkflow(wf, wfSource, wfSourceStandAlone,
                                          callsLoToHi, callables, language, verbose)
