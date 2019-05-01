@@ -1,7 +1,7 @@
 # Release Notes
 
 ## 1.03
-- Bug fixes related to optional arguments
+- Bug fixes related to optional arguments (https://github.com/dnanexus/dxWDL/issues/235).
 
 ## 1.02
 - Removed the instance-type database, and wom source code from the inputs of applets.
