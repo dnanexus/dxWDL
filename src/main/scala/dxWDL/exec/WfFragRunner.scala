@@ -40,7 +40,7 @@ import common.validation.ErrorOr.ErrorOr
 import com.dnanexus._
 import com.fasterxml.jackson.databind.JsonNode
 import java.nio.file.Paths
-import scala.collection.JavaConverters._
+//import scala.collection.JavaConverters._
 import spray.json._
 import wom.callable.{WorkflowDefinition}
 import wom.expression._
@@ -113,22 +113,6 @@ case class WfFragRunner(wf: WorkflowDefinition,
                     s"Could not find linking information for ${calleeName}")
             case Some(eInfo) => eInfo
         }
-    }
-
-    // Figure out what outputs need to be exported.
-    private def exportedVarNames() : Set[String] = {
-        val dxapp : DXApplet = Utils.dxEnv.getJob().describe().getApplet()
-        val desc : DXApplet.Describe = dxapp.describe()
-        val outputSpecRaw: List[OutputParameter] = desc.getOutputSpecification().asScala.toList
-        val outputNames = outputSpecRaw.map(
-            iSpec => iSpec.getName
-        )
-
-        // remove auxiliary fields
-        outputNames
-            .filter( fieldName => !fieldName.endsWith(Utils.FLAT_FILES_SUFFIX))
-            .map{ name => Utils.revTransformVarName(name) }
-            .toSet
     }
 
     // This method is exposed so that we can unit-test it.
@@ -702,16 +686,17 @@ case class WfFragRunner(wf: WorkflowDefinition,
         // Some of the inputs could be optional. If they are missing,
         // add in a None value.
         val (allInputs, _) = Block.closure(block)
-        val envInitialFilled : Map[String, WomValue] = allInputs.map { case (name, womType) =>
-            val value = envInitial.get(name) match {
-                case None if Utils.isOptional(womType) =>
-                    WomOptionalValue(womType, None)
-                case None =>
-                    throw new Exception(s"Missing input ${name} of type ${womType}")
-                case Some(x) =>
-                    x
+        val envInitialFilled : Map[String, WomValue] = allInputs.flatMap { case (name, womType) =>
+            (envInitial.get(name), womType) match {
+                case (None, WomOptionalType(t)) =>
+                    Some(name -> WomOptionalValue(t, None))
+                case (None, _) =>
+                    // input is missing, it could have a default at the callee,
+                    // so we don't want to throw an exception
+                    None
+                case (Some(x), _) =>
+                    Some(name -> x)
             }
-            name -> value
         }.toMap
 
         val catg = Block.categorize(block)
@@ -783,7 +768,10 @@ case class WfFragRunner(wf: WorkflowDefinition,
                 }
         }
 
-        val exportedVars = exportedVarNames()
+        // figure out what outputs need to be exported
+        val blockOutputs : Map[String, WomType] = Block.outputs(block)
+        val exportedVars : Set[String] = blockOutputs.keys.toSet
+
         val jsOutputs : Map[String, JsValue] = processOutputs(env, fragResults, exportedVars)
         val jsOutputsDbgStr = jsOutputs.mkString("\n")
         Utils.appletLog(verbose, s"""|JSON outputs:
