@@ -69,7 +69,6 @@ libraryDependencies ++= Seq(
 //    "org.broadinstitute" %% "wdl-biscayne" % cromwellV,
 
     "io.spray" %% "spray-json" % "1.3.2",
-    "net.jcazevedo" %% "moultingyaml" % "0.4.0",
     "com.typesafe" % "config" % "1.3.1",
 
     //---------- Test libraries -------------------//
@@ -93,3 +92,5 @@ Test / parallelExecution := false
 
 // comment out this line to enable tests in assembly
 //test in assembly := {}
+
+coverageExcludedPackages := "dxWDL.exec.*;"

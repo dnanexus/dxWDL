@@ -40,7 +40,7 @@ import common.validation.ErrorOr.ErrorOr
 import com.dnanexus._
 import com.fasterxml.jackson.databind.JsonNode
 import java.nio.file.Paths
-import scala.collection.JavaConverters._
+//import scala.collection.JavaConverters._
 import spray.json._
 import wom.callable.{WorkflowDefinition}
 import wom.expression._
@@ -113,22 +113,6 @@ case class WfFragRunner(wf: WorkflowDefinition,
                     s"Could not find linking information for ${calleeName}")
             case Some(eInfo) => eInfo
         }
-    }
-
-    // Figure out what outputs need to be exported.
-    private def exportedVarNames() : Set[String] = {
-        val dxapp : DXApplet = Utils.dxEnv.getJob().describe().getApplet()
-        val desc : DXApplet.Describe = dxapp.describe()
-        val outputSpecRaw: List[OutputParameter] = desc.getOutputSpecification().asScala.toList
-        val outputNames = outputSpecRaw.map(
-            iSpec => iSpec.getName
-        )
-
-        // remove auxiliary fields
-        outputNames
-            .filter( fieldName => !fieldName.endsWith(Utils.FLAT_FILES_SUFFIX))
-            .map{ name => Utils.revTransformVarName(name) }
-            .toSet
     }
 
     // This method is exposed so that we can unit-test it.
@@ -373,9 +357,23 @@ case class WfFragRunner(wf: WorkflowDefinition,
                     "properties" -> JsObject("call" ->  JsString(callName),
                                              "seq_number" -> JsString(seqNum.toString))
                 )
-                // TODO: If this is a task that specifies the instance type
+
+                // If this is a task that specifies the instance type
                 // at runtime, launch it in the requested instance.
-                //
+/*                val instanceType = nswf.findTask(calleeName) match {
+                    case Some(task) if mayCalculateInstaceType(task) =>
+                        preCalcInstanceType(task, callInputsWvl)
+                    case _ => None
+                }
+                val instanceFields = instanceType match {
+                    case None => Map.empty
+                    case Some(iType) =>
+                        Map("systemRequirements" -> JsObject(
+                                "main" -> JsObject("instanceType" -> JsString(iType))
+                            ))
+                }
+                val req = JsObject(fields ++ instanceFields)*/
+
                 val req = JsObject(fields)
                 val retval: JsonNode = DXAPI.appletRun(applet.getId,
                                                        Utils.jsonNodeOfJsValue(req),
@@ -685,8 +683,24 @@ case class WfFragRunner(wf: WorkflowDefinition,
                                      |
                                      |""".stripMargin)
 
+        // Some of the inputs could be optional. If they are missing,
+        // add in a None value.
+        val (allInputs, _) = Block.closure(block)
+        val envInitialFilled : Map[String, WomValue] = allInputs.flatMap { case (name, womType) =>
+            (envInitial.get(name), womType) match {
+                case (None, WomOptionalType(t)) =>
+                    Some(name -> WomOptionalValue(t, None))
+                case (None, _) =>
+                    // input is missing, it could have a default at the callee,
+                    // so we don't want to throw an exception
+                    None
+                case (Some(x), _) =>
+                    Some(name -> x)
+            }
+        }.toMap
+
         val catg = Block.categorize(block)
-        val env = evalExpressions(catg.nodes, envInitial)
+        val env = evalExpressions(catg.nodes, envInitialFilled)
 
         val fragResults : Map[String, WdlVarLinks] = runMode match {
             case RunnerWfFragmentMode.Launch =>
@@ -754,7 +768,10 @@ case class WfFragRunner(wf: WorkflowDefinition,
                 }
         }
 
-        val exportedVars = exportedVarNames()
+        // figure out what outputs need to be exported
+        val blockOutputs : Map[String, WomType] = Block.outputs(block)
+        val exportedVars : Set[String] = blockOutputs.keys.toSet
+
         val jsOutputs : Map[String, JsValue] = processOutputs(env, fragResults, exportedVars)
         val jsOutputsDbgStr = jsOutputs.mkString("\n")
         Utils.appletLog(verbose, s"""|JSON outputs:

@@ -1,5 +1,8 @@
 # Release Notes
 
+## 1.03
+- Bug fixes related to optional arguments
+
 ## 1.02
 - Removed the instance-type database, and wom source code from the inputs of applets.
 - Added the WDL source code to workflow and applet objects on the platform. It is stored in the details field, and

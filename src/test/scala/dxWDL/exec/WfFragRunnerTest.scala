@@ -20,8 +20,7 @@ import dxWDL.util._
 // This tests the compiler Native mode, however, it creates
 // dnanexus applets and workflows that are not runnable.
 class WfFragRunnerTest extends FlatSpec with Matchers {
-    private val runtimeDebugLevel = 2
-    //private val verbose = runtimeDebugLevel >= 1
+    private val runtimeDebugLevel = 0
     private val instanceTypeDB = InstanceTypeDB.genTestDB(false)
 
     private def setup() : (DxPathConfig, DxIoFunctions) = {
@@ -288,7 +287,7 @@ class WfFragRunnerTest extends FlatSpec with Matchers {
         args shouldBe (Map("a" -> WomInteger(3)))
     }
 
-    it should "expressions with structs" taggedAs(EdgeTest) in {
+    it should "expressions with structs" in {
         val path = pathFromBasename("frag_runner", "House.wdl")
         val wfSourceCode = Utils.readFileContent(path)
 
@@ -311,5 +310,16 @@ class WfFragRunnerTest extends FlatSpec with Matchers {
                                                                 "city" -> WomStringType),
                                                             Some("House"))
                                  ))
+    }
+
+    it should "fill in missing optionals" taggedAs(EdgeTest) in {
+        val path = pathFromBasename("frag_runner", "missing_args.wdl")
+        val wfSourceCode = Utils.readFileContent(path)
+
+        val (dxPathConfig, dxIoFunctions) = setup()
+        val (wf, fragRunner) = setupFragRunner(dxPathConfig, dxIoFunctions, wfSourceCode)
+        val results: Map[String, JsValue] =
+            fragRunner.apply(Vector(0), Map("y" -> WomInteger(5)), RunnerWfFragmentMode.Launch)
+        results shouldBe (Map("retval" -> JsNumber(5)))
     }
 }

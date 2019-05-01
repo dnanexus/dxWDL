@@ -27,7 +27,6 @@ workflow optionals {
         call opt_MaybeInt as mi4 { input: a=mi2.result }
     }
 
-
     output {
         Int? r_mi1 = mi1.result
         Int? r_mi2 = mi2.result
