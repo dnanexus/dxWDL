@@ -23,7 +23,7 @@ class BlockTest extends FlatSpec with Matchers {
     it should "calculate closure correctly" in {
         val path = pathFromBasename("util", "block_closure.wdl")
         val wfSourceCode = Utils.readFileContent(path)
-        val (wf : WorkflowDefinition, _) = ParseWomSourceFile.parseWdlWorkflow(wfSourceCode)
+        val (wf : WorkflowDefinition, _, _) = ParseWomSourceFile.parseWdlWorkflow(wfSourceCode)
         val (_, _, subBlocks, _) = Block.split(wf.innerGraph, wfSourceCode)
 
         /*System.out.println(s"""|block #0 =
@@ -39,7 +39,7 @@ class BlockTest extends FlatSpec with Matchers {
     it should "calculate outputs correctly" in {
         val path = pathFromBasename("util", "block_closure.wdl")
         val wfSourceCode = Utils.readFileContent(path)
-        val (wf : WorkflowDefinition, _) = ParseWomSourceFile.parseWdlWorkflow(wfSourceCode)
+        val (wf : WorkflowDefinition, _, _) = ParseWomSourceFile.parseWdlWorkflow(wfSourceCode)
         val (_, _, subBlocks, _) = Block.split(wf.innerGraph, wfSourceCode)
 
         Block.outputs(subBlocks(1)) should be(Map("inc2.result" -> WomOptionalType(WomIntegerType)))
@@ -54,7 +54,7 @@ class BlockTest extends FlatSpec with Matchers {
     it should "calculate outputs correctly II" in {
         val path = pathFromBasename("compiler", "wf_linear.wdl")
         val wfSourceCode = Utils.readFileContent(path)
-        val (wf : WorkflowDefinition, _) = ParseWomSourceFile.parseWdlWorkflow(wfSourceCode)
+        val (wf : WorkflowDefinition, _, _) = ParseWomSourceFile.parseWdlWorkflow(wfSourceCode)
         val (_, _, subBlocks, _) = Block.split(wf.innerGraph, wfSourceCode)
 
         Block.outputs(subBlocks(1)) should be(Map("z" -> WomIntegerType,
@@ -65,7 +65,7 @@ class BlockTest extends FlatSpec with Matchers {
     it should "handle block zero" in {
         val path = pathFromBasename("util", "block_zero.wdl")
         val wfSourceCode = Utils.readFileContent(path)
-        val (wf : WorkflowDefinition, _) = ParseWomSourceFile.parseWdlWorkflow(wfSourceCode)
+        val (wf : WorkflowDefinition, _, _) = ParseWomSourceFile.parseWdlWorkflow(wfSourceCode)
         val (inNodes, _, subBlocks, outNodes) = Block.split(wf.innerGraph, wfSourceCode)
 
         Block.outputs(subBlocks(0)) should be(
@@ -77,7 +77,7 @@ class BlockTest extends FlatSpec with Matchers {
     it should "block with two calls or more" in {
         val path = pathFromBasename("util", "block_with_three_calls.wdl")
         val wfSourceCode = Utils.readFileContent(path)
-        val (wf : WorkflowDefinition, _) = ParseWomSourceFile.parseWdlWorkflow(wfSourceCode)
+        val (wf : WorkflowDefinition, _, _) = ParseWomSourceFile.parseWdlWorkflow(wfSourceCode)
         val (_, _, subBlocks, _) = Block.split(wf.innerGraph, wfSourceCode)
         subBlocks.size should be(1)
     }
@@ -85,7 +85,7 @@ class BlockTest extends FlatSpec with Matchers {
     it should "split a block with an expression after a call" in {
         val path = pathFromBasename("util", "expression_after_call.wdl")
         val wfSourceCode = Utils.readFileContent(path)
-        val (wf : WorkflowDefinition, _) = ParseWomSourceFile.parseWdlWorkflow(wfSourceCode)
+        val (wf : WorkflowDefinition, _, _) = ParseWomSourceFile.parseWdlWorkflow(wfSourceCode)
         val (_, _, subBlocks, _) = Block.split(wf.innerGraph, wfSourceCode)
         subBlocks.size should be(2)
     }
@@ -93,7 +93,7 @@ class BlockTest extends FlatSpec with Matchers {
     it should "calculate closure correctly for WDL draft-2" in {
         val path = pathFromBasename("draft2", "block_closure.wdl")
         val wfSourceCode = Utils.readFileContent(path)
-        val (wf : WorkflowDefinition, _) = ParseWomSourceFile.parseWdlWorkflow(wfSourceCode)
+        val (wf : WorkflowDefinition, _, _) = ParseWomSourceFile.parseWdlWorkflow(wfSourceCode)
         val (_, _, subBlocks, _) = Block.split(wf.innerGraph, wfSourceCode)
 
         closureAll(subBlocks(1)).keys.toSet should be(Set("flag", "rain"))
@@ -105,7 +105,7 @@ class BlockTest extends FlatSpec with Matchers {
     it should "calculate closure correctly for WDL draft-2 II" in {
         val path = pathFromBasename("draft2", "shapes.wdl")
         val wfSourceCode = Utils.readFileContent(path)
-        val (wf : WorkflowDefinition, _) = ParseWomSourceFile.parseWdlWorkflow(wfSourceCode)
+        val (wf : WorkflowDefinition, _, _) = ParseWomSourceFile.parseWdlWorkflow(wfSourceCode)
         val (inputNodes, _, subBlocks, outputNodes) = Block.split(wf.innerGraph, wfSourceCode)
 
         closureAll(subBlocks(0)).keys.toSet should be(Set("num"))
@@ -115,7 +115,7 @@ class BlockTest extends FlatSpec with Matchers {
     it should "calculate closure for a workflow with expression outputs" in {
         val path = pathFromBasename("compiler", "wf_with_output_expressions.wdl")
         val wfSourceCode = Utils.readFileContent(path)
-        val (wf : WorkflowDefinition, _) = ParseWomSourceFile.parseWdlWorkflow(wfSourceCode)
+        val (wf : WorkflowDefinition, _, _) = ParseWomSourceFile.parseWdlWorkflow(wfSourceCode)
 
         val outputNodes = wf.innerGraph.outputNodes
         val exprOutputNodes: Vector[ExpressionBasedGraphOutputNode] =
@@ -129,7 +129,7 @@ class BlockTest extends FlatSpec with Matchers {
     it should "calculate output closure for a workflow" in {
         val path = pathFromBasename("compiler", "cast.wdl")
         val wfSourceCode = Utils.readFileContent(path)
-        val (wf : WorkflowDefinition, _) = ParseWomSourceFile.parseWdlWorkflow(wfSourceCode)
+        val (wf : WorkflowDefinition, _, _) = ParseWomSourceFile.parseWdlWorkflow(wfSourceCode)
         val outputNodes = wf.innerGraph.outputNodes.toVector
         Block.outputClosure(outputNodes) should be (Set("Add.result",
                                                         "SumArray.result",
@@ -140,7 +140,7 @@ class BlockTest extends FlatSpec with Matchers {
     it should "identify simple calls even if they have optionals" in {
         val path = pathFromBasename("util", "missing_inputs_to_direct_call.wdl")
         val wfSourceCode = Utils.readFileContent(path)
-        val (wf : WorkflowDefinition, _) = ParseWomSourceFile.parseWdlWorkflow(wfSourceCode)
+        val (wf : WorkflowDefinition, _, _) = ParseWomSourceFile.parseWdlWorkflow(wfSourceCode)
         val (inputNodes, _, subBlocks, outputNodes) = Block.split(wf.innerGraph, wfSourceCode)
 
         for (i <- 0 to 2) {
@@ -169,7 +169,7 @@ class BlockTest extends FlatSpec with Matchers {
         val path = pathFromBasename("nested", "two_levels.wdl")
         val wfSourceCode = Utils.readFileContent(path)
         val (_, womBundle, sources, _) = ParseWomSourceFile.apply(path)
-        val (wf : WorkflowDefinition, _) = ParseWomSourceFile.parseWdlWorkflow(wfSourceCode)
+        val (wf : WorkflowDefinition, _, _) = ParseWomSourceFile.parseWdlWorkflow(wfSourceCode)
 
         // sort from low to high according to the source lines.
         val callToSrcLine = ParseWomSourceFile.scanForCalls(wfSourceCode)
@@ -276,7 +276,7 @@ class BlockTest extends FlatSpec with Matchers {
     it should "sort a block correctly in the presence of conditionals" in {
         val path = pathFromBasename("draft2", "conditionals3.wdl")
         val wfSourceCode = Utils.readFileContent(path)
-        val (wf : WorkflowDefinition, _) = ParseWomSourceFile.parseWdlWorkflow(wfSourceCode)
+        val (wf : WorkflowDefinition, _, _) = ParseWomSourceFile.parseWdlWorkflow(wfSourceCode)
 
         val (_, _, subBlocks, _) = Block.split(wf.innerGraph, wfSourceCode)
         val b0 = subBlocks(0)
@@ -336,7 +336,7 @@ class BlockTest extends FlatSpec with Matchers {
     it should "handle an empty workflow" in {
         val path = pathFromBasename("util", "empty_workflow.wdl")
         val wfSourceCode = Utils.readFileContent(path)
-        val (wf : WorkflowDefinition, _) = ParseWomSourceFile.parseWdlWorkflow(wfSourceCode)
+        val (wf : WorkflowDefinition, _, _) = ParseWomSourceFile.parseWdlWorkflow(wfSourceCode)
         val (_, _, subBlocks, _) = Block.split(wf.innerGraph, wfSourceCode)
         subBlocks.size shouldBe(0)
     }
@@ -344,7 +344,7 @@ class BlockTest extends FlatSpec with Matchers {
     it should "detect when inputs are used as outputs" in {
         val path = pathFromBasename("util", "inputs_used_as_outputs.wdl")
         val wfSourceCode = Utils.readFileContent(path)
-        val (wf : WorkflowDefinition, _) = ParseWomSourceFile.parseWdlWorkflow(wfSourceCode)
+        val (wf : WorkflowDefinition, _, _) = ParseWomSourceFile.parseWdlWorkflow(wfSourceCode)
         val (inputs, _, _, outputs) = Block.split(wf.innerGraph, wfSourceCode)
         Block.inputsUsedAsOutputs(inputs, outputs) shouldBe(Set("lane"))
     }
@@ -352,7 +352,7 @@ class BlockTest extends FlatSpec with Matchers {
     it should "create correct inputs for a workflow with an unpassed argument" in{
         val path = pathFromBasename("bugs", "unpassed_argument_propagation.wdl")
         val wfSourceCode = Utils.readFileContent(path)
-        val (wf : WorkflowDefinition, _) = ParseWomSourceFile.parseWdlWorkflow(wfSourceCode)
+        val (wf : WorkflowDefinition, _, _) = ParseWomSourceFile.parseWdlWorkflow(wfSourceCode)
         val (inputs, _, _, _) = Block.split(wf.innerGraph, wfSourceCode)
 
         val names = inputs.map{ inDef => inDef.identifier.localName.value}.toSet
@@ -362,7 +362,7 @@ class BlockTest extends FlatSpec with Matchers {
     it should "account for arguments that have a default, but are not optional" taggedAs(EdgeTest) in {
         val path = pathFromBasename("bugs", "unpassed_argument_propagation.wdl")
         val wfSourceCode = Utils.readFileContent(path)
-        val (wf : WorkflowDefinition, _) = ParseWomSourceFile.parseWdlWorkflow(wfSourceCode)
+        val (wf : WorkflowDefinition, _, _) = ParseWomSourceFile.parseWdlWorkflow(wfSourceCode)
         val (_, _, subBlocks, _) = Block.split(wf.innerGraph, wfSourceCode)
 
         val (c0All, c0Optionals) = Block.closure(subBlocks(0))

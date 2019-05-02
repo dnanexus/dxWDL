@@ -11,7 +11,8 @@ import dxWDL.util._
 case class WdlCodeSnippet(value : String)
 
 case class WdlCodeGen(verbose: Verbose,
-                      typeAliases: Map[String, WomType]) {
+                      typeAliases: Map[String, WomType],
+                      language : Language.Value) {
 
     private def genDefaultValueOfType(wdlType: WomType) : WomValue = {
         wdlType match {
@@ -82,8 +83,7 @@ task Add {
    }
   }
 */
-    private def taskHeader(callable: IR.Callable,
-                           language: Language.Value) : WdlCodeSnippet = {
+    private def genTaskHeader(callable: IR.Callable) : WdlCodeSnippet = {
         /*Utils.trace(verbose.on,
                     s"""|taskHeader  callable=${callable.name}
                         |  inputs= ${callable.inputVars.map(_.name)}
@@ -132,8 +132,7 @@ task Add {
     def genDnanexusAppletStub(id: String,
                               appletName: String,
                               inputSpec: Map[String, WomType],
-                              outputSpec: Map[String, WomType],
-                              language: Language.Value) : WdlCodeSnippet = {
+                              outputSpec: Map[String, WomType]) : WdlCodeSnippet = {
         val inputs = inputSpec.map{ case (name, womType) =>
             s"    ${typeName(womType)} ${name}"
         }.mkString("\n")
@@ -216,7 +215,7 @@ task Add {
     }
 
         // A self contained WDL workflow
-    def versionString(language: Language.Value) : String = {
+    def versionString() : String = {
         language match {
             case Language.WDLvDraft2 => ""
             case Language.WDLv1_0 => "version 1.0"
@@ -245,10 +244,8 @@ task Add {
     }
 
 
-    def standAloneTask(originalTaskSource: String,
-                       language: Language.Value) : WdlCodeSnippet = {
-
-        val wdlWfSource = s"""|${versionString(language)}
+    def standAloneTask(originalTaskSource: String) : WdlCodeSnippet = {
+        val wdlWfSource = s"""|${versionString()}
                               |
                               |# struct definitions
                               |${typeAliasDefinitions}
@@ -270,23 +267,32 @@ task Add {
     // unqualified names, not their fully-qualified names. This works
     // because the WDL workflow must be "flattenable".
     def standAloneWorkflow( originalWorkflowSource: String,
-                            allCalls : Vector[IR.Callable],
-                            language: Language.Value) : WdlCodeSnippet = {
+                            allCalls : Vector[IR.Callable]) : WdlCodeSnippet = {
         val taskStubs: Map[String, WdlCodeSnippet] =
             allCalls.foldLeft(Map.empty[String, WdlCodeSnippet]) { case (accu, callable) =>
                 if (accu contains callable.name) {
                     // we have already created a stub for this call
                     accu
                 } else {
-                    // no existing stub, create it
-                    val taskSourceCode =  taskHeader(callable, language)
-                    accu + (callable.name -> taskSourceCode)
+                    val sourceCode = callable match {
+                        case IR.Applet(_, _, _, _, _, IR.AppletKindTask(_), taskSourceCode) =>
+                            // This is a task, include its source code, instead of a header.
+                            val taskDir = ParseWomSourceFile.scanForTasks(taskSourceCode)
+                            assert(taskDir.size == 1)
+                            val taskBody = taskDir.values.head
+                            WdlCodeSnippet(taskBody)
+
+                        case _ =>
+                            // no existing stub, create it
+                            genTaskHeader(callable)
+                    }
+                    accu + (callable.name -> sourceCode)
                 }
             }
         val tasks = taskStubs.map{case (name, wdlCode) => wdlCode.value}.mkString("\n\n")
 
         val wfWithoutImportCalls = flattenWorkflow(originalWorkflowSource)
-        val wdlWfSource = s"""|${versionString(language)}
+        val wdlWfSource = s"""|${versionString()}
                               |
                               |# struct definitions
                               |${typeAliasDefinitions}

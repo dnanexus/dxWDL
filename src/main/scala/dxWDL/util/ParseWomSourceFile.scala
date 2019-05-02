@@ -217,8 +217,7 @@ object ParseWomSourceFile {
     // Go through one WDL source file, and return a map from task name
     // to its source code. Return an empty map if there are no tasks
     // in this file.
-    def scanForTasks(language: Language.Value,
-                     sourceCode: String) : Map[String, String] = {
+    def scanForTasks(sourceCode: String) : Map[String, String] = {
         var lines = sourceCode.split("\n").toList
         val taskDir = HashMap.empty[String, String]
 
@@ -239,8 +238,7 @@ object ParseWomSourceFile {
     // Go through one WDL source file, and return a map from task name
     // to its source code. Return an empty map if there are no tasks
     // in this file.
-    def scanForWorkflow(language: Language.Value,
-                        sourceCode: String) : Option[(String, String)] = {
+    def scanForWorkflow(sourceCode: String) : Option[(String, String)] = {
         val lines = sourceCode.split("\n").toList
         findNextWorkflow(lines) match {
             case None =>
@@ -375,7 +373,13 @@ object ParseWomSourceFile {
         }
     }
 
-    def parseWdlWorkflow(wfSource: String) : (WorkflowDefinition, Map[String, WomType])= {
+    // Parse a Workflow source file. Return the:
+    //  * workflow definition
+    //  * directory of tasks
+    //  * directory of type aliases
+    def parseWdlWorkflow(wfSource: String) : (WorkflowDefinition,
+                                              Map[String, CallableTaskDefinition],
+                                              Map[String, WomType])= {
         val languageFactory =
             if (wfSource.startsWith("version 1.0") ||
                     wfSource.startsWith("version draft-3")) {
@@ -392,10 +396,19 @@ object ParseWomSourceFile {
                                                          |""".stripMargin)
             case Right(bundle) => bundle
         }
-        womBundle.primaryCallable match {
-            case Some(wf: WorkflowDefinition) => (wf, womBundle.typeAliases)
+        val wf = womBundle.primaryCallable match {
+            case Some(wf: WorkflowDefinition) => wf
             case _ => throw new Exception("Could not find the workflow in the source")
         }
+        val taskDir = womBundle.allCallables.flatMap{
+            case (name, callable) =>
+                callable match {
+                    case task : CallableTaskDefinition => Some(name -> task)
+                    case exec : ExecutableTaskDefinition => Some(name -> exec.callableTaskDefinition)
+                    case _ => None
+                }
+        }.toMap
+        (wf, taskDir, womBundle.typeAliases)
     }
 
     // Extract the only task from a namespace

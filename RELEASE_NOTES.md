@@ -1,5 +1,8 @@
 # Release Notes
 
+## 1.04
+- Precalculate instance types. There are tasks that calculate the instance type they need in the runtime section. If the task call is made from a workflow fragment, we can calculate the instance type then and there. This allows launching directly in the correct instance type.
+
 ## 1.03
 - Bug fixes related to optional arguments (https://github.com/dnanexus/dxWDL/issues/235).
 

@@ -70,7 +70,6 @@ import wom.values._
 import dxWDL.util._
 
 case class ChildExecDesc(execName: String,
-                         unqCallName: String,
                          seqNum: Int,
                          outputs: Map[String, JsValue],
                          exec: DXExecution)
@@ -151,11 +150,10 @@ case class CollectSubJobs(jobInputOutput : JobInputOutput,
                 case Some(JsString(name)) => name
                 case _ => throw new Exception(s"wrong type for executableName ${desc}")
             }
-            val (unqCallName, seqNum) = fields.get("properties") match {
+            val seqNum = fields.get("properties") match {
                 case Some(obj) =>
-                    obj.asJsObject.getFields("call", "seq_number") match {
-                        case Seq(JsString(unqCallName), JsString(seqNum)) =>
-                            (unqCallName, seqNum.toInt)
+                    obj.asJsObject.getFields("seq_number") match {
+                        case Seq(JsString(seqNum)) => seqNum.toInt
                         case _ => throw new Exception(s"wrong value for properties ${desc}, ${obj}")
                     }
                 case _ => throw new Exception(s"wrong type for properties ${desc}")
@@ -164,7 +162,7 @@ case class CollectSubJobs(jobInputOutput : JobInputOutput,
                 case None => throw new Exception(s"No output field for a child job ${desc}")
                 case Some(o) => o
             }
-            ChildExecDesc(execName, unqCallName, seqNum, outputs.asJsObject.fields, dxExec)
+            ChildExecDesc(execName, seqNum, outputs.asJsObject.fields, dxExec)
         }.toVector
     }
 
