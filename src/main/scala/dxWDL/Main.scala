@@ -588,7 +588,7 @@ object Main extends App {
         val outputFields: Map[String, JsValue] =
             op match {
                 case InternalOp.WfFragment =>
-                    val fragRunner = new exec.WfFragRunner(wf, taskDir,
+                    val fragRunner = new exec.WfFragRunner(wf, taskDir, typeAliases,
                                                            womSourceCode, instanceTypeDB,
                                                            meta.execLinkInfo,
                                                            dxPathConfig, dxIoFunctions,
@@ -597,7 +597,7 @@ object Main extends App {
                                                            rtDebugLvl)
                     fragRunner.apply(meta.blockPath, meta.env, RunnerWfFragmentMode.Launch)
                 case InternalOp.Collect =>
-                    val fragRunner = new exec.WfFragRunner(wf, taskDir,
+                    val fragRunner = new exec.WfFragRunner(wf, taskDir, typeAliases,
                                                            womSourceCode, instanceTypeDB,
                                                            meta.execLinkInfo,
                                                            dxPathConfig, dxIoFunctions,

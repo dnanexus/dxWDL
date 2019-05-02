@@ -277,7 +277,7 @@ task Add {
                     val sourceCode = callable match {
                         case IR.Applet(_, _, _, _, _, IR.AppletKindTask(_), taskSourceCode) =>
                             // This is a task, include its source code, instead of a header.
-                            val taskDir = ParseWomSourceFile.scanForTasks(language, taskSourceCode)
+                            val taskDir = ParseWomSourceFile.scanForTasks(taskSourceCode)
                             assert(taskDir.size == 1)
                             val taskBody = taskDir.values.head
                             WdlCodeSnippet(taskBody)

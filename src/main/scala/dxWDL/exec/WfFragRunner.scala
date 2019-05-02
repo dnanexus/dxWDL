@@ -42,6 +42,7 @@ import com.fasterxml.jackson.databind.JsonNode
 import java.nio.file.Paths
 import spray.json._
 import wom.callable.{CallableTaskDefinition, WorkflowDefinition}
+import wom.callable.Callable._
 import wom.expression._
 import wom.graph._
 import wom.graph.GraphNodePort._
@@ -54,6 +55,7 @@ import dxWDL.util._
 
 case class WfFragRunner(wf: WorkflowDefinition,
                         taskDir : Map[String, CallableTaskDefinition],
+                        typeAliases: Map[String, WomType],
                         wfSourceCode: String,
                         instanceTypeDB: InstanceTypeDB,
                         execLinkInfo: Map[String, ExecLinkInfo],
@@ -65,11 +67,14 @@ case class WfFragRunner(wf: WorkflowDefinition,
     private val verbose = runtimeDebugLevel >= 1
     //private val maxVerboseLevel = (runtimeDebugLevel == 2)
     private val wdlVarLinksConverter = WdlVarLinksConverter(fragInputOutput.typeAliases)
-    private val collectSubJobs = CollectSubJobs(fragInputOutput.jobInputOutput,
+    private val jobInputOutput = fragInputOutput.jobInputOutput
+    private val collectSubJobs = CollectSubJobs(jobInputOutput,
                                                 inputsRaw,
                                                 instanceTypeDB,
                                                 runtimeDebugLevel,
                                                 fragInputOutput.typeAliases)
+    // The source code for all the tasks
+    private val taskSourceDir : Map[String, String] = ParseWomSourceFile.scanForTasks(wfSourceCode)
 
     var gSeqNum = 0
     private def launchSeqNum() : Int = {
@@ -325,20 +330,73 @@ case class WfFragRunner(wf: WorkflowDefinition,
         JsObject(m)
     }
 
+    // Figure out what instance type to launch at task in. Return None if the instance
+    // type is a constant, and is already set.
+    private def preCalcInstanceType(task: CallableTaskDefinition,
+                                    taskSourceCode: String,
+                                    taskInputs: Map[InputDefinition, WomValue]) : Option[String] = {
+        // Note: if none of these attributes are specified, the return value is None.
+        val instanceAttrs = Set("memory", "disks", "cpu")
+        val allConst = instanceAttrs.forall{ attrName =>
+            task.runtimeAttributes.attributes.get(attrName) match {
+                case None => true
+                case Some(expr) => WomValueAnalysis.isExpressionConst(WomStringType, expr)
+            }
+        }
+        if (allConst)
+            return None
+
+        // There is runtime evaluation for the instance type
+        val taskRunner = new TaskRunner(task,
+                                        taskSourceCode,
+                                        typeAliases,
+                                        instanceTypeDB,
+                                        dxPathConfig,
+                                        dxIoFunctions,
+                                        jobInputOutput,
+                                        runtimeDebugLevel)
+        try {
+            val iType = taskRunner.calcInstanceType(taskInputs)
+            Utils.appletLog(verbose, s"Precalculated instance type for ${task.unqualifiedName}: ${iType}")
+            Some(iType)
+        } catch {
+            case e : Throwable =>
+                Utils.appletLog(verbose,
+                                s"""|Failed to precalculate the instance type for
+                                    |task ${task.unqualifiedName}.
+                                    |
+                                    |${e}
+                                    |""".stripMargin)
+                None
+        }
+    }
+
     private def execDNAxExecutable(dxExecId: String,
                                    dbgName: String,
-                                   callName: String,
-                                   callInputs : JsValue) : (Int, DXExecution) = {
+                                   callInputs : JsValue,
+                                   instanceType: Option[String]) : (Int, DXExecution) = {
+        // We may need to run a collect subjob. Add the the sequence
+        // number to each invocation, so the collect subjob will be
+        // able to put the results back together in the correct order.
         val seqNum: Int = launchSeqNum()
+
+        // If this is a task that specifies the instance type
+        // at runtime, launch it in the requested instance.
+        val instanceFields = instanceType match {
+            case None => Map.empty
+            case Some(iType) =>
+                Map("systemRequirements" -> JsObject(
+                        "main" -> JsObject("instanceType" -> JsString(iType))
+                    ))
+        }
         val dxExec =
             if (dxExecId.startsWith("app-")) {
                 val fields = Map(
                     "name" -> JsString(dbgName),
                     "input" -> callInputs,
-                    "properties" -> JsObject("call" ->  JsString(callName),
-                                             "seq_number" -> JsString(seqNum.toString))
+                    "properties" -> JsObject("seq_number" -> JsString(seqNum.toString))
                 )
-                val req = JsObject(fields)
+                val req = JsObject(fields ++ instanceFields)
                 val retval: JsonNode = DXAPI.appRun(dxExecId,
                                                     Utils.jsonNodeOfJsValue(req),
                                                     classOf[JsonNode])
@@ -354,27 +412,9 @@ case class WfFragRunner(wf: WorkflowDefinition,
                 val fields = Map(
                     "name" -> JsString(dbgName),
                     "input" -> callInputs,
-                    "properties" -> JsObject("call" ->  JsString(callName),
-                                             "seq_number" -> JsString(seqNum.toString))
+                    "properties" -> JsObject("seq_number" -> JsString(seqNum.toString))
                 )
-
-                // If this is a task that specifies the instance type
-                // at runtime, launch it in the requested instance.
-/*                val instanceType = nswf.findTask(calleeName) match {
-                    case Some(task) if mayCalculateInstaceType(task) =>
-                        preCalcInstanceType(task, callInputsWvl)
-                    case _ => None
-                }
-                val instanceFields = instanceType match {
-                    case None => Map.empty
-                    case Some(iType) =>
-                        Map("systemRequirements" -> JsObject(
-                                "main" -> JsObject("instanceType" -> JsString(iType))
-                            ))
-                }
-                val req = JsObject(fields ++ instanceFields)*/
-
-                val req = JsObject(fields)
+                val req = JsObject(fields ++ instanceFields)
                 val retval: JsonNode = DXAPI.appletRun(applet.getId,
                                                        Utils.jsonNodeOfJsValue(req),
                                                        classOf[JsonNode])
@@ -390,7 +430,6 @@ case class WfFragRunner(wf: WorkflowDefinition,
                 val dxAnalysis :DXAnalysis = workflow.newRun()
                     .setRawInput(Utils.jsonNodeOfJsValue(callInputs))
                     .setName(dbgName)
-                    .putProperty("call", callName)
                     .putProperty("seq_number", seqNum.toString)
                     .run()
                 dxAnalysis
@@ -405,21 +444,28 @@ case class WfFragRunner(wf: WorkflowDefinition,
                          callNameHint: Option[String]) : (Int, DXExecution) = {
         val linkInfo = getCallLinkInfo(call)
         val callName = call.identifier.localName.value
-        //val calleeName = call.callable.name
+        val calleeName = call.callable.name
         val callInputsJSON : JsValue = buildCallInputs(callName, linkInfo, callInputs)
 /*        Utils.appletLog(verbose, s"""|Call ${callName}
                                      |calleeName= ${calleeName}
                                      |inputs = ${callInputsJSON}""".stripMargin)*/
 
-        // We may need to run a collect subjob. Add the call
-        // name, and the sequence number, to each execution invocation,
-        // so the collect subjob will be able to put the
-        // results back together.
+        // This is presented in the UI, to inform the user
         val dbgName = callNameHint match {
             case None => call.identifier.localName.value
             case Some(hint) => s"${callName} ${hint}"
         }
-        execDNAxExecutable(linkInfo.dxExec.getId, dbgName, callName, callInputsJSON)
+
+        // If this is a call to a task that computes the required instance type at runtime,
+        // do the calculation right now. This saves a job relaunch down the road.
+        val instanceType : Option[String] =
+            (taskDir.get(calleeName), taskSourceDir.get(calleeName)) match {
+                case (Some(task), Some(taskSourceCode)) =>
+                    val taskInputs = jobInputOutput.loadInputs(callInputsJSON, task)
+                    preCalcInstanceType(task, taskSourceCode, taskInputs)
+                case (_, _) => None
+        }
+        execDNAxExecutable(linkInfo.dxExec.getId, dbgName, callInputsJSON, instanceType)
     }
 
     // create promises to this call. This allows returning
@@ -536,7 +582,7 @@ case class WfFragRunner(wf: WorkflowDefinition,
 
             // The subblock is complex, and requires a fragment, or a subworkflow
             val callInputs:JsValue = buildCallInputs(linkInfo.name, linkInfo, env)
-            val (_, dxExec) = execDNAxExecutable(linkInfo.dxExec.getId, linkInfo.name, linkInfo.name, callInputs)
+            val (_, dxExec) = execDNAxExecutable(linkInfo.dxExec.getId, linkInfo.name, callInputs, None)
 
             // create promises for results
             linkInfo.outputs.map{
@@ -655,7 +701,7 @@ case class WfFragRunner(wf: WorkflowDefinition,
 
                 // The subblock is complex, and requires a fragment, or a subworkflow
                 val callInputs:JsValue = buildCallInputs(linkInfo.name, linkInfo, innerEnv)
-                val (_, dxJob) = execDNAxExecutable(linkInfo.dxExec.getId, dbgName, linkInfo.name, callInputs)
+                val (_, dxJob) = execDNAxExecutable(linkInfo.dxExec.getId, dbgName, callInputs, None)
                 dxJob
             }.toVector
 

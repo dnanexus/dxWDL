@@ -217,8 +217,7 @@ object ParseWomSourceFile {
     // Go through one WDL source file, and return a map from task name
     // to its source code. Return an empty map if there are no tasks
     // in this file.
-    def scanForTasks(language: Language.Value,
-                     sourceCode: String) : Map[String, String] = {
+    def scanForTasks(sourceCode: String) : Map[String, String] = {
         var lines = sourceCode.split("\n").toList
         val taskDir = HashMap.empty[String, String]
 
@@ -239,8 +238,7 @@ object ParseWomSourceFile {
     // Go through one WDL source file, and return a map from task name
     // to its source code. Return an empty map if there are no tasks
     // in this file.
-    def scanForWorkflow(language: Language.Value,
-                        sourceCode: String) : Option[(String, String)] = {
+    def scanForWorkflow(sourceCode: String) : Option[(String, String)] = {
         val lines = sourceCode.split("\n").toList
         findNextWorkflow(lines) match {
             case None =>

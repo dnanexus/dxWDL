@@ -43,7 +43,8 @@ class WfFragRunnerTest extends FlatSpec with Matchers {
                                                     null /*dxProject*/,
                                                     runtimeDebugLevel,
                                                     typeAliases)
-        val fragRunner = new WfFragRunner(wf, taskDir, wfSourceCode,
+        val fragRunner = new WfFragRunner(wf, taskDir, typeAliases,
+                                          wfSourceCode,
                                           instanceTypeDB,
                                           Map.empty[String, ExecLinkInfo],
                                           dxPathConfig,

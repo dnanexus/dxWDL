@@ -167,14 +167,14 @@ case class GenerateIR(verbose: Verbose) {
         // There is no built-in method for this.
         val taskDir = allSources.foldLeft(Map.empty[String, String]) {
             case (accu, (filename, srcCode)) =>
-                val d = ParseWomSourceFile.scanForTasks(language, srcCode)
+                val d = ParseWomSourceFile.scanForTasks(srcCode)
                 accu ++ d
         }
         Utils.trace(verbose.on, s"tasks=${taskDir.keys}")
 
         val workflowDir = allSources.foldLeft(Map.empty[String, String]) {
             case (accu, (filename, srcCode)) =>
-                ParseWomSourceFile.scanForWorkflow(language, srcCode) match {
+                ParseWomSourceFile.scanForWorkflow(srcCode) match {
                     case None =>
                         accu
                     case Some((wfName, wfSource)) =>
