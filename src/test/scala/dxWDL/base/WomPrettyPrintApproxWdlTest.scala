@@ -1,27 +1,48 @@
 package dxWDL.base
 
-import java.nio.file.{Path, Paths}
+import java.io.File
 import org.scalatest.{FlatSpec, Matchers}
 import wom.callable.{WorkflowDefinition}
 
+import dxWDL.util.ParseWomSourceFile
+import dxWDL.util.Utils
+
 class WomPrettyPrintApproxWdlTest extends FlatSpec with Matchers {
-    private def pathFromBasename(basename: String) : Path = {
-        val p = getClass.getResource(s"/util/${basename}").getPath
-        Paths.get(p)
+
+    private def tryToPrintFile(path : File) : Unit = {
+        val wfSourceCode = scala.io.Source.fromFile(path).mkString
+        try {
+            val (wf : WorkflowDefinition, _, typeAliases) = ParseWomSourceFile.parseWdlWorkflow(wfSourceCode)
+            val s = wf.innerGraph.nodes.map{
+                WomPrettyPrintApproxWdl.apply(_)
+            }.mkString("\n")
+            Utils.ignore(s)
+        } catch {
+            // Some of the source files are invalid, or contain tasks and not workflows
+            case e : Throwable => ()
+        }
+    }
+
+    it should "print original WDL for draft2" in {
+        val testDir = new File("src/test/resources/draft2")
+        val testCases = testDir.listFiles.filter{ x =>
+            x.isFile && x.getName.endsWith(".wdl")
+        }.toVector
+
+        for (path <- testCases) {
+            tryToPrintFile(path)
+        }
     }
 
 
-    // Ignore a value. This is useful for avoiding warnings/errors
-    // on unused variables.
-    def ignore[A](value: A) : Unit = {}
+    it should "print original WDL for version 1.0" in {
+        val testDir = new File("src/test/resources/compiler")
+        val testCases = testDir.listFiles.filter{ x =>
+            x.isFile && x.getName.endsWith(".wdl")
+        }.toVector
 
-    it should "print original WDL from block_closure.wdl" in {
-        val path = pathFromBasename("block_closure.wdl")
-        val wfSourceCode = scala.io.Source.fromFile(path.toFile).mkString
-        val (wf : WorkflowDefinition, _, typeAliases) = dxWDL.util.ParseWomSourceFile.parseWdlWorkflow(wfSourceCode)
-        val s = wf.innerGraph.nodes.map{
-            WomPrettyPrintApproxWdl.apply(_)
-        }.mkString("\n")
-        ignore(s)
+        for (path <- testCases) {
+            tryToPrintFile(path)
+        }
     }
 }

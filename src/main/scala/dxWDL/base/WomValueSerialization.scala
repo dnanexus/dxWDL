@@ -130,9 +130,6 @@ case class WomValueSerialization(typeAliases: Map[String, WomType]) {
                 WomOptionalValue(womFromJSON(t, jsv))
 
             // structs
-            case (WomCompositeType(typeMap, None), _) =>
-                throw new Exception("struct without a name")
-
             case (WomCompositeType(typeMap, Some(structName)), JsObject(fields)) =>
                 val m: Map[String, WomValue] = fields.map{
                     case (key, elemValue) =>

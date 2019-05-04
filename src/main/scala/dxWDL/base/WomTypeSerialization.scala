@@ -36,8 +36,6 @@ case class WomTypeSerialization(typeAliases: Map[String, WomType]) {
                 s"Pair[$ls, $rs]"
 
             // structs
-            case WomCompositeType(_, None) =>
-                throw new Exception("unnamed struct")
             case WomCompositeType(_, Some(structName)) =>
                 structName
 
