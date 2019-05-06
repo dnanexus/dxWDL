@@ -31,7 +31,6 @@ import com.dnanexus.{DXAPI, DXJSON, DXProject}
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.node.ObjectNode
 import spray.json._
-import Utils.{DEFAULT_INSTANCE_TYPE, warning}
 import wom.values._
 
 // Instance Type on the platform. For example:
@@ -172,7 +171,7 @@ case class InstanceTypeDB(instances: Vector[DxInstanceType]) {
     // An fast but cheap instance type.
     //
     def defaultInstanceType : String = {
-        val iType = instances.find(x => x.name == DEFAULT_INSTANCE_TYPE) match {
+        val iType = instances.find(x => x.name == InstanceTypeDB.DEFAULT_INSTANCE_TYPE) match {
             case Some(iType) => iType
             case None => calcMinimalInstanceType(instances.toSet)
         }
@@ -224,6 +223,8 @@ case class InstanceTypeDB(instances: Vector[DxInstanceType]) {
 }
 
 object InstanceTypeDB extends DefaultJsonProtocol {
+    val DEFAULT_INSTANCE_TYPE = "mem1_ssd1_x4"
+
     // support automatic conversion to/from JsValue
     implicit val instanceTypeDBFormat = jsonFormat1(InstanceTypeDB.apply)
 
@@ -248,7 +249,7 @@ object InstanceTypeDB extends DefaultJsonProtocol {
             case None => None
             case Some(WomString(buf)) =>
                 // extract number
-                val numRex = """(\d+.?\d*)""".r
+                val numRex = """(\d+\.?\d*)""".r
                 val numbers = numRex.findAllIn(buf).toList
                 if (numbers.length != 1)
                     throw new Exception(s"Can not parse memory specification ${buf}")
@@ -483,10 +484,10 @@ object InstanceTypeDB extends DefaultJsonProtocol {
         } catch {
             // Insufficient permissions to describe the user, we cannot get the price list.
             case e: Throwable =>
-                warning(verbose, """|Warning: insufficient permissions to retrieve the
-                                    |instance price list. This will result in suboptimal machine choices,
-                                    |incurring higher costs when running workflows.
-                                    |""".stripMargin.replaceAll("\n", " "))
+                Utils.warning(verbose, """|Warning: insufficient permissions to retrieve the
+                                          |instance price list. This will result in suboptimal machine choices,
+                                          |incurring higher costs when running workflows.
+                                          |""".stripMargin.replaceAll("\n", " "))
                 queryNoPrices(dxProject)
         }
     }
