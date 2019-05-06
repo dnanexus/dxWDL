@@ -1,5 +1,3 @@
-# Advanced options
-
 The reader is assumed to understand the
 [Workflow Description Language (WDL)](http://www.openwdl.org/), and have
 some experience using the [DNAnexus](http://www.dnanexus.com) platform.
@@ -8,7 +6,7 @@ some experience using the [DNAnexus](http://www.dnanexus.com) platform.
 compiles it to an equivalent workflow on the DNAnexus platform.
 
 
-## Getting started
+# Getting started
 Prerequisites: DNAnexus platform account, dx-toolkit, java 8+, python 2.7.
 
 Make sure you've installed the dx-toolkit CLI, and initialized it with
@@ -108,7 +106,7 @@ tasks by default.
 $ java -jar dxWDL-0.44.jar compile test/files.wdl -project project-xxxx -defaults test/files_input.json -extras extraOptions.json
 ```
 
-## Extensions
+# Extensions
 
 A task declaration has a runtime section where memory, cpu, and disk
 space can be specified. Based on these attributes, an instance type is chosen by
@@ -169,7 +167,7 @@ task fileSize {
 ```
 
 
-## Task and workflow inputs
+# Task and workflow inputs
 
 WDL assumes that a task declaration can be overriden
 by the caller, if it is unassigned, or assigned to a constant.
@@ -236,7 +234,7 @@ workflow math {
 Currently, dxWDL does not support this feature. However, there is a [suggestion](MissingCallArguments.md)
 for limited support.
 
-## Calling existing applets
+# Calling existing applets
 
 Sometimes, it is desirable to call an existing dx:applet from a WDL
 workflow. For example, when porting a native workflow, we can leave
@@ -305,7 +303,7 @@ workflow w {
 }
 ```
 
-### Calling apps
+## Calling apps
 
 To call apps instead of applets, use
 
@@ -317,7 +315,7 @@ The compiler will search for all the apps you can call, and create WDL
 tasks for them.
 
 
-## Debugging an applet
+# Debugging an applet
 
 If you build an applet on the platform with dxWDL, and want to inspect
 it, use: ```dx get --omit-resources <applet path>```. This will
@@ -325,7 +323,7 @@ refrain from downloading the large resource files that go into the
 applet.
 
 
-## Setting dnanexus specific attributes for tasks
+# Setting dnanexus specific attributes for tasks
 
 When writing a dnanexus applet the user can specify options through
 the [dxapp.json](https://wiki.dnanexus.com/dxapp.json) file. The dxWDL
@@ -395,7 +393,7 @@ section. For example
 will override the default timeout for tasks `Add` and `Inc`. It will also provide
 `UPLOAD` instead of `VIEW` project access to `Inc`.
 
-## Handling intermediate workflow outputs
+# Handling intermediate workflow outputs
 
 A workflow may create a large number of files, taking up significant
 disk space, and incurring storage costs. Some of the files are
@@ -408,7 +406,7 @@ that reorganizes the output folder, it uses `CONTRIBUTE` access to
 reach into the parent project, create a subfolder, and move files into
 it.
 
-### Use your own applet
+## Use your own applet
 
 You may want to use a different applet than the one provided with `--reorg`. To
 do that, write a native applet, and call it at the end your workflow.
@@ -420,7 +418,7 @@ it may misplace or outright delete files. The applet:
 3. has to be careful about inputs that are *also* outputs. Normally, these should not be moved.
 4. should use bulk object operations, so as not to overload the API server.
 
-## Toplevel calls compiled as stages
+# Toplevel calls compiled as stages
 
 If a workflow is compiled in unlocked mode, top level calls with no
 subexpressions are compiled directly to dx:workflow stages. For
@@ -576,3 +574,15 @@ form. To extract it you can do:
 ```
 dx describe /builds/1.02/applets/hello --json --details | jq '.details | .womSourceCode' | sed 's/"//g' | base64 --decode | gunzip
 ```
+
+# Recompilation
+
+Any significant WDL workflow is compiled into multiple DNAx applets
+and workflows. Naively, any modification to the WDL source would
+necessitate recompilation of all the constituent objects, which is
+expensive. To optimize this use case, all generated platform objects are
+checksumed. If a dx:object has not changed, it is not recompiled, and
+the existing version can be used. The checksum covers the WDL source
+code, the DNAx runtime specification, and any other attributes. There
+are two exceptions: the project name, and the folder. This allows
+moving WDL workflows in the folder hierarchy without recompilation.
