@@ -17,27 +17,6 @@ class AppException private(ex: RuntimeException) extends RuntimeException(ex) {
     def this(message:String) = this(new RuntimeException(message))
 }
 
-class UnboundVariableException private(ex: RuntimeException) extends RuntimeException(ex) {
-    def this(varName: String) = this(new RuntimeException(s"Variable ${varName} is unbound"))
-}
-
-class NamespaceValidationException private(ex: RuntimeException) extends RuntimeException(ex) {
-    def this(msg: String) = this(new RuntimeException(msg))
-}
-
-class NullValueException private(ex: Exception) extends RuntimeException(ex) {
-    def this(msg: String) = this(new RuntimeException(msg))
-}
-
-
-// Mode of file data transfer
-//   Data: download of upload the entire file
-//   Remote: leave the file on the platform
-//   Stream: stream download/upload the file
-object IOMode extends Enumeration {
-    val Data, Remote, Stream = Value
-}
-
 object IORef extends Enumeration {
     val Input, Output = Value
 }

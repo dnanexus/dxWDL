@@ -4,31 +4,90 @@ import org.scalatest.{FlatSpec, Matchers}
 import wom.types._
 
 class WomTypeSerializationTest extends FlatSpec with Matchers {
-    private val typeSerialize = WomTypeSerialization(Map.empty)
 
-    it should "work on optional type" in {
-        val t : WomType = WomOptionalType(WomIntegerType)
-        typeSerialize.fromString(typeSerialize.toString(t)) should be (t)
+    val testCases : List[WomType] = List(
+        // Primitive types
+        WomNothingType,
+        WomBooleanType,
+        WomIntegerType,
+        WomLongType,
+        WomFloatType,
+        WomStringType,
+        WomSingleFileType,
+
+        // array
+        WomMaybeEmptyArrayType(WomStringType),
+        WomNonEmptyArrayType(WomSingleFileType),
+
+        // maps
+        WomMapType(WomStringType, WomSingleFileType),
+        WomMapType(WomStringType, WomMapType(WomFloatType, WomIntegerType)),
+
+        // optionals
+        WomOptionalType(WomLongType),
+        WomOptionalType(WomMaybeEmptyArrayType(WomBooleanType)),
+
+        WomPairType(WomIntegerType, WomStringType)
+    )
+
+    it should "work for various WDL types" in {
+        val typeSerialize = WomTypeSerialization(Map.empty)
+
+        for (t <- testCases) {
+            typeSerialize.fromString(typeSerialize.toString(t)) should be (t)
+        }
     }
 
-    it should "handle map types" in {
-        val t : WomType = WomMapType(WomStringType, WomIntegerType)
-        typeSerialize.fromString(typeSerialize.toString(t)) should be (t)
+    val personType = WomCompositeType(Map("name" -> WomStringType,
+                                          "age" -> WomIntegerType),
+                                      Some("Person"))
+    val houseType = WomCompositeType(Map("street" -> WomStringType,
+                                         "zip code" -> WomIntegerType,
+                                         "owner" -> personType),
+                                      Some("House"))
+
+    val structTestCases : List[WomType] = List(
+        personType,
+        WomPairType(personType, houseType),
+        WomOptionalType(houseType)
+    )
+
+    it should "work for structs" in {
+        val typeAliases: Map[String, WomType] = Map("Person" -> personType,
+                                                    "House" -> houseType)
+        val typeSerialize = WomTypeSerialization(typeAliases)
+
+        for (t <- structTestCases) {
+            typeSerialize.fromString(typeSerialize.toString(t)) should be (t)
+        }
     }
 
-    it should "handle map types II" in {
-        val t : WomType = WomMapType(WomStringType, WomMapType(WomFloatType, WomIntegerType))
-        typeSerialize.fromString(typeSerialize.toString(t)) should be (t)
+    val badTypeNames : List[String] = List(
+        "A bad type",
+        "dummy",
+        "Map[Int, UnrealFile]",
+        "Pair[Int, Map[Int, X__String]]"
+    )
+
+    it should "detect bad type descriptions" in {
+        val typeAliases: Map[String, WomType] = Map("Person" -> personType,
+                                                    "House" -> houseType)
+        val typeSerialize = WomTypeSerialization(typeAliases)
+
+        for (typeDesc <- badTypeNames) {
+            assertThrows[Exception] {
+                typeSerialize.fromString(typeDesc)
+            }
+        }
     }
 
-    it should "handle map types III" in {
-        val t : WomType = WomMapType(WomMapType(WomFloatType, WomIntegerType),
-                                     WomArrayType(WomLongType))
-        typeSerialize.fromString(typeSerialize.toString(t)) should be (t)
-    }
-
-    it should "handle pairs" in {
-        val t : WomType = WomPairType(WomIntegerType, WomStringType)
-        typeSerialize.fromString(typeSerialize.toString(t)) should be (t)
+    it should "detect objects that aren't structs" in {
+        val typeSerialize = WomTypeSerialization(Map.empty)
+        val objectWithoutName  = WomCompositeType(Map("name" -> WomStringType,
+                                                      "age" -> WomIntegerType),
+                                                  None)
+        assertThrows[Exception] {
+            typeSerialize.toString(objectWithoutName)
+        }
     }
 }

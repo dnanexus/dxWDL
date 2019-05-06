@@ -19,7 +19,6 @@ import wom.types._
 object Utils {
     val APPLET_LOG_MSG_LIMIT = 1000
     val CHECKSUM_PROP = "dxWDL_checksum"
-    val DEFAULT_INSTANCE_TYPE = "mem1_ssd1_x4"
     val DEFAULT_RUNTIME_DEBUG_LEVEL = 1
     val DX_URL_PREFIX = "dx://"
     val DX_WDL_ASSET = "dxWDLrt"

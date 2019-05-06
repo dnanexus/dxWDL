@@ -423,10 +423,6 @@ object Main extends App {
                     return SuccessfulTermination(desc)
             }
         } catch {
-            case e : NamespaceValidationException =>
-                return UnsuccessfulTermination(
-                    "Namespace validation error\n\n" +
-                    e.getMessage)
             case e : Throwable =>
                 return UnsuccessfulTermination(Utils.exceptionToString(e))
         }

@@ -93,4 +93,15 @@ Test / parallelExecution := false
 // comment out this line to enable tests in assembly
 //test in assembly := {}
 
-coverageExcludedPackages := "dxWDL.exec.*;"
+
+// Coverage
+//
+// sbt clean coverage test
+// sbt coverageReport
+
+// To turn it off do:
+// sbt coverageOff
+
+// Ignore code parts that cannot be checked in the unit
+// test environment
+coverageExcludedPackages := "dxWDL.exec.*;dxWDL.Main;dxWDL.compiler.DxNI;dxWDL.compiler.DxObjectDirectory;dxWDL.compiler.Native;"
