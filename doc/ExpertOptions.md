@@ -578,12 +578,11 @@ dx describe /builds/1.02/applets/hello --json --details | jq '.details | .womSou
 # Recompilation
 
 Any significant WDL workflow is compiled into multiple DNAx applets
-and workflows. Naively, any modification to the WDL source would necessecitate
-recompilation of all the constituent objects. This is expensive; to
-improve it, all generated platform objects are
-checksumed. If a dx:object has not changed, it is not
-recompiled, and the existing version can be used. The
-checksum covers the WDL source code, the DNAx runtime specification,
-and any other attributes. There are two exceptions: the project name,
-and the folder. This allows moving WDL workflows in the folder hierarchy
-without recompilation.
+and workflows. Naively, any modification to the WDL source would
+necessitate recompilation of all the constituent objects, which is
+expensive. To optimize this use case, all generated platform objects are
+checksumed. If a dx:object has not changed, it is not recompiled, and
+the existing version can be used. The checksum covers the WDL source
+code, the DNAx runtime specification, and any other attributes. There
+are two exceptions: the project name, and the folder. This allows
+moving WDL workflows in the folder hierarchy without recompilation.
