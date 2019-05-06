@@ -50,7 +50,6 @@ import wom.graph.expression._
 import wom.values._
 import wom.types._
 
-import dxWDL.base._
 import dxWDL.util._
 
 case class WfFragRunner(wf: WorkflowDefinition,
@@ -721,11 +720,8 @@ case class WfFragRunner(wf: WorkflowDefinition,
 
         // Find the fragment block to execute
         val block = Block.getSubBlock(blockPath, wf.innerGraph, callsLoToHi)
-        val dbgBlock = block.nodes.map{
-            WomPrettyPrintApproxWdl.apply(_)
-        }.mkString("\n")
         Utils.appletLog(verbose, s"""|Block ${blockPath} to execute:
-                                     |${dbgBlock}
+                                     |${WomPrettyPrintApproxWdl.block(block)}
                                      |
                                      |""".stripMargin)
 

@@ -4,7 +4,7 @@ import scala.util.matching.Regex
 import wom.types._
 import wom.values._
 
-import dxWDL.base.WomPrettyPrintApproxWdl.typeName
+import dxWDL.base.WomTypeSerialization.typeName
 import dxWDL.util._
 
 // A bunch of WDL source lines
