@@ -14,6 +14,16 @@ case class WdlCodeGen(verbose: Verbose,
                       typeAliases: Map[String, WomType],
                       language : Language.Value) {
 
+        // A self contained WDL workflow
+    def versionString() : String = {
+        language match {
+            case Language.WDLvDraft2 => ""
+            case Language.WDLv1_0 => "version 1.0"
+            case other =>
+                throw new Exception(s"Unsupported language version ${other}")
+        }
+    }
+
     private def genDefaultValueOfType(wdlType: WomType) : WomValue = {
         wdlType match {
             case WomBooleanType => WomBoolean(true)
@@ -147,36 +157,44 @@ task Add {
                 |     id : "${id}"
                 |  }""".stripMargin
 
-        language match {
+        val taskSourceCode = language match {
             case Language.WDLvDraft2 =>
                 // Draft-2 does not support the input block.
-                WdlCodeSnippet(
-                    s"""|task ${appletName} {
-                        |${inputs}
-                        |
-                        |  command {}
-                        |  output {
-                        |${outputs}
-                        |  }
-                        |${metaSection}
-                        |}""".stripMargin
-                )
+                s"""|task ${appletName} {
+                    |${inputs}
+                    |
+                    |  command {}
+                    |  output {
+                    |${outputs}
+                    |  }
+                    |${metaSection}
+                    |}""".stripMargin
             case Language.WDLv1_0 =>
-                WdlCodeSnippet(
-                    s"""|task ${appletName} {
-                        |  input {
-                        |${inputs}
-                        |  }
-                        |  command {}
-                        |  output {
-                        |${outputs}
-                        |  }
-                        |${metaSection}
-                        |}""".stripMargin
-                )
+                s"""|task ${appletName} {
+                    |  input {
+                    |${inputs}
+                    |  }
+                    |  command {}
+                    |  output {
+                    |${outputs}
+                    |  }
+                    |${metaSection}
+                    |}""".stripMargin
             case other =>
                 throw new Exception(s"Unsupported language version ${other}")
         }
+
+        // Make sure this is actually valid WDL
+        //
+        // We need to add the version to this task, to
+        // make it valid WDL
+        val taskStandalone = s"""|${versionString()}
+                                 |
+                                 |${taskSourceCode}
+                                 |""".stripMargin
+        ParseWomSourceFile.validateWdlCode(taskStandalone, language)
+
+        WdlCodeSnippet(taskSourceCode)
     }
 
     // A workflow can import other libraries:
@@ -214,17 +232,6 @@ task Add {
         cleanLines.mkString("\n")
     }
 
-        // A self contained WDL workflow
-    def versionString() : String = {
-        language match {
-            case Language.WDLvDraft2 => ""
-            case Language.WDLv1_0 => "version 1.0"
-            case other =>
-                throw new Exception(s"Unsupported language version ${other}")
-        }
-    }
-
-
     // Write valid WDL code that defines the type aliases we have.
     private def typeAliasDefinitions : String = {
         val snippetVec = typeAliases.map{
@@ -254,7 +261,7 @@ task Add {
                               |${originalTaskSource}
                               |""".stripMargin
 
-        // Make sure this is actually valid WDL 1.0
+        // Make sure this is actually valid WDL
         ParseWomSourceFile.validateWdlCode(wdlWfSource, language)
 
         WdlCodeSnippet(wdlWfSource)
@@ -305,7 +312,7 @@ task Add {
                               |
                               |""".stripMargin
 
-        // Make sure this is actually valid WDL 1.0
+        // Make sure this is actually valid WDL
         ParseWomSourceFile.validateWdlCode(wdlWfSource, language)
 
         WdlCodeSnippet(wdlWfSource)

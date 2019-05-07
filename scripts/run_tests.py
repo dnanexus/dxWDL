@@ -29,7 +29,7 @@ test_failing=set(["bad_status",
 wdl_v1_list = [
      # calling native dx applets/apps
     "call_native_v1",
-#    "call_native_app",
+    "call_native_app",
 
     "cast",
     "dict",
@@ -176,7 +176,7 @@ def get_metadata(filename):
         return TestMetaData(name = tasks[0],
                             kind = "applet")
     if (os.path.basename(filename).startswith("library") or
-        os.path.basename(filename).startswith("dx_extern")):
+        os.path.basename(filename).endswith("_extern")):
         return
     raise RuntimeError("{} is not a valid WDL test, #tasks={}".format(filename, len(tasks)))
 
@@ -545,7 +545,7 @@ def native_call_app_setup(version_id):
                 "dxni",
                 "--apps",
                 "--force",
-                "--language", "wdl_draft2",
+                "--language", "wdl_v1.0",
                 "--output", header_file]
     print(" ".join(cmdline))
     subprocess.check_output(cmdline)
@@ -671,7 +671,8 @@ def main():
         compiler_flags += ["-runtimeDebugLevel", args.runtime_debug_level]
 
     #  is "native" included in one of the test names?
-    if any("native" in x for x in test_names):
+    if ("call_native" in test_names or
+        "call_native_v1" in test_names):
         native_call_setup(project, applet_folder, version_id)
     if "call_native_app" in test_names:
         native_call_app_setup(version_id)
