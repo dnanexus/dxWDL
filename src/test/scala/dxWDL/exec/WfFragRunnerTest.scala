@@ -252,7 +252,7 @@ class WfFragRunnerTest extends FlatSpec with Matchers {
         }
     }
 
-    it should "evaluate call inputs properly" taggedAs(EdgeTest) in {
+    it should "evaluate call inputs properly" in {
         val path = pathFromBasename("draft2", "various_calls.wdl")
         val wfSourceCode = Utils.readFileContent(path)
         val (dxPathConfig, dxIoFunctions) = setup()
@@ -313,7 +313,7 @@ class WfFragRunnerTest extends FlatSpec with Matchers {
                                  ))
     }
 
-    it should "fill in missing optionals" taggedAs(EdgeTest) in {
+    it should "fill in missing optionals" in {
         val path = pathFromBasename("frag_runner", "missing_args.wdl")
         val wfSourceCode = Utils.readFileContent(path)
 
@@ -322,5 +322,19 @@ class WfFragRunnerTest extends FlatSpec with Matchers {
         val results: Map[String, JsValue] =
             fragRunner.apply(Vector(0), Map("y" -> WomInteger(5)), RunnerWfFragmentMode.Launch)
         results shouldBe (Map("retval" -> JsNumber(5)))
+    }
+
+    it should "evaluate expressions in correct order" taggedAs(EdgeTest) in {
+        val path = pathFromBasename("frag_runner", "scatter_variable_not_found.wdl")
+        val wfSourceCode = Utils.readFileContent(path)
+
+        val (dxPathConfig, dxIoFunctions) = setup()
+        val (wf, fragRunner) = setupFragRunner(dxPathConfig, dxIoFunctions, wfSourceCode)
+        val results: Map[String, JsValue] =
+            fragRunner.apply(Vector(0), Map.empty, RunnerWfFragmentMode.Launch)
+        results.keys should contain("bam_lane1")
+        results("bam_lane1") shouldBe (JsObject(
+                                           "value" -> JsArray(JsString("1_ACGT_1.bam"), JsNull),
+                                           "womType" -> JsString("MaybeEmptyArray[Option[String]]")))
     }
 }

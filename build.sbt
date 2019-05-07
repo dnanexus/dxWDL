@@ -104,4 +104,4 @@ Test / parallelExecution := false
 
 // Ignore code parts that cannot be checked in the unit
 // test environment
-coverageExcludedPackages := "dxWDL.exec.*;dxWDL.Main;dxWDL.compiler.DxNI;dxWDL.compiler.DxObjectDirectory;dxWDL.compiler.Native;"
+coverageExcludedPackages := "dxWDL.Main;dxWDL.compiler.DxNI;dxWDL.compiler.DxObjectDirectory;dxWDL.compiler.Native"

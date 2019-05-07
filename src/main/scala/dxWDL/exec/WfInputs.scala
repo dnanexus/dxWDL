@@ -8,7 +8,6 @@ import wom.callable.{WorkflowDefinition}
 import wom.values._
 import wom.types.WomType
 
-import dxWDL.base._
 import dxWDL.util._
 
 case class WfInputs(wf: WorkflowDefinition,
@@ -22,11 +21,8 @@ case class WfInputs(wf: WorkflowDefinition,
     def apply(inputs: Map[String, WomValue]) : Map[String, JsValue] = {
         Utils.appletLog(verbose, s"dxWDL version: ${Utils.getVersion()}")
         Utils.appletLog(verbose, s"Environment: ${inputs}")
-        val dbgInputs = wf.inputs.map{
-            WomPrettyPrintApproxWdl.apply(_)
-        }.mkString("\n")
         Utils.appletLog(verbose, s"""|Artificial applet for unlocked workflow inputs
-                                     |${dbgInputs}
+                                     |${WomPrettyPrintApproxWdl.graphInputs(wf.inputs.toSeq)}
                                      |""".stripMargin)
 
         // convert the WDL values to JSON

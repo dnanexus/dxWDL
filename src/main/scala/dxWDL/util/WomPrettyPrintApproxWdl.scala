@@ -1,58 +1,15 @@
 /** Pretty printing WOM as, approximately, the original WDL.
   */
-package dxWDL.base
+package dxWDL.util
 
 import wom.callable.Callable._
 import wom.graph._
 import wom.graph.expression._
 import wom.types._
 
+import dxWDL.base.WomTypeSerialization.typeName
+
 object WomPrettyPrintApproxWdl {
-
-    // Get a human readable type name
-    // Int ->   "Int"
-    // Array[Int] -> "Array[Int]"
-    def typeName(t: WomType) : String = {
-        t match {
-            // Base case: primitive types.
-            case WomNothingType => "Nothing"
-            case WomBooleanType => "Boolean"
-            case WomIntegerType => "Int"
-            case WomLongType => "Long"
-            case WomFloatType => "Float"
-            case WomStringType => "String"
-            case WomSingleFileType => "File"
-
-            // compound types
-            case WomMaybeEmptyArrayType(memberType) =>
-                val inner = typeName(memberType)
-                s"Array[${inner}]"
-            case WomMapType(keyType, valueType) =>
-                val k = typeName(keyType)
-                val v = typeName(valueType)
-                s"Map[$k, $v]"
-            case WomNonEmptyArrayType(memberType) =>
-                val inner = typeName(memberType)
-                s"Array[${inner}]+"
-            case WomOptionalType(memberType) =>
-                val inner = typeName(memberType)
-                s"$inner?"
-            case WomPairType(lType, rType) =>
-                val ls = typeName(lType)
-                val rs = typeName(rType)
-                s"Pair[$ls, $rs]"
-
-            // structs
-            case WomCompositeType(_, None) =>
-                throw new Exception("unnamed struct")
-            case WomCompositeType(_, Some(structName)) =>
-                structName
-
-            // catch-all for other types not currently supported
-            case _ =>
-                throw new Exception(s"Unsupported WOM type ${t}, ${t.stableName}")
-        }
-    }
 
     // Convert a fully qualified name to a local name.
     // Examples:
@@ -75,21 +32,22 @@ object WomPrettyPrintApproxWdl {
                 val varName = varNames.head
                 val svNode: ScatterVariableNode = sct.scatterVariableNodes.head
                 val collection = svNode.scatterExpressionNode.womExpression.sourceString
-                val innerBlock =
-                    sct.innerGraph.nodes.flatMap{ node =>
-                        applyGNode(node, indent + "  ")
-                    }.mkString("\n")
+                val orderedNodes = Block.partialSortByDep(sct.innerGraph.nodes)
+                val innerBlock = orderedNodes.flatMap{ node =>
+                    applyGNode(node, indent + "  ")
+                }.mkString("\n")
                 Some(s"""|${indent}scatter (${varName} in ${collection}) {
                          |${innerBlock}
                          |${indent}}
                          |""".stripMargin)
 
             case cnd : ConditionalNode =>
+                val orderedNodes = Block.partialSortByDep(cnd.innerGraph.nodes)
                 val innerBlock =
-                    cnd.innerGraph.nodes.flatMap{ node =>
+                    orderedNodes.flatMap{ node =>
                         applyGNode(node, indent + "  ")
                     }.mkString("\n")
-                Some(s"""|${indent}if (${cnd.conditionExpression.womExpression.sourceString}) {
+                Some(s"""|${indent}if ${cnd.conditionExpression.womExpression.sourceString} {
                          |${innerBlock}
                          |${indent}}
                          |""".stripMargin)
@@ -115,7 +73,7 @@ object WomPrettyPrintApproxWdl {
                 Some(s"${indent}${typeName(expr.womType)} ${expr.identifier.localName.value} = ${exprSource}")
 
             case expr : ExposedExpressionNode =>
-                Some(s"${indent}${expr.identifier.localName.value} =  ${expr.womExpression.sourceString}")
+                Some(s"${indent}${typeName(expr.womType)} ${expr.identifier.localName.value} =  ${expr.womExpression.sourceString}")
 
             case expr : ExpressionNode =>
                 //Some(expr.womExpression.sourceString)
@@ -135,15 +93,9 @@ object WomPrettyPrintApproxWdl {
         }
     }
 
-    def apply(node: GraphNode) : String = {
-        applyGNode(node, "") match {
-            case None => ""
-            case Some(x) => x
-        }
-    }
 
-    def apply(inputDef : InputDefinition) : String = {
-        inputDef match {
+    private def applyInput(iDef : InputDefinition) : String = {
+        iDef match {
             case RequiredInputDefinition(iName, womType, _, _) =>
                 s"${typeName(womType)} ${iName}"
 
@@ -161,5 +113,23 @@ object WomPrettyPrintApproxWdl {
             case other =>
                 throw new Exception(s"${other} not handled")
         }
+    }
+
+    def graphInputs(inputDefs : Seq[InputDefinition]) : String = {
+        inputDefs.flatMap{
+            applyInput(_)
+        }.mkString("\n")
+    }
+
+    def graphOutputs(outputs : Seq[GraphOutputNode]) : String = {
+        outputs.flatMap{
+            applyGNode(_, "    ")
+        }.mkString("\n")
+    }
+
+    def block(block : Block) : String = {
+        block.nodes.flatMap{
+            applyGNode(_, "    ")
+        }.mkString("\n")
     }
 }

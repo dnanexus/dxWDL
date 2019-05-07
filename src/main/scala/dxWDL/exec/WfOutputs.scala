@@ -12,7 +12,6 @@ import wom.graph._
 import wom.values._
 import wom.types._
 
-import dxWDL.base._
 import dxWDL.util._
 
 case class WfOutputs(wf: WorkflowDefinition,
@@ -46,13 +45,9 @@ case class WfOutputs(wf: WorkflowDefinition,
     def apply(envInitial: Map[String, WomValue]) : Map[String, JsValue] = {
         Utils.appletLog(verbose, s"dxWDL version: ${Utils.getVersion()}")
         Utils.appletLog(verbose, s"Environment: ${envInitial}")
-
         val outputNodes : Vector[GraphOutputNode] = wf.innerGraph.outputNodes.toVector
-        val dbgOutputs = outputNodes.map{
-            WomPrettyPrintApproxWdl.apply(_)
-        }.mkString("\n")
         Utils.appletLog(verbose, s"""|Evaluating workflow outputs
-                                     |${dbgOutputs}
+                                     |${WomPrettyPrintApproxWdl.graphOutputs(outputNodes)}
                                      |""".stripMargin)
 
         // Evaluate the output declarations. Add outputs evaluated to

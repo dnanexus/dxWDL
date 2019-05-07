@@ -50,7 +50,6 @@ import wom.graph.expression._
 import wom.values._
 import wom.types._
 
-import dxWDL.base._
 import dxWDL.util._
 
 case class WfFragRunner(wf: WorkflowDefinition,
@@ -123,17 +122,8 @@ case class WfFragRunner(wf: WorkflowDefinition,
     // This method is exposed so that we can unit-test it.
     def evalExpressions(nodes: Seq[GraphNode],
                         env: Map[String, WomValue]) : Map[String, WomValue] = {
-        /*if (verbose) {
-            val dbgGraph = nodes.map{node => WomPrettyPrint.apply(node) }.mkString("  \n")
-        Utils.trace(verbose,
-                    s"""|--- evalExpressions
-                        |env =
-                        |   ${env.mkString("  \n")}
-                        |graph =
-                        |   ${dbgGraph}
-                        |---
-                        |""".stripMargin) */
-        nodes.foldLeft(env) {
+        val partialOrderNodes = Block.partialSortByDep(nodes.toSet)
+        partialOrderNodes.foldLeft(env) {
             // simple expression
             case (env, eNode: ExposedExpressionNode) =>
                 val value : WomValue =
@@ -721,11 +711,8 @@ case class WfFragRunner(wf: WorkflowDefinition,
 
         // Find the fragment block to execute
         val block = Block.getSubBlock(blockPath, wf.innerGraph, callsLoToHi)
-        val dbgBlock = block.nodes.map{
-            WomPrettyPrintApproxWdl.apply(_)
-        }.mkString("\n")
         Utils.appletLog(verbose, s"""|Block ${blockPath} to execute:
-                                     |${dbgBlock}
+                                     |${WomPrettyPrintApproxWdl.block(block)}
                                      |
                                      |""".stripMargin)
 

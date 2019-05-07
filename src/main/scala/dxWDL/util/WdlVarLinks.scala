@@ -217,7 +217,7 @@ case class WdlVarLinksConverter(typeAliases: Map[String, WomType]) {
                     if (womType == null)
                         "null"
                     else
-                        WomPrettyPrintApproxWdl.typeName(womType)
+                        WomTypeSerialization.typeName(womType)
                 val womValueStr =
                     if (womValue == null)
                         "null"

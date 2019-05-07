@@ -82,8 +82,6 @@ import wom.graph._
 import wom.graph.expression._
 import wom.types._
 
-import dxWDL.base._
-
 // A sorted group of graph nodes, that match some original
 // set of WDL statements.
 case class Block(nodes : Vector[GraphNode]) {
@@ -94,12 +92,6 @@ case class Block(nodes : Vector[GraphNode]) {
         s"""|Block [
             |${desc}
             |]""".stripMargin
-    }
-
-    def prettyPrintApproxWdl: String = {
-        nodes.map{
-            WomPrettyPrintApproxWdl.apply(_)
-        }.mkString("\n")
     }
 
     // Check that this block is valid.
@@ -223,7 +215,7 @@ object Block {
 
     // Sort a group of nodes according to dependencies. Note that this is a partial
     // ordering only.
-    private def partialSortByDep(nodes: Set[GraphNode]) : Vector[GraphNode] = {
+    def partialSortByDep(nodes: Set[GraphNode]) : Vector[GraphNode] = {
         var ordered = Vector.empty[GraphNode]
         var rest : Set[GraphNode] = nodes
 
@@ -379,36 +371,6 @@ object Block {
         val callsLoToHi : Vector[(String, Int)] = callToSrcLine.toVector.sortBy(_._2)
 
         splitGraph(graph, callsLoToHi)
-    }
-
-    // A debugging method, to display a block in a human readable
-    // fashion.
-    def dbgToString(inputNodes: Vector[GraphInputNode],   // inputs
-                    subBlocks: Vector[Block], // blocks
-                    outputNodes: Vector[GraphOutputNode]) // outputs
-            : String = {
-        val inputs = inputNodes.map{ node =>
-            WomPrettyPrintApproxWdl.apply(node)
-        }.mkString("\n")
-        val blocks = subBlocks.map{ block =>
-            val body = block.nodes.map{ node =>
-                WomPrettyPrintApproxWdl.apply(node)
-            }.mkString("\n")
-            s"""|Block [
-                |${body}
-                |]""".stripMargin
-        }.mkString("\n")
-        val outputs= outputNodes.map{ node =>
-            WomPrettyPrintApproxWdl.apply(node)
-        }.mkString("\n")
-
-        s"""|Inputs ["
-            |${inputs}
-            |]
-            |${blocks}
-            |Output [
-            |${outputs}
-            |]""".stripMargin
     }
 
     // A block of nodes that represents a call with no subexpressions. These
