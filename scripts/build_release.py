@@ -46,16 +46,18 @@ def main():
     print("version: {}".format(version_id))
 
     # Set the folder
-    folder = time.strftime("/releases/{}".format(version_id))
+    folder = "/releases/{}".format(version_id)
     print("folder: {}".format(folder))
 
+    # remove the existing directory paths
     if args.force:
-        try:
-            # remove the existing directory path
-            cmd = "dx rm -r {}:/{}".format(project.get_id(), folder)
-            subprocess.check_call(cmd.split())
-        except:
-            pass
+        for proj_name in project_dict.values():
+            print("removing path {}:{}".format(proj_name, folder))
+            dx_proj = util.get_project(proj_name)
+            try:
+                dx_proj.remove_folder(folder, recurse=True)
+            except dxpy.DXError:
+                pass
 
     # Make sure the target directory exists
     project.new_folder(folder, parents=True)
