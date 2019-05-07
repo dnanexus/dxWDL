@@ -122,16 +122,6 @@ case class WfFragRunner(wf: WorkflowDefinition,
     // This method is exposed so that we can unit-test it.
     def evalExpressions(nodes: Seq[GraphNode],
                         env: Map[String, WomValue]) : Map[String, WomValue] = {
-        /*if (verbose) {
-            val dbgGraph = nodes.map{node => WomPrettyPrint.apply(node) }.mkString("  \n")
-        Utils.trace(verbose,
-                    s"""|--- evalExpressions
-                        |env =
-                        |   ${env.mkString("  \n")}
-                        |graph =
-                        |   ${dbgGraph}
-                        |---
-         |""".stripMargin) */
         val partialOrderNodes = Block.partialSortByDep(nodes.toSet)
         partialOrderNodes.foldLeft(env) {
             // simple expression

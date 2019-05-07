@@ -11,8 +11,4 @@ workflow foo {
         }
     }
     Array[String] lane1_bams = select_all(bam_lane1)
-
-    output {
-        Array[String] result = lane1_bams
-    }
 }

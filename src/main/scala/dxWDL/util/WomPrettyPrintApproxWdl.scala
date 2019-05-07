@@ -32,18 +32,19 @@ object WomPrettyPrintApproxWdl {
                 val varName = varNames.head
                 val svNode: ScatterVariableNode = sct.scatterVariableNodes.head
                 val collection = svNode.scatterExpressionNode.womExpression.sourceString
-                val innerBlock =
-                    sct.innerGraph.nodes.flatMap{ node =>
-                        applyGNode(node, indent + "  ")
-                    }.mkString("\n")
+                val orderedNodes = Block.partialSortByDep(sct.innerGraph.nodes)
+                val innerBlock = orderedNodes.flatMap{ node =>
+                    applyGNode(node, indent + "  ")
+                }.mkString("\n")
                 Some(s"""|${indent}scatter (${varName} in ${collection}) {
                          |${innerBlock}
                          |${indent}}
                          |""".stripMargin)
 
             case cnd : ConditionalNode =>
+                val orderedNodes = Block.partialSortByDep(cnd.innerGraph.nodes)
                 val innerBlock =
-                    cnd.innerGraph.nodes.flatMap{ node =>
+                    orderedNodes.flatMap{ node =>
                         applyGNode(node, indent + "  ")
                     }.mkString("\n")
                 Some(s"""|${indent}if ${cnd.conditionExpression.womExpression.sourceString} {
