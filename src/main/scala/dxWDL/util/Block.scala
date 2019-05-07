@@ -215,7 +215,7 @@ object Block {
 
     // Sort a group of nodes according to dependencies. Note that this is a partial
     // ordering only.
-    private def partialSortByDep(nodes: Set[GraphNode]) : Vector[GraphNode] = {
+    def partialSortByDep(nodes: Set[GraphNode]) : Vector[GraphNode] = {
         var ordered = Vector.empty[GraphNode]
         var rest : Set[GraphNode] = nodes
 

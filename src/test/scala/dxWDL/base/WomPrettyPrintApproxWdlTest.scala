@@ -23,7 +23,7 @@ class WomPrettyPrintApproxWdlTest extends FlatSpec with Matchers {
                        |Array[String] lane1_bams = select_all(bam_lane1)
                        |""".stripMargin
 
-    it should "maintain line ordering" in {
+    ignore should "maintain line ordering" in {
         val path = new File("src/test/resources/bugs/scatter_variable_not_found.wdl")
         val wfSourceCode = scala.io.Source.fromFile(path).mkString
 

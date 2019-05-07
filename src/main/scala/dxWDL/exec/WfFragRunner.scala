@@ -131,8 +131,9 @@ case class WfFragRunner(wf: WorkflowDefinition,
                         |graph =
                         |   ${dbgGraph}
                         |---
-                        |""".stripMargin) */
-        nodes.foldLeft(env) {
+         |""".stripMargin) */
+        val partialOrderNodes = Block.partialSortByDep(nodes.toSet)
+        partialOrderNodes.foldLeft(env) {
             // simple expression
             case (env, eNode: ExposedExpressionNode) =>
                 val value : WomValue =
