@@ -118,14 +118,13 @@ test_suites = {
 }
 
 # Tests with the reorg flags
-test_reorg=["dict", "linear"]
+test_reorg=["dict", "strings"]
 test_defaults=[]
 test_unlocked=["cast",
                "call_with_defaults1",
                "files",
                "hello",
                "optionals",
-               "linear",
                "shapes"]
 test_extras=["instance_types"]
 test_private_registry=["private_registry"]
@@ -575,18 +574,13 @@ def copy_wf_test(tname, src_proj, src_folder):
     if trg_proj is None:
         raise RuntimeError("Could not find project {}".format(alt_proj_name))
     test_folder = "/test"
+
+    # clean up target
+    print("cleaning up target")
+    subprocess.check_output("dx rm -r {}:/{}".format(trg_proj.getId(), test_folder))
     trg_proj.new_folder(test_folder, parents=True)
 
     # copy to alternate project
-    alt_wf_l = list(dxpy.bindings.search.find_data_objects(name= tname,
-                                                           folder= test_folder,
-                                                           project= trg_proj.get_id()))
-    if len(alt_wf_l) > 0:
-        print("remove {} from alternate project".format(tname))
-        for d in alt_wf_l:
-            x_wf = dxpy.DXWorkflow(project = d['project'], dxid = d['id'])
-            x_wf.remove()
-
     src_wf_id = lookup_dataobj(tname, src_proj, src_folder)
     print("copy {} to alternate project".format(src_wf_id))
     wf = dxpy.DXWorkflow(dxid=src_wf_id)
@@ -608,14 +602,18 @@ def main():
     argparser.add_argument("--compile-mode", help="Compilation mode")
     argparser.add_argument("--do-not-build", help="Do not assemble the dxWDL jar file",
                            action="store_true", default=False)
+    argparser.add_argument("--extras", help="run extra tests",
+                           action="store_true", default=False)
     argparser.add_argument("--force", help="Remove old versions of applets and workflows",
                            action="store_true", default=False)
     argparser.add_argument("--folder", help="Use an existing folder, instead of building dxWDL")
     argparser.add_argument("--lazy", help="Only compile workflows that are unbuilt",
                            action="store_true", default=False)
+    argparser.add_argument("--list", "--test-list", help="Print a list of available tests",
+                           action="store_true",
+                           dest="test_list",
+                           default=False)
     argparser.add_argument("--locked", help="Generate locked-down workflows",
-                           action="store_true", default=False)
-    argparser.add_argument("--unlocked", help="Generate only unlocked workflows",
                            action="store_true", default=False)
     argparser.add_argument("--project", help="DNAnexus project ID",
                            default="dxWDL_playground")
@@ -623,10 +621,8 @@ def main():
                            help="printing verbosity of task/workflow runner, {0,1,2}")
     argparser.add_argument("--test", help="Run a test, or a subgroup of tests",
                            action="append", default=[])
-    argparser.add_argument("--list", "--test-list", help="Print a list of available tests",
-                           action="store_true",
-                           dest="test_list",
-                           default=False)
+    argparser.add_argument("--unlocked", help="Generate only unlocked workflows",
+                           action="store_true", default=False)
     argparser.add_argument("--verbose", help="Verbose compilation",
                            action="store_true", default=False)
     argparser.add_argument("--verbose-key", help="Verbose compilation",
@@ -698,20 +694,22 @@ def main():
     if "call_native_app" in test_names:
         native_call_app_setup(version_id)
 
-#    try:
-#        # Compile the WDL files to dx:workflows and dx:applets
-#        runnable = compile_tests_to_project(project,
-#                                            test_names,
-#                                            applet_folder,
-#                                            compiler_flags,
-#                                            version_id,
-#                                            args.lazy)
-#        if not args.compile_only:
-#            run_test_subset(project, runnable, test_folder)
-#    finally:
-#        print("Completed running tasks in {}".format(args.project))
+    try:
+        # Compile the WDL files to dx:workflows and dx:applets
+        runnable = compile_tests_to_project(project,
+                                            test_names,
+                                            applet_folder,
+                                            compiler_flags,
+                                            version_id,
+                                            args.lazy)
+        if not args.compile_only:
+            run_test_subset(project, runnable, test_folder)
+    finally:
+        print("Completed running tasks in {}".format(args.project))
 
-    copy_wf_test("instance_types", project, applet_folder)
+    if args.extras:
+        print("Copy workflow and run in alternate project ")
+        copy_wf_test("linear", project, applet_folder)
 
 if __name__ == '__main__':
     main()

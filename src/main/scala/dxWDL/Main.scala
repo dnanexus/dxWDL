@@ -562,6 +562,7 @@ object Main extends App {
     private def workflowFragAction(op: InternalOp.Value,
                                    womSourceCode: String,
                                    instanceTypeDB: InstanceTypeDB,
+                                   metaInfo: JsValue,
                                    jobInputPath: Path,
                                    jobOutputPath: Path,
                                    dxPathConfig : DxPathConfig,
@@ -580,38 +581,38 @@ object Main extends App {
         val fragInputOutput = new exec.WfFragInputOutput(dxIoFunctions, dxProject, rtDebugLvl, typeAliases)
 
         // process the inputs
-        val meta = fragInputOutput.loadInputs(inputsRaw)
+        val fragInputs = fragInputOutput.loadInputs(inputsRaw, metaInfo)
         val outputFields: Map[String, JsValue] =
             op match {
                 case InternalOp.WfFragment =>
                     val fragRunner = new exec.WfFragRunner(wf, taskDir, typeAliases,
                                                            womSourceCode, instanceTypeDB,
-                                                           meta.execLinkInfo,
+                                                           fragInputs.execLinkInfo,
                                                            dxPathConfig, dxIoFunctions,
                                                            inputsRaw,
                                                            fragInputOutput,
                                                            rtDebugLvl)
-                    fragRunner.apply(meta.blockPath, meta.env, RunnerWfFragmentMode.Launch)
+                    fragRunner.apply(fragInputs.blockPath, fragInputs.env, RunnerWfFragmentMode.Launch)
                 case InternalOp.Collect =>
                     val fragRunner = new exec.WfFragRunner(wf, taskDir, typeAliases,
                                                            womSourceCode, instanceTypeDB,
-                                                           meta.execLinkInfo,
+                                                           fragInputs.execLinkInfo,
                                                            dxPathConfig, dxIoFunctions,
                                                            inputsRaw,
                                                            fragInputOutput,
                                                            rtDebugLvl)
-                    fragRunner.apply(meta.blockPath, meta.env, RunnerWfFragmentMode.Collect)
+                    fragRunner.apply(fragInputs.blockPath, fragInputs.env, RunnerWfFragmentMode.Collect)
                 case InternalOp.WfInputs =>
                     val wfInputs = new exec.WfInputs(wf, womSourceCode, typeAliases, rtDebugLvl)
-                    wfInputs.apply(meta.env)
+                    wfInputs.apply(fragInputs.env)
                 case InternalOp.WfOutputs =>
                     val wfOutputs = new exec.WfOutputs(wf, womSourceCode, typeAliases,
                                                        dxPathConfig, dxIoFunctions,
                                                        rtDebugLvl)
-                    wfOutputs.apply(meta.env)
+                    wfOutputs.apply(fragInputs.env)
                 case InternalOp.WorkflowOutputReorg =>
                     val wfReorg = new exec.WorkflowOutputReorg(wf, womSourceCode, typeAliases, rtDebugLvl)
-                    val refDxFiles = fragInputOutput.findRefDxFiles(inputsRaw)
+                    val refDxFiles = fragInputOutput.findRefDxFiles(inputsRaw, metaInfo)
                     wfReorg.apply(refDxFiles)
                 case _ =>
                     throw new Exception(s"Illegal workflow fragment operation ${op}")
@@ -629,7 +630,9 @@ object Main extends App {
 
     // Get the WOM source code, and the instance type database from the
     // details field stored on the platform
-    private def retrieveFromDetails(jobInfoPath: Path) : (String, InstanceTypeDB) = {
+    private def retrieveFromDetails(jobInfoPath: Path) : (String,
+                                                          InstanceTypeDB,
+                                                          JsValue) = {
         val jobInfo = Utils.readFileContent(jobInfoPath).parseJson
         val applet: DXApplet = jobInfo.asJsObject.fields.get("applet") match {
             case None =>
@@ -655,7 +658,8 @@ object Main extends App {
         val JsString(instanceTypeDBEncoded) = details.asJsObject.fields("instanceTypeDB")
         val dbRaw = Utils.base64DecodeAndGunzip(instanceTypeDBEncoded)
         val instanceTypeDB = dbRaw.parseJson.convertTo[InstanceTypeDB]
-        (womSourceCode, instanceTypeDB)
+
+        (womSourceCode, instanceTypeDB, details)
     }
 
     def internalOp(args : Seq[String]) : Termination = {
@@ -673,7 +677,7 @@ object Main extends App {
 
                 // Get the WOM source code (currently WDL, could be also CWL in the future)
                 // Parse the inputs, convert to WOM values.
-                val (womSourceCode, instanceTypeDB) = retrieveFromDetails(jobInfoPath)
+                val (womSourceCode, instanceTypeDB, metaInfo) = retrieveFromDetails(jobInfoPath)
 
                 try {
                     op match {
@@ -682,7 +686,7 @@ object Main extends App {
                                 InternalOp.WfInputs |
                                 InternalOp.WfOutputs |
                                 InternalOp.WorkflowOutputReorg =>
-                            workflowFragAction(op, womSourceCode, instanceTypeDB,
+                            workflowFragAction(op, womSourceCode, instanceTypeDB, metaInfo,
                                                jobInputPath, jobOutputPath,
                                                dxPathConfig, dxIoFunctions, rtDebugLvl)
                         case InternalOp.TaskCheckInstanceType|

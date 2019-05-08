@@ -1,7 +1,9 @@
 # Release Notes
 
 ## 1.05
-- Reviving DxNI for DNAnexus apps.
+- Got DxNI to work for DNAnexus apps, not just applets.
+- A compiled WDL workflow can be copied between projects. It is now linked to all applets and subworkflows that it is uses.
+
 
 ## 1.04
 - Precalculate instance types. There are tasks that calculate the instance type they need in the runtime section. If the task call is made from a workflow fragment, we can calculate the instance type then and there. This allows launching directly in the correct instance type, instead of launching an additional job.
