@@ -1,6 +1,4 @@
 #!/usr/bin/env python
-from __future__ import print_function
-
 import argparse
 from collections import namedtuple
 import dxpy
@@ -13,8 +11,9 @@ import sys
 import subprocess
 from termcolor import colored, cprint
 import time
-import util
 from dxpy.exceptions import DXJobFailureError
+
+import util
 
 here = os.path.dirname(sys.argv[0])
 top_dir = os.path.dirname(os.path.abspath(here))
@@ -324,7 +323,7 @@ def wait_for_completion(test_exec_objs):
 
 
 # Run [workflow] on several inputs, return the analysis ID.
-def run_executable(project, test_folder, tname, oid, delay_workspace_destruction):
+def run_executable(project, test_folder, tname, oid):
     def once():
         try:
             desc = test_files[tname]
@@ -345,7 +344,6 @@ def run_executable(project, test_folder, tname, oid, delay_workspace_destruction
                                 project=project.get_id(),
                                 folder=test_folder,
                                 name="{} {}".format(desc.name, git_revision),
-                                delay_workspace_destruction=delay_workspace_destruction,
                                 instance_type="mem1_ssd1_x4")
         except Exception as e:
             print("exception message={}".format(e))
@@ -377,18 +375,15 @@ def extract_outputs(tname, exec_obj):
     else:
         raise RuntimeError("Unknown kind {}".format(desc.kind))
 
-def run_test_subset(project, runnable, test_folder, delay_workspace_destruction, no_wait):
+def run_test_subset(project, runnable, test_folder):
     # Run the workflows
     test_exec_objs=[]
     for tname, oid in runnable.items():
         desc = test_files[tname]
         print("Running {} {} {}".format(desc.kind, desc.name, oid))
-        anl = run_executable(project, test_folder, tname, oid, delay_workspace_destruction)
+        anl = run_executable(project, test_folder, tname, oid)
         test_exec_objs.append(anl)
     print("executables: " + ", ".join([a.get_id() for a in test_exec_objs]))
-
-    if no_wait:
-        return
 
     # Wait for completion
     wait_for_completion(test_exec_objs)
@@ -443,7 +438,7 @@ def register_all_tests():
                 fname = os.path.splitext(base)[0]
                 if fname.startswith("library_"):
                     continue
-                if fname == "dx_extern":
+                if fname.endswith("_extern"):
                     continue
                 try:
                     register_test(root, fname)
@@ -497,7 +492,7 @@ def native_call_setup(project, applet_folder, version_id):
         applet = list(dxpy.bindings.search.find_data_objects(classname= "applet",
                                                              name= napl,
                                                              folder= applet_folder,
-                                                            project= project.get_id()))
+                                                             project= project.get_id()))
         if len(applet) == 0:
             cmdline = [ "dx", "build",
                         os.path.join(top_dir, "test/applets/{}".format(napl)),
@@ -571,6 +566,36 @@ def compile_tests_to_project(trg_proj,
         print("runnable({}) = {}".format(tname, oid))
     return runnable
 
+
+######################################################################
+# Copy a workflow to an alternate project, and run it there.
+def copy_wf_test(tname, src_proj, src_folder):
+    alt_proj_name = "dxWDL_playground_2"
+    trg_proj = util.get_project(alt_proj_name)
+    if trg_proj is None:
+        raise RuntimeError("Could not find project {}".format(alt_proj_name))
+    test_folder = "/test"
+    trg_proj.new_folder(test_folder, parents=True)
+
+    # copy to alternate project
+    alt_wf_l = list(dxpy.bindings.search.find_data_objects(name= tname,
+                                                           folder= test_folder,
+                                                           project= trg_proj.get_id()))
+    if len(alt_wf_l) > 0:
+        print("remove {} from alternate project".format(tname))
+        for d in alt_wf_l:
+            x_wf = dxpy.DXWorkflow(project = d['project'], dxid = d['id'])
+            x_wf.remove()
+
+    src_wf_id = lookup_dataobj(tname, src_proj, src_folder)
+    print("copy {} to alternate project".format(src_wf_id))
+    wf = dxpy.DXWorkflow(dxid=src_wf_id)
+    wf2 = wf.clone(trg_proj.get_id(), folder=test_folder)
+
+    # Run the workflow, and wait for completion
+    runnable = {tname : wf2.get_id()}
+    run_test_subset(trg_proj, runnable, test_folder)
+
 ######################################################################
 ## Program entry point
 def main():
@@ -581,8 +606,6 @@ def main():
     argparser.add_argument("--compile-only", help="Only compile the workflows, don't run them",
                            action="store_true", default=False)
     argparser.add_argument("--compile-mode", help="Compilation mode")
-    argparser.add_argument("--delay-workspace-destruction", help="Flag passed to workflow run",
-                           action="store_true", default=False)
     argparser.add_argument("--do-not-build", help="Do not assemble the dxWDL jar file",
                            action="store_true", default=False)
     argparser.add_argument("--force", help="Remove old versions of applets and workflows",
@@ -593,8 +616,6 @@ def main():
     argparser.add_argument("--locked", help="Generate locked-down workflows",
                            action="store_true", default=False)
     argparser.add_argument("--unlocked", help="Generate only unlocked workflows",
-                           action="store_true", default=False)
-    argparser.add_argument("--no-wait", help="Exit immediately after launching tests",
                            action="store_true", default=False)
     argparser.add_argument("--project", help="DNAnexus project ID",
                            default="dxWDL_playground")
@@ -677,20 +698,20 @@ def main():
     if "call_native_app" in test_names:
         native_call_app_setup(version_id)
 
-    try:
-        # Compile the WDL files to dx:workflows and dx:applets
-        runnable = compile_tests_to_project(project,
-                                            test_names,
-                                            applet_folder,
-                                            compiler_flags,
-                                            version_id,
-                                            args.lazy)
-        if not args.compile_only:
-            run_test_subset(project, runnable, test_folder,
-                            args.delay_workspace_destruction,
-                            args.no_wait)
-    finally:
-        print("Test complete")
+#    try:
+#        # Compile the WDL files to dx:workflows and dx:applets
+#        runnable = compile_tests_to_project(project,
+#                                            test_names,
+#                                            applet_folder,
+#                                            compiler_flags,
+#                                            version_id,
+#                                            args.lazy)
+#        if not args.compile_only:
+#            run_test_subset(project, runnable, test_folder)
+#    finally:
+#        print("Completed running tasks in {}".format(args.project))
+
+    copy_wf_test("instance_types", project, applet_folder)
 
 if __name__ == '__main__':
     main()
