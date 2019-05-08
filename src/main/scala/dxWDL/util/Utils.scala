@@ -31,8 +31,6 @@ object Utils {
     val MAX_STRING_LEN = 32 * 1024     // Long strings cause problems with bash and the UI
     val MAX_STAGE_NAME_LEN = 60       // maximal length of a workflow stage name
     val MAX_NUM_FILES_MOVE_LIMIT = 1000
-    val META_INFO = "_metaInfo"
-    val RESERVED_APPLET_INPUT_NAMES = Set(META_INFO)
     val UBUNTU_VERSION = "16.04"
     var traceLevel = 0
 

@@ -12,7 +12,7 @@ import wom.values._
 
 import dxWDL.base._
 import dxWDL.util._
-import dxWDL.util.Utils.{META_INFO, FLAT_FILES_SUFFIX}
+import dxWDL.util.Utils.{FLAT_FILES_SUFFIX}
 
 case class JobInputOutput(dxIoFunctions : DxIoFunctions,
                           runtimeDebugLevel: Int,
@@ -259,7 +259,6 @@ case class JobInputOutput(dxIoFunctions : DxIoFunctions,
         val fields : Map[String, JsValue] = inputs
             .asJsObject.fields
             .filter{ case (fieldName,_) => !fieldName.endsWith(FLAT_FILES_SUFFIX) }
-            .filter{ case (fieldName,_) => fieldName != META_INFO }
 
         // Get the declarations matching the input fields.
         // Create a mapping from each key to its WDL value

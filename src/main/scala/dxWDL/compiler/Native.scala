@@ -592,41 +592,32 @@ case class Native(dxWDLrtId: Option[String],
                 name -> ExecLinkInfo.writeJson(ali, typeAliases)
             }.toMap
 
-        val metaInfo : Option[JsValue] =
+        val metaInfo : Map[String, JsValue] =
             applet.kind match {
                 case IR.AppletKindWfFragment(calls, blockPath, fqnDictTypes) =>
                     // meta information used for running workflow fragments
-                    val hardCodedFragInfo = JsObject(
-                        "execLinkInfo" -> JsObject(linkInfo),
+                    Map("execLinkInfo" -> JsObject(linkInfo),
                         "blockPath" -> JsArray(blockPath.map(JsNumber(_))),
                         "fqnDictTypes" -> JsObject(
                             fqnDictTypes.map{ case (k,t) =>
                                 val tStr = WomTypeSerialization(typeAliases).toString(t)
                                 k -> JsString(tStr)
-                            }.toMap)
-                    )
-                    Some(JsObject("name" -> JsString(Utils.META_INFO),
-                                  "class" -> JsString("hash"),
-                                  "default" -> hardCodedFragInfo))
+                            }.toMap))
 
                 case IR.AppletKindWfInputs |
                         IR.AppletKindWfOutputs |
                         IR.AppletKindWorkflowOutputReorg =>
                     // meta information used for running workflow fragments
-                    val hardCodedFragInfo = JsObject(
-                        "fqnDictTypes" -> JsObject(
-                            applet.inputVars.map{
-                                case cVar =>
-                                    val tStr = WomTypeSerialization(typeAliases).toString(cVar.womType)
-                                    cVar.name -> JsString(tStr)
-                            }.toMap)
-                    )
-                    Some(JsObject("name" -> JsString(Utils.META_INFO),
-                                  "class" -> JsString("hash"),
-                                  "default" -> hardCodedFragInfo))
+                    val fqnDictTypes = JsObject(
+                        applet.inputVars.map{
+                            case cVar =>
+                                val tStr = WomTypeSerialization(typeAliases).toString(cVar.womType)
+                                cVar.name -> JsString(tStr)
+                        }.toMap)
+                    Map("fqnDictTypes" -> fqnDictTypes)
 
                 case _ =>
-                    None
+                    Map.empty
             }
         val outputSpec : Vector[JsValue] = applet.outputs.map(cVar =>
             cVarToSpec(cVar)
@@ -637,23 +628,33 @@ case class Native(dxWDLrtId: Option[String],
         val womSourceCode = Utils.gzipAndBase64Encode(applet.womSourceCode)
         val dbOpaque = InstanceTypeDB.opaquePrices(instanceTypeDB)
         val dbOpaqueInstance = Utils.gzipAndBase64Encode(dbOpaque.toJson.prettyPrint)
-        val details1 = Map("womSourceCode" -> JsString(womSourceCode),
+        val auxInfo = Map("womSourceCode" -> JsString(womSourceCode),
                            "instanceTypeDB" -> JsString(dbOpaqueInstance))
 
-        val (runSpec : JsValue, details2: JsValue) = calcRunSpec(applet,
-                                                                 details1,
-                                                                 bashScript)
+        // Links to applets that could get called at runtime. If
+        // this applet is copied, we need to maintain referential integrity.
+        val dxLinks = aplLinks.map{ case (name, execLinkInfo) =>
+            ("link_" + name) -> JsObject(
+                "$dnanexus_link" -> JsObject(
+                    "project" -> JsString(dxProject.getId),
+                    "id" -> JsString(execLinkInfo.dxExec.getId)
+                ))
+        }.toMap
+
+        val (runSpec : JsValue, details: JsValue) = calcRunSpec(applet,
+                                                                auxInfo ++ dxLinks ++ metaInfo,
+                                                                bashScript)
         val access : JsValue = calcAccess(applet)
 
          // pack all the core arguments into a single request
         var reqCore = Map(
 	    "name" -> JsString(applet.name),
-            "inputSpec" -> JsArray(inputSpec ++ metaInfo.toVector),
+            "inputSpec" -> JsArray(inputSpec),
             "outputSpec" -> JsArray(outputSpec),
             "runSpec" -> runSpec,
             "dxapi" -> JsString("1.0.0"),
             "tags" -> JsArray(JsString("dxWDL")),
-            "details" -> details2
+            "details" -> details
         )
         if (access != JsNull)
             reqCore += ("access" -> access)

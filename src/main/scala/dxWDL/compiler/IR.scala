@@ -41,7 +41,6 @@ object IR {
         def dxVarName : String = {
             val nameNoDots = Utils.transformVarName(name)
             assert(!(nameNoDots contains "."))
-            assert(!(Utils.RESERVED_APPLET_INPUT_NAMES contains nameNoDots))
             nameNoDots
         }
     }

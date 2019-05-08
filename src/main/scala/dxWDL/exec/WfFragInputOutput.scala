@@ -7,7 +7,6 @@ import wom.values._
 
 import dxWDL.base._
 import dxWDL.util._
-import dxWDL.util.Utils.META_INFO
 
 case class WfFragInput(blockPath: Vector[Int],
                        env: Map[String, WomValue],
@@ -60,25 +59,18 @@ case class WfFragInputOutput(dxIoFunctions : DxIoFunctions,
     // 1. Convert the inputs to WOM values
     // 2. Setup an environment to evaluate the sub-block. This should
     //    look to the WOM code as if all previous code had been evaluated.
-    def loadInputs(inputs : JsValue) : WfFragInput = {
-        val fields : Map[String, JsValue] = inputs
+    def loadInputs(inputs : JsValue,
+                   metaInfo: JsValue) : WfFragInput = {
+        val regularFields : Map[String, JsValue] = inputs
             .asJsObject.fields
             .filter{ case (fieldName,_) => !fieldName.endsWith(Utils.FLAT_FILES_SUFFIX) }
 
         // Extract the meta information needed to setup the closure
         // for the subblock
-        val metaInfo: Map[String, JsValue] =
-            fields.get(META_INFO) match {
-                case Some(JsObject(fields)) => fields
-                case other =>
-                    throw new Exception(
-                        s"JSON object has bad value ${other} for field ${META_INFO}")
-            }
-        val (execLinkInfo, blockPath, fqnDictTypes) = loadWorkflowMetaInfo(metaInfo)
+        val (execLinkInfo, blockPath, fqnDictTypes) = loadWorkflowMetaInfo(metaInfo.asJsObject.fields)
 
         // What remains are inputs from other stages. Convert from JSON
         // to wom values
-        val regularFields = fields - META_INFO
         val env : Map[String, WomValue] = regularFields.map{
             case (name, jsValue) =>
                 val fqn = Utils.revTransformVarName(name)
@@ -95,25 +87,15 @@ case class WfFragInputOutput(dxIoFunctions : DxIoFunctions,
     }
 
     // find all the dx:files that are referenced from the inputs
-    def findRefDxFiles(inputs : JsValue) : Vector[DXFile] = {
-        val fields : Map[String, JsValue] = inputs
+    def findRefDxFiles(inputs : JsValue,
+                       metaInfo: JsValue) : Vector[DXFile] = {
+        val regularFields : Map[String, JsValue] = inputs
             .asJsObject.fields
             .filter{ case (fieldName,_) => !fieldName.endsWith(Utils.FLAT_FILES_SUFFIX) }
 
-        // Extract the meta information needed to setup the closure
-        // for the subblock
-        val metaInfo: Map[String, JsValue] =
-            fields.get(META_INFO) match {
-                case Some(JsObject(fields)) => fields
-                case other =>
-                    throw new Exception(
-                        s"JSON object has bad value ${other} for field ${META_INFO}")
-            }
-        val (_, _, fqnDictTypes) = loadWorkflowMetaInfo(metaInfo)
+        val (_, _, fqnDictTypes) = loadWorkflowMetaInfo(metaInfo.asJsObject.fields)
 
-        // What remains are inputs from other stages. Convert from JSON
-        // to wom values
-        val regularFields = fields - META_INFO
+        // Convert from JSON to wom values
         regularFields.map{
             case (name, jsValue) =>
                 val fqn = Utils.revTransformVarName(name)

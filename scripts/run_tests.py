@@ -1,6 +1,4 @@
 #!/usr/bin/env python
-from __future__ import print_function
-
 import argparse
 from collections import namedtuple
 import dxpy
@@ -13,8 +11,9 @@ import sys
 import subprocess
 from termcolor import colored, cprint
 import time
-import util
 from dxpy.exceptions import DXJobFailureError
+
+import util
 
 here = os.path.dirname(sys.argv[0])
 top_dir = os.path.dirname(os.path.abspath(here))
@@ -29,7 +28,7 @@ test_failing=set(["bad_status",
 wdl_v1_list = [
      # calling native dx applets/apps
     "call_native_v1",
-#    "call_native_app",
+    "call_native_app",
 
     "cast",
     "dict",
@@ -119,14 +118,13 @@ test_suites = {
 }
 
 # Tests with the reorg flags
-test_reorg=["dict", "linear"]
+test_reorg=["dict", "strings"]
 test_defaults=[]
 test_unlocked=["cast",
                "call_with_defaults1",
                "files",
                "hello",
                "optionals",
-               "linear",
                "shapes"]
 test_extras=["instance_types"]
 test_private_registry=["private_registry"]
@@ -176,7 +174,7 @@ def get_metadata(filename):
         return TestMetaData(name = tasks[0],
                             kind = "applet")
     if (os.path.basename(filename).startswith("library") or
-        os.path.basename(filename).startswith("dx_extern")):
+        os.path.basename(filename).endswith("_extern")):
         return
     raise RuntimeError("{} is not a valid WDL test, #tasks={}".format(filename, len(tasks)))
 
@@ -324,7 +322,7 @@ def wait_for_completion(test_exec_objs):
 
 
 # Run [workflow] on several inputs, return the analysis ID.
-def run_executable(project, test_folder, tname, oid, delay_workspace_destruction):
+def run_executable(project, test_folder, tname, oid):
     def once():
         try:
             desc = test_files[tname]
@@ -345,7 +343,6 @@ def run_executable(project, test_folder, tname, oid, delay_workspace_destruction
                                 project=project.get_id(),
                                 folder=test_folder,
                                 name="{} {}".format(desc.name, git_revision),
-                                delay_workspace_destruction=delay_workspace_destruction,
                                 instance_type="mem1_ssd1_x4")
         except Exception as e:
             print("exception message={}".format(e))
@@ -377,18 +374,15 @@ def extract_outputs(tname, exec_obj):
     else:
         raise RuntimeError("Unknown kind {}".format(desc.kind))
 
-def run_test_subset(project, runnable, test_folder, delay_workspace_destruction, no_wait):
+def run_test_subset(project, runnable, test_folder):
     # Run the workflows
     test_exec_objs=[]
     for tname, oid in runnable.items():
         desc = test_files[tname]
         print("Running {} {} {}".format(desc.kind, desc.name, oid))
-        anl = run_executable(project, test_folder, tname, oid, delay_workspace_destruction)
+        anl = run_executable(project, test_folder, tname, oid)
         test_exec_objs.append(anl)
     print("executables: " + ", ".join([a.get_id() for a in test_exec_objs]))
-
-    if no_wait:
-        return
 
     # Wait for completion
     wait_for_completion(test_exec_objs)
@@ -443,7 +437,7 @@ def register_all_tests():
                 fname = os.path.splitext(base)[0]
                 if fname.startswith("library_"):
                     continue
-                if fname == "dx_extern":
+                if fname.endswith("_extern"):
                     continue
                 try:
                     register_test(root, fname)
@@ -497,7 +491,7 @@ def native_call_setup(project, applet_folder, version_id):
         applet = list(dxpy.bindings.search.find_data_objects(classname= "applet",
                                                              name= napl,
                                                              folder= applet_folder,
-                                                            project= project.get_id()))
+                                                             project= project.get_id()))
         if len(applet) == 0:
             cmdline = [ "dx", "build",
                         os.path.join(top_dir, "test/applets/{}".format(napl)),
@@ -545,7 +539,7 @@ def native_call_app_setup(version_id):
                 "dxni",
                 "--apps",
                 "--force",
-                "--language", "wdl_draft2",
+                "--language", "wdl_v1.0",
                 "--output", header_file]
     print(" ".join(cmdline))
     subprocess.check_output(cmdline)
@@ -571,6 +565,31 @@ def compile_tests_to_project(trg_proj,
         print("runnable({}) = {}".format(tname, oid))
     return runnable
 
+
+######################################################################
+# Copy a workflow to an alternate project, and run it there.
+def copy_wf_test(tname, src_proj, src_folder):
+    alt_proj_name = "dxWDL_playground_2"
+    trg_proj = util.get_project(alt_proj_name)
+    if trg_proj is None:
+        raise RuntimeError("Could not find project {}".format(alt_proj_name))
+    test_folder = "/test"
+
+    # clean up target
+    print("cleaning up target")
+    subprocess.check_output("dx rm -r {}:/{}".format(trg_proj.getId(), test_folder))
+    trg_proj.new_folder(test_folder, parents=True)
+
+    # copy to alternate project
+    src_wf_id = lookup_dataobj(tname, src_proj, src_folder)
+    print("copy {} to alternate project".format(src_wf_id))
+    wf = dxpy.DXWorkflow(dxid=src_wf_id)
+    wf2 = wf.clone(trg_proj.get_id(), folder=test_folder)
+
+    # Run the workflow, and wait for completion
+    runnable = {tname : wf2.get_id()}
+    run_test_subset(trg_proj, runnable, test_folder)
+
 ######################################################################
 ## Program entry point
 def main():
@@ -581,20 +600,20 @@ def main():
     argparser.add_argument("--compile-only", help="Only compile the workflows, don't run them",
                            action="store_true", default=False)
     argparser.add_argument("--compile-mode", help="Compilation mode")
-    argparser.add_argument("--delay-workspace-destruction", help="Flag passed to workflow run",
-                           action="store_true", default=False)
     argparser.add_argument("--do-not-build", help="Do not assemble the dxWDL jar file",
+                           action="store_true", default=False)
+    argparser.add_argument("--extras", help="run extra tests",
                            action="store_true", default=False)
     argparser.add_argument("--force", help="Remove old versions of applets and workflows",
                            action="store_true", default=False)
     argparser.add_argument("--folder", help="Use an existing folder, instead of building dxWDL")
     argparser.add_argument("--lazy", help="Only compile workflows that are unbuilt",
                            action="store_true", default=False)
+    argparser.add_argument("--list", "--test-list", help="Print a list of available tests",
+                           action="store_true",
+                           dest="test_list",
+                           default=False)
     argparser.add_argument("--locked", help="Generate locked-down workflows",
-                           action="store_true", default=False)
-    argparser.add_argument("--unlocked", help="Generate only unlocked workflows",
-                           action="store_true", default=False)
-    argparser.add_argument("--no-wait", help="Exit immediately after launching tests",
                            action="store_true", default=False)
     argparser.add_argument("--project", help="DNAnexus project ID",
                            default="dxWDL_playground")
@@ -602,10 +621,8 @@ def main():
                            help="printing verbosity of task/workflow runner, {0,1,2}")
     argparser.add_argument("--test", help="Run a test, or a subgroup of tests",
                            action="append", default=[])
-    argparser.add_argument("--list", "--test-list", help="Print a list of available tests",
-                           action="store_true",
-                           dest="test_list",
-                           default=False)
+    argparser.add_argument("--unlocked", help="Generate only unlocked workflows",
+                           action="store_true", default=False)
     argparser.add_argument("--verbose", help="Verbose compilation",
                            action="store_true", default=False)
     argparser.add_argument("--verbose-key", help="Verbose compilation",
@@ -671,7 +688,8 @@ def main():
         compiler_flags += ["-runtimeDebugLevel", args.runtime_debug_level]
 
     #  is "native" included in one of the test names?
-    if any("native" in x for x in test_names):
+    if ("call_native" in test_names or
+        "call_native_v1" in test_names):
         native_call_setup(project, applet_folder, version_id)
     if "call_native_app" in test_names:
         native_call_app_setup(version_id)
@@ -685,11 +703,13 @@ def main():
                                             version_id,
                                             args.lazy)
         if not args.compile_only:
-            run_test_subset(project, runnable, test_folder,
-                            args.delay_workspace_destruction,
-                            args.no_wait)
+            run_test_subset(project, runnable, test_folder)
     finally:
-        print("Test complete")
+        print("Completed running tasks in {}".format(args.project))
+
+    if args.extras:
+        print("Copy workflow and run in alternate project ")
+        copy_wf_test("linear", project, applet_folder)
 
 if __name__ == '__main__':
     main()
