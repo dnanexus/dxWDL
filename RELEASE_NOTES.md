@@ -4,6 +4,7 @@
 - Got DxNI to work for DNAnexus apps, not just applets.
 - Added links to applets that are referenced inside WDL fragments. This should allow, at some point, copying workflows between projects.
 - Moved applet meta-information into the `details` field. This makes dx:applets more readable.
+- Wrote unit-tests for the `WdlVarLinks` module.
 
 ## 1.04
 - Precalculate instance types. There are tasks that calculate the instance type they need in the runtime section. If the task call is made from a workflow fragment, we can calculate the instance type then and there. This allows launching directly in the correct instance type, instead of launching an additional job.
