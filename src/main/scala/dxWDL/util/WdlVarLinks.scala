@@ -34,6 +34,7 @@ case class DxlExec(dxExec: DXExecution, varName: String) extends DxLink
 case class WdlVarLinks(womType: WomType, dxlink: DxLink)
 
 case class WdlVarLinksConverter(typeAliases: Map[String, WomType]) {
+    val womTypeSerializer = WomTypeSerialization(typeAliases)
 
     private def getRawJsValue(wvl: WdlVarLinks) : JsValue = {
         wvl.dxlink match {
@@ -152,15 +153,6 @@ case class WdlVarLinksConverter(typeAliases: Map[String, WomType]) {
                 val rJs = jsFromWomValue(rType, r)
                 JsObject("left" -> lJs, "right" -> rJs)
 
-            case (WomMapType(WomStringType, valueType), WomMap(_, m)) =>
-                // keys are strings
-                JsObject(m.map{
-                             case (WomString(k), v) =>
-                                 k -> jsFromWomValue(valueType, v)
-                             case (k,_) =>
-                                 throw new Exception(s"key ${k.toWomString} should be a WomString")
-                         }.toMap)
-
             // Maps. These are projections from a key to value, where
             // the key and value types are statically known. We
             // represent them in JSON as an array of keys, followed by
@@ -209,7 +201,7 @@ case class WdlVarLinksConverter(typeAliases: Map[String, WomType]) {
                     key -> jsFromWomValue(elemType, womValue)
                 }.toMap
                 // retain the struct name
-                JsObject("type" -> JsString(WomTypeSerialization(typeAliases).toString(womType)),
+                JsObject("type" -> JsString(womTypeSerializer.toString(womType)),
                          "value" -> JsObject(mJs))
 
             case (_,_) =>
@@ -236,6 +228,10 @@ case class WdlVarLinksConverter(typeAliases: Map[String, WomType]) {
         WdlVarLinks(womType, DxlValue(jsValue))
     }
 
+    def importFromCromwellJSON(womType: WomType,
+                               jsv: JsValue) : WdlVarLinks = {
+        WdlVarLinks(womType, DxlValue(jsv))
+    }
 
     // Dx allows hashes as an input/output type. If the JSON value is
     // not a hash (js-object), we need to add an outer layer to it.
@@ -248,49 +244,130 @@ case class WdlVarLinksConverter(typeAliases: Map[String, WomType]) {
                 // Embed the value into a JSON object
                 Map("value" -> jsVal)
         }
-        val typeStr = WomTypeSerialization(typeAliases).toString(womType)
+        val typeStr = womTypeSerializer.toString(womType)
         val mWithType = m + ("womType" -> JsString(typeStr))
         JsObject(mWithType)
     }
 
-    private def unmarshalHash(jsv:JsValue) : (WomType, JsValue) = {
-        jsv match {
-            case JsObject(fields) =>
-                // An object, the type is embedded as a 'womType' field
-                fields.get("womType") match {
-                    case Some(JsString(s)) =>
-                        val t = WomTypeSerialization(typeAliases).fromString(s)
-                        if (fields contains "value") {
-                            // the value is encapsulated in the "value" field
-                            (t, fields("value"))
-                        } else {
-                            // strip the womType field
-                            (t, JsObject(fields - "womType"))
-                        }
-                    case _ => throw new Exception(
-                        s"missing or malformed womType field in ${jsv}")
+    // Convert a job input to a WomValue. Do not download any files, convert them
+    // to a string representation. For example: dx://proj-xxxx:file-yyyy::/A/B/C.txt
+    //
+    private def jobInputToWomValue(name: String,
+                                   womType: WomType,
+                                   jsValue: JsValue) : WomValue = {
+        (womType, jsValue)  match {
+            // base case: primitive types
+            case (WomBooleanType, JsBoolean(b)) => WomBoolean(b.booleanValue)
+            case (WomIntegerType, JsNumber(bnm)) => WomInteger(bnm.intValue)
+            case (WomFloatType, JsNumber(bnm)) => WomFloat(bnm.doubleValue)
+            case (WomStringType, JsString(s)) => WomString(s)
+            case (WomSingleFileType, JsString(s)) => WomSingleFile(s)
+            case (WomSingleFileType, JsObject(_)) =>
+                // Convert the path in DNAx to a string. We can later
+                // decide if we want to download it or not
+                val dxFile = Utils.dxFileFromJsValue(jsValue)
+                val FurlDx(s) = FurlDx.dxFileToFurl(dxFile)
+                WomSingleFile(s)
+
+            // Maps. These are serialized as an object with a keys array and
+            // a values array.
+            case (WomMapType(keyType, valueType), _) =>
+                val fields = jsValue.asJsObject.fields
+                // [mJs] is a map from json key to json value
+                val mJs: Map[JsValue, JsValue] =
+                    (fields("keys"), fields("values")) match {
+                        case (JsArray(x), JsArray(y)) =>
+                            assert(x.length == y.length)
+                            (x zip y).toMap
+                        case _ => throw new Exception("Malformed JSON")
+                    }
+                val m: Map[WomValue, WomValue] = mJs.map {
+                    case (k:JsValue, v:JsValue) =>
+                        val kWom = jobInputToWomValue(name, keyType, k)
+                        val vWom = jobInputToWomValue(name, valueType, v)
+                        kWom -> vWom
+                }.toMap
+                WomMap(WomMapType(keyType, valueType), m)
+
+            case (WomPairType(lType, rType), JsObject(fields))
+                    if (List("left", "right").forall(fields contains _)) =>
+                val left = jobInputToWomValue(name, lType, fields("left"))
+                val right = jobInputToWomValue(name, rType, fields("right"))
+                WomPair(left, right)
+
+            // empty array
+            case (WomArrayType(t), JsNull) =>
+                WomArray(WomArrayType(t), List.empty[WomValue])
+
+            // array
+            case (WomArrayType(t), JsArray(vec)) =>
+                val wVec: Seq[WomValue] = vec.map{
+                    elem:JsValue => jobInputToWomValue(name, t, elem)
                 }
+                WomArray(WomArrayType(t), wVec)
+
+            case (WomOptionalType(t), JsNull) =>
+                WomOptionalValue(t, None)
+            case (WomOptionalType(t), jsv) =>
+                val value = jobInputToWomValue(name, t, jsv)
+                WomOptionalValue(t, Some(value))
+
+            // structs
+            case (WomCompositeType(typeMap, Some(structName)), JsObject(fields)) =>
+                val m : Map[String, WomValue] = fields.map{
+                    case (key, jsValue) =>
+                        val t = typeMap(key)
+                        key -> jobInputToWomValue(key, t, jsValue)
+                }.toMap
+                WomObject(m, WomCompositeType(typeMap, Some(structName)))
+
+            case _ =>
+                throw new AppInternalException(
+                    s"""|Unsupported combination
+                        |  name:    ${name}
+                        |  womType: ${womType}
+                        |  JSON:    ${jsValue.prettyPrint}
+                        |""".stripMargin)
+        }
+    }
+
+    def unpackJobInput(name: String, womType: WomType, jsv: JsValue) : (WomValue,
+                                                                        Vector[DXFile]) = {
+        if (Utils.isNativeDxType(womType)) {
+            // no unpacking is needed, this is a primitive, or an array of primitives.
+            // it is directly mapped to dnanexus types.
+            val womValue = jobInputToWomValue(name, womType, jsv)
+            val dxFiles = findDxFiles(jsv)
+            return (womValue, dxFiles)
+        }
+
+        // unpack the hash with which complex JSON values are
+        // wrapped in dnanexus.
+        val fields = jsv match {
+            case JsObject(fields) => fields
             case other =>
                 throw new Exception(s"JSON ${jsv} does not match the marshalled WDL value")
         }
-    }
 
-    // Import a value we got as an output from a dx:executable. In this case,
-    // we don't have the dx:specification, but we do have the WomType.
-    def importFromDxExec(womType:WomType,
-                         jsValue: JsValue) : WdlVarLinks = {
-        if (Utils.isNativeDxType(womType)) {
-            WdlVarLinks(womType, DxlValue(jsValue))
-        } else {
-            val (womType2, v) = unmarshalHash(jsValue)
-            assert(womType2 == womType)
-            WdlVarLinks(womType, DxlValue(v))
+        // An object, the type is embedded as a 'womType' field
+        fields.get("womType") match {
+            case Some(JsString(s)) =>
+                val t = womTypeSerializer.fromString(s)
+                assert(t == womType)
+            case _ => throw new Exception(s"missing or malformed womType field in ${jsv}")
         }
-    }
 
-    def importFromCromwellJSON(womType: WomType,
-                               jsv: JsValue) : WdlVarLinks = {
-        WdlVarLinks(womType, DxlValue(jsv))
+        val jsv1 =
+            if (fields contains "value") {
+                    // the value is encapsulated in the "value" field
+                fields("value")
+            } else {
+                // strip the womType field
+                JsObject(fields - "womType")
+            }
+        val womValue = jobInputToWomValue(name, womType, jsv1)
+        val dxFiles = findDxFiles(jsv1)
+        (womValue, dxFiles)
     }
 
     // create input/output fields that bind the variable name [bindName] to
