@@ -30,13 +30,90 @@ import wom.values._
 
 import dxWDL.util._
 
-// scan an input file, and return all the dx:files in it
+// scan a Cromwell style JSON input file, and return all the dx:files in it
 case class InputFileScan(bundle: IR.Bundle,
                          verbose: Verbose) {
 
-    def findDxFiles(womType: WomType,
-                    jsValue: JsValue) : Vector[DXFile] = {
-        Vector.empty
+    private def findDxFiles(womType: WomType,
+                            jsValue: JsValue) : Vector[DXFile] = {
+        (womType, jsValue)  match {
+            // base case: primitive types
+            case (WomBooleanType, _) => Vector.empty
+            case (WomIntegerType, _) => Vector.empty
+            case (WomFloatType, _) => Vector.empty
+            case (WomStringType, _) => Vector.empty
+            case (WomSingleFileType, JsString(s)) =>
+                Furl.parse(s) match {
+                    case FurlDx(_, _, dxFile) => Vector(dxFile)
+                    case _ => Vector.empty
+                }
+            case (WomSingleFileType, JsObject(_)) =>
+                Vector(Utils.dxFileFromJsValue(jsValue))
+
+            // Maps. These are serialized as an object with a keys array and
+            // a values array.
+            case (WomMapType(keyType, valueType), _) =>
+                val (keysJs, valuesJs) = jsValue.asJsObject.getFields("keys", "values") match {
+                    case Seq(JsArray(keys), JsArray(values)) => (keys, values)
+                    case _ => throw new Exception("malformed JSON")
+                }
+                val kFiles = keysJs.flatMap(findDxFiles(keyType, _))
+                val vFiles = valuesJs.flatMap(findDxFiles(valueType, _))
+                kFiles.toVector ++ vFiles.toVector
+
+            case (WomPairType(lType, rType), JsObject(fields))
+                    if (List("left", "right").forall(fields contains _)) =>
+                val lFiles = findDxFiles(lType, fields("left"))
+                val rFiles = findDxFiles(rType, fields("right"))
+                lFiles ++ rFiles
+
+            case (WomArrayType(t), JsArray(vec)) =>
+                vec.flatMap( findDxFiles(t, _ ))
+
+            case (WomOptionalType(t), JsNull) =>
+                Vector.empty
+
+            case (WomOptionalType(t), jsv) =>
+                findDxFiles(t, jsv)
+
+            // structs
+            case (WomCompositeType(typeMap, Some(structName)), JsObject(fields)) =>
+                fields.flatMap {
+                    case (key, value) =>
+                        val t : WomType = typeMap(key)
+                        findDxFiles(t, value)
+                }.toVector
+
+            case _ =>
+                throw new AppInternalException(
+                    s"Unsupported combination ${womType} ${jsValue.prettyPrint}")
+        }
+    }
+
+    private def findFilesForApplet(inputs: Map[String, JsValue],
+                                   applet: IR.Applet) : Vector[DXFile] = {
+        applet.inputs.flatMap{
+            case cVar =>
+                val fqn = s"${applet.name}.${cVar.name}"
+                inputs.get(fqn) match {
+                    case None => None
+                    case Some(jsValue) =>
+                        Some(findDxFiles(cVar.womType, jsValue))
+                }
+        }.flatten.toVector
+    }
+
+    private def findFilesForWorkflow(inputs: Map[String, JsValue],
+                                     wf: IR.Workflow) : Vector[DXFile] = {
+        wf.inputs.flatMap {
+            case (cVar, _) =>
+                val fqn = s"${wf.name}.${cVar.name}"
+                inputs.get(fqn) match {
+                    case None => None
+                    case Some(jsValue) =>
+                        Some(findDxFiles(cVar.womType, jsValue))
+                }
+        }.flatten.toVector
     }
 
     def apply(inputPath: Path) : Vector[DXFile] = {
@@ -44,32 +121,21 @@ case class InputFileScan(bundle: IR.Bundle,
         val content = Utils.readFileContent(inputPath).parseJson
         val inputs: Map[String, JsValue] = content.asJsObject.fields
 
-        // Look for all workflow variables. Match each
-        // field with its WOM type
-        bundle.allCallables.map {
-            case (name, applet :IR.Applet) =>
-                applet.inputs.flatMap{
-                    case cVar =>
-                        val fqn = s"${applet.name}.${cVar.name}"
-                        inputs.get(fqn) match {
-                            case None => None
-                            case Some(jsValue) =>
-                                Some(findDxFiles(cVar.womType, jsValue))
-                        }
-                }.flatten.toVector
+        val allCallables: Vector[IR.Callable] =
+            bundle.primaryCallable.toVector ++ bundle.allCallables.map(_._2)
 
-            case (name, wf :IR.Workflow) =>
-                wf.inputs.flatMap {
-                    case (cVar, _) =>
-                        val fqn = s"${wf.name}.${cVar.name}"
-                        inputs.get(fqn) match {
-                            case None => None
-                            case Some(jsValue) =>
-                                Some(findDxFiles(cVar.womType, jsValue))
-                        }
-                }.flatten.toVector
-        }
-    }.flatten.toVector
+        // Match each field with its WOM type, this allows
+        // accurately finding dx-files.
+        val files = allCallables.map {
+            case applet :IR.Applet =>
+                findFilesForApplet(inputs, applet)
+            case wf :IR.Workflow =>
+                findFilesForWorkflow(inputs, wf)
+        }.flatten.toVector
+
+        // make files unique
+        files.toSet.toVector
+    }
 }
 
 case class InputFile(fileInfoDir: Map[DXFile, DxBulkDescribe.MiniDescribe],
