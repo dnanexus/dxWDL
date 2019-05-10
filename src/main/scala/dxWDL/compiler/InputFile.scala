@@ -50,7 +50,7 @@ case class InputFile(verbose: Verbose,
                 // Convert the path in DNAx to a string. We can later
                 // decide if we want to download it or not
                 val dxFile = Utils.dxFileFromJsValue(jsValue)
-                val FurlDx(s) = FurlDx.dxFileToFurl(dxFile)
+                val FurlDx(s, _, _) = Furl.dxFileToFurl(dxFile)
                 WomSingleFile(s)
 
             // Maps. These are serialized as an object with a keys array and

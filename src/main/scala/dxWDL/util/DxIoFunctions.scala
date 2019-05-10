@@ -51,8 +51,7 @@ case class DxPathFunctions(config: DxPathConfig,
                 p.getFileName.toString
             case fdx : FurlDx =>
                 // perform an API call to get the file name
-                val dxFile = FurlDx.getDxFile(fdx)
-                dxFile.describe().getName()
+                fdx.dxFile.describe().getName()
         }
 
     }
@@ -96,8 +95,7 @@ case class DxIoFunctions(config: DxPathConfig,
                         throw new Exception(s"File ${p} does not exist")
                 }
             case fdx : FurlDx =>
-                val dxFile = FurlDx.getDxFile(fdx)
-                Utils.downloadString(dxFile)
+                Utils.downloadString(fdx.dxFile)
         }
         Future(content)
     }
@@ -192,9 +190,8 @@ case class DxIoFunctions(config: DxPathConfig,
                 val p = Paths.get(localPath)
                 p.toFile.length
             case fdx : FurlDx =>
-                val dxFile = FurlDx.getDxFile(fdx)
                 // perform an API call to get the size
-                dxFile.describe().getSize()
+                fdx.dxFile.describe().getSize()
         }
         Future(size)
     }

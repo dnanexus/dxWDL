@@ -117,8 +117,7 @@ case class WdlVarLinksConverter(typeAliases: Map[String, WomType]) {
         }
         def handleFile(path:String) : JsValue =  {
             Furl.parse(path) match {
-                case FurlDx(path) =>
-                    val dxFile = DxPath.lookupDxURLFile(path)
+                case FurlDx(path, _, dxFile) =>
                     Utils.dxFileToJsValue(dxFile)
                 case FurlLocal(path) =>
                     // A local file.
@@ -266,7 +265,7 @@ case class WdlVarLinksConverter(typeAliases: Map[String, WomType]) {
                 // Convert the path in DNAx to a string. We can later
                 // decide if we want to download it or not
                 val dxFile = Utils.dxFileFromJsValue(jsValue)
-                val FurlDx(s) = FurlDx.dxFileToFurl(dxFile)
+                val FurlDx(s, _, _) = Furl.dxFileToFurl(dxFile)
                 WomSingleFile(s)
 
             // Maps. These are serialized as an object with a keys array and

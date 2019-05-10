@@ -1,7 +1,7 @@
 package dxWDL.exec
 
 import cats.data.Validated.{Invalid, Valid}
-import com.dnanexus.{DXFile}
+import com.dnanexus.DXFile
 import common.validation.ErrorOr.ErrorOr
 import java.nio.file.{Files, Path, Paths}
 import spray.json._
@@ -229,11 +229,10 @@ case class JobInputOutput(dxIoFunctions : DxIoFunctions,
     // Create a local path for a DNAx file. The normal location, is to download
     // to the $HOME/inputs directory. However, since downloaded files may have the same
     // name, we may need to disambiguate them.
-    private def createUniqueDownloadPath(dxUrl: FurlDx,
+    private def createUniqueDownloadPath(basename: String,
+                                         dxFile: DXFile,
                                          existingFiles: Set[Path],
                                          inputsDir: Path) : Path = {
-        val (basename, dxFile) = FurlDx.components(dxUrl)
-
         val shortPath = inputsDir.resolve(basename)
         if (!(existingFiles contains shortPath))
             return shortPath
@@ -311,7 +310,7 @@ case class JobInputOutput(dxIoFunctions : DxIoFunctions,
     private def replaceFURLsWithLocalPaths(womValue: WomValue,
                                            localizationPlan: Map[Furl, Path]) : WomValue = {
         val translation : Map[String, String] = localizationPlan.map{
-            case (FurlDx(value), path) =>  value -> path.toString
+            case (FurlDx(value, _, _), path) =>  value -> path.toString
             case (FurlLocal(p1), p2) => p1 -> p2.toString
         }.toMap
         translateFiles(womValue, translation)
@@ -367,6 +366,8 @@ case class JobInputOutput(dxIoFunctions : DxIoFunctions,
 
         // remove duplicates; we want to download each file just once
         val filesToDownload: Set[Furl] = fileURLs.toSet
+        val platformFiles: Set[DXFile] = filesToDownload.collect{ case x : FurlDx => x.dxFile }
+        val fileInfoDir = DxBulkDescribe.apply(platformFiles.toSeq)
 
         // Choose a local path for each cloud file
         val furl2path: Map[Furl, Path] =
@@ -383,7 +384,8 @@ case class JobInputOutput(dxIoFunctions : DxIoFunctions,
                     case dxUrl: FurlDx =>
                         // The file needs to be localized
                         val existingFiles = accu.values.toSet
-                        val path = createUniqueDownloadPath(dxUrl, existingFiles, inputsDir)
+                        val desc = fileInfoDir(dxUrl.dxFile)
+                        val path = createUniqueDownloadPath(desc.name, dxUrl.dxFile, existingFiles, inputsDir)
                         accu + (dxUrl -> path)
                 }
             }
@@ -394,15 +396,14 @@ case class JobInputOutput(dxIoFunctions : DxIoFunctions,
         var bashSnippets = Vector.empty[String]
         furl2path.foreach{
             case (dxUrl : FurlDx, localPath) =>
+                val dxFile = dxUrl.dxFile
                 if (streamingFiles contains dxUrl) {
-                    val dxFile = FurlDx.getDxFile(dxUrl)
                     val snippet = s"""|mkfifo ${localPath}
                                       |dx cat ${dxFile.getId} > ${localPath} &
                                       |echo $$!
                                       |""".stripMargin
                     bashSnippets :+= snippet
                 } else {
-                    val dxFile = FurlDx.getDxFile(dxUrl)
                     downloadFile(localPath, dxFile)
                 }
             case (FurlLocal(path), _) =>
@@ -455,7 +456,7 @@ case class JobInputOutput(dxIoFunctions : DxIoFunctions,
         // upload the files; this could be in parallel in the future.
         val uploaded_path2furl : Map[Path, Furl] = pathsToUpload.map{ path =>
             val dxFile = uploadFile(path)
-            path -> FurlDx.dxFileToFurl(dxFile)
+            path -> Furl.dxFileToFurl(dxFile, Map.empty)   // no cache
         }.toMap
 
         // invert the furl2path map

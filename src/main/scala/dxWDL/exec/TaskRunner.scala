@@ -116,7 +116,7 @@ case class TaskRunner(task: CallableTaskDefinition,
         val dxUrlM : Map[String, JsValue] = dxUrl2path.map{
             case (FurlLocal(url), path) =>
                 url -> JsString(path.toString)
-            case (FurlDx(value), path) =>
+            case (FurlDx(value, _, _), path) =>
                 value -> JsString(path.toString)
         }
 
