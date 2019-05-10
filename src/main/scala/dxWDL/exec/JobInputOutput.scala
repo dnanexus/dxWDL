@@ -17,7 +17,7 @@ case class JobInputOutput(dxIoFunctions : DxIoFunctions,
                           runtimeDebugLevel: Int,
                           typeAliases: Map[String, WomType]) {
     private val verbose = (runtimeDebugLevel >= 1)
-    private val wdlVarLinksConverter = WdlVarLinksConverter(typeAliases)
+    private val wdlVarLinksConverter = WdlVarLinksConverter(dxIoFunctions.fileInfoDir, typeAliases)
 
     private val DOWNLOAD_RETRY_LIMIT = 3
     private val UPLOAD_RETRY_LIMIT = 3

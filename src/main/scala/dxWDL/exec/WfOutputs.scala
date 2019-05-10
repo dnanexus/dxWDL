@@ -22,7 +22,7 @@ case class WfOutputs(wf: WorkflowDefinition,
                      runtimeDebugLevel: Int) {
     private val verbose = runtimeDebugLevel >= 1
     //private val maxVerboseLevel = (runtimeDebugLevel == 2)
-    private val wdlVarLinksConverter = WdlVarLinksConverter(typeAliases)
+    private val wdlVarLinksConverter = WdlVarLinksConverter(dxIoFunctions.fileInfoDir, typeAliases)
 
     private def evaluateWomExpression(expr: WomExpression,
                                       womType: WomType,

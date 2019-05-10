@@ -14,6 +14,7 @@ import wom.values._
 
 import dxWDL.base.WomTypeSerialization
 import dxWDL.util._
+import dxWDL.util.DxBulkDescribe.MiniDescribe
 import dxWDL.util.Utils.{CHECKSUM_PROP, jsonNodeOfJsValue, trace}
 import IR.{CVar, SArg}
 
@@ -23,6 +24,7 @@ case class Native(dxWDLrtId: Option[String],
                   dxObjDir: DxObjectDirectory,
                   instanceTypeDB: InstanceTypeDB,
                   dxPathConfig: DxPathConfig,
+                  fileInfoDir : Map[DXFile, MiniDescribe],
                   typeAliases: Map[String, WomType],
                   extras: Option[Extras],
                   runtimeDebugLevel: Option[Int],
@@ -36,7 +38,7 @@ case class Native(dxWDLrtId: Option[String],
 
     private val verbose2:Boolean = verbose.containsKey("Native")
     private val rtDebugLvl = runtimeDebugLevel.getOrElse(Utils.DEFAULT_RUNTIME_DEBUG_LEVEL)
-    private val wdlVarLinksConverter = WdlVarLinksConverter(typeAliases)
+    private val wdlVarLinksConverter = WdlVarLinksConverter(fileInfoDir, typeAliases)
 
      // Are we setting up a private docker registry?
     private val dockerRegistryInfo : Option[DockerRegistry]= extras match {

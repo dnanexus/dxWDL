@@ -13,10 +13,12 @@ import dxWDL.util._
 case class WfInputs(wf: WorkflowDefinition,
                     wfSourceCode: String,
                     typeAliases: Map[String, WomType],
+                    dxPathConfig: DxPathConfig,
+                    dxIoFunctions : DxIoFunctions,
                     runtimeDebugLevel: Int) {
     private val verbose = runtimeDebugLevel >= 1
     //private val maxVerboseLevel = (runtimeDebugLevel == 2)
-    private val wdlVarLinksConverter = WdlVarLinksConverter(typeAliases)
+    private val wdlVarLinksConverter = WdlVarLinksConverter(dxIoFunctions.fileInfoDir, typeAliases)
 
     def apply(inputs: Map[String, WomValue]) : Map[String, JsValue] = {
         Utils.appletLog(verbose, s"dxWDL version: ${Utils.getVersion()}")

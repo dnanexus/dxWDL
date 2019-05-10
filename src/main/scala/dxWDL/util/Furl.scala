@@ -77,13 +77,14 @@ object Furl {
     // string is well defined, and requires an explicit conversion function.
     //
     def dxFileToFurl(dxFile: DXFile,
-                     infoCache: Map[DXFile, MiniDescribe]) : FurlDx = {
-        // Try to do a cache lookup, perform an API call only
-        // if the cache doesn't have the file
-        val (folder, name) = infoCache.get(dxFile) match {
+                     fileInfoDir: Map[DXFile, MiniDescribe]) : FurlDx = {
+        // Instead of doing a straight lookup, we could perform an API call
+        // if the cache doesn't have the file.
+        val (folder, name) = fileInfoDir.get(dxFile) match {
             case None =>
-                val desc = dxFile.describe
-                (desc.getFolder, desc.getName)
+                /*val desc = dxFile.describe
+                 (desc.getFolder, desc.getName)*/
+                throw new Exception(s"dxFile ${dxFile} not found in lookup cache")
             case Some(miniDesc) =>
                 (miniDesc.folder, miniDesc.name)
         }

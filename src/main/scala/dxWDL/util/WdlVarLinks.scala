@@ -33,7 +33,8 @@ case class DxlExec(dxExec: DXExecution, varName: String) extends DxLink
 
 case class WdlVarLinks(womType: WomType, dxlink: DxLink)
 
-case class WdlVarLinksConverter(typeAliases: Map[String, WomType]) {
+case class WdlVarLinksConverter(fileInfoDir: Map[DXFile, DxBulkDescribe.MiniDescribe],
+                                typeAliases: Map[String, WomType]) {
     val womTypeSerializer = WomTypeSerialization(typeAliases)
 
     private def getRawJsValue(wvl: WdlVarLinks) : JsValue = {
@@ -265,7 +266,7 @@ case class WdlVarLinksConverter(typeAliases: Map[String, WomType]) {
                 // Convert the path in DNAx to a string. We can later
                 // decide if we want to download it or not
                 val dxFile = Utils.dxFileFromJsValue(jsValue)
-                val FurlDx(s, _, _) = Furl.dxFileToFurl(dxFile)
+                val FurlDx(s, _, _) = Furl.dxFileToFurl(dxFile, fileInfoDir)
                 WomSingleFile(s)
 
             // Maps. These are serialized as an object with a keys array and

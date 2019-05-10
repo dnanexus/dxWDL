@@ -21,7 +21,6 @@ This is the dx JSON input:
 package dxWDL.compiler
 
 import com.dnanexus.{DXDataObject, DXFile}
-import dxWDL.util._
 import IR.{CVar, SArg, COMMON, OUTPUT_SECTION, REORG}
 import scala.collection.mutable.HashMap
 import java.nio.file.Path
@@ -29,10 +28,55 @@ import spray.json._
 import wom.types._
 import wom.values._
 
-case class InputFile(verbose: Verbose,
-                     typeAliases: Map[String, WomType]) {
+import dxWDL.util._
+
+// scan an input file, and return all the dx:files in it
+case class InputFileScan(bundle: IR.Bundle,
+                         verbose: Verbose) {
+
+    def findDxFiles(womType: WomType,
+                    jsValue: JsValue) : Vector[DXFile] = {
+        Vector.empty
+    }
+
+    def apply(inputPath: Path) : Vector[DXFile] = {
+        // Read the JSON values from the file
+        val content = Utils.readFileContent(inputPath).parseJson
+        val inputs: Map[String, JsValue] = content.asJsObject.fields
+
+        // Look for all workflow variables. Match each
+        // field with its WOM type
+        bundle.allCallables.map {
+            case (name, applet :IR.Applet) =>
+                applet.inputs.flatMap{
+                    case cVar =>
+                        val fqn = s"${applet.name}.${cVar.name}"
+                        inputs.get(fqn) match {
+                            case None => None
+                            case Some(jsValue) =>
+                                Some(findDxFiles(cVar.womType, jsValue))
+                        }
+                }.flatten.toVector
+
+            case (name, wf :IR.Workflow) =>
+                wf.inputs.flatMap {
+                    case (cVar, _) =>
+                        val fqn = s"${wf.name}.${cVar.name}"
+                        inputs.get(fqn) match {
+                            case None => None
+                            case Some(jsValue) =>
+                                Some(findDxFiles(cVar.womType, jsValue))
+                        }
+                }.flatten.toVector
+        }
+    }.flatten.toVector
+}
+
+case class InputFile(fileInfoDir: Map[DXFile, DxBulkDescribe.MiniDescribe],
+                     typeAliases: Map[String, WomType],
+                     verbose: Verbose) {
     val verbose2:Boolean = verbose.containsKey("InputFile")
-    private val wdlVarLinksConverter = WdlVarLinksConverter(typeAliases)
+    private val wdlVarLinksConverter = WdlVarLinksConverter(fileInfoDir, typeAliases)
 
     // Convert a job input to a WomValue. Do not download any files, convert them
     // to a string representation. For example: dx://proj-xxxx:file-yyyy::/A/B/C.txt
@@ -50,7 +94,7 @@ case class InputFile(verbose: Verbose,
                 // Convert the path in DNAx to a string. We can later
                 // decide if we want to download it or not
                 val dxFile = Utils.dxFileFromJsValue(jsValue)
-                val FurlDx(s, _, _) = Furl.dxFileToFurl(dxFile)
+                val FurlDx(s, _, _) = Furl.dxFileToFurl(dxFile, fileInfoDir)
                 WomSingleFile(s)
 
             // Maps. These are serialized as an object with a keys array and

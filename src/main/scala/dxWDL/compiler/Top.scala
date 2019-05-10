@@ -3,7 +3,7 @@
 
 package dxWDL.compiler
 
-import com.dnanexus.{DXDataObject, DXProject, DXRecord, DXSearch}
+import com.dnanexus._
 import java.nio.file.{Path, Paths}
 import scala.collection.JavaConverters._
 
@@ -14,6 +14,7 @@ import wom.graph.expression._
 
 import dxWDL.util._
 import dxWDL.util.Utils.DX_WDL_ASSET
+import dxWDL.util.DxBulkDescribe.MiniDescribe
 
 case class Top(cOpt: CompilerOptions) {
     val verbose = cOpt.verbose
@@ -78,7 +79,8 @@ case class Top(cOpt: CompilerOptions) {
     private def compileNative(bundle: IR.Bundle,
                               folder: String,
                               dxProject: DXProject,
-                              runtimePathConfig: DxPathConfig) : CompilationResults = {
+                              runtimePathConfig: DxPathConfig,
+                              fileInfoDir: Map[DXFile, MiniDescribe]) : CompilationResults = {
         val dxWDLrtId: Option[String] = cOpt.compileMode match {
             case CompilerFlag.IR =>
                 throw new Exception("Invalid value IR for compilation mode")
@@ -105,7 +107,7 @@ case class Top(cOpt: CompilerOptions) {
         // Generate dx:applets and dx:workflow from the IR
         new Native(dxWDLrtId, folder, dxProject,
                    dxObjDir,
-                   instanceTypeDB, runtimePathConfig, bundle.typeAliases,
+                   instanceTypeDB, runtimePathConfig, fileInfoDir, bundle.typeAliases,
                    cOpt.extras,
                    cOpt.runtimeDebugLevel,
                    cOpt.leaveWorkflowsOpen,
@@ -209,8 +211,27 @@ case class Top(cOpt: CompilerOptions) {
                   allTypeAliases)
     }
 
-    // Compile IR only
-    def applyOnlyIR(source: Path) : IR.Bundle = {
+
+    // Scan the JSON inputs files for dx:files, and batch describe them. This
+    // reduces the number of API calls.
+    private def bulkFileDescribe(bundle: IR.Bundle) : Map[DXFile, MiniDescribe] = {
+        val refDefaults : Vector[DXFile] = cOpt.defaults match {
+            case None => Vector.empty
+            case Some(path) =>
+                InputFileScan(bundle, verbose).apply(path)
+        }
+
+        val refInputs : Vector[DXFile] = cOpt.inputs.map {
+            case path =>
+                InputFileScan(bundle, verbose).apply(path)
+        }.flatten.toVector
+
+        val allFilesReferenced = refDefaults ++ refInputs
+        DxBulkDescribe.apply(allFilesReferenced)
+    }
+
+
+    private def womToIR(source: Path) : IR.Bundle = {
         val (language, womBundle, allSources, subBundles) = ParseWomSourceFile.apply(source)
 
         // Check that each workflow/task appears just one
@@ -227,14 +248,25 @@ case class Top(cOpt: CompilerOptions) {
         // Representation (IR)
         val bundle: IR.Bundle = new GenerateIR(cOpt.verbose).apply(everythingBundle, allSources, language,
                                                                    cOpt.locked, cOpt.reorg)
+        bundle
+    }
+
+    // Compile IR only
+    private def handleInputFiles(bundle: IR.Bundle,
+                                 fileInfoDir: Map[DXFile, MiniDescribe]) : IR.Bundle = {
         val bundle2: IR.Bundle = cOpt.defaults match {
             case None => bundle
-            case Some(path) => InputFile(cOpt.verbose, everythingBundle.typeAliases).embedDefaults(bundle, path)
+            case Some(path) =>
+                InputFile(fileInfoDir,
+                          bundle.typeAliases,
+                          cOpt.verbose).embedDefaults(bundle, path)
         }
 
         // generate dx inputs from the Cromwell-style input specification.
         cOpt.inputs.foreach{ path =>
-            val dxInputs = InputFile(cOpt.verbose, everythingBundle.typeAliases).dxFromCromwell(bundle2, path)
+            val dxInputs = InputFile(fileInfoDir,
+                                     bundle.typeAliases,
+                                     cOpt.verbose).dxFromCromwell(bundle2, path)
             // write back out as xxxx.dx.json
             val filename = Utils.replaceFileSuffix(path, ".dx.json")
             val parent = path.getParent
@@ -247,13 +279,31 @@ case class Top(cOpt: CompilerOptions) {
         bundle2
     }
 
+    // compile and generate intermediate code only
+    def applyOnlyIR(source: Path) : IR.Bundle = {
+        // generate IR
+        val bundle : IR.Bundle = womToIR(source)
+
+        // lookup platform files in bulk
+        val fileInfoDir = bulkFileDescribe(bundle)
+
+        // handle changes resulting from setting defaults, and
+        // generate DNAx input files.
+        handleInputFiles(bundle, fileInfoDir)
+    }
+
     // Compile up to native dx applets and workflows
     def apply(source: Path,
               folder: String,
               dxProject: DXProject,
               runtimePathConfig: DxPathConfig) : Option[String] = {
+        val bundle : IR.Bundle = womToIR(source)
+
+        // lookup platform files in bulk
+        val fileInfoDir = bulkFileDescribe(bundle)
+
         // generate IR
-        val bundle: IR.Bundle = applyOnlyIR(source)
+        val bundle2: IR.Bundle = handleInputFiles(bundle, fileInfoDir)
 
         // Up to this point, compilation does not require
         // the dx:project. This allows unit testing without
@@ -261,7 +311,7 @@ case class Top(cOpt: CompilerOptions) {
         // pass the dx:project is required to establish
         // (1) the instance price list and database
         // (2) the output location of applets and workflows
-        val cResults = compileNative(bundle, folder, dxProject, runtimePathConfig)
+        val cResults = compileNative(bundle2, folder, dxProject, runtimePathConfig, fileInfoDir)
         val execIds = cResults.primaryCallable match {
             case None =>
                 cResults.execDict.map{ case (_, dxExec) => dxExec.getId }.mkString(",")

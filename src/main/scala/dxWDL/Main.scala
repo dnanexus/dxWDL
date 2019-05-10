@@ -8,6 +8,7 @@ import scala.collection.mutable.HashMap
 import spray.json._
 
 import dxWDL.util._
+import dxWDL.util.DxBulkDescribe.MiniDescribe
 
 object Main extends App {
     sealed trait Termination
@@ -603,7 +604,9 @@ object Main extends App {
                                                            rtDebugLvl)
                     fragRunner.apply(fragInputs.blockPath, fragInputs.env, RunnerWfFragmentMode.Collect)
                 case InternalOp.WfInputs =>
-                    val wfInputs = new exec.WfInputs(wf, womSourceCode, typeAliases, rtDebugLvl)
+                    val wfInputs = new exec.WfInputs(wf, womSourceCode, typeAliases,
+                                                     dxPathConfig, dxIoFunctions,
+                                                     rtDebugLvl)
                     wfInputs.apply(fragInputs.env)
                 case InternalOp.WfOutputs =>
                     val wfOutputs = new exec.WfOutputs(wf, womSourceCode, typeAliases,
@@ -611,7 +614,9 @@ object Main extends App {
                                                        rtDebugLvl)
                     wfOutputs.apply(fragInputs.env)
                 case InternalOp.WorkflowOutputReorg =>
-                    val wfReorg = new exec.WorkflowOutputReorg(wf, womSourceCode, typeAliases, rtDebugLvl)
+                    val wfReorg = new exec.WorkflowOutputReorg(wf, womSourceCode, typeAliases,
+                                                               dxPathConfig, dxIoFunctions,
+                                                               rtDebugLvl)
                     val refDxFiles = fragInputOutput.findRefDxFiles(inputsRaw, metaInfo)
                     wfReorg.apply(refDxFiles)
                 case _ =>
@@ -662,6 +667,19 @@ object Main extends App {
         (womSourceCode, instanceTypeDB, details)
     }
 
+    // Make a list of all the files cloned for access by this applet.
+    // Bulk describe all the them.
+    private def runtimeBulkFileDescribe(jobInputPath: Path) : Map[DXFile, MiniDescribe] = {
+        val inputs: JsValue = Utils.readFileContent(jobInputPath).parseJson
+        val allFilesReferenced = inputs.asJsObject.fields.collect {
+            case (key, JsArray(elems)) if key.endsWith(Utils.FLAT_FILES_SUFFIX) =>
+                elems.map( Utils.dxFileFromJsValue(_) )
+        }.flatten.toVector
+
+        // Describe all the files, in one go
+        DxBulkDescribe.apply(allFilesReferenced)
+    }
+
     def internalOp(args : Seq[String]) : Termination = {
         val operation = InternalOp.values find (x => normKey(x.toString) == normKey(args.head))
         operation match {
@@ -673,7 +691,8 @@ object Main extends App {
                 val (jobInputPath, jobOutputPath, jobErrorPath, jobInfoPath) =
                     Utils.jobFilesOfHomeDir(homeDir)
                 val dxPathConfig = buildRuntimePathConfig(rtDebugLvl >= 1)
-                val dxIoFunctions = DxIoFunctions(dxPathConfig, rtDebugLvl)
+                val fileInfoDir = runtimeBulkFileDescribe(jobInputPath)
+                val dxIoFunctions = DxIoFunctions(fileInfoDir, dxPathConfig, rtDebugLvl)
 
                 // Get the WOM source code (currently WDL, could be also CWL in the future)
                 // Parse the inputs, convert to WOM values.

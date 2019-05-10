@@ -138,7 +138,7 @@ class TaskRunnerTest extends FlatSpec with Matchers {
 
         // Parse the inputs, convert to WOM values. Delay downloading files
         // from the platform, we may not need to access them.
-        val dxIoFunctions = DxIoFunctions(dxPathConfig, runtimeDebugLevel)
+        val dxIoFunctions = DxIoFunctions(Map.empty, dxPathConfig, runtimeDebugLevel)
         val jobInputOutput = new JobInputOutput(dxIoFunctions, runtimeDebugLevel, womBundle.typeAliases)
         val taskRunner = TaskRunner(task, taskSourceCode, womBundle.typeAliases,
                                     instanceTypeDB,

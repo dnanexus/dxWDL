@@ -10,6 +10,7 @@ object DxBulkDescribe {
     // this is a subset of the what you can get from DXDataObject.Describe
     case class MiniDescribe(name : String,
                             folder: String,
+                            size : Long,
                             projectId: String,
                             fileId : String)
 
@@ -41,10 +42,11 @@ object DxBulkDescribe {
                 case None =>
                     throw new Exception(s"Could not describe object ${dxFile.getId}")
                 case Some(descJs) =>
-                    descJs.asJsObject.getFields("id", "project", "name", "folder") match {
-                        case Seq(JsString(id), JsString(projectId), JsString(name), JsString(folder)) =>
-                            assert(id == dxFile.getId)
-                            MiniDescribe(id, projectId, name, folder)
+                    descJs.asJsObject.getFields("name", "folder", "size", "id", "project") match {
+                        case Seq(JsString(fid), JsString(projectId),
+                                 JsNumber(size), JsString(name), JsString(folder)) =>
+                            assert(fid == dxFile.getId)
+                            MiniDescribe(name, folder, size.toLong, projectId, fid)
                         case _ =>
                             throw new Exception(s"bad describe object ${descJs}")
                     }

@@ -12,7 +12,7 @@ object WomValueAnalysis {
     // Ideally, we should not be using any of the IO functions, since
     // these checks may be part of the compilation process.
     private lazy val dxPathConfig = DxPathConfig(Paths.get("/tmp/"), false)
-    private lazy val dxIoFunctions = DxIoFunctions(dxPathConfig, 0)
+    private lazy val dxIoFunctions = DxIoFunctions(Map.empty, dxPathConfig, 0)
 
     // Examine task foo:
     //

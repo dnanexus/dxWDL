@@ -19,9 +19,11 @@ import dxWDL.util._
 case class WorkflowOutputReorg(wf: WorkflowDefinition,
                                wfSourceCode: String,
                                typeAliases: Map[String, WomType],
+                               dxPathConfig : DxPathConfig,
+                               dxIoFunctions : DxIoFunctions,
                                runtimeDebugLevel: Int) {
     private val verbose = runtimeDebugLevel >= 1
-    private val wdlVarLinksConverter = WdlVarLinksConverter(typeAliases)
+    private val wdlVarLinksConverter = WdlVarLinksConverter(dxIoFunctions.fileInfoDir, typeAliases)
 
     // Efficiently get the names of many files. We
     // don't want to do a `describe` each one of them, instead,
