@@ -214,17 +214,18 @@ case class Top(cOpt: CompilerOptions) {
 
     // Scan the JSON inputs files for dx:files, and batch describe them. This
     // reduces the number of API calls.
-    private def bulkFileDescribe(bundle: IR.Bundle) : (Map[String, DXFile],
-                                                       Map[DXFile, MiniDescribe]) = {
+    private def bulkFileDescribe(bundle: IR.Bundle,
+                                 dxProject: DXProject) : (Map[String, DXFile],
+                                                          Map[DXFile, MiniDescribe]) = {
         val defResults : InputFileScanResults = cOpt.defaults match {
             case None => InputFileScanResults(Map.empty, Vector.empty)
             case Some(path) =>
-                InputFileScan(bundle, verbose).apply(path)
+                InputFileScan(bundle, dxProject, verbose).apply(path)
         }
 
         val allResults : InputFileScanResults = cOpt.inputs.foldLeft(defResults) {
             case (accu : InputFileScanResults, inputFilePath) =>
-                val res = InputFileScan(bundle, verbose).apply(inputFilePath)
+                val res = InputFileScan(bundle, dxProject, verbose).apply(inputFilePath)
                 InputFileScanResults(accu.path2file ++ res.path2file,
                                      accu.dxFiles ++ res.dxFiles)
         }
@@ -286,12 +287,13 @@ case class Top(cOpt: CompilerOptions) {
     }
 
     // compile and generate intermediate code only
-    def applyOnlyIR(source: Path) : IR.Bundle = {
+    def applyOnlyIR(source: Path,
+                    dxProject: DXProject) : IR.Bundle = {
         // generate IR
         val bundle : IR.Bundle = womToIR(source)
 
         // lookup platform files in bulk
-        val (path2dxFile, fileInfoDir) = bulkFileDescribe(bundle)
+        val (path2dxFile, fileInfoDir) = bulkFileDescribe(bundle, dxProject)
 
         // handle changes resulting from setting defaults, and
         // generate DNAx input files.
@@ -306,7 +308,7 @@ case class Top(cOpt: CompilerOptions) {
         val bundle : IR.Bundle = womToIR(source)
 
         // lookup platform files in bulk
-        val (path2dxFile, fileInfoDir) = bulkFileDescribe(bundle)
+        val (path2dxFile, fileInfoDir) = bulkFileDescribe(bundle, dxProject)
 
         // generate IR
         val bundle2: IR.Bundle = handleInputFiles(bundle, path2dxFile, fileInfoDir)

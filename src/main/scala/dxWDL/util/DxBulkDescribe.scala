@@ -36,8 +36,8 @@ object DxBulkDescribe {
                     throw new Exception(s"Could not describe object ${dxFile.getId}")
                 case Some(descJs) =>
                     descJs.asJsObject.getFields("name", "folder", "size", "id", "project") match {
-                        case Seq(JsString(fid), JsString(projectId),
-                                 JsNumber(size), JsString(name), JsString(folder)) =>
+                        case Seq(JsString(name), JsString(folder),
+                                 JsNumber(size), JsString(fid), JsString(projectId)) =>
                             assert(fid == dxFile.getId)
                             MiniDescribe(name, folder, size.toLong, projectId, fid)
                         case _ =>

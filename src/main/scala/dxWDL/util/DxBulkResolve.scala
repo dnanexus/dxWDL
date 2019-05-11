@@ -51,32 +51,47 @@ object DxBulkResolve {
             case None =>
                 JsObject("name" -> JsString(name),
                          "folder" -> JsString(folder))
-            case Some(proj) =>
+            case Some(projName) =>
+                val dxProj = DxPath.lookupProject(projName)
                 JsObject("name" -> JsString(name),
                          "folder" -> JsString(folder),
-                         "project" -> JsString(proj))
+                         "project" -> JsString(dxProj.getId))
         }
     }
 
-    private def submitRequest(dxPaths : Vector[String]) : Map[String, DXFile] = {
+    private def submitRequest(dxPaths : Vector[String],
+                              dxProject: DXProject) : Map[String, DXFile] = {
         val objectReqs : Vector[JsValue] = dxPaths.map{ makeReqFromDxPath(_) }
+        val request = JsObject("objects" -> JsArray(objectReqs),
+                               "project" -> JsString(dxProject.getId))
 
-        val request = JsObject("objects" -> JsArray(objectReqs))
-        val response = DXAPI.systemDescribeDataObjects(Utils.jsonNodeOfJsValue(request),
-                                                       classOf[JsonNode])
+        val response = DXAPI.systemResolveDataObjects(Utils.jsonNodeOfJsValue(request),
+                                                      classOf[JsonNode])
         val repJs:JsValue = Utils.jsValueOfJsonNode(response)
         val resultsPerObj:Vector[JsValue] = repJs.asJsObject.fields.get("results") match {
             case Some(JsArray(x)) => x
             case other => throw new Exception(s"API call returned invalid data ${other}")
         }
         resultsPerObj.zipWithIndex.map{
-            case (descJs, i) =>
+            case (descJs : JsValue, i) =>
                 val path = dxPaths(i)
-                val dxFile = descJs.asJsObject.getFields("project", "id") match {
-                    case Seq(JsString(projectId), JsString(fileId)) =>
-                        DXFile.getInstance(fileId, DXProject.getInstance(projectId))
-                    case _ =>
-                        throw new Exception(s"bad describe object ${descJs}")
+                val o = descJs match {
+                    case JsArray(x) => x(0)
+                    case obj :JsObject => obj
+                    case other => throw new Exception(s"malformed json ${other}")
+                }
+                val fields = o.asJsObject.fields
+                val fileId = fields.get("id") match {
+                    case Some(JsString(x)) => x
+                    case _ => throw new Exception("no id returned")
+                }
+                val projId = fields.get("project") match {
+                    case Some(JsString(x)) => Some(x)
+                    case _ => None
+                }
+                val dxFile = projId match  {
+                    case None => DXFile.getInstance(fileId)
+                    case Some(x) => DXFile.getInstance(fileId, DXProject.getInstance(x))
                 }
                 path -> dxFile
         }.toMap
@@ -84,7 +99,8 @@ object DxBulkResolve {
 
     // Describe the names of all the files in one batch. This is much more efficient
     // than submitting file describes one-by-one.
-    def apply(dxPaths: Seq[String]) : Map[String, DXFile] = {
+    def apply(dxPaths: Seq[String],
+              dxProject: DXProject) : Map[String, DXFile] = {
         if (dxPaths.isEmpty) {
             // avoid an unnessary API call; this is important for unit tests
             // that do not have a network connection.
@@ -97,7 +113,7 @@ object DxBulkResolve {
         // iterate on the ranges
         slices.foldLeft(Map.empty[String, DXFile]) {
             case (accu, pathsRange) =>
-                accu ++ submitRequest(pathsRange.toVector)
+                accu ++ submitRequest(pathsRange.toVector, dxProject)
         }
     }
 }
