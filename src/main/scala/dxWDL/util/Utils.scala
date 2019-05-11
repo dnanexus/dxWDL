@@ -17,6 +17,7 @@ import spray.json._
 import wom.types._
 
 object Utils {
+    val DXAPI_NUM_OBJECTS_LIMIT = 1000 // maximal number of objects in a single API request
     val APPLET_LOG_MSG_LIMIT = 1000
     val CHECKSUM_PROP = "dxWDL_checksum"
     val DEFAULT_RUNTIME_DEBUG_LEVEL = 1

@@ -214,20 +214,23 @@ case class Top(cOpt: CompilerOptions) {
 
     // Scan the JSON inputs files for dx:files, and batch describe them. This
     // reduces the number of API calls.
-    private def bulkFileDescribe(bundle: IR.Bundle) : Map[DXFile, MiniDescribe] = {
-        val refDefaults : Vector[DXFile] = cOpt.defaults match {
-            case None => Vector.empty
+    private def bulkFileDescribe(bundle: IR.Bundle) : (Map[String, DXFile],
+                                                       Map[DXFile, MiniDescribe]) = {
+        val defResults : InputFileScanResults = cOpt.defaults match {
+            case None => InputFileScanResults(Map.empty, Vector.empty)
             case Some(path) =>
                 InputFileScan(bundle, verbose).apply(path)
         }
 
-        val refInputs : Vector[DXFile] = cOpt.inputs.map {
-            case path =>
-                InputFileScan(bundle, verbose).apply(path)
-        }.flatten.toVector
+        val allResults : InputFileScanResults = cOpt.inputs.foldLeft(defResults) {
+            case (accu : InputFileScanResults, inputFilePath) =>
+                val res = InputFileScan(bundle, verbose).apply(inputFilePath)
+                InputFileScanResults(accu.path2file ++ res.path2file,
+                                     accu.dxFiles ++ res.dxFiles)
+        }
 
-        val allFilesReferenced = refDefaults ++ refInputs
-        DxBulkDescribe.apply(allFilesReferenced)
+        (allResults.path2file,
+         DxBulkDescribe.apply(allResults.dxFiles))
     }
 
 
@@ -253,11 +256,13 @@ case class Top(cOpt: CompilerOptions) {
 
     // Compile IR only
     private def handleInputFiles(bundle: IR.Bundle,
+                                 path2file: Map[String, DXFile],
                                  fileInfoDir: Map[DXFile, MiniDescribe]) : IR.Bundle = {
         val bundle2: IR.Bundle = cOpt.defaults match {
             case None => bundle
             case Some(path) =>
                 InputFile(fileInfoDir,
+                          path2file,
                           bundle.typeAliases,
                           cOpt.verbose).embedDefaults(bundle, path)
         }
@@ -265,6 +270,7 @@ case class Top(cOpt: CompilerOptions) {
         // generate dx inputs from the Cromwell-style input specification.
         cOpt.inputs.foreach{ path =>
             val dxInputs = InputFile(fileInfoDir,
+                                     path2file,
                                      bundle.typeAliases,
                                      cOpt.verbose).dxFromCromwell(bundle2, path)
             // write back out as xxxx.dx.json
@@ -285,11 +291,11 @@ case class Top(cOpt: CompilerOptions) {
         val bundle : IR.Bundle = womToIR(source)
 
         // lookup platform files in bulk
-        val fileInfoDir = bulkFileDescribe(bundle)
+        val (path2dxFile, fileInfoDir) = bulkFileDescribe(bundle)
 
         // handle changes resulting from setting defaults, and
         // generate DNAx input files.
-        handleInputFiles(bundle, fileInfoDir)
+        handleInputFiles(bundle, path2dxFile, fileInfoDir)
     }
 
     // Compile up to native dx applets and workflows
@@ -300,10 +306,10 @@ case class Top(cOpt: CompilerOptions) {
         val bundle : IR.Bundle = womToIR(source)
 
         // lookup platform files in bulk
-        val fileInfoDir = bulkFileDescribe(bundle)
+        val (path2dxFile, fileInfoDir) = bulkFileDescribe(bundle)
 
         // generate IR
-        val bundle2: IR.Bundle = handleInputFiles(bundle, fileInfoDir)
+        val bundle2: IR.Bundle = handleInputFiles(bundle, path2dxFile, fileInfoDir)
 
         // Up to this point, compilation does not require
         // the dx:project. This allows unit testing without

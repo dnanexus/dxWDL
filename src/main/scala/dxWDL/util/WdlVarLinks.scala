@@ -14,6 +14,7 @@ import wom.types._
 import wom.values._
 
 import dxWDL.base._
+import dxWDL.util.DxBulkDescribe.MiniDescribe
 
 // A union of all the different ways of building a value
 // from JSON passed by the platform.
@@ -33,7 +34,7 @@ case class DxlExec(dxExec: DXExecution, varName: String) extends DxLink
 
 case class WdlVarLinks(womType: WomType, dxlink: DxLink)
 
-case class WdlVarLinksConverter(fileInfoDir: Map[DXFile, DxBulkDescribe.MiniDescribe],
+case class WdlVarLinksConverter(fileInfoDir: Map[DXFile, MiniDescribe],
                                 typeAliases: Map[String, WomType]) {
     val womTypeSerializer = WomTypeSerialization(typeAliases)
 

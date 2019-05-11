@@ -20,7 +20,7 @@ This is the dx JSON input:
   */
 package dxWDL.compiler
 
-import com.dnanexus.{DXDataObject, DXFile}
+import com.dnanexus.DXFile
 import IR.{CVar, SArg, COMMON, OUTPUT_SECTION, REORG}
 import scala.collection.mutable.HashMap
 import java.nio.file.Path
@@ -29,26 +29,34 @@ import wom.types._
 import wom.values._
 
 import dxWDL.util._
+import dxWDL.util.Utils.DX_URL_PREFIX
+import dxWDL.util.DxBulkDescribe.MiniDescribe
 
-// scan a Cromwell style JSON input file, and return all the dx:files in it
+// scan a Cromwell style JSON input file, and return all the dx:files in it.
+// An input file for workflow foo could look like this:
+// {
+//   "foo.f": "dx://dxWDL_playground:/test_data/fileB",
+//   "foo.f1": "dx://dxWDL_playground:/test_data/fileC",
+//   "foo.f2": "dx://dxWDL_playground:/test_data/1/fileC",
+//   "foo.fruit_list": "dx://dxWDL_playground:/test_data/fruit_list.txt"
+// }
+//
+
+case class InputFileScanResults(path2file: Map[String, DXFile],
+                                dxFiles: Vector[DXFile])
+
 case class InputFileScan(bundle: IR.Bundle,
                          verbose: Verbose) {
 
     private def findDxFiles(womType: WomType,
-                            jsValue: JsValue) : Vector[DXFile] = {
+                            jsValue: JsValue) : Vector[JsValue] = {
         (womType, jsValue)  match {
             // base case: primitive types
             case (WomBooleanType, _) => Vector.empty
             case (WomIntegerType, _) => Vector.empty
             case (WomFloatType, _) => Vector.empty
             case (WomStringType, _) => Vector.empty
-            case (WomSingleFileType, JsString(s)) =>
-                Furl.parse(s) match {
-                    case FurlDx(_, _, dxFile) => Vector(dxFile)
-                    case _ => Vector.empty
-                }
-            case (WomSingleFileType, JsObject(_)) =>
-                Vector(Utils.dxFileFromJsValue(jsValue))
+            case (WomSingleFileType, jsv) => Vector(jsv)
 
             // Maps. These are serialized as an object with a keys array and
             // a values array.
@@ -91,7 +99,7 @@ case class InputFileScan(bundle: IR.Bundle,
     }
 
     private def findFilesForApplet(inputs: Map[String, JsValue],
-                                   applet: IR.Applet) : Vector[DXFile] = {
+                                   applet: IR.Applet) : Vector[JsValue] = {
         applet.inputs.flatMap{
             case cVar =>
                 val fqn = s"${applet.name}.${cVar.name}"
@@ -104,7 +112,7 @@ case class InputFileScan(bundle: IR.Bundle,
     }
 
     private def findFilesForWorkflow(inputs: Map[String, JsValue],
-                                     wf: IR.Workflow) : Vector[DXFile] = {
+                                     wf: IR.Workflow) : Vector[JsValue] = {
         wf.inputs.flatMap {
             case (cVar, _) =>
                 val fqn = s"${wf.name}.${cVar.name}"
@@ -116,7 +124,7 @@ case class InputFileScan(bundle: IR.Bundle,
         }.flatten.toVector
     }
 
-    def apply(inputPath: Path) : Vector[DXFile] = {
+    def apply(inputPath: Path) : InputFileScanResults = {
         // Read the JSON values from the file
         val content = Utils.readFileContent(inputPath).parseJson
         val inputs: Map[String, JsValue] = content.asJsObject.fields
@@ -126,19 +134,31 @@ case class InputFileScan(bundle: IR.Bundle,
 
         // Match each field with its WOM type, this allows
         // accurately finding dx-files.
-        val files = allCallables.map {
+        val jsFileDesc : Vector[JsValue] = allCallables.map {
             case applet :IR.Applet =>
                 findFilesForApplet(inputs, applet)
             case wf :IR.Workflow =>
                 findFilesForWorkflow(inputs, wf)
         }.flatten.toVector
 
-        // make files unique
-        files.toSet.toVector
+        // files that have already been resolved
+        val dxFiles : Vector[DXFile] = jsFileDesc.collect{
+            case jsv : JsObject => Utils.dxFileFromJsValue(jsv)
+        }.toVector
+
+        // Paths that look like this: "dx://dxWDL_playground:/test_data/fileB".
+        // These need to be resolved.
+        val dxPaths : Vector[String] = jsFileDesc.collect{
+            case JsString(x) => x
+        }.toVector
+        val resolvedPaths = DxBulkResolve.apply(dxPaths)
+
+        InputFileScanResults(resolvedPaths, (dxFiles ++ resolvedPaths.values))
     }
 }
 
-case class InputFile(fileInfoDir: Map[DXFile, DxBulkDescribe.MiniDescribe],
+case class InputFile(fileInfoDir: Map[DXFile, MiniDescribe],
+                     path2file: Map[String, DXFile],
                      typeAliases: Map[String, WomType],
                      verbose: Verbose) {
     val verbose2:Boolean = verbose.containsKey("InputFile")
@@ -289,11 +309,11 @@ case class InputFile(fileInfoDir: Map[DXFile, DxBulkDescribe.MiniDescribe],
     // dx-links.
     private def replaceURLsWithLinks(jsv: JsValue) : JsValue = {
         jsv match {
-            case JsString(s) if s.startsWith(Utils.DX_URL_PREFIX) =>
+            case JsString(s) if s.startsWith(DX_URL_PREFIX) =>
                 // Identify platform file paths by their prefix,
                 // do a lookup, and create a dxlink
-                val dxFile: DXDataObject = DxPath.lookupDxURLFile(s)
-                Utils.dxFileToJsValue(dxFile.asInstanceOf[DXFile])
+                val dxFile = path2file(s)
+                Utils.dxFileToJsValue(dxFile)
 
             case JsBoolean(_) | JsNull | JsNumber(_) | JsString(_) => jsv
             case JsObject(fields) =>

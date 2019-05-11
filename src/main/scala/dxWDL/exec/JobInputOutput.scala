@@ -366,8 +366,6 @@ case class JobInputOutput(dxIoFunctions : DxIoFunctions,
 
         // remove duplicates; we want to download each file just once
         val filesToDownload: Set[Furl] = fileURLs.toSet
-        val platformFiles: Set[DXFile] = filesToDownload.collect{ case x : FurlDx => x.dxFile }
-        val fileInfoDir = DxBulkDescribe.apply(platformFiles.toSeq)
 
         // Choose a local path for each cloud file
         val furl2path: Map[Furl, Path] =
@@ -384,7 +382,7 @@ case class JobInputOutput(dxIoFunctions : DxIoFunctions,
                     case dxUrl: FurlDx =>
                         // The file needs to be localized
                         val existingFiles = accu.values.toSet
-                        val desc = fileInfoDir(dxUrl.dxFile)
+                        val desc = dxIoFunctions.fileInfoDir(dxUrl.dxFile)
                         val path = createUniqueDownloadPath(desc.name, dxUrl.dxFile, existingFiles, inputsDir)
                         accu + (dxUrl -> path)
                 }

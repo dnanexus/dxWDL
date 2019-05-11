@@ -6,6 +6,9 @@ import com.dnanexus.{DXAPI, DXFile}
 import com.fasterxml.jackson.databind.JsonNode
 import spray.json._
 
+// maximal number of objects in a single API request
+import dxWDL.util.Utils.DXAPI_NUM_OBJECTS_LIMIT
+
 object DxBulkDescribe {
     // this is a subset of the what you can get from DXDataObject.Describe
     case class MiniDescribe(name : String,
@@ -14,19 +17,9 @@ object DxBulkDescribe {
                             projectId: String,
                             fileId : String)
 
-    // Describe the names of all the files in one batch. This is much more efficient
-    // than submitting file describes one-by-one.
-    def apply(files: Seq[DXFile]) : Map[DXFile, MiniDescribe] = {
-        if (files.isEmpty) {
-            // avoid an unnessary API call; this is important for unit tests
-            // that do not have a network connection.
-            return Map.empty
-        }
+    private def submitRequest(dxFiles : Vector[DXFile]) : Map[DXFile, MiniDescribe] = {
+        val oids = dxFiles.map(_.getId).toVector
 
-        val oids = files.map(_.getId).toVector
-
-        // Temporary, until we implement paging.
-        assert(oids.size < 1000)
         val request = JsObject("objects" ->
                                    JsArray(oids.map{x => JsString(x) }))
         val response = DXAPI.systemDescribeDataObjects(Utils.jsonNodeOfJsValue(request),
@@ -37,7 +30,7 @@ object DxBulkDescribe {
             case other => throw new Exception(s"API call returned invalid data ${other}")
         }
         resultsPerObj.zipWithIndex.map{ case (jsv, i) =>
-            val dxFile = files(i)
+            val dxFile = dxFiles(i)
             val fileName = jsv.asJsObject.fields.get("describe") match {
                 case None =>
                     throw new Exception(s"Could not describe object ${dxFile.getId}")
@@ -53,5 +46,24 @@ object DxBulkDescribe {
             }
             dxFile -> fileName
         }.toMap
+    }
+
+    // Describe the names of all the files in one batch. This is much more efficient
+    // than submitting file describes one-by-one.
+    def apply(files: Seq[DXFile]) : Map[DXFile, MiniDescribe] = {
+        if (files.isEmpty) {
+            // avoid an unnessary API call; this is important for unit tests
+            // that do not have a network connection.
+            return Map.empty
+        }
+
+        // Limit on number of objects in one API request
+        val slices = files.grouped(DXAPI_NUM_OBJECTS_LIMIT).toList
+
+        // iterate on the ranges
+        slices.foldLeft(Map.empty[DXFile, MiniDescribe]) {
+            case (accu, fileRange) =>
+                accu ++ submitRequest(fileRange.toVector)
+        }
     }
 }
