@@ -78,13 +78,11 @@ object Furl {
     //
     def dxFileToFurl(dxFile: DXFile,
                      fileInfoDir: Map[DXFile, MiniDescribe]) : FurlDx = {
-        // Instead of doing a straight lookup, we could perform an API call
-        // if the cache doesn't have the file.
+        // Try the cache first; if the file isn't there, submit an API call.
         val (folder, name) = fileInfoDir.get(dxFile) match {
             case None =>
-                /*val desc = dxFile.describe
-                 (desc.getFolder, desc.getName)*/
-                throw new Exception(s"dxFile ${dxFile} not found in lookup cache")
+                val desc = dxFile.describe
+                 (desc.getFolder, desc.getName)
             case Some(miniDesc) =>
                 (miniDesc.folder, miniDesc.name)
         }

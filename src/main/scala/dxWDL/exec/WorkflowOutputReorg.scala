@@ -23,7 +23,6 @@ case class WorkflowOutputReorg(wf: WorkflowDefinition,
                                dxIoFunctions : DxIoFunctions,
                                runtimeDebugLevel: Int) {
     private val verbose = runtimeDebugLevel >= 1
-    private val wdlVarLinksConverter = WdlVarLinksConverter(dxIoFunctions.fileInfoDir, typeAliases)
 
     // Efficiently get the names of many files. We
     // don't want to do a `describe` each one of them, instead,
@@ -68,8 +67,8 @@ case class WorkflowOutputReorg(wf: WorkflowDefinition,
             case Some(x) => x
         }
 
-        val fileOutputs : Set[DXFile] = wdlVarLinksConverter.findDxFiles(outputs).toSet
-        val fileInputs: Set[DXFile] = wdlVarLinksConverter.findDxFiles(inputs).toSet
+        val fileOutputs : Set[DXFile] = Utils.findDxFiles(outputs).toSet
+        val fileInputs: Set[DXFile] = Utils.findDxFiles(inputs).toSet
         val realOutputs:Set[DXFile] = fileOutputs.toSet -- fileInputs.toSet
         Utils.appletLog(verbose, s"analysis has ${fileOutputs.size} output files")
         Utils.appletLog(verbose, s"analysis has ${fileInputs.size} input files")

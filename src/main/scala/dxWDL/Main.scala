@@ -671,10 +671,10 @@ object Main extends App {
     // Bulk describe all the them.
     private def runtimeBulkFileDescribe(jobInputPath: Path) : Map[DXFile, MiniDescribe] = {
         val inputs: JsValue = Utils.readFileContent(jobInputPath).parseJson
-        val allFilesReferenced = inputs.asJsObject.fields.collect {
-            case (key, JsArray(elems)) if key.endsWith(Utils.FLAT_FILES_SUFFIX) =>
-                elems.map( Utils.dxFileFromJsValue(_) )
-        }.flatten.toVector
+
+        val allFilesReferenced = inputs.asJsObject.fields.flatMap{
+            case (_, jsElem) => Utils.findDxFiles(jsElem)
+        }.toVector
 
         // Describe all the files, in one go
         DxBulkDescribe.apply(allFilesReferenced)
