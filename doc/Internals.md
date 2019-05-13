@@ -231,8 +231,7 @@ In addition, there are three applets than can be called on their own:
 The compiler can generate applets that are able to fully process
 simple parts of a larger workflow. These are called *fragments*. A
 fragment comprises a series of declarations followed by (1) a call, or
-(2) a conditional block, or (3) a scatter block. A fragment is used
-when runtime WDL expression evaluation is required. Native workflows
+(2) a conditional block, or (3) a scatter block. Native workflows
 do not support variable lookup, expressions, or evaluation. This means
 that we need to launch a job even for a trivial expression. The
 compiler tries to batch such evaluations together, to minimize the
