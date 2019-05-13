@@ -34,9 +34,9 @@ of primitives. However, difficulties arise with complex types. For
 example, a ragged array of strings `Array[Array[String]]` presents two issues:
 
 1. Type: Which dx type to use, so that it will be presented intuitively in the UI
-2. Size: ragged can be very large, we have seen 100KB
-sized values. This is much too large to storage as a dx:string, that is passed to
-the bash, stored in a database, etc.
+2. Size: ragged arrays may get very large. A naive approach is to serialize them
+as strings. However, this has resulted in strings in excess of 100KB for real
+world workflows. This is too large to present comfortably on the screen.
 
 The type mapping for primitive types is:
 
@@ -61,8 +61,8 @@ Optional primitives are mapped as follows:
 
 
 Single dimensional arrays of WDL primitives are mapped to DNAx optional arrays, because
-it allows them to be empty. Had they been mapped to compulsory arrays, they
-would be required to have one element at least.
+it allows them to be empty. The default DNAx array type is required to have at least one
+element.
 
 | WDL type       |  DNAX type | optional |
 | -------------- |  --------------- | -------------       |
@@ -81,8 +81,8 @@ objects that need to be closed and cloned into the workspace.
 
 ## Imports and nested namespaces
 
-A WDL file creates its own namespace. It can also import other files,
-each inhabiting its own sub-namespaces. Tasks and workflows from
+A WDL file creates its own namespace. It may import other WDL files,
+each inhabiting its own namespace. Tasks and workflows from
 children can be called with their fully-qualified-names. We map the
 WDL namespace hierarchy to a flat space of *dx:applets* and
 *dx:workflows* in the target project and folder. To do this, we
@@ -223,13 +223,16 @@ this:
 | Stage 3 | applet inc | stage-2.result |
 | Outputs |        | sub.result |
 
+In addition, there are three applets than can be called on their own:
+`add`, `mul`, and `inc`.
 
 ## Fragments
 
 The compiler can generate applets that are able to fully process
 simple parts of a larger workflow. These are called *fragments*. A
-fragment comprises a series of declarations followed by a (1) call,
-or (2) a conditional block, or (3) a scatter block. For example,
+fragment comprises a series of declarations followed by (1) a call, or
+(2) a conditional block, or (3) a scatter block. A fragment is used
+when runtime WDL expression evaluation is required. For example,
 workflow `linear2` can be split into three fragments.
 
 ```wdl
@@ -254,25 +257,29 @@ workflow linear2 {
 
 Task `add` can be called directly, no fragment is required.
 
-Fragment *mul*
+Fragment *frag-mul* is required to evaluate expression `add.result + 1`, and then call `mul`.
 ```wdl
     Int z = add.result + 1
     call mul { input: a=z, b=5 }
 ```
 
-Fragment *inc*
+Fragment *frag-inc* is needed to evaluate `z + mul.result + 8`, and subsequentally call `inc`.
 ```wdl
     call inc { input: i= z + mul.result + 8}
 ```
 
-Workflow `linear2` is compiled into:
+
+Native workflows do not support variable lookup, expressions, or
+evaluation. This means that we need to launch a job even for a trivial
+expression. The compiler tries to batch such evaluations together, to
+minimize the number of jobs. Workflow `linear2` is compiled into:
 
 | phase   | call   | arguments |
 |-------  | -----  | ----      |
 | Inputs  |        |     x, y  |
 | Stage 1 | applet add | x, y  |
-| Stage 2 | applet fragment-mul | stage-1.result |
-| Stage 3 | applet fragment-inc | stage-2.z, stage-2.mul.result |
+| Stage 2 | applet frag-mul | stage-1.result |
+| Stage 3 | applet frag-inc | stage-2.z, stage-2.mul.result |
 | Outputs |        | stage-3.result |
 
 
