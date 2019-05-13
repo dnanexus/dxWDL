@@ -1,5 +1,8 @@
 # Release Notes
 
+## 1.06
+- Upgrade to Cromwell v41
+
 ## 1.05
 - Got DxNI to work for DNAnexus apps, not just applets.
 - Added links to applets that are referenced inside WDL fragments. This should allow, at some point, copying workflows between projects.
