@@ -232,8 +232,11 @@ The compiler can generate applets that are able to fully process
 simple parts of a larger workflow. These are called *fragments*. A
 fragment comprises a series of declarations followed by (1) a call, or
 (2) a conditional block, or (3) a scatter block. A fragment is used
-when runtime WDL expression evaluation is required. For example,
-workflow `linear2` can be split into three fragments.
+when runtime WDL expression evaluation is required. Native workflows
+do not support variable lookup, expressions, or evaluation. This means
+that we need to launch a job even for a trivial expression. The
+compiler tries to batch such evaluations together, to minimize the
+number of jobs. For example,workflow `linear2` is split into three fragments.
 
 ```wdl
 workflow linear2 {
@@ -255,31 +258,26 @@ workflow linear2 {
 }
 ```
 
-Task `add` can be called directly, no fragment is required.
-
-Fragment *frag-mul* is required to evaluate expression `add.result + 1`, and then call `mul`.
+Task `add` can be called directly, no fragment is required. Fragment-1 evaluates expression `add.result + 1`, and then calls `mul`.
 ```wdl
     Int z = add.result + 1
     call mul { input: a=z, b=5 }
 ```
 
-Fragment *frag-inc* is needed to evaluate `z + mul.result + 8`, and subsequentally call `inc`.
+Fragment-2 evaluates `z + mul.result + 8`, and then calls `inc`.
 ```wdl
     call inc { input: i= z + mul.result + 8}
 ```
 
 
-Native workflows do not support variable lookup, expressions, or
-evaluation. This means that we need to launch a job even for a trivial
-expression. The compiler tries to batch such evaluations together, to
-minimize the number of jobs. Workflow `linear2` is compiled into:
+Workflow `linear2` is compiled into:
 
 | phase   | call   | arguments |
 |-------  | -----  | ----      |
 | Inputs  |        |     x, y  |
 | Stage 1 | applet add | x, y  |
-| Stage 2 | applet frag-mul | stage-1.result |
-| Stage 3 | applet frag-inc | stage-2.z, stage-2.mul.result |
+| Stage 2 | applet fragment-1 | stage-1.result |
+| Stage 3 | applet fragment-2 | stage-2.z, stage-2.mul.result |
 | Outputs |        | stage-3.result |
 
 
