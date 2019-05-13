@@ -14,6 +14,7 @@ import wom.types._
 import wom.values._
 
 import dxWDL.base._
+import dxWDL.util.DxBulkDescribe.MiniDescribe
 
 // A union of all the different ways of building a value
 // from JSON passed by the platform.
@@ -33,66 +34,9 @@ case class DxlExec(dxExec: DXExecution, varName: String) extends DxLink
 
 case class WdlVarLinks(womType: WomType, dxlink: DxLink)
 
-case class WdlVarLinksConverter(typeAliases: Map[String, WomType]) {
+case class WdlVarLinksConverter(fileInfoDir: Map[DXFile, MiniDescribe],
+                                typeAliases: Map[String, WomType]) {
     val womTypeSerializer = WomTypeSerialization(typeAliases)
-
-    private def getRawJsValue(wvl: WdlVarLinks) : JsValue = {
-        wvl.dxlink match {
-            case DxlValue(jsn) => jsn
-            case _ =>
-                throw new AppInternalException(
-                    s"Unsupported conversion from ${wvl.dxlink} to WomValue")
-        }
-    }
-
-    private def isDxFile(jsValue: JsValue): Boolean = {
-        jsValue match {
-            case JsObject(fields) =>
-                fields.get("$dnanexus_link") match {
-                    case Some(JsString(s)) if s.startsWith("file-") => true
-                    case Some(JsObject(linkFields)) =>
-                        linkFields.get("id") match {
-                            case Some(JsString(s)) if s.startsWith("file-") => true
-                            case _ => false
-                        }
-                    case _ => false
-                }
-            case  _ => false
-        }
-    }
-
-    // Search through a JSON value for all the dx:file links inside it. Returns
-    // those as a vector.
-    def findDxFiles(jsValue: JsValue) : Vector[DXFile] = {
-        jsValue match {
-            case JsBoolean(_) | JsNumber(_) | JsString(_) | JsNull =>
-                Vector.empty[DXFile]
-            case JsObject(_) if isDxFile(jsValue) =>
-                Vector(Utils.dxFileFromJsValue(jsValue))
-            case JsObject(fields) =>
-                fields.map{ case(_,v) => findDxFiles(v) }.toVector.flatten
-            case JsArray(elems) =>
-                elems.map(e => findDxFiles(e)).flatten
-        }
-    }
-
-    // find all dx:files referenced from the variable
-    def findDxFiles(wvl: WdlVarLinks) : Vector[DXFile] = {
-        findDxFiles(getRawJsValue(wvl))
-    }
-
-    // Get the file-id
-    def getDxFile(wvl: WdlVarLinks) : DXFile = {
-        assert(Utils.stripOptional(wvl.womType) == WomSingleFileType)
-        wvl.dxlink match {
-            case DxlValue(jsn) =>
-                val dxFiles = findDxFiles(jsn)
-                assert(dxFiles.length == 1)
-                dxFiles.head
-            case _ =>
-                throw new Exception("cannot get file-id from non-JSON")
-        }
-    }
 
     private def isDoubleOptional(t: WomType) : Boolean = {
         t match {
@@ -100,7 +44,6 @@ case class WdlVarLinksConverter(typeAliases: Map[String, WomType]) {
             case _ => false
         }
     }
-
 
     // Serialize a complex WDL value into a JSON value. The value could potentially point
     // to many files. The assumption is that files are already in the format of dxWDLs,
@@ -117,8 +60,7 @@ case class WdlVarLinksConverter(typeAliases: Map[String, WomType]) {
         }
         def handleFile(path:String) : JsValue =  {
             Furl.parse(path) match {
-                case FurlDx(path) =>
-                    val dxFile = DxPath.lookupDxURLFile(path)
+                case FurlDx(path, _, dxFile) =>
                     Utils.dxFileToJsValue(dxFile)
                 case FurlLocal(path) =>
                     // A local file.
@@ -266,7 +208,7 @@ case class WdlVarLinksConverter(typeAliases: Map[String, WomType]) {
                 // Convert the path in DNAx to a string. We can later
                 // decide if we want to download it or not
                 val dxFile = Utils.dxFileFromJsValue(jsValue)
-                val FurlDx(s) = FurlDx.dxFileToFurl(dxFile)
+                val FurlDx(s, _, _) = Furl.dxFileToFurl(dxFile, fileInfoDir)
                 WomSingleFile(s)
 
             // Maps. These are serialized as an object with a keys array and
@@ -337,7 +279,7 @@ case class WdlVarLinksConverter(typeAliases: Map[String, WomType]) {
             // no unpacking is needed, this is a primitive, or an array of primitives.
             // it is directly mapped to dnanexus types.
             val womValue = jobInputToWomValue(name, womType, jsv)
-            val dxFiles = findDxFiles(jsv)
+            val dxFiles = Utils.findDxFiles(jsv)
             return (womValue, dxFiles)
         }
 
@@ -366,7 +308,7 @@ case class WdlVarLinksConverter(typeAliases: Map[String, WomType]) {
                 JsObject(fields - "womType")
             }
         val womValue = jobInputToWomValue(name, womType, jsv1)
-        val dxFiles = findDxFiles(jsv1)
+        val dxFiles = Utils.findDxFiles(jsv1)
         (womValue, dxFiles)
     }
 
@@ -401,7 +343,7 @@ case class WdlVarLinksConverter(typeAliases: Map[String, WomType]) {
             wvl.dxlink match {
                 case DxlValue(jsn) =>
                     // files that are embedded in the structure
-                    val dxFiles = findDxFiles(jsn)
+                    val dxFiles = Utils.findDxFiles(jsn)
                     val jsFiles = dxFiles.map(x => Utils.jsValueOfJsonNode(x.getLinkAsJson))
                     // convert the top level structure into a hash
                     val hash = jsValueToDxHash(womType, jsn)

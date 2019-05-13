@@ -116,7 +116,7 @@ object WomPrettyPrintApproxWdl {
     }
 
     def graphInputs(inputDefs : Seq[InputDefinition]) : String = {
-        inputDefs.flatMap{
+        inputDefs.map{
             applyInput(_)
         }.mkString("\n")
     }

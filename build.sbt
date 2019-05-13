@@ -91,7 +91,7 @@ Test / testOptions += Tests.Argument("-l", "native")
 Test / parallelExecution := false
 
 // comment out this line to enable tests in assembly
-//test in assembly := {}
+test in assembly := {}
 
 
 // Coverage

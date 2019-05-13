@@ -65,7 +65,8 @@ case class WfFragRunner(wf: WorkflowDefinition,
                         runtimeDebugLevel: Int) {
     private val verbose = runtimeDebugLevel >= 1
     //private val maxVerboseLevel = (runtimeDebugLevel == 2)
-    private val wdlVarLinksConverter = WdlVarLinksConverter(fragInputOutput.typeAliases)
+    private val wdlVarLinksConverter = WdlVarLinksConverter(dxIoFunctions.fileInfoDir,
+                                                            fragInputOutput.typeAliases)
     private val jobInputOutput = fragInputOutput.jobInputOutput
     private val collectSubJobs = CollectSubJobs(jobInputOutput,
                                                 inputsRaw,

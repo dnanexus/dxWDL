@@ -1,5 +1,6 @@
 package dxWDL.util
 
+import com.dnanexus.DXFile
 import java.nio.file.{Files, FileSystems, Paths, PathMatcher}
 import scala.collection.JavaConverters._
 import scala.concurrent.{ExecutionContext, Future}
@@ -8,8 +9,12 @@ import wom.expression.{IoFunctionSet, PathFunctionSet}
 import wom.expression.IoFunctionSet.IoElement
 import wom.values._
 
-case class DxPathFunctions(config: DxPathConfig,
+import DxBulkDescribe.MiniDescribe
+
+case class DxPathFunctions(fileInfoDir : Map[DXFile, MiniDescribe],
+                           config: DxPathConfig,
                            runtimeDebugLevel: Int) extends PathFunctionSet {
+
     /**
       * Similar to java.nio.Path.resolveSibling with
       * of == a string representation of a java.nio.Path
@@ -50,11 +55,14 @@ case class DxPathFunctions(config: DxPathConfig,
                 val p = Paths.get(localPath)
                 p.getFileName.toString
             case fdx : FurlDx =>
-                // perform an API call to get the file name
-                val dxFile = FurlDx.getDxFile(fdx)
-                dxFile.describe().getName()
+                fileInfoDir.get(fdx.dxFile) match {
+                    case None =>
+                        // perform an API call to get the file name
+                        fdx.dxFile.describe().getName()
+                    case Some(desc) =>
+                        desc.name
+                }
         }
-
     }
 
     /**
@@ -68,10 +76,11 @@ case class DxPathFunctions(config: DxPathConfig,
     override def stderr: String = config.stderr.toString
 }
 
-case class DxIoFunctions(config: DxPathConfig,
+case class DxIoFunctions(fileInfoDir : Map[DXFile, MiniDescribe],
+                         config: DxPathConfig,
                          runtimeDebugLevel: Int) extends IoFunctionSet {
 
-    override def pathFunctions = DxPathFunctions(config, runtimeDebugLevel)
+    override def pathFunctions = new DxPathFunctions(fileInfoDir, config, runtimeDebugLevel)
 
     // Functions that (possibly) necessitate I/O operation (on local, network, or cloud filesystems)
     /**
@@ -96,8 +105,7 @@ case class DxIoFunctions(config: DxPathConfig,
                         throw new Exception(s"File ${p} does not exist")
                 }
             case fdx : FurlDx =>
-                val dxFile = FurlDx.getDxFile(fdx)
-                Utils.downloadString(dxFile)
+                Utils.downloadString(fdx.dxFile)
         }
         Future(content)
     }
@@ -192,9 +200,13 @@ case class DxIoFunctions(config: DxPathConfig,
                 val p = Paths.get(localPath)
                 p.toFile.length
             case fdx : FurlDx =>
-                val dxFile = FurlDx.getDxFile(fdx)
-                // perform an API call to get the size
-                dxFile.describe().getSize()
+                pathFunctions.fileInfoDir.get(fdx.dxFile) match {
+                    case None =>
+                        // perform an API call to get the size
+                        fdx.dxFile.describe().getSize()
+                    case Some(desc) =>
+                        desc.size
+                }
         }
         Future(size)
     }

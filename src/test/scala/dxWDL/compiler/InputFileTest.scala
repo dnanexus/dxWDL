@@ -1,9 +1,11 @@
 package dxWDL.compiler
 
-import dxWDL.{Main}
 import java.nio.file.{Path, Paths}
 import org.scalatest.{FlatSpec, Matchers}
 import org.scalatest.Inside._
+
+import dxWDL.{Main}
+import dxWDL.util.Utils
 
 // These tests involve compilation -without- access to the platform.
 //
@@ -13,7 +15,8 @@ class InputFileTest extends FlatSpec with Matchers {
         Paths.get(p)
     }
 
-    val cFlags = List("--compileMode", "ir", "-quiet")
+    val cFlags = List("--compileMode", "ir", "-quiet",
+                      "--project", Utils.dxEnv.getProjectContext().getId)
 
     it should "handle one task and two inputs" in {
         val wdlCode = pathFromBasename("input_file", "add.wdl")
@@ -68,8 +71,8 @@ class InputFileTest extends FlatSpec with Matchers {
         val wdlCode = pathFromBasename("input_file", "population.wdl")
         val defaults = pathFromBasename("input_file", "population_inputs.json")
         val retval = Main.compile(
-            List(wdlCode.toString, "--compileMode", "ir", "--quiet",
-                 "-defaults", defaults.toString)
+            List(wdlCode.toString, "-defaults", defaults.toString)
+                ++ cFlags
         )
         retval shouldBe a [Main.SuccessfulTerminationIR]
     }
@@ -115,8 +118,8 @@ class InputFileTest extends FlatSpec with Matchers {
         val inputs = pathFromBasename("struct", "Person_input.json")
 
         val retval = Main.compile(
-            List(wdlCode.toString, "--compileMode", "ir",
-                 "-inputs", inputs.toString)
+            List(wdlCode.toString, "-inputs", inputs.toString)
+                ++ cFlags
         )
         retval shouldBe a [Main.SuccessfulTerminationIR]
     }

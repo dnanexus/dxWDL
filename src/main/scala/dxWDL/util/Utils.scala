@@ -17,6 +17,7 @@ import spray.json._
 import wom.types._
 
 object Utils {
+    val DXAPI_NUM_OBJECTS_LIMIT = 1000 // maximal number of objects in a single API request
     val APPLET_LOG_MSG_LIMIT = 1000
     val CHECKSUM_PROP = "dxWDL_checksum"
     val DEFAULT_RUNTIME_DEBUG_LEVEL = 1
@@ -106,6 +107,37 @@ object Utils {
             // A tricky, but important case, is `Array[File]+?`. This
             // cannot be converted into a dx file array, unfortunately.
             case _ => false
+        }
+    }
+
+    private def isDxFile(jsValue: JsValue): Boolean = {
+        jsValue match {
+            case JsObject(fields) =>
+                fields.get("$dnanexus_link") match {
+                    case Some(JsString(s)) if s.startsWith("file-") => true
+                    case Some(JsObject(linkFields)) =>
+                        linkFields.get("id") match {
+                            case Some(JsString(s)) if s.startsWith("file-") => true
+                            case _ => false
+                        }
+                    case _ => false
+                }
+            case  _ => false
+        }
+    }
+
+    // Search through a JSON value for all the dx:file links inside it. Returns
+    // those as a vector.
+    def findDxFiles(jsValue: JsValue) : Vector[DXFile] = {
+        jsValue match {
+            case JsBoolean(_) | JsNumber(_) | JsString(_) | JsNull =>
+                Vector.empty[DXFile]
+            case JsObject(_) if isDxFile(jsValue) =>
+                Vector(Utils.dxFileFromJsValue(jsValue))
+            case JsObject(fields) =>
+                fields.map{ case(_,v) => findDxFiles(v) }.toVector.flatten
+            case JsArray(elems) =>
+                elems.map(e => findDxFiles(e)).flatten
         }
     }
 

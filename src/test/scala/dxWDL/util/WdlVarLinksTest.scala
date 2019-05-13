@@ -31,7 +31,7 @@ class WdlVarLinksTest extends FlatSpec with Matchers {
     }
 
     it should "handle primitive WDL elements" in {
-        val wvlConverter = new WdlVarLinksConverter(Map.empty)
+        val wvlConverter = new WdlVarLinksConverter(Map.empty, Map.empty)
 
         val testCases = List(
             // primitives
@@ -48,7 +48,7 @@ class WdlVarLinksTest extends FlatSpec with Matchers {
     }
 
     it should "handle compound WDL types" in {
-        val wvlConverter = new WdlVarLinksConverter(Map.empty)
+        val wvlConverter = new WdlVarLinksConverter(Map.empty, Map.empty)
 
         def makePair(x: Double, s: String) : WomValue = {
             WomPair(WomFloat(x), WomString(s))
@@ -100,7 +100,7 @@ class WdlVarLinksTest extends FlatSpec with Matchers {
                              makeElement(janice))
 
         // no definitions for struct Person, should fail
-        val wvlConverterEmpty = new WdlVarLinksConverter(Map.empty)
+        val wvlConverterEmpty = new WdlVarLinksConverter(Map.empty, Map.empty)
         testCases.foreach{ elem =>
             assertThrows[Exception] {
                 check(elem, wvlConverterEmpty)
@@ -108,7 +108,7 @@ class WdlVarLinksTest extends FlatSpec with Matchers {
         }
 
         val typeAliases: Map[String, WomType] = Map("Person" -> personType)
-        val wvlConverter = new WdlVarLinksConverter(typeAliases)
+        val wvlConverter = new WdlVarLinksConverter(Map.empty, typeAliases)
         testCases.foreach{ elem =>
             check(elem, wvlConverter)
         }

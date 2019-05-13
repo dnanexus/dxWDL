@@ -17,13 +17,20 @@ class GenerateIRTest extends FlatSpec with Matchers {
     }
 
     // task compilation
-    private val cFlags = List("--compileMode", "ir", "-quiet", "-fatalValidationWarnings",
-                              "--locked")
-    private val cFlagsUnlocked = List("--compileMode", "ir", "-quiet", "-fatalValidationWarnings")
+    private val cFlags = List("--compileMode", "ir",
+                              "-quiet",
+                              "-fatalValidationWarnings",
+                              "--locked",
+                              "--project", Utils.dxEnv.getProjectContext().getId)
+    private val cFlagsUnlocked = List("--compileMode", "ir",
+                                      "-quiet",
+                                      "-fatalValidationWarnings",
+                                      "--project", Utils.dxEnv.getProjectContext().getId)
     val dbgFlags = List("--compileMode", "ir",
                         "--verbose",
                         "--verboseKey", "GenerateIR",
-                        "--locked")
+                        "--locked",
+                        "--project", Utils.dxEnv.getProjectContext().getId)
 
     it should "IR compile a single WDL task" in {
         val path = pathFromBasename("compiler", "add.wdl")
@@ -146,7 +153,8 @@ class GenerateIRTest extends FlatSpec with Matchers {
     it should "missing workflow inputs" in {
         val path = pathFromBasename("input_file", "missing_args.wdl")
         Main.compile(
-            path.toString :: List("--compileMode", "ir", "--quiet")
+            path.toString :: List("--compileMode", "ir", "--quiet",
+                                  "--project", Utils.dxEnv.getProjectContext().getId)
         ) shouldBe a [Main.SuccessfulTerminationIR]
     }
 

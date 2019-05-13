@@ -30,7 +30,7 @@ class WfFragRunnerTest extends FlatSpec with Matchers {
         Utils.safeMkdir(jobHomeDir)
         val dxPathConfig = DxPathConfig.apply(jobHomeDir, runtimeDebugLevel >= 1)
         dxPathConfig.createCleanDirs()
-        val dxIoFunctions = DxIoFunctions(dxPathConfig, runtimeDebugLevel)
+        val dxIoFunctions = DxIoFunctions(Map.empty, dxPathConfig, runtimeDebugLevel)
         (dxPathConfig, dxIoFunctions)
     }
 
