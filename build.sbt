@@ -57,7 +57,7 @@ logLevel in assembly := Level.Info
 assemblyOutputPath in assembly := file("applet_resources/resources/dxWDL.jar")
 assemblyMergeStrategy in assembly := customMergeStrategy.value
 
-val cromwellV = "40"
+val cromwellV = "41"
 
 libraryDependencies ++= Seq(
     "org.broadinstitute" %% "cromwell-common" % cromwellV,
