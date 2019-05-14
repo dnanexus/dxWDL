@@ -648,6 +648,15 @@ case class Native(dxWDLrtId: Option[String],
                                                                 bashScript)
         val access : JsValue = calcAccess(applet)
 
+        // A fragemnt is hidden, not visible under default settings. This
+        // allows the workflow copying code to traverse it, and link to
+        // anything it calls.
+        val hidden : Boolean =
+            applet.kind match {
+                case _ : IR.AppletKindWfFragment => true
+                case _ => false
+            }
+
          // pack all the core arguments into a single request
         var reqCore = Map(
 	    "name" -> JsString(applet.name),
@@ -656,7 +665,8 @@ case class Native(dxWDLrtId: Option[String],
             "runSpec" -> runSpec,
             "dxapi" -> JsString("1.0.0"),
             "tags" -> JsArray(JsString("dxWDL")),
-            "details" -> details
+            "details" -> details,
+            "hidden" -> JsBoolean(hidden)
         )
         if (access != JsNull)
             reqCore += ("access" -> access)
@@ -841,13 +851,17 @@ case class Native(dxWDLrtId: Option[String],
                     stagesReq :+ stageReqDesc
             }
 
+        // Sub-workflow are compiled to hidden objects.
+        val hidden = wf.level == IR.Level.Sub
+
         // pack all the arguments into a single API call
         val reqFields = Map("project" -> JsString(dxProject.getId),
                             "name" -> JsString(wf.name),
                             "folder" -> JsString(folder),
                             "properties" -> JsObject(CHECKSUM_PROP -> JsString(digest)),
                             "stages" -> JsArray(stagesReq),
-                            "tags" -> JsArray(JsString("dxWDL")))
+                            "tags" -> JsArray(JsString("dxWDL")),
+                            "hidden" -> JsBoolean(hidden))
 
         val wfInputOutput: Map[String, JsValue] =
             if (wf.locked) {

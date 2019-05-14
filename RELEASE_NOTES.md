@@ -2,6 +2,7 @@
 
 ## 1.06
 - Upgrade to Cromwell v41
+- Mark auxiliary workflows and applets as hidden. This helps copying from one project to another.
 
 ## 1.05
 - Got DxNI to work for DNAnexus apps, not just applets.

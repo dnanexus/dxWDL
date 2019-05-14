@@ -147,14 +147,23 @@ object IR {
                      outputs: Vector[CVar])
 
     /** A workflow output is linked to the stage that
-      *  generated it.
+      * generated it.
+      *
+      * If [level] is SubWorkflow, then a workflow matches part of a
+      * WDL workflow, it is not a first class citizen. It is compiled
+      * into a hidden dx:workflow.
       */
+    object Level extends Enumeration {
+        val Top, Sub = Value
+    }
+
     case class Workflow(name: String,
                         inputs: Vector[(CVar,SArg)],
                         outputs: Vector[(CVar,SArg)],
                         stages: Vector[Stage],
                         womSourceCode: String,
-                        locked: Boolean) extends Callable {
+                        locked: Boolean,
+                        level: Level.Value) extends Callable {
         def inputVars = inputs.map{ case (cVar,_) => cVar }.toVector
         def outputVars = outputs.map{ case (cVar,_) => cVar }.toVector
     }
