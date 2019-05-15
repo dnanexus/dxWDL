@@ -577,7 +577,7 @@ def copy_wf_test(tname, src_proj, src_folder):
 
     # clean up target
     print("cleaning up target")
-    subprocess.check_output("dx rm -r {}:/{}".format(trg_proj.getId(), test_folder))
+    trg_proj.remove_folder(test_folder, recurse=True)
     trg_proj.new_folder(test_folder, parents=True)
 
     # copy to alternate project

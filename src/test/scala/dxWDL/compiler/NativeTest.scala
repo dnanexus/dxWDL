@@ -29,7 +29,8 @@ class NativeTest extends FlatSpec with Matchers {
                            "-project", dxTestProject.getId,
                            "-folder", "/unit_tests",
                            "-force",
-                           "-locked")
+                           "-locked",
+                           "-quiet")
 
     it should "Native compile a single WDL task" taggedAs(NativeTestXX) in {
         val path = pathFromBasename("compiler", "add.wdl")
@@ -77,9 +78,9 @@ class NativeTest extends FlatSpec with Matchers {
         val path = pathFromBasename("draft2", "conditionals_base.wdl")
         Main.compile(
             path.toString
-                :: "--verbose"
+/*                :: "--verbose"
                 :: "--verboseKey" :: "Native"
-                :: "--verboseKey" :: "GenerateIR"
+                :: "--verboseKey" :: "GenerateIR"*/
                 :: cFlags
         ) shouldBe a [Main.SuccessfulTermination]
     }

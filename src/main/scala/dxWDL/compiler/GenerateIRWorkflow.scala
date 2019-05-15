@@ -266,7 +266,7 @@ case class GenerateIRWorkflow(wf : WorkflowDefinition,
             val pathStr = blockPath.map(x => x.toString).mkString("_")
             val (subwf, auxCallables, _ ) = compileWorkflowLocked(wfName + "_block_" + pathStr,
                                                                   inputNodes, outputNodes,
-                                                                  blockPath, subBlocks)
+                                                                  blockPath, subBlocks, IR.Level.Sub)
             (subwf, auxCallables)
         }
     }
@@ -559,7 +559,8 @@ case class GenerateIRWorkflow(wf : WorkflowDefinition,
                                       inputNodes: Vector[GraphInputNode],
                                       outputNodes: Vector[GraphOutputNode],
                                       blockPath: Vector[Int],
-                                      subBlocks : Vector[Block]) :
+                                      subBlocks : Vector[Block],
+                                      level: IR.Level.Value) :
             (IR.Workflow, Vector[IR.Callable], Vector[(CVar, SArg)]) =
     {
         val wfInputs:Vector[(CVar, SArg)] = inputNodes.map{
@@ -590,7 +591,7 @@ case class GenerateIRWorkflow(wf : WorkflowDefinition,
         if (outputNodes.forall(Block.isSimpleOutput) &&
                 Block.inputsUsedAsOutputs(inputNodes, outputNodes).isEmpty) {
             val simpleWfOutputs = outputNodes.map(node => buildSimpleWorkflowOutput(node, env)).toVector
-            val irwf = IR.Workflow(wfName, wfInputs, simpleWfOutputs, stages, wfSourceCode, true)
+            val irwf = IR.Workflow(wfName, wfInputs, simpleWfOutputs, stages, wfSourceCode, true, level)
             (irwf, auxCallables.flatten, simpleWfOutputs)
         } else {
             // Some of the outputs are expressions. We need an extra applet+stage
@@ -605,7 +606,8 @@ case class GenerateIRWorkflow(wf : WorkflowDefinition,
             val irwf = IR.Workflow(wfName,
                                    wfInputs, wfOutputs,
                                    stages :+ outputStage,
-                                   wfSourceCode, true)
+                                   wfSourceCode,
+                                   true, level)
             (irwf, auxCallables.flatten :+ outputApplet, wfOutputs)
         }
     }
@@ -652,7 +654,8 @@ case class GenerateIRWorkflow(wf : WorkflowDefinition,
                                wfOutputs.toVector,
                                commonStg +: stages :+ outputStage,
                                wfSourceCode,
-                               false)
+                               false,
+                               IR.Level.Top)
         (irwf, commonApplet +: auxCallables.flatten :+ outputApplet, wfOutputs)
     }
 
@@ -678,7 +681,7 @@ case class GenerateIRWorkflow(wf : WorkflowDefinition,
         val (irwf, irCallables, wfOutputs) =
             if (locked) {
                 compileWorkflowLocked(wf.name, inputNodes, outputNodes,
-                                      Vector.empty, subBlocks)
+                                      Vector.empty, subBlocks, IR.Level.Top)
             } else {
                 compileWorkflowRegular(inputNodes, outputNodes, subBlocks)
             }

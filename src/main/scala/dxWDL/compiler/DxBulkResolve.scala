@@ -108,7 +108,8 @@ case class DxBulkResolve(dxProject: DXProject) {
                 }
                 val dxFile = projId match  {
                     case None => DXFile.getInstance(fileId)
-                    case Some(x) => DXFile.getInstance(fileId, DXProject.getInstance(x))
+                    case Some(x) =>
+                        DXFile.getInstance(fileId, DXProject.getInstance(x))
                 }
                 path -> dxFile
         }.toMap
