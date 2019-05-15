@@ -3,6 +3,7 @@
 ## 1.06
 - Upgrade to Cromwell v41
 - Mark auxiliary workflows and applets as hidden. This helps copying from one project to another.
+- Added unit tests for the `WomValueAnalysis` module, which checks if expressions are constant.
 
 ## 1.05
 - Got DxNI to work for DNAnexus apps, not just applets.

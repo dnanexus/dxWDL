@@ -67,7 +67,7 @@ case class DxObjectDirectory(ns: IR.Bundle,
         val t0 = System.nanoTime()
         val dxObjectsInFolder: List[DXDataObject] = DXSearch.findDataObjects()
             .inFolder(dxProject, folder)
-//            .withProperty(CHECKSUM_PROP)
+            .withVisibility(DXSearch.VisibilityQuery.EITHER)
             .includeDescribeOutput(DXDataObject.DescribeOptions.get().withProperties())
             .execute().asList().asScala.toList
         val nrApplets = dxObjectsInFolder.count{ _.isInstanceOf[DXApplet] }
@@ -131,6 +131,7 @@ case class DxObjectDirectory(ns: IR.Bundle,
         val t0 = System.nanoTime()
         val dxAppletsInProject: List[DXDataObject] = DXSearch.findDataObjects()
             .inProject(dxProject)
+            .withVisibility(DXSearch.VisibilityQuery.EITHER)
             .withProperty(CHECKSUM_PROP)
             .withClassApplet
             .includeDescribeOutput(DXDataObject.DescribeOptions.get().withProperties())
