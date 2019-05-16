@@ -16,16 +16,20 @@ class GenerateIRTest extends FlatSpec with Matchers {
         Paths.get(p)
     }
 
+    private val dxProject = Utils.dxEnv.getProjectContext()
+    if (dxProject == null)
+        throw new Exception("Must be logged in to run this test")
+
     // task compilation
     private val cFlags = List("--compileMode", "ir",
                               "-quiet",
                               "-fatalValidationWarnings",
                               "--locked",
-                              "--project", Utils.dxEnv.getProjectContext().getId)
+                              "--project", dxProject.getId)
     private val cFlagsUnlocked = List("--compileMode", "ir",
                                       "-quiet",
                                       "-fatalValidationWarnings",
-                                      "--project", Utils.dxEnv.getProjectContext().getId)
+                                      "--project", dxProject.getId)
     val dbgFlags = List("--compileMode", "ir",
                         "--verbose",
                         "--verboseKey", "GenerateIR",

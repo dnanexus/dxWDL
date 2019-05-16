@@ -271,7 +271,15 @@ object Main extends App {
         if (!folderRaw.startsWith("/"))
             throw new Exception(s"Folder must start with '/'")
         val dxFolder = folderRaw
-        val dxProject = DxPath.lookupProject(projectRaw)
+        val dxProject =
+            try {
+                DxPath.lookupProject(projectRaw)
+            } catch {
+                case e : Exception =>
+                    Utils.error(e.getMessage)
+                    throw new Exception(s"""|Could not find project ${projectRaw}, you probably need to be logged into
+                                            |the platform""".stripMargin)
+            }
         Utils.trace(verbose.on,
                     s"""|project ID: ${dxProject.getId}
                         |folder: ${dxFolder}""".stripMargin)

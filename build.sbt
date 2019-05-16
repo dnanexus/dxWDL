@@ -68,8 +68,8 @@ libraryDependencies ++= Seq(
     "org.broadinstitute" %% "wdl-draft3" % cromwellV,
 //    "org.broadinstitute" %% "wdl-biscayne" % cromwellV,
 
-    "io.spray" %% "spray-json" % "1.3.2",
-    "com.typesafe" % "config" % "1.3.1",
+    "io.spray" %% "spray-json" % "1.3.5",
+    "com.typesafe" % "config" % "1.3.3",
 
     //---------- Test libraries -------------------//
     "org.scalactic" %% "scalactic" % "3.0.1",

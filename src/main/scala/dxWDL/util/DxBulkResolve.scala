@@ -5,19 +5,16 @@
 //   "dx://dxWDL_playground:/test_data/1/fileC",
 //   "dx://dxWDL_playground:/test_data/fruit_list.txt"
 
-package dxWDL.compiler
+package dxWDL.util
 
 import com.dnanexus.{DXAPI, DXFile, DXProject}
 import com.fasterxml.jackson.databind.JsonNode
 import spray.json._
 
-import dxWDL.util.DxPath
-import dxWDL.util.Utils
-
 // maximal number of objects in a single API request
 import dxWDL.util.Utils.{DX_URL_PREFIX, DXAPI_NUM_OBJECTS_LIMIT}
 
-case class DxBulkResolve(dxProject: DXProject) {
+object DxBulkResolve {
 
     case class DxPathParsed(name: String,
                             folder: Option[String],
@@ -73,7 +70,8 @@ case class DxBulkResolve(dxProject: DXProject) {
         JsObject(reqFields ++ folderField ++ projectField)
     }
 
-    private def submitRequest(dxPaths : Vector[DxPathParsed]) : Map[String, DXFile] = {
+  private def submitRequest(dxPaths : Vector[DxPathParsed],
+                            dxProject : DXProject) : Map[String, DXFile] = {
         val objectReqs : Vector[JsValue] = dxPaths.map{ makeResolutionReq(_) }
         val request = JsObject("objects" -> JsArray(objectReqs),
                                "project" -> JsString(dxProject.getId))
@@ -143,7 +141,8 @@ case class DxBulkResolve(dxProject: DXProject) {
 
     // Describe the names of all the files in one batch. This is much more efficient
     // than submitting file describes one-by-one.
-    def apply(dxPaths: Seq[String]) : Map[String, DXFile] = {
+  def apply(dxPaths: Seq[String],
+            dxProject: DXProject) : Map[String, DXFile] = {
         if (dxPaths.isEmpty) {
             // avoid an unnessary API call; this is important for unit tests
             // that do not have a network connection.
@@ -161,7 +160,7 @@ case class DxBulkResolve(dxProject: DXProject) {
         // iterate on the ranges
         val resolved = slices.foldLeft(Map.empty[String, DXFile]) {
             case (accu, pathsRange) =>
-                accu ++ submitRequest(pathsRange.toVector)
+                accu ++ submitRequest(pathsRange.toVector, dxProject)
         }
 
         alreadyResolved ++ resolved

@@ -15,8 +15,14 @@ class InputFileTest extends FlatSpec with Matchers {
         Paths.get(p)
     }
 
+    val dxProject = Utils.dxEnv.getProjectContext()
+    if (dxProject == null)
+        throw new Exception("Must be logged in to run this test")
+
     val cFlags = List("--compileMode", "ir", "-quiet",
-                      "--project", Utils.dxEnv.getProjectContext().getId)
+                      "--project", dxProject.getId)
+
+    // make sure we are logged in
 
     it should "handle one task and two inputs" in {
         val wdlCode = pathFromBasename("input_file", "add.wdl")

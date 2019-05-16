@@ -152,7 +152,7 @@ case class InputFileScan(bundle: IR.Bundle,
         val dxPaths : Vector[String] = jsFileDesc.collect{
             case JsString(x) => x
         }.toVector
-        val resolvedPaths = DxBulkResolve(dxProject).apply(dxPaths)
+        val resolvedPaths = DxBulkResolve.apply(dxPaths, dxProject)
 
         InputFileScanResults(resolvedPaths, (dxFiles ++ resolvedPaths.values))
     }
