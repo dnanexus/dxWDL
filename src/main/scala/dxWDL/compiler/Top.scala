@@ -5,7 +5,6 @@ package dxWDL.compiler
 
 import com.dnanexus._
 import java.nio.file.{Path, Paths}
-import scala.collection.JavaConverters._
 
 import wom.callable._
 import wom.executable.WomBundle
@@ -13,7 +12,7 @@ import wom.types._
 import wom.graph.expression._
 
 import dxWDL.util._
-import dxWDL.util.Utils.DX_WDL_ASSET
+import dxWDL.util.Utils.{DX_URL_PREFIX, DX_WDL_ASSET}
 import dxWDL.util.DxBulkDescribe.MiniDescribe
 
 case class Top(cOpt: CompilerOptions) {
@@ -47,17 +46,16 @@ case class Top(cOpt: CompilerOptions) {
         val dxProjRt = DxPath.lookupProject(projNameRt)
         Utils.trace(verbose.on, s"Looking for asset-id in ${projNameRt}:/${folder}")
 
-        val found:List[DXDataObject] =
-            DXSearch.findDataObjects()
-                .nameMatchesExactly(DX_WDL_ASSET)
-                .inFolder(dxProjRt, folder)
-                .execute().asList().asScala.toList
-        if (found.length == 0)
+        val assetDxPath = s"${DX_URL_PREFIX}${dxProjRt.getId}:${folder}${DX_WDL_ASSET}"
+        val found : Map[String, DXDataObject] =
+            DxBulkResolve.apply(Vector(assetDxPath), dxProjRt)
+
+        if (found.size == 0)
             throw new Exception(s"Could not find runtime asset at ${dxProjRt.getId}:${folder}/${DX_WDL_ASSET}")
-        if (found.length > 1)
+        if (found.size > 1)
             throw new Exception(s"Found more than one dx:object named ${DX_WDL_ASSET} in path ${dxProjRt.getId}:${folder}")
 
-        found(0).getId
+        found.values.head.getId
     }
 
     // We need the dxWDL runtime library cloned into this project, so it will

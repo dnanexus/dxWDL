@@ -86,7 +86,7 @@ libraryDependencies ++= Seq(
 //
 // comment out this line in order to allow native
 // tests
-Test / testOptions += Tests.Argument("-l", "native")
+// Test / testOptions += Tests.Argument("-l", "native")
 
 Test / parallelExecution := false
 

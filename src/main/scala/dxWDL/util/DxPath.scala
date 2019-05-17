@@ -11,10 +11,8 @@
 */
 package dxWDL.util
 
-import com.dnanexus.{DXAPI, DXApplet, DXDataObject, DXFile, DXProject, DXRecord, DXSearch, DXWorkflow}
+import com.dnanexus.{DXAPI, DXApplet, DXDataObject, DXFile, DXProject, DXRecord, DXWorkflow}
 import com.fasterxml.jackson.databind.JsonNode
-import java.nio.file.Paths
-import scala.collection.JavaConverters._
 import scala.collection.mutable.HashMap
 import spray.json._
 
@@ -81,24 +79,14 @@ object DxPath {
             throw new Exception(s"gtables not supported proj=${dxProject} obj=${objName}")
         }
 
-        val fullPath = Paths.get(objName)
-        trace(true, s"lookupObject: ${fullPath.toString}")
-        val parent = fullPath.getParent
-        var folder = "/"
-        if (parent != null) {
-            folder = parent.toString
-            if (!folder.startsWith("/"))
-                folder = "/" + folder
-        }
-        val baseName = fullPath.getFileName.toString
-        val found:List[DXDataObject] =
-            DXSearch.findDataObjects().nameMatchesExactly(baseName)
-                .inFolder(dxProject, folder).execute().asList().asScala.toList
-        if (found.length == 0)
-            throw new Exception(s"Object ${objName} not found in path ${dxProject.getId}:${folder}")
-        if (found.length > 1)
-            throw new Exception(s"Found more than one dx:object named ${objName} in path ${dxProject.getId}:${folder}")
-        return found(0)
+        trace(true, s"lookupObject: ${objName}")
+        val objPath = s"${DX_URL_PREFIX}${dxProject.getId}:${objName}"
+        val found: Map[String, DXDataObject] = DxBulkResolve.apply(Vector(objPath), dxProject)
+        if (found.size == 0)
+            throw new Exception(s"Object ${objName} not found in path ${objPath}")
+        if (found.size > 1)
+            throw new Exception(s"Found more than one dx:object named ${objName} in path ${objPath}")
+        return found.values.head
     }
 
     private def lookupDxPath(dxPath: String) : DXDataObject = {

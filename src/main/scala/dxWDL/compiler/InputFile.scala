@@ -152,7 +152,12 @@ case class InputFileScan(bundle: IR.Bundle,
         val dxPaths : Vector[String] = jsFileDesc.collect{
             case JsString(x) => x
         }.toVector
-        val resolvedPaths = DxBulkResolve.apply(dxPaths, dxProject)
+        val resolvedPaths = DxBulkResolve.apply(dxPaths, dxProject).map {
+            case (key, dxobj) if dxobj.isInstanceOf[DXFile] =>
+                key -> dxobj.asInstanceOf[DXFile]
+            case (key, dxobj) =>
+                throw new Exception(s"Scanning the input file produced ${dxobj} which is not a file")
+        }.toMap
 
         InputFileScanResults(resolvedPaths, (dxFiles ++ resolvedPaths.values))
     }
