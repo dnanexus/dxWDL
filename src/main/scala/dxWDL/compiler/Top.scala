@@ -46,7 +46,7 @@ case class Top(cOpt: CompilerOptions) {
         val dxProjRt = DxPath.lookupProject(projNameRt)
         Utils.trace(verbose.on, s"Looking for asset-id in ${projNameRt}:/${folder}")
 
-        val assetDxPath = s"${DX_URL_PREFIX}${dxProjRt.getId}:${folder}${DX_WDL_ASSET}"
+        val assetDxPath = s"${DX_URL_PREFIX}${dxProjRt.getId}:${folder}/${DX_WDL_ASSET}"
         val found : Map[String, DXDataObject] =
             DxBulkResolve.apply(Vector(assetDxPath), dxProjRt)
 
