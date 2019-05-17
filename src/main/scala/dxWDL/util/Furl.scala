@@ -17,7 +17,6 @@ package dxWDL.util
 
 import com.dnanexus.{DXFile, DXProject}
 import Utils.DX_URL_PREFIX
-import dxWDL.util.DxBulkDescribe.MiniDescribe
 
 sealed trait Furl
 
@@ -77,7 +76,7 @@ object Furl {
     // string is well defined, and requires an explicit conversion function.
     //
     def dxFileToFurl(dxFile: DXFile,
-                     fileInfoDir: Map[DXFile, MiniDescribe]) : FurlDx = {
+                     fileInfoDir: Map[DXFile, DxDescribe]) : FurlDx = {
         // Try the cache first; if the file isn't there, submit an API call.
         val (folder, name) = fileInfoDir.get(dxFile) match {
             case None =>

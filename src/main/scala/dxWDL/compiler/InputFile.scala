@@ -30,7 +30,6 @@ import wom.values._
 
 import dxWDL.util._
 import dxWDL.util.Utils.DX_URL_PREFIX
-import dxWDL.util.DxBulkDescribe.MiniDescribe
 
 // scan a Cromwell style JSON input file, and return all the dx:files in it.
 // An input file for workflow foo could look like this:
@@ -163,7 +162,7 @@ case class InputFileScan(bundle: IR.Bundle,
     }
 }
 
-case class InputFile(fileInfoDir: Map[DXFile, MiniDescribe],
+case class InputFile(fileInfoDir: Map[DXFile, DxDescribe],
                      path2file: Map[String, DXFile],
                      typeAliases: Map[String, WomType],
                      verbose: Verbose) {

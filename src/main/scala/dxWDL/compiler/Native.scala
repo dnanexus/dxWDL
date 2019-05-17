@@ -14,7 +14,6 @@ import wom.values._
 
 import dxWDL.base.WomTypeSerialization
 import dxWDL.util._
-import dxWDL.util.DxBulkDescribe.MiniDescribe
 import dxWDL.util.Utils.{CHECKSUM_PROP, jsonNodeOfJsValue, trace}
 import IR.{CVar, SArg}
 
@@ -24,7 +23,7 @@ case class Native(dxWDLrtId: Option[String],
                   dxObjDir: DxObjectDirectory,
                   instanceTypeDB: InstanceTypeDB,
                   dxPathConfig: DxPathConfig,
-                  fileInfoDir : Map[DXFile, MiniDescribe],
+                  fileInfoDir : Map[DXFile, DxDescribe],
                   typeAliases: Map[String, WomType],
                   extras: Option[Extras],
                   runtimeDebugLevel: Option[Int],

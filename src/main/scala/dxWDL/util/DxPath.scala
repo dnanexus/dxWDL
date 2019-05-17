@@ -11,7 +11,7 @@
 */
 package dxWDL.util
 
-import com.dnanexus.{DXAPI, DXApplet, DXDataObject, DXFile, DXProject, DXRecord, DXWorkflow}
+import com.dnanexus.{DXAPI, DXDataObject, DXFile, DXProject, DXRecord}
 import com.fasterxml.jackson.databind.JsonNode
 import scala.collection.mutable.HashMap
 import spray.json._
@@ -38,7 +38,8 @@ object DxPath {
                            "level" -> JsString("VIEW"),
                            "limit" -> JsNumber(2))
         val rep = DXAPI.systemFindProjects(jsonNodeOfJsValue(req),
-                                           classOf[JsonNode])
+                                           classOf[JsonNode],
+                                           Utils.dxEnv)
         val repJs:JsValue = jsValueOfJsonNode(rep)
 
         val results = repJs.asJsObject.fields.get("results") match {
@@ -62,21 +63,10 @@ object DxPath {
     private def lookupObject(dxProject: DXProject,
                              objName: String): DXDataObject = {
         // If the object is a file-id (or something like it), then
-        // shortcut the expensive findDataObjects call.
-        if (objName.startsWith("applet-")) {
-            return DXApplet.getInstance(objName)
-        }
-        if (objName.startsWith("file-")) {
-            return DXFile.getInstance(objName)
-        }
-        if (objName.startsWith("record-")) {
-            return DXRecord.getInstance(objName)
-        }
-        if (objName.startsWith("workflow-")) {
-            return DXWorkflow.getInstance(objName)
-        }
-        if (objName.startsWith("gtable-")) {
-            throw new Exception(s"gtables not supported proj=${dxProject} obj=${objName}")
+        // shortcircuit the expensive API call call.
+        DxDescribe.convertToDxObject(objName) match {
+            case None => ()
+            case Some(dxobj) => return dxobj
         }
 
         trace(true, s"lookupObject: ${objName}")

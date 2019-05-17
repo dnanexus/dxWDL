@@ -164,3 +164,41 @@ object RunnerWfFragmentMode extends Enumeration {
 object Language extends Enumeration {
     val WDLvDraft2, WDLv1_0, CWLv1_0 = Value
 }
+
+case class InputParameter(name: String,
+                          ioClass: IOClass,
+                          label: String,
+                          optional : Boolean)
+case class OutputParameter(name: String,
+                           ioClass: IOClass,
+                           optional : Boolean)
+
+// This is similar to DXDataObject.Describe
+case class DxDescribe(name : String,
+                      folder: String,
+                      size : Long,
+                      project: DXProject,
+                      dxid : DXDataObject,
+                      properties: Map[String, String],
+                      inputSpec : Vector[InputParameter],
+                      outputSpec : Vector[OutputParameter])
+
+object DxDescribe {
+    def convertToDxObject(objName : String) : Option[DXDataObject] = {
+        // If the object is a file-id (or something like it), then
+        // shortcut the expensive findDataObjects call.
+        if (objName.startsWith("applet-")) {
+            return Some(DXApplet.getInstance(objName))
+        }
+        if (objName.startsWith("file-")) {
+            return Some(DXFile.getInstance(objName))
+        }
+        if (objName.startsWith("record-")) {
+            return Some(DXRecord.getInstance(objName))
+        }
+        if (objName.startsWith("workflow-")) {
+            return Some(DXWorkflow.getInstance(objName))
+        }
+        return None
+    }
+}

@@ -8,7 +8,6 @@ import scala.collection.mutable.HashMap
 import spray.json._
 
 import dxWDL.util._
-import dxWDL.util.DxBulkDescribe.MiniDescribe
 
 object Main extends App {
     sealed trait Termination
@@ -677,7 +676,7 @@ object Main extends App {
 
     // Make a list of all the files cloned for access by this applet.
     // Bulk describe all the them.
-    private def runtimeBulkFileDescribe(jobInputPath: Path) : Map[DXFile, MiniDescribe] = {
+    private def runtimeBulkFileDescribe(jobInputPath: Path) : Map[DXFile, DxDescribe] = {
         val inputs: JsValue = Utils.readFileContent(jobInputPath).parseJson
 
         val allFilesReferenced = inputs.asJsObject.fields.flatMap{

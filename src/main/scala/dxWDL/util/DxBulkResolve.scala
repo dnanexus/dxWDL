@@ -7,7 +7,7 @@
 
 package dxWDL.util
 
-import com.dnanexus.{DXAPI, DXApplet, DXDataObject, DXFile, DXProject, DXRecord, DXWorkflow}
+import com.dnanexus.{DXAPI, DXDataObject, DXProject}
 import com.fasterxml.jackson.databind.JsonNode
 import spray.json._
 
@@ -53,25 +53,6 @@ object DxBulkResolve {
         DxPathParsed(name, folder, projName, dxPath)
     }
 
-    private def convertToDxObject(objName : String) : Option[DXDataObject] = {
-        // If the object is a file-id (or something like it), then
-        // shortcut the expensive findDataObjects call.
-        if (objName.startsWith("applet-")) {
-            return Some(DXApplet.getInstance(objName))
-        }
-        if (objName.startsWith("file-")) {
-            return Some(DXFile.getInstance(objName))
-        }
-        if (objName.startsWith("record-")) {
-            return Some(DXRecord.getInstance(objName))
-        }
-        if (objName.startsWith("workflow-")) {
-            return Some(DXWorkflow.getInstance(objName))
-        }
-        return None
-    }
-
-
     // Create a request from a path like:
     //   "dx://dxWDL_playground:/test_data/fileB",
     private def makeResolutionReq(pDxPath: DxPathParsed) : JsValue = {
@@ -96,7 +77,8 @@ object DxBulkResolve {
                                "project" -> JsString(dxProject.getId))
 
         val response = DXAPI.systemResolveDataObjects(Utils.jsonNodeOfJsValue(request),
-                                                      classOf[JsonNode])
+                                                      classOf[JsonNode],
+                                                      Utils.dxEnv)
         val repJs:JsValue = Utils.jsValueOfJsonNode(response)
         val resultsPerObj:Vector[JsValue] = repJs.asJsObject.fields.get("results") match {
             case Some(JsArray(x)) => x
@@ -120,7 +102,7 @@ object DxBulkResolve {
                     case _ => throw new Exception("no id returned")
                 }
                 // safe conversion to a dx-object
-                val dxobj = convertToDxObject(dxid) match {
+                val dxobj = DxDescribe.convertToDxObject(dxid) match {
                     case None => throw new Exception(s"Bad dxid=${dxid}")
                     case Some(x) => x
                 }
@@ -147,7 +129,7 @@ object DxBulkResolve {
 
         for (p <- allDxPaths) {
             val pDxPath = parse(p)
-            convertToDxObject(pDxPath.name) match {
+            DxDescribe.convertToDxObject(pDxPath.name) match {
                 case None =>
                     rest = rest :+ pDxPath
                 case Some(dxobj) =>
