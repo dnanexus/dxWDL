@@ -481,7 +481,7 @@ object Main extends App {
         }
     }
 
-    private def dxni(args: Seq[String]): Termination = {
+    def dxni(args: Seq[String]): Termination = {
         try {
             val options = parseCmdlineOptions(args.toList)
             if (options contains "help")

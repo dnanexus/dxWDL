@@ -1,28 +1,80 @@
 package dxWDL.util
 
-import com.dnanexus.{DXAPI, DXDataObject, DXProject}
+import com.dnanexus.{DXAPI, DXDataObject, DXProject, IOClass}
 import com.fasterxml.jackson.databind.JsonNode
 import spray.json._
 
 
 object DxFindDataObjects {
+
+    private def parseParamSpec(jsv: JsValue) : IOParameter = {
+        val ioClass: IOClass = jsv.asJsObject.fields.get("class") match {
+            case None => throw new Exception("class field missing")
+            case Some(JsString(ioClass)) => IOClass.create(ioClass)
+            case other => throw new Exception(s"malformed class field ${other}")
+        }
+
+        val name: String = jsv.asJsObject.fields.get("name") match {
+            case None => throw new Exception("name field missing")
+            case Some(JsString(name)) => name
+            case other => throw new Exception(s"malformed name field ${other}")
+        }
+
+        val optional : Boolean = jsv.asJsObject.fields.get("optional") match {
+            case None => false
+            case Some(JsBoolean(flag)) => flag
+            case other => throw new Exception(s"malformed optional field ${other}")
+        }
+        IOParameter(name, ioClass, optional)
+    }
+
     private def parseDescribe(jsv: JsValue,
                               dxobj : DXDataObject,
                               dxProject: DXProject) : DxDescribe = {
-        jsv.asJsObject.getFields("name", "folder", "size", "properties", "inputSpec", "outputSpec") match {
-            case Seq(JsString(name), JsString(folder), JsNumber(size),
-                     properties, inputSpec, outputSpec) =>
-                System.out.println(s"properties=${properties}")
-                System.out.println(s"inputSpec=${inputSpec}")
-                System.out.println(s"outputSpec=${outputSpec}")
-                DxDescribe(name, folder, size.toLong, dxProject, dxobj,
-                           Map.empty, // properties
-                           Vector.empty, // inputSpec
-                           Vector.empty // outputSpec
-                )
-            case _ =>
-                throw new Exception(s"malformed describe output ${jsv.prettyPrint}")
+        val size = jsv.asJsObject.fields.get("size") match {
+            case None => None
+            case Some(JsNumber(size)) => Some(size.toLong)
+            case Some(other) => throw new Exception(s"malformed size field ${other}")
         }
+        val name: String = jsv.asJsObject.fields.get("name") match {
+            case None => throw new Exception("name field missing")
+            case Some(JsString(name)) => name
+            case other => throw new Exception(s"malformed name field ${other}")
+        }
+        val folder = jsv.asJsObject.fields.get("folder") match {
+            case None => throw new Exception("folder field missing")
+            case Some(JsString(folder)) => folder
+            case Some(other) => throw new Exception(s"malformed folder field ${other}")
+        }
+        val properties : Map[String, String] = jsv.asJsObject.fields.get("properties") match {
+            case None => Map.empty
+            case Some(JsObject(fields)) =>
+                fields.map{
+                    case (key, JsString(value)) =>
+                        key -> value
+                    case (key, other) =>
+                        throw new Exception(s"key ${key} has malformed property ${other}")
+                }.toMap
+            case Some(other) => throw new Exception(s"malformed properties field ${other}")
+        }
+        val inputSpec : Option[Vector[IOParameter]] = jsv.asJsObject.fields.get("inputSpec") match {
+            case None => None
+            case Some(JsArray(iSpecVec)) =>
+                Some(iSpecVec.map(parseParamSpec).toVector)
+            case Some(other) =>
+                throw new Exception(s"malformed inputSpec field ${other}")
+        }
+        val outputSpec : Option[Vector[IOParameter]]= jsv.asJsObject.fields.get("outputSpec") match {
+            case None => None
+            case Some(JsArray(oSpecVec)) =>
+                Some(oSpecVec.map(parseParamSpec).toVector)
+            case Some(other) =>
+                throw new Exception(s"malformed output field ${other}")
+        }
+
+        DxDescribe(name, folder, size,
+                   dxProject, dxobj,
+                   properties, inputSpec, outputSpec)
     }
 
     private def parseOneResult(jsv : JsValue) : (DXDataObject, DxDescribe) = {

@@ -203,7 +203,10 @@ case class DxIoFunctions(fileInfoDir : Map[DXFile, DxDescribe],
                         // perform an API call to get the size
                         fdx.dxFile.describe().getSize()
                     case Some(desc) =>
-                        desc.size
+                        desc.size match {
+                            case None => throw new Exception("missing size field")
+                            case Some(sz) => sz
+                        }
                 }
         }
         Future(size)

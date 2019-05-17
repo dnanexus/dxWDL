@@ -112,12 +112,12 @@ case class DxNI(verbose: Verbose,
             (Map[String, WomType], Map[String, WomType]) = {
         Utils.trace(verbose.on, s"analyzing applet ${aplName}")
         val inputSpec:Map[String, WomType] =
-            desc.inputSpec.map{ iSpec =>
+            desc.inputSpec.get.map{ iSpec =>
                 iSpec.name -> wdlTypeOfIOClass(aplName, iSpec.name,
                                                   iSpec.ioClass, iSpec.optional)
             }.toMap
         val outputSpec:Map[String, WomType] =
-            desc.outputSpec.map{ iSpec =>
+            desc.outputSpec.get.map{ iSpec =>
                 iSpec.name -> wdlTypeOfIOClass(aplName, iSpec.name,
                                                   iSpec.ioClass, iSpec.optional)
             }.toMap

@@ -35,13 +35,10 @@ object DxBulkDescribe {
                             assert(fid == dxFile.getId)
                             DxDescribe(name,
                                        folder,
-                                       size.toLong,
+                                       Some(size.toLong),
                                        DXProject.getInstance(projectId),
                                        DxDescribe.convertToDxObject(fid).get,
-                                       Map.empty, // properties
-                                       Vector.empty,  // inputSpec
-                                       Vector.empty  // runtimeSpec
-                            )
+                                       Map.empty, None, None)
                         case _ =>
                             throw new Exception(s"bad describe object ${descJs}")
                     }
