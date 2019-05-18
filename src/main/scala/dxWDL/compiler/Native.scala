@@ -377,7 +377,7 @@ case class Native(dxWDLrtId: Option[String],
         dxObjDir.lookupOtherVersions(name, digest) match {
             case None => ()
             case Some((dxObj, desc)) =>
-                Utils.trace(verbose.on, s"Found existing version of ${name} in folder ${desc.getFolder}")
+                Utils.trace(verbose.on, s"Found existing version of ${name} in folder ${desc.folder}")
                 return Some(dxObj)
         }
 

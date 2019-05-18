@@ -3,7 +3,6 @@
 package dxWDL.compiler
 
 import com.fasterxml.jackson.databind.JsonNode
-import dxWDL.util.{Verbose, Utils}
 import com.dnanexus._
 import java.time.{LocalDateTime, ZoneId}
 import java.time.format.DateTimeFormatter
@@ -11,13 +10,16 @@ import scala.collection.JavaConverters._
 import scala.collection.mutable.HashMap
 import scala.collection.mutable.HashSet
 import spray.json._
-import Utils.CHECKSUM_PROP
+
+import dxWDL.util._
+import dxWDL.util.{Verbose, Utils}
+import dxWDL.util.Utils.CHECKSUM_PROP
 
 // Keep all the information about an applet in packaged form
-case class DxObjectInfo(name:String,
-                        crDate: LocalDateTime,
-                        dxObj:DXDataObject,
-                        digest: Option[String]) {
+case class DxObjectInfo(name :String,
+                        crDate : LocalDateTime,
+                        dxObj : DXDataObject,
+                        digest : Option[String]) {
     lazy val dxClass:String =
         dxObj.getClass.getSimpleName match {
             case "DXWorkflow" => "Workflow"
@@ -44,7 +46,7 @@ case class DxObjectDirectory(ns: IR.Bundle,
     // not clear this is useful to the majority of users, so it is
     // gated by the [projectWideReuse] flag.
     private val projectWideExecutableDir :
-            Map[String, Vector[(DXDataObject, DXDataObject.Describe)]] =
+            Map[String, Vector[(DXDataObject, DxDescribe)]] =
         if (projectWideReuse) projectBulkLookup()
         else Map.empty
 
@@ -65,13 +67,10 @@ case class DxObjectDirectory(ns: IR.Bundle,
     // use by a regular dnanexus applet/workflow.
     private def bulkLookup() : HashMap[String, Vector[DxObjectInfo]] = {
         val t0 = System.nanoTime()
-        val dxObjectsInFolder: List[DXDataObject] = DXSearch.findDataObjects()
-            .inFolder(dxProject, folder)
-            .withVisibility(DXSearch.VisibilityQuery.EITHER)
-            .includeDescribeOutput(DXDataObject.DescribeOptions.get().withProperties())
-            .execute().asList().asScala.toList
-        val nrApplets = dxObjectsInFolder.count{ _.isInstanceOf[DXApplet] }
-        val nrWorkflows = dxObjectsInFolder.count{ _.isInstanceOf[DXWorkflow] }
+        val dxObjectsInFolder: Map[DXDataObject, DxDescribe] =
+            DxFindDataObjects(None, verbose).apply(dxProject, Some(folder), false, None)
+        val nrApplets = dxObjectsInFolder.count{ case (dxobj, _) => dxobj.isInstanceOf[DXApplet] }
+        val nrWorkflows = dxObjectsInFolder.count{ case (dxobj, _) => dxobj.isInstanceOf[DXWorkflow] }
         val t1 = System.nanoTime()
         val diffMSec = (t1 -t0) / (1000 * 1000)
         Utils.trace(verbose.on,
@@ -80,23 +79,18 @@ case class DxObjectDirectory(ns: IR.Bundle,
                         .stripMargin.replaceAll("\n", " "))
 
         // Leave only dx:objects that could belong to the workflow
-        val dxObjects = dxObjectsInFolder.filter{ dxObj =>
-            val desc = dxObj.getCachedDescribe()
-            val name = desc.getName
+        val dxObjects = dxObjectsInFolder.filter{ case (dxObj, desc) =>
             val appletOrWorkflow = dxObj.isInstanceOf[DXApplet] || dxObj.isInstanceOf[DXWorkflow]
-            (allExecutableNames contains name) && appletOrWorkflow
+            (allExecutableNames contains desc.name) && appletOrWorkflow
         }
 
-        val dxObjectList: List[DxObjectInfo] = dxObjects.map{ dxObj =>
-            val desc = dxObj.getCachedDescribe()
-            val name = desc.getName()
-            val crDate = desc.getCreationDate
-            val crLdt:LocalDateTime = LocalDateTime.ofInstant(crDate.toInstant(), ZoneId.systemDefault())
-
-            val props: Map[String, String] = desc.getProperties().asScala.toMap
-            val chksum = props.get(CHECKSUM_PROP)
-            DxObjectInfo(name, crLdt, dxObj, chksum)
-        }
+        val dxObjectList: List[DxObjectInfo] = dxObjects.map{
+            case (dxObj, desc) =>
+                val crLdt:LocalDateTime = LocalDateTime.ofInstant(desc.creationDate.toInstant(),
+                                                                  ZoneId.systemDefault())
+                val chksum = desc.properties.get(CHECKSUM_PROP)
+                DxObjectInfo(desc.name, crLdt, dxObj, chksum)
+        }.toList
 
         // There could be multiple versions of the same applet/workflow, collect their
         // information in vectors
@@ -127,27 +121,19 @@ case class DxObjectDirectory(ns: IR.Bundle,
     // DXSearch.findDataObjects can be an expensive call, both on the server and client sides.
     // We limit it by filtering on the CHECKSUM property, which is attached only to generated
     // applets and workflows.
-    private def projectBulkLookup() : Map[String, Vector[(DXDataObject, DXDataObject.Describe)]] = {
+    private def projectBulkLookup() : Map[String, Vector[(DXDataObject, DxDescribe)]] = {
         val t0 = System.nanoTime()
-        val dxAppletsInProject: List[DXDataObject] = DXSearch.findDataObjects()
-            .inProject(dxProject)
-            .withVisibility(DXSearch.VisibilityQuery.EITHER)
-            .withProperty(CHECKSUM_PROP)
-            .withClassApplet
-            .includeDescribeOutput(DXDataObject.DescribeOptions.get().withProperties())
-            .execute().asList().asScala.toList
+        val dxAppletsInProject: Map[DXDataObject, DxDescribe] =
+            DxFindDataObjects(None, verbose).apply(dxProject, None, true, Some("applet"))
         val nrApplets = dxAppletsInProject.size
         val t1 = System.nanoTime()
         val diffMSec = (t1 -t0) / (1000 * 1000)
         Utils.trace(verbose.on,
                     s"Found ${nrApplets} applets in project ${dxProject.getId} (${diffMSec} millisec)")
 
-        val hm = HashMap.empty[String, Vector[(DXDataObject, DXDataObject.Describe)]]
-        dxAppletsInProject.foreach{ dxApplet =>
-            val dxObj = dxApplet.asInstanceOf[DXDataObject]
-            val desc = dxObj.getCachedDescribe()
-            val props: Map[String, String] = desc.getProperties().asScala.toMap
-            props.get(CHECKSUM_PROP) match {
+        val hm = HashMap.empty[String, Vector[(DXDataObject, DxDescribe)]]
+        dxAppletsInProject.foreach{ case (dxObj, desc) =>
+            desc.properties.get(CHECKSUM_PROP) match {
                 case None => ()
                 case Some(digest) =>
                     if (hm contains digest)
@@ -173,13 +159,13 @@ case class DxObjectDirectory(ns: IR.Bundle,
     // Note: in case of checksum collision, there could be several hits.
     // Return only the one that starts with the name we are looking for.
     def lookupOtherVersions(execName: String, digest: String)
-            : Option[(DXDataObject, DXDataObject.Describe)] = {
+            : Option[(DXDataObject, DxDescribe)] = {
         val checksumMatches = projectWideExecutableDir.get(digest) match {
             case None => return None
             case Some(vec) => vec
         }
         val checksumAndNameMatches = checksumMatches.filter{ case (dxObj, dxDesc) =>
-            dxDesc.getName.startsWith(execName)
+            dxDesc.name.startsWith(execName)
         }
         if (checksumAndNameMatches.isEmpty)
             return None

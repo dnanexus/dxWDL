@@ -5,7 +5,8 @@ import com.fasterxml.jackson.databind.JsonNode
 import spray.json._
 
 
-object DxFindDataObjects {
+case class DxFindDataObjects(limit: Option[Int],
+                             verbose: Verbose) {
 
     private def parseParamSpec(jsv: JsValue) : IOParameter = {
         val ioClass: IOClass = jsv.asJsObject.fields.get("class") match {
@@ -71,9 +72,13 @@ object DxFindDataObjects {
             case Some(other) =>
                 throw new Exception(s"malformed output field ${other}")
         }
-
+        val creationDate : java.util.Date = jsv.asJsObject.fields.get("created") match {
+            case None => throw new Exception("")
+            case Some(JsNumber(date)) => new java.util.Date(date.toLong)
+            case Some(other) => throw new Exception(s"malformed created field ${other}")
+        }
         DxDescribe(name, folder, size,
-                   dxProject, dxobj,
+                   dxProject, dxobj, creationDate,
                    properties, inputSpec, outputSpec)
     }
 
@@ -110,23 +115,30 @@ object DxFindDataObjects {
     // Submit a request for a limited number of objects
     private def submitRequest(scope : JsValue,
                               dxProject: DXProject,
-                              limit: Int,
-                              cursor: Option[JsValue]) : (Map[DXDataObject, DxDescribe], Option[JsValue]) = {
+                              cursor: Option[JsValue],
+                              klass: Option[String]) : (Map[DXDataObject, DxDescribe], Option[JsValue]) = {
         val reqFields = Map("visibility" -> JsString("either"),
-                          "project" -> JsString(dxProject.getId),
-                          "describe" -> JsObject("name" -> JsBoolean(true),
-                                                 "folder" -> JsBoolean(true),
-                                                 "size" -> JsBoolean(true),
-                                                 "properties" -> JsBoolean(true),
-                                                 "inputSpec" -> JsBoolean(true),
-                                                 "outputSpec" -> JsBoolean(true)),
-                          "scope" -> scope,
-                          "limit" -> JsNumber(limit))
+                            "project" -> JsString(dxProject.getId),
+                            "describe" -> JsObject("name" -> JsBoolean(true),
+                                                   "folder" -> JsBoolean(true),
+                                                   "size" -> JsBoolean(true),
+                                                   "properties" -> JsBoolean(true),
+                                                   "inputSpec" -> JsBoolean(true),
+                                                   "outputSpec" -> JsBoolean(true)),
+                            "scope" -> scope)
+        val limitField = limit match {
+            case None => Map.empty
+            case Some(lim) =>  Map("limit" -> JsNumber(lim))
+        }
         val cursorField = cursor match {
             case None => Map.empty
             case Some(cursorValue) => Map("starting" -> cursorValue)
         }
-        val request = JsObject(reqFields ++ cursorField)
+        val classField = klass match {
+            case None => Map.empty
+            case Some(k) => Map("class" -> JsString(k))
+        }
+        val request = JsObject(reqFields ++ cursorField ++ limitField ++ classField)
         val response = DXAPI.systemFindDataObjects(Utils.jsonNodeOfJsValue(request),
                                                    classOf[JsonNode],
                                                    Utils.dxEnv)
@@ -150,30 +162,25 @@ object DxFindDataObjects {
 
     def apply(dxProject : DXProject,
               folder : Option[String],
-              recurse: Boolean) : Map[DXDataObject, DxDescribe] = {
+              recurse: Boolean,
+              klass : Option[String]) : Map[DXDataObject, DxDescribe] = {
+        klass.map{ k =>
+            if (!(Set("record", "file", "applet", "workflow") contains k))
+                throw new Exception("class limitation must be one of {record, file, applet, workflow}")
+        }
         val scope = buildScope(dxProject, folder, recurse)
-        val limit = 10
 
         var allResults = Map.empty[DXDataObject, DxDescribe]
         var cursor : Option[JsValue] = None
         do {
-            val (results, next) = submitRequest(scope, dxProject, limit, cursor)
+            val (results, next) = submitRequest(scope, dxProject, cursor, klass)
             allResults = allResults ++ results
             cursor = next
         } while (cursor != None);
         allResults
     }
 }
-
 /*
-
-DxObjectDirectory
-        val dxObjectsInFolder: List[DXDataObject] = DXSearch.findDataObjects()
-            .inFolder(dxProject, folder)
-            .withVisibility(DXSearch.VisibilityQuery.EITHER)
-            .includeDescribeOutput(DXDataObject.DescribeOptions.get().withProperties())
-            .execute().asList().asScala.toList
-
         val dxAppletsInProject: List[DXDataObject] = DXSearch.findDataObjects()
             .inProject(dxProject)
             .withVisibility(DXSearch.VisibilityQuery.EITHER)

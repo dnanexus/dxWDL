@@ -29,16 +29,20 @@ object DxBulkDescribe {
                 case None =>
                     throw new Exception(s"Could not describe object ${dxFile.getId}")
                 case Some(descJs) =>
-                    descJs.asJsObject.getFields("name", "folder", "size", "id", "project") match {
+                    descJs.asJsObject.getFields("name", "folder", "size", "id", "project", "created") match {
                         case Seq(JsString(name), JsString(folder),
-                                 JsNumber(size), JsString(fid), JsString(projectId)) =>
+                                 JsNumber(size), JsString(fid), JsString(projectId), JsNumber(created)) =>
                             assert(fid == dxFile.getId)
+                            val crDate = new java.util.Date(created.toLong)
                             DxDescribe(name,
                                        folder,
                                        Some(size.toLong),
                                        DXProject.getInstance(projectId),
                                        DxDescribe.convertToDxObject(fid).get,
-                                       Map.empty, None, None)
+                                       crDate,
+                                       Map.empty,
+                                       None,
+                                       None)
                         case _ =>
                             throw new Exception(s"bad describe object ${descJs}")
                     }
