@@ -89,7 +89,7 @@ class NativeTest extends FlatSpec with Matchers {
     it should "be able to build interfaces to native applets" taggedAs(NativeTestXX, EdgeTest) in {
         val outputPath = "/tmp/dx_extern.wdl"
         Main.dxni(
-            List("--force", "--verbose",
+            List("--force", "--quiet",
                  "--folder", "/unit_tests/applets",
                  "--project", dxTestProject.getId,
                  "--language", "wdl_draft2",

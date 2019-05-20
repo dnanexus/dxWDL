@@ -58,9 +58,8 @@ Note: the compiler ensures that the scatter will call exactly one call.
 package dxWDL.exec
 
 // DX bindings
-import com.dnanexus.{DXAPI, DXEnvironment, DXExecution, DXJob, DXSearch}
+import com.dnanexus.{DXAPI, DXExecution, DXJob}
 import com.fasterxml.jackson.databind.JsonNode
-import scala.collection.JavaConverters._
 import spray.json._
 import wom.callable.Callable._
 import wom.graph._
@@ -106,13 +105,10 @@ case class CollectSubJobs(jobInputOutput : JobInputOutput,
 
     private def findChildExecs() : Vector[DXExecution] = {
          // get the parent job
-        val dxEnv = DXEnvironment.create()
-        val dxJob = dxEnv.getJob()
+        val dxJob = Utils.dxEnv.getJob()
         val parentJob: DXJob = dxJob.describe().getParentJob()
 
-        val childExecs : Vector[DXExecution] = DXSearch.findExecutions()
-            .withParentJob(parentJob)
-            .execute().asList().asScala.toVector
+        val childExecs : Vector[DXExecution] = DxFindExecutions.apply(Some(parentJob))
 
         // make sure the collect subjob is not included. Theoretically,
         // it should not be returned as a search result, becase we did
