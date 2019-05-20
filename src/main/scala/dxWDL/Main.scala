@@ -684,7 +684,7 @@ object Main extends App {
         }.toVector
 
         // Describe all the files, in one go
-        DxBulkDescribe.apply(allFilesReferenced)
+        DxBulkDescribe.apply(allFilesReferenced, None)
     }
 
     def internalOp(args : Seq[String]) : Termination = {

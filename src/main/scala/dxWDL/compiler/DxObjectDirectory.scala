@@ -61,7 +61,7 @@ case class DxObjectDirectory(ns: IR.Bundle,
     // find all the objects in the target directory. Setup an easy to
     // use map with information on each name.
     //
-    // DXSearch.findDataObjects can be an expensive call, both on the server and client sides.
+    // findDataObjects can be an expensive call, both on the server and client sides.
     // We could limit it by filtering on the CHECKSUM property, which is attached only to generated
     // applets and workflows. However, this would miss cases where an applet name is already in
     // use by a regular dnanexus applet/workflow.
@@ -118,7 +118,7 @@ case class DxObjectDirectory(ns: IR.Bundle,
     // miss matches when we search. The cost would be creating a
     // dx:executable again, which is acceptable.
     //
-    // DXSearch.findDataObjects can be an expensive call, both on the server and client sides.
+    // findDataObjects can be an expensive call, both on the server and client sides.
     // We limit it by filtering on the CHECKSUM property, which is attached only to generated
     // applets and workflows.
     private def projectBulkLookup() : Map[String, Vector[(DXDataObject, DxDescribe)]] = {

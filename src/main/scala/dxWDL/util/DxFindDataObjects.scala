@@ -163,8 +163,8 @@ case class DxFindDataObjects(limit: Option[Int],
     def apply(dxProject : DXProject,
               folder : Option[String],
               recurse: Boolean,
-              klass : Option[String]) : Map[DXDataObject, DxDescribe] = {
-        klass.map{ k =>
+              klassRestriction : Option[String]) : Map[DXDataObject, DxDescribe] = {
+        klassRestriction.map{ k =>
             if (!(Set("record", "file", "applet", "workflow") contains k))
                 throw new Exception("class limitation must be one of {record, file, applet, workflow}")
         }
@@ -173,30 +173,10 @@ case class DxFindDataObjects(limit: Option[Int],
         var allResults = Map.empty[DXDataObject, DxDescribe]
         var cursor : Option[JsValue] = None
         do {
-            val (results, next) = submitRequest(scope, dxProject, cursor, klass)
+            val (results, next) = submitRequest(scope, dxProject, cursor, klassRestriction)
             allResults = allResults ++ results
             cursor = next
         } while (cursor != None);
         allResults
     }
 }
-/*
-        val dxAppletsInProject: List[DXDataObject] = DXSearch.findDataObjects()
-            .inProject(dxProject)
-            .withVisibility(DXSearch.VisibilityQuery.EITHER)
-            .withProperty(CHECKSUM_PROP)
-            .withClassApplet
-            .includeDescribeOutput(DXDataObject.DescribeOptions.get().withProperties())
-            .execute().asList().asScala.toList
-
-WorkflowOutputReorg
-    def bulkGetFilenames(files: Seq[DXFile], dxProject: DXProject) : Vector[String] = {
-        val info:List[DXDataObject] = DXSearch.findDataObjects()
-            .withIdsIn(files.asJava)
-            .inProject(dxProject)
-            .includeDescribeOutput()
-            .execute().asList().asScala.toList
-        info.map(_.getCachedDescribe().getName()).toVector
-    }
-
- */

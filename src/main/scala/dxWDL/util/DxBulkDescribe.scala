@@ -10,7 +10,8 @@ import spray.json._
 import dxWDL.util.Utils.DXAPI_NUM_OBJECTS_LIMIT
 
 object DxBulkDescribe {
-    private def submitRequest(dxFiles : Vector[DXFile]) : Map[DXFile, DxDescribe] = {
+    private def submitRequest(dxFiles : Vector[DXFile],
+                              dxProject : Option[DXProject]) : Map[DXFile, DxDescribe] = {
         val oids = dxFiles.map(_.getId).toVector
 
         val request = JsObject("objects" ->
@@ -53,7 +54,8 @@ object DxBulkDescribe {
 
     // Describe the names of all the files in one batch. This is much more efficient
     // than submitting file describes one-by-one.
-    def apply(files: Seq[DXFile]) : Map[DXFile, DxDescribe] = {
+    def apply(files: Seq[DXFile],
+              dxProject : Option[DXProject]) : Map[DXFile, DxDescribe] = {
         if (files.isEmpty) {
             // avoid an unnessary API call; this is important for unit tests
             // that do not have a network connection.
@@ -66,7 +68,7 @@ object DxBulkDescribe {
         // iterate on the ranges
         slices.foldLeft(Map.empty[DXFile, DxDescribe]) {
             case (accu, fileRange) =>
-                accu ++ submitRequest(fileRange.toVector)
+                accu ++ submitRequest(fileRange.toVector, dxProject)
         }
     }
 }
