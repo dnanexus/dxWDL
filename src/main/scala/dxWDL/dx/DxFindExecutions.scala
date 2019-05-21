@@ -1,4 +1,4 @@
-package dxWDL.util
+package dxWDL.dx
 
 import com.dnanexus.{DXAPI, DXJob, DXAnalysis, DXExecution}
 import com.fasterxml.jackson.databind.JsonNode
@@ -26,10 +26,10 @@ object DxFindExecutions {
             case Some(cursorValue) => Map("starting" -> cursorValue)
         }
         val request = JsObject(parentField ++ cursorField)
-        val response = DXAPI.systemFindExecutions(Utils.jsonNodeOfJsValue(request),
+        val response = DXAPI.systemFindExecutions(DxUtils.jsonNodeOfJsValue(request),
                                                   classOf[JsonNode],
-                                                  Utils.dxEnv)
-        val repJs : JsValue = Utils.jsValueOfJsonNode(response)
+                                                  DxUtils.dxEnv)
+        val repJs : JsValue = DxUtils.jsValueOfJsonNode(response)
 
         val next : Option[JsValue] = repJs.asJsObject.fields.get("next") match {
             case None => None

@@ -1,9 +1,10 @@
-package dxWDL.util
+package dxWDL.dx
 
 import com.dnanexus.{DXAPI, DXDataObject, DXProject, IOClass}
 import com.fasterxml.jackson.databind.JsonNode
 import spray.json._
 
+import dxWDL.base.Verbose
 
 case class DxFindDataObjects(limit: Option[Int],
                              verbose: Verbose) {
@@ -86,7 +87,7 @@ case class DxFindDataObjects(limit: Option[Int],
         jsv.asJsObject.getFields("project", "id", "describe") match {
             case Seq(JsString(projectId), JsString(dxid), desc) =>
                 val dxProj = DXProject.getInstance(projectId)
-                val dxobj = DxDescribe.convertToDxObject(dxid).get
+                val dxobj = DxUtils.convertToDxObject(dxid).get
                 val dxobjWithProj = DXDataObject.getInstance(dxobj.getId, dxProj)
                 (dxobjWithProj, parseDescribe(desc, dxobj, dxProj))
             case _ => throw new Exception(
@@ -139,10 +140,10 @@ case class DxFindDataObjects(limit: Option[Int],
             case Some(k) => Map("class" -> JsString(k))
         }
         val request = JsObject(reqFields ++ cursorField ++ limitField ++ classField)
-        val response = DXAPI.systemFindDataObjects(Utils.jsonNodeOfJsValue(request),
+        val response = DXAPI.systemFindDataObjects(DxUtils.jsonNodeOfJsValue(request),
                                                    classOf[JsonNode],
-                                                   Utils.dxEnv)
-        val repJs:JsValue = Utils.jsValueOfJsonNode(response)
+                                                   DxUtils.dxEnv)
+        val repJs:JsValue = DxUtils.jsValueOfJsonNode(response)
 
         val next : Option[JsValue] = repJs.asJsObject.fields.get("next") match {
             case None => None

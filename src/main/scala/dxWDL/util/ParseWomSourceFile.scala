@@ -21,6 +21,8 @@ import wom.core.WorkflowSource
 import wom.executable.WomBundle
 import wom.types._
 
+import dxWDL.base.{Language, Utils}
+
 // Read, parse, and typecheck a WDL/CWL source file. This includes loading all imported files.
 object ParseWomSourceFile {
 

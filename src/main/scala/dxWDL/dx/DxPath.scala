@@ -9,14 +9,15 @@
 
   genome_ref:/A/B/C.txt     dx://proj-xxxx:file-yyyy::/A/B/C.txt
 */
-package dxWDL.util
+package dxWDL.dx
 
 import com.dnanexus.{DXAPI, DXDataObject, DXFile, DXProject, DXRecord}
 import com.fasterxml.jackson.databind.JsonNode
 import scala.collection.mutable.HashMap
 import spray.json._
 
-import Utils.{DX_URL_PREFIX, jsonNodeOfJsValue, jsValueOfJsonNode, trace}
+import dxWDL.base.Utils.{DX_URL_PREFIX, trace}
+import DxUtils.{jsonNodeOfJsValue, jsValueOfJsonNode}
 
 object DxPath {
     // Lookup cache for projects. This saves
@@ -39,7 +40,7 @@ object DxPath {
                            "limit" -> JsNumber(2))
         val rep = DXAPI.systemFindProjects(jsonNodeOfJsValue(req),
                                            classOf[JsonNode],
-                                           Utils.dxEnv)
+                                           DxUtils.dxEnv)
         val repJs:JsValue = jsValueOfJsonNode(rep)
 
         val results = repJs.asJsObject.fields.get("results") match {
@@ -64,7 +65,7 @@ object DxPath {
                              objName: String): DXDataObject = {
         // If the object is a file-id (or something like it), then
         // shortcircuit the expensive API call call.
-        DxDescribe.convertToDxObject(objName) match {
+        DxUtils.convertToDxObject(objName) match {
             case None => ()
             case Some(dxobj) => return dxobj
         }
@@ -90,7 +91,7 @@ object DxPath {
             lookupObject(dxProject, objName)
         } else if (components.length == 1) {
             val objName = components(0)
-            val crntProj = Utils.dxEnv.getProjectContext()
+            val crntProj = DxUtils.dxEnv.getProjectContext()
             lookupObject(crntProj, objName)
         } else {
             throw new Exception(s"Path ${dxPath} is invalid")

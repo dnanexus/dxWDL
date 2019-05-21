@@ -21,15 +21,17 @@ This is the dx JSON input:
 package dxWDL.compiler
 
 import com.dnanexus.{DXFile, DXProject}
-import IR.{CVar, SArg, COMMON, OUTPUT_SECTION, REORG}
 import scala.collection.mutable.HashMap
 import java.nio.file.Path
 import spray.json._
 import wom.types._
 import wom.values._
 
+import dxWDL.base._
+import dxWDL.base.Utils._
+import dxWDL.dx.{DxDescribe, DxBulkResolve, DxUtils}
 import dxWDL.util._
-import dxWDL.util.Utils.DX_URL_PREFIX
+import IR.{CVar, SArg, COMMON, OUTPUT_SECTION, REORG}
 
 // scan a Cromwell style JSON input file, and return all the dx:files in it.
 // An input file for workflow foo could look like this:
@@ -143,7 +145,7 @@ case class InputFileScan(bundle: IR.Bundle,
 
         // files that have already been resolved
         val dxFiles : Vector[DXFile] = jsFileDesc.collect{
-            case jsv : JsObject => Utils.dxFileFromJsValue(jsv)
+            case jsv : JsObject => DxUtils.dxFileFromJsValue(jsv)
         }.toVector
 
         // Paths that look like this: "dx://dxWDL_playground:/test_data/fileB".
@@ -184,7 +186,7 @@ case class InputFile(fileInfoDir: Map[DXFile, DxDescribe],
             case (WomSingleFileType, JsObject(_)) =>
                 // Convert the path in DNAx to a string. We can later
                 // decide if we want to download it or not
-                val dxFile = Utils.dxFileFromJsValue(jsValue)
+                val dxFile = DxUtils.dxFileFromJsValue(jsValue)
                 val FurlDx(s, _, _) = Furl.dxFileToFurl(dxFile, fileInfoDir)
                 WomSingleFile(s)
 
@@ -318,7 +320,7 @@ case class InputFile(fileInfoDir: Map[DXFile, DxDescribe],
                 // Identify platform file paths by their prefix,
                 // do a lookup, and create a dxlink
                 val dxFile = path2file(s)
-                Utils.dxFileToJsValue(dxFile)
+                DxUtils.dxFileToJsValue(dxFile)
 
             case JsBoolean(_) | JsNull | JsNumber(_) | JsString(_) => jsv
             case JsObject(fields) =>

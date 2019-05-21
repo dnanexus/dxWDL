@@ -50,7 +50,8 @@ import scala.util.matching.Regex
 import spray.json._
 import wom.types._
 
-import dxWDL.util._
+import dxWDL.base._
+import dxWDL.dx._
 
 case class IoSpec(name: String,
                   ioClass: IOClass,
@@ -321,9 +322,9 @@ case class DxNI(verbose: Verbose,
                            "describe" -> JsObject("inputSpec" -> JsBoolean(true),
                                                   "outputSpec" -> JsBoolean(true)),
                            "limit" -> JsNumber(1000))
-        val rep = DXAPI.systemFindApps(Utils.jsonNodeOfJsValue(req),
+        val rep = DXAPI.systemFindApps(DxUtils.jsonNodeOfJsValue(req),
                                        classOf[JsonNode])
-        val repJs:JsValue = Utils.jsValueOfJsonNode(rep)
+        val repJs:JsValue = DxUtils.jsValueOfJsonNode(rep)
         val appsJs = repJs.asJsObject.fields.get("results") match {
             case Some(JsArray(apps)) => apps
             case _ => throw new Exception(s"""|malformed reply to findApps

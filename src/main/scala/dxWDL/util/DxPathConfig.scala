@@ -2,6 +2,8 @@ package dxWDL.util
 
 import java.nio.file.{Path}
 
+import dxWDL.base.Utils
+
 // configuration of paths. This is used in several distinct and seemingly disjoint
 // cases:
 //  - compile time

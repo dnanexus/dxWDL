@@ -4,6 +4,9 @@ import org.scalatest.{FlatSpec, Matchers}
 import spray.json._
 import wom.values._
 
+import dxWDL.base._
+import dxWDL.base.Utils
+
 class InstanceTypeDBTest extends FlatSpec with Matchers {
 
     val dbFull = InstanceTypeDB.genTestDB(true)

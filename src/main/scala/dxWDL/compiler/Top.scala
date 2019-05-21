@@ -11,8 +11,14 @@ import wom.executable.WomBundle
 import wom.types._
 import wom.graph.expression._
 
+import dxWDL.base._
+import dxWDL.base.Utils.{DX_URL_PREFIX, DX_WDL_ASSET}
+import dxWDL.dx._
 import dxWDL.util._
-import dxWDL.util.Utils.{DX_URL_PREFIX, DX_WDL_ASSET}
+
+// The end result of the compiler
+case class CompilationResults(primaryCallable: Option[DxExec],
+                              execDict: Map[String, DxExec])
 
 case class Top(cOpt: CompilerOptions) {
     val verbose = cOpt.verbose
@@ -65,11 +71,11 @@ case class Top(cOpt: CompilerOptions) {
         val region2project = Utils.getRegions()
         val (projNameRt, folder)  = getProjectWithRuntimeLibrary(region2project, region)
         val dxProjRt = DxPath.lookupProject(projNameRt)
-        Utils.cloneAsset(DXRecord.getInstance(dxWDLrtId),
-                         dxProject,
-                         DX_WDL_ASSET,
-                         dxProjRt,
-                         verbose)
+        DxUtils.cloneAsset(DXRecord.getInstance(dxWDLrtId),
+                           dxProject,
+                           DX_WDL_ASSET,
+                           dxProjRt,
+                           verbose)
     }
 
     // Backend compiler pass
@@ -88,7 +94,7 @@ case class Top(cOpt: CompilerOptions) {
             case CompilerFlag.All =>
                 // get billTo and region from the project, then find the runtime asset
                 // in the current region.
-                val (billTo, region) = Utils.projectDescribeExtraInfo(dxProject)
+                val (billTo, region) = DxUtils.projectDescribeExtraInfo(dxProject)
                 val lrtId = getAssetId(region)
                 cloneRtLibraryToProject(region, lrtId, dxProject)
                 Some(lrtId)

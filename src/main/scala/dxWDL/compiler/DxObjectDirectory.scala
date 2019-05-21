@@ -11,9 +11,9 @@ import scala.collection.mutable.HashMap
 import scala.collection.mutable.HashSet
 import spray.json._
 
-import dxWDL.util._
-import dxWDL.util.{Verbose, Utils}
-import dxWDL.util.Utils.CHECKSUM_PROP
+import dxWDL.base._
+import dxWDL.base.Utils.CHECKSUM_PROP
+import dxWDL.dx.{DxUtils, DxDescribe, DxFindDataObjects}
 
 // Keep all the information about an applet in packaged form
 case class DxObjectInfo(name :String,
@@ -216,11 +216,11 @@ case class DxObjectDirectory(ns: IR.Bundle,
         dxClass match {
             case "Workflow" =>
                 DXAPI.workflowRename(objInfo.dxObj.getId,
-                                     Utils.jsonNodeOfJsValue(req),
+                                     DxUtils.jsonNodeOfJsValue(req),
                                      classOf[JsonNode])
             case "Applet" =>
                 DXAPI.appletRename(objInfo.dxObj.getId,
-                                   Utils.jsonNodeOfJsValue(req),
+                                   DxUtils.jsonNodeOfJsValue(req),
                                    classOf[JsonNode])
             case other => throw new Exception(s"Unkown class ${other}")
         }

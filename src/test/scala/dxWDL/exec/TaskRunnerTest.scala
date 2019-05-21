@@ -8,7 +8,8 @@ import wom.executable.WomBundle
 import wom.types._
 import wom.values._
 
-import dxWDL.util.{DxIoFunctions, DxPathConfig, InstanceTypeDB, ParseWomSourceFile, Utils}
+import dxWDL.base.Utils
+import dxWDL.util.{DxIoFunctions, DxPathConfig, InstanceTypeDB, ParseWomSourceFile}
 
 // This test module requires being logged in to the platform.
 // It compiles WDL scripts without the runtime library.

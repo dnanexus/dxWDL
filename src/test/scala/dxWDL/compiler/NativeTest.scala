@@ -1,10 +1,12 @@
 package dxWDL.compiler
 
-import dxWDL.Main
-import dxWDL.util.{DxPath, ParseWomSourceFile}
 import java.nio.file.{Path, Paths}
 import org.scalatest.{FlatSpec, Matchers}
 import scala.io.Source
+
+import dxWDL.Main
+import dxWDL.dx.DxPath
+import dxWDL.util.ParseWomSourceFile
 
 // This test module requires being logged in to the platform.
 // It compiles WDL scripts without the runtime library.

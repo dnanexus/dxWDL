@@ -14,6 +14,7 @@ import wom.types._
 import wom.values._
 
 import dxWDL.base._
+import dxWDL.dx.{DxDescribe, DXWorkflowStage, DxUtils}
 
 // A union of all the different ways of building a value
 // from JSON passed by the platform.
@@ -60,7 +61,7 @@ case class WdlVarLinksConverter(fileInfoDir: Map[DXFile, DxDescribe],
         def handleFile(path:String) : JsValue =  {
             Furl.parse(path) match {
                 case FurlDx(path, _, dxFile) =>
-                    Utils.dxFileToJsValue(dxFile)
+                    DxUtils.dxFileToJsValue(dxFile)
                 case FurlLocal(path) =>
                     // A local file.
                     JsString(path)
@@ -206,7 +207,7 @@ case class WdlVarLinksConverter(fileInfoDir: Map[DXFile, DxDescribe],
             case (WomSingleFileType, JsObject(_)) =>
                 // Convert the path in DNAx to a string. We can later
                 // decide if we want to download it or not
-                val dxFile = Utils.dxFileFromJsValue(jsValue)
+                val dxFile = DxUtils.dxFileFromJsValue(jsValue)
                 val FurlDx(s, _, _) = Furl.dxFileToFurl(dxFile, fileInfoDir)
                 WomSingleFile(s)
 
@@ -274,11 +275,11 @@ case class WdlVarLinksConverter(fileInfoDir: Map[DXFile, DxDescribe],
 
     def unpackJobInput(name: String, womType: WomType, jsv: JsValue) : (WomValue,
                                                                         Vector[DXFile]) = {
-        if (Utils.isNativeDxType(womType)) {
+        if (DxUtils.isNativeDxType(womType)) {
             // no unpacking is needed, this is a primitive, or an array of primitives.
             // it is directly mapped to dnanexus types.
             val womValue = jobInputToWomValue(name, womType, jsv)
-            val dxFiles = Utils.findDxFiles(jsv)
+            val dxFiles = DxUtils.findDxFiles(jsv)
             return (womValue, dxFiles)
         }
 
@@ -307,7 +308,7 @@ case class WdlVarLinksConverter(fileInfoDir: Map[DXFile, DxDescribe],
                 JsObject(fields - "womType")
             }
         val womValue = jobInputToWomValue(name, womType, jsv1)
-        val dxFiles = Utils.findDxFiles(jsv1)
+        val dxFiles = DxUtils.findDxFiles(jsv1)
         (womValue, dxFiles)
     }
 
@@ -333,7 +334,7 @@ case class WdlVarLinksConverter(fileInfoDir: Map[DXFile, DxDescribe],
                     JsObject("$dnanexus_link" -> JsObject(
                                  "workflowInputField" -> JsString(nodots(varEncName))))
                 case DxlExec(dxJob, varEncName) =>
-                    Utils.makeEBOR(dxJob, nodots(varEncName))
+                    DxUtils.makeEBOR(dxJob, nodots(varEncName))
             }
             (bindEncName, jsv)
         }
@@ -342,8 +343,8 @@ case class WdlVarLinksConverter(fileInfoDir: Map[DXFile, DxDescribe],
             wvl.dxlink match {
                 case DxlValue(jsn) =>
                     // files that are embedded in the structure
-                    val dxFiles = Utils.findDxFiles(jsn)
-                    val jsFiles = dxFiles.map(x => Utils.jsValueOfJsonNode(x.getLinkAsJson))
+                    val dxFiles = DxUtils.findDxFiles(jsn)
+                    val jsFiles = dxFiles.map(x => DxUtils.jsValueOfJsonNode(x.getLinkAsJson))
                     // convert the top level structure into a hash
                     val hash = jsValueToDxHash(womType, jsn)
                     Map(bindEncName -> hash,
@@ -371,13 +372,13 @@ case class WdlVarLinksConverter(fileInfoDir: Map[DXFile, DxDescribe],
                     )
                 case DxlExec(dxJob, varEncName) =>
                     val varEncName_F = varEncName + Utils.FLAT_FILES_SUFFIX
-                    Map(bindEncName -> Utils.makeEBOR(dxJob, nodots(varEncName)),
-                        bindEncName_F -> Utils.makeEBOR(dxJob, nodots(varEncName_F)))
+                    Map(bindEncName -> DxUtils.makeEBOR(dxJob, nodots(varEncName)),
+                        bindEncName_F -> DxUtils.makeEBOR(dxJob, nodots(varEncName_F)))
             }
         }
 
         val womType = Utils.stripOptional(wvl.womType)
-        if (Utils.isNativeDxType(womType)) {
+        if (DxUtils.isNativeDxType(womType)) {
             // Types that are supported natively in DX
             List(mkSimple())
         } else {

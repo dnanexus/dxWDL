@@ -1,13 +1,13 @@
 // Describe a large number of platform objects in bulk.
 
-package dxWDL.util
+package dxWDL.dx
 
 import com.dnanexus.{DXAPI, DXFile, DXProject}
 import com.fasterxml.jackson.databind.JsonNode
 import spray.json._
 
 // maximal number of objects in a single API request
-import dxWDL.util.Utils.DXAPI_NUM_OBJECTS_LIMIT
+import dxWDL.base.Utils.DXAPI_NUM_OBJECTS_LIMIT
 
 object DxBulkDescribe {
     private def submitRequest(dxFiles : Vector[DXFile],
@@ -16,10 +16,10 @@ object DxBulkDescribe {
 
         val request = JsObject("objects" ->
                                    JsArray(oids.map{x => JsString(x) }))
-        val response = DXAPI.systemDescribeDataObjects(Utils.jsonNodeOfJsValue(request),
+        val response = DXAPI.systemDescribeDataObjects(DxUtils.jsonNodeOfJsValue(request),
                                                        classOf[JsonNode],
-                                                       Utils.dxEnv)
-        val repJs:JsValue = Utils.jsValueOfJsonNode(response)
+                                                       DxUtils.dxEnv)
+        val repJs:JsValue = DxUtils.jsValueOfJsonNode(response)
         val resultsPerObj:Vector[JsValue] = repJs.asJsObject.fields.get("results") match {
             case Some(JsArray(x)) => x
             case other => throw new Exception(s"API call returned invalid data ${other}")
@@ -39,7 +39,7 @@ object DxBulkDescribe {
                                        folder,
                                        Some(size.toLong),
                                        DXProject.getInstance(projectId),
-                                       DxDescribe.convertToDxObject(fid).get,
+                                       DxUtils.convertToDxObject(fid).get,
                                        crDate,
                                        Map.empty,
                                        None,

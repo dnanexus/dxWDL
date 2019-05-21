@@ -13,6 +13,8 @@ import spray.json._
 import wom.callable.{WorkflowDefinition}
 import wom.types.WomType
 
+import dxWDL.base.Utils
+import dxWDL.dx._
 import dxWDL.util._
 
 case class WorkflowOutputReorg(wf: WorkflowDefinition,
@@ -50,7 +52,7 @@ case class WorkflowOutputReorg(wf: WorkflowDefinition,
                                "input" -> JsBoolean(true),
                                "output" -> JsBoolean(true)))
         val rep = DXAPI.analysisDescribe(dxAnalysis.getId(), req, classOf[JsonNode])
-        val repJs:JsValue = Utils.jsValueOfJsonNode(rep)
+        val repJs:JsValue = DxUtils.jsValueOfJsonNode(rep)
         val outputs = repJs.asJsObject.fields.get("output") match {
             case None => throw new Exception("Failed to get analysis outputs")
             case Some(x) => x
@@ -60,8 +62,8 @@ case class WorkflowOutputReorg(wf: WorkflowDefinition,
             case Some(x) => x
         }
 
-        val fileOutputs : Set[DXFile] = Utils.findDxFiles(outputs).toSet
-        val fileInputs: Set[DXFile] = Utils.findDxFiles(inputs).toSet
+        val fileOutputs : Set[DXFile] = DxUtils.findDxFiles(outputs).toSet
+        val fileInputs: Set[DXFile] = DxUtils.findDxFiles(inputs).toSet
         val realOutputs:Set[DXFile] = fileOutputs.toSet -- fileInputs.toSet
         Utils.appletLog(verbose, s"analysis has ${fileOutputs.size} output files")
         Utils.appletLog(verbose, s"analysis has ${fileInputs.size} input files")
@@ -91,7 +93,7 @@ case class WorkflowOutputReorg(wf: WorkflowDefinition,
 
     // Move all intermediate results to a sub-folder
     def moveIntermediateResultFiles(exportFiles: Vector[DXFile]): Unit = {
-        val dxEnv = Utils.dxEnv
+        val dxEnv = DxUtils.dxEnv
         val dxProject = dxEnv.getProjectContext()
         val dxProjDesc = dxProject.describe
         val dxAnalysis = dxEnv.getJob.describe.getAnalysis

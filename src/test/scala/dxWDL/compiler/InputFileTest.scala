@@ -5,7 +5,7 @@ import org.scalatest.{FlatSpec, Matchers}
 import org.scalatest.Inside._
 
 import dxWDL.{Main}
-import dxWDL.util.Utils
+import dxWDL.dx.DxUtils
 
 // These tests involve compilation -without- access to the platform.
 //
@@ -15,7 +15,7 @@ class InputFileTest extends FlatSpec with Matchers {
         Paths.get(p)
     }
 
-    val dxProject = Utils.dxEnv.getProjectContext()
+    val dxProject = DxUtils.dxEnv.getProjectContext()
     if (dxProject == null)
         throw new Exception("Must be logged in to run this test")
 

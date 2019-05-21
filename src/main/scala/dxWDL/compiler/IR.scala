@@ -9,10 +9,12 @@
 package dxWDL.compiler
 
 import com.dnanexus.DXFile
-import dxWDL.util.{DXWorkflowStage, Utils}
 import wom.callable.CallableTaskDefinition
 import wom.types.WomType
 import wom.values.WomValue
+
+import dxWDL.base.Utils
+import dxWDL.dx.DXWorkflowStage
 
 object IR {
     // stages that the compiler uses in generated DNAx workflows

@@ -7,6 +7,8 @@ import java.nio.file.{Path, Paths}
 import scala.collection.mutable.HashMap
 import spray.json._
 
+import dxWDL.base._
+import dxWDL.dx._
 import dxWDL.util._
 
 object Main extends App {
@@ -576,7 +578,7 @@ object Main extends App {
                                    dxPathConfig : DxPathConfig,
                                    dxIoFunctions : DxIoFunctions,
                                    rtDebugLvl: Int): Termination = {
-        val dxProject = Utils.dxEnv.getProjectContext()
+        val dxProject = DxUtils.dxEnv.getProjectContext()
 
         // Parse the inputs, convert to WOM values. Delay downloading files
         // from the platform, we may not need to access them.
@@ -652,7 +654,7 @@ object Main extends App {
                             s"""|applet field not found locally, performing
                                 |an API call.
                                 |""".stripMargin)
-                val dxJob : DXJob = Utils.dxEnv.getJob()
+                val dxJob : DXJob = DxUtils.dxEnv.getJob()
                 dxJob.describe().getApplet()
             case Some(JsString(x)) =>
                 DXApplet.getInstance(x)
@@ -661,7 +663,7 @@ object Main extends App {
         }
 
         val descOptions = DXDataObject.DescribeOptions.get().withDetails
-        val details: JsValue = Utils.jsValueOfJsonNode(
+        val details: JsValue = DxUtils.jsValueOfJsonNode(
             applet.describe(descOptions).getDetails(classOf[JsonNode]))
 
         val JsString(womSourceCodeEncoded) = details.asJsObject.fields("womSourceCode")
@@ -680,7 +682,7 @@ object Main extends App {
         val inputs: JsValue = Utils.readFileContent(jobInputPath).parseJson
 
         val allFilesReferenced = inputs.asJsObject.fields.flatMap{
-            case (_, jsElem) => Utils.findDxFiles(jsElem)
+            case (_, jsElem) => DxUtils.findDxFiles(jsElem)
         }.toVector
 
         // Describe all the files, in one go

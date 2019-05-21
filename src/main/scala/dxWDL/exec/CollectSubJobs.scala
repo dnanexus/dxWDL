@@ -66,6 +66,8 @@ import wom.graph._
 import wom.types._
 import wom.values._
 
+import dxWDL.base._
+import dxWDL.dx._
 import dxWDL.util._
 
 case class ChildExecDesc(execName: String,
@@ -89,11 +91,11 @@ case class CollectSubJobs(jobInputOutput : JobInputOutput,
 
         // Run a sub-job with the "collect" entry point.
         // We need to provide the exact same inputs.
-        val dxSubJob : DXJob = Utils.runSubJob("collect",
-                                               Some(instanceTypeDB.defaultInstanceType),
-                                               inputsRaw,
-                                               childJobs,
-                                               maxVerboseLevel)
+        val dxSubJob : DXJob = DxUtils.runSubJob("collect",
+                                                 Some(instanceTypeDB.defaultInstanceType),
+                                                 inputsRaw,
+                                                 childJobs,
+                                                 maxVerboseLevel)
 
         // Return promises (JBORs) for all the outputs. Since the signature of the sub-job
         // is exactly the same as the parent, we can immediately exit the parent job.
@@ -105,7 +107,7 @@ case class CollectSubJobs(jobInputOutput : JobInputOutput,
 
     private def findChildExecs() : Vector[DXExecution] = {
          // get the parent job
-        val dxJob = Utils.dxEnv.getJob()
+        val dxJob = DxUtils.dxEnv.getJob()
         val parentJob: DXJob = dxJob.describe().getParentJob()
 
         val childExecs : Vector[DXExecution] = DxFindExecutions.apply(Some(parentJob))
@@ -131,8 +133,8 @@ case class CollectSubJobs(jobInputOutput : JobInputOutput,
         val req = JsObject("executions" -> JsArray(jobInfoReq))
         System.err.println(s"bulk-describe request=${req}")
         val retval: JsValue =
-            Utils.jsValueOfJsonNode(
-                DXAPI.systemDescribeExecutions(Utils.jsonNodeOfJsValue(req), classOf[JsonNode]))
+            DxUtils.jsValueOfJsonNode(
+                DXAPI.systemDescribeExecutions(DxUtils.jsonNodeOfJsValue(req), classOf[JsonNode]))
         val results:Vector[JsValue] = retval.asJsObject.fields.get("results") match {
             case Some(JsArray(x)) => x.toVector
             case _ => throw new Exception(s"wrong type for executableName ${retval}")

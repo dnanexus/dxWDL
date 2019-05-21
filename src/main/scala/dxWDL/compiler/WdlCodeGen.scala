@@ -4,6 +4,7 @@ import scala.util.matching.Regex
 import wom.types._
 import wom.values._
 
+import dxWDL.base._
 import dxWDL.base.WomTypeSerialization.typeName
 import dxWDL.util._
 

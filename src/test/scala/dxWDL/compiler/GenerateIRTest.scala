@@ -6,7 +6,8 @@ import org.scalatest.Inside._
 import wom.callable.{CallableTaskDefinition, MetaValueElement}
 
 import dxWDL.Main
-import dxWDL.util.Utils
+import dxWDL.base.Utils
+import dxWDL.dx.DxUtils
 
 // These tests involve compilation -without- access to the platform.
 //
@@ -16,7 +17,7 @@ class GenerateIRTest extends FlatSpec with Matchers {
         Paths.get(p)
     }
 
-    private val dxProject = Utils.dxEnv.getProjectContext()
+    private val dxProject = DxUtils.dxEnv.getProjectContext()
     if (dxProject == null)
         throw new Exception("Must be logged in to run this test")
 
@@ -34,7 +35,7 @@ class GenerateIRTest extends FlatSpec with Matchers {
                         "--verbose",
                         "--verboseKey", "GenerateIR",
                         "--locked",
-                        "--project", Utils.dxEnv.getProjectContext().getId)
+                        "--project", DxUtils.dxEnv.getProjectContext().getId)
 
     it should "IR compile a single WDL task" in {
         val path = pathFromBasename("compiler", "add.wdl")
@@ -158,7 +159,7 @@ class GenerateIRTest extends FlatSpec with Matchers {
         val path = pathFromBasename("input_file", "missing_args.wdl")
         Main.compile(
             path.toString :: List("--compileMode", "ir", "--quiet",
-                                  "--project", Utils.dxEnv.getProjectContext().getId)
+                                  "--project", DxUtils.dxEnv.getProjectContext().getId)
         ) shouldBe a [Main.SuccessfulTerminationIR]
     }
 

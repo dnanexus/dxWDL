@@ -9,6 +9,9 @@ import wom.expression.{IoFunctionSet, PathFunctionSet}
 import wom.expression.IoFunctionSet.IoElement
 import wom.values._
 
+import dxWDL.base.{AppInternalException, Utils}
+import dxWDL.dx.{DxDescribe, DxUtils}
+
 case class DxPathFunctions(fileInfoDir : Map[DXFile, DxDescribe],
                            config: DxPathConfig,
                            runtimeDebugLevel: Int) extends PathFunctionSet {
@@ -103,7 +106,7 @@ case class DxIoFunctions(fileInfoDir : Map[DXFile, DxDescribe],
                         throw new Exception(s"File ${p} does not exist")
                 }
             case fdx : FurlDx =>
-                Utils.downloadString(fdx.dxFile)
+                DxUtils.downloadString(fdx.dxFile)
         }
         Future(content)
     }

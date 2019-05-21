@@ -9,6 +9,8 @@ import wom.graph._
 import wom.graph.expression._
 import wom.types._
 
+import dxWDL.base.Utils
+
 class BlockTest extends FlatSpec with Matchers {
     private def pathFromBasename(dir: String, basename: String) : Path = {
         val p = getClass.getResource(s"/${dir}/${basename}").getPath

@@ -16,7 +16,9 @@
 package dxWDL.util
 
 import com.dnanexus.{DXFile, DXProject}
-import Utils.DX_URL_PREFIX
+import dxWDL.base.Utils
+import dxWDL.base.Utils.DX_URL_PREFIX
+import dxWDL.dx.DxDescribe
 
 sealed trait Furl
 

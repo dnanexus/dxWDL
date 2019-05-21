@@ -1,4 +1,4 @@
-package dxWDL.util
+package dxWDL.base
 
 import org.scalatest.{FlatSpec, Matchers}
 
