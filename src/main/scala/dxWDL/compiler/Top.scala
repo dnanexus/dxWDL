@@ -5,16 +5,20 @@ package dxWDL.compiler
 
 import com.dnanexus._
 import java.nio.file.{Path, Paths}
-import scala.collection.JavaConverters._
 
 import wom.callable._
 import wom.executable.WomBundle
 import wom.types._
 import wom.graph.expression._
 
+import dxWDL.base._
+import dxWDL.base.Utils.{DX_URL_PREFIX, DX_WDL_ASSET}
+import dxWDL.dx._
 import dxWDL.util._
-import dxWDL.util.Utils.DX_WDL_ASSET
-import dxWDL.util.DxBulkDescribe.MiniDescribe
+
+// The end result of the compiler
+case class CompilationResults(primaryCallable: Option[DxExec],
+                              execDict: Map[String, DxExec])
 
 case class Top(cOpt: CompilerOptions) {
     val verbose = cOpt.verbose
@@ -47,17 +51,16 @@ case class Top(cOpt: CompilerOptions) {
         val dxProjRt = DxPath.lookupProject(projNameRt)
         Utils.trace(verbose.on, s"Looking for asset-id in ${projNameRt}:/${folder}")
 
-        val found:List[DXDataObject] =
-            DXSearch.findDataObjects()
-                .nameMatchesExactly(DX_WDL_ASSET)
-                .inFolder(dxProjRt, folder)
-                .execute().asList().asScala.toList
-        if (found.length == 0)
+        val assetDxPath = s"${DX_URL_PREFIX}${dxProjRt.getId}:${folder}/${DX_WDL_ASSET}"
+        val found : Map[String, DXDataObject] =
+            DxBulkResolve.apply(Vector(assetDxPath), dxProjRt)
+
+        if (found.size == 0)
             throw new Exception(s"Could not find runtime asset at ${dxProjRt.getId}:${folder}/${DX_WDL_ASSET}")
-        if (found.length > 1)
+        if (found.size > 1)
             throw new Exception(s"Found more than one dx:object named ${DX_WDL_ASSET} in path ${dxProjRt.getId}:${folder}")
 
-        found(0).getId
+        found.values.head.getId
     }
 
     // We need the dxWDL runtime library cloned into this project, so it will
@@ -68,11 +71,11 @@ case class Top(cOpt: CompilerOptions) {
         val region2project = Utils.getRegions()
         val (projNameRt, folder)  = getProjectWithRuntimeLibrary(region2project, region)
         val dxProjRt = DxPath.lookupProject(projNameRt)
-        Utils.cloneAsset(DXRecord.getInstance(dxWDLrtId),
-                         dxProject,
-                         DX_WDL_ASSET,
-                         dxProjRt,
-                         verbose)
+        DxUtils.cloneAsset(DXRecord.getInstance(dxWDLrtId),
+                           dxProject,
+                           DX_WDL_ASSET,
+                           dxProjRt,
+                           verbose)
     }
 
     // Backend compiler pass
@@ -80,7 +83,7 @@ case class Top(cOpt: CompilerOptions) {
                               folder: String,
                               dxProject: DXProject,
                               runtimePathConfig: DxPathConfig,
-                              fileInfoDir: Map[DXFile, MiniDescribe]) : CompilationResults = {
+                              fileInfoDir: Map[DXFile, DxDescribe]) : CompilationResults = {
         val dxWDLrtId: Option[String] = cOpt.compileMode match {
             case CompilerFlag.IR =>
                 throw new Exception("Invalid value IR for compilation mode")
@@ -91,7 +94,7 @@ case class Top(cOpt: CompilerOptions) {
             case CompilerFlag.All =>
                 // get billTo and region from the project, then find the runtime asset
                 // in the current region.
-                val (billTo, region) = Utils.projectDescribeExtraInfo(dxProject)
+                val (billTo, region) = DxUtils.projectDescribeExtraInfo(dxProject)
                 val lrtId = getAssetId(region)
                 cloneRtLibraryToProject(region, lrtId, dxProject)
                 Some(lrtId)
@@ -216,7 +219,7 @@ case class Top(cOpt: CompilerOptions) {
     // reduces the number of API calls.
     private def bulkFileDescribe(bundle: IR.Bundle,
                                  dxProject: DXProject) : (Map[String, DXFile],
-                                                          Map[DXFile, MiniDescribe]) = {
+                                                          Map[DXFile, DxDescribe]) = {
         val defResults : InputFileScanResults = cOpt.defaults match {
             case None => InputFileScanResults(Map.empty, Vector.empty)
             case Some(path) =>
@@ -231,7 +234,7 @@ case class Top(cOpt: CompilerOptions) {
         }
 
         (allResults.path2file,
-         DxBulkDescribe.apply(allResults.dxFiles))
+         DxBulkDescribe.apply(allResults.dxFiles, Some(dxProject)))
     }
 
 
@@ -258,7 +261,7 @@ case class Top(cOpt: CompilerOptions) {
     // Compile IR only
     private def handleInputFiles(bundle: IR.Bundle,
                                  path2file: Map[String, DXFile],
-                                 fileInfoDir: Map[DXFile, MiniDescribe]) : IR.Bundle = {
+                                 fileInfoDir: Map[DXFile, DxDescribe]) : IR.Bundle = {
         val bundle2: IR.Bundle = cOpt.defaults match {
             case None => bundle
             case Some(path) =>

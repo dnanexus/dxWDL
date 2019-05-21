@@ -13,7 +13,9 @@ import wom.graph.expression._
 import wom.values._
 import wom.types._
 
-import dxWDL.util._
+import dxWDL.base.{Utils, RunnerWfFragmentMode}
+import dxWDL.dx.ExecLinkInfo
+import dxWDL.util.{Block, DxIoFunctions, DxPathConfig, InstanceTypeDB, ParseWomSourceFile}
 
 // This test module requires being logged in to the platform.
 // It compiles WDL scripts without the runtime library.

@@ -1,4 +1,4 @@
-package dxWDL.util
+package dxWDL.base
 
 // Place to put any extra options, equivalent to Cromwell workflowOptions.
 // Also, allows dnanexus specific configuration per task.

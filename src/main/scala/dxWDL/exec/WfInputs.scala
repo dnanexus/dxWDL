@@ -8,6 +8,7 @@ import wom.callable.{WorkflowDefinition}
 import wom.values._
 import wom.types.WomType
 
+import dxWDL.base.Utils
 import dxWDL.util._
 
 case class WfInputs(wf: WorkflowDefinition,

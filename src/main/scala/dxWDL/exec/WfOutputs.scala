@@ -12,6 +12,7 @@ import wom.graph._
 import wom.values._
 import wom.types._
 
+import dxWDL.base.Utils
 import dxWDL.util._
 
 case class WfOutputs(wf: WorkflowDefinition,

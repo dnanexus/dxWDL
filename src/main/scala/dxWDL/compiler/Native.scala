@@ -12,10 +12,10 @@ import spray.json._
 import wom.types._
 import wom.values._
 
-import dxWDL.base.WomTypeSerialization
+import dxWDL.base._
+//import dxWDL.base.WomTypeSerialization
 import dxWDL.util._
-import dxWDL.util.DxBulkDescribe.MiniDescribe
-import dxWDL.util.Utils.{CHECKSUM_PROP, jsonNodeOfJsValue, trace}
+import dxWDL.dx._
 import IR.{CVar, SArg}
 
 case class Native(dxWDLrtId: Option[String],
@@ -24,7 +24,7 @@ case class Native(dxWDLrtId: Option[String],
                   dxObjDir: DxObjectDirectory,
                   instanceTypeDB: InstanceTypeDB,
                   dxPathConfig: DxPathConfig,
-                  fileInfoDir : Map[DXFile, MiniDescribe],
+                  fileInfoDir : Map[DXFile, DxDescribe],
                   typeAliases: Map[String, WomType],
                   extras: Option[Extras],
                   runtimeDebugLevel: Option[Int],
@@ -59,13 +59,13 @@ case class Native(dxWDLrtId: Option[String],
                 // Extract the archive from the details field
                 val record = DXRecord.getInstance(id)
                 val descOptions = DXDataObject.DescribeOptions.get().inProject(dxProject).withDetails
-                val details = Utils.jsValueOfJsonNode(
+                val details = DxUtils.jsValueOfJsonNode(
                     record.describe(descOptions).getDetails(classOf[JsonNode]))
                 val dxLink = details.asJsObject.fields.get("archiveFileId") match {
                     case Some(x) => x
                     case None => throw new Exception(s"record does not have an archive field ${details}")
                 }
-                val dxFile = Utils.dxFileFromJsValue(dxLink)
+                val dxFile = DxUtils.dxFileFromJsValue(dxLink)
                 val name = dxFile.describe.getName()
                 Some(JsObject(
                     "name" -> JsString(name),
@@ -358,7 +358,7 @@ case class Native(dxWDLrtId: Option[String],
     private def checksumReq(req: JsValue) : (String, JsValue) = {
         val digest = chksum(req.prettyPrint)
         val props = Map("properties" ->
-                            JsObject(CHECKSUM_PROP -> JsString(digest)))
+                            JsObject(Utils.CHECKSUM_PROP -> JsString(digest)))
         val reqChk = req match {
             case JsObject(fields) =>
                 JsObject(fields ++ props)
@@ -378,7 +378,7 @@ case class Native(dxWDLrtId: Option[String],
         dxObjDir.lookupOtherVersions(name, digest) match {
             case None => ()
             case Some((dxObj, desc)) =>
-                Utils.trace(verbose.on, s"Found existing version of ${name} in folder ${desc.getFolder}")
+                Utils.trace(verbose.on, s"Found existing version of ${name} in folder ${desc.folder}")
                 return Some(dxObj)
         }
 
@@ -446,7 +446,7 @@ case class Native(dxWDLrtId: Option[String],
     }
 
     private def apiParseReplyID(rep: JsonNode) : String = {
-        val repJs:JsValue = Utils.jsValueOfJsonNode(rep)
+        val repJs:JsValue = DxUtils.jsValueOfJsonNode(rep)
         repJs.asJsObject.fields.get("id") match {
             case None => throw new Exception("API call did not returnd an ID")
             case Some(JsString(x)) => x
@@ -521,7 +521,7 @@ case class Native(dxWDLrtId: Option[String],
         val details2 = dockerFile match {
             case None => details
             case Some(dxfile) =>
-                details + ("docker-image" -> Utils.dxFileToJsValue(dxfile))
+                details + ("docker-image" -> DxUtils.dxFileToJsValue(dxfile))
         }
         (runSpecEverything, JsObject(details2))
     }
@@ -720,7 +720,7 @@ case class Native(dxWDLrtId: Option[String],
         val dxApplet = buildRequired match {
             case None =>
                 // Compile a WDL snippet into an applet.
-                val rep = DXAPI.appletNew(Utils.jsonNodeOfJsValue(appletApiRequest), classOf[JsonNode])
+                val rep = DXAPI.appletNew(DxUtils.jsonNodeOfJsValue(appletApiRequest), classOf[JsonNode])
                 val id = apiParseReplyID(rep)
                 val dxApplet = DXApplet.getInstance(id)
                 dxObjDir.insert(applet.name, dxApplet, digest)
@@ -835,7 +835,7 @@ case class Native(dxWDLrtId: Option[String],
     private def buildWorkflow(wf: IR.Workflow,
                               digest: String,
                               execDict: Map[String, ExecRecord]) : DXWorkflow = {
-        trace(verbose2, s"build workflow ${wf.name}")
+        Utils.trace(verbose2, s"build workflow ${wf.name}")
 
         val stagesReq =
             wf.stages.foldLeft(Vector.empty[JsValue]) {
@@ -867,7 +867,7 @@ case class Native(dxWDLrtId: Option[String],
         val reqFields = Map("project" -> JsString(dxProject.getId),
                             "name" -> JsString(wf.name),
                             "folder" -> JsString(folder),
-                            "properties" -> JsObject(CHECKSUM_PROP -> JsString(digest)),
+                            "properties" -> JsObject(Utils.CHECKSUM_PROP -> JsString(digest)),
                             "stages" -> JsArray(stagesReq),
                             "tags" -> JsArray(JsString("dxWDL")),
                             "hidden" -> JsBoolean(hidden))
@@ -884,11 +884,11 @@ case class Native(dxWDLrtId: Option[String],
 
                 if (verbose2) {
                     val inputSpecDbg = wfInputSpec.map("    " + _.toString).mkString("\n")
-                    trace(verbose2, s"""|input spec
-                                        |${inputSpecDbg}""".stripMargin)
+                    Utils.trace(verbose2, s"""|input spec
+                                                |${inputSpecDbg}""".stripMargin)
                     val outputSpecDbg = wfOutputSpec.map("    " + _.toString).mkString("\n")
-                    trace(verbose2, s"""|output spec
-                                        |${outputSpecDbg}""".stripMargin)
+                    Utils.trace(verbose2, s"""|output spec
+                                                |${outputSpecDbg}""".stripMargin)
                 }
 
                 Map("inputs" -> JsArray(wfInputSpec),
@@ -915,7 +915,7 @@ case class Native(dxWDLrtId: Option[String],
 
         // pack all the arguments into a single API call
         val req = JsObject(reqFields ++ wfInputOutput ++ details)
-        val rep = DXAPI.workflowNew(jsonNodeOfJsValue(req), classOf[JsonNode])
+        val rep = DXAPI.workflowNew(DxUtils.jsonNodeOfJsValue(req), classOf[JsonNode])
         val id = apiParseReplyID(rep)
         val dxwf = DXWorkflow.getInstance(id)
 

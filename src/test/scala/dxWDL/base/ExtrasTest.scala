@@ -1,4 +1,4 @@
-package dxWDL.util
+package dxWDL.base
 
 import com.dnanexus.AccessLevel
 import org.scalatest.{FlatSpec, Matchers}
@@ -6,6 +6,8 @@ import spray.json._
 import wom.expression.WomExpression
 import wom.types._
 import wom.values._
+
+import dxWDL.util.WomValueAnalysis
 
 class ExtrasTest extends FlatSpec with Matchers {
     val verbose = Verbose(true, true, Set.empty)

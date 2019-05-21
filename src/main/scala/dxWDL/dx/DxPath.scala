@@ -9,16 +9,15 @@
 
   genome_ref:/A/B/C.txt     dx://proj-xxxx:file-yyyy::/A/B/C.txt
 */
-package dxWDL.util
+package dxWDL.dx
 
-import com.dnanexus.{DXAPI, DXApplet, DXDataObject, DXFile, DXProject, DXRecord, DXSearch, DXWorkflow}
+import com.dnanexus.{DXAPI, DXDataObject, DXFile, DXProject, DXRecord}
 import com.fasterxml.jackson.databind.JsonNode
-import java.nio.file.Paths
-import scala.collection.JavaConverters._
 import scala.collection.mutable.HashMap
 import spray.json._
 
-import Utils.{DX_URL_PREFIX, jsonNodeOfJsValue, jsValueOfJsonNode, trace}
+import dxWDL.base.Utils.{DX_URL_PREFIX, trace}
+import DxUtils.{jsonNodeOfJsValue, jsValueOfJsonNode}
 
 object DxPath {
     // Lookup cache for projects. This saves
@@ -40,7 +39,8 @@ object DxPath {
                            "level" -> JsString("VIEW"),
                            "limit" -> JsNumber(2))
         val rep = DXAPI.systemFindProjects(jsonNodeOfJsValue(req),
-                                           classOf[JsonNode])
+                                           classOf[JsonNode],
+                                           DxUtils.dxEnv)
         val repJs:JsValue = jsValueOfJsonNode(rep)
 
         val results = repJs.asJsObject.fields.get("results") match {
@@ -64,41 +64,20 @@ object DxPath {
     private def lookupObject(dxProject: DXProject,
                              objName: String): DXDataObject = {
         // If the object is a file-id (or something like it), then
-        // shortcut the expensive findDataObjects call.
-        if (objName.startsWith("applet-")) {
-            return DXApplet.getInstance(objName)
-        }
-        if (objName.startsWith("file-")) {
-            return DXFile.getInstance(objName)
-        }
-        if (objName.startsWith("record-")) {
-            return DXRecord.getInstance(objName)
-        }
-        if (objName.startsWith("workflow-")) {
-            return DXWorkflow.getInstance(objName)
-        }
-        if (objName.startsWith("gtable-")) {
-            throw new Exception(s"gtables not supported proj=${dxProject} obj=${objName}")
+        // shortcircuit the expensive API call call.
+        DxUtils.convertToDxObject(objName) match {
+            case None => ()
+            case Some(dxobj) => return dxobj
         }
 
-        val fullPath = Paths.get(objName)
-        trace(true, s"lookupObject: ${fullPath.toString}")
-        val parent = fullPath.getParent
-        var folder = "/"
-        if (parent != null) {
-            folder = parent.toString
-            if (!folder.startsWith("/"))
-                folder = "/" + folder
-        }
-        val baseName = fullPath.getFileName.toString
-        val found:List[DXDataObject] =
-            DXSearch.findDataObjects().nameMatchesExactly(baseName)
-                .inFolder(dxProject, folder).execute().asList().asScala.toList
-        if (found.length == 0)
-            throw new Exception(s"Object ${objName} not found in path ${dxProject.getId}:${folder}")
-        if (found.length > 1)
-            throw new Exception(s"Found more than one dx:object named ${objName} in path ${dxProject.getId}:${folder}")
-        return found(0)
+        trace(true, s"lookupObject: ${objName}")
+        val objPath = s"${DX_URL_PREFIX}${dxProject.getId}:${objName}"
+        val found: Map[String, DXDataObject] = DxBulkResolve.apply(Vector(objPath), dxProject)
+        if (found.size == 0)
+            throw new Exception(s"Object ${objName} not found in path ${objPath}")
+        if (found.size > 1)
+            throw new Exception(s"Found more than one dx:object named ${objName} in path ${objPath}")
+        return found.values.head
     }
 
     private def lookupDxPath(dxPath: String) : DXDataObject = {
@@ -112,7 +91,7 @@ object DxPath {
             lookupObject(dxProject, objName)
         } else if (components.length == 1) {
             val objName = components(0)
-            val crntProj = Utils.dxEnv.getProjectContext()
+            val crntProj = DxUtils.dxEnv.getProjectContext()
             lookupObject(crntProj, objName)
         } else {
             throw new Exception(s"Path ${dxPath} is invalid")

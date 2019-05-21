@@ -33,6 +33,15 @@ import com.fasterxml.jackson.databind.node.ObjectNode
 import spray.json._
 import wom.values._
 
+import dxWDL.base.{Utils, Verbose}
+import dxWDL.dx.DxUtils
+
+// Request for an instance type
+case class InstanceTypeReq(dxInstanceType: Option[String],
+                           memoryMB: Option[Int],
+                           diskGB: Option[Int],
+                           cpu: Option[Int])
+
 // Instance Type on the platform. For example:
 // name:   mem1_ssd1_x4
 // memory: 4096 MB
@@ -357,7 +366,7 @@ object InstanceTypeDB extends DefaultJsonProtocol {
                      .build())
             .build()
         val rep = DXAPI.projectDescribe(dxProject.getId(), req, classOf[JsonNode])
-        val repJs:JsValue = Utils.jsValueOfJsonNode(rep)
+        val repJs:JsValue = DxUtils.jsValueOfJsonNode(rep)
         val availableInstanceTypes:JsValue =
             repJs.asJsObject.fields.get(availableField) match {
                 case Some(x) => x
@@ -395,7 +404,7 @@ object InstanceTypeDB extends DefaultJsonProtocol {
                 throw new Exception("Insufficient permissions")
         }
 
-        val js: JsValue = Utils.jsValueOfJsonNode(rep)
+        val js: JsValue = DxUtils.jsValueOfJsonNode(rep)
         val pricingModelsByRegion = getJsField(js, "pricingModelsByRegion")
         val pricingModel = getJsField(pricingModelsByRegion, region)
         val computeRatesPerHour = getJsField(pricingModel, "computeRatesPerHour")
@@ -465,7 +474,7 @@ object InstanceTypeDB extends DefaultJsonProtocol {
         val allAvailableIT = queryAvailableInstanceTypes(dxProject)
 
         // get billTo and region from the project
-        val (billTo, region) = Utils.projectDescribeExtraInfo(dxProject)
+        val (billTo, region) = DxUtils.projectDescribeExtraInfo(dxProject)
 
         // get the pricing model
         val pm = getPricingModel(billTo, region)

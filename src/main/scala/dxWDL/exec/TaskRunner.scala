@@ -32,6 +32,7 @@ import wom.types.WomType
 import wom.values._
 
 import dxWDL.base._
+import dxWDL.dx._
 import dxWDL.util._
 
 // This object is used to allow easy testing of complex
@@ -513,13 +514,13 @@ case class TaskRunner(task: CallableTaskDefinition,
         Utils.appletLog(verbose, s"required instance type: ${requiredInstanceType}")
 
         // Figure out which instance we are on right now
-        val dxJob = Utils.dxEnv.getJob()
+        val dxJob = DxUtils.dxEnv.getJob()
 
         val descFieldReq = JsObject("fields" -> JsObject("instanceType" -> JsBoolean(true)))
         val retval: JsValue =
-            Utils.jsValueOfJsonNode(
+            DxUtils.jsValueOfJsonNode(
                 DXAPI.jobDescribe(dxJob.getId,
-                                  Utils.jsonNodeOfJsValue(descFieldReq),
+                                  DxUtils.jsonNodeOfJsValue(descFieldReq),
                                   classOf[JsonNode]))
         val crntInstanceType:String = retval.asJsObject.fields.get("instanceType") match {
             case Some(JsString(x)) => x
@@ -543,8 +544,8 @@ case class TaskRunner(task: CallableTaskDefinition,
         val instanceType:String = calcInstanceType(inputs)
 
         // Run a sub-job with the "body" entry point, and the required instance type
-        val dxSubJob : DXJob = Utils.runSubJob("body", Some(instanceType), originalInputs,
-                                               Vector.empty, maxVerboseLevel)
+        val dxSubJob : DXJob = DxUtils.runSubJob("body", Some(instanceType), originalInputs,
+                                                 Vector.empty, maxVerboseLevel)
 
         // Return promises (JBORs) for all the outputs. Since the signature of the sub-job
         // is exactly the same as the parent, we can immediately exit the parent job.

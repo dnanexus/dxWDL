@@ -7,8 +7,9 @@ import java.nio.file.{Path, Paths}
 import scala.collection.mutable.HashMap
 import spray.json._
 
+import dxWDL.base._
+import dxWDL.dx._
 import dxWDL.util._
-import dxWDL.util.DxBulkDescribe.MiniDescribe
 
 object Main extends App {
     sealed trait Termination
@@ -271,7 +272,15 @@ object Main extends App {
         if (!folderRaw.startsWith("/"))
             throw new Exception(s"Folder must start with '/'")
         val dxFolder = folderRaw
-        val dxProject = DxPath.lookupProject(projectRaw)
+        val dxProject =
+            try {
+                DxPath.lookupProject(projectRaw)
+            } catch {
+                case e : Exception =>
+                    Utils.error(e.getMessage)
+                    throw new Exception(s"""|Could not find project ${projectRaw}, you probably need to be logged into
+                                            |the platform""".stripMargin)
+            }
         Utils.trace(verbose.on,
                     s"""|project ID: ${dxProject.getId}
                         |folder: ${dxFolder}""".stripMargin)
@@ -474,7 +483,7 @@ object Main extends App {
         }
     }
 
-    private def dxni(args: Seq[String]): Termination = {
+    def dxni(args: Seq[String]): Termination = {
         try {
             val options = parseCmdlineOptions(args.toList)
             if (options contains "help")
@@ -569,7 +578,7 @@ object Main extends App {
                                    dxPathConfig : DxPathConfig,
                                    dxIoFunctions : DxIoFunctions,
                                    rtDebugLvl: Int): Termination = {
-        val dxProject = Utils.dxEnv.getProjectContext()
+        val dxProject = DxUtils.dxEnv.getProjectContext()
 
         // Parse the inputs, convert to WOM values. Delay downloading files
         // from the platform, we may not need to access them.
@@ -645,7 +654,7 @@ object Main extends App {
                             s"""|applet field not found locally, performing
                                 |an API call.
                                 |""".stripMargin)
-                val dxJob : DXJob = Utils.dxEnv.getJob()
+                val dxJob : DXJob = DxUtils.dxEnv.getJob()
                 dxJob.describe().getApplet()
             case Some(JsString(x)) =>
                 DXApplet.getInstance(x)
@@ -654,7 +663,7 @@ object Main extends App {
         }
 
         val descOptions = DXDataObject.DescribeOptions.get().withDetails
-        val details: JsValue = Utils.jsValueOfJsonNode(
+        val details: JsValue = DxUtils.jsValueOfJsonNode(
             applet.describe(descOptions).getDetails(classOf[JsonNode]))
 
         val JsString(womSourceCodeEncoded) = details.asJsObject.fields("womSourceCode")
@@ -669,15 +678,15 @@ object Main extends App {
 
     // Make a list of all the files cloned for access by this applet.
     // Bulk describe all the them.
-    private def runtimeBulkFileDescribe(jobInputPath: Path) : Map[DXFile, MiniDescribe] = {
+    private def runtimeBulkFileDescribe(jobInputPath: Path) : Map[DXFile, DxDescribe] = {
         val inputs: JsValue = Utils.readFileContent(jobInputPath).parseJson
 
         val allFilesReferenced = inputs.asJsObject.fields.flatMap{
-            case (_, jsElem) => Utils.findDxFiles(jsElem)
+            case (_, jsElem) => DxUtils.findDxFiles(jsElem)
         }.toVector
 
         // Describe all the files, in one go
-        DxBulkDescribe.apply(allFilesReferenced)
+        DxBulkDescribe.apply(allFilesReferenced, None)
     }
 
     def internalOp(args : Seq[String]) : Termination = {

@@ -50,6 +50,8 @@ import wom.graph.expression._
 import wom.values._
 import wom.types._
 
+import dxWDL.base._
+import dxWDL.dx._
 import dxWDL.util._
 
 case class WfFragRunner(wf: WorkflowDefinition,
@@ -389,9 +391,9 @@ case class WfFragRunner(wf: WorkflowDefinition,
                 )
                 val req = JsObject(fields ++ instanceFields)
                 val retval: JsonNode = DXAPI.appRun(dxExecId,
-                                                    Utils.jsonNodeOfJsValue(req),
+                                                    DxUtils.jsonNodeOfJsValue(req),
                                                     classOf[JsonNode])
-                val info: JsValue =  Utils.jsValueOfJsonNode(retval)
+                val info: JsValue =  DxUtils.jsValueOfJsonNode(retval)
                 val id:String = info.asJsObject.fields.get("id") match {
                     case Some(JsString(x)) => x
                     case _ => throw new AppInternalException(
@@ -407,9 +409,9 @@ case class WfFragRunner(wf: WorkflowDefinition,
                 )
                 val req = JsObject(fields ++ instanceFields)
                 val retval: JsonNode = DXAPI.appletRun(applet.getId,
-                                                       Utils.jsonNodeOfJsValue(req),
+                                                       DxUtils.jsonNodeOfJsValue(req),
                                                        classOf[JsonNode])
-                val info: JsValue =  Utils.jsValueOfJsonNode(retval)
+                val info: JsValue =  DxUtils.jsValueOfJsonNode(retval)
                 val id:String = info.asJsObject.fields.get("id") match {
                     case Some(JsString(x)) => x
                     case _ => throw new AppInternalException(
@@ -419,7 +421,7 @@ case class WfFragRunner(wf: WorkflowDefinition,
             } else if (dxExecId.startsWith("workflow-")) {
                 val workflow = DXWorkflow.getInstance(dxExecId)
                 val dxAnalysis :DXAnalysis = workflow.newRun()
-                    .setRawInput(Utils.jsonNodeOfJsValue(callInputs))
+                    .setRawInput(DxUtils.jsonNodeOfJsValue(callInputs))
                     .setName(dbgName)
                     .putProperty("seq_number", seqNum.toString)
                     .run()

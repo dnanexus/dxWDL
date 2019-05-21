@@ -5,19 +5,16 @@
 //   "dx://dxWDL_playground:/test_data/1/fileC",
 //   "dx://dxWDL_playground:/test_data/fruit_list.txt"
 
-package dxWDL.compiler
+package dxWDL.dx
 
-import com.dnanexus.{DXAPI, DXFile, DXProject}
+import com.dnanexus.{DXAPI, DXDataObject, DXProject}
 import com.fasterxml.jackson.databind.JsonNode
 import spray.json._
 
-import dxWDL.util.DxPath
-import dxWDL.util.Utils
-
 // maximal number of objects in a single API request
-import dxWDL.util.Utils.{DX_URL_PREFIX, DXAPI_NUM_OBJECTS_LIMIT}
+import dxWDL.base.Utils.{DX_URL_PREFIX, DXAPI_NUM_OBJECTS_LIMIT}
 
-case class DxBulkResolve(dxProject: DXProject) {
+object DxBulkResolve {
 
     case class DxPathParsed(name: String,
                             folder: Option[String],
@@ -73,14 +70,16 @@ case class DxBulkResolve(dxProject: DXProject) {
         JsObject(reqFields ++ folderField ++ projectField)
     }
 
-    private def submitRequest(dxPaths : Vector[DxPathParsed]) : Map[String, DXFile] = {
+    private def submitRequest(dxPaths : Vector[DxPathParsed],
+                              dxProject : DXProject) : Map[String, DXDataObject] = {
         val objectReqs : Vector[JsValue] = dxPaths.map{ makeResolutionReq(_) }
         val request = JsObject("objects" -> JsArray(objectReqs),
                                "project" -> JsString(dxProject.getId))
 
-        val response = DXAPI.systemResolveDataObjects(Utils.jsonNodeOfJsValue(request),
-                                                      classOf[JsonNode])
-        val repJs:JsValue = Utils.jsValueOfJsonNode(response)
+        val response = DXAPI.systemResolveDataObjects(DxUtils.jsonNodeOfJsValue(request),
+                                                      classOf[JsonNode],
+                                                      DxUtils.dxEnv)
+        val repJs:JsValue = DxUtils.jsValueOfJsonNode(response)
         val resultsPerObj:Vector[JsValue] = repJs.asJsObject.fields.get("results") match {
             case Some(JsArray(x)) => x
             case other => throw new Exception(s"API call returned invalid data ${other}")
@@ -98,52 +97,58 @@ case class DxBulkResolve(dxProject: DXProject) {
                     case other => throw new Exception(s"malformed json ${other}")
                 }
                 val fields = o.asJsObject.fields
-                val fileId = fields.get("id") match {
+                val dxid = fields.get("id") match {
                     case Some(JsString(x)) => x
                     case _ => throw new Exception("no id returned")
                 }
-                val projId = fields.get("project") match {
-                    case Some(JsString(x)) => Some(x)
+                // safe conversion to a dx-object
+                val dxobj = DxUtils.convertToDxObject(dxid) match {
+                    case None => throw new Exception(s"Bad dxid=${dxid}")
+                    case Some(x) => x
+                }
+
+                val dxProj : Option[DXProject] = fields.get("project") match {
+                    case Some(JsString(x)) => Some(DXProject.getInstance(x))
                     case _ => None
                 }
-                val dxFile = projId match  {
-                    case None => DXFile.getInstance(fileId)
-                    case Some(x) =>
-                        DXFile.getInstance(fileId, DXProject.getInstance(x))
+
+                val dxobjWithProj = dxProj match  {
+                    case None => dxobj
+                    case Some(proj) => DXDataObject.getInstance(dxobj.getId, proj)
                 }
-                path -> dxFile
+                path -> dxobjWithProj
         }.toMap
     }
 
     // split between files that have already been resolved (we have their file-id), and
     // those that require lookup.
-    private def triage(allDxPaths: Seq[String]) : (Map[String, DXFile],
+    private def triage(allDxPaths: Seq[String]) : (Map[String, DXDataObject],
                                                    Vector[DxPathParsed]) = {
-        var alreadyResolved = Map.empty[String, DXFile]
+        var alreadyResolved = Map.empty[String, DXDataObject]
         var rest = Vector.empty[DxPathParsed]
 
         for (p <- allDxPaths) {
             val pDxPath = parse(p)
-
-            if (pDxPath.name.startsWith("file-")) {
-                val fid = pDxPath.name
-                val dxFile = pDxPath.projName match {
-                    case None => DXFile.getInstance(pDxPath.name)
-                    case Some(pid) =>
-                        val dxProj = DxPath.lookupProject(pid)
-                        DXFile.getInstance(fid, dxProj)
-                }
-                alreadyResolved = alreadyResolved + (p -> dxFile)
-            } else {
-                rest = rest :+ pDxPath
+            DxUtils.convertToDxObject(pDxPath.name) match {
+                case None =>
+                    rest = rest :+ pDxPath
+                case Some(dxobj) =>
+                    val dxobjWithProj = pDxPath.projName match {
+                        case None => dxobj
+                        case Some(pid) =>
+                            val dxProj = DxPath.lookupProject(pid)
+                            DXDataObject.getInstance(dxobj.getId, dxProj)
+                    }
+                    alreadyResolved = alreadyResolved + (p -> dxobjWithProj)
             }
         }
         (alreadyResolved, rest)
     }
 
-    // Describe the names of all the files in one batch. This is much more efficient
-    // than submitting file describes one-by-one.
-    def apply(dxPaths: Seq[String]) : Map[String, DXFile] = {
+    // Describe the names of all the data objects in one batch. This is much more efficient
+    // than submitting object describes one-by-one.
+  def apply(dxPaths: Seq[String],
+            dxProject: DXProject) : Map[String, DXDataObject] = {
         if (dxPaths.isEmpty) {
             // avoid an unnessary API call; this is important for unit tests
             // that do not have a network connection.
@@ -159,9 +164,9 @@ case class DxBulkResolve(dxProject: DXProject) {
         val slices = dxPathsToResolve.grouped(DXAPI_NUM_OBJECTS_LIMIT).toList
 
         // iterate on the ranges
-        val resolved = slices.foldLeft(Map.empty[String, DXFile]) {
+        val resolved = slices.foldLeft(Map.empty[String, DXDataObject]) {
             case (accu, pathsRange) =>
-                accu ++ submitRequest(pathsRange.toVector)
+                accu ++ submitRequest(pathsRange.toVector, dxProject)
         }
 
         alreadyResolved ++ resolved

@@ -10,8 +10,9 @@ import wom.expression.WomExpression
 import wom.types._
 import wom.values._
 
+import dxWDL.base._
+import dxWDL.base.Utils.{FLAT_FILES_SUFFIX}
 import dxWDL.util._
-import dxWDL.util.Utils.{FLAT_FILES_SUFFIX}
 
 case class JobInputOutput(dxIoFunctions : DxIoFunctions,
                           runtimeDebugLevel: Int,

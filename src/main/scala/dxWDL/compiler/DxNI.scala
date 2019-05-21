@@ -43,15 +43,15 @@ task mk_int_list {
   */
 package dxWDL.compiler
 
-import com.dnanexus._
+import com.dnanexus.{DXAPI, DXApplet, DXDataObject, DXProject, IOClass}
 import com.fasterxml.jackson.databind.JsonNode
 import java.nio.file.{Files, Path}
-import scala.collection.JavaConverters._
 import scala.util.matching.Regex
 import spray.json._
 import wom.types._
 
-import dxWDL.util._
+import dxWDL.base._
+import dxWDL.dx._
 
 case class IoSpec(name: String,
                   ioClass: IOClass,
@@ -109,20 +109,18 @@ case class DxNI(verbose: Verbose,
     // We can translate with primitive types, and their arrays. Hashes cannot
     // be translated; applets that have them cannot be converted.
     private def wdlTypesOfDxApplet(aplName: String,
-                                   desc: DXApplet.Describe) :
+                                   desc: DxDescribe) :
             (Map[String, WomType], Map[String, WomType]) = {
         Utils.trace(verbose.on, s"analyzing applet ${aplName}")
-        val inputSpecRaw: List[InputParameter] = desc.getInputSpecification().asScala.toList
         val inputSpec:Map[String, WomType] =
-            inputSpecRaw.map{ iSpec =>
-                iSpec.getName -> wdlTypeOfIOClass(aplName, iSpec.getName,
-                                                  iSpec.getIOClass, iSpec.isOptional)
+            desc.inputSpec.get.map{ iSpec =>
+                iSpec.name -> wdlTypeOfIOClass(aplName, iSpec.name,
+                                                  iSpec.ioClass, iSpec.optional)
             }.toMap
-        val outputSpecRaw: List[OutputParameter] = desc.getOutputSpecification().asScala.toList
         val outputSpec:Map[String, WomType] =
-            outputSpecRaw.map{ iSpec =>
-                iSpec.getName -> wdlTypeOfIOClass(aplName, iSpec.getName,
-                                                  iSpec.getIOClass, iSpec.isOptional)
+            desc.outputSpec.get.map{ iSpec =>
+                iSpec.name -> wdlTypeOfIOClass(aplName, iSpec.name,
+                                                  iSpec.ioClass, iSpec.optional)
             }.toMap
         (inputSpec, outputSpec)
     }
@@ -135,34 +133,26 @@ case class DxNI(verbose: Verbose,
     private def search(dxProject: DXProject,
                        folder: String,
                        recursive: Boolean) : Vector[String] = {
-        val dxAppletsInFolder: Seq[DXApplet] =
-            if (recursive) {
-                DXSearch.findDataObjects()
-                    .inFolderOrSubfolders(dxProject, folder)
-                    .withClassApplet
-                    .includeDescribeOutput(DXDataObject.DescribeOptions.get().withProperties())
-                    .execute().asList().asScala.toVector
-            } else {
-                DXSearch.findDataObjects()
-                    .inFolder(dxProject, folder)
-                    .withClassApplet
-                    .includeDescribeOutput(DXDataObject.DescribeOptions.get().withProperties())
-                    .execute().asList().asScala.toVector
-            }
+        val dxObjectsInFolder : Map[DXDataObject, DxDescribe] =
+            DxFindDataObjects(None, verbose).apply(dxProject, Some(folder), recursive, None)
 
-        // Filter applets that are WDL tasks
-        val nativeApplets: Seq[DXApplet] = dxAppletsInFolder.map{ apl =>
-            val desc = apl.getCachedDescribe()
-            val props: Map[String, String] = desc.getProperties().asScala.toMap
-            props.get(Utils.CHECKSUM_PROP) match {
-                case Some(_) => None
-                case None => Some(apl)
-            }
-        }.flatten
+        // we just want the applets
+        val dxAppletsInFolder : Map[DXApplet, DxDescribe]= dxObjectsInFolder.collect{
+            case (dxobj, desc) if dxobj.isInstanceOf[DXApplet] =>
+                (dxobj.asInstanceOf[DXApplet], desc)
+        }
 
-        nativeApplets.map{ apl =>
-            val desc = apl.getCachedDescribe()
-            val aplName = desc.getName
+        // Filter out applets that are WDL tasks
+        val nativeApplets: Map[DXApplet, DxDescribe] = dxAppletsInFolder.flatMap{
+            case (apl, desc) =>
+                desc.properties.get(Utils.CHECKSUM_PROP) match {
+                    case Some(_) => None
+                    case None => Some(apl -> desc)
+                }
+        }.toMap
+
+        nativeApplets.map{ case (apl, desc) =>
+            val aplName = desc.name
             try {
                 val (inputSpec, outputSpec) = wdlTypesOfDxApplet(aplName, desc)
                 // DNAx applets allow the same variable name to be used for inputs and outputs.
@@ -332,9 +322,9 @@ case class DxNI(verbose: Verbose,
                            "describe" -> JsObject("inputSpec" -> JsBoolean(true),
                                                   "outputSpec" -> JsBoolean(true)),
                            "limit" -> JsNumber(1000))
-        val rep = DXAPI.systemFindApps(Utils.jsonNodeOfJsValue(req),
+        val rep = DXAPI.systemFindApps(DxUtils.jsonNodeOfJsValue(req),
                                        classOf[JsonNode])
-        val repJs:JsValue = Utils.jsValueOfJsonNode(rep)
+        val repJs:JsValue = DxUtils.jsValueOfJsonNode(rep)
         val appsJs = repJs.asJsObject.fields.get("results") match {
             case Some(JsArray(apps)) => apps
             case _ => throw new Exception(s"""|malformed reply to findApps

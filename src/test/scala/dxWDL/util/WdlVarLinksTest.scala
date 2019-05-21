@@ -5,6 +5,8 @@ import spray.json._
 import wom.types._
 import wom.values._
 
+import dxWDL.base.Utils
+
 class WdlVarLinksTest extends FlatSpec with Matchers {
 
     case class Element(name: String,

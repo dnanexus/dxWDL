@@ -11,6 +11,8 @@ import wom.graph._
 import wom.expression._
 import wom.types._
 
+import dxWDL.base.AppInternalException
+
 class TypeEvalTest extends FlatSpec with Matchers {
 
     def parseWdlCode(sourceCode: String) : WomBundle = {

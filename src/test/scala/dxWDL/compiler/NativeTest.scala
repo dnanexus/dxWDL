@@ -1,9 +1,12 @@
 package dxWDL.compiler
 
-import dxWDL.Main
-import dxWDL.util.DxPath
 import java.nio.file.{Path, Paths}
 import org.scalatest.{FlatSpec, Matchers}
+import scala.io.Source
+
+import dxWDL.Main
+import dxWDL.dx.DxPath
+import dxWDL.util.ParseWomSourceFile
 
 // This test module requires being logged in to the platform.
 // It compiles WDL scripts without the runtime library.
@@ -67,14 +70,14 @@ class NativeTest extends FlatSpec with Matchers {
         ) shouldBe a [Main.SuccessfulTermination]
     }
 
-    it should "Native compile a workflow with one level nesting" taggedAs(NativeTestXX, EdgeTest) in {
+    it should "Native compile a workflow with one level nesting" taggedAs(NativeTestXX) in {
         val path = pathFromBasename("nested", "two_levels.wdl")
         Main.compile(
             path.toString :: "--force" :: cFlags
         ) shouldBe a [Main.SuccessfulTermination]
     }
 
-    it should "handle various conditionals" taggedAs(NativeTestXX, EdgeTest) in {
+    it should "handle various conditionals" taggedAs(NativeTestXX) in {
         val path = pathFromBasename("draft2", "conditionals_base.wdl")
         Main.compile(
             path.toString
@@ -83,5 +86,22 @@ class NativeTest extends FlatSpec with Matchers {
                 :: "--verboseKey" :: "GenerateIR"*/
                 :: cFlags
         ) shouldBe a [Main.SuccessfulTermination]
+    }
+
+    it should "be able to build interfaces to native applets" taggedAs(NativeTestXX, EdgeTest) in {
+        val outputPath = "/tmp/dx_extern.wdl"
+        Main.dxni(
+            List("--force", "--quiet",
+                 "--folder", "/unit_tests/applets",
+                 "--project", dxTestProject.getId,
+                 "--language", "wdl_draft2",
+                 "--output", outputPath)
+        ) shouldBe a [Main.SuccessfulTermination]
+
+        // check that the generated file contains the correct tasks
+        val content = Source.fromFile(outputPath).getLines.mkString("\n")
+
+        val tasks : Map[String, String] = ParseWomSourceFile.scanForTasks(content)
+        tasks.keys shouldBe(Set("native_sum", "native_sum_012", "native_mk_list", "native_diff", "native_concat"))
     }
 }

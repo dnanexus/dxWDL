@@ -6,6 +6,7 @@ import wom.types._
 import wom.values._
 
 import dxWDL.base._
+import dxWDL.dx._
 import dxWDL.util._
 
 case class WfFragInput(blockPath: Vector[Int],

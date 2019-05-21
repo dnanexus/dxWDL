@@ -9,9 +9,10 @@ import wom.expression.{IoFunctionSet, PathFunctionSet}
 import wom.expression.IoFunctionSet.IoElement
 import wom.values._
 
-import DxBulkDescribe.MiniDescribe
+import dxWDL.base.{AppInternalException, Utils}
+import dxWDL.dx.{DxDescribe, DxUtils}
 
-case class DxPathFunctions(fileInfoDir : Map[DXFile, MiniDescribe],
+case class DxPathFunctions(fileInfoDir : Map[DXFile, DxDescribe],
                            config: DxPathConfig,
                            runtimeDebugLevel: Int) extends PathFunctionSet {
 
@@ -76,7 +77,7 @@ case class DxPathFunctions(fileInfoDir : Map[DXFile, MiniDescribe],
     override def stderr: String = config.stderr.toString
 }
 
-case class DxIoFunctions(fileInfoDir : Map[DXFile, MiniDescribe],
+case class DxIoFunctions(fileInfoDir : Map[DXFile, DxDescribe],
                          config: DxPathConfig,
                          runtimeDebugLevel: Int) extends IoFunctionSet {
 
@@ -105,7 +106,7 @@ case class DxIoFunctions(fileInfoDir : Map[DXFile, MiniDescribe],
                         throw new Exception(s"File ${p} does not exist")
                 }
             case fdx : FurlDx =>
-                Utils.downloadString(fdx.dxFile)
+                DxUtils.downloadString(fdx.dxFile)
         }
         Future(content)
     }
@@ -205,7 +206,10 @@ case class DxIoFunctions(fileInfoDir : Map[DXFile, MiniDescribe],
                         // perform an API call to get the size
                         fdx.dxFile.describe().getSize()
                     case Some(desc) =>
-                        desc.size
+                        desc.size match {
+                            case None => throw new Exception("missing size field")
+                            case Some(sz) => sz
+                        }
                 }
         }
         Future(size)

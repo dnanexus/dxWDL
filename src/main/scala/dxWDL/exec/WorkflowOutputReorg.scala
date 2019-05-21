@@ -6,14 +6,15 @@
 package dxWDL.exec
 
 // DX bindings
-import com.dnanexus._
+import com.dnanexus.{DXAPI, DXAnalysis, DXContainer, DXFile, DXProject}
 import com.fasterxml.jackson.databind.JsonNode
-import com.fasterxml.jackson.databind.node.ObjectNode
 import scala.collection.JavaConverters._
 import spray.json._
 import wom.callable.{WorkflowDefinition}
 import wom.types.WomType
 
+import dxWDL.base.Utils
+import dxWDL.dx._
 import dxWDL.util._
 
 case class WorkflowOutputReorg(wf: WorkflowDefinition,
@@ -31,12 +32,8 @@ case class WorkflowOutputReorg(wf: WorkflowDefinition,
     // In other words, this code is an efficient replacement for:
     // files.map(_.describe().getName())
     def bulkGetFilenames(files: Seq[DXFile], dxProject: DXProject) : Vector[String] = {
-        val info:List[DXDataObject] = DXSearch.findDataObjects()
-            .withIdsIn(files.asJava)
-            .inProject(dxProject)
-            .includeDescribeOutput()
-            .execute().asList().asScala.toList
-        info.map(_.getCachedDescribe().getName()).toVector
+        val info : Map[DXFile, DxDescribe] = DxBulkDescribe.apply(files, Some(dxProject))
+        info.values.map(_.name).toVector
     }
 
     // find all output files from the analysis
@@ -51,13 +48,11 @@ case class WorkflowOutputReorg(wf: WorkflowDefinition,
     // appear in the input.
     def analysisFileOutputs(dxProject: DXProject,
                             dxAnalysis: DXAnalysis) : Vector[DXFile]= {
-        val req: ObjectNode = DXJSON.getObjectBuilder()
-            .put("fields", DXJSON.getObjectBuilder()
-                     .put("input", true)
-                     .put("output", true)
-                     .build()).build()
+        val req = JsObject("fields" -> JsObject(
+                               "input" -> JsBoolean(true),
+                               "output" -> JsBoolean(true)))
         val rep = DXAPI.analysisDescribe(dxAnalysis.getId(), req, classOf[JsonNode])
-        val repJs:JsValue = Utils.jsValueOfJsonNode(rep)
+        val repJs:JsValue = DxUtils.jsValueOfJsonNode(rep)
         val outputs = repJs.asJsObject.fields.get("output") match {
             case None => throw new Exception("Failed to get analysis outputs")
             case Some(x) => x
@@ -67,8 +62,8 @@ case class WorkflowOutputReorg(wf: WorkflowDefinition,
             case Some(x) => x
         }
 
-        val fileOutputs : Set[DXFile] = Utils.findDxFiles(outputs).toSet
-        val fileInputs: Set[DXFile] = Utils.findDxFiles(inputs).toSet
+        val fileOutputs : Set[DXFile] = DxUtils.findDxFiles(outputs).toSet
+        val fileInputs: Set[DXFile] = DxUtils.findDxFiles(inputs).toSet
         val realOutputs:Set[DXFile] = fileOutputs.toSet -- fileInputs.toSet
         Utils.appletLog(verbose, s"analysis has ${fileOutputs.size} output files")
         Utils.appletLog(verbose, s"analysis has ${fileInputs.size} input files")
@@ -79,15 +74,18 @@ case class WorkflowOutputReorg(wf: WorkflowDefinition,
             Utils.appletLog(verbose, s"WARNING: Large number of outputs (${realOutputs.size}), not moving objects")
             return Vector.empty
         }
+        val realFreshOutputs:Map[DXFile, DxDescribe] =
+            DxBulkDescribe.apply(realOutputs.toSeq, Some(dxProject))
+
+        // Retain only files that were created AFTER the analysis started
         val anlCreateTs:java.util.Date = dxAnalysis.describe.getCreationDate()
-        val realFreshOutputs:List[DXDataObject] = DXSearch.findDataObjects()
-            .withIdsIn(realOutputs.asJava)
-            .inProject(dxProject)
-            .createdAfter(anlCreateTs)
-            .execute().asList().asScala.toList
-        val outputFiles: Vector[DXFile] = realFreshOutputs.map(
-            dxObj => DXFile.getInstance(dxObj.getId())
-        ).toVector
+        val outputFiles: Vector[DXFile] = realFreshOutputs.flatMap{
+            case (dxFile, desc) =>
+                if (desc.creationDate.compareTo(anlCreateTs) >= 0)
+                    Some(dxFile)
+                else
+                    None
+        }.toVector
         Utils.appletLog(verbose, s"analysis has ${outputFiles.length} verified output files")
 
         outputFiles
@@ -95,7 +93,7 @@ case class WorkflowOutputReorg(wf: WorkflowDefinition,
 
     // Move all intermediate results to a sub-folder
     def moveIntermediateResultFiles(exportFiles: Vector[DXFile]): Unit = {
-        val dxEnv = DXEnvironment.create()
+        val dxEnv = DxUtils.dxEnv
         val dxProject = dxEnv.getProjectContext()
         val dxProjDesc = dxProject.describe
         val dxAnalysis = dxEnv.getJob.describe.getAnalysis

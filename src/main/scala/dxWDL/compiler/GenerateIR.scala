@@ -7,6 +7,7 @@ import wom.callable.{Callable, CallableTaskDefinition, ExecutableTaskDefinition,
 import wom.graph._
 import wom.types._
 
+import dxWDL.base._
 import dxWDL.util._
 
 case class GenerateIR(verbose: Verbose) {
