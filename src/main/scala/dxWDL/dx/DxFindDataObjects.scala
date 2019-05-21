@@ -79,7 +79,7 @@ case class DxFindDataObjects(limit: Option[Int],
             case Some(other) => throw new Exception(s"malformed created field ${other}")
         }
         DxDescribe(name, folder, size,
-                   dxProject, dxobj, creationDate,
+                   Some(dxProject), dxobj, creationDate,
                    properties, inputSpec, outputSpec)
     }
 

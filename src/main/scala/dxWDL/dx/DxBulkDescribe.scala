@@ -35,10 +35,15 @@ object DxBulkDescribe {
                                  JsNumber(size), JsString(fid), JsString(projectId), JsNumber(created)) =>
                             assert(fid == dxFile.getId)
                             val crDate = new java.util.Date(created.toLong)
+                            val dxProj =
+                                if (projectId.startsWith("project-"))
+                                    Some(DXProject.getInstance(projectId))
+                                else
+                                    None
                             DxDescribe(name,
                                        folder,
                                        Some(size.toLong),
-                                       DXProject.getInstance(projectId),
+                                       dxProj,
                                        DxUtils.convertToDxObject(fid).get,
                                        crDate,
                                        Map.empty,
