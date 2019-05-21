@@ -221,7 +221,7 @@ object Main extends App {
 
 
     private def pathOptions(options: OptionsMap,
-                            verbose: Verbose) : (DXProject, String) = {
+                            verbose: Verbose) : (DxProject, String) = {
         var folderOpt:Option[String] = options.get("folder") match {
             case None => None
             case Some(List(f)) => Some(f)

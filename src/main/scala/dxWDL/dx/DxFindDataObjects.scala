@@ -1,8 +1,9 @@
 package dxWDL.dx
 
-import com.dnanexus.{DXAPI, DXDataObject, DXProject, IOClass}
+import com.dnanexus.{DXAPI, DXDataObject, IOClass}
 import com.fasterxml.jackson.databind.JsonNode
 import spray.json._
+
 
 import dxWDL.base.Verbose
 
@@ -32,7 +33,7 @@ case class DxFindDataObjects(limit: Option[Int],
 
     private def parseDescribe(jsv: JsValue,
                               dxobj : DXDataObject,
-                              dxProject: DXProject) : DxDescribe = {
+                              dxProject: DxProject) : DxDescribe = {
         val size = jsv.asJsObject.fields.get("size") match {
             case None => None
             case Some(JsNumber(size)) => Some(size.toLong)
@@ -86,7 +87,7 @@ case class DxFindDataObjects(limit: Option[Int],
     private def parseOneResult(jsv : JsValue) : (DXDataObject, DxDescribe) = {
         jsv.asJsObject.getFields("project", "id", "describe") match {
             case Seq(JsString(projectId), JsString(dxid), desc) =>
-                val dxProj = DXProject.getInstance(projectId)
+                val dxProj = DxProject.getInstance(projectId)
                 val dxobj = DxUtils.convertToDxObject(dxid).get
                 val dxobjWithProj = DXDataObject.getInstance(dxobj.getId, dxProj)
                 (dxobjWithProj, parseDescribe(desc, dxobj, dxProj))
@@ -97,7 +98,7 @@ case class DxFindDataObjects(limit: Option[Int],
         }
     }
 
-    private def buildScope(dxProject : DXProject,
+    private def buildScope(dxProject : DxProject,
                            folder : Option[String],
                            recurse : Boolean) : JsValue = {
         val part1 = Map("project" -> JsString(dxProject.getId))
@@ -115,7 +116,7 @@ case class DxFindDataObjects(limit: Option[Int],
 
     // Submit a request for a limited number of objects
     private def submitRequest(scope : JsValue,
-                              dxProject: DXProject,
+                              dxProject: DxProject,
                               cursor: Option[JsValue],
                               klass: Option[String]) : (Map[DXDataObject, DxDescribe], Option[JsValue]) = {
         val reqFields = Map("visibility" -> JsString("either"),
@@ -161,7 +162,7 @@ case class DxFindDataObjects(limit: Option[Int],
         (results.toMap, next)
     }
 
-    def apply(dxProject : DXProject,
+    def apply(dxProject : DxProject,
               folder : Option[String],
               recurse: Boolean,
               klassRestriction : Option[String]) : Map[DXDataObject, DxDescribe] = {

@@ -14,7 +14,7 @@ case class IOParameter(name: String,
 case class DxDescribe(name : String,
                       folder: String,
                       size : Option[Long],
-                      project: Option[DXProject],
+                      project: Option[DxProject],
                       dxobj : DXDataObject,
                       creationDate : java.util.Date,
                       properties: Map[String, String],
@@ -26,6 +26,9 @@ case class DxExec(id: String) {
     def getId : String = id
 }
 
+case class DxProject(id: String) {
+    def getId : String = id
+}
 
 // An equivalent for the InputParmater/OutputParameter types
 case class DXIOParam(ioClass: IOClass,

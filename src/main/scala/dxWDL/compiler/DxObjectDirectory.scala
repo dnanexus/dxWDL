@@ -13,7 +13,7 @@ import spray.json._
 
 import dxWDL.base._
 import dxWDL.base.Utils.CHECKSUM_PROP
-import dxWDL.dx.{DxUtils, DxDescribe, DxFindDataObjects}
+import dxWDL.dx._
 
 // Keep all the information about an applet in packaged form
 case class DxObjectInfo(name :String,
@@ -32,7 +32,7 @@ case class DxObjectInfo(name :String,
 // Make an efficient directory of all the applets that exist there. Update
 // the directory when an applet is compiled.
 case class DxObjectDirectory(ns: IR.Bundle,
-                             dxProject:DXProject,
+                             dxProject:DxProject,
                              folder: String,
                              projectWideReuse: Boolean,
                              verbose: Verbose) {

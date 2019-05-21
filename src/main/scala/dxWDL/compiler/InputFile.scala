@@ -20,7 +20,7 @@ This is the dx JSON input:
   */
 package dxWDL.compiler
 
-import com.dnanexus.{DXFile, DXProject}
+import com.dnanexus.{DXFile}
 import scala.collection.mutable.HashMap
 import java.nio.file.Path
 import spray.json._
@@ -29,7 +29,7 @@ import wom.values._
 
 import dxWDL.base._
 import dxWDL.base.Utils._
-import dxWDL.dx.{DxDescribe, DxBulkResolve, DxUtils}
+import dxWDL.dx._
 import dxWDL.util._
 import IR.{CVar, SArg, COMMON, OUTPUT_SECTION, REORG}
 
@@ -47,7 +47,7 @@ case class InputFileScanResults(path2file: Map[String, DXFile],
                                 dxFiles: Vector[DXFile])
 
 case class InputFileScan(bundle: IR.Bundle,
-                         dxProject: DXProject,
+                         dxProject: DxProject,
                          verbose: Verbose) {
 
     private def findDxFiles(womType: WomType,

@@ -43,7 +43,7 @@ task mk_int_list {
   */
 package dxWDL.compiler
 
-import com.dnanexus.{DXAPI, DXApplet, DXDataObject, DXProject, IOClass}
+import com.dnanexus.{DXAPI, DXApplet, DXDataObject, DxProject, IOClass}
 import com.fasterxml.jackson.databind.JsonNode
 import java.nio.file.{Files, Path}
 import scala.util.matching.Regex
@@ -130,7 +130,7 @@ case class DxNI(verbose: Verbose,
     // applet-ids.
     //
     // If the folder is not a valid path, an empty list will be returned.
-    private def search(dxProject: DXProject,
+    private def search(dxProject: DxProject,
                        folder: String,
                        recursive: Boolean) : Vector[String] = {
         val dxObjectsInFolder : Map[DXDataObject, DxDescribe] =
@@ -375,7 +375,7 @@ object DxNI {
 
     // create headers for calling dx:applets and dx:workflows
     // We assume the folder is valid.
-    def apply(dxProject: DXProject,
+    def apply(dxProject: DxProject,
               folder: String,
               output: Path,
               recursive: Boolean,

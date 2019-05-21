@@ -2,16 +2,18 @@
 
 package dxWDL.dx
 
-import com.dnanexus.{DXAPI, DXFile, DXProject}
+import com.dnanexus.{DXAPI, DXFile}
 import com.fasterxml.jackson.databind.JsonNode
 import spray.json._
+
+
 
 // maximal number of objects in a single API request
 import dxWDL.base.Utils.DXAPI_NUM_OBJECTS_LIMIT
 
 object DxBulkDescribe {
     private def submitRequest(dxFiles : Vector[DXFile],
-                              dxProject : Option[DXProject]) : Map[DXFile, DxDescribe] = {
+                              dxProject : Option[DxProject]) : Map[DXFile, DxDescribe] = {
         val oids = dxFiles.map(_.getId).toVector
 
         val request = JsObject("objects" ->
@@ -37,7 +39,7 @@ object DxBulkDescribe {
                             val crDate = new java.util.Date(created.toLong)
                             val dxProj =
                                 if (projectId.startsWith("project-"))
-                                    Some(DXProject.getInstance(projectId))
+                                    Some(DxProject.getInstance(projectId))
                                 else
                                     None
                             DxDescribe(name,
@@ -60,7 +62,7 @@ object DxBulkDescribe {
     // Describe the names of all the files in one batch. This is much more efficient
     // than submitting file describes one-by-one.
     def apply(files: Seq[DXFile],
-              dxProject : Option[DXProject]) : Map[DXFile, DxDescribe] = {
+              dxProject : Option[DxProject]) : Map[DXFile, DxDescribe] = {
         if (files.isEmpty) {
             // avoid an unnessary API call; this is important for unit tests
             // that do not have a network connection.

@@ -7,9 +7,10 @@
 
 package dxWDL.dx
 
-import com.dnanexus.{DXAPI, DXDataObject, DXProject}
+import com.dnanexus.{DXAPI, DXDataObject}
 import com.fasterxml.jackson.databind.JsonNode
 import spray.json._
+
 
 // maximal number of objects in a single API request
 import dxWDL.base.Utils.{DX_URL_PREFIX, DXAPI_NUM_OBJECTS_LIMIT}
@@ -71,7 +72,7 @@ object DxBulkResolve {
     }
 
     private def submitRequest(dxPaths : Vector[DxPathParsed],
-                              dxProject : DXProject) : Map[String, DXDataObject] = {
+                              dxProject : DxProject) : Map[String, DXDataObject] = {
         val objectReqs : Vector[JsValue] = dxPaths.map{ makeResolutionReq(_) }
         val request = JsObject("objects" -> JsArray(objectReqs),
                                "project" -> JsString(dxProject.getId))
@@ -107,8 +108,8 @@ object DxBulkResolve {
                     case Some(x) => x
                 }
 
-                val dxProj : Option[DXProject] = fields.get("project") match {
-                    case Some(JsString(x)) => Some(DXProject.getInstance(x))
+                val dxProj : Option[DxProject] = fields.get("project") match {
+                    case Some(JsString(x)) => Some(DxProject.getInstance(x))
                     case _ => None
                 }
 
@@ -148,7 +149,7 @@ object DxBulkResolve {
     // Describe the names of all the data objects in one batch. This is much more efficient
     // than submitting object describes one-by-one.
   def apply(dxPaths: Seq[String],
-            dxProject: DXProject) : Map[String, DXDataObject] = {
+            dxProject: DxProject) : Map[String, DXDataObject] = {
         if (dxPaths.isEmpty) {
             // avoid an unnessary API call; this is important for unit tests
             // that do not have a network connection.

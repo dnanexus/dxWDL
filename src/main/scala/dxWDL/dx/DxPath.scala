@@ -11,10 +11,11 @@
 */
 package dxWDL.dx
 
-import com.dnanexus.{DXAPI, DXDataObject, DXFile, DXProject, DXRecord}
+import com.dnanexus.{DXAPI, DXDataObject, DXFile, DXRecord}
 import com.fasterxml.jackson.databind.JsonNode
 import scala.collection.mutable.HashMap
 import spray.json._
+
 
 import dxWDL.base.Utils.{DX_URL_PREFIX, trace}
 import DxUtils.{jsonNodeOfJsValue, jsValueOfJsonNode}
@@ -22,12 +23,12 @@ import DxUtils.{jsonNodeOfJsValue, jsValueOfJsonNode}
 object DxPath {
     // Lookup cache for projects. This saves
     // repeated searches for projects we already found.
-    private val projectDict = HashMap.empty[String, DXProject]
+    private val projectDict = HashMap.empty[String, DxProject]
 
-    def lookupProject(projName: String): DXProject = {
+    def lookupProject(projName: String): DxProject = {
         if (projName.startsWith("project-")) {
             // A project ID
-            return DXProject.getInstance(projName)
+            return DxProject.getInstance(projName)
         }
         if (projectDict contains projName) {
             //System.err.println(s"Cached project ${projName}")
@@ -53,7 +54,7 @@ object DxPath {
         if (results.length == 0)
             throw new Exception(s"Project ${projName} not found")
         val dxProject = results(0).asJsObject.fields.get("id") match {
-            case Some(JsString(id)) => DXProject.getInstance(id)
+            case Some(JsString(id)) => DxProject.getInstance(id)
             case _ => throw new Exception(s"Bad response from SystemFindProject API call ${repJs.prettyPrint}")
         }
         projectDict(projName) = dxProject
@@ -61,7 +62,7 @@ object DxPath {
     }
 
 
-    private def lookupObject(dxProject: DXProject,
+    private def lookupObject(dxProject: DxProject,
                              objName: String): DXDataObject = {
         // If the object is a file-id (or something like it), then
         // shortcircuit the expensive API call call.

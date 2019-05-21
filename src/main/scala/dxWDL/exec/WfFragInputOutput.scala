@@ -1,6 +1,6 @@
 package dxWDL.exec
 
-import com.dnanexus.{DXFile, DXProject}
+import com.dnanexus.{DXFile}
 import spray.json._
 import wom.types._
 import wom.values._
@@ -14,7 +14,7 @@ case class WfFragInput(blockPath: Vector[Int],
                        execLinkInfo : Map[String, ExecLinkInfo])
 
 case class WfFragInputOutput(dxIoFunctions : DxIoFunctions,
-                             dxProject: DXProject,
+                             dxProject: DxProject,
                              runtimeDebugLevel: Int,
                              typeAliases: Map[String, WomType]) {
     val verbose = runtimeDebugLevel >= 1
