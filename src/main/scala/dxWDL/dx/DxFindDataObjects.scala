@@ -61,6 +61,7 @@ case class DxFindDataObjects(limit: Option[Int],
         }
         val inputSpec : Option[Vector[IOParameter]] = jsv.asJsObject.fields.get("inputSpec") match {
             case None => None
+            case Some(JsNull) => None
             case Some(JsArray(iSpecVec)) =>
                 Some(iSpecVec.map(parseParamSpec).toVector)
             case Some(other) =>
@@ -68,13 +69,14 @@ case class DxFindDataObjects(limit: Option[Int],
         }
         val outputSpec : Option[Vector[IOParameter]]= jsv.asJsObject.fields.get("outputSpec") match {
             case None => None
+            case Some(JsNull) => None
             case Some(JsArray(oSpecVec)) =>
                 Some(oSpecVec.map(parseParamSpec).toVector)
             case Some(other) =>
                 throw new Exception(s"malformed output field ${other}")
         }
         val creationDate : java.util.Date = jsv.asJsObject.fields.get("created") match {
-            case None => throw new Exception("")
+            case None => throw new Exception("'created' field is missing")
             case Some(JsNumber(date)) => new java.util.Date(date.toLong)
             case Some(other) => throw new Exception(s"malformed created field ${other}")
         }

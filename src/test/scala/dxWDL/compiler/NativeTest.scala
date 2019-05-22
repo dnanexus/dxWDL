@@ -63,7 +63,7 @@ class NativeTest extends FlatSpec with Matchers {
     }
 
 
-    it should "Native compile a draft2 workflow" taggedAs(NativeTestXX) in {
+    it should "Native compile a draft2 workflow" taggedAs(NativeTestXX, EdgeTest) in {
         val path = pathFromBasename("draft2", "shapes.wdl")
         Main.compile(
             path.toString :: "--force" :: cFlags
@@ -88,7 +88,7 @@ class NativeTest extends FlatSpec with Matchers {
         ) shouldBe a [Main.SuccessfulTermination]
     }
 
-    it should "be able to build interfaces to native applets" taggedAs(NativeTestXX, EdgeTest) in {
+    it should "be able to build interfaces to native applets" taggedAs(NativeTestXX) in {
         val outputPath = "/tmp/dx_extern.wdl"
         Main.dxni(
             List("--force", "--quiet",
