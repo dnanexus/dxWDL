@@ -3,7 +3,7 @@ package dxWDL.dx
 import com.dnanexus._
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.databind.JsonNode
-import java.nio.charset.{StandardCharsets}
+import java.nio.file.{Path, Files}
 import spray.json._
 import wom.types._
 
@@ -11,6 +11,9 @@ import dxWDL.base.{AppInternalException, Utils, Verbose}
 import dxWDL.base.Utils.trace
 
 object DxUtils {
+    private val DOWNLOAD_RETRY_LIMIT = 3
+    private val UPLOAD_RETRY_LIMIT = 3
+
     lazy val dxEnv = DXEnvironment.create()
 
     def convertToDxObject(objName : String) : Option[DXDataObject] = {
@@ -273,10 +276,103 @@ object DxUtils {
     }
 
 
-    // Download platform file contents directly into an in-memory string.
-    // This makes sense for small files.
-    def downloadString(dxfile: DXFile) : String = {
-        val bytes = dxfile.downloadBytes()
-        new String(bytes, StandardCharsets.UTF_8)
+    // download a file from the platform to a path on the local disk. Use
+    // 'dx download' as a separate process.
+    //
+    // Note: this function assumes that the target path does not exist yet
+    def downloadFile(path: Path, dxfile: DXFile) : Unit = {
+        def downloadOneFile(path: Path, dxfile: DXFile, counter: Int) : Boolean = {
+            val fid = dxfile.getId()
+            try {
+                // Use dx download. Quote the path, because it may contains spaces.
+                val dxDownloadCmd = s"""dx download ${fid} -o "${path.toString()}" """
+                System.err.println(s"--  ${dxDownloadCmd}")
+                val (outmsg, errmsg) = Utils.execCommand(dxDownloadCmd, None)
+
+                true
+            } catch {
+                case e: Throwable =>
+                    if (counter < DOWNLOAD_RETRY_LIMIT)
+                        false
+                    else throw e
+            }
+        }
+        val dir = path.getParent()
+        if (dir != null) {
+            if (!Files.exists(dir))
+                Files.createDirectories(dir)
+        }
+        var rc = false
+        var counter = 0
+        while (!rc && counter < DOWNLOAD_RETRY_LIMIT) {
+            System.err.println(s"downloading file ${path.toString} (try=${counter})")
+            rc = downloadOneFile(path, dxfile, counter)
+            counter = counter + 1
+        }
+        if (!rc)
+            throw new Exception(s"Failure to download file ${path}")
+    }
+
+    // Upload a local file to the platform, and return a json link.
+    // Use 'dx upload' as a separate process.
+    def uploadFile(path: Path) : DXFile = {
+        if (!Files.exists(path))
+            throw new AppInternalException(s"Output file ${path.toString} is missing")
+        def uploadOneFile(path: Path, counter: Int) : Option[String] = {
+            try {
+                // shell out to dx upload. We need to quote the path, because it may contain
+                // spaces
+                val dxUploadCmd = s"""dx upload "${path.toString}" --brief"""
+                System.err.println(s"--  ${dxUploadCmd}")
+                val (outmsg, errmsg) = Utils.execCommand(dxUploadCmd, None)
+                if (!outmsg.startsWith("file-"))
+                    return None
+                Some(outmsg.trim())
+            } catch {
+                case e: Throwable =>
+                    if (counter < UPLOAD_RETRY_LIMIT)
+                        None
+                    else throw e
+            }
+        }
+
+        var counter = 0
+        while (counter < UPLOAD_RETRY_LIMIT) {
+            System.err.println(s"upload file ${path.toString} (try=${counter})")
+            uploadOneFile(path, counter) match {
+                case Some(fid) =>
+                   return DXFile.getInstance(fid)
+                case None => ()
+            }
+            counter = counter + 1
+        }
+        throw new Exception(s"Failure to upload file ${path}")
+    }
+
+    def silentFileDelete(p : Path) : Unit = {
+        try {
+            Files.delete(p)
+        } catch {
+            case e : Throwable => ()
+        }
+    }
+
+    // Read the contents of a platform file into a string
+    def downloadString(dxFile: DXFile) : String = {
+        // We don't want to use the dxjava implementation
+        //val bytes = dxFile.downloadBytes()
+        //new String(bytes, StandardCharsets.UTF_8)
+
+        // We don't want to use "dx cat" because it doesn't validate the checksum.
+        //val (outmsg, errmsg) = Utils.execCommand(s"dx cat ${dxFile.getId}")
+        //outmsg
+
+        // create a temporary file, and write the contents into it.
+        val tempFi : Path = Files.createTempFile(s"${dxFile.getId}", ".tmp")
+        silentFileDelete(tempFi)
+        downloadFile(tempFi, dxFile)
+        val content = Utils.readFileContent(tempFi)
+        silentFileDelete(tempFi)
+        content
     }
 }

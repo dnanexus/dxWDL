@@ -188,7 +188,7 @@ case class TaskRunner(task: CallableTaskDefinition,
                 val localTar : Path = tarballDir.resolve(fileName)
 
                 Utils.appletLog(verbose, s"downloading docker tarball to ${localTar}")
-                jobInputOutput.downloadFile(localTar, dxFile)
+                DxUtils.downloadFile(localTar, dxFile)
 
                 Utils.appletLog(verbose, "figuring out the image name")
                 val (mContent, _) = Utils.execCommand(s"tar --to-stdout -xf ${localTar} manifest.json")

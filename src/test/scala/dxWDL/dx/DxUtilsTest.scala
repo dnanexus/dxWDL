@@ -1,0 +1,29 @@
+package dxWDL.dx
+
+import com.dnanexus.{DXFile, DXProject}
+import org.scalatest.{FlatSpec, Matchers}
+
+class DxUtilsTest extends FlatSpec with Matchers {
+
+    val TEST_PROJECT = "dxWDL_playground"
+    lazy val dxTestProject : DXProject =
+        try {
+            DxPath.lookupProject(TEST_PROJECT)
+        } catch {
+            case e : Exception =>
+                throw new Exception(s"""|Could not find project ${TEST_PROJECT}, you probably need to be logged into
+                                        |the platform""".stripMargin)
+        }
+
+    it should "download files as strings" in {
+        val results = DxBulkResolve.apply(
+            List("dx://dxWDL_playground:/test_data/fileA"), dxTestProject)
+        results.size shouldBe(1)
+        val dxobj = results.values.head
+        val dxFile : DXFile = dxobj.asInstanceOf[DXFile]
+
+        val value = DxUtils.downloadString(dxFile)
+        value shouldBe("The fibonacci series includes 0,1,1,2,3,5\n")
+    }
+
+}
