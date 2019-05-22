@@ -11,21 +11,27 @@ object DxIOClass extends Enumeration {
         ARRAY_OF_INTS, ARRAY_OF_FLOATS, ARRAY_OF_STRINGS, ARRAY_OF_BOOLEANS, ARRAY_OF_FILES,
         HASH = Value
 
-    def fromString(s : String) : DxIOClass = {
+    def fromString(s : String) : DxIOClass.Value = {
         s match {
+            // primitives
             case "int" => INT
             case "float" => FLOAT
             case "string" => STRING
             case "boolean" => BOOLEAN
             case "file" => FILE
 
+            // arrays of primitives
             case "array:int" => ARRAY_OF_INTS
             case "array:float" => ARRAY_OF_FLOATS
             case "array:string" => ARRAY_OF_STRINGS
             case "array:boolean"=> ARRAY_OF_BOOLEANS
             case "array:file" => ARRAY_OF_FILES
 
+            // hash
             case "hash" => HASH
+
+            // we don't deal with anything else
+            case other => throw new Exception(s"io class ${other} is not handled in dxWDL")
         }
     }
 }
