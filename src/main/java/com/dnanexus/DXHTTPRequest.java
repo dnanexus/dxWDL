@@ -21,7 +21,6 @@ import java.nio.charset.Charset;
 
 import org.apache.http.Header;
 import org.apache.http.HttpEntity;
-import org.apache.http.HttpHost;
 import org.apache.http.HttpResponse;
 import org.apache.http.HttpStatus;
 import org.apache.http.auth.AuthScope;
@@ -35,6 +34,8 @@ import org.apache.http.entity.StringEntity;
 import org.apache.http.impl.client.BasicCredentialsProvider;
 import org.apache.http.impl.client.HttpClientBuilder;
 import org.apache.http.util.EntityUtils;
+import org.apache.http.protocol.HttpContext;
+import org.apache.http.protocol.BasicHttpContext;
 
 import com.dnanexus.exceptions.DXAPIException;
 import com.dnanexus.exceptions.DXHTTPException;
@@ -170,7 +171,7 @@ public class DXHTTPRequest {
             return;
         }
 
-        // Configure a proxy
+          // Configure a proxy
         if (!proxyDesc.authRequired) {
             reqBuilder.setProxy(proxyDesc.host);
             RequestConfig requestConfig = reqBuilder.build();
@@ -221,6 +222,12 @@ public class DXHTTPRequest {
     protected HttpClient getHttpClient() {
         return this.httpclient;
     }
+
+    /**
+     * Allows custom HttpContext to setup overridden http. parameters
+     * e.g. http.conn-manager.timeout for PoolingHttpClientConnectionManager
+     */
+    protected HttpContext getHttpContext() { return new BasicHttpContext(); }
 
     /**
      * Issues a request against the specified resource (assuming requests ARE safe to be retried)
@@ -348,7 +355,7 @@ public class DXHTTPRequest {
                 // TODO: distinguish between errors during connection init and socket errors while
                 // sending or receiving data. The former can always be retried, but the latter can
                 // only be retried if the request is idempotent.
-                HttpResponse response = getHttpClient().execute(request);
+                HttpResponse response = getHttpClient().execute(request, getHttpContext());
 
                 statusCode = response.getStatusLine().getStatusCode();
                 requestId = getHeader(response, "X-Request-ID");
@@ -484,8 +491,10 @@ public class DXHTTPRequest {
             // retries). So there is at least one more retry left; sleep before we retry.
             assert attempts <= NUM_RETRIES;
 
+
             if (this.disableRetry)
                 throw new RuntimeException("Retry disabled");
+
 
             sleep(timeoutSeconds);
             timeoutSeconds *= 2;

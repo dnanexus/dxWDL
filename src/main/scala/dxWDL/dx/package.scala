@@ -6,8 +6,32 @@ import wom.types._
 
 import dxWDL.base.WomTypeSerialization
 
+object DxIOClass extends Enumeration {
+    val INT, FLOAT, STRING, BOOLEAN, FILE,
+        ARRAY_OF_INTS, ARRAY_OF_FLOATS, ARRAY_OF_STRINGS, ARRAY_OF_BOOLEANS, ARRAY_OF_FILES,
+        HASH = Value
+
+    def fromString(s : String) : DxIOClass = {
+        s match {
+            case "int" => INT
+            case "float" => FLOAT
+            case "string" => STRING
+            case "boolean" => BOOLEAN
+            case "file" => FILE
+
+            case "array:int" => ARRAY_OF_INTS
+            case "array:float" => ARRAY_OF_FLOATS
+            case "array:string" => ARRAY_OF_STRINGS
+            case "array:boolean"=> ARRAY_OF_BOOLEANS
+            case "array:file" => ARRAY_OF_FILES
+
+            case "hash" => HASH
+        }
+    }
+}
+
 case class IOParameter(name: String,
-                       ioClass: IOClass,
+                       ioClass: DxIOClass.Value,
                        optional : Boolean)
 
 // This is similar to DXDataObject.Describe
@@ -26,10 +50,6 @@ case class DxExec(id: String) {
     def getId : String = id
 }
 
-
-// An equivalent for the InputParmater/OutputParameter types
-case class DXIOParam(ioClass: IOClass,
-                     optional: Boolean)
 
 // A stand in for the DXWorkflow.Stage inner class (we don't have a constructor for it)
 case class DXWorkflowStage(id: String) {

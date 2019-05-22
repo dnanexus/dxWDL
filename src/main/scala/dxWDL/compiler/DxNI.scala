@@ -43,7 +43,7 @@ task mk_int_list {
   */
 package dxWDL.compiler
 
-import com.dnanexus.{DXAPI, DXApplet, DXDataObject, DXProject, IOClass}
+import com.dnanexus.{DXAPI, DXApplet, DXDataObject, DXProject}
 import com.fasterxml.jackson.databind.JsonNode
 import java.nio.file.{Files, Path}
 import scala.util.matching.Regex
@@ -54,7 +54,7 @@ import dxWDL.base._
 import dxWDL.dx._
 
 case class IoSpec(name: String,
-                  ioClass: IOClass,
+                  ioClass: DxIOClass.Value,
                   optional: Boolean)
 
 case class DxApp(name: String,
@@ -67,36 +67,36 @@ case class DxNI(verbose: Verbose,
 
     private def wdlTypeOfIOClass(appletName:String,
                                  argName: String,
-                                 ioClass: IOClass,
+                                 ioClass: DxIOClass.Value,
                                  isOptional: Boolean) : WomType = {
         if (isOptional) {
             ioClass match {
-            case IOClass.BOOLEAN => WomOptionalType(WomBooleanType)
-            case IOClass.INT => WomOptionalType(WomIntegerType)
-            case IOClass.FLOAT => WomOptionalType(WomFloatType)
-            case IOClass.STRING => WomOptionalType(WomStringType)
-            case IOClass.FILE => WomOptionalType(WomSingleFileType)
-            case IOClass.ARRAY_OF_BOOLEANS => WomMaybeEmptyArrayType(WomBooleanType)
-            case IOClass.ARRAY_OF_INTS => WomMaybeEmptyArrayType(WomIntegerType)
-            case IOClass.ARRAY_OF_FLOATS => WomMaybeEmptyArrayType(WomFloatType)
-            case IOClass.ARRAY_OF_STRINGS => WomMaybeEmptyArrayType(WomStringType)
-            case IOClass.ARRAY_OF_FILES => WomMaybeEmptyArrayType(WomSingleFileType)
+            case DxIOClass.BOOLEAN => WomOptionalType(WomBooleanType)
+            case DxIOClass.INT => WomOptionalType(WomIntegerType)
+            case DxIOClass.FLOAT => WomOptionalType(WomFloatType)
+            case DxIOClass.STRING => WomOptionalType(WomStringType)
+            case DxIOClass.FILE => WomOptionalType(WomSingleFileType)
+            case DxIOClass.ARRAY_OF_BOOLEANS => WomMaybeEmptyArrayType(WomBooleanType)
+            case DxIOClass.ARRAY_OF_INTS => WomMaybeEmptyArrayType(WomIntegerType)
+            case DxIOClass.ARRAY_OF_FLOATS => WomMaybeEmptyArrayType(WomFloatType)
+            case DxIOClass.ARRAY_OF_STRINGS => WomMaybeEmptyArrayType(WomStringType)
+            case DxIOClass.ARRAY_OF_FILES => WomMaybeEmptyArrayType(WomSingleFileType)
             case _ => throw new Exception(
                 s"""|Cannot call applet ${appletName} from WDL, argument ${argName}
                     |has IO class ${ioClass}""".stripMargin.replaceAll("\n", " "))
             }
         } else {
             ioClass match {
-                case IOClass.BOOLEAN => WomBooleanType
-                case IOClass.INT => WomIntegerType
-                case IOClass.FLOAT => WomFloatType
-                case IOClass.STRING => WomStringType
-                case IOClass.FILE => WomSingleFileType
-                case IOClass.ARRAY_OF_BOOLEANS => WomNonEmptyArrayType(WomBooleanType)
-                case IOClass.ARRAY_OF_INTS => WomNonEmptyArrayType(WomIntegerType)
-                case IOClass.ARRAY_OF_FLOATS => WomNonEmptyArrayType(WomFloatType)
-                case IOClass.ARRAY_OF_STRINGS => WomNonEmptyArrayType(WomStringType)
-                case IOClass.ARRAY_OF_FILES => WomNonEmptyArrayType(WomSingleFileType)
+                case DxIOClass.BOOLEAN => WomBooleanType
+                case DxIOClass.INT => WomIntegerType
+                case DxIOClass.FLOAT => WomFloatType
+                case DxIOClass.STRING => WomStringType
+                case DxIOClass.FILE => WomSingleFileType
+                case DxIOClass.ARRAY_OF_BOOLEANS => WomNonEmptyArrayType(WomBooleanType)
+                case DxIOClass.ARRAY_OF_INTS => WomNonEmptyArrayType(WomIntegerType)
+                case DxIOClass.ARRAY_OF_FLOATS => WomNonEmptyArrayType(WomFloatType)
+                case DxIOClass.ARRAY_OF_STRINGS => WomNonEmptyArrayType(WomStringType)
+                case DxIOClass.ARRAY_OF_FILES => WomNonEmptyArrayType(WomSingleFileType)
                 case _ => throw new Exception(
                     s"""|Cannot call applet ${appletName} from WDL, argument ${argName}
                         |has IO class ${ioClass}""".stripMargin.replaceAll("\n", " "))
@@ -115,12 +115,12 @@ case class DxNI(verbose: Verbose,
         val inputSpec:Map[String, WomType] =
             desc.inputSpec.get.map{ iSpec =>
                 iSpec.name -> wdlTypeOfIOClass(aplName, iSpec.name,
-                                                  iSpec.ioClass, iSpec.optional)
+                                               iSpec.ioClass, iSpec.optional)
             }.toMap
         val outputSpec:Map[String, WomType] =
             desc.outputSpec.get.map{ iSpec =>
                 iSpec.name -> wdlTypeOfIOClass(aplName, iSpec.name,
-                                                  iSpec.ioClass, iSpec.optional)
+                                               iSpec.ioClass, iSpec.optional)
             }.toMap
         (inputSpec, outputSpec)
     }
@@ -218,19 +218,9 @@ case class DxNI(verbose: Verbose,
                                  jsv: JsValue) : IoSpec = {
         val name = checkedGetJsString(jsv, "name")
         val ioClassRaw = checkedGetJsString(jsv, "class")
-        val ioClass = ioClassRaw match {
-            case "boolean" => IOClass.BOOLEAN
-            case "int" => IOClass.INT
-            case "float" => IOClass.FLOAT
-            case "string" => IOClass.STRING
-            case "file" => IOClass.FILE
-            case "array:boolean" => IOClass.ARRAY_OF_BOOLEANS
-            case "array:int" => IOClass.ARRAY_OF_INTS
-            case "array:float" => IOClass.ARRAY_OF_FLOATS
-            case "array:string" => IOClass.ARRAY_OF_STRINGS
-            case "array:file" => IOClass.ARRAY_OF_FILES
-            case other => throw new Exception(s"app ${appName} has field ${name} with non WDL-native io class ${other}")
-        }
+        val ioClass = DxIOClass.fromString(ioClassRaw)
+        if (ioClass == DxIOClass.HASH)
+            throw new Exception(s"app ${appName} has field ${name} with non WDL-native io class HASH")
         val optional = checkedGetJsBooleanOrFalse(jsv, "optional")
         IoSpec(name, ioClass, optional)
     }

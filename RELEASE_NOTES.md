@@ -5,6 +5,7 @@
 - Mark auxiliary workflows and applets as hidden. This is a step in the direction of supporting copying of a workflow from one project to another.
 - Added unit tests for the `WomValueAnalysis` module, which checks if WOM expressions are constant.
 - Reducing reliance on the dxjava library, calling the DXAPI directly.
+- Merged fork of the dxjava library back into the dx-toolkit.
 
 ## 1.05
 - Got DxNI to work for DNAnexus apps, not just applets.

@@ -1,6 +1,6 @@
 package dxWDL.dx
 
-import com.dnanexus.{DXAPI, DXDataObject, DXProject, IOClass}
+import com.dnanexus.{DXAPI, DXDataObject, DXProject}
 import com.fasterxml.jackson.databind.JsonNode
 import spray.json._
 
@@ -10,9 +10,9 @@ case class DxFindDataObjects(limit: Option[Int],
                              verbose: Verbose) {
 
     private def parseParamSpec(jsv: JsValue) : IOParameter = {
-        val ioClass: IOClass = jsv.asJsObject.fields.get("class") match {
+        val ioClass: DxIOClass.Value = jsv.asJsObject.fields.get("class") match {
             case None => throw new Exception("class field missing")
-            case Some(JsString(ioClass)) => IOClass.create(ioClass)
+            case Some(JsString(ioClass)) => DxIOClass.fromString(ioClass)
             case other => throw new Exception(s"malformed class field ${other}")
         }
 

@@ -59,7 +59,7 @@ public enum IOClass {
     }
 
     @JsonCreator
-    public static IOClass create(String value) {
+    private static IOClass create(String value) {
         return createMap.get(value);
     }
 
