@@ -349,7 +349,7 @@ object DxUtils {
         throw new Exception(s"Failure to upload file ${path}")
     }
 
-    def silentFileDelete(p : Path) : Unit = {
+    private def silentFileDelete(p : Path) : Unit = {
         try {
             Files.delete(p)
         } catch {
