@@ -16,7 +16,9 @@ import time
 
 AssetDesc = namedtuple('AssetDesc', 'region asset_id project')
 
+dxda_version = "v0.2.1"
 max_num_retries = 5
+
 def dxWDL_jar_path(top_dir):
     return os.path.join(top_dir, "applet_resources/resources/dxWDL.jar")
 
@@ -102,10 +104,36 @@ def _sbt_assembly(top_dir, version_id):
     os.chdir(crnt_work_dir)
     return jar_path
 
+# download dxda for linux, and place it in the resources
+# sub-directory.
+def _download_dxda_into_resources(top_dir):
+    crnt_work_dir = os.getcwd()
+    os.chdir(os.path.join(top_dir, "applet_resources"))
+
+    # make sure the resources directory exists
+    if not os.path.exists("resources"):
+        os.mkdir("resources")
+
+    # download dxda release, and place it in the resources directory
+    trg_dxda_tar = "resources/dx-download-agent-linux.tar"
+    subprocess.check_call([
+        "wget",
+        "https://github.com/dnanexus/dxda/releases/download/{}/dx-download-agent-linux.tar".format(dxda_version),
+        "-O",
+        trg_dxda_tar])
+    subprocess.check_call(["tar", "-C", "resources", "-xvf", trg_dxda_tar])
+    os.rename("resources/dx-download-agent-linux/dx-download-agent",
+              "resources/dx-download-agent")
+    os.remove(trg_dxda_tar)
+    shutil.rmtree("resources/dx-download-agent-linux")
+    os.chdir(crnt_work_dir)
+
 # Build a dx-asset from the runtime library.
 # Go to the top level directory, before running "dx"
 def build_asset(top_dir, destination):
     crnt_work_dir = os.getcwd()
+
+    # build the platform asset
     os.chdir(os.path.abspath(top_dir))
     subprocess.check_call(["dx", "build_asset", "applet_resources",
                            "--destination", destination])
@@ -175,6 +203,9 @@ def build(project, folder, version_id, top_dir, path_dict):
     # Create a configuration file
     _gen_config_file(version_id, top_dir, path_dict)
     jar_path = _sbt_assembly(top_dir, version_id)
+
+    # get a copy of the download agent (dxda)
+    _download_dxda_into_resources(top_dir)
 
     asset = find_asset(project, folder)
     if asset is None:

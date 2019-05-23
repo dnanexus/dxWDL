@@ -13,6 +13,10 @@ top_dir = os.path.dirname(os.path.abspath(here))
 
 HOME_REGION = "aws:us-east-1"
 
+TEST_DICT = {
+    "aws:us-east-1" :  "dxWDL_playground"
+}
+
 # To add region R, create a project for it, dxWDL_R, and add
 # a mapping to the lists
 #    R : dxWDL_R
@@ -36,8 +40,16 @@ def main():
                            default=False)
     args = argparser.parse_args()
 
+    # build multi-region jar for releases, or
+    # if explicitly specified
+    multi_region = args.multi_region
+
     # Choose which dictionary to use
-    project_dict = RELEASE_DICT
+    if multi_region:
+        project_dict = RELEASE_DICT
+    else:
+        project_dict = TEST_DICT
+
     project = util.get_project(project_dict[HOME_REGION])
     print("project: {} ({})".format(project.name, project.get_id()))
 
@@ -61,10 +73,6 @@ def main():
 
     # Make sure the target directory exists
     project.new_folder(folder, parents=True)
-
-    # build multi-region jar for releases, or
-    # if explicitly specified
-    multi_region = args.multi_region
 
     # Build the asset, and the compiler jar file.
     path_dict = dict(map(lambda kv: (kv[0], kv[1] + ":" + folder),
