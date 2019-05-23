@@ -82,7 +82,7 @@ case class DxFindDataObjects(limit: Option[Int],
         }
         DxDescribe(name, folder, size,
                    Some(dxProject), dxobj, creationDate,
-                   properties, inputSpec, outputSpec)
+                   properties, inputSpec, outputSpec, None)
     }
 
     private def parseOneResult(jsv : JsValue) : (DXDataObject, DxDescribe) = {

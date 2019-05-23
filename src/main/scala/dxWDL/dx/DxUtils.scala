@@ -286,9 +286,7 @@ object DxUtils {
             try {
                 // Use dx download. Quote the path, because it may contains spaces.
                 val dxDownloadCmd = s"""dx download ${fid} -o "${path.toString()}" """
-                System.err.println(s"--  ${dxDownloadCmd}")
                 val (outmsg, errmsg) = Utils.execCommand(dxDownloadCmd, None)
-
                 true
             } catch {
                 case e: Throwable =>
