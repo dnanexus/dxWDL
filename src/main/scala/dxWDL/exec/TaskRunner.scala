@@ -397,7 +397,7 @@ case class TaskRunner(task: CallableTaskDefinition,
         // build a manifest for dxda, if there are files to download
         val DxdaManifest(manifestJs) = dxdaManifest
         if (manifestJs.asJsObject.fields.size > 0) {
-            ???
+            Utils.writeFileContent(dxPathConfig.dxdaManifest, manifestJs.prettyPrint)
         }
 
         val inputs = localizedInputs.map{ case (inpDfn, value) =>

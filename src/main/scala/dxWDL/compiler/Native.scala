@@ -233,6 +233,12 @@ case class Native(dxWDLrtId: Option[String],
             |       echo "Background processes ids: $${background_pids[@]}"
             |    fi
             |
+            |    # run the dx-download-agent (dxda) on a manifest of files
+            |    if [[ -e ${dxPathConfig.dxdaManifest} ]]; then
+            |       bzip2 ${dxPathConfig.dxdaManifest} > ${dxPathConfig.dxdaManifest}.bz2
+            |       dx-download-agent download ${dxPathConfig.dxdaManifest}.bz2
+            |    fi
+            |
             |    echo "bash command encapsulation script:"
             |    cat ${dxPathConfig.script}
             |
