@@ -22,7 +22,7 @@ class DxUtilsTest extends FlatSpec with Matchers {
         val dxobj = results.values.head
         val dxFile : DXFile = dxobj.asInstanceOf[DXFile]
 
-        val value = DxUtils.downloadString(dxFile)
+        val value = DxUtils.downloadString(dxFile, false)
         value shouldBe("The fibonacci series includes 0,1,1,2,3,5\n")
     }
 

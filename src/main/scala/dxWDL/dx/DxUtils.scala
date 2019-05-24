@@ -8,7 +8,6 @@ import spray.json._
 import wom.types._
 
 import dxWDL.base.{AppInternalException, Utils, Verbose}
-import dxWDL.base.Utils.trace
 
 object DxUtils {
     private val DOWNLOAD_RETRY_LIMIT = 3
@@ -241,10 +240,10 @@ object DxUtils {
                    rmtProject: DXProject,
                    verbose: Verbose) : Unit = {
         if (dxProject == rmtProject) {
-            trace(verbose.on, s"The asset ${pkgName} is from this project ${rmtProject.getId}, no need to clone")
+            Utils.trace(verbose.on, s"The asset ${pkgName} is from this project ${rmtProject.getId}, no need to clone")
             return
         }
-        trace(verbose.on, s"The asset ${pkgName} is from a different project ${rmtProject.getId}")
+        Utils.trace(verbose.on, s"The asset ${pkgName} is from a different project ${rmtProject.getId}")
 
         // clone
         val req = JsObject( "objects" -> JsArray(JsString(assetRecord.getId)),
@@ -267,9 +266,9 @@ object DxUtils {
         existingRecords.size match {
             case 0 =>
                 val localAssetRecord = DXRecord.getInstance(assetRecord.getId)
-                trace(verbose.on, s"Created ${localAssetRecord.getId} pointing to asset ${pkgName}")
+                Utils.trace(verbose.on, s"Created ${localAssetRecord.getId} pointing to asset ${pkgName}")
             case 1 =>
-                trace(verbose.on, s"The project already has a record pointing to asset ${pkgName}")
+                Utils.trace(verbose.on, s"The project already has a record pointing to asset ${pkgName}")
             case _ =>
                 throw new Exception(s"clone returned too many existing records ${exists}")
         }
@@ -280,7 +279,9 @@ object DxUtils {
     // 'dx download' as a separate process.
     //
     // Note: this function assumes that the target path does not exist yet
-    def downloadFile(path: Path, dxfile: DXFile) : Unit = {
+    def downloadFile(path: Path,
+                     dxfile: DXFile,
+                     verbose: Boolean) : Unit = {
         def downloadOneFile(path: Path, dxfile: DXFile, counter: Int) : Boolean = {
             val fid = dxfile.getId()
             try {
@@ -303,7 +304,7 @@ object DxUtils {
         var rc = false
         var counter = 0
         while (!rc && counter < DOWNLOAD_RETRY_LIMIT) {
-            System.err.println(s"downloading file ${path.toString} (try=${counter})")
+            Utils.appletLog(verbose, s"downloading file ${path.toString} (try=${counter})")
             rc = downloadOneFile(path, dxfile, counter)
             counter = counter + 1
         }
@@ -313,7 +314,8 @@ object DxUtils {
 
     // Upload a local file to the platform, and return a json link.
     // Use 'dx upload' as a separate process.
-    def uploadFile(path: Path) : DXFile = {
+    def uploadFile(path: Path,
+                   verbose: Boolean) : DXFile = {
         if (!Files.exists(path))
             throw new AppInternalException(s"Output file ${path.toString} is missing")
         def uploadOneFile(path: Path, counter: Int) : Option[String] = {
@@ -321,7 +323,7 @@ object DxUtils {
                 // shell out to dx upload. We need to quote the path, because it may contain
                 // spaces
                 val dxUploadCmd = s"""dx upload "${path.toString}" --brief"""
-                System.err.println(s"--  ${dxUploadCmd}")
+                Utils.appletLog(verbose, s"--  ${dxUploadCmd}")
                 val (outmsg, errmsg) = Utils.execCommand(dxUploadCmd, None)
                 if (!outmsg.startsWith("file-"))
                     return None
@@ -336,7 +338,7 @@ object DxUtils {
 
         var counter = 0
         while (counter < UPLOAD_RETRY_LIMIT) {
-            System.err.println(s"upload file ${path.toString} (try=${counter})")
+            Utils.appletLog(verbose, s"upload file ${path.toString} (try=${counter})")
             uploadOneFile(path, counter) match {
                 case Some(fid) =>
                    return DXFile.getInstance(fid)
@@ -356,7 +358,8 @@ object DxUtils {
     }
 
     // Read the contents of a platform file into a string
-    def downloadString(dxFile: DXFile) : String = {
+    def downloadString(dxFile: DXFile,
+                       verbose: Boolean) : String = {
         // We don't want to use the dxjava implementation
         //val bytes = dxFile.downloadBytes()
         //new String(bytes, StandardCharsets.UTF_8)
@@ -368,7 +371,7 @@ object DxUtils {
         // create a temporary file, and write the contents into it.
         val tempFi : Path = Files.createTempFile(s"${dxFile.getId}", ".tmp")
         silentFileDelete(tempFi)
-        downloadFile(tempFi, dxFile)
+        downloadFile(tempFi, dxFile, verbose)
         val content = Utils.readFileContent(tempFi)
         silentFileDelete(tempFi)
         content

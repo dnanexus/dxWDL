@@ -12,7 +12,7 @@ import wom.values._
 
 import dxWDL.base._
 import dxWDL.base.Utils.{FLAT_FILES_SUFFIX}
-import dxWDL.dx.DxUtils
+import dxWDL.dx.{DxUtils, DxdaManifest}
 import dxWDL.util._
 
 case class JobInputOutput(dxIoFunctions : DxIoFunctions,
@@ -286,7 +286,8 @@ case class JobInputOutput(dxIoFunctions : DxIoFunctions,
                       inputs: Map[InputDefinition, WomValue],
                       inputsDir: Path) : (Map[InputDefinition, WomValue],
                                           Map[Furl, Path],
-                                          Vector[String]) = {
+                                          Vector[String],
+                                          DxdaManifest) = {
         val fileURLs : Vector[Furl] = inputs.values.map(findFiles).flatten.toVector
         val streamingFiles : Set[Furl] = areStreaming(parameterMeta, inputs)
         Utils.appletLog(verbose, s"streaming files = ${streamingFiles}")
@@ -315,26 +316,25 @@ case class JobInputOutput(dxIoFunctions : DxIoFunctions,
                 }
             }
 
-        // download the files from the cloud.
-        // This could be done in parallel using the download agent.
-        // Right now, we are downloading the files one at a time
-        var bashSnippets = Vector.empty[String]
-        furl2path.foreach{
-            case (dxUrl : FurlDx, localPath) =>
-                val dxFile = dxUrl.dxFile
-                if (streamingFiles contains dxUrl) {
-                    val snippet = s"""|mkfifo ${localPath}
-                                      |dx cat ${dxFile.getId} > ${localPath} &
-                                      |echo $$!
-                                      |""".stripMargin
-                    bashSnippets :+= snippet
-                } else {
-                    DxUtils.downloadFile(localPath, dxFile)
-                }
-            case (FurlLocal(path), _) =>
-                // The file is already local, nothing to do
-                ()
-        }
+        // a bash snippet for each file we will stream. These file are NOT
+        // downloaded.
+        val bashStreamingSnippets : Vector[String] =
+            furl2path.collect {
+                case (dxUrl : FurlDx, localPath) if streamingFiles contains dxUrl =>
+                    val dxFile = dxUrl.dxFile
+                    s"""|mkfifo ${localPath}
+                        |dx cat ${dxFile.getId} > ${localPath} &
+                        |echo $$!
+                        |""".stripMargin
+            }.toVector
+
+        // Create a manifest for the download agent (dxda)
+        val filesToDownloadWithDxda : Map[DXFile, Path] =
+            furl2path.collect{
+                case (dxUrl: FurlDx, localPath) if !(streamingFiles contains dxUrl) =>
+                    dxUrl.dxFile -> localPath
+            }
+        val manifest = DxdaManifest.apply(filesToDownloadWithDxda)
 
         // Replace the dxURLs with local file paths
         val localizedInputs = inputs.map{ case (inpDef, womValue) =>
@@ -342,7 +342,7 @@ case class JobInputOutput(dxIoFunctions : DxIoFunctions,
             inpDef -> v1
         }
 
-        (localizedInputs, furl2path, bashSnippets)
+        (localizedInputs, furl2path, bashStreamingSnippets, manifest)
     }
 
     // We have task outputs, where files are stored locally. Upload the files to
@@ -380,7 +380,7 @@ case class JobInputOutput(dxIoFunctions : DxIoFunctions,
 
         // upload the files; this could be in parallel in the future.
         val uploaded_path2furl : Map[Path, Furl] = pathsToUpload.map{ path =>
-            val dxFile = DxUtils.uploadFile(path)
+            val dxFile = DxUtils.uploadFile(path, verbose)
             path -> Furl.dxFileToFurl(dxFile, Map.empty)   // no cache
         }.toMap
 
