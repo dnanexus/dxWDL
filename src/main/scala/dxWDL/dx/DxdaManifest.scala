@@ -3,7 +3,7 @@
 
 package dxWDL.dx
 
-import com.dnanexus.{DXFile, DXProject}
+import com.dnanexus.{DXFile, DXContainer}
 import java.nio.file.Path
 import spray.json._
 
@@ -61,25 +61,18 @@ object DxdaManifest {
 
         // collect all the information per file
         val fileDescs : Map[DXFile, DxDescribe] = DxBulkDescribe.apply(file2LocalMapping.keys.toVector,
-                                                                       None,
                                                                        parts = true)
 
         // create a sub-map per project
-        val fileDescsByProject : Map[DXProject, Map[DXFile, DxDescribe]] =
-            fileDescs.foldLeft(Map.empty[DXProject, Map[DXFile, DxDescribe]]) {
+        val fileDescsByProject : Map[DXContainer, Map[DXFile, DxDescribe]] =
+            fileDescs.foldLeft(Map.empty[DXContainer, Map[DXFile, DxDescribe]]) {
                 case (accu, (dxFile, dxDesc)) =>
-                    val dxProj = dxDesc.project match {
+                    val container : DXContainer = dxDesc.container
+                    accu.get(container) match {
                         case None =>
-                            throw new Exception(s"""|Project has to be defined for
-                                                    |file to be downloaded ${dxFile}"""
-                                                    .stripMargin.replaceAll("\n", " "))
-                        case Some(x) => x
-                    }
-                    accu.get(dxProj) match {
-                        case None =>
-                            accu + (dxProj -> Map(dxFile -> dxDesc))
+                            accu + (container -> Map(dxFile -> dxDesc))
                         case Some(m) =>
-                            accu + (dxProj -> (m + (dxFile -> dxDesc)))
+                            accu + (container -> (m + (dxFile -> dxDesc)))
                     }
             }
 

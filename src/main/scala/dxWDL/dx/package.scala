@@ -48,7 +48,7 @@ case class DxFilePart(state: String,
 case class DxDescribe(name : String,
                       folder: String,
                       size : Option[Long],
-                      project: Option[DXProject],
+                      container: DXContainer, // a project or a container
                       dxobj : DXDataObject,
                       creationDate : java.util.Date,
                       properties: Map[String, String],

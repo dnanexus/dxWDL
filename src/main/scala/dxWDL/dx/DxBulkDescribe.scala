@@ -2,7 +2,7 @@
 
 package dxWDL.dx
 
-import com.dnanexus.{DXAPI, DXFile, DXProject}
+import com.dnanexus.{DXAPI, DXContainer, DXFile}
 import com.fasterxml.jackson.databind.JsonNode
 import spray.json._
 
@@ -35,7 +35,6 @@ object DxBulkDescribe {
     }
 
     private def submitRequest(dxFiles : Vector[DXFile],
-                              dxProject : Option[DXProject],
                               parts : Boolean) : Map[DXFile, DxDescribe] = {
         val oids = dxFiles.map(_.getId).toVector
 
@@ -72,16 +71,14 @@ object DxBulkDescribe {
                                  JsNumber(size), JsString(fid), JsString(projectId), JsNumber(created)) =>
                             assert(fid == dxFile.getId)
                             val crDate = new java.util.Date(created.toLong)
-                            val dxProj =
-                                if (projectId.startsWith("project-"))
-                                    Some(DXProject.getInstance(projectId))
-                                else
-                                    None
+
+                            // This could be a container, not a project.
+                            val dxContainer = DXContainer.getInstance(projectId)
                             DxDescribe(name,
                                        folder,
                                        Some(size.toLong),
-                                       dxProj,
-                                       DxUtils.convertToDxObject(fid).get,
+                                       dxContainer,
+                                       DxUtils.convertToDxObject(fid, Some(dxContainer)).get,
                                        crDate,
                                        Map.empty,
                                        None,
@@ -102,7 +99,6 @@ object DxBulkDescribe {
     // Describe the names of all the files in one batch. This is much more efficient
     // than submitting file describes one-by-one.
     def apply(files: Seq[DXFile],
-              dxProject : Option[DXProject],
               parts : Boolean = false) : Map[DXFile, DxDescribe] = {
         if (files.isEmpty) {
             // avoid an unnessary API call; this is important for unit tests
@@ -116,7 +112,7 @@ object DxBulkDescribe {
         // iterate on the ranges
         slices.foldLeft(Map.empty[DXFile, DxDescribe]) {
             case (accu, fileRange) =>
-                accu ++ submitRequest(fileRange.toVector, dxProject, parts)
+                accu ++ submitRequest(fileRange.toVector, parts)
         }
     }
 }

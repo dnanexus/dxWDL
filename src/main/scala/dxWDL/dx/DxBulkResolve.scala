@@ -7,7 +7,7 @@
 
 package dxWDL.dx
 
-import com.dnanexus.{DXAPI, DXDataObject, DXProject}
+import com.dnanexus.{DXAPI, DXContainer, DXDataObject, DXProject}
 import com.fasterxml.jackson.databind.JsonNode
 import spray.json._
 
@@ -101,22 +101,20 @@ object DxBulkResolve {
                     case Some(JsString(x)) => x
                     case _ => throw new Exception("no id returned")
                 }
+
+                // could be a container, not a project
+                val dxContainer : Option[DXContainer] = fields.get("project") match {
+                    case Some(JsString(x)) => Some(DXContainer.getInstance(x))
+                    case _ => None
+                }
+
                 // safe conversion to a dx-object
-                val dxobj = DxUtils.convertToDxObject(dxid) match {
+                val dxobj = DxUtils.convertToDxObject(dxid, dxContainer) match {
                     case None => throw new Exception(s"Bad dxid=${dxid}")
                     case Some(x) => x
                 }
 
-                val dxProj : Option[DXProject] = fields.get("project") match {
-                    case Some(JsString(x)) => Some(DXProject.getInstance(x))
-                    case _ => None
-                }
-
-                val dxobjWithProj = dxProj match  {
-                    case None => dxobj
-                    case Some(proj) => DXDataObject.getInstance(dxobj.getId, proj)
-                }
-                path -> dxobjWithProj
+                path -> dxobj
         }.toMap
     }
 
@@ -129,7 +127,7 @@ object DxBulkResolve {
 
         for (p <- allDxPaths) {
             val pDxPath = parse(p)
-            DxUtils.convertToDxObject(pDxPath.name) match {
+            DxUtils.convertToDxObject(pDxPath.name, None) match {
                 case None =>
                     rest = rest :+ pDxPath
                 case Some(dxobj) =>

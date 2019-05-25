@@ -15,22 +15,52 @@ object DxUtils {
 
     lazy val dxEnv = DXEnvironment.create()
 
-    def convertToDxObject(objName : String) : Option[DXDataObject] = {
+    def convertToDxObject(objName : String,
+                          container : Option[DXContainer]) : Option[DXDataObject] = {
         // If the object is a file-id (or something like it), then
         // shortcut the expensive findDataObjects call.
-        if (objName.startsWith("applet-")) {
-            return Some(DXApplet.getInstance(objName))
+        val dxobj : Option[DXDataObject] = objName match {
+            case _ if objName.startsWith("applet-") =>
+                Some(DXApplet.getInstance(objName))
+            case _ if objName.startsWith("file-") =>
+                Some(DXFile.getInstance(objName))
+            case _  if objName.startsWith("record-") =>
+                Some(DXRecord.getInstance(objName))
+            case _ if objName.startsWith("workflow-") =>
+                Some(DXWorkflow.getInstance(objName))
+            case _ =>
+                None
         }
-        if (objName.startsWith("file-")) {
-            return Some(DXFile.getInstance(objName))
+
+        // short circut setting the project, if we don't have
+        // a project
+        if (dxobj == None)
+            return None
+        container match {
+            case None =>
+                return dxobj
+            case Some(dxcont) if dxcont.isInstanceOf[DXContainer] =>
+                return dxobj
+            case _ =>
+                ()
         }
-        if (objName.startsWith("record-")) {
-            return Some(DXRecord.getInstance(objName))
+
+        // set the project
+        val dxProj = container.get.asInstanceOf[DXProject]
+
+        val dxobjWithProj : DXDataObject = dxobj.get match {
+            case apl : DXApplet =>
+                DXApplet.getInstance(apl.getId, dxProj)
+            case dxFile : DXFile =>
+                DXApplet.getInstance(dxFile.getId, dxProj)
+            case record : DXRecord =>
+                DXRecord.getInstance(record.getId, dxProj)
+            case wf : DXWorkflow =>
+                DXWorkflow.getInstance(wf.getId, dxProj)
+            case other =>
+                other
         }
-        if (objName.startsWith("workflow-")) {
-            return Some(DXWorkflow.getInstance(objName))
-        }
-        return None
+        Some(dxobjWithProj)
     }
 
     // Is this a WDL type that maps to a native DX type?

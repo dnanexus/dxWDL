@@ -112,8 +112,8 @@ def _download_dxda_into_resources(top_dir):
     os.chdir(os.path.join(top_dir, "applet_resources"))
 
     # make sure the resources directory exists
-    if not os.path.exists("resources"):
-        os.mkdir("resources")
+    if not os.path.exists("resources/usr/bin"):
+        os.makedirs("resources/usr/bin")
 
     # download dxda release, and place it in the resources directory
     trg_dxda_tar = "resources/dx-download-agent-linux.tar"
@@ -124,7 +124,8 @@ def _download_dxda_into_resources(top_dir):
         trg_dxda_tar])
     subprocess.check_call(["tar", "-C", "resources", "-xvf", trg_dxda_tar])
     os.rename("resources/dx-download-agent-linux/dx-download-agent",
-              "resources/dx-download-agent")
+              "resources/usr/bin/dx-download-agent")
+    os.chmod("resources/usr/bin/dx-download-agent", 0o775)
     os.remove(trg_dxda_tar)
     shutil.rmtree("resources/dx-download-agent-linux")
     os.chdir(crnt_work_dir)

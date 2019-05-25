@@ -235,7 +235,8 @@ case class Native(dxWDLrtId: Option[String],
             |
             |    # run the dx-download-agent (dxda) on a manifest of files
             |    if [[ -e ${dxPathConfig.dxdaManifest} ]]; then
-            |       bzip2 ${dxPathConfig.dxdaManifest} > ${dxPathConfig.dxdaManifest}.bz2
+            |       head -n 20 ${dxPathConfig.dxdaManifest}
+            |       bzip2 ${dxPathConfig.dxdaManifest}
             |       dx-download-agent download ${dxPathConfig.dxdaManifest}.bz2
             |    fi
             |
