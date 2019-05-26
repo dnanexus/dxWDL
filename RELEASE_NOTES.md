@@ -6,6 +6,7 @@
 - Added unit tests for the `WomValueAnalysis` module, which checks if WOM expressions are constant.
 - Reducing reliance on the dxjava library, calling the DXAPI directly.
 - Merged fork of the dxjava library back into the dx-toolkit.
+- Use the dx-download-agent (dxda) instead of `dx download` in tasks.
 
 ## 1.05
 - Got DxNI to work for DNAnexus apps, not just applets.
