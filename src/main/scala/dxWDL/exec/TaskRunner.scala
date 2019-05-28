@@ -284,7 +284,7 @@ case class TaskRunner(task: CallableTaskDefinition,
         // the platform.
         //
         val dockerRunScript =
-            s"""|#!/bin/bash -ex
+            s"""|#!/bin/bash -x
                 |
                 |# make sure there is no preexisting Docker CID file
                 |rm -f ${dxPathConfig.dockerCid}

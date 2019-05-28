@@ -3,7 +3,7 @@
 
 package dxWDL.dx
 
-import com.dnanexus.{DXFile, DXContainer}
+import com.dnanexus.{DXFile, DXProject}
 import java.nio.file.Path
 import spray.json._
 
@@ -64,15 +64,23 @@ object DxdaManifest {
                                                                        parts = true)
 
         // create a sub-map per project
-        val fileDescsByProject : Map[DXContainer, Map[DXFile, DxDescribe]] =
-            fileDescs.foldLeft(Map.empty[DXContainer, Map[DXFile, DxDescribe]]) {
+        val fileDescsByProject : Map[DXProject, Map[DXFile, DxDescribe]] =
+            fileDescs.foldLeft(Map.empty[DXProject, Map[DXFile, DxDescribe]]) {
                 case (accu, (dxFile, dxDesc)) =>
-                    val container : DXContainer = dxDesc.container
-                    accu.get(container) match {
+                    val project : DXProject = dxDesc.container match {
+                        case p if p.getId.startsWith("project") => DXProject.getInstance(p.getId)
+                        case _ =>
+                            // This is a container, which is useless when calling dxda.
+                            // The download API call requires a project, not
+                            // a container. We replace the container with our best guess for the
+                            // project.
+                            DxUtils.dxEnv.getProjectContext()
+                    }
+                    accu.get(project) match {
                         case None =>
-                            accu + (container -> Map(dxFile -> dxDesc))
+                            accu + (project -> Map(dxFile -> dxDesc))
                         case Some(m) =>
-                            accu + (container -> (m + (dxFile -> dxDesc)))
+                            accu + (project -> (m + (dxFile -> dxDesc)))
                     }
             }
 

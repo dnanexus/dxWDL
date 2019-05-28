@@ -339,11 +339,18 @@ def run_executable(project, test_folder, tname, oid):
                 exec_obj = dxpy.DXApplet(project=project.get_id(), dxid=oid)
             else:
                 raise RuntimeError("Unknown kind {}".format(desc.kind))
+
+            run_kwargs = {
+                "debug": {"debugOn": ['AppError', 'AppInternalError', 'ExecutionError'] },
+                "allow_ssh" : [ "*" ]
+            }
+
             return exec_obj.run(inputs,
                                 project=project.get_id(),
                                 folder=test_folder,
                                 name="{} {}".format(desc.name, git_revision),
-                                instance_type="mem1_ssd1_x4")
+                                instance_type="mem1_ssd1_x4",
+                                **run_kwargs)
         except Exception as e:
             print("exception message={}".format(e))
             return None

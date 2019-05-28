@@ -73,7 +73,8 @@ def make_asset_file(version_id, top_dir):
         "distribution": "Ubuntu",
         "execDepends": [
             { "name": "openjdk-8-jre-headless" },
-            { "name": "bzip2" }
+            { "name": "bzip2" },
+            { "name": "jq" }
         ],
         "instanceType": "mem1_ssd1_x2",
         "description": "Prerequisits for running WDL workflows compiled to the platform"
