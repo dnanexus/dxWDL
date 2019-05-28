@@ -238,9 +238,8 @@ case class Native(dxWDLrtId: Option[String],
             |       head -n 20 ${dxPathConfig.dxdaManifest}
             |       bzip2 ${dxPathConfig.dxdaManifest}
             |
-            |       # use the job token for authentication
+            |       # use the job token for authentication, remove the quotes
             |       export DX_API_TOKEN=$$(echo $$DX_SECURITY_CONTEXT | jq .auth_token | sed s/\"//g)
-            |       echo $DX_API_TOKEN
             |       export DX_API_SERVER=$${DX_APISERVER_HOST}
             |
             |       # run the download agent, and store the return code; do not exit on error.
