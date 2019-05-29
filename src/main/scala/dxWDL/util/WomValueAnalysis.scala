@@ -7,6 +7,8 @@ import wom.types._
 import wom.values._
 import wom.expression._
 
+import dxWDL.base.Utils
+
 object WomValueAnalysis {
     // These are used for evaluating if a WOM expression is constant.
     // Ideally, we should not be using any of the IO functions, since
@@ -31,8 +33,17 @@ object WomValueAnalysis {
     // link.
     private def requiresEvaluation(womType: WomType,
                                    value: WomValue) : Boolean = {
-        def isLocalFile(constantFileStr: String) : Boolean = {
-            Furl.parse(constantFileStr).isInstanceOf[FurlLocal]
+        def isMutableFile(constantFileStr: String) : Boolean = {
+            constantFileStr match {
+                case path if path.startsWith(Utils.DX_URL_PREFIX) =>
+                    // platform files are immutable
+                    false
+                case path if path contains "://" =>
+                    throw new Exception(s"protocol not supported, cannot access ${path}")
+                case _ =>
+                    // anything else might be mutable
+                    true
+            }
         }
 
         (womType, value) match {
@@ -41,8 +52,8 @@ object WomValueAnalysis {
             case (WomIntegerType, _) => false
             case (WomFloatType, _) => false
             case (WomStringType, _) => false
-            case (WomSingleFileType, WomString(s)) => isLocalFile(s)
-            case (WomSingleFileType, WomSingleFile(s)) => isLocalFile(s)
+            case (WomSingleFileType, WomString(s)) => isMutableFile(s)
+            case (WomSingleFileType, WomSingleFile(s)) => isMutableFile(s)
 
             // arrays
             case (WomArrayType(t), WomArray(_, elems)) =>
