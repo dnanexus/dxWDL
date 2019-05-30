@@ -238,16 +238,13 @@ case class Native(dxWDLrtId: Option[String],
             |       head -n 20 ${dxPathConfig.dxdaManifest}
             |       bzip2 ${dxPathConfig.dxdaManifest}
             |
-            |       # use the job token for authentication, remove the quotes
-            |       export DX_API_TOKEN=$$(echo $$DX_SECURITY_CONTEXT | jq .auth_token | sed s/\"//g)
-            |       export DX_API_SERVER=$${DX_APISERVER_HOST}
-            |
             |       # run the download agent, and store the return code; do not exit on error.
-            |       dx-download-agent download ${dxPathConfig.dxdaManifest}.bz2 || rc=$$? && true;
+            |       rc=0
+            |       dx-download-agent download ${dxPathConfig.dxdaManifest}.bz2 || rc=$$? && true
             |
-            |       # if there is an error, print out the download log
+            |       # if there was an error during download, print out the download log
             |       if [[ $$rc != 0 ]]; then
-            |           echo "download agent failed"
+            |           echo "download agent failed rc=$$rc"
             |           if [[ -e ${dxPathConfig.dxdaManifest}.bz2.download.log ]]; then
             |              echo "The download log is:"
             |              cat ${dxPathConfig.dxdaManifest}.bz2.download.log

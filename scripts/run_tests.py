@@ -322,7 +322,7 @@ def wait_for_completion(test_exec_objs):
 
 
 # Run [workflow] on several inputs, return the analysis ID.
-def run_executable(project, test_folder, tname, oid):
+def run_executable(project, test_folder, tname, oid, debug_flag):
     def once():
         try:
             desc = test_files[tname]
@@ -340,10 +340,12 @@ def run_executable(project, test_folder, tname, oid):
             else:
                 raise RuntimeError("Unknown kind {}".format(desc.kind))
 
-            run_kwargs = {
-                "debug": {"debugOn": ['AppError', 'AppInternalError', 'ExecutionError'] },
-                "allow_ssh" : [ "*" ]
-            }
+            run_kwargs = {}
+            if debug_flag:
+                run_kwargs = {
+                    "debug": {"debugOn": ['AppError', 'AppInternalError', 'ExecutionError'] },
+                    "allow_ssh" : [ "*" ]
+                }
 
             return exec_obj.run(inputs,
                                 project=project.get_id(),
@@ -381,13 +383,13 @@ def extract_outputs(tname, exec_obj):
     else:
         raise RuntimeError("Unknown kind {}".format(desc.kind))
 
-def run_test_subset(project, runnable, test_folder):
+def run_test_subset(project, runnable, test_folder, debug_flag):
     # Run the workflows
     test_exec_objs=[]
     for tname, oid in runnable.items():
         desc = test_files[tname]
         print("Running {} {} {}".format(desc.kind, desc.name, oid))
-        anl = run_executable(project, test_folder, tname, oid)
+        anl = run_executable(project, test_folder, tname, oid, debug_flag)
         test_exec_objs.append(anl)
     print("executables: " + ", ".join([a.get_id() for a in test_exec_objs]))
 
@@ -575,7 +577,7 @@ def compile_tests_to_project(trg_proj,
 
 ######################################################################
 # Copy a workflow to an alternate project, and run it there.
-def copy_wf_test(tname, src_proj, src_folder):
+def copy_wf_test(tname, src_proj, src_folder, debug_flag):
     alt_proj_name = "dxWDL_playground_2"
     trg_proj = util.get_project(alt_proj_name)
     if trg_proj is None:
@@ -595,7 +597,7 @@ def copy_wf_test(tname, src_proj, src_folder):
 
     # Run the workflow, and wait for completion
     runnable = {tname : wf2.get_id()}
-    run_test_subset(trg_proj, runnable, test_folder)
+    run_test_subset(trg_proj, runnable, test_folder, debug_flag)
 
 ######################################################################
 ## Program entry point
@@ -607,6 +609,8 @@ def main():
     argparser.add_argument("--compile-only", help="Only compile the workflows, don't run them",
                            action="store_true", default=False)
     argparser.add_argument("--compile-mode", help="Compilation mode")
+    argparser.add_argument("--debug", help="Run applets with debug-hold, and allow ssh",
+                           default=False)
     argparser.add_argument("--do-not-build", help="Do not assemble the dxWDL jar file",
                            action="store_true", default=False)
     argparser.add_argument("--extras", help="run extra tests",
@@ -710,13 +714,13 @@ def main():
                                             version_id,
                                             args.lazy)
         if not args.compile_only:
-            run_test_subset(project, runnable, test_folder)
+            run_test_subset(project, runnable, test_folder, args.debug)
     finally:
         print("Completed running tasks in {}".format(args.project))
 
     if args.extras:
         print("Copy workflow and run in alternate project ")
-        copy_wf_test("linear", project, applet_folder)
+        copy_wf_test("linear", project, applet_folder, args.debug)
 
 if __name__ == '__main__':
     main()

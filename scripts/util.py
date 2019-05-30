@@ -208,7 +208,7 @@ def build(project, folder, version_id, top_dir, path_dict):
     jar_path = _sbt_assembly(top_dir, version_id)
 
     # get a copy of the download agent (dxda)
-    _download_dxda_into_resources(top_dir)
+    #_download_dxda_into_resources(top_dir)
 
     asset = find_asset(project, folder)
     if asset is None:
