@@ -43,9 +43,8 @@ class DxPathTest extends FlatSpec with Matchers {
     }
 
     it should "handle files with a colon" in {
-        val path = s"${TEST_PROJECT}:/x:x.txt"
-        val expectedId = describeDxFilePath(path)
-        val dxFile : DXFile = DxPath.lookupDxURLFile(s"dx://${path}")
+        val expectedId = describeDxFilePath(s"${TEST_PROJECT}:/x*.txt")
+        val dxFile : DXFile = DxPath.lookupDxURLFile(s"dx://${TEST_PROJECT}:/x:x.txt")
         dxFile.getId shouldBe(expectedId)
     }
 }

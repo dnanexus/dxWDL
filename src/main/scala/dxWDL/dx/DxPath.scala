@@ -16,7 +16,7 @@ import com.fasterxml.jackson.databind.JsonNode
 import scala.collection.mutable.HashMap
 import spray.json._
 
-import dxWDL.base.Utils.{DX_URL_PREFIX, trace}
+import dxWDL.base.Utils.{DX_URL_PREFIX}
 import DxUtils.{jsonNodeOfJsValue, jsValueOfJsonNode}
 
 object DxPath {
@@ -70,7 +70,6 @@ object DxPath {
             case Some(dxobj) => return dxobj
         }
 
-        trace(true, s"lookupObject: ${objName}")
         val objPath = s"${DX_URL_PREFIX}${dxProject.getId}:${objName}"
         val found: Map[String, DXDataObject] = DxBulkResolve.apply(Vector(objPath), dxProject)
         if (found.size == 0)
@@ -81,20 +80,17 @@ object DxPath {
     }
 
     private def lookupDxPath(dxPath: String) : DXDataObject = {
-        val components = dxPath.split(":")
-        if (components.length > 2) {
-            throw new Exception(s"Path ${dxPath} cannot have more than two components")
-        } else if (components.length == 2) {
-            val projName = components(0)
-            val objName = components(1)
-            val dxProject = lookupProject(projName)
-            lookupObject(dxProject, objName)
-        } else if (components.length == 1) {
-            val objName = components(0)
-            val crntProj = DxUtils.dxEnv.getProjectContext()
-            lookupObject(crntProj, objName)
-        } else {
-            throw new Exception(s"Path ${dxPath} is invalid")
+        val components = dxPath.split(":").toList
+        components match {
+            case Nil =>
+                throw new Exception(s"Path ${dxPath} is invalid")
+            case List(objName) =>
+                val crntProj = DxUtils.dxEnv.getProjectContext()
+                lookupObject(crntProj, objName)
+            case projName :: tail =>
+                val objName = tail.mkString(":")
+                val dxProject = lookupProject(projName)
+                lookupObject(dxProject, objName)
         }
     }
 
@@ -102,7 +98,7 @@ object DxPath {
     private def lookupDxURL(buf: String) : DXDataObject = {
         assert(buf.startsWith(DX_URL_PREFIX))
         val s = buf.substring(DX_URL_PREFIX.length)
-        val index = s.lastIndexOf("::")
+        val index = s.indexOf("::")
         val s1 =
             if (index == -1) {
                 s

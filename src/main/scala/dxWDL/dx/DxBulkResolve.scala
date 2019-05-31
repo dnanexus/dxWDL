@@ -27,28 +27,32 @@ object DxBulkResolve {
         val s = dxPath.substring(DX_URL_PREFIX.length)
 
         // take out the project, if it is specified
-        val components = s.split(":")
-        val (projName, rest) =
-            if (components.length > 2) {
-                throw new Exception(s"Path ${dxPath} cannot have more than two components")
-            } else if (components.length == 2) {
-                val projName = Some(components(0))
-                val rest = components(1)
-                (projName, rest)
-            } else if (components.length == 1) {
-                (None, components(0))
-            } else {
+        val components = s.split(":").toList
+        val (projName, dxObjectPath) = components match {
+            case Nil =>
                 throw new Exception(s"Path ${dxPath} is invalid")
+            case List(objName) =>
+                (None, objName)
+            case projName :: tail =>
+                val rest = tail.mkString(":")
+                (Some(projName), rest)
+        }
+
+        // split the object path into folder/name
+        val index = dxObjectPath.lastIndexOf('/')
+        val (folderRaw, name) =
+            if (index == -1) {
+                ("/", dxObjectPath)
+            } else {
+                (dxObjectPath.substring(0, index),
+                 dxObjectPath.substring(index + 1))
             }
 
-        // split into folder/name
-        val index = rest.lastIndexOf('/')
-        val (folder, name) =
-            if (index == -1)
-                (None, rest)
-            else
-                (Some(rest.substring(0, index)),
-                 rest.substring(index + 1))
+        // We don't want a folder if this is a dx-data-object (file-xxxx, record-yyyy)
+        val folder =
+            if (DxUtils.isDxId(name)) None
+            else if (folderRaw == "") Some("/")
+            else Some(folderRaw)
 
         DxPathParsed(name, folder, projName, dxPath)
     }

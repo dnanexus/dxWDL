@@ -1,5 +1,10 @@
 # Release Notes
 
+## 1.07
+Fixed
+- [bug 259](ttps://github.com/dnanexus/dxWDL/issues/259)
+
+
 ## 1.06
 - Upgrade to Cromwell v41
 - Mark auxiliary workflows and applets as hidden. This is a step in the direction of supporting copying of a workflow from one project to another.
