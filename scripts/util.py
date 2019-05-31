@@ -16,7 +16,7 @@ import time
 
 AssetDesc = namedtuple('AssetDesc', 'region asset_id project')
 
-dxda_version = "v0.2.1"
+dxda_version = "v0.2.2"
 max_num_retries = 5
 
 def dxWDL_jar_path(top_dir):
@@ -208,7 +208,7 @@ def build(project, folder, version_id, top_dir, path_dict):
     jar_path = _sbt_assembly(top_dir, version_id)
 
     # get a copy of the download agent (dxda)
-    #_download_dxda_into_resources(top_dir)
+    _download_dxda_into_resources(top_dir)
 
     asset = find_asset(project, folder)
     if asset is None:

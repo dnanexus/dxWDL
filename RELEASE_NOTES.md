@@ -8,6 +8,7 @@
 - Merged fork of the dxjava library back into the dx-toolkit.
 - Use the dx-download-agent (dxda) instead of `dx download` in tasks.
 - Fix for bug (https://github.com/dnanexus/dxWDL/issues/254)
+- Fix for bug occurring when a `struct` is imported twice
 
 ## 1.05
 - Got DxNI to work for DNAnexus apps, not just applets.
