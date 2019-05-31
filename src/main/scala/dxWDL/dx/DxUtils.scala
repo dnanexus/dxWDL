@@ -15,6 +15,16 @@ object DxUtils {
 
     lazy val dxEnv = DXEnvironment.create()
 
+    def isDxId(objName : String) : Boolean = {
+        objName match {
+            case _ if objName.startsWith("applet-") => true
+            case _ if objName.startsWith("file-") => true
+            case _  if objName.startsWith("record-") => true
+            case _ if objName.startsWith("workflow-") => true
+            case _ => false
+        }
+    }
+
     def convertToDxObject(objName : String,
                           container : Option[DXContainer]) : Option[DXDataObject] = {
         // If the object is a file-id (or something like it), then
