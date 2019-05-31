@@ -239,6 +239,8 @@ case class Native(dxWDLrtId: Option[String],
             |       bzip2 ${dxPathConfig.dxdaManifest}
             |
             |       # run the download agent, and store the return code; do not exit on error.
+            |       # we need to run it from the root directory, because it uses relative paths.
+            |       cd /
             |       rc=0
             |       dx-download-agent download ${dxPathConfig.dxdaManifest}.bz2 || rc=$$? && true
             |
@@ -251,6 +253,12 @@ case class Native(dxWDLrtId: Option[String],
             |           fi
             |           exit $$rc
             |       fi
+            |
+            |       # The download was ok, check file integrity on disk
+            |       dx-download-agent inspect ${dxPathConfig.dxdaManifest}.bz2
+            |
+            |       # go back to home directory
+            |       cd ${dxPathConfig.homeDir}
             |    fi
             |
             |    echo "bash command encapsulation script:"

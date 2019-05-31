@@ -610,7 +610,7 @@ def main():
                            action="store_true", default=False)
     argparser.add_argument("--compile-mode", help="Compilation mode")
     argparser.add_argument("--debug", help="Run applets with debug-hold, and allow ssh",
-                           default=False)
+                           action="store_true", default=False)
     argparser.add_argument("--do-not-build", help="Do not assemble the dxWDL jar file",
                            action="store_true", default=False)
     argparser.add_argument("--extras", help="run extra tests",

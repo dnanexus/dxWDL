@@ -1,0 +1,4 @@
+{
+  "copy_file.src" : "dx://dxWDL_playground:/test_data/fileA",
+  "copy_file.basename" : "happyDays"
+}
