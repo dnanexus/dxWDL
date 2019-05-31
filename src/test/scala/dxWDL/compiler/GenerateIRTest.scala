@@ -340,4 +340,10 @@ class GenerateIRTest extends FlatSpec with Matchers {
         val retval = Main.compile(path.toString :: cFlags)
         retval shouldBe a[Main.SuccessfulTerminationIR]
     }
+
+    it should "handle struct imported several times" in {
+        val path = pathFromBasename("struct/struct_imported_twice", "file3.wdl")
+        val retval = Main.compile(path.toString :: cFlags)
+        retval shouldBe a[Main.SuccessfulTerminationIR]
+    }
 }

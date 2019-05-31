@@ -194,7 +194,7 @@ case class Top(cOpt: CompilerOptions) {
                 allTypeAliases.get(key) match {
                     case None =>
                         allTypeAliases = allTypeAliases + (key -> definition)
-                    case Some(existing) =>
+                    case Some(existing) if (existing != definition) =>
                         Utils.error(s"""|${key} appears twice, with two different definitions
                                         |1)
                                         |${definition}
