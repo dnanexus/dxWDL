@@ -188,7 +188,7 @@ case class TaskRunner(task: CallableTaskDefinition,
                 val localTar : Path = tarballDir.resolve(fileName)
 
                 Utils.appletLog(verbose, s"downloading docker tarball to ${localTar}")
-                jobInputOutput.downloadFile(localTar, dxFile)
+                DxUtils.downloadFile(localTar, dxFile, verbose)
 
                 Utils.appletLog(verbose, "figuring out the image name")
                 val (mContent, _) = Utils.execCommand(s"tar --to-stdout -xf ${localTar} manifest.json")
@@ -284,7 +284,7 @@ case class TaskRunner(task: CallableTaskDefinition,
         // the platform.
         //
         val dockerRunScript =
-            s"""|#!/bin/bash -ex
+            s"""|#!/bin/bash -x
                 |
                 |# make sure there is no preexisting Docker CID file
                 |rm -f ${dxPathConfig.dockerCid}
@@ -380,7 +380,7 @@ case class TaskRunner(task: CallableTaskDefinition,
         //
         // Note: this may be overly conservative,
         // because some of the files may not actually be accessed.
-        val (localizedInputs, dxUrl2path, bashSnippetVec) =
+        val (localizedInputs, dxUrl2path, bashSnippetVec, dxdaManifest) =
             jobInputOutput.localizeFiles(task.parameterMeta, taskInputs, dxPathConfig.inputFilesDir)
 
         // deal with files that need streaming
@@ -392,6 +392,12 @@ case class TaskRunner(task: CallableTaskDefinition,
             val snippet = bashSnippetVec.mkString("\n")
             Utils.writeFileContent(path, snippet)
             path.toFile.setExecutable(true)
+        }
+
+        // build a manifest for dxda, if there are files to download
+        val DxdaManifest(manifestJs) = dxdaManifest
+        if (manifestJs.asJsObject.fields.size > 0) {
+            Utils.writeFileContent(dxPathConfig.dxdaManifest, manifestJs.prettyPrint)
         }
 
         val inputs = localizedInputs.map{ case (inpDfn, value) =>

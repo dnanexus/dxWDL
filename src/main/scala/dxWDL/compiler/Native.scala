@@ -233,6 +233,34 @@ case class Native(dxWDLrtId: Option[String],
             |       echo "Background processes ids: $${background_pids[@]}"
             |    fi
             |
+            |    # run the dx-download-agent (dxda) on a manifest of files
+            |    if [[ -e ${dxPathConfig.dxdaManifest} ]]; then
+            |       head -n 20 ${dxPathConfig.dxdaManifest}
+            |       bzip2 ${dxPathConfig.dxdaManifest}
+            |
+            |       # run the download agent, and store the return code; do not exit on error.
+            |       # we need to run it from the root directory, because it uses relative paths.
+            |       cd /
+            |       rc=0
+            |       dx-download-agent download ${dxPathConfig.dxdaManifest}.bz2 || rc=$$? && true
+            |
+            |       # if there was an error during download, print out the download log
+            |       if [[ $$rc != 0 ]]; then
+            |           echo "download agent failed rc=$$rc"
+            |           if [[ -e ${dxPathConfig.dxdaManifest}.bz2.download.log ]]; then
+            |              echo "The download log is:"
+            |              cat ${dxPathConfig.dxdaManifest}.bz2.download.log
+            |           fi
+            |           exit $$rc
+            |       fi
+            |
+            |       # The download was ok, check file integrity on disk
+            |       dx-download-agent inspect ${dxPathConfig.dxdaManifest}.bz2
+            |
+            |       # go back to home directory
+            |       cd ${dxPathConfig.homeDir}
+            |    fi
+            |
             |    echo "bash command encapsulation script:"
             |    cat ${dxPathConfig.script}
             |

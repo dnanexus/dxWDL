@@ -1,6 +1,6 @@
 package dxWDL.dx
 
-import com.dnanexus.{DXAPI, DXDataObject, DXProject}
+import com.dnanexus.{DXAPI, DXContainer, DXDataObject, DXProject}
 import com.fasterxml.jackson.databind.JsonNode
 import spray.json._
 
@@ -81,17 +81,16 @@ case class DxFindDataObjects(limit: Option[Int],
             case Some(other) => throw new Exception(s"malformed created field ${other}")
         }
         DxDescribe(name, folder, size,
-                   Some(dxProject), dxobj, creationDate,
-                   properties, inputSpec, outputSpec)
+                   dxProject.asInstanceOf[DXContainer], dxobj, creationDate,
+                   properties, inputSpec, outputSpec, None)
     }
 
     private def parseOneResult(jsv : JsValue) : (DXDataObject, DxDescribe) = {
         jsv.asJsObject.getFields("project", "id", "describe") match {
             case Seq(JsString(projectId), JsString(dxid), desc) =>
                 val dxProj = DXProject.getInstance(projectId)
-                val dxobj = DxUtils.convertToDxObject(dxid).get
-                val dxobjWithProj = DXDataObject.getInstance(dxobj.getId, dxProj)
-                (dxobjWithProj, parseDescribe(desc, dxobj, dxProj))
+                val dxobj = DxUtils.convertToDxObject(dxid, Some(dxProj)).get
+                (dxobj, parseDescribe(desc, dxobj, dxProj))
             case _ => throw new Exception(
                 s"""|malformed result: expecting {project, id, describe} fields, got:
                     |${jsv.prettyPrint}

@@ -3,32 +3,64 @@ package dxWDL.dx
 import com.dnanexus._
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.databind.JsonNode
-import java.nio.charset.{StandardCharsets}
+import java.nio.file.{Path, Files}
 import spray.json._
 import wom.types._
 
 import dxWDL.base.{AppInternalException, Utils, Verbose}
-import dxWDL.base.Utils.trace
 
 object DxUtils {
+    private val DOWNLOAD_RETRY_LIMIT = 3
+    private val UPLOAD_RETRY_LIMIT = 3
+
     lazy val dxEnv = DXEnvironment.create()
 
-    def convertToDxObject(objName : String) : Option[DXDataObject] = {
+    def convertToDxObject(objName : String,
+                          container : Option[DXContainer]) : Option[DXDataObject] = {
         // If the object is a file-id (or something like it), then
         // shortcut the expensive findDataObjects call.
-        if (objName.startsWith("applet-")) {
-            return Some(DXApplet.getInstance(objName))
+        val dxobj : Option[DXDataObject] = objName match {
+            case _ if objName.startsWith("applet-") =>
+                Some(DXApplet.getInstance(objName))
+            case _ if objName.startsWith("file-") =>
+                Some(DXFile.getInstance(objName))
+            case _  if objName.startsWith("record-") =>
+                Some(DXRecord.getInstance(objName))
+            case _ if objName.startsWith("workflow-") =>
+                Some(DXWorkflow.getInstance(objName))
+            case _ =>
+                None
         }
-        if (objName.startsWith("file-")) {
-            return Some(DXFile.getInstance(objName))
+
+        // short circut setting the project, if we don't have
+        // a project
+        if (dxobj == None)
+            return None
+        container match {
+            case None =>
+                return dxobj
+            case Some(dxcont) if dxcont.isInstanceOf[DXContainer] =>
+                return dxobj
+            case _ =>
+                ()
         }
-        if (objName.startsWith("record-")) {
-            return Some(DXRecord.getInstance(objName))
+
+        // set the project
+        val dxProj = container.get.asInstanceOf[DXProject]
+
+        val dxobjWithProj : DXDataObject = dxobj.get match {
+            case apl : DXApplet =>
+                DXApplet.getInstance(apl.getId, dxProj)
+            case dxFile : DXFile =>
+                DXApplet.getInstance(dxFile.getId, dxProj)
+            case record : DXRecord =>
+                DXRecord.getInstance(record.getId, dxProj)
+            case wf : DXWorkflow =>
+                DXWorkflow.getInstance(wf.getId, dxProj)
+            case other =>
+                other
         }
-        if (objName.startsWith("workflow-")) {
-            return Some(DXWorkflow.getInstance(objName))
-        }
-        return None
+        Some(dxobjWithProj)
     }
 
     // Is this a WDL type that maps to a native DX type?
@@ -238,10 +270,10 @@ object DxUtils {
                    rmtProject: DXProject,
                    verbose: Verbose) : Unit = {
         if (dxProject == rmtProject) {
-            trace(verbose.on, s"The asset ${pkgName} is from this project ${rmtProject.getId}, no need to clone")
+            Utils.trace(verbose.on, s"The asset ${pkgName} is from this project ${rmtProject.getId}, no need to clone")
             return
         }
-        trace(verbose.on, s"The asset ${pkgName} is from a different project ${rmtProject.getId}")
+        Utils.trace(verbose.on, s"The asset ${pkgName} is from a different project ${rmtProject.getId}")
 
         // clone
         val req = JsObject( "objects" -> JsArray(JsString(assetRecord.getId)),
@@ -264,19 +296,114 @@ object DxUtils {
         existingRecords.size match {
             case 0 =>
                 val localAssetRecord = DXRecord.getInstance(assetRecord.getId)
-                trace(verbose.on, s"Created ${localAssetRecord.getId} pointing to asset ${pkgName}")
+                Utils.trace(verbose.on, s"Created ${localAssetRecord.getId} pointing to asset ${pkgName}")
             case 1 =>
-                trace(verbose.on, s"The project already has a record pointing to asset ${pkgName}")
+                Utils.trace(verbose.on, s"The project already has a record pointing to asset ${pkgName}")
             case _ =>
                 throw new Exception(s"clone returned too many existing records ${exists}")
         }
     }
 
 
-    // Download platform file contents directly into an in-memory string.
-    // This makes sense for small files.
-    def downloadString(dxfile: DXFile) : String = {
-        val bytes = dxfile.downloadBytes()
-        new String(bytes, StandardCharsets.UTF_8)
+    // download a file from the platform to a path on the local disk. Use
+    // 'dx download' as a separate process.
+    //
+    // Note: this function assumes that the target path does not exist yet
+    def downloadFile(path: Path,
+                     dxfile: DXFile,
+                     verbose: Boolean) : Unit = {
+        def downloadOneFile(path: Path, dxfile: DXFile, counter: Int) : Boolean = {
+            val fid = dxfile.getId()
+            try {
+                // Use dx download. Quote the path, because it may contains spaces.
+                val dxDownloadCmd = s"""dx download ${fid} -o "${path.toString()}" """
+                val (outmsg, errmsg) = Utils.execCommand(dxDownloadCmd, None)
+                true
+            } catch {
+                case e: Throwable =>
+                    if (counter < DOWNLOAD_RETRY_LIMIT)
+                        false
+                    else throw e
+            }
+        }
+        val dir = path.getParent()
+        if (dir != null) {
+            if (!Files.exists(dir))
+                Files.createDirectories(dir)
+        }
+        var rc = false
+        var counter = 0
+        while (!rc && counter < DOWNLOAD_RETRY_LIMIT) {
+            Utils.appletLog(verbose, s"downloading file ${path.toString} (try=${counter})")
+            rc = downloadOneFile(path, dxfile, counter)
+            counter = counter + 1
+        }
+        if (!rc)
+            throw new Exception(s"Failure to download file ${path}")
+    }
+
+    // Upload a local file to the platform, and return a json link.
+    // Use 'dx upload' as a separate process.
+    def uploadFile(path: Path,
+                   verbose: Boolean) : DXFile = {
+        if (!Files.exists(path))
+            throw new AppInternalException(s"Output file ${path.toString} is missing")
+        def uploadOneFile(path: Path, counter: Int) : Option[String] = {
+            try {
+                // shell out to dx upload. We need to quote the path, because it may contain
+                // spaces
+                val dxUploadCmd = s"""dx upload "${path.toString}" --brief"""
+                Utils.appletLog(verbose, s"--  ${dxUploadCmd}")
+                val (outmsg, errmsg) = Utils.execCommand(dxUploadCmd, None)
+                if (!outmsg.startsWith("file-"))
+                    return None
+                Some(outmsg.trim())
+            } catch {
+                case e: Throwable =>
+                    if (counter < UPLOAD_RETRY_LIMIT)
+                        None
+                    else throw e
+            }
+        }
+
+        var counter = 0
+        while (counter < UPLOAD_RETRY_LIMIT) {
+            Utils.appletLog(verbose, s"upload file ${path.toString} (try=${counter})")
+            uploadOneFile(path, counter) match {
+                case Some(fid) =>
+                   return DXFile.getInstance(fid)
+                case None => ()
+            }
+            counter = counter + 1
+        }
+        throw new Exception(s"Failure to upload file ${path}")
+    }
+
+    private def silentFileDelete(p : Path) : Unit = {
+        try {
+            Files.delete(p)
+        } catch {
+            case e : Throwable => ()
+        }
+    }
+
+    // Read the contents of a platform file into a string
+    def downloadString(dxFile: DXFile,
+                       verbose: Boolean) : String = {
+        // We don't want to use the dxjava implementation
+        //val bytes = dxFile.downloadBytes()
+        //new String(bytes, StandardCharsets.UTF_8)
+
+        // We don't want to use "dx cat" because it doesn't validate the checksum.
+        //val (outmsg, errmsg) = Utils.execCommand(s"dx cat ${dxFile.getId}")
+        //outmsg
+
+        // create a temporary file, and write the contents into it.
+        val tempFi : Path = Files.createTempFile(s"${dxFile.getId}", ".tmp")
+        silentFileDelete(tempFi)
+        downloadFile(tempFi, dxFile, verbose)
+        val content = Utils.readFileContent(tempFi)
+        silentFileDelete(tempFi)
+        content
     }
 }

@@ -65,7 +65,7 @@ object DxPath {
                              objName: String): DXDataObject = {
         // If the object is a file-id (or something like it), then
         // shortcircuit the expensive API call call.
-        DxUtils.convertToDxObject(objName) match {
+        DxUtils.convertToDxObject(objName, Some(dxProject)) match {
             case None => ()
             case Some(dxobj) => return dxobj
         }

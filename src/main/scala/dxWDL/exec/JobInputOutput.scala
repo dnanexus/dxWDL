@@ -3,7 +3,7 @@ package dxWDL.exec
 import cats.data.Validated.{Invalid, Valid}
 import com.dnanexus.DXFile
 import common.validation.ErrorOr.ErrorOr
-import java.nio.file.{Files, Path, Paths}
+import java.nio.file.{Path, Paths}
 import spray.json._
 import wom.callable.Callable._
 import wom.expression.WomExpression
@@ -12,6 +12,7 @@ import wom.values._
 
 import dxWDL.base._
 import dxWDL.base.Utils.{FLAT_FILES_SUFFIX}
+import dxWDL.dx.{DxUtils, DxdaManifest}
 import dxWDL.util._
 
 case class JobInputOutput(dxIoFunctions : DxIoFunctions,
@@ -20,82 +21,7 @@ case class JobInputOutput(dxIoFunctions : DxIoFunctions,
     private val verbose = (runtimeDebugLevel >= 1)
     private val wdlVarLinksConverter = WdlVarLinksConverter(dxIoFunctions.fileInfoDir, typeAliases)
 
-    private val DOWNLOAD_RETRY_LIMIT = 3
-    private val UPLOAD_RETRY_LIMIT = 3
     private val DISAMBIGUATION_DIRS_MAX_NUM = 10
-
-    // download a file from the platform to a path on the local disk. Use
-    // 'dx download' as a separate process.
-    //
-    // Note: this function assumes that the target path does not exist yet
-    def downloadFile(path: Path, dxfile: DXFile) : Unit = {
-        def downloadOneFile(path: Path, dxfile: DXFile, counter: Int) : Boolean = {
-            val fid = dxfile.getId()
-            try {
-                // Use dx download. Quote the path, because it may contains spaces.
-                val dxDownloadCmd = s"""dx download ${fid} -o "${path.toString()}" """
-                System.err.println(s"--  ${dxDownloadCmd}")
-                val (outmsg, errmsg) = Utils.execCommand(dxDownloadCmd, None)
-
-                true
-            } catch {
-                case e: Throwable =>
-                    if (counter < DOWNLOAD_RETRY_LIMIT)
-                        false
-                    else throw e
-            }
-        }
-        val dir = path.getParent()
-        if (dir != null) {
-            if (!Files.exists(dir))
-                Files.createDirectories(dir)
-        }
-        var rc = false
-        var counter = 0
-        while (!rc && counter < DOWNLOAD_RETRY_LIMIT) {
-            System.err.println(s"downloading file ${path.toString} (try=${counter})")
-            rc = downloadOneFile(path, dxfile, counter)
-            counter = counter + 1
-        }
-        if (!rc)
-            throw new Exception(s"Failure to download file ${path}")
-    }
-
-    // Upload a local file to the platform, and return a json link.
-    // Use 'dx upload' as a separate process.
-    def uploadFile(path: Path) : DXFile = {
-        if (!Files.exists(path))
-            throw new AppInternalException(s"Output file ${path.toString} is missing")
-        def uploadOneFile(path: Path, counter: Int) : Option[String] = {
-            try {
-                // shell out to dx upload. We need to quote the path, because it may contain
-                // spaces
-                val dxUploadCmd = s"""dx upload "${path.toString}" --brief"""
-                System.err.println(s"--  ${dxUploadCmd}")
-                val (outmsg, errmsg) = Utils.execCommand(dxUploadCmd, None)
-                if (!outmsg.startsWith("file-"))
-                    return None
-                Some(outmsg.trim())
-            } catch {
-                case e: Throwable =>
-                    if (counter < UPLOAD_RETRY_LIMIT)
-                        None
-                    else throw e
-            }
-        }
-
-        var counter = 0
-        while (counter < UPLOAD_RETRY_LIMIT) {
-            System.err.println(s"upload file ${path.toString} (try=${counter})")
-            uploadOneFile(path, counter) match {
-                case Some(fid) =>
-                   return DXFile.getInstance(fid)
-                case None => ()
-            }
-            counter = counter + 1
-        }
-        throw new Exception(s"Failure to upload file ${path}")
-    }
 
     def unpackJobInput(name: String, womType: WomType, jsv: JsValue) : WomValue = {
         val (womValue, _) = wdlVarLinksConverter.unpackJobInput(name, womType, jsv)
@@ -360,7 +286,8 @@ case class JobInputOutput(dxIoFunctions : DxIoFunctions,
                       inputs: Map[InputDefinition, WomValue],
                       inputsDir: Path) : (Map[InputDefinition, WomValue],
                                           Map[Furl, Path],
-                                          Vector[String]) = {
+                                          Vector[String],
+                                          DxdaManifest) = {
         val fileURLs : Vector[Furl] = inputs.values.map(findFiles).flatten.toVector
         val streamingFiles : Set[Furl] = areStreaming(parameterMeta, inputs)
         Utils.appletLog(verbose, s"streaming files = ${streamingFiles}")
@@ -389,26 +316,25 @@ case class JobInputOutput(dxIoFunctions : DxIoFunctions,
                 }
             }
 
-        // download the files from the cloud.
-        // This could be done in parallel using the download agent.
-        // Right now, we are downloading the files one at a time
-        var bashSnippets = Vector.empty[String]
-        furl2path.foreach{
-            case (dxUrl : FurlDx, localPath) =>
-                val dxFile = dxUrl.dxFile
-                if (streamingFiles contains dxUrl) {
-                    val snippet = s"""|mkfifo ${localPath}
-                                      |dx cat ${dxFile.getId} > ${localPath} &
-                                      |echo $$!
-                                      |""".stripMargin
-                    bashSnippets :+= snippet
-                } else {
-                    downloadFile(localPath, dxFile)
-                }
-            case (FurlLocal(path), _) =>
-                // The file is already local, nothing to do
-                ()
-        }
+        // a bash snippet for each file we will stream. These file are NOT
+        // downloaded.
+        val bashStreamingSnippets : Vector[String] =
+            furl2path.collect {
+                case (dxUrl : FurlDx, localPath) if streamingFiles contains dxUrl =>
+                    val dxFile = dxUrl.dxFile
+                    s"""|mkfifo ${localPath}
+                        |dx cat ${dxFile.getId} > ${localPath} &
+                        |echo $$!
+                        |""".stripMargin
+            }.toVector
+
+        // Create a manifest for the download agent (dxda)
+        val filesToDownloadWithDxda : Map[DXFile, Path] =
+            furl2path.collect{
+                case (dxUrl: FurlDx, localPath) if !(streamingFiles contains dxUrl) =>
+                    dxUrl.dxFile -> localPath
+            }
+        val manifest = DxdaManifest.apply(filesToDownloadWithDxda)
 
         // Replace the dxURLs with local file paths
         val localizedInputs = inputs.map{ case (inpDef, womValue) =>
@@ -416,7 +342,7 @@ case class JobInputOutput(dxIoFunctions : DxIoFunctions,
             inpDef -> v1
         }
 
-        (localizedInputs, furl2path, bashSnippets)
+        (localizedInputs, furl2path, bashStreamingSnippets, manifest)
     }
 
     // We have task outputs, where files are stored locally. Upload the files to
@@ -454,7 +380,7 @@ case class JobInputOutput(dxIoFunctions : DxIoFunctions,
 
         // upload the files; this could be in parallel in the future.
         val uploaded_path2furl : Map[Path, Furl] = pathsToUpload.map{ path =>
-            val dxFile = uploadFile(path)
+            val dxFile = DxUtils.uploadFile(path, verbose)
             path -> Furl.dxFileToFurl(dxFile, Map.empty)   // no cache
         }.toMap
 

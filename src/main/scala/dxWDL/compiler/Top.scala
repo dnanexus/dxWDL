@@ -234,7 +234,7 @@ case class Top(cOpt: CompilerOptions) {
         }
 
         (allResults.path2file,
-         DxBulkDescribe.apply(allResults.dxFiles, Some(dxProject)))
+         DxBulkDescribe.apply(allResults.dxFiles))
     }
 
 

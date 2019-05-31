@@ -40,16 +40,21 @@ case class IOParameter(name: String,
                        ioClass: DxIOClass.Value,
                        optional : Boolean)
 
+case class DxFilePart(state: String,
+                      size: Long,
+                      md5: String)
+
 // This is similar to DXDataObject.Describe
 case class DxDescribe(name : String,
                       folder: String,
                       size : Option[Long],
-                      project: Option[DXProject],
+                      container: DXContainer, // a project or a container
                       dxobj : DXDataObject,
                       creationDate : java.util.Date,
                       properties: Map[String, String],
                       inputSpec : Option[Vector[IOParameter]],
-                      outputSpec : Option[Vector[IOParameter]])
+                      outputSpec : Option[Vector[IOParameter]],
+                      parts : Option[Map[Int, DxFilePart]])
 
 // A DNAx executable. An app, applet, or workflow.
 case class DxExec(id: String) {
