@@ -1,7 +1,7 @@
 # Release Notes
 
 ## 1.07
-Fixed
+**Fixed**
 - [bug 259](ttps://github.com/dnanexus/dxWDL/issues/259)
 
 
