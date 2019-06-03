@@ -99,4 +99,22 @@ class WomValueAnalysisTest extends FlatSpec with Matchers {
             WomValueAnalysis.ifConstEval(node.womType, node.womExpression)
         }
     }
+
+    it should "handle links to dx files" in {
+        val wdlCode =
+            """|version 1.0
+               |
+               |workflow foo {
+               |    File fruit_list = "dx://dxWDL_playground:/test_data/fruit_list.txt"
+               |    File a_txt = "dx://dxWDL_playground:/A.txt"
+               |    File proj_file_id = "dx://project-xxxx:file-yyyy"
+               |    File proj_file_name = "dx://project-xxxx:A.txt"
+               |}
+               |""".stripMargin
+
+        val expressions = parseExpressions(wdlCode)
+        val nodes = expressions.toList
+        for (node <- nodes)
+            WomValueAnalysis.ifConstEval(node.womType, node.womExpression)
+    }
 }
