@@ -8,7 +8,7 @@ class DxUtilsTest extends FlatSpec with Matchers {
     val TEST_PROJECT = "dxWDL_playground"
     lazy val dxTestProject : DXProject =
         try {
-            DxPath.lookupProject(TEST_PROJECT)
+            DxBulkResolve.lookupProject(TEST_PROJECT)
         } catch {
             case e : Exception =>
                 throw new Exception(s"""|Could not find project ${TEST_PROJECT}, you probably need to be logged into

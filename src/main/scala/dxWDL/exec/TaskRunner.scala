@@ -181,7 +181,7 @@ case class TaskRunner(task: CallableTaskDefinition,
                 // 2. load into the local docker cache
                 // 3. figure out the image name
                 Utils.appletLog(verbose, s"looking up dx:url ${url}")
-                val dxFile = DxPath.lookupDxURLFile(url)
+                val dxFile = DxBulkResolve.lookupDxURLFile(url)
 		val fileName = dxFile.describe().getName
                 val tarballDir = Paths.get(DOCKER_TARBALLS_DIR)
 	        Utils.safeMkdir(tarballDir)
