@@ -89,7 +89,7 @@ single_tasks_list = [
     "add3",
     "diff2files",
     "empty_stdout",
-    "copy_file"
+    "sort_file"
 ]
 
 # Tests run in continuous integration. We remove the native app test,
