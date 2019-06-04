@@ -19,10 +19,47 @@ import dxWDL.base.Utils.{DX_URL_PREFIX, DXAPI_NUM_OBJECTS_LIMIT}
 
 object DxBulkResolve {
 
-    case class DxPathParsed(name: String,
-                            folder: Option[String],
-                            projName: Option[String],
-                            sourcePath: String)
+    private case class DxPathComponents(name: String,
+                                        folder: Option[String],
+                                        projName: Option[String],
+                                        objFullName : String,
+                                        sourcePath: String)
+
+    private def parse(dxPath : String) : DxPathComponents = {
+        // strip the prefix
+        assert(dxPath.startsWith(DX_URL_PREFIX))
+        val s = dxPath.substring(DX_URL_PREFIX.length)
+
+        // take out the project, if it is specified
+        val components = s.split(":").toList
+        val (projName, dxObjectPath) = components match {
+            case Nil =>
+                throw new Exception(s"Path ${dxPath} is invalid")
+            case List(objName) =>
+                (None, objName)
+            case projName :: tail =>
+                val rest = tail.mkString(":")
+                (Some(projName), rest)
+        }
+
+        // split the object path into folder/name
+        val index = dxObjectPath.lastIndexOf('/')
+        val (folderRaw, name) =
+            if (index == -1) {
+                ("/", dxObjectPath)
+            } else {
+                (dxObjectPath.substring(0, index),
+                 dxObjectPath.substring(index + 1))
+            }
+
+        // We don't want a folder if this is a dx-data-object (file-xxxx, record-yyyy)
+        val folder =
+            if (DxUtils.isDxId(name)) None
+            else if (folderRaw == "") Some("/")
+            else Some(folderRaw)
+
+        DxPathComponents(name, folder, projName, dxObjectPath, dxPath)
+    }
 
     // Lookup cache for projects. This saves
     // repeated searches for projects we already found.
@@ -64,51 +101,16 @@ object DxBulkResolve {
         return dxProject
     }
 
-    private def parse(dxPath : String) : DxPathParsed = {
-        // strip the prefix
-        assert(dxPath.startsWith(DX_URL_PREFIX))
-        val s = dxPath.substring(DX_URL_PREFIX.length)
-
-        // take out the project, if it is specified
-        val components = s.split(":").toList
-        val (projName, dxObjectPath) = components match {
-            case Nil =>
-                throw new Exception(s"Path ${dxPath} is invalid")
-            case List(objName) =>
-                (None, objName)
-            case projName :: tail =>
-                val rest = tail.mkString(":")
-                (Some(projName), rest)
-        }
-
-        // split the object path into folder/name
-        val index = dxObjectPath.lastIndexOf('/')
-        val (folderRaw, name) =
-            if (index == -1) {
-                ("/", dxObjectPath)
-            } else {
-                (dxObjectPath.substring(0, index),
-                 dxObjectPath.substring(index + 1))
-            }
-
-        // We don't want a folder if this is a dx-data-object (file-xxxx, record-yyyy)
-        val folder =
-            if (DxUtils.isDxId(name)) None
-            else if (folderRaw == "") Some("/")
-            else Some(folderRaw)
-
-        DxPathParsed(name, folder, projName, dxPath)
-    }
 
     // Create a request from a path like:
     //   "dx://dxWDL_playground:/test_data/fileB",
-    private def makeResolutionReq(pDxPath: DxPathParsed) : JsValue = {
-        val reqFields : Map[String, JsValue] = Map("name" -> JsString(pDxPath.name))
-        val folderField : Map[String, JsValue] = pDxPath.folder match {
+    private def makeResolutionReq(components: DxPathComponents) : JsValue = {
+        val reqFields : Map[String, JsValue] = Map("name" -> JsString(components.name))
+        val folderField : Map[String, JsValue] = components.folder match {
             case None => Map.empty
             case Some(x) => Map("folder" -> JsString(x))
         }
-        val projectField : Map[String, JsValue] = pDxPath.projName match {
+        val projectField : Map[String, JsValue] = components.projName match {
             case None => Map.empty
             case Some(x) =>
                 val dxProj = lookupProject(x)
@@ -117,7 +119,7 @@ object DxBulkResolve {
         JsObject(reqFields ++ folderField ++ projectField)
     }
 
-    private def submitRequest(dxPaths : Vector[DxPathParsed],
+    private def submitRequest(dxPaths : Vector[DxPathComponents],
                               dxProject : DXProject) : Map[String, DXDataObject] = {
         val objectReqs : Vector[JsValue] = dxPaths.map{ makeResolutionReq(_) }
         val request = JsObject("objects" -> JsArray(objectReqs),
@@ -168,17 +170,17 @@ object DxBulkResolve {
     // split between files that have already been resolved (we have their file-id), and
     // those that require lookup.
     private def triage(allDxPaths: Seq[String]) : (Map[String, DXDataObject],
-                                                   Vector[DxPathParsed]) = {
+                                                   Vector[DxPathComponents]) = {
         var alreadyResolved = Map.empty[String, DXDataObject]
-        var rest = Vector.empty[DxPathParsed]
+        var rest = Vector.empty[DxPathComponents]
 
         for (p <- allDxPaths) {
-            val pDxPath = parse(p)
-            DxUtils.convertToDxObject(pDxPath.name, None) match {
+            val dxPathComp = parse(p)
+            DxUtils.convertToDxObject(dxPathComp.name, None) match {
                 case None =>
-                    rest = rest :+ pDxPath
+                    rest = rest :+ dxPathComp
                 case Some(dxobj) =>
-                    val dxobjWithProj = pDxPath.projName match {
+                    val dxobjWithProj = dxPathComp.projName match {
                         case None => dxobj
                         case Some(pid) =>
                             val dxProj = lookupProject(pid)
@@ -231,17 +233,14 @@ object DxBulkResolve {
     }
 
     private def lookupDxPath(dxPath: String) : DXDataObject = {
-        val components = dxPath.split(":").toList
-        components match {
-            case Nil =>
-                throw new Exception(s"Path ${dxPath} is invalid")
-            case List(objName) =>
-                val crntProj = DxUtils.dxEnv.getProjectContext()
-                lookupOnePath(objName, crntProj)
-            case projName :: tail =>
-                val objName = tail.mkString(":")
-                val dxProject = lookupProject(projName)
-                lookupOnePath(objName, dxProject)
+        val components = parse(dxPath)
+        components.projName match {
+            case None =>
+                lookupOnePath(dxPath,
+                              DxUtils.dxEnv.getProjectContext())
+            case Some(pName) =>
+                lookupOnePath(dxPath,
+                              lookupProject(pName))
         }
     }
 
