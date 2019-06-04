@@ -175,12 +175,12 @@ object DxBulkResolve {
         var rest = Vector.empty[DxPathComponents]
 
         for (p <- allDxPaths) {
-            val dxPathComp = parse(p)
-            DxUtils.convertToDxObject(dxPathComp.name, None) match {
+            val components = parse(p)
+            DxUtils.convertToDxObject(components.name, None) match {
                 case None =>
-                    rest = rest :+ dxPathComp
+                    rest = rest :+ components
                 case Some(dxobj) =>
-                    val dxobjWithProj = dxPathComp.projName match {
+                    val dxobjWithProj = components.projName match {
                         case None => dxobj
                         case Some(pid) =>
                             val dxProj = lookupProject(pid)

@@ -15,10 +15,10 @@
 
 package dxWDL.util
 
-import com.dnanexus.{DXFile, DXProject}
+import com.dnanexus.{DXContainer, DXFile, DXProject}
 import dxWDL.base.Utils
 import dxWDL.base.Utils.DX_URL_PREFIX
-import dxWDL.dx.DxDescribe
+import dxWDL.dx.{DxBulkResolve, DxDescribe}
 
 sealed trait Furl
 
@@ -36,15 +36,16 @@ object Furl {
     private def parseDxFurl(buf: String) : FurlDx = {
         val s = buf.substring(DX_URL_PREFIX.length)
         val proj_file = s.split("::")(0)
-        val words = proj_file.split(":")
-        words.size match {
-            case 1 =>
-                val dxFile = DXFile.getInstance(words(0))
-                FurlDx(buf, None, dxFile)
-            case 2 =>
-                val dxProj = DXProject.getInstance(words(0))
-                val dxFile = DXFile.getInstance(words(1))
+
+        val dxFile = DxBulkResolve.lookupDxURLFile(DX_URL_PREFIX + proj_file)
+        val dxProj = dxFile.getProject
+        if (dxProj == null)
+            return FurlDx(buf, None, dxFile)
+        dxFile.getProject match {
+            case dxProj : DXProject =>
                 FurlDx(buf, Some(dxProj), dxFile)
+            case cont : DXContainer =>
+                FurlDx(buf, None, dxFile)
             case _ =>
                 throw new Exception(s"Invalid path ${buf}")
         }
