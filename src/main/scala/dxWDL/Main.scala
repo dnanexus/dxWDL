@@ -274,7 +274,7 @@ object Main extends App {
         val dxFolder = folderRaw
         val dxProject =
             try {
-                DxPath.lookupProject(projectRaw)
+                DxBulkResolve.lookupProject(projectRaw)
             } catch {
                 case e : Exception =>
                     Utils.error(e.getMessage)

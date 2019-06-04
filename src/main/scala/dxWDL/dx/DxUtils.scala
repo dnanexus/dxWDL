@@ -73,6 +73,10 @@ object DxUtils {
         Some(dxobjWithProj)
     }
 
+    def dxDataObjectToURL(dxObj: DXDataObject) : String = {
+        s"${Utils.DX_URL_PREFIX}${dxObj.getId}"
+    }
+
     // Is this a WDL type that maps to a native DX type?
     def isNativeDxType(wdlType: WomType) : Boolean = {
         wdlType match {

@@ -7,21 +7,25 @@
 
 package dxWDL.dx
 
-import com.dnanexus.{DXAPI, DXContainer, DXDataObject, DXProject}
+import com.dnanexus.{DXAPI, DXContainer, DXDataObject, DXFile, DXProject, DXRecord}
 import com.fasterxml.jackson.databind.JsonNode
+import scala.collection.mutable.HashMap
 import spray.json._
+
+import DxUtils.{jsonNodeOfJsValue, jsValueOfJsonNode}
 
 // maximal number of objects in a single API request
 import dxWDL.base.Utils.{DX_URL_PREFIX, DXAPI_NUM_OBJECTS_LIMIT}
 
 object DxBulkResolve {
 
-    case class DxPathParsed(name: String,
-                            folder: Option[String],
-                            projName: Option[String],
-                            sourcePath: String)
+    private case class DxPathComponents(name: String,
+                                        folder: Option[String],
+                                        projName: Option[String],
+                                        objFullName : String,
+                                        sourcePath: String)
 
-    private def parse(dxPath : String) : DxPathParsed = {
+    private def parse(dxPath : String) : DxPathComponents = {
         // strip the prefix
         assert(dxPath.startsWith(DX_URL_PREFIX))
         val s = dxPath.substring(DX_URL_PREFIX.length)
@@ -54,27 +58,68 @@ object DxBulkResolve {
             else if (folderRaw == "") Some("/")
             else Some(folderRaw)
 
-        DxPathParsed(name, folder, projName, dxPath)
+        DxPathComponents(name, folder, projName, dxObjectPath, dxPath)
     }
+
+    // Lookup cache for projects. This saves
+    // repeated searches for projects we already found.
+    private val projectDict = HashMap.empty[String, DXProject]
+
+    def lookupProject(projName: String): DXProject = {
+        if (projName.startsWith("project-")) {
+            // A project ID
+            return DXProject.getInstance(projName)
+        }
+        if (projectDict contains projName) {
+            //System.err.println(s"Cached project ${projName}")
+            return projectDict(projName)
+        }
+
+        // A project name, resolve it
+        val req = JsObject("name" -> JsString(projName),
+                           "level" -> JsString("VIEW"),
+                           "limit" -> JsNumber(2))
+        val rep = DXAPI.systemFindProjects(jsonNodeOfJsValue(req),
+                                           classOf[JsonNode],
+                                           DxUtils.dxEnv)
+        val repJs:JsValue = jsValueOfJsonNode(rep)
+
+        val results = repJs.asJsObject.fields.get("results") match {
+            case Some(JsArray(x)) => x
+            case _ => throw new Exception(
+                s"Bad response from systemFindProject API call (${repJs.prettyPrint}), when resolving project ${projName}.")
+        }
+        if (results.length > 1)
+            throw new Exception(s"Found more than one project named ${projName}")
+        if (results.length == 0)
+            throw new Exception(s"Project ${projName} not found")
+        val dxProject = results(0).asJsObject.fields.get("id") match {
+            case Some(JsString(id)) => DXProject.getInstance(id)
+            case _ => throw new Exception(s"Bad response from SystemFindProject API call ${repJs.prettyPrint}")
+        }
+        projectDict(projName) = dxProject
+        return dxProject
+    }
+
 
     // Create a request from a path like:
     //   "dx://dxWDL_playground:/test_data/fileB",
-    private def makeResolutionReq(pDxPath: DxPathParsed) : JsValue = {
-        val reqFields : Map[String, JsValue] = Map("name" -> JsString(pDxPath.name))
-        val folderField : Map[String, JsValue] = pDxPath.folder match {
+    private def makeResolutionReq(components: DxPathComponents) : JsValue = {
+        val reqFields : Map[String, JsValue] = Map("name" -> JsString(components.name))
+        val folderField : Map[String, JsValue] = components.folder match {
             case None => Map.empty
             case Some(x) => Map("folder" -> JsString(x))
         }
-        val projectField : Map[String, JsValue] = pDxPath.projName match {
+        val projectField : Map[String, JsValue] = components.projName match {
             case None => Map.empty
             case Some(x) =>
-                val dxProj = DxPath.lookupProject(x)
+                val dxProj = lookupProject(x)
                 Map("project" -> JsString(dxProj.getId))
         }
         JsObject(reqFields ++ folderField ++ projectField)
     }
 
-    private def submitRequest(dxPaths : Vector[DxPathParsed],
+    private def submitRequest(dxPaths : Vector[DxPathComponents],
                               dxProject : DXProject) : Map[String, DXDataObject] = {
         val objectReqs : Vector[JsValue] = dxPaths.map{ makeResolutionReq(_) }
         val request = JsObject("objects" -> JsArray(objectReqs),
@@ -125,20 +170,20 @@ object DxBulkResolve {
     // split between files that have already been resolved (we have their file-id), and
     // those that require lookup.
     private def triage(allDxPaths: Seq[String]) : (Map[String, DXDataObject],
-                                                   Vector[DxPathParsed]) = {
+                                                   Vector[DxPathComponents]) = {
         var alreadyResolved = Map.empty[String, DXDataObject]
-        var rest = Vector.empty[DxPathParsed]
+        var rest = Vector.empty[DxPathComponents]
 
         for (p <- allDxPaths) {
-            val pDxPath = parse(p)
-            DxUtils.convertToDxObject(pDxPath.name, None) match {
+            val components = parse(p)
+            DxUtils.convertToDxObject(components.name, None) match {
                 case None =>
-                    rest = rest :+ pDxPath
+                    rest = rest :+ components
                 case Some(dxobj) =>
-                    val dxobjWithProj = pDxPath.projName match {
+                    val dxobjWithProj = components.projName match {
                         case None => dxobj
                         case Some(pid) =>
-                            val dxProj = DxPath.lookupProject(pid)
+                            val dxProj = lookupProject(pid)
                             DXDataObject.getInstance(dxobj.getId, dxProj)
                     }
                     alreadyResolved = alreadyResolved + (p -> dxobjWithProj)
@@ -149,8 +194,8 @@ object DxBulkResolve {
 
     // Describe the names of all the data objects in one batch. This is much more efficient
     // than submitting object describes one-by-one.
-  def apply(dxPaths: Seq[String],
-            dxProject: DXProject) : Map[String, DXDataObject] = {
+    def apply(dxPaths: Seq[String],
+              dxProject: DXProject) : Map[String, DXDataObject] = {
         if (dxPaths.isEmpty) {
             // avoid an unnessary API call; this is important for unit tests
             // that do not have a network connection.
@@ -172,5 +217,45 @@ object DxBulkResolve {
         }
 
         alreadyResolved ++ resolved
+    }
+
+    def lookupOnePath(dxPath: String,
+                      dxProject : DXProject) : DXDataObject = {
+        val found : Map[String, DXDataObject] =
+            apply(Vector(dxPath), dxProject)
+
+        if (found.size == 0)
+            throw new Exception(s"Could not find ${dxPath} in project ${dxProject.getId}")
+        if (found.size > 1)
+            throw new Exception(s"Found more than one dx:object in path ${dxPath}, project=${dxProject.getId}")
+
+        found.values.head
+    }
+
+    private def lookupDxPath(dxPath: String) : DXDataObject = {
+        val components = parse(dxPath)
+        components.projName match {
+            case None =>
+                lookupOnePath(dxPath,
+                              DxUtils.dxEnv.getProjectContext())
+            case Some(pName) =>
+                lookupOnePath(dxPath,
+                              lookupProject(pName))
+        }
+    }
+
+    // More accurate types
+    def lookupDxURLRecord(buf: String) : DXRecord = {
+        val dxObj = lookupDxPath(buf)
+        if (!dxObj.isInstanceOf[DXRecord])
+            throw new Exception(s"Found dx:object of the wrong type ${dxObj}")
+        dxObj.asInstanceOf[DXRecord]
+    }
+
+    def lookupDxURLFile(buf: String) : DXFile = {
+        val dxObj = lookupDxPath(buf)
+        if (!dxObj.isInstanceOf[DXFile])
+            throw new Exception(s"Found dx:object of the wrong type ${dxObj}")
+        dxObj.asInstanceOf[DXFile]
     }
 }

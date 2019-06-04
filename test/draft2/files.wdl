@@ -3,7 +3,7 @@
 import "library_sys_call.wdl" as lib
 
 workflow files {
-    File f
+    File f = "dx://dxWDL_playground:/test_data/fileB"
     File f1
     File f2
     File fruit_list

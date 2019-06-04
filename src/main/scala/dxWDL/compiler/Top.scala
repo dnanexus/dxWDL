@@ -48,19 +48,14 @@ case class Top(cOpt: CompilerOptions) {
     private def getAssetId(region: String) : String = {
         val region2project = Utils.getRegions()
         val (projNameRt, folder)  = getProjectWithRuntimeLibrary(region2project, region)
-        val dxProjRt = DxPath.lookupProject(projNameRt)
+        val dxProjRt = DxBulkResolve.lookupProject(projNameRt)
         Utils.trace(verbose.on, s"Looking for asset-id in ${projNameRt}:/${folder}")
 
         val assetDxPath = s"${DX_URL_PREFIX}${dxProjRt.getId}:${folder}/${DX_WDL_ASSET}"
-        val found : Map[String, DXDataObject] =
-            DxBulkResolve.apply(Vector(assetDxPath), dxProjRt)
-
-        if (found.size == 0)
-            throw new Exception(s"Could not find runtime asset at ${dxProjRt.getId}:${folder}/${DX_WDL_ASSET}")
-        if (found.size > 1)
-            throw new Exception(s"Found more than one dx:object named ${DX_WDL_ASSET} in path ${dxProjRt.getId}:${folder}")
-
-        found.values.head.getId
+        val dxObj = DxBulkResolve.lookupOnePath(assetDxPath, dxProjRt)
+        if (!dxObj.isInstanceOf[DXRecord])
+            throw new Exception(s"Found dx object of wrong type ${dxObj} at ${assetDxPath}")
+        dxObj.getId
     }
 
     // We need the dxWDL runtime library cloned into this project, so it will
@@ -70,7 +65,7 @@ case class Top(cOpt: CompilerOptions) {
                                         dxProject: DXProject) : Unit = {
         val region2project = Utils.getRegions()
         val (projNameRt, folder)  = getProjectWithRuntimeLibrary(region2project, region)
-        val dxProjRt = DxPath.lookupProject(projNameRt)
+        val dxProjRt = DxBulkResolve.lookupProject(projNameRt)
         DxUtils.cloneAsset(DXRecord.getInstance(dxWDLrtId),
                            dxProject,
                            DX_WDL_ASSET,

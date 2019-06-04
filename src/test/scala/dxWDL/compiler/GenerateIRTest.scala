@@ -346,4 +346,10 @@ class GenerateIRTest extends FlatSpec with Matchers {
         val retval = Main.compile(path.toString :: cFlags)
         retval shouldBe a[Main.SuccessfulTerminationIR]
     }
+
+    it should "handle file constants in a workflow" in {
+        val path = pathFromBasename("compiler", "wf_constants.wdl")
+        val retval = Main.compile(path.toString :: cFlags)
+        retval shouldBe a[Main.SuccessfulTerminationIR]
+    }
 }

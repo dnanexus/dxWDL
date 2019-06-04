@@ -88,7 +88,8 @@ draft2_test_list = [
 single_tasks_list = [
     "add3",
     "diff2files",
-    "empty_stdout"
+    "empty_stdout",
+    "copy_file"
 ]
 
 # Tests run in continuous integration. We remove the native app test,
