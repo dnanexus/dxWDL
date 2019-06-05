@@ -78,15 +78,19 @@ object ParseWomSourceFile {
         val absPath = Paths.get(mainFile.toAbsolutePath.toString)
         val mainFileContents = Files.readAllLines(absPath).asScala.mkString(System.lineSeparator())
 
-        // We need to get all the sources sources
+        // We need to get all the WDL sources, so we could analyze them
         val mainFileResolvers =
             DirectoryResolver.localFilesystemResolvers(Some(DefaultPathBuilder.build(mainFile)))
+
+        // look for source files in each of the import directories
         val fileImportResolvers : List[ImportResolver] = imports.map{ p =>
-            val p2 : cromwell.core.path.Path = DefaultPathBuilder.build(p)
+            val p2 : cromwell.core.path.Path = DefaultPathBuilder.build(p.toAbsolutePath)
             DirectoryResolver(p2, None, None, false)
         }
         val importResolvers: List[ImportResolver] =
             mainFileResolvers ++ fileImportResolvers :+ HttpResolver(relativeTo = None)
+
+        // Allow http addresses when importing
         val importResolversRecorded: List[ImportResolver] =
             importResolvers.map{ impr => fileRecorder(allSources, impr) }
 
