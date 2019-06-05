@@ -3,7 +3,7 @@
 
 package dxWDL.dx
 
-import com.dnanexus.{DXFile, DXProject}
+import com.dnanexus.{DXFile, DXContainer}
 import java.nio.file.Path
 import spray.json._
 
@@ -63,36 +63,28 @@ object DxdaManifest {
         val fileDescs : Map[DXFile, DxDescribe] = DxBulkDescribe.apply(file2LocalMapping.keys.toVector,
                                                                        parts = true)
 
-        // create a sub-map per project
-        val fileDescsByProject : Map[DXProject, Map[DXFile, DxDescribe]] =
-            fileDescs.foldLeft(Map.empty[DXProject, Map[DXFile, DxDescribe]]) {
+        // create a sub-map per container
+        val fileDescsByContainer : Map[DXContainer, Map[DXFile, DxDescribe]] =
+            fileDescs.foldLeft(Map.empty[DXContainer, Map[DXFile, DxDescribe]]) {
                 case (accu, (dxFile, dxDesc)) =>
-                    val project : DXProject = dxDesc.container match {
-                        case p if p.getId.startsWith("project") => DXProject.getInstance(p.getId)
-                        case _ =>
-                            // This is a container, which is useless when calling dxda.
-                            // The download API call requires a project, not
-                            // a container. We replace the container with our best guess for the
-                            // project.
-                            DxUtils.dxEnv.getProjectContext()
-                    }
-                    accu.get(project) match {
+                    val container = dxDesc.container
+                    accu.get(container) match {
                         case None =>
-                            accu + (project -> Map(dxFile -> dxDesc))
+                            accu + (container -> Map(dxFile -> dxDesc))
                         case Some(m) =>
-                            accu + (project -> (m + (dxFile -> dxDesc)))
+                            accu + (container -> (m + (dxFile -> dxDesc)))
                     }
             }
 
-        val m : Map[String, JsValue] = fileDescsByProject.map{
-            case (dxProj, fileDescs) =>
+        val m : Map[String, JsValue] = fileDescsByContainer.map{
+            case (dxContainer, fileDescs) =>
                 val projectFilesToLocalPath : Vector[JsValue] =
                     fileDescs.map{
                         case (dxFile, dxDesc) =>
                             val local: Path = file2LocalMapping(dxFile)
                             processFile(dxDesc, local)
                     }.toVector
-                dxProj.getId -> JsArray(projectFilesToLocalPath)
+                dxContainer.getId -> JsArray(projectFilesToLocalPath)
         }.toMap
         new DxdaManifest(JsObject(m))
     }

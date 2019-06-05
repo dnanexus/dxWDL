@@ -171,7 +171,7 @@ case class Native(dxWDLrtId: Option[String],
             case Some(DockerRegistry(registry, username, credentials)) =>
                 // check that the credentials file is a valid platform path
                 try {
-                    val dxFile = DxBulkResolve.lookupDxURLFile(credentials)
+                    val dxFile = DxPath.resolveDxURLFile(credentials)
                     Utils.ignore(dxFile)
                 } catch {
                     case e : Throwable =>

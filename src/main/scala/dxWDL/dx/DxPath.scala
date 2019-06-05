@@ -17,7 +17,7 @@ import DxUtils.{jsonNodeOfJsValue, jsValueOfJsonNode}
 // maximal number of objects in a single API request
 import dxWDL.base.Utils.{DX_URL_PREFIX, DXAPI_NUM_OBJECTS_LIMIT}
 
-object DxBulkResolve {
+object DxPath {
 
     private case class DxPathComponents(name: String,
                                         folder: Option[String],
@@ -65,7 +65,7 @@ object DxBulkResolve {
     // repeated searches for projects we already found.
     private val projectDict = HashMap.empty[String, DXProject]
 
-    def lookupProject(projName: String): DXProject = {
+    def resolveProject(projName: String): DXProject = {
         if (projName.startsWith("project-")) {
             // A project ID
             return DXProject.getInstance(projName)
@@ -113,7 +113,7 @@ object DxBulkResolve {
         val projectField : Map[String, JsValue] = components.projName match {
             case None => Map.empty
             case Some(x) =>
-                val dxProj = lookupProject(x)
+                val dxProj = resolveProject(x)
                 Map("project" -> JsString(dxProj.getId))
         }
         JsObject(reqFields ++ folderField ++ projectField)
@@ -183,7 +183,7 @@ object DxBulkResolve {
                     val dxobjWithProj = components.projName match {
                         case None => dxobj
                         case Some(pid) =>
-                            val dxProj = lookupProject(pid)
+                            val dxProj = resolveProject(pid)
                             DXDataObject.getInstance(dxobj.getId, dxProj)
                     }
                     alreadyResolved = alreadyResolved + (p -> dxobjWithProj)
@@ -194,8 +194,8 @@ object DxBulkResolve {
 
     // Describe the names of all the data objects in one batch. This is much more efficient
     // than submitting object describes one-by-one.
-    def apply(dxPaths: Seq[String],
-              dxProject: DXProject) : Map[String, DXDataObject] = {
+    def resolveBulk(dxPaths: Seq[String],
+                    dxProject: DXProject) : Map[String, DXDataObject] = {
         if (dxPaths.isEmpty) {
             // avoid an unnessary API call; this is important for unit tests
             // that do not have a network connection.
@@ -219,10 +219,10 @@ object DxBulkResolve {
         alreadyResolved ++ resolved
     }
 
-    def lookupOnePath(dxPath: String,
-                      dxProject : DXProject) : DXDataObject = {
+    def resolveOnePath(dxPath: String,
+                       dxProject : DXProject) : DXDataObject = {
         val found : Map[String, DXDataObject] =
-            apply(Vector(dxPath), dxProject)
+            resolveBulk(Vector(dxPath), dxProject)
 
         if (found.size == 0)
             throw new Exception(s"Could not find ${dxPath} in project ${dxProject.getId}")
@@ -232,28 +232,28 @@ object DxBulkResolve {
         found.values.head
     }
 
-    private def lookupDxPath(dxPath: String) : DXDataObject = {
+    private def resolveDxPath(dxPath: String) : DXDataObject = {
         val components = parse(dxPath)
         components.projName match {
             case None =>
-                lookupOnePath(dxPath,
+                resolveOnePath(dxPath,
                               DxUtils.dxEnv.getProjectContext())
             case Some(pName) =>
-                lookupOnePath(dxPath,
-                              lookupProject(pName))
+                resolveOnePath(dxPath,
+                              resolveProject(pName))
         }
     }
 
     // More accurate types
-    def lookupDxURLRecord(buf: String) : DXRecord = {
-        val dxObj = lookupDxPath(buf)
+    def resolveDxURLRecord(buf: String) : DXRecord = {
+        val dxObj = resolveDxPath(buf)
         if (!dxObj.isInstanceOf[DXRecord])
             throw new Exception(s"Found dx:object of the wrong type ${dxObj}")
         dxObj.asInstanceOf[DXRecord]
     }
 
-    def lookupDxURLFile(buf: String) : DXFile = {
-        val dxObj = lookupDxPath(buf)
+    def resolveDxURLFile(buf: String) : DXFile = {
+        val dxObj = resolveDxPath(buf)
         if (!dxObj.isInstanceOf[DXFile])
             throw new Exception(s"Found dx:object of the wrong type ${dxObj}")
         dxObj.asInstanceOf[DXFile]

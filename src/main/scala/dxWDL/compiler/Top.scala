@@ -48,11 +48,11 @@ case class Top(cOpt: CompilerOptions) {
     private def getAssetId(region: String) : String = {
         val region2project = Utils.getRegions()
         val (projNameRt, folder)  = getProjectWithRuntimeLibrary(region2project, region)
-        val dxProjRt = DxBulkResolve.lookupProject(projNameRt)
+        val dxProjRt = DxPath.resolveProject(projNameRt)
         Utils.trace(verbose.on, s"Looking for asset-id in ${projNameRt}:/${folder}")
 
         val assetDxPath = s"${DX_URL_PREFIX}${dxProjRt.getId}:${folder}/${DX_WDL_ASSET}"
-        val dxObj = DxBulkResolve.lookupOnePath(assetDxPath, dxProjRt)
+        val dxObj = DxPath.resolveOnePath(assetDxPath, dxProjRt)
         if (!dxObj.isInstanceOf[DXRecord])
             throw new Exception(s"Found dx object of wrong type ${dxObj} at ${assetDxPath}")
         dxObj.getId
@@ -65,7 +65,7 @@ case class Top(cOpt: CompilerOptions) {
                                         dxProject: DXProject) : Unit = {
         val region2project = Utils.getRegions()
         val (projNameRt, folder)  = getProjectWithRuntimeLibrary(region2project, region)
-        val dxProjRt = DxBulkResolve.lookupProject(projNameRt)
+        val dxProjRt = DxPath.resolveProject(projNameRt)
         DxUtils.cloneAsset(DXRecord.getInstance(dxWDLrtId),
                            dxProject,
                            DX_WDL_ASSET,

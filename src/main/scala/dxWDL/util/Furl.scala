@@ -18,7 +18,7 @@ package dxWDL.util
 import com.dnanexus.{DXContainer, DXFile, DXProject}
 import dxWDL.base.Utils
 import dxWDL.base.Utils.DX_URL_PREFIX
-import dxWDL.dx.{DxBulkResolve, DxDescribe}
+import dxWDL.dx.{DxPath, DxDescribe}
 
 sealed trait Furl
 
@@ -37,7 +37,7 @@ object Furl {
         val s = buf.substring(DX_URL_PREFIX.length)
         val proj_file = s.split("::")(0)
 
-        val dxFile = DxBulkResolve.lookupDxURLFile(DX_URL_PREFIX + proj_file)
+        val dxFile = DxPath.resolveDxURLFile(DX_URL_PREFIX + proj_file)
         val dxProj = dxFile.getProject
         if (dxProj == null)
             return FurlDx(buf, None, dxFile)

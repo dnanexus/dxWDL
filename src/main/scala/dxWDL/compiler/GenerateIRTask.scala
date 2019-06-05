@@ -132,7 +132,7 @@ case class GenerateIRTask(verbose: Verbose,
                 wdlConst match {
                     case WomString(url) if url.startsWith(Utils.DX_URL_PREFIX) =>
                         // A constant image specified with a DX URL
-                        val dxfile = DxBulkResolve.lookupDxURLFile(url)
+                        val dxfile = DxPath.resolveDxURLFile(url)
                         IR.DockerImageDxFile(url, dxfile)
                     case _ =>
                         // Probably a public docker image

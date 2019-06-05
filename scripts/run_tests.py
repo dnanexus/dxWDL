@@ -45,7 +45,10 @@ wdl_v1_list = [
     "param_passing",
 
     # defaults and parameter passing
-    "top"
+    "top",
+
+    # can we download from a container?
+    "download_from_container"
 ]
 
 # docker image tests
@@ -89,7 +92,7 @@ single_tasks_list = [
     "add3",
     "diff2files",
     "empty_stdout",
-    "copy_file"
+    "sort_file"
 ]
 
 # Tests run in continuous integration. We remove the native app test,
@@ -129,6 +132,7 @@ test_unlocked=["cast",
                "shapes"]
 test_extras=["instance_types"]
 test_private_registry=["private_registry"]
+test_import_dirs=["A"]
 TestMetaData = namedtuple('TestMetaData', 'name kind')
 TestDesc = namedtuple('TestDesc', 'name kind wdl_source wdl_input dx_input results')
 
@@ -482,6 +486,8 @@ def compiler_per_test_flags(tname):
         flags += ["--extras", os.path.join(top_dir, "test/extras.json")]
     if tname in test_private_registry:
         flags += ["--extras", os.path.join(top_dir, "test/extras_private_registry.json")]
+    if tname in test_import_dirs:
+        flags += ["--imports", os.path.join(top_dir, "test/imports/library")]
     return flags
 
 # Which project to use for a test
