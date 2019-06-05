@@ -487,7 +487,7 @@ def compiler_per_test_flags(tname):
     if tname in test_private_registry:
         flags += ["--extras", os.path.join(top_dir, "test/extras_private_registry.json")]
     if tname in test_import_dirs:
-        flags += ["--imports", os.path.join(top_dir, "test/imports/library")]
+        flags += ["--imports", os.path.join(top_dir, "test/imports/lib")]
     return flags
 
 # Which project to use for a test
