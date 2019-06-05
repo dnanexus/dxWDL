@@ -132,6 +132,7 @@ test_unlocked=["cast",
                "shapes"]
 test_extras=["instance_types"]
 test_private_registry=["private_registry"]
+test_import_dirs=["A"]
 TestMetaData = namedtuple('TestMetaData', 'name kind')
 TestDesc = namedtuple('TestDesc', 'name kind wdl_source wdl_input dx_input results')
 
@@ -485,6 +486,8 @@ def compiler_per_test_flags(tname):
         flags += ["--extras", os.path.join(top_dir, "test/extras.json")]
     if tname in test_private_registry:
         flags += ["--extras", os.path.join(top_dir, "test/extras_private_registry.json")]
+    if tname in test_import_dirs:
+        flags += ["--imports", os.path.join(top_dir, "test/imports/library")]
     return flags
 
 # Which project to use for a test
