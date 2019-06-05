@@ -29,7 +29,7 @@ class DxBulkResolveTest extends FlatSpec with Matchers {
     }
 
     it should "handle files in a root directory" in {
-        val path = s"${TEST_PROJECT}:/wgEncodeUwRepliSeqBg02esG1bAlnRep1.bam.bai"
+        val path = s"${TEST_PROJECT}:/Readme.md"
         val expectedId = describeDxFilePath(path)
         val dxFile : DXFile = DxBulkResolve.lookupDxURLFile(s"dx://${path}")
         dxFile.getId shouldBe(expectedId)

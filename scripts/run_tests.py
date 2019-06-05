@@ -45,7 +45,7 @@ wdl_v1_list = [
     "param_passing",
 
     # defaults and parameter passing
-    "top"
+    "top",
 
     # can we download from a container?
     "download_from_container"
