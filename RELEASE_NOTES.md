@@ -1,6 +1,6 @@
 # Release Notes
 
-## 1.07
+## 1.08
 **Fixed**
 - [bug 259](ttps://github.com/dnanexus/dxWDL/issues/259). Unified the code for resolving platform paths.
 - Error when downloading a file that resides in a container, rather than a project.
