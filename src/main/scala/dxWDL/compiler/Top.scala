@@ -234,7 +234,8 @@ case class Top(cOpt: CompilerOptions) {
 
 
     private def womToIR(source: Path) : IR.Bundle = {
-        val (language, womBundle, allSources, subBundles) = ParseWomSourceFile.apply(source)
+        val (language, womBundle, allSources, subBundles) =
+            ParseWomSourceFile.apply(source, cOpt.importDirs)
 
         // Check that each workflow/task appears just one
         val everythingBundle : WomBundle = mergeIntoOneBundle(womBundle, subBundles)

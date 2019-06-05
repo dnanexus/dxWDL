@@ -325,7 +325,7 @@ class GenerateIRTest extends FlatSpec with Matchers {
         retval shouldBe a [Main.SuccessfulTerminationIR]
     }
 
-    it should "check for reserved symbols" taggedAs(EdgeTest) in {
+    it should "check for reserved symbols" in {
         val path = pathFromBasename("compiler", "reserved.wdl")
         val retval = Main.compile(path.toString :: cFlags)
 
@@ -350,6 +350,13 @@ class GenerateIRTest extends FlatSpec with Matchers {
     it should "handle file constants in a workflow" in {
         val path = pathFromBasename("compiler", "wf_constants.wdl")
         val retval = Main.compile(path.toString :: cFlags)
+        retval shouldBe a[Main.SuccessfulTerminationIR]
+    }
+
+    it should "respect import flag" taggedAs(EdgeTest) in {
+        val path = pathFromBasename("compiler/imports", "A.wdl")
+        val libraryPath = path.getParent.resolve("lib")
+        val retval = Main.compile(path.toString :: "--imports" :: libraryPath.toString :: cFlags)
         retval shouldBe a[Main.SuccessfulTerminationIR]
     }
 }
