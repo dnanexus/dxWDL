@@ -6,9 +6,9 @@ import common.Checked
 import common.transforms.CheckedAtoB
 import common.validation.ErrorOr._
 import com.typesafe.config.ConfigFactory
-import cromwell.core.path.{DefaultPathBuilder, Path}
+import cromwell.core.path.{DefaultPathBuilder}
 import cromwell.languages.util.ImportResolver._
-import java.nio.file.{Files, Paths}
+import java.nio.file.{Files, Path, Paths}
 import languages.cwl.CwlV1_0LanguageFactory
 import languages.wdl.draft2.WdlDraft2LanguageFactory
 import languages.wdl.draft3.WdlDraft3LanguageFactory
@@ -65,21 +65,28 @@ object ParseWomSourceFile {
                              resolver: ImportResolver) : ImportResolver =
         new FileRecorderResolver(allSources, resolver)
 
-    private def getBundle(mainFile: Path): (Language.Value,
-                                            WomBundle,
-                                            Map[String, WorkflowSource],
-                                            Vector[WomBundle]) = {
+    private def getBundle(mainFile: Path,
+                          imports: List[Path]): (Language.Value,
+                                                 WomBundle,
+                                                 Map[String, WorkflowSource],
+                                                 Vector[WomBundle]) = {
         // Resolves for:
         // - Where we run from
         // - Where the file is
         val allSources =  HashMap.empty[String, WorkflowSource]
 
-        val absPath = Paths.get(mainFile.toAbsolutePath.pathAsString)
+        val absPath = Paths.get(mainFile.toAbsolutePath.toString)
         val mainFileContents = Files.readAllLines(absPath).asScala.mkString(System.lineSeparator())
 
         // We need to get all the sources sources
+        val mainFileResolvers =
+            DirectoryResolver.localFilesystemResolvers(Some(DefaultPathBuilder.build(mainFile)))
+        val fileImportResolvers : List[ImportResolver] = imports.map{ p =>
+            val p2 : cromwell.core.path.Path = DefaultPathBuilder.build(p)
+            DirectoryResolver(p2, None, None, false)
+        }
         val importResolvers: List[ImportResolver] =
-            DirectoryResolver.localFilesystemResolvers(Some(mainFile)) :+ HttpResolver(relativeTo = None)
+            mainFileResolvers ++ fileImportResolvers :+ HttpResolver(relativeTo = None)
         val importResolversRecorded: List[ImportResolver] =
             importResolvers.map{ impr => fileRecorder(allSources, impr) }
 
@@ -126,12 +133,12 @@ object ParseWomSourceFile {
         (lang, bundle, allSources.toMap, subBundles)
     }
 
-    def apply(sourcePath: java.nio.file.Path) : (Language.Value,
-                                                 WomBundle,
-                                                 Map[String, WorkflowSource],
-                                                 Vector[WomBundle]) = {
-        val src : Path = DefaultPathBuilder.build(sourcePath)
-        val (lang, bundle, allSources, subBundles) = getBundle(src)
+    def apply(sourcePath: Path,
+              imports: List[Path]) : (Language.Value,
+                                      WomBundle,
+                                      Map[String, WorkflowSource],
+                                      Vector[WomBundle]) = {
+        val (lang, bundle, allSources, subBundles) = getBundle(sourcePath, imports)
         lang match {
             case Language.CWLv1_0 =>
                 throw new Exception("CWL is not handled at the moment, only WDL is supported")
