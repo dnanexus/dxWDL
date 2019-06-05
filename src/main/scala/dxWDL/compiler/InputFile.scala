@@ -29,7 +29,7 @@ import wom.values._
 
 import dxWDL.base._
 import dxWDL.base.Utils._
-import dxWDL.dx.{DxDescribe, DxBulkResolve, DxUtils}
+import dxWDL.dx.{DxDescribe, DxPath, DxUtils}
 import dxWDL.util._
 import IR.{CVar, SArg, COMMON, OUTPUT_SECTION, REORG}
 
@@ -153,7 +153,7 @@ case class InputFileScan(bundle: IR.Bundle,
         val dxPaths : Vector[String] = jsFileDesc.collect{
             case JsString(x) => x
         }.toVector
-        val resolvedPaths = DxBulkResolve.apply(dxPaths, dxProject).map {
+        val resolvedPaths = DxPath.resolveBulk(dxPaths, dxProject).map {
             case (key, dxobj) if dxobj.isInstanceOf[DXFile] =>
                 key -> dxobj.asInstanceOf[DXFile]
             case (key, dxobj) =>

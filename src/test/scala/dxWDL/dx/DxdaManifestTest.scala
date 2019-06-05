@@ -10,7 +10,7 @@ class DxdaManifestTest extends FlatSpec with Matchers {
     val TEST_PROJECT = "dxWDL_playground"
     lazy val dxTestProject : DXProject =
         try {
-            DxBulkResolve.lookupProject(TEST_PROJECT)
+            DxPath.resolveProject(TEST_PROJECT)
         } catch {
             case e : Exception =>
                 throw new Exception(s"""|Could not find project ${TEST_PROJECT}, you probably need to be logged into
@@ -26,8 +26,8 @@ class DxdaManifestTest extends FlatSpec with Matchers {
         )
 
         // resolve the paths
-        val resolvedObjects : Map[String, DXDataObject] = DxBulkResolve.apply(fileDir.keys.toVector,
-                                                                              dxTestProject)
+        val resolvedObjects : Map[String, DXDataObject] = DxPath.resolveBulk(fileDir.keys.toVector,
+                                                                             dxTestProject)
         val filesInManifest : Map[DXFile, Path] = resolvedObjects.map{
             case (dxPath, dataObj) =>
                 val dxFile = dataObj.asInstanceOf[DXFile]

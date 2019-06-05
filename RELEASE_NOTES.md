@@ -2,8 +2,11 @@
 
 ## 1.07
 **Fixed**
-- [bug 259](ttps://github.com/dnanexus/dxWDL/issues/259)
+- [bug 259](ttps://github.com/dnanexus/dxWDL/issues/259). Unified the code for resolving platform paths.
+- Error when downloading a file that resides in a container, rather than a project.
 
+**Changed**
+- Merged `DxPath` and `DxBulkResolve` modules.
 
 ## 1.06
 - Upgrade to Cromwell v41

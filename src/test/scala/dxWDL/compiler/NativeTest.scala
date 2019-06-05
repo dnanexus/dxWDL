@@ -5,7 +5,7 @@ import org.scalatest.{FlatSpec, Matchers}
 import scala.io.Source
 
 import dxWDL.Main
-import dxWDL.dx.DxBulkResolve
+import dxWDL.dx.DxPath
 import dxWDL.util.ParseWomSourceFile
 
 // This test module requires being logged in to the platform.
@@ -22,7 +22,7 @@ class NativeTest extends FlatSpec with Matchers {
     val TEST_PROJECT = "dxWDL_playground"
     lazy val dxTestProject =
         try {
-            DxBulkResolve.lookupProject(TEST_PROJECT)
+            DxPath.resolveProject(TEST_PROJECT)
         } catch {
             case e : Exception =>
                 throw new Exception(s"""|Could not find project ${TEST_PROJECT}, you probably need to be logged into
