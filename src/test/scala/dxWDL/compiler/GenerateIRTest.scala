@@ -353,10 +353,23 @@ class GenerateIRTest extends FlatSpec with Matchers {
         retval shouldBe a[Main.SuccessfulTerminationIR]
     }
 
-    it should "respect import flag" taggedAs(EdgeTest) in {
+    it should "respect import flag" in {
         val path = pathFromBasename("compiler/imports", "A.wdl")
         val libraryPath = path.getParent.resolve("lib")
         val retval = Main.compile(path.toString :: "--imports" :: libraryPath.toString :: cFlags)
+        retval shouldBe a[Main.SuccessfulTerminationIR]
+    }
+
+    it should "respect import -p flag" in {
+        val path = pathFromBasename("compiler/imports", "A.wdl")
+        val libraryPath = path.getParent.resolve("lib")
+        val retval = Main.compile(path.toString :: "--p" :: libraryPath.toString :: cFlags)
+        retval shouldBe a[Main.SuccessfulTerminationIR]
+    }
+
+    it should "pass environment between deep stages" taggedAs(EdgeTest) in {
+        val path = pathFromBasename("compiler", "environment_passing_deep_nesting.wdl")
+        val retval = Main.compile(path.toString :: cFlagsUnlocked)
         retval shouldBe a[Main.SuccessfulTerminationIR]
     }
 }

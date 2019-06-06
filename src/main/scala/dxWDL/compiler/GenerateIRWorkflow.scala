@@ -151,8 +151,19 @@ case class GenerateIRWorkflow(wf : WorkflowDefinition,
 
                 case Some(tcInput) =>
                     val exprSourceString = tcInput.womExpression.sourceString
-                    val lVar = env(exprSourceString)
-                    lVar.sArg
+                    env.get(exprSourceString) match {
+                        case None =>
+                            val envDbg = env.map{ case (name, lVar) =>
+                                s"  ${name} -> ${lVar.sArg}"
+                            }.mkString("\n")
+                            Utils.trace(verbose.on, s"""|env =
+                                                        |${envDbg}""".stripMargin)
+                            throw new Exception(
+                                s"""|input <${cVar.name}, ${cVar.womType}> to call <${call.fullyQualifiedName}>
+                                    |is missing from the environment. This is an internal error."""
+                                    .stripMargin.replaceAll("\n", " "))
+                        case Some(lVar) => lVar.sArg
+                    }
             }
         }
 
