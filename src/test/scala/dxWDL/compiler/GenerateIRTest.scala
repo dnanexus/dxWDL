@@ -369,7 +369,7 @@ class GenerateIRTest extends FlatSpec with Matchers {
 
     it should "pass environment between deep stages" taggedAs(EdgeTest) in {
         val path = pathFromBasename("compiler", "environment_passing_deep_nesting.wdl")
-        val retval = Main.compile(path.toString :: cFlagsUnlocked)
+        val retval = Main.compile(path.toString :: cFlags)
         retval shouldBe a[Main.SuccessfulTerminationIR]
     }
 }

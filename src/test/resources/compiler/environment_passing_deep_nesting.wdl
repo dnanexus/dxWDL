@@ -1,18 +1,14 @@
 version 1.0
 
 workflow environment_passing_deep_nesting {
-    input {
-        File dummy_file
-    }
 
-    call unify_sites as unify
-
-    call vcf_shard_merge_pyspark as vcf_shard_merge
+    call bear
+    call cat
 
     if (false) {
-        call cmp_seq_sharded as compare { input:
-            unify_sites_sharded = unify.unified_sites,
-            VCF_sharded_merged = vcf_shard_merge.pvcf_gz
+        call compare { input:
+            a = bear.result,
+            b = cat.result
         }
 
         call assert
@@ -20,36 +16,31 @@ workflow environment_passing_deep_nesting {
 }
 
 
-task unify_sites {
+task bear {
     command {}
     output {
-        Array[File] unified_sites = glob("unified_sites/*.gz")
+        Int result = 10
     }
 }
 
-task assert {
-    command {
-    }
-}
-
-
-task cmp_seq_sharded {
-    input {
-        Array[File] unify_sites_sharded
-        Array[File] VCF_sharded_merged
-    }
+task cat {
   command {}
   output {
-    Boolean equality = true
-    File? unified_sites_diff = "dummy.txt"
-    Array[File] VCF_diff = []
+      Int result = 3
   }
 }
 
-task vcf_shard_merge_pyspark {
+task assert {
+    command {}
+}
+
+
+task compare {
+    input {
+        Int a
+        Int b
+    }
   command {}
   output {
-    Array[File] pvcf_gz = []
-    Array[File] tbi = []
   }
 }
