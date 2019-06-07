@@ -9,6 +9,7 @@ import os
 import re
 import sys
 import subprocess
+from typing import Callable, Iterator, Union, Optional, List
 from termcolor import colored, cprint
 import time
 from dxpy.exceptions import DXJobFailureError
@@ -443,7 +444,7 @@ def choose_tests(name):
 
 # Find all the WDL test files, these are located in the 'test'
 # directory. A test file must have some support files.
-def register_all_tests():
+def register_all_tests(verbose : bool) -> None :
     for root, dirs, files in os.walk(test_dir):
         for t_file in files:
             if t_file.endswith(".wdl"):
@@ -456,7 +457,8 @@ def register_all_tests():
                 try:
                     register_test(root, fname)
                 except Exception as e:
-                    print("Skipping WDL file {} error={}".format(fname, e))
+                    if verbose:
+                        print("Skipping WDL file {} error={}".format(fname, e))
 
 
 def build_dirs(project, version_id):
@@ -649,7 +651,7 @@ def main():
 
     print("top_dir={} test_dir={}".format(top_dir, test_dir))
 
-    register_all_tests()
+    register_all_tests(args.verbose)
     if args.test_list:
         print_test_list()
         exit(0)

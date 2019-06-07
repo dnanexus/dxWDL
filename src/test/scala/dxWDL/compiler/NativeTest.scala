@@ -104,4 +104,16 @@ class NativeTest extends FlatSpec with Matchers {
         val tasks : Map[String, String] = ParseWomSourceFile.scanForTasks(content)
         tasks.keys shouldBe(Set("native_sum", "native_sum_012", "native_mk_list", "native_diff", "native_concat"))
     }
+
+    it should "deep nesting" taggedAs(NativeTestXX, EdgeTest) in {
+        val path = pathFromBasename("compiler", "environment_passing_deep_nesting.wdl")
+        Main.compile(
+            path.toString
+/*                :: "--verbose"
+                :: "--verboseKey" :: "Native"
+                :: "--verboseKey" :: "GenerateIR"*/
+                :: cFlags
+        ) shouldBe a [Main.SuccessfulTermination]
+    }
+
 }

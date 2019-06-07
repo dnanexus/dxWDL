@@ -367,7 +367,7 @@ class GenerateIRTest extends FlatSpec with Matchers {
         retval shouldBe a[Main.SuccessfulTerminationIR]
     }
 
-    it should "pass environment between deep stages" taggedAs(EdgeTest) in {
+    it should "pass environment between deep stages" in {
         val path = pathFromBasename("compiler", "environment_passing_deep_nesting.wdl")
         val retval = Main.compile(path.toString
 //                                      :: "--verbose"
@@ -375,4 +375,15 @@ class GenerateIRTest extends FlatSpec with Matchers {
                                       :: cFlags)
         retval shouldBe a[Main.SuccessfulTerminationIR]
     }
+
+    it should "handle multiple struct definitions" taggedAs(EdgeTest) in {
+        val path = pathFromBasename("struct/DEVEX-1196-struct-resolution-wrong-order",
+                                    "file3.wdl")
+        val retval = Main.compile(path.toString
+//                                      :: "--verbose"
+//                                      :: "--verboseKey" :: "GenerateIR"
+                                      :: cFlags)
+        retval shouldBe a[Main.SuccessfulTerminationIR]
+    }
+
 }

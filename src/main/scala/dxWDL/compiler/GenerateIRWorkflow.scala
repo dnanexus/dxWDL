@@ -159,8 +159,10 @@ case class GenerateIRWorkflow(wf : WorkflowDefinition,
                             Utils.trace(verbose.on, s"""|env =
                                                         |${envDbg}""".stripMargin)
                             throw new Exception(
-                                s"""|input <${cVar.name}, ${cVar.womType}> to call <${call.fullyQualifiedName}>
-                                    |is missing from the environment. This is an internal error."""
+                                s"""|Internal compiler error.
+                                    |
+                                    |Input <${cVar.name}, ${cVar.womType}> to call <${call.fullyQualifiedName}>
+                                    |is missing from the environment."""
                                     .stripMargin.replaceAll("\n", " "))
                         case Some(lVar) => lVar.sArg
                     }
@@ -239,6 +241,25 @@ case class GenerateIRWorkflow(wf : WorkflowDefinition,
         }.toMap
     }
 
+    // Find the closure of a graph, besides its normal inputs. Create an input
+    // node for each of these external references.
+    private def graphClosure(inputNodes: Vector[GraphInputNode],
+                             subBlocks: Vector[Block]) : Map[String, WomType] = {
+        val allInputs : Map[String, WomType] = subBlocks.map{ block =>
+            val (inputs, _) = Block.closure(block)
+            inputs
+        }.flatten.toMap
+
+        // remove the regular inputs
+        val regularInputNames : Set[String] = inputNodes.map {
+            case iNode => iNode.localName
+        }.toSet
+        allInputs.filter{
+            case (name, _) =>
+                !(regularInputNames contains name)
+        }.toMap
+    }
+
     // A block inside a conditional or scatter. If it is simple,
     // we can use a direct call. Otherwise, recursively call into the asssemble-backbone method, and
     // get a locked subworkflow.
@@ -276,11 +297,33 @@ case class GenerateIRWorkflow(wf : WorkflowDefinition,
         } else {
             // there are several subblocks, we need a subworkflow to string them
             // together.
+            //
+            // The subworkflow may access declerations outside of its scope.
+            // For example, stage-0.result, and stage-1.result are inputs to
+            // stage-2, that belongs to a subworkflow. Because the subworkflow is
+            // locked, we need to make them proper inputs.
+            //
+            //  |- stage-0.result
+            //  |
+            //  |- stage-1.result
+            //  |
+            //  |--- |- stage-2
+            //       |
+            //       |- stage-3
+            //       |
+            //       |- stage-4
+            //
             val pathStr = blockPath.map(x => x.toString).mkString("_")
+            val closureInputs = graphClosure(inputNodes, subBlocks)
+            Utils.trace(verbose.on, s"""|compileNestedBlock, closureInputs=
+                                        | ${closureInputs}
+                                        |""".stripMargin)
             val (subwf, auxCallables, _ ) = compileWorkflowLocked(wfName + "_block_" + pathStr,
-                                                                  env,
-                                                                  inputNodes, outputNodes,
-                                                                  blockPath, subBlocks, IR.Level.Sub)
+                                                                  inputNodes,
+                                                                  closureInputs,
+                                                                  outputNodes,
+                                                                  blockPath, subBlocks,
+                                                                  IR.Level.Sub)
             (subwf, auxCallables)
         }
     }
@@ -390,7 +433,6 @@ case class GenerateIRWorkflow(wf : WorkflowDefinition,
     // workflows. At this point we we have workflow level inputs and
     // outputs.
     private def assembleBackbone(wfName: String,
-                                 envAbove: CallEnv,
                                  wfInputs: Vector[(CVar, SArg)],
                                  blockPath: Vector[Int],
                                  subBlocks: Vector[Block],
@@ -402,7 +444,7 @@ case class GenerateIRWorkflow(wf : WorkflowDefinition,
         val inputNamesDbg = wfInputs.map{ case (cVar, _) => cVar.name }
         Utils.trace(verbose.on, s"inputs= ${inputNamesDbg}")
 
-        var env : CallEnv = envAbove ++ wfInputs.map { case (cVar,sArg) =>
+        var env : CallEnv = wfInputs.map { case (cVar,sArg) =>
             cVar.name -> LinkedVar(cVar, sArg)
         }.toMap
 
@@ -571,8 +613,8 @@ case class GenerateIRWorkflow(wf : WorkflowDefinition,
     }
 
     private def compileWorkflowLocked(wfName: String,
-                                      envAbove: CallEnv,
                                       inputNodes: Vector[GraphInputNode],
+                                      closureInputs: Map[String, WomType],
                                       outputNodes: Vector[GraphOutputNode],
                                       blockPath: Vector[Int],
                                       subBlocks : Vector[Block],
@@ -585,7 +627,17 @@ case class GenerateIRWorkflow(wf : WorkflowDefinition,
                 (cVar, IR.SArgWorkflowInput(cVar))
         }.toVector
 
-        val (allStageInfo, env) = assembleBackbone(wfName, envAbove, wfInputs, blockPath, subBlocks, true)
+        // inputs that are a result of accessing declarations in an ecompassing
+        // WDL workflow.
+        val clsInputs: Vector[(CVar, SArg)] = closureInputs.map{
+            case (name, womType) =>
+                val cVar = CVar(name, womType, None)
+                (cVar, IR.SArgWorkflowInput(cVar))
+        }.toVector
+        val allWfInputs = wfInputs ++ clsInputs
+
+        val (allStageInfo, env) = assembleBackbone(wfName, allWfInputs,
+                                                   blockPath, subBlocks, true)
         val (stages, auxCallables) = allStageInfo.unzip
 
         // Handle outputs that are constants or variables, we can output them directly.
@@ -607,7 +659,7 @@ case class GenerateIRWorkflow(wf : WorkflowDefinition,
         if (outputNodes.forall(Block.isSimpleOutput) &&
                 Block.inputsUsedAsOutputs(inputNodes, outputNodes).isEmpty) {
             val simpleWfOutputs = outputNodes.map(node => buildSimpleWorkflowOutput(node, env)).toVector
-            val irwf = IR.Workflow(wfName, wfInputs, simpleWfOutputs, stages, wfSourceCode, true, level)
+            val irwf = IR.Workflow(wfName, allWfInputs, simpleWfOutputs, stages, wfSourceCode, true, level)
             (irwf, auxCallables.flatten, simpleWfOutputs)
         } else {
             // Some of the outputs are expressions. We need an extra applet+stage
@@ -620,7 +672,7 @@ case class GenerateIRWorkflow(wf : WorkflowDefinition,
                 (cVar, IR.SArgLink(outputStage.id, cVar))
             }
             val irwf = IR.Workflow(wfName,
-                                   wfInputs, wfOutputs,
+                                   allWfInputs, wfOutputs,
                                    stages :+ outputStage,
                                    wfSourceCode,
                                    true, level)
@@ -651,7 +703,7 @@ case class GenerateIRWorkflow(wf : WorkflowDefinition,
                 (cVar, sArg)
         }.toVector
 
-        val (allStageInfo, env) = assembleBackbone(wf.name, Map.empty, fauxWfInputs, Vector.empty, subBlocks, false)
+        val (allStageInfo, env) = assembleBackbone(wf.name, fauxWfInputs, Vector.empty, subBlocks, false)
         val (stages: Vector[IR.Stage], auxCallables) = allStageInfo.unzip
 
         // convert the outputs into an applet+stage
@@ -676,10 +728,8 @@ case class GenerateIRWorkflow(wf : WorkflowDefinition,
     }
 
 
-    // Compile a (single) WDL workflow into a single dx:workflow.
+    // Compile a (single) user defined WDL workflow into a dx:workflow.
     //
-    // There are cases where we are going to need to generate dx:subworkflows.
-    // This is not handled currently.
     private def apply2(locked: Boolean, reorg: Boolean) : (IR.Workflow, Vector[IR.Callable]) =
     {
         Utils.trace(verbose.on, s"compiling workflow ${wf.name}")
@@ -696,8 +746,8 @@ case class GenerateIRWorkflow(wf : WorkflowDefinition,
         // compile into an IR workflow
         val (irwf, irCallables, wfOutputs) =
             if (locked) {
-                compileWorkflowLocked(wf.name, Map.empty,
-                                      inputNodes, outputNodes,
+                compileWorkflowLocked(wf.name,
+                                      inputNodes, Map.empty, outputNodes,
                                       Vector.empty, subBlocks, IR.Level.Top)
             } else {
                 compileWorkflowRegular(inputNodes, outputNodes, subBlocks)

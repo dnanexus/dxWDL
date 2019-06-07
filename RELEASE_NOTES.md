@@ -3,7 +3,7 @@
 ## 1.09
 **Fixed**
 - The `-p` flag was not respected
-
+- Environment not passed correctly during compilation.
 
 ## 1.08
 **Fixed**
