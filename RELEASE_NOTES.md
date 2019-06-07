@@ -4,6 +4,7 @@
 **Fixed**
 - The `-p` flag was not respected
 - Environment not passed correctly during compilation.
+- Sorting structs by dependencies
 
 ## 1.08
 **Fixed**
