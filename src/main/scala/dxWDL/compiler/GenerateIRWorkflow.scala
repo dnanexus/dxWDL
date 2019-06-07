@@ -278,6 +278,7 @@ case class GenerateIRWorkflow(wf : WorkflowDefinition,
             // together.
             val pathStr = blockPath.map(x => x.toString).mkString("_")
             val (subwf, auxCallables, _ ) = compileWorkflowLocked(wfName + "_block_" + pathStr,
+                                                                  env,
                                                                   inputNodes, outputNodes,
                                                                   blockPath, subBlocks, IR.Level.Sub)
             (subwf, auxCallables)
@@ -389,6 +390,7 @@ case class GenerateIRWorkflow(wf : WorkflowDefinition,
     // workflows. At this point we we have workflow level inputs and
     // outputs.
     private def assembleBackbone(wfName: String,
+                                 envAbove: CallEnv,
                                  wfInputs: Vector[(CVar, SArg)],
                                  blockPath: Vector[Int],
                                  subBlocks: Vector[Block],
@@ -400,7 +402,7 @@ case class GenerateIRWorkflow(wf : WorkflowDefinition,
         val inputNamesDbg = wfInputs.map{ case (cVar, _) => cVar.name }
         Utils.trace(verbose.on, s"inputs= ${inputNamesDbg}")
 
-        var env : CallEnv = wfInputs.map { case (cVar,sArg) =>
+        var env : CallEnv = envAbove ++ wfInputs.map { case (cVar,sArg) =>
             cVar.name -> LinkedVar(cVar, sArg)
         }.toMap
 
@@ -569,6 +571,7 @@ case class GenerateIRWorkflow(wf : WorkflowDefinition,
     }
 
     private def compileWorkflowLocked(wfName: String,
+                                      envAbove: CallEnv,
                                       inputNodes: Vector[GraphInputNode],
                                       outputNodes: Vector[GraphOutputNode],
                                       blockPath: Vector[Int],
@@ -582,7 +585,7 @@ case class GenerateIRWorkflow(wf : WorkflowDefinition,
                 (cVar, IR.SArgWorkflowInput(cVar))
         }.toVector
 
-        val (allStageInfo, env) = assembleBackbone(wfName, wfInputs, blockPath, subBlocks, true)
+        val (allStageInfo, env) = assembleBackbone(wfName, envAbove, wfInputs, blockPath, subBlocks, true)
         val (stages, auxCallables) = allStageInfo.unzip
 
         // Handle outputs that are constants or variables, we can output them directly.
@@ -648,7 +651,7 @@ case class GenerateIRWorkflow(wf : WorkflowDefinition,
                 (cVar, sArg)
         }.toVector
 
-        val (allStageInfo, env) = assembleBackbone(wf.name, fauxWfInputs, Vector.empty, subBlocks, false)
+        val (allStageInfo, env) = assembleBackbone(wf.name, Map.empty, fauxWfInputs, Vector.empty, subBlocks, false)
         val (stages: Vector[IR.Stage], auxCallables) = allStageInfo.unzip
 
         // convert the outputs into an applet+stage
@@ -693,7 +696,8 @@ case class GenerateIRWorkflow(wf : WorkflowDefinition,
         // compile into an IR workflow
         val (irwf, irCallables, wfOutputs) =
             if (locked) {
-                compileWorkflowLocked(wf.name, inputNodes, outputNodes,
+                compileWorkflowLocked(wf.name, Map.empty,
+                                      inputNodes, outputNodes,
                                       Vector.empty, subBlocks, IR.Level.Top)
             } else {
                 compileWorkflowRegular(inputNodes, outputNodes, subBlocks)
