@@ -1,5 +1,11 @@
 # Release Notes
 
+## 1.09
+**Fixed**
+- The `-p` flag was not respected
+- Environment not passed correctly during compilation.
+- Sorting structs by dependencies
+
 ## 1.08
 **Fixed**
 - [bug 259](ttps://github.com/dnanexus/dxWDL/issues/259). Unified the code for resolving platform paths.

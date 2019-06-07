@@ -235,7 +235,8 @@ task Add {
 
     // Write valid WDL code that defines the type aliases we have.
     private def typeAliasDefinitions : String = {
-        val snippetVec = typeAliases.map{
+        val sortedTypeAliases = SortTypeAliases(verbose).apply(typeAliases.toVector)
+        val snippetVec = sortedTypeAliases.map{
             case (name, WomCompositeType(typeMap, _)) =>
                 val fieldLines = typeMap.map{ case (fieldName, womType) =>
                     s"    ${typeName(womType)} ${fieldName}"

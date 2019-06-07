@@ -913,10 +913,10 @@ case class Native(dxWDLrtId: Option[String],
                 if (verbose2) {
                     val inputSpecDbg = wfInputSpec.map("    " + _.toString).mkString("\n")
                     Utils.trace(verbose2, s"""|input spec
-                                                |${inputSpecDbg}""".stripMargin)
+                                              |${inputSpecDbg}""".stripMargin)
                     val outputSpecDbg = wfOutputSpec.map("    " + _.toString).mkString("\n")
                     Utils.trace(verbose2, s"""|output spec
-                                                |${outputSpecDbg}""".stripMargin)
+                                              |${outputSpecDbg}""".stripMargin)
                 }
 
                 Map("inputs" -> JsArray(wfInputSpec),

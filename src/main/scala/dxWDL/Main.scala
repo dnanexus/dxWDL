@@ -138,7 +138,7 @@ object Main extends App {
                         (keyword, subargs.head)
                     case ("imports"|"p") =>
                         checkNumberOfArguments(keyword, 1, subargs)
-                        (keyword, subargs.head)
+                        ("imports", subargs.head)
                     case "language" =>
                         checkNumberOfArguments(keyword, 1, subargs)
                         (keyword, subargs.head)
