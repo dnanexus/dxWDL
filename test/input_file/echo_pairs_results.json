@@ -1,3 +1,3 @@
 {
-  "echo_pairs.all_echoed_words" : [ "hello", "world", "hello_again", "world_again"]
+  "echo_pairs.all_echoed_words" : [ "hello\nworld", "hello_again\nworld_again"]
 }

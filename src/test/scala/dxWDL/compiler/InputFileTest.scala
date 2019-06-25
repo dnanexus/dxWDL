@@ -141,9 +141,20 @@ class InputFileTest extends FlatSpec with Matchers {
         retval shouldBe a [Main.SuccessfulTerminationIR]
     }
 
-    it should "array of structs" taggedAs(EdgeTest) in {
+    it should "array of structs" in {
         val wdlCode = pathFromBasename("struct", "array_of_structs.wdl")
         val inputs = pathFromBasename("struct", "array_of_structs_input.json")
+
+        val retval = Main.compile(
+            List(wdlCode.toString, "-inputs", inputs.toString)
+                ++ cFlags
+        )
+        retval shouldBe a [Main.SuccessfulTerminationIR]
+    }
+
+    ignore should "override default values in input file" taggedAs(EdgeTest) in {
+        val wdlCode = pathFromBasename("input_file", "override.wdl")
+        val inputs = pathFromBasename("input_file", "override_input.json")
 
         val retval = Main.compile(
             List(wdlCode.toString, "-inputs", inputs.toString)

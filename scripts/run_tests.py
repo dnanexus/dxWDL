@@ -49,7 +49,7 @@ wdl_v1_list = [
     "top",
 
     # can we download from a container?
-    "download_from_container"
+    "download_from_container",
 
     # input file with pairs
     "echo_pairs",
