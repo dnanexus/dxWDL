@@ -1,5 +1,40 @@
 # Release Notes
 
+## 1.10
+**Fixed**
+- Handling of pair type in a JSON input file
+- Allow overriding default values in calls from the input file. For example, in a workflow like:
+
+```wdl
+version 1.0
+
+workflow override {
+    call etl { input: a = 3 }
+    output {
+        Int result = etl.result
+    }
+}
+
+task etl {
+    input {
+        Int a
+        Int b = 10
+    }
+    command {}
+    output {
+        Int result = a + b
+    }
+}
+```
+
+We can now set b to a value other than 10, with an input file like this:
+
+```
+{
+  "override.etl.b" : 5
+}
+```
+
 ## 1.09
 **Fixed**
 - The `-p` flag was not respected
