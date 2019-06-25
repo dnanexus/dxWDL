@@ -71,10 +71,17 @@ case class InputFileScan(bundle: IR.Bundle,
                 val vFiles = valuesJs.flatMap(findDxFiles(valueType, _))
                 kFiles.toVector ++ vFiles.toVector
 
+                // Two ways of writing pairs: an object with left/right fields, or an array
+                // with two elements.
             case (WomPairType(lType, rType), JsObject(fields))
                     if (List("left", "right").forall(fields contains _)) =>
                 val lFiles = findDxFiles(lType, fields("left"))
                 val rFiles = findDxFiles(rType, fields("right"))
+                lFiles ++ rFiles
+
+            case (WomPairType(lType, rType), JsArray(Vector(l,r))) =>
+                val lFiles = findDxFiles(lType, l)
+                val rFiles = findDxFiles(rType, r)
                 lFiles ++ rFiles
 
             case (WomArrayType(t), JsArray(vec)) =>
@@ -210,10 +217,16 @@ case class InputFile(fileInfoDir: Map[DXFile, DxDescribe],
                 }.toMap
                 WomMap(WomMapType(keyType, valueType), m)
 
+            // a few ways of writing a pair: an object, or an array
             case (WomPairType(lType, rType), JsObject(fields))
                     if (List("left", "right").forall(fields contains _)) =>
                 val left = womValueFromCromwellJSON(lType, fields("left"))
                 val right = womValueFromCromwellJSON(rType, fields("right"))
+                WomPair(left, right)
+
+            case (WomPairType(lType, rType), JsArray(Vector(l,r))) =>
+                val left = womValueFromCromwellJSON(lType, l)
+                val right = womValueFromCromwellJSON(rType, r)
                 WomPair(left, right)
 
             // empty array
@@ -279,6 +292,13 @@ case class InputFile(fileInfoDir: Map[DXFile, DxDescribe],
                 JsObject(fields.map{ case (k,v) =>
                              k -> jsValueFromCromwellJSON(valueType, v)
                          })
+
+            // a pair can be written as an object or an array with two elements.
+            case (WomPairType(lType, rType), JsObject(fields))
+                    if (List("left", "right").forall(fields contains _)) =>
+                val lJs = jsValueFromCromwellJSON(lType, fields("left"))
+                val rJs = jsValueFromCromwellJSON(rType, fields("right"))
+                JsObject("left" -> lJs, "right" -> rJs)
 
             case (WomPairType(lType, rType), JsArray(Vector(l,r))) =>
                 val lJs = jsValueFromCromwellJSON(lType, l)

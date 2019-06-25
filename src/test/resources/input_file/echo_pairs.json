@@ -1,0 +1,6 @@
+{"echo_pairs.pairs_of_words":
+  [
+    ["hello", "world"],
+    {"left" : "hello_again", "right" : "world_again"}
+  ]
+}
