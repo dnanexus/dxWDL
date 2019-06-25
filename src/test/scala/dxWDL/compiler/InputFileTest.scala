@@ -130,9 +130,20 @@ class InputFileTest extends FlatSpec with Matchers {
         retval shouldBe a [Main.SuccessfulTerminationIR]
     }
 
-    it should "support array of pairs" taggedAs(EdgeTest) in {
+    it should "support array of pairs" in {
         val wdlCode = pathFromBasename("input_file", "echo_pairs.wdl")
         val inputs = pathFromBasename("input_file", "echo_pairs.json")
+
+        val retval = Main.compile(
+            List(wdlCode.toString, "-inputs", inputs.toString)
+                ++ cFlags
+        )
+        retval shouldBe a [Main.SuccessfulTerminationIR]
+    }
+
+    it should "array of structs" taggedAs(EdgeTest) in {
+        val wdlCode = pathFromBasename("struct", "array_of_structs.wdl")
+        val inputs = pathFromBasename("struct", "array_of_structs_input.json")
 
         val retval = Main.compile(
             List(wdlCode.toString, "-inputs", inputs.toString)
