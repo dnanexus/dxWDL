@@ -35,6 +35,13 @@ We can now set b to a value other than 10, with an input file like this:
 }
 ```
 
+**New**
+- Support for compressed docker images (gzip)
+
+**Changed**
+- Upgrade to Cromwell v42
+
+
 ## 1.09
 **Fixed**
 - The `-p` flag was not respected
