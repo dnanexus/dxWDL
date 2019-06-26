@@ -57,7 +57,7 @@ logLevel in assembly := Level.Info
 assemblyOutputPath in assembly := file("applet_resources/resources/dxWDL.jar")
 assemblyMergeStrategy in assembly := customMergeStrategy.value
 
-val cromwellV = "42"
+val cromwellV = "43"
 
 val googleHttpClientApacheV = "2.1.1"
 val googleHttpClientV = "1.29.1"
