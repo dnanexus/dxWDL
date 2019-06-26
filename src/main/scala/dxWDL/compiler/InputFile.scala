@@ -612,13 +612,14 @@ case class InputFile(fileInfoDir: Map[DXFile, DxDescribe],
                     cif.checkAndBind(fqn, dxName, cVar)
                 }
 
-                // Inputs for top level calls
+                // filter out auxiliary stages
                 val auxStages = Set(s"stage-${COMMON}",
                                     s"stage-${OUTPUT_SECTION}",
                                     s"stage-${REORG}")
                 val middleStages = wf.stages.filter{ stg =>
                     !(auxStages contains stg.id.getId)
                 }
+                // Inputs for top level calls
                 middleStages.foreach{ stg =>
                     // Find the input definitions for the stage, by locating the callee
                     val callee : IR.Callable = bundle.allCallables.get(stg.calleeName) match {
@@ -627,8 +628,8 @@ case class InputFile(fileInfoDir: Map[DXFile, DxDescribe],
                         case Some(x) => x
                     }
                     callee.inputVars.foreach { cVar =>
-                        val fqn = s"${wf.name}.${stg.id.getId}.${cVar.name}"
-                        val dxName = s"${stg.id.getId}.${cVar.name}"
+                        val fqn = s"${wf.name}.${stg.description}.${cVar.name}"
+                        val dxName = s"${stg.description}.${cVar.name}"
                         cif.checkAndBind(fqn, dxName, cVar)
                     }
                 }
