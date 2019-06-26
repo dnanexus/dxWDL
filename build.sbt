@@ -57,7 +57,19 @@ logLevel in assembly := Level.Info
 assemblyOutputPath in assembly := file("applet_resources/resources/dxWDL.jar")
 assemblyMergeStrategy in assembly := customMergeStrategy.value
 
-val cromwellV = "41"
+val cromwellV = "42"
+
+val googleHttpClientApacheV = "2.1.1"
+val googleHttpClientV = "1.29.1"
+
+val googleHttpClientDependencies = List(
+    /*
+    There is a conflict between versions of com/google/api/client/http/apache/ApacheHttpTransport.class
+    which is in both packages. We need these particular versions of the packages.
+     */
+    "com.google.http-client" % "google-http-client-apache" % googleHttpClientApacheV,
+    "com.google.http-client" % "google-http-client" % googleHttpClientV,
+    )
 
 libraryDependencies ++= Seq(
     "org.broadinstitute" %% "cromwell-common" % cromwellV,
@@ -74,7 +86,7 @@ libraryDependencies ++= Seq(
     //---------- Test libraries -------------------//
     "org.scalactic" %% "scalactic" % "3.0.1",
     "org.scalatest" %% "scalatest" % "3.0.1" % "test",
-)
+) ++ googleHttpClientDependencies
 
 // If an exception is thrown during tests, show the full
 // stack trace, by adding the "-oF" option to the list.

@@ -61,6 +61,7 @@ docker_test_list = [
     "broad_genomics",
     "private_registry",
     "native_docker_file_image",
+    "native_docker_file_image_gzip",
     "samtools_count",
     "hostname_is_jobid"
 ]
