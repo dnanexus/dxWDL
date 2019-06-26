@@ -1,4 +1,4 @@
-version 1.0
+version development
 
 task add {
     input {
@@ -14,7 +14,7 @@ task add {
 workflow dict2 {
     Map[Int, Float] mIF = {1: 1.2, 10: 113.0}
 
-    scatter (p in mIF) {
+    scatter (p in as_pairs(mIF)) {
         call add {
             input: a=p.left, b=5
         }
