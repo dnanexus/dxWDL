@@ -152,7 +152,7 @@ class InputFileTest extends FlatSpec with Matchers {
         retval shouldBe a [Main.SuccessfulTerminationIR]
     }
 
-    ignore should "override default values in input file" taggedAs(EdgeTest) in {
+    it should "override default values in input file" taggedAs(EdgeTest) in {
         val wdlCode = pathFromBasename("input_file", "override.wdl")
         val inputs = pathFromBasename("input_file", "override_input.json")
 
