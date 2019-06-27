@@ -468,7 +468,7 @@ case class InputFile(fileInfoDir: Map[DXFile, DxDescribe],
                     if (stg.id.getId == s"stage-${COMMON}") {
                         addDefaultsToStage(stg, wf.name, callee, defaultFields)
                     } else {
-                        addDefaultsToStage(stg, s"${wf.name}.${stg.id.getId}", callee, defaultFields)
+                        addDefaultsToStage(stg, s"${wf.name}.${stg.description}", callee, defaultFields)
                     }
                 }
                 wf.copy(stages = stagesWithDefaults)

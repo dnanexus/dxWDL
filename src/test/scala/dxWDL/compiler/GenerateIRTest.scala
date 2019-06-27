@@ -117,7 +117,7 @@ class GenerateIRTest extends FlatSpec with Matchers {
         ) shouldBe a [Main.SuccessfulTerminationIR]
     }
 
-    ignore should "compile scatters over maps --- doesn't work in cromwell v37,v38" in {
+    ignore should "scatters over maps -- this requires the as_pairs engine function which is experimental" in {
         val path = pathFromBasename("compiler", "dict2.wdl")
         Main.compile(
             path.toString :: cFlags
@@ -335,7 +335,7 @@ class GenerateIRTest extends FlatSpec with Matchers {
         }
     }
 
-    ignore should "do nested scatters" in {
+    ignore should "do nested scatters" taggedAs(EdgeTest) in {
         val path = pathFromBasename("compiler", "nested_scatter.wdl")
         val retval = Main.compile(path.toString :: cFlags)
         retval shouldBe a[Main.SuccessfulTerminationIR]
@@ -376,7 +376,7 @@ class GenerateIRTest extends FlatSpec with Matchers {
         retval shouldBe a[Main.SuccessfulTerminationIR]
     }
 
-    it should "handle multiple struct definitions" taggedAs(EdgeTest) in {
+    it should "handle multiple struct definitions" in {
         val path = pathFromBasename("struct/DEVEX-1196-struct-resolution-wrong-order",
                                     "file3.wdl")
         val retval = Main.compile(path.toString

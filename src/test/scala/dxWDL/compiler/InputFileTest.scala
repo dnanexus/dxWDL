@@ -83,27 +83,26 @@ class InputFileTest extends FlatSpec with Matchers {
         retval shouldBe a [Main.SuccessfulTerminationIR]
     }
 
-    ignore should "handle inputs specified in the json file, but missing in the workflow" in {
+    it should "handle inputs specified in the json file, but missing in the workflow" taggedAs(EdgeTest) in {
         val wdlCode = pathFromBasename("input_file", "missing_args.wdl")
         val inputs = pathFromBasename("input_file", "missing_args_inputs.json")
 
         Main.compile(
-            List(wdlCode.toString, "--compileMode", "ir", "-quiet",
-                 //"--verbose", "--verboseKey", "GenerateIR",
-                 "-inputs", inputs.toString)
+            List(wdlCode.toString, "-inputs", inputs.toString)
+                ++ cFlags
         ) shouldBe a [Main.SuccessfulTerminationIR]
 
         // inputs as defaults
         Main.compile(
-            List(wdlCode.toString, "--compileMode", "ir", "-quiet",
-                 "-defaults", inputs.toString)
+            List(wdlCode.toString, "-defaults", inputs.toString)
+                ++ cFlags
         ) shouldBe a [Main.SuccessfulTerminationIR]
 
         // Input to an applet.
         // Missing argument in a locked workflow should throw an exception.
         val retval = Main.compile(
-            List(wdlCode.toString, "--compileMode", "ir", "--locked",
-                 "-quiet", "-inputs", inputs.toString)
+            List(wdlCode.toString, "-inputs", inputs.toString, "--locked")
+                ++ cFlags
         )
         inside(retval) {
             case Main.UnsuccessfulTermination(errMsg) =>
@@ -112,10 +111,10 @@ class InputFileTest extends FlatSpec with Matchers {
         }
 
         // Missing arguments are legal in an unlocked workflow
-/*        Main.compile(
-            List(wdlCode.toString, "--compileMode", "ir",
-                 "-quiet", "-inputs", inputs.toString)
-        ) shouldBe a [Main.SuccessfulTerminationIR]*/
+        Main.compile(
+            List(wdlCode.toString, "-inputs", inputs.toString)
+                ++ cFlags
+        ) shouldBe a [Main.SuccessfulTerminationIR]
     }
 
 
@@ -152,7 +151,7 @@ class InputFileTest extends FlatSpec with Matchers {
         retval shouldBe a [Main.SuccessfulTerminationIR]
     }
 
-    it should "override default values in input file" taggedAs(EdgeTest) in {
+    it should "override default values in input file" in {
         val wdlCode = pathFromBasename("input_file", "override.wdl")
         val inputs = pathFromBasename("input_file", "override_input.json")
 
