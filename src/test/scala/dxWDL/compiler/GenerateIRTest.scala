@@ -335,7 +335,7 @@ class GenerateIRTest extends FlatSpec with Matchers {
         }
     }
 
-    it should "do nested scatters" taggedAs(EdgeTest) in {
+    ignore should "do nested scatters" taggedAs(EdgeTest) in {
         val path = pathFromBasename("compiler", "nested_scatter.wdl")
         val retval = Main.compile(path.toString :: cFlags)
         retval shouldBe a[Main.SuccessfulTerminationIR]
