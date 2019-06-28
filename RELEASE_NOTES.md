@@ -2,7 +2,7 @@
 
 ## 1.11
 **Fixed**
-- Support default values to be specified for top-level calls using a JSON file.
+- Default values specified for top-level calls using a JSON file.
 
 **Changed**
 - Upgrade to Cromwell v43
