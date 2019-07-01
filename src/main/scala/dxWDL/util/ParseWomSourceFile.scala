@@ -16,9 +16,11 @@ import scala.collection.JavaConverters._
 import scala.collection.mutable.HashMap
 import scala.util.matching.Regex
 
+import wom.SourceFileLocation
 import wom.callable.{CallableTaskDefinition, ExecutableTaskDefinition, WorkflowDefinition}
 import wom.core.WorkflowSource
 import wom.executable.WomBundle
+import wom.graph.{CallNode, Graph, GraphNode}
 import wom.types._
 
 import dxWDL.base.{Language, Utils}
@@ -261,21 +263,8 @@ object ParseWomSourceFile {
         }
     }
 
-    private def matchPatterAtMostOnce(ptrn: Regex,
-                                      line: String) : Option[Regex.Match] = {
-        val allMatches = ptrn.findAllMatchIn(line).toList
-        allMatches.size match {
-            case 0 => None
-            case 1 => Some(allMatches(0))
-            case _ =>
-                throw new Exception(s"""|bad line, pattern appears twice
-                                        |
-                                        |${line}
-                                        |""".stripMargin)
-        }
-    }
-
-    // Scan the workflow for calls, and return the list of call names.
+    // Scan the workflow for calls, and return a mapping from call name
+    // to source line number.
     //
     // For example, scanning workflow foo
     //
@@ -285,7 +274,7 @@ object ParseWomSourceFile {
     //   call A as A2
     // }
     //
-    // would return : [A, A2]
+    // would return : Map(A -> 3, A2 -> 4)
     //
     // When a workflow imports other namespaces, the syntax for calls
     // is NAMESPACE.CALL_NAME. For example:
@@ -295,69 +284,30 @@ object ParseWomSourceFile {
     //   call lib.Multiply as mul { ... }
     // }
     //
-    // The "callLine" regular expression will match occurrences of
-    // "callAsLine", so we are careful to find all aliased calls first
-    //
-    // Note that call names can include dot ('.').
-    private val callLine: Regex = "^(\\s*)call(\\s+)([\\w+,\\.]+)".r
-    private val callAsLine: Regex = "^(\\s*)call(\\s+)([\\w,\\.]+)(\\s+)as(\\s+)(\\w+)".r
-
-    def scanForCalls(wdlWfSource: String) : Map[String, Int] = {
-        val wfLines = wdlWfSource.split("\n").toList
-
-        val calls =  HashMap.empty[String, Int]
-        var linesWithCalls = Set.empty[Int]
-        for (lineNr <- 0 until wfLines.length) {
-            val line = wfLines(lineNr)
-
-            // is this an aliased call?
-            //   call A as Av1 { input: ... }
-            //   calls A as Av1
-            matchPatterAtMostOnce(callAsLine, line) match {
-                case Some(m) =>
-                    val callName = m.group(6)
-                    calls(callName) = lineNr
-                    linesWithCalls += lineNr
-                case None =>
-                    calls
-            }
-        }
-
-        for (lineNr <- 0 until wfLines.length) {
-            val line = wfLines(lineNr)
-
-            if (!(linesWithCalls contains lineNr)) {
-                // is this a simple call?
-                //   call A { input: ... }
-                //   call A
-                matchPatterAtMostOnce(callLine, line) match {
-                    case Some(m) =>
-                        val callName = m.group(3)
-                        calls.get(callName) match {
-                            case None =>
-                                calls(callName) = lineNr
-                                linesWithCalls += lineNr
-                            case Some(_) =>
-                                // already matched to an aliased call.
-                                ()
-                        }
-                    case None => ()
-                }
-            }
-        }
-
-        // make sure there are no duplicate lines
-        val sourceLines = calls.values.toVector
-        assert(sourceLines.size == sourceLines.toSet.size)
-
-        // We are using the flat-namespace assumption here. There is a single
-        // definition for each WDL task and workflow.
-        calls.map{ case (callFqn, lineNr) =>
-            val callUnqualifiedName = Utils.getUnqualifiedName(callFqn)
-            (callUnqualifiedName, lineNr)
-        }.toMap
+    private def allNodesDoNotDescendIntoSubWorkflows(graph: Graph): Set[GraphNode] = {
+        graph.nodes ++
+        graph.scatters.flatMap(x => allNodesDoNotDescendIntoSubWorkflows(x.innerGraph)) ++
+        graph.conditionals.flatMap(x => allNodesDoNotDescendIntoSubWorkflows(x.innerGraph)) ++
+        graph.workflowCalls
     }
 
+    def scanForCalls(graph: Graph,
+                     wfSource: String) : Vector[String] = {
+        val nodes = allNodesDoNotDescendIntoSubWorkflows(graph)
+        val callToSrcLine : Map[String, Int]  = nodes.collect{
+            case cNode : CallNode =>
+                val callUnqualifiedName = Utils.getUnqualifiedName(cNode.localName)
+                val lineNum = cNode.sourceLocation match {
+                    case None => throw new Exception("No source line for call ${cNode}")
+                    case Some(SourceFileLocation(x)) => x
+                }
+                callUnqualifiedName -> lineNum
+        }.toMap
+
+        // sort from low to high according to the source lines.
+        val callsLoToHi : Vector[(String, Int)] = callToSrcLine.toVector.sortBy(_._2)
+        callsLoToHi.map{ case (x,_) => x }
+    }
 
     // throw an exception if the workflow source is not valid WDL 1.0
     def validateWdlCode(wdlWfSource: String,

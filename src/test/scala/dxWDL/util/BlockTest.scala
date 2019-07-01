@@ -150,7 +150,7 @@ class BlockTest extends FlatSpec with Matchers {
         }
     }
 
-    it should "categorize correctly calls to subworkflows" in {
+    it should "categorize correctly calls to subworkflows" taggedAs(EdgeTest) in {
         val path = pathFromBasename("subworkflows", "trains.wdl")
         val (_, womBundle, sources, _) = ParseWomSourceFile.apply(path, List.empty)
         val (_, wfSourceCode) = sources.find{ case (key, wdlCode) =>
@@ -174,8 +174,7 @@ class BlockTest extends FlatSpec with Matchers {
         val (wf : WorkflowDefinition, _, _) = ParseWomSourceFile.parseWdlWorkflow(wfSourceCode)
 
         // sort from low to high according to the source lines.
-        val callToSrcLine = ParseWomSourceFile.scanForCalls(wfSourceCode)
-        val callsLoToHi : Vector[(String, Int)] = callToSrcLine.toVector.sortBy(_._2)
+        val callsLoToHi = ParseWomSourceFile.scanForCalls(wf.innerGraph, wfSourceCode)
 
         val graph = wf.innerGraph
 
@@ -256,8 +255,7 @@ class BlockTest extends FlatSpec with Matchers {
         }
 
         // sort from low to high according to the source lines.
-        val callToSrcLine = ParseWomSourceFile.scanForCalls(wfSource)
-        val callsLoToHi : Vector[(String, Int)] = callToSrcLine.toVector.sortBy(_._2)
+        val callsLoToHi = ParseWomSourceFile.scanForCalls(wf.innerGraph, wfSource)
 
         // Find the fragment block to execute
         val block = Block.getSubBlock(Vector(0), wf.innerGraph, callsLoToHi)
@@ -323,8 +321,7 @@ class BlockTest extends FlatSpec with Matchers {
         }
 
         // sort from low to high according to the source lines.
-        val callToSrcLine = ParseWomSourceFile.scanForCalls(wfSource)
-        val callsLoToHi : Vector[(String, Int)] = callToSrcLine.toVector.sortBy(_._2)
+        val callsLoToHi = ParseWomSourceFile.scanForCalls(wf.innerGraph, wfSource)
 
         // Find the fragment block to execute
         val b = Block.getSubBlock(Vector(1), wf.innerGraph, callsLoToHi)
@@ -361,7 +358,7 @@ class BlockTest extends FlatSpec with Matchers {
         names shouldBe(Set.empty[String])
     }
 
-    it should "account for arguments that have a default, but are not optional" taggedAs(EdgeTest) in {
+    it should "account for arguments that have a default, but are not optional" in {
         val path = pathFromBasename("bugs", "unpassed_argument_propagation.wdl")
         val wfSourceCode = Utils.readFileContent(path)
         val (wf : WorkflowDefinition, _, _) = ParseWomSourceFile.parseWdlWorkflow(wfSourceCode)

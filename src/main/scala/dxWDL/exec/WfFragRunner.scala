@@ -709,8 +709,7 @@ case class WfFragRunner(wf: WorkflowDefinition,
         Utils.appletLog(verbose, s"Environment: ${envInitial}")
 
         // sort from low to high according to the source lines.
-        val callToSrcLine = ParseWomSourceFile.scanForCalls(wfSourceCode)
-        val callsLoToHi : Vector[(String, Int)] = callToSrcLine.toVector.sortBy(_._2)
+        val callsLoToHi : Vector[String] = ParseWomSourceFile.scanForCalls(wf.innerGraph, wfSourceCode)
 
         // Find the fragment block to execute
         val block = Block.getSubBlock(blockPath, wf.innerGraph, callsLoToHi)

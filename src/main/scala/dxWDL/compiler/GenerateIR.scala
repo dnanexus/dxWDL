@@ -85,10 +85,8 @@ case class GenerateIR(verbose: Verbose) {
                                 language: Language.Value,
                                 locked : Boolean,
                                 reorg : Boolean) : (IR.Workflow, Vector[IR.Callable]) = {
-        val callToSrcLine = ParseWomSourceFile.scanForCalls(wfSource)
-
         // sort from low to high according to the source lines.
-        val callsLoToHi : Vector[(String, Int)] = callToSrcLine.toVector.sortBy(_._2)
+        val callsLoToHi = ParseWomSourceFile.scanForCalls(wf.innerGraph, wfSource)
 
         // Make a list of all task/workflow calls made inside the block. We will need to link
         // to the equivalent dx:applets and dx:workflows.

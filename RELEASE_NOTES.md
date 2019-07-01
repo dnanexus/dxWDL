@@ -6,7 +6,7 @@
 
 **Changed**
 - Upgrade to Cromwell v43
-
+- Replaced internal implementation of finding source lines for calls, with Cromwell/WOM implementation.
 
 ## 1.10
 **Fixed**
