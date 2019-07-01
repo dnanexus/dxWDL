@@ -300,7 +300,7 @@ object Block {
     //  [ call B ]  [ call C ]
     //
     // We choose option #2 because it resembles the original.
-    def splitGraph(graph: Graph, callsLoToHi: Vector[(String, Int)]):
+    def splitGraph(graph: Graph, callsLoToHi: Vector[String]):
             (Vector[GraphInputNode], // inputs
              Vector[GraphInputNode], // missing inner inputs that propagate
              Vector[Block], // blocks
@@ -323,7 +323,7 @@ object Block {
         // Create a separate block for each call. This maintains
         // the sort order from the origial code.
         //
-        for ((callName, _) <- callsLoToHi) {
+        for (callName <- callsLoToHi) {
             findCallByName(callName, rest) match {
                 case None =>
                     // we already accounted for this call. Several
@@ -365,11 +365,8 @@ object Block {
                                                   Vector[Block], // blocks
                                                   Vector[GraphOutputNode]) // outputs
     = {
-        val callToSrcLine = ParseWomSourceFile.scanForCalls(wfSource)
-
         // sort from low to high according to the source lines.
-        val callsLoToHi : Vector[(String, Int)] = callToSrcLine.toVector.sortBy(_._2)
-
+        val callsLoToHi : Vector[String] = ParseWomSourceFile.scanForCalls(graph, wfSource)
         splitGraph(graph, callsLoToHi)
     }
 
@@ -548,7 +545,7 @@ object Block {
 
     def getSubBlock(path: Vector[Int],
                     graph: Graph,
-                    callsLoToHi: Vector[(String, Int)]) : Block = {
+                    callsLoToHi: Vector[String]) : Block = {
         assert(path.size >= 1)
 
         val (_, _, blocks, _) = splitGraph(graph, callsLoToHi)

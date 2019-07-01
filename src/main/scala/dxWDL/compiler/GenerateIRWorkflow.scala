@@ -17,7 +17,7 @@ import IR.{CVar, SArg, COMMON, OUTPUT_SECTION, REORG}
 case class GenerateIRWorkflow(wf : WorkflowDefinition,
                               wfSourceCode: String,
                               wfSourceStandAlone: String,
-                              callsLoToHi: Vector[(String, Int)],
+                              callsLoToHi: Vector[String],
                               callables: Map[String, IR.Callable],
                               language: Language.Value,
                               verbose: Verbose) {
