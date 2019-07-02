@@ -135,7 +135,8 @@ test_unlocked=["cast",
                "files",
                "hello",
                "optionals",
-               "shapes"]
+               "shapes",
+               "array_structs"]
 test_extras=["instance_types"]
 test_private_registry=["private_registry"]
 test_import_dirs=["A"]
