@@ -152,9 +152,7 @@ case class WdlVarLinksConverter(fileInfoDir: Map[DXFile, DxDescribe],
                     }
                     key -> jsFromWomValue(elemType, womValue)
                 }.toMap
-                // retain the struct name
-                JsObject("type" -> JsString(womTypeSerializer.toString(womType)),
-                         "value" -> JsObject(mJs))
+                JsObject(mJs)
 
             case (_,_) =>
                 val womTypeStr =
