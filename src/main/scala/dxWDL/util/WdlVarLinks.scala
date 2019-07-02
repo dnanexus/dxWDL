@@ -139,12 +139,20 @@ case class WdlVarLinksConverter(fileInfoDir: Map[DXFile, DxDescribe],
                   WomObject(m: Map[String, WomValue], _)) =>
                 // Convert each of the elements
                 val mJs = m.map{ case (key, womValue) =>
-                    val elemType = typeMap(key)
+                    val elemType = typeMap.get(key) match {
+                        case None =>
+                            throw new Exception(s"""|ERROR
+                                                    |WomCompositeType
+                                                    |  structName=${structName}
+                                                    |  typeMap=${typeMap}
+                                                    |  wom-object=${m}
+                                                    |typeMap is missing key=${key}
+                                                    |""".stripMargin)
+                        case Some(t) => t
+                    }
                     key -> jsFromWomValue(elemType, womValue)
                 }.toMap
-                // retain the struct name
-                JsObject("type" -> JsString(womTypeSerializer.toString(womType)),
-                         "value" -> JsObject(mJs))
+                JsObject(mJs)
 
             case (_,_) =>
                 val womTypeStr =
@@ -258,7 +266,17 @@ case class WdlVarLinksConverter(fileInfoDir: Map[DXFile, DxDescribe],
             case (WomCompositeType(typeMap, Some(structName)), JsObject(fields)) =>
                 val m : Map[String, WomValue] = fields.map{
                     case (key, jsValue) =>
-                        val t = typeMap(key)
+                        val t = typeMap.get(key) match {
+                            case None =>
+                                throw new Exception(s"""|ERROR
+                                                        |WomCompositeType
+                                                        |  structName=${structName}
+                                                        |  typeMap=${typeMap}
+                                                        |  fields=${fields}
+                                                        |typeMap is missing key=${key}
+                                                        |""".stripMargin)
+                            case Some(t) => t
+                        }
                         key -> jobInputToWomValue(key, t, jsValue)
                 }.toMap
                 WomObject(m, WomCompositeType(typeMap, Some(structName)))

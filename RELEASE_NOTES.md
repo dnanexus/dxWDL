@@ -3,6 +3,8 @@
 ## 1.11
 **Fixed**
 - Default values specified for top-level calls using a JSON file.
+- [Bug 272](https://github.com/dnanexus/dxWDL/issues/272)
+- Runtime error when using an array of WDL structs
 
 **Changed**
 - Upgrade to Cromwell v43
@@ -58,7 +60,7 @@ We can now set b to a value other than 10, with an input file like this:
 
 ## 1.08
 **Fixed**
-- [bug 259](ttps://github.com/dnanexus/dxWDL/issues/259). Unified the code for resolving platform paths.
+- [bug 259](https://github.com/dnanexus/dxWDL/issues/259). Unified the code for resolving platform paths.
 - Error when downloading a file that resides in a container, rather than a project.
 - Imports specified from the command line
 

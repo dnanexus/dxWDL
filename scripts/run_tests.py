@@ -24,6 +24,7 @@ git_revision = subprocess.check_output(["git", "describe", "--always", "--dirty"
 test_files={}
 test_failing=set(["bad_status",
                   "bad_status2",
+                  "just_fail_wf",
                   "missing_output"])
 
 wdl_v1_list = [
@@ -71,6 +72,7 @@ draft2_test_list = [
     "advanced",
     "bad_status",
     "bad_status2",
+    "just_fail_wf",
     "call_with_defaults1",
     "call_with_defaults2",
     "conditionals_base",
@@ -135,7 +137,8 @@ test_unlocked=["cast",
                "files",
                "hello",
                "optionals",
-               "shapes"]
+               "shapes",
+               "array_structs"]
 test_extras=["instance_types"]
 test_private_registry=["private_registry"]
 test_import_dirs=["A"]
@@ -323,10 +326,10 @@ def wait_for_completion(test_exec_objs):
             except DXJobFailureError:
                 tname = find_test_from_exec(exec_obj)
                 desc = test_files[tname]
-                if tname not in test_failing:
-                    raise RuntimeError("Executable {} failed".format(desc.name))
-                else:
+                if tname in test_failing:
                     print("Executable {} failed as expected".format(desc.name))
+                else:
+                    raise RuntimeError("Executable {} failed".format(desc.name))
     finally:
         noise.kill()
     print("done")

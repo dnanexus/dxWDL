@@ -86,7 +86,7 @@ class WdlVarLinksTest extends FlatSpec with Matchers {
         }
     }
 
-    it should "handle structs" taggedAs(EdgeTest) in {
+    it should "handle structs" in {
         val personType = WomCompositeType(Map("name" -> WomStringType,
                                               "age" -> WomIntegerType),
                                           Some("Person"))
@@ -98,7 +98,7 @@ class WdlVarLinksTest extends FlatSpec with Matchers {
                                    "age" -> WomInteger(25)),
                                personType)
 
-        val testCases = List(makeElement(jeff),
+        val testCases = List(makeElement(jeff) ,
                              makeElement(janice))
 
         // no definitions for struct Person, should fail
@@ -110,6 +110,46 @@ class WdlVarLinksTest extends FlatSpec with Matchers {
         }
 
         val typeAliases: Map[String, WomType] = Map("Person" -> personType)
+        val wvlConverter = new WdlVarLinksConverter(Map.empty, typeAliases)
+        testCases.foreach{ elem =>
+            check(elem, wvlConverter)
+        }
+    }
+
+    it should "handle nested structs" taggedAs(EdgeTest) in {
+        // People
+        val personType = WomCompositeType(Map("name" -> WomStringType,
+                                              "age" -> WomIntegerType),
+                                          Some("Person"))
+
+        val lucy = WomObject(Map("name" -> WomString("Lucy"),
+                                 "age" -> WomInteger(37)),
+                             personType)
+        val lear = WomObject(Map("name" -> WomString("King Lear"),
+                                 "age" -> WomInteger(41)),
+                             personType)
+
+        // Houses
+        val houseType = WomCompositeType(Map("person" -> personType,
+                                             "zipcode" -> WomIntegerType,
+                                             "type" -> WomStringType),
+                                         Some("House"))
+
+        val learCastle = WomObject(Map("person" -> lear,
+                                       "zipcode" -> WomInteger(1),
+                                       "type" -> WomString("Castle")),
+                                   houseType)
+
+        val lucyHouse = WomObject(Map("person" -> lucy,
+                                      "zipcode" -> WomInteger(94043),
+                                      "type" -> WomString("town house")),
+                                  houseType)
+
+        val testCases = List(makeElement(learCastle) ,
+                             makeElement(lucyHouse))
+
+        val typeAliases: Map[String, WomType] = Map("Person" -> personType,
+                                                    "House" -> houseType)
         val wvlConverter = new WdlVarLinksConverter(Map.empty, typeAliases)
         testCases.foreach{ elem =>
             check(elem, wvlConverter)
