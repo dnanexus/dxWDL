@@ -260,12 +260,13 @@ case class TaskRunner(task: CallableTaskDefinition,
                     |  > >( tee ${dxPathConfig.stdout} ) \\
                     |  2> >( tee ${dxPathConfig.stderr} >&2 )
                     |
+                    |echo $$? > ${dxPathConfig.rcPath}
+                    |
                     |# make sure the files are on stable storage
                     |# before leaving. This helps with stdin and stdout
-                    |# that may be in the fifo queues.
+                    |# characters that may be in the fifo queues.
                     |sync
                     |
-                    |echo $$? > ${dxPathConfig.rcPath}
                     |""".stripMargin.trim + "\n"
             }
         Utils.appletLog(verbose, s"writing bash script to ${dxPathConfig.script}")
