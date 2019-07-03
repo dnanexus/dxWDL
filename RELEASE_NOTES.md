@@ -3,6 +3,26 @@
 ## 1.12
 **Fixed**
 - Tolerate platform applets/workflows with input/output specs that use non WDL types. For example, an array of applets.
+- Bug when accessing call results that were not executed. For example, in `path_not_taken` the `compare` call is not made. This, incorrectly, causes an exception to be raised while evaluating `equality`.
+```
+version 1.0
+
+workflow path_not_taken {
+    if (false) {
+        call compare
+    }
+    output {
+        Boolean? equality = compare.equality
+    }
+}
+
+task compare {
+    command {}
+    output {
+        Boolean equality = true
+    }
+}
+```
 
 **Changed**
 - Removed warning for variables that cannot be set from the inputs file. These are messages like this:
