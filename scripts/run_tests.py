@@ -132,13 +132,15 @@ test_suites = {
 # Tests with the reorg flags
 test_reorg=["dict", "strings"]
 test_defaults=[]
-test_unlocked=["cast",
+test_unlocked=["array_structs",
+               "cast",
                "call_with_defaults1",
                "files",
                "hello",
+               "path_not_taken",
                "optionals",
-               "shapes",
-               "array_structs"]
+               "shapes"]
+
 test_extras=["instance_types"]
 test_private_registry=["private_registry"]
 test_import_dirs=["A"]

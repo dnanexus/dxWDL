@@ -4,6 +4,15 @@
 **Fixed**
 - Tolerate platform applets/workflows with input/output specs that use non WDL types. For example, an array of applets.
 
+**Changed**
+- Removed warning for variables that cannot be set from the inputs file. These are messages like this:
+```
+Argument unify.contig_shards, is not treated as an input, it cannot be set
+Argument etl.shards, is not treated as an input, it cannot be set
+Argument seq.iter_compare, is not treated as an input, it cannot be set
+```
+Top level call argument can now be set.
+
 ## 1.11
 **Fixed**
 - Default values specified for top-level calls using a JSON file.

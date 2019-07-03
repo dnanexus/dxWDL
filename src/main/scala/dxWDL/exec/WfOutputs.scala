@@ -51,10 +51,26 @@ case class WfOutputs(wf: WorkflowDefinition,
                                      |${WomPrettyPrintApproxWdl.graphOutputs(outputNodes)}
                                      |""".stripMargin)
 
+        // Some of the inputs could be optional. If they are missing,
+        // add in a None value.
+        val (allInputs, _) = Block.closure(Block(wf.innerGraph.outputNodes.toVector))
+        val envInitialFilled : Map[String, WomValue] = allInputs.flatMap { case (name, womType) =>
+            (envInitial.get(name), womType) match {
+                case (None, WomOptionalType(t)) =>
+                    Some(name -> WomOptionalValue(t, None))
+                case (None, _) =>
+                    // input is missing, it could have a default at the callee,
+                    // so we don't want to throw an exception
+                    None
+                case (Some(x), _) =>
+                    Some(name -> x)
+            }
+        }.toMap
+
         // Evaluate the output declarations. Add outputs evaluated to
         // the environment, so they can be referenced by expressions in the next
         // lines.
-        var envFull = envInitial
+        var envFull = envInitialFilled
         val outputs: Map[String, WomValue] = outputNodes.map{
             case PortBasedGraphOutputNode(id, womType, sourcePort) =>
                 val value = envFull.get(sourcePort.name) match {
