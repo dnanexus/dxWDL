@@ -1,5 +1,9 @@
 # Release Notes
 
+## 1.12
+**Fixed**
+- Tolerate platform applets/workflows with input/output specs that use non WDL types. For example, an array of applets.
+
 ## 1.11
 **Fixed**
 - Default values specified for top-level calls using a JSON file.
