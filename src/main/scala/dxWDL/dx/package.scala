@@ -9,7 +9,7 @@ import dxWDL.base.WomTypeSerialization
 object DxIOClass extends Enumeration {
     val INT, FLOAT, STRING, BOOLEAN, FILE,
         ARRAY_OF_INTS, ARRAY_OF_FLOATS, ARRAY_OF_STRINGS, ARRAY_OF_BOOLEANS, ARRAY_OF_FILES,
-        HASH = Value
+        HASH, OTHER = Value
 
     def fromString(s : String) : DxIOClass.Value = {
         s match {
@@ -31,7 +31,7 @@ object DxIOClass extends Enumeration {
             case "hash" => HASH
 
             // we don't deal with anything else
-            case other => throw new Exception(s"io class ${other} is not handled in dxWDL")
+            case other => OTHER
         }
     }
 }

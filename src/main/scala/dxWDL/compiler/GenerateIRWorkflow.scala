@@ -736,12 +736,7 @@ case class GenerateIRWorkflow(wf : WorkflowDefinition,
         val graph = wf.innerGraph
 
         // Create a stage per call/scatter-block/declaration-block
-        val (inputNodes, innerInputNodes, subBlocks, outputNodes) = Block.splitGraph(graph, callsLoToHi)
-        for (iNode <- innerInputNodes) {
-            val name =  iNode.identifier.localName.value
-            Utils.warning(verbose,
-                          s"Argument ${name}, is not treated as an input, it cannot be set")
-        }
+        val (inputNodes, _, subBlocks, outputNodes) = Block.splitGraph(graph, callsLoToHi)
 
         // compile into an IR workflow
         val (irwf, irCallables, wfOutputs) =
