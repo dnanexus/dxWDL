@@ -5,6 +5,7 @@ package dxWDL.base
 
 import com.dnanexus.AccessLevel
 import spray.json._
+import DefaultJsonProtocol._
 import wom.expression.{ValueAsAnExpression, WomExpression}
 import wom.values._
 
@@ -167,20 +168,65 @@ case class DxRunSpec(access: Option[DxAccess],
     }
 }
 
+case class DxAttrs(runSpec: Option[DxRunSpec],
+                   details: Option[DxDetails])
+
+
+case class DxLicense(name: String,
+                     repoUrl: String,
+                     version: String,
+                     license: String,
+                     licenseUrl: String,
+                     author: String
+                    )
+
+case class DxDetails(upstreamProjects: Option[List[DxLicense]]){
+
+    def toDetailsJson : Map[String, JsValue] = {
+
+        implicit val personJsonWriter: RootJsonWriter[DxLicense] = new RootJsonWriter[DxLicense] {
+
+            def write(dxLicense: DxLicense): JsValue = {
+                JsObject(
+                    "name" -> dxLicense.name.toJson,
+                    "repoUrl" -> dxLicense.repoUrl.toJson,
+                    "version" -> dxLicense.version.toJson,
+                    "license" -> dxLicense.license.toJson,
+                    "licenseUrl" -> dxLicense.licenseUrl.toJson,
+                    "author" -> dxLicense.author.toJson
+                )
+            }
+        }
+
+        val something = upstreamProjects match {
+            case None => List.empty
+            case Some(x) => x.map{ p : DxLicense => p.toJson}
+            }
+
+
+
+        return Map("upstreamLicense" -> something.toJson)
+        }
+
+    }
+
 case class DockerRegistry(registry: String,
                            username: String,
                            credentials: String)
 
 case class Extras(defaultRuntimeAttributes: Map[String, WomExpression],
-                  defaultTaskDxAttributes: Option[DxRunSpec],
-                  perTaskDxAttributes: Map[String, DxRunSpec],
+                  defaultTaskDxAttributes: Option[DxAttrs],
+                  perTaskDxAttributes: Map[String, DxAttrs],
                   dockerRegistry : Option[DockerRegistry]) {
     def getDefaultAccess : DxAccess = {
         defaultTaskDxAttributes match {
             case None => DxAccess.empty
-            case Some(dta) => dta.access match {
+            case Some(dta) => dta.runSpec match {
                 case None => DxAccess.empty
-                case Some(access) => access
+                case Some(runSpec) => runSpec.access match {
+                    case None => DxAccess.empty
+                    case Some(access) => access
+                }
             }
         }
     }
@@ -188,14 +234,18 @@ case class Extras(defaultRuntimeAttributes: Map[String, WomExpression],
     def getTaskAccess(taskName: String) : DxAccess = {
         perTaskDxAttributes.get(taskName) match {
             case None => DxAccess.empty
-            case Some(dta) => dta.access match {
+            case Some(dta) => dta.runSpec match {
                 case None => DxAccess.empty
-                case Some(access) => access
+                case Some(runSpec) => runSpec.access match {
+                    case None => DxAccess.empty
+                    case Some(access) => access
+                }
             }
         }
     }
 
 }
+
 
 object Extras {
     val DX_INSTANCE_TYPE_ATTR = "dx_instance_type"
@@ -212,7 +262,8 @@ object Extras {
     val RUN_SPEC_EXEC_POLICY_RESTART_ON_ATTRS = Set("ExecutionError", "UnresponsiveWorker",
                                                     "JMInternalError", "AppInternalError",
                                                     "JobTimeoutExceeded", "*")
-    val TASK_DX_ATTRS = Set("runSpec")
+    val TASK_DX_ATTRS = Set("runSpec", "details")
+    val DX_DETAILS_ATTRS = Set("upstreamProjects")
 
 
     private def wdlExpressionFromJsValue(jsv: JsValue) : WomExpression = {
@@ -423,19 +474,45 @@ object Extras {
 
     }
 
-    private def parseTaskDxAttrs(jsv: JsValue,
-                                 verbose: Verbose) : Option[DxRunSpec] = {
+    private def parseUpstreamProjects(jsv: Option[JsValue]): Option[List[DxLicense]] = {
+        if (jsv == JsNull)
+            return None
+
+        implicit val dxLicenseFormat = jsonFormat6(DxLicense)
+        return Some(jsv.get.convertTo[List[DxLicense]])
+
+    }
+
+    private def parseDxDetails(jsv: JsValue): Option[DxDetails] = {
+
         if (jsv == JsNull)
             return None
         val fields = jsv.asJsObject.fields
+
+        Some(DxDetails(parseUpstreamProjects(fields.get("upstreamProjects"))))
+
+    }
+
+    private def parseTaskDxAttrs(jsv: JsValue,
+                                 verbose: Verbose) : Option[DxAttrs] = {
+        if (jsv == JsNull)
+            return None
+        val fields = jsv.asJsObject.fields
+
         for (k <- fields.keys) {
             if (!(TASK_DX_ATTRS contains k))
                 throw new Exception(s"""|Unsupported runtime attribute ${k},
                                         |we currently support ${TASK_DX_ATTRS}
                                         |""".stripMargin.replaceAll("\n", ""))
-
         }
-        return parseRunSpec(checkedParseObjectField(fields, "runSpec"))
+
+        val runSpec = parseRunSpec(checkedParseObjectField(fields, "runSpec"))
+        val details = parseDxDetails(checkedParseObjectField(fields, "details"))
+
+
+        return Some(DxAttrs(runSpec, details))
+
+
     }
 
     private def parseDockerRegistry(jsv: JsValue,
@@ -478,13 +555,13 @@ object Extras {
         }
 
         // parse the individual task dx attributes
-        val perTaskDxAttrs : Map[String, DxRunSpec] =
+        val perTaskDxAttrs : Map[String, DxAttrs] =
             checkedParseObjectField(fields, "per_task_dx_attributes") match {
                 case JsNull =>
-                    Map.empty[String, DxRunSpec]
+                    Map.empty[String, DxAttrs]
                 case jsObj =>
                     val fields = jsObj.asJsObject.fields
-                    fields.foldLeft(Map.empty[String, DxRunSpec]){
+                    fields.foldLeft(Map.empty[String, DxAttrs]){
                         case (accu, (name, jsValue)) =>
                             val dxAttrs = parseTaskDxAttrs(jsValue, verbose)
                             dxAttrs match {
@@ -505,6 +582,8 @@ object Extras {
                perTaskDxAttrs,
                parseDockerRegistry(
                    checkedParseObjectField(fields, "docker_registry"),
-                   verbose))
+                   verbose),
+
+        )
     }
 }

@@ -123,6 +123,8 @@ case class GenerateIRTask(verbose: Verbose,
                     IR.AppletKindTask(task)
             }
 
+
+
         // Figure out if we need to use docker
         val docker = task.runtimeAttributes.attributes.get("docker") match {
             case None =>
@@ -162,6 +164,7 @@ case class GenerateIRTask(verbose: Verbose,
                   instanceType,
                   docker,
                   kind,
+                  task.meta,
                   selfContainedSourceCode)
     }
 }

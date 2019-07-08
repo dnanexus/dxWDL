@@ -122,6 +122,7 @@ object IR {
                       instanceType: InstanceType,
                       docker: DockerImage,
                       kind: AppletKind,
+                      meta: Map[String,String],
                       womSourceCode: String) extends Callable {
         def inputVars = inputs
         def outputVars = outputs
