@@ -224,8 +224,11 @@ this:
 | Outputs |        | sub.result |
 
 In addition, there are three applets that can be called on their own:
-`add`, `mul`, and `inc`. See ![](./images/linear.png).
+`add`, `mul`, and `inc`.
 
+The image below shows the workflow as an ellipse, and the standalone applets as
+light blue hexagons.
+![](./images/linear.png).
 
 ## Fragments
 
