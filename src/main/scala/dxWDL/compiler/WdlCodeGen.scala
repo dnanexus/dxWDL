@@ -254,14 +254,12 @@ task Add {
 
 
     def standAloneTask(originalTaskSource: String) : WdlCodeSnippet = {
-        val wdlWfSource = s"""|${versionString()}
-                              |
-                              |# struct definitions
-                              |${typeAliasDefinitions}
-                              |
-                              |# Task
-                              |${originalTaskSource}
-                              |""".stripMargin
+        val wdlWfSource =
+            List(versionString() + "\n",
+                 "# struct definitions",
+                 typeAliasDefinitions,
+                 "# Task",
+                 originalTaskSource).mkString("\n")
 
         // Make sure this is actually valid WDL
         ParseWomSourceFile.validateWdlCode(wdlWfSource, language)
@@ -301,18 +299,14 @@ task Add {
         val tasks = taskStubs.map{case (name, wdlCode) => wdlCode.value}.mkString("\n\n")
 
         val wfWithoutImportCalls = flattenWorkflow(originalWorkflowSource)
-        val wdlWfSource = s"""|${versionString()}
-                              |
-                              |# struct definitions
-                              |${typeAliasDefinitions}
-                              |
-                              |# Task headers
-                              |${tasks}
-                              |
-                              |# Workflow with imports made local
-                              |${wfWithoutImportCalls}
-                              |
-                              |""".stripMargin
+        val wdlWfSource =
+            List(versionString() + "\n",
+                 "# struct definitions",
+                 typeAliasDefinitions,
+                 "# Task headers",
+                 tasks,
+                 "# Workflow with imports made local",
+                 wfWithoutImportCalls).mkString("\n")
 
         // Make sure this is actually valid WDL
         ParseWomSourceFile.validateWdlCode(wdlWfSource, language)

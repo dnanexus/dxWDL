@@ -388,29 +388,17 @@ class GenerateIRTest extends FlatSpec with Matchers {
                                       :: cFlags)
         retval shouldBe a[Main.SuccessfulTerminationIR]
 
-        val taskSourceCode =
-"""|version 1.0
-|
-|# struct definitions
-|
-|
-|# Task
-|task echo_line_split {
-|
-|  command {
-|  echo 1 hello world | sed 's/world/wdl/'
-|  echo 2 hello \
-|  world \
-|  | sed 's/world/wdl/'
-|  echo 3 hello \
-|  world | \
-|  sed 's/world/wdl/'
-|  }
-|
-|  output {
-|    String results = read_string(stdout())
-|  }
-|}""".stripMargin
+        val commandSection =
+            """|  command {
+               |  echo 1 hello world | sed 's/world/wdl/'
+               |  echo 2 hello \
+               |  world \
+               |  | sed 's/world/wdl/'
+               |  echo 3 hello \
+               |  world | \
+               |  sed 's/world/wdl/'
+               |  }
+               |""".stripMargin
 
         inside(retval) {
             case Main.SuccessfulTerminationIR(bundle) =>
@@ -418,7 +406,7 @@ class GenerateIRTest extends FlatSpec with Matchers {
                 val (_, callable) = bundle.allCallables.head
                 callable shouldBe a[IR.Applet]
                 val task = callable.asInstanceOf[IR.Applet]
-                task.womSourceCode shouldBe (taskSourceCode)
+                task.womSourceCode should include (commandSection)
         }
     }
 }
