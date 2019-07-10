@@ -1,5 +1,9 @@
 # Release Notes
 
+## 1.13
+**Fixed**
+- [Bug 274](https://github.com/dnanexus/dxWDL/issues/274), losing pipe symbols ('|') at the beginning of a line.
+
 ## 1.12
 **Fixed**
 - Tolerate platform applets/workflows with input/output specs that use non WDL types. For example, an array of applets.

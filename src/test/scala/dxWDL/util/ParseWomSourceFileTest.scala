@@ -150,4 +150,27 @@ class ParseWomSourceFileTest extends FlatSpec with Matchers {
                                 "id" -> "applet-xxxx"))
     }
 
+    // The scanForTasks method takes apart the source WOM code, and then puts
+    // it back together. Check that it isn't discarding the pipe characters ('|'),
+    // or anything else.
+    it should "not omit symbols in the command section" taggedAs(EdgeTest) in {
+        val srcCode =
+            """|task echo_line_split {
+               |
+               |  command {
+               |  echo 1 hello world | sed 's/world/wdl/'
+               |  echo 2 hello \
+               |  world \
+               |  | sed 's/world/wdl/'
+               |  echo 3 hello \
+               |  world | \
+               |  sed 's/world/wdl/'
+               |  }
+               |}""".stripMargin
+
+        val taskDir = ParseWomSourceFile.scanForTasks(srcCode)
+        taskDir.size should equal(1)
+        val taskSourceCode : String = taskDir.values.head
+        taskSourceCode shouldBe(srcCode)
+    }
 }

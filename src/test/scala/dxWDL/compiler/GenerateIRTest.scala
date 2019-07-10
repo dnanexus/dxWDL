@@ -335,7 +335,7 @@ class GenerateIRTest extends FlatSpec with Matchers {
         }
     }
 
-    ignore should "do nested scatters" taggedAs(EdgeTest) in {
+    ignore should "do nested scatters" in {
         val path = pathFromBasename("compiler", "nested_scatter.wdl")
         val retval = Main.compile(path.toString :: cFlags)
         retval shouldBe a[Main.SuccessfulTerminationIR]
@@ -369,21 +369,44 @@ class GenerateIRTest extends FlatSpec with Matchers {
 
     it should "pass environment between deep stages" in {
         val path = pathFromBasename("compiler", "environment_passing_deep_nesting.wdl")
-        val retval = Main.compile(path.toString
-//                                      :: "--verbose"
-//                                      :: "--verboseKey" :: "GenerateIR"
-                                      :: cFlags)
+        val retval = Main.compile(path.toString :: cFlags)
         retval shouldBe a[Main.SuccessfulTerminationIR]
     }
 
     it should "handle multiple struct definitions" in {
         val path = pathFromBasename("struct/DEVEX-1196-struct-resolution-wrong-order",
                                     "file3.wdl")
+        val retval = Main.compile(path.toString :: cFlags)
+        retval shouldBe a[Main.SuccessfulTerminationIR]
+    }
+
+    it should "retain all characters in a WDL task" taggedAs(EdgeTest) in {
+        val path = pathFromBasename("bugs", "missing_chars_in_task.wdl")
         val retval = Main.compile(path.toString
 //                                      :: "--verbose"
 //                                      :: "--verboseKey" :: "GenerateIR"
                                       :: cFlags)
         retval shouldBe a[Main.SuccessfulTerminationIR]
-    }
 
+        val commandSection =
+            """|  command {
+               |  echo 1 hello world | sed 's/world/wdl/'
+               |  echo 2 hello \
+               |  world \
+               |  | sed 's/world/wdl/'
+               |  echo 3 hello \
+               |  world | \
+               |  sed 's/world/wdl/'
+               |  }
+               |""".stripMargin
+
+        inside(retval) {
+            case Main.SuccessfulTerminationIR(bundle) =>
+                bundle.allCallables.size shouldBe(1)
+                val (_, callable) = bundle.allCallables.head
+                callable shouldBe a[IR.Applet]
+                val task = callable.asInstanceOf[IR.Applet]
+                task.womSourceCode should include (commandSection)
+        }
+    }
 }

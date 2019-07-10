@@ -252,22 +252,28 @@ case class TaskRunner(task: CallableTaskDefinition,
                     |echo 0 > ${dxPathConfig.rcPath}
                     |""".stripMargin.trim + "\n"
             } else {
-                s"""|#!/bin/bash
-                    |(
-                    |    cd ${dxPathConfig.homeDir.toString}
-                    |    ${command}
-                    |) \\
-                    |  > >( tee ${dxPathConfig.stdout} ) \\
-                    |  2> >( tee ${dxPathConfig.stderr} >&2 )
-                    |
-                    |echo $$? > ${dxPathConfig.rcPath}
-                    |
-                    |# make sure the files are on stable storage
-                    |# before leaving. This helps with stdin and stdout
-                    |# characters that may be in the fifo queues.
-                    |sync
-                    |
-                    |""".stripMargin.trim + "\n"
+                // It would have been easier to have one long
+                // section bracketed with triple quotes (`"""`). However,
+                // some characters are dropped from [command] this way, for
+                // example pipe ('|').
+                val part1 =
+                    s"""|#!/bin/bash
+                        |(
+                        |    cd ${dxPathConfig.homeDir.toString}
+                        |""".stripMargin
+                val part2 =
+                    s"""|) \\
+                        |  > >( tee ${dxPathConfig.stdout} ) \\
+                        |  2> >( tee ${dxPathConfig.stderr} >&2 )
+                        |
+                        |echo $$? > ${dxPathConfig.rcPath}
+                        |
+                        |# make sure the files are on stable storage
+                        |# before leaving. This helps with stdin and stdout
+                        |# characters that may be in the fifo queues.
+                        |sync
+                        |""".stripMargin
+                List(part1, command, part2).mkString("\n")
             }
         Utils.appletLog(verbose, s"writing bash script to ${dxPathConfig.script}")
         Utils.writeFileContent(dxPathConfig.script, script)
