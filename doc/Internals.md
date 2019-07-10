@@ -441,5 +441,4 @@ Part 5:
     call mul {input: a=1, b=4}
 ```
 
-The overall structure is:
-![](./images/two_levels.png)
+The overall structure is ![](./images/two_levels.png)
