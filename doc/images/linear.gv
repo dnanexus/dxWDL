@@ -4,7 +4,7 @@ digraph G {
         mul [shape=polygon, sides=6; color=lightblue, style=filled];
         inc [shape=polygon, sides=6; color=lightblue, style=filled];
 
-        linear -> add [label=1];
-        linear -> mul [label=2];
-        linear -> inc [label=3];
+        linear -> add;
+        linear -> mul;
+        linear -> inc;
 }

@@ -1,4 +1,4 @@
-objects = linear.png linear2.png optionals.png
+objects = linear.png linear2.png optionals.png mul_loop.png two_levels.png
 
 all : $(objects)
 

@@ -1,0 +1,13 @@
+digraph G {
+        // workflow
+        mulloop [shape=ellipse, label="mul_loop"];
+
+        // stand alone applets
+        mul [shape=polygon, sides=6; color=lightblue, style=filled];
+
+        // fragments
+        fragment1 [shape=box; color=salmon, style=filled, label="frag 1"];
+
+        mulloop -> fragment1;
+        fragment1 -> mul [style=dotted];
+}
