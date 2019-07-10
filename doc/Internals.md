@@ -223,8 +223,9 @@ this:
 | Stage 3 | applet inc | stage-2.result |
 | Outputs |        | sub.result |
 
-In addition, there are three applets than can be called on their own:
-`add`, `mul`, and `inc`.
+In addition, there are three applets that can be called on their own:
+`add`, `mul`, and `inc`. See ![](./images/linear.png).
+
 
 ## Fragments
 

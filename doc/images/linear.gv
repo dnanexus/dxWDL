@@ -1,0 +1,10 @@
+digraph G {
+        linear [shape=ellipse];
+        add [shape=polygon, sides=6; color=lightblue, style=filled];
+        mul [shape=polygon, sides=6; color=lightblue, style=filled];
+        inc [shape=polygon, sides=6; color=lightblue, style=filled];
+
+        linear -> add;
+        linear -> mul;
+        linear -> inc;
+}
