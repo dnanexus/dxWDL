@@ -20,7 +20,7 @@ import IR.{CVar, SArg}
 
 case class Native(dxWDLrtId: Option[String],
                   folder: String,
-                  dxProject: DXProject,
+                  dxProject: DxProject,
                   dxObjDir: DxObjectDirectory,
                   instanceTypeDB: InstanceTypeDB,
                   dxPathConfig: DxPathConfig,

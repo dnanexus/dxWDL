@@ -18,13 +18,13 @@ package dxWDL.util
 import com.dnanexus.{DXContainer, DXFile, DXProject}
 import dxWDL.base.Utils
 import dxWDL.base.Utils.DX_URL_PREFIX
-import dxWDL.dx.{DxPath, DxDescribe}
+import dxWDL.dx.{DxPath, DxDescribe, DxProject}
 
 sealed trait Furl
 
 case class FurlLocal(path : String) extends Furl
 case class FurlDx(value : String,
-                  dxProj : Option[DXProject],
+                  dxProj : Option[DxProject],
                   dxFile: DXFile) extends Furl
 
 object Furl {
@@ -36,13 +36,12 @@ object Furl {
     private def parseDxFurl(buf: String) : FurlDx = {
         val s = buf.substring(DX_URL_PREFIX.length)
         val proj_file = s.split("::")(0)
-
         val dxFile = DxPath.resolveDxURLFile(DX_URL_PREFIX + proj_file)
         val dxProj = dxFile.getProject
         if (dxProj == null)
             return FurlDx(buf, None, dxFile)
         dxFile.getProject match {
-            case dxProj : DXProject =>
+            case dxProj : DxProject =>
                 FurlDx(buf, Some(dxProj), dxFile)
             case cont : DXContainer =>
                 FurlDx(buf, None, dxFile)
@@ -98,7 +97,7 @@ object Furl {
         } else {
             val projId = proj.getId
             FurlDx(s"${DX_URL_PREFIX}${projId}:${fid}::${logicalName}",
-                   Some(DXProject.getInstance(projId)),
+                   Some(DxProject.getInstance(projId)),
                    dxFile)
         }
     }

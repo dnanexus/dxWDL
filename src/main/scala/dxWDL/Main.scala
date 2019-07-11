@@ -221,7 +221,7 @@ object Main extends App {
 
 
     private def pathOptions(options: OptionsMap,
-                            verbose: Verbose) : (DXProject, String) = {
+                            verbose: Verbose) : (DxProject, String) = {
         var folderOpt:Option[String] = options.get("folder") match {
             case None => None
             case Some(List(f)) => Some(f)
@@ -578,7 +578,7 @@ object Main extends App {
                                    dxPathConfig : DxPathConfig,
                                    dxIoFunctions : DxIoFunctions,
                                    rtDebugLvl: Int): Termination = {
-        val dxProject = DxUtils.dxEnv.getProjectContext()
+        val dxProject = DxUtils.dxCrntProject
 
         // Parse the inputs, convert to WOM values. Delay downloading files
         // from the platform, we may not need to access them.

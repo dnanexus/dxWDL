@@ -7,7 +7,7 @@
 
 package dxWDL.dx
 
-import com.dnanexus.{DXAPI, DXContainer, DXDataObject, DXFile, DXProject, DXRecord}
+import com.dnanexus.{DXAPI, DXDataObject, DXFile, DXRecord}
 import com.fasterxml.jackson.databind.JsonNode
 import scala.collection.mutable.HashMap
 import spray.json._
@@ -63,12 +63,12 @@ object DxPath {
 
     // Lookup cache for projects. This saves
     // repeated searches for projects we already found.
-    private val projectDict = HashMap.empty[String, DXProject]
+    private val projectDict = HashMap.empty[String, DxProject]
 
-    def resolveProject(projName: String): DXProject = {
+    def resolveProject(projName: String): DxProject = {
         if (projName.startsWith("project-")) {
             // A project ID
-            return DXProject.getInstance(projName)
+            return DxProject.getInstance(projName)
         }
         if (projectDict contains projName) {
             //System.err.println(s"Cached project ${projName}")
@@ -94,7 +94,7 @@ object DxPath {
         if (results.length == 0)
             throw new Exception(s"Project ${projName} not found")
         val dxProject = results(0).asJsObject.fields.get("id") match {
-            case Some(JsString(id)) => DXProject.getInstance(id)
+            case Some(JsString(id)) => DxProject.getInstance(id)
             case _ => throw new Exception(s"Bad response from SystemFindProject API call ${repJs.prettyPrint}")
         }
         projectDict(projName) = dxProject
@@ -120,7 +120,7 @@ object DxPath {
     }
 
     private def submitRequest(dxPaths : Vector[DxPathComponents],
-                              dxProject : DXProject) : Map[String, DXDataObject] = {
+                              dxProject : DxProject) : Map[String, DXDataObject] = {
         val objectReqs : Vector[JsValue] = dxPaths.map{ makeResolutionReq(_) }
         val request = JsObject("objects" -> JsArray(objectReqs),
                                "project" -> JsString(dxProject.getId))
@@ -195,7 +195,7 @@ object DxPath {
     // Describe the names of all the data objects in one batch. This is much more efficient
     // than submitting object describes one-by-one.
     def resolveBulk(dxPaths: Seq[String],
-                    dxProject: DXProject) : Map[String, DXDataObject] = {
+                    dxProject: DxProject) : Map[String, DXDataObject] = {
         if (dxPaths.isEmpty) {
             // avoid an unnessary API call; this is important for unit tests
             // that do not have a network connection.
@@ -220,7 +220,7 @@ object DxPath {
     }
 
     def resolveOnePath(dxPath: String,
-                       dxProject : DXProject) : DXDataObject = {
+                       dxProject : DxProject) : DXDataObject = {
         val found : Map[String, DXDataObject] =
             resolveBulk(Vector(dxPath), dxProject)
 

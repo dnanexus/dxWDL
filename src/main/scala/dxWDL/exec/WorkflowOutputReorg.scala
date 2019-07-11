@@ -6,7 +6,7 @@
 package dxWDL.exec
 
 // DX bindings
-import com.dnanexus.{DXAPI, DXAnalysis, DXContainer, DXFile, DXProject}
+import com.dnanexus.{DXAPI, DXAnalysis, DXContainer, DXFile}
 import com.fasterxml.jackson.databind.JsonNode
 import scala.collection.JavaConverters._
 import spray.json._
@@ -31,7 +31,7 @@ case class WorkflowOutputReorg(wf: WorkflowDefinition,
     //
     // In other words, this code is an efficient replacement for:
     // files.map(_.describe().getName())
-    def bulkGetFilenames(files: Seq[DXFile], dxProject: DXProject) : Vector[String] = {
+    def bulkGetFilenames(files: Seq[DXFile], dxProject: DxProject) : Vector[String] = {
         val info : Map[DXFile, DxDescribe] = DxBulkDescribe.apply(files)
         info.values.map(_.name).toVector
     }
@@ -46,7 +46,7 @@ case class WorkflowOutputReorg(wf: WorkflowDefinition,
     // however, that would require a describe API call per output
     // file. Instead, we find all the output files that do not also
     // appear in the input.
-    def analysisFileOutputs(dxProject: DXProject,
+    def analysisFileOutputs(dxProject: DxProject,
                             dxAnalysis: DXAnalysis) : Vector[DXFile]= {
         val req = JsObject("fields" -> JsObject(
                                "input" -> JsBoolean(true),

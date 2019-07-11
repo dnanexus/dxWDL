@@ -6,14 +6,13 @@ import com.fasterxml.jackson.databind.JsonNode
 import com.dnanexus._
 import java.time.{LocalDateTime, ZoneId}
 import java.time.format.DateTimeFormatter
-import scala.collection.JavaConverters._
 import scala.collection.mutable.HashMap
 import scala.collection.mutable.HashSet
 import spray.json._
 
 import dxWDL.base._
 import dxWDL.base.Utils.CHECKSUM_PROP
-import dxWDL.dx.{DxUtils, DxDescribe, DxFindDataObjects}
+import dxWDL.dx._
 
 // Keep all the information about an applet in packaged form
 case class DxObjectInfo(name :String,
@@ -32,7 +31,7 @@ case class DxObjectInfo(name :String,
 // Make an efficient directory of all the applets that exist there. Update
 // the directory when an applet is compiled.
 case class DxObjectDirectory(ns: IR.Bundle,
-                             dxProject:DXProject,
+                             dxProject:DxProject,
                              folder: String,
                              projectWideReuse: Boolean,
                              verbose: Verbose) {
@@ -203,7 +202,7 @@ case class DxObjectDirectory(ns: IR.Bundle,
 
         // move the object to the new location
         newFolder(destFolder)
-        dxProject.move(List(objInfo.dxObj).asJava, List.empty[String].asJava, destFolder)
+        dxProject.move(List(objInfo.dxObj), destFolder)
 
         // add the date to the object name
         val formatter = DateTimeFormatter.ofPattern("EE MMM dd kk:mm:ss yyyy")

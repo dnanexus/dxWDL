@@ -62,7 +62,7 @@ case class Top(cOpt: CompilerOptions) {
     // be available to all subjobs we run.
     private def cloneRtLibraryToProject(region: String,
                                         dxWDLrtId: String,
-                                        dxProject: DXProject) : Unit = {
+                                        dxProject: DxProject) : Unit = {
         val region2project = Utils.getRegions()
         val (projNameRt, folder)  = getProjectWithRuntimeLibrary(region2project, region)
         val dxProjRt = DxPath.resolveProject(projNameRt)
@@ -76,7 +76,7 @@ case class Top(cOpt: CompilerOptions) {
     // Backend compiler pass
     private def compileNative(bundle: IR.Bundle,
                               folder: String,
-                              dxProject: DXProject,
+                              dxProject: DxProject,
                               runtimePathConfig: DxPathConfig,
                               fileInfoDir: Map[DXFile, DxDescribe]) : CompilationResults = {
         val dxWDLrtId: Option[String] = cOpt.compileMode match {
@@ -213,7 +213,7 @@ case class Top(cOpt: CompilerOptions) {
     // Scan the JSON inputs files for dx:files, and batch describe them. This
     // reduces the number of API calls.
     private def bulkFileDescribe(bundle: IR.Bundle,
-                                 dxProject: DXProject) : (Map[String, DXFile],
+                                 dxProject: DxProject) : (Map[String, DXFile],
                                                           Map[DXFile, DxDescribe]) = {
         val defResults : InputFileScanResults = cOpt.defaults match {
             case None => InputFileScanResults(Map.empty, Vector.empty)
@@ -287,7 +287,7 @@ case class Top(cOpt: CompilerOptions) {
 
     // compile and generate intermediate code only
     def applyOnlyIR(source: Path,
-                    dxProject: DXProject) : IR.Bundle = {
+                    dxProject: DxProject) : IR.Bundle = {
         // generate IR
         val bundle : IR.Bundle = womToIR(source)
 
@@ -302,7 +302,7 @@ case class Top(cOpt: CompilerOptions) {
     // Compile up to native dx applets and workflows
     def apply(source: Path,
               folder: String,
-              dxProject: DXProject,
+              dxProject: DxProject,
               runtimePathConfig: DxPathConfig) : Option[String] = {
         val bundle : IR.Bundle = womToIR(source)
 

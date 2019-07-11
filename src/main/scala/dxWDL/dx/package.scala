@@ -48,7 +48,7 @@ case class DxFilePart(state: String,
 case class DxDescribe(name : String,
                       folder: String,
                       size : Option[Long],
-                      container: DXContainer, // a project or a container
+                      container: DxContainer, // a project or a container
                       dxobj : DXDataObject,
                       creationDate : java.util.Date,
                       properties: Map[String, String],
@@ -61,6 +61,9 @@ case class DxExec(id: String) {
     def getId : String = id
 }
 
+case class DxContainer(id: String) {
+    def getId : String = id
+}
 
 // A stand in for the DXWorkflow.Stage inner class (we don't have a constructor for it)
 case class DXWorkflowStage(id: String) {

@@ -2,9 +2,11 @@
 
 package dxWDL.dx
 
-import com.dnanexus.{DXAPI, DXContainer, DXFile}
+import com.dnanexus.{DXAPI, DXFile}
 import com.fasterxml.jackson.databind.JsonNode
 import spray.json._
+
+
 
 // maximal number of objects in a single API request
 import dxWDL.base.Utils.DXAPI_NUM_OBJECTS_LIMIT

@@ -7,6 +7,7 @@ import java.nio.file.{Path, Files}
 import spray.json._
 import wom.types._
 
+
 import dxWDL.base.{AppInternalException, Utils, Verbose}
 
 object DxUtils {
@@ -14,6 +15,7 @@ object DxUtils {
     private val UPLOAD_RETRY_LIMIT = 3
 
     lazy val dxEnv = DXEnvironment.create()
+    lazy val dxCrntProject = DxProject(dxEnv.getProjectContext().getId)
 
     def isDxId(objName : String) : Boolean = {
         objName match {
@@ -210,7 +212,7 @@ object DxUtils {
 
     // describe a project, and extract fields that not currently available
     // through dxjava.
-    def projectDescribeExtraInfo(dxProject: DXProject) : (String,String) = {
+    def projectDescribeExtraInfo(dxProject: DxProject) : (String,String) = {
         val rep = DXAPI.projectDescribe(dxProject.getId(), classOf[JsonNode])
         val jso:JsObject = jsValueOfJsonNode(rep).asJsObject
 
@@ -269,7 +271,7 @@ object DxUtils {
 
         projId match {
             case None => DXFile.getInstance(fid)
-            case Some(pid) => DXFile.getInstance(fid, DXProject.getInstance(pid))
+            case Some(pid) => DXFile.getInstance(fid, DxProject.getInstance(pid))
         }
     }
 
@@ -279,9 +281,9 @@ object DxUtils {
 
     // copy asset to local project, if it isn't already here.
     def cloneAsset(assetRecord: DXRecord,
-                   dxProject: DXProject,
+                   dxProject: DxProject,
                    pkgName: String,
-                   rmtProject: DXProject,
+                   rmtProject: DxProject,
                    verbose: Verbose) : Unit = {
         if (dxProject == rmtProject) {
             Utils.trace(verbose.on, s"The asset ${pkgName} is from this project ${rmtProject.getId}, no need to clone")
