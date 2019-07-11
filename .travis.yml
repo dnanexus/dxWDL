@@ -2,11 +2,10 @@ language: scala
 sudo: false
 dist: bionic
 
-# We do not want to start a travis build
-# for modifications to any branch.
+# Start a build on for changes to master, or for pull requests
 branches:
-    except:
-      - gh-pages
+  only:
+    - master
 
 addons:
   apt:
