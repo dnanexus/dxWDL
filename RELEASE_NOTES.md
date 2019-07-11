@@ -4,6 +4,11 @@
 **Fixed**
 - [Bug 274](https://github.com/dnanexus/dxWDL/issues/274), losing pipe symbols ('|') at the beginning of a line.
 
+**Changed**
+- Added diagrams to internals documentation (Internals.md).
+- Made the travis continuous integration process run and check the unit tests
+- Modifed the code to a have minimal level of dependency on the dxjava toolkit. We now only use the DXAPI methods.
+
 ## 1.12
 **Fixed**
 - Tolerate platform applets/workflows with input/output specs that use non WDL types. For example, an array of applets.

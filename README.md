@@ -130,7 +130,7 @@ workflow w2 {
         Int a_ij = i + j
     }
     output {
-        Int a_ij
+        Array[Int] a_ij
     }
 }
 ```
