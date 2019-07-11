@@ -1,6 +1,6 @@
 language: scala
 sudo: false
-dist: trusty
+dist: bionic
 
 # We do not want to start a travis build
 # for modifications to any branch.
@@ -19,8 +19,9 @@ addons:
     - git
     - openssh-server
     - tree
-    - python2.7
-    - python-pip
+    - python3
+    - python3-pip
+    - python3-venv
 
 before_install:
   - mkdir -p /tmp/ci_tests
