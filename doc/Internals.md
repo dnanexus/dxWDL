@@ -223,8 +223,11 @@ this:
 | Stage 3 | applet inc | stage-2.result |
 | Outputs |        | sub.result |
 
-In addition, there are three applets than can be called on their own:
-`add`, `mul`, and `inc`.
+In addition, there are three applets that can be called on their own:
+`add`, `mul`, and `inc`. The image below shows the workflow as an
+ellipse, and the standalone applets as light blue hexagons.
+
+![](./images/linear.png)
 
 ## Fragments
 
@@ -279,6 +282,7 @@ Workflow `linear2` is compiled into:
 | Stage 3 | applet fragment-2 | stage-2.z, stage-2.mul.result |
 | Outputs |        | stage-3.result |
 
+![](./images/linear2.png)
 
 Workflow `optionals` uses conditional blocks. It can be broken down into two fragments.
 
@@ -328,11 +332,14 @@ The fragments are linked together into a dx:workflow like this:
 | Outputs |        | stage-1.inc.result, stage-2.add.result |
 
 
-Workflow `mul-loop` loops through the numbers *0, 1, .. n*, and
+![](./images/optionals.png)
+
+
+Workflow `mul_loop` loops through the numbers *0, 1, .. n*, and
 multiplies them by two. The result is an array of integers.
 
 ```wdl
-workflow mul-loop {
+workflow mul_loop {
     input {
         Int n
     }
@@ -361,6 +368,7 @@ each vlues of `item`. In order to massage the results into the proper
 WDL types, we run a collect sub-job that waits for the child jobs to
 complete, and returns an array of integers.
 
+![](./images/mul_loop.png)
 
 ## Nested blocks
 
@@ -387,45 +395,53 @@ workflow two_levels {
     }
 
     if (true) {
-        call inc as inc4 { input: a = 3 }
+        call add { input: a = 3, b = 4 }
     }
 
-    call inc as inc5 {input: a=1}
+    call mul {input: a=1, b=4}
 
     output {
         Array[Int] a = inc3.result
-        Int? b = inc4.result
-        Int c = inc5.result
+        Int? b = add.result
+        Int c = mul.result
     }
 }
 ```
 
-It will be broken down into five fragments:
+It will be broken down into five parts. A sub-workflow will tie the
+first three pieces together:
 
-Fragment *inc1*
+Part 1:
 ```wdl
         call inc as inc1 { input: a = i}
 ```
 
-Fragment *inc2*
+Part 2:
 ```wdl
         call inc as inc2 { input: a = inc1.result }
 ```
 
-Fragment *inc3*
+Part 3 (fragment *A*):
 ```wdl
         Int b = inc2.result
         call inc as inc3 { input: a = b }
 ```
 
-Fragment *4*
+The top level workflow calls a scatter applet, which calls the sub-workflow. Later,
+it calls parts four and five.
+
+Part 4 (fragment *B*):
 ```wdl
     if (true) {
-        call inc as inc4 { input: a = 3 }
+        call add { input: a = 3, b = 4 }
     }
 ```
 
-Fragment *inc5*
+Part 5:
 ```wdl
-    call inc as inc5 {input: a=1}
+    call mul {input: a=1, b=4}
 ```
+
+The overall structure is
+
+![](./images/two_levels.png)

@@ -1,0 +1,35 @@
+digraph G {
+        // workflows
+        two_levels [shape=ellipse];
+        wf_inc123 [shape=ellipse];
+
+        // stand alone applets
+        inc [shape=polygon, sides=6; color=lightblue, style=filled];
+        add [shape=polygon, sides=6; color=lightblue, style=filled];
+        mul [shape=polygon, sides=6; color=lightblue, style=filled];
+
+        // fragments
+        fragmentScatter [shape=box; color=salmon, style=filled, label="scatter"];
+        fragmentA [shape=box; color=salmon, style=filled, label="frag A"];
+        fragmentB [shape=box; color=salmon, style=filled, label="frag B"];
+
+        two_levels -> fragmentScatter;
+        two_levels -> fragmentB;
+        two_levels -> mul
+        fragmentScatter -> fragmentB [style=invis];
+        fragmentB -> mul [style=invis];
+        {rank = same; fragmentScatter;
+                fragmentB;
+                mul;
+         }
+
+        wf_inc123 -> inc [label="inc1"];
+        wf_inc123 -> inc [label="inc2"]
+        wf_inc123 -> fragmentA;
+
+        fragmentA -> inc [style=dotted, label="inc3"];
+        fragmentB -> add [style=dotted];
+        fragmentScatter -> wf_inc123 [style=dotted];
+
+
+}

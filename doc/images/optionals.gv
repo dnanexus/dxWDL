@@ -1,0 +1,18 @@
+digraph G {
+        // workflow
+        optionals [shape=ellipse];
+
+        // stand alone applets
+        add [shape=polygon, sides=6; color=lightblue, style=filled];
+        inc [shape=polygon, sides=6; color=lightblue, style=filled];
+
+        // fragments
+        fragment1 [shape=box; color=salmon, style=filled, label="frag 1"];
+        fragment2 [shape=box; color=salmon, style=filled, label="frag 2"];
+
+        optionals -> fragment1;
+        optionals -> fragment2;
+
+        fragment1 -> add [style=dotted];
+        fragment2 -> inc [style=dotted];
+}
