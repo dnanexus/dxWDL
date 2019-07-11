@@ -6,10 +6,8 @@ dist: bionic
 # for modifications to any branch.
 branches:
     except:
-        - develop
-    only:
-        - master
-        - citest
+      - gh-pages
+      - /^DEVEX*/
 
 addons:
   apt:
@@ -46,7 +44,7 @@ before_script:
 script:
   - pwd
   - source dx-toolkit/environment
-  - dx login --token ${DX_AUTH_TOKEN}
+  - dx login --staging --noprojects --token ${DX_AUTH_TOKEN}
   - dx select dxWDL_playground
   - java -version
   # run unit tests
