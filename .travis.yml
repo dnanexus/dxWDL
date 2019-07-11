@@ -7,7 +7,6 @@ dist: bionic
 branches:
     except:
       - gh-pages
-      - /^DEVEX*/
 
 addons:
   apt:
