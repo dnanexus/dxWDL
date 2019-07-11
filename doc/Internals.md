@@ -225,8 +225,8 @@ this:
 
 In addition, there are three applets that can be called on their own:
 `add`, `mul`, and `inc`. The image below shows the workflow as an
-ellipse, and the standalone applets as light blue hexagons. The
-workflow stages are numbered one through three.
+ellipse, and the standalone applets as light blue hexagons.
+
 ![](./images/linear.png)
 
 ## Fragments
@@ -282,6 +282,7 @@ Workflow `linear2` is compiled into:
 | Stage 3 | applet fragment-2 | stage-2.z, stage-2.mul.result |
 | Outputs |        | stage-3.result |
 
+![](./images/linear2.png)
 
 Workflow `optionals` uses conditional blocks. It can be broken down into two fragments.
 
@@ -331,7 +332,7 @@ The fragments are linked together into a dx:workflow like this:
 | Outputs |        | stage-1.inc.result, stage-2.add.result |
 
 
-![](./images/linear2.png)
+![](./images/optionals.png)
 
 
 Workflow `mul_loop` loops through the numbers *0, 1, .. n*, and
