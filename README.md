@@ -6,7 +6,7 @@ and compiles it to an equivalent workflow on the DNAnexus platform.
 It provides a reasonably complete set of WDL features.
 WDL draft-2, and version 1.0 are supported, with a few exceptions:
 * Calls with missing arguments have limited support
-* Nested scatters are not supported
+* Nested scatters are not supported (see [clarification](#Nested-Scatters) below).
 
 A high level list of changes between draft-2 and version 1.0 is
 provided [here](doc/WdlVersionChanges.md).
@@ -98,6 +98,42 @@ dx run bam_chrom_counter -i0.file=file-xxxx
 
 At runtime this looks like this:
 ![this](doc/bam_chrom_counter.png)
+
+## Nested Scatters
+
+This is where a single WDL workflow has a scatter within another scatter. For example:
+```wdl
+workflow w {
+    scatter (i in [1,2,3]) {
+        scatter (j in [10, 100]) {
+           Int a_ij = i + j
+        }
+    }
+}
+```
+You can work around this current limitation, by splitting out the inner scatter
+into a separate workflow. For example:
+
+
+```wdl
+workflow w {
+    scatter (i in [1,2,3]) {
+        call w2 { i = i }
+    }
+}
+
+workflow w2 {
+    input {
+        Int i
+    }
+    scatter (j in [10, 100]) {
+        Int a_ij = i + j
+    }
+    output {
+        Int a_ij
+    }
+}
+```
 
 
 # Additional information

@@ -27,6 +27,11 @@ before_install:
   - cd /tmp/ci_tests
 
 install:
+  # Clone and make the python and java dxpy version
+  - pwd
+  - git clone https://github.com/dnanexus/dx-toolkit.git
+  - make -C dx-toolkit python
+
   # Clone dxWDL into a new directory,
   - pwd
   - git clone https://github.com/dnanexus-rnd/dxWDL.git
@@ -39,5 +44,9 @@ before_script:
 
 script:
   - pwd
+  - source dx-toolkit/environment
+  - dx login --token ${DX_AUTH_TOKEN}
+  - dx select dxWDL_playground
   - java -version
-  - cd dxWDL && sbt version && sbt assembly
+  # run unit tests
+  - cd dxWDL && sbt version && sbt compile && sbt test
