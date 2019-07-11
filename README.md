@@ -1,4 +1,4 @@
-<a href="https://travis-ci.org/dnanexus/dxWDL"><img src="https://travis-ci.org/dnanexus/dxWDL.svg?branch=master"/></a>
+XF<a href="https://travis-ci.org/dnanexus/dxWDL"><img src="https://travis-ci.org/dnanexus/dxWDL.svg?branch=master"/></a>
 
 dxWDL takes a bioinformatics pipeline written in the
 [Workflow Description Language (WDL)](http://www.openwdl.org/)
