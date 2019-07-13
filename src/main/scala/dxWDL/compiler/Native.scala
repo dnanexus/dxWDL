@@ -8,6 +8,7 @@ import com.dnanexus._
 import java.security.MessageDigest
 import scala.collection.JavaConverters._
 import spray.json._
+import DefaultJsonProtocol._
 
 import wom.types._
 import wom.values._
@@ -491,27 +492,15 @@ case class Native(dxWDLrtId: Option[String],
                     case None => Map.empty
                     case Some(ext) => ext.perTaskDxAttributes.get(applet.name) match {
                         case None => Map.empty
-                        case Some(dta) => dta.details match {
-                            case None => Map.empty
-                            case Some(detail) => detail.toDetailsJson
-                        }
+                        case Some(dta) => dta.getDetailsJson
                     }
                 }
             } else {
-                Map.empty
+                Map("test"->"something".toJson)
             }
-        val data =
-            """|{
-               | "upstreamLicense" : [
-               |   "registry_my" : "foo.bar.dnanexus.com",
-               |   "username" : "perkins",
-               |   "credentials" : "BandersnatchOnTheLoose"
-               | ]
-               |}
-               |""".stripMargin.parseJson
 
 
-        return Map("test" -> data )
+        return taskSpecificDetails
     }
 
     // Set the run spec.
@@ -546,12 +535,10 @@ case class Native(dxWDLrtId: Option[String],
             case None => Map.empty
             case Some(ext) => ext.defaultTaskDxAttributes match {
                 case None => Map.empty
-                case Some(dta) => dta.runSpec match {
-                    case  None => Map.empty
-                    case Some(runSpec) => runSpec.toRunSpecJson
-                }
+                case Some(dta) => dta.getRunSpecJson
             }
         }
+
         val taskSpecificRunSpec : Map[String, JsValue] =
             if (applet.kind.isInstanceOf[IR.AppletKindTask]) {
                 // A task can override the default dx attributes
@@ -559,10 +546,7 @@ case class Native(dxWDLrtId: Option[String],
                     case None => Map.empty
                     case Some(ext) => ext.perTaskDxAttributes.get(applet.name) match {
                         case None => Map.empty
-                        case Some(dta) => dta.runSpec match {
-                            case  None => Map.empty
-                            case Some(runSpec) => runSpec.toRunSpecJson
-                        }
+                        case Some(dta) => dta.getRunSpecJson
                     }
                 }
             } else {
@@ -725,8 +709,6 @@ case class Native(dxWDLrtId: Option[String],
                 case _ : IR.AppletKindWfFragment => true
                 case _ => false
             }
-        val summary = applet.meta.getOrElse("summary", applet.name)
-
 
          // pack all the core arguments into a single request
         var reqCore = Map(
@@ -738,7 +720,6 @@ case class Native(dxWDLrtId: Option[String],
             "tags" -> JsArray(JsString("dxWDL")),
             "details" -> jsDetails,
             "hidden" -> JsBoolean(hidden),
-            "summary" -> JsString(summary)
         )
         if (access != JsNull)
             reqCore += ("access" -> access)

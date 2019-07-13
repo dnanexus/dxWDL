@@ -1,12 +1,12 @@
 package dxWDL.base
 
 import com.dnanexus.AccessLevel
+import dxWDL.compiler.EdgeTest
 import org.scalatest.{FlatSpec, Matchers}
 import spray.json._
 import wom.expression.WomExpression
 import wom.types._
 import wom.values._
-
 import dxWDL.util.WomValueAnalysis
 
 class ExtrasTest extends FlatSpec with Matchers {
@@ -24,7 +24,8 @@ class ExtrasTest extends FlatSpec with Matchers {
                |}""".stripMargin.parseJson
 
         val extras = Extras.parse(runtimeAttrs, verbose)
-        extras.defaultTaskDxAttributes should be (Some(DxAttrs(Some(DxRunSpec(None, None, Some("all"), None)), None)))
+        extras.defaultTaskDxAttributes should be (Some(
+            DxAttrs(Some(DxRunSpec(None, None, Some("all"), None)), None)))
     }
 
     it should "invalid runSpec I" in {
@@ -119,18 +120,18 @@ class ExtrasTest extends FlatSpec with Matchers {
         val extras = Extras.parse(js, verbose)
         extras.defaultTaskDxAttributes should be (
             Some(DxAttrs(Some(DxRunSpec(
-                                                           Some(DxAccess(Some(Vector("*")),
-                                                                         Some(AccessLevel.CONTRIBUTE),
-                                                                         Some(AccessLevel.VIEW),
-                                                                         Some(true),
-                                                                         None)),
-                                                           Some(DxExecPolicy(Some(Map("*" -> 3)),
-                                                                             None)),
-                                                           None,
-                                                           Some(DxTimeout(None,
-                                                                          Some(12),
-                                                                          None))
-                                                       )), None)))
+                           Some(DxAccess(Some(Vector("*")),
+                                         Some(AccessLevel.CONTRIBUTE),
+                                         Some(AccessLevel.VIEW),
+                                         Some(true),
+                                         None)),
+                           Some(DxExecPolicy(Some(Map("*" -> 3)),
+                                             None)),
+                           None,
+                           Some(DxTimeout(None,
+                                          Some(12),
+                                          None))
+                       )), None)))
     }
 
 
@@ -536,5 +537,79 @@ class ExtrasTest extends FlatSpec with Matchers {
 
         val result = dxDetails.toDetailsJson
         result("upstreamProjects") should be (dxDetailsJson)
+    }
+
+    it should "all DxAttr to return RunSpec Json" taggedAs(EdgeTest) in {
+
+        val expectedPolicy = """
+            |{
+            |  "*": {
+            |    "minutes": 30
+            |  }
+            |}
+          """.stripMargin.parseJson
+
+        val expected: Map[String, JsValue] = Map("timeoutPolicy" -> expectedPolicy)
+
+        val dxAttrs: DxAttrs = DxAttrs(
+            Some(DxRunSpec(
+                None, None, None, Some(DxTimeout(None, None, Some(30))))),
+            None
+        )
+
+        val runSpecJson: Map[String, JsValue] = dxAttrs.getRunSpecJson
+        (runSpecJson) should be (expected)
+
+    }
+
+    it should "all DxAttr to return empty runSpec and details Json" taggedAs(EdgeTest) in {
+
+        val dxAttrs = DxAttrs(None, None)
+
+        val runSpecJson = dxAttrs.getRunSpecJson
+        runSpecJson should be (Map.empty)
+
+        val detailJson = dxAttrs.getDetailsJson
+        detailJson should be (Map.empty)
+
+    }
+
+    it should "all DxAttr to return Details Json" in {
+
+        val expectedContent =
+          """
+            |[
+            |  {
+            |    "name": "GATK4",
+            |    "repoUrl": "https://github.com/broadinstitute/gatk",
+            |    "version": "GATK-4.0.1.2",
+            |    "license": "BSD-3-Clause",
+            |    "licenseUrl": "https://github.com/broadinstitute/LICENSE.TXT",
+            |    "author": "Broad Institute"
+            |  }
+            |]
+            |
+          """.stripMargin.parseJson
+
+        val expected: Map[String, JsValue] = Map("upstreamProjects" -> expectedContent)
+
+        val dxAttrs: DxAttrs = DxAttrs(
+            None,
+            Some(DxDetails(Some(
+                List(DxLicense(
+                    "GATK4",
+                    "https://github.com/broadinstitute/gatk",
+                    "GATK-4.0.1.2",
+                    "BSD-3-Clause",
+                    "https://github.com/broadinstitute/LICENSE.TXT",
+                    "Broad Institute")
+                )
+            ))
+            )
+        )
+
+        val detailsJson = dxAttrs.getDetailsJson
+
+        expected should be (detailsJson)
     }
 }

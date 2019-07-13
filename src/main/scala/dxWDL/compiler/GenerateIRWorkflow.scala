@@ -411,16 +411,8 @@ case class GenerateIRWorkflow(wf : WorkflowDefinition,
                                                          blockPath, innerEnv)
                 (Some(callable.name), aux :+ callable)
         }
-        val empty_meta = Map[String, String]()
 
-        val applet = IR.Applet(s"${wfName}_frag_${genFragId()}",
-                               inputVars,
-                               outputVars,
-                               IR.InstanceTypeDefault,
-                               IR.DockerImageNone,
-                               IR.AppletKindWfFragment(innerCall.toVector, blockPath, fqnDictTypes),
-                               empty_meta,
-                               wfSourceStandAlone)
+        val applet = IR.Applet(s"${wfName}_frag_${genFragId()}", inputVars, outputVars, IR.InstanceTypeDefault, IR.DockerImageNone, IR.AppletKindWfFragment(innerCall.toVector, blockPath, fqnDictTypes), wfSourceStandAlone)
 
         val sArgs : Vector[SArg] = closure.map {
             case (_, LinkedVar(_, sArg)) => sArg
@@ -530,15 +522,7 @@ case class GenerateIRWorkflow(wf : WorkflowDefinition,
                                   inputVars: Vector[CVar]) : (IR.Stage, IR.Applet) = {
         val outputVars: Vector[CVar] = inputVars
 
-        val emptyMeta = Map[String, String]()
-        val applet = IR.Applet(s"${wfName}_${COMMON}",
-                               inputVars,
-                               outputVars,
-                               IR.InstanceTypeDefault,
-                               IR.DockerImageNone,
-                               IR.AppletKindWfInputs,
-                               emptyMeta,
-                               wfSourceStandAlone)
+        val applet = IR.Applet(s"${wfName}_${COMMON}", inputVars, outputVars, IR.InstanceTypeDefault, IR.DockerImageNone, IR.AppletKindWfInputs, wfSourceStandAlone)
         Utils.trace(verbose.on, s"Compiling common applet ${applet.name}")
 
         val sArgs: Vector[SArg] = inputVars.map{ _ => IR.SArgEmpty}.toVector
@@ -579,16 +563,7 @@ case class GenerateIRWorkflow(wf : WorkflowDefinition,
                 throw new Exception(s"unhandled output ${other}")
         }.toVector
 
-        val emptyMeta = Map[String, String]()
-
-        val applet = IR.Applet(s"${wfName}_${OUTPUT_SECTION}",
-                               inputVars.map(_.cVar),
-                               outputVars,
-                               IR.InstanceTypeDefault,
-                               IR.DockerImageNone,
-                               IR.AppletKindWfOutputs,
-                               emptyMeta,
-                               wfSourceStandAlone)
+        val applet = IR.Applet(s"${wfName}_${OUTPUT_SECTION}", inputVars.map(_.cVar), outputVars, IR.InstanceTypeDefault, IR.DockerImageNone, IR.AppletKindWfOutputs, wfSourceStandAlone)
 
         // define the extra stage we add to the workflow
         (IR.Stage(OUTPUT_SECTION, genStageId(Some(OUTPUT_SECTION)), applet.name,
@@ -604,17 +579,8 @@ case class GenerateIRWorkflow(wf : WorkflowDefinition,
                                 wfSourceStandAlone : String,
                                 wfOutputs: Vector[(CVar, SArg)]) : (IR.Stage, IR.Applet) = {
 
-        val emptyMeta = Map[String, String]()
-
         // We need minimal compute resources, use the default instance type
-        val applet = IR.Applet(s"${wfName}_${REORG}",
-                               wfOutputs.map{ case (cVar, _) => cVar },
-                               Vector.empty,
-                               IR.InstanceTypeDefault,
-                               IR.DockerImageNone,
-                               IR.AppletKindWorkflowOutputReorg,
-                               emptyMeta,
-                               wfSourceStandAlone)
+        val applet = IR.Applet(s"${wfName}_${REORG}", wfOutputs.map{ case (cVar, _) => cVar }, Vector.empty, IR.InstanceTypeDefault, IR.DockerImageNone, IR.AppletKindWorkflowOutputReorg, wfSourceStandAlone)
         Utils.trace(verbose.on, s"Compiling output reorganization applet ${applet.name}")
 
         // Link to the X.y original variables

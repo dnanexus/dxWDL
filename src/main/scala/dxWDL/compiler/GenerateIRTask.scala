@@ -158,13 +158,6 @@ case class GenerateIRTask(verbose: Verbose,
         val WdlCodeSnippet(selfContainedSourceCode) =
             WdlCodeGen(verbose, typeAliases, language).standAloneTask(taskCleanedSourceCode)
 
-        IR.Applet(task.name,
-                  inputs,
-                  outputs,
-                  instanceType,
-                  docker,
-                  kind,
-                  task.meta,
-                  selfContainedSourceCode)
+        IR.Applet(task.name, inputs, outputs, instanceType, docker, kind, selfContainedSourceCode)
     }
 }

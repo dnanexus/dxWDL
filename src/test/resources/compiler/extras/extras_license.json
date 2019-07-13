@@ -9,7 +9,7 @@
     }
   },
   "per_task_dx_attributes" : {
-    "Add": {
+    "add": {
       "details": {
         "upstreamProjects": [
           {

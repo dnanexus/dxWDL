@@ -38,24 +38,6 @@ class NativeTest extends FlatSpec with Matchers {
                            "-locked",
                            "-quiet")
 
-    it should "Native compile a single WDL task with summary" taggedAs(NativeTestXX) in {
-        val path = pathFromBasename("compiler", "add.wdl")
-        val retval = Main.compile(path.toString :: "--verbose" :: "--verboseKey" :: "NativeTest" ::  cFlags)
-
-        val appPath = "%s:/unit_tests/add".format(dxTestProject.getId)
-        val expected = "Adds two int together."
-
-        val (stdout, stderr) = Utils.execCommand(s"dx describe ${appPath} --json")
-
-        val summary = stdout.parseJson.asJsObject.fields.get("summary") match {
-            case Some(JsString(x)) => x.replaceAll("\"", "")
-            case other => throw new Exception(s"Unexpected result ${other}")
-        }
-
-        retval shouldBe a [Main.SuccessfulTermination]
-        summary shouldBe expected
-    }
-
     it should "Native compile a single WDL task" taggedAs(NativeTestXX) in {
         val path = pathFromBasename("compiler", "add.wdl")
         val retval = Main.compile(path.toString :: cFlags)
@@ -128,6 +110,20 @@ class NativeTest extends FlatSpec with Matchers {
 
     it should "be able to include license information in details" taggedAs(EdgeTest) in {
 
+        val expected =
+            """
+              |[
+              |  {
+              |    "author":"Broad Institute",
+              |    "license":"BSD-3-Clause",
+              |    "licenseUrl":"https://github.com/broadinstitute/LICENSE.TXT",
+              |    "name":"GATK4",
+              |    "repoUrl":"https://github.com/broadinstitute/gatk",
+              |    "version":"GATK-4.0.1.2"
+              |    }
+              |]
+            """.stripMargin.parseJson
+
         val path = pathFromBasename("compiler", "add.wdl")
         val extraPath = pathFromBasename("compiler/extras",  "extras_license.json")
 
@@ -136,20 +132,20 @@ class NativeTest extends FlatSpec with Matchers {
         )
 
         val appPath = "%s:/unit_tests/add".format(dxTestProject.getId)
-        val expected =
-          """
-            |something
-          """.stripMargin
 
         val (stdout, stderr) = Utils.execCommand(s"dx describe ${appPath} --json")
 
-        val summary = stdout.parseJson.asJsObject.fields.get("details") match {
-            case Some(JsString(x)) => x.replaceAll("\"", "")
+        val license = stdout.parseJson.asJsObject.fields.get("details") match {
+            case Some(JsObject(x)) => x.get("upstreamProjects") match {
+                case None => List.empty
+                case Some(s) => s
+
+            }
             case other => throw new Exception(s"Unexpected result ${other}")
         }
 
         retval shouldBe a [Main.SuccessfulTermination]
-        summary shouldBe expected
+        license shouldBe expected
     }
 
     it should "deep nesting" taggedAs(NativeTestXX) in {

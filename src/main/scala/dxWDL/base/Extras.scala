@@ -169,8 +169,25 @@ case class DxRunSpec(access: Option[DxAccess],
 }
 
 case class DxAttrs(runSpec: Option[DxRunSpec],
-                   details: Option[DxDetails])
+                   details: Option[DxDetails]){
 
+    def getRunSpecJson: Map[String, JsValue] = {
+        val runSpecJson: Map[String, JsValue] = runSpec match {
+            case None => Map.empty
+            case Some(runSpec) => runSpec.toRunSpecJson
+        }
+
+        runSpecJson
+    }
+
+    def getDetailsJson: Map[String, JsValue] = {
+        val detailsJson: Map[String, JsValue] = details match {
+            case None => Map.empty
+            case Some(details) => details.toDetailsJson
+        }
+        detailsJson
+    }
+}
 
 case class DxLicense(name: String,
                      repoUrl: String,
@@ -184,28 +201,21 @@ case class DxDetails(upstreamProjects: Option[List[DxLicense]]){
 
     def toDetailsJson : Map[String, JsValue] = {
 
-        implicit val personJsonWriter: RootJsonWriter[DxLicense] = new RootJsonWriter[DxLicense] {
-
-            def write(dxLicense: DxLicense): JsValue = {
+        val something = upstreamProjects match {
+            case None => List.empty
+            case Some(x) => x.map{ dxLicense : DxLicense =>
                 JsObject(
-                    "name" -> dxLicense.name.toJson,
-                    "repoUrl" -> dxLicense.repoUrl.toJson,
-                    "version" -> dxLicense.version.toJson,
-                    "license" -> dxLicense.license.toJson,
-                    "licenseUrl" -> dxLicense.licenseUrl.toJson,
-                    "author" -> dxLicense.author.toJson
+                    "name" -> JsString(dxLicense.name),
+                    "repoUrl" -> JsString(dxLicense.repoUrl),
+                    "version" -> JsString(dxLicense.version),
+                    "license" -> JsString(dxLicense.license),
+                    "licenseUrl" -> JsString(dxLicense.licenseUrl),
+                    "author" -> JsString(dxLicense.author)
                 )
             }
         }
 
-        val something = upstreamProjects match {
-            case None => List.empty
-            case Some(x) => x.map{ p : DxLicense => p.toJson}
-            }
-
-
-
-        return Map("upstreamLicense" -> something.toJson)
+        return Map("upstreamProjects" -> something.toJson)
         }
 
     }
@@ -558,7 +568,7 @@ object Extras {
         val perTaskDxAttrs : Map[String, DxAttrs] =
             checkedParseObjectField(fields, "per_task_dx_attributes") match {
                 case JsNull =>
-                    Map.empty[String, DxAttrs]
+                    Map.empty
                 case jsObj =>
                     val fields = jsObj.asJsObject.fields
                     fields.foldLeft(Map.empty[String, DxAttrs]){
