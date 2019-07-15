@@ -201,7 +201,7 @@ case class DxDetails(upstreamProjects: Option[List[DxLicense]]){
 
     def toDetailsJson : Map[String, JsValue] = {
 
-        val something = upstreamProjects match {
+        val upstreamProjectList: List[JsObject] = upstreamProjects match {
             case None => List.empty
             case Some(x) => x.map{ dxLicense : DxLicense =>
                 JsObject(
@@ -215,7 +215,7 @@ case class DxDetails(upstreamProjects: Option[List[DxLicense]]){
             }
         }
 
-        return Map("upstreamProjects" -> something.toJson)
+        return Map("upstreamProjects" -> upstreamProjectList.toJson)
         }
 
     }
@@ -255,7 +255,6 @@ case class Extras(defaultRuntimeAttributes: Map[String, WomExpression],
     }
 
 }
-
 
 object Extras {
     val DX_INSTANCE_TYPE_ATTR = "dx_instance_type"
