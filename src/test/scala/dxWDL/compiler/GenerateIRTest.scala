@@ -3,7 +3,8 @@ package dxWDL.compiler
 import java.nio.file.{Path, Paths}
 import org.scalatest.{FlatSpec, Matchers}
 import org.scalatest.Inside._
-import wom.callable.{CallableTaskDefinition, MetaValueElement}
+import wom.callable.{CallableTaskDefinition}
+import wom.callable.MetaValueElement
 
 import dxWDL.Main
 import dxWDL.base.Utils
@@ -255,12 +256,13 @@ class GenerateIRTest extends FlatSpec with Matchers {
         }
 
         val cgrepTask = getTaskByName("cgrep", bundle)
-        cgrepTask.parameterMeta shouldBe (Map("in_file" -> "stream"))
+        cgrepTask.parameterMeta shouldBe (Map("in_file" -> MetaValueElement.MetaValueElementString("stream")))
         val iDef = cgrepTask.inputs.find(_.name == "in_file").get
         iDef.parameterMeta shouldBe (Some(MetaValueElement.MetaValueElementString("stream")))
 
         val diffTask = getTaskByName("diff", bundle)
-        diffTask.parameterMeta shouldBe (Map("a" -> "stream", "b" -> "stream"))
+        diffTask.parameterMeta shouldBe (Map("a" -> MetaValueElement.MetaValueElementString("stream"),
+                                             "b" -> MetaValueElement.MetaValueElementString("stream")))
     }
 
     it should "emit warning for streaming on non files I" in {
@@ -296,11 +298,8 @@ class GenerateIRTest extends FlatSpec with Matchers {
             case _ => throw new Exception("sanity")
         }
         val diffTask = getTaskByName("diff", bundle)
-        diffTask.parameterMeta shouldBe (Map("a" -> "stream", "b" -> "stream"))
-
-        // This doesn't work on draft2
-        //val iDef = diffTask.inputs.find(_.name == "a").get
-        //iDef.parameterMeta shouldBe (Some(MetaValueElement.MetaValueElementString("stream")))
+        diffTask.parameterMeta shouldBe (Map("a" -> MetaValueElement.MetaValueElementString("stream"),
+                                             "b" -> MetaValueElement.MetaValueElementString("stream")))
     }
 
     it should "handle an empty workflow" in {

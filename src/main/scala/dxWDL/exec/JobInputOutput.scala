@@ -6,6 +6,7 @@ import common.validation.ErrorOr.ErrorOr
 import java.nio.file.{Path, Paths}
 import spray.json._
 import wom.callable.Callable._
+import wom.callable.MetaValueElement
 import wom.expression.WomExpression
 import wom.types._
 import wom.values._
@@ -256,14 +257,14 @@ case class JobInputOutput(dxIoFunctions : DxIoFunctions,
 
 
     // Figure out which files need to be streamed
-    private def areStreaming(parameterMeta: Map[String, String],
+    private def areStreaming(parameterMeta: Map[String, MetaValueElement],
                              inputs: Map[InputDefinition, WomValue]) : Set[Furl] = {
         inputs.map{
             case (iDef, womValue) =>
                 // This is better "iDef.parameterMeta", but it does not
                 // work on draft2.
                 parameterMeta.get(iDef.name) match {
-                    case (Some("stream")) =>
+                    case (Some(MetaValueElement.MetaValueElementString("stream"))) =>
                         findFiles(womValue)
                     case _ =>
                         Vector.empty
@@ -282,7 +283,7 @@ case class JobInputOutput(dxIoFunctions : DxIoFunctions,
     // Notes:
     // A file may be referenced more than once, we want to download it
     // just once.
-    def localizeFiles(parameterMeta: Map[String, String],
+    def localizeFiles(parameterMeta: Map[String, MetaValueElement],
                       inputs: Map[InputDefinition, WomValue],
                       inputsDir: Path) : (Map[InputDefinition, WomValue],
                                           Map[Furl, Path],

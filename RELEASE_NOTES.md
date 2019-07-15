@@ -4,6 +4,10 @@
 **Fixed**
 - [Bug 274](https://github.com/dnanexus/dxWDL/issues/274), losing pipe symbols ('|') at the beginning of a line.
 
+**Changed**
+- Upgrade to Cromwell 44, with support for JSON-like values in meta sections
+
+
 ## 1.12
 **Fixed**
 - Tolerate platform applets/workflows with input/output specs that use non WDL types. For example, an array of applets.

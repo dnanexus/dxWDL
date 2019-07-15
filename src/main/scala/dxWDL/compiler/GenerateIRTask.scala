@@ -4,6 +4,7 @@ import cats.data.Validated.{Invalid, Valid}
 import common.validation.ErrorOr.ErrorOr
 import wom.callable.CallableTaskDefinition
 import wom.callable.Callable._
+import wom.callable.MetaValueElement._
 import wom.types._
 import wom.values._
 
@@ -112,7 +113,7 @@ case class GenerateIRTask(verbose: Verbose,
 
         val kind =
             (task.meta.get("type"), task.meta.get("id")) match {
-                case (Some("native"), Some(id)) =>
+                case (Some(MetaValueElementString("native")), Some(MetaValueElementString(id))) =>
                     // wrapper for a native applet.
                     // make sure the runtime block is empty
                     if (!task.runtimeAttributes.attributes.isEmpty)
