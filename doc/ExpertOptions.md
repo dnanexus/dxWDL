@@ -393,6 +393,37 @@ section. For example
 will override the default timeout for tasks `Add` and `Inc`. It will also provide
 `UPLOAD` instead of `VIEW` project access to `Inc`.
 
+You are also able add citations or licenses information using for each task at the `per_task_dx_attributes` section. For example
+
+```
+{
+  "per_task_dx_attributes" : {
+    "Add": {
+      "runSpec": {
+        "timeoutPolicy": {
+          "*": {
+             "minutes": 30
+          }
+        }
+      },
+      "details": {
+        "upstreamProjects": [
+          {
+            "name": "GATK4",
+            "repoUrl": "https://github.com/broadinstitute/gatk",
+            "version": "GATK-4.0.1.2",
+            "license": "BSD-3-Clause",
+            "licenseUrl": "https://github.com/broadinstitute/LICENSE.TXT",
+            "author": "Broad Institute"
+          }
+        ]
+      }
+    },
+  }
+}
+```
+
+
 # Handling intermediate workflow outputs
 
 A workflow may create a large number of files, taking up significant

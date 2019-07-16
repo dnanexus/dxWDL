@@ -123,6 +123,8 @@ case class GenerateIRTask(verbose: Verbose,
                     IR.AppletKindTask(task)
             }
 
+
+
         // Figure out if we need to use docker
         val docker = task.runtimeAttributes.attributes.get("docker") match {
             case None =>
@@ -156,12 +158,6 @@ case class GenerateIRTask(verbose: Verbose,
         val WdlCodeSnippet(selfContainedSourceCode) =
             WdlCodeGen(verbose, typeAliases, language).standAloneTask(taskCleanedSourceCode)
 
-        IR.Applet(task.name,
-                  inputs,
-                  outputs,
-                  instanceType,
-                  docker,
-                  kind,
-                  selfContainedSourceCode)
+        IR.Applet(task.name, inputs, outputs, instanceType, docker, kind, selfContainedSourceCode)
     }
 }

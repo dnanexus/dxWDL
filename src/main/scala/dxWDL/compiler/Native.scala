@@ -8,6 +8,7 @@ import com.dnanexus._
 import java.security.MessageDigest
 import scala.collection.JavaConverters._
 import spray.json._
+import DefaultJsonProtocol._
 
 import wom.types._
 import wom.values._
@@ -482,11 +483,31 @@ case class Native(dxWDLrtId: Option[String],
         }
     }
 
+    private def addLicences(applet: IR.Applet) : Map[String, JsValue] = {
+
+        val taskSpecificDetails : Map[String, JsValue] =
+            if (applet.kind.isInstanceOf[IR.AppletKindTask]) {
+                // A task can override the default dx attributes
+                extras match {
+                    case None => Map.empty
+                    case Some(ext) => ext.perTaskDxAttributes.get(applet.name) match {
+                        case None => Map.empty
+                        case Some(dta) => dta.getDetailsJson
+                    }
+                }
+            } else {
+                Map("test"->"something".toJson)
+            }
+
+
+        return taskSpecificDetails
+    }
+
     // Set the run spec.
     //
     private def calcRunSpec(applet: IR.Applet,
                             details: Map[String, JsValue],
-                            bashScript: String) : (JsValue, JsValue) = {
+                            bashScript: String) : (JsValue, Map[String, JsValue]) = {
         // find the dxWDL asset
         val instanceType:String = applet.instanceType match {
             case x : IR.InstanceTypeConst =>
@@ -514,9 +535,10 @@ case class Native(dxWDLrtId: Option[String],
             case None => Map.empty
             case Some(ext) => ext.defaultTaskDxAttributes match {
                 case None => Map.empty
-                case Some(dta) => dta.toRunSpecJson
+                case Some(dta) => dta.getRunSpecJson
             }
         }
+
         val taskSpecificRunSpec : Map[String, JsValue] =
             if (applet.kind.isInstanceOf[IR.AppletKindTask]) {
                 // A task can override the default dx attributes
@@ -524,12 +546,13 @@ case class Native(dxWDLrtId: Option[String],
                     case None => Map.empty
                     case Some(ext) => ext.perTaskDxAttributes.get(applet.name) match {
                         case None => Map.empty
-                        case Some(dta) => dta.toRunSpecJson
+                        case Some(dta) => dta.getRunSpecJson
                     }
                 }
             } else {
                 Map.empty
             }
+
         val runSpecWithExtras = runSpec ++ extraRunSpec ++ taskSpecificRunSpec
 
         // - If the docker image is a tarball, add a link in the details field.
@@ -551,7 +574,7 @@ case class Native(dxWDLrtId: Option[String],
             case Some(dxfile) =>
                 details + ("docker-image" -> DxUtils.dxFileToJsValue(dxfile))
         }
-        (runSpecEverything, JsObject(details2))
+        (runSpecEverything, details2)
     }
 
     def calcAccess(applet: IR.Applet) : JsValue = {
@@ -668,10 +691,14 @@ case class Native(dxWDLrtId: Option[String],
             ("link_" + name) -> JsObject(
                 "$dnanexus_link" -> JsString(execLinkInfo.dxExec.getId))
         }.toMap
-
-        val (runSpec : JsValue, details: JsValue) = calcRunSpec(applet,
+        val (runSpec : JsValue, details: Map[String, JsValue]) = calcRunSpec(applet,
                                                                 auxInfo ++ dxLinks ++ metaInfo,
                                                                 bashScript)
+
+        val detailsWithLicense: Map[String, JsValue] = addLicences(applet)
+
+        val jsDetails: JsValue = JsObject(details ++ detailsWithLicense)
+
         val access : JsValue = calcAccess(applet)
 
         // A fragemnt is hidden, not visible under default settings. This
@@ -685,14 +712,14 @@ case class Native(dxWDLrtId: Option[String],
 
          // pack all the core arguments into a single request
         var reqCore = Map(
-	    "name" -> JsString(applet.name),
+            "name" -> JsString(applet.name),
             "inputSpec" -> JsArray(inputSpec),
             "outputSpec" -> JsArray(outputSpec),
             "runSpec" -> runSpec,
             "dxapi" -> JsString("1.0.0"),
             "tags" -> JsArray(JsString("dxWDL")),
-            "details" -> details,
-            "hidden" -> JsBoolean(hidden)
+            "details" -> jsDetails,
+            "hidden" -> JsBoolean(hidden),
         )
         if (access != JsNull)
             reqCore += ("access" -> access)

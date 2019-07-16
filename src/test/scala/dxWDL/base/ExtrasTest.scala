@@ -1,12 +1,12 @@
 package dxWDL.base
 
 import com.dnanexus.AccessLevel
+import dxWDL.compiler.EdgeTest
 import org.scalatest.{FlatSpec, Matchers}
 import spray.json._
 import wom.expression.WomExpression
 import wom.types._
 import wom.values._
-
 import dxWDL.util.WomValueAnalysis
 
 class ExtrasTest extends FlatSpec with Matchers {
@@ -24,7 +24,8 @@ class ExtrasTest extends FlatSpec with Matchers {
                |}""".stripMargin.parseJson
 
         val extras = Extras.parse(runtimeAttrs, verbose)
-        extras.defaultTaskDxAttributes should be (Some(DxRunSpec(None, None, Some("all"), None)))
+        extras.defaultTaskDxAttributes should be (Some(
+            DxAttrs(Some(DxRunSpec(None, None, Some("all"), None)), None)))
     }
 
     it should "invalid runSpec I" in {
@@ -117,19 +118,20 @@ class ExtrasTest extends FlatSpec with Matchers {
 
         val js = runSpecValid.parseJson
         val extras = Extras.parse(js, verbose)
-        extras.defaultTaskDxAttributes should be (Some(DxRunSpec(
-                                                           Some(DxAccess(Some(Vector("*")),
-                                                                         Some(AccessLevel.CONTRIBUTE),
-                                                                         Some(AccessLevel.VIEW),
-                                                                         Some(true),
-                                                                         None)),
-                                                           Some(DxExecPolicy(Some(Map("*" -> 3)),
-                                                                             None)),
-                                                           None,
-                                                           Some(DxTimeout(None,
-                                                                          Some(12),
-                                                                          None))
-                                                       )))
+        extras.defaultTaskDxAttributes should be (
+            Some(DxAttrs(Some(DxRunSpec(
+                           Some(DxAccess(Some(Vector("*")),
+                                         Some(AccessLevel.CONTRIBUTE),
+                                         Some(AccessLevel.VIEW),
+                                         Some(true),
+                                         None)),
+                           Some(DxExecPolicy(Some(Map("*" -> 3)),
+                                             None)),
+                           None,
+                           Some(DxTimeout(None,
+                                          Some(12),
+                                          None))
+                       )), None)))
     }
 
 
@@ -155,12 +157,12 @@ class ExtrasTest extends FlatSpec with Matchers {
         val extras = Extras.parse(js, verbose)
 
         val restartPolicy = Map("UnresponsiveWorker" -> 2, "JMInternalError" -> 0, "ExecutionError" -> 4)
-        extras.defaultTaskDxAttributes should be (Some(DxRunSpec(
+        extras.defaultTaskDxAttributes should be (Some(DxAttrs(Some(DxRunSpec(
                                                            None,
                                                            Some(DxExecPolicy(Some(restartPolicy), Some(5))),
                                                            None,
                                                            None)
-                                                  ))
+                                                  ), None)))
     }
 
     it should "recognize error in complex execution policy" in {
@@ -297,16 +299,146 @@ class ExtrasTest extends FlatSpec with Matchers {
 
         val extras = Extras.parse(runSpec, verbose)
         extras.defaultTaskDxAttributes should be (
-            Some(DxRunSpec(
+            Some(DxAttrs(Some(DxRunSpec(
                      None,
                      None,
                      None,
                      Some(DxTimeout(None, Some(12), None))
-                 )))
+                 )), None)))
         extras.perTaskDxAttributes should be (
-            Map("Multiply" -> DxRunSpec(Some(DxAccess(None, Some(AccessLevel.UPLOAD), None, None, None)),
-                                        None, None, Some(DxTimeout(None, None, Some(30)))),
-                "Add" -> DxRunSpec(None, None, None, Some(DxTimeout(None, None, Some(30)))))
+            Map("Multiply" -> DxAttrs(Some(DxRunSpec(Some(DxAccess(None, Some(AccessLevel.UPLOAD), None, None, None)),
+                                        None, None, Some(DxTimeout(None, None, Some(30))))), None),
+                "Add" -> DxAttrs(Some(DxRunSpec(None, None, None, Some(DxTimeout(None, None, Some(30))))), None)
+        ))
+    }
+
+    it should "include optional details and runSpec in per task attributes" in {
+        val runSpec : JsValue =
+            """|{
+               | "default_task_dx_attributes" : {
+               |   "runSpec": {
+               |     "timeoutPolicy": {
+               |        "*": {
+               |          "hours": 12
+               |        }
+               |     }
+               |   }
+               |  },
+               | "per_task_dx_attributes" : {
+               |   "Add": {
+               |      "runSpec": {
+               |        "timeoutPolicy": {
+               |          "*": {
+               |             "minutes": 30
+               |          }
+               |        }
+               |      },
+               |      "details": {
+               |        "upstreamProjects": [
+               |          {
+               |            "name": "GATK4",
+               |            "repoUrl": "https://github.com/broadinstitute/gatk",
+               |            "version": "GATK-4.0.1.2",
+               |            "license": "BSD-3-Clause",
+               |            "licenseUrl": "https://github.com/broadinstitute/LICENSE.TXT",
+               |            "author": "Broad Institute"
+               |          }
+               |        ]
+               |      }
+               |    },
+               |    "Multiply" : {
+               |      "runSpec": {
+               |        "timeoutPolicy": {
+               |          "*": {
+               |            "minutes": 30
+               |          }
+               |        },
+               |        "access" : {
+               |          "project": "UPLOAD"
+               |        }
+               |      }
+               |    }
+               |  }
+               |}
+               |""".stripMargin.parseJson
+
+        val extras = Extras.parse(runSpec, verbose)
+        extras.defaultTaskDxAttributes should be (
+            Some(DxAttrs(Some(DxRunSpec(
+                None,
+                None,
+                None,
+                Some(DxTimeout(None, Some(12), None))
+            )), None)))
+
+        extras.perTaskDxAttributes should be (
+            Map("Add" -> DxAttrs(
+                Some(DxRunSpec(
+                    None, None, None, Some(DxTimeout(None, None, Some(30))))),
+                Some(DxDetails(Some(
+                    List(DxLicense(
+                        "GATK4",
+                        "https://github.com/broadinstitute/gatk",
+                        "GATK-4.0.1.2",
+                        "BSD-3-Clause",
+                        "https://github.com/broadinstitute/LICENSE.TXT",
+                        "Broad Institute")))))),
+                "Multiply" -> DxAttrs(
+                    Some(DxRunSpec(Some(DxAccess(None,Some(AccessLevel.UPLOAD),None,None,None)), None, None, Some(DxTimeout(None, None, Some(30))))), None)
+            )
+        )
+    }
+
+    it should "include optional details in per task attributes" in {
+        val runSpec : JsValue =
+            """|{
+               | "default_task_dx_attributes" : {
+               |   "runSpec": {
+               |     "timeoutPolicy": {
+               |        "*": {
+               |          "hours": 12
+               |        }
+               |     }
+               |   }
+               |  },
+               | "per_task_dx_attributes" : {
+               |   "Add": {
+               |      "details": {
+               |        "upstreamProjects": [
+               |          {
+               |            "name": "GATK4",
+               |            "repoUrl": "https://github.com/broadinstitute/gatk",
+               |            "version": "GATK-4.0.1.2",
+               |            "license": "BSD-3-Clause",
+               |            "licenseUrl": "https://github.com/broadinstitute/LICENSE.TXT",
+               |            "author": "Broad Institute"
+               |          }
+               |        ]
+               |      }
+               |    }
+               |  }
+               |}
+               |""".stripMargin.parseJson
+
+        val extras = Extras.parse(runSpec, verbose)
+        extras.defaultTaskDxAttributes should be (
+            Some(
+                DxAttrs(
+                    Some(DxRunSpec(None,None,None,Some(DxTimeout(None,Some(12),None)))),
+                    None
+            )))
+        extras.perTaskDxAttributes should be (
+            Map("Add" -> DxAttrs(
+                None,
+                Some(DxDetails(Some(
+                    List(DxLicense(
+                        "GATK4",
+                        "https://github.com/broadinstitute/gatk",
+                        "GATK-4.0.1.2",
+                        "BSD-3-Clause",
+                        "https://github.com/broadinstitute/LICENSE.TXT",
+                        "Broad Institute"))))))
+            )
         )
     }
 
@@ -370,5 +502,114 @@ class ExtrasTest extends FlatSpec with Matchers {
         assertThrows[Exception] {
             Extras.parse(data, verbose)
         }
+    }
+
+    it should "convert DxLicense to JsValue" in {
+
+        val dxDetailsJson : JsValue =
+          """|[
+             |   {
+             |      "author":"author1",
+             |      "license":"license1",
+             |      "licenseUrl":"licenseURL",
+             |      "name":"name",
+             |      "repoUrl":"repoURL",
+             |      "version":"version1"
+             |   },
+             |   {
+             |      "author":"author2",
+             |      "license":"license2",
+             |      "licenseUrl":"licenseURL",
+             |      "name":"name2",
+             |      "repoUrl":"repoURL",
+             |      "version":"version2"
+             |   }
+             |]
+             |""".stripMargin.parseJson
+
+
+        val upstreamProjects  = List(
+            DxLicense("name", "repoURL", "version1", "license1", "licenseURL", "author1"),
+            DxLicense("name2", "repoURL", "version2", "license2", "licenseURL", "author2"),
+        )
+
+        val dxDetails = DxDetails(Some(upstreamProjects))
+
+        val result = dxDetails.toDetailsJson
+        result("upstreamProjects") should be (dxDetailsJson)
+    }
+
+    it should "all DxAttr to return RunSpec Json" taggedAs(EdgeTest) in {
+
+        val expectedPolicy = """
+            |{
+            |  "*": {
+            |    "minutes": 30
+            |  }
+            |}
+          """.stripMargin.parseJson
+
+        val expected: Map[String, JsValue] = Map("timeoutPolicy" -> expectedPolicy)
+
+        val dxAttrs: DxAttrs = DxAttrs(
+            Some(DxRunSpec(
+                None, None, None, Some(DxTimeout(None, None, Some(30))))),
+            None
+        )
+
+        val runSpecJson: Map[String, JsValue] = dxAttrs.getRunSpecJson
+        (runSpecJson) should be (expected)
+
+    }
+
+    it should "all DxAttr to return empty runSpec and details Json" taggedAs(EdgeTest) in {
+
+        val dxAttrs = DxAttrs(None, None)
+
+        val runSpecJson = dxAttrs.getRunSpecJson
+        runSpecJson should be (Map.empty)
+
+        val detailJson = dxAttrs.getDetailsJson
+        detailJson should be (Map.empty)
+
+    }
+
+    it should "all DxAttr to return Details Json" in {
+
+        val expectedContent =
+          """
+            |[
+            |  {
+            |    "name": "GATK4",
+            |    "repoUrl": "https://github.com/broadinstitute/gatk",
+            |    "version": "GATK-4.0.1.2",
+            |    "license": "BSD-3-Clause",
+            |    "licenseUrl": "https://github.com/broadinstitute/LICENSE.TXT",
+            |    "author": "Broad Institute"
+            |  }
+            |]
+            |
+          """.stripMargin.parseJson
+
+        val expected: Map[String, JsValue] = Map("upstreamProjects" -> expectedContent)
+
+        val dxAttrs: DxAttrs = DxAttrs(
+            None,
+            Some(DxDetails(Some(
+                List(DxLicense(
+                    "GATK4",
+                    "https://github.com/broadinstitute/gatk",
+                    "GATK-4.0.1.2",
+                    "BSD-3-Clause",
+                    "https://github.com/broadinstitute/LICENSE.TXT",
+                    "Broad Institute")
+                )
+            ))
+            )
+        )
+
+        val detailsJson = dxAttrs.getDetailsJson
+
+        expected should be (detailsJson)
     }
 }
