@@ -7,6 +7,8 @@
 **Changed**
 - Upgrade to Cromwell 44, with support for JSON-like values in meta sections
 
+**Added**
+- Ability to put a list of upstream projects into the [extras file](./doc/ExpertOptions.md#Setting-dnanexus-specific-attributes-for-tasks).
 
 ## 1.12
 **Fixed**
