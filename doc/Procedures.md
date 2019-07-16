@@ -24,6 +24,8 @@ to mix the experimental release, with the old code.
 - Lines should not go over 100 characters
 - Unit tests should assert, and not print to the console
 - WDL test files belong in the top directory `test`
+- No tabs in code, only spaces.
+- Indentation in scala code should be 4 white spaces.
 
 ## Building
 
