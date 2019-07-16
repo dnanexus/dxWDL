@@ -1,0 +1,27 @@
+{
+  "default_task_dx_attributes" : {
+    "runSpec": {
+      "timeoutPolicy": {
+        "*": {
+          "hours": 12
+        }
+      }
+    }
+  },
+  "per_task_dx_attributes" : {
+    "add": {
+      "details": {
+        "upstreamProjects": [
+          {
+            "name": "GATK4",
+            "repoUrl": "https://github.com/broadinstitute/gatk",
+            "version": "GATK-4.0.1.2",
+            "license": "BSD-3-Clause",
+            "licenseUrl": "https://github.com/broadinstitute/LICENSE.TXT",
+            "author": "Broad Institute"
+          }
+        ]
+      }
+    }
+  }
+}
