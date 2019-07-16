@@ -36,8 +36,15 @@ install:
   # Clone dxWDL into a new directory,
   - pwd
   - git clone https://github.com/dnanexus-rnd/dxWDL.git
-  - echo "dxWDL commit = ${TRAVIS_COMMIT}"
-  - cd dxWDL && git checkout ${TRAVIS_COMMIT} && cd ..
+
+  - |
+      set -ex -o pipefail
+      branch=$TRAVIS_PULL_REQUEST_BRANCH
+      if [ $branch == "" ]; then
+        branch=master
+      fi
+      echo "effective branch = $branch"
+      cd dxWDL && git checkout $branch
   - ls dxWDL
 
 before_script:
