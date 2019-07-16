@@ -412,7 +412,13 @@ case class GenerateIRWorkflow(wf : WorkflowDefinition,
                 (Some(callable.name), aux :+ callable)
         }
 
-        val applet = IR.Applet(s"${wfName}_frag_${genFragId()}", inputVars, outputVars, IR.InstanceTypeDefault, IR.DockerImageNone, IR.AppletKindWfFragment(innerCall.toVector, blockPath, fqnDictTypes), wfSourceStandAlone)
+        val applet = IR.Applet(s"${wfName}_frag_${genFragId()}",
+                               inputVars,
+                               outputVars,
+                               IR.InstanceTypeDefault,
+                               IR.DockerImageNone,
+                               IR.AppletKindWfFragment(innerCall.toVector, blockPath, fqnDictTypes),
+                               wfSourceStandAlone)
 
         val sArgs : Vector[SArg] = closure.map {
             case (_, LinkedVar(_, sArg)) => sArg
@@ -521,8 +527,13 @@ case class GenerateIRWorkflow(wf : WorkflowDefinition,
                                   wfSourceStandAlone: String,
                                   inputVars: Vector[CVar]) : (IR.Stage, IR.Applet) = {
         val outputVars: Vector[CVar] = inputVars
-
-        val applet = IR.Applet(s"${wfName}_${COMMON}", inputVars, outputVars, IR.InstanceTypeDefault, IR.DockerImageNone, IR.AppletKindWfInputs, wfSourceStandAlone)
+        val applet = IR.Applet(s"${wfName}_${COMMON}",
+                               inputVars,
+                               outputVars,
+                               IR.InstanceTypeDefault,
+                               IR.DockerImageNone,
+                               IR.AppletKindWfInputs,
+                               wfSourceStandAlone)
         Utils.trace(verbose.on, s"Compiling common applet ${applet.name}")
 
         val sArgs: Vector[SArg] = inputVars.map{ _ => IR.SArgEmpty}.toVector
@@ -563,7 +574,13 @@ case class GenerateIRWorkflow(wf : WorkflowDefinition,
                 throw new Exception(s"unhandled output ${other}")
         }.toVector
 
-        val applet = IR.Applet(s"${wfName}_${OUTPUT_SECTION}", inputVars.map(_.cVar), outputVars, IR.InstanceTypeDefault, IR.DockerImageNone, IR.AppletKindWfOutputs, wfSourceStandAlone)
+        val applet = IR.Applet(s"${wfName}_${OUTPUT_SECTION}",
+                               inputVars.map(_.cVar),
+                               outputVars,
+                               IR.InstanceTypeDefault,
+                               IR.DockerImageNone,
+                               IR.AppletKindWfOutputs,
+                               wfSourceStandAlone)
 
         // define the extra stage we add to the workflow
         (IR.Stage(OUTPUT_SECTION, genStageId(Some(OUTPUT_SECTION)), applet.name,
@@ -578,9 +595,14 @@ case class GenerateIRWorkflow(wf : WorkflowDefinition,
     private def buildReorgStage(wfName: String,
                                 wfSourceStandAlone : String,
                                 wfOutputs: Vector[(CVar, SArg)]) : (IR.Stage, IR.Applet) = {
-
         // We need minimal compute resources, use the default instance type
-        val applet = IR.Applet(s"${wfName}_${REORG}", wfOutputs.map{ case (cVar, _) => cVar }, Vector.empty, IR.InstanceTypeDefault, IR.DockerImageNone, IR.AppletKindWorkflowOutputReorg, wfSourceStandAlone)
+        val applet = IR.Applet(s"${wfName}_${REORG}",
+                               wfOutputs.map{ case (cVar, _) => cVar },
+                               Vector.empty,
+                               IR.InstanceTypeDefault,
+                               IR.DockerImageNone,
+                               IR.AppletKindWorkflowOutputReorg,
+                               wfSourceStandAlone)
         Utils.trace(verbose.on, s"Compiling output reorganization applet ${applet.name}")
 
         // Link to the X.y original variables

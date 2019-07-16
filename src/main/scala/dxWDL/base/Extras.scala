@@ -194,8 +194,7 @@ case class DxLicense(name: String,
                      version: String,
                      license: String,
                      licenseUrl: String,
-                     author: String
-                    )
+                     author: String)
 
 case class DxDetails(upstreamProjects: Option[List[DxLicense]]){
 
@@ -217,7 +216,6 @@ case class DxDetails(upstreamProjects: Option[List[DxLicense]]){
 
         return Map("upstreamProjects" -> upstreamProjectList.toJson)
         }
-
     }
 
 case class DockerRegistry(registry: String,
@@ -499,7 +497,6 @@ object Extras {
         val fields = jsv.asJsObject.fields
 
         Some(DxDetails(parseUpstreamProjects(fields.get("upstreamProjects"))))
-
     }
 
     private def parseTaskDxAttrs(jsv: JsValue,
@@ -591,8 +588,6 @@ object Extras {
                perTaskDxAttrs,
                parseDockerRegistry(
                    checkedParseObjectField(fields, "docker_registry"),
-                   verbose),
-
-        )
+                   verbose))
     }
 }

@@ -116,14 +116,13 @@ object IR {
       * @param task          Task definition
       * @param womSourceCode WDL/CWL source code for task.
       */
-    case class Applet(
-                       name: String,
-                       inputs: Vector[CVar],
-                       outputs: Vector[CVar],
-                       instanceType: InstanceType,
-                       docker: DockerImage,
-                       kind: AppletKind,
-                       womSourceCode: String) extends Callable {
+    case class Applet(name: String,
+                      inputs: Vector[CVar],
+                      outputs: Vector[CVar],
+                      instanceType: InstanceType,
+                      docker: DockerImage,
+                      kind: AppletKind,
+                      womSourceCode: String) extends Callable {
         def inputVars = inputs
         def outputVars = outputs
     }
