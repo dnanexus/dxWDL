@@ -128,7 +128,9 @@ class NativeTest extends FlatSpec with Matchers {
         val extraPath = pathFromBasename("compiler/extras",  "extras_license.json")
 
         val retval = Main.compile(
-            path.toString :: "--verbose" :: "--verboseKey" :: "EdgeTest" :: "--extras" :: extraPath.toString :: cFlags
+            path.toString
+                /*:: "--verbose" :: "--verboseKey" :: "EdgeTest" */
+                :: "--extras" :: extraPath.toString :: cFlags
         )
 
         val appPath = "%s:/unit_tests/add".format(dxTestProject.getId)

@@ -7,6 +7,7 @@ import com.dnanexus._
 import java.nio.file.{Path, Paths}
 
 import wom.callable._
+import wom.callable.MetaValueElement._
 import wom.executable.WomBundle
 import wom.types._
 import wom.graph.expression._
@@ -138,7 +139,7 @@ case class Top(cOpt: CompilerOptions) {
                         //iDef.parameterMeta --- this does not work on draft2
                         task.parameterMeta.get(iDef.name) match {
                             case None => ()
-                            case Some(x : String) if x == "stream"=>
+                            case Some(MetaValueElementString(x)) if x == "stream"=>
                                 if (iDef.womType != WomSingleFileType) {
                                     val msg =
                                         s"""|Only files that are task inputs can be declared streaming.

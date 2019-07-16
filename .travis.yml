@@ -7,6 +7,10 @@ branches:
   only:
     - master
 
+# Don't clone automatically
+git:
+  clone: false
+
 addons:
   apt:
     packages:
@@ -32,9 +36,8 @@ install:
   # Clone dxWDL into a new directory,
   - pwd
   - git clone https://github.com/dnanexus-rnd/dxWDL.git
-  - echo "dxWDL branch = $TRAVIS_BRANCH"
-  - cd dxWDL && git checkout $TRAVIS_BRANCH && cd ..
-  - ls -R dxWDL
+  - cd dxWDL && git checkout $TRAVIS_PULL_REQUEST_BRANCH && cd ..
+  - ls dxWDL
 
 before_script:
   - cd /tmp/ci_tests
