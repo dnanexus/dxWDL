@@ -36,7 +36,7 @@ install:
   # Clone dxWDL into a new directory,
   - pwd
   - git clone https://github.com/dnanexus-rnd/dxWDL.git
-  - cd dxWDL && git checkout $TRAVIS_PULL_REQUEST_BRANCH
+  - cd dxWDL && git checkout $TRAVIS_PULL_REQUEST_BRANCH && cd ..
   - ls dxWDL
 
 before_script:
