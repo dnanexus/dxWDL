@@ -169,5 +169,6 @@ class InstanceTypeDBTest extends FlatSpec with Matchers {
         )
 
         db.choose3Attr(Some(239 * 1024), Some(18), Some(32)) should equal("mem3_ssd1_x32")
+        db.choose3Attr(Some(240 * 1024), Some(18), Some(32)) should equal("mem4_ssd1_x128")
     }
 }

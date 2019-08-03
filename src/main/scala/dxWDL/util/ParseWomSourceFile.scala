@@ -7,11 +7,13 @@ import common.transforms.CheckedAtoB
 import common.validation.ErrorOr._
 import com.typesafe.config.ConfigFactory
 import cromwell.core.path.{DefaultPathBuilder}
+import cromwell.languages.LanguageFactory
 import cromwell.languages.util.ImportResolver._
 import java.nio.file.{Files, Path, Paths}
 import languages.cwl.CwlV1_0LanguageFactory
 import languages.wdl.draft2.WdlDraft2LanguageFactory
 import languages.wdl.draft3.WdlDraft3LanguageFactory
+import languages.wdl.biscayne.WdlBiscayneLanguageFactory
 import scala.collection.JavaConverters._
 import scala.collection.mutable.HashMap
 import scala.util.matching.Regex
@@ -67,6 +69,19 @@ object ParseWomSourceFile {
                              resolver: ImportResolver) : ImportResolver =
         new FileRecorderResolver(allSources, resolver)
 
+    // Figure out which language variant is used in the source code. WDL/CWL, and
+    // which version.
+    private def getLanguageFactory(wfSource : String) : LanguageFactory = {
+        val langPossibilties = List(
+            new WdlDraft3LanguageFactory(ConfigFactory.empty()),
+            new WdlBiscayneLanguageFactory(ConfigFactory.empty()),
+            new CwlV1_0LanguageFactory(ConfigFactory.empty()))
+
+        langPossibilties
+            .find(_.looksParsable(wfSource))
+            .getOrElse(new WdlDraft2LanguageFactory(ConfigFactory.empty()))
+    }
+
     private def getBundle(mainFile: Path,
                           imports: List[Path]): (Language.Value,
                                                  WomBundle,
@@ -96,13 +111,7 @@ object ParseWomSourceFile {
         val importResolversRecorded: List[ImportResolver] =
             importResolvers.map{ impr => fileRecorder(allSources, impr) }
 
-        val languageFactory =
-            List(
-                new WdlDraft3LanguageFactory(ConfigFactory.empty()),
-                new CwlV1_0LanguageFactory(ConfigFactory.empty()))
-                .find(_.looksParsable(mainFileContents))
-                .getOrElse(new WdlDraft2LanguageFactory(ConfigFactory.empty())
-            )
+        val languageFactory = getLanguageFactory(mainFileContents)
         val bundleChk: Checked[WomBundle] =
             languageFactory.getWomBundle(mainFileContents, "{}", importResolversRecorded, List(languageFactory))
 
@@ -115,8 +124,9 @@ object ParseWomSourceFile {
         val lang = (languageFactory.languageName.toLowerCase,
                     languageFactory.languageVersionName) match {
             case ("wdl", "draft-2") => Language.WDLvDraft2
-            case ("wdl", "draft-3") => Language.WDLvDraft2
+            case ("wdl", "draft-3") => Language.WDLv1_0
             case ("wdl", "1.0") => Language.WDLv1_0
+            case ("wdl", "development") => Language.WDLv2_0
             case ("cwl", "1.0") => Language.CWLv1_0
             case (l,v) => throw new Exception(s"Unsupported language (${l}) version (${v})")
         }
@@ -313,6 +323,8 @@ object ParseWomSourceFile {
     def validateWdlCode(wdlWfSource: String,
                         language: Language.Value) : Unit = {
         val languageFactory = language match {
+            case Language.WDLv2_0 =>
+                new WdlBiscayneLanguageFactory(ConfigFactory.empty())
             case Language.WDLv1_0 =>
                 new WdlDraft3LanguageFactory(ConfigFactory.empty())
             case Language.WDLvDraft2 =>
@@ -343,14 +355,7 @@ object ParseWomSourceFile {
     def parseWdlWorkflow(wfSource: String) : (WorkflowDefinition,
                                               Map[String, CallableTaskDefinition],
                                               Map[String, WomType])= {
-        val languageFactory =
-            if (wfSource.startsWith("version 1.0") ||
-                    wfSource.startsWith("version draft-3")) {
-                new WdlDraft3LanguageFactory(ConfigFactory.empty())
-            } else {
-                new WdlDraft2LanguageFactory(ConfigFactory.empty())
-            }
-
+        val languageFactory = getLanguageFactory(wfSource)
         val bundleChk: Checked[WomBundle] =
             languageFactory.getWomBundle(wfSource, "{}", List.empty, List(languageFactory))
         val womBundle = bundleChk match {
@@ -398,14 +403,7 @@ object ParseWomSourceFile {
     }
 
     def parseWdlTask(wfSource: String) : (CallableTaskDefinition, Map[String, WomType]) = {
-        val languageFactory =
-            if (wfSource.startsWith("version 1.0") ||
-                    wfSource.startsWith("version draft-3")) {
-                new WdlDraft3LanguageFactory(ConfigFactory.empty())
-            } else {
-                new WdlDraft2LanguageFactory(ConfigFactory.empty())
-            }
-
+        val languageFactory = getLanguageFactory(wfSource)
         val bundleChk: Checked[WomBundle] =
             languageFactory.getWomBundle(wfSource, "{}", List.empty, List(languageFactory))
         val womBundle = bundleChk match {

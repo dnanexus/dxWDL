@@ -78,7 +78,7 @@ libraryDependencies ++= Seq(
     "org.broadinstitute" %% "cwl-v1-0" % cromwellV,
     "org.broadinstitute" %% "wdl-draft2" % cromwellV,
     "org.broadinstitute" %% "wdl-draft3" % cromwellV,
-//    "org.broadinstitute" %% "wdl-biscayne" % cromwellV,
+    "org.broadinstitute" %% "wdl-biscayne" % cromwellV,
 
     "io.spray" %% "spray-json" % "1.3.5",
     "com.typesafe" % "config" % "1.3.3",

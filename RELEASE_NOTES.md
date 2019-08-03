@@ -1,5 +1,8 @@
 # Release Notes
 
+## 1.14
+- Added initial support for the development WDL version, 1.1 (or 2.0). This does not include the directory type.
+
 ## 1.13
 **Fixed**
 - [Bug 274](https://github.com/dnanexus/dxWDL/issues/274), losing pipe symbols ('|') at the beginning of a line.
