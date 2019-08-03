@@ -146,4 +146,28 @@ class InstanceTypeDBTest extends FlatSpec with Matchers {
         }
     }
 
+    it should "work on large instances (JIRA-1258)" in {
+        val db = InstanceTypeDB(
+            Vector(
+                DxInstanceType(
+                    "mem3_ssd1_x32",
+                    245751,
+                    32,
+                    597,
+                    13.0.toFloat,
+                    Vector(("Ubuntu", "16.04"))
+                ),
+                DxInstanceType(
+                    "mem4_ssd1_x128",
+                    1967522,
+                    128,
+                    3573,
+                    14.0.toFloat,
+                    Vector(("Ubuntu", "16.04"))
+                )
+            )
+        )
+
+        db.choose3Attr(Some(239 * 1024), Some(18), Some(32)) should equal("mem3_ssd1_x32")
+    }
 }
