@@ -1,7 +1,12 @@
 # Release Notes
 
 ## 1.14
-- Added initial support for the development WDL version, 1.1 (or 2.0). This does not include the directory type.
+
+**Fixed**
+- Binary and decimal units are respected when specifying memory. For example, GB is 10^9 bytes, and GiB is 2^30 bytes.
+
+**Added**
+- Initial support for the development WDL version, 1.1 (or 2.0). This does not include the directory type.
 
 ## 1.13
 **Fixed**

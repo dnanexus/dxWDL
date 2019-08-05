@@ -22,7 +22,7 @@ case class JobInputOutput(dxIoFunctions : DxIoFunctions,
     private val verbose = (runtimeDebugLevel >= 1)
     private val wdlVarLinksConverter = WdlVarLinksConverter(dxIoFunctions.fileInfoDir, typeAliases)
 
-    private val DISAMBIGUATION_DIRS_MAX_NUM = 10
+    private val DISAMBIGUATION_DIRS_MAX_NUM = 200
 
     def unpackJobInput(name: String, womType: WomType, jsv: JsValue) : WomValue = {
         val (womValue, _) = wdlVarLinksConverter.unpackJobInput(name, womType, jsv)

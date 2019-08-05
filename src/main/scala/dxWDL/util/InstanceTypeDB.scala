@@ -94,8 +94,11 @@ case class DxInstanceType(name: String,
             return 1
 
         // Prices are the same, compare based on resource sizes.
-        val memDelta = (this.memoryMB / 1024) - (that.memoryMB / 1024)
-        val diskDelta = (this.diskGB / 16) - (that.diskGB / 16)
+        // We add some fuzziness to the comparison, because the instance
+        // types don't have the exact memory and disk space that you would
+        // expect. For example, mem1_ssd1_x2 has less disk space than mem2_ssd1_x2.
+        val memDelta = (this.memoryMB/1024) - (that.memoryMB/1024)
+        val diskDelta = (this.diskGB/16) - (that.diskGB/16)
         val cpuDelta = this.cpu - that.cpu
 
         if (memDelta == 0 &&
@@ -263,7 +266,7 @@ object InstanceTypeDB extends DefaultJsonProtocol {
                 if (numbers.length != 1)
                     throw new Exception(s"Can not parse memory specification ${buf}")
                 val number:String = numbers(0)
-                val x:Float = try { number.toFloat } catch {
+                val x:Double = try { number.toDouble } catch {
                     case e: Throwable =>
                         throw new Exception(s"Unrecognized number ${number}")
                 }
@@ -271,16 +274,31 @@ object InstanceTypeDB extends DefaultJsonProtocol {
                 // extract memory units
                 val memUnitRex = """([a-zA-Z]+)""".r
                 val memUnits = memUnitRex.findAllIn(buf).toList
-                if (memUnits.length != 1)
+                if (memUnits.length > 1)
                     throw new Exception(s"Can not parse memory specification ${buf}")
-                val memUnit:String = memUnits(0).toLowerCase
-                val mem: Float = memUnit match {
-                    case "mib" | "mb" | "m" => x
-                    case "gib" | "gb" | "g" => x * 1024
-                    case "tib" | "tb" | "t" => x * 1024 * 1024
-                    case _ => throw new Exception(s"Unknown memory unit ${memUnit}")
-                }
-                Some(mem.ceil.round)
+                val memBytes : Double =
+                    if (memUnits.isEmpty) {
+                    // specification is in bytes, convert to megabytes
+                        x.toInt
+                    } else {
+                        // Units were specified
+                        val memUnit:String = memUnits(0).toLowerCase
+                        val nBytes: Double = memUnit match {
+                            case "b" => x
+                            case "kb" => x * 1000d
+                            case "mb" => x * 1000d * 1000d
+                            case "gb" => x * 1000d * 1000d * 1000d
+                            case "tb" => x * 1000d * 1000d * 1000d * 1000d
+                            case "kib" => x * 1024d
+                            case "mib" => x * 1024d * 1024d
+                            case "gib" => x * 1024d * 1024d * 1024d
+                            case "tib" => x * 1024d * 1024d * 1024d * 1024d
+                            case _ => throw new Exception(s"Unknown memory unit ${memUnit}")
+                        }
+                        nBytes.toDouble
+                    }
+                val memMib : Double = memBytes / (1024 * 1024).toDouble
+                Some(memMib.toInt)
             case Some(x) =>
                 throw new Exception(s"Memory has to evaluate to a WomString type ${x.toWomString}")
         }

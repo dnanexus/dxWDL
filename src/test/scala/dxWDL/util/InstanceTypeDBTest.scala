@@ -103,9 +103,23 @@ class InstanceTypeDBTest extends FlatSpec with Matchers {
         }
 
         // memory specification
-        InstanceTypeDB.parse(None, Some(WomString("230GB")), None, None) shouldBe InstanceTypeReq(None, Some(230 * 1024), None, None)
+        InstanceTypeDB.parse(None, Some(WomString("230MB")), None, None) shouldBe
+        InstanceTypeReq(None, Some((230 * 1000 * 1000) / (1024 * 1024).toInt), None, None)
 
-        InstanceTypeDB.parse(None, Some(WomString("1000 TB")), None, None) shouldBe InstanceTypeReq(None, Some(1000 * 1024 * 1024), None, None)
+        InstanceTypeDB.parse(None, Some(WomString("230MiB")), None, None) shouldBe
+        InstanceTypeReq(None, Some(230), None, None)
+
+        InstanceTypeDB.parse(None, Some(WomString("230GB")), None, None) shouldBe
+        InstanceTypeReq(None, Some(((230D * 1000D * 1000D * 1000D) / (1024D * 1024D)).toInt), None, None)
+
+        InstanceTypeDB.parse(None, Some(WomString("230GiB")), None, None) shouldBe
+        InstanceTypeReq(None, Some(230 * 1024), None, None)
+
+        InstanceTypeDB.parse(None, Some(WomString("1000 TB")), None, None) shouldBe
+        InstanceTypeReq(None, Some(((1000d * 1000d * 1000d * 1000d * 1000d) / (1024d * 1024d)).toInt), None, None)
+
+        InstanceTypeDB.parse(None, Some(WomString("1000 TiB")), None, None) shouldBe
+        InstanceTypeReq(None, Some(1000 * 1024 * 1024), None, None)
 
         assertThrows[Exception] {
             InstanceTypeDB.parse(None, Some(WomString("230 44 34 GB")), None, None)
