@@ -154,7 +154,7 @@ class ParseWomSourceFileTest extends FlatSpec with Matchers {
     // The scanForTasks method takes apart the source WOM code, and then puts
     // it back together. Check that it isn't discarding the pipe characters ('|'),
     // or anything else.
-    it should "not omit symbols in the command section" taggedAs(EdgeTest) in {
+    it should "not omit symbols in the command section" in {
         val srcCode =
             """|task echo_line_split {
                |
@@ -173,5 +173,31 @@ class ParseWomSourceFileTest extends FlatSpec with Matchers {
         taskDir.size should equal(1)
         val taskSourceCode : String = taskDir.values.head
         taskSourceCode shouldBe(srcCode)
+    }
+
+    it should "parse the meta section in wdl 1.1/development" taggedAs(EdgeTest) in {
+        val srcCode =
+            """|version development
+               |
+               |task add {
+               |  input {
+               |    Int a
+               |    Int b
+               |  }
+               |  command {}
+               |  output {
+               |    Int result = a + b
+               |  }
+               |  meta {
+               |     type : "native"
+               |     id : "applet-xxxx"
+               |  }
+               |}
+               |
+               |""".stripMargin
+
+        val (task : CallableTaskDefinition, _) = ParseWomSourceFile.parseWdlTask(srcCode)
+        task.meta shouldBe (Map("type" -> MetaValueElementString("native"),
+                                "id" -> MetaValueElementString("applet-xxxx")))
     }
 }

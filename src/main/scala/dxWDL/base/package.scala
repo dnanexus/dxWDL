@@ -63,5 +63,5 @@ object RunnerWfFragmentMode extends Enumeration {
 }
 
 object Language extends Enumeration {
-    val WDLvDraft2, WDLv1_0, CWLv1_0 = Value
+    val WDLvDraft2, WDLv1_0, WDLv2_0, CWLv1_0 = Value
 }

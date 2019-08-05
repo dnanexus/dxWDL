@@ -1,5 +1,13 @@
 # Release Notes
 
+## 1.14
+
+**Fixed**
+- Binary and decimal units are respected when specifying memory. For example, GB is 10<sup>9</sup> bytes, and GiB is 2<sup>30</sup> bytes. This follows the [memory spec](https://github.com/openwdl/wdl/blob/master/versions/1.0/SPEC.md#memory).
+
+**Added**
+- Initial support for the development WDL version, 1.1 (or 2.0). This does not include the directory type.
+
 ## 1.13
 **Fixed**
 - [Bug 274](https://github.com/dnanexus/dxWDL/issues/274), losing pipe symbols ('|') at the beginning of a line.

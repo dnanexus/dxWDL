@@ -20,6 +20,7 @@ case class WdlCodeGen(verbose: Verbose,
         language match {
             case Language.WDLvDraft2 => ""
             case Language.WDLv1_0 => "version 1.0"
+            case Language.WDLv2_0 => "version development"
             case other =>
                 throw new Exception(s"Unsupported language version ${other}")
         }

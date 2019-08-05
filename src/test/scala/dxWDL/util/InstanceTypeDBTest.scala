@@ -103,9 +103,23 @@ class InstanceTypeDBTest extends FlatSpec with Matchers {
         }
 
         // memory specification
-        InstanceTypeDB.parse(None, Some(WomString("230GB")), None, None) shouldBe InstanceTypeReq(None, Some(230 * 1024), None, None)
+        InstanceTypeDB.parse(None, Some(WomString("230MB")), None, None) shouldBe
+        InstanceTypeReq(None, Some((230 * 1000 * 1000) / (1024 * 1024).toInt), None, None)
 
-        InstanceTypeDB.parse(None, Some(WomString("1000 TB")), None, None) shouldBe InstanceTypeReq(None, Some(1000 * 1024 * 1024), None, None)
+        InstanceTypeDB.parse(None, Some(WomString("230MiB")), None, None) shouldBe
+        InstanceTypeReq(None, Some(230), None, None)
+
+        InstanceTypeDB.parse(None, Some(WomString("230GB")), None, None) shouldBe
+        InstanceTypeReq(None, Some(((230D * 1000D * 1000D * 1000D) / (1024D * 1024D)).toInt), None, None)
+
+        InstanceTypeDB.parse(None, Some(WomString("230GiB")), None, None) shouldBe
+        InstanceTypeReq(None, Some(230 * 1024), None, None)
+
+        InstanceTypeDB.parse(None, Some(WomString("1000 TB")), None, None) shouldBe
+        InstanceTypeReq(None, Some(((1000d * 1000d * 1000d * 1000d * 1000d) / (1024d * 1024d)).toInt), None, None)
+
+        InstanceTypeDB.parse(None, Some(WomString("1000 TiB")), None, None) shouldBe
+        InstanceTypeReq(None, Some(1000 * 1024 * 1024), None, None)
 
         assertThrows[Exception] {
             InstanceTypeDB.parse(None, Some(WomString("230 44 34 GB")), None, None)
@@ -146,4 +160,29 @@ class InstanceTypeDBTest extends FlatSpec with Matchers {
         }
     }
 
+    it should "work on large instances (JIRA-1258)" in {
+        val db = InstanceTypeDB(
+            Vector(
+                DxInstanceType(
+                    "mem3_ssd1_x32",
+                    245751,
+                    32,
+                    597,
+                    13.0.toFloat,
+                    Vector(("Ubuntu", "16.04"))
+                ),
+                DxInstanceType(
+                    "mem4_ssd1_x128",
+                    1967522,
+                    128,
+                    3573,
+                    14.0.toFloat,
+                    Vector(("Ubuntu", "16.04"))
+                )
+            )
+        )
+
+        db.choose3Attr(Some(239 * 1024), Some(18), Some(32)) should equal("mem3_ssd1_x32")
+        db.choose3Attr(Some(240 * 1024), Some(18), Some(32)) should equal("mem4_ssd1_x128")
+    }
 }

@@ -542,7 +542,7 @@ def native_call_setup(project, applet_folder, version_id):
     subprocess.check_output(cmdline_draft2)
 
     cmdline_v1 = cmdline_common + [ "--language", "wdl_v1.0",
-                                    "--output", os.path.join(top_dir, "test/basic/dx_extern.wdl")]
+                                    "--output", os.path.join(top_dir, "test/wdl_1_0/dx_extern.wdl")]
     print(" ".join(cmdline_v1))
     subprocess.check_output(cmdline_v1)
 
@@ -561,7 +561,7 @@ def native_call_app_setup(version_id):
         subprocess.check_output(cmdline)
 
     # build WDL wrapper tasks in test/dx_extern.wdl
-    header_file = os.path.join(top_dir, "test/basic/dx_app_extern.wdl")
+    header_file = os.path.join(top_dir, "test/wdl_1_0/dx_app_extern.wdl")
     cmdline = [ "java", "-jar",
                 os.path.join(top_dir, "dxWDL-{}.jar".format(version_id)),
                 "dxni",
