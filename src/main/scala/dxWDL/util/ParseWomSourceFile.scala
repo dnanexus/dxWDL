@@ -127,6 +127,7 @@ object ParseWomSourceFile {
             case ("wdl", "draft-3") => Language.WDLv1_0
             case ("wdl", "1.0") => Language.WDLv1_0
             case ("wdl", "development") => Language.WDLv2_0
+            case ("wdl", "Biscayne") => Language.WDLv2_0
             case ("cwl", "1.0") => Language.CWLv1_0
             case (l,v) => throw new Exception(s"Unsupported language (${l}) version (${v})")
         }

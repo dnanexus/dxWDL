@@ -118,7 +118,7 @@ class GenerateIRTest extends FlatSpec with Matchers {
         ) shouldBe a [Main.SuccessfulTerminationIR]
     }
 
-    ignore should "scatters over maps -- this requires the as_pairs engine function which is experimental" in {
+    it should "scatters over maps" in {
         val path = pathFromBasename("compiler", "dict2.wdl")
         Main.compile(
             path.toString :: cFlags
