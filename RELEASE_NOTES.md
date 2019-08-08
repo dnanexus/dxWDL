@@ -1,10 +1,17 @@
 # Release Notes
 
 ## 1.15
-**Changed**
+
 Improved find-data-objects queries, reducing the time to check if an
 applet (or workflow) already exists on the platform. This is used when
 deciding if an applet should be built, rebuilt, or archived.
+
+To speed the query so it works on large projects with thousands of
+applets and workflows, we limited the search to data objects generated
+by dxWDL. These have a `dxWDL_checksum` property. This runs the risk
+of missing cases where an applet name is already in use by a regular
+dnanexus applet/workflow. We assume this is an unusual case. To fix this,
+the existing applet can be moved or renamed.
 
 ## 1.14
 

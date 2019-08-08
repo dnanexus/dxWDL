@@ -62,21 +62,34 @@ case class DxObjectDirectory(ns: IR.Bundle,
     // use map with information on each name.
     //
     // findDataObjects can be an expensive call, both on the server and client sides.
-    // We could limit it by filtering on the CHECKSUM property, which is attached only to generated
-    // applets and workflows. However, this would miss cases where an applet name is already in
+    // We limit it by filtering on the CHECKSUM property, which is attached only to generated
+    // applets and workflows. This runs the risk of missing cases where an applet name is already in
     // use by a regular dnanexus applet/workflow.
     private def bulkLookup() : HashMap[String, Vector[DxObjectInfo]] = {
+        // find applets
         val t0 = System.nanoTime()
         val dxAppletsInFolder: Map[DXDataObject, DxDescribe] =
-            DxFindDataObjects(None, verbose).apply(dxProject, Some(folder), false, Some("applet"), Vector.empty)
-        val dxWorkflowsInFolder: Map[DXDataObject, DxDescribe] =
-            DxFindDataObjects(None, verbose).apply(dxProject, Some(folder), false, Some("workflow"), Vector.empty)
+            DxFindDataObjects(None, verbose).apply(dxProject, Some(folder), false, Some("applet"),
+                                                   Vector(CHECKSUM_PROP), false)
         val t1 = System.nanoTime()
-        val diffMSec = (t1 -t0) / (1000 * 1000)
+        var diffMSec = (t1 -t0) / (1000 * 1000)
         Utils.trace(verbose.on,
-                    s"""|Found ${dxAppletsInFolder.size} applets and ${dxWorkflowsInFolder.size}
-                        |workflows in ${dxProject.getId} folder=${folder} (${diffMSec} millisec)"""
+                    s"""|Found ${dxAppletsInFolder.size} applets
+                        |in ${dxProject.getId} folder=${folder} (${diffMSec} millisec)"""
                         .stripMargin.replaceAll("\n", " "))
+
+        // find workflows
+        val t2 = System.nanoTime()
+        val dxWorkflowsInFolder: Map[DXDataObject, DxDescribe] =
+            DxFindDataObjects(None, verbose).apply(dxProject, Some(folder), false, Some("workflow"),
+                                                   Vector(CHECKSUM_PROP), false)
+        val t3 = System.nanoTime()
+        diffMSec = (t3 -t2) / (1000 * 1000)
+        Utils.trace(verbose.on,
+                    s"""|Found ${dxWorkflowsInFolder.size} workflows
+                        | in ${dxProject.getId} folder=${folder} (${diffMSec} millisec)"""
+                        .stripMargin.replaceAll("\n", " "))
+
 
         // Leave only dx:objects that could belong to the workflow
         val dxObjects = (dxAppletsInFolder ++ dxWorkflowsInFolder).filter{
@@ -123,7 +136,8 @@ case class DxObjectDirectory(ns: IR.Bundle,
     private def projectBulkLookup() : Map[String, Vector[(DXDataObject, DxDescribe)]] = {
         val t0 = System.nanoTime()
         val dxAppletsInProject: Map[DXDataObject, DxDescribe] =
-            DxFindDataObjects(None, verbose).apply(dxProject, None, true, Some("applet"), Vector(CHECKSUM_PROP))
+            DxFindDataObjects(None, verbose).apply(dxProject, None, true, Some("applet"),
+                                                   Vector(CHECKSUM_PROP), false)
         val nrApplets = dxAppletsInProject.size
         val t1 = System.nanoTime()
         val diffMSec = (t1 -t0) / (1000 * 1000)
