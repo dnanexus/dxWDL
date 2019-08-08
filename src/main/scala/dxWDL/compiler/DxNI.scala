@@ -134,7 +134,7 @@ case class DxNI(verbose: Verbose,
                        folder: String,
                        recursive: Boolean) : Vector[String] = {
         val dxObjectsInFolder : Map[DXDataObject, DxDescribe] =
-            DxFindDataObjects(None, verbose).apply(dxProject, Some(folder), recursive, None, Vector.empty)
+            DxFindDataObjects(None, verbose).apply(dxProject, Some(folder), recursive, None, Vector.empty, true)
 
         // we just want the applets
         val dxAppletsInFolder : Map[DXApplet, DxDescribe]= dxObjectsInFolder.collect{

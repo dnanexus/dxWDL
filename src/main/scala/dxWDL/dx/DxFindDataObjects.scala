@@ -119,15 +119,22 @@ case class DxFindDataObjects(limit: Option[Int],
                               dxProject: DXProject,
                               cursor: Option[JsValue],
                               klass: Option[String],
-                              withProperties: Vector[String]) : (Map[DXDataObject, DxDescribe], Option[JsValue]) = {
+                              propertyConstraints: Vector[String],
+                              withInputOutputSpec : Boolean) : (Map[DXDataObject, DxDescribe], Option[JsValue]) = {
+        val describeFields = Map("name" -> JsBoolean(true),
+                                 "folder" -> JsBoolean(true),
+                                 "size" -> JsBoolean(true),
+                                 "properties" -> JsBoolean(true))
+        val ioSpec =
+            if (withInputOutputSpec)
+                Map("inputSpec" -> JsBoolean(true),
+                    "outputSpec" -> JsBoolean(true))
+            else
+                Map.empty
+
         val reqFields = Map("visibility" -> JsString("either"),
                             "project" -> JsString(dxProject.getId),
-                            "describe" -> JsObject("name" -> JsBoolean(true),
-                                                   "folder" -> JsBoolean(true),
-                                                   "size" -> JsBoolean(true),
-                                                   "properties" -> JsBoolean(true),
-                                                   "inputSpec" -> JsBoolean(true),
-                                                   "outputSpec" -> JsBoolean(true)),
+                            "describe" -> JsObject(describeFields ++ ioSpec),
                             "scope" -> scope)
         val limitField = limit match {
             case None => Map.empty
@@ -142,13 +149,18 @@ case class DxFindDataObjects(limit: Option[Int],
             case Some(k) => Map("class" -> JsString(k))
         }
         val propertiesField =
-            if (withProperties.isEmpty) {
+            if (propertyConstraints.isEmpty) {
                 Map.empty
             } else {
-                val m = withProperties.map{ prop => prop -> JsBoolean(true) }.toMap
-                Map("properties" -> JsObject(m))
+                Map("properties" -> JsObject(
+                        propertyConstraints.map{
+                            prop => prop -> JsBoolean(true)
+                        }.toMap))
             }
         val request = JsObject(reqFields ++ cursorField ++ limitField ++ classField ++ propertiesField)
+
+        //Utils.trace(verbose.on, s"submitRequest:\n ${request.prettyPrint}")
+
         val response = DXAPI.systemFindDataObjects(DxUtils.jsonNodeOfJsValue(request),
                                                    classOf[JsonNode],
                                                    DxUtils.dxEnv)
@@ -174,7 +186,8 @@ case class DxFindDataObjects(limit: Option[Int],
               folder : Option[String],
               recurse: Boolean,
               klassRestriction : Option[String],
-              withProperties : Vector[String] // object must have these properties
+              withProperties : Vector[String], // object must have these properties
+              withInputOutputSpec : Boolean  // should the IO spec be described?
     ) : Map[DXDataObject, DxDescribe] = {
         klassRestriction.map{ k =>
             if (!(Set("record", "file", "applet", "workflow") contains k))
@@ -185,7 +198,9 @@ case class DxFindDataObjects(limit: Option[Int],
         var allResults = Map.empty[DXDataObject, DxDescribe]
         var cursor : Option[JsValue] = None
         do {
-            val (results, next) = submitRequest(scope, dxProject, cursor, klassRestriction, withProperties)
+            val (results, next) = submitRequest(scope, dxProject, cursor, klassRestriction,
+                                                withProperties,
+                                                withInputOutputSpec)
             allResults = allResults ++ results
             cursor = next
         } while (cursor != None);
