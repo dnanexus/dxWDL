@@ -118,7 +118,8 @@ case class DxFindDataObjects(limit: Option[Int],
     private def submitRequest(scope : JsValue,
                               dxProject: DXProject,
                               cursor: Option[JsValue],
-                              klass: Option[String]) : (Map[DXDataObject, DxDescribe], Option[JsValue]) = {
+                              klass: Option[String],
+                              withProperties: Vector[String]) : (Map[DXDataObject, DxDescribe], Option[JsValue]) = {
         val reqFields = Map("visibility" -> JsString("either"),
                             "project" -> JsString(dxProject.getId),
                             "describe" -> JsObject("name" -> JsBoolean(true),
@@ -140,7 +141,14 @@ case class DxFindDataObjects(limit: Option[Int],
             case None => Map.empty
             case Some(k) => Map("class" -> JsString(k))
         }
-        val request = JsObject(reqFields ++ cursorField ++ limitField ++ classField)
+        val propertiesField =
+            if (withProperties.isEmpty) {
+                Map.empty
+            } else {
+                val m = withProperties.map{ prop => prop -> JsBoolean(true) }.toMap
+                Map("properties" -> JsObject(m))
+            }
+        val request = JsObject(reqFields ++ cursorField ++ limitField ++ classField ++ propertiesField)
         val response = DXAPI.systemFindDataObjects(DxUtils.jsonNodeOfJsValue(request),
                                                    classOf[JsonNode],
                                                    DxUtils.dxEnv)
@@ -165,7 +173,9 @@ case class DxFindDataObjects(limit: Option[Int],
     def apply(dxProject : DXProject,
               folder : Option[String],
               recurse: Boolean,
-              klassRestriction : Option[String]) : Map[DXDataObject, DxDescribe] = {
+              klassRestriction : Option[String],
+              withProperties : Vector[String] // object must have these properties
+    ) : Map[DXDataObject, DxDescribe] = {
         klassRestriction.map{ k =>
             if (!(Set("record", "file", "applet", "workflow") contains k))
                 throw new Exception("class limitation must be one of {record, file, applet, workflow}")
@@ -175,7 +185,7 @@ case class DxFindDataObjects(limit: Option[Int],
         var allResults = Map.empty[DXDataObject, DxDescribe]
         var cursor : Option[JsValue] = None
         do {
-            val (results, next) = submitRequest(scope, dxProject, cursor, klassRestriction)
+            val (results, next) = submitRequest(scope, dxProject, cursor, klassRestriction, withProperties)
             allResults = allResults ++ results
             cursor = next
         } while (cursor != None);
