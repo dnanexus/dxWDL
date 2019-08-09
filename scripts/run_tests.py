@@ -48,6 +48,7 @@ wdl_v1_list = [
 
     # defaults and parameter passing
     "top",
+    "subworkflow_with_default",
 
     # can we download from a container?
     "download_from_container",

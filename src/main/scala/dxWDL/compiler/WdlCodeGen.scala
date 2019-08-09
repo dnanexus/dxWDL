@@ -103,7 +103,12 @@ task Add {
                         .stripMargin)*/
 
         val inputs = callable.inputVars.map{ cVar =>
-            s"    ${typeName(cVar.womType)} ${cVar.name}"
+            cVar.default match {
+                case None =>
+                    s"    ${typeName(cVar.womType)} ${cVar.name}"
+                case Some(womValue) =>
+                    s"    ${typeName(cVar.womType)} ${cVar.name} = ${womValue.toWomString}"
+            }
         }.mkString("\n")
 
         val outputs = callable.outputVars.map{ cVar =>
