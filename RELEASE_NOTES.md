@@ -1,5 +1,10 @@
 # Release Notes
 
+## 1.16
+**Fixed**
+- [Bug 284](https://github.com/dnanexus/dxWDL/issues/284), dropping a default when
+calling a subworkflow.
+
 ## 1.15
 
 Improved find-data-objects queries, reducing the time to check if an
