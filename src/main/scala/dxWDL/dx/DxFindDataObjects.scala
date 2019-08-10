@@ -110,7 +110,7 @@ case class DxFindDataObjects(limit: Option[Int],
             if (recurse)
                 Map("recurse" -> JsBoolean(true))
             else
-                Map.empty
+                Map("recurse" -> JsBoolean(false))
         JsObject(part1 ++ part2 ++ part3)
     }
 
