@@ -1,5 +1,10 @@
 # Release Notes
 
+## 1.17
+**Fixed**
+- Setting recurse to false, when searching for existing applets and
+  workflows. Fix contributed by Jeff Tratner.
+
 ## 1.16
 **Fixed**
 - [Bug 284](https://github.com/dnanexus/dxWDL/issues/284), dropping a default when
