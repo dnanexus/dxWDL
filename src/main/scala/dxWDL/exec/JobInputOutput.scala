@@ -3,7 +3,7 @@ package dxWDL.exec
 import cats.data.Validated.{Invalid, Valid}
 import com.dnanexus.DXFile
 import common.validation.ErrorOr.ErrorOr
-import java.nio.file.{Path, Paths}
+import java.nio.file.{Files, Path, Paths}
 import spray.json._
 import wom.callable.Callable._
 import wom.callable.MetaValueElement
@@ -380,9 +380,15 @@ case class JobInputOutput(dxIoFunctions : DxIoFunctions,
         }.toSet
 
         // upload the files; this could be in parallel in the future.
-        val uploaded_path2furl : Map[Path, Furl] = pathsToUpload.map{ path =>
-            val dxFile = DxUtils.uploadFile(path, verbose)
-            path -> Furl.dxFileToFurl(dxFile, Map.empty)   // no cache
+        val uploaded_path2furl : Map[Path, Furl] = pathsToUpload.flatMap{ path =>
+            if (Files.exists(path)) {
+                val dxFile = DxUtils.uploadFile(path, verbose)
+                Some(path -> Furl.dxFileToFurl(dxFile, Map.empty))   // no cache
+            } else {
+                // The file does not exist on the local machine. This is
+                // legal if it is optional.
+                None
+            }
         }.toMap
 
         // invert the furl2path map

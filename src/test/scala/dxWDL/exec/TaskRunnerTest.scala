@@ -243,7 +243,11 @@ class TaskRunnerTest extends FlatSpec with Matchers {
         repo should equal("ubuntu_18_04_minimal:latest")
     }
 
-    it should "handle structs" taggedAs(EdgeTest) in {
+    it should "handle structs" in {
         runTask("Person2")
+    }
+
+    it should "handle missing optional files" taggedAs(EdgeTest) in {
+        runTask("missing_optional_output_file")
     }
 }
