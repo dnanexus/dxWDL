@@ -3,7 +3,7 @@ package dxWDL.exec
 import cats.data.Validated.{Invalid, Valid}
 import com.dnanexus.DXFile
 import common.validation.ErrorOr.ErrorOr
-import java.nio.file.{Path, Paths}
+import java.nio.file.{Files, Path, Paths}
 import spray.json._
 import wom.callable.Callable._
 import wom.callable.MetaValueElement
@@ -218,6 +218,18 @@ case class JobInputOutput(dxIoFunctions : DxIoFunctions,
 
             case WomOptionalValue(t,  None) =>
                 WomOptionalValue(t, None)
+
+                // special case: an optional file. If it doesn't exist,
+                // return None
+            case WomOptionalValue(WomSingleFileType, Some(WomSingleFile(localPath))) =>
+                translation.get(localPath) match {
+                    case None =>
+                        WomOptionalValue(WomSingleFileType, None)
+                    case Some(url) =>
+                        WomOptionalValue(WomSingleFileType, Some(WomSingleFile(url)))
+                }
+
+
             case WomOptionalValue(t, Some(v)) =>
                 val v1 = translateFiles(v, translation)
                 WomOptionalValue(t, Some(v1))
@@ -380,9 +392,15 @@ case class JobInputOutput(dxIoFunctions : DxIoFunctions,
         }.toSet
 
         // upload the files; this could be in parallel in the future.
-        val uploaded_path2furl : Map[Path, Furl] = pathsToUpload.map{ path =>
-            val dxFile = DxUtils.uploadFile(path, verbose)
-            path -> Furl.dxFileToFurl(dxFile, Map.empty)   // no cache
+        val uploaded_path2furl : Map[Path, Furl] = pathsToUpload.flatMap{ path =>
+            if (Files.exists(path)) {
+                val dxFile = DxUtils.uploadFile(path, verbose)
+                Some(path -> Furl.dxFileToFurl(dxFile, Map.empty))   // no cache
+            } else {
+                // The file does not exist on the local machine. This is
+                // legal if it is optional.
+                None
+            }
         }.toMap
 
         // invert the furl2path map
