@@ -4,6 +4,27 @@
 **Fixed**
 - Setting recurse to false, when searching for existing applets and
   workflows. Fix contributed by Jeff Tratner.
+- An optional output file, that does not exist, is returned as `None`.
+For example, examine task `foo`.
+
+```wdl
+version 1.0
+task foo {
+    command {}
+    output {
+        File? f = "A.txt"
+        Array[File?] fa = ["X.txt", "Y.txt"]
+    }
+}
+```
+
+Running it will return:
+```
+{
+    "f" : null,
+    "fa" : [null, null]
+}
+```
 
 ## 1.16
 **Fixed**

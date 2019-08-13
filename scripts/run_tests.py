@@ -55,7 +55,11 @@ wdl_v1_list = [
 
     # input file with pairs
     "echo_pairs",
-    "array_structs"
+    "array_structs",
+
+    # Missing optional output files, returned as none, instead
+    # of an error
+    "missing_optional_output_file"
 ]
 
 # docker image tests

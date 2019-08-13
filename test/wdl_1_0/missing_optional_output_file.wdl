@@ -6,5 +6,6 @@ task missing_optional_output_file {
     >>>
     output {
         File? non_existent_file = "nofile"
+        Array[File?] a = ["X", "Y"]
     }
 }

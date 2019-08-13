@@ -218,6 +218,18 @@ case class JobInputOutput(dxIoFunctions : DxIoFunctions,
 
             case WomOptionalValue(t,  None) =>
                 WomOptionalValue(t, None)
+
+                // special case: an optional file. If it doesn't exist,
+                // return None
+            case WomOptionalValue(WomSingleFileType, Some(WomSingleFile(localPath))) =>
+                translation.get(localPath) match {
+                    case None =>
+                        WomOptionalValue(WomSingleFileType, None)
+                    case Some(url) =>
+                        WomOptionalValue(WomSingleFileType, Some(WomSingleFile(url)))
+                }
+
+
             case WomOptionalValue(t, Some(v)) =>
                 val v1 = translateFiles(v, translation)
                 WomOptionalValue(t, Some(v1))
