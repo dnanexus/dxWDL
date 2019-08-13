@@ -21,10 +21,12 @@ task foo {
 Running it will return:
 ```
 {
-    "f" : null,
     "fa" : [null, null]
 }
 ```
+Note that `f` is missing. When passing through the DNAx
+system, it is removed becaues it is optional and null.
+
 
 ## 1.16
 **Fixed**
