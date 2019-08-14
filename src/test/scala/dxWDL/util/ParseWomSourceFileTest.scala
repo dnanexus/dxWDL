@@ -8,6 +8,8 @@ import wom.callable.MetaValueElement._
 // These tests involve compilation -without- access to the platform.
 //
 class ParseWomSourceFileTest extends FlatSpec with Matchers {
+    private val parseWomSourceFile = ParseWomSourceFile(false)
+
     private def normalize(s: String) : String = {
         s.replaceAll("(?s)\\s+", " ").trim
     }
@@ -19,7 +21,7 @@ class ParseWomSourceFileTest extends FlatSpec with Matchers {
                |}
                |""".stripMargin
 
-        val taskDir = ParseWomSourceFile.scanForTasks(srcCode)
+        val taskDir = parseWomSourceFile.scanForTasks(srcCode)
         taskDir.size should equal(1)
         val helloTask = taskDir.get("hello")
         inside (helloTask) {
@@ -39,7 +41,7 @@ class ParseWomSourceFileTest extends FlatSpec with Matchers {
                |}
                |""".stripMargin
 
-        val taskDir = ParseWomSourceFile.scanForTasks(srcCode)
+        val taskDir = parseWomSourceFile.scanForTasks(srcCode)
         taskDir.size should equal(1)
         val subTask = taskDir.get("sub")
         inside (subTask) {
@@ -64,7 +66,7 @@ class ParseWomSourceFileTest extends FlatSpec with Matchers {
                |}
                |""".stripMargin
 
-        val taskDir = ParseWomSourceFile.scanForTasks(srcCode)
+        val taskDir = parseWomSourceFile.scanForTasks(srcCode)
         taskDir.size should equal(2)
         inside (taskDir.get("sub")) {
             case Some(x) =>
@@ -95,7 +97,7 @@ class ParseWomSourceFileTest extends FlatSpec with Matchers {
                |}
                |""".stripMargin
 
-        val taskDir = ParseWomSourceFile.scanForTasks(srcCode)
+        val taskDir = parseWomSourceFile.scanForTasks(srcCode)
         taskDir.size should equal(1)
         inside (taskDir.get("Add")) {
             case Some(x) =>
@@ -120,7 +122,7 @@ class ParseWomSourceFileTest extends FlatSpec with Matchers {
                |
                |""".stripMargin
 
-        val (task : CallableTaskDefinition, _) = ParseWomSourceFile.parseWdlTask(srcCode)
+        val (task : CallableTaskDefinition, _) = parseWomSourceFile.parseWdlTask(srcCode)
         task.meta shouldBe (Map("type" -> MetaValueElementString("native"),
                                 "id" -> MetaValueElementString("applet-xxxx")))
     }
@@ -146,7 +148,7 @@ class ParseWomSourceFileTest extends FlatSpec with Matchers {
                |
                |""".stripMargin
 
-        val (task : CallableTaskDefinition, _) = ParseWomSourceFile.parseWdlTask(srcCode)
+        val (task : CallableTaskDefinition, _) = parseWomSourceFile.parseWdlTask(srcCode)
         task.meta shouldBe (Map("type" -> MetaValueElementString("native"),
                                 "id" -> MetaValueElementString("applet-xxxx")))
     }
@@ -169,7 +171,7 @@ class ParseWomSourceFileTest extends FlatSpec with Matchers {
                |  }
                |}""".stripMargin
 
-        val taskDir = ParseWomSourceFile.scanForTasks(srcCode)
+        val taskDir = parseWomSourceFile.scanForTasks(srcCode)
         taskDir.size should equal(1)
         val taskSourceCode : String = taskDir.values.head
         taskSourceCode shouldBe(srcCode)
@@ -196,7 +198,7 @@ class ParseWomSourceFileTest extends FlatSpec with Matchers {
                |
                |""".stripMargin
 
-        val (task : CallableTaskDefinition, _) = ParseWomSourceFile.parseWdlTask(srcCode)
+        val (task : CallableTaskDefinition, _) = parseWomSourceFile.parseWdlTask(srcCode)
         task.meta shouldBe (Map("type" -> MetaValueElementString("native"),
                                 "id" -> MetaValueElementString("applet-xxxx")))
     }

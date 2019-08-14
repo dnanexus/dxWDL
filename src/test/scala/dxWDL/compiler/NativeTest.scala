@@ -104,7 +104,7 @@ class NativeTest extends FlatSpec with Matchers {
         // check that the generated file contains the correct tasks
         val content = Source.fromFile(outputPath).getLines.mkString("\n")
 
-        val tasks : Map[String, String] = ParseWomSourceFile.scanForTasks(content)
+        val tasks : Map[String, String] = ParseWomSourceFile(false).scanForTasks(content)
         tasks.keys shouldBe(Set("native_sum", "native_sum_012", "native_mk_list", "native_diff", "native_concat"))
     }
 

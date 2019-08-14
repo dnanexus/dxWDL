@@ -366,7 +366,7 @@ object Block {
                                                   Vector[GraphOutputNode]) // outputs
     = {
         // sort from low to high according to the source lines.
-        val callsLoToHi : Vector[String] = ParseWomSourceFile.scanForCalls(graph, wfSource)
+        val callsLoToHi : Vector[String] = ParseWomSourceFile(false).scanForCalls(graph, wfSource)
         splitGraph(graph, callsLoToHi)
     }
 

@@ -384,16 +384,25 @@ case class Native(dxWDLrtId: Option[String],
     }
 
     // Add a checksum to a request
-    private def checksumReq(req: JsValue) : (String, JsValue) = {
-        val digest = chksum(req.prettyPrint)
+    private def checksumReq(name: String,
+                            fields: Map[String, JsValue]) : (String, JsValue) = {
+        Utils.trace(verbose2, s"""|${name} -> checksum request
+                                  |fields = ${JsObject(fields)}.prettyPrint
+                                  |
+                                  |""".stripMargin)
+
+/*        // Ensure the ordering of properties is deterministic
+        val sortedFields = fields
+            .toVector
+            .sortWith(_._1 < _._1)
+            .map{ case (k,v) => k + " : " + v.prettyPrint }
+            .mkString("\n")*/
+
+        val digest = chksum(JsObject(fields).prettyPrint)
         val props = Map("properties" ->
                             JsObject(Utils.CHECKSUM_PROP -> JsString(digest)))
-        val reqChk = req match {
-            case JsObject(fields) =>
-                JsObject(fields ++ props)
-            case _ => throw new Exception("sanity")
-        }
-        (digest, reqChk)
+        val reqChk = fields ++ props
+        (digest, JsObject(reqChk))
     }
 
     // Do we need to build this applet/workflow?
@@ -711,7 +720,7 @@ case class Native(dxWDLrtId: Option[String],
             }
 
          // pack all the core arguments into a single request
-        var reqCore = Map(
+        val reqCore = Map(
             "name" -> JsString(applet.name),
             "inputSpec" -> JsArray(inputSpec),
             "outputSpec" -> JsArray(outputSpec),
@@ -721,11 +730,12 @@ case class Native(dxWDLrtId: Option[String],
             "details" -> jsDetails,
             "hidden" -> JsBoolean(hidden),
         )
-        if (access != JsNull)
-            reqCore += ("access" -> access)
+        val accessField =
+            if (access == JsNull) Map.empty
+            else Map("access" -> access)
 
         // Add a checksum
-        val (digest, req) = checksumReq(JsObject(reqCore))
+        val (digest, req) = checksumReq(applet.name, reqCore ++ accessField)
 
         // Add properties we do not want to fall under the checksum.
         // This allows, for example, moving the dx:executable, while

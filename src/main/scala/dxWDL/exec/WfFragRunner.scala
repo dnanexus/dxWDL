@@ -76,7 +76,7 @@ case class WfFragRunner(wf: WorkflowDefinition,
                                                 runtimeDebugLevel,
                                                 fragInputOutput.typeAliases)
     // The source code for all the tasks
-    private val taskSourceDir : Map[String, String] = ParseWomSourceFile.scanForTasks(wfSourceCode)
+    private val taskSourceDir : Map[String, String] = ParseWomSourceFile(verbose).scanForTasks(wfSourceCode)
 
     var gSeqNum = 0
     private def launchSeqNum() : Int = {
@@ -709,7 +709,7 @@ case class WfFragRunner(wf: WorkflowDefinition,
         Utils.appletLog(verbose, s"Environment: ${envInitial}")
 
         // sort from low to high according to the source lines.
-        val callsLoToHi : Vector[String] = ParseWomSourceFile.scanForCalls(wf.innerGraph, wfSourceCode)
+        val callsLoToHi : Vector[String] = ParseWomSourceFile(verbose).scanForCalls(wf.innerGraph, wfSourceCode)
 
         // Find the fragment block to execute
         val block = Block.getSubBlock(blockPath, wf.innerGraph, callsLoToHi)
