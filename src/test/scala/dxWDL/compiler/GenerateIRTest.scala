@@ -379,7 +379,7 @@ class GenerateIRTest extends FlatSpec with Matchers {
         retval shouldBe a[Main.SuccessfulTerminationIR]
     }
 
-    it should "retain all characters in a WDL task" taggedAs(EdgeTest) in {
+    it should "retain all characters in a WDL task" in {
         val path = pathFromBasename("bugs", "missing_chars_in_task.wdl")
         val retval = Main.compile(path.toString
 //                                      :: "--verbose"
@@ -407,5 +407,14 @@ class GenerateIRTest extends FlatSpec with Matchers {
                 val task = callable.asInstanceOf[IR.Applet]
                 task.womSourceCode should include (commandSection)
         }
+    }
+
+    it should "correctly flatten a workflow with imports" taggedAs(EdgeTest) in {
+        val path = pathFromBasename("compiler", "wf_to_flatten.wdl")
+        val retval = Main.compile(path.toString
+//                                      :: "--verbose"
+//                                      :: "--verboseKey" :: "GenerateIR"
+                                      :: cFlags)
+        retval shouldBe a[Main.SuccessfulTerminationIR]
     }
 }

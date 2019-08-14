@@ -211,6 +211,7 @@ task Add {
     //   call lib.Multiply as mul { ... }
     //   call lib.Add { ... }
     //   call lib.Nice as nice { ... }
+    //   call lib.Hello
     // }
     //
     // rewrite the workflow, and remove the calls to external libraries.
@@ -219,21 +220,36 @@ task Add {
     //   call Multiply as mul { ... }
     //   call Add { ... }
     //   call Nice as nice { ... }
+    //   call Nice as nice { ... }
+    //   call Hello
     // }
     //
-    private val callLibrary: Regex = "^(\\s*)call(\\s+)(\\w+)\\.(\\w+)(\\s+)(.+)".r
+    private val callLibrary:       Regex = "^(\\s*)call(\\s+)(\\w+)\\.(\\w+)(\\s+)(.+)".r
+    private val callLibraryNoArgs: Regex = "^(\\s*)call(\\s+)(\\w+)\\.(\\w+)(\\s*)".r
     private def flattenWorkflow(wdlWfSource: String) : String = {
         val originalLines = wdlWfSource.split("\n").toList
         val cleanLines = originalLines.map { line =>
             val allMatches = callLibrary.findAllMatchIn(line).toList
             assert(allMatches.size <= 1)
-            if (allMatches.isEmpty) {
-                line
+            val newLine =
+                if (allMatches.isEmpty) {
+                    line
+                } else {
+                    val m = allMatches(0)
+                    val callee : String = m.group(4)
+                    val rest = m.group(6)
+                    s"call ${callee} ${rest}"
+                }
+
+            // call with no arguments
+            val allMatches2 = callLibraryNoArgs.findAllMatchIn(newLine).toList
+            assert(allMatches2.size <= 1)
+            if (allMatches2.isEmpty) {
+                newLine
             } else {
-                val m = allMatches(0)
+                val m = allMatches2(0)
                 val callee : String = m.group(4)
-                val rest = m.group(6)
-                s"call ${callee} ${rest}"
+                s"call ${callee}"
             }
         }
         cleanLines.mkString("\n")
@@ -303,7 +319,6 @@ task Add {
                 }
             }
         val tasks = taskStubs.map{case (name, wdlCode) => wdlCode.value}.mkString("\n\n")
-
         val wfWithoutImportCalls = flattenWorkflow(originalWorkflowSource)
         val wdlWfSource =
             List(versionString() + "\n",
