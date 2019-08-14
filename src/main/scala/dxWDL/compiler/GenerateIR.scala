@@ -59,8 +59,19 @@ case class GenerateIR(verbose: Verbose) {
                 Utils.trace(verbose2, s"immediateDeps(${c.name}) = ${deps}")
                 deps.subsetOf(readyNames)
             }
-            if (satisfiedCallables.isEmpty)
-                throw new Exception("Sanity: cannot find the next callable to compile.")
+            if (satisfiedCallables.isEmpty) {
+                val stuck = callables.map(_.name).toSet -- readyNames
+                val stuckWaitingOn : Map[String, Set[String]] = stuck.map{ name =>
+                    name -> (immediateDeps(name) -- readyNames)
+                }.toMap
+                val explanationLines = stuckWaitingOn.mkString("\n")
+                throw new Exception(s"""|Sanity: cannot find the next callable to compile.
+                                        |ready = ${readyNames}
+                                        |stuck = ${stuck}
+                                        |stuckWaitingOn =
+                                        |${explanationLines}
+                                        |""".stripMargin)
+            }
             satisfiedCallables
         }
 
