@@ -387,7 +387,7 @@ case class Native(dxWDLrtId: Option[String],
     private def checksumReq(name: String,
                             fields: Map[String, JsValue]) : (String, JsValue) = {
         Utils.trace(verbose2, s"""|${name} -> checksum request
-                                  |fields = ${JsObject(fields)}.prettyPrint
+                                  |fields = ${JsObject(fields).prettyPrint}
                                   |
                                   |""".stripMargin)
 
@@ -645,9 +645,13 @@ case class Native(dxWDLrtId: Option[String],
                              aplLinks: Map[String, ExecLinkInfo]) : (String, JsValue) = {
         Utils.trace(verbose2, s"Building /applet/new request for ${applet.name}")
 
-        val inputSpec : Vector[JsValue] = applet.inputs.map(cVar =>
-            cVarToSpec(cVar)
-        ).flatten.toVector
+        // we need to sort the input spec, so that the checksum will be deterministic
+        val inputSpec : Vector[JsValue] =
+            applet
+                .inputs
+                .sortWith(_.name < _.name)
+                .map(cVar => cVarToSpec(cVar))
+                .flatten.toVector
 
         // create linking information
         val linkInfo : Map[String, JsValue] =
@@ -682,9 +686,14 @@ case class Native(dxWDLrtId: Option[String],
                 case _ =>
                     Map.empty
             }
-        val outputSpec : Vector[JsValue] = applet.outputs.map(cVar =>
-            cVarToSpec(cVar)
-        ).flatten.toVector
+
+        // we need to sort the output spec, so that the checksum will be deterministic
+        val outputSpec : Vector[JsValue] =
+            applet
+                .outputs
+                .sortWith(_.name < _.name)
+                .map(cVar => cVarToSpec(cVar))
+                .flatten.toVector
 
         // put the wom source code into the details field.
         // Add the pricing model, and make the prices opaque.

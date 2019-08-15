@@ -141,7 +141,7 @@ case class ParseWomSourceFile(verbose: Boolean) {
         // build wom bundles for all the referenced files
         //
         // We need to do this iteratively, because we may discover new
-        // imports
+        // imports every time we access a WDL file.
         var subBundles = Map.empty[String, WomBundle]
         var discoveredNewSources = true
         while (discoveredNewSources)  {
