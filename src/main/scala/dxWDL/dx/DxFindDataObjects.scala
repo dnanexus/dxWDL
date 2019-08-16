@@ -4,7 +4,7 @@ import com.dnanexus.{DXAPI, DXContainer, DXDataObject, DXProject}
 import com.fasterxml.jackson.databind.JsonNode
 import spray.json._
 
-import dxWDL.base.{Utils, Verbose}
+import dxWDL.base.{Verbose}
 
 case class DxFindDataObjects(limit: Option[Int],
                              verbose: Verbose) {
@@ -178,7 +178,7 @@ case class DxFindDataObjects(limit: Option[Int],
                                    ++ classField ++ propertiesField
                                    ++ namePcreField)
 
-        Utils.trace(verbose.on, s"submitRequest:\n ${request.prettyPrint}")
+        //Utils.trace(verbose.on, s"submitRequest:\n ${request.prettyPrint}")
 
         val response = DXAPI.systemFindDataObjects(DxUtils.jsonNodeOfJsValue(request),
                                                    classOf[JsonNode],

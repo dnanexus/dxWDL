@@ -41,7 +41,7 @@ class NativeTest extends FlatSpec with Matchers {
     it should "Native compile a single WDL task" taggedAs(NativeTestXX, EdgeTest) in {
         val path = pathFromBasename("compiler", "add.wdl")
         val retval = Main.compile(path.toString
-                                      :: "--verbose"
+//                                      :: "--verbose"
                                       :: cFlags)
         retval shouldBe a [Main.SuccessfulTermination]
     }
