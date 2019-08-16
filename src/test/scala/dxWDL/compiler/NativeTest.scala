@@ -38,9 +38,11 @@ class NativeTest extends FlatSpec with Matchers {
                            "-locked",
                            "-quiet")
 
-    it should "Native compile a single WDL task" taggedAs(NativeTestXX) in {
+    it should "Native compile a single WDL task" taggedAs(NativeTestXX, EdgeTest) in {
         val path = pathFromBasename("compiler", "add.wdl")
-        val retval = Main.compile(path.toString :: cFlags)
+        val retval = Main.compile(path.toString
+//                                      :: "--verbose"
+                                      :: cFlags)
         retval shouldBe a [Main.SuccessfulTermination]
     }
 
@@ -108,7 +110,7 @@ class NativeTest extends FlatSpec with Matchers {
         tasks.keys shouldBe(Set("native_sum", "native_sum_012", "native_mk_list", "native_diff", "native_concat"))
     }
 
-    it should "be able to include license information in details" taggedAs(EdgeTest) in {
+    it should "be able to include license information in details" in {
 
         val expected =
             """

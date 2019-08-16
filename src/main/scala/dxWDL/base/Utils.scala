@@ -31,6 +31,7 @@ object Utils {
     val MAX_STAGE_NAME_LEN = 60       // maximal length of a workflow stage name
     val MAX_NUM_FILES_MOVE_LIMIT = 1000
     val UBUNTU_VERSION = "16.04"
+    val VERSION_PROP = "dxWDL_version"
     var traceLevel = 0
 
     // The version lives in application.conf
