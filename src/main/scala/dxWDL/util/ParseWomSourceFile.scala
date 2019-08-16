@@ -28,7 +28,7 @@ import wom.types._
 import dxWDL.base.{Language, Utils}
 
 // Read, parse, and typecheck a WDL/CWL source file. This includes loading all imported files.
-object ParseWomSourceFile {
+case class ParseWomSourceFile(verbose: Boolean) {
 
     // allSources: A mapping from file URL to file source.
     //
@@ -56,7 +56,13 @@ object ParseWomSourceFile {
                         case Right(bundle) =>
                             val fileContent = bundle.source
                             // convert an 'EitherOr' to 'Validated'
-                            allSources(path) = fileContent
+                            allSources.get(path) match {
+                                case None =>
+                                    allSources(path) = fileContent
+                                case Some(oldContent) if oldContent != fileContent =>
+                                    Invalid(s"${path} has been imported twice, with different content")
+                                case _ => ()
+                            }
                             Valid(bundle)
                     }
             }
@@ -133,21 +139,41 @@ object ParseWomSourceFile {
         }
 
         // build wom bundles for all the referenced files
-        val subBundles : Vector[WomBundle] = allSources.map{
-            case (path, wfSource) =>
-                languageFactory.getWomBundle(wfSource,
-                                             "{}",
-                                             importResolvers,
-                                             List(languageFactory)) match {
-                    case Left(errors) => throw new Exception(s"""|WOM validation errors:
-                                                                 | ${errors}
-                                                                 |""".stripMargin)
-                    case Right(bundle) => bundle
-                }
-        }.toVector
+        //
+        // We need to do this iteratively, because we may discover new
+        // imports every time we access a WDL file.
+        var subBundles = Map.empty[String, WomBundle]
+        var discoveredNewSources = true
+        while (discoveredNewSources)  {
+            val newSubBundles = allSources.flatMap{
+                case (path, wfSource) if subBundles contains path =>
+                    // we already parsed the wom code in this path
+                    None
+                case (path, wfSource) if !(subBundles contains path) =>
+                    // A new path, not seen before
+                    val bundle =
+                        languageFactory.getWomBundle(wfSource,
+                                                     "{}",
+                                                     importResolversRecorded,
+                                                     List(languageFactory)) match {
+                            case Left(errors) => throw new Exception(s"""|WOM validation errors:
+                                                                         | ${errors}
+                                                                         |""".stripMargin)
+                            case Right(bundle) => bundle
+                        }
+                    Some(path -> bundle)
+            }.toMap
+            subBundles = subBundles ++ newSubBundles
+
+            // have we discovered new WDL files?
+            val delta = newSubBundles.size
+            discoveredNewSources = !newSubBundles.isEmpty
+            if (delta > 0)
+                Utils.trace(verbose, s"found ${delta} new WDL source files")
+        }
 
         allSources(mainFile.toString) = mainFileContents
-        (lang, bundle, allSources.toMap, subBundles)
+        (lang, bundle, allSources.toMap, subBundles.values.toVector)
     }
 
     def apply(sourcePath: Path,

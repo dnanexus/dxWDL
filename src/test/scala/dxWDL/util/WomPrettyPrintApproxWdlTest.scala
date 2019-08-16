@@ -9,7 +9,7 @@ class WomPrettyPrintApproxWdlTest extends FlatSpec with Matchers {
     private def tryToPrintFile(path : File) : Unit = {
         val wfSourceCode = scala.io.Source.fromFile(path).mkString
         try {
-            val (wf : WorkflowDefinition, _, typeAliases) = ParseWomSourceFile.parseWdlWorkflow(wfSourceCode)
+            val (wf : WorkflowDefinition, _, typeAliases) = ParseWomSourceFile(false).parseWdlWorkflow(wfSourceCode)
             val (_, _, blocks, outputs) = Block.split(wf.graph, wfSourceCode)
 
             WomPrettyPrintApproxWdl.graphInputs(wf.inputs.toSeq)

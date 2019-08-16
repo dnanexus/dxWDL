@@ -32,3 +32,13 @@ task Concat {
         String result = a + "_" + b
     }
 }
+
+task NoArguments {
+    input {
+        String a = "goodbye"
+    }
+    command {}
+    output {
+        String result = a + " " + "and thank you for the fish"
+    }
+}

@@ -3,7 +3,7 @@ import sbt.Keys._
 import sbtassembly.AssemblyPlugin.autoImport._
 import scoverage.ScoverageKeys._
 
-scalaVersion := "2.12.6"
+scalaVersion := "2.12.9"
 name := "dxWDL"
 organization := "com.dnanexus"
 

@@ -515,10 +515,11 @@ object Main extends App {
                            rtDebugLvl: Int): Termination = {
         // Parse the inputs, convert to WOM values. Delay downloading files
         // from the platform, we may not need to access them.
+        val verbose = rtDebugLvl > 0
         val inputLines : String = Utils.readFileContent(jobInputPath)
         val originalInputs : JsValue = inputLines.parseJson
 
-        val (task, typeAliases) = ParseWomSourceFile.parseWdlTask(taskSourceCode)
+        val (task, typeAliases) = ParseWomSourceFile(verbose).parseWdlTask(taskSourceCode)
 
         // setup the utility directories that the task-runner employs
         dxPathConfig.createCleanDirs()
@@ -578,6 +579,7 @@ object Main extends App {
                                    dxPathConfig : DxPathConfig,
                                    dxIoFunctions : DxIoFunctions,
                                    rtDebugLvl: Int): Termination = {
+        val verbose = rtDebugLvl > 0
         val dxProject = DxUtils.dxEnv.getProjectContext()
 
         // Parse the inputs, convert to WOM values. Delay downloading files
@@ -585,7 +587,7 @@ object Main extends App {
         val inputLines : String = Utils.readFileContent(jobInputPath)
         val inputsRaw : JsValue = inputLines.parseJson
 
-        val (wf, taskDir, typeAliases) = ParseWomSourceFile.parseWdlWorkflow(womSourceCode)
+        val (wf, taskDir, typeAliases) = ParseWomSourceFile(verbose).parseWdlWorkflow(womSourceCode)
 
         // setup the utility directories that the frag-runner employs
         val fragInputOutput = new exec.WfFragInputOutput(dxIoFunctions, dxProject, rtDebugLvl, typeAliases)
@@ -806,8 +808,10 @@ object Main extends App {
     val termination = dispatchCommand(args)
 
     termination match {
-        case SuccessfulTermination(s) => println(s)
-        case SuccessfulTerminationIR(s) => println("Intermediate representation")
+        case SuccessfulTermination(s) =>
+            println(s)
+        case SuccessfulTerminationIR(s) =>
+            println("Intermediate representation")
         case BadUsageTermination(s) if (s == "") =>
             Console.err.println(usageMessage)
             System.exit(1)
@@ -818,4 +822,5 @@ object Main extends App {
             Utils.error(s)
             System.exit(1)
     }
+    System.exit(0)
 }

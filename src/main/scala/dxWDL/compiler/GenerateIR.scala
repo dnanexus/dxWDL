@@ -59,8 +59,19 @@ case class GenerateIR(verbose: Verbose) {
                 Utils.trace(verbose2, s"immediateDeps(${c.name}) = ${deps}")
                 deps.subsetOf(readyNames)
             }
-            if (satisfiedCallables.isEmpty)
-                throw new Exception("Sanity: cannot find the next callable to compile.")
+            if (satisfiedCallables.isEmpty) {
+                val stuck = callables.map(_.name).toSet -- readyNames
+                val stuckWaitingOn : Map[String, Set[String]] = stuck.map{ name =>
+                    name -> (immediateDeps(name) -- readyNames)
+                }.toMap
+                val explanationLines = stuckWaitingOn.mkString("\n")
+                throw new Exception(s"""|Sanity: cannot find the next callable to compile.
+                                        |ready = ${readyNames}
+                                        |stuck = ${stuck}
+                                        |stuckWaitingOn =
+                                        |${explanationLines}
+                                        |""".stripMargin)
+            }
             satisfiedCallables
         }
 
@@ -86,7 +97,7 @@ case class GenerateIR(verbose: Verbose) {
                                 locked : Boolean,
                                 reorg : Boolean) : (IR.Workflow, Vector[IR.Callable]) = {
         // sort from low to high according to the source lines.
-        val callsLoToHi = ParseWomSourceFile.scanForCalls(wf.innerGraph, wfSource)
+        val callsLoToHi = ParseWomSourceFile(verbose.on).scanForCalls(wf.innerGraph, wfSource)
 
         // Make a list of all task/workflow calls made inside the block. We will need to link
         // to the equivalent dx:applets and dx:workflows.
@@ -166,14 +177,14 @@ case class GenerateIR(verbose: Verbose) {
         // There is no built-in method for this.
         val taskDir = allSources.foldLeft(Map.empty[String, String]) {
             case (accu, (filename, srcCode)) =>
-                val d = ParseWomSourceFile.scanForTasks(srcCode)
+                val d = ParseWomSourceFile(verbose.on).scanForTasks(srcCode)
                 accu ++ d
         }
         Utils.trace(verbose.on, s"tasks=${taskDir.keys}")
 
         val workflowDir = allSources.foldLeft(Map.empty[String, String]) {
             case (accu, (filename, srcCode)) =>
-                ParseWomSourceFile.scanForWorkflow(srcCode) match {
+                ParseWomSourceFile(verbose.on).scanForWorkflow(srcCode) match {
                     case None =>
                         accu
                     case Some((wfName, wfSource)) =>
