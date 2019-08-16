@@ -7,7 +7,9 @@ import java.nio.file.{Path, Paths, Files}
 import java.util.Base64
 import java.util.zip.{GZIPOutputStream, GZIPInputStream}
 import scala.collection.JavaConverters._
+import scala.collection.immutable.TreeMap
 import scala.concurrent._
+import spray.json._
 import ExecutionContext.Implicits.global
 import scala.sys.process._
 import wom.types._
@@ -304,4 +306,27 @@ object Utils {
     def error(msg: String) : Unit = {
         System.err.println(Console.RED + msg + Console.RESET)
     }
+
+    // Make a JSON value deterministically sorted.  This is used to
+    // ensure that the checksum does not change when arrays or maps
+    // are rearranged.
+    def makeDeterministic(jsValue : JsValue) : JsValue = {
+        def cmpJsValues(a : JsValue, b : JsValue) : Boolean = {
+            a.compactPrint < b.compactPrint
+        }
+        jsValue match {
+            case JsObject(m : Map[String, JsValue]) =>
+                val m2 = m.map{
+                    case (k, v) => k -> makeDeterministic(v)
+                }.toMap
+                val tree = TreeMap(m2.toArray:_*)
+                JsObject(tree)
+            case JsArray(vec : Vector[JsValue]) =>
+                val vec2 = vec.map(makeDeterministic(_))
+                JsArray(vec2.sortWith(cmpJsValues).toVector)
+            case other =>
+                other
+        }
+    }
+
 }

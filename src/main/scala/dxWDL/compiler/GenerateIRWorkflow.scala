@@ -786,13 +786,7 @@ case class GenerateIRWorkflow(wf : WorkflowDefinition,
                             |""".stripMargin)
                 }
         }
-/*
-        val dbg = irCallables.map{
-            case wf: IR.Workflow => s"Workflow(${wf.name})"
-            case apl: IR.Applet => s"Applet(${apl.name})"
-        }.mkString(", ")
-        Utils.trace(verbose.on, s"created auxiliaries: ${dbg}")
- */
+
         (irwf, irCallables)
     }
 }

@@ -318,14 +318,20 @@ task Add {
                     accu + (callable.name -> sourceCode)
                 }
             }
-        val tasks = taskStubs.map{case (name, wdlCode) => wdlCode.value}.mkString("\n\n")
+
+        // sort the task order by name, so the generated code will be deterministic
+        val tasksStr = taskStubs
+            .toVector
+            .sortWith(_._1 < _._1)
+            .map{case (name, wdlCode) => wdlCode.value}
+            .mkString("\n\n")
         val wfWithoutImportCalls = flattenWorkflow(originalWorkflowSource)
         val wdlWfSource =
             List(versionString() + "\n",
                  "# struct definitions",
                  typeAliasDefinitions,
                  "# Task headers",
-                 tasks,
+                 tasksStr,
                  "# Workflow with imports made local",
                  wfWithoutImportCalls).mkString("\n")
 
