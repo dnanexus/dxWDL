@@ -3,7 +3,11 @@
 ## 1.18
 - Correctly identify WDL calls with no arguments
 - Dealing with the case where a WDL file imports a file, that imports another file
-- Making checksums deterministic
+- Making checksums deterministic, this ensures that a compilation process will not be repeated unnecessarily.
+- Added the dxWDL version number to the properties.
+- Optimized queries that if a workflow/applet has already been compiled. This is done by limiting
+the possible names of the data object we are searching for. We add a regular expression to the
+query, bounding the legal names.
 
 ## 1.17
 **Fixed**

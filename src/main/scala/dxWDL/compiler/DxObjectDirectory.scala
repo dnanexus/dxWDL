@@ -68,7 +68,9 @@ case class DxObjectDirectory(ns: IR.Bundle,
         val t0 = System.nanoTime()
         val dxAppletsInFolder: Map[DXDataObject, DxDescribe] =
             DxFindDataObjects(None, verbose).apply(dxProject, Some(folder), false, Some("applet"),
-                                                   Vector(CHECKSUM_PROP), false)
+                                                   Vector(CHECKSUM_PROP),
+                                                   allExecutableNames.toVector,
+                                                   false)
         val t1 = System.nanoTime()
         var diffMSec = (t1 -t0) / (1000 * 1000)
         Utils.trace(verbose.on,
@@ -80,7 +82,9 @@ case class DxObjectDirectory(ns: IR.Bundle,
         val t2 = System.nanoTime()
         val dxWorkflowsInFolder: Map[DXDataObject, DxDescribe] =
             DxFindDataObjects(None, verbose).apply(dxProject, Some(folder), false, Some("workflow"),
-                                                   Vector(CHECKSUM_PROP), false)
+                                                   Vector(CHECKSUM_PROP),
+                                                   allExecutableNames.toVector,
+                                                   false)
         val t3 = System.nanoTime()
         diffMSec = (t3 -t2) / (1000 * 1000)
         Utils.trace(verbose.on,
@@ -88,11 +92,7 @@ case class DxObjectDirectory(ns: IR.Bundle,
                         | in ${dxProject.getId} folder=${folder} (${diffMSec} millisec)"""
                         .stripMargin.replaceAll("\n", " "))
 
-
-        // Leave only dx:objects that could belong to the workflow
-        val dxObjects = (dxAppletsInFolder ++ dxWorkflowsInFolder).filter{
-            case (appletOrWorkflow, desc) => allExecutableNames contains desc.name
-        }
+        val dxObjects = dxAppletsInFolder ++ dxWorkflowsInFolder
 
         val dxObjectList: List[DxObjectInfo] = dxObjects.map{
             case (dxObj, desc) =>
@@ -135,12 +135,14 @@ case class DxObjectDirectory(ns: IR.Bundle,
         val t0 = System.nanoTime()
         val dxAppletsInProject: Map[DXDataObject, DxDescribe] =
             DxFindDataObjects(None, verbose).apply(dxProject, None, true, Some("applet"),
-                                                   Vector(CHECKSUM_PROP), false)
+                                                   Vector(CHECKSUM_PROP),
+                                                   allExecutableNames.toVector,
+                                                   false)
         val nrApplets = dxAppletsInProject.size
         val t1 = System.nanoTime()
         val diffMSec = (t1 -t0) / (1000 * 1000)
         Utils.trace(verbose.on,
-                    s"Found ${nrApplets} applets in project ${dxProject.getId} (${diffMSec} millisec)")
+                    s"Found ${nrApplets} applets matching expected names in project ${dxProject.getId} (${diffMSec} millisec)")
 
         val hm = HashMap.empty[String, Vector[(DXDataObject, DxDescribe)]]
         dxAppletsInProject.foreach{ case (dxObj, desc) =>

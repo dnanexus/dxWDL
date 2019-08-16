@@ -4,7 +4,7 @@ import com.dnanexus.{DXAPI, DXContainer, DXDataObject, DXProject}
 import com.fasterxml.jackson.databind.JsonNode
 import spray.json._
 
-import dxWDL.base.Verbose
+import dxWDL.base.{Utils, Verbose}
 
 case class DxFindDataObjects(limit: Option[Int],
                              verbose: Verbose) {
@@ -120,6 +120,7 @@ case class DxFindDataObjects(limit: Option[Int],
                               cursor: Option[JsValue],
                               klass: Option[String],
                               propertyConstraints: Vector[String],
+                              nameConstraints : Vector[String],
                               withInputOutputSpec : Boolean) : (Map[DXDataObject, DxDescribe], Option[JsValue]) = {
         val describeFields = Map("name" -> JsBoolean(true),
                                  "folder" -> JsBoolean(true),
@@ -157,9 +158,27 @@ case class DxFindDataObjects(limit: Option[Int],
                             prop => prop -> JsBoolean(true)
                         }.toMap))
             }
-        val request = JsObject(reqFields ++ cursorField ++ limitField ++ classField ++ propertiesField)
 
-        //Utils.trace(verbose.on, s"submitRequest:\n ${request.prettyPrint}")
+        val namePcreField =
+            if (nameConstraints.isEmpty) {
+                Map.empty
+            } else if (nameConstraints.size == 1) {
+                // Just one name, no need to use regular expressions
+                Map("name" -> JsString(nameConstraints(0)))
+            } else {
+                // Make a conjunction of all the legal names. For example:
+                // ["Nice", "Foo", "Bar"] ===>
+                //  [(Nice)|(Foo)|(Bar)]
+                val orAll = nameConstraints.map{x => s"(${x})"}.mkString("|")
+                Map("name" -> JsObject(
+                        "regexp" -> JsString(s"[${orAll}]")))
+            }
+
+        val request = JsObject(reqFields ++ cursorField ++ limitField
+                                   ++ classField ++ propertiesField
+                                   ++ namePcreField)
+
+        Utils.trace(verbose.on, s"submitRequest:\n ${request.prettyPrint}")
 
         val response = DXAPI.systemFindDataObjects(DxUtils.jsonNodeOfJsValue(request),
                                                    classOf[JsonNode],
@@ -187,6 +206,7 @@ case class DxFindDataObjects(limit: Option[Int],
               recurse: Boolean,
               klassRestriction : Option[String],
               withProperties : Vector[String], // object must have these properties
+              nameConstraints : Vector[String], // the object name has to be one of these strings
               withInputOutputSpec : Boolean  // should the IO spec be described?
     ) : Map[DXDataObject, DxDescribe] = {
         klassRestriction.map{ k =>
@@ -200,10 +220,16 @@ case class DxFindDataObjects(limit: Option[Int],
         do {
             val (results, next) = submitRequest(scope, dxProject, cursor, klassRestriction,
                                                 withProperties,
+                                                nameConstraints,
                                                 withInputOutputSpec)
             allResults = allResults ++ results
             cursor = next
         } while (cursor != None);
-        allResults
+
+        // Ensure the the data objects have names in the allowed set
+        val allowedNames = nameConstraints.toSet
+        allResults.filter{
+            case (appletOrWorkflow, desc) => allowedNames contains desc.name
+        }
     }
 }

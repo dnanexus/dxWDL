@@ -15,11 +15,13 @@ import wom.types._
 import wom.values._
 
 import dxWDL.base._
-//import dxWDL.base.WomTypeSerialization
 import dxWDL.util._
 import dxWDL.dx._
 import IR.{CVar, SArg}
 
+// An overall design principal here, is that the json requests
+// have to be deterministic. This is because the checksums rely
+// on that property.
 case class Native(dxWDLrtId: Option[String],
                   folder: String,
                   dxProject: DXProject,
@@ -393,9 +395,18 @@ case class Native(dxWDLrtId: Option[String],
                                   |""".stripMargin)
         val jsDet = Utils.makeDeterministic(JsObject(fields))
         val digest = chksum(jsDet.prettyPrint)
+
+        // Add the checksum to the properies
+        val preExistingProps : Map[String, JsValue] =
+            fields.get("properties") match {
+                case Some(JsObject(props)) => props
+                case None => Map.empty
+                case other => throw new Exception(s"Bad properties json value ${other}")
+            }
+        val checksumField = Map(Utils.CHECKSUM_PROP -> JsString(digest))
         val props = Map("properties" ->
-                            JsObject(Utils.CHECKSUM_PROP -> JsString(digest)))
-        val reqChk = fields ++ props
+                            JsObject(preExistingProps ++ checksumField))
+        val reqChk = (fields - "properies") ++ props
         (digest, JsObject(reqChk))
     }
 
@@ -724,6 +735,8 @@ case class Native(dxWDLrtId: Option[String],
             "tags" -> JsArray(JsString("dxWDL")),
             "details" -> jsDetails,
             "hidden" -> JsBoolean(hidden),
+            "properties" ->
+                JsObject(Utils.VERSION_PROP -> JsString(Utils.getVersion()))
         )
         val accessField =
             if (access == JsNull) Map.empty
