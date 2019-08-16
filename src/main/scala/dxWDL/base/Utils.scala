@@ -308,12 +308,12 @@ object Utils {
     }
 
     // Make a JSON value deterministically sorted.  This is used to
-    // ensure that the checksum does not change when arrays or maps
-    // are rearranged.
+    // ensure that the checksum does not change when maps
+    // are ordered in different ways.
+    //
+    // Note: this does not handle the case where of arrays that
+    // may have different equivalent orderings.
     def makeDeterministic(jsValue : JsValue) : JsValue = {
-        def cmpJsValues(a : JsValue, b : JsValue) : Boolean = {
-            a.compactPrint < b.compactPrint
-        }
         jsValue match {
             case JsObject(m : Map[String, JsValue]) =>
                 val m2 = m.map{
@@ -321,9 +321,6 @@ object Utils {
                 }.toMap
                 val tree = TreeMap(m2.toArray:_*)
                 JsObject(tree)
-            case JsArray(vec : Vector[JsValue]) =>
-                val vec2 = vec.map(makeDeterministic(_))
-                JsArray(vec2.sortWith(cmpJsValues).toVector)
             case other =>
                 other
         }

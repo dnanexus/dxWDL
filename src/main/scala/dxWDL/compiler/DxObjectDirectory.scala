@@ -36,6 +36,9 @@ case class DxObjectDirectory(ns: IR.Bundle,
                              folder: String,
                              projectWideReuse: Boolean,
                              verbose: Verbose) {
+    // a list of all dx:workflow and dx:applet names used in this WDL workflow
+    private val allExecutableNames: Set[String] = ns.allCallables.keys.toSet
+
     // A map from an applet/workflow that is part of the namespace to its dx:object
     // on the target path (project/folder)
     private val objDir : HashMap[String, Vector[DxObjectInfo]] = bulkLookup()
@@ -51,11 +54,6 @@ case class DxObjectDirectory(ns: IR.Bundle,
         else Map.empty
 
     private val folders = HashSet.empty[String]
-
-    // a list of all dx:workflow and dx:applet names used in this WDL workflow
-    private def allExecutableNames: Set[String] = {
-        ns.allCallables.keys.toSet
-    }
 
     // Instead of looking up applets/workflows one by one, perform a bulk lookup, and
     // find all the objects in the target directory. Setup an easy to

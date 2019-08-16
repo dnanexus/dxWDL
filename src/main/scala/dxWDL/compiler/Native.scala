@@ -7,6 +7,7 @@ import com.fasterxml.jackson.databind.JsonNode
 import com.dnanexus._
 import java.security.MessageDigest
 import scala.collection.JavaConverters._
+import scala.collection.immutable.TreeMap
 import spray.json._
 import DefaultJsonProtocol._
 
@@ -639,6 +640,7 @@ case class Native(dxWDLrtId: Option[String],
         Utils.trace(verbose2, s"Building /applet/new request for ${applet.name}")
 
         val inputSpec : Vector[JsValue] = applet.inputs
+            .sortWith(_.name < _.name)
             .map(cVar => cVarToSpec(cVar))
             .flatten.toVector
 
@@ -677,6 +679,7 @@ case class Native(dxWDLrtId: Option[String],
             }
 
         val outputSpec : Vector[JsValue] = applet.outputs
+            .sortWith(_.name < _.name)
             .map(cVar => cVarToSpec(cVar))
             .flatten.toVector
 
@@ -694,14 +697,12 @@ case class Native(dxWDLrtId: Option[String],
             ("link_" + name) -> JsObject(
                 "$dnanexus_link" -> JsString(execLinkInfo.dxExec.getId))
         }.toMap
-        val (runSpec : JsValue, details: Map[String, JsValue]) = calcRunSpec(applet,
-                                                                auxInfo ++ dxLinks ++ metaInfo,
-                                                                bashScript)
-
+        val (runSpec : JsValue, details: Map[String, JsValue]) =
+            calcRunSpec(applet,
+                        auxInfo ++ dxLinks ++ metaInfo,
+                        bashScript)
         val detailsWithLicense: Map[String, JsValue] = addLicences(applet)
-
         val jsDetails: JsValue = JsObject(details ++ detailsWithLicense)
-
         val access : JsValue = calcAccess(applet)
 
         // A fragemnt is hidden, not visible under default settings. This
@@ -796,7 +797,8 @@ case class Native(dxWDLrtId: Option[String],
     //
     // It comprises mappings from variable name to WomType.
     private def genStageInputs(inputs: Vector[(CVar, SArg)]) : JsValue = {
-        val jsInputs:Map[String, JsValue] = inputs.foldLeft(Map.empty[String, JsValue]){
+        // sort the inputs, to make the request deterministic
+        val jsInputs:TreeMap[String, JsValue] = inputs.foldLeft(TreeMap.empty[String, JsValue]){
             case (m, (cVar, sArg)) =>
                 sArg match {
                     case IR.SArgEmpty =>
@@ -929,9 +931,11 @@ case class Native(dxWDLrtId: Option[String],
             if (wf.locked) {
                 // Locked workflows have well defined inputs and outputs
                 val wfInputSpec:Vector[JsValue] = wf.inputs
+                    .sortWith(_._1.name < _._1.name)
                     .map{ case (cVar,sArg) => buildWorkflowInputSpec(cVar, sArg) }
                     .flatten
                 val wfOutputSpec:Vector[JsValue] = wf.outputs
+                    .sortWith(_._1.name < _._1.name)
                     .map{ case (cVar,sArg) => buildWorkflowOutputSpec(cVar, sArg) }
                     .flatten
                 Map("inputs" -> JsArray(wfInputSpec),

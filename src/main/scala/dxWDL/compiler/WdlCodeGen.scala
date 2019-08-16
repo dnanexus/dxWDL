@@ -102,19 +102,26 @@ task Add {
                         |  outputs= ${callable.outputVars.map(_.name)}"""
                         .stripMargin)*/
 
-        val inputs = callable.inputVars.map{ cVar =>
-            cVar.default match {
-                case None =>
-                    s"    ${typeName(cVar.womType)} ${cVar.name}"
-                case Some(womValue) =>
-                    s"    ${typeName(cVar.womType)} ${cVar.name} = ${womValue.toWomString}"
-            }
-        }.mkString("\n")
+        // Sort the inputs by name, so the result will be deterministic.
+        val inputs =
+            callable.inputVars
+                .sortWith(_.name < _.name)
+                .map{ case cVar =>
+                    cVar.default match {
+                        case None =>
+                            s"    ${typeName(cVar.womType)} ${cVar.name}"
+                        case Some(womValue) =>
+                            s"    ${typeName(cVar.womType)} ${cVar.name} = ${womValue.toWomString}"
+                    }
+            }.mkString("\n")
 
-        val outputs = callable.outputVars.map{ cVar =>
-            val defaultVal = genDefaultValueOfType(cVar.womType)
-            s"    ${typeName(cVar.womType)} ${cVar.name} = ${defaultVal.toWomString}"
-        }.mkString("\n")
+        val outputs =
+            callable.outputVars
+                .sortWith(_.name < _.name)
+                .map{ case cVar =>
+                    val defaultVal = genDefaultValueOfType(cVar.womType)
+                    s"    ${typeName(cVar.womType)} ${cVar.name} = ${defaultVal.toWomString}"
+            }.mkString("\n")
 
         language match {
             case Language.WDLvDraft2 =>
