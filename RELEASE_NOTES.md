@@ -1,5 +1,10 @@
 # Release Notes
 
+## 1.18
+- Correctly identify WDL calls with no arguments
+- Dealing with the case where a WDL file imports a file, that imports another file
+- Making checksums deterministic
+
 ## 1.17
 **Fixed**
 - Setting recurse to false, when searching for existing applets and
