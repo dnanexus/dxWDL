@@ -1,5 +1,9 @@
 # Release Notes
 
+## 1.19
+- Bug fix for DxNI error
+- Limit the size of the name of jobs in a scatter
+
 ## 1.18
 - Correctly identify WDL calls with no arguments
 - Dealing with the case where a WDL file imports a file, that imports another file
