@@ -226,10 +226,14 @@ case class DxFindDataObjects(limit: Option[Int],
             cursor = next
         } while (cursor != None);
 
-        // Ensure the the data objects have names in the allowed set
-        val allowedNames = nameConstraints.toSet
-        allResults.filter{
-            case (appletOrWorkflow, desc) => allowedNames contains desc.name
+        if (nameConstraints.isEmpty) {
+            allResults
+        } else {
+            // Ensure the the data objects have names in the allowed set
+            val allowedNames = nameConstraints.toSet
+            allResults.filter{
+                case (appletOrWorkflow, desc) => allowedNames contains desc.name
+            }
         }
     }
 }
