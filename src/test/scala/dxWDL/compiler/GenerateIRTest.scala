@@ -225,10 +225,11 @@ class GenerateIRTest extends FlatSpec with Matchers {
         val retval = Main.compile(
             path.toString :: cFlags
         )
-        inside(retval) {
+/*        inside(retval) {
             case Main.UnsuccessfulTermination(errMsg) =>
                 errMsg should include ("nested scatter")
-        }
+ }*/
+        retval shouldBe a [Main.SuccessfulTerminationIR]
     }
 
     private def getTaskByName(name: String,
@@ -334,7 +335,7 @@ class GenerateIRTest extends FlatSpec with Matchers {
         }
     }
 
-    ignore should "do nested scatters" in {
+    it should "do nested scatters" in {
         val path = pathFromBasename("compiler", "nested_scatter.wdl")
         val retval = Main.compile(path.toString :: cFlags)
         retval shouldBe a[Main.SuccessfulTerminationIR]

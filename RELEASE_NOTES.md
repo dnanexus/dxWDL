@@ -3,6 +3,8 @@
 ## 1.19
 - Bug fix for DxNI error
 - Limit the size of the name of jobs in a scatter
+- Upgrade to Cromwell v45
+- Nested scatters are supported
 
 ## 1.18
 - Correctly identify WDL calls with no arguments

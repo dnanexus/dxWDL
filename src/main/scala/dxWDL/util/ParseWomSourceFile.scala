@@ -120,6 +120,7 @@ case class ParseWomSourceFile(verbose: Boolean) {
         val languageFactory = getLanguageFactory(mainFileContents)
         val bundleChk: Checked[WomBundle] =
             languageFactory.getWomBundle(mainFileContents,
+                                         None,
                                          "{}",
                                          importResolversRecorded,
                                          List(languageFactory),
@@ -157,6 +158,7 @@ case class ParseWomSourceFile(verbose: Boolean) {
                     // A new path, not seen before
                     val bundle =
                         languageFactory.getWomBundle(wfSource,
+                                                     None,
                                                      "{}",
                                                      importResolversRecorded,
                                                      List(languageFactory),
@@ -366,7 +368,7 @@ case class ParseWomSourceFile(verbose: Boolean) {
         }
 
         val bundleChk: Checked[WomBundle] =
-            languageFactory.getWomBundle(wdlWfSource, "{}", List.empty, List.empty)
+            languageFactory.getWomBundle(wdlWfSource, None, "{}", List.empty, List.empty, false)
         bundleChk match {
             case Left(errors) =>
                 Utils.error("Found Errors in generated WDL source")
@@ -389,7 +391,7 @@ case class ParseWomSourceFile(verbose: Boolean) {
                                               Map[String, WomType])= {
         val languageFactory = getLanguageFactory(wfSource)
         val bundleChk: Checked[WomBundle] =
-            languageFactory.getWomBundle(wfSource, "{}", List.empty, List(languageFactory),
+            languageFactory.getWomBundle(wfSource, None, "{}", List.empty, List(languageFactory),
                                          convertNestedScatterToSubworkflow = false)
         val womBundle = bundleChk match {
             case Left(errors) => throw new Exception(s"""|WOM validation errors:
@@ -438,7 +440,7 @@ case class ParseWomSourceFile(verbose: Boolean) {
     def parseWdlTask(wfSource: String) : (CallableTaskDefinition, Map[String, WomType]) = {
         val languageFactory = getLanguageFactory(wfSource)
         val bundleChk: Checked[WomBundle] =
-            languageFactory.getWomBundle(wfSource, "{}", List.empty, List(languageFactory))
+            languageFactory.getWomBundle(wfSource, None, "{}", List.empty, List(languageFactory), false)
         val womBundle = bundleChk match {
             case Left(errors) => throw new Exception(s"""|WOM validation errors:
                                                          | ${errors}
