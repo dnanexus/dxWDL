@@ -26,4 +26,19 @@ class UtilsTest extends FlatSpec with Matchers {
         val y2 = JsObject("b" -> JsNumber(2), "a" -> JsNumber(1))
         assert(Utils.makeDeterministic(x2) != Utils.makeDeterministic(y2))
     }
+
+
+    it should "build limited sized names" in {
+        val retval = Utils.buildLimitedSizeName(Vector(1, 2, 3).map(_.toString), 10)
+        retval should be ("[1, 2, 3]")
+
+        val retval2 = Utils.buildLimitedSizeName(Vector(100, 200, 300).map(_.toString), 10)
+        retval2 should be ("[100, 200]")
+
+        Utils.buildLimitedSizeName(Vector("A", "B", "hel", "nope"), 10) should be ("[A, B, hel]")
+
+        Utils.buildLimitedSizeName(Vector("A", "B", "C", "D", "neverland"), 13) should be ("[A, B, C, D]")
+
+        Utils.buildLimitedSizeName(Vector.empty, 4) should be ("[]")
+    }
 }

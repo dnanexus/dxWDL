@@ -119,7 +119,11 @@ case class ParseWomSourceFile(verbose: Boolean) {
 
         val languageFactory = getLanguageFactory(mainFileContents)
         val bundleChk: Checked[WomBundle] =
-            languageFactory.getWomBundle(mainFileContents, "{}", importResolversRecorded, List(languageFactory))
+            languageFactory.getWomBundle(mainFileContents,
+                                         "{}",
+                                         importResolversRecorded,
+                                         List(languageFactory),
+                                         convertNestedScatterToSubworkflow = false)
 
         val bundle = bundleChk match {
             case Left(errors) => throw new Exception(s"""|WOM validation errors:
@@ -155,7 +159,8 @@ case class ParseWomSourceFile(verbose: Boolean) {
                         languageFactory.getWomBundle(wfSource,
                                                      "{}",
                                                      importResolversRecorded,
-                                                     List(languageFactory)) match {
+                                                     List(languageFactory),
+                                                     convertNestedScatterToSubworkflow = false) match {
                             case Left(errors) => throw new Exception(s"""|WOM validation errors:
                                                                          | ${errors}
                                                                          |""".stripMargin)
@@ -384,7 +389,8 @@ case class ParseWomSourceFile(verbose: Boolean) {
                                               Map[String, WomType])= {
         val languageFactory = getLanguageFactory(wfSource)
         val bundleChk: Checked[WomBundle] =
-            languageFactory.getWomBundle(wfSource, "{}", List.empty, List(languageFactory))
+            languageFactory.getWomBundle(wfSource, "{}", List.empty, List(languageFactory),
+                                         convertNestedScatterToSubworkflow = false)
         val womBundle = bundleChk match {
             case Left(errors) => throw new Exception(s"""|WOM validation errors:
                                                          | ${errors}
