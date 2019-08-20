@@ -29,7 +29,7 @@ task add {
         Int b
     }
     command {
-        echo $((${a} + ${b}))
+        echo $((~{a} + ~{b}))
     }
     output {
         Int result = read_int(stdout())
@@ -43,7 +43,7 @@ task mul {
     }
 
     command {
-        echo $((a * b))
+        echo $((~{a} * ~{b}))
     }
     output {
         Int result = a * b
@@ -55,9 +55,9 @@ task inc {
         Int i
     }
 
-    command <<<
-        python -c "print(${i} + 1)"
-    >>>
+    command {
+        python -c "print(~{i} + 1)"
+    }
     output {
         Int result = read_int(stdout())
     }

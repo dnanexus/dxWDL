@@ -45,6 +45,7 @@ wdl_v1_list = [
     # workflows with nested blocks
     "two_levels",
     "param_passing",
+    "nested_scatter",
 
     # defaults and parameter passing
     "top",

@@ -65,6 +65,7 @@ case class WfFragRunner(wf: WorkflowDefinition,
                         inputsRaw : JsValue,
                         fragInputOutput : WfFragInputOutput,
                         runtimeDebugLevel: Int) {
+    private val MAX_JOB_NAME = 50
     private val verbose = runtimeDebugLevel >= 1
     //private val maxVerboseLevel = (runtimeDebugLevel == 2)
     private val wdlVarLinksConverter = WdlVarLinksConverter(dxIoFunctions.fileInfoDir,
@@ -592,6 +593,7 @@ case class WfFragRunner(wf: WorkflowDefinition,
         }
     }
 
+
     // create a short, easy to read, description for a scatter element.
     private def readableNameForScatterItem(item: WomValue) : Option[String] = {
         item match {
@@ -612,9 +614,11 @@ case class WfFragRunner(wf: WorkflowDefinition,
             case WomOptionalValue(_, Some(x)) =>
                 readableNameForScatterItem(x)
             case WomArray(_, arrValues) =>
+                // Create a name by concatenating the initial elements of the array.
+                // Limit the total size of the name.
                 val arrBeginning = arrValues.slice(0, 3)
                 val elements = arrBeginning.flatMap(readableNameForScatterItem(_))
-                Some("[" + elements.mkString(", ") + "]")
+                Some(Utils.buildLimitedSizeName(elements, MAX_JOB_NAME))
             case _ =>
                 None
         }

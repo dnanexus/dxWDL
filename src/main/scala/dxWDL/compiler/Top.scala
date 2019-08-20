@@ -207,7 +207,8 @@ case class Top(cOpt: CompilerOptions) {
         // Merge all the bundles together
         WomBundle(mainBundle.primaryCallable,
                   allCallables,
-                  allTypeAliases)
+                  allTypeAliases,
+                  Set.empty)
     }
 
 

@@ -327,4 +327,29 @@ object Utils {
         }
     }
 
+    // Concatenate the elements, until hitting a size limit
+    def buildLimitedSizeName(elements: Seq[String], maxLen: Int) : String = {
+        if (elements.isEmpty)
+            return "[]"
+        val (_, concat) = elements.tail.foldLeft((false, elements(0))){
+            case ((true, accu), _) =>
+                // stopping condition reached, we have reached the size limit
+                (true, accu)
+
+            case ((false, accu), _) if accu.size >= maxLen =>
+                // move into stopping condition
+                (true, accu)
+
+            case ((false, accu), elem) =>
+                val tentative = accu + ", " + elem
+                if (tentative.size > maxLen) {
+                    // not enough space
+                    (true, accu)
+                } else {
+                    // still have space
+                    (false, tentative)
+                }
+        }
+        "[" + concat + "]"
+    }
 }
