@@ -275,8 +275,8 @@ def main():
     }
 
     # build the dxWDL jar file, only on us-east-1
-    if not args.do_not_build:
-        util.build(project, folder, version_id, top_dir, test_dict)
+    #if not args.do_not_build:
+    #    util.build(project, folder, version_id, top_dir, test_dict)
 
     # For some reason, the ip-tables state is not completely
     # cleared. Therefore, we need to run those tests first.
