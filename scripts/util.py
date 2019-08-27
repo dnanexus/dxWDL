@@ -16,7 +16,8 @@ import time
 
 AssetDesc = namedtuple('AssetDesc', 'region asset_id project')
 
-dxda_version = "v0.2.2"
+#dxda_version = "v0.2.2"
+dxda_version = "20190826211126_3361980"
 max_num_retries = 5
 
 def dxWDL_jar_path(top_dir):
@@ -118,11 +119,22 @@ def _download_dxda_into_resources(top_dir):
 
     # download dxda release, and place it in the resources directory
     trg_dxda_tar = "resources/dx-download-agent-linux.tar"
-    subprocess.check_call([
-        "wget",
-        "https://github.com/dnanexus/dxda/releases/download/{}/dx-download-agent-linux.tar".format(dxda_version),
-        "-O",
-        trg_dxda_tar])
+    if dxda_version.startswith("v"):
+        # A proper download-agent release, it starts with a "v"
+        subprocess.check_call([
+            "wget",
+            "https://github.com/dnanexus/dxda/releases/download/{}/dx-download-agent-linux.tar".format(dxda_version),
+            "-O",
+            trg_dxda_tar])
+    else:
+        # A snapshot of the download-agent development branch
+        command = """sudo  docker run --entrypoint=\'\' dnanexus/dxda:{} cat /builds/dx-download-agent-linux.tar > {}""".format(dxda_version, trg_dxda_tar)
+        p = subprocess.Popen(command, universal_newlines=True, shell=True,
+                             stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        text = p.stdout.read()
+        retcode = p.wait()
+        print("downloading dxda{} {}", retcode, text)
+
     subprocess.check_call(["tar", "-C", "resources", "-xvf", trg_dxda_tar])
     os.rename("resources/dx-download-agent-linux/dx-download-agent",
               "resources/usr/bin/dx-download-agent")
