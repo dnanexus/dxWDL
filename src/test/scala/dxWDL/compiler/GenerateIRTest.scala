@@ -196,6 +196,41 @@ class GenerateIRTest extends FlatSpec with Matchers {
         stage.description shouldBe ("review")
     }
 
+    it should "compile a workflow calling a subworkflow as a direct call with development version" in {
+        val path = pathFromBasename("development", "movies.wdl")
+        val bundle : IR.Bundle = Main.compile(path.toString :: cFlags) match {
+            case Main.SuccessfulTerminationIR(bundle) => bundle
+            case other =>
+                Utils.error(other.toString)
+                throw new Exception(s"Failed to compile ${path}")
+        }
+        val wf : IR.Workflow = bundle.primaryCallable match {
+            case Some(wf: IR.Workflow) =>
+                wf
+            case _ => throw new Exception("bad value in bundle")
+        }
+        val stage = wf.stages.head
+        stage.description shouldBe ("review")
+    }
+
+
+    it should "compile a workflow calling a subworkflow with native DNANexus applet as a direct call with development version" in {
+        val path = pathFromBasename("development", "call_dnanexus_applet.wdl")
+        val bundle : IR.Bundle = Main.compile(path.toString :: cFlags) match {
+            case Main.SuccessfulTerminationIR(bundle) => bundle
+            case other =>
+                Utils.error(other.toString)
+                throw new Exception(s"Failed to compile ${path}")
+        }
+        val wf : IR.Workflow = bundle.primaryCallable match {
+            case Some(wf: IR.Workflow) =>
+                wf
+            case _ => throw new Exception("bad value in bundle")
+        }
+        val stage = wf.stages.head
+        stage.description shouldBe ("native_sum_wf")
+    }
+
     it should "three nesting levels" in {
         val path = pathFromBasename("nested", "three_levels.wdl")
         val retval = Main.compile(
