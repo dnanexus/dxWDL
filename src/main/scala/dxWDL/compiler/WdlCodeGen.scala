@@ -148,6 +148,18 @@ task Add {
                         |  }
                         |}""".stripMargin
                 )
+            case Language.WDLv2_0 =>
+                WdlCodeSnippet(
+                    s"""|task ${callable.name} {
+                        |  input {
+                        |${inputs}
+                        |  }
+                        |  command {}
+                        |  output {
+                        |${outputs}
+                        |  }
+                        |}""".stripMargin
+                )
             case other =>
                 throw new Exception(s"Unsupported language version ${other}")
         }
@@ -194,6 +206,7 @@ task Add {
                     |  }
                     |${metaSection}
                     |}""".stripMargin
+
             case other =>
                 throw new Exception(s"Unsupported language version ${other}")
         }
