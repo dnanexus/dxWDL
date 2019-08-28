@@ -196,7 +196,7 @@ class GenerateIRTest extends FlatSpec with Matchers {
         stage.description shouldBe ("review")
     }
 
-    it should "compile a workflow calling a subworkflow as a direct call with development version" taggedAs(EdgeTest) in {
+    it should "compile a workflow calling a subworkflow as a direct call with development version" in {
         val path = pathFromBasename("development", "movies.wdl")
         val bundle : IR.Bundle = Main.compile(path.toString :: cFlags) match {
             case Main.SuccessfulTerminationIR(bundle) => bundle
@@ -214,7 +214,7 @@ class GenerateIRTest extends FlatSpec with Matchers {
     }
 
 
-    it should "compile a workflow calling a subworkflow with native DNANexus applet as a direct call with development version" taggedAs(EdgeTest) in {
+    it should "compile a workflow calling a subworkflow with native DNANexus applet as a direct call with development version" in {
         val path = pathFromBasename("development", "call_dnanexus_applet.wdl")
         val bundle : IR.Bundle = Main.compile(path.toString :: cFlags) match {
             case Main.SuccessfulTerminationIR(bundle) => bundle
