@@ -206,6 +206,18 @@ task Add {
                     |  }
                     |${metaSection}
                     |}""".stripMargin
+            case Language.WDLv2_0 =>
+              s"""|task ${appletName} {
+                  |  input {
+                  |${inputs}
+                  |  }
+                  |  command {}
+                  |  output {
+                  |${outputs}
+                  |  }
+                  |${metaSection}
+                  |}""".stripMargin
+
 
             case other =>
                 throw new Exception(s"Unsupported language version ${other}")
