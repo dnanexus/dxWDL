@@ -1,5 +1,9 @@
 # Release Notes
 
+## 1.20a [pre-release]
+- An experimental version of dx-download-agent
+- Upgrade to Cromwell 45.1
+
 ## 1.20
 - Experimental version of the download-agent. Trying to reduce download failures at the beginning of a job. For internal use only.
 
