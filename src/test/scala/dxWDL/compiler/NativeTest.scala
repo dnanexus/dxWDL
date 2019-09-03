@@ -163,4 +163,50 @@ class NativeTest extends FlatSpec with Matchers {
         ) shouldBe a [Main.SuccessfulTermination]
     }
 
+    it should "make default task timeout 48 hours" taggedAs(NativeTestXX, EdgeTest) in {
+        val path = pathFromBasename("compiler", "add_timeout.wdl")
+        Main.compile(
+            path.toString :: "--force" :: cFlags
+        ) shouldBe a [Main.SuccessfulTermination]
+
+        // make sure the timeout is what it should be
+        val appPath = "%s:/unit_tests/add_timeout".format(dxTestProject.getId)
+        val (stdout, stderr) = Utils.execCommand(s"dx describe ${appPath} --json")
+
+        val timeout = stdout.parseJson.asJsObject.fields.get("runSpec") match {
+            case Some(JsObject(x)) => x.get("timeoutPolicy") match {
+                case None => throw new Exception("No timeout policy set")
+                case Some(s) => s
+            }
+            case other => throw new Exception(s"Unexpected result ${other}")
+        }
+        timeout shouldBe JsObject("*" -> JsObject(
+                                      "days" -> JsNumber(2),
+                                      "hours" -> JsNumber(0),
+                                      "minutes" -> JsNumber(0)))
+    }
+
+    it should "timeout can be overriden from the extras file" taggedAs(NativeTestXX, EdgeTest) in {
+        val path = pathFromBasename("compiler", "add_timeout_override.wdl")
+        val extraPath = pathFromBasename("compiler/extras",  "short_timeout.json")
+        Main.compile(
+            path.toString
+                :: "--extras" :: extraPath.toString :: cFlags
+        ) shouldBe a [Main.SuccessfulTermination]
+
+        // make sure the timeout is what it should be
+        val appPath = "%s:/unit_tests/add_timeout_override".format(dxTestProject.getId)
+        val (stdout, stderr) = Utils.execCommand(s"dx describe ${appPath} --json")
+
+        val timeout = stdout.parseJson.asJsObject.fields.get("runSpec") match {
+            case Some(JsObject(x)) => x.get("timeoutPolicy") match {
+                case None => throw new Exception("No timeout policy set")
+                case Some(s) => s
+            }
+            case other => throw new Exception(s"Unexpected result ${other}")
+        }
+        timeout shouldBe JsObject("*" -> JsObject("hours" -> JsNumber(3)))
+
+    }
+
 }

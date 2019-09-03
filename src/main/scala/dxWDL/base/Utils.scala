@@ -15,10 +15,11 @@ import scala.sys.process._
 import wom.types._
 
 object Utils {
-    val DXAPI_NUM_OBJECTS_LIMIT = 1000 // maximal number of objects in a single API request
     val APPLET_LOG_MSG_LIMIT = 1000
     val CHECKSUM_PROP = "dxWDL_checksum"
     val DEFAULT_RUNTIME_DEBUG_LEVEL = 1
+    val DEFAULT_APPLET_TIMEOUT_IN_DAYS = 2
+    val DXAPI_NUM_OBJECTS_LIMIT = 1000 // maximal number of objects in a single API request
     val DX_WDL_ASSET = "dxWDLrt"
     val DX_URL_PREFIX = "dx://"
     val DX_WDL_RUNTIME_CONF_FILE = "dxWDL_runtime.conf"

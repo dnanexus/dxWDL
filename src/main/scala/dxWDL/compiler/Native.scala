@@ -545,7 +545,9 @@ case class Native(dxWDLrtId: Option[String],
 
         // Add default timeout
         val defaultTimeout : Map[String, JsValue] =
-            DxRunSpec(None, None, None, Some(DxTimeout(Some(2), Some(0), Some(0)))).toRunSpecJson
+            DxRunSpec(None, None, None, Some(DxTimeout(Some(Utils.DEFAULT_APPLET_TIMEOUT_IN_DAYS),
+                                                       Some(0),
+                                                       Some(0)))).toRunSpecJson
 
         // Start with the default dx-attribute section, and override
         // any field that is specified in the individual task section.
