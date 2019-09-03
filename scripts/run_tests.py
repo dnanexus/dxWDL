@@ -147,7 +147,7 @@ test_unlocked=["array_structs",
                "optionals",
                "shapes"]
 
-test_extras=["instance_types"]
+test_extras=["instance_types", "hello"]
 test_private_registry=["private_registry"]
 test_import_dirs=["A"]
 TestMetaData = namedtuple('TestMetaData', 'name kind')
@@ -638,8 +638,6 @@ def main():
                            action="store_true", default=False)
     argparser.add_argument("--do-not-build", help="Do not assemble the dxWDL jar file",
                            action="store_true", default=False)
-    argparser.add_argument("--extras", help="run extra tests",
-                           action="store_true", default=False)
     argparser.add_argument("--force", help="Remove old versions of applets and workflows",
                            action="store_true", default=False)
     argparser.add_argument("--folder", help="Use an existing folder, instead of building dxWDL")
@@ -742,10 +740,6 @@ def main():
             run_test_subset(project, runnable, test_folder, args.debug)
     finally:
         print("Completed running tasks in {}".format(args.project))
-
-    if args.extras:
-        print("Copy workflow and run in alternate project ")
-        copy_wf_test("linear", project, applet_folder, args.debug)
 
 if __name__ == '__main__':
     main()

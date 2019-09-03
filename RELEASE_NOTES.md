@@ -1,5 +1,9 @@
 # Release Notes
 
+## 1.20b
+- Another experimental version of dx-download-agent
+- By default, setting a 48 hour timeout for applets. This can be modified as needed by setting a different timeout in the [extras file](./doc/ExpertOptions.md#Setting-dnanexus-specific-attributes-for-tasks).
+
 ## 1.20a
 - An experimental version of dx-download-agent
 - Upgrade to Cromwell 45.1
