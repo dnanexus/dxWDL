@@ -1,5 +1,9 @@
 # Release Notes
 
+## 1.20b
+- The default timeout limit for tasks is 48 hours. It can be overriden by setting a different timeout in the [extras file](./doc/ExpertOptions.md#Setting-dnanexus-specific-attributes-for-tasks).
+- Fixing a bug where the database is locked, in the [dx-download-agent](https://github.com/dnanexus/dxda/).
+
 ## 1.20a
 - An experimental version of dx-download-agent
 - Upgrade to Cromwell 45.1
