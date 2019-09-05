@@ -1,5 +1,9 @@
 # Release Notes
 
+## 1.20c
+- Documented syntax limitation for task/workflow [bracket placement](README.md#Strict-syntax).
+- Upgraded to sbt 1.3.0
+
 ## 1.20b
 - The default timeout limit for tasks is 48 hours. It can be overriden by setting a different timeout in the [extras file](./doc/ExpertOptions.md#Setting-dnanexus-specific-attributes-for-tasks).
 - Fixing a bug where the database is locked, in the [dx-download-agent](https://github.com/dnanexus/dxda/).

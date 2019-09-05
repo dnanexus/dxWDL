@@ -97,6 +97,35 @@ dx run bam_chrom_counter -i0.file=file-xxxx
 At runtime this looks like this:
 ![this](doc/bam_chrom_counter.png)
 
+## Strict syntax
+
+One of the compiler phases takes a workflow apart, and extracts standalone tasks and sub-workflows. This requires a lexical analysis on the WDL program. It currently uses a simple regular expression to detect task/workflow start and end. This means that a task has to adhere to the following rules:
+1. no extra text is allows after the final closing bracket
+2. within the task body, closing brackets may not start at the beginning of a line.
+
+Here is an example to avoid:
+```wdl
+task foo {
+input {
+    File ref
+}
+command {
+    ls -lh ~{ref}
+}
+}
+```
+
+It should be written like this:
+```wdl
+task foo {
+    input {
+        File ref
+    }
+    command {
+        ls -lh ~{ref}
+    }
+}
+```
 
 
 # Additional information
