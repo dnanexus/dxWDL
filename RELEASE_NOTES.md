@@ -1,9 +1,9 @@
 # Release Notes
 
-## 1.20c
+## 1.21
 - Documented syntax limitation for task/workflow [bracket placement](README.md#Strict-syntax).
 - Upgraded to sbt 1.3.0
-- If there is a global default timeout for tasks, apply it to native applets as well.
+- Improvements to the download agent
 
 ## 1.20b
 - The default timeout limit for tasks is 48 hours. It can be overriden by setting a different timeout in the [extras file](./doc/ExpertOptions.md#Setting-dnanexus-specific-attributes-for-tasks).
