@@ -17,7 +17,7 @@ import time
 AssetDesc = namedtuple('AssetDesc', 'region asset_id project')
 
 #dxda_version = "v0.2.2"
-dxda_version = "20190903204842_c71ebee"
+dxda_version = "20190909212832_c28a2ad"
 max_num_retries = 5
 
 def dxWDL_jar_path(top_dir):
