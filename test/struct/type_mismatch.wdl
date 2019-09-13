@@ -2,7 +2,7 @@ version 1.0
 
 struct WordStruct {
     String word
-    File? catalog
+    File catalog
 }
 
 task red_panda {
@@ -15,9 +15,19 @@ task red_panda {
     }
 }
 
+task create_file {
+    command {
+        echo "99 balloons go by" > balloon.txt
+    }
+    output {
+        File o = "balloon.txt"
+    }
+}
 
 workflow type_mismatch {
-    WordStruct bamboo = {"word" : "bamboo"}
+    call create_file
+
+    WordStruct bamboo = {"word" : "bamboo", "catalog" : create_file.o}
     call red_panda {
         input:
             sentence = [bamboo],
