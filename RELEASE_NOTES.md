@@ -1,5 +1,8 @@
 # Release Notes
 
+## 1.21.1
+- Writing out a better description when raising a runtime assertion because WOM types don't match.
+
 ## 1.21
 - Documented syntax limitation for task/workflow [bracket placement](README.md#Strict-syntax).
 - Upgraded to sbt 1.3.0
