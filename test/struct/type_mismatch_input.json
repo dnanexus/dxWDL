@@ -1,6 +1,0 @@
-{"type_mismatch.sentence": [
-  {"word": "hello"},
-  {"word": "world"}
-],
- "type_mismatch.numbers": [1, 5, 10]
-}
