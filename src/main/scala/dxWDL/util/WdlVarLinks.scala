@@ -188,7 +188,9 @@ case class WdlVarLinksConverter(fileInfoDir: Map[DXFile, DxDescribe],
     private def jsValueToDxHash(womType: WomType, jsVal: JsValue) : JsValue = {
         val m:Map[String, JsValue] = jsVal match {
             case JsObject(fields) =>
-                assert(!(fields contains "womType"))
+                if (fields contains "womType")
+                    throw new Exception(s"""|The JSON value is not supposed to have a womType field.
+                                            |fields: ${fields}""".stripMargin)
                 fields
             case _ =>
                 // Embed the value into a JSON object
@@ -227,9 +229,13 @@ case class WdlVarLinksConverter(fileInfoDir: Map[DXFile, DxDescribe],
                 val mJs: Map[JsValue, JsValue] =
                     (fields("keys"), fields("values")) match {
                         case (JsArray(x), JsArray(y)) =>
-                            assert(x.length == y.length)
+                            if (x.length != y.length)
+                                throw new Exception(s"""|len(keys) != len(values)
+                                                        |fields: ${fields}
+                                                        |""".stripMargin)
                             (x zip y).toMap
-                        case _ => throw new Exception("Malformed JSON")
+                        case _ =>
+                            throw new Exception(s"Malformed JSON ${fields}")
                     }
                 val m: Map[WomValue, WomValue] = mJs.map {
                     case (k:JsValue, v:JsValue) =>
@@ -313,8 +319,13 @@ case class WdlVarLinksConverter(fileInfoDir: Map[DXFile, DxDescribe],
         fields.get("womType") match {
             case Some(JsString(s)) =>
                 val t = womTypeSerializer.fromString(s)
-                assert(t == womType)
-            case _ => throw new Exception(s"missing or malformed womType field in ${jsv}")
+                if (t != womType)
+                    throw new Exception(s"""|The statically expected wom type is: ${womType}
+                                            |the input type is: ${t}
+                                            |JSON object fields: ${fields}"""
+                                            .stripMargin)
+            case _ =>
+                throw new Exception(s"missing or malformed womType field in ${jsv}")
         }
 
         val jsv1 =
