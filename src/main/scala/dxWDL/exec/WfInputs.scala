@@ -8,7 +8,7 @@ import wom.callable.{WorkflowDefinition}
 import wom.values._
 import wom.types.WomType
 
-import dxWDL.base.Utils
+import dxWDL.base.{Utils, Verbose}
 import dxWDL.util._
 
 case class WfInputs(wf: WorkflowDefinition,
@@ -19,7 +19,8 @@ case class WfInputs(wf: WorkflowDefinition,
                     runtimeDebugLevel: Int) {
     private val verbose = runtimeDebugLevel >= 1
     //private val maxVerboseLevel = (runtimeDebugLevel == 2)
-    private val wdlVarLinksConverter = WdlVarLinksConverter(dxIoFunctions.fileInfoDir, typeAliases)
+    private val utlVerbose = Verbose(runtimeDebugLevel >= 1, false, Set.empty)
+    private val wdlVarLinksConverter = WdlVarLinksConverter(utlVerbose, dxIoFunctions.fileInfoDir, typeAliases)
 
     def apply(inputs: Map[String, WomValue]) : Map[String, JsValue] = {
         Utils.appletLog(verbose, s"dxWDL version: ${Utils.getVersion()}")
