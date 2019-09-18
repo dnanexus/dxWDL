@@ -1,5 +1,8 @@
 # Release Notes
 
+## 1.22
+- Upgrade to Cromwell version 46
+
 ## 1.21.1
 - Writing out a better description when raising a runtime assertion because WOM types don't match.
 
