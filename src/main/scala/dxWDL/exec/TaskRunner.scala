@@ -387,24 +387,19 @@ case class TaskRunner(task: CallableTaskDefinition,
         //
         // Note: this may be overly conservative,
         // because some of the files may not actually be accessed.
-        val (localizedInputs, dxUrl2path, bashSnippetVec, dxdaManifest) =
+        val (localizedInputs, dxUrl2path, dxdaManifest, dxfs2Manifest) =
             jobInputOutput.localizeFiles(task.parameterMeta, taskInputs, dxPathConfig.inputFilesDir)
-
-        // deal with files that need streaming
-        if (bashSnippetVec.size > 0) {
-            // set up all the named pipes
-            val path = dxPathConfig.setupStreams
-            Utils.appletLog(maxVerboseLevel,
-                            s"writing bash script for stream(s) set up to ${path}")
-            val snippet = bashSnippetVec.mkString("\n")
-            Utils.writeFileContent(path, snippet)
-            path.toFile.setExecutable(true)
-        }
 
         // build a manifest for dxda, if there are files to download
         val DxdaManifest(manifestJs) = dxdaManifest
         if (manifestJs.asJsObject.fields.size > 0) {
             Utils.writeFileContent(dxPathConfig.dxdaManifest, manifestJs.prettyPrint)
+        }
+
+        // build a manifest for dxfs2
+        val Dxfs2Manifest(manifest2Js) = dxfs2Manifest
+        if (manifest2Js.asJsObject.fields.size > 0) {
+            Utils.writeFileContent(dxPathConfig.dxfs2Manifest, manifest2Js.prettyPrint)
         }
 
         val inputs = localizedInputs.map{ case (inpDfn, value) =>

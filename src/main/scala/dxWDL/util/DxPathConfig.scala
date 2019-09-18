@@ -60,6 +60,11 @@ case class DxPathConfig(
     // files, if the file is non empty.
     dxdaManifest : Path,
 
+    // Location of dxfs2 manifest. It will mount all these
+    // files, if the file is non empty.
+    dxfs2Manifest : Path,
+    dxfs2Mountpoint : Path,
+
     // file for storing the state between prolog and epilog of the task runner
     runnerTaskEnv: Path,
     verbose: Boolean) {
@@ -91,6 +96,8 @@ object DxPathConfig {
         val dockerSubmitScript = metaDir.resolve("docker.submit")
         val setupStreams = metaDir.resolve("setup_streams")
         val dxdaManifest = metaDir.resolve("dxdaManifest.json")
+        val dxfs2Manifest = metaDir.resolve("dxfs2Manifest.json")
+        val dxfs2Mountpoint = metaDir.resolve("mnt")
         val rcPath = metaDir.resolve("rc")
         val dockerCid = metaDir.resolve("dockerCid")
         val runnerTaskEnv = metaDir.resolve("taskEnv.json")
@@ -110,6 +117,8 @@ object DxPathConfig {
                      dockerCid,
                      setupStreams,
                      dxdaManifest,
+                     dxfs2Manifest,
+                     dxfs2Mountpoint,
                      runnerTaskEnv,
                      verbose)
     }
