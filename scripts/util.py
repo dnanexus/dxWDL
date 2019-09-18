@@ -88,7 +88,6 @@ def make_asset_file(version_id, top_dir):
 # call sbt-assembly. The tricky part here, is to
 # change the working directory to the top of the project.
 def _sbt_assembly(top_dir, version_id):
-    crnt_work_dir = os.getcwd()
     os.chdir(os.path.abspath(top_dir))
 
     # Make sure the directory path exists
@@ -104,13 +103,11 @@ def _sbt_assembly(top_dir, version_id):
     subprocess.check_call(["sbt", "assembly"])
     if not os.path.exists(jar_path):
         raise Exception("sbt assembly failed")
-    os.chdir(crnt_work_dir)
     return jar_path
 
 # download dxda for linux, and place it in the resources
 # sub-directory.
 def _download_dxda_into_resources(top_dir):
-    crnt_work_dir = os.getcwd()
     os.chdir(os.path.join(top_dir, "applet_resources"))
 
     # make sure the resources directory exists
@@ -141,7 +138,17 @@ def _download_dxda_into_resources(top_dir):
     os.chmod("resources/usr/bin/dx-download-agent", 0o775)
     os.remove(trg_dxda_tar)
     shutil.rmtree("resources/dx-download-agent-linux")
-    os.chdir(crnt_work_dir)
+
+def _add_dxfs2_to_resources(top_dir):
+    os.chdir(os.path.join(top_dir, "applet_resources"))
+
+    # make sure the resources directory exists
+    if not os.path.exists("resources/usr/bin"):
+        os.makedirs("resources/usr/bin")
+    if not os.path.exists("/go/bin/dxfs2"):
+        raise Exception("The dxfs2 executable does not exist")
+    shutil.copyfile("/go/bin/dxfs2", "resources/usr/bin/dxfs2")
+    os.chmod("resources/usr/bin/dxfs2", 0o775)
 
 # Build a dx-asset from the runtime library.
 # Go to the top level directory, before running "dx"
@@ -221,6 +228,9 @@ def build(project, folder, version_id, top_dir, path_dict):
 
     # get a copy of the download agent (dxda)
     _download_dxda_into_resources(top_dir)
+
+    # get a copy of the dxfs2 executable
+    _add_dxfs2_to_resources(top_dir)
 
     asset = find_asset(project, folder)
     if asset is None:
