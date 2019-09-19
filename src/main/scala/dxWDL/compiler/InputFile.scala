@@ -176,7 +176,7 @@ case class InputFile(fileInfoDir: Map[DXFile, DxDescribe],
                      typeAliases: Map[String, WomType],
                      verbose: Verbose) {
     val verbose2:Boolean = verbose.containsKey("InputFile")
-    private val wdlVarLinksConverter = WdlVarLinksConverter(fileInfoDir, typeAliases)
+    private val wdlVarLinksConverter = WdlVarLinksConverter(verbose, fileInfoDir, typeAliases)
 
     // Convert a job input to a WomValue. Do not download any files, convert them
     // to a string representation. For example: dx://proj-xxxx:file-yyyy::/A/B/C.txt

@@ -34,7 +34,8 @@ case class DxlExec(dxExec: DXExecution, varName: String) extends DxLink
 
 case class WdlVarLinks(womType: WomType, dxlink: DxLink)
 
-case class WdlVarLinksConverter(fileInfoDir: Map[DXFile, DxDescribe],
+case class WdlVarLinksConverter(verbose: Verbose,
+                                fileInfoDir: Map[DXFile, DxDescribe],
                                 typeAliases: Map[String, WomType]) {
     val womTypeSerializer = WomTypeSerialization(typeAliases)
 
@@ -315,19 +316,8 @@ case class WdlVarLinksConverter(fileInfoDir: Map[DXFile, DxDescribe],
                 throw new Exception(s"JSON ${jsv} does not match the marshalled WDL value")
         }
 
-        // An object, the type is embedded as a 'womType' field
-        fields.get("womType") match {
-            case Some(JsString(s)) =>
-                val t = womTypeSerializer.fromString(s)
-                if (t != womType)
-                    throw new Exception(s"""|The statically expected wom type is: ${womType}
-                                            |the input type is: ${t}
-                                            |JSON object fields: ${fields}"""
-                                            .stripMargin)
-            case _ =>
-                throw new Exception(s"missing or malformed womType field in ${jsv}")
-        }
-
+        // An object, the type is embedded as a 'womType' field.
+        // we aren't using it here.
         val jsv1 =
             if (fields contains "value") {
                     // the value is encapsulated in the "value" field

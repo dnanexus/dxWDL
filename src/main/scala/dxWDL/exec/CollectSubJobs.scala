@@ -82,7 +82,8 @@ case class CollectSubJobs(jobInputOutput : JobInputOutput,
                           typeAliases: Map[String, WomType]) {
     //private val verbose = runtimeDebugLevel >= 1
     private val maxVerboseLevel = (runtimeDebugLevel == 2)
-    private val wdlVarLinksConverter = WdlVarLinksConverter(Map.empty, typeAliases)
+    private val verbose = Verbose(runtimeDebugLevel >= 1, false, Set.empty)
+    private val wdlVarLinksConverter = WdlVarLinksConverter(verbose, Map.empty, typeAliases)
 
     // Launch a subjob to collect the outputs
     def launch(childJobs: Vector[DXExecution],
