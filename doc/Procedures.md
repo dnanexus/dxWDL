@@ -3,15 +3,15 @@
 ## Release check list
 - Make sure regression tests pass
 - Update release notes and README.md
-- Make sure the version number in `src/main/resources/application.conf` is correct
+- Make sure the version number in `src/main/resources/application.conf` is correct. It is used
+when building the release.
 - Merge onto master branch, make sure [travis tests](https://travis-ci.org/dnanexus/dxWDL) pass
-- Tag git with the release version
 - Build new externally visible release
-  * run `./scripts/build_release.py --force --multi-region` in staging
-  * run `./scripts/build_release.py --force --multi-region` in production
+  * setup the *STAGING_TOKEN* and *PRODUCTION_TOKEN* environment variables.
+  * run `./scripts/build_all_releases.sh`, this will take a while. It builds the release
+  on staging and development. It also runs multi-region tests on staging.
   * Update [releases](https://github.com/dnanexus-rnd/dxWDL/releases) github page,
-  use the `Draft a new release` button.
-  * Upload a dxWDL.jar file
+  use the `Draft a new release` button, and upload a dxWDL.jar file.
 - Create a dxwdl docker image with `./scripts/compiler_image/build_compiler_docker_image.sh`
 
 ## Post release
