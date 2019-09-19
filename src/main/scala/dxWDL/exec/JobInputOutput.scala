@@ -20,7 +20,8 @@ case class JobInputOutput(dxIoFunctions : DxIoFunctions,
                           runtimeDebugLevel: Int,
                           typeAliases: Map[String, WomType]) {
     private val verbose = (runtimeDebugLevel >= 1)
-    private val wdlVarLinksConverter = WdlVarLinksConverter(dxIoFunctions.fileInfoDir, typeAliases)
+    private val utlVerbose = Verbose(runtimeDebugLevel >= 1, false, Set.empty)
+    private val wdlVarLinksConverter = WdlVarLinksConverter(utlVerbose, dxIoFunctions.fileInfoDir, typeAliases)
 
     private val DISAMBIGUATION_DIRS_MAX_NUM = 200
 

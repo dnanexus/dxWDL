@@ -43,7 +43,7 @@ case class Native(dxWDLrtId: Option[String],
 
     private val verbose2:Boolean = verbose.containsKey("Native")
     private val rtDebugLvl = runtimeDebugLevel.getOrElse(Utils.DEFAULT_RUNTIME_DEBUG_LEVEL)
-    private val wdlVarLinksConverter = WdlVarLinksConverter(fileInfoDir, typeAliases)
+    private val wdlVarLinksConverter = WdlVarLinksConverter(verbose, fileInfoDir, typeAliases)
 
     // Are we setting up a private docker registry?
     private val dockerRegistryInfo : Option[DockerRegistry]= extras match {
