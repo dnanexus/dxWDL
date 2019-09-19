@@ -303,12 +303,20 @@ case class TaskRunner(task: CallableTaskDefinition,
                 |extraFlags="--user $$(id -u):$$(id -g) --hostname $$(hostname)"
                 |
                 |# run as in the original configuration
-                |docker run \\
-                |  --cidfile ${dxPathConfig.dockerCid} \\
-                |  $${extraFlags} \\
-                |  --entrypoint /bin/bash \\
-                |  -v ${dxPathConfig.homeDir}:${dxPathConfig.homeDir} \\
-                |  ${imgName} ${dxPathConfig.script.toString}
+                |
+                |n=0
+                |until [ $$n -ge 5 ]
+                |do
+                |   docker run \\
+                |   --cidfile ${dxPathConfig.dockerCid} \\
+                |   $${extraFlags} \\
+                |   --entrypoint /bin/bash \\
+                |   -v ${dxPathConfig.homeDir}:${dxPathConfig.homeDir} \\
+                |   ${imgName} ${dxPathConfig.script.toString} && break  # substitute your command here
+                |    n=$$((n+1))
+                |    echo "Failed to pull ${imgName}. Retrying $$n of 5 in 15secs"
+                |    sleep 15
+                |done
                 |
                 |# get the return code (working even if the container was detached)
                 |rc=$$(docker wait `cat ${dxPathConfig.dockerCid.toString}`)
