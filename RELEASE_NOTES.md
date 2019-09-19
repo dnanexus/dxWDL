@@ -1,5 +1,9 @@
 # Release Notes
 
+## 1.22
+- Upgrade to Cromwell version 46
+- Removed a runtime assert that was too strict. It was checking that the type of a WDL value *V* had a static WDL type *T*. However, the real question was whether *V* could be casted type *T*.
+
 ## 1.21.1
 - Writing out a better description when raising a runtime assertion because WOM types don't match.
 

@@ -31,7 +31,7 @@ RELEASE_DICT = {
 def main():
     argparser = argparse.ArgumentParser(description="Build a dxWDL release")
     argparser.add_argument("--force",
-                           help="Build even if the there is an existing version",
+                           help="Build even if there is an existing version",
                            action='store_true',
                            default=False)
     argparser.add_argument("--multi-region",

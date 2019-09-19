@@ -316,21 +316,8 @@ case class WdlVarLinksConverter(verbose: Verbose,
                 throw new Exception(s"JSON ${jsv} does not match the marshalled WDL value")
         }
 
-        // An object, the type is embedded as a 'womType' field
-        fields.get("womType") match {
-            case Some(JsString(s)) =>
-                val t = womTypeSerializer.fromString(s)
-                if (t != womType)
-                    Utils.warning(verbose,
-                                  s"""|input name: ${name}
-                                      |    the statically expected wom type is: ${womType}
-                                      |    the runtime type is: ${t}
-                                      |this is not a fatal error, because the unmarshaller may be able to
-                                      |handle it.""".stripMargin)
-            case _ =>
-                throw new Exception(s"missing or malformed womType field in input ${name}, JSON=${jsv}")
-        }
-
+        // An object, the type is embedded as a 'womType' field.
+        // we aren't using it here.
         val jsv1 =
             if (fields contains "value") {
                     // the value is encapsulated in the "value" field
