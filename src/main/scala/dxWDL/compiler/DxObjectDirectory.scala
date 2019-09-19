@@ -96,7 +96,8 @@ case class DxObjectDirectory(ns: IR.Bundle,
 
         val dxObjectList: List[DxObjectInfo] = dxObjects.map{
             case (dxObj, desc) =>
-                val crLdt:LocalDateTime = LocalDateTime.ofInstant(desc.creationDate.toInstant(),
+                val creationDate = new java.util.Date(desc.created)
+                val crLdt:LocalDateTime = LocalDateTime.ofInstant(creationDate.toInstant(),
                                                                   ZoneId.systemDefault())
                 val chksum = desc.properties.get(CHECKSUM_PROP)
                 DxObjectInfo(desc.name, crLdt, dxObj, chksum)

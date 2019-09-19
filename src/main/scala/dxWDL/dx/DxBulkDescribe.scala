@@ -66,12 +66,12 @@ object DxBulkDescribe {
                 case None =>
                     throw new Exception(s"Could not describe object ${dxFile.getId}")
                 case Some(descJs) =>
-                    val dxDesc = descJs.asJsObject.getFields("name", "folder", "size", "id", "project", "created") match {
-                        case Seq(JsString(name), JsString(folder),
-                                 JsNumber(size), JsString(fid), JsString(projectId), JsNumber(created)) =>
-                            assert(fid == dxFile.getId)
-                            val crDate = new java.util.Date(created.toLong)
-
+                    val dxDesc =
+                        descJs.asJsObject.getFields("name", "folder", "size", "id", "project", "created", "modified") match {
+                            case Seq(JsString(name), JsString(folder),
+                                     JsNumber(size), JsString(fid), JsString(projectId),
+                                     JsNumber(created), JsNumber(modified)) =>
+                                assert(fid == dxFile.getId)
                             // This could be a container, not a project.
                             val dxContainer = DXContainer.getInstance(projectId)
                             DxDescribe(name,
@@ -79,7 +79,8 @@ object DxBulkDescribe {
                                        Some(size.toLong),
                                        dxContainer,
                                        DxUtils.convertToDxObject(fid, Some(dxContainer)).get,
-                                       crDate,
+                                       created.toLong,
+                                       modified.toLong,
                                        Map.empty,
                                        None,
                                        None,

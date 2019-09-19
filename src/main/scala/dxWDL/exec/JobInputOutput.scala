@@ -168,7 +168,7 @@ case class JobInputOutput(dxIoFunctions : DxIoFunctions,
 
         // The path is already used for a file with this name. Try to place it
         // in directories: [inputs/1, inputs/2, ... ]
-        System.err.println(s"Disambiguating file ${dxFile.getId} with name ${basename}")
+        System.err.println(s"Disambiguating file ${basename}")
 
         for (dirNum <- 1 to DISAMBIGUATION_DIRS_MAX_NUM) {
             val dir:Path = inputsDir.resolve(dirNum.toString)
@@ -321,6 +321,13 @@ case class JobInputOutput(dxIoFunctions : DxIoFunctions,
                         // directories.
                         accu + (FurlLocal(p) -> Paths.get(p))
 
+                    case dxUrl: FurlDx if streamingFiles contains dxUrl =>
+                        // file should be streamed
+                        val existingFiles = accu.values.toSet
+                        val desc = dxIoFunctions.fileInfoDir(dxUrl.dxFile)
+                        val path = createUniqueDownloadPath(desc.name, dxUrl.dxFile, existingFiles, Paths.get("/"))
+                        accu + (dxUrl -> path)
+
                     case dxUrl: FurlDx =>
                         // The file needs to be localized
                         val existingFiles = accu.values.toSet
@@ -330,6 +337,14 @@ case class JobInputOutput(dxIoFunctions : DxIoFunctions,
                 }
             }
 
+        // Create a manifest for all the streaming files; we'll use dxfs2 to handle them.
+        val filesToMount : Map[DXFile, Path] =
+            furl2path.collect{
+                case (dxUrl: FurlDx, localPath) if (streamingFiles contains dxUrl) =>
+                    dxUrl.dxFile -> localPath
+            }
+        val dxfs2Manifest = Dxfs2Manifest.apply(filesToMount, dxIoFunctions)
+
         // Create a manifest for the download agent (dxda)
         val filesToDownloadWithDxda : Map[DXFile, Path] =
             furl2path.collect{
@@ -337,14 +352,6 @@ case class JobInputOutput(dxIoFunctions : DxIoFunctions,
                     dxUrl.dxFile -> localPath
             }
         val dxdaManifest = DxdaManifest.apply(filesToDownloadWithDxda)
-
-        // Create a manifest for dxfs2
-        val filesToMount : Map[DXFile, Path] =
-            furl2path.collect{
-                case (dxUrl: FurlDx, localPath) if (streamingFiles contains dxUrl) =>
-                    dxUrl.dxFile -> localPath
-            }
-        val dxfs2Manifest = Dxfs2Manifest.apply(filesToMount)
 
         // Replace the dxURLs with local file paths
         val localizedInputs = inputs.map{ case (inpDef, womValue) =>

@@ -75,13 +75,20 @@ case class DxFindDataObjects(limit: Option[Int],
             case Some(other) =>
                 throw new Exception(s"malformed output field ${other}")
         }
-        val creationDate : java.util.Date = jsv.asJsObject.fields.get("created") match {
+        val created : Long = jsv.asJsObject.fields.get("created") match {
             case None => throw new Exception("'created' field is missing")
-            case Some(JsNumber(date)) => new java.util.Date(date.toLong)
+            case Some(JsNumber(date)) => date.toLong
             case Some(other) => throw new Exception(s"malformed created field ${other}")
         }
+        val modified : Long = jsv.asJsObject.fields.get("modified") match {
+            case None => throw new Exception("'modified' field is missing")
+            case Some(JsNumber(date)) => date.toLong
+            case Some(other) => throw new Exception(s"malformed created field ${other}")
+        }
+
         DxDescribe(name, folder, size,
-                   dxProject.asInstanceOf[DXContainer], dxobj, creationDate,
+                   dxProject.asInstanceOf[DXContainer], dxobj,
+                   created, modified,
                    properties, inputSpec, outputSpec, None)
     }
 

@@ -76,6 +76,7 @@ case class DxPathConfig(
         Utils.safeMkdir(inputFilesDir)
         Utils.safeMkdir(outputFilesDir)
         Utils.safeMkdir(tmpDir)
+        Utils.safeMkdir(dxfs2Mountpoint)
     }
 }
 

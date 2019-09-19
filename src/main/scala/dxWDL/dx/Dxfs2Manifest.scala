@@ -7,29 +7,34 @@ import com.dnanexus.{DXFile}
 import java.nio.file.Path
 import spray.json._
 
+import dxWDL.util.DxIoFunctions
+
 case class Dxfs2Manifest(value : JsValue)
 
 object Dxfs2Manifest {
-/*
-  Start with paths like this:
-    "dx://dxWDL_playground:/test_data/fileB",
-    "dx://dxWDL_playground:/test_data/fileC",
+    def apply(file2LocalMapping: Map[DXFile, Path],
+              dxIoFunctions : DxIoFunctions) : Dxfs2Manifest = {
+        val files = file2LocalMapping.map{
+            case (dxFile, path) =>
+                val parentDir = path.getParent()
+                val fDesc = dxIoFunctions.fileInfoDir(dxFile)
+                val size = fDesc.size match {
+                    case None => throw new Exception(s"File is missing the size field ${fDesc}")
+                    case Some(x) => x
+                }
+                JsObject(
+                    "proj_id" -> JsString(fDesc.container.getId),
+                    "file_id" -> JsString(dxFile.getId),
+                    "parent" -> JsString(parentDir.toString),
+                    "fname" -> JsString(fDesc.name),
+                    "size" -> JsNumber(size),
+                    "ctime" -> JsNumber(fDesc.created),
+                    "mtime" -> JsNumber(fDesc.modified))
+        }.toVector
 
-  and generate a manifest like this:
-
-   val fileB = JsObject(
-                   "proj_id" -> JsString("proj-xxxx"),
-                   "file_id" -> JsString("file-yyyy"),
-                   "parent" -> "/")
-   val fileC = JsObject(
-                   "proj_id" -> JsString("proj-uuuu"),
-                   "file_id" -> JsString("file-vvvv"),
-                   "parent" -> "/")
-
-   JsObject("files" -> [fileB, fileC])
-
- */
-
-    // The project is just a hint. The files don't have to actually reside in it.
-    def apply(file2LocalMapping: Map[DXFile, Path]) : Dxfs2Manifest = ???
+        Dxfs2Manifest(
+            JsObject("files" -> JsArray(files),
+                     "directories" -> JsArray(Vector.empty))
+        )
+    }
 }

@@ -1,5 +1,8 @@
 # Release Notes
 
+## 1.30
+- Using dxfs2 to stream files. This replaces `dx cat`, which was the previous solution.
+
 ## 1.22
 - Upgrade to Cromwell version 46
 - Removed a runtime assert that was too strict. It was checking that the type of a WDL value *V* had a static WDL type *T*. However, the real question was whether *V* could be casted type *T*.
