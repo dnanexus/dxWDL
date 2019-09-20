@@ -399,7 +399,7 @@ case class TaskRunner(task: CallableTaskDefinition,
 
         // build a manifest for dxfs2
         val Dxfs2Manifest(manifest2Js) = dxfs2Manifest
-        if (manifest2Js.asJsObject.fields.size > 0) {
+        if (manifest2Js != JsNull) {
             Utils.writeFileContent(dxPathConfig.dxfs2Manifest, manifest2Js.prettyPrint)
         }
 

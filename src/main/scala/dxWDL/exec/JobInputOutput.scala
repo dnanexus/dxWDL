@@ -325,14 +325,16 @@ case class JobInputOutput(dxIoFunctions : DxIoFunctions,
                         // file should be streamed
                         val existingFiles = accu.values.toSet
                         val desc = dxIoFunctions.fileInfoDir(dxUrl.dxFile)
-                        val path = createUniqueDownloadPath(desc.name, dxUrl.dxFile, existingFiles, Paths.get("/"))
+                        val path = createUniqueDownloadPath(desc.name, dxUrl.dxFile, existingFiles,
+                                                            dxIoFunctions.config.dxfs2Mountpoint)
                         accu + (dxUrl -> path)
 
                     case dxUrl: FurlDx =>
                         // The file needs to be localized
                         val existingFiles = accu.values.toSet
                         val desc = dxIoFunctions.fileInfoDir(dxUrl.dxFile)
-                        val path = createUniqueDownloadPath(desc.name, dxUrl.dxFile, existingFiles, inputsDir)
+                        val path = createUniqueDownloadPath(desc.name, dxUrl.dxFile, existingFiles,
+                                                            inputsDir)
                         accu + (dxUrl -> path)
                 }
             }

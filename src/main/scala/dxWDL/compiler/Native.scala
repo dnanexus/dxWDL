@@ -261,6 +261,10 @@ case class Native(dxWDLrtId: Option[String],
             |       # run dxfs2 so that it will no exist after the bash script exists.
             |       nohup sudo -E dxfs2 ${dxPathConfig.dxfs2Mountpoint.toString} ${dxPathConfig.dxfs2Manifest.toString} &
             |       disown
+            |
+            |       # wait for the mount to start. Need to find a better way that sleep; it is
+            |       # just a heuristic.
+            |       sleep 2
             |    fi
             |
             |    echo "bash command encapsulation script:"
@@ -326,12 +330,14 @@ case class Native(dxWDLrtId: Option[String],
                     case IR.InstanceTypeDefault | IR.InstanceTypeConst(_,_,_,_) =>
                         s"""|${dockerPreamble(applet.docker)}
                             |
+                            |set -e -o pipefail
                             |main() {
                             |${genBashScriptTaskBody()}
                             |}""".stripMargin
                     case IR.InstanceTypeRuntime =>
                         s"""|${dockerPreamble(applet.docker)}
                             |
+                            |set -e -o pipefail
                             |main() {
                             |    # check if this is the correct instance type
                             |    correctInstanceType=`java -jar $${DX_FS_ROOT}/dxWDL.jar internal taskCheckInstanceType $${HOME} ${rtDebugLvl.toString}`
