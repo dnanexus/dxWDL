@@ -44,6 +44,7 @@ case class Native(dxWDLrtId: Option[String],
     private val verbose2:Boolean = verbose.containsKey("Native")
     private val rtDebugLvl = runtimeDebugLevel.getOrElse(Utils.DEFAULT_RUNTIME_DEBUG_LEVEL)
     private val wdlVarLinksConverter = WdlVarLinksConverter(verbose, fileInfoDir, typeAliases)
+    private val streamAllFiles:Boolean = dxPathConfig.streamAllFiles
 
     // Are we setting up a private docker registry?
     private val dockerRegistryInfo : Option[DockerRegistry]= extras match {
@@ -216,7 +217,7 @@ case class Native(dxWDLrtId: Option[String],
 
     private def genBashScriptTaskBody(): String = {
         s"""|    # evaluate input arguments, and download input files
-            |    java -jar $${DX_FS_ROOT}/dxWDL.jar internal taskProlog $${HOME} ${rtDebugLvl.toString}
+            |    java -jar $${DX_FS_ROOT}/dxWDL.jar internal taskProlog $${HOME} ${rtDebugLvl.toString} ${streamAllFiles.toString}
             |
             |    # run the dx-download-agent (dxda) on a manifest of files
             |    if [[ -e ${dxPathConfig.dxdaManifest} ]]; then
@@ -259,6 +260,7 @@ case class Native(dxWDLrtId: Option[String],
             |       source environment >& /dev/null
             |
             |       # run dxfs2 so that it will no exist after the bash script exists.
+            |       echo "mounting dxfs2 on ${dxPathConfig.dxfs2Mountpoint.toString}"
             |       sudo -E dxfs2 -uid $$(id -u) -gid $$(id -g) ${dxPathConfig.dxfs2Mountpoint.toString} ${dxPathConfig.dxfs2Manifest.toString} >& dxfs2.log &
             |       disown
             |
@@ -287,10 +289,11 @@ case class Native(dxWDLrtId: Option[String],
             |    fi
             |
             |    # evaluate applet outputs, and upload result files
-            |    java -jar $${DX_FS_ROOT}/dxWDL.jar internal taskEpilog $${HOME} ${rtDebugLvl.toString}
+            |    java -jar $${DX_FS_ROOT}/dxWDL.jar internal taskEpilog $${HOME} ${rtDebugLvl.toString} ${streamAllFiles.toString}
             |
             |    # unmount dxfs2
             |    if [[ -e ${dxPathConfig.dxfs2Manifest} ]]; then
+            |        echo "unmounting dxfs2"
             |        sudo umount ${dxPathConfig.dxfs2Mountpoint}
             |    fi
             |""".stripMargin.trim
@@ -298,17 +301,17 @@ case class Native(dxWDLrtId: Option[String],
 
     private def genBashScriptWfFragment() : String = {
         s"""|main() {
-            |    java -jar $${DX_FS_ROOT}/dxWDL.jar internal wfFragment $${HOME} ${rtDebugLvl.toString}
+            |    java -jar $${DX_FS_ROOT}/dxWDL.jar internal wfFragment $${HOME} ${rtDebugLvl.toString} ${streamAllFiles.toString}
             |}
             |
             |collect() {
-            |    java -jar $${DX_FS_ROOT}/dxWDL.jar internal collect $${HOME} ${rtDebugLvl.toString}
+            |    java -jar $${DX_FS_ROOT}/dxWDL.jar internal collect $${HOME} ${rtDebugLvl.toString} ${streamAllFiles.toString}
             |}""".stripMargin.trim
     }
 
     private def genBashScriptCmd(cmd: String) : String = {
         s"""|main() {
-            |    java -jar $${DX_FS_ROOT}/dxWDL.jar internal ${cmd} $${HOME} ${rtDebugLvl.toString}
+            |    java -jar $${DX_FS_ROOT}/dxWDL.jar internal ${cmd} $${HOME} ${rtDebugLvl.toString} ${streamAllFiles.toString}
             |}""".stripMargin.trim
     }
 
@@ -340,12 +343,12 @@ case class Native(dxWDLrtId: Option[String],
                             |set -e -o pipefail
                             |main() {
                             |    # check if this is the correct instance type
-                            |    correctInstanceType=`java -jar $${DX_FS_ROOT}/dxWDL.jar internal taskCheckInstanceType $${HOME} ${rtDebugLvl.toString}`
+                            |    correctInstanceType=`java -jar $${DX_FS_ROOT}/dxWDL.jar internal taskCheckInstanceType $${HOME} ${rtDebugLvl.toString} ${streamAllFiles.toString}`
                             |    if [[ $$correctInstanceType == "true" ]]; then
                             |        body
                             |    else
                             |       # evaluate the instance type, and launch a sub job on it
-                            |       java -jar $${DX_FS_ROOT}/dxWDL.jar internal taskRelaunch $${HOME} ${rtDebugLvl.toString}
+                            |       java -jar $${DX_FS_ROOT}/dxWDL.jar internal taskRelaunch $${HOME} ${rtDebugLvl.toString} ${streamAllFiles.toString}
                             |    fi
                             |}
                             |

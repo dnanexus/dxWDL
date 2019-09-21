@@ -45,8 +45,8 @@ object Main extends App {
     // runtime, not at compile time. On the cloud instance running the
     // job, the user is "dnanexus", and the home directory is
     // "/home/dnanexus".
-    private def buildRuntimePathConfig(verbose: Boolean) : DxPathConfig = {
-        DxPathConfig.apply(baseDNAxDir, verbose)
+    private def buildRuntimePathConfig(streamAllFiles: Boolean, verbose: Boolean) : DxPathConfig = {
+        DxPathConfig.apply(baseDNAxDir, streamAllFiles, verbose)
     }
 
     private def normKey(s: String) : String= {
@@ -169,6 +169,9 @@ object Main extends App {
                     case "runtimeDebugLevel" =>
                         checkNumberOfArguments(keyword, 1, subargs)
                         (keyword, subargs.head)
+                    case "streamAllFiles" =>
+                        checkNumberOfArguments(keyword, 0, subargs)
+                        ("streamAllFiles", "")
                     case "verbose" =>
                         checkNumberOfArguments(keyword, 0, subargs)
                         (keyword, "")
@@ -304,6 +307,17 @@ object Main extends App {
         rtDebugLvl
     }
 
+    private def parseStreamAllFiles(s: String) : Boolean = {
+        s.toLowerCase match {
+            case "true" => true
+            case "false" => false
+            case other =>
+                throw new Exception(s"""|the streamAllFiles flag must be a boolean (true,false).
+                                        |Value ${other} is illegal."""
+                                        .stripMargin.replaceAll("\n", " "))
+        }
+    }
+
     // Get basic information about the dx environment, and process
     // the compiler flags
     private def compilerOptions(options: OptionsMap) : CompilerOptions = {
@@ -359,6 +373,7 @@ object Main extends App {
                         options contains "locked",
                         options contains "projectWideReuse",
                         options contains "reorg",
+                        options contains "streamAllFiles",
                         runtimeDebugLevel,
                         verbose)
     }
@@ -427,7 +442,7 @@ object Main extends App {
 
                 case CompilerFlag.All
                        | CompilerFlag.NativeWithoutRuntimeAsset =>
-                    val dxPathConfig = DxPathConfig.apply(baseDNAxDir, cOpt.verbose.on)
+                    val dxPathConfig = DxPathConfig.apply(baseDNAxDir, cOpt.streamAllFiles, cOpt.verbose.on)
                     val retval = top.apply(sourceFile, folder, dxProject, dxPathConfig)
                     val desc = retval.getOrElse("")
                     return SuccessfulTermination(desc)
@@ -696,12 +711,13 @@ object Main extends App {
         operation match {
             case None =>
                 UnsuccessfulTermination(s"unknown internal action ${args.head}")
-            case Some(op) if args.length == 3 =>
+            case Some(op) if args.length == 4 =>
                 val homeDir = Paths.get(args(1))
                 val rtDebugLvl = parseRuntimeDebugLevel(args(2))
+                val streamAllFiles = parseStreamAllFiles(args(3))
                 val (jobInputPath, jobOutputPath, jobErrorPath, jobInfoPath) =
                     Utils.jobFilesOfHomeDir(homeDir)
-                val dxPathConfig = buildRuntimePathConfig(rtDebugLvl >= 1)
+                val dxPathConfig = buildRuntimePathConfig(streamAllFiles, rtDebugLvl >= 1)
                 val fileInfoDir = runtimeBulkFileDescribe(jobInputPath)
                 val dxIoFunctions = DxIoFunctions(fileInfoDir, dxPathConfig, rtDebugLvl)
 

@@ -651,6 +651,8 @@ def main():
                            action="store_true", default=False)
     argparser.add_argument("--project", help="DNAnexus project ID",
                            default="dxWDL_playground")
+    argparser.add_argument("--stream-all-files", help="Stream all input files with dxfs2",
+                           action="store_true", default=False)
     argparser.add_argument("--runtime-debug-level",
                            help="printing verbosity of task/workflow runner, {0,1,2}")
     argparser.add_argument("--test", help="Run a test, or a subgroup of tests",
@@ -715,6 +717,8 @@ def main():
         compiler_flags.append("-force")
     if args.verbose:
         compiler_flags.append("-verbose")
+    if args.stream_all_files:
+        compiler_flags.append("-streamAllFiles")
     if args.verbose_key:
         for key in args.verbose_key:
             compiler_flags += ["-verboseKey", key]

@@ -67,6 +67,9 @@ case class DxPathConfig(
 
     // file for storing the state between prolog and epilog of the task runner
     runnerTaskEnv: Path,
+
+    // should we stream all files?
+    streamAllFiles: Boolean,
     verbose: Boolean) {
 
     // create all the directory paths, so we can start using them.
@@ -82,6 +85,7 @@ case class DxPathConfig(
 
 object DxPathConfig {
     def apply(homeDir: Path,
+              streamAllFiles : Boolean,
               verbose: Boolean) : DxPathConfig = {
         val metaDir: Path = homeDir.resolve("meta")
         val inputFilesDir: Path = homeDir.resolve("inputs")
@@ -121,6 +125,7 @@ object DxPathConfig {
                      dxfs2Manifest,
                      dxfs2Mountpoint,
                      runnerTaskEnv,
+                     streamAllFiles,
                      verbose)
     }
 }
