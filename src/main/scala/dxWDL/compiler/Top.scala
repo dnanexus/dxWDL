@@ -7,9 +7,7 @@ import com.dnanexus._
 import java.nio.file.{Path, Paths}
 
 import wom.callable._
-import wom.callable.MetaValueElement._
 import wom.executable.WomBundle
-import wom.types._
 import wom.graph.expression._
 
 import dxWDL.base._
@@ -134,26 +132,6 @@ case class Top(cOpt: CompilerOptions) {
                 checkDeclarations(allDeclarations.map(_.identifier.localName.value).toSeq)
 
             case task: CallableTaskDefinition =>
-                task.inputs.foreach{
-                    case iDef : Callable.InputDefinition =>
-                        //iDef.parameterMeta --- this does not work on draft2
-                        task.parameterMeta.get(iDef.name) match {
-                            case None => ()
-                            case Some(MetaValueElementString(x)) if x == "stream"=>
-                                if (iDef.womType != WomSingleFileType) {
-                                    val msg =
-                                        s"""|Only files that are task inputs can be declared streaming.
-                                            |task = ${task.name}, input = ${iDef.name},
-                                            |womType = ${iDef.womType}
-                                            |""".stripMargin.replaceAll("\n", " ")
-                                    if (cOpt.fatalValidationWarnings)
-                                        throw new Exception(msg)
-                                    else
-                                        Utils.warning(verbose, msg)
-                                }
-                            case Some(other) => ()
-                        }
-                }
                 checkDeclarations(task.inputs.map(_.name).toSeq)
                 checkDeclarations(task.outputs.map(_.name).toSeq)
 

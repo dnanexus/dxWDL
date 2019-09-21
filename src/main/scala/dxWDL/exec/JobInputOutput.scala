@@ -272,15 +272,20 @@ case class JobInputOutput(dxIoFunctions : DxIoFunctions,
     // Figure out which files need to be streamed
     private def areStreaming(parameterMeta: Map[String, MetaValueElement],
                              inputs: Map[InputDefinition, WomValue]) : Set[Furl] = {
+        val streamAll : Boolean = Utils.streamAllFiles()
         inputs.map{
             case (iDef, womValue) =>
                 // This is better "iDef.parameterMeta", but it does not
                 // work on draft2.
-                parameterMeta.get(iDef.name) match {
-                    case (Some(MetaValueElement.MetaValueElementString("stream"))) =>
-                        findFiles(womValue)
-                    case _ =>
-                        Vector.empty
+                if (streamAll) {
+                    findFiles(womValue)
+                } else {
+                    parameterMeta.get(iDef.name) match {
+                        case (Some(MetaValueElement.MetaValueElementString("stream"))) =>
+                            findFiles(womValue)
+                        case _ =>
+                            Vector.empty
+                    }
                 }
         }.flatten.toSet
     }

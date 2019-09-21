@@ -259,7 +259,7 @@ case class Native(dxWDLrtId: Option[String],
             |       source environment >& /dev/null
             |
             |       # run dxfs2 so that it will no exist after the bash script exists.
-            |       nohup sudo -E dxfs2 ${dxPathConfig.dxfs2Mountpoint.toString} ${dxPathConfig.dxfs2Manifest.toString} &
+            |       sudo -E dxfs2 -uid $$(id -u) -gid $$(id -g) ${dxPathConfig.dxfs2Mountpoint.toString} ${dxPathConfig.dxfs2Manifest.toString} >& dxfs2.log &
             |       disown
             |
             |       # wait for the mount to start. Need to find a better way that sleep; it is

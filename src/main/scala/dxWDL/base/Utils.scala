@@ -41,6 +41,16 @@ object Utils {
         config.getString("dxWDL.version")
     }
 
+    //
+    def streamAllFiles() : Boolean = {
+        val config = ConfigFactory.load("application.conf")
+        try {
+            config.getBoolean("dxWDL.streamAllFiles")
+        } catch {
+            case _ : Throwable => false
+        }
+    }
+
     // the regions live in dxWDL.conf
     def getRegions() : Map[String, String] = {
         val config = ConfigFactory.load(DX_WDL_RUNTIME_CONF_FILE)
