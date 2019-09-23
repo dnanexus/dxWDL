@@ -102,7 +102,7 @@ object DxPathConfig {
         val setupStreams = metaDir.resolve("setup_streams")
         val dxdaManifest = metaDir.resolve("dxdaManifest.json")
         val dxfs2Manifest = metaDir.resolve("dxfs2Manifest.json")
-        val dxfs2Mountpoint = metaDir.resolve("mnt")
+        val dxfs2Mountpoint = homeDir.resolve("mnt")
         val rcPath = metaDir.resolve("rc")
         val dockerCid = metaDir.resolve("dockerCid")
         val runnerTaskEnv = metaDir.resolve("taskEnv.json")

@@ -259,14 +259,14 @@ case class Native(dxWDLrtId: Option[String],
             |       # in the environment, so that dxfs2 could get it.
             |       source environment >& /dev/null
             |
-            |       # run dxfs2 so that it will no exist after the bash script exists.
+            |       # run dxfs2 so that it will not exist after the bash script exists.
             |       echo "mounting dxfs2 on ${dxPathConfig.dxfs2Mountpoint.toString}"
-            |       sudo -E dxfs2 -uid $$(id -u) -gid $$(id -g) ${dxPathConfig.dxfs2Mountpoint.toString} ${dxPathConfig.dxfs2Manifest.toString} >& dxfs2.log &
-            |       disown
+            |       nohup sudo -E dxfs2 -uid $$(id -u) -gid $$(id -g) ${dxPathConfig.dxfs2Mountpoint.toString} ${dxPathConfig.dxfs2Manifest.toString} &
+            |       disown %1
             |
-            |       # wait for the mount to start. Need to find a better way that sleep; it is
-            |       # just a heuristic.
+            |       # wait for the mount to start.
             |       sleep 2
+            |       cat /var/log/dxfs2.log
             |    fi
             |
             |    echo "bash command encapsulation script:"
