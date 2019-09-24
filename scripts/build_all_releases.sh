@@ -35,7 +35,7 @@ git push origin $version
 # build the release on staging
 echo "building staging release"
 dx login --staging --token $STAGING_TOKEN --noprojects
-$top_dir/build_release.py --force --multi-region
+$top_dir/scripts/build_release.py --force --multi-region
 
 ## test that it actually works
 echo "running multi region tests on staging"
