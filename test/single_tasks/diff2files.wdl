@@ -11,4 +11,8 @@ task diff2files {
     output {
         Int result = read_int(stdout())
     }
+    parameter_meta {
+        a : "stream"
+        b : "stream"
+    }
 }

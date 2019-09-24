@@ -18,6 +18,7 @@ AssetDesc = namedtuple('AssetDesc', 'region asset_id project')
 
 #dxda_version = "v0.2.2"
 dxda_version = "20190909212832_c28a2ad"
+dxfs2_version = "master"
 max_num_retries = 5
 
 def dxWDL_jar_path(top_dir):
@@ -88,7 +89,6 @@ def make_asset_file(version_id, top_dir):
 # call sbt-assembly. The tricky part here, is to
 # change the working directory to the top of the project.
 def _sbt_assembly(top_dir, version_id):
-    crnt_work_dir = os.getcwd()
     os.chdir(os.path.abspath(top_dir))
 
     # Make sure the directory path exists
@@ -104,13 +104,11 @@ def _sbt_assembly(top_dir, version_id):
     subprocess.check_call(["sbt", "assembly"])
     if not os.path.exists(jar_path):
         raise Exception("sbt assembly failed")
-    os.chdir(crnt_work_dir)
     return jar_path
 
 # download dxda for linux, and place it in the resources
 # sub-directory.
 def _download_dxda_into_resources(top_dir):
-    crnt_work_dir = os.getcwd()
     os.chdir(os.path.join(top_dir, "applet_resources"))
 
     # make sure the resources directory exists
@@ -141,7 +139,28 @@ def _download_dxda_into_resources(top_dir):
     os.chmod("resources/usr/bin/dx-download-agent", 0o775)
     os.remove(trg_dxda_tar)
     shutil.rmtree("resources/dx-download-agent-linux")
-    os.chdir(crnt_work_dir)
+
+# build dxfs2 from source code
+def _add_dxfs2_to_resources(top_dir):
+    print("Building an executable for dxfs2")
+    dxfs2_dir = os.path.join("/tmp", "dxfs2")
+    print("Using {} as a build location for dxfs2".format(dxfs2_dir))
+    if os.path.exists(dxfs2_dir):
+        shutil.rmtree(dxfs2_dir)
+    os.makedirs(dxfs2_dir)
+    os.chdir(dxfs2_dir)
+    subprocess.check_call(["git", "clone", "git@github.com:dnanexus/dxfs2.git"])
+    os.chdir(os.path.join(dxfs2_dir, "dxfs2"))
+    subprocess.check_call(["git", "checkout", dxfs2_version])
+
+    # make sure the resources directory exists
+    os.chdir(os.path.join(top_dir, "applet_resources"))
+    if not os.path.exists("resources/usr/bin"):
+        os.makedirs("resources/usr/bin")
+    subprocess.check_call(["go", "build", "-o",
+                           "resources/usr/bin/dxfs2",
+                           os.path.join(dxfs2_dir, "dxfs2", "cmd/main.go")])
+    os.chmod("resources/usr/bin/dxfs2", 0o775)
 
 # Build a dx-asset from the runtime library.
 # Go to the top level directory, before running "dx"
@@ -215,6 +234,8 @@ def _gen_config_file(version_id, top_dir, project_dict):
                                                             rt_conf_path))
 
 def build(project, folder, version_id, top_dir, path_dict):
+    _add_dxfs2_to_resources(top_dir)
+
     # Create a configuration file
     _gen_config_file(version_id, top_dir, path_dict)
     jar_path = _sbt_assembly(top_dir, version_id)
@@ -222,6 +243,7 @@ def build(project, folder, version_id, top_dir, path_dict):
     # get a copy of the download agent (dxda)
     _download_dxda_into_resources(top_dir)
 
+    # get a copy of the dxfs2 executable
     asset = find_asset(project, folder)
     if asset is None:
         make_prerequisits(project, folder, version_id, top_dir)

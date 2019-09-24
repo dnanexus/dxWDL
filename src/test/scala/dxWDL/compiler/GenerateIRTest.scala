@@ -301,28 +301,6 @@ class GenerateIRTest extends FlatSpec with Matchers {
                                              "b" -> MetaValueElement.MetaValueElementString("stream")))
     }
 
-    it should "emit warning for streaming on non files I" in {
-        val path = pathFromBasename("compiler", "streaming_files_error1.wdl")
-        val retval = Main.compile(
-            path.toString :: cFlags
-        )
-        inside(retval) {
-            case Main.UnsuccessfulTermination(errMsg) =>
-                errMsg should include ("Only files that are task inputs can be declared streaming")
-        }
-    }
-
-    it should "emit warning for streaming on non files II" in {
-        val path = pathFromBasename("compiler", "streaming_files_error2.wdl")
-        val retval = Main.compile(
-            path.toString :: cFlags
-        )
-        inside(retval) {
-            case Main.UnsuccessfulTermination(errMsg) =>
-                errMsg should include ("Only files that are task inputs can be declared streaming")
-        }
-    }
-
     it should "recognize the streaming annotation for wdl draft2" in {
         val path = pathFromBasename("draft2", "streaming.wdl")
         val retval = Main.compile(

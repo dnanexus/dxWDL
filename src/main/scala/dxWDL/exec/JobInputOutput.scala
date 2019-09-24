@@ -13,7 +13,7 @@ import wom.values._
 
 import dxWDL.base._
 import dxWDL.base.Utils.{FLAT_FILES_SUFFIX}
-import dxWDL.dx.{DxUtils, DxdaManifest}
+import dxWDL.dx.{DxUtils, DxdaManifest, Dxfs2Manifest}
 import dxWDL.util._
 
 case class JobInputOutput(dxIoFunctions : DxIoFunctions,
@@ -168,7 +168,7 @@ case class JobInputOutput(dxIoFunctions : DxIoFunctions,
 
         // The path is already used for a file with this name. Try to place it
         // in directories: [inputs/1, inputs/2, ... ]
-        System.err.println(s"Disambiguating file ${dxFile.getId} with name ${basename}")
+        System.err.println(s"Disambiguating file ${basename}")
 
         for (dirNum <- 1 to DISAMBIGUATION_DIRS_MAX_NUM) {
             val dir:Path = inputsDir.resolve(dirNum.toString)
@@ -274,13 +274,17 @@ case class JobInputOutput(dxIoFunctions : DxIoFunctions,
                              inputs: Map[InputDefinition, WomValue]) : Set[Furl] = {
         inputs.map{
             case (iDef, womValue) =>
-                // This is better "iDef.parameterMeta", but it does not
-                // work on draft2.
-                parameterMeta.get(iDef.name) match {
-                    case (Some(MetaValueElement.MetaValueElementString("stream"))) =>
-                        findFiles(womValue)
-                    case _ =>
-                        Vector.empty
+                if (dxIoFunctions.config.streamAllFiles) {
+                    findFiles(womValue)
+                } else {
+                    // This is better than "iDef.parameterMeta", but it does not
+                    // work on draft2.
+                    parameterMeta.get(iDef.name) match {
+                        case (Some(MetaValueElement.MetaValueElementString("stream"))) =>
+                            findFiles(womValue)
+                        case _ =>
+                            Vector.empty
+                    }
                 }
         }.flatten.toSet
     }
@@ -300,8 +304,8 @@ case class JobInputOutput(dxIoFunctions : DxIoFunctions,
                       inputs: Map[InputDefinition, WomValue],
                       inputsDir: Path) : (Map[InputDefinition, WomValue],
                                           Map[Furl, Path],
-                                          Vector[String],
-                                          DxdaManifest) = {
+                                          DxdaManifest,
+                                          Dxfs2Manifest) = {
         val fileURLs : Vector[Furl] = inputs.values.map(findFiles).flatten.toVector
         val streamingFiles : Set[Furl] = areStreaming(parameterMeta, inputs)
         Utils.appletLog(verbose, s"streaming files = ${streamingFiles}")
@@ -321,26 +325,31 @@ case class JobInputOutput(dxIoFunctions : DxIoFunctions,
                         // directories.
                         accu + (FurlLocal(p) -> Paths.get(p))
 
+                    case dxUrl: FurlDx if streamingFiles contains dxUrl =>
+                        // file should be streamed
+                        val existingFiles = accu.values.toSet
+                        val desc = dxIoFunctions.fileInfoDir(dxUrl.dxFile)
+                        val path = createUniqueDownloadPath(desc.name, dxUrl.dxFile, existingFiles,
+                                                            dxIoFunctions.config.dxfs2Mountpoint)
+                        accu + (dxUrl -> path)
+
                     case dxUrl: FurlDx =>
                         // The file needs to be localized
                         val existingFiles = accu.values.toSet
                         val desc = dxIoFunctions.fileInfoDir(dxUrl.dxFile)
-                        val path = createUniqueDownloadPath(desc.name, dxUrl.dxFile, existingFiles, inputsDir)
+                        val path = createUniqueDownloadPath(desc.name, dxUrl.dxFile, existingFiles,
+                                                            inputsDir)
                         accu + (dxUrl -> path)
                 }
             }
 
-        // a bash snippet for each file we will stream. These file are NOT
-        // downloaded.
-        val bashStreamingSnippets : Vector[String] =
-            furl2path.collect {
-                case (dxUrl : FurlDx, localPath) if streamingFiles contains dxUrl =>
-                    val dxFile = dxUrl.dxFile
-                    s"""|mkfifo ${localPath}
-                        |dx cat ${dxFile.getId} > ${localPath} &
-                        |echo $$!
-                        |""".stripMargin
-            }.toVector
+        // Create a manifest for all the streaming files; we'll use dxfs2 to handle them.
+        val filesToMount : Map[DXFile, Path] =
+            furl2path.collect{
+                case (dxUrl: FurlDx, localPath) if (streamingFiles contains dxUrl) =>
+                    dxUrl.dxFile -> localPath
+            }
+        val dxfs2Manifest = Dxfs2Manifest.apply(filesToMount, dxIoFunctions)
 
         // Create a manifest for the download agent (dxda)
         val filesToDownloadWithDxda : Map[DXFile, Path] =
@@ -348,7 +357,7 @@ case class JobInputOutput(dxIoFunctions : DxIoFunctions,
                 case (dxUrl: FurlDx, localPath) if !(streamingFiles contains dxUrl) =>
                     dxUrl.dxFile -> localPath
             }
-        val manifest = DxdaManifest.apply(filesToDownloadWithDxda)
+        val dxdaManifest = DxdaManifest.apply(filesToDownloadWithDxda)
 
         // Replace the dxURLs with local file paths
         val localizedInputs = inputs.map{ case (inpDef, womValue) =>
@@ -356,7 +365,7 @@ case class JobInputOutput(dxIoFunctions : DxIoFunctions,
             inpDef -> v1
         }
 
-        (localizedInputs, furl2path, bashStreamingSnippets, manifest)
+        (localizedInputs, furl2path, dxdaManifest, dxfs2Manifest)
     }
 
     // We have task outputs, where files are stored locally. Upload the files to

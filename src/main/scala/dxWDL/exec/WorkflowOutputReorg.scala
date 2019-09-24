@@ -81,7 +81,8 @@ case class WorkflowOutputReorg(wf: WorkflowDefinition,
         val anlCreateTs:java.util.Date = dxAnalysis.describe.getCreationDate()
         val outputFiles: Vector[DXFile] = realFreshOutputs.flatMap{
             case (dxFile, desc) =>
-                if (desc.creationDate.compareTo(anlCreateTs) >= 0)
+                val creationDate = new java.util.Date(desc.created)
+                if (creationDate.compareTo(anlCreateTs) >= 0)
                     Some(dxFile)
                 else
                     None

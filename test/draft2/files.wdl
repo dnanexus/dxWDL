@@ -11,9 +11,9 @@ workflow files {
 
     # This isn't legal, because you can't stream
     # the same file twice.
-#    call lib.diff as diff1 {
-#        input: a=f, b=f
-#    }
+    call lib.diff as diff_same {
+        input: a=f, b=f
+    }
 
     # Create an applet that ignores every input file
     call IgnoreAll { input: files = [] }

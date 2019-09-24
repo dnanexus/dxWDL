@@ -69,6 +69,8 @@ case class ParseWomSourceFile(verbose: Boolean) {
         }
 
         override def cleanupIfNecessary(): ErrorOr[Unit] = ???
+
+        override def hashKey: ErrorOr[String] = ???
     }
 
     private def fileRecorder(allSources: HashMap[String, WorkflowSource],
@@ -108,7 +110,10 @@ case class ParseWomSourceFile(verbose: Boolean) {
         // look for source files in each of the import directories
         val fileImportResolvers : List[ImportResolver] = imports.map{ p =>
             val p2 : cromwell.core.path.Path = DefaultPathBuilder.build(p.toAbsolutePath)
-            DirectoryResolver(p2, None, None, false)
+            DirectoryResolver(p2,
+                              customName = None,
+                              deleteOnClose = false,
+                              directoryHash = None)
         }
         val importResolvers: List[ImportResolver] =
             mainFileResolvers ++ fileImportResolvers :+ HttpResolver(relativeTo = None)

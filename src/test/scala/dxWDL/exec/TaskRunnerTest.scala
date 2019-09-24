@@ -127,7 +127,7 @@ class TaskRunnerTest extends FlatSpec with Matchers {
         val jobHomeDir : Path = Paths.get("/tmp/dxwdl_applet_test")
         Utils.deleteRecursive(jobHomeDir.toFile)
         Utils.safeMkdir(jobHomeDir)
-        val dxPathConfig = DxPathConfig.apply(jobHomeDir, verbose)
+        val dxPathConfig = DxPathConfig.apply(jobHomeDir, false, verbose)
         dxPathConfig.createCleanDirs()
 
         val (language, womBundle: WomBundle, allSources, _) = ParseWomSourceFile(false).apply(wdlCode, List.empty)
