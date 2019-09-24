@@ -41,9 +41,4 @@ class UtilsTest extends FlatSpec with Matchers {
 
         Utils.buildLimitedSizeName(Vector.empty, 4) should be ("[]")
     }
-
-    it should "stream all"  in {
-        val sa = Utils.streamAllFiles()
-        System.out.println(s"sa=${sa}")
-    }
 }
