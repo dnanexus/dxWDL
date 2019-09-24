@@ -234,6 +234,7 @@ def _gen_config_file(version_id, top_dir, project_dict):
                                                             rt_conf_path))
 
 def build(project, folder, version_id, top_dir, path_dict):
+    # get a copy of the dxfs2 executable
     _add_dxfs2_to_resources(top_dir)
 
     # Create a configuration file
@@ -243,7 +244,6 @@ def build(project, folder, version_id, top_dir, path_dict):
     # get a copy of the download agent (dxda)
     _download_dxda_into_resources(top_dir)
 
-    # get a copy of the dxfs2 executable
     asset = find_asset(project, folder)
     if asset is None:
         make_prerequisits(project, folder, version_id, top_dir)
