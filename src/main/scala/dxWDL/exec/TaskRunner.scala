@@ -171,6 +171,30 @@ case class TaskRunner(task: CallableTaskDefinition,
         }
     }
 
+    private def pullImage(dImg: String, retry_count: Int): Option[String] = {
+        try {
+            val (outstr, errstr) = Utils.execCommand(s"docker pull ${dImg}")
+
+            Utils.appletLog(verbose, s"""|output:
+                                         |${outstr}
+                                         |stderr:
+                                         |${errstr}""".stripMargin)
+        } catch {
+            // ideally should catch specific exception.
+            case e: Throwable =>
+                if (retry_count > 1) {
+                    Utils.appletLog(verbose,
+                        s"""Failed to pull:
+                           |${dImg}. Retrying... ${6 - retry_count}
+                   """.stripMargin)
+                    Thread.sleep(1000)
+                    pullImage(dImg, retry_count - 1)
+                }
+                else throw new RuntimeException(s"Unable to pull docker image: ${dImg} after 5 tries")
+        }
+        Some(dImg)
+    }
+
     private def dockerImage(env: Map[String, WomValue]) : Option[String] = {
         val dImg = dockerImageEval(env)
         dImg match {
@@ -182,9 +206,9 @@ case class TaskRunner(task: CallableTaskDefinition,
                 // 3. figure out the image name
                 Utils.appletLog(verbose, s"looking up dx:url ${url}")
                 val dxFile = DxPath.resolveDxURLFile(url)
-		val fileName = dxFile.describe().getName
+		            val fileName = dxFile.describe().getName
                 val tarballDir = Paths.get(DOCKER_TARBALLS_DIR)
-	        Utils.safeMkdir(tarballDir)
+	              Utils.safeMkdir(tarballDir)
                 val localTar : Path = tarballDir.resolve(fileName)
 
                 Utils.appletLog(verbose, s"downloading docker tarball to ${localTar}")
@@ -192,7 +216,7 @@ case class TaskRunner(task: CallableTaskDefinition,
 
                 Utils.appletLog(verbose, "figuring out the image name")
                 val (mContent, _) = Utils.execCommand(s"tar --to-stdout -xf ${localTar} manifest.json")
-            	Utils.appletLog(verbose, s"""|manifest content:
+            	  Utils.appletLog(verbose, s"""|manifest content:
                                              |${mContent}
                                              |""".stripMargin)
                 val repo = TaskRunnerUtils.readManifestGetDockerImageName(mContent)
@@ -206,7 +230,11 @@ case class TaskRunner(task: CallableTaskDefinition,
                                              |${errstr}""".stripMargin)
                 Some(repo)
 
-            case _ => dImg
+            case Some(dImg) =>
+                pullImage(dImg ,5   )
+
+            case _ =>
+                dImg
         }
     }
 
@@ -303,20 +331,12 @@ case class TaskRunner(task: CallableTaskDefinition,
                 |extraFlags="--user $$(id -u):$$(id -g) --hostname $$(hostname)"
                 |
                 |# run as in the original configuration
-                |
-                |n=0
-                |until [ $$n -ge 5 ]
-                |do
-                |   docker run \\
-                |   --cidfile ${dxPathConfig.dockerCid} \\
-                |   $${extraFlags} \\
-                |   --entrypoint /bin/bash \\
-                |   -v ${dxPathConfig.homeDir}:${dxPathConfig.homeDir} \\
-                |   ${imgName} ${dxPathConfig.script.toString} && break  # substitute your command here
-                |    n=$$((n+1))
-                |    echo "Failed to pull ${imgName}. Retrying $$n of 5 in 15secs"
-                |    sleep 15
-                |done
+                |docker run \\
+                |  --cidfile ${dxPathConfig.dockerCid} \\
+                |  $${extraFlags} \\
+                |  --entrypoint /bin/bash \\
+                |  -v ${dxPathConfig.homeDir}:${dxPathConfig.homeDir} \\
+                |  ${imgName} ${dxPathConfig.script.toString}
                 |
                 |# get the return code (working even if the container was detached)
                 |rc=$$(docker wait `cat ${dxPathConfig.dockerCid.toString}`)

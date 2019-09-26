@@ -250,4 +250,18 @@ class TaskRunnerTest extends FlatSpec with Matchers {
     it should "handle missing optional files" taggedAs(EdgeTest) in {
         runTask("missing_optional_output_file")
     }
+
+    it should "retry docker at least 5 times" taggedAs(EdgeTest) in {
+
+        // able to pull docker images that are available
+        runTask("docker_pass")
+
+        // does not exists - unable to pull
+        val caught =
+            intercept[Exception] {
+                runTask("docker_retry")
+            }
+        assert(caught.getMessage.indexOf("5 tries") != -1)
+
+    }
 }
