@@ -52,7 +52,7 @@ object TaskRunnerUtils {
     // ]
     def readManifestGetDockerImageName(buf: String) : String = {
         val jso = buf.parseJson
-	val elem = jso match {
+        val elem = jso match {
             case JsArray(elements) if elements.size >= 1 => elements.head
             case other => throw new Exception(s"bad value ${other} for manifest, expecting non empty array")
         }
@@ -218,7 +218,7 @@ case class TaskRunner(task: CallableTaskDefinition,
 
                 Utils.appletLog(verbose, "figuring out the image name")
                 val (mContent, _) = Utils.execCommand(s"tar --to-stdout -xf ${localTar} manifest.json")
-            	  Utils.appletLog(verbose, s"""|manifest content:
+                Utils.appletLog(verbose, s"""|manifest content:
                                              |${mContent}
                                              |""".stripMargin)
                 val repo = TaskRunnerUtils.readManifestGetDockerImageName(mContent)
