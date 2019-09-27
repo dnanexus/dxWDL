@@ -179,11 +179,6 @@ case class WdlVarLinksConverter(verbose: Verbose,
         WdlVarLinks(womType, DxlValue(jsValue))
     }
 
-    def importFromCromwellJSON(womType: WomType,
-                               jsv: JsValue) : WdlVarLinks = {
-        WdlVarLinks(womType, DxlValue(jsv))
-    }
-
     // Convert a job input to a WomValue. Do not download any files, convert them
     // to a string representation. For example: dx://proj-xxxx:file-yyyy::/A/B/C.txt
     //
