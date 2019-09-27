@@ -171,28 +171,30 @@ case class TaskRunner(task: CallableTaskDefinition,
         }
     }
 
-    private def pullImage(dImg: String, retry_count: Int): Option[String] = {
-        try {
-            val (outstr, errstr) = Utils.execCommand(s"docker pull ${dImg}")
+    private def pullImage(dImg: String): Option[String] = {
 
-            Utils.appletLog(verbose, s"""|output:
-                                         |${outstr}
-                                         |stderr:
-                                         |${errstr}""".stripMargin)
-        } catch {
-            // ideally should catch specific exception.
-            case e: Throwable =>
-                if (retry_count > 1) {
+        var retry_count = 5;
+        while (retry_count > 0){
+            try {
+                val (outstr, errstr) = Utils.execCommand(s"docker pull ${dImg}")
+
+                Utils.appletLog(verbose, s"""|output:
+                                             |${outstr}
+                                             |stderr:
+                                             |${errstr}""".stripMargin)
+                return Some(dImg)
+            } catch {
+                // ideally should catch specific exception.
+                case e: Throwable =>
+                    retry_count = retry_count - 1
                     Utils.appletLog(verbose,
-                        s"""Failed to pull:
-                           |${dImg}. Retrying... ${6 - retry_count}
-                   """.stripMargin)
+                        s"""Failed to pull docker image:
+                           |${dImg}. Retrying... ${5 - retry_count}
+                    """.stripMargin)
                     Thread.sleep(1000)
-                    pullImage(dImg, retry_count - 1)
-                }
-                else throw new RuntimeException(s"Unable to pull docker image: ${dImg} after 5 tries")
+            }
         }
-        Some(dImg)
+        throw new RuntimeException(s"Unable to pull docker image: ${dImg} after 5 tries")
     }
 
     private def dockerImage(env: Map[String, WomValue]) : Option[String] = {
@@ -206,9 +208,9 @@ case class TaskRunner(task: CallableTaskDefinition,
                 // 3. figure out the image name
                 Utils.appletLog(verbose, s"looking up dx:url ${url}")
                 val dxFile = DxPath.resolveDxURLFile(url)
-		            val fileName = dxFile.describe().getName
+                val fileName = dxFile.describe().getName
                 val tarballDir = Paths.get(DOCKER_TARBALLS_DIR)
-	              Utils.safeMkdir(tarballDir)
+                Utils.safeMkdir(tarballDir)
                 val localTar : Path = tarballDir.resolve(fileName)
 
                 Utils.appletLog(verbose, s"downloading docker tarball to ${localTar}")
@@ -231,7 +233,7 @@ case class TaskRunner(task: CallableTaskDefinition,
                 Some(repo)
 
             case Some(dImg) =>
-                pullImage(dImg ,5   )
+                pullImage(dImg)
 
             case _ =>
                 dImg
