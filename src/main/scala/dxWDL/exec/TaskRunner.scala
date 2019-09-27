@@ -52,7 +52,7 @@ object TaskRunnerUtils {
     // ]
     def readManifestGetDockerImageName(buf: String) : String = {
         val jso = buf.parseJson
-	val elem = jso match {
+        val elem = jso match {
             case JsArray(elements) if elements.size >= 1 => elements.head
             case other => throw new Exception(s"bad value ${other} for manifest, expecting non empty array")
         }
@@ -172,6 +172,32 @@ case class TaskRunner(task: CallableTaskDefinition,
         }
     }
 
+    private def pullImage(dImg: String): Option[String] = {
+
+        var retry_count = 5;
+        while (retry_count > 0){
+            try {
+                val (outstr, errstr) = Utils.execCommand(s"docker pull ${dImg}")
+
+                Utils.appletLog(verbose, s"""|output:
+                                             |${outstr}
+                                             |stderr:
+                                             |${errstr}""".stripMargin)
+                return Some(dImg)
+            } catch {
+                // ideally should catch specific exception.
+                case e: Throwable =>
+                    retry_count = retry_count - 1
+                    Utils.appletLog(verbose,
+                        s"""Failed to pull docker image:
+                           |${dImg}. Retrying... ${5 - retry_count}
+                    """.stripMargin)
+                    Thread.sleep(1000)
+            }
+        }
+        throw new RuntimeException(s"Unable to pull docker image: ${dImg} after 5 tries")
+    }
+
     private def dockerImage(env: Map[String, WomValue]) : Option[String] = {
         val dImg = dockerImageEval(env)
         dImg match {
@@ -183,9 +209,9 @@ case class TaskRunner(task: CallableTaskDefinition,
                 // 3. figure out the image name
                 Utils.appletLog(verbose, s"looking up dx:url ${url}")
                 val dxFile = DxPath.resolveDxURLFile(url)
-		val fileName = dxFile.describe().getName
+                val fileName = dxFile.describe().getName
                 val tarballDir = Paths.get(DOCKER_TARBALLS_DIR)
-	        Utils.safeMkdir(tarballDir)
+                Utils.safeMkdir(tarballDir)
                 val localTar : Path = tarballDir.resolve(fileName)
 
                 Utils.appletLog(verbose, s"downloading docker tarball to ${localTar}")
@@ -193,7 +219,7 @@ case class TaskRunner(task: CallableTaskDefinition,
 
                 Utils.appletLog(verbose, "figuring out the image name")
                 val (mContent, _) = Utils.execCommand(s"tar --to-stdout -xf ${localTar} manifest.json")
-            	Utils.appletLog(verbose, s"""|manifest content:
+                Utils.appletLog(verbose, s"""|manifest content:
                                              |${mContent}
                                              |""".stripMargin)
                 val repo = TaskRunnerUtils.readManifestGetDockerImageName(mContent)
@@ -207,7 +233,11 @@ case class TaskRunner(task: CallableTaskDefinition,
                                              |${errstr}""".stripMargin)
                 Some(repo)
 
-            case _ => dImg
+            case Some(dImg) =>
+                pullImage(dImg)
+
+            case _ =>
+                dImg
         }
     }
 

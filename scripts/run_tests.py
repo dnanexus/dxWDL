@@ -25,7 +25,9 @@ test_files={}
 test_failing=set(["bad_status",
                   "bad_status2",
                   "just_fail_wf",
-                  "missing_output"])
+                  "missing_output",
+                  "docker_retry"
+                  ])
 
 wdl_v1_list = [
      # calling native dx applets/apps
@@ -70,7 +72,7 @@ docker_test_list = [
     "native_docker_file_image",
     "native_docker_file_image_gzip",
     "samtools_count",
-    "hostname_is_jobid"
+    "hostname_is_jobid",
 ]
 
 # wdl draft-2
