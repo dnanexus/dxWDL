@@ -13,7 +13,7 @@ import wom.values._
 
 import dxWDL.base._
 import dxWDL.base.Utils.{FLAT_FILES_SUFFIX}
-import dxWDL.dx.{DxUtils, DxdaManifest, Dxfs2Manifest}
+import dxWDL.dx.{DxUtils, DxdaManifest, DxfuseManifest}
 import dxWDL.util._
 
 case class JobInputOutput(dxIoFunctions : DxIoFunctions,
@@ -305,7 +305,7 @@ case class JobInputOutput(dxIoFunctions : DxIoFunctions,
                       inputsDir: Path) : (Map[InputDefinition, WomValue],
                                           Map[Furl, Path],
                                           DxdaManifest,
-                                          Dxfs2Manifest) = {
+                                          DxfuseManifest) = {
         val fileURLs : Vector[Furl] = inputs.values.map(findFiles).flatten.toVector
         val streamingFiles : Set[Furl] = areStreaming(parameterMeta, inputs)
         Utils.appletLog(verbose, s"streaming files = ${streamingFiles}")
@@ -330,7 +330,7 @@ case class JobInputOutput(dxIoFunctions : DxIoFunctions,
                         val existingFiles = accu.values.toSet
                         val desc = dxIoFunctions.fileInfoDir(dxUrl.dxFile)
                         val path = createUniqueDownloadPath(desc.name, dxUrl.dxFile, existingFiles,
-                                                            dxIoFunctions.config.dxfs2Mountpoint)
+                                                            dxIoFunctions.config.dxfuseMountpoint)
                         accu + (dxUrl -> path)
 
                     case dxUrl: FurlDx =>
@@ -343,13 +343,13 @@ case class JobInputOutput(dxIoFunctions : DxIoFunctions,
                 }
             }
 
-        // Create a manifest for all the streaming files; we'll use dxfs2 to handle them.
+        // Create a manifest for all the streaming files; we'll use dxfuse to handle them.
         val filesToMount : Map[DXFile, Path] =
             furl2path.collect{
                 case (dxUrl: FurlDx, localPath) if (streamingFiles contains dxUrl) =>
                     dxUrl.dxFile -> localPath
             }
-        val dxfs2Manifest = Dxfs2Manifest.apply(filesToMount, dxIoFunctions)
+        val dxfuseManifest = DxfuseManifest.apply(filesToMount, dxIoFunctions)
 
         // Create a manifest for the download agent (dxda)
         val filesToDownloadWithDxda : Map[DXFile, Path] =
@@ -365,7 +365,7 @@ case class JobInputOutput(dxIoFunctions : DxIoFunctions,
             inpDef -> v1
         }
 
-        (localizedInputs, furl2path, dxdaManifest, dxfs2Manifest)
+        (localizedInputs, furl2path, dxdaManifest, dxfuseManifest)
     }
 
     // We have task outputs, where files are stored locally. Upload the files to

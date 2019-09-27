@@ -1,4 +1,4 @@
-// Create a manifest for dxfs2 (https://github.com/dnanexus/dxfs2).
+// Create a manifest for dxfuse (https://github.com/dnanexus/dxfuse).
 //
 
 package dxWDL.dx
@@ -9,13 +9,13 @@ import spray.json._
 
 import dxWDL.util.DxIoFunctions
 
-case class Dxfs2Manifest(value : JsValue)
+case class DxfuseManifest(value : JsValue)
 
-object Dxfs2Manifest {
+object DxfuseManifest {
     def apply(file2LocalMapping: Map[DXFile, Path],
-              dxIoFunctions : DxIoFunctions) : Dxfs2Manifest = {
+              dxIoFunctions : DxIoFunctions) : DxfuseManifest = {
         if (file2LocalMapping.isEmpty)
-            return Dxfs2Manifest(JsNull)
+            return DxfuseManifest(JsNull)
 
         val files = file2LocalMapping.map{
             case (dxFile, path) =>
@@ -23,7 +23,7 @@ object Dxfs2Manifest {
 
                 // remove the mountpoint from the directory. We need
                 // paths that are relative to the mount point.
-                val mountDir = dxIoFunctions.config.dxfs2Mountpoint.toString
+                val mountDir = dxIoFunctions.config.dxfuseMountpoint.toString
                 assert(parentDir.startsWith(mountDir))
                 val relParentDir = "/" + parentDir.stripPrefix(mountDir)
 
@@ -42,7 +42,7 @@ object Dxfs2Manifest {
                     "mtime" -> JsNumber(fDesc.modified))
         }.toVector
 
-        Dxfs2Manifest(
+        DxfuseManifest(
             JsObject("files" -> JsArray(files),
                      "directories" -> JsArray(Vector.empty))
         )

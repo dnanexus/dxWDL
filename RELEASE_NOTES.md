@@ -1,5 +1,11 @@
 # Release Notes
 
+## 1.31
+- Renaming dxfs2 to [dxfuse](https://github.com/dnanexus/dxfuse). This
+  is the official name for the DNAx FUSE filesystem.
+- [Prefer](https://github.com/dnanexus/dxWDL/issues/309) v2 instances over v1 instances.
+- Improving marshalling of WDL values to JSON.
+
 ## 1.30
 - Using dxfs2 to stream files. This replaces `dx cat`, which was the previous solution.
 

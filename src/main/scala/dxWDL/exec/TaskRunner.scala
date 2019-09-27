@@ -388,7 +388,7 @@ case class TaskRunner(task: CallableTaskDefinition,
         //
         // Note: this may be overly conservative,
         // because some of the files may not actually be accessed.
-        val (localizedInputs, dxUrl2path, dxdaManifest, dxfs2Manifest) =
+        val (localizedInputs, dxUrl2path, dxdaManifest, dxfuseManifest) =
             jobInputOutput.localizeFiles(task.parameterMeta, taskInputs, dxPathConfig.inputFilesDir)
 
         // build a manifest for dxda, if there are files to download
@@ -397,10 +397,10 @@ case class TaskRunner(task: CallableTaskDefinition,
             Utils.writeFileContent(dxPathConfig.dxdaManifest, manifestJs.prettyPrint)
         }
 
-        // build a manifest for dxfs2
-        val Dxfs2Manifest(manifest2Js) = dxfs2Manifest
+        // build a manifest for dxfuse
+        val DxfuseManifest(manifest2Js) = dxfuseManifest
         if (manifest2Js != JsNull) {
-            Utils.writeFileContent(dxPathConfig.dxfs2Manifest, manifest2Js.prettyPrint)
+            Utils.writeFileContent(dxPathConfig.dxfuseManifest, manifest2Js.prettyPrint)
         }
 
         val inputs = localizedInputs.map{ case (inpDfn, value) =>

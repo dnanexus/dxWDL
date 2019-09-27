@@ -18,7 +18,7 @@ AssetDesc = namedtuple('AssetDesc', 'region asset_id project')
 
 #dxda_version = "v0.2.2"
 dxda_version = "20190909212832_c28a2ad"
-dxfs2_version = "master"
+dxfuse_version = "v0.11"
 max_num_retries = 5
 
 def dxWDL_jar_path(top_dir):
@@ -140,27 +140,17 @@ def _download_dxda_into_resources(top_dir):
     os.remove(trg_dxda_tar)
     shutil.rmtree("resources/dx-download-agent-linux")
 
-# build dxfs2 from source code
-def _add_dxfs2_to_resources(top_dir):
-    print("Building an executable for dxfs2")
-    dxfs2_dir = os.path.join("/tmp", "dxfs2")
-    print("Using {} as a build location for dxfs2".format(dxfs2_dir))
-    if os.path.exists(dxfs2_dir):
-        shutil.rmtree(dxfs2_dir)
-    os.makedirs(dxfs2_dir)
-    os.chdir(dxfs2_dir)
-    subprocess.check_call(["git", "clone", "git@github.com:dnanexus/dxfs2.git"])
-    os.chdir(os.path.join(dxfs2_dir, "dxfs2"))
-    subprocess.check_call(["git", "checkout", dxfs2_version])
-
+def _add_dxfuse_to_resources(top_dir):
     # make sure the resources directory exists
     os.chdir(os.path.join(top_dir, "applet_resources"))
     if not os.path.exists("resources/usr/bin"):
         os.makedirs("resources/usr/bin")
-    subprocess.check_call(["go", "build", "-o",
-                           "resources/usr/bin/dxfs2",
-                           os.path.join(dxfs2_dir, "dxfs2", "cmd/main.go")])
-    os.chmod("resources/usr/bin/dxfs2", 0o775)
+    subprocess.check_call([
+        "wget",
+        "https://github.com/dnanexus/dxfuse/releases/download/{}/dxfuse-linux".format(dxfuse_version),
+        "-O",
+        os.path.join("resources/usr/bin/dxfuse") ])
+    os.chmod("resources/usr/bin/dxfuse", 0o775)
 
 # Build a dx-asset from the runtime library.
 # Go to the top level directory, before running "dx"
@@ -234,8 +224,8 @@ def _gen_config_file(version_id, top_dir, project_dict):
                                                             rt_conf_path))
 
 def build(project, folder, version_id, top_dir, path_dict):
-    # get a copy of the dxfs2 executable
-    _add_dxfs2_to_resources(top_dir)
+    # get a copy of the dxfuse executable
+    _add_dxfuse_to_resources(top_dir)
 
     # Create a configuration file
     _gen_config_file(version_id, top_dir, path_dict)
