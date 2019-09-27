@@ -138,7 +138,7 @@ class InstanceTypeDBTest extends FlatSpec with Matchers {
             val cpu = intOfJs(traits("numCores"))
             DxInstanceType(name, memoryMB, diskGB, cpu, price, Vector.empty)
         }.toVector
-        InstanceTypeDB(true, db)
+        InstanceTypeDB(pricingInfo, db)
     }
 
     private def useDB(db: InstanceTypeDB) : Unit = {
@@ -200,6 +200,8 @@ class InstanceTypeDBTest extends FlatSpec with Matchers {
     it should "Work even without access to pricing information" in {
         // parameters are:          RAM,     disk,     cores
         dbNoPrices.choose3Attr(None, None, None) should equal("mem1_ssd1_x2")
+
+        dbNoPrices.choose3Attr(Some(1000), None, Some(3)) should equal("mem1_ssd1_x4")
     }
 
     it should "Choose reasonable platform instance types" in {
@@ -323,24 +325,22 @@ class InstanceTypeDBTest extends FlatSpec with Matchers {
         val db = InstanceTypeDB(true,
             Vector(
                 DxInstanceType(
-                    "mem1_ssd1_x4",
-                    110000,
-                    800,
-                    4,
-                    0.2.toFloat,
-                    Vector(("Ubuntu", "16.04"))
-                ),
-                DxInstanceType(
                     "mem1_ssd1_v2_x4",
-                    7000,
-                    60,
+                    8000,
+                    80,
                     4,
                     0.2.toFloat,
-                    Vector(("Ubuntu", "16.04"))
-                )
+                    Vector(("Ubuntu", "16.04"))),
+                DxInstanceType(
+                    "mem1_ssd1_x4",
+                    8000,
+                    80,
+                    4,
+                    0.2.toFloat,
+                    Vector(("Ubuntu", "16.04")))
             )
         )
 
-        db.choose3Attr(None, None, Some(4)) should equal("mem1_ssd1_x4")
+        db.choose3Attr(None, None, Some(4)) should equal("mem1_ssd1_v2_x4")
     }
 }

@@ -106,9 +106,22 @@ case class DxInstanceType(name: String,
             else
                 // instances cannot be directly compared.
                 0
-        System.out.println(s"compare(${this.name},${that.name})=${retval} memDelta=${memDelta} diskDelta=${diskDelta} cpuDelta=${cpuDelta}")
-
+        //System.out.println(s"compareByResource ${this.name} ${that.name} retval=${retval}")
         retval
+    }
+
+    // v2 instances are always better than v1 instances
+    def compareByType(that: DxInstanceType) : Int = {
+        //System.out.println(s"compareByType ${this.name} ${that.name}")
+        def typeVersion(name: String) =
+            if (name contains "_v2") "v2"
+            else "v1"
+
+        (typeVersion(this.name), typeVersion(that.name)) match {
+            case ("v1", "v2") => -1
+            case ("v2", "v1") => 1
+            case (_, _) => 0
+        }
     }
 }
 
@@ -124,11 +137,17 @@ case class InstanceTypeDB(pricingAvailable : Boolean,
     // if prices are available, choose the cheapest instance. Otherwise,
     // choose one with minimal resources.
     private def lteq(x : DxInstanceType, y : DxInstanceType) : Boolean = {
-        if (pricingAvailable) {
-            x.compareByPrice(y) <= 0
-        } else {
-            x.compareByResources(y) <= 0
-        }
+        val costDiff =
+            if (pricingAvailable) {
+                x.compareByPrice(y)
+            } else {
+                x.compareByResources(y)
+            }
+        if (costDiff != 0)
+            return costDiff <= 0
+
+        // cost is the same, compare by instance type. Better is HIGHER
+        x.compareByType(y) >= 0
     }
 
     // Calculate the dx instance type that fits best, based on
