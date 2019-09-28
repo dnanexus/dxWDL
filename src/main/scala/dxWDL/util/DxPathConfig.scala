@@ -60,10 +60,10 @@ case class DxPathConfig(
     // files, if the file is non empty.
     dxdaManifest : Path,
 
-    // Location of dxfs2 manifest. It will mount all these
+    // Location of dxfuse manifest. It will mount all these
     // files, if the file is non empty.
-    dxfs2Manifest : Path,
-    dxfs2Mountpoint : Path,
+    dxfuseManifest : Path,
+    dxfuseMountpoint : Path,
 
     // file for storing the state between prolog and epilog of the task runner
     runnerTaskEnv: Path,
@@ -79,7 +79,7 @@ case class DxPathConfig(
         Utils.safeMkdir(inputFilesDir)
         Utils.safeMkdir(outputFilesDir)
         Utils.safeMkdir(tmpDir)
-        Utils.safeMkdir(dxfs2Mountpoint)
+        Utils.safeMkdir(dxfuseMountpoint)
     }
 }
 
@@ -101,8 +101,8 @@ object DxPathConfig {
         val dockerSubmitScript = metaDir.resolve("docker.submit")
         val setupStreams = metaDir.resolve("setup_streams")
         val dxdaManifest = metaDir.resolve("dxdaManifest.json")
-        val dxfs2Manifest = metaDir.resolve("dxfs2Manifest.json")
-        val dxfs2Mountpoint = homeDir.resolve("mnt")
+        val dxfuseManifest = metaDir.resolve("dxfuseManifest.json")
+        val dxfuseMountpoint = homeDir.resolve("mnt")
         val rcPath = metaDir.resolve("rc")
         val dockerCid = metaDir.resolve("dockerCid")
         val runnerTaskEnv = metaDir.resolve("taskEnv.json")
@@ -122,8 +122,8 @@ object DxPathConfig {
                      dockerCid,
                      setupStreams,
                      dxdaManifest,
-                     dxfs2Manifest,
-                     dxfs2Mountpoint,
+                     dxfuseManifest,
+                     dxfuseMountpoint,
                      runnerTaskEnv,
                      streamAllFiles,
                      verbose)

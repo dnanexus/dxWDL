@@ -247,26 +247,26 @@ case class Native(dxWDLrtId: Option[String],
             |       cd ${dxPathConfig.homeDir.toString}
             |    fi
             |
-            |    # run dxfs2 on a manifest of files. It will provide remote access
+            |    # run dxfuse on a manifest of files. It will provide remote access
             |    # to DNAx files.
-            |    if [[ -e ${dxPathConfig.dxfs2Manifest} ]]; then
-            |       head -n 20 ${dxPathConfig.dxfs2Manifest.toString}
+            |    if [[ -e ${dxPathConfig.dxfuseManifest} ]]; then
+            |       head -n 20 ${dxPathConfig.dxfuseManifest.toString}
             |
             |       # make sure the mountpoint exists
-            |       mkdir -p ${dxPathConfig.dxfs2Mountpoint.toString}
+            |       mkdir -p ${dxPathConfig.dxfuseMountpoint.toString}
             |
             |       # don't leak the token to stdout. We need the DNAx token to be accessible
-            |       # in the environment, so that dxfs2 could get it.
+            |       # in the environment, so that dxfuse could get it.
             |       source environment >& /dev/null
             |
-            |       # run dxfs2 so that it will not exist after the bash script exists.
-            |       echo "mounting dxfs2 on ${dxPathConfig.dxfs2Mountpoint.toString}"
-            |       nohup sudo -E dxfs2 -uid $$(id -u) -gid $$(id -g) ${dxPathConfig.dxfs2Mountpoint.toString} ${dxPathConfig.dxfs2Manifest.toString} &
+            |       # run dxfuse so that it will not exist after the bash script exists.
+            |       echo "mounting dxfuse on ${dxPathConfig.dxfuseMountpoint.toString}"
+            |       nohup sudo -E dxfuse -uid $$(id -u) -gid $$(id -g) ${dxPathConfig.dxfuseMountpoint.toString} ${dxPathConfig.dxfuseManifest.toString} &
             |       disown %1
             |
             |       # wait for the mount to start.
             |       sleep 2
-            |       cat /var/log/dxfs2.log
+            |       cat /var/log/dxfuse.log
             |    fi
             |
             |    echo "bash command encapsulation script:"
@@ -291,10 +291,10 @@ case class Native(dxWDLrtId: Option[String],
             |    # evaluate applet outputs, and upload result files
             |    java -jar $${DX_FS_ROOT}/dxWDL.jar internal taskEpilog $${HOME} ${rtDebugLvl.toString} ${streamAllFiles.toString}
             |
-            |    # unmount dxfs2
-            |    if [[ -e ${dxPathConfig.dxfs2Manifest} ]]; then
-            |        echo "unmounting dxfs2"
-            |        sudo umount ${dxPathConfig.dxfs2Mountpoint}
+            |    # unmount dxfuse
+            |    if [[ -e ${dxPathConfig.dxfuseManifest} ]]; then
+            |        echo "unmounting dxfuse"
+            |        sudo umount ${dxPathConfig.dxfuseMountpoint}
             |    fi
             |""".stripMargin.trim
     }

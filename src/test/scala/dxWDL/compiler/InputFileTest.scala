@@ -83,7 +83,7 @@ class InputFileTest extends FlatSpec with Matchers {
         retval shouldBe a [Main.SuccessfulTerminationIR]
     }
 
-    it should "handle inputs specified in the json file, but missing in the workflow" taggedAs(EdgeTest) in {
+    it should "handle inputs specified in the json file, but missing in the workflow" in {
         val wdlCode = pathFromBasename("input_file", "missing_args.wdl")
         val inputs = pathFromBasename("input_file", "missing_args_inputs.json")
 
@@ -161,4 +161,27 @@ class InputFileTest extends FlatSpec with Matchers {
         )
         retval shouldBe a [Main.SuccessfulTerminationIR]
     }
+
+    it should "WDL map input" taggedAs(EdgeTest) in {
+        val wdlCode = pathFromBasename("input_file", "map_argument.wdl")
+        val inputs = pathFromBasename("input_file", "map_argument_input.json")
+
+        val retval = Main.compile(
+            List(wdlCode.toString, "-inputs", inputs.toString)
+                ++ cFlags
+        )
+        retval shouldBe a [Main.SuccessfulTerminationIR]
+    }
+
+    it should "allow file as WDL map key" in {
+        val wdlCode = pathFromBasename("input_file", "no_file_key.wdl")
+        val inputs = pathFromBasename("input_file", "no_file_key_input.json")
+
+        val retval = Main.compile(
+            List(wdlCode.toString, "-inputs", inputs.toString)
+                ++ cFlags
+        )
+        retval shouldBe a [Main.SuccessfulTerminationIR]
+    }
+
 }

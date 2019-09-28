@@ -1,6 +1,5 @@
 {
   "missing_optional_output_file.a" : {
-    "womType": "MaybeEmptyArray[Option[SingleFile]]",
-    "value": [null, null]
+    "___": [null, null]
   }
 }

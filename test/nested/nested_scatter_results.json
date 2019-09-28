@@ -1,6 +1,5 @@
 {
   "nested_scatter.result" : {
-    "womType": "MaybeEmptyArray[MaybeEmptyArray[Integer]]",
-    "value": [[11, 12], [12, 13], [13, 14]]
+    "___": [[11, 12], [12, 13], [13, 14]]
   }
 }

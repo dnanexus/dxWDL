@@ -179,29 +179,6 @@ case class WdlVarLinksConverter(verbose: Verbose,
         WdlVarLinks(womType, DxlValue(jsValue))
     }
 
-    def importFromCromwellJSON(womType: WomType,
-                               jsv: JsValue) : WdlVarLinks = {
-        WdlVarLinks(womType, DxlValue(jsv))
-    }
-
-    // Dx allows hashes as an input/output type. If the JSON value is
-    // not a hash (js-object), we need to add an outer layer to it.
-    private def jsValueToDxHash(womType: WomType, jsVal: JsValue) : JsValue = {
-        val m:Map[String, JsValue] = jsVal match {
-            case JsObject(fields) =>
-                if (fields contains "womType")
-                    throw new Exception(s"""|The JSON value is not supposed to have a womType field.
-                                            |fields: ${fields}""".stripMargin)
-                fields
-            case _ =>
-                // Embed the value into a JSON object
-                Map("value" -> jsVal)
-        }
-        val typeStr = womTypeSerializer.toString(womType)
-        val mWithType = m + ("womType" -> JsString(typeStr))
-        JsObject(mWithType)
-    }
-
     // Convert a job input to a WomValue. Do not download any files, convert them
     // to a string representation. For example: dx://proj-xxxx:file-yyyy::/A/B/C.txt
     //
@@ -300,34 +277,16 @@ case class WdlVarLinksConverter(verbose: Verbose,
 
     def unpackJobInput(name: String, womType: WomType, jsv: JsValue) : (WomValue,
                                                                         Vector[DXFile]) = {
-        if (DxUtils.isNativeDxType(womType)) {
-            // no unpacking is needed, this is a primitive, or an array of primitives.
-            // it is directly mapped to dnanexus types.
-            val womValue = jobInputToWomValue(name, womType, jsv)
-            val dxFiles = DxUtils.findDxFiles(jsv)
-            return (womValue, dxFiles)
-        }
-
-        // unpack the hash with which complex JSON values are
-        // wrapped in dnanexus.
-        val fields = jsv match {
-            case JsObject(fields) => fields
-            case other =>
-                throw new Exception(s"JSON ${jsv} does not match the marshalled WDL value")
-        }
-
-        // An object, the type is embedded as a 'womType' field.
-        // we aren't using it here.
         val jsv1 =
-            if (fields contains "value") {
-                    // the value is encapsulated in the "value" field
-                fields("value")
-            } else {
-                // strip the womType field
-                JsObject(fields - "womType")
+            jsv match {
+                case JsObject(fields) if fields contains "___" =>
+                    // unpack the hash with which complex JSON values are
+                    // wrapped in dnanexus.
+                    fields("___")
+                case _ => jsv
             }
         val womValue = jobInputToWomValue(name, womType, jsv1)
-        val dxFiles = DxUtils.findDxFiles(jsv1)
+        val dxFiles = DxUtils.findDxFiles(jsv)
         (womValue, dxFiles)
     }
 
@@ -364,9 +323,10 @@ case class WdlVarLinksConverter(verbose: Verbose,
                     // files that are embedded in the structure
                     val dxFiles = DxUtils.findDxFiles(jsn)
                     val jsFiles = dxFiles.map(x => DxUtils.jsValueOfJsonNode(x.getLinkAsJson))
-                    // convert the top level structure into a hash
-                    val hash = jsValueToDxHash(womType, jsn)
-                    Map(bindEncName -> hash,
+                    // Dx allows hashes as an input/output type. If the JSON value is
+                    // not a hash (js-object), we need to add an outer layer to it.
+                    val jsn1 = JsObject("___" -> jsn)
+                    Map(bindEncName -> jsn1,
                         bindEncName_F -> JsArray(jsFiles))
                 case DxlStage(dxStage, ioRef, varEncName) =>
                     val varEncName_F = varEncName + Utils.FLAT_FILES_SUFFIX

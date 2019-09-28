@@ -9,7 +9,7 @@ import wom.types._
 import wom.values._
 
 import dxWDL.base.Utils
-import dxWDL.util.{DxIoFunctions, DxPathConfig, InstanceTypeDB, ParseWomSourceFile}
+import dxWDL.util.{DxIoFunctions, DxInstanceType, DxPathConfig, InstanceTypeDB, ParseWomSourceFile}
 
 // This test module requires being logged in to the platform.
 // It compiles WDL scripts without the runtime library.
@@ -17,7 +17,13 @@ import dxWDL.util.{DxIoFunctions, DxPathConfig, InstanceTypeDB, ParseWomSourceFi
 // dnanexus applets and workflows that are not runnable.
 class TaskRunnerTest extends FlatSpec with Matchers {
     private val runtimeDebugLevel = 0
-    private val instanceTypeDB = InstanceTypeDB.genTestDB(true)
+    private val unicornInstance = DxInstanceType("mem_ssd_unicorn",
+                                                 100,
+                                                 100,
+                                                 4,
+                                                 1.00F,
+                                                 Vector(("Ubuntu", "16.04")))
+    private val instanceTypeDB = InstanceTypeDB(true, Vector(unicornInstance))
     private val verbose = false
 
     // Note: if the file doesn't exist, this throws a null pointer exception

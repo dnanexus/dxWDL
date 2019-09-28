@@ -15,7 +15,7 @@ import wom.types._
 
 import dxWDL.base.{Utils, RunnerWfFragmentMode}
 import dxWDL.dx.ExecLinkInfo
-import dxWDL.util.{Block, DxIoFunctions, DxPathConfig, InstanceTypeDB, ParseWomSourceFile}
+import dxWDL.util.{Block, DxIoFunctions, DxInstanceType, DxPathConfig, InstanceTypeDB, ParseWomSourceFile}
 
 // This test module requires being logged in to the platform.
 // It compiles WDL scripts without the runtime library.
@@ -23,7 +23,13 @@ import dxWDL.util.{Block, DxIoFunctions, DxPathConfig, InstanceTypeDB, ParseWomS
 // dnanexus applets and workflows that are not runnable.
 class WfFragRunnerTest extends FlatSpec with Matchers {
     private val runtimeDebugLevel = 0
-    private val instanceTypeDB = InstanceTypeDB.genTestDB(false)
+    private val unicornInstance = DxInstanceType("mem_ssd_unicorn",
+                                                 100,
+                                                 100,
+                                                 4,
+                                                 1.00F,
+                                                 Vector(("Ubuntu", "16.04")))
+    private val instanceTypeDB = InstanceTypeDB(true, Vector(unicornInstance))
 
     private def setup() : (DxPathConfig, DxIoFunctions) = {
         // Create a clean directory in "/tmp" for the task to use
@@ -337,7 +343,6 @@ class WfFragRunnerTest extends FlatSpec with Matchers {
             fragRunner.apply(Vector(0), Map.empty, RunnerWfFragmentMode.Launch)
         results.keys should contain("bam_lane1")
         results("bam_lane1") shouldBe (JsObject(
-                                           "value" -> JsArray(JsString("1_ACGT_1.bam"), JsNull),
-                                           "womType" -> JsString("MaybeEmptyArray[Option[String]]")))
+                                           "___" -> JsArray(JsString("1_ACGT_1.bam"), JsNull)))
     }
 }
