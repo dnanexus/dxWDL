@@ -77,7 +77,7 @@ def main():
     # Build the asset, and the compiler jar file.
     path_dict = dict(map(lambda kv: (kv[0], kv[1] + ":" + folder),
                          project_dict.items()))
-    (jar_path, home_ad) = util.build(project, folder, version_id, top_dir, path_dict)
+    home_ad = util.build(project, folder, version_id, top_dir, path_dict)
 
     if multi_region:
         # download dxWDL runtime library
@@ -101,9 +101,6 @@ def main():
                     dest_ad = util.copy_across_regions(rtlib_path, home_rec, region, dest_proj, folder)
                 else:
                     print("No project named {}".format(proj))
-
-    # Upload compiler jar file
-    util.upload_local_file(jar_path, project, folder)
 
 if __name__ == '__main__':
     main()

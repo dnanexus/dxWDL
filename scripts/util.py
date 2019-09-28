@@ -224,32 +224,33 @@ def _gen_config_file(version_id, top_dir, project_dict):
                                                             rt_conf_path))
 
 def build(project, folder, version_id, top_dir, path_dict):
-    # get a copy of the dxfuse executable
-    _add_dxfuse_to_resources(top_dir)
-
-    # Create a configuration file
-    _gen_config_file(version_id, top_dir, path_dict)
-    jar_path = _sbt_assembly(top_dir, version_id)
-
-    # get a copy of the download agent (dxda)
-    _download_dxda_into_resources(top_dir)
-
     asset = find_asset(project, folder)
     if asset is None:
+        # get a copy of the dxfuse executable
+        _add_dxfuse_to_resources(top_dir)
+
+        # Create a configuration file
+        _gen_config_file(version_id, top_dir, path_dict)
+        jar_path = _sbt_assembly(top_dir, version_id)
+
+        # get a copy of the download agent (dxda)
+        _download_dxda_into_resources(top_dir)
+
         make_prerequisits(project, folder, version_id, top_dir)
         asset = find_asset(project, folder)
+
+        # Move the file to the top level directory
+        all_in_one_jar = os.path.join(top_dir, "dxWDL-{}.jar".format(version_id))
+        shutil.move(os.path.join(top_dir, jar_path),
+                    all_in_one_jar)
+
     region = dxpy.describe(project.get_id())['region']
     ad = AssetDesc(region, asset.get_id(), project)
-
-    # Move the file to the top level directory
-    all_in_one_jar = os.path.join(top_dir, "dxWDL-{}.jar".format(version_id))
-    shutil.move(os.path.join(top_dir, jar_path),
-                all_in_one_jar)
 
     # Hygiene, remove the new configuration file, we
     # don't want it to leak into the next build cycle.
     # os.remove(crnt_conf_path)
-    return (all_in_one_jar, ad)
+    return ad
 
 
 # Extract version_id from configuration file
