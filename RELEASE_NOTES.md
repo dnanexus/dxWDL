@@ -1,6 +1,6 @@
 # Release Notes
 
-## 1.31
+## 1.31  27-Sep-2019
 - Renaming dxfs2 to [dxfuse](https://github.com/dnanexus/dxfuse). This
   is the official name for the DNAx FUSE filesystem.
 - [Prefer](https://github.com/dnanexus/dxWDL/issues/309) v2 instances over v1 instances.
