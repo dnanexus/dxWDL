@@ -41,7 +41,7 @@ def get_project(project_name):
     except dxpy.DXError:
         pass
 
-    project = dxpy.find_projects(name=project_name, name_mode='glob', return_handler=True, level="VIEW")
+    project = dxpy.find_projects(name=project_name, return_handler=True, level="VIEW")
     project = [p for p in project]
     if len(project) == 0:
         print('Did not find project {0}'.format(project_name), file=sys.stderr)
@@ -264,36 +264,3 @@ def get_version_id(top_dir):
             if m is not None:
                 return m.group(6).strip()
     raise Exception("version ID not found in {}".format(conf_file))
-
-# Copy an asset across regions
-#   path: path to local file
-#   dstProj: destination project to copy to. Should be in another region
-# return:
-#    asset descriptor
-def copy_across_regions(local_path, record, dest_region, dest_proj, dest_folder):
-    print("copy_across_regions {} {} {} {}:{}".format(local_path,
-                                                      record.get_id(),
-                                                      dest_region,
-                                                      dest_proj.get_id(),
-                                                      dest_folder))
-    # check if we haven't already created this record, and uploaded the file
-    dest_asset = find_asset(dest_proj, dest_folder)
-    if dest_asset is not None:
-        print("Already copied to region {}".format(dest_region))
-        return AssetDesc(dest_region, dest_asset.get_id(), dest_proj)
-
-    # upload
-    dest_proj.new_folder(dest_folder, parents=True)
-    dxfile = upload_local_file(local_path,
-                               dest_proj,
-                               dest_folder,
-                               hidden=True)
-    fid = dxfile.get_id()
-    dest_asset = dxpy.new_dxrecord(name=record.name,
-                                   types=['AssetBundle'],
-                                   details={'archiveFileId': dxpy.dxlink(fid)},
-                                   properties=record.get_properties(),
-                                   project=dest_proj.get_id(),
-                                   folder=dest_folder,
-                                   close=True)
-    return AssetDesc(dest_region, dest_asset.get_id(), dest_proj)

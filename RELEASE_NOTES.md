@@ -1,5 +1,9 @@
 # Release Notes
 
+## 1.32
+- Improved release script. Copies to geographically distributed regions with an app.
+
+
 ## 1.31  27-Sep-2019
 - Renaming dxfs2 to [dxfuse](https://github.com/dnanexus/dxfuse). This
   is the official name for the DNAx FUSE filesystem.
