@@ -1,8 +1,7 @@
 workflow intermediate_files {
-    call mk_file
 
-    output {
-        Int result = 3
+    scatter (x in [1, 2, 3]) {
+        call mk_file
     }
 }
 

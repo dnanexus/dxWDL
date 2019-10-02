@@ -10,6 +10,5 @@ RUN apt-get update && \
 
 # dxWDL
 COPY dxWDL-$VERSION.jar /dxWDL.jar
-RUN chmod +x /dxWDL.jar
 
 ENTRYPOINT ["java", "-jar", "/dxWDL.jar"]
