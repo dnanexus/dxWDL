@@ -259,7 +259,7 @@ case class Native(dxWDLrtId: Option[String],
             |       # in the environment, so that dxfuse could get it.
             |       source environment >& /dev/null
             |
-            |       # run dxfuse so that it will not exist after the bash script exists.
+            |       # run dxfuse so that it will not exit after the bash script exists.
             |       echo "mounting dxfuse on ${dxPathConfig.dxfuseMountpoint.toString}"
             |       nohup sudo -E dxfuse -uid $$(id -u) -gid $$(id -g) ${dxPathConfig.dxfuseMountpoint.toString} ${dxPathConfig.dxfuseManifest.toString} &
             |       disown %1

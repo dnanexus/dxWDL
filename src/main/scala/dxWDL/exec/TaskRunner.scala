@@ -313,14 +313,17 @@ case class TaskRunner(task: CallableTaskDefinition,
 
     private def writeDockerSubmitBashScript(imgName: String) : Unit = {
         // The user wants to use a docker container with the
-        // image [imgName]. We implement this with dx-docker.
-        // There may be corner cases where the image will run
-        // into permission limitations due to security.
+        // image [imgName].
         //
         // Map the home directory into the container, so that
         // we can reach the result files, and upload them to
         // the platform.
         //
+        // Limit the docker container to leave some memory for the rest of the
+        // ongoing system services, for example, dxfuse.
+        val headroom = Utils.DXFUSE_MEMORY_HEAD_ROOM
+        val totalAvailableMemoryBytes = Utils.readFileContent("/sys/fs/cgroup/memory/memory.limit_in_bytes").toInt
+        val memCap = totalAvailableMemoryBytes - headroom
         val dockerRunScript =
             s"""|#!/bin/bash -x
                 |
