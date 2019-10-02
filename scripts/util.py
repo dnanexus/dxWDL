@@ -41,7 +41,7 @@ def get_project(project_name):
     except dxpy.DXError:
         pass
 
-    project = dxpy.find_projects(name=project_name, name_mode='glob', return_handler=True, level="VIEW")
+    project = dxpy.find_projects(name=project_name, return_handler=True, level="VIEW")
     project = [p for p in project]
     if len(project) == 0:
         print('Did not find project {0}'.format(project_name), file=sys.stderr)
@@ -224,32 +224,33 @@ def _gen_config_file(version_id, top_dir, project_dict):
                                                             rt_conf_path))
 
 def build(project, folder, version_id, top_dir, path_dict):
-    # get a copy of the dxfuse executable
-    _add_dxfuse_to_resources(top_dir)
-
-    # Create a configuration file
-    _gen_config_file(version_id, top_dir, path_dict)
-    jar_path = _sbt_assembly(top_dir, version_id)
-
-    # get a copy of the download agent (dxda)
-    _download_dxda_into_resources(top_dir)
-
     asset = find_asset(project, folder)
     if asset is None:
+        # get a copy of the dxfuse executable
+        _add_dxfuse_to_resources(top_dir)
+
+        # Create a configuration file
+        _gen_config_file(version_id, top_dir, path_dict)
+        jar_path = _sbt_assembly(top_dir, version_id)
+
+        # get a copy of the download agent (dxda)
+        _download_dxda_into_resources(top_dir)
+
         make_prerequisits(project, folder, version_id, top_dir)
         asset = find_asset(project, folder)
+
+        # Move the file to the top level directory
+        all_in_one_jar = os.path.join(top_dir, "dxWDL-{}.jar".format(version_id))
+        shutil.move(os.path.join(top_dir, jar_path),
+                    all_in_one_jar)
+
     region = dxpy.describe(project.get_id())['region']
     ad = AssetDesc(region, asset.get_id(), project)
-
-    # Move the file to the top level directory
-    all_in_one_jar = os.path.join(top_dir, "dxWDL-{}.jar".format(version_id))
-    shutil.move(os.path.join(top_dir, jar_path),
-                all_in_one_jar)
 
     # Hygiene, remove the new configuration file, we
     # don't want it to leak into the next build cycle.
     # os.remove(crnt_conf_path)
-    return (all_in_one_jar, ad)
+    return ad
 
 
 # Extract version_id from configuration file
@@ -263,36 +264,3 @@ def get_version_id(top_dir):
             if m is not None:
                 return m.group(6).strip()
     raise Exception("version ID not found in {}".format(conf_file))
-
-# Copy an asset across regions
-#   path: path to local file
-#   dstProj: destination project to copy to. Should be in another region
-# return:
-#    asset descriptor
-def copy_across_regions(local_path, record, dest_region, dest_proj, dest_folder):
-    print("copy_across_regions {} {} {} {}:{}".format(local_path,
-                                                      record.get_id(),
-                                                      dest_region,
-                                                      dest_proj.get_id(),
-                                                      dest_folder))
-    # check if we haven't already created this record, and uploaded the file
-    dest_asset = find_asset(dest_proj, dest_folder)
-    if dest_asset is not None:
-        print("Already copied to region {}".format(dest_region))
-        return AssetDesc(dest_region, dest_asset.get_id(), dest_proj)
-
-    # upload
-    dest_proj.new_folder(dest_folder, parents=True)
-    dxfile = upload_local_file(local_path,
-                               dest_proj,
-                               dest_folder,
-                               hidden=True)
-    fid = dxfile.get_id()
-    dest_asset = dxpy.new_dxrecord(name=record.name,
-                                   types=['AssetBundle'],
-                                   details={'archiveFileId': dxpy.dxlink(fid)},
-                                   properties=record.get_properties(),
-                                   project=dest_proj.get_id(),
-                                   folder=dest_folder,
-                                   close=True)
-    return AssetDesc(dest_region, dest_asset.get_id(), dest_proj)
