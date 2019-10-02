@@ -1,5 +1,5 @@
 {
-  "call_with_defaults2.r1" : "Hello, ",
+  "call_with_defaults2.r1" : "Hello, world",
   "call_with_defaults2.r2" : "Hello, world",
   "call_with_defaults2.r3" : "Hello, Sandy"
 }
