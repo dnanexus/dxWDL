@@ -1,9 +1,12 @@
 # Release Notes
 
 ## 1.32
-- Improved release script. Copies to geographically distributed regions with an app.
 - Upgrade to Cromwell 46.1
+- Retrying docker pull at runtime.
+- Improved release script. Copies to geographically distributed regions with an app.
 
+**Fixed**
+- [#313](https://github.com/dnanexus/dxWDL/issues/313).
 
 ## 1.31  30-Sep-2019
 - Renaming dxfs2 to [dxfuse](https://github.com/dnanexus/dxfuse). This

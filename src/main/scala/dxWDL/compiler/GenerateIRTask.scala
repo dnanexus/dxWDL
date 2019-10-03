@@ -15,7 +15,8 @@ import IR.CVar
 
 case class GenerateIRTask(verbose: Verbose,
                           typeAliases: Map[String, WomType],
-                          language: Language.Value) {
+                          language: Language.Value,
+                          defaultRuntimeAttrs : Option[WdlRuntimeAttrs]) {
     val verbose2 : Boolean = verbose.containsKey("GenerateIR")
 
     private class DynamicInstanceTypesException private(ex: Exception) extends RuntimeException(ex) {
@@ -30,9 +31,14 @@ case class GenerateIRTask(verbose: Verbose,
     // At compile time, constants expressions are handled. Some can
     // only be evaluated at runtime.
     private def calcInstanceType(task: CallableTaskDefinition) : IR.InstanceType = {
-        def evalAttr(task: CallableTaskDefinition, attrName: String) : Option[WomValue] = {
+        def evalAttr(attrName: String) : Option[WomValue] = {
             task.runtimeAttributes.attributes.get(attrName) match {
-                case None => None
+                case None =>
+                    // Check the defaults, maybe there is a setting over there
+                    defaultRuntimeAttrs match {
+                        case None => None
+                        case Some(dra) => dra.getAttr(attrName)
+                    }
                 case Some(expr) =>
                     val result: ErrorOr[WomValue] =
                         expr.evaluateValue(Map.empty[String, WomValue], wom.expression.NoIoFunctionSet)
@@ -44,10 +50,10 @@ case class GenerateIRTask(verbose: Verbose,
         }
 
         try {
-            val dxInstaceType = evalAttr(task, Extras.DX_INSTANCE_TYPE_ATTR)
-            val memory = evalAttr(task, "memory")
-            val diskSpace = evalAttr(task, "disks")
-            val cores = evalAttr(task, "cpu")
+            val dxInstaceType = evalAttr("dx_instance_type")
+            val memory = evalAttr("memory")
+            val diskSpace = evalAttr("disks")
+            val cores = evalAttr("cpu")
             val iTypeDesc = InstanceTypeDB.parse(dxInstaceType, memory, diskSpace, cores)
             IR.InstanceTypeConst(iTypeDesc.dxInstanceType,
                                  iTypeDesc.memoryMB,

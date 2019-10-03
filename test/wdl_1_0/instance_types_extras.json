@@ -1,0 +1,47 @@
+{
+  "default_task_dx_attributes" : {
+    "runSpec": {
+      "restartableEntryPoints": "all",
+      "executionPolicy": {
+        "restartOn": {
+          "*": 1
+        }
+      },
+      "timeoutPolicy": {
+        "*": {
+          "hours": 1
+        }
+      },
+      "access" : {
+        "project": "VIEW",
+        "network": [
+          "*"
+        ]
+      }
+    }
+  },
+
+  "per_task_dx_attributes" : {
+    "DiskSpaceSpec" : {
+      "runSpec": {
+        "timeoutPolicy": {
+          "*": {
+            "minutes": 30
+          }
+        },
+        "access" : {
+          "project": "UPLOAD"
+        }
+      }
+    },
+    "DiskSpaceTaskDeclarations" : {
+      "runSpec": {
+        "timeoutPolicy": {
+          "*": {
+            "minutes": 30
+          }
+        }
+      }
+    }
+  }
+}

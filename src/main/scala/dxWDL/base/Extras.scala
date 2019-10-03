@@ -6,7 +6,6 @@ package dxWDL.base
 import com.dnanexus.AccessLevel
 import spray.json._
 import DefaultJsonProtocol._
-import wom.expression.{ValueAsAnExpression, WomExpression}
 import wom.values._
 
 case class DxExecPolicy(restartOn: Option[Map[String, Int]],
@@ -215,14 +214,34 @@ case class DxDetails(upstreamProjects: Option[List[DxLicense]]){
         }
 
         return Map("upstreamProjects" -> upstreamProjectList.toJson)
+    }
+}
+
+case class WdlRuntimeAttrs(dxInstanceType: Option[String],
+                           memory: Option[String],
+                           disks : Option[String],
+                           cpu : Option[String],
+                           docker : Option[String]) {
+    def getAttr(attrName : String) : Option[WomValue] = {
+        val v : Option[String] = attrName match {
+            case "dx_instance_type" => dxInstanceType
+            case "memory" => memory
+            case "disks" => disks
+            case "cpu" => cpu
+            case "docker" => docker
+        }
+        v match {
+            case None => None
+            case Some(s) => Some(WomString(s))
         }
     }
+}
 
 case class DockerRegistry(registry: String,
                            username: String,
                            credentials: String)
 
-case class Extras(defaultRuntimeAttributes: Map[String, WomExpression],
+case class Extras(defaultRuntimeAttributes: Option[WdlRuntimeAttrs],
                   defaultTaskDxAttributes: Option[DxAttrs],
                   perTaskDxAttributes: Map[String, DxAttrs],
                   dockerRegistry : Option[DockerRegistry]) {
@@ -255,13 +274,12 @@ case class Extras(defaultRuntimeAttributes: Map[String, WomExpression],
 }
 
 object Extras {
-    val DX_INSTANCE_TYPE_ATTR = "dx_instance_type"
     val DOCKER_REGISTRY_ATTRS = Set("username", "registry", "credentials")
     val EXTRA_ATTRS = Set("default_runtime_attributes",
                           "default_task_dx_attributes",
                           "per_task_dx_attributes",
                           "docker_registry")
-    val RUNTIME_ATTRS = Set(DX_INSTANCE_TYPE_ATTR, "memory", "disks", "cpu", "docker")
+    val RUNTIME_ATTRS = Set("dx_instance_type", "memory", "disks", "cpu", "docker")
     val RUN_SPEC_ATTRS = Set("access", "executionPolicy", "restartableEntryPoints", "timeoutPolicy")
     val RUN_SPEC_ACCESS_ATTRS = Set("network", "project", "allProjects", "developer", "projectCreation")
     val RUN_SPEC_TIMEOUT_ATTRS = Set("days", "hours", "minutes")
@@ -271,17 +289,6 @@ object Extras {
                                                     "JobTimeoutExceeded", "*")
     val TASK_DX_ATTRS = Set("runSpec", "details")
     val DX_DETAILS_ATTRS = Set("upstreamProjects")
-
-
-    private def wdlExpressionFromJsValue(jsv: JsValue) : WomExpression = {
-        val wValue: WomValue = jsv match {
-            case JsBoolean(b) => WomBoolean(b.booleanValue)
-            case JsNumber(nmb) => WomInteger(nmb.intValue)
-            case JsString(s) => WomString(s)
-            case other => throw new Exception(s"Unsupported json value ${other}")
-        }
-        ValueAsAnExpression(wValue)
-    }
 
 
     private def checkedParseIntField(fields: Map[String, JsValue],
@@ -360,10 +367,10 @@ object Extras {
         return Some(m1)
     }
 
-    private def parseRuntimeAttrs(jsv: JsValue,
-                                  verbose: Verbose) : Map[String, WomExpression] = {
+    private def parseWdlRuntimeAttrs(jsv: JsValue,
+                                     verbose: Verbose) : Option[WdlRuntimeAttrs] = {
         if (jsv == JsNull)
-            return Map.empty
+            return None
         val fields = jsv.asJsObject.fields
         for (k <- fields.keys) {
             if (!(RUNTIME_ATTRS contains k))
@@ -371,11 +378,19 @@ object Extras {
                                            |we currently support ${RUNTIME_ATTRS}
                                            |""".stripMargin.replaceAll("\n", ""))
         }
-        val attrs = fields
-            .filter{ case (key,_) => RUNTIME_ATTRS contains key }
-            .map{ case (name, jsValue) =>
-                name -> wdlExpressionFromJsValue(jsValue) }.toMap
-        return attrs
+        def jsToString(jsv : Option[JsValue]) : Option[String] = {
+            jsv.flatMap{
+                case JsNumber(nmb) => Some(nmb.intValue.toString)
+                case JsString(s) => Some(s)
+                case other => throw new Exception(s"Unsupported json value ${other}")
+            }
+        }
+        val ra = WdlRuntimeAttrs(dxInstanceType = jsToString(fields.get("dx_instance_type")),
+                                 memory = jsToString(fields.get("memory")),
+                                 disks = jsToString(fields.get("disks")),
+                                 cpu = jsToString(fields.get("cpu")),
+                                 docker = jsToString(fields.get("docker")))
+        Some(ra)
     }
 
     private def parseExecutionPolicy(jsv: JsValue) : Option[DxExecPolicy] = {
@@ -579,7 +594,7 @@ object Extras {
                     }
             }
 
-        Extras(parseRuntimeAttrs(
+        Extras(parseWdlRuntimeAttrs(
                    checkedParseObjectField(fields, "default_runtime_attributes"),
                    verbose),
                parseTaskDxAttrs(

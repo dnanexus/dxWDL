@@ -67,6 +67,7 @@ wdl_v1_list = [
 
 # docker image tests
 docker_test_list = [
+    "biocontainers",
     "broad_genomics",
     "private_registry",
     "native_docker_file_image",
@@ -149,11 +150,10 @@ test_unlocked=["array_structs",
                "optionals",
                "shapes"]
 
-test_extras=["instance_types", "hello"]
-test_private_registry=["private_registry"]
 test_import_dirs=["A"]
-TestMetaData = namedtuple('TestMetaData', 'name kind')
-TestDesc = namedtuple('TestDesc', 'name kind wdl_source wdl_input dx_input results')
+TestMetaData = namedtuple('TestMetaData', ['name','kind'])
+TestDesc = namedtuple('TestDesc',
+                      ['name', 'kind', 'wdl_source', 'wdl_input', 'dx_input', 'results', 'extras'])
 
 ######################################################################
 # Read a JSON file
@@ -211,25 +211,25 @@ def register_test(dir_path, tname):
     if not os.path.exists(wdl_file):
         raise RuntimeError("Test file {} does not exist".format(path))
     metadata = get_metadata(wdl_file)
+    desc = TestDesc(name = metadata.name,
+                    kind = metadata.kind,
+                    wdl_source= wdl_file,
+                    wdl_input= None,
+                    dx_input= None,
+                    results= os.path.join(dir_path, tname + "_results.json"),
+                    extras = None)
 
+    # Verify the input file, and add it (if it exists)
     wdl_input= os.path.join(dir_path, tname + "_input.json")
     if os.path.exists(wdl_input):
-        # Verify the validity of the input file
         verify_json_file(wdl_input)
-        desc = TestDesc(name = metadata.name,
-                        kind = metadata.kind,
-                        wdl_source= wdl_file,
-                        wdl_input= wdl_input,
-                        dx_input= os.path.join(dir_path, tname + "_input.dx.json"),
-                        results= os.path.join(dir_path, tname + "_results.json"))
-    else:
-        # empty input file
-        desc = TestDesc(name = metadata.name,
-                        kind = metadata.kind,
-                        wdl_source= wdl_file,
-                        wdl_input= None,
-                        dx_input= None,
-                        results= os.path.join(dir_path, tname + "_results.json"))
+        desc = desc._replace(wdl_input= wdl_input,
+                             dx_input= os.path.join(dir_path, tname + "_input.dx.json"))
+
+    # Add an extras file (if it exists)
+    extras = os.path.join(dir_path, tname + "_extras.json")
+    if os.path.exists(extras):
+        desc = desc._replace(extras = extras)
 
     test_files[tname] = desc
     desc
@@ -502,10 +502,8 @@ def compiler_per_test_flags(tname):
         if desc.wdl_input is not None:
             flags.append("-inputs")
             flags.append(desc.wdl_input)
-    if tname in test_extras:
-        flags += ["--extras", os.path.join(top_dir, "test/extras.json")]
-    if tname in test_private_registry:
-        flags += ["--extras", os.path.join(top_dir, "test/extras_private_registry.json")]
+    if desc.extras is not None:
+        flags += ["--extras", os.path.join(top_dir, desc.extras)]
     if tname in test_import_dirs:
         flags += ["--imports", os.path.join(top_dir, "test/imports/lib")]
     return flags

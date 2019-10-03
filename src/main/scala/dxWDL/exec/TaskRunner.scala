@@ -319,11 +319,14 @@ case class TaskRunner(task: CallableTaskDefinition,
         // we can reach the result files, and upload them to
         // the platform.
         //
+
+        // TODO
         // Limit the docker container to leave some memory for the rest of the
         // ongoing system services, for example, dxfuse.
-        val headroom = Utils.DXFUSE_MEMORY_HEAD_ROOM
-        val totalAvailableMemoryBytes = Utils.readFileContent("/sys/fs/cgroup/memory/memory.limit_in_bytes").toInt
-        val memCap = totalAvailableMemoryBytes - headroom
+        //val headroom = Utils.DXFUSE_MEMORY_HEAD_ROOM
+        //val totalAvailableMemoryBytes = Utils.readFileContent("/sys/fs/cgroup/memory/memory.limit_in_bytes").toInt
+        //val memCap = totalAvailableMemoryBytes - headroom
+
         val dockerRunScript =
             s"""|#!/bin/bash -x
                 |
@@ -532,11 +535,11 @@ case class TaskRunner(task: CallableTaskDefinition,
             }
         }
 
-        val dxInstaceType = evalAttr(Extras.DX_INSTANCE_TYPE_ATTR)
+        val dxInstanceType = evalAttr("dx_instance_type")
         val memory = evalAttr("memory")
         val diskSpace = evalAttr("disks")
         val cores = evalAttr("cpu")
-        val iTypeRaw = InstanceTypeDB.parse(dxInstaceType, memory, diskSpace, cores)
+        val iTypeRaw = InstanceTypeDB.parse(dxInstanceType, memory, diskSpace, cores)
         val iType = instanceTypeDB.apply(iTypeRaw)
         Utils.appletLog(verbose, s"""|calcInstanceType memory=${memory} disk=${diskSpace}
                                      |cores=${cores} instancetype=${iType}"""
