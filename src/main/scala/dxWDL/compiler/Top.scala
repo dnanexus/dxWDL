@@ -229,9 +229,12 @@ case class Top(cOpt: CompilerOptions) {
 
         // Compile the WDL workflow into an Intermediate
         // Representation (IR)
-        val bundle: IR.Bundle = new GenerateIR(cOpt.verbose).apply(everythingBundle, allSources, language,
-                                                                   cOpt.locked, cOpt.reorg)
-        bundle
+        val defaultRuntimeAttrs = cOpt.extras match {
+            case None => WdlRuntimeAttrs(Map.empty)
+            case Some(ex) => ex.defaultRuntimeAttributes
+        }
+        new GenerateIR(cOpt.verbose, defaultRuntimeAttrs).apply(everythingBundle, allSources, language,
+                                                                cOpt.locked, cOpt.reorg)
     }
 
     // Compile IR only

@@ -5,6 +5,7 @@ import common.validation.ErrorOr.ErrorOr
 import wom.callable.CallableTaskDefinition
 import wom.callable.Callable._
 import wom.callable.MetaValueElement._
+import wom.expression.{ValueAsAnExpression, WomExpression}
 import wom.types._
 import wom.values._
 
@@ -15,7 +16,8 @@ import IR.CVar
 
 case class GenerateIRTask(verbose: Verbose,
                           typeAliases: Map[String, WomType],
-                          language: Language.Value) {
+                          language: Language.Value,
+                          defaultRuntimeAttrs : WdlRuntimeAttrs) {
     val verbose2 : Boolean = verbose.containsKey("GenerateIR")
 
     private class DynamicInstanceTypesException private(ex: Exception) extends RuntimeException(ex) {
@@ -30,9 +32,11 @@ case class GenerateIRTask(verbose: Verbose,
     // At compile time, constants expressions are handled. Some can
     // only be evaluated at runtime.
     private def calcInstanceType(task: CallableTaskDefinition) : IR.InstanceType = {
-        def evalAttr(task: CallableTaskDefinition, attrName: String) : Option[WomValue] = {
+        def evalAttr(attrName: String) : Option[WomValue] = {
             task.runtimeAttributes.attributes.get(attrName) match {
-                case None => None
+                case None =>
+                    // Check the overall defaults, there might be a setting over there
+                    defaultRuntimeAttrs.m.get(attrName)
                 case Some(expr) =>
                     val result: ErrorOr[WomValue] =
                         expr.evaluateValue(Map.empty[String, WomValue], wom.expression.NoIoFunctionSet)
@@ -44,10 +48,10 @@ case class GenerateIRTask(verbose: Verbose,
         }
 
         try {
-            val dxInstaceType = evalAttr(task, Extras.DX_INSTANCE_TYPE_ATTR)
-            val memory = evalAttr(task, "memory")
-            val diskSpace = evalAttr(task, "disks")
-            val cores = evalAttr(task, "cpu")
+            val dxInstaceType = evalAttr("dx_instance_type")
+            val memory = evalAttr("memory")
+            val diskSpace = evalAttr("disks")
+            val cores = evalAttr("cpu")
             val iTypeDesc = InstanceTypeDB.parse(dxInstaceType, memory, diskSpace, cores)
             IR.InstanceTypeConst(iTypeDesc.dxInstanceType,
                                  iTypeDesc.memoryMB,
@@ -57,6 +61,29 @@ case class GenerateIRTask(verbose: Verbose,
             case e : DynamicInstanceTypesException =>
                 // The generated code will need to calculate the instance type at runtime
                 IR.InstanceTypeRuntime
+        }
+    }
+
+
+    // Process a docker image, if there is one
+    def triageDockerImage(dockerExpr : Option[WomExpression]) : IR.DockerImage = {
+        dockerExpr match {
+            case None =>
+                IR.DockerImageNone
+            case Some(expr) if WomValueAnalysis.isExpressionConst(WomStringType, expr) =>
+                val wdlConst = WomValueAnalysis.evalConst(WomStringType, expr)
+                wdlConst match {
+                    case WomString(url) if url.startsWith(Utils.DX_URL_PREFIX) =>
+                        // A constant image specified with a DX URL
+                        val dxfile = DxPath.resolveDxURLFile(url)
+                        IR.DockerImageDxFile(url, dxfile)
+                    case _ =>
+                        // Probably a public docker image
+                        IR.DockerImageNetwork
+                }
+            case _ =>
+                // Image will be downloaded from the network
+                IR.DockerImageNetwork
         }
     }
 
@@ -125,31 +152,15 @@ case class GenerateIRTask(verbose: Verbose,
             }
 
         // Figure out if we need to use docker
-        val docker = task.runtimeAttributes.attributes.get("docker") match {
-            case None =>
-                IR.DockerImageNone
-            case Some(expr) if WomValueAnalysis.isExpressionConst(WomStringType, expr) =>
-                val wdlConst = WomValueAnalysis.evalConst(WomStringType, expr)
-                wdlConst match {
-                    case WomString(url) if url.startsWith(Utils.DX_URL_PREFIX) =>
-                        // A constant image specified with a DX URL
-                        val dxfile = DxPath.resolveDxURLFile(url)
-                        IR.DockerImageDxFile(url, dxfile)
-                    case _ =>
-                        // Probably a public docker image
-                        IR.DockerImageNetwork
-                }
-            case _ =>
-                // Image will be downloaded from the network
-                IR.DockerImageNetwork
-        }
-        // The docker container is on the platform, we need to remove
-        // the dxURLs in the runtime section, to avoid a runtime
-        // lookup. For example:
-        //
-        //   dx://dxWDL_playground:/glnexus_internal  ->   dx://project-xxxx:record-yyyy
+        val docker = triageDockerImage(task.runtimeAttributes.attributes.get("docker"))
+
         val taskCleanedSourceCode = docker match {
             case IR.DockerImageDxFile(orgURL, dxFile) =>
+                // The docker container is on the platform, we need to remove
+                // the dxURLs in the runtime section, to avoid a runtime
+                // lookup. For example:
+                //
+                //   dx://dxWDL_playground:/glnexus_internal  ->   dx://project-xxxx:record-yyyy
                 val dxURL = DxUtils.dxDataObjectToURL(dxFile)
                 taskSourceCode.replaceAll(orgURL, dxURL)
             case _ => taskSourceCode
@@ -157,6 +168,16 @@ case class GenerateIRTask(verbose: Verbose,
         val WdlCodeSnippet(selfContainedSourceCode) =
             WdlCodeGen(verbose, typeAliases, language).standAloneTask(taskCleanedSourceCode)
 
-        IR.Applet(task.name, inputs, outputs, instanceType, docker, kind, selfContainedSourceCode)
+        val dockerFinal = docker match {
+            case IR.DockerImageNone =>
+                // No docker image was specified, but there might be one in the
+                // overall defaults
+                defaultRuntimeAttrs.m.get("docker") match {
+                    case None => IR.DockerImageNone
+                    case Some(wValue) => triageDockerImage(Some(ValueAsAnExpression(wValue)))
+                }
+            case other => other
+        }
+        IR.Applet(task.name, inputs, outputs, instanceType, dockerFinal, kind, selfContainedSourceCode)
     }
 }

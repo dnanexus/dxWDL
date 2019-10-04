@@ -64,6 +64,7 @@ case class WfFragRunner(wf: WorkflowDefinition,
                         dxIoFunctions : DxIoFunctions,
                         inputsRaw : JsValue,
                         fragInputOutput : WfFragInputOutput,
+                        defaultRuntimeAttributes : Option[WdlRuntimeAttrs],
                         runtimeDebugLevel: Int) {
     private val MAX_JOB_NAME = 50
     private val verbose = runtimeDebugLevel >= 1
@@ -350,6 +351,7 @@ case class WfFragRunner(wf: WorkflowDefinition,
                                         dxPathConfig,
                                         dxIoFunctions,
                                         jobInputOutput,
+                                        defaultRuntimeAttributes,
                                         runtimeDebugLevel)
         try {
             val iType = taskRunner.calcInstanceType(taskInputs)

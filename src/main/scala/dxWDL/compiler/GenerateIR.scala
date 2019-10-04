@@ -10,7 +10,8 @@ import wom.types._
 import dxWDL.base._
 import dxWDL.util._
 
-case class GenerateIR(verbose: Verbose) {
+case class GenerateIR(verbose: Verbose,
+                      defaultRuntimeAttrs: WdlRuntimeAttrs) {
     val verbose2 : Boolean = verbose.containsKey("GenerateIR")
 
     def sortByDependencies(allCallables: Vector[Callable]) : Vector[Callable] = {
@@ -140,7 +141,8 @@ case class GenerateIR(verbose: Verbose) {
                 case None => throw new Exception(s"Did not find task ${task.name}")
                 case Some(x) => x
             }
-            GenerateIRTask(verbose, typeAliases, language).apply(task, taskSourceCode)
+            GenerateIRTask(verbose, typeAliases,
+                           language, defaultRuntimeAttrs).apply(task, taskSourceCode)
         }
         callable match {
             case exec : ExecutableTaskDefinition =>

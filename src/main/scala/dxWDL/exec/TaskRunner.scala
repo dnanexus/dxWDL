@@ -84,6 +84,7 @@ case class TaskRunner(task: CallableTaskDefinition,
                       dxPathConfig : DxPathConfig,
                       dxIoFunctions : DxIoFunctions,
                       jobInputOutput : JobInputOutput,
+                      defaultRuntimeAttrs : Option[WdlRuntimeAttrs],
                       runtimeDebugLevel: Int) {
     private val verbose = (runtimeDebugLevel >= 1)
     private val maxVerboseLevel = (runtimeDebugLevel == 2)
@@ -159,16 +160,25 @@ case class TaskRunner(task: CallableTaskDefinition,
 
     // Figure out if a docker image is specified. If so, return it as a string.
     private def dockerImageEval(env: Map[String, WomValue]) : Option[String] = {
-        task.runtimeAttributes.attributes.get("docker") match {
-            case None => None
-            case Some(expr) =>
-                val result: ErrorOr[WomValue] =
-                    expr.evaluateValue(env, dxIoFunctions)
-                result match {
-                    case Valid(WomString(s)) => Some(s)
-                    case _ =>
-                        throw new AppInternalException(s"docker is not a string expression ${expr}")
+        val dImg : Option[WomValue] = task.runtimeAttributes.attributes.get("docker") match {
+            case None =>
+                defaultRuntimeAttrs match {
+                    case None => None
+                    case Some(dra) => dra.m.get("docker")
                 }
+            case Some(expr) =>
+                val result: ErrorOr[WomValue] = expr.evaluateValue(env, dxIoFunctions)
+                result match {
+                    case Valid(x) => Some(x)
+                    case Invalid(_) =>
+                        throw new AppInternalException(s"Invalid wom expression ${expr}")
+                }
+        }
+        dImg match {
+            case None => None
+            case Some(WomString(s)) => Some(s)
+            case Some(other) =>
+                throw new AppInternalException(s"docker is not a string expression ${other}")
         }
     }
 
@@ -313,14 +323,20 @@ case class TaskRunner(task: CallableTaskDefinition,
 
     private def writeDockerSubmitBashScript(imgName: String) : Unit = {
         // The user wants to use a docker container with the
-        // image [imgName]. We implement this with dx-docker.
-        // There may be corner cases where the image will run
-        // into permission limitations due to security.
+        // image [imgName].
         //
         // Map the home directory into the container, so that
         // we can reach the result files, and upload them to
         // the platform.
         //
+
+        // TODO
+        // Limit the docker container to leave some memory for the rest of the
+        // ongoing system services, for example, dxfuse.
+        //val headroom = Utils.DXFUSE_MEMORY_HEAD_ROOM
+        //val totalAvailableMemoryBytes = Utils.readFileContent("/sys/fs/cgroup/memory/memory.limit_in_bytes").toInt
+        //val memCap = totalAvailableMemoryBytes - headroom
+
         val dockerRunScript =
             s"""|#!/bin/bash -x
                 |
@@ -524,16 +540,22 @@ case class TaskRunner(task: CallableTaskDefinition,
 
         def evalAttr(attrName: String) : Option[WomValue] = {
             task.runtimeAttributes.attributes.get(attrName) match {
-                case None => None
-                case Some(expr) => Some(getErrorOr(expr.evaluateValue(inputs, dxIoFunctions)))
+                case None =>
+                    // try the defaults
+                    defaultRuntimeAttrs match {
+                        case None => None
+                        case Some(dra) => dra.m.get(attrName)
+                    }
+                case Some(expr) =>
+                    Some(getErrorOr(expr.evaluateValue(inputs, dxIoFunctions)))
             }
         }
 
-        val dxInstaceType = evalAttr(Extras.DX_INSTANCE_TYPE_ATTR)
+        val dxInstanceType = evalAttr("dx_instance_type")
         val memory = evalAttr("memory")
         val diskSpace = evalAttr("disks")
         val cores = evalAttr("cpu")
-        val iTypeRaw = InstanceTypeDB.parse(dxInstaceType, memory, diskSpace, cores)
+        val iTypeRaw = InstanceTypeDB.parse(dxInstanceType, memory, diskSpace, cores)
         val iType = instanceTypeDB.apply(iTypeRaw)
         Utils.appletLog(verbose, s"""|calcInstanceType memory=${memory} disk=${diskSpace}
                                      |cores=${cores} instancetype=${iType}"""

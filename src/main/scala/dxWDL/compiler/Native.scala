@@ -259,7 +259,7 @@ case class Native(dxWDLrtId: Option[String],
             |       # in the environment, so that dxfuse could get it.
             |       source environment >& /dev/null
             |
-            |       # run dxfuse so that it will not exist after the bash script exists.
+            |       # run dxfuse so that it will not exit after the bash script exists.
             |       echo "mounting dxfuse on ${dxPathConfig.dxfuseMountpoint.toString}"
             |       nohup sudo -E dxfuse -uid $$(id -u) -gid $$(id -g) ${dxPathConfig.dxfuseMountpoint.toString} ${dxPathConfig.dxfuseManifest.toString} &
             |       disown %1
@@ -689,8 +689,13 @@ case class Native(dxWDLrtId: Option[String],
         val womSourceCode = Utils.gzipAndBase64Encode(applet.womSourceCode)
         val dbOpaque = InstanceTypeDB.opaquePrices(instanceTypeDB)
         val dbOpaqueInstance = Utils.gzipAndBase64Encode(dbOpaque.toJson.prettyPrint)
+        val runtimeAttrs = extras match {
+            case None => JsNull
+            case Some(ext) => ext.defaultRuntimeAttributes.toJson
+        }
         val auxInfo = Map("womSourceCode" -> JsString(womSourceCode),
-                           "instanceTypeDB" -> JsString(dbOpaqueInstance))
+                          "instanceTypeDB" -> JsString(dbOpaqueInstance),
+                          "runtimeAttrs" -> runtimeAttrs)
 
         // Links to applets that could get called at runtime. If
         // this applet is copied, we need to maintain referential integrity.

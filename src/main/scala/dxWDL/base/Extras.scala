@@ -6,7 +6,6 @@ package dxWDL.base
 import com.dnanexus.AccessLevel
 import spray.json._
 import DefaultJsonProtocol._
-import wom.expression.{ValueAsAnExpression, WomExpression}
 import wom.values._
 
 case class DxExecPolicy(restartOn: Option[Map[String, Int]],
@@ -215,14 +214,53 @@ case class DxDetails(upstreamProjects: Option[List[DxLicense]]){
         }
 
         return Map("upstreamProjects" -> upstreamProjectList.toJson)
+    }
+}
+
+// The available fields are:
+//    dx_instance_type"
+//    memory
+//    disks
+//    cpu
+//    docker
+//
+case class WdlRuntimeAttrs(m : Map[String, WomValue])
+
+// support automatic conversion to/from JsValue
+object WdlRuntimeAttrs extends DefaultJsonProtocol {
+    implicit object WdlRuntimeAttrsFormat extends RootJsonFormat[WdlRuntimeAttrs] {
+        private def readWomValue(value : JsValue) : WomValue = value match {
+            case JsBoolean(b) => WomBoolean(b.booleanValue)
+            case JsNumber(nmb) => WomInteger(nmb.intValue)
+            case JsString(s) => WomString(s)
+            case other => throw new Exception(s"Unsupported json value ${other}")
+        }
+        private def writeWomValue(wValue : WomValue) : JsValue = wValue match {
+            case WomBoolean(b) => JsBoolean(b)
+            case WomInteger(i) => JsNumber(i)
+            case WomString(s) => JsString(s)
+            case other => throw new Exception(s"Unsupported wom value value ${other}")
+        }
+
+        def read(jsv : JsValue) : WdlRuntimeAttrs = {
+            val m = jsv.asJsObject.fields.map{ case (k,v) => k -> readWomValue(v) }.toMap
+            WdlRuntimeAttrs(m)
+        }
+
+        def write(wra : WdlRuntimeAttrs) : JsValue = {
+            val fields = wra.m.map{ case (k, v) =>
+                k -> writeWomValue(v)
+            }.toMap
+            JsObject(fields)
         }
     }
+}
 
 case class DockerRegistry(registry: String,
                            username: String,
                            credentials: String)
 
-case class Extras(defaultRuntimeAttributes: Map[String, WomExpression],
+case class Extras(defaultRuntimeAttributes: WdlRuntimeAttrs,
                   defaultTaskDxAttributes: Option[DxAttrs],
                   perTaskDxAttributes: Map[String, DxAttrs],
                   dockerRegistry : Option[DockerRegistry]) {
@@ -255,13 +293,12 @@ case class Extras(defaultRuntimeAttributes: Map[String, WomExpression],
 }
 
 object Extras {
-    val DX_INSTANCE_TYPE_ATTR = "dx_instance_type"
     val DOCKER_REGISTRY_ATTRS = Set("username", "registry", "credentials")
     val EXTRA_ATTRS = Set("default_runtime_attributes",
                           "default_task_dx_attributes",
                           "per_task_dx_attributes",
                           "docker_registry")
-    val RUNTIME_ATTRS = Set(DX_INSTANCE_TYPE_ATTR, "memory", "disks", "cpu", "docker")
+    val RUNTIME_ATTRS = Set("dx_instance_type", "memory", "disks", "cpu", "docker")
     val RUN_SPEC_ATTRS = Set("access", "executionPolicy", "restartableEntryPoints", "timeoutPolicy")
     val RUN_SPEC_ACCESS_ATTRS = Set("network", "project", "allProjects", "developer", "projectCreation")
     val RUN_SPEC_TIMEOUT_ATTRS = Set("days", "hours", "minutes")
@@ -271,17 +308,6 @@ object Extras {
                                                     "JobTimeoutExceeded", "*")
     val TASK_DX_ATTRS = Set("runSpec", "details")
     val DX_DETAILS_ATTRS = Set("upstreamProjects")
-
-
-    private def wdlExpressionFromJsValue(jsv: JsValue) : WomExpression = {
-        val wValue: WomValue = jsv match {
-            case JsBoolean(b) => WomBoolean(b.booleanValue)
-            case JsNumber(nmb) => WomInteger(nmb.intValue)
-            case JsString(s) => WomString(s)
-            case other => throw new Exception(s"Unsupported json value ${other}")
-        }
-        ValueAsAnExpression(wValue)
-    }
 
 
     private def checkedParseIntField(fields: Map[String, JsValue],
@@ -360,10 +386,10 @@ object Extras {
         return Some(m1)
     }
 
-    private def parseRuntimeAttrs(jsv: JsValue,
-                                  verbose: Verbose) : Map[String, WomExpression] = {
+    private def parseWdlRuntimeAttrs(jsv: JsValue,
+                                     verbose: Verbose) : WdlRuntimeAttrs = {
         if (jsv == JsNull)
-            return Map.empty
+            return WdlRuntimeAttrs(Map.empty)
         val fields = jsv.asJsObject.fields
         for (k <- fields.keys) {
             if (!(RUNTIME_ATTRS contains k))
@@ -371,11 +397,20 @@ object Extras {
                                            |we currently support ${RUNTIME_ATTRS}
                                            |""".stripMargin.replaceAll("\n", ""))
         }
+
+        def wdlValueFromJsValue(jsv: JsValue) : WomValue = {
+            jsv match {
+                case JsBoolean(b) => WomBoolean(b.booleanValue)
+                case JsNumber(nmb) => WomInteger(nmb.intValue)
+                case JsString(s) => WomString(s)
+                case other => throw new Exception(s"Unsupported json value ${other}")
+            }
+        }
         val attrs = fields
             .filter{ case (key,_) => RUNTIME_ATTRS contains key }
             .map{ case (name, jsValue) =>
-                name -> wdlExpressionFromJsValue(jsValue) }.toMap
-        return attrs
+                name -> wdlValueFromJsValue(jsValue) }.toMap
+        return WdlRuntimeAttrs(attrs)
     }
 
     private def parseExecutionPolicy(jsv: JsValue) : Option[DxExecPolicy] = {
@@ -579,7 +614,7 @@ object Extras {
                     }
             }
 
-        Extras(parseRuntimeAttrs(
+        Extras(parseWdlRuntimeAttrs(
                    checkedParseObjectField(fields, "default_runtime_attributes"),
                    verbose),
                parseTaskDxAttrs(
