@@ -67,8 +67,8 @@ wdl_v1_list = [
 
 # docker image tests
 docker_test_list = [
-    "biocontainers",
     "broad_genomics",
+    "broad_genomics_II",
     "private_registry",
     "native_docker_file_image",
     "native_docker_file_image_gzip",

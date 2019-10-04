@@ -160,16 +160,25 @@ case class TaskRunner(task: CallableTaskDefinition,
 
     // Figure out if a docker image is specified. If so, return it as a string.
     private def dockerImageEval(env: Map[String, WomValue]) : Option[String] = {
-        task.runtimeAttributes.attributes.get("docker") match {
-            case None => None
-            case Some(expr) =>
-                val result: ErrorOr[WomValue] =
-                    expr.evaluateValue(env, dxIoFunctions)
-                result match {
-                    case Valid(WomString(s)) => Some(s)
-                    case _ =>
-                        throw new AppInternalException(s"docker is not a string expression ${expr}")
+        val dImg : Option[WomValue] = task.runtimeAttributes.attributes.get("docker") match {
+            case None =>
+                defaultRuntimeAttrs match {
+                    case None => None
+                    case Some(dra) => dra.m.get("docker")
                 }
+            case Some(expr) =>
+                val result: ErrorOr[WomValue] = expr.evaluateValue(env, dxIoFunctions)
+                result match {
+                    case Valid(x) => Some(x)
+                    case Invalid(_) =>
+                        throw new AppInternalException(s"Invalid wom expression ${expr}")
+                }
+        }
+        dImg match {
+            case None => None
+            case Some(WomString(s)) => Some(s)
+            case Some(other) =>
+                throw new AppInternalException(s"docker is not a string expression ${other}")
         }
     }
 
