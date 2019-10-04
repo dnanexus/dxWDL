@@ -9,7 +9,7 @@ task broad_genomics {
     sed 's/Version: //'
   }
   runtime {
-      docker: "broadinstitute/genomes-in-the-cloud"
+      docker: "broadinstitute/genomes-in-the-cloud:2.3.1-1512499786"
       memory: "3 GB"
       cpu: "1"
       disks: "local-disk 10 HDD"

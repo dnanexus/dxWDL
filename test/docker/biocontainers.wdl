@@ -2,10 +2,10 @@ version 1.0
 
 # check that the docker option is passed correctly from the extras file.
 
-task broad_genomics_II {
+task biocontainers {
     command {
         # check that bwa actually exists in the docker image
-        /usr/gitc/bwa
+        samtools --help
     }
     runtime {
         memory: "16 GB"

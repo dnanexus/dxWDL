@@ -1,5 +1,0 @@
-{
-  "default_runtime_attributes" : {
-    "docker" :  "broadinstitute/genomes-in-the-cloud"
-  }
-}

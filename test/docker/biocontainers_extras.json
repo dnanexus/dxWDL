@@ -1,0 +1,5 @@
+{
+  "default_runtime_attributes" : {
+    "docker" : "biocontainers/samtools:v1.7.0_cv4"
+  }
+}
