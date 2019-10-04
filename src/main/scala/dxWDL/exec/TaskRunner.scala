@@ -84,6 +84,7 @@ case class TaskRunner(task: CallableTaskDefinition,
                       dxPathConfig : DxPathConfig,
                       dxIoFunctions : DxIoFunctions,
                       jobInputOutput : JobInputOutput,
+                      defaultRuntimeAttrs : Option[WdlRuntimeAttrs],
                       runtimeDebugLevel: Int) {
     private val verbose = (runtimeDebugLevel >= 1)
     private val maxVerboseLevel = (runtimeDebugLevel == 2)
@@ -530,8 +531,14 @@ case class TaskRunner(task: CallableTaskDefinition,
 
         def evalAttr(attrName: String) : Option[WomValue] = {
             task.runtimeAttributes.attributes.get(attrName) match {
-                case None => None
-                case Some(expr) => Some(getErrorOr(expr.evaluateValue(inputs, dxIoFunctions)))
+                case None =>
+                    // try the defaults
+                    defaultRuntimeAttrs match {
+                        case None => None
+                        case Some(dra) => dra.m.get(attrName)
+                    }
+                case Some(expr) =>
+                    Some(getErrorOr(expr.evaluateValue(inputs, dxIoFunctions)))
             }
         }
 

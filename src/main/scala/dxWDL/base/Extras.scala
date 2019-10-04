@@ -217,22 +217,41 @@ case class DxDetails(upstreamProjects: Option[List[DxLicense]]){
     }
 }
 
-case class WdlRuntimeAttrs(dxInstanceType: Option[String],
-                           memory: Option[String],
-                           disks : Option[String],
-                           cpu : Option[String],
-                           docker : Option[String]) {
-    def getAttr(attrName : String) : Option[WomValue] = {
-        val v : Option[String] = attrName match {
-            case "dx_instance_type" => dxInstanceType
-            case "memory" => memory
-            case "disks" => disks
-            case "cpu" => cpu
-            case "docker" => docker
+// The available fields are:
+//    dx_instance_type"
+//    memory
+//    disks
+//    cpu
+//    docker
+//
+case class WdlRuntimeAttrs(m : Map[String, WomValue])
+
+// support automatic conversion to/from JsValue
+object WdlRuntimeAttrs extends DefaultJsonProtocol {
+    implicit object WdlRuntimeAttrsFormat extends RootJsonFormat[WdlRuntimeAttrs] {
+        private def readWomValue(value : JsValue) : WomValue = value match {
+            case JsBoolean(b) => WomBoolean(b.booleanValue)
+            case JsNumber(nmb) => WomInteger(nmb.intValue)
+            case JsString(s) => WomString(s)
+            case other => throw new Exception(s"Unsupported json value ${other}")
         }
-        v match {
-            case None => None
-            case Some(s) => Some(WomString(s))
+        private def writeWomValue(wValue : WomValue) : JsValue = wValue match {
+            case WomBoolean(b) => JsBoolean(b)
+            case WomInteger(i) => JsNumber(i)
+            case WomString(s) => JsString(s)
+            case other => throw new Exception(s"Unsupported wom value value ${other}")
+        }
+
+        def read(jsv : JsValue) : WdlRuntimeAttrs = {
+            val m = jsv.asJsObject.fields.map{ case (k,v) => k -> readWomValue(v) }.toMap
+            WdlRuntimeAttrs(m)
+        }
+
+        def write(wra : WdlRuntimeAttrs) : JsValue = {
+            val fields = wra.m.map{ case (k, v) =>
+                k -> writeWomValue(v)
+            }.toMap
+            JsObject(fields)
         }
     }
 }
@@ -241,7 +260,7 @@ case class DockerRegistry(registry: String,
                            username: String,
                            credentials: String)
 
-case class Extras(defaultRuntimeAttributes: Option[WdlRuntimeAttrs],
+case class Extras(defaultRuntimeAttributes: WdlRuntimeAttrs,
                   defaultTaskDxAttributes: Option[DxAttrs],
                   perTaskDxAttributes: Map[String, DxAttrs],
                   dockerRegistry : Option[DockerRegistry]) {
@@ -368,9 +387,9 @@ object Extras {
     }
 
     private def parseWdlRuntimeAttrs(jsv: JsValue,
-                                     verbose: Verbose) : Option[WdlRuntimeAttrs] = {
+                                     verbose: Verbose) : WdlRuntimeAttrs = {
         if (jsv == JsNull)
-            return None
+            return WdlRuntimeAttrs(Map.empty)
         val fields = jsv.asJsObject.fields
         for (k <- fields.keys) {
             if (!(RUNTIME_ATTRS contains k))
@@ -378,19 +397,20 @@ object Extras {
                                            |we currently support ${RUNTIME_ATTRS}
                                            |""".stripMargin.replaceAll("\n", ""))
         }
-        def jsToString(jsv : Option[JsValue]) : Option[String] = {
-            jsv.flatMap{
-                case JsNumber(nmb) => Some(nmb.intValue.toString)
-                case JsString(s) => Some(s)
+
+        def wdlValueFromJsValue(jsv: JsValue) : WomValue = {
+            jsv match {
+                case JsBoolean(b) => WomBoolean(b.booleanValue)
+                case JsNumber(nmb) => WomInteger(nmb.intValue)
+                case JsString(s) => WomString(s)
                 case other => throw new Exception(s"Unsupported json value ${other}")
             }
         }
-        val ra = WdlRuntimeAttrs(dxInstanceType = jsToString(fields.get("dx_instance_type")),
-                                 memory = jsToString(fields.get("memory")),
-                                 disks = jsToString(fields.get("disks")),
-                                 cpu = jsToString(fields.get("cpu")),
-                                 docker = jsToString(fields.get("docker")))
-        Some(ra)
+        val attrs = fields
+            .filter{ case (key,_) => RUNTIME_ATTRS contains key }
+            .map{ case (name, jsValue) =>
+                name -> wdlValueFromJsValue(jsValue) }.toMap
+        return WdlRuntimeAttrs(attrs)
     }
 
     private def parseExecutionPolicy(jsv: JsValue) : Option[DxExecPolicy] = {

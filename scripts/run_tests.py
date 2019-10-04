@@ -636,8 +636,6 @@ def main():
     argparser.add_argument("--compile-mode", help="Compilation mode")
     argparser.add_argument("--debug", help="Run applets with debug-hold, and allow ssh",
                            action="store_true", default=False)
-    argparser.add_argument("--do-not-build", help="Do not assemble the dxWDL jar file",
-                           action="store_true", default=False)
     argparser.add_argument("--force", help="Remove old versions of applets and workflows",
                            action="store_true", default=False)
     argparser.add_argument("--folder", help="Use an existing folder, instead of building dxWDL")
@@ -697,8 +695,7 @@ def main():
     }
 
     # build the dxWDL jar file, only on us-east-1
-    if not args.do_not_build:
-        util.build(project, base_folder, version_id, top_dir, test_dict)
+    util.build(project, base_folder, version_id, top_dir, test_dict)
 
     if args.unlocked:
         # Disable all locked workflows

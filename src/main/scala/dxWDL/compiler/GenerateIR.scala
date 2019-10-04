@@ -11,7 +11,7 @@ import dxWDL.base._
 import dxWDL.util._
 
 case class GenerateIR(verbose: Verbose,
-                      defaultRuntimeAttrs: Option[WdlRuntimeAttrs]) {
+                      defaultRuntimeAttrs: WdlRuntimeAttrs) {
     val verbose2 : Boolean = verbose.containsKey("GenerateIR")
 
     def sortByDependencies(allCallables: Vector[Callable]) : Vector[Callable] = {

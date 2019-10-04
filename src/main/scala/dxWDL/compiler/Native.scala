@@ -689,8 +689,13 @@ case class Native(dxWDLrtId: Option[String],
         val womSourceCode = Utils.gzipAndBase64Encode(applet.womSourceCode)
         val dbOpaque = InstanceTypeDB.opaquePrices(instanceTypeDB)
         val dbOpaqueInstance = Utils.gzipAndBase64Encode(dbOpaque.toJson.prettyPrint)
+        val runtimeAttrs = extras match {
+            case None => JsNull
+            case Some(ext) => ext.defaultRuntimeAttributes.toJson
+        }
         val auxInfo = Map("womSourceCode" -> JsString(womSourceCode),
-                           "instanceTypeDB" -> JsString(dbOpaqueInstance))
+                          "instanceTypeDB" -> JsString(dbOpaqueInstance),
+                          "runtimeAttrs" -> runtimeAttrs)
 
         // Links to applets that could get called at runtime. If
         // this applet is copied, we need to maintain referential integrity.

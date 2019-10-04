@@ -527,6 +527,7 @@ object Main extends App {
                            jobOutputPath: Path,
                            dxPathConfig : DxPathConfig,
                            dxIoFunctions : DxIoFunctions,
+                           defaultRuntimeAttributes : Option[WdlRuntimeAttrs],
                            rtDebugLvl: Int): Termination = {
         // Parse the inputs, convert to WOM values. Delay downloading files
         // from the platform, we may not need to access them.
@@ -543,7 +544,7 @@ object Main extends App {
         val inputs = jobInputOutput.loadInputs(originalInputs, task)
         val taskRunner = exec.TaskRunner(task, taskSourceCode, typeAliases, instanceTypeDB,
                                          dxPathConfig, dxIoFunctions, jobInputOutput,
-                                         rtDebugLvl)
+                                         defaultRuntimeAttributes, rtDebugLvl)
 
         // Running tasks
         op match {
@@ -593,6 +594,7 @@ object Main extends App {
                                    jobOutputPath: Path,
                                    dxPathConfig : DxPathConfig,
                                    dxIoFunctions : DxIoFunctions,
+                                   defaultRuntimeAttributes : Option[WdlRuntimeAttrs],
                                    rtDebugLvl: Int): Termination = {
         val verbose = rtDebugLvl > 0
         val dxProject = DxUtils.dxEnv.getProjectContext()
@@ -618,6 +620,7 @@ object Main extends App {
                                                            dxPathConfig, dxIoFunctions,
                                                            inputsRaw,
                                                            fragInputOutput,
+                                                           defaultRuntimeAttributes,
                                                            rtDebugLvl)
                     fragRunner.apply(fragInputs.blockPath, fragInputs.env, RunnerWfFragmentMode.Launch)
                 case InternalOp.Collect =>
@@ -627,6 +630,7 @@ object Main extends App {
                                                            dxPathConfig, dxIoFunctions,
                                                            inputsRaw,
                                                            fragInputOutput,
+                                                           defaultRuntimeAttributes,
                                                            rtDebugLvl)
                     fragRunner.apply(fragInputs.blockPath, fragInputs.env, RunnerWfFragmentMode.Collect)
                 case InternalOp.WfInputs =>
@@ -663,7 +667,8 @@ object Main extends App {
     // details field stored on the platform
     private def retrieveFromDetails(jobInfoPath: Path) : (String,
                                                           InstanceTypeDB,
-                                                          JsValue) = {
+                                                          JsValue,
+                                                          Option[WdlRuntimeAttrs]) = {
         val jobInfo = Utils.readFileContent(jobInfoPath).parseJson
         val applet: DXApplet = jobInfo.asJsObject.fields.get("applet") match {
             case None =>
@@ -690,7 +695,12 @@ object Main extends App {
         val dbRaw = Utils.base64DecodeAndGunzip(instanceTypeDBEncoded)
         val instanceTypeDB = dbRaw.parseJson.convertTo[InstanceTypeDB]
 
-        (womSourceCode, instanceTypeDB, details)
+        val runtimeAttrs : Option[WdlRuntimeAttrs] = details.asJsObject.fields.get("runtimeAttrs") match {
+            case None => None
+            case Some(JsNull) => None
+            case Some(x) => Some(x.convertTo[WdlRuntimeAttrs])
+        }
+        (womSourceCode, instanceTypeDB, details, runtimeAttrs)
     }
 
     // Make a list of all the files cloned for access by this applet.
@@ -723,7 +733,8 @@ object Main extends App {
 
                 // Get the WOM source code (currently WDL, could be also CWL in the future)
                 // Parse the inputs, convert to WOM values.
-                val (womSourceCode, instanceTypeDB, metaInfo) = retrieveFromDetails(jobInfoPath)
+                val (womSourceCode, instanceTypeDB, metaInfo, defaultRuntimeAttrs) =
+                    retrieveFromDetails(jobInfoPath)
 
                 try {
                     op match {
@@ -734,14 +745,16 @@ object Main extends App {
                                 InternalOp.WorkflowOutputReorg =>
                             workflowFragAction(op, womSourceCode, instanceTypeDB, metaInfo,
                                                jobInputPath, jobOutputPath,
-                                               dxPathConfig, dxIoFunctions, rtDebugLvl)
+                                               dxPathConfig, dxIoFunctions,
+                                               defaultRuntimeAttrs, rtDebugLvl)
                         case InternalOp.TaskCheckInstanceType|
                                 InternalOp.TaskEpilog|
                                 InternalOp.TaskProlog|
                                 InternalOp.TaskRelaunch =>
                             taskAction(op, womSourceCode, instanceTypeDB,
                                        jobInputPath, jobOutputPath,
-                                       dxPathConfig, dxIoFunctions, rtDebugLvl)
+                                       dxPathConfig, dxIoFunctions,
+                                       defaultRuntimeAttrs, rtDebugLvl)
                     }
                 } catch {
                     case e : Throwable =>
