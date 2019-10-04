@@ -8,7 +8,7 @@ import wom.executable.WomBundle
 import wom.types._
 import wom.values._
 
-import dxWDL.base.Utils
+import dxWDL.base.{Utils, WdlRuntimeAttrs}
 import dxWDL.util.{DxIoFunctions, DxInstanceType, DxPathConfig, InstanceTypeDB, ParseWomSourceFile}
 
 // This test module requires being logged in to the platform.
@@ -149,7 +149,8 @@ class TaskRunnerTest extends FlatSpec with Matchers {
         val jobInputOutput = new JobInputOutput(dxIoFunctions, runtimeDebugLevel, womBundle.typeAliases)
         val taskRunner = TaskRunner(task, taskSourceCode, womBundle.typeAliases,
                                     instanceTypeDB,
-                                    dxPathConfig, dxIoFunctions, jobInputOutput, 0)
+                                    dxPathConfig, dxIoFunctions, jobInputOutput,
+                                    Some(WdlRuntimeAttrs(Map.empty)), 0)
         val inputsRelPaths = taskRunner.jobInputOutput.loadInputs(JsObject(inputsOrg), task)
         val inputs = inputsRelPaths.map{
             case (inpDef, value) => (inpDef, addBaseDir(value))

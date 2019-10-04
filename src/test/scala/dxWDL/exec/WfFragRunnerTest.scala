@@ -13,7 +13,7 @@ import wom.graph.expression._
 import wom.values._
 import wom.types._
 
-import dxWDL.base.{Utils, RunnerWfFragmentMode}
+import dxWDL.base.{RunnerWfFragmentMode, Utils, WdlRuntimeAttrs}
 import dxWDL.dx.ExecLinkInfo
 import dxWDL.util.{Block, DxIoFunctions, DxInstanceType, DxPathConfig, InstanceTypeDB, ParseWomSourceFile}
 
@@ -59,6 +59,7 @@ class WfFragRunnerTest extends FlatSpec with Matchers {
                                           dxIoFunctions,
                                           JsNull,
                                           fragInputOutput,
+                                          Some(WdlRuntimeAttrs(Map.empty)),
                                           runtimeDebugLevel)
         (wf, fragRunner)
     }

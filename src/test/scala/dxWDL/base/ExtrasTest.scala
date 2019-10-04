@@ -4,10 +4,7 @@ import com.dnanexus.AccessLevel
 import dxWDL.compiler.EdgeTest
 import org.scalatest.{FlatSpec, Matchers}
 import spray.json._
-import wom.expression.WomExpression
-import wom.types._
 import wom.values._
-import dxWDL.util.WomValueAnalysis
 
 class ExtrasTest extends FlatSpec with Matchers {
     val verbose = Verbose(true, true, Set.empty)
@@ -237,12 +234,12 @@ class ExtrasTest extends FlatSpec with Matchers {
                |}""".stripMargin.parseJson
 
         val extras = Extras.parse(runtimeAttrs, verbose)
-        val dockerOpt: Option[WomExpression] = extras.defaultRuntimeAttributes.get("docker")
+        val dockerOpt: Option[WomValue] = extras.defaultRuntimeAttributes.m.get("docker")
         dockerOpt match {
             case None =>
                 throw new Exception("Wrong type for dockerOpt")
             case Some(docker) =>
-                 WomValueAnalysis.evalConst(WomStringType, docker) should equal (WomString("quay.io/encode-dcc/atac-seq-pipeline:v1"))
+                 docker should equal (WomString("quay.io/encode-dcc/atac-seq-pipeline:v1"))
         }
     }
 
@@ -256,7 +253,7 @@ class ExtrasTest extends FlatSpec with Matchers {
                |}""".stripMargin.parseJson
 
         val extrasEmpty = Extras.parse(rtEmpty, verbose)
-        extrasEmpty.defaultRuntimeAttributes should equal(Map.empty)
+        extrasEmpty.defaultRuntimeAttributes should equal(WdlRuntimeAttrs(Map.empty))
     }
 
     it should "accept per task attributes" in {
