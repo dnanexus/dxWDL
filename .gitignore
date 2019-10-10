@@ -28,3 +28,6 @@ test/scratch
 applet_resources/
 src/main/resources/dxWDL_runtime.conf
 *.tmp
+
+.idea
+.
