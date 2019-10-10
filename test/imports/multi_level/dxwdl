@@ -1,0 +1,14 @@
+#!/bin/bash -e
+eval "$(dx env --bash)"
+DXWDL_VERSION=v1.32
+echo $DXWDL_VERSION
+docker run \
+     --rm \
+     -e DX_SECURITY_CONTEXT \
+     -e DX_APISERVER_PROTOCOL \
+     -e DX_APISERVER_HOST \
+     -e DX_APISERVER_PORT \
+     -e DX_PROJECT_CONTEXT_ID \
+     --volume "$(pwd)":"$(pwd)" \
+     --workdir "$(pwd)" \
+     dnanexus/dxwdl:${DXWDL_VERSION} "$@"

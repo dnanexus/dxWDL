@@ -49,6 +49,9 @@ wdl_v1_list = [
     "param_passing",
     "nested_scatter",
 
+    # Map with a File key
+    "map_file_key",
+
     # defaults and parameter passing
     "top",
     "subworkflow_with_default",
@@ -114,9 +117,6 @@ single_tasks_list = [
 
 # Tests run in continuous integration. We remove the native app test,
 # because we don't want to give permissions for creating platform apps.
-#ci_test_list = copy.deepcopy(medium_test_list)
-#ci_test_list.remove("call_native_app")
-#ci_test_list.remove("platform_asset")
 ci_test_list = [
     "advanced",
     "call_native",
