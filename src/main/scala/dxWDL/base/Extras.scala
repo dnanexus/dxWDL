@@ -303,7 +303,7 @@ object Extras {
                           "per_task_dx_attributes",
                           "docker_registry",
                           "custom_reorg")
-    val RUNTIME_ATTRS = Set("dx_instance_type", "memory", "disks", "cpu", "docker")
+    val RUNTIME_ATTRS = Set("dx_instance_type", "memory", "disks", "cpu", "docker",
                           "docker_registry",
                           "custom_reorg")
     val RUN_SPEC_ATTRS = Set("access", "executionPolicy", "restartableEntryPoints", "timeoutPolicy")
@@ -331,6 +331,16 @@ object Extras {
         fields.get(fieldName) match {
             case None => None
             case Some(JsString(str)) => Some(str)
+            case Some(other) => throw new Exception(s"Malformed ${fieldName} (${other})")
+        }
+    }
+
+    private def checkedParseStringFieldReplaceNull(fields: Map[String, JsValue],
+                                        fieldName: String) : Option[String] = {
+        fields.get(fieldName) match {
+            case None => None
+            case Some(JsString(str)) => Some(str)
+            case Some(JsNull) => Some("")
             case Some(other) => throw new Exception(s"Malformed ${fieldName} (${other})")
         }
     }
@@ -599,22 +609,9 @@ object Extras {
                                         |""".stripMargin.replaceAll("\n", ""))
         }
 
-        trace(
-            true,
-            s"""|Writing your own applet for reorganization purposes is tricky. If you are not careful,
-               |it may misplace or outright delete files.
-               |The applet: ${applet_id} requires CONTRIBUTE project access,
-               |so it can move files and folders around and has to be idempotent, so that if the instance it runs on crashes, it can safely restart. It has to be careful about inputs that are also outputs. Normally, these should not be moved. It should use bulk object operations, so as not to overload the API server.'
-               |You can refer to this example:
-               |
-               |https://github.com/dnanexus/dxWDL/blob/master/doc/ExpertOptions.md#use-your-own-applet
-            """.stripMargin.replaceAll("\n", " ")
-            )
 
         val reorgAppId: String = checkedParseStringField(fields, "app_id") match {
             case None => throw new IllegalArgumentException("app_id must be specified in the custom_reorg section.")
-            case Some(JsString(str)) => Some(str)
-            case Some(JsNull) => Some("")
             case Some(x) => x
         }
 
@@ -623,10 +620,20 @@ object Extras {
                 "inputs must be specified in the custom_reorg section. " +
                 "Please set the value to null if there is no input."
             )
-            case Some(JsString(str)) => Some(str)
-            case Some(JsNull) => Some("")
             case Some(x) => x
         }
+
+        Utils.trace(
+            true,
+            s"""|Writing your own applet for reorganization purposes is tricky. If you are not careful,
+                |it may misplace or outright delete files.
+                |The applet: ${reorgAppId} requires CONTRIBUTE project access,
+                |so it can move files and folders around and has to be idempotent, so that if the instance it runs on crashes, it can safely restart. It has to be careful about inputs that are also outputs. Normally, these should not be moved. It should use bulk object operations, so as not to overload the API server.'
+                |You can refer to this example:
+                |
+                |https://github.com/dnanexus/dxWDL/blob/master/doc/ExpertOptions.md#use-your-own-applet
+            """.stripMargin.replaceAll("\n", " ")
+        )
 
         Some(ReorgAttrs(reorgAppId, reorgInput))
     }
@@ -676,7 +683,7 @@ object Extras {
                    checkedParseObjectField(fields, "docker_registry"),
                    verbose),
                 parseCustomReorgAttrs(
-                    fields, verbose
+                    checkedParseObjectField(fields, fieldName = "custom_reorg"), verbose
                 )
         )
 
