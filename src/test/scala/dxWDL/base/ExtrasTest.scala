@@ -185,6 +185,83 @@ class ExtrasTest extends FlatSpec with Matchers {
         }
     }
 
+    it should "parse the custom-reorg object" taggedAs(EdgeTest) in {
+
+        val app_id: String = "applet-123456"
+        val inputs: String = "dx://file-123456"
+        val reorg: JsValue   =
+            s"""|{
+               | "custom_reorg" : {
+               |    "app_id" : "${app_id}",
+               |    "inputs" : "${inputs}"
+               |  }
+               |}
+               |""".stripMargin.parseJson
+
+        val extras= Extras.parse(reorg, verbose)
+        extras.customReorgAttributes  should be (
+            Some(ReorgAttrs(app_id, inputs))
+        )
+    }
+
+    it should "throw IllegalArgumentException due to missing app_id" taggedAs(EdgeTest) in {
+
+        val inputs: String = "dx://file-123456"
+        val reorg: JsValue   =
+            s"""|{
+                | "custom_reorg" : {
+                |    "inputs" : "${inputs}"
+                |  }
+                |}
+                |""".stripMargin.parseJson
+
+
+        val thrown = intercept[IllegalArgumentException] {
+            Extras.parse(reorg, verbose)
+        }
+
+        thrown.getMessage should be ("app_id must be specified in the custom_reorg section.")
+    }
+
+    it should "throw IllegalArgumentException due to missing inputs in custom_reorg section" taggedAs(EdgeTest) in {
+
+        val app_id: String = "applet-123456"
+        val reorg: JsValue   =
+            s"""|{
+                | "custom_reorg" : {
+                |    "app_id" : "${app_id}"
+                |  }
+                |}
+                |""".stripMargin.parseJson
+
+
+        val thrown = intercept[IllegalArgumentException] {
+            Extras.parse(reorg, verbose)
+        }
+
+        //thrown.getMessage should contain  ("inputs must be specified in the custom_reorg section.")
+        thrown.getMessage should be  (
+            "inputs must be specified in the custom_reorg section. Please set the value to null if there is no input.")
+    }
+
+    it should "Allow inputs to be null in custom reorg" taggedAs(EdgeTest) in {
+
+      val app_id: String = "applet-123456"
+      val reorg: JsValue   =
+        s"""|{
+            | "custom_reorg" : {
+            |     "app_id" : "${app_id}",
+            |    "inputs" : null
+            |  }
+            |}
+            |""".stripMargin.parseJson
+
+
+      val extras = Extras.parse(reorg, verbose)
+      extras.customReorgAttributes should be (
+        Some(ReorgAttrs(app_id, ""))
+      )
+  }
 
     it should "generate valid JSON execution policy" in {
         val expectedJs : JsValue =
@@ -200,6 +277,7 @@ class ExtrasTest extends FlatSpec with Matchers {
 
         val execPolicy = DxExecPolicy(Some(Map("*" -> 5)),
                                       Some(4))
+
         JsObject(execPolicy.toJson) should be(expectedJs)
     }
 
@@ -606,7 +684,6 @@ class ExtrasTest extends FlatSpec with Matchers {
         )
 
         val detailsJson = dxAttrs.getDetailsJson
-
         expected should be (detailsJson)
     }
 }
