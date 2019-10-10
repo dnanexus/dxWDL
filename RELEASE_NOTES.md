@@ -1,5 +1,8 @@
 # Release Notes
 
+## 1.33
+- Upgrade to Cromwell 47
+
 ## 1.32 4-Oct-2019
 - Upgrade to Cromwell 46.1
 - Retrying docker pull at runtime.
