@@ -1,6 +1,7 @@
 package dxWDL.base
 
 import com.dnanexus.AccessLevel
+import com.dnanexus.exceptions.ResourceNotFoundException
 import dxWDL.compiler.EdgeTest
 import org.scalatest.{FlatSpec, Matchers}
 import spray.json._
@@ -187,7 +188,7 @@ class ExtrasTest extends FlatSpec with Matchers {
 
     it should "parse the custom-reorg object" taggedAs(EdgeTest) in {
 
-        val app_id: String = "applet-123456"
+        val app_id: String = "applet-FJqZk8j0jy8xb42JK2x0Gk7B"
         val inputs: String = "dx://file-123456"
         val reorg: JsValue   =
             s"""|{
@@ -225,7 +226,7 @@ class ExtrasTest extends FlatSpec with Matchers {
 
     it should "throw IllegalArgumentException due to missing inputs in custom_reorg section" taggedAs(EdgeTest) in {
 
-        val app_id: String = "applet-123456"
+        val app_id: String = "applet-FJqZk8j0jy8xb42JK2x0Gk7B"
         val reorg: JsValue   =
             s"""|{
                 | "custom_reorg" : {
@@ -241,12 +242,13 @@ class ExtrasTest extends FlatSpec with Matchers {
 
         //thrown.getMessage should contain  ("inputs must be specified in the custom_reorg section.")
         thrown.getMessage should be  (
-            "inputs must be specified in the custom_reorg section. Please set the value to null if there is no input.")
+            "inputs must be specified in the custom_reorg section. Please set the value to null if there is no input."
+        )
     }
 
     it should "Allow inputs to be null in custom reorg" taggedAs(EdgeTest) in {
 
-      val app_id: String = "applet-123456"
+      val app_id: String = "applet-FJqZk8j0jy8xb42JK2x0Gk7B"
       val reorg: JsValue   =
         s"""|{
             | "custom_reorg" : {
@@ -263,7 +265,51 @@ class ExtrasTest extends FlatSpec with Matchers {
       )
   }
 
-    it should "generate valid JSON execution policy" in {
+  it should "throw IllegalArgumentException due to invalid applet ID" taggedAs(EdgeTest) in {
+
+    val app_id : String = "applet-123456"
+    val reorg : JsValue =
+        s"""|{
+           |  "custom_reorg" : {
+           |      "app_id" : "${app_id}",
+           |      "inputs": null
+           |   }
+           |}
+           |""".stripMargin.parseJson
+
+    val thrown = intercept[IllegalArgumentException] {
+      Extras.parse(reorg, verbose)
+    }
+
+    thrown.getMessage should be  (
+      s"dxId must match applet-[A-Za-z0-9]{24}"
+    )
+
+  }
+
+  it should "throw ResourceNotFoundException due to non-existant applet" taggedAs(EdgeTest) in {
+
+    val app_id : String = "applet-mPX7K2j0Gv2K2jXF75Bf21v2"
+    val reorg : JsValue =
+      s"""|{
+          |  "custom_reorg" : {
+          |      "app_id" : "${app_id}",
+          |      "inputs": null
+          |   }
+          |}
+          |""".stripMargin.parseJson
+
+    val thrown = intercept[ResourceNotFoundException] {
+      Extras.parse(reorg, verbose)
+    }
+
+    thrown.getMessage should be  (
+      s""""${app_id}" is not a recognized ID"""
+    )
+
+  }
+
+  it should "generate valid JSON execution policy" in {
         val expectedJs : JsValue =
             """|{
                | "executionPolicy": {

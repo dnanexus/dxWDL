@@ -4,6 +4,9 @@ package dxWDL.base
 // Also, allows dnanexus specific configuration per task.
 
 import com.dnanexus.AccessLevel
+import com.dnanexus.DXApplet
+import com.dnanexus.DXAPI
+import com.dnanexus.exceptions.ResourceNotFoundException
 import spray.json._
 import DefaultJsonProtocol._
 import wom.values._
@@ -622,6 +625,11 @@ object Extras {
             )
             case Some(x) => x
         }
+
+        // if reorgAppId is invalid, DXApplet.getInstance will throw an IllegalArgumentException
+        val app: DXApplet = DXApplet.getInstance(reorgAppId)
+        // if reorgAppId cannot be found, describe() will throw a ResourceNotFoundException
+        val appDescribe: DXApplet.Describe = app.describe()
 
         Utils.trace(
             true,
