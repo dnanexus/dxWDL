@@ -600,16 +600,13 @@ object Extras {
         Some(DockerRegistry(registry, username, credentials))
     }
 
-    def parseCustomReorgAttrs(jsv: JsValue, verbose: Verbose): Option[ReorgAttrs] = {
-        if (jsv == JsNull)
-            return None
+    def checkAttrs(fields: Map[String, JsValue]): (String, String) = {
 
-        val fields = jsv.asJsObject.fields
         for (k <- fields.keys) {
             if (!(CUSTOM_REORG_ATTRS contains k))
                 throw new IllegalArgumentException(s"""|Unsupported custom reorg attribute ${k},
-                                        |we currently support ${CUSTOM_REORG_ATTRS}
-                                        |""".stripMargin.replaceAll("\n", ""))
+                                                       |we currently support ${CUSTOM_REORG_ATTRS}
+                                                       |""".stripMargin.replaceAll("\n", ""))
         }
 
 
@@ -621,11 +618,22 @@ object Extras {
         val reorgInput: String = checkedParseStringFieldReplaceNull(fields, "inputs") match {
             case None => throw new IllegalArgumentException(
                 "inputs must be specified in the custom_reorg section. " +
-                "Please set the value to null if there is no input."
+                  "Please set the value to null if there is no input."
             )
             case Some(x) => x
         }
 
+        (reorgAppId,reorgInput)
+
+    }
+
+    def parseCustomReorgAttrs(jsv: JsValue, verbose: Verbose): Option[ReorgAttrs] = {
+        if (jsv == JsNull)
+            return None
+
+        val fields = jsv.asJsObject.fields
+        // check required inputs are supplied
+        val (reorgAppId, reorgInput) = checkAttrs(fields)
         // if reorgAppId is invalid, DXApplet.getInstance will throw an IllegalArgumentException
         val app: DXApplet = DXApplet.getInstance(reorgAppId)
         // if reorgAppId cannot be found, describe() will throw a ResourceNotFoundException

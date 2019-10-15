@@ -325,7 +325,7 @@ class ExtrasTest extends FlatSpec with Matchers {
                                       Some(4))
 
         JsObject(execPolicy.toJson) should be(expectedJs)
-    }
+  }
 
     it should "generate valid JSON timeout policy" in {
         val expectedJs : JsValue =
