@@ -1,9 +1,10 @@
 # Release Notes
 
-## 1.33
+## 1.33 15-Oct-2019
 - Upgrade to Cromwell 47
 - Protect 300MiB of memory for dxfuse, if it is running. We don't want it killed by the OOM if the user
-  processes use too much memory. This works only when using docker images.
+processes use too much memory. This works only when using docker images.
+- Fixed bug with comparision of tasks.
 
 ## 1.32 4-Oct-2019
 - Upgrade to Cromwell 46.1
