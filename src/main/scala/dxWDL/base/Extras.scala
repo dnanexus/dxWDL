@@ -5,8 +5,9 @@ package dxWDL.base
 
 import com.dnanexus.AccessLevel
 import com.dnanexus.DXApplet
-import com.dnanexus.DXAPI
-import com.dnanexus.exceptions.ResourceNotFoundException
+import com.dnanexus.DXEnvironment
+import com.dnanexus.DXProject
+import com.dnanexus.exceptions.PermissionDeniedException
 import spray.json._
 import DefaultJsonProtocol._
 import wom.values._
@@ -600,7 +601,7 @@ object Extras {
         Some(DockerRegistry(registry, username, credentials))
     }
 
-    def checkAttrs(fields: Map[String, JsValue]): (String, String) = {
+    private def checkAttrs(fields: Map[String, JsValue]): (String, String) = {
 
         for (k <- fields.keys) {
             if (!(CUSTOM_REORG_ATTRS contains k))
@@ -638,6 +639,19 @@ object Extras {
         val app: DXApplet = DXApplet.getInstance(reorgAppId)
         // if reorgAppId cannot be found, describe() will throw a ResourceNotFoundException
         val appDescribe: DXApplet.Describe = app.describe()
+
+        // obtain the access level
+        val environ: DXEnvironment = DXEnvironment.create()
+        val proj: DXProject = environ.getProjectContext()
+        val projDescribe: DXProject.Describe = proj.describe()
+        val accessLevel: String = projDescribe.getAccessLevel()
+
+        // check if access level is CONTRIBUTE or ADMINISTRATOR
+        if ( accessLevel == "VIEW" || accessLevel == "NONE" || accessLevel == "UPLOAD" ) {
+
+            throw new PermissionDeniedException("ERROR: User does not have CONTRIBUTOR or ADMINISTRATOR access and this is required for the custom reorg app.", -1)
+
+        }
 
         Utils.trace(
             true,
@@ -699,7 +713,8 @@ object Extras {
                    checkedParseObjectField(fields, "docker_registry"),
                    verbose),
                 parseCustomReorgAttrs(
-                    checkedParseObjectField(fields, fieldName = "custom_reorg"), verbose
+                    checkedParseObjectField(fields, fieldName = "custom_reorg"),
+                    verbose
                 )
         )
 

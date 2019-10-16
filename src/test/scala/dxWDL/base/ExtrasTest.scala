@@ -2,6 +2,7 @@ package dxWDL.base
 
 import com.dnanexus.AccessLevel
 import com.dnanexus.exceptions.ResourceNotFoundException
+import com.dnanexus.exceptions.PermissionDeniedException
 import dxWDL.compiler.EdgeTest
 import org.scalatest.{FlatSpec, Matchers}
 import spray.json._
@@ -248,7 +249,7 @@ class ExtrasTest extends FlatSpec with Matchers {
 
     it should "Allow inputs to be null in custom reorg" taggedAs(EdgeTest) in {
 
-      val app_id: String = "applet-FJqZk8j0jy8xb42JK2x0Gk7B"
+      val app_id: String = "applet-FK09V880KFBPz8V905pZkB69"
       val reorg: JsValue   =
         s"""|{
             | "custom_reorg" : {
@@ -308,6 +309,33 @@ class ExtrasTest extends FlatSpec with Matchers {
     )
 
   }
+
+  it should "throw PermissionDeniedException due to insufficient user permissions in this project" taggedAs(EdgeTest) in {
+
+    val app_id : String = "applet-FK09V880KFBPz8V905pZkB69"
+    val reorg : JsValue =
+      s"""|{
+          |  "custom_reorg" : {
+          |      "app_id" : "${app_id}",
+          |      "inputs": null
+          |   }
+          |}
+          |""".stripMargin.parseJson
+
+    val thrown = intercept[PermissionDeniedException] {
+
+      Extras.parse(reorg, verbose)
+
+    }
+
+    thrown.getMessage should be (
+
+      "ERROR: User does not have CONTRIBUTOR or ADMINISTRATOR access and this is required for the custom reorg app."
+
+    )
+
+  }
+
 
   it should "generate valid JSON execution policy" in {
         val expectedJs : JsValue =
