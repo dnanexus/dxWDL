@@ -610,7 +610,6 @@ object Extras {
                                                        |""".stripMargin.replaceAll("\n", ""))
         }
 
-
         val reorgAppId: String = checkedParseStringField(fields, "app_id") match {
             case None => throw new IllegalArgumentException("app_id must be specified in the custom_reorg section.")
             case Some(x) => x
@@ -628,17 +627,7 @@ object Extras {
 
     }
 
-    def parseCustomReorgAttrs(jsv: JsValue, verbose: Verbose): Option[ReorgAttrs] = {
-        if (jsv == JsNull)
-            return None
-
-        val fields = jsv.asJsObject.fields
-        // check required inputs are supplied
-        val (reorgAppId, reorgInput) = checkAttrs(fields)
-        // if reorgAppId is invalid, DXApplet.getInstance will throw an IllegalArgumentException
-        val app: DXApplet = DXApplet.getInstance(reorgAppId)
-        // if reorgAppId cannot be found, describe() will throw a ResourceNotFoundException
-        val appDescribe: DXApplet.Describe = app.describe()
+    private def checkAccess() = {
 
         // obtain the access level
         val environ: DXEnvironment = DXEnvironment.create()
@@ -652,6 +641,23 @@ object Extras {
             throw new PermissionDeniedException("ERROR: User does not have CONTRIBUTOR or ADMINISTRATOR access and this is required for the custom reorg app.", -1)
 
         }
+
+    }
+
+    def parseCustomReorgAttrs(jsv: JsValue, verbose: Verbose): Option[ReorgAttrs] = {
+        if (jsv == JsNull)
+            return None
+
+        val fields = jsv.asJsObject.fields
+        // check required inputs are supplied
+        val (reorgAppId, reorgInput) = checkAttrs(fields)
+        // if reorgAppId is invalid, DXApplet.getInstance will throw an IllegalArgumentException
+        val app: DXApplet = DXApplet.getInstance(reorgAppId)
+        // if reorgAppId cannot be found, describe() will throw a ResourceNotFoundException
+        val appDescribe: DXApplet.Describe = app.describe()
+
+        // check access level
+        checkAccess()
 
         Utils.trace(
             true,
