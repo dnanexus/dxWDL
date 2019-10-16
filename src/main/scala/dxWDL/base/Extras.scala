@@ -5,6 +5,7 @@ package dxWDL.base
 
 import com.dnanexus.AccessLevel
 import com.dnanexus.DXApplet
+import com.dnanexus.DXFile
 import com.dnanexus.DXEnvironment
 import com.dnanexus.DXProject
 import com.dnanexus.exceptions.PermissionDeniedException
@@ -656,8 +657,18 @@ object Extras {
         // if reorgAppId cannot be found, describe() will throw a ResourceNotFoundException
         val appDescribe: DXApplet.Describe = app.describe()
 
+        // if provided, check that the fileID is valid and present
+        if ( reorgInput != "" ) {
+            // format dx file ID
+            val reorgFileID: String = reorgInput.replace("dx://", "")
+            // if input file  ID is invalid, DXFile.getInstance will thown an IllegalArgumentException
+            val file: DXFile = DXFile.getInstance(reorgFileID)
+            // if reorgFileID cannot be found, describe will throw a ResourceNotFoundException
+            val fileDescribe: DXFile.Describe = file.describe()
+        }
+
         // check access level
-        checkAccess()
+        //checkAccess()
 
         Utils.trace(
             true,

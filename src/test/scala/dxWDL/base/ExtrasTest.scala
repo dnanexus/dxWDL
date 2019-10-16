@@ -189,20 +189,22 @@ class ExtrasTest extends FlatSpec with Matchers {
 
     it should "parse the custom-reorg object" taggedAs(EdgeTest) in {
 
+        // app_id is sum app in project-FJ90qPj0jy8zYvVV9yz3F5gv
         val app_id: String = "applet-FJqZk8j0jy8xb42JK2x0Gk7B"
-        val inputs: String = "dx://file-123456"
+        // input is Readme.md file in project-FJ90qPj0jy8zYvVV9yz3F5gv
+        val input: String = "dx://file-FZBYqBQ0jy8qpqJz12gpXFf0"
         val reorg: JsValue   =
             s"""|{
                | "custom_reorg" : {
                |    "app_id" : "${app_id}",
-               |    "inputs" : "${inputs}"
+               |    "inputs" : "${input}"
                |  }
                |}
                |""".stripMargin.parseJson
 
-        val extras= Extras.parse(reorg, verbose)
+        val extras = Extras.parse(reorg, verbose)
         extras.customReorgAttributes  should be (
-            Some(ReorgAttrs(app_id, inputs))
+            Some(ReorgAttrs(app_id, input))
         )
     }
 
@@ -227,6 +229,7 @@ class ExtrasTest extends FlatSpec with Matchers {
 
     it should "throw IllegalArgumentException due to missing inputs in custom_reorg section" taggedAs(EdgeTest) in {
 
+        // app_id is sum app in project-FJ90qPj0jy8zYvVV9yz3F5gv
         val app_id: String = "applet-FJqZk8j0jy8xb42JK2x0Gk7B"
         val reorg: JsValue   =
             s"""|{
@@ -249,8 +252,9 @@ class ExtrasTest extends FlatSpec with Matchers {
 
     it should "Allow inputs to be null in custom reorg" taggedAs(EdgeTest) in {
 
-      val app_id: String = "applet-FK09V880KFBPz8V905pZkB69"
-      val reorg: JsValue   =
+      // app_id is sum app in project-FJ90qPj0jy8zYvVV9yz3F5gv
+      val app_id: String = "applet-FJqZk8j0jy8xb42JK2x0Gk7B"
+      val reorg: JsValue =
         s"""|{
             | "custom_reorg" : {
             |     "app_id" : "${app_id}",
@@ -268,6 +272,7 @@ class ExtrasTest extends FlatSpec with Matchers {
 
   it should "throw IllegalArgumentException due to invalid applet ID" taggedAs(EdgeTest) in {
 
+    // invalid applet ID
     val app_id : String = "applet-123456"
     val reorg : JsValue =
         s"""|{
@@ -290,6 +295,7 @@ class ExtrasTest extends FlatSpec with Matchers {
 
   it should "throw ResourceNotFoundException due to non-existant applet" taggedAs(EdgeTest) in {
 
+    // non-existant (made up) applet ID
     val app_id : String = "applet-mPX7K2j0Gv2K2jXF75Bf21v2"
     val reorg : JsValue =
       s"""|{
@@ -310,7 +316,58 @@ class ExtrasTest extends FlatSpec with Matchers {
 
   }
 
-  it should "throw PermissionDeniedException due to insufficient user permissions in this project" taggedAs(EdgeTest) in {
+  it should "throw IllegalArgumentException due to invalid file ID" taggedAs(EdgeTest) in {
+
+    // app_id is sum app in project-FJ90qPj0jy8zYvVV9yz3F5gv
+    val app_id : String = "applet-FJqZk8j0jy8xb42JK2x0Gk7B"
+    val file_id : String = "file-1223445"
+    val reorg : JsValue =
+      s"""|{
+          |  "custom_reorg" : {
+          |      "app_id" : "${app_id}",
+          |      "inputs": "${file_id}"
+          |   }
+          |}
+          |""".stripMargin.parseJson
+
+    val thrown = intercept[IllegalArgumentException] {
+      Extras.parse(reorg, verbose)
+    }
+
+    thrown.getMessage should be  (
+      s"dxId must match file-[A-Za-z0-9]{24}"
+    )
+
+  }
+
+  it should "throw ResourceNotFoundException due to non-existant file" taggedAs(EdgeTest) in {
+
+    // app_id is sum app in project-FJ90qPj0jy8zYvVV9yz3F5gv
+    val app_id : String = "applet-FJqZk8j0jy8xb42JK2x0Gk7B"
+    // input is non-existant (made up) file ID
+    val input : String = "dx://file-AZBYlBQ0jy1qpqJz17gpXFf8"
+    val reorg : JsValue =
+      s"""|{
+          |  "custom_reorg" : {
+          |      "app_id" : "${app_id}",
+          |      "inputs": "${input}"
+          |   }
+          |}
+          |""".stripMargin.parseJson
+
+    val thrown = intercept[ResourceNotFoundException] {
+      Extras.parse(reorg, verbose)
+    }
+
+    val file_id : String = input.replace("dx://", "")
+
+    thrown.getMessage should be  (
+      s""""${file_id}" is not a recognized ID"""
+    )
+
+  }
+
+  /*it should "throw PermissionDeniedException due to insufficient user permissions in this project" taggedAs(EdgeTest) in {
 
     val app_id : String = "applet-FK09V880KFBPz8V905pZkB69"
     val reorg : JsValue =
@@ -334,7 +391,7 @@ class ExtrasTest extends FlatSpec with Matchers {
 
     )
 
-  }
+  }*/
 
 
   it should "generate valid JSON execution policy" in {
