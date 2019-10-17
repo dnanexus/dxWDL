@@ -2,6 +2,7 @@
 
 import argparse
 import dxpy
+from dxpy.exceptions import DXJobFailureError
 import json
 import os
 import subprocess
@@ -55,16 +56,42 @@ def _wait_for_completion(jobs):
     print("awaiting completion ...")
     # wait for analysis to finish while working around Travis 10m console inactivity timeout
     noise = subprocess.Popen(["/bin/bash", "-c", "while true; do sleep 60; date; done"])
+    success = True
     try:
         for j in jobs:
             try:
                 j.wait_on_done()
             except DXJobFailureError:
                 print("job {} failed".format(j.get_id()))
+                success = False
     finally:
         noise.kill()
     print("done")
+    return success
 
+def _clone_to_all_regions():
+    jobs = []
+    for region in regions:
+        dest_proj_id = region2projid[region]
+        results = list(dxpy.find_data_objects(classname = "file",
+                                              visibility = "hidden",
+                                              name = asset_file_name,
+                                              project = dest_proj_id,
+                                              folder = folder))
+        file_ids = [p["id"] for p in results]
+        nfiles = len(file_ids)
+        if nfiles == 1:
+            continue
+        if nfiles > 1:
+            print("cleanup in {}, found {} files instead of 0/1".format(dest_proj_id, nfiles))
+            dxpy.DXProject(dest_proj_id).remove_objects(file_ids)
+        dxjob = _clone_asset_into_region(region,
+                                         dest_proj_id,
+                                         asset_file_name,
+                                         folder,
+                                         url)
+        jobs.append(dxjob)
+    return jobs
 
 def _clone_asset(record, folder, regions, project_dict):
     """
@@ -107,30 +134,12 @@ def _clone_asset(record, folder, regions, project_dict):
     print(region2projid)
 
     # Fire off a clone process for each region
-    jobs = []
-    for region in regions:
-        dest_proj_id = region2projid[region]
-        results = list(dxpy.find_data_objects(classname = "file",
-                                              visibility = "hidden",
-                                              name = asset_file_name,
-                                              project = dest_proj_id,
-                                              folder = folder))
-        file_ids = [p["id"] for p in results]
-        nfiles = len(file_ids)
-        if nfiles == 1:
-            continue
-        if nfiles > 1:
-            print("cleanup in {}, found {} files instead of 0/1".format(dest_proj_id, nfiles))
-            dxpy.DXProject(dest_proj_id).remove_objects(file_ids)
-        dxjob = _clone_asset_into_region(region,
-                                         dest_proj_id,
-                                         asset_file_name,
-                                         folder,
-                                         url)
-        jobs.append(dxjob)
-
     # Wait for the cloning to complete
-    _wait_for_completion(jobs)
+    for i in [1, 2, 3]:
+        jobs = _clone_to_all_regions()
+        retval = _wait_for_completion(jobs)
+        if retval:
+            break
 
     # make records for each file
     for region in regions:

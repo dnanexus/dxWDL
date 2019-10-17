@@ -2,23 +2,23 @@ version 1.0
 
 # check that files can be keys in a WDL map
 
-workflow no_file_key {
+workflow map_file_key {
   input {
      Map[File, String] file_key
   }
 
-  call no_file_key_support_task {
+  call map_file_key_support_task {
     input:
       file_key=file_key
   }
 
   output {
-    File file_key_map_output = no_file_key_support_task.file_key_map_output
+    File file_key_map_output = map_file_key_support_task.file_key_map_output
   }
 
 }
 
-task no_file_key_support_task {
+task map_file_key_support_task {
   input {
      Map[File, String] file_key
   }

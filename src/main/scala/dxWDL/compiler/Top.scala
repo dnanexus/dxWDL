@@ -152,7 +152,11 @@ case class Top(cOpt: CompilerOptions) {
                 allCallables.get(key) match {
                     case None =>
                         allCallables = allCallables + (key -> callable)
-                    case Some(existing) if (existing != callable) =>
+
+                    // The comparision is done with "toString", because otherwise two
+                    // identical definitions are somehow, through the magic of Scala,
+                    // unequal.
+                    case Some(existing) if (existing.toString != callable.toString) =>
                         Utils.error(s"""|${key} appears with two different callable definitions
                                         |1)
                                         |${callable}

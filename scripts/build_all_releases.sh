@@ -28,9 +28,15 @@ fi
 echo "version is $version"
 
 
-# echo "setting release tag on github"
-git tag $version
-git push origin $version
+currentHash=$(git rev-parse HEAD)
+possibleTags=$(git tag --contains $currentHash)
+if [[ $possibleTags == "" ]]; then
+    echo "setting release tag on github"
+    git tag $version
+    git push origin $version
+else
+    echo "Tag is already set"
+fi
 
 # build the release on staging
 echo "building staging release"

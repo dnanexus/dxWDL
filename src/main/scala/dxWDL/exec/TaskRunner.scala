@@ -251,9 +251,19 @@ case class TaskRunner(task: CallableTaskDefinition,
         }
     }
 
+    // Figure how much memory is available for this container/image
+    //
+    // We may need to check the cgroup itself. Not sure how portable that is.
+    //val totalAvailableMemoryBytes = Utils.readFileContent("/sys/fs/cgroup/memory/memory.limit_in_bytes").toInt
+    //
+    private def availableMemory() : Long = {
+        val mbean = ManagementFactory.getOperatingSystemMXBean()
+            .asInstanceOf[com.sun.management.OperatingSystemMXBean]
+        mbean.getTotalPhysicalMemorySize()
+    }
+
     private def getRuntimeEnvironment() : RuntimeEnvironment = {
-        val mbean = ManagementFactory.getOperatingSystemMXBean().asInstanceOf[com.sun.management.OperatingSystemMXBean]
-        val physicalMemorySize = mbean.getTotalPhysicalMemorySize()
+        val physicalMemorySize = availableMemory()
         val numCores = Runtime.getRuntime().availableProcessors()
 
         import eu.timepit.refined._
@@ -321,7 +331,8 @@ case class TaskRunner(task: CallableTaskDefinition,
         dxPathConfig.script.toFile.setExecutable(true)
     }
 
-    private def writeDockerSubmitBashScript(imgName: String) : Unit = {
+    private def writeDockerSubmitBashScript(imgName: String,
+                                            dxfuseRunning: Boolean) : Unit = {
         // The user wants to use a docker container with the
         // image [imgName].
         //
@@ -330,13 +341,15 @@ case class TaskRunner(task: CallableTaskDefinition,
         // the platform.
         //
 
-        // TODO
         // Limit the docker container to leave some memory for the rest of the
         // ongoing system services, for example, dxfuse.
-        //val headroom = Utils.DXFUSE_MEMORY_HEAD_ROOM
-        //val totalAvailableMemoryBytes = Utils.readFileContent("/sys/fs/cgroup/memory/memory.limit_in_bytes").toInt
-        //val memCap = totalAvailableMemoryBytes - headroom
 
+        val totalAvailableMemoryBytes = availableMemory()
+        val memCap =
+            if (dxfuseRunning)
+                totalAvailableMemoryBytes - Utils.DXFUSE_MAX_MEMORY_CONSUMPTION
+            else
+                totalAvailableMemoryBytes
         val dockerRunScript =
             s"""|#!/bin/bash -x
                 |
@@ -351,6 +364,7 @@ case class TaskRunner(task: CallableTaskDefinition,
                 |
                 |# run as in the original configuration
                 |docker run \\
+                |  --memory=${memCap} \\
                 |  --cidfile ${dxPathConfig.dockerCid} \\
                 |  $${extraFlags} \\
                 |  --entrypoint /bin/bash \\
@@ -467,7 +481,7 @@ case class TaskRunner(task: CallableTaskDefinition,
         docker match {
             case Some(img) =>
                 // write a script that launches the actual command inside a docker image.
-                writeDockerSubmitBashScript(img)
+                writeDockerSubmitBashScript(img, manifest2Js != JsNull)
             case None => ()
         }
 
