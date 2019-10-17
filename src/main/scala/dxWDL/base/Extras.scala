@@ -6,8 +6,6 @@ package dxWDL.base
 import com.dnanexus.AccessLevel
 import com.dnanexus.DXApplet
 import com.dnanexus.DXFile
-import com.dnanexus.DXEnvironment
-import com.dnanexus.DXProject
 import com.dnanexus.exceptions.PermissionDeniedException
 import spray.json._
 import DefaultJsonProtocol._
