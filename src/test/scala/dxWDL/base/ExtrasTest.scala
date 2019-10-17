@@ -189,8 +189,8 @@ class ExtrasTest extends FlatSpec with Matchers {
 
     it should "parse the custom-reorg object" taggedAs(EdgeTest) in {
 
-        // app_id is sum app in project-FJ90qPj0jy8zYvVV9yz3F5gv
-        val app_id: String = "applet-FJqZk8j0jy8xb42JK2x0Gk7B"
+        // app_id is mummer nucmer app in project-FJ90qPj0jy8zYvVV9yz3F5gv
+        val app_id: String = "applet-FKfZpF002fp738k1Jqz8vX1G"
         // input is Readme.md file in project-FJ90qPj0jy8zYvVV9yz3F5gv
         val input: String = "dx://file-FZBYqBQ0jy8qpqJz12gpXFf0"
         val reorg: JsValue   =
@@ -229,8 +229,8 @@ class ExtrasTest extends FlatSpec with Matchers {
 
     it should "throw IllegalArgumentException due to missing inputs in custom_reorg section" taggedAs(EdgeTest) in {
 
-        // app_id is sum app in project-FJ90qPj0jy8zYvVV9yz3F5gv
-        val app_id: String = "applet-FJqZk8j0jy8xb42JK2x0Gk7B"
+        // app_id is mummer nucmer app in project-FJ90qPj0jy8zYvVV9yz3F5gv
+        val app_id: String = "applet-FKfZpF002fp738k1Jqz8vX1G"
         val reorg: JsValue   =
             s"""|{
                 | "custom_reorg" : {
@@ -252,8 +252,8 @@ class ExtrasTest extends FlatSpec with Matchers {
 
     it should "Allow inputs to be null in custom reorg" taggedAs(EdgeTest) in {
 
-      // app_id is sum app in project-FJ90qPj0jy8zYvVV9yz3F5gv
-      val app_id: String = "applet-FJqZk8j0jy8xb42JK2x0Gk7B"
+      // app_id is mummer nucmer app in project-FJ90qPj0jy8zYvVV9yz3F5gv
+      val app_id: String = "applet-FKfZpF002fp738k1Jqz8vX1G"
       val reorg: JsValue =
         s"""|{
             | "custom_reorg" : {
@@ -318,8 +318,8 @@ class ExtrasTest extends FlatSpec with Matchers {
 
   it should "throw IllegalArgumentException due to invalid file ID" taggedAs(EdgeTest) in {
 
-    // app_id is sum app in project-FJ90qPj0jy8zYvVV9yz3F5gv
-    val app_id : String = "applet-FJqZk8j0jy8xb42JK2x0Gk7B"
+    // app_id is mummer nucmer app in project-FJ90qPj0jy8zYvVV9yz3F5gv
+    val app_id : String = "applet-FKfZpF002fp738k1Jqz8vX1G"
     val file_id : String = "file-1223445"
     val reorg : JsValue =
       s"""|{
@@ -342,8 +342,8 @@ class ExtrasTest extends FlatSpec with Matchers {
 
   it should "throw ResourceNotFoundException due to non-existant file" taggedAs(EdgeTest) in {
 
-    // app_id is sum app in project-FJ90qPj0jy8zYvVV9yz3F5gv
-    val app_id : String = "applet-FJqZk8j0jy8xb42JK2x0Gk7B"
+    // app_id is mummer nucmer app in project-FJ90qPj0jy8zYvVV9yz3F5gv
+    val app_id : String = "applet-FKfZpF002fp738k1Jqz8vX1G"
     // input is non-existant (made up) file ID
     val input : String = "dx://file-AZBYlBQ0jy1qpqJz17gpXFf8"
     val reorg : JsValue =
@@ -367,15 +367,16 @@ class ExtrasTest extends FlatSpec with Matchers {
 
   }
 
-  /*it should "throw PermissionDeniedException due to insufficient user permissions in this project" taggedAs(EdgeTest) in {
+  it should "throw PermissionDeniedException due to applet not having contribute access in the project" taggedAs(EdgeTest) in {
 
-    val app_id : String = "applet-FK09V880KFBPz8V905pZkB69"
-    val reorg : JsValue =
+    // app_id is sum app in project-FJ90qPj0jy8zYvVV9yz3F5gv
+    val app_id: String = "applet-FJqZk8j0jy8xb42JK2x0Gk7B"
+    val reorg: JsValue =
       s"""|{
-          |  "custom_reorg" : {
-          |      "app_id" : "${app_id}",
-          |      "inputs": null
-          |   }
+          | "custom_reorg" : {
+          |    "app_id" : "${app_id}",
+          |    "inputs": "null"
+          |  }
           |}
           |""".stripMargin.parseJson
 
@@ -386,13 +387,11 @@ class ExtrasTest extends FlatSpec with Matchers {
     }
 
     thrown.getMessage should be (
-
-      "ERROR: User does not have CONTRIBUTOR or ADMINISTRATOR access and this is required for the custom reorg app."
-
+        s"ERROR: Applet for custom reorg stage ${app_id} does not " +
+        s"have CONTRIBUTOR or ADMINISTRATOR access and this is required."
     )
 
-  }*/
-
+  }
 
   it should "generate valid JSON execution policy" in {
         val expectedJs : JsValue =

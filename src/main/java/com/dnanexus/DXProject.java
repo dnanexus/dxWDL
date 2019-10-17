@@ -45,8 +45,7 @@ public class DXProject extends DXContainer {
         private String id;
         @JsonProperty
         private String name;
-        @JsonProperty
-        private String level;
+
         /**
          * Creates a {@code Describe} object with all empty metadata.
          */
@@ -63,12 +62,6 @@ public class DXProject extends DXContainer {
             return this.name;
         }
 
-        /**
-         * Returns the access level of the user in this project.
-         *
-         * @return the access level
-         */
-        public String getAccessLevel() {return this.level;}
     }
 
     /**

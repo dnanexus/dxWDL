@@ -628,23 +628,6 @@ object Extras {
 
     }
 
-    private def checkAccess() = {
-
-        // obtain the access level
-        val environ: DXEnvironment = DXEnvironment.create()
-        val proj: DXProject = environ.getProjectContext()
-        val projDescribe: DXProject.Describe = proj.describe()
-        val accessLevel: String = projDescribe.getAccessLevel()
-
-        // check if access level is CONTRIBUTE or ADMINISTRATOR
-        if ( accessLevel == "VIEW" || accessLevel == "NONE" || accessLevel == "UPLOAD" ) {
-
-            throw new PermissionDeniedException("ERROR: User does not have CONTRIBUTOR or ADMINISTRATOR access and this is required for the custom reorg app.", -1)
-
-        }
-
-    }
-
     def parseCustomReorgAttrs(jsv: JsValue, verbose: Verbose): Option[ReorgAttrs] = {
         if (jsv == JsNull)
             return None
@@ -657,6 +640,22 @@ object Extras {
         // if reorgAppId cannot be found, describe() will throw a ResourceNotFoundException
         val appDescribe: DXApplet.Describe = app.describe()
 
+        // check applet has access to the projet
+        val accessJson = appDescribe.getAccess()
+        val projectAccess = accessJson.get("project")
+        val access: String = if ( projectAccess != null) {
+
+            projectAccess.toString.replace("\"", "")
+        }
+        else ""
+
+        if ( access != "CONTRIBUTE" && access != "ADMINISTER" ) {
+
+            throw new PermissionDeniedException(s"ERROR: Applet for custom reorg stage ${reorgAppId } does not " +
+                                                s"have CONTRIBUTOR or ADMINISTRATOR access and this is required.", -1)
+
+        }
+
         // if provided, check that the fileID is valid and present
         if ( reorgInput != "" ) {
             // format dx file ID
@@ -667,12 +666,9 @@ object Extras {
             val fileDescribe: DXFile.Describe = file.describe()
         }
 
-        // check access level
-        //checkAccess()
-
         Utils.trace(
             true,
-            s"""|Writing your own applet for reorganization purposes is tricky. If you are not careful,
+            """s|Writing your own applet for reorganization purposes is tricky. If you are not careful,
                 |it may misplace or outright delete files.
                 |The applet: ${reorgAppId} requires CONTRIBUTE project access,
                 |so it can move files and folders around and has to be idempotent, so that if the instance it runs on crashes, it can safely restart. It has to be careful about inputs that are also outputs. Normally, these should not be moved. It should use bulk object operations, so as not to overload the API server.'
