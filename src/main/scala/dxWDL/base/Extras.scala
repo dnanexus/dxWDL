@@ -622,21 +622,11 @@ object Extras {
             case Some(x) => x
         }
 
-        (reorgAppId,reorgInput)
+        return (reorgAppId,reorgInput)
 
     }
 
-    def parseCustomReorgAttrs(jsv: JsValue, verbose: Verbose): Option[ReorgAttrs] = {
-        if (jsv == JsNull)
-            return None
-
-        val fields = jsv.asJsObject.fields
-        // check required inputs are supplied
-        val (reorgAppId, reorgInput) = checkAttrs(fields)
-        // if reorgAppId is invalid, DXApplet.getInstance will throw an IllegalArgumentException
-        val app: DXApplet = DXApplet.getInstance(reorgAppId)
-        // if reorgAppId cannot be found, describe() will throw a ResourceNotFoundException
-        val appDescribe: DXApplet.Describe = app.describe()
+    def verifyReorgAppHasAccess(appDescribe: DXApplet.Describe, reorgAppId: String) = {
 
         // check applet has access to the projet
         val accessJson = appDescribe.getAccess()
@@ -650,9 +640,24 @@ object Extras {
         if ( access != "CONTRIBUTE" && access != "ADMINISTER" ) {
 
             throw new PermissionDeniedException(s"ERROR: Applet for custom reorg stage ${reorgAppId } does not " +
-                                                s"have CONTRIBUTOR or ADMINISTRATOR access and this is required.", -1)
+              s"have CONTRIBUTOR or ADMINISTRATOR access and this is required.", -1)
 
         }
+
+    }
+
+    def veryifyRorgApp(reorgAppId: String) = {
+
+        // if reorgAppId is invalid, DXApplet.getInstance will throw an IllegalArgumentException
+        val app: DXApplet = DXApplet.getInstance(reorgAppId)
+        // if reorgAppId cannot be found, describe() will throw a ResourceNotFoundException
+        val appDescribe: DXApplet.Describe = app.describe()
+        // verify reorg app has at least contribute access
+        verifyReorgAppHasAccess(appDescribe, reorgAppId)
+
+    }
+
+    def verifyInputs(reorgInput: String) = {
 
         // if provided, check that the fileID is valid and present
         if ( reorgInput != "" ) {
@@ -663,6 +668,22 @@ object Extras {
             // if reorgFileID cannot be found, describe will throw a ResourceNotFoundException
             val fileDescribe: DXFile.Describe = file.describe()
         }
+
+    }
+
+    def parseCustomReorgAttrs(jsv: JsValue, verbose: Verbose): Option[ReorgAttrs] = {
+        if (jsv == JsNull)
+            return None
+
+        val fields = jsv.asJsObject.fields
+        // check required inputs are supplied
+        val (reorgAppId, reorgInput) = checkAttrs(fields)
+
+        // verify reorg app
+        veryifyRorgApp(reorgAppId)
+
+        // verify inputs
+        verifyInputs(reorgInput)
 
         Utils.trace(
             true,
