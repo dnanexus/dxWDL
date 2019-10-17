@@ -1,5 +1,8 @@
 # Release Notes
 
+## 1.34 17-Oct-2019
+- Bug fix for handling of structs when creating task headers
+
 ## 1.33 15-Oct-2019
 - Upgrade to Cromwell 47
 - Protect 300MiB of memory for dxfuse, if it is running. We don't want it killed by the OOM if the user

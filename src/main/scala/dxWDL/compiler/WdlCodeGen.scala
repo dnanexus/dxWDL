@@ -26,7 +26,7 @@ case class WdlCodeGen(verbose: Verbose,
         }
     }
 
-    private def genDefaultValueOfType(wdlType: WomType) : WomValue = {
+    def genDefaultValueOfType(wdlType: WomType) : WomValue = {
         wdlType match {
             case WomBooleanType => WomBoolean(true)
             case WomIntegerType => WomInteger(0)
@@ -57,11 +57,19 @@ case class WdlCodeGen(verbose: Verbose,
 
             case WomPairType(lType, rType) => WomPair(genDefaultValueOfType(lType),
                                                       genDefaultValueOfType(rType))
+
+            case WomCompositeType(typeMap, structName) =>
+                val m = typeMap.map{
+                    case (fieldName, t) =>
+                        fieldName -> genDefaultValueOfType(t)
+                }.toMap
+                WomObject(m, WomObjectType)
+
             case _ => throw new Exception(s"Unhandled type ${wdlType}")
         }
     }
 
-/*
+    /*
 Create a header for a task/workflow. This is an empty task
 that includes the input and output definitions. It is used
 to
