@@ -11,7 +11,7 @@ class WdlCodeGenTest extends FlatSpec with Matchers {
 
     private def genDefaultValue(t : WomType) : String = {
         val defVal = wdlCodeGen.genDefaultValueOfType(t)
-        wdlCodeGen.womToSourceCode(t, defVal)
+        defVal.toWomString
     }
 
     it should "Handle primitive types" in {
@@ -19,13 +19,26 @@ class WdlCodeGenTest extends FlatSpec with Matchers {
         genDefaultValue(WomFloatType) shouldBe("0.0")
         genDefaultValue(WomStringType) shouldBe("""""""")
         genDefaultValue(WomSingleFileType) shouldBe(""""dummy.txt"""")
+    }
 
+    it should "Handle array" in {
         genDefaultValue(WomArrayType(WomIntegerType)) shouldBe("[]")
         genDefaultValue(WomArrayType(WomFloatType)) shouldBe("[]")
+    }
 
-        genDefaultValue(WomMapType(WomIntegerType, WomStringType)) shouldBe("""{0:""}""")
+    it should "handle maps, pairs, optionals" in {
+        genDefaultValue(WomMapType(WomIntegerType, WomStringType)) shouldBe("""{0: ""}""")
 
-        genDefaultValue(WomPairType(WomIntegerType, WomSingleFileType)) shouldBe("""(0 , "dummy.txt")""")
+        genDefaultValue(WomPairType(WomIntegerType, WomSingleFileType)) shouldBe("""(0, "dummy.txt")""")
         genDefaultValue(WomOptionalType(WomFloatType)) shouldBe("0.0")
+    }
+
+    it should "handle structs" in {
+        val houseType = WomCompositeType(Map("height" -> WomIntegerType,
+                                             "num_floors" -> WomIntegerType,
+                                             "street" -> WomStringType,
+                                             "city" -> WomStringType),
+                                         Some("House"))
+        genDefaultValue(houseType) shouldBe("""object {height: 0, num_floors: 0, street: "", city: ""}""")
     }
 }

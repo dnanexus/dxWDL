@@ -26,7 +26,6 @@ case class WdlCodeGen(verbose: Verbose,
         }
     }
 
-    // used in testing, otherwise, it is a private method
     def genDefaultValueOfType(wdlType: WomType) : WomValue = {
         wdlType match {
             case WomBooleanType => WomBoolean(true)
@@ -64,68 +63,9 @@ case class WdlCodeGen(verbose: Verbose,
                     case (fieldName, t) =>
                         fieldName -> genDefaultValueOfType(t)
                 }.toMap
-                //WomObject(m, WomCompositeType(typeMap, structName))
-                // HACK
-                // We omit the type here, so that the ".toWomString" method
-                // will work on the resulting value. This is
-                WomObject(m, WomCompositeType(typeMap, None))
+                WomObject(m, WomObjectType)
 
             case _ => throw new Exception(s"Unhandled type ${wdlType}")
-        }
-    }
-
-    // Serialization of a WOM value to JSON
-    def womToSourceCode(t:WomType, w:WomValue) : String = {
-        (t, w)  match {
-            // Base case: primitive types.
-            // Files are encoded as their full path.
-            case (WomBooleanType, _) |
-                    (WomIntegerType, _) |
-                    (WomFloatType, _) |
-                    (WomStringType, _) |
-                    (WomSingleFileType, _) => w.toWomString
-
-            case (WomArrayType(t), WomArray(_, elems)) =>
-                val av = elems.map(e => womToSourceCode(t, e)).toVector
-                "[" + av.mkString(",") + "]"
-
-            // Maps. These are projections from a key to value, where
-            // the key and value types are statically known.
-            case (WomMapType(keyType, valueType), WomMap(_, m)) =>
-                val v = m.map{ case (k,v) =>
-                    val ks = womToSourceCode(keyType, k)
-                    val vs = womToSourceCode(valueType, v)
-                    ks + ":" + vs
-                }.toVector
-                "{" + v.mkString(",")  + "}"
-
-            case (WomPairType(lType, rType), WomPair(l,r)) =>
-                val lv = womToSourceCode(lType, l)
-                val rv = womToSourceCode(rType, r)
-                s"($lv , $rv)"
-
-            // Strip optional type
-            case (WomOptionalType(t), WomOptionalValue(_,Some(w))) =>
-                womToSourceCode(t, w)
-
-            // missing value
-            case (_, WomOptionalValue(_,None)) =>
-                throw new Exception("Don't have a value for None yet")
-
-            // keys are strings, requiring no conversion. We do
-            // need to carry the types are runtime.
-            case (WomCompositeType(typeMap, _), WomObject(m: Map[String, WomValue], _)) =>
-                val v = m.map{
-                    case (key, v) =>
-                        val t: WomType = typeMap(key)
-                        key + ":" + womToSourceCode(t, v)
-                }.toVector
-                "object {" + v.mkString(",") + "}"
-
-            case (_,_) => throw new Exception(
-                s"""|Unsupported combination type=(${t.stableName},${t})
-                    |value=(${w.toWomString}, ${w})"""
-                    .stripMargin.replaceAll("\n", " "))
         }
     }
 
