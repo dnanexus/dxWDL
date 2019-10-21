@@ -4,6 +4,9 @@ package dxWDL.base
 // Also, allows dnanexus specific configuration per task.
 
 import com.dnanexus.AccessLevel
+import com.dnanexus.DXApplet
+import com.dnanexus.DXFile
+import com.dnanexus.exceptions.PermissionDeniedException
 import spray.json._
 import DefaultJsonProtocol._
 import wom.values._
@@ -597,18 +600,15 @@ object Extras {
         Some(DockerRegistry(registry, username, credentials))
     }
 
-    def parseCustomReorgAttrs(jsv: JsValue, verbose: Verbose): Option[ReorgAttrs] = {
-        if (jsv == JsNull)
-            return None
+    private def checkAttrs(fields: Map[String, JsValue]): (String, String) = {
 
-        val fields = jsv.asJsObject.fields
         for (k <- fields.keys) {
             if (!(CUSTOM_REORG_ATTRS contains k))
-                throw new IllegalArgumentException(s"""|Unsupported custom reorg attribute ${k},
-                                        |we currently support ${CUSTOM_REORG_ATTRS}
-                                        |""".stripMargin.replaceAll("\n", ""))
-        }
-
+                throw new IllegalArgumentException(
+                    s"""|Unsupported custom reorg attribute ${k},
+                        |we currently support ${CUSTOM_REORG_ATTRS}
+                        |""".stripMargin.replaceAll("\n", ""))
+         }
 
         val reorgAppId: String = checkedParseStringField(fields, "app_id") match {
             case None => throw new IllegalArgumentException("app_id must be specified in the custom_reorg section.")
@@ -618,10 +618,73 @@ object Extras {
         val reorgInput: String = checkedParseStringFieldReplaceNull(fields, "inputs") match {
             case None => throw new IllegalArgumentException(
                 "inputs must be specified in the custom_reorg section. " +
-                "Please set the value to null if there is no input."
+                  "Please set the value to null if there is no input."
             )
             case Some(x) => x
         }
+
+        return (reorgAppId,reorgInput)
+
+    }
+
+    def verifyReorgAppHasAccess(appDescribe: DXApplet.Describe, reorgAppId: String) = {
+
+        // check applet has access to the projet
+        val accessJson = appDescribe.getAccess()
+        val projectAccess = accessJson.get("project")
+        val access: String = if ( projectAccess != null) {
+
+            projectAccess.toString.replace("\"", "")
+        }
+        else ""
+
+        if ( access != "CONTRIBUTE" && access != "ADMINISTER" ) {
+
+            throw new PermissionDeniedException(s"ERROR: Applet for custom reorg stage ${reorgAppId } does not " +
+              s"have CONTRIBUTOR or ADMINISTRATOR access and this is required.", -1)
+
+        }
+
+    }
+
+    def veryifyRorgApp(reorgAppId: String) = {
+
+        // if reorgAppId is invalid, DXApplet.getInstance will throw an IllegalArgumentException
+        val app: DXApplet = DXApplet.getInstance(reorgAppId)
+        // if reorgAppId cannot be found, describe() will throw a ResourceNotFoundException
+        val appDescribe: DXApplet.Describe = app.describe()
+        // verify reorg app has at least contribute access
+        verifyReorgAppHasAccess(appDescribe, reorgAppId)
+
+    }
+
+    def verifyInputs(reorgInput: String) = {
+
+        // if provided, check that the fileID is valid and present
+        if ( reorgInput != "" ) {
+            // format dx file ID
+            val reorgFileID: String = reorgInput.replace("dx://", "")
+            // if input file  ID is invalid, DXFile.getInstance will thown an IllegalArgumentException
+            val file: DXFile = DXFile.getInstance(reorgFileID)
+            // if reorgFileID cannot be found, describe will throw a ResourceNotFoundException
+            val fileDescribe: DXFile.Describe = file.describe()
+        }
+
+    }
+
+    def parseCustomReorgAttrs(jsv: JsValue, verbose: Verbose): Option[ReorgAttrs] = {
+        if (jsv == JsNull)
+            return None
+
+        val fields = jsv.asJsObject.fields
+        // check required inputs are supplied
+        val (reorgAppId, reorgInput) = checkAttrs(fields)
+
+        // verify reorg app
+        veryifyRorgApp(reorgAppId)
+
+        // verify inputs
+        verifyInputs(reorgInput)
 
         Utils.trace(
             true,
