@@ -627,7 +627,7 @@ object Extras {
 
     }
 
-    def verifyReorgAppHasAccess(appDescribe: DXApplet.Describe, reorgAppId: String) = {
+    private def verifyReorgAppHasAccess(appDescribe: DXApplet.Describe, reorgAppId: String): Unit = {
 
         // check applet has access to the projet
         val accessJson = appDescribe.getAccess()
@@ -647,7 +647,7 @@ object Extras {
 
     }
 
-    def veryifyRorgApp(reorgAppId: String) = {
+    private def veryifyRorgApp(reorgAppId: String): Unit= {
 
         // if reorgAppId is invalid, DXApplet.getInstance will throw an IllegalArgumentException
         val app: DXApplet = DXApplet.getInstance(reorgAppId)
@@ -658,16 +658,16 @@ object Extras {
 
     }
 
-    def verifyInputs(reorgInput: String) = {
+    private def verifyInputs(reorgInput: String): Unit= {
 
         // if provided, check that the fileID is valid and present
-        if ( reorgInput != "" ) {
+        if (reorgInput != "") {
             // format dx file ID
             val reorgFileID: String = reorgInput.replace("dx://", "")
             // if input file  ID is invalid, DXFile.getInstance will thown an IllegalArgumentException
             val file: DXFile = DXFile.getInstance(reorgFileID)
             // if reorgFileID cannot be found, describe will throw a ResourceNotFoundException
-            val fileDescribe: DXFile.Describe = file.describe()
+            file.describe()
         }
 
     }
