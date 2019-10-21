@@ -677,13 +677,8 @@ object Extras {
             return None
 
         val fields = jsv.asJsObject.fields
-        // check required inputs are supplied
         val (reorgAppId, reorgInput) = checkAttrs(fields)
-
-        // verify reorg app
         veryifyRorgApp(reorgAppId)
-
-        // verify inputs
         verifyInputs(reorgInput)
 
         Utils.trace(
