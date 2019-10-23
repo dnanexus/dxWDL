@@ -22,7 +22,8 @@ class TaskRunnerTest extends FlatSpec with Matchers {
                                                  100,
                                                  4,
                                                  1.00F,
-                                                 Vector(("Ubuntu", "16.04")))
+                                                 Vector(("Ubuntu", "16.04")),
+                                                 false)
     private val instanceTypeDB = InstanceTypeDB(true, Vector(unicornInstance))
     private val verbose = false
 

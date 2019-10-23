@@ -65,7 +65,8 @@ object IR {
         dxInstanceType: Option[String],
         memoryMB: Option[Int],
         diskGB: Option[Int],
-        cpu: Option[Int]
+        cpu: Option[Int],
+        gpu: Option[Boolean]
     ) extends InstanceType
     case object InstanceTypeRuntime extends InstanceType
 

@@ -569,7 +569,8 @@ case class TaskRunner(task: CallableTaskDefinition,
         val memory = evalAttr("memory")
         val diskSpace = evalAttr("disks")
         val cores = evalAttr("cpu")
-        val iTypeRaw = InstanceTypeDB.parse(dxInstanceType, memory, diskSpace, cores)
+        val gpu = evalAttr("gpu")
+        val iTypeRaw = InstanceTypeDB.parse(dxInstanceType, memory, diskSpace, cores, gpu)
         val iType = instanceTypeDB.apply(iTypeRaw)
         Utils.appletLog(verbose, s"""|calcInstanceType memory=${memory} disk=${diskSpace}
                                      |cores=${cores} instancetype=${iType}"""

@@ -330,7 +330,7 @@ case class Native(dxWDLrtId: Option[String],
                 genBashScriptCmd("workflowOutputReorg")
             case IR.AppletKindTask(_) =>
                 instanceType match {
-                    case IR.InstanceTypeDefault | IR.InstanceTypeConst(_,_,_,_) =>
+                    case IR.InstanceTypeDefault | IR.InstanceTypeConst(_,_,_,_,_) =>
                         s"""|${dockerPreamble(applet.docker)}
                             |
                             |set -e -o pipefail
@@ -512,7 +512,8 @@ case class Native(dxWDLrtId: Option[String],
                 val xDesc = InstanceTypeReq(x.dxInstanceType,
                                             x.memoryMB,
                                             x.diskGB,
-                                            x.cpu)
+                                            x.cpu,
+                                            x.gpu)
                 instanceTypeDB.apply(xDesc)
             case IR.InstanceTypeDefault | IR.InstanceTypeRuntime =>
                 instanceTypeDB.defaultInstanceType
