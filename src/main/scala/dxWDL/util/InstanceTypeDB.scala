@@ -178,7 +178,7 @@ case class InstanceTypeDB(pricingAvailable : Boolean,
         if (sufficient.length == 0)
             throw new Exception(s"""|No instances found that match the requirements
                                     |memory=$memoryMB, diskGB=$diskGB, cpu=$cpu"""
-                                    .stripMargin.replaceAll("/", " "))
+                                    .stripMargin.replaceAll("\n", " "))
         val initialGuess = sufficient.head
         val bestInstance = sufficient.tail.foldLeft(initialGuess){ case (bestSoFar,x) =>
             if (lteq(x, bestSoFar)) x
@@ -216,10 +216,7 @@ case class InstanceTypeDB(pricingAvailable : Boolean,
     // A fast but cheap instance type.
     //
     def defaultInstanceType : String = {
-        val iType = instances.find(x => x.name == InstanceTypeDB.DEFAULT_INSTANCE_TYPE) match {
-            case Some(iType) => iType
-            case None => calcMinimalInstanceType(instances.toSet)
-        }
+        val iType = calcMinimalInstanceType(instances.toSet)
         iType.name
     }
 
@@ -268,8 +265,6 @@ case class InstanceTypeDB(pricingAvailable : Boolean,
 }
 
 object InstanceTypeDB extends DefaultJsonProtocol {
-    val DEFAULT_INSTANCE_TYPE = "mem1_ssd1_x4"
-
     // support automatic conversion to/from JsValue
     implicit val instanceTypeDBFormat = jsonFormat2(InstanceTypeDB.apply)
 
@@ -439,7 +434,7 @@ object InstanceTypeDB extends DefaultJsonProtocol {
             val memoryMB = getJsIntField(jsValue, "totalMemoryMB")
             val diskSpaceGB = getJsIntField(jsValue, "ephemeralStorageGB")
             val os = getSupportedOSes(jsValue)
-            val gpu = iName contains "gpu"
+            val gpu = iName contains "_gpu"
             val dxInstanceType = DxInstanceType(iName, memoryMB, diskSpaceGB, numCores, 0, os, gpu)
             iName -> dxInstanceType
         }.toMap

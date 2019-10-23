@@ -38,7 +38,7 @@ class NativeTest extends FlatSpec with Matchers {
                            "-locked",
                            "-quiet")
 
-    it should "Native compile a single WDL task" taggedAs(NativeTestXX, EdgeTest) in {
+    it should "Native compile a single WDL task" taggedAs(NativeTestXX) in {
         val path = pathFromBasename("compiler", "add.wdl")
         val retval = Main.compile(path.toString
 //                                      :: "--verbose"
@@ -163,7 +163,7 @@ class NativeTest extends FlatSpec with Matchers {
         ) shouldBe a [Main.SuccessfulTermination]
     }
 
-    it should "make default task timeout 48 hours" taggedAs(NativeTestXX, EdgeTest) in {
+    it should "make default task timeout 48 hours" taggedAs(NativeTestXX) in {
         val path = pathFromBasename("compiler", "add_timeout.wdl")
         Main.compile(
             path.toString :: "--force" :: cFlags
@@ -186,7 +186,7 @@ class NativeTest extends FlatSpec with Matchers {
                                       "minutes" -> JsNumber(0)))
     }
 
-    it should "timeout can be overriden from the extras file" taggedAs(NativeTestXX, EdgeTest) in {
+     it should "timeout can be overriden from the extras file" taggedAs(NativeTestXX, EdgeTest) in {
         val path = pathFromBasename("compiler", "add_timeout_override.wdl")
         val extraPath = pathFromBasename("compiler/extras",  "short_timeout.json")
         Main.compile(
@@ -209,4 +209,23 @@ class NativeTest extends FlatSpec with Matchers {
 
     }
 
+    it should "allow choosing GPU instances" taggedAs(NativeTestXX, EdgeTest) in {
+        val path = pathFromBasename("compiler", "GPU2.wdl")
+        Main.compile(path.toString :: cFlags) shouldBe a [Main.SuccessfulTermination]
+
+        // make sure the timeout is what it should be
+        val appPath = "%s:/unit_tests/GPU2".format(dxTestProject.getId)
+        val (stdout, stderr) = Utils.execCommand(s"dx describe ${appPath} --json")
+        val obj = stdout.parseJson.asJsObject
+        val obj2 = obj.fields("runSpec").asJsObject
+        val obj3 = obj2.fields("systemRequirements").asJsObject
+        val obj4 = obj3.fields("main").asJsObject
+        val instanceType = obj4.fields.get("instanceType") match {
+            case Some(JsString(x)) => x
+            case other => throw new Exception(s"Unexpected result ${other}")
+        }
+
+        //System.out.println(s"instanceType = ${instanceType}")
+        instanceType should include ("_gpu")
+    }
 }

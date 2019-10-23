@@ -153,8 +153,6 @@ class InstanceTypeDBTest extends FlatSpec with Matchers {
         }
 
 
-        db.defaultInstanceType should equal(InstanceTypeDB.DEFAULT_INSTANCE_TYPE)
-
         db.apply(InstanceTypeDB.parse(None,
                                       Some(WomString("3 GB")),
                                       Some(WomString("local-disk 10 HDD")),
@@ -394,5 +392,15 @@ class InstanceTypeDBTest extends FlatSpec with Matchers {
         )
 
         db.chooseAttrs(None, None, Some(4), Some(true)) should equal("mem3_ssd1_gpu_x8")
+
+        assertThrows[Exception] {
+            // No non-GPU instance has 8 cpus
+            db.chooseAttrs(None, None, Some(8), Some(false))
+        }
+
+        assertThrows[Exception] {
+            // GPU has to be requested specifically
+            db.chooseAttrs(None, None, Some(8), None)
+        }
     }
 }
