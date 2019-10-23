@@ -7,7 +7,6 @@ import com.dnanexus.AccessLevel
 import com.dnanexus.DXApplet
 import com.dnanexus.DXFile
 import com.dnanexus.exceptions.PermissionDeniedException
-import com.fasterxml.jackson.databind.JsonNode
 import spray.json._
 import DefaultJsonProtocol._
 import wom.values._
@@ -632,18 +631,18 @@ object Extras {
 
         // check applet has access to the projet
         val accessJson = appDescribe.getAccess()
+        val projectAccess = accessJson.get("project")
+        val access: String = if ( projectAccess != null) {
 
-        val isValid: Boolean = accessJson.get("project") match {
-            case null => false
-            case x: JsonNode  => x.toString.replace("\"", "") match {
-                case "CONTRIBUTE" | "ADMINISTER" => true
-                case _ => false
-            }
+            projectAccess.toString.replace("\"", "")
         }
+        else ""
 
-        if (!isValid) {
+        if ( access != "CONTRIBUTE" && access != "ADMINISTER" ) {
+
             throw new PermissionDeniedException(s"ERROR: Applet for custom reorg stage ${reorgAppId } does not " +
               s"have CONTRIBUTOR or ADMINISTRATOR access and this is required.", -1)
+
         }
 
     }
