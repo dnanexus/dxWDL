@@ -233,17 +233,8 @@ case class Top(cOpt: CompilerOptions) {
             case None => WdlRuntimeAttrs(Map.empty)
             case Some(ex) => ex.defaultRuntimeAttributes
         }
-
-        val reorgApp: Either[Boolean, String] = cOpt.extras match {
-            case None => Left(cOpt.reorg)
-            case Some(ex) => ex.customReorgAttributes match  {
-                case None => Left(cOpt.reorg)
-                case Some(cOrg) => Right(cOrg.appId)
-            }
-        }
-
         new GenerateIR(cOpt.verbose, defaultRuntimeAttrs).apply(everythingBundle, allSources, language,
-                                                                cOpt.locked, reorgApp)
+                                                                cOpt.locked, cOpt.reorg)
     }
 
     // Compile IR only

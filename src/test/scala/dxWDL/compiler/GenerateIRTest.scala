@@ -423,31 +423,12 @@ class GenerateIRTest extends FlatSpec with Matchers {
         }
     }
 
-    it should "correctly flatten a workflow with imports" in {
+    it should "correctly flatten a workflow with imports" taggedAs(EdgeTest) in {
         val path = pathFromBasename("compiler", "wf_to_flatten.wdl")
         val retval = Main.compile(path.toString
-                                      :: "--verbose"
-                                      :: "--verboseKey" :: "GenerateIR"
+//                                      :: "--verbose"
+//                                      :: "--verboseKey" :: "GenerateIR"
                                       :: cFlags)
         retval shouldBe a[Main.SuccessfulTerminationIR]
-    }
-
-
-    it should "Compile a workflow with a custom reorg applet" taggedAs(EdgeTest) in {
-        val path = pathFromBasename("compiler", basename="wf_custom_reorg.wdl")
-
-        val extrasPath = pathFromBasename("compiler/extras", basename="extras_custom_reorg.json")
-
-        val retval = Main.compile(
-            path.toString :: "--extras " :: extrasPath.toString :: cFlags
-        )
-        retval shouldBe a [Main.SuccessfulTerminationIR]
-        val bundle = retval match {
-            case Main.SuccessfulTerminationIR(ir) => ir
-            case _ => throw new Exception("sanity")
-        }
-
-        bundle.primaryCallable shouldBe "asd"
-
     }
 }
