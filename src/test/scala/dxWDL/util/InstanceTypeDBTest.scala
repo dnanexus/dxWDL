@@ -397,10 +397,5 @@ class InstanceTypeDBTest extends FlatSpec with Matchers {
             // No non-GPU instance has 8 cpus
             db.chooseAttrs(None, None, Some(8), Some(false))
         }
-
-        assertThrows[Exception] {
-            // GPU has to be requested specifically
-            db.chooseAttrs(None, None, Some(8), None)
-        }
     }
 }
