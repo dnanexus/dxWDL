@@ -121,6 +121,16 @@ runtime {
 }
 ```
 
+If you want to choose an instance that has a GPU, set the `gpu` attribute to true.
+For example:
+```
+runtime {
+   memory: "4 GB"
+   cpu : 4
+   gpu : true
+}
+```
+
 Normally, a file used in a task is downloaded to the instance, and
 then used locally (*locallized*). If the file only needs to be
 examined once in sequential order, then this can be optimized by
