@@ -320,6 +320,8 @@ case class Native(dxWDLrtId: Option[String],
         val body:String = applet.kind match {
             case IR.AppletKindNative(_) =>
                 throw new Exception("Sanity: generating a bash script for a native applet")
+            case IR.AppletKindWorkflowCustomReorg(_) =>
+                throw new Exception("Sanity: generating a bash script for a custom reorg applet")
             case IR.AppletKindWfFragment(_, _, _) =>
                 genBashScriptWfFragment()
             case IR.AppletKindWfInputs =>
