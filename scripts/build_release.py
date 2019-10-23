@@ -69,7 +69,7 @@ def _wait_for_completion(jobs):
     print("done")
     return success
 
-def _clone_to_all_regions():
+def _clone_to_all_regions(region2projid, regions, asset_file_name, folder, url):
     jobs = []
     for region in regions:
         dest_proj_id = region2projid[region]
@@ -136,7 +136,7 @@ def _clone_asset(record, folder, regions, project_dict):
     # Fire off a clone process for each region
     # Wait for the cloning to complete
     for i in [1, 2, 3]:
-        jobs = _clone_to_all_regions()
+        jobs = _clone_to_all_regions(region2projid, regions, asset_file_name, folder, url)
         retval = _wait_for_completion(jobs)
         if retval:
             break
@@ -174,6 +174,10 @@ def main():
                            help="Copy to all supported regions",
                            action='store_true',
                            default=False)
+    argparser.add_argument("--dry-run",
+                           help="Don't build any artifacts",
+                           action='store_true',
+                           default=False)
     args = argparser.parse_args()
 
     # build multi-region jar for releases, or
@@ -197,6 +201,9 @@ def main():
     folder = "/releases/{}".format(version_id)
     print("folder: {}".format(folder))
 
+    if args.dry_run:
+        args.force = False
+
     # remove the existing directory paths
     if args.force:
         for proj_name in project_dict.values():
@@ -213,6 +220,8 @@ def main():
     # Build the asset, and the compiler jar file.
     path_dict = dict(map(lambda kv: (kv[0], kv[1] + ":" + folder),
                          project_dict.items()))
+    if args.dry_run:
+        return
     home_ad = util.build(project, folder, version_id, top_dir, path_dict)
 
     if multi_region:
