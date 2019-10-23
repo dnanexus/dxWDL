@@ -249,9 +249,20 @@ public class DXApplet extends DXDataObject implements DXExecutable<DXJob> {
         private RunSpecification runSpec;
         @JsonProperty
         private String dxapi;
+        @JsonProperty
+        private JsonNode access;
 
         private Describe() {
             super();
+        }
+
+        /**
+         * Returns JsonNode of access field.
+         *
+         * @return applet access field
+         */
+        public JsonNode getAccess() {
+            return this.access;
         }
 
         /**

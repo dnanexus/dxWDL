@@ -96,7 +96,7 @@ case class GenerateIR(verbose: Verbose,
                                 callables: Map[String, IR.Callable],
                                 language: Language.Value,
                                 locked : Boolean,
-                                reorg : Boolean) : (IR.Workflow, Vector[IR.Callable]) = {
+                                reorg : Either[Boolean, String]) : (IR.Workflow, Vector[IR.Callable]) = {
         // sort from low to high according to the source lines.
         val callsLoToHi = ParseWomSourceFile(verbose.on).scanForCalls(wf.innerGraph, wfSource)
 
@@ -135,7 +135,7 @@ case class GenerateIR(verbose: Verbose,
                                 callables: Map[String, IR.Callable],
                                 language: Language.Value,
                                 locked: Boolean,
-                                reorg: Boolean) : (IR.Callable, Vector[IR.Callable]) = {
+                                reorg: Either[Boolean, String]) : (IR.Callable, Vector[IR.Callable]) = {
         def compileTask2(task : CallableTaskDefinition) = {
             val taskSourceCode = taskDir.get(task.name) match {
                 case None => throw new Exception(s"Did not find task ${task.name}")
@@ -169,7 +169,7 @@ case class GenerateIR(verbose: Verbose,
               allSources: Map[String, WorkflowSource],
               language: Language.Value,
               locked: Boolean,
-              reorg: Boolean) : IR.Bundle = {
+              reorg: Either[Boolean, String]) : IR.Bundle = {
         Utils.trace(verbose.on, s"IR pass")
         Utils.traceLevelInc()
 

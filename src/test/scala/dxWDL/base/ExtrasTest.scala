@@ -1,6 +1,8 @@
 package dxWDL.base
 
 import com.dnanexus.AccessLevel
+import com.dnanexus.exceptions.ResourceNotFoundException
+import com.dnanexus.exceptions.PermissionDeniedException
 import dxWDL.compiler.EdgeTest
 import org.scalatest.{FlatSpec, Matchers}
 import spray.json._
@@ -185,8 +187,213 @@ class ExtrasTest extends FlatSpec with Matchers {
         }
     }
 
+    it should "parse the custom-reorg object" taggedAs(EdgeTest) in {
 
-    it should "generate valid JSON execution policy" in {
+        // app_id is mummer nucmer app in project-FJ90qPj0jy8zYvVV9yz3F5gv
+        val appId: String = "applet-FKfZpF002fp738k1Jqz8vX1G"
+        // inputs is Readme.md file in project-FJ90qPj0jy8zYvVV9yz3F5gv
+        val inputs: String = "dx://file-FZBYqBQ0jy8qpqJz12gpXFf0"
+        val reorg: JsValue   =
+            s"""|{
+               | "custom_reorg" : {
+               |    "app_id" : "${appId}",
+               |    "inputs" : "${inputs}"
+               |  }
+               |}
+               |""".stripMargin.parseJson
+
+        val extras = Extras.parse(reorg, verbose)
+        extras.customReorgAttributes  should be (
+            Some(ReorgAttrs(appId, inputs))
+        )
+    }
+
+    it should "throw IllegalArgumentException due to missing applet id" taggedAs(EdgeTest) in {
+
+        val inputs: String = "dx://file-123456"
+        val reorg: JsValue   =
+            s"""|{
+                | "custom_reorg" : {
+                |    "inputs" : "${inputs}"
+                |  }
+                |}
+                |""".stripMargin.parseJson
+
+
+        val thrown = intercept[IllegalArgumentException] {
+            Extras.parse(reorg, verbose)
+        }
+
+        thrown.getMessage should be ("applet ID must be specified in the custom_reorg section.")
+    }
+
+    it should "throw IllegalArgumentException due to missing inputs in custom_reorg section" taggedAs(EdgeTest) in {
+
+        // app_id is mummer nucmer app in project-FJ90qPj0jy8zYvVV9yz3F5gv
+        val appId: String = "applet-FKfZpF002fp738k1Jqz8vX1G"
+        val reorg: JsValue   =
+            s"""|{
+                | "custom_reorg" : {
+                |    "app_id" : "${appId}"
+                |  }
+                |}
+                |""".stripMargin.parseJson
+
+
+        val thrown = intercept[IllegalArgumentException] {
+            Extras.parse(reorg, verbose)
+        }
+
+        //thrown.getMessage should contain  ("inputs must be specified in the custom_reorg section.")
+        thrown.getMessage should be  (
+            "inputs must be specified in the custom_reorg section. Please set the value to null if there is no input."
+        )
+    }
+
+    it should "Allow inputs to be null in custom reorg" taggedAs(EdgeTest) in {
+
+      // app_id is mummer nucmer app in project-FJ90qPj0jy8zYvVV9yz3F5gv
+      val appId: String = "applet-FKfZpF002fp738k1Jqz8vX1G"
+      val reorg: JsValue   =
+        s"""|{
+            | "custom_reorg" : {
+            |     "app_id" : "${appId}",
+            |    "inputs" : null
+            |  }
+            |}
+            |""".stripMargin.parseJson
+
+
+      val extras = Extras.parse(reorg, verbose)
+      extras.customReorgAttributes should be (
+        Some(ReorgAttrs(appId, ""))
+      )
+  }
+
+  it should "throw IllegalArgumentException due to invalid applet ID" taggedAs(EdgeTest) in {
+
+    // invalid applet ID
+    val appId : String = "applet-123456"
+    val reorg : JsValue =
+      s"""|{
+          |  "custom_reorg" : {
+          |      "app_id" : "${appId}",
+          |      "inputs": null
+          |   }
+          |}
+          |""".stripMargin.parseJson
+
+    val thrown = intercept[IllegalArgumentException] {
+      Extras.parse(reorg, verbose)
+    }
+
+    thrown.getMessage should be  (
+      s"dxId must match applet-[A-Za-z0-9]{24}"
+    )
+
+  }
+
+  it should "throw ResourceNotFoundException due to non-existant applet" taggedAs(EdgeTest) in {
+
+    // non-existant (made up) applet ID
+    val appId : String = "applet-mPX7K2j0Gv2K2jXF75Bf21v2"
+    val reorg : JsValue =
+      s"""|{
+          |  "custom_reorg" : {
+          |      "app_id" : "${appId}",
+          |      "inputs": null
+          |   }
+          |}
+          |""".stripMargin.parseJson
+
+    val thrown = intercept[ResourceNotFoundException] {
+      Extras.parse(reorg, verbose)
+    }
+
+    thrown.getMessage should be  (
+      s""""${appId}" is not a recognized ID"""
+    )
+
+  }
+
+  it should "throw IllegalArgumentException due to invalid file ID" taggedAs(EdgeTest) in {
+
+    // app_id is mummer nucmer app in project-FJ90qPj0jy8zYvVV9yz3F5gv
+    val appId : String = "applet-FKfZpF002fp738k1Jqz8vX1G"
+    val inputs : String = "file-1223445"
+    val reorg : JsValue =
+      s"""|{
+          |  "custom_reorg" : {
+          |      "app_id" : "${appId}",
+          |      "inputs": "${inputs}"
+          |   }
+          |}
+          |""".stripMargin.parseJson
+
+    val thrown = intercept[IllegalArgumentException] {
+      Extras.parse(reorg, verbose)
+    }
+
+    thrown.getMessage should be  (
+      s"dxId must match file-[A-Za-z0-9]{24}"
+    )
+
+  }
+
+  it should "throw ResourceNotFoundException due to non-existant file" taggedAs(EdgeTest) in {
+
+    // app_id is mummer nucmer app in project-FJ90qPj0jy8zYvVV9yz3F5gv
+    val appId : String = "applet-FKfZpF002fp738k1Jqz8vX1G"
+    // input is non-existant (made up) file ID
+    val inputs : String = "dx://file-AZBYlBQ0jy1qpqJz17gpXFf8"
+    val reorg : JsValue =
+      s"""|{
+          |  "custom_reorg" : {
+          |      "app_id" : "${appId}",
+          |      "inputs": "${inputs}"
+          |   }
+          |}
+          |""".stripMargin.parseJson
+
+    val thrown = intercept[ResourceNotFoundException] {
+      Extras.parse(reorg, verbose)
+    }
+
+    val fileId : String = inputs.replace("dx://", "")
+
+    thrown.getMessage should be  (
+      s""""${fileId}" is not a recognized ID"""
+    )
+
+  }
+
+  it should "throw PermissionDeniedException due to applet not having contribute access in the project" taggedAs(EdgeTest) in {
+
+    // app_id is sum app in project-FJ90qPj0jy8zYvVV9yz3F5gv
+    val appId: String = "applet-FJqZk8j0jy8xb42JK2x0Gk7B"
+    val reorg: JsValue =
+      s"""|{
+          | "custom_reorg" : {
+          |    "app_id" : "${appId}",
+          |    "inputs": "null"
+          |  }
+          |}
+          |""".stripMargin.parseJson
+
+    val thrown = intercept[PermissionDeniedException] {
+
+      Extras.parse(reorg, verbose)
+
+    }
+
+    thrown.getMessage should be (
+      s"ERROR: Applet for custom reorg stage ${appId} does not " +
+        s"have CONTRIBUTOR or ADMINISTRATOR access and this is required."
+    )
+
+  }
+
+  it should "generate valid JSON execution policy" in {
         val expectedJs : JsValue =
             """|{
                | "executionPolicy": {
@@ -200,6 +407,7 @@ class ExtrasTest extends FlatSpec with Matchers {
 
         val execPolicy = DxExecPolicy(Some(Map("*" -> 5)),
                                       Some(4))
+
         JsObject(execPolicy.toJson) should be(expectedJs)
     }
 
@@ -606,7 +814,6 @@ class ExtrasTest extends FlatSpec with Matchers {
         )
 
         val detailsJson = dxAttrs.getDetailsJson
-
         expected should be (detailsJson)
     }
 }
