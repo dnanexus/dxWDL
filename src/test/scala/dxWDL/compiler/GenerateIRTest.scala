@@ -439,7 +439,7 @@ class GenerateIRTest extends FlatSpec with Matchers {
         val extrasPath = pathFromBasename("compiler/extras", basename="extras_custom_reorg.json")
 
         val retval = Main.compile(
-            path.toString :: "--extras " :: extrasPath.toString :: cFlags
+            path.toString :: "-extras" :: extrasPath.toString :: cFlags
         )
         retval shouldBe a [Main.SuccessfulTerminationIR]
         val bundle = retval match {
@@ -447,7 +447,12 @@ class GenerateIRTest extends FlatSpec with Matchers {
             case _ => throw new Exception("sanity")
         }
 
-        bundle.primaryCallable shouldBe "asd"
+        val wf: IR.Workflow =  bundle.primaryCallable.get match {
+            case wf: IR.Workflow => wf
+            case _ => throw new Exception("sanity")
+        }
 
+        wf.stages.size shouldBe(2)
+        wf.stages(1).calleeName shouldBe("applet-FfjGKQj0jy8bJq64B41ZV0xK")
     }
 }
