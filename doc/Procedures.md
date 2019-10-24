@@ -9,7 +9,7 @@ when building the release.
 
 - Build new externally visible release
 ```
-./scripts/build_all_releases.sh --staging-token=XXX --production-token=YYY --docker-user=UUU --docker-password=WWW
+./scripts/build_all_releases.sh --staging-token XXX --production-token YYY --docker-user UUU --docker-password WWW
 ```
 this will take a while. It builds the release
 on staging, runs multi-region tests on staging, builds on production, and creates an easy to
