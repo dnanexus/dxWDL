@@ -2,7 +2,7 @@ version 1.0
 
 workflow test_reorg {
 
-    call stage_one {}
+    call stage_one
 
     output {
         File output_file = stage_one.output_file
@@ -10,6 +10,7 @@ workflow test_reorg {
     }
 
 }
+
 
 task stage_one {
 
