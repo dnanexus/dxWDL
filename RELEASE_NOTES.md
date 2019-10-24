@@ -1,5 +1,18 @@
 # Release Notes
 
+## 1.35 24-Oct-2019
+- Support for GPU instances.
+
+If you want an instance that has a GPU chipset, set the `gpu` attribute to true. For example:
+```
+runtime {
+   memory: "4 GB"
+   cpu : 4
+   gpu : true
+}
+```
+
+
 ## 1.34 17-Oct-2019
 - Bug fix for handling of structs when creating task headers
 
