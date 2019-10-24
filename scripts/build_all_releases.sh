@@ -76,7 +76,8 @@ function build {
 # Create a public docker image for the dxWDL compiler that allows a simple command line
 # invocation
 function build_docker_image {
-    ln ../dxWDL-${version}.jar .
+    cd $top_dir/scripts
+    ln $top_dir/dxWDL-${version}.jar .
 
     echo "building a docker image"
     sudo docker build --build-arg VERSION=${version} -t dnanexus/dxwdl:${version} .
@@ -134,6 +135,7 @@ function parse_cmd_line {
                 shift
                 ;;
             *)
+                echo "unknown argument $1"
                 usage_die
         esac
         shift
