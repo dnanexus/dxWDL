@@ -40,7 +40,8 @@ import dxWDL.dx.DxUtils
 case class InstanceTypeReq(dxInstanceType: Option[String],
                            memoryMB: Option[Int],
                            diskGB: Option[Int],
-                           cpu: Option[Int])
+                           cpu: Option[Int],
+                           gpu: Option[Boolean])
 
 // Instance Type on the platform. For example:
 // name:   mem1_ssd1_x4
@@ -53,11 +54,13 @@ case class DxInstanceType(name: String,
                           diskGB: Int,
                           cpu: Int,
                           price: Float,
-                          os: Vector[(String, String)]) {
+                          os: Vector[(String, String)],
+                          gpu : Boolean) {
     // Does this instance satisfy the requirements?
     def satisfies(memReq: Option[Int],
                   diskReq: Option[Int],
-                  cpuReq: Option[Int]) : Boolean = {
+                  cpuReq: Option[Int],
+                  gpuReq: Option[Boolean]) : Boolean = {
         memReq match {
             case Some(x) => if (memoryMB < x) return false
             case None => ()
@@ -68,6 +71,10 @@ case class DxInstanceType(name: String,
         }
         cpuReq match {
             case Some(x) => if (cpu < x) return false
+            case None => ()
+        }
+        gpuReq match {
+            case Some(flag) => if (flag != gpu) return false
             case None => ()
         }
         return true
@@ -127,7 +134,7 @@ case class DxInstanceType(name: String,
 
 // support automatic conversion to/from JsValue
 object DxInstanceType extends DefaultJsonProtocol {
-    implicit val dxInstanceTypeFormat = jsonFormat6(DxInstanceType.apply)
+    implicit val dxInstanceTypeFormat = jsonFormat7(DxInstanceType.apply)
 }
 
 
@@ -161,16 +168,17 @@ case class InstanceTypeDB(pricingAvailable : Boolean,
     // we use here is:
     // 1) discard all instances that do not have enough resources
     // 2) choose the cheapest instance
-    def choose3Attr(memoryMB: Option[Int],
+    def chooseAttrs(memoryMB: Option[Int],
                     diskGB: Option[Int],
-                    cpu: Option[Int]) : String = {
+                    cpu: Option[Int],
+                    gpu: Option[Boolean]) : String = {
         // discard all instances that are too weak
         val sufficient: Vector[DxInstanceType] =
-            instances.filter(x => x.satisfies(memoryMB, diskGB, cpu))
+            instances.filter(x => x.satisfies(memoryMB, diskGB, cpu, gpu))
         if (sufficient.length == 0)
             throw new Exception(s"""|No instances found that match the requirements
                                     |memory=$memoryMB, diskGB=$diskGB, cpu=$cpu"""
-                                    .stripMargin.replaceAll("/", " "))
+                                    .stripMargin.replaceAll("\n", " "))
         val initialGuess = sufficient.head
         val bestInstance = sufficient.tail.foldLeft(initialGuess){ case (bestSoFar,x) =>
             if (lteq(x, bestSoFar)) x
@@ -208,10 +216,7 @@ case class InstanceTypeDB(pricingAvailable : Boolean,
     // A fast but cheap instance type.
     //
     def defaultInstanceType : String = {
-        val iType = instances.find(x => x.name == InstanceTypeDB.DEFAULT_INSTANCE_TYPE) match {
-            case Some(iType) => iType
-            case None => calcMinimalInstanceType(instances.toSet)
-        }
+        val iType = calcMinimalInstanceType(instances.toSet)
         iType.name
     }
 
@@ -239,7 +244,7 @@ case class InstanceTypeDB(pricingAvailable : Boolean,
     def apply(iType: InstanceTypeReq) : String = {
         iType.dxInstanceType match {
             case None =>
-                choose3Attr(iType.memoryMB, iType.diskGB, iType.cpu)
+                chooseAttrs(iType.memoryMB, iType.diskGB, iType.cpu, iType.gpu)
             case Some(dxIType) =>
                 // Shortcut the entire calculation, and provide the dx instance type directly
                 chooseShortcut(dxIType)
@@ -260,8 +265,6 @@ case class InstanceTypeDB(pricingAvailable : Boolean,
 }
 
 object InstanceTypeDB extends DefaultJsonProtocol {
-    val DEFAULT_INSTANCE_TYPE = "mem1_ssd1_x4"
-
     // support automatic conversion to/from JsValue
     implicit val instanceTypeDBFormat = jsonFormat2(InstanceTypeDB.apply)
 
@@ -269,12 +272,13 @@ object InstanceTypeDB extends DefaultJsonProtocol {
     def parse(dxInstanceType: Option[WomValue],
               wdlMemoryMB: Option[WomValue],
               wdlDiskGB: Option[WomValue],
-              wdlCpu: Option[WomValue]) : InstanceTypeReq = {
+              wdlCpu: Option[WomValue],
+              wdlGpu: Option[WomValue]) : InstanceTypeReq = {
         // Shortcut the entire calculation, and provide the dx instance type directly
         dxInstanceType match {
             case None => None
             case Some(WomString(iType)) =>
-                return InstanceTypeReq(Some(iType), None, None, None)
+                return InstanceTypeReq(Some(iType), None, None, None, None)
             case Some(x) =>
                 throw new Exception(s"""|dxInstaceType has to evaluate to a
                                         |WomString type ${x.toWomString}"""
@@ -359,7 +363,14 @@ object InstanceTypeDB extends DefaultJsonProtocol {
             case Some(WomFloat(x)) => Some(x.toInt)
             case Some(x) => throw new Exception(s"Cpu has to evaluate to a numeric value ${x}")
         }
-        return InstanceTypeReq(None, memoryMB, diskGB, cpu)
+
+        val gpu : Option[Boolean] = wdlGpu match {
+            case None => None
+            case Some(WomBoolean(flag)) => Some(flag)
+            case Some(x) => throw new Exception(s"Gpu has to be a boolean ${x}")
+        }
+
+        return InstanceTypeReq(None, memoryMB, diskGB, cpu, gpu)
     }
 
     // Extract an integer fields from a JsObject
@@ -423,7 +434,8 @@ object InstanceTypeDB extends DefaultJsonProtocol {
             val memoryMB = getJsIntField(jsValue, "totalMemoryMB")
             val diskSpaceGB = getJsIntField(jsValue, "ephemeralStorageGB")
             val os = getSupportedOSes(jsValue)
-            val dxInstanceType = DxInstanceType(iName, memoryMB, diskSpaceGB, numCores, 0, os)
+            val gpu = iName contains "_gpu"
+            val dxInstanceType = DxInstanceType(iName, memoryMB, diskSpaceGB, numCores, 0, os, gpu)
             iName -> dxInstanceType
         }.toMap
     }
@@ -470,14 +482,13 @@ object InstanceTypeDB extends DefaultJsonProtocol {
                 case None => None
                 case Some(iType) =>
                     Some(DxInstanceType(iName, iType.memoryMB, iType.diskGB,
-                                        iType.cpu, hourlyRate, iType.os))
+                                        iType.cpu, hourlyRate, iType.os, iType.gpu))
             }
         }.flatten.toVector
     }
 
     // Check if an instance type passes some basic criteria:
     // - Instance must support Ubuntu 16.04.
-    // - Instance is not a GPU instance.
     // - Instance is not an FPGA instance.
     // - Instance does not have local HDD storage, this
     //   means it is really old hardware.
@@ -490,8 +501,6 @@ object InstanceTypeDB extends DefaultJsonProtocol {
                     accu
         }
         if (!osSupported)
-            return false
-        if (iType.name contains "gpu")
             return false
         if (iType.name contains "fpga")
             return false

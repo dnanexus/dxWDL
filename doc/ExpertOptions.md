@@ -121,12 +121,21 @@ runtime {
 }
 ```
 
+If you want an instance that has a GPU chipset, set the `gpu` attribute to true. For example:
+```
+runtime {
+   memory: "4 GB"
+   cpu : 4
+   gpu : true
+}
+```
+
 Normally, a file used in a task is downloaded to the instance, and
 then used locally (*locallized*). If the file only needs to be
 examined once in sequential order, then this can be optimized by
-streaming instead. The Unix `cat`, `wc`, and `head` commands are of this
-nature. To specify that a file is to be streamed, mark it as such in
-the `parameter_meta` section. For example:
+streaming instead. The Unix `cat`, `wc`, and `head` commands are of
+this nature. To specify that a file is to be streamed, mark it as such
+in the `parameter_meta` section. For example:
 
 ```wdl
 task head {

@@ -48,15 +48,17 @@ case class GenerateIRTask(verbose: Verbose,
         }
 
         try {
-            val dxInstaceType = evalAttr("dx_instance_type")
+            val dxInstanceType = evalAttr("dx_instance_type")
             val memory = evalAttr("memory")
             val diskSpace = evalAttr("disks")
             val cores = evalAttr("cpu")
-            val iTypeDesc = InstanceTypeDB.parse(dxInstaceType, memory, diskSpace, cores)
+            val gpu = evalAttr("gpu")
+            val iTypeDesc = InstanceTypeDB.parse(dxInstanceType, memory, diskSpace, cores, gpu)
             IR.InstanceTypeConst(iTypeDesc.dxInstanceType,
                                  iTypeDesc.memoryMB,
                                  iTypeDesc.diskGB,
-                                 iTypeDesc.cpu)
+                                 iTypeDesc.cpu,
+                                 iTypeDesc.gpu)
         } catch {
             case e : DynamicInstanceTypesException =>
                 // The generated code will need to calculate the instance type at runtime

@@ -423,12 +423,46 @@ class GenerateIRTest extends FlatSpec with Matchers {
         }
     }
 
-    it should "correctly flatten a workflow with imports" taggedAs(EdgeTest) in {
+    it should "correctly flatten a workflow with imports" in {
         val path = pathFromBasename("compiler", "wf_to_flatten.wdl")
+        val retval = Main.compile(path.toString :: cFlags)
+        retval shouldBe a[Main.SuccessfulTerminationIR]
+    }
+
+    it should "detect a request for GPU" taggedAs(EdgeTest) in {
+        val path = pathFromBasename("compiler", "GPU.wdl")
         val retval = Main.compile(path.toString
 //                                      :: "--verbose"
 //                                      :: "--verboseKey" :: "GenerateIR"
                                       :: cFlags)
         retval shouldBe a[Main.SuccessfulTerminationIR]
+
+        inside(retval) {
+            case Main.SuccessfulTerminationIR(bundle) =>
+                bundle.allCallables.size shouldBe(1)
+                val (_, callable) = bundle.allCallables.head
+                callable shouldBe a[IR.Applet]
+                val task = callable.asInstanceOf[IR.Applet]
+                task.instanceType shouldBe(IR.InstanceTypeConst(Some("mem3_ssd1_gpu_x8"), None, None, None, None))
+        }
     }
+
+    it should "detect a request for GPU with attributes" taggedAs(EdgeTest) in {
+        val path = pathFromBasename("compiler", "GPU2.wdl")
+        val retval = Main.compile(path.toString
+//                                      :: "--verbose"
+//                                      :: "--verboseKey" :: "GenerateIR"
+                                      :: cFlags)
+        retval shouldBe a[Main.SuccessfulTerminationIR]
+
+        inside(retval) {
+            case Main.SuccessfulTerminationIR(bundle) =>
+                bundle.allCallables.size shouldBe(1)
+                val (_, callable) = bundle.allCallables.head
+                callable shouldBe a[IR.Applet]
+                val task = callable.asInstanceOf[IR.Applet]
+                task.instanceType shouldBe(IR.InstanceTypeConst(None, Some(2 * 1024), None, None, Some(true)))
+        }
+    }
+
 }

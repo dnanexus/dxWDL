@@ -6,13 +6,16 @@
 - Make sure the version number in `src/main/resources/application.conf` is correct. It is used
 when building the release.
 - Merge onto master branch, make sure [travis tests](https://travis-ci.org/dnanexus/dxWDL) pass
+
 - Build new externally visible release
-  * setup the *STAGING_TOKEN* and *PRODUCTION_TOKEN* environment variables.
-  * run `./scripts/build_all_releases.sh`, this will take a while. It builds the release
-  on staging and development. It also runs multi-region tests on staging.
-  * Update [releases](https://github.com/dnanexus-rnd/dxWDL/releases) github page,
-  use the `Draft a new release` button, and upload a dxWDL.jar file.
-- Create a dxwdl docker image with `./scripts/compiler_image/build_compiler_docker_image.sh`
+```
+./scripts/build_all_releases.sh --staging-token=XXX --production-token=YYY --docker-user=UUU --docker-password=WWW
+```
+this will take a while. It builds the release
+on staging, runs multi-region tests on staging, builds on production, and creates an easy to
+use docker image.
+
+- Update [releases](https://github.com/dnanexus-rnd/dxWDL/releases) github page, use the `Draft a new release` button, and upload a dxWDL.jar file.
 
 ## Post release
 - Update the version number in `src/main/resources/application.conf`. We don't want

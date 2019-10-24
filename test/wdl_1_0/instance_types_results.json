@@ -1,4 +1,5 @@
 {
+  "instance_types.GPUSpec_retval" : "On a GPU instance",
   "instance_types.DiskSpaceSpec_retval" : "true",
   "instance_types.MemorySpec_retval" : "true",
   "instance_types.NumCoresSpec_retval" : "true",
