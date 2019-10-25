@@ -234,13 +234,6 @@ case class Top(cOpt: CompilerOptions) {
             case Some(ex) => ex.defaultRuntimeAttributes
         }
 
-        /*val reorgApp: Either[Boolean, String] = cOpt.extras match {
-            case None => Left(cOpt.reorg)
-            case Some(ex) => ex.customReorgAttributes match  {
-                case None => Left(cOpt.reorg)
-                case Some(cOrg) => Right(cOrg.appId)
-            }
-        }*/
         val reorgApp: Either[Boolean, ReorgAttrs] = cOpt.extras match {
 
             case None => Left(cOpt.reorg)
