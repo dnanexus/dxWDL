@@ -1,14 +1,13 @@
 package dxWDL.compiler
 
 import java.nio.file.{Path, Paths}
+
 import org.scalatest.{FlatSpec, Matchers}
 import org.scalatest.Inside._
-import wom.callable.{CallableTaskDefinition}
-import wom.callable.MetaValueElement
-
+import wom.callable._
 import dxWDL.Main
 import dxWDL.base.Utils
-import dxWDL.dx.DxUtils
+import dxWDL.dx.{DXWorkflowStage, DxUtils}
 
 // These tests involve compilation -without- access to the platform.
 //
