@@ -125,6 +125,8 @@ ci_test_list = [
     "files"
 ]
 
+custom_reorg_test_list = [ "wf_custom_reorg" ]
+
 medium_test_list= wdl_v1_list + docker_test_list
 large_test_list= draft2_test_list + wdl_v1_list + docker_test_list + single_tasks_list
 

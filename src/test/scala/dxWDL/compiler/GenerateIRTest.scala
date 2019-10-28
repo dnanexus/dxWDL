@@ -7,7 +7,7 @@ import org.scalatest.Inside._
 import wom.callable._
 import dxWDL.Main
 import dxWDL.base.Utils
-import dxWDL.dx.{DXWorkflowStage, DxUtils}
+import dxWDL.dx._
 
 // These tests involve compilation -without- access to the platform.
 //
@@ -435,7 +435,7 @@ class GenerateIRTest extends FlatSpec with Matchers {
     it should "Compile a workflow with a custom reorg applet" taggedAs(EdgeTest) in {
         val path = pathFromBasename("compiler", basename="wf_custom_reorg.wdl")
 
-        val extrasPath = pathFromBasename("compiler/extras", basename="extras_custom_reorg.json")
+        val extrasPath = pathFromBasename("compiler/extras", basename="functional_custom_reorg.json")
 
         val retval = Main.compile(
             path.toString :: "-extras" :: extrasPath.toString :: cFlags
@@ -452,6 +452,6 @@ class GenerateIRTest extends FlatSpec with Matchers {
         }
 
         wf.stages.size shouldBe(2)
-        wf.stages(1).calleeName shouldBe("applet-FfjGKQj0jy8bJq64B41ZV0xK")
+        wf.stages(1).calleeName shouldBe("applet-Ffqg57j0jy8q1fgy0GFz5px7")
     }
 }
