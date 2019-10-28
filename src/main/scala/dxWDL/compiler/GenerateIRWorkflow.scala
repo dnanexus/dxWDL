@@ -615,13 +615,15 @@ case class GenerateIRWorkflow(wf : WorkflowDefinition,
     private def addCustomReorgStage(wfName: String,
                                     wfSourceStandAlone: String,
                                     wfOutputs: Vector[(CVar, SArg)],
-                                    reorgAppletID: String
+                                    reorgAttributes: ReorgAttrs
                                    ) : (IR.Stage, IR.Applet) = {
 
-        val appletKind = IR.AppletKindWorkflowCustomReorg(reorgAppletID)
+        val appletKind = IR.AppletKindWorkflowCustomReorg(reorgAttributes.appId)
+        val appInputs: Vector[IR.CVar] = wfOutputs.map { case (cVar, _) => cVar }.toVector
+        appInputs :+ CVar(reorgAttributes.reorgInputs, WomSingleFileType, None)
         val applet = IR.Applet(
-            reorgAppletID,
-            wfOutputs.map { case (cVar, _) => cVar },
+            reorgAttributes.appId,
+            appInputs,
             Vector.empty,
             IR.InstanceTypeDefault,
             IR.DockerImageNone,
@@ -629,7 +631,7 @@ case class GenerateIRWorkflow(wf : WorkflowDefinition,
             wfSourceStandAlone
         )
 
-        Utils.trace(verbose.on, s"Adding custom output reorganization applet ${reorgAppletID}")
+        Utils.trace(verbose.on, s"Adding custom output reorganization applet ${reorgAttributes.appId}")
 
         // Link to the X.y original variables
         val inputs: Vector[IR.SArg] = wfOutputs.map{ case (_, sArg) => sArg }.toVector
@@ -757,7 +759,7 @@ case class GenerateIRWorkflow(wf : WorkflowDefinition,
 
     // Compile a (single) user defined WDL workflow into a dx:workflow.
     //
-    private def apply2(locked: Boolean, reorg: Either[Boolean, String]) : (IR.Workflow, Vector[IR.Callable]) =
+    private def apply2(locked: Boolean, reorg: Either[Boolean, ReorgAttrs]) : (IR.Workflow, Vector[IR.Callable]) =
     {
         Utils.trace(verbose.on, s"compiling workflow ${wf.name}")
         val graph = wf.innerGraph
@@ -785,11 +787,11 @@ case class GenerateIRWorkflow(wf : WorkflowDefinition,
             } else {
                 (irwf, irCallables)
             }
-            case Right(appId) =>
+            case Right(reorgAttributes) =>
                 val (reorgStage, reorgApl) = addCustomReorgStage(wf.name,
                     wfSourceStandAlone,
                     wfOutputs,
-                    appId)
+                    reorgAttributes)
                 (irwf.copy(stages = irwf.stages :+ reorgStage),
                   irCallables :+ reorgApl)
         }
@@ -797,7 +799,7 @@ case class GenerateIRWorkflow(wf : WorkflowDefinition,
         (wf2, apl2)
     }
 
-    def apply(locked: Boolean, reorg: Either[Boolean, String]) : (IR.Workflow, Vector[IR.Callable]) = {
+    def apply(locked: Boolean, reorg: Either[Boolean, ReorgAttrs]) : (IR.Workflow, Vector[IR.Callable]) = {
         val (irwf, irCallables) = apply2(locked, reorg)
 
         // sanity check
