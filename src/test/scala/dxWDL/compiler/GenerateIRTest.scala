@@ -469,9 +469,8 @@ class GenerateIRTest extends FlatSpec with Matchers {
         }
 
         wf.stages.size shouldBe(2)
-        wf.stages(1).calleeName shouldBe "applet-FfjGKQj0jy8bJq64B41ZV0xK"
+        wf.stages(1).calleeName shouldBe "applet-Ffv046j0jy8zFQkxJy5ZVk8p"
     }
-
 
     it should "Compile a workflow on the platform and we can describe it" taggedAs(EdgeTest)  in {
         val path = pathFromBasename("compiler", basename="wf_custom_reorg.wdl")
@@ -500,18 +499,17 @@ class GenerateIRTest extends FlatSpec with Matchers {
         wfStages.size shouldBe 2
 
         // if its not a JsObject return mepty string and test will fail
-        val stageId: String = wfStages(1) match {
-            case JsObject(x) => x("id").toString
-            case _ => ""
+        val stageId: JsValue = wfStages(1) match {
+            case JsObject(x) => JsObject(x).fields("id")
+            case _ => JsString("")
         }
 
-        val executable: String  = wfStages(1) match {
-            case JsObject(x) => x("executable").toString
-            case _ => ""
+        val executable: JsValue  = wfStages(1) match {
+            case JsObject(x) => JsObject(x).fields("executable")
+            case _ => JsString("")
         }
-
-        stageId shouldBe "stage-reorg"
-        executable shouldBe Some("applet-FfjGKQj0jy8bJq64B41ZV0xK")
+        stageId shouldBe JsString("stage-reorg")
+        executable shouldBe JsString("applet-Ffv046j0jy8zFQkxJy5ZVk8p")
     }
 }
 
