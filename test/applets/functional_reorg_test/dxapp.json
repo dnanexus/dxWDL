@@ -5,10 +5,18 @@
   "dxapi": "1.0.0",
   "inputSpec": [
     {
-      "name": "inputs",
-      "label": "Inputs",
+      "name": "output_file",
+      "label": "output_file",
       "help": "",
-      "class": "array:file",
+      "class": "file",
+      "patterns": ["*"],
+      "optional": false
+    },
+    {
+      "name": "output_config_file",
+      "label": "output_config_file",
+      "help": "",
+      "class": "file",
       "patterns": ["*"],
       "optional": false
     },
@@ -31,7 +39,7 @@
     }
   ],
   "runSpec": {
-    "interpreter": "bash",
+    "interpreter": "python2.7",
     "timeoutPolicy": {
       "*": {
         "hours": 48
@@ -39,7 +47,7 @@
     },
     "distribution": "Ubuntu",
     "release": "16.04",
-    "file": "code.sh"
+    "file": "code.py"
   },
   "access": {
     "network": [
