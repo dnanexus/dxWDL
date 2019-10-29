@@ -320,6 +320,8 @@ case class Native(dxWDLrtId: Option[String],
         val body:String = applet.kind match {
             case IR.AppletKindNative(_) =>
                 throw new Exception("Sanity: generating a bash script for a native applet")
+            case IR.AppletKindWorkflowCustomReorg(_) =>
+                throw new Exception("Sanity: generating a bash script for a custom reorg applet")
             case IR.AppletKindWfFragment(_, _, _) =>
                 genBashScriptWfFragment()
             case IR.AppletKindWfInputs =>
@@ -1033,6 +1035,9 @@ case class Native(dxWDLrtId: Option[String],
                         val execRecord = apl.kind match {
                             case IR.AppletKindNative(id) =>
                                 // native applets do not depend on other data-objects
+                                ExecRecord(apl, DxExec(id), Vector.empty)
+                            case IR.AppletKindWorkflowCustomReorg(id) =>
+                                // does this has to be a different class?
                                 ExecRecord(apl, DxExec(id), Vector.empty)
                             case _ =>
                                 val (dxApplet, dependencies) = buildAppletIfNeeded(apl, accu)

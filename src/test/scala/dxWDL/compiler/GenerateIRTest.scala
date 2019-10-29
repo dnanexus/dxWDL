@@ -9,6 +9,7 @@ import wom.callable.MetaValueElement
 import dxWDL.Main
 import dxWDL.base.Utils
 import dxWDL.dx.DxUtils
+import spray.json._
 
 // These tests involve compilation -without- access to the platform.
 //
@@ -447,22 +448,70 @@ class GenerateIRTest extends FlatSpec with Matchers {
         }
     }
 
-    it should "detect a request for GPU with attributes" taggedAs(EdgeTest) in {
-        val path = pathFromBasename("compiler", "GPU2.wdl")
-        val retval = Main.compile(path.toString
-//                                      :: "--verbose"
-//                                      :: "--verboseKey" :: "GenerateIR"
-                                      :: cFlags)
-        retval shouldBe a[Main.SuccessfulTerminationIR]
 
-        inside(retval) {
-            case Main.SuccessfulTerminationIR(bundle) =>
-                bundle.allCallables.size shouldBe(1)
-                val (_, callable) = bundle.allCallables.head
-                callable shouldBe a[IR.Applet]
-                val task = callable.asInstanceOf[IR.Applet]
-                task.instanceType shouldBe(IR.InstanceTypeConst(None, Some(2 * 1024), None, None, Some(true)))
+    it should "Compile a workflow with a custom reorg applet" in {
+        val path = pathFromBasename("compiler", basename="wf_custom_reorg.wdl")
+
+        val extrasPath = pathFromBasename("compiler/extras", basename="extras_custom_reorg.json")
+
+        val retval = Main.compile(
+            path.toString :: "-extras" :: extrasPath.toString :: cFlags
+        )
+        retval shouldBe a [Main.SuccessfulTerminationIR]
+        val bundle = retval match {
+            case Main.SuccessfulTerminationIR(ir) => ir
+            case _ => throw new Exception("sanity")
         }
+
+        val wf: IR.Workflow =  bundle.primaryCallable.get match {
+            case wf: IR.Workflow => wf
+            case _ => throw new Exception("sanity")
+        }
+
+        wf.stages.size shouldBe(2)
+        wf.stages(1).calleeName shouldBe "applet-FfjGKQj0jy8bJq64B41ZV0xK"
     }
 
+
+    it should "Compile a workflow on the platform and we can describe it" taggedAs(EdgeTest)  in {
+        val path = pathFromBasename("compiler", basename="wf_custom_reorg.wdl")
+
+        val extrasPath = pathFromBasename("compiler/extras", basename="extras_custom_reorg.json")
+
+        val cFlags2 = cFlags.drop(2)
+
+
+        val retval = Main.compile(
+            path.toString :: "-extras" :: extrasPath.toString :: cFlags2
+        )
+        retval shouldBe a [Main.SuccessfulTermination]
+        val wfId: String = retval match {
+            case Main.SuccessfulTermination(ir) => ir
+            case _ => throw new Exception("sanity")
+        }
+
+        val (stdout, stderr) = Utils.execCommand(s"dx describe ${wfId} --json")
+
+        val wfStages = stdout.parseJson.asJsObject.fields.get("stages") match {
+            case Some(JsArray(x)) => x.toVector
+            case other => throw new Exception(s"Unexpected result ${other}")
+        }
+
+        wfStages.size shouldBe 2
+
+        // if its not a JsObject return mepty string and test will fail
+        val stageId: String = wfStages(1) match {
+            case JsObject(x) => x("id").toString
+            case _ => ""
+        }
+
+        val executable: String  = wfStages(1) match {
+            case JsObject(x) => x("executable").toString
+            case _ => ""
+        }
+
+        stageId shouldBe "stage-reorg"
+        executable shouldBe Some("applet-FfjGKQj0jy8bJq64B41ZV0xK")
+    }
 }
+
