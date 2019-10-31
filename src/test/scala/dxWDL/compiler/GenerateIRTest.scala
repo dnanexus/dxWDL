@@ -469,7 +469,7 @@ class GenerateIRTest extends FlatSpec with Matchers {
         }
 
         wf.stages.size shouldBe(2)
-        wf.stages(1).calleeName shouldBe "applet-Ffv046j0jy8zFQkxJy5ZVk8p"
+        wf.stages(1).calleeName shouldBe "applet-Ffv40q00jy8qPb4qGY40Jp28"
     }
 
     it should "Compile a workflow on the platform and we can describe it" taggedAs(EdgeTest)  in {
@@ -477,7 +477,7 @@ class GenerateIRTest extends FlatSpec with Matchers {
 
         val extrasPath = pathFromBasename("compiler/extras", basename="extras_custom_reorg.json")
 
-        val cFlags2 = cFlags.drop(2)
+        val cFlags2 = cFlags.drop(5)
 
 
         val retval = Main.compile(
@@ -496,7 +496,7 @@ class GenerateIRTest extends FlatSpec with Matchers {
             case other => throw new Exception(s"Unexpected result ${other}")
         }
 
-        wfStages.size shouldBe 2
+        wfStages.size shouldBe 4
 
         // if its not a JsObject return mepty string and test will fail
         val stageId: JsValue = wfStages(1) match {
@@ -509,7 +509,7 @@ class GenerateIRTest extends FlatSpec with Matchers {
             case _ => JsString("")
         }
         stageId shouldBe JsString("stage-reorg")
-        executable shouldBe JsString("applet-Ffv046j0jy8zFQkxJy5ZVk8p")
+        executable shouldBe JsString("applet-Ffv40q00jy8qPb4qGY40Jp28")
     }
 }
 
