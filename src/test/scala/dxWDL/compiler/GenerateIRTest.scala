@@ -477,8 +477,8 @@ class GenerateIRTest extends FlatSpec with Matchers {
 
         val extrasPath = pathFromBasename("compiler/extras", basename="extras_custom_reorg.json")
 
+        // remove locked workflow flag
         val cFlags2 = cFlags.drop(5)
-
 
         val retval = Main.compile(
             path.toString :: "-extras" :: extrasPath.toString :: cFlags2
@@ -498,18 +498,18 @@ class GenerateIRTest extends FlatSpec with Matchers {
 
         wfStages.size shouldBe 4
 
-        // if its not a JsObject return mepty string and test will fail
-        val stageId: JsValue = wfStages(1) match {
-            case JsObject(x) => JsObject(x).fields("id")
-            case _ => JsString("")
+        val reorgStage = wfStages.last
+
+        // if its not a JsObject return empty string and test will fail
+        val reorgDetails = reorgStage match {
+            case JsObject(x) => JsObject(x).getFields("id", "executable")
+            case _ => throw new Exception("sanity")
         }
 
-        val executable: JsValue  = wfStages(1) match {
-            case JsObject(x) => JsObject(x).fields("executable")
-            case _ => JsString("")
-        }
-        stageId shouldBe JsString("stage-reorg")
-        executable shouldBe JsString("applet-Ffv40q00jy8qPb4qGY40Jp28")
+        reorgDetails shouldBe Seq(
+            JsString("stage-reorg"), JsString("applet-Ffv40q00jy8qPb4qGY40Jp28")
+        )
+
     }
 }
 

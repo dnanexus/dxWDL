@@ -20,7 +20,7 @@ task stage_one {
     }
 
     output {
-        File output_files = ["/home/dnanexus/output_file", "/home/dnanexus/output_file_two"]
+        Array[File] output_files = ["/home/dnanexus/output_file", "/home/dnanexus/output_file_two"]
         File output_config_file = "/home/dnanexus/output_config_file"
     }
 }
