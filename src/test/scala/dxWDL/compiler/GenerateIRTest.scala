@@ -313,13 +313,13 @@ class GenerateIRTest extends FlatSpec with Matchers {
         }
 
         val cgrepTask = getTaskByName("cgrep", bundle)
-        cgrepTask.parameterMeta shouldBe (Map("in_file" -> MetaValueElement.MetaValueElementObject(Map("stream" -> true))))
+        cgrepTask.parameterMeta shouldBe (Map("in_file" -> MetaValueElement.MetaValueElementObject(Map("stream" -> MetaValueElement.MetaValueElementBoolean(true)))))
         val iDef = cgrepTask.inputs.find(_.name == "in_file").get
-        iDef.parameterMeta shouldBe (Some(MetaValueElement.MetaValueElementObject(Map("stream" -> true))))
+        iDef.parameterMeta shouldBe (Some(MetaValueElement.MetaValueElementObject(Map("stream" -> MetaValueElement.MetaValueElementBoolean(true)))))
 
         val diffTask = getTaskByName("diff", bundle)
-        diffTask.parameterMeta shouldBe (Map("a" -> MetaValueElement.MetaValueElementObject(Map("stream" -> true)),
-                                             "b" -> MetaValueElement.MetaValueElementObject(Map("stream" -> true))))
+        diffTask.parameterMeta shouldBe (Map("a" -> MetaValueElement.MetaValueElementObject(Map("stream" -> MetaValueElement.MetaValueElementBoolean(true))),
+                                             "b" -> MetaValueElement.MetaValueElementObject(Map("stream" -> MetaValueElement.MetaValueElementBoolean(true)))))
     }
 
     it should "recognize the streaming annotation for wdl draft2" in {
