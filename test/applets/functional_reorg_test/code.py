@@ -2,6 +2,15 @@
 import dxpy
 
 
+def create_folder(container, folder_name):
+    try:
+        container.new_folder(folder_name, parents=True)
+    except dxpy.exceptions.InvalidState:
+        print(
+            "Folder Exists %s ignoring new_folder creation" % folder_name
+        )
+
+
 @dxpy.entry_point('main')
 def main(output_file, output_config_file, config=None):
 
@@ -13,8 +22,9 @@ def main(output_file, output_config_file, config=None):
     output_folder_2 = '/tests/test_reorg/out_2'
 
     dx_container = dxpy.DXProject(dxpy.PROJECT_CONTEXT_ID)
-    dx_container.new_folder(output_folder_1, parents=True)
-    dx_container.new_folder(output_folder_2, parents=True)
+
+    create_folder(dx_container, output_folder_1)
+    create_folder(dx_container, output_folder_2)
 
     dx_container.move(
         destination=output_folder_1,
