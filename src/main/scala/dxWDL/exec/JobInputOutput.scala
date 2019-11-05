@@ -283,7 +283,8 @@ case class JobInputOutput(dxIoFunctions : DxIoFunctions,
                         case (Some(MetaValueElement.MetaValueElementString("stream"))) =>
                             findFiles(womValue)
                         case (Some(MetaValueElement.MetaValueElementObject(value))) =>
-                            if (value.getOrElse("stream", false)) {
+                            if (value.contains("stream") && 
+                                value("stream").asInstanceOf[MetaValueElement.MetaValueElementBoolean].value) {
                                 findFiles(womValue)
                             } else {
                                 Vector.empty
