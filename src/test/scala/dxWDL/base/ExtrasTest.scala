@@ -2,7 +2,6 @@ package dxWDL.base
 
 import com.dnanexus.AccessLevel
 import com.dnanexus.exceptions.ResourceNotFoundException
-import com.dnanexus.exceptions.PermissionDeniedException
 import dxWDL.compiler.EdgeTest
 import org.scalatest.{FlatSpec, Matchers}
 import spray.json._
@@ -187,7 +186,7 @@ class ExtrasTest extends FlatSpec with Matchers {
         }
     }
 
-    it should "parse the custom-reorg object" taggedAs(EdgeTest) in {
+    it should "parse the custom_reorg object" in {
 
         // app_id is mummer nucmer app in project-FJ90qPj0jy8zYvVV9yz3F5gv
         val appId: String = "applet-FKfZpF002fp738k1Jqz8vX1G"
@@ -208,7 +207,7 @@ class ExtrasTest extends FlatSpec with Matchers {
         )
     }
 
-    it should "throw IllegalArgumentException due to missing applet id" taggedAs(EdgeTest) in {
+    it should "throw IllegalArgumentException due to missing applet id" in {
 
         val inputs: String = "dx://file-123456"
         val reorg: JsValue   =
@@ -227,7 +226,7 @@ class ExtrasTest extends FlatSpec with Matchers {
         thrown.getMessage should be ("applet ID must be specified in the custom_reorg section.")
     }
 
-    it should "throw IllegalArgumentException due to missing inputs in custom_reorg section" taggedAs(EdgeTest) in {
+    it should "throw IllegalArgumentException due to missing inputs in custom_reorg section" in {
 
         // app_id is mummer nucmer app in project-FJ90qPj0jy8zYvVV9yz3F5gv
         val appId: String = "applet-FKfZpF002fp738k1Jqz8vX1G"
@@ -250,7 +249,7 @@ class ExtrasTest extends FlatSpec with Matchers {
         )
     }
 
-    it should "Allow inputs to be null in custom reorg" taggedAs(EdgeTest) in {
+    it should "Allow inputs to be null in custom reorg" in {
 
       // app_id is mummer nucmer app in project-FJ90qPj0jy8zYvVV9yz3F5gv
       val appId: String = "applet-FKfZpF002fp738k1Jqz8vX1G"
@@ -270,7 +269,7 @@ class ExtrasTest extends FlatSpec with Matchers {
       )
   }
 
-  it should "throw IllegalArgumentException due to invalid applet ID" taggedAs(EdgeTest) in {
+  it should "throw IllegalArgumentException due to invalid applet ID" in {
 
     // invalid applet ID
     val appId : String = "applet-123456"
@@ -293,7 +292,7 @@ class ExtrasTest extends FlatSpec with Matchers {
 
   }
 
-  it should "throw ResourceNotFoundException due to non-existant applet" taggedAs(EdgeTest) in {
+  it should "throw ResourceNotFoundException due to non-existent applet" in {
 
     // non-existant (made up) applet ID
     val appId : String = "applet-mPX7K2j0Gv2K2jXF75Bf21v2"
@@ -316,7 +315,7 @@ class ExtrasTest extends FlatSpec with Matchers {
 
   }
 
-  it should "throw IllegalArgumentException due to invalid file ID" taggedAs(EdgeTest) in {
+  it should "throw IllegalArgumentException due to invalid file ID" in {
 
     // app_id is mummer nucmer app in project-FJ90qPj0jy8zYvVV9yz3F5gv
     val appId : String = "applet-FKfZpF002fp738k1Jqz8vX1G"
@@ -367,7 +366,7 @@ class ExtrasTest extends FlatSpec with Matchers {
 
   }
 
-  it should "throw PermissionDeniedException due to applet not having contribute access in the project" taggedAs(EdgeTest) in {
+  it should "throw PermissionDeniedException due to applet not having contribute access in the project" in {
 
     // app_id is sum app in project-FJ90qPj0jy8zYvVV9yz3F5gv
     val appId: String = "applet-FJqZk8j0jy8xb42JK2x0Gk7B"
@@ -743,7 +742,7 @@ class ExtrasTest extends FlatSpec with Matchers {
         result("upstreamProjects") should be (dxDetailsJson)
     }
 
-    it should "all DxAttr to return RunSpec Json" taggedAs(EdgeTest) in {
+    it should "all DxAttr to return RunSpec Json" in {
 
         val expectedPolicy = """
             |{
@@ -766,7 +765,7 @@ class ExtrasTest extends FlatSpec with Matchers {
 
     }
 
-    it should "all DxAttr to return empty runSpec and details Json" taggedAs(EdgeTest) in {
+    it should "all DxAttr to return empty runSpec and details Json" in {
 
         val dxAttrs = DxAttrs(None, None)
 

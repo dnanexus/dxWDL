@@ -1,7 +1,6 @@
 package dxWDL
 
 import com.dnanexus._
-import com.dnanexus.exceptions.InvalidInputException
 import com.fasterxml.jackson.databind.JsonNode
 import com.typesafe.config._
 import java.nio.file.{Path, Paths}
@@ -366,7 +365,7 @@ object Main extends App {
         if ( extras != None ) {
             if (extras.contains("reorg")  && (options contains "reorg")) {
 
-                throw new InvalidInputException("ERROR: cannot provide --reorg option when reorg is specified in extras.", -1)
+                throw new InvalidInputException("ERROR: cannot provide --reorg option when reorg is specified in extras.")
 
             }
         }

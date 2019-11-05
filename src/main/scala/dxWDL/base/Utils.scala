@@ -355,3 +355,8 @@ object Utils {
         "[" + concat + "]"
     }
 }
+
+
+class PermissionDeniedException(s:String) extends Exception(s){}
+
+class InvalidInputException(s:String) extends Exception(s){}

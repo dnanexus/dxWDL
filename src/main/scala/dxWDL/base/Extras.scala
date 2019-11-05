@@ -6,7 +6,6 @@ package dxWDL.base
 import com.dnanexus.AccessLevel
 import com.dnanexus.DXApplet
 import com.dnanexus.DXFile
-import com.dnanexus.exceptions.PermissionDeniedException
 import com.fasterxml.jackson.databind.JsonNode
 import spray.json._
 import DefaultJsonProtocol._
@@ -643,12 +642,12 @@ object Extras {
 
         if (!isValid) {
             throw new PermissionDeniedException(s"ERROR: Applet for custom reorg stage ${reorgAppId } does not " +
-              s"have CONTRIBUTOR or ADMINISTRATOR access and this is required.", -1)
+              s"have CONTRIBUTOR or ADMINISTRATOR access and this is required.")
         }
 
     }
 
-    private def veryifyRorgApp(reorgAppId: String): Unit= {
+    private def veryifyReorgApp(reorgAppId: String): Unit= {
 
         // if reorgAppId is invalid, DXApplet.getInstance will throw an IllegalArgumentException
         val app: DXApplet = DXApplet.getInstance(reorgAppId)
@@ -679,7 +678,7 @@ object Extras {
 
         val fields = jsv.asJsObject.fields
         val (reorgAppId, reorgInput) = checkAttrs(fields)
-        veryifyRorgApp(reorgAppId)
+        veryifyReorgApp(reorgAppId)
         verifyInputs(reorgInput)
 
         Utils.trace(
