@@ -282,6 +282,12 @@ case class JobInputOutput(dxIoFunctions : DxIoFunctions,
                     parameterMeta.get(iDef.name) match {
                         case (Some(MetaValueElement.MetaValueElementString("stream"))) =>
                             findFiles(womValue)
+                        case (Some(MetaValueElement.MetaValueElementObject(value))) =>
+                            if (value.getOrElse("stream", false)) {
+                                findFiles(womValue)
+                            } else {
+                                Vector.empty
+                            }
                         case _ =>
                             Vector.empty
                     }
