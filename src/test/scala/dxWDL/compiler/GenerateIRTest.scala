@@ -448,7 +448,6 @@ class GenerateIRTest extends FlatSpec with Matchers {
         }
     }
 
-
     it should "Compile a workflow with a custom reorg applet" in {
         val path = pathFromBasename("compiler", basename="wf_custom_reorg.wdl")
 
@@ -507,7 +506,7 @@ class GenerateIRTest extends FlatSpec with Matchers {
         }
 
         reorgDetails.getFields("id", "executable") shouldBe Seq(
-            JsString("stage-reorg"), JsString("applet-Fg2xVFj0jy8qJV5X0PvJvGYj")
+            JsString("stage-reorg"), JsString("applet-Fg2xv200jy8XzjZ4B020Xk2Z")
         )
         // There should be 3 inputs, the output from output stage and the custom reorg config file.
         val reorgInput: JsObject = reorgDetails.fields("input") match {
