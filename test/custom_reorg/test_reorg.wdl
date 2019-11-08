@@ -13,10 +13,12 @@ workflow test_reorg {
 
 task stage_one {
 
-    command {
+    command <<<
+        set -euxo pipefail
+
         touch output_file && echo "This is the output file" >> output_file
         touch output_config_file && echo "This is the output config file" >> output_config_file
-    }
+    >>>
 
     output {
         File output_file = "/home/dnanexus/output_file"

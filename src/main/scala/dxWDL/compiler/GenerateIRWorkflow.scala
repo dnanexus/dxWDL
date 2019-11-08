@@ -8,19 +8,18 @@ import wom.graph._
 import wom.graph.expression._
 import wom.types._
 import wom.values._
-
-import dxWDL.base._
+import dxWDL.base.{Language, _}
 import dxWDL.dx._
 import dxWDL.util._
-import IR.{CVar, SArg, COMMON, OUTPUT_SECTION, REORG}
+import IR.{COMMON, CVar, OUTPUT_SECTION, REORG, SArg, SArgConst}
 
-case class GenerateIRWorkflow(wf : WorkflowDefinition,
+case class GenerateIRWorkflow(wf: WorkflowDefinition,
                               wfSourceCode: String,
                               wfSourceStandAlone: String,
                               callsLoToHi: Vector[String],
                               callables: Map[String, IR.Callable],
-                              language: Language.Value,
-                              verbose: Verbose) {
+                              language: Language.Value, verbose: Verbose,
+                              reorg: Either[Boolean, ReorgAttrs]) {
     val verbose2 : Boolean = verbose.containsKey("GenerateIR")
 
     private case class LinkedVar(cVar: CVar, sArg: SArg)
@@ -527,6 +526,7 @@ case class GenerateIRWorkflow(wf : WorkflowDefinition,
                                   wfSourceStandAlone: String,
                                   inputVars: Vector[CVar]) : (IR.Stage, IR.Applet) = {
         val outputVars: Vector[CVar] = inputVars
+
         val applet = IR.Applet(s"${wfName}_${COMMON}",
                                inputVars,
                                outputVars,
@@ -620,10 +620,16 @@ case class GenerateIRWorkflow(wf : WorkflowDefinition,
 
         val appletKind = IR.AppletKindWorkflowCustomReorg(reorgAttributes.appId)
         val appInputs: Vector[IR.CVar] = wfOutputs.map { case (cVar, _) => cVar }.toVector
-        appInputs :+ CVar(reorgAttributes.reorgInputs, WomSingleFileType, None)
+
+        val configFile: Option[WomSingleFile] = reorgAttributes.reorgInputs match {
+            case "" => None
+            case x: String => Some(WomSingleFile(x))
+        }
+
+
         val applet = IR.Applet(
             reorgAttributes.appId,
-            appInputs,
+            appInputs :+ CVar("config", WomSingleFileType, configFile),
             Vector.empty,
             IR.InstanceTypeDefault,
             IR.DockerImageNone,
@@ -636,7 +642,11 @@ case class GenerateIRWorkflow(wf : WorkflowDefinition,
         // Link to the X.y original variables
         val inputs: Vector[IR.SArg] = wfOutputs.map{ case (_, sArg) => sArg }.toVector
 
-        (IR.Stage(REORG, genStageId(Some(REORG)), applet.name, inputs, Vector.empty[CVar]),
+
+
+
+        (IR.Stage(REORG, genStageId(Some(REORG)), applet.name, inputs :+ SArgConst(configFile.get)
+            , Vector.empty[CVar]),
           applet)
     }
 
@@ -759,7 +769,7 @@ case class GenerateIRWorkflow(wf : WorkflowDefinition,
 
     // Compile a (single) user defined WDL workflow into a dx:workflow.
     //
-    private def apply2(locked: Boolean, reorg: Either[Boolean, ReorgAttrs]) : (IR.Workflow, Vector[IR.Callable]) =
+    private def apply2(locked: Boolean) =
     {
         Utils.trace(verbose.on, s"compiling workflow ${wf.name}")
         val graph = wf.innerGraph
@@ -800,8 +810,8 @@ case class GenerateIRWorkflow(wf : WorkflowDefinition,
         (wf2, apl2)
     }
 
-    def apply(locked: Boolean, reorg: Either[Boolean, ReorgAttrs]) : (IR.Workflow, Vector[IR.Callable]) = {
-        val (irwf, irCallables) = apply2(locked, reorg)
+    def apply(locked: Boolean): (IR.Workflow, Vector[IR.Callable]) = {
+        val (irwf, irCallables) = apply2(locked)
 
         // sanity check
         val callableNames: Set[String] =

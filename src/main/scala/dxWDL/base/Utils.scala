@@ -34,6 +34,9 @@ object Utils {
     val MAX_NUM_FILES_MOVE_LIMIT = 1000
     val UBUNTU_VERSION = "16.04"
     val VERSION_PROP = "dxWDL_version"
+    val REORG_CONFIG = "___reorg_conf"
+
+
     var traceLevel = 0
 
     // The version lives in application.conf
