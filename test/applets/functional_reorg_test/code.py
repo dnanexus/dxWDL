@@ -12,11 +12,10 @@ def create_folder(container, folder_name):
 
 
 @dxpy.entry_point('main')
-def main(output_file, output_config_file, config=None):
+def main(output_file, output_config_file, ___reorg_config=None, ___reorg_status=None):
 
     output_file = dxpy.DXFile(output_file)
     output_config_file = dxpy.DXFile(output_config_file)
-    config = dxpy.DXFile(config)
 
     output_folder_1 = '/tests/test_reorg/out_1'
     output_folder_2 = '/tests/test_reorg/out_2'

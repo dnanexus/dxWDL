@@ -541,6 +541,14 @@ case class GenerateIRWorkflow(wf: WorkflowDefinition,
          applet)
     }
 
+    private def addOutputStatus(outputsVar: Vector[CVar]) = {
+        outputsVar :+ CVar(
+            Utils.REORG_STATUS,
+            WomStringType,
+            Some(WomString("completed"))
+        )
+    }
+
     // There are two reasons to be build a special output section:
     // 1. Locked workflow: some of the workflow outputs are expressions.
     //    We need an extra applet+stage to evaluate them.
@@ -574,17 +582,22 @@ case class GenerateIRWorkflow(wf: WorkflowDefinition,
                 throw new Exception(s"unhandled output ${other}")
         }.toVector
 
+        val updatedOutputVars: Vector[CVar] = reorg match {
+            case Left(reorg_flag) => outputVars
+            case Right(reorg_attrs) => addOutputStatus(outputVars)
+        }
         val applet = IR.Applet(s"${wfName}_${OUTPUT_SECTION}",
-                               inputVars.map(_.cVar),
-                               outputVars,
-                               IR.InstanceTypeDefault,
-                               IR.DockerImageNone,
-                               IR.AppletKindWfOutputs,
-                               wfSourceStandAlone)
+            inputVars.map(_.cVar),
+            updatedOutputVars,
+            IR.InstanceTypeDefault,
+            IR.DockerImageNone,
+            IR.AppletKindWfOutputs,
+            wfSourceStandAlone)
+
 
         // define the extra stage we add to the workflow
         (IR.Stage(OUTPUT_SECTION, genStageId(Some(OUTPUT_SECTION)), applet.name,
-                  inputVars.map(_.sArg), outputVars),
+                  inputVars.map(_.sArg), updatedOutputVars),
          applet)
     }
 
@@ -619,17 +632,23 @@ case class GenerateIRWorkflow(wf: WorkflowDefinition,
                                    ) : (IR.Stage, IR.Applet) = {
 
         val appletKind = IR.AppletKindWorkflowCustomReorg(reorgAttributes.appId)
-        val appInputs: Vector[IR.CVar] = wfOutputs.map { case (cVar, _) => cVar }.toVector
+
+        // will throw error if there is no status string. Should consider checking there i s only one.
+        val reorgStatusInput: (CVar, SArg) = wfOutputs.filter(x=> x._1.name == Utils.REORG_STATUS).head
 
         val configFile: Option[WomSingleFile] = reorgAttributes.reorgInputs match {
             case "" => None
             case x: String => Some(WomSingleFile(x))
         }
 
+        val appInputs = Vector(
+            reorgStatusInput._1,
+            CVar(Utils.REORG_CONFIG, WomSingleFileType, configFile)
+        )
 
         val applet = IR.Applet(
             reorgAttributes.appId,
-            appInputs :+ CVar("config", WomSingleFileType, configFile),
+            appInputs,
             Vector.empty,
             IR.InstanceTypeDefault,
             IR.DockerImageNone,
@@ -640,12 +659,9 @@ case class GenerateIRWorkflow(wf: WorkflowDefinition,
         Utils.trace(verbose.on, s"Adding custom output reorganization applet ${reorgAttributes.appId}")
 
         // Link to the X.y original variables
-        val inputs: Vector[IR.SArg] = wfOutputs.map{ case (_, sArg) => sArg }.toVector
+        val inputs: Vector[IR.SArg] = Vector(reorgStatusInput._2,  SArgConst(configFile.get))
 
-
-
-
-        (IR.Stage(REORG, genStageId(Some(REORG)), applet.name, inputs :+ SArgConst(configFile.get)
+        (IR.Stage(REORG, genStageId(Some(REORG)), applet.name, inputs
             , Vector.empty[CVar]),
           applet)
     }

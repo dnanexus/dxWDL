@@ -472,45 +472,6 @@ class GenerateIRTest extends FlatSpec with Matchers {
         wf.stages(1).calleeName shouldBe "applet-Ffv40q00jy8qPb4qGY40Jp28"
     }
 
-    it should "Compile a workflow on the platform and we can describe it" in {
-        val path = pathFromBasename("compiler", basename="wf_custom_reorg.wdl")
-
-        val extrasPath = pathFromBasename("compiler/extras", basename="extras_custom_reorg.json")
-
-        // remove locked workflow flag
-        val cFlags2 = cFlags.drop(5)
-
-        val retval = Main.compile(
-            path.toString :: "-extras" :: extrasPath.toString :: cFlags2
-        )
-        retval shouldBe a [Main.SuccessfulTermination]
-        val wfId: String = retval match {
-            case Main.SuccessfulTermination(ir) => ir
-            case _ => throw new Exception("sanity")
-        }
-
-        val (stdout, stderr) = Utils.execCommand(s"dx describe ${wfId} --json")
-
-        val wfStages = stdout.parseJson.asJsObject.fields.get("stages") match {
-            case Some(JsArray(x)) => x.toVector
-            case other => throw new Exception(s"Unexpected result ${other}")
-        }
-
-        wfStages.size shouldBe 4
-
-        val reorgStage = wfStages.last
-
-        // if its not a JsObject return empty string and test will fail
-        val reorgDetails = reorgStage match {
-            case JsObject(x) => JsObject(x).getFields("id", "executable")
-            case _ => throw new Exception("sanity")
-        }
-
-        reorgDetails shouldBe Seq(
-            JsString("stage-reorg"), JsString("applet-Ffv40q00jy8qPb4qGY40Jp28")
-        )
-    }
-
     it should "Compile a workflow on the platform with the config file in the input" taggedAs(EdgeTest)  in {
         val path = pathFromBasename("compiler", basename="wf_custom_reorg.wdl")
 
@@ -546,7 +507,7 @@ class GenerateIRTest extends FlatSpec with Matchers {
         }
 
         reorgDetails.getFields("id", "executable") shouldBe Seq(
-            JsString("stage-reorg"), JsString("applet-Ffv40q00jy8qPb4qGY40Jp28")
+            JsString("stage-reorg"), JsString("applet-Fg2qy100jy8YP7jB6kVPgq9f")
         )
         // There should be 3 inputs, the output from output stage and the custom reorg config file.
         val reorgInput: JsObject = reorgDetails.fields("input") match {
@@ -555,9 +516,8 @@ class GenerateIRTest extends FlatSpec with Matchers {
 
         }
 
-        reorgInput.fields.size shouldBe 3
-        reorgInput.fields.contains("config") shouldBe true
-
+        reorgInput.fields.size shouldBe 2
+        reorgInput.fields.keys shouldBe Set(Utils.REORG_CONFIG, Utils.REORG_STATUS)
     }
 }
 

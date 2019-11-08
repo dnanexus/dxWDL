@@ -21,7 +21,15 @@
       "optional": false
     },
     {
-      "name": "config",
+      "name": "___reorg_conf",
+      "label": "Config",
+      "help": "",
+      "class": "file",
+      "patterns": ["*"],
+      "optional": true
+    },
+    {
+      "name": "___reorg_status",
       "label": "Config",
       "help": "",
       "class": "file",
