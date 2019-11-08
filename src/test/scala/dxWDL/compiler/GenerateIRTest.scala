@@ -507,7 +507,7 @@ class GenerateIRTest extends FlatSpec with Matchers {
         }
 
         reorgDetails.getFields("id", "executable") shouldBe Seq(
-            JsString("stage-reorg"), JsString("applet-Fg2qy100jy8YP7jB6kVPgq9f")
+            JsString("stage-reorg"), JsString("applet-Fg2xVFj0jy8qJV5X0PvJvGYj")
         )
         // There should be 3 inputs, the output from output stage and the custom reorg config file.
         val reorgInput: JsObject = reorgDetails.fields("input") match {
