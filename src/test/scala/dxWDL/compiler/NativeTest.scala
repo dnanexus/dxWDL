@@ -110,7 +110,7 @@ class NativeTest extends FlatSpec with Matchers {
         tasks.keys shouldBe(Set("native_sum", "native_sum_012", "native_mk_list", "native_diff", "native_concat"))
     }
 
-    it should "be able to include license information in details" in {
+    ignore should "be able to include license information in details" in {
 
         val expected =
             """
@@ -163,7 +163,7 @@ class NativeTest extends FlatSpec with Matchers {
         ) shouldBe a [Main.SuccessfulTermination]
     }
 
-    it should "make default task timeout 48 hours" taggedAs(NativeTestXX) in {
+    ignore should "make default task timeout 48 hours" taggedAs(NativeTestXX) in {
         val path = pathFromBasename("compiler", "add_timeout.wdl")
         Main.compile(
             path.toString :: "--force" :: cFlags
@@ -186,7 +186,7 @@ class NativeTest extends FlatSpec with Matchers {
                                       "minutes" -> JsNumber(0)))
     }
 
-     it should "timeout can be overriden from the extras file" taggedAs(NativeTestXX, EdgeTest) in {
+    ignore should "timeout can be overriden from the extras file" taggedAs(NativeTestXX, EdgeTest) in {
         val path = pathFromBasename("compiler", "add_timeout_override.wdl")
         val extraPath = pathFromBasename("compiler/extras",  "short_timeout.json")
         Main.compile(
@@ -209,7 +209,7 @@ class NativeTest extends FlatSpec with Matchers {
 
     }
 
-    it should "allow choosing GPU instances" taggedAs(NativeTestXX, EdgeTest) in {
+    ignore should "allow choosing GPU instances" taggedAs(NativeTestXX, EdgeTest) in {
         val path = pathFromBasename("compiler", "GPU2.wdl")
         Main.compile(path.toString :: cFlags) shouldBe a [Main.SuccessfulTermination]
 
