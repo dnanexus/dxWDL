@@ -5,22 +5,6 @@
   "dxapi": "1.0.0",
   "inputSpec": [
     {
-      "name": "output_file",
-      "label": "output_file",
-      "help": "",
-      "class": "file",
-      "patterns": ["*"],
-      "optional": false
-    },
-    {
-      "name": "output_config_file",
-      "label": "output_config_file",
-      "help": "",
-      "class": "file",
-      "patterns": ["*"],
-      "optional": false
-    },
-    {
       "name": "___reorg_conf",
       "label": "Config",
       "help": "",

@@ -329,7 +329,7 @@ case class Native(dxWDLrtId: Option[String],
             case IR.AppletKindWfOutputs =>
                 genBashScriptCmd("wfOutputs")
             case IR.AppletKindWorkflowOutputReorg =>
-                genBashScriptCmd("workflowOutputReorg")
+                genBashScriptCmd("WfCustomReorgOutputs")
             case IR.AppletKindTask(_) =>
                 instanceType match {
                     case IR.InstanceTypeDefault | IR.InstanceTypeConst(_,_,_,_,_) =>

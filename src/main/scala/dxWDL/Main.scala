@@ -25,7 +25,7 @@ object Main extends App {
     }
     object InternalOp extends Enumeration {
         val Collect,
-            WfOutputs, WfInputs, WorkflowOutputReorg,
+            WfOutputs, WfInputs, WfCustomReorgOutputs,
             WfFragment,
             TaskCheckInstanceType, TaskEpilog, TaskProlog, TaskRelaunch = Value
     }
@@ -652,7 +652,7 @@ object Main extends App {
                                                        dxPathConfig, dxIoFunctions,
                                                        rtDebugLvl)
                     wfOutputs.apply(fragInputs.env)
-                case InternalOp.WorkflowOutputReorg =>
+                case InternalOp.WfCustomReorgOutputs =>
                     val wfReorg = new exec.WorkflowOutputReorg(wf, womSourceCode, typeAliases,
                                                                dxPathConfig, dxIoFunctions,
                                                                rtDebugLvl)
@@ -751,7 +751,7 @@ object Main extends App {
                                 InternalOp.WfFragment |
                                 InternalOp.WfInputs |
                                 InternalOp.WfOutputs |
-                                InternalOp.WorkflowOutputReorg =>
+                                InternalOp.WfCustomReorgOutputs =>
                             workflowFragAction(op, womSourceCode, instanceTypeDB, metaInfo,
                                                jobInputPath, jobOutputPath,
                                                dxPathConfig, dxIoFunctions,

@@ -11,7 +11,7 @@ import wom.values._
 import dxWDL.base.{Language, _}
 import dxWDL.dx._
 import dxWDL.util._
-import IR.{COMMON, CVar, OUTPUT_SECTION, REORG, SArg, SArgConst}
+import IR.{COMMON, CVar, OUTPUT_SECTION, REORG, SArg, SArgConst, SArgEmpty}
 
 case class GenerateIRWorkflow(wf: WorkflowDefinition,
                               wfSourceCode: String,
@@ -659,7 +659,13 @@ case class GenerateIRWorkflow(wf: WorkflowDefinition,
         Utils.trace(verbose.on, s"Adding custom output reorganization applet ${reorgAttributes.appId}")
 
         // Link to the X.y original variables
-        val inputs: Vector[IR.SArg] = Vector(reorgStatusInput._2,  SArgConst(configFile.get))
+
+
+
+        val inputs: Vector[IR.SArg] = configFile match {
+            case None =>  Vector(reorgStatusInput._2, SArgEmpty)
+            case Some(x) => Vector(reorgStatusInput._2, SArgConst(x))
+        }
 
         (IR.Stage(REORG, genStageId(Some(REORG)), applet.name, inputs
             , Vector.empty[CVar]),

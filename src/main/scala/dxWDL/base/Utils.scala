@@ -36,6 +36,7 @@ object Utils {
     val VERSION_PROP = "dxWDL_version"
     val REORG_CONFIG = "___reorg_conf"
     val REORG_STATUS = "___reorg_status"
+    val REORG_STATUS_COMPLETE = "completed"
 
 
     var traceLevel = 0

@@ -15,7 +15,8 @@ import wom.types._
 import dxWDL.base.{Utils, Verbose}
 import dxWDL.util._
 
-case class WfOutputs(wf: WorkflowDefinition,
+
+abstract class WfOutputsBase(wf: WorkflowDefinition,
                      wfSourceCode: String,
                      typeAliases : Map[String, WomType],
                      dxPathConfig : DxPathConfig,
@@ -105,3 +106,45 @@ case class WfOutputs(wf: WorkflowDefinition,
         outputFields
     }
 }
+
+
+case class WfOutputs (wf: WorkflowDefinition,
+    wfSourceCode: String,
+    typeAliases : Map[String, WomType],
+    dxPathConfig : DxPathConfig,
+    dxIoFunctions : DxIoFunctions,
+    runtimeDebugLevel: Int
+) extends WfOutputsBase (wf: WorkflowDefinition,
+    wfSourceCode: String,
+    typeAliases : Map[String, WomType],
+    dxPathConfig : DxPathConfig,
+    dxIoFunctions : DxIoFunctions,
+    runtimeDebugLevel: Int
+){
+    override def apply(envInitial: Map[String, WomValue]): Map[String, JsValue] = {
+        val outputFields : Map[String, JsValue]  = super.apply(envInitial)
+        outputFields
+    }
+}
+
+
+case class WfCustomReorgOutputs (wf: WorkflowDefinition,
+                      wfSourceCode: String,
+                      typeAliases : Map[String, WomType],
+                      dxPathConfig : DxPathConfig,
+                      dxIoFunctions : DxIoFunctions,
+                      runtimeDebugLevel: Int
+                     ) extends WfOutputsBase (wf: WorkflowDefinition,
+    wfSourceCode: String,
+    typeAliases : Map[String, WomType],
+    dxPathConfig : DxPathConfig,
+    dxIoFunctions : DxIoFunctions,
+    runtimeDebugLevel: Int
+) {
+
+    override def apply(envInitial: Map[String, WomValue]): Map[String, JsValue] = {
+        val outputFields : Map[String, JsValue]  = super.apply(envInitial)
+        outputFields + (Utils.REORG_STATUS -> JsString(Utils.REORG_STATUS_COMPLETE))
+    }
+}
+

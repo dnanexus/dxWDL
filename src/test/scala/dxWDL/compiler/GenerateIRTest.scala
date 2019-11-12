@@ -454,8 +454,10 @@ class GenerateIRTest extends FlatSpec with Matchers {
         val extrasPath = pathFromBasename("compiler/extras", basename="extras_custom_reorg.json")
 
         val retval = Main.compile(
-            path.toString :: "-extras" :: extrasPath.toString :: cFlags
+            path.toString :: "-extras" :: extrasPath.toString ::
+              List("--compileMode", "ir", "--project", dxProject.getId)
         )
+
         retval shouldBe a [Main.SuccessfulTerminationIR]
         val bundle = retval match {
             case Main.SuccessfulTerminationIR(ir) => ir
@@ -467,8 +469,8 @@ class GenerateIRTest extends FlatSpec with Matchers {
             case _ => throw new Exception("sanity")
         }
 
-        wf.stages.size shouldBe(2)
-        wf.stages(1).calleeName shouldBe "applet-Ffv40q00jy8qPb4qGY40Jp28"
+        wf.stages.size shouldBe(4)
+        wf.stages(3).calleeName shouldBe "applet-Fg2y2900jy8f056J6FP5QF26"
     }
 
     it should "Compile a workflow on the platform with the config file in the input" taggedAs(EdgeTest)  in {
@@ -506,7 +508,7 @@ class GenerateIRTest extends FlatSpec with Matchers {
         }
 
         reorgDetails.getFields("id", "executable") shouldBe Seq(
-            JsString("stage-reorg"), JsString("applet-Fg2xv200jy8XzjZ4B020Xk2Z")
+            JsString("stage-reorg"), JsString("applet-Fg2y2900jy8f056J6FP5QF26")
         )
         // There should be 3 inputs, the output from output stage and the custom reorg config file.
         val reorgInput: JsObject = reorgDetails.fields("input") match {
