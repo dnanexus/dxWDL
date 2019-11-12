@@ -261,7 +261,7 @@ case class Native(dxWDLrtId: Option[String],
             |
             |       # run dxfuse so that it will not exit after the bash script exists.
             |       echo "mounting dxfuse on ${dxPathConfig.dxfuseMountpoint.toString}"
-            |       nohup sudo -E dxfuse -uid $$(id -u) -gid $$(id -g) ${dxPathConfig.dxfuseMountpoint.toString} ${dxPathConfig.dxfuseManifest.toString} &
+            |       nohup sudo -E dxfuse -readOnly -uid $$(id -u) -gid $$(id -g) ${dxPathConfig.dxfuseMountpoint.toString} ${dxPathConfig.dxfuseManifest.toString} &
             |       disown %1
             |
             |       # wait for the mount to start.
@@ -731,9 +731,7 @@ case class Native(dxWDLrtId: Option[String],
             "dxapi" -> JsString("1.0.0"),
             "tags" -> JsArray(JsString("dxWDL")),
             "details" -> jsDetails,
-            "hidden" -> JsBoolean(hidden),
-            "properties" ->
-                JsObject(Utils.VERSION_PROP -> JsString(Utils.getVersion()))
+            "hidden" -> JsBoolean(hidden)
         )
         val accessField =
             if (access == JsNull) Map.empty
@@ -749,8 +747,10 @@ case class Native(dxWDLrtId: Option[String],
             JsObject(req.asJsObject.fields ++ Map(
                                "project" -> JsString(dxProject.getId),
                                "folder" -> JsString(folder),
-                               "parents" -> JsBoolean(true)
-                           ))
+                               "parents" -> JsBoolean(true),
+                               "properties" ->
+                                   JsObject(Utils.VERSION_PROP -> JsString(Utils.getVersion()))
+                     ))
         (digest, reqWithEverything)
     }
 

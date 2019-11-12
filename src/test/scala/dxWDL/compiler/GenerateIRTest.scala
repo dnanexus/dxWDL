@@ -301,6 +301,27 @@ class GenerateIRTest extends FlatSpec with Matchers {
                                              "b" -> MetaValueElement.MetaValueElementString("stream")))
     }
 
+    it should "recognize the streaming object annotation" in {
+        val path = pathFromBasename("compiler", "streaming_files_obj.wdl")
+        val retval = Main.compile(
+            path.toString :: cFlags
+        )
+        retval shouldBe a [Main.SuccessfulTerminationIR]
+        val bundle = retval match {
+            case Main.SuccessfulTerminationIR(ir) => ir
+            case _ => throw new Exception("sanity")
+        }
+
+        val cgrepTask = getTaskByName("cgrep", bundle)
+        cgrepTask.parameterMeta shouldBe (Map("in_file" -> MetaValueElement.MetaValueElementObject(Map("stream" -> MetaValueElement.MetaValueElementBoolean(true)))))
+        val iDef = cgrepTask.inputs.find(_.name == "in_file").get
+        iDef.parameterMeta shouldBe (Some(MetaValueElement.MetaValueElementObject(Map("stream" -> MetaValueElement.MetaValueElementBoolean(true)))))
+
+        val diffTask = getTaskByName("diff", bundle)
+        diffTask.parameterMeta shouldBe (Map("a" -> MetaValueElement.MetaValueElementObject(Map("stream" -> MetaValueElement.MetaValueElementBoolean(true))),
+                                             "b" -> MetaValueElement.MetaValueElementObject(Map("stream" -> MetaValueElement.MetaValueElementBoolean(true)))))
+    }
+
     it should "recognize the streaming annotation for wdl draft2" in {
         val path = pathFromBasename("draft2", "streaming.wdl")
         val retval = Main.compile(

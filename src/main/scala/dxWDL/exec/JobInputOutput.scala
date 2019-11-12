@@ -282,6 +282,17 @@ case class JobInputOutput(dxIoFunctions : DxIoFunctions,
                     parameterMeta.get(iDef.name) match {
                         case (Some(MetaValueElement.MetaValueElementString("stream"))) =>
                             findFiles(womValue)
+                        case (Some(MetaValueElement.MetaValueElementObject(value))) =>
+                            // This enables the stream annotation in the object form of metadata value, e.g.
+                            // bam_file : {
+                            //   stream : true
+                            // }
+                            if (value.contains("stream") && 
+                                value("stream").asInstanceOf[MetaValueElement.MetaValueElementBoolean].value) {
+                                findFiles(womValue)
+                            } else {
+                                Vector.empty
+                            }
                         case _ =>
                             Vector.empty
                     }
