@@ -363,11 +363,19 @@ object Main extends App {
         }
 
         if ( extras != None ) {
+
             if (extras.contains("reorg")  && (options contains "reorg")) {
 
                 throw new InvalidInputException("ERROR: cannot provide --reorg option when reorg is specified in extras.")
 
             }
+
+            if (extras.contains("reorg") && (options contains "locked")) {
+
+                throw new InvalidInputException("ERROR: cannot provide --locked option when reorg is specified in extras.")
+
+            }
+
         }
 
         CompilerOptions(options contains "archive",
