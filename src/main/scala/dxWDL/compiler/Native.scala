@@ -328,8 +328,10 @@ case class Native(dxWDLrtId: Option[String],
                 genBashScriptCmd("wfInputs")
             case IR.AppletKindWfOutputs =>
                 genBashScriptCmd("wfOutputs")
+            case IR.AppletKindWfCustomReorgOutputs =>
+                genBashScriptCmd("wfCustomReorgOutputs")
             case IR.AppletKindWorkflowOutputReorg =>
-                genBashScriptCmd("WfCustomReorgOutputs")
+                genBashScriptCmd("workflowOutputReorg")
             case IR.AppletKindTask(_) =>
                 instanceType match {
                     case IR.InstanceTypeDefault | IR.InstanceTypeConst(_,_,_,_,_) =>
@@ -669,6 +671,7 @@ case class Native(dxWDLrtId: Option[String],
 
                 case IR.AppletKindWfInputs |
                         IR.AppletKindWfOutputs |
+                        IR.AppletKindWfCustomReorgOutputs |
                         IR.AppletKindWorkflowOutputReorg =>
                     // meta information used for running workflow fragments
                     val fqnDictTypes = JsObject(

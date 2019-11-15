@@ -586,12 +586,18 @@ case class GenerateIRWorkflow(wf: WorkflowDefinition,
             case Left(reorg_flag) => outputVars
             case Right(reorg_attrs) => addOutputStatus(outputVars)
         }
+
+        val appletKind: IR.AppletKind = reorg match {
+            case Left(reorg_flag) => IR.AppletKindWfOutputs
+            case Right(reorg_attrs) => IR.AppletKindWfCustomReorgOutputs
+        }
+
         val applet = IR.Applet(s"${wfName}_${OUTPUT_SECTION}",
             inputVars.map(_.cVar),
             updatedOutputVars,
             IR.InstanceTypeDefault,
             IR.DockerImageNone,
-            IR.AppletKindWfOutputs,
+            appletKind,
             wfSourceStandAlone)
 
 
@@ -660,11 +666,9 @@ case class GenerateIRWorkflow(wf: WorkflowDefinition,
 
         // Link to the X.y original variables
 
-
-
         val inputs: Vector[IR.SArg] = configFile match {
-            case None =>  Vector(reorgStatusInput._2, SArgEmpty)
             case Some(x) => Vector(reorgStatusInput._2, SArgConst(x))
+            case _ =>  Vector(reorgStatusInput._2)
         }
 
         (IR.Stage(REORG, genStageId(Some(REORG)), applet.name, inputs
@@ -821,12 +825,17 @@ case class GenerateIRWorkflow(wf: WorkflowDefinition,
                 (irwf, irCallables)
             }
             case Right(reorgAttributes) =>
-                val (reorgStage, reorgApl) = addCustomReorgStage(wf.name,
-                    wfSourceStandAlone,
-                    wfOutputs,
-                    reorgAttributes)
-                (irwf.copy(stages = irwf.stages :+ reorgStage),
-                  irCallables :+ reorgApl)
+                if (!locked) {
+                    val (reorgStage, reorgApl) = addCustomReorgStage(wf.name,
+                        wfSourceStandAlone,
+                        wfOutputs,
+                        reorgAttributes)
+                    (irwf.copy(stages = irwf.stages :+ reorgStage),
+                      irCallables :+ reorgApl)
+                }
+                else {
+                    (irwf, irCallables)
+                }
         }
 
         (wf2, apl2)

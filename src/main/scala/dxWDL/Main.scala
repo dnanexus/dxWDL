@@ -25,7 +25,7 @@ object Main extends App {
     }
     object InternalOp extends Enumeration {
         val Collect,
-            WfOutputs, WfInputs, WfCustomReorgOutputs,
+            WfOutputs, WfInputs, WorkflowOutputReorg, WfCustomReorgOutputs,
             WfFragment,
             TaskCheckInstanceType, TaskEpilog, TaskProlog, TaskRelaunch = Value
     }
@@ -656,16 +656,25 @@ object Main extends App {
                                                      rtDebugLvl)
                     wfInputs.apply(fragInputs.env)
                 case InternalOp.WfOutputs =>
-                    val wfOutputs = new exec.WfOutputs(wf, womSourceCode, typeAliases,
+                    val wfOutputs = new exec.
+                    WfOutputs(wf, womSourceCode, typeAliases,
                                                        dxPathConfig, dxIoFunctions,
                                                        rtDebugLvl)
                     wfOutputs.apply(fragInputs.env)
+
                 case InternalOp.WfCustomReorgOutputs =>
+                    val wfCustomReorgOutputs = new exec.WfCustomReorgOutputs(
+                        wf, womSourceCode, typeAliases, dxPathConfig, dxIoFunctions, rtDebugLvl
+                    )
+                    wfCustomReorgOutputs.apply(fragInputs.env)
+
+                case InternalOp.WorkflowOutputReorg =>
                     val wfReorg = new exec.WorkflowOutputReorg(wf, womSourceCode, typeAliases,
                                                                dxPathConfig, dxIoFunctions,
                                                                rtDebugLvl)
                     val refDxFiles = fragInputOutput.findRefDxFiles(inputsRaw, metaInfo)
                     wfReorg.apply(refDxFiles)
+
                 case _ =>
                     throw new Exception(s"Illegal workflow fragment operation ${op}")
             }
@@ -759,6 +768,7 @@ object Main extends App {
                                 InternalOp.WfFragment |
                                 InternalOp.WfInputs |
                                 InternalOp.WfOutputs |
+                                InternalOp.WorkflowOutputReorg |
                                 InternalOp.WfCustomReorgOutputs =>
                             workflowFragAction(op, womSourceCode, instanceTypeDB, metaInfo,
                                                jobInputPath, jobOutputPath,

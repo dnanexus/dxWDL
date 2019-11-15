@@ -101,14 +101,19 @@ object IR {
     //   WorkflowOutputReorg: move intermediate result files to a subdirectory.
     sealed trait AppletKind
     case class  AppletKindNative(id: String) extends AppletKind
-    case class AppletKindWorkflowCustomReorg(id: String) extends AppletKind
     case class  AppletKindTask(task: CallableTaskDefinition) extends AppletKind
     case class  AppletKindWfFragment(calls: Vector[String],
                                      blockPath: Vector[Int],
                                      fqnDictTypes: Map[String, WomType]) extends AppletKind
     case object AppletKindWfInputs extends AppletKind
+
+    // Output - default and custom reorg
     case object AppletKindWfOutputs extends AppletKind
+    case object AppletKindWfCustomReorgOutputs extends AppletKind
+
+    // Reorg - default aand custom reorg
     case object AppletKindWorkflowOutputReorg extends AppletKind
+    case class  AppletKindWorkflowCustomReorg(id: String) extends AppletKind
 
     /** @param name          Name of applet
       * @param inputs        input arguments
