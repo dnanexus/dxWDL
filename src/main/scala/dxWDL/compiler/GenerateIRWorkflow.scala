@@ -11,7 +11,7 @@ import wom.values._
 import dxWDL.base.{Language, _}
 import dxWDL.dx._
 import dxWDL.util._
-import IR.{COMMON, CVar, OUTPUT_SECTION, REORG, SArg, SArgConst, SArgEmpty}
+import IR.{COMMON, CVar, OUTPUT_SECTION, REORG, SArg, SArgConst}
 
 case class GenerateIRWorkflow(wf: WorkflowDefinition,
                               wfSourceCode: String,
