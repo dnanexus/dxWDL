@@ -448,7 +448,7 @@ class GenerateIRTest extends FlatSpec with Matchers {
         }
     }
 
-    it should "Compile a workflow with a custom reorg applet" in {
+    it should "Compile a workflow with a custom reorg applet" taggedAs(EdgeTest)  in {
         val path = pathFromBasename("compiler", basename="wf_custom_reorg.wdl")
 
         val extrasPath = pathFromBasename("compiler/extras", basename="extras_custom_reorg.json")
@@ -470,7 +470,7 @@ class GenerateIRTest extends FlatSpec with Matchers {
         }
 
         wf.stages.size shouldBe(4)
-        wf.stages(3).calleeName shouldBe "applet-Fg2y2900jy8f056J6FP5QF26"
+        wf.stages(3).calleeName shouldBe "applet-Fg623fj0jy8q7jjv9xV6q5fQ"
     }
 
     it should "Compile a workflow on the platform with the config file in the input" taggedAs(EdgeTest)  in {
@@ -479,7 +479,7 @@ class GenerateIRTest extends FlatSpec with Matchers {
         val extrasPath = pathFromBasename("compiler/extras", basename="extras_custom_reorg_config.json")
 
         // remove locked workflow flag
-        val cFlags2 = cFlags.drop(5)
+        val cFlags2 = cFlags.drop(5) ++ Vector("--folder", "/reorg_tests")
 
         val retval = Main.compile(
             path.toString :: "-extras" :: extrasPath.toString :: cFlags2
@@ -508,7 +508,7 @@ class GenerateIRTest extends FlatSpec with Matchers {
         }
 
         reorgDetails.getFields("id", "executable") shouldBe Seq(
-            JsString("stage-reorg"), JsString("applet-Fg2y2900jy8f056J6FP5QF26")
+            JsString("stage-reorg"), JsString("applet-Fg623fj0jy8q7jjv9xV6q5fQ")
         )
         // There should be 3 inputs, the output from output stage and the custom reorg config file.
         val reorgInput: JsObject = reorgDetails.fields("input") match {
@@ -520,5 +520,26 @@ class GenerateIRTest extends FlatSpec with Matchers {
         reorgInput.fields.size shouldBe 2
         reorgInput.fields.keys shouldBe Set(Utils.REORG_CONFIG, Utils.REORG_STATUS)
     }
+
+
+    it should "Compile a workflow on the platform without config file in the input" taggedAs(EdgeTest) in {
+        // This works in conjunction with "Compile a workflow on the platform with the config file in the input".
+        // There is less assertions here.
+        val path = pathFromBasename("compiler", basename="wf_custom_reorg.wdl")
+
+        val extrasPath = pathFromBasename("compiler/extras", basename="extras_custom_reorg.json")
+
+        // remove locked workflow flag
+        val cFlags2 = cFlags.drop(5) ++ Vector("--folder", "/reorg_tests_without_config")
+
+        val retval = Main.compile(
+            path.toString :: "-extras" :: extrasPath.toString :: cFlags2
+        )
+        retval shouldBe a [Main.SuccessfulTermination]
+
+    }
 }
+
+
+
 
