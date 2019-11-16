@@ -458,6 +458,71 @@ it may misplace or outright delete files. The applet:
 3. has to be careful about inputs that are *also* outputs. Normally, these should not be moved.
 4. should use bulk object operations, so as not to overload the API server.
 
+## Adding config-file based reorg applet at compilation time with `-extras`.
+In addition to using `--reorg` flag to add the reorg stage, you may also add a custom reorganization applet that takes an optional input
+by declaring a "custom-reorg" object in the JSON file used as parameter with `-extras`
+
+The  "custom-reorg" object has two properties in extra.json:
+    # app_id: reorg applet id
+    # inputs: auxiliary configuration
+
+
+The optional input file can be used as a configuration file for the reorganization process.
+
+For example:
+
+```
+
+{
+  "custom-reorg" : {
+    "app_id" : "applet-12345678910",
+    "inputs" : "dx://file-xxxxxxxx"
+  }
+}
+
+# if you wish to include an additional config file, please set the "inputs" to `null`
+{
+  "custom-reorg" : {
+    "app_id" : "applet-12345678910",
+    "inputs" : null
+  }
+}
+
+
+```
+
+The config-file based reorg applet needs to have the following specs as inputs.
+
+`___reorg_conf` and `___reorg_status`:
+
+```json
+{
+  "inputSpec": [
+    {
+      "name": "___reorg_conf",
+      "label": "Auxiliary config input used for reorganisation.",
+      "help": "",
+      "class": "file",
+      "patterns": ["*"],
+      "optional": true
+    },
+    {
+      "name": "___reorg_status",
+      "label": "A string from output stage that act as a signal to indicate the workflow has completed.",
+      "help": "",
+      "class": "string",
+      "optional": true
+    }
+  ]
+}
+```
+
+When compiling a workflow with a custom-reorg applet declared with `-extras` JSON,
+a string variable `___reorg_status` with the value of `completed` will be included in the output stage.
+
+The `___reorg_status` is used to act as a dependency to signal that the workflow has completed.
+
+For an example use case of a configuration based custom reorg applet, please refer to [CustomReorgAppletExample.md](CustomReorgAppletExample.md)
 # Toplevel calls compiled as stages
 
 If a workflow is compiled in unlocked mode, top level calls with no
