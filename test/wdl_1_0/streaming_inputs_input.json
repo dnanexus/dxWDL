@@ -1,0 +1,4 @@
+{
+    "streaming_inputs.f1": "dx://dxWDL_playground:/test_data/f1.txt.gz",
+    "streaming_inputs.f2": "dx://dxWDL_playground:/test_data/f2.txt.gz"
+}
