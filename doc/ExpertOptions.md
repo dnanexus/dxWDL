@@ -458,7 +458,7 @@ it may misplace or outright delete files. The applet:
 3. has to be careful about inputs that are *also* outputs. Normally, these should not be moved.
 4. should use bulk object operations, so as not to overload the API server.
 
-## Adding config-file based reorg applet at compilation time with `-extras`.
+## Adding config-file based reorg applet at compilation time
 In addition to using `--reorg` flag to add the reorg stage, you may also add a custom reorganization applet that takes an optional input
 by declaring a "custom-reorg" object in the JSON file used as parameter with `-extras`
 
