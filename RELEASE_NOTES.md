@@ -1,5 +1,11 @@
 # Release Notes
 
+## 1.36 18-Nov-2019
+
+Added mechanism to add configuration file-based custom reorganization applet at compilation time.
+Please refer to [docs/ExpertOptions.md](docs/ExpertOptions.md#Adding-config-file-based-reorg-apple-at-compilation-time]
+
+
 ## 1.35 24-Oct-2019
 - Support for GPU instances.
 
