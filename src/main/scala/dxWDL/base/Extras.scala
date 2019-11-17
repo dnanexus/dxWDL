@@ -611,7 +611,7 @@ object Extras {
          }
 
         val reorgAppId: String = checkedParseStringField(fields, "app_id") match {
-            case None => throw new IllegalArgumentException("applet ID must be specified in the custom_reorg section.")
+            case None => throw new IllegalArgumentException("app_id must be specified in the custom_reorg section.")
             case Some(x) => x
         }
 
