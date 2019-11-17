@@ -191,7 +191,7 @@ case class DxAttrs(runSpec: Option[DxRunSpec],
     }
 }
 
-case class ReorgAttrs(appId: String, reorgInputs: String)
+case class ReorgAttrs(appId: String, reorgConf: String)
 
 case class DxLicense(name: String,
                      repoUrl: String,
@@ -300,7 +300,7 @@ case class Extras(defaultRuntimeAttributes: WdlRuntimeAttrs,
 
 object Extras {
     val DOCKER_REGISTRY_ATTRS = Set("username", "registry", "credentials")
-    val CUSTOM_REORG_ATTRS = Set("app_id", "inputs")
+    val CUSTOM_REORG_ATTRS = Set("app_id", "conf")
     val EXTRA_ATTRS = Set("default_runtime_attributes",
                           "default_task_dx_attributes",
                           "per_task_dx_attributes",
@@ -615,15 +615,15 @@ object Extras {
             case Some(x) => x
         }
 
-        val reorgInput: String = checkedParseStringFieldReplaceNull(fields, "inputs") match {
+        val reorgConf: String = checkedParseStringFieldReplaceNull(fields, "conf") match {
             case None => throw new IllegalArgumentException(
-                "inputs must be specified in the custom_reorg section. " +
-                  "Please set the value to null if there is no input."
+                "conf must be specified in the custom_reorg section. " +
+                  "Please set the value to null if there is no conf file."
             )
             case Some(x) => x
         }
 
-        return (reorgAppId,reorgInput)
+        return (reorgAppId, reorgConf)
 
     }
 
@@ -658,13 +658,13 @@ object Extras {
 
     }
 
-    private def verifyInputs(reorgInput: String): Unit= {
+    private def verifyInputs(reorgConf: String): Unit= {
 
         // if provided, check that the fileID is valid and present
-        if (reorgInput != "") {
+        if (reorgConf != "") {
             // format dx file ID
-            val reorgFileID: String = reorgInput.replace("dx://", "")
-            // if input file  ID is invalid, DXFile.getInstance will thown an IllegalArgumentException
+            val reorgFileID: String = reorgConf.replace("dx://", "")
+            // if input file  ID is invalid, DXFile.getInstance will thow an IllegalArgumentException
             val file: DXFile = DXFile.getInstance(reorgFileID)
             // if reorgFileID cannot be found, describe will throw a ResourceNotFoundException
             file.describe()
@@ -677,9 +677,9 @@ object Extras {
             return None
 
         val fields = jsv.asJsObject.fields
-        val (reorgAppId, reorgInput) = checkAttrs(fields)
+        val (reorgAppId, reorgConf) = checkAttrs(fields)
         veryifyReorgApp(reorgAppId)
-        verifyInputs(reorgInput)
+        verifyInputs(reorgConf)
 
         Utils.trace(
             true,
@@ -693,7 +693,7 @@ object Extras {
             """.stripMargin.replaceAll("\n", " ")
         )
 
-        Some(ReorgAttrs(reorgAppId, reorgInput))
+        Some(ReorgAttrs(reorgAppId, reorgConf))
     }
 
     def parse(jsv: JsValue,

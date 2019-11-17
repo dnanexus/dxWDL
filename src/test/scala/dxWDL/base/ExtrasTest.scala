@@ -257,7 +257,7 @@ class ExtrasTest extends FlatSpec with Matchers {
         s"""|{
             | "custom_reorg" : {
             |     "app_id" : "${appId}",
-            |    "inputs" : null
+            |    "conf" : null
             |  }
             |}
             |""".stripMargin.parseJson
@@ -277,7 +277,7 @@ class ExtrasTest extends FlatSpec with Matchers {
       s"""|{
           |  "custom_reorg" : {
           |      "app_id" : "${appId}",
-          |      "inputs": null
+          |      "conf": null
           |   }
           |}
           |""".stripMargin.parseJson
@@ -300,7 +300,7 @@ class ExtrasTest extends FlatSpec with Matchers {
       s"""|{
           |  "custom_reorg" : {
           |      "app_id" : "${appId}",
-          |      "inputs": null
+          |      "conf": null
           |   }
           |}
           |""".stripMargin.parseJson
@@ -324,7 +324,7 @@ class ExtrasTest extends FlatSpec with Matchers {
       s"""|{
           |  "custom_reorg" : {
           |      "app_id" : "${appId}",
-          |      "inputs": "${inputs}"
+          |      "conf": "${inputs}"
           |   }
           |}
           |""".stripMargin.parseJson
@@ -349,7 +349,7 @@ class ExtrasTest extends FlatSpec with Matchers {
       s"""|{
           |  "custom_reorg" : {
           |      "app_id" : "${appId}",
-          |      "inputs": "${inputs}"
+          |      "conf": "${inputs}"
           |   }
           |}
           |""".stripMargin.parseJson
@@ -374,7 +374,7 @@ class ExtrasTest extends FlatSpec with Matchers {
       s"""|{
           | "custom_reorg" : {
           |    "app_id" : "${appId}",
-          |    "inputs": "null"
+          |    "conf": "null"
           |  }
           |}
           |""".stripMargin.parseJson

@@ -545,7 +545,7 @@ case class GenerateIRWorkflow(wf: WorkflowDefinition,
         outputsVar :+ CVar(
             Utils.REORG_STATUS,
             WomStringType,
-            Some(WomString("completed"))
+            Some(WomString(Utils.REORG_STATUS_COMPLETE))
         )
     }
 
@@ -642,7 +642,7 @@ case class GenerateIRWorkflow(wf: WorkflowDefinition,
         // will throw error if there is no status string. Should consider checking there i s only one.
         val reorgStatusInput: (CVar, SArg) = wfOutputs.filter(x=> x._1.name == Utils.REORG_STATUS).head
 
-        val configFile: Option[WomSingleFile] = reorgAttributes.reorgInputs match {
+        val configFile: Option[WomSingleFile] = reorgAttributes.reorgConf match {
             case "" => None
             case x: String => Some(WomSingleFile(x))
         }

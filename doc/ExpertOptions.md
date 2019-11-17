@@ -464,7 +464,7 @@ by declaring a "custom-reorg" object in the JSON file used as parameter with `-e
 
 The  "custom-reorg" object has two properties in extra.json:
     # app_id: reorg applet id
-    # inputs: auxiliary configuration
+    # conf: auxiliary configuration
 
 
 The optional input file can be used as a configuration file for the reorganization process.
@@ -476,15 +476,15 @@ For example:
 {
   "custom-reorg" : {
     "app_id" : "applet-12345678910",
-    "inputs" : "dx://file-xxxxxxxx"
+    "conf" : "dx://file-xxxxxxxx"
   }
 }
 
-# if you wish to include an additional config file, please set the "inputs" to `null`
+# if you wish to include an additional config file, please set the "conf" to `null`
 {
   "custom-reorg" : {
     "app_id" : "applet-12345678910",
-    "inputs" : null
+    "conf" : null
   }
 }
 

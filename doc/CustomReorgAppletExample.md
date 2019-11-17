@@ -103,7 +103,7 @@ def main(___reorg_conf=None, ___reorg_status=None):
 ## dxapp.json
 
 This is the spec for the applet.
-`___reorg_conf` is declared in `custom-reorg.inputs` in extras.json (JSON file provided to `-extras`).
+`___reorg_conf` is declared in `custom-reorg.conf` in extras.json (JSON file provided to `-extras`).
 
 ```
 {
@@ -164,7 +164,7 @@ This is the spec for the applet.
 {
   "custom-reorg" : {
     "app_id" : "applet-12345678910",
-    "inputs" : "dx://file-xxxxxxxx"
+    "conf" : "dx://file-xxxxxxxx"
   }
 }
 
