@@ -245,7 +245,7 @@ class ExtrasTest extends FlatSpec with Matchers {
 
         //thrown.getMessage should contain  ("inputs must be specified in the custom_reorg section.")
         thrown.getMessage should be  (
-            "inputs must be specified in the custom_reorg section. Please set the value to null if there is no input."
+            "conf must be specified in the custom_reorg section. Please set the value to null if there is no conf file."
         )
     }
 
