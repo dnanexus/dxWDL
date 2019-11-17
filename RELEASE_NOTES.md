@@ -5,6 +5,26 @@
 Added mechanism to add configuration file-based custom reorganization applet at compilation time.
 Please refer to [docs/ExpertOptions.md](docs/ExpertOptions.md#Adding-config-file-based-reorg-apple-at-compilation-time]
 
+## 1.35.1
+- Object form of streaming syntax. This allows several annotations for an input/output
+parameter. In addition to the previously supported:
+```
+parameter_meta {
+  foo: stream
+}
+```
+
+You can also write:
+```
+parameter_meta {
+  foo: {
+    stream: true
+  }
+}
+```
+- New version of dxfuse (v0.12)
+- The checksum of an applet/workflow does not include the dxWDL version. This means that upgrading to
+a new dxWDL version does not require recompiling everything.
 
 ## 1.35 24-Oct-2019
 - Support for GPU instances.

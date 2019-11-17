@@ -65,7 +65,10 @@ wdl_v1_list = [
 
     # Missing optional output files, returned as none, instead
     # of an error
-    "missing_optional_output_file"
+    "missing_optional_output_file",
+
+    # streaming
+    "streaming_inputs"
 ]
 
 # docker image tests
