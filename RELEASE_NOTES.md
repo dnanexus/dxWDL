@@ -2,7 +2,9 @@
 
 ## 1.36 18-Nov-2019
 
-Added mechanism to add configuration file-based custom reorganization applet at compilation time.
+Added a mechanism for a custom reorganization applet, it can be used instead of the built in --reorg option.
+You can use it to reorganize workflow file results after it completes.
+
 Please refer to [docs/ExpertOptions.md](docs/ExpertOptions.md#Adding-config-file-based-reorg-apple-at-compilation-time]
 
 ## 1.35.1

@@ -111,7 +111,7 @@ object IR {
     case object AppletKindWfOutputs extends AppletKind
     case object AppletKindWfCustomReorgOutputs extends AppletKind
 
-    // Reorg - default aand custom reorg
+    // Reorg - default and custom reorg
     case object AppletKindWorkflowOutputReorg extends AppletKind
     case class  AppletKindWorkflowCustomReorg(id: String) extends AppletKind
 

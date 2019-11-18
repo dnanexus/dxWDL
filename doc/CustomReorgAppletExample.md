@@ -30,7 +30,7 @@ simple_task {
 ```
 
 The workflow will generate an array of files - `out.vcf` and `out.bam`.
-Suppose we want to reorganize the results to 2 different folders on the project.
+Suppose we want to reorganize the results into to 2 different folders on the project.
 
 `out.vcf` will go to /results/out/vcf
 `out.bam` will go to /bam/

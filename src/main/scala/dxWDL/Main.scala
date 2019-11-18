@@ -663,10 +663,11 @@ object Main extends App {
                     wfOutputs.apply(fragInputs.env)
 
                 case InternalOp.WfCustomReorgOutputs =>
-                    val wfCustomReorgOutputs = new exec.WfCustomReorgOutputs(
+                    val wfCustomReorgOutputs = new exec.WfOutputs(
                         wf, womSourceCode, typeAliases, dxPathConfig, dxIoFunctions, rtDebugLvl
                     )
-                    wfCustomReorgOutputs.apply(fragInputs.env)
+                    // add ___reconf_status as output.
+                    wfCustomReorgOutputs.apply(fragInputs.env, addStatus = true)
 
                 case InternalOp.WorkflowOutputReorg =>
                     val wfReorg = new exec.WorkflowOutputReorg(wf, womSourceCode, typeAliases,

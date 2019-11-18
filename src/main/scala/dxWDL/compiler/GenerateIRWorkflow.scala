@@ -18,7 +18,8 @@ case class GenerateIRWorkflow(wf: WorkflowDefinition,
                               wfSourceStandAlone: String,
                               callsLoToHi: Vector[String],
                               callables: Map[String, IR.Callable],
-                              language: Language.Value, verbose: Verbose,
+                              language: Language.Value,
+                              verbose: Verbose,
                               reorg: Either[Boolean, ReorgAttrs]) {
     val verbose2 : Boolean = verbose.containsKey("GenerateIR")
 
@@ -640,7 +641,9 @@ case class GenerateIRWorkflow(wf: WorkflowDefinition,
         val appletKind = IR.AppletKindWorkflowCustomReorg(reorgAttributes.appId)
 
         // will throw error if there is no status string. Should consider checking there i s only one.
-        val reorgStatusInput: (CVar, SArg) = wfOutputs.filter(x=> x._1.name == Utils.REORG_STATUS).head
+        val(reorgStatusCvar, reorgStatusSArg): (CVar, SArg) = wfOutputs.filter {
+            case (x, y) => x.name == Utils.REORG_STATUS
+        }.head
 
         val configFile: Option[WomSingleFile] = reorgAttributes.reorgConf match {
             case "" => None
@@ -648,7 +651,7 @@ case class GenerateIRWorkflow(wf: WorkflowDefinition,
         }
 
         val appInputs = Vector(
-            reorgStatusInput._1,
+            reorgStatusCvar,
             CVar(Utils.REORG_CONFIG, WomSingleFileType, configFile)
         )
 
@@ -667,8 +670,8 @@ case class GenerateIRWorkflow(wf: WorkflowDefinition,
         // Link to the X.y original variables
 
         val inputs: Vector[IR.SArg] = configFile match {
-            case Some(x) => Vector(reorgStatusInput._2, SArgConst(x))
-            case _ =>  Vector(reorgStatusInput._2)
+            case Some(x) => Vector(reorgStatusSArg, SArgConst(x))
+            case _ =>  Vector(reorgStatusSArg)
         }
 
         (IR.Stage(REORG, genStageId(Some(REORG)), applet.name, inputs

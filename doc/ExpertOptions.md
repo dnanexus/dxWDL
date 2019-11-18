@@ -480,7 +480,7 @@ For example:
   }
 }
 
-# if you wish to include an additional config file, please set the "conf" to `null`
+# if you do not wish to include an additional config file, please set the "conf" to `null`
 {
   "custom-reorg" : {
     "app_id" : "applet-12345678910",

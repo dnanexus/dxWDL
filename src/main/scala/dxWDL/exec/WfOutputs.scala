@@ -15,8 +15,7 @@ import wom.types._
 import dxWDL.base.{Utils, Verbose}
 import dxWDL.util._
 
-
-abstract class WfOutputsBase(wf: WorkflowDefinition,
+case class WfOutputs(wf: WorkflowDefinition,
                      wfSourceCode: String,
                      typeAliases : Map[String, WomType],
                      dxPathConfig : DxPathConfig,
@@ -45,7 +44,7 @@ abstract class WfOutputsBase(wf: WorkflowDefinition,
         womType.coerceRawValue(value).get
     }
 
-    def apply(envInitial: Map[String, WomValue]) : Map[String, JsValue] = {
+    def apply(envInitial: Map[String, WomValue], addStatus: Boolean = false) : Map[String, JsValue] = {
         Utils.appletLog(verbose, s"dxWDL version: ${Utils.getVersion()}")
         Utils.appletLog(verbose, s"Environment: ${envInitial}")
         val outputNodes : Vector[GraphOutputNode] = wf.innerGraph.outputNodes.toVector
@@ -87,8 +86,8 @@ abstract class WfOutputsBase(wf: WorkflowDefinition,
 
             case expr :ExpressionBasedGraphOutputNode =>
                 val value = evaluateWomExpression(expr.womExpression,
-                                                  expr.womType,
-                                                  envFull)
+                    expr.womType,
+                    envFull)
                 val name = expr.graphOutputPort.name
                 envFull += (name -> value)
                 name -> value
@@ -103,48 +102,11 @@ abstract class WfOutputsBase(wf: WorkflowDefinition,
                 val wvl = wdlVarLinksConverter.importFromWDL(womValue.womType, womValue)
                 wdlVarLinksConverter.genFields(wvl, outputVarName)
         }.toList.flatten.toMap
-        outputFields
+
+        if (addStatus) {
+            outputFields + (Utils.REORG_STATUS -> JsString(Utils.REORG_STATUS_COMPLETE))
+        } else {
+            outputFields
+        }
     }
 }
-
-
-case class WfOutputs (wf: WorkflowDefinition,
-    wfSourceCode: String,
-    typeAliases : Map[String, WomType],
-    dxPathConfig : DxPathConfig,
-    dxIoFunctions : DxIoFunctions,
-    runtimeDebugLevel: Int
-) extends WfOutputsBase (wf: WorkflowDefinition,
-    wfSourceCode: String,
-    typeAliases : Map[String, WomType],
-    dxPathConfig : DxPathConfig,
-    dxIoFunctions : DxIoFunctions,
-    runtimeDebugLevel: Int
-){
-    override def apply(envInitial: Map[String, WomValue]): Map[String, JsValue] = {
-        val outputFields : Map[String, JsValue]  = super.apply(envInitial)
-        outputFields
-    }
-}
-
-
-case class WfCustomReorgOutputs (wf: WorkflowDefinition,
-                      wfSourceCode: String,
-                      typeAliases : Map[String, WomType],
-                      dxPathConfig : DxPathConfig,
-                      dxIoFunctions : DxIoFunctions,
-                      runtimeDebugLevel: Int
-                     ) extends WfOutputsBase (wf: WorkflowDefinition,
-    wfSourceCode: String,
-    typeAliases : Map[String, WomType],
-    dxPathConfig : DxPathConfig,
-    dxIoFunctions : DxIoFunctions,
-    runtimeDebugLevel: Int
-) {
-
-    override def apply(envInitial: Map[String, WomValue]): Map[String, JsValue] = {
-        val outputFields : Map[String, JsValue]  = super.apply(envInitial)
-        outputFields + (Utils.REORG_STATUS -> JsString(Utils.REORG_STATUS_COMPLETE))
-    }
-}
-
