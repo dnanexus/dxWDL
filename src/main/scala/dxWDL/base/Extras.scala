@@ -3,8 +3,7 @@ package dxWDL.base
 // Place to put any extra options, equivalent to Cromwell workflowOptions.
 // Also, allows dnanexus specific configuration per task.
 
-import com.dnanexus.{AccessLevel, DXApplet, DXFile}
-import com.fasterxml.jackson.databind.JsonNode
+import com.dnanexus.{AccessLevel, DXFile}
 import spray.json._
 import DefaultJsonProtocol._
 import wom.values._
@@ -626,34 +625,35 @@ object Extras {
 
     }
 
-    private def verifyReorgAppHasAccess(appDescribe: DXApplet.Describe, reorgAppId: String): Unit = {
+    private def veryifyReorgApp(reorgAppId: String): Unit= {
 
-        // check applet has access to the projet
-        val accessJson = appDescribe.getAccess()
+        val app_regex = "app-[0-9a-zA-Z]{24}"
+        val applet_regex = "applet-[0-9a-zA-Z]{24}"
 
-        val isValid: Boolean = accessJson.get("project") match {
-            case null => false
-            case x: JsonNode  => x.toString.replace("\"", "") match {
-                case "CONTRIBUTE" | "ADMINISTER" => true
+
+        val isValidID: Boolean = reorgAppId.matches(app_regex) || reorgAppId.matches(applet_regex)
+
+        if (!isValidID) {
+            throw new IllegalArgumentException("dxId must match applet-[A-Za-z0-9]{24}")
+        }
+
+        val dxUploadCmd = s"""dx describe ${reorgAppId} --json"""
+
+        val (outmsg, errmsg) = Utils.execCommand(dxUploadCmd, None)
+
+        val isValid: Boolean  = outmsg.parseJson.asJsObject.fields.get("access") match {
+            case Some(JsObject(x)) => JsObject(x).fields.get("project") match {
+                case Some(JsString("CONTRIBUTE")) | Some(JsString("ADMINISTER")) => true
                 case _ => false
             }
+            case other =>
+                false
         }
 
         if (!isValid) {
-            throw new PermissionDeniedException(s"ERROR: Applet for custom reorg stage ${reorgAppId } does not " +
+            throw new PermissionDeniedException(s"ERROR: App(let) for custom reorg stage ${reorgAppId } does not " +
               s"have CONTRIBUTOR or ADMINISTRATOR access and this is required.")
         }
-
-    }
-    private def veryifyReorgApp(reorgAppId: String): Unit= {
-
-        // if reorgAppId is invalid, DXApplet.getInstance will throw an IllegalArgumentException
-        val app: DXApplet = DXApplet.getInstance(reorgAppId)
-        // if reorgAppId cannot be found, describe() will throw a ResourceNotFoundException
-        val appDescribe: DXApplet.Describe = app.describe()
-        // verify reorg app has at least contribute access
-        verifyReorgAppHasAccess(appDescribe, reorgAppId)
-
     }
 
     private def verifyInputs(reorgConf: String): Unit= {

@@ -365,3 +365,5 @@ object Utils {
 class PermissionDeniedException(s:String) extends Exception(s){}
 
 class InvalidInputException(s:String) extends Exception(s){}
+
+class IllegalArgumentException(s:String) extends Exception(s){}

@@ -219,7 +219,7 @@ class ExtrasTest extends FlatSpec with Matchers {
                 |""".stripMargin.parseJson
 
 
-        val thrown = intercept[IllegalArgumentException] {
+        val thrown = intercept[dxWDL.base.IllegalArgumentException] {
             Extras.parse(reorg, verbose)
         }
 
@@ -239,7 +239,7 @@ class ExtrasTest extends FlatSpec with Matchers {
                 |""".stripMargin.parseJson
 
 
-        val thrown = intercept[IllegalArgumentException] {
+        val thrown = intercept[dxWDL.base.IllegalArgumentException] {
             Extras.parse(reorg, verbose)
         }
 
@@ -282,7 +282,7 @@ class ExtrasTest extends FlatSpec with Matchers {
           |}
           |""".stripMargin.parseJson
 
-    val thrown = intercept[IllegalArgumentException] {
+    val thrown = intercept[dxWDL.base.IllegalArgumentException] {
       Extras.parse(reorg, verbose)
     }
 
@@ -294,7 +294,7 @@ class ExtrasTest extends FlatSpec with Matchers {
 
   it should "throw ResourceNotFoundException due to non-existent applet" in {
 
-    // non-existant (made up) applet ID
+    // non-existent (made up) applet ID
     val appId : String = "applet-mPX7K2j0Gv2K2jXF75Bf21v2"
     val reorg : JsValue =
       s"""|{
@@ -305,12 +305,12 @@ class ExtrasTest extends FlatSpec with Matchers {
           |}
           |""".stripMargin.parseJson
 
-    val thrown = intercept[ResourceNotFoundException] {
+    val thrown = intercept[Exception] {
       Extras.parse(reorg, verbose)
     }
 
     thrown.getMessage should be  (
-      s""""${appId}" is not a recognized ID"""
+      s"""Error running command dx describe $appId --json"""
     )
 
   }
@@ -329,7 +329,7 @@ class ExtrasTest extends FlatSpec with Matchers {
           |}
           |""".stripMargin.parseJson
 
-    val thrown = intercept[IllegalArgumentException] {
+    val thrown = intercept[java.lang.IllegalArgumentException] {
       Extras.parse(reorg, verbose)
     }
 
@@ -339,7 +339,7 @@ class ExtrasTest extends FlatSpec with Matchers {
 
   }
 
-  it should "throw ResourceNotFoundException due to non-existant file" taggedAs(EdgeTest) in {
+  it should "throw ResourceNotFoundException due to non-existant file" in {
 
     // app_id is mummer nucmer app in project-FJ90qPj0jy8zYvVV9yz3F5gv
     val appId : String = "applet-FKfZpF002fp738k1Jqz8vX1G"
@@ -386,11 +386,31 @@ class ExtrasTest extends FlatSpec with Matchers {
     }
 
     thrown.getMessage should be (
-      s"ERROR: Applet for custom reorg stage ${appId} does not " +
+      s"ERROR: App(let) for custom reorg stage ${appId} does not " +
         s"have CONTRIBUTOR or ADMINISTRATOR access and this is required."
     )
 
   }
+
+  it should "take app id as well as applet id for custom reorg" taggedAs (EdgeTest) in {
+
+    val appId: String = "app-FK7bVfQ0zk0Zky724pgFz4vp"
+    val reorg: JsValue =
+      s"""|{
+          | "custom_reorg" : {
+          |    "app_id" : "${appId}",
+          |    "conf": null
+          |  }
+          |}
+          |""".stripMargin.parseJson
+
+    val extras = Extras.parse(reorg, verbose)
+    extras.customReorgAttributes  should be (
+      Some(ReorgAttrs(appId, ""))
+    )
+  }
+
+
 
     it should "generate valid JSON execution policy" in {
         val expectedJs : JsValue =
