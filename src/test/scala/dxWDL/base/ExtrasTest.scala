@@ -196,7 +196,7 @@ class ExtrasTest extends FlatSpec with Matchers {
             s"""|{
                | "custom_reorg" : {
                |    "app_id" : "${appId}",
-               |    "inputs" : "${inputs}"
+               |    "conf" : "${inputs}"
                |  }
                |}
                |""".stripMargin.parseJson
@@ -213,7 +213,7 @@ class ExtrasTest extends FlatSpec with Matchers {
         val reorg: JsValue   =
             s"""|{
                 | "custom_reorg" : {
-                |    "inputs" : "${inputs}"
+                |    "conf" : "${inputs}"
                 |  }
                 |}
                 |""".stripMargin.parseJson
@@ -223,7 +223,7 @@ class ExtrasTest extends FlatSpec with Matchers {
             Extras.parse(reorg, verbose)
         }
 
-        thrown.getMessage should be ("applet ID must be specified in the custom_reorg section.")
+        thrown.getMessage should be ("app_id must be specified in the custom_reorg section.")
     }
 
     it should "throw IllegalArgumentException due to missing inputs in custom_reorg section" in {
@@ -256,7 +256,7 @@ class ExtrasTest extends FlatSpec with Matchers {
       val reorg: JsValue   =
         s"""|{
             | "custom_reorg" : {
-            |     "app_id" : "${appId}",
+            |    "app_id" : "${appId}",
             |    "conf" : null
             |  }
             |}

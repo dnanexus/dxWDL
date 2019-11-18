@@ -3,13 +3,12 @@ package dxWDL.base
 // Place to put any extra options, equivalent to Cromwell workflowOptions.
 // Also, allows dnanexus specific configuration per task.
 
-import com.dnanexus.AccessLevel
-import com.dnanexus.DXApplet
-import com.dnanexus.DXFile
+import com.dnanexus.{AccessLevel, DXApplet, DXFile}
 import com.fasterxml.jackson.databind.JsonNode
 import spray.json._
 import DefaultJsonProtocol._
 import wom.values._
+
 
 case class DxExecPolicy(restartOn: Option[Map[String, Int]],
                         maxRestarts: Option[Int]) {
@@ -646,7 +645,6 @@ object Extras {
         }
 
     }
-
     private def veryifyReorgApp(reorgAppId: String): Unit= {
 
         // if reorgAppId is invalid, DXApplet.getInstance will throw an IllegalArgumentException
