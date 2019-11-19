@@ -3,10 +3,11 @@ package dxWDL.base
 // Place to put any extra options, equivalent to Cromwell workflowOptions.
 // Also, allows dnanexus specific configuration per task.
 
-import com.dnanexus.AccessLevel
+import com.dnanexus.{AccessLevel, DXFile}
 import spray.json._
 import DefaultJsonProtocol._
 import wom.values._
+
 
 case class DxExecPolicy(restartOn: Option[Map[String, Int]],
                         maxRestarts: Option[Int]) {
@@ -188,6 +189,8 @@ case class DxAttrs(runSpec: Option[DxRunSpec],
     }
 }
 
+case class ReorgAttrs(appId: String, reorgConf: String)
+
 case class DxLicense(name: String,
                      repoUrl: String,
                      version: String,
@@ -263,7 +266,8 @@ case class DockerRegistry(registry: String,
 case class Extras(defaultRuntimeAttributes: WdlRuntimeAttrs,
                   defaultTaskDxAttributes: Option[DxAttrs],
                   perTaskDxAttributes: Map[String, DxAttrs],
-                  dockerRegistry : Option[DockerRegistry]) {
+                  dockerRegistry : Option[DockerRegistry],
+                  customReorgAttributes: Option[ReorgAttrs]) {
     def getDefaultAccess : DxAccess = {
         defaultTaskDxAttributes match {
             case None => DxAccess.empty
@@ -294,11 +298,15 @@ case class Extras(defaultRuntimeAttributes: WdlRuntimeAttrs,
 
 object Extras {
     val DOCKER_REGISTRY_ATTRS = Set("username", "registry", "credentials")
+    val CUSTOM_REORG_ATTRS = Set("app_id", "conf")
     val EXTRA_ATTRS = Set("default_runtime_attributes",
                           "default_task_dx_attributes",
                           "per_task_dx_attributes",
-                          "docker_registry")
-    val RUNTIME_ATTRS = Set("dx_instance_type", "memory", "disks", "cpu", "docker")
+                          "docker_registry",
+                          "custom_reorg")
+    val RUNTIME_ATTRS = Set("dx_instance_type", "memory", "disks", "cpu", "docker",
+                          "docker_registry",
+                          "custom_reorg")
     val RUN_SPEC_ATTRS = Set("access", "executionPolicy", "restartableEntryPoints", "timeoutPolicy")
     val RUN_SPEC_ACCESS_ATTRS = Set("network", "project", "allProjects", "developer", "projectCreation")
     val RUN_SPEC_TIMEOUT_ATTRS = Set("days", "hours", "minutes")
@@ -324,6 +332,16 @@ object Extras {
         fields.get(fieldName) match {
             case None => None
             case Some(JsString(str)) => Some(str)
+            case Some(other) => throw new Exception(s"Malformed ${fieldName} (${other})")
+        }
+    }
+
+    private def checkedParseStringFieldReplaceNull(fields: Map[String, JsValue],
+                                        fieldName: String) : Option[String] = {
+        fields.get(fieldName) match {
+            case None => None
+            case Some(JsString(str)) => Some(str)
+            case Some(JsNull) => Some("")
             case Some(other) => throw new Exception(s"Malformed ${fieldName} (${other})")
         }
     }
@@ -580,6 +598,102 @@ object Extras {
         Some(DockerRegistry(registry, username, credentials))
     }
 
+    private def checkAttrs(fields: Map[String, JsValue]): (String, String) = {
+
+        for (k <- fields.keys) {
+            if (!(CUSTOM_REORG_ATTRS contains k))
+                throw new IllegalArgumentException(
+                    s"""|Unsupported custom reorg attribute ${k},
+                        |we currently support ${CUSTOM_REORG_ATTRS}
+                        |""".stripMargin.replaceAll("\n", ""))
+         }
+
+        val reorgAppId: String = checkedParseStringField(fields, "app_id") match {
+            case None => throw new IllegalArgumentException("app_id must be specified in the custom_reorg section.")
+            case Some(x) => x
+        }
+
+        val reorgConf: String = checkedParseStringFieldReplaceNull(fields, "conf") match {
+            case None => throw new IllegalArgumentException(
+                "conf must be specified in the custom_reorg section. " +
+                  "Please set the value to null if there is no conf file."
+            )
+            case Some(x) => x
+        }
+
+        return (reorgAppId, reorgConf)
+
+    }
+
+    private def veryifyReorgApp(reorgAppId: String): Unit= {
+
+        val app_regex = "app-[0-9a-zA-Z]{24}"
+        val applet_regex = "applet-[0-9a-zA-Z]{24}"
+
+
+        val isValidID: Boolean = reorgAppId.matches(app_regex) || reorgAppId.matches(applet_regex)
+
+        if (!isValidID) {
+            throw new IllegalArgumentException("dxId must match applet-[A-Za-z0-9]{24}")
+        }
+
+        val dxUploadCmd = s"""dx describe ${reorgAppId} --json"""
+
+        val (outmsg, errmsg) = Utils.execCommand(dxUploadCmd, None)
+
+        val isValid: Boolean  = outmsg.parseJson.asJsObject.fields.get("access") match {
+            case Some(JsObject(x)) => JsObject(x).fields.get("project") match {
+                case Some(JsString("CONTRIBUTE")) | Some(JsString("ADMINISTER")) => true
+                case _ => false
+            }
+            case other =>
+                false
+        }
+
+        if (!isValid) {
+            throw new PermissionDeniedException(s"ERROR: App(let) for custom reorg stage ${reorgAppId } does not " +
+              s"have CONTRIBUTOR or ADMINISTRATOR access and this is required.")
+        }
+    }
+
+    private def verifyInputs(reorgConf: String): Unit= {
+
+        // if provided, check that the fileID is valid and present
+        if (reorgConf != "") {
+            // format dx file ID
+            val reorgFileID: String = reorgConf.replace("dx://", "")
+            // if input file  ID is invalid, DXFile.getInstance will thow an IllegalArgumentException
+            val file: DXFile = DXFile.getInstance(reorgFileID)
+            // if reorgFileID cannot be found, describe will throw a ResourceNotFoundException
+            file.describe()
+        }
+
+    }
+
+    def parseCustomReorgAttrs(jsv: JsValue, verbose: Verbose): Option[ReorgAttrs] = {
+        if (jsv == JsNull)
+            return None
+
+        val fields = jsv.asJsObject.fields
+        val (reorgAppId, reorgConf) = checkAttrs(fields)
+        veryifyReorgApp(reorgAppId)
+        verifyInputs(reorgConf)
+
+        Utils.trace(
+            true,
+            s"""|Writing your own applet for reorganization purposes is tricky. If you are not careful,
+                |it may misplace or outright delete files.
+                |The applet: ${reorgAppId} requires CONTRIBUTE project access,
+                |so it can move files and folders around and has to be idempotent, so that if the instance it runs on crashes, it can safely restart. It has to be careful about inputs that are also outputs. Normally, these should not be moved. It should use bulk object operations, so as not to overload the API server.'
+                |You can refer to this example:
+                |
+                |https://github.com/dnanexus/dxWDL/blob/master/doc/ExpertOptions.md#use-your-own-applet
+            """.stripMargin.replaceAll("\n", " ")
+        )
+
+        Some(ReorgAttrs(reorgAppId, reorgConf))
+    }
+
     def parse(jsv: JsValue,
               verbose: Verbose) : Extras = {
         val fields = jsv match {
@@ -623,6 +737,12 @@ object Extras {
                perTaskDxAttrs,
                parseDockerRegistry(
                    checkedParseObjectField(fields, "docker_registry"),
-                   verbose))
+                   verbose),
+                parseCustomReorgAttrs(
+                    checkedParseObjectField(fields, fieldName = "custom_reorg"), verbose
+                )
+        )
+
+
     }
 }

@@ -21,6 +21,7 @@ object IR {
     val COMMON = "common"
     val OUTPUT_SECTION = "outputs"
     val REORG = "reorg"
+    val CUSTOM_REORG_CONFIG = "reorg_config"
 
     // Compile time representation of a variable. Used also as
     // an applet argument.
@@ -33,7 +34,7 @@ object IR {
     // The attributes are used to encode DNAx applet input/output
     // specification fields, such as {help, suggestions, patterns}.
     //
-    case class CVar(name: String,
+    case class  CVar(name: String,
                     womType: WomType,
                     default: Option[WomValue]) {
         // dx does not allow dots in variable names, so we
@@ -105,8 +106,14 @@ object IR {
                                      blockPath: Vector[Int],
                                      fqnDictTypes: Map[String, WomType]) extends AppletKind
     case object AppletKindWfInputs extends AppletKind
+
+    // Output - default and custom reorg
     case object AppletKindWfOutputs extends AppletKind
+    case object AppletKindWfCustomReorgOutputs extends AppletKind
+
+    // Reorg - default and custom reorg
     case object AppletKindWorkflowOutputReorg extends AppletKind
+    case class  AppletKindWorkflowCustomReorg(id: String) extends AppletKind
 
     /** @param name          Name of applet
       * @param inputs        input arguments

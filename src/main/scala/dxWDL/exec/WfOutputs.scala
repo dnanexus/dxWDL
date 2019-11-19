@@ -44,7 +44,7 @@ case class WfOutputs(wf: WorkflowDefinition,
         womType.coerceRawValue(value).get
     }
 
-    def apply(envInitial: Map[String, WomValue]) : Map[String, JsValue] = {
+    def apply(envInitial: Map[String, WomValue], addStatus: Boolean = false) : Map[String, JsValue] = {
         Utils.appletLog(verbose, s"dxWDL version: ${Utils.getVersion()}")
         Utils.appletLog(verbose, s"Environment: ${envInitial}")
         val outputNodes : Vector[GraphOutputNode] = wf.innerGraph.outputNodes.toVector
@@ -86,8 +86,8 @@ case class WfOutputs(wf: WorkflowDefinition,
 
             case expr :ExpressionBasedGraphOutputNode =>
                 val value = evaluateWomExpression(expr.womExpression,
-                                                  expr.womType,
-                                                  envFull)
+                    expr.womType,
+                    envFull)
                 val name = expr.graphOutputPort.name
                 envFull += (name -> value)
                 name -> value
@@ -102,6 +102,11 @@ case class WfOutputs(wf: WorkflowDefinition,
                 val wvl = wdlVarLinksConverter.importFromWDL(womValue.womType, womValue)
                 wdlVarLinksConverter.genFields(wvl, outputVarName)
         }.toList.flatten.toMap
-        outputFields
+
+        if (addStatus) {
+            outputFields + (Utils.REORG_STATUS -> JsString(Utils.REORG_STATUS_COMPLETE))
+        } else {
+            outputFields
+        }
     }
 }

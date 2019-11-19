@@ -25,7 +25,7 @@ object Main extends App {
     }
     object InternalOp extends Enumeration {
         val Collect,
-            WfOutputs, WfInputs, WorkflowOutputReorg,
+            WfOutputs, WfInputs, WorkflowOutputReorg, WfCustomReorgOutputs,
             WfFragment,
             TaskCheckInstanceType, TaskEpilog, TaskProlog, TaskRelaunch = Value
     }
@@ -361,6 +361,23 @@ object Main extends App {
             case Some(List(numberStr)) => Some(parseRuntimeDebugLevel(numberStr))
             case _ => throw new Exception("debug level specified twice")
         }
+
+        if ( extras != None ) {
+
+            if (extras.contains("reorg")  && (options contains "reorg")) {
+
+                throw new InvalidInputException("ERROR: cannot provide --reorg option when reorg is specified in extras.")
+
+            }
+
+            if (extras.contains("reorg") && (options contains "locked")) {
+
+                throw new InvalidInputException("ERROR: cannot provide --locked option when reorg is specified in extras.")
+
+            }
+
+        }
+
         CompilerOptions(options contains "archive",
                         compileMode,
                         defaults,
@@ -639,16 +656,26 @@ object Main extends App {
                                                      rtDebugLvl)
                     wfInputs.apply(fragInputs.env)
                 case InternalOp.WfOutputs =>
-                    val wfOutputs = new exec.WfOutputs(wf, womSourceCode, typeAliases,
+                    val wfOutputs = new exec.
+                    WfOutputs(wf, womSourceCode, typeAliases,
                                                        dxPathConfig, dxIoFunctions,
                                                        rtDebugLvl)
                     wfOutputs.apply(fragInputs.env)
+
+                case InternalOp.WfCustomReorgOutputs =>
+                    val wfCustomReorgOutputs = new exec.WfOutputs(
+                        wf, womSourceCode, typeAliases, dxPathConfig, dxIoFunctions, rtDebugLvl
+                    )
+                    // add ___reconf_status as output.
+                    wfCustomReorgOutputs.apply(fragInputs.env, addStatus = true)
+
                 case InternalOp.WorkflowOutputReorg =>
                     val wfReorg = new exec.WorkflowOutputReorg(wf, womSourceCode, typeAliases,
                                                                dxPathConfig, dxIoFunctions,
                                                                rtDebugLvl)
                     val refDxFiles = fragInputOutput.findRefDxFiles(inputsRaw, metaInfo)
                     wfReorg.apply(refDxFiles)
+
                 case _ =>
                     throw new Exception(s"Illegal workflow fragment operation ${op}")
             }
@@ -742,7 +769,8 @@ object Main extends App {
                                 InternalOp.WfFragment |
                                 InternalOp.WfInputs |
                                 InternalOp.WfOutputs |
-                                InternalOp.WorkflowOutputReorg =>
+                                InternalOp.WorkflowOutputReorg |
+                                InternalOp.WfCustomReorgOutputs =>
                             workflowFragAction(op, womSourceCode, instanceTypeDB, metaInfo,
                                                jobInputPath, jobOutputPath,
                                                dxPathConfig, dxIoFunctions,

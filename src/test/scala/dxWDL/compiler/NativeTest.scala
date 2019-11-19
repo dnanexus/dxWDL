@@ -6,6 +6,7 @@ import org.scalatest.{FlatSpec, Matchers}
 
 import scala.io.Source
 import dxWDL.Main
+import dxWDL.Main.SuccessfulTermination
 import dxWDL.base.Utils
 import dxWDL.dx.DxPath
 import dxWDL.util.ParseWomSourceFile
@@ -111,7 +112,6 @@ class NativeTest extends FlatSpec with Matchers {
     }
 
     ignore should "be able to include license information in details" in {
-
         val expected =
             """
               |[
@@ -129,15 +129,17 @@ class NativeTest extends FlatSpec with Matchers {
         val path = pathFromBasename("compiler", "add.wdl")
         val extraPath = pathFromBasename("compiler/extras",  "extras_license.json")
 
-        val retval = Main.compile(
+        val appId = Main.compile(
             path.toString
                 /*:: "--verbose" :: "--verboseKey" :: "EdgeTest" */
                 :: "--extras" :: extraPath.toString :: cFlags
-        )
+        ) match {
+            case SuccessfulTermination(x) => x
+            case _ => throw new Exception("sanity")
 
-        val appPath = "%s:/unit_tests/add".format(dxTestProject.getId)
+        }
 
-        val (stdout, stderr) = Utils.execCommand(s"dx describe ${appPath} --json")
+        val (stdout, stderr) = Utils.execCommand(s"dx describe ${dxTestProject.getId}:${appId} --json")
 
         val license = stdout.parseJson.asJsObject.fields.get("details") match {
             case Some(JsObject(x)) => x.get("upstreamProjects") match {
@@ -148,7 +150,6 @@ class NativeTest extends FlatSpec with Matchers {
             case other => throw new Exception(s"Unexpected result ${other}")
         }
 
-        retval shouldBe a [Main.SuccessfulTermination]
         license shouldBe expected
     }
 
@@ -165,13 +166,16 @@ class NativeTest extends FlatSpec with Matchers {
 
     ignore should "make default task timeout 48 hours" taggedAs(NativeTestXX) in {
         val path = pathFromBasename("compiler", "add_timeout.wdl")
-        Main.compile(
+        val appId = Main.compile(
             path.toString :: "--force" :: cFlags
-        ) shouldBe a [Main.SuccessfulTermination]
+        ) match {
+            case SuccessfulTermination(x) => x
+            case _ => throw new Exception("sanity")
+        }
 
         // make sure the timeout is what it should be
-        val appPath = "%s:/unit_tests/add_timeout".format(dxTestProject.getId)
-        val (stdout, stderr) = Utils.execCommand(s"dx describe ${appPath} --json")
+        val (stdout, stderr) = Utils.execCommand(
+            s"dx describe ${dxTestProject.getId}:${appId} --json")
 
         val timeout = stdout.parseJson.asJsObject.fields.get("runSpec") match {
             case Some(JsObject(x)) => x.get("timeoutPolicy") match {
@@ -189,14 +193,17 @@ class NativeTest extends FlatSpec with Matchers {
     ignore should "timeout can be overriden from the extras file" taggedAs(NativeTestXX, EdgeTest) in {
         val path = pathFromBasename("compiler", "add_timeout_override.wdl")
         val extraPath = pathFromBasename("compiler/extras",  "short_timeout.json")
-        Main.compile(
+        val appId = Main.compile(
             path.toString
                 :: "--extras" :: extraPath.toString :: cFlags
-        ) shouldBe a [Main.SuccessfulTermination]
+        ) match {
+            case SuccessfulTermination(x) => x
+            case _ => throw new Exception("sanity")
+        }
 
         // make sure the timeout is what it should be
-        val appPath = "%s:/unit_tests/add_timeout_override".format(dxTestProject.getId)
-        val (stdout, stderr) = Utils.execCommand(s"dx describe ${appPath} --json")
+        val (stdout, stderr) = Utils.execCommand(
+            s"dx describe ${dxTestProject.getId}:${appId} --json")
 
         val timeout = stdout.parseJson.asJsObject.fields.get("runSpec") match {
             case Some(JsObject(x)) => x.get("timeoutPolicy") match {
@@ -211,11 +218,15 @@ class NativeTest extends FlatSpec with Matchers {
 
     ignore should "allow choosing GPU instances" taggedAs(NativeTestXX, EdgeTest) in {
         val path = pathFromBasename("compiler", "GPU2.wdl")
-        Main.compile(path.toString :: cFlags) shouldBe a [Main.SuccessfulTermination]
+
+        val appId = Main.compile(path.toString :: cFlags) match {
+            case SuccessfulTermination(x) => x
+            case _ => throw new Exception("sanity")
+        }
 
         // make sure the timeout is what it should be
-        val appPath = "%s:/unit_tests/GPU2".format(dxTestProject.getId)
-        val (stdout, stderr) = Utils.execCommand(s"dx describe ${appPath} --json")
+        val (stdout, stderr) = Utils.execCommand(
+            s"dx describe ${dxTestProject.getId}:${appId} --json")
         val obj = stdout.parseJson.asJsObject
         val obj2 = obj.fields("runSpec").asJsObject
         val obj3 = obj2.fields("systemRequirements").asJsObject
