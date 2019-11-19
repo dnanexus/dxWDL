@@ -5,7 +5,7 @@
 Added a mechanism for a custom reorganization applet, it can be used instead of the built in --reorg option.
 You can use it to reorganize workflow file results after it completes.
 
-Please refer to [docs/ExpertOptions.md](docs/ExpertOptions.md#adding-config-file-based-reorg-applet-at-compilation-time)
+Please refer to [docs/ExpertOptions.md](doc/ExpertOptions.md#adding-config-file-based-reorg-applet-at-compilation-time)
 
 ## 1.35.1
 - Object form of streaming syntax. This allows several annotations for an input/output
