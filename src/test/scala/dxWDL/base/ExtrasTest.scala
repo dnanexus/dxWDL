@@ -6,10 +6,17 @@ import dxWDL.compiler.EdgeTest
 import org.scalatest.{FlatSpec, Matchers}
 import spray.json._
 import wom.values._
+import DefaultJsonProtocol._
 
 class ExtrasTest extends FlatSpec with Matchers {
     val verbose = Verbose(true, true, Set.empty)
 
+    private def getIdFromName(name: String): String = {
+      val (stdout, stderr) = Utils.execCommand(s"dx describe ${name} --json")
+      stdout.parseJson.asJsObject match {
+        case JsObject(x) => JsObject(x).fields("id").convertTo[String]
+      }
+    }
 
     it should "recognize restartable entry points" in {
         val runtimeAttrs : JsValue =
@@ -189,21 +196,22 @@ class ExtrasTest extends FlatSpec with Matchers {
     it should "parse the custom_reorg object" in {
 
         // app_id is mummer nucmer app in project-FJ90qPj0jy8zYvVV9yz3F5gv
-        val appId: String = "applet-FKfZpF002fp738k1Jqz8vX1G"
+        val appId : String = getIdFromName("mummer_nucmer_aligner")
+        val fileId : String = getIdFromName("Readme.md")
+
         // inputs is Readme.md file in project-FJ90qPj0jy8zYvVV9yz3F5gv
-        val inputs: String = "dx://file-FZBYqBQ0jy8qpqJz12gpXFf0"
         val reorg: JsValue   =
             s"""|{
                | "custom_reorg" : {
-               |    "app_id" : "${appId}",
-               |    "conf" : "${inputs}"
+               |    "app_id" :"${appId}",
+               |    "conf" : "${fileId}"
                |  }
                |}
                |""".stripMargin.parseJson
 
         val extras = Extras.parse(reorg, verbose)
         extras.customReorgAttributes  should be (
-            Some(ReorgAttrs(appId, inputs))
+            Some(ReorgAttrs(appId, fileId))
         )
     }
 
@@ -229,30 +237,30 @@ class ExtrasTest extends FlatSpec with Matchers {
     it should "throw IllegalArgumentException due to missing inputs in custom_reorg section" in {
 
         // app_id is mummer nucmer app in project-FJ90qPj0jy8zYvVV9yz3F5gv
-        val appId: String = "applet-FKfZpF002fp738k1Jqz8vX1G"
+        val appId : String = getIdFromName("mummer_nucmer_aligner")
         val reorg: JsValue   =
-            s"""|{
-                | "custom_reorg" : {
-                |    "app_id" : "${appId}"
-                |  }
-                |}
-                |""".stripMargin.parseJson
+        s"""|{
+            | "custom_reorg" : {
+            |    "app_id" : "${appId}"
+            |  }
+            |}
+            |""".stripMargin.parseJson
 
 
-        val thrown = intercept[dxWDL.base.IllegalArgumentException] {
-            Extras.parse(reorg, verbose)
-        }
+      val thrown = intercept[dxWDL.base.IllegalArgumentException] {
+          Extras.parse(reorg, verbose)
+      }
 
-        //thrown.getMessage should contain  ("inputs must be specified in the custom_reorg section.")
-        thrown.getMessage should be  (
-            "conf must be specified in the custom_reorg section. Please set the value to null if there is no conf file."
-        )
+      //thrown.getMessage should contain  ("inputs must be specified in the custom_reorg section.")
+      thrown.getMessage should be  (
+          "conf must be specified in the custom_reorg section. Please set the value to null if there is no conf file."
+      )
     }
 
     it should "Allow inputs to be null in custom reorg" in {
 
       // app_id is mummer nucmer app in project-FJ90qPj0jy8zYvVV9yz3F5gv
-      val appId: String = "applet-FKfZpF002fp738k1Jqz8vX1G"
+      val appId : String = getIdFromName("mummer_nucmer_aligner")
       val reorg: JsValue   =
         s"""|{
             | "custom_reorg" : {
@@ -318,7 +326,8 @@ class ExtrasTest extends FlatSpec with Matchers {
   it should "throw IllegalArgumentException due to invalid file ID" in {
 
     // app_id is mummer nucmer app in project-FJ90qPj0jy8zYvVV9yz3F5gv
-    val appId : String = "applet-FKfZpF002fp738k1Jqz8vX1G"
+
+    val appId : String = getIdFromName("mummer_nucmer_aligner")
     val inputs : String = "file-1223445"
     val reorg : JsValue =
       s"""|{
@@ -342,8 +351,8 @@ class ExtrasTest extends FlatSpec with Matchers {
   it should "throw ResourceNotFoundException due to non-existant file" in {
 
     // app_id is mummer nucmer app in project-FJ90qPj0jy8zYvVV9yz3F5gv
-    val appId : String = "applet-FKfZpF002fp738k1Jqz8vX1G"
-    // input is non-existant (made up) file ID
+
+    val appId : String = getIdFromName("mummer_nucmer_aligner")
     val inputs : String = "dx://file-AZBYlBQ0jy1qpqJz17gpXFf8"
     val reorg : JsValue =
       s"""|{
@@ -369,7 +378,7 @@ class ExtrasTest extends FlatSpec with Matchers {
   it should "throw PermissionDeniedException due to applet not having contribute access in the project" in {
 
     // app_id is sum app in project-FJ90qPj0jy8zYvVV9yz3F5gv
-    val appId: String = "applet-FJqZk8j0jy8xb42JK2x0Gk7B"
+    val appId : String = getIdFromName("/release_test/Sum ")
     val reorg: JsValue =
       s"""|{
           | "custom_reorg" : {
@@ -380,7 +389,6 @@ class ExtrasTest extends FlatSpec with Matchers {
           |""".stripMargin.parseJson
 
     val thrown = intercept[PermissionDeniedException] {
-
       Extras.parse(reorg, verbose)
 
     }
@@ -389,12 +397,11 @@ class ExtrasTest extends FlatSpec with Matchers {
       s"ERROR: App(let) for custom reorg stage ${appId} does not " +
         s"have CONTRIBUTOR or ADMINISTRATOR access and this is required."
     )
-
   }
 
   it should "take app id as well as applet id for custom reorg" taggedAs (EdgeTest) in {
 
-    val appId: String = "app-FK7bVfQ0zk0Zky724pgFz4vp"
+    val appId : String = getIdFromName("cloud_workstation")
     val reorg: JsValue =
       s"""|{
           | "custom_reorg" : {
@@ -410,11 +417,9 @@ class ExtrasTest extends FlatSpec with Matchers {
     )
   }
 
-
-
-    it should "generate valid JSON execution policy" in {
-        val expectedJs : JsValue =
-            """|{
+  it should "generate valid JSON execution policy" in {
+    val expectedJs : JsValue =
+        """|{
                | "executionPolicy": {
                |    "restartOn": {
                |       "*": 5

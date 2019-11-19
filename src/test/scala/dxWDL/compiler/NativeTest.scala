@@ -140,7 +140,7 @@ class NativeTest extends FlatSpec with Matchers {
 
         }
 
-        val (stdout, stderr) = Utils.execCommand(s"dx describe ${dxTestProject.getId}:${appId}--json")
+        val (stdout, stderr) = Utils.execCommand(s"dx describe ${dxTestProject.getId}:${appId} --json")
 
         val license = stdout.parseJson.asJsObject.fields.get("details") match {
             case Some(JsObject(x)) => x.get("upstreamProjects") match {

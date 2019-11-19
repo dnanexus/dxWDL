@@ -49,4 +49,4 @@ script:
   - dx select dxWDL_playground
   - java -version
   # run unit tests
-  - cd dxWDL && sbt version && sbt compile && sbt test
+  - cd dxWDL && sbt version && sbt compile && sbt testOnly -- -l prod
