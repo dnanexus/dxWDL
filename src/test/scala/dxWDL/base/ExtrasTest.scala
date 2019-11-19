@@ -196,7 +196,7 @@ class ExtrasTest extends FlatSpec with Matchers {
     it should "parse the custom_reorg object" in {
 
         // app_id is mummer nucmer app in project-FJ90qPj0jy8zYvVV9yz3F5gv
-        val appId : String = getIdFromName("mummer_nucmer_aligner")
+        val appId : String = getIdFromName("/release_test/mummer_nucmer_aligner")
         val fileId : String = getIdFromName("Readme.md")
 
         // inputs is Readme.md file in project-FJ90qPj0jy8zYvVV9yz3F5gv
@@ -237,7 +237,7 @@ class ExtrasTest extends FlatSpec with Matchers {
     it should "throw IllegalArgumentException due to missing inputs in custom_reorg section" in {
 
         // app_id is mummer nucmer app in project-FJ90qPj0jy8zYvVV9yz3F5gv
-        val appId : String = getIdFromName("mummer_nucmer_aligner")
+        val appId : String = getIdFromName("/release_test/mummer_nucmer_aligner")
         val reorg: JsValue   =
         s"""|{
             | "custom_reorg" : {
@@ -260,7 +260,7 @@ class ExtrasTest extends FlatSpec with Matchers {
     it should "Allow inputs to be null in custom reorg" in {
 
       // app_id is mummer nucmer app in project-FJ90qPj0jy8zYvVV9yz3F5gv
-      val appId : String = getIdFromName("mummer_nucmer_aligner")
+      val appId : String = getIdFromName("/release_test/mummer_nucmer_aligner")
       val reorg: JsValue   =
         s"""|{
             | "custom_reorg" : {
@@ -327,7 +327,7 @@ class ExtrasTest extends FlatSpec with Matchers {
 
     // app_id is mummer nucmer app in project-FJ90qPj0jy8zYvVV9yz3F5gv
 
-    val appId : String = getIdFromName("mummer_nucmer_aligner")
+    val appId : String = getIdFromName("/release_test/mummer_nucmer_aligner")
     val inputs : String = "file-1223445"
     val reorg : JsValue =
       s"""|{
@@ -352,7 +352,7 @@ class ExtrasTest extends FlatSpec with Matchers {
 
     // app_id is mummer nucmer app in project-FJ90qPj0jy8zYvVV9yz3F5gv
 
-    val appId : String = getIdFromName("mummer_nucmer_aligner")
+    val appId : String = getIdFromName("/release_test/mummer_nucmer_aligner")
     val inputs : String = "dx://file-AZBYlBQ0jy1qpqJz17gpXFf8"
     val reorg : JsValue =
       s"""|{
