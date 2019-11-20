@@ -36,21 +36,22 @@ object DxBulkDescribe {
         }.toMap
     }
 
-    private def submitRequest(dxFiles : Vector[DXFile],
-                              parts : Boolean) : Map[DXFile, DxDescribe] = {
-        val oids = dxFiles.map(_.getId).toVector
-
+    private def submitRequest(oids : Vector[String],
+                              extraFields : Vector[String]) : Map[DXFile, DxDescribe] = {
         val requestFields = Map("objects" ->
                                    JsArray(oids.map{x => JsString(x) }))
 
         // extra describe options, if specified
         val extraDescribeFields : Map[String, JsValue] =
-            if (parts) {
-                Map("classDescribeOptions" -> JsObject(
-                        "file" ->
-                            JsObject("parts" -> JsBoolean(true))))
-            } else {
+            if (extraFields.isEmpty) {
                 Map.empty
+            } else {
+                val m = extraFields.map{ fieldName =>
+                    fieldName -> JsBoolean(true)
+                }.toMap
+                Map("classDescribeOptions" -> JsObject(
+                        "*" -> JsObject(m)
+                    ))
             }
         val request = JsObject(requestFields ++ extraDescribeFields)
 
@@ -102,7 +103,8 @@ object DxBulkDescribe {
     // Describe the names of all the files in one batch. This is much more efficient
     // than submitting file describes one-by-one.
     def apply(files: Seq[DXFile],
-              parts : Boolean = false) : Map[DXFile, DxDescribe] = {
+              parts : Boolean = false,
+              details : Boolean = false) : Map[DXFile, DxDescribe] = {
         if (files.isEmpty) {
             // avoid an unnessary API call; this is important for unit tests
             // that do not have a network connection.
@@ -112,10 +114,16 @@ object DxBulkDescribe {
         // Limit on number of objects in one API request
         val slices = files.grouped(DXAPI_NUM_OBJECTS_LIMIT).toList
 
+        var extraFields = Vector.empty[String]
+        if (parts)
+            extraFields = extraFields :+ "parts"
+        if (details)
+            extraFields = extraFields :+ "details"
+
         // iterate on the ranges
         slices.foldLeft(Map.empty[DXFile, DxDescribe]) {
             case (accu, fileRange) =>
-                accu ++ submitRequest(fileRange.toVector, parts)
+                accu ++ submitRequest(fileRange.toVector, extraFields)
         }
     }
 }

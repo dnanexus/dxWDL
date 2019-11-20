@@ -64,6 +64,9 @@ case class Native(dxWDLrtId: Option[String],
                 // Extract the archive from the details field
                 val record = DXRecord.getInstance(id)
                 val descOptions = DXDataObject.DescribeOptions.get().inProject(dxProject).withDetails
+
+                val desc = describe(record, details=true)
+
                 val details = DxUtils.jsValueOfJsonNode(
                     record.describe(descOptions).getDetails(classOf[JsonNode]))
                 val dxLink = details.asJsObject.fields.get("archiveFileId") match {

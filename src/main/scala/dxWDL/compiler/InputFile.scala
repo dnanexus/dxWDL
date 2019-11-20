@@ -28,7 +28,6 @@ import wom.types._
 import wom.values._
 
 import dxWDL.base._
-import dxWDL.base.Utils._
 import dxWDL.dx.{DxDescribe, DxPath, DxProject, DxUtils}
 import dxWDL.util._
 import IR.{CVar, SArg, COMMON, OUTPUT_SECTION, REORG}
