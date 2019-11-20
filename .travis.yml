@@ -2,11 +2,14 @@ language: scala
 sudo: false
 dist: bionic
 
-# We do not want to start a travis build
-# for modifications to any branch.
+# Start a build on for changes to master, or for pull requests
 branches:
-    only:
-      - master
+  only:
+    - master
+
+# Don't clone automatically
+git:
+  clone: false
 
 addons:
   apt:
@@ -33,9 +36,8 @@ install:
   # Clone dxWDL into a new directory,
   - pwd
   - git clone https://github.com/dnanexus-rnd/dxWDL.git
-  - echo "dxWDL branch = $TRAVIS_BRANCH"
-  - cd dxWDL && git checkout $TRAVIS_BRANCH && cd ..
-  - ls -R dxWDL
+  - cd dxWDL && git checkout $TRAVIS_PULL_REQUEST_BRANCH && cd ..
+  - ls dxWDL
 
 before_script:
   - cd /tmp/ci_tests
@@ -47,4 +49,4 @@ script:
   - dx select dxWDL_playground
   - java -version
   # run unit tests
-  - cd dxWDL && sbt version && sbt compile && sbt test
+  - cd dxWDL && sbt version && sbt compile && sbt "testOnly -- -l prod"

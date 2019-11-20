@@ -64,10 +64,14 @@ case class WfFragRunner(wf: WorkflowDefinition,
                         dxIoFunctions : DxIoFunctions,
                         inputsRaw : JsValue,
                         fragInputOutput : WfFragInputOutput,
+                        defaultRuntimeAttributes : Option[WdlRuntimeAttrs],
                         runtimeDebugLevel: Int) {
+    private val MAX_JOB_NAME = 50
     private val verbose = runtimeDebugLevel >= 1
     //private val maxVerboseLevel = (runtimeDebugLevel == 2)
-    private val wdlVarLinksConverter = WdlVarLinksConverter(dxIoFunctions.fileInfoDir,
+    private val utlVerbose = Verbose(runtimeDebugLevel >= 1, false, Set.empty)
+    private val wdlVarLinksConverter = WdlVarLinksConverter(utlVerbose,
+                                                            dxIoFunctions.fileInfoDir,
                                                             fragInputOutput.typeAliases)
     private val jobInputOutput = fragInputOutput.jobInputOutput
     private val collectSubJobs = CollectSubJobs(jobInputOutput,
@@ -76,7 +80,7 @@ case class WfFragRunner(wf: WorkflowDefinition,
                                                 runtimeDebugLevel,
                                                 fragInputOutput.typeAliases)
     // The source code for all the tasks
-    private val taskSourceDir : Map[String, String] = ParseWomSourceFile.scanForTasks(wfSourceCode)
+    private val taskSourceDir : Map[String, String] = ParseWomSourceFile(verbose).scanForTasks(wfSourceCode)
 
     var gSeqNum = 0
     private def launchSeqNum() : Int = {
@@ -347,6 +351,7 @@ case class WfFragRunner(wf: WorkflowDefinition,
                                         dxPathConfig,
                                         dxIoFunctions,
                                         jobInputOutput,
+                                        defaultRuntimeAttributes,
                                         runtimeDebugLevel)
         try {
             val iType = taskRunner.calcInstanceType(taskInputs)
@@ -592,6 +597,7 @@ case class WfFragRunner(wf: WorkflowDefinition,
         }
     }
 
+
     // create a short, easy to read, description for a scatter element.
     private def readableNameForScatterItem(item: WomValue) : Option[String] = {
         item match {
@@ -612,9 +618,11 @@ case class WfFragRunner(wf: WorkflowDefinition,
             case WomOptionalValue(_, Some(x)) =>
                 readableNameForScatterItem(x)
             case WomArray(_, arrValues) =>
+                // Create a name by concatenating the initial elements of the array.
+                // Limit the total size of the name.
                 val arrBeginning = arrValues.slice(0, 3)
                 val elements = arrBeginning.flatMap(readableNameForScatterItem(_))
-                Some("[" + elements.mkString(", ") + "]")
+                Some(Utils.buildLimitedSizeName(elements, MAX_JOB_NAME))
             case _ =>
                 None
         }
@@ -709,7 +717,7 @@ case class WfFragRunner(wf: WorkflowDefinition,
         Utils.appletLog(verbose, s"Environment: ${envInitial}")
 
         // sort from low to high according to the source lines.
-        val callsLoToHi : Vector[String] = ParseWomSourceFile.scanForCalls(wf.innerGraph, wfSourceCode)
+        val callsLoToHi : Vector[String] = ParseWomSourceFile(verbose).scanForCalls(wf.innerGraph, wfSourceCode)
 
         // Find the fragment block to execute
         val block = Block.getSubBlock(blockPath, wf.innerGraph, callsLoToHi)

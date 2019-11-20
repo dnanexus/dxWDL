@@ -17,7 +17,7 @@ class TypeEvalTest extends FlatSpec with Matchers {
 
     def parseWdlCode(sourceCode: String) : WomBundle = {
         val languageFactory = new WdlDraft3LanguageFactory(ConfigFactory.empty())
-        val bundle = languageFactory.getWomBundle(sourceCode, "{}", List.empty, List(languageFactory))
+        val bundle = languageFactory.getWomBundle(sourceCode, None, "{}", List.empty, List(languageFactory), false)
         bundle match {
             case Right(bn) =>
                 bn

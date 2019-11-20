@@ -121,12 +121,21 @@ runtime {
 }
 ```
 
+If you want an instance that has a GPU chipset, set the `gpu` attribute to true. For example:
+```
+runtime {
+   memory: "4 GB"
+   cpu : 4
+   gpu : true
+}
+```
+
 Normally, a file used in a task is downloaded to the instance, and
 then used locally (*locallized*). If the file only needs to be
 examined once in sequential order, then this can be optimized by
-streaming instead. The Unix `cat`, `wc`, and `head` commands are of this
-nature. To specify that a file is to be streamed, mark it as such in
-the `parameter_meta` section. For example:
+streaming instead. The Unix `cat`, `wc`, and `head` commands are of
+this nature. To specify that a file is to be streamed, mark it as such
+in the `parameter_meta` section. For example:
 
 ```wdl
 task head {
@@ -393,6 +402,37 @@ section. For example
 will override the default timeout for tasks `Add` and `Inc`. It will also provide
 `UPLOAD` instead of `VIEW` project access to `Inc`.
 
+You are also able add citations or licenses information using for each task at the `per_task_dx_attributes` section. For example
+
+```
+{
+  "per_task_dx_attributes" : {
+    "Add": {
+      "runSpec": {
+        "timeoutPolicy": {
+          "*": {
+             "minutes": 30
+          }
+        }
+      },
+      "details": {
+        "upstreamProjects": [
+          {
+            "name": "GATK4",
+            "repoUrl": "https://github.com/broadinstitute/gatk",
+            "version": "GATK-4.0.1.2",
+            "license": "BSD-3-Clause",
+            "licenseUrl": "https://github.com/broadinstitute/LICENSE.TXT",
+            "author": "Broad Institute"
+          }
+        ]
+      }
+    },
+  }
+}
+```
+
+
 # Handling intermediate workflow outputs
 
 A workflow may create a large number of files, taking up significant
@@ -418,6 +458,71 @@ it may misplace or outright delete files. The applet:
 3. has to be careful about inputs that are *also* outputs. Normally, these should not be moved.
 4. should use bulk object operations, so as not to overload the API server.
 
+## Adding config-file based reorg applet at compilation time
+In addition to using `--reorg` flag to add the reorg stage, you may also add a custom reorganization applet that takes an optional input
+by declaring a "custom-reorg" object in the JSON file used as parameter with `-extras`
+
+The  "custom-reorg" object has two properties in extra.json:
+    # app_id: reorg applet id
+    # conf: auxiliary configuration
+
+
+The optional input file can be used as a configuration file for the reorganization process.
+
+For example:
+
+```
+
+{
+  "custom-reorg" : {
+    "app_id" : "applet-12345678910",
+    "conf" : "dx://file-xxxxxxxx"
+  }
+}
+
+# if you do not wish to include an additional config file, please set the "conf" to `null`
+{
+  "custom-reorg" : {
+    "app_id" : "applet-12345678910",
+    "conf" : null
+  }
+}
+
+
+```
+
+The config-file based reorg applet needs to have the following specs as inputs.
+
+`___reorg_conf` and `___reorg_status`:
+
+```json
+{
+  "inputSpec": [
+    {
+      "name": "___reorg_conf",
+      "label": "Auxiliary config input used for reorganisation.",
+      "help": "",
+      "class": "file",
+      "patterns": ["*"],
+      "optional": true
+    },
+    {
+      "name": "___reorg_status",
+      "label": "A string from output stage that act as a signal to indicate the workflow has completed.",
+      "help": "",
+      "class": "string",
+      "optional": true
+    }
+  ]
+}
+```
+
+When compiling a workflow with a custom-reorg applet declared with `-extras` JSON,
+a string variable `___reorg_status` with the value of `completed` will be included in the output stage.
+
+The `___reorg_status` is used to act as a dependency to signal that the workflow has completed.
+
+For an example use case of a configuration based custom reorg applet, please refer to [CustomReorgAppletExample.md](CustomReorgAppletExample.md)
 # Toplevel calls compiled as stages
 
 If a workflow is compiled in unlocked mode, top level calls with no

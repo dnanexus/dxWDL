@@ -1,13 +1,17 @@
 package dxWDL.compiler
 
+
 import java.nio.file.{Path, Paths}
 import org.scalatest.{FlatSpec, Matchers}
 import org.scalatest.Inside._
-import wom.callable.{CallableTaskDefinition, MetaValueElement}
+import wom.callable.{CallableTaskDefinition}
+import wom.callable.MetaValueElement
+
 
 import dxWDL.Main
 import dxWDL.base.Utils
 import dxWDL.dx.DxUtils
+import spray.json._
 
 // These tests involve compilation -without- access to the platform.
 //
@@ -117,7 +121,7 @@ class GenerateIRTest extends FlatSpec with Matchers {
         ) shouldBe a [Main.SuccessfulTerminationIR]
     }
 
-    ignore should "scatters over maps -- this requires the as_pairs engine function which is experimental" in {
+    it should "scatters over maps" in {
         val path = pathFromBasename("compiler", "dict2.wdl")
         Main.compile(
             path.toString :: cFlags
@@ -195,6 +199,41 @@ class GenerateIRTest extends FlatSpec with Matchers {
         stage.description shouldBe ("review")
     }
 
+    it should "compile a workflow calling a subworkflow as a direct call with development version" in {
+        val path = pathFromBasename("development", "movies.wdl")
+        val bundle : IR.Bundle = Main.compile(path.toString :: cFlags) match {
+            case Main.SuccessfulTerminationIR(bundle) => bundle
+            case other =>
+                Utils.error(other.toString)
+                throw new Exception(s"Failed to compile ${path}")
+        }
+        val wf : IR.Workflow = bundle.primaryCallable match {
+            case Some(wf: IR.Workflow) =>
+                wf
+            case _ => throw new Exception("bad value in bundle")
+        }
+        val stage = wf.stages.head
+        stage.description shouldBe ("review")
+    }
+
+
+    it should "compile a workflow calling a subworkflow with native DNANexus applet as a direct call with development version" in {
+        val path = pathFromBasename("development", "call_dnanexus_applet.wdl")
+        val bundle : IR.Bundle = Main.compile(path.toString :: cFlags) match {
+            case Main.SuccessfulTerminationIR(bundle) => bundle
+            case other =>
+                Utils.error(other.toString)
+                throw new Exception(s"Failed to compile ${path}")
+        }
+        val wf : IR.Workflow = bundle.primaryCallable match {
+            case Some(wf: IR.Workflow) =>
+                wf
+            case _ => throw new Exception("bad value in bundle")
+        }
+        val stage = wf.stages.head
+        stage.description shouldBe ("native_sum_wf")
+    }
+
     it should "three nesting levels" in {
         val path = pathFromBasename("nested", "three_levels.wdl")
         val retval = Main.compile(
@@ -224,10 +263,11 @@ class GenerateIRTest extends FlatSpec with Matchers {
         val retval = Main.compile(
             path.toString :: cFlags
         )
-        inside(retval) {
+/*        inside(retval) {
             case Main.UnsuccessfulTermination(errMsg) =>
                 errMsg should include ("nested scatter")
-        }
+ }*/
+        retval shouldBe a [Main.SuccessfulTerminationIR]
     }
 
     private def getTaskByName(name: String,
@@ -255,34 +295,34 @@ class GenerateIRTest extends FlatSpec with Matchers {
         }
 
         val cgrepTask = getTaskByName("cgrep", bundle)
-        cgrepTask.parameterMeta shouldBe (Map("in_file" -> "stream"))
+        cgrepTask.parameterMeta shouldBe (Map("in_file" -> MetaValueElement.MetaValueElementString("stream")))
         val iDef = cgrepTask.inputs.find(_.name == "in_file").get
         iDef.parameterMeta shouldBe (Some(MetaValueElement.MetaValueElementString("stream")))
 
         val diffTask = getTaskByName("diff", bundle)
-        diffTask.parameterMeta shouldBe (Map("a" -> "stream", "b" -> "stream"))
+        diffTask.parameterMeta shouldBe (Map("a" -> MetaValueElement.MetaValueElementString("stream"),
+                                             "b" -> MetaValueElement.MetaValueElementString("stream")))
     }
 
-    it should "emit warning for streaming on non files I" in {
-        val path = pathFromBasename("compiler", "streaming_files_error1.wdl")
+    it should "recognize the streaming object annotation" in {
+        val path = pathFromBasename("compiler", "streaming_files_obj.wdl")
         val retval = Main.compile(
             path.toString :: cFlags
         )
-        inside(retval) {
-            case Main.UnsuccessfulTermination(errMsg) =>
-                errMsg should include ("Only files that are task inputs can be declared streaming")
+        retval shouldBe a [Main.SuccessfulTerminationIR]
+        val bundle = retval match {
+            case Main.SuccessfulTerminationIR(ir) => ir
+            case _ => throw new Exception("sanity")
         }
-    }
 
-    it should "emit warning for streaming on non files II" in {
-        val path = pathFromBasename("compiler", "streaming_files_error2.wdl")
-        val retval = Main.compile(
-            path.toString :: cFlags
-        )
-        inside(retval) {
-            case Main.UnsuccessfulTermination(errMsg) =>
-                errMsg should include ("Only files that are task inputs can be declared streaming")
-        }
+        val cgrepTask = getTaskByName("cgrep", bundle)
+        cgrepTask.parameterMeta shouldBe (Map("in_file" -> MetaValueElement.MetaValueElementObject(Map("stream" -> MetaValueElement.MetaValueElementBoolean(true)))))
+        val iDef = cgrepTask.inputs.find(_.name == "in_file").get
+        iDef.parameterMeta shouldBe (Some(MetaValueElement.MetaValueElementObject(Map("stream" -> MetaValueElement.MetaValueElementBoolean(true)))))
+
+        val diffTask = getTaskByName("diff", bundle)
+        diffTask.parameterMeta shouldBe (Map("a" -> MetaValueElement.MetaValueElementObject(Map("stream" -> MetaValueElement.MetaValueElementBoolean(true))),
+                                             "b" -> MetaValueElement.MetaValueElementObject(Map("stream" -> MetaValueElement.MetaValueElementBoolean(true)))))
     }
 
     it should "recognize the streaming annotation for wdl draft2" in {
@@ -296,11 +336,8 @@ class GenerateIRTest extends FlatSpec with Matchers {
             case _ => throw new Exception("sanity")
         }
         val diffTask = getTaskByName("diff", bundle)
-        diffTask.parameterMeta shouldBe (Map("a" -> "stream", "b" -> "stream"))
-
-        // This doesn't work on draft2
-        //val iDef = diffTask.inputs.find(_.name == "a").get
-        //iDef.parameterMeta shouldBe (Some(MetaValueElement.MetaValueElementString("stream")))
+        diffTask.parameterMeta shouldBe (Map("a" -> MetaValueElement.MetaValueElementString("stream"),
+                                             "b" -> MetaValueElement.MetaValueElementString("stream")))
     }
 
     it should "handle an empty workflow" in {
@@ -335,7 +372,7 @@ class GenerateIRTest extends FlatSpec with Matchers {
         }
     }
 
-    ignore should "do nested scatters" in {
+    it should "do nested scatters" in {
         val path = pathFromBasename("compiler", "nested_scatter.wdl")
         val retval = Main.compile(path.toString :: cFlags)
         retval shouldBe a[Main.SuccessfulTerminationIR]
@@ -380,7 +417,7 @@ class GenerateIRTest extends FlatSpec with Matchers {
         retval shouldBe a[Main.SuccessfulTerminationIR]
     }
 
-    it should "retain all characters in a WDL task" taggedAs(EdgeTest) in {
+    it should "retain all characters in a WDL task" in {
         val path = pathFromBasename("bugs", "missing_chars_in_task.wdl")
         val retval = Main.compile(path.toString
 //                                      :: "--verbose"
@@ -409,4 +446,125 @@ class GenerateIRTest extends FlatSpec with Matchers {
                 task.womSourceCode should include (commandSection)
         }
     }
+
+    it should "correctly flatten a workflow with imports" in {
+        val path = pathFromBasename("compiler", "wf_to_flatten.wdl")
+        val retval = Main.compile(path.toString :: cFlags)
+        retval shouldBe a[Main.SuccessfulTerminationIR]
+    }
+
+    it should "detect a request for GPU" taggedAs(EdgeTest) in {
+        val path = pathFromBasename("compiler", "GPU.wdl")
+        val retval = Main.compile(path.toString
+//                                      :: "--verbose"
+//                                      :: "--verboseKey" :: "GenerateIR"
+                                      :: cFlags)
+        retval shouldBe a[Main.SuccessfulTerminationIR]
+
+        inside(retval) {
+            case Main.SuccessfulTerminationIR(bundle) =>
+                bundle.allCallables.size shouldBe(1)
+                val (_, callable) = bundle.allCallables.head
+                callable shouldBe a[IR.Applet]
+                val task = callable.asInstanceOf[IR.Applet]
+                task.instanceType shouldBe(IR.InstanceTypeConst(Some("mem3_ssd1_gpu_x8"), None, None, None, None))
+        }
+    }
+
+    // ignore for now as the test will fail in staging
+    it should "Compile a workflow with a custom reorg applet" taggedAs(ProdTest) in {
+        val path = pathFromBasename("compiler", basename="wf_custom_reorg.wdl")
+
+        val extrasPath = pathFromBasename("compiler/extras", basename="extras_custom_reorg.json")
+
+        val retval = Main.compile(
+            path.toString :: "-extras" :: extrasPath.toString ::
+              List("--compileMode", "ir", "--project", dxProject.getId)
+        )
+
+        retval shouldBe a [Main.SuccessfulTerminationIR]
+        val bundle = retval match {
+            case Main.SuccessfulTerminationIR(ir) => ir
+            case _ => throw new Exception("sanity")
+        }
+
+        val wf: IR.Workflow =  bundle.primaryCallable.get match {
+            case wf: IR.Workflow => wf
+            case _ => throw new Exception("sanity")
+        }
+
+        wf.stages.size shouldBe(4)
+        wf.stages(3).calleeName shouldBe "applet-Fg623fj0jy8q7jjv9xV6q5fQ"
+    }
+
+    // ignore for now as the test will fail in staging
+    it should "Compile a workflow on the platform with the config file in the input" taggedAs(ProdTest)  in {
+        val path = pathFromBasename("compiler", basename="wf_custom_reorg.wdl")
+
+        val extrasPath = pathFromBasename("compiler/extras", basename="extras_custom_reorg_config.json")
+
+        // remove locked workflow flag
+        val cFlags2 = cFlags.drop(5) ++ Vector("--folder", "/reorg_tests")
+
+        val retval = Main.compile(
+            path.toString :: "-extras" :: extrasPath.toString :: cFlags2
+        )
+        retval shouldBe a [Main.SuccessfulTermination]
+        val wfId: String = retval match {
+            case Main.SuccessfulTermination(ir) => ir
+            case _ => throw new Exception("sanity")
+        }
+
+        val (stdout, stderr) = Utils.execCommand(s"dx describe ${wfId} --json")
+
+        val wfStages = stdout.parseJson.asJsObject.fields.get("stages") match {
+            case Some(JsArray(x)) => x.toVector
+            case other => throw new Exception(s"Unexpected result ${other}")
+        }
+
+        wfStages.size shouldBe 4
+
+        val reorgStage = wfStages.last
+
+        // if its not a JsObject return empty string and test will fail
+        val reorgDetails = reorgStage match {
+            case JsObject(x) => JsObject(x)
+            case _ => throw new Exception("sanity")
+        }
+
+        reorgDetails.getFields("id", "executable") shouldBe Seq(
+            JsString("stage-reorg"), JsString("applet-Fg623fj0jy8q7jjv9xV6q5fQ")
+        )
+        // There should be 3 inputs, the output from output stage and the custom reorg config file.
+        val reorgInput: JsObject = reorgDetails.fields("input") match {
+            case JsObject(x) => JsObject(x)
+            case _ => throw new Exception("sanity")
+
+        }
+
+        reorgInput.fields.size shouldBe 2
+        reorgInput.fields.keys shouldBe Set(Utils.REORG_CONFIG, Utils.REORG_STATUS)
+    }
+
+    // ignore for now as the test will fail in staging
+    it should "Compile a workflow on the platform without config file in the input" taggedAs(ProdTest) in {
+        // This works in conjunction with "Compile a workflow on the platform with the config file in the input".
+        // There is less assertions here.
+        val path = pathFromBasename("compiler", basename="wf_custom_reorg.wdl")
+
+        val extrasPath = pathFromBasename("compiler/extras", basename="extras_custom_reorg.json")
+
+        // remove locked workflow flag
+        val cFlags2 = cFlags.drop(5) ++ Vector("--folder", "/reorg_tests_without_config")
+
+        val retval = Main.compile(
+            path.toString :: "-extras" :: extrasPath.toString :: cFlags2
+        )
+        retval shouldBe a [Main.SuccessfulTermination]
+
+    }
 }
+
+
+
+

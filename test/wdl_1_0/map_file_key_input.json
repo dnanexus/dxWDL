@@ -1,0 +1,5 @@
+{
+  "map_file_key.file_key": {
+    "dx://dxWDL_playground:/test_data/fileA": "this is string value"
+  }
+}

@@ -8,8 +8,8 @@ import wom.executable.WomBundle
 import wom.types._
 import wom.values._
 
-import dxWDL.base.Utils
-import dxWDL.util.{DxIoFunctions, DxPathConfig, InstanceTypeDB, ParseWomSourceFile}
+import dxWDL.base.{Utils, WdlRuntimeAttrs}
+import dxWDL.util.{DxIoFunctions, DxInstanceType, DxPathConfig, InstanceTypeDB, ParseWomSourceFile}
 
 // This test module requires being logged in to the platform.
 // It compiles WDL scripts without the runtime library.
@@ -17,7 +17,14 @@ import dxWDL.util.{DxIoFunctions, DxPathConfig, InstanceTypeDB, ParseWomSourceFi
 // dnanexus applets and workflows that are not runnable.
 class TaskRunnerTest extends FlatSpec with Matchers {
     private val runtimeDebugLevel = 0
-    private val instanceTypeDB = InstanceTypeDB.genTestDB(true)
+    private val unicornInstance = DxInstanceType("mem_ssd_unicorn",
+                                                 100,
+                                                 100,
+                                                 4,
+                                                 1.00F,
+                                                 Vector(("Ubuntu", "16.04")),
+                                                 false)
+    private val instanceTypeDB = InstanceTypeDB(true, Vector(unicornInstance))
     private val verbose = false
 
     // Note: if the file doesn't exist, this throws a null pointer exception
@@ -127,13 +134,13 @@ class TaskRunnerTest extends FlatSpec with Matchers {
         val jobHomeDir : Path = Paths.get("/tmp/dxwdl_applet_test")
         Utils.deleteRecursive(jobHomeDir.toFile)
         Utils.safeMkdir(jobHomeDir)
-        val dxPathConfig = DxPathConfig.apply(jobHomeDir, verbose)
+        val dxPathConfig = DxPathConfig.apply(jobHomeDir, false, verbose)
         dxPathConfig.createCleanDirs()
 
-        val (language, womBundle: WomBundle, allSources, _) = ParseWomSourceFile.apply(wdlCode, List.empty)
-        val task : CallableTaskDefinition = ParseWomSourceFile.getMainTask(womBundle)
+        val (language, womBundle: WomBundle, allSources, _) = ParseWomSourceFile(false).apply(wdlCode, List.empty)
+        val task : CallableTaskDefinition = ParseWomSourceFile(false).getMainTask(womBundle)
         assert(allSources.size == 1)
-        val sourceDict  = ParseWomSourceFile.scanForTasks(allSources.values.head)
+        val sourceDict  = ParseWomSourceFile(false).scanForTasks(allSources.values.head)
         assert(sourceDict.size == 1)
         val taskSourceCode = sourceDict.values.head
 
@@ -143,7 +150,8 @@ class TaskRunnerTest extends FlatSpec with Matchers {
         val jobInputOutput = new JobInputOutput(dxIoFunctions, runtimeDebugLevel, womBundle.typeAliases)
         val taskRunner = TaskRunner(task, taskSourceCode, womBundle.typeAliases,
                                     instanceTypeDB,
-                                    dxPathConfig, dxIoFunctions, jobInputOutput, 0)
+                                    dxPathConfig, dxIoFunctions, jobInputOutput,
+                                    Some(WdlRuntimeAttrs(Map.empty)), 0)
         val inputsRelPaths = taskRunner.jobInputOutput.loadInputs(JsObject(inputsOrg), task)
         val inputs = inputsRelPaths.map{
             case (inpDef, value) => (inpDef, addBaseDir(value))
@@ -243,7 +251,11 @@ class TaskRunnerTest extends FlatSpec with Matchers {
         repo should equal("ubuntu_18_04_minimal:latest")
     }
 
-    it should "handle structs" taggedAs(EdgeTest) in {
+    it should "handle structs" in {
         runTask("Person2")
+    }
+
+    it should "handle missing optional files" taggedAs(EdgeTest) in {
+        runTask("missing_optional_output_file")
     }
 }

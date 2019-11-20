@@ -3,7 +3,7 @@ import sbt.Keys._
 import sbtassembly.AssemblyPlugin.autoImport._
 import scoverage.ScoverageKeys._
 
-scalaVersion := "2.12.6"
+scalaVersion := "2.12.9"
 name := "dxWDL"
 organization := "com.dnanexus"
 
@@ -57,7 +57,7 @@ logLevel in assembly := Level.Info
 assemblyOutputPath in assembly := file("applet_resources/resources/dxWDL.jar")
 assemblyMergeStrategy in assembly := customMergeStrategy.value
 
-val cromwellV = "43"
+val cromwellV = "47"
 
 val googleHttpClientApacheV = "2.1.1"
 val googleHttpClientV = "1.29.1"
@@ -78,7 +78,7 @@ libraryDependencies ++= Seq(
     "org.broadinstitute" %% "cwl-v1-0" % cromwellV,
     "org.broadinstitute" %% "wdl-draft2" % cromwellV,
     "org.broadinstitute" %% "wdl-draft3" % cromwellV,
-//    "org.broadinstitute" %% "wdl-biscayne" % cromwellV,
+    "org.broadinstitute" %% "wdl-biscayne" % cromwellV,
 
     "io.spray" %% "spray-json" % "1.3.5",
     "com.typesafe" % "config" % "1.3.3",

@@ -4,7 +4,6 @@ import com.dnanexus.{DXAPI, DXDataObject}
 import com.fasterxml.jackson.databind.JsonNode
 import spray.json._
 
-
 import dxWDL.base.Verbose
 
 case class DxFindDataObjects(limit: Option[Int],
@@ -76,13 +75,20 @@ case class DxFindDataObjects(limit: Option[Int],
             case Some(other) =>
                 throw new Exception(s"malformed output field ${other}")
         }
-        val creationDate : java.util.Date = jsv.asJsObject.fields.get("created") match {
+        val created : Long = jsv.asJsObject.fields.get("created") match {
             case None => throw new Exception("'created' field is missing")
-            case Some(JsNumber(date)) => new java.util.Date(date.toLong)
+            case Some(JsNumber(date)) => date.toLong
             case Some(other) => throw new Exception(s"malformed created field ${other}")
         }
+        val modified : Long = jsv.asJsObject.fields.get("modified") match {
+            case None => throw new Exception("'modified' field is missing")
+            case Some(JsNumber(date)) => date.toLong
+            case Some(other) => throw new Exception(s"malformed created field ${other}")
+        }
+
         DxDescribe(name, folder, size,
-                   dxProject.asInstanceOf[DXContainer], dxobj, creationDate,
+                   dxProject.asInstanceOf[DXContainer], dxobj,
+                   created, modified,
                    properties, inputSpec, outputSpec, None)
     }
 
@@ -111,7 +117,7 @@ case class DxFindDataObjects(limit: Option[Int],
             if (recurse)
                 Map("recurse" -> JsBoolean(true))
             else
-                Map.empty
+                Map("recurse" -> JsBoolean(false))
         JsObject(part1 ++ part2 ++ part3)
     }
 
@@ -119,15 +125,24 @@ case class DxFindDataObjects(limit: Option[Int],
     private def submitRequest(scope : JsValue,
                               dxProject: DxProject,
                               cursor: Option[JsValue],
-                              klass: Option[String]) : (Map[DXDataObject, DxDescribe], Option[JsValue]) = {
+                              klass: Option[String],
+                              propertyConstraints: Vector[String],
+                              nameConstraints : Vector[String],
+                              withInputOutputSpec : Boolean) : (Map[DXDataObject, DxDescribe], Option[JsValue]) = {
+        val describeFields = Map("name" -> JsBoolean(true),
+                                 "folder" -> JsBoolean(true),
+                                 "size" -> JsBoolean(true),
+                                 "properties" -> JsBoolean(true))
+        val ioSpec =
+            if (withInputOutputSpec)
+                Map("inputSpec" -> JsBoolean(true),
+                    "outputSpec" -> JsBoolean(true))
+            else
+                Map.empty
+
         val reqFields = Map("visibility" -> JsString("either"),
                             "project" -> JsString(dxProject.getId),
-                            "describe" -> JsObject("name" -> JsBoolean(true),
-                                                   "folder" -> JsBoolean(true),
-                                                   "size" -> JsBoolean(true),
-                                                   "properties" -> JsBoolean(true),
-                                                   "inputSpec" -> JsBoolean(true),
-                                                   "outputSpec" -> JsBoolean(true)),
+                            "describe" -> JsObject(describeFields ++ ioSpec),
                             "scope" -> scope)
         val limitField = limit match {
             case None => Map.empty
@@ -141,7 +156,37 @@ case class DxFindDataObjects(limit: Option[Int],
             case None => Map.empty
             case Some(k) => Map("class" -> JsString(k))
         }
-        val request = JsObject(reqFields ++ cursorField ++ limitField ++ classField)
+        val propertiesField =
+            if (propertyConstraints.isEmpty) {
+                Map.empty
+            } else {
+                Map("properties" -> JsObject(
+                        propertyConstraints.map{
+                            prop => prop -> JsBoolean(true)
+                        }.toMap))
+            }
+
+        val namePcreField =
+            if (nameConstraints.isEmpty) {
+                Map.empty
+            } else if (nameConstraints.size == 1) {
+                // Just one name, no need to use regular expressions
+                Map("name" -> JsString(nameConstraints(0)))
+            } else {
+                // Make a conjunction of all the legal names. For example:
+                // ["Nice", "Foo", "Bar"] ===>
+                //  [(Nice)|(Foo)|(Bar)]
+                val orAll = nameConstraints.map{x => s"(${x})"}.mkString("|")
+                Map("name" -> JsObject(
+                        "regexp" -> JsString(s"[${orAll}]")))
+            }
+
+        val request = JsObject(reqFields ++ cursorField ++ limitField
+                                   ++ classField ++ propertiesField
+                                   ++ namePcreField)
+
+        //Utils.trace(verbose.on, s"submitRequest:\n ${request.prettyPrint}")
+
         val response = DXAPI.systemFindDataObjects(DxUtils.jsonNodeOfJsValue(request),
                                                    classOf[JsonNode],
                                                    DxUtils.dxEnv)
@@ -166,7 +211,11 @@ case class DxFindDataObjects(limit: Option[Int],
     def apply(dxProject : DxProject,
               folder : Option[String],
               recurse: Boolean,
-              klassRestriction : Option[String]) : Map[DXDataObject, DxDescribe] = {
+              klassRestriction : Option[String],
+              withProperties : Vector[String], // object must have these properties
+              nameConstraints : Vector[String], // the object name has to be one of these strings
+              withInputOutputSpec : Boolean  // should the IO spec be described?
+    ) : Map[DXDataObject, DxDescribe] = {
         klassRestriction.map{ k =>
             if (!(Set("record", "file", "applet", "workflow") contains k))
                 throw new Exception("class limitation must be one of {record, file, applet, workflow}")
@@ -176,10 +225,22 @@ case class DxFindDataObjects(limit: Option[Int],
         var allResults = Map.empty[DXDataObject, DxDescribe]
         var cursor : Option[JsValue] = None
         do {
-            val (results, next) = submitRequest(scope, dxProject, cursor, klassRestriction)
+            val (results, next) = submitRequest(scope, dxProject, cursor, klassRestriction,
+                                                withProperties,
+                                                nameConstraints,
+                                                withInputOutputSpec)
             allResults = allResults ++ results
             cursor = next
         } while (cursor != None);
-        allResults
+
+        if (nameConstraints.isEmpty) {
+            allResults
+        } else {
+            // Ensure the the data objects have names in the allowed set
+            val allowedNames = nameConstraints.toSet
+            allResults.filter{
+                case (appletOrWorkflow, desc) => allowedNames contains desc.name
+            }
+        }
     }
 }

@@ -3,16 +3,19 @@
 ## Release check list
 - Make sure regression tests pass
 - Update release notes and README.md
-- Make sure the version number in `src/main/resources/application.conf` is correct
+- Make sure the version number in `src/main/resources/application.conf` is correct. It is used
+when building the release.
 - Merge onto master branch, make sure [travis tests](https://travis-ci.org/dnanexus/dxWDL) pass
-- Tag git with the release version
+
 - Build new externally visible release
-  * run `./scripts/build_release.py --force --multi-region` in staging
-  * run `./scripts/build_release.py --force --multi-region` in production
-  * Update [releases](https://github.com/dnanexus-rnd/dxWDL/releases) github page,
-  use the `Draft a new release` button.
-  * Upload a dxWDL.jar file
-- Create a dxwdl docker image with `./scripts/compiler_image/build_compiler_docker_image.sh`
+```
+./scripts/build_all_releases.sh --staging-token XXX --production-token YYY --docker-user UUU --docker-password WWW
+```
+this will take a while. It builds the release
+on staging, runs multi-region tests on staging, builds on production, and creates an easy to
+use docker image.
+
+- Update [releases](https://github.com/dnanexus-rnd/dxWDL/releases) github page, use the `Draft a new release` button, and upload a dxWDL.jar file.
 
 ## Post release
 - Update the version number in `src/main/resources/application.conf`. We don't want
@@ -24,6 +27,8 @@ to mix the experimental release, with the old code.
 - Lines should not go over 100 characters
 - Unit tests should assert, and not print to the console
 - WDL test files belong in the top directory `test`
+- No tabs in code, only spaces.
+- Indentation in scala code should be 4 white spaces.
 
 ## Building
 

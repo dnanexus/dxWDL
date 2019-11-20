@@ -1,6 +1,7 @@
 package dxWDL.dx
 
 import com.dnanexus._
+import scala.collection.immutable.TreeMap
 import spray.json._
 import wom.types._
 
@@ -50,7 +51,8 @@ case class DxDescribe(name : String,
                       size : Option[Long],
                       container: DxContainer, // a project or a container
                       dxobj : DXDataObject,
-                      creationDate : java.util.Date,
+                      created : Long,
+                      modified : Long,
                       properties: Map[String, String],
                       inputSpec : Option[Vector[IOParameter]],
                       outputSpec : Option[Vector[IOParameter]],
@@ -89,8 +91,6 @@ case class ExecLinkInfo(name: String,
                         outputs: Map[String, WomType],
                         dxExec: DxExec)
 
-
-
 object ExecLinkInfo {
     // Serialize applet input definitions, so they could be used
     // at runtime.
@@ -106,8 +106,8 @@ object ExecLinkInfo {
         }.toMap
         JsObject(
             "name" -> JsString(ali.name),
-            "inputs" -> JsObject(appInputDefs),
-            "outputs" -> JsObject(appOutputDefs),
+            "inputs" -> JsObject(TreeMap(appInputDefs.toArray:_*)),
+            "outputs" -> JsObject(TreeMap(appOutputDefs.toArray:_*)),
             "id" -> JsString(ali.dxExec.getId)
         )
     }

@@ -134,7 +134,8 @@ case class DxNI(verbose: Verbose,
                        folder: String,
                        recursive: Boolean) : Vector[String] = {
         val dxObjectsInFolder : Map[DXDataObject, DxDescribe] =
-            DxFindDataObjects(None, verbose).apply(dxProject, Some(folder), recursive, None)
+            DxFindDataObjects(None, verbose).apply(dxProject, Some(folder), recursive, None,
+                                                   Vector.empty, Vector.empty, true)
 
         // we just want the applets
         val dxAppletsInFolder : Map[DXApplet, DxDescribe]= dxObjectsInFolder.collect{
@@ -345,21 +346,21 @@ case class DxNI(verbose: Verbose,
 object DxNI {
     private def writeHeadersToFile(header: String,
                                    tasks : Vector[String],
-                                   output: Path,
+                                   outputPath: Path,
                                    force: Boolean) : Unit = {
-        if (Files.exists(output)) {
+        if (Files.exists(outputPath)) {
             if (!force) {
-                throw new Exception(s"""|Output file ${output.toString} already exists,
+                throw new Exception(s"""|Output file ${outputPath.toString} already exists,
                                         |use -force to overwrite it"""
                                         .stripMargin.replaceAll("\n", " "))
             }
-            output.toFile().delete
+            outputPath.toFile().delete
         }
 
         // pretty print into a buffer
         val lines = tasks.mkString("\n\n")
         val allLines = header + "\n" + lines
-        Utils.writeFileContent(output, allLines)
+        Utils.writeFileContent(outputPath, allLines)
     }
 
 

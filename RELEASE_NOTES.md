@@ -1,13 +1,172 @@
 # Release Notes
 
+## 1.36 18-Nov-2019
+
+Added a mechanism for a custom reorganization applet, it can be used instead of the built in --reorg option.
+You can use it to reorganize workflow file results after it completes.
+
+Please refer to [docs/ExpertOptions.md](doc/ExpertOptions.md#adding-config-file-based-reorg-applet-at-compilation-time)
+
+## 1.35.1
+- Object form of streaming syntax. This allows several annotations for an input/output
+parameter. In addition to the previously supported:
+```
+parameter_meta {
+  foo: stream
+}
+```
+
+You can also write:
+```
+parameter_meta {
+  foo: {
+    stream: true
+  }
+}
+```
+- New version of dxfuse (v0.12)
+- The checksum of an applet/workflow does not include the dxWDL version. This means that upgrading to
+a new dxWDL version does not require recompiling everything.
+
+## 1.35 24-Oct-2019
+- Support for GPU instances.
+
+If you want an instance that has a GPU chipset, set the `gpu` attribute to true. For example:
+```
+runtime {
+   memory: "4 GB"
+   cpu : 4
+   gpu : true
+}
+```
+
+
+## 1.34 17-Oct-2019
+- Bug fix for handling of structs when creating task headers
+
+## 1.33 15-Oct-2019
+- Upgrade to Cromwell 47
+- Protect 300MiB of memory for dxfuse, if it is running. We don't want it killed by the OOM if the user
+processes use too much memory. This works only when using docker images.
+- Fixed bug with comparision of tasks.
+
+## 1.32 4-Oct-2019
+- Upgrade to Cromwell 46.1
+- Retrying docker pull at runtime.
+- Improved release script. Copies to geographically distributed regions with an app.
+- Fixed bug [#313](https://github.com/dnanexus/dxWDL/issues/313).
+
+## 1.31  30-Sep-2019
+- Renaming dxfs2 to [dxfuse](https://github.com/dnanexus/dxfuse). This
+  is the official name for the DNAx FUSE filesystem.
+- [Prefer](https://github.com/dnanexus/dxWDL/issues/309) v2 instances over v1 instances.
+- Improving marshalling of WDL values to JSON.
+- Allow a WDL input that is a map where the key is a file.
+
+## 1.30
+- Using dxfs2 to stream files. This replaces `dx cat`, which was the previous solution.
+
+## 1.22
+- Upgrade to Cromwell version 46
+- Removed a runtime assert that was too strict. It was checking that the type of a WDL value *V* had a static WDL type *T*. However, the real question was whether *V* could be casted type *T*.
+
+## 1.21.1
+- Writing out a better description when raising a runtime assertion because WOM types don't match.
+
+## 1.21
+- Documented syntax limitation for task/workflow [bracket placement](README.md#Strict-syntax).
+- Upgraded to sbt 1.3.0
+- Improvements to the download agent
+
+## 1.20b
+- The default timeout limit for tasks is 48 hours. It can be overriden by setting a different timeout in the [extras file](./doc/ExpertOptions.md#Setting-dnanexus-specific-attributes-for-tasks).
+- Fixing a bug where the database is locked, in the [dx-download-agent](https://github.com/dnanexus/dxda/).
+
+## 1.20a
+- An experimental version of dx-download-agent
+- Upgrade to Cromwell 45.1
+
+## 1.20
+- Experimental version of the download-agent. Trying to reduce download failures at the beginning of a job. For internal use only.
+
+## 1.19
+- Bug fix for DxNI error
+- Limit the size of the name of jobs in a scatter
+- Upgrade to Cromwell v45
+- Nested scatters are supported
+
+## 1.18
+- Correctly identify WDL calls with no arguments
+- Dealing with the case where a WDL file imports a file, that imports another file
+- Making checksums deterministic, this ensures that a compilation process will not be repeated unnecessarily.
+- Added the dxWDL version number to the properties.
+- Optimized queries that if a workflow/applet has already been compiled. This is done by limiting
+the possible names of the data object we are searching for. We add a regular expression to the
+query, bounding the legal names.
+
+## 1.17
+**Fixed**
+- Setting recurse to false, when searching for existing applets and
+  workflows. Fix contributed by Jeff Tratner.
+- An optional output file, that does not exist, is returned as `None`.
+For example, examine task `foo`.
+
+```wdl
+version 1.0
+task foo {
+    command {}
+    output {
+        File? f = "A.txt"
+        Array[File?] fa = ["X.txt", "Y.txt"]
+    }
+}
+```
+
+Running it will return:
+```
+{
+    "fa" : [null, null]
+}
+```
+Note that `f` is missing. When passing through the DNAx
+system, it is removed becaues it is optional and null.
+
+
+## 1.16
+**Fixed**
+- [Bug 284](https://github.com/dnanexus/dxWDL/issues/284), dropping a default when
+calling a subworkflow.
+
+## 1.15
+
+Improved find-data-objects queries, reducing the time to check if an
+applet (or workflow) already exists on the platform. This is used when
+deciding if an applet should be built, rebuilt, or archived.
+
+To speed the query so it works on large projects with thousands of
+applets and workflows, we limited the search to data objects generated
+by dxWDL. These have a `dxWDL_checksum` property. This runs the risk
+of missing cases where an applet name is already in use by a regular
+dnanexus applet/workflow. We assume this is an unusual case. To fix this,
+the existing applet can be moved or renamed.
+
+## 1.14
+
+**Fixed**
+- Binary and decimal units are respected when specifying memory. For example, GB is 10<sup>9</sup> bytes, and GiB is 2<sup>30</sup> bytes. This follows the [memory spec](https://github.com/openwdl/wdl/blob/master/versions/1.0/SPEC.md#memory).
+
+**Added**
+- Initial support for the development WDL version, 1.1 (or 2.0). This does not include the directory type.
+
 ## 1.13
 **Fixed**
 - [Bug 274](https://github.com/dnanexus/dxWDL/issues/274), losing pipe symbols ('|') at the beginning of a line.
 
 **Changed**
-- Added diagrams to [internals documentation](doc/Internals.md).
-- Made the travis continuous integration process run and check the unit tests
-- Modifed the code to a have minimal level of dependency on the dxjava toolkit. We now only use the DXAPI methods.
+- Upgrade to Cromwell 44, with support for JSON-like values in meta sections
+
+**Added**
+- Ability to put a list of upstream projects into the [extras file](./doc/ExpertOptions.md#Setting-dnanexus-specific-attributes-for-tasks).
 
 ## 1.12
 **Fixed**

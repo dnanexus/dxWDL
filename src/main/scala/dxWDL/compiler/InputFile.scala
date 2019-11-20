@@ -63,10 +63,9 @@ case class InputFileScan(bundle: IR.Bundle,
             // Maps. These are serialized as an object with a keys array and
             // a values array.
             case (WomMapType(keyType, valueType), _) =>
-                val (keysJs, valuesJs) = jsValue.asJsObject.getFields("keys", "values") match {
-                    case Seq(JsArray(keys), JsArray(values)) => (keys, values)
-                    case _ => throw new Exception("malformed JSON")
-                }
+                //System.out.println(s"wom map    kv-type=(${keyType}, ${valueType})")
+                val keysJs = jsValue.asJsObject.fields.keys.map{ k => JsString(k)}.toVector
+                val valuesJs = jsValue.asJsObject.fields.values.toVector
                 val kFiles = keysJs.flatMap(findDxFiles(keyType, _))
                 val vFiles = valuesJs.flatMap(findDxFiles(valueType, _))
                 kFiles.toVector ++ vFiles.toVector
@@ -128,6 +127,7 @@ case class InputFileScan(bundle: IR.Bundle,
                 inputs.get(fqn) match {
                     case None => None
                     case Some(jsValue) =>
+                        //System.out.println(s"findDxFiles ${cVar.womType} ${jsValue.prettyPrint}")
                         Some(findDxFiles(cVar.womType, jsValue))
                 }
         }.flatten.toVector
@@ -176,7 +176,7 @@ case class InputFile(fileInfoDir: Map[DXFile, DxDescribe],
                      typeAliases: Map[String, WomType],
                      verbose: Verbose) {
     val verbose2:Boolean = verbose.containsKey("InputFile")
-    private val wdlVarLinksConverter = WdlVarLinksConverter(fileInfoDir, typeAliases)
+    private val wdlVarLinksConverter = WdlVarLinksConverter(verbose, fileInfoDir, typeAliases)
 
     // Convert a job input to a WomValue. Do not download any files, convert them
     // to a string representation. For example: dx://proj-xxxx:file-yyyy::/A/B/C.txt
@@ -201,17 +201,9 @@ case class InputFile(fileInfoDir: Map[DXFile, DxDescribe],
             // a values array.
             case (WomMapType(keyType, valueType), _) =>
                 val fields = jsValue.asJsObject.fields
-                // [mJs] is a map from json key to json value
-                val mJs: Map[JsValue, JsValue] =
-                    (fields("keys"), fields("values")) match {
-                        case (JsArray(x), JsArray(y)) =>
-                            assert(x.length == y.length)
-                            (x zip y).toMap
-                        case _ => throw new Exception("Malformed JSON")
-                    }
-                val m: Map[WomValue, WomValue] = mJs.map {
-                    case (k:JsValue, v:JsValue) =>
-                        val kWom = womValueFromCromwellJSON(keyType, k)
+                val m: Map[WomValue, WomValue] = fields.map {
+                    case (k:String, v:JsValue) =>
+                        val kWom = womValueFromCromwellJSON(keyType, JsString(k))
                         val vWom = womValueFromCromwellJSON(valueType, v)
                         kWom -> vWom
                 }.toMap
@@ -264,102 +256,11 @@ case class InputFile(fileInfoDir: Map[DXFile, DxDescribe],
         }
     }
 
-    // Import a value specified in a Cromwell style JSON input
-    // file. Assume that all the platform files have already been
-    // converted into dx:links.
-    //
-    // Challenges:
-    // 1) avoiding an intermediate conversion into a WDL value. Most
-    // types pose no issues. However, dx:files cannot be converted
-    // into WDL files in all cases.
-    // 2) JSON maps and WDL maps are slighly different. WDL maps can have
-    // keys of any type, where JSON maps can only have string keys.
-    private def jsValueFromCromwellJSON(womType: WomType,
-                                        jsv: JsValue) : JsValue = {
-        (womType, jsv) match {
-            // base case: primitive types
-            case (WomBooleanType, JsBoolean(_)) => jsv
-            case (WomIntegerType, JsNumber(_)) => jsv
-            case (WomFloatType, JsNumber(_)) => jsv
-            case (WomStringType, JsString(_)) => jsv
-            case (WomSingleFileType, JsObject(_)) => jsv
-
-            // Maps. Since these have string values, they are, essentially,
-            // mapped to WDL maps of type Map[String, T].
-            case (WomMapType(keyType, valueType), JsObject(fields)) =>
-                if (keyType != WomStringType)
-                    throw new Exception("Importing a JSON object to a WDL map requires string keys")
-                JsObject(fields.map{ case (k,v) =>
-                             k -> jsValueFromCromwellJSON(valueType, v)
-                         })
-
-            // a pair can be written as an object or an array with two elements.
-            case (WomPairType(lType, rType), JsObject(fields))
-                    if (List("left", "right").forall(fields contains _)) =>
-                val lJs = jsValueFromCromwellJSON(lType, fields("left"))
-                val rJs = jsValueFromCromwellJSON(rType, fields("right"))
-                JsObject("left" -> lJs, "right" -> rJs)
-
-            case (WomPairType(lType, rType), JsArray(Vector(l,r))) =>
-                val lJs = jsValueFromCromwellJSON(lType, l)
-                val rJs = jsValueFromCromwellJSON(rType, r)
-                JsObject("left" -> lJs, "right" -> rJs)
-
-            case (WomArrayType(t), JsArray(vec)) =>
-                JsArray(vec.map{
-                    elem => jsValueFromCromwellJSON(t, elem)
-                })
-
-            case (WomOptionalType(t), (null|JsNull)) => JsNull
-            case (WomOptionalType(t), _) =>  jsValueFromCromwellJSON(t, jsv)
-
-            // structs
-            case (WomCompositeType(typeMap, Some(structName)), JsObject(fields)) =>
-                // convert each field
-                val m = fields.map {
-                    case (key, value) =>
-                        val t : WomType = typeMap(key)
-                        val elem: JsValue = jsValueFromCromwellJSON(t, value)
-                        key -> elem
-                }.toMap
-                JsObject(m)
-
-            case _ =>
-                throw new Exception(
-                    s"""|Unsupported/Invalid type/JSON combination in input file
-                        |  womType= ${womType}
-                        |  JSON= ${jsv.prettyPrint}""".stripMargin.trim)
-        }
-    }
-
-    // traverse the JSON structure, and replace file URLs with
-    // dx-links.
-    private def replaceURLsWithLinks(jsv: JsValue) : JsValue = {
-        jsv match {
-            case JsString(s) if s.startsWith(DX_URL_PREFIX) =>
-                // Identify platform file paths by their prefix,
-                // do a lookup, and create a dxlink
-                val dxFile = path2file(s)
-                DxUtils.dxFileToJsValue(dxFile)
-
-            case JsBoolean(_) | JsNull | JsNumber(_) | JsString(_) => jsv
-            case JsObject(fields) =>
-                JsObject(fields.map{
-                             case(k,v) => k -> replaceURLsWithLinks(v)
-                         }.toMap)
-            case JsArray(elems) =>
-                JsArray(elems.map(e => replaceURLsWithLinks(e)))
-            case _ =>
-                throw new Exception(s"unrecognized JSON value=${jsv}")
-        }
-    }
-
     // Import into a WDL value, and convert back to JSON.
     private def translateValue(cVar: CVar,
                                jsv: JsValue) : WdlVarLinks = {
-        val jsWithDxLinks: JsValue = replaceURLsWithLinks(jsv)
-        val js2 = jsValueFromCromwellJSON(cVar.womType, jsWithDxLinks)
-        wdlVarLinksConverter.importFromCromwellJSON(cVar.womType, js2)
+        val womValue = womValueFromCromwellJSON(cVar.womType, jsv)
+        wdlVarLinksConverter.importFromWDL(cVar.womType, womValue)
     }
 
     // skip comment lines, these start with ##.

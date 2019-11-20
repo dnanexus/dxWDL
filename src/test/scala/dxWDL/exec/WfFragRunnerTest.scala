@@ -13,9 +13,9 @@ import wom.graph.expression._
 import wom.values._
 import wom.types._
 
-import dxWDL.base.{Utils, RunnerWfFragmentMode}
+import dxWDL.base.{RunnerWfFragmentMode, Utils, WdlRuntimeAttrs}
 import dxWDL.dx.ExecLinkInfo
-import dxWDL.util.{Block, DxIoFunctions, DxPathConfig, InstanceTypeDB, ParseWomSourceFile}
+import dxWDL.util.{Block, DxIoFunctions, DxInstanceType, DxPathConfig, InstanceTypeDB, ParseWomSourceFile}
 
 // This test module requires being logged in to the platform.
 // It compiles WDL scripts without the runtime library.
@@ -23,14 +23,21 @@ import dxWDL.util.{Block, DxIoFunctions, DxPathConfig, InstanceTypeDB, ParseWomS
 // dnanexus applets and workflows that are not runnable.
 class WfFragRunnerTest extends FlatSpec with Matchers {
     private val runtimeDebugLevel = 0
-    private val instanceTypeDB = InstanceTypeDB.genTestDB(false)
+    private val unicornInstance = DxInstanceType("mem_ssd_unicorn",
+                                                 100,
+                                                 100,
+                                                 4,
+                                                 1.00F,
+                                                 Vector(("Ubuntu", "16.04")),
+                                                 false)
+    private val instanceTypeDB = InstanceTypeDB(true, Vector(unicornInstance))
 
     private def setup() : (DxPathConfig, DxIoFunctions) = {
         // Create a clean directory in "/tmp" for the task to use
         val jobHomeDir : Path = Paths.get("/tmp/dxwdl_applet_test")
         Utils.deleteRecursive(jobHomeDir.toFile)
         Utils.safeMkdir(jobHomeDir)
-        val dxPathConfig = DxPathConfig.apply(jobHomeDir, runtimeDebugLevel >= 1)
+        val dxPathConfig = DxPathConfig.apply(jobHomeDir, false, runtimeDebugLevel >= 1)
         dxPathConfig.createCleanDirs()
         val dxIoFunctions = DxIoFunctions(Map.empty, dxPathConfig, runtimeDebugLevel)
         (dxPathConfig, dxIoFunctions)
@@ -40,7 +47,7 @@ class WfFragRunnerTest extends FlatSpec with Matchers {
     private def setupFragRunner(dxPathConfig: DxPathConfig,
                                 dxIoFunctions: DxIoFunctions,
                                 wfSourceCode: String) : (WorkflowDefinition, WfFragRunner) = {
-        val (wf : WorkflowDefinition, taskDir, typeAliases) = ParseWomSourceFile.parseWdlWorkflow(wfSourceCode)
+        val (wf : WorkflowDefinition, taskDir, typeAliases) = ParseWomSourceFile(false).parseWdlWorkflow(wfSourceCode)
         val fragInputOutput = new WfFragInputOutput(dxIoFunctions,
                                                     null /*dxProject*/,
                                                     runtimeDebugLevel,
@@ -53,6 +60,7 @@ class WfFragRunnerTest extends FlatSpec with Matchers {
                                           dxIoFunctions,
                                           JsNull,
                                           fragInputOutput,
+                                          Some(WdlRuntimeAttrs(Map.empty)),
                                           runtimeDebugLevel)
         (wf, fragRunner)
     }
@@ -81,7 +89,7 @@ class WfFragRunnerTest extends FlatSpec with Matchers {
         val (dxPathConfig, dxIoFunctions) = setup()
 
         val (language, womBundle: WomBundle, allSources, subBundles) =
-            ParseWomSourceFile.apply(source, List.empty)
+            ParseWomSourceFile(false).apply(source, List.empty)
         subBundles.size should be(0)
         val wfSource = allSources.values.head
 
@@ -173,7 +181,7 @@ class WfFragRunnerTest extends FlatSpec with Matchers {
     it should "create proper names for scatter results" in {
         val path = pathFromBasename("frag_runner", "strings.wdl")
         val wfSourceCode = Utils.readFileContent(path)
-        val (wf : WorkflowDefinition, _, _) = ParseWomSourceFile.parseWdlWorkflow(wfSourceCode)
+        val (wf : WorkflowDefinition, _, _) = ParseWomSourceFile(false).parseWdlWorkflow(wfSourceCode)
 
         val sctNode = wf.innerGraph.scatters.head
         val svNode: ScatterVariableNode = sctNode.scatterVariableNodes.head
@@ -337,7 +345,6 @@ class WfFragRunnerTest extends FlatSpec with Matchers {
             fragRunner.apply(Vector(0), Map.empty, RunnerWfFragmentMode.Launch)
         results.keys should contain("bam_lane1")
         results("bam_lane1") shouldBe (JsObject(
-                                           "value" -> JsArray(JsString("1_ACGT_1.bam"), JsNull),
-                                           "womType" -> JsString("MaybeEmptyArray[Option[String]]")))
+                                           "___" -> JsArray(JsString("1_ACGT_1.bam"), JsNull)))
     }
 }

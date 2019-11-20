@@ -108,6 +108,9 @@ task FileIdent {
     output {
        File result = aF
     }
+    parameter_meta {
+        bF : "stream"
+    }
 }
 
 task FileSize {
@@ -128,5 +131,9 @@ task FileArraySize {
     >>>
     output {
         Int result = read_int(stdout())
+    }
+
+    parameter_meta {
+        files : "stream"
     }
 }

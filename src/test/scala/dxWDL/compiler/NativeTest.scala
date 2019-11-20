@@ -1,12 +1,16 @@
 package dxWDL.compiler
 
 import java.nio.file.{Path, Paths}
-import org.scalatest.{FlatSpec, Matchers}
-import scala.io.Source
 
+import org.scalatest.{FlatSpec, Matchers}
+
+import scala.io.Source
 import dxWDL.Main
+import dxWDL.Main.SuccessfulTermination
+import dxWDL.base.Utils
 import dxWDL.dx.DxPath
 import dxWDL.util.ParseWomSourceFile
+import spray.json._
 
 // This test module requires being logged in to the platform.
 // It compiles WDL scripts without the runtime library.
@@ -37,7 +41,9 @@ class NativeTest extends FlatSpec with Matchers {
 
     it should "Native compile a single WDL task" taggedAs(NativeTestXX) in {
         val path = pathFromBasename("compiler", "add.wdl")
-        val retval = Main.compile(path.toString :: cFlags)
+        val retval = Main.compile(path.toString
+//                                      :: "--verbose"
+                                      :: cFlags)
         retval shouldBe a [Main.SuccessfulTermination]
     }
 
@@ -63,7 +69,7 @@ class NativeTest extends FlatSpec with Matchers {
     }
 
 
-    it should "Native compile a draft2 workflow" taggedAs(NativeTestXX, EdgeTest) in {
+    it should "Native compile a draft2 workflow" taggedAs(NativeTestXX) in {
         val path = pathFromBasename("draft2", "shapes.wdl")
         Main.compile(
             path.toString :: "--force" :: cFlags
@@ -101,11 +107,53 @@ class NativeTest extends FlatSpec with Matchers {
         // check that the generated file contains the correct tasks
         val content = Source.fromFile(outputPath).getLines.mkString("\n")
 
-        val tasks : Map[String, String] = ParseWomSourceFile.scanForTasks(content)
+        val tasks : Map[String, String] = ParseWomSourceFile(false).scanForTasks(content)
         tasks.keys shouldBe(Set("native_sum", "native_sum_012", "native_mk_list", "native_diff", "native_concat"))
     }
 
-    it should "deep nesting" taggedAs(NativeTestXX, EdgeTest) in {
+    ignore should "be able to include license information in details" in {
+        val expected =
+            """
+              |[
+              |  {
+              |    "author":"Broad Institute",
+              |    "license":"BSD-3-Clause",
+              |    "licenseUrl":"https://github.com/broadinstitute/LICENSE.TXT",
+              |    "name":"GATK4",
+              |    "repoUrl":"https://github.com/broadinstitute/gatk",
+              |    "version":"GATK-4.0.1.2"
+              |    }
+              |]
+            """.stripMargin.parseJson
+
+        val path = pathFromBasename("compiler", "add.wdl")
+        val extraPath = pathFromBasename("compiler/extras",  "extras_license.json")
+
+        val appId = Main.compile(
+            path.toString
+                /*:: "--verbose" :: "--verboseKey" :: "EdgeTest" */
+                :: "--extras" :: extraPath.toString :: cFlags
+        ) match {
+            case SuccessfulTermination(x) => x
+            case _ => throw new Exception("sanity")
+
+        }
+
+        val (stdout, stderr) = Utils.execCommand(s"dx describe ${dxTestProject.getId}:${appId} --json")
+
+        val license = stdout.parseJson.asJsObject.fields.get("details") match {
+            case Some(JsObject(x)) => x.get("upstreamProjects") match {
+                case None => List.empty
+                case Some(s) => s
+
+            }
+            case other => throw new Exception(s"Unexpected result ${other}")
+        }
+
+        license shouldBe expected
+    }
+
+    it should "deep nesting" taggedAs(NativeTestXX) in {
         val path = pathFromBasename("compiler", "environment_passing_deep_nesting.wdl")
         Main.compile(
             path.toString
@@ -116,4 +164,79 @@ class NativeTest extends FlatSpec with Matchers {
         ) shouldBe a [Main.SuccessfulTermination]
     }
 
+    ignore should "make default task timeout 48 hours" taggedAs(NativeTestXX) in {
+        val path = pathFromBasename("compiler", "add_timeout.wdl")
+        val appId = Main.compile(
+            path.toString :: "--force" :: cFlags
+        ) match {
+            case SuccessfulTermination(x) => x
+            case _ => throw new Exception("sanity")
+        }
+
+        // make sure the timeout is what it should be
+        val (stdout, stderr) = Utils.execCommand(
+            s"dx describe ${dxTestProject.getId}:${appId} --json")
+
+        val timeout = stdout.parseJson.asJsObject.fields.get("runSpec") match {
+            case Some(JsObject(x)) => x.get("timeoutPolicy") match {
+                case None => throw new Exception("No timeout policy set")
+                case Some(s) => s
+            }
+            case other => throw new Exception(s"Unexpected result ${other}")
+        }
+        timeout shouldBe JsObject("*" -> JsObject(
+                                      "days" -> JsNumber(2),
+                                      "hours" -> JsNumber(0),
+                                      "minutes" -> JsNumber(0)))
+    }
+
+    ignore should "timeout can be overriden from the extras file" taggedAs(NativeTestXX, EdgeTest) in {
+        val path = pathFromBasename("compiler", "add_timeout_override.wdl")
+        val extraPath = pathFromBasename("compiler/extras",  "short_timeout.json")
+        val appId = Main.compile(
+            path.toString
+                :: "--extras" :: extraPath.toString :: cFlags
+        ) match {
+            case SuccessfulTermination(x) => x
+            case _ => throw new Exception("sanity")
+        }
+
+        // make sure the timeout is what it should be
+        val (stdout, stderr) = Utils.execCommand(
+            s"dx describe ${dxTestProject.getId}:${appId} --json")
+
+        val timeout = stdout.parseJson.asJsObject.fields.get("runSpec") match {
+            case Some(JsObject(x)) => x.get("timeoutPolicy") match {
+                case None => throw new Exception("No timeout policy set")
+                case Some(s) => s
+            }
+            case other => throw new Exception(s"Unexpected result ${other}")
+        }
+        timeout shouldBe JsObject("*" -> JsObject("hours" -> JsNumber(3)))
+
+    }
+
+    ignore should "allow choosing GPU instances" taggedAs(NativeTestXX, EdgeTest) in {
+        val path = pathFromBasename("compiler", "GPU2.wdl")
+
+        val appId = Main.compile(path.toString :: cFlags) match {
+            case SuccessfulTermination(x) => x
+            case _ => throw new Exception("sanity")
+        }
+
+        // make sure the timeout is what it should be
+        val (stdout, stderr) = Utils.execCommand(
+            s"dx describe ${dxTestProject.getId}:${appId} --json")
+        val obj = stdout.parseJson.asJsObject
+        val obj2 = obj.fields("runSpec").asJsObject
+        val obj3 = obj2.fields("systemRequirements").asJsObject
+        val obj4 = obj3.fields("main").asJsObject
+        val instanceType = obj4.fields.get("instanceType") match {
+            case Some(JsString(x)) => x
+            case other => throw new Exception(s"Unexpected result ${other}")
+        }
+
+        //System.out.println(s"instanceType = ${instanceType}")
+        instanceType should include ("_gpu")
+    }
 }

@@ -18,10 +18,12 @@ fi
 version=$(grep version ${conf_file} | awk '{print $3}' | sed 's/\"//g' )
 echo "dxwdl version is ${version}"
 
-# To build the docker image, we need a copy of the jar file. We
-# download it from github to make sure we have an up to date version.
-rm -f dxWDL-${version}.jar
-wget https://github.com/dnanexus/dxWDL/releases/download/${version}/dxWDL-${version}.jar
+if [[ ! -f dxWDL-${version}.jar ]]; then
+    # To build the docker image, we need a copy of the jar file. We
+    # download it from github to make sure we have an up to date version.
+    rm -f dxWDL-${version}.jar
+    wget https://github.com/dnanexus/dxWDL/releases/download/${version}/dxWDL-${version}.jar
+fi
 
 echo "building a docker image"
 sudo docker build --build-arg VERSION=${version} -t dnanexus/dxwdl:${version} .

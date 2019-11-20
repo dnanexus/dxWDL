@@ -16,7 +16,9 @@ import time
 
 AssetDesc = namedtuple('AssetDesc', 'region asset_id project')
 
-dxda_version = "v0.2.2"
+#dxda_version = "v0.2.2"
+dxda_version = "20190909212832_c28a2ad"
+dxfuse_version = "v0.12"
 max_num_retries = 5
 
 def dxWDL_jar_path(top_dir):
@@ -39,7 +41,7 @@ def get_project(project_name):
     except dxpy.DXError:
         pass
 
-    project = dxpy.find_projects(name=project_name, name_mode='glob', return_handler=True, level="VIEW")
+    project = dxpy.find_projects(name=project_name, return_handler=True, level="VIEW")
     project = [p for p in project]
     if len(project) == 0:
         print('Did not find project {0}'.format(project_name), file=sys.stderr)
@@ -87,7 +89,6 @@ def make_asset_file(version_id, top_dir):
 # call sbt-assembly. The tricky part here, is to
 # change the working directory to the top of the project.
 def _sbt_assembly(top_dir, version_id):
-    crnt_work_dir = os.getcwd()
     os.chdir(os.path.abspath(top_dir))
 
     # Make sure the directory path exists
@@ -103,13 +104,11 @@ def _sbt_assembly(top_dir, version_id):
     subprocess.check_call(["sbt", "assembly"])
     if not os.path.exists(jar_path):
         raise Exception("sbt assembly failed")
-    os.chdir(crnt_work_dir)
     return jar_path
 
 # download dxda for linux, and place it in the resources
 # sub-directory.
 def _download_dxda_into_resources(top_dir):
-    crnt_work_dir = os.getcwd()
     os.chdir(os.path.join(top_dir, "applet_resources"))
 
     # make sure the resources directory exists
@@ -118,18 +117,40 @@ def _download_dxda_into_resources(top_dir):
 
     # download dxda release, and place it in the resources directory
     trg_dxda_tar = "resources/dx-download-agent-linux.tar"
-    subprocess.check_call([
-        "wget",
-        "https://github.com/dnanexus/dxda/releases/download/{}/dx-download-agent-linux.tar".format(dxda_version),
-        "-O",
-        trg_dxda_tar])
+    if dxda_version.startswith("v"):
+        # A proper download-agent release, it starts with a "v"
+        subprocess.check_call([
+            "wget",
+            "https://github.com/dnanexus/dxda/releases/download/{}/dx-download-agent-linux.tar".format(dxda_version),
+            "-O",
+            trg_dxda_tar])
+    else:
+        # A snapshot of the download-agent development branch
+        command = """sudo  docker run --rm --entrypoint=\'\' dnanexus/dxda:{} cat /builds/dx-download-agent-linux.tar > {}""".format(dxda_version, trg_dxda_tar)
+        p = subprocess.Popen(command, universal_newlines=True, shell=True,
+                             stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        text = p.stdout.read()
+        retcode = p.wait()
+        print("downloading dxda{} {}", retcode, text)
+
     subprocess.check_call(["tar", "-C", "resources", "-xvf", trg_dxda_tar])
     os.rename("resources/dx-download-agent-linux/dx-download-agent",
               "resources/usr/bin/dx-download-agent")
     os.chmod("resources/usr/bin/dx-download-agent", 0o775)
     os.remove(trg_dxda_tar)
     shutil.rmtree("resources/dx-download-agent-linux")
-    os.chdir(crnt_work_dir)
+
+def _add_dxfuse_to_resources(top_dir):
+    # make sure the resources directory exists
+    os.chdir(os.path.join(top_dir, "applet_resources"))
+    if not os.path.exists("resources/usr/bin"):
+        os.makedirs("resources/usr/bin")
+    subprocess.check_call([
+        "wget",
+        "https://github.com/dnanexus/dxfuse/releases/download/{}/dxfuse-linux".format(dxfuse_version),
+        "-O",
+        os.path.join("resources/usr/bin/dxfuse") ])
+    os.chmod("resources/usr/bin/dxfuse", 0o775)
 
 # Build a dx-asset from the runtime library.
 # Go to the top level directory, before running "dx"
@@ -203,29 +224,33 @@ def _gen_config_file(version_id, top_dir, project_dict):
                                                             rt_conf_path))
 
 def build(project, folder, version_id, top_dir, path_dict):
-    # Create a configuration file
-    _gen_config_file(version_id, top_dir, path_dict)
-    jar_path = _sbt_assembly(top_dir, version_id)
-
-    # get a copy of the download agent (dxda)
-    _download_dxda_into_resources(top_dir)
-
     asset = find_asset(project, folder)
     if asset is None:
+        # get a copy of the dxfuse executable
+        _add_dxfuse_to_resources(top_dir)
+
+        # Create a configuration file
+        _gen_config_file(version_id, top_dir, path_dict)
+        jar_path = _sbt_assembly(top_dir, version_id)
+
+        # get a copy of the download agent (dxda)
+        _download_dxda_into_resources(top_dir)
+
         make_prerequisits(project, folder, version_id, top_dir)
         asset = find_asset(project, folder)
+
+        # Move the file to the top level directory
+        all_in_one_jar = os.path.join(top_dir, "dxWDL-{}.jar".format(version_id))
+        shutil.move(os.path.join(top_dir, jar_path),
+                    all_in_one_jar)
+
     region = dxpy.describe(project.get_id())['region']
     ad = AssetDesc(region, asset.get_id(), project)
-
-    # Move the file to the top level directory
-    all_in_one_jar = os.path.join(top_dir, "dxWDL-{}.jar".format(version_id))
-    shutil.move(os.path.join(top_dir, jar_path),
-                all_in_one_jar)
 
     # Hygiene, remove the new configuration file, we
     # don't want it to leak into the next build cycle.
     # os.remove(crnt_conf_path)
-    return (all_in_one_jar, ad)
+    return ad
 
 
 # Extract version_id from configuration file
@@ -239,36 +264,3 @@ def get_version_id(top_dir):
             if m is not None:
                 return m.group(6).strip()
     raise Exception("version ID not found in {}".format(conf_file))
-
-# Copy an asset across regions
-#   path: path to local file
-#   dstProj: destination project to copy to. Should be in another region
-# return:
-#    asset descriptor
-def copy_across_regions(local_path, record, dest_region, dest_proj, dest_folder):
-    print("copy_across_regions {} {} {} {}:{}".format(local_path,
-                                                      record.get_id(),
-                                                      dest_region,
-                                                      dest_proj.get_id(),
-                                                      dest_folder))
-    # check if we haven't already created this record, and uploaded the file
-    dest_asset = find_asset(dest_proj, dest_folder)
-    if dest_asset is not None:
-        print("Already copied to region {}".format(dest_region))
-        return AssetDesc(dest_region, dest_asset.get_id(), dest_proj)
-
-    # upload
-    dest_proj.new_folder(dest_folder, parents=True)
-    dxfile = upload_local_file(local_path,
-                               dest_proj,
-                               dest_folder,
-                               hidden=True)
-    fid = dxfile.get_id()
-    dest_asset = dxpy.new_dxrecord(name=record.name,
-                                   types=['AssetBundle'],
-                                   details={'archiveFileId': dxpy.dxlink(fid)},
-                                   properties=record.get_properties(),
-                                   project=dest_proj.get_id(),
-                                   folder=dest_folder,
-                                   close=True)
-    return AssetDesc(dest_region, dest_asset.get_id(), dest_proj)

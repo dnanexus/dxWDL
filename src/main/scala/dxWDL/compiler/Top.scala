@@ -8,7 +8,6 @@ import java.nio.file.{Path, Paths}
 
 import wom.callable._
 import wom.executable.WomBundle
-import wom.types._
 import wom.graph.expression._
 
 import dxWDL.base._
@@ -133,26 +132,6 @@ case class Top(cOpt: CompilerOptions) {
                 checkDeclarations(allDeclarations.map(_.identifier.localName.value).toSeq)
 
             case task: CallableTaskDefinition =>
-                task.inputs.foreach{
-                    case iDef : Callable.InputDefinition =>
-                        //iDef.parameterMeta --- this does not work on draft2
-                        task.parameterMeta.get(iDef.name) match {
-                            case None => ()
-                            case Some(x : String) if x == "stream"=>
-                                if (iDef.womType != WomSingleFileType) {
-                                    val msg =
-                                        s"""|Only files that are task inputs can be declared streaming.
-                                            |task = ${task.name}, input = ${iDef.name},
-                                            |womType = ${iDef.womType}
-                                            |""".stripMargin.replaceAll("\n", " ")
-                                    if (cOpt.fatalValidationWarnings)
-                                        throw new Exception(msg)
-                                    else
-                                        Utils.warning(verbose, msg)
-                                }
-                            case Some(other) => ()
-                        }
-                }
                 checkDeclarations(task.inputs.map(_.name).toSeq)
                 checkDeclarations(task.outputs.map(_.name).toSeq)
 
@@ -173,7 +152,11 @@ case class Top(cOpt: CompilerOptions) {
                 allCallables.get(key) match {
                     case None =>
                         allCallables = allCallables + (key -> callable)
-                    case Some(existing) if (existing != callable) =>
+
+                    // The comparision is done with "toString", because otherwise two
+                    // identical definitions are somehow, through the magic of Scala,
+                    // unequal.
+                    case Some(existing) if (existing.toString != callable.toString) =>
                         Utils.error(s"""|${key} appears with two different callable definitions
                                         |1)
                                         |${callable}
@@ -206,7 +189,8 @@ case class Top(cOpt: CompilerOptions) {
         // Merge all the bundles together
         WomBundle(mainBundle.primaryCallable,
                   allCallables,
-                  allTypeAliases)
+                  allTypeAliases,
+                  Set.empty)
     }
 
 
@@ -235,7 +219,7 @@ case class Top(cOpt: CompilerOptions) {
 
     private def womToIR(source: Path) : IR.Bundle = {
         val (language, womBundle, allSources, subBundles) =
-            ParseWomSourceFile.apply(source, cOpt.importDirs)
+            ParseWomSourceFile(verbose.on).apply(source, cOpt.importDirs)
 
         // Check that each workflow/task appears just one
         val everythingBundle : WomBundle = mergeIntoOneBundle(womBundle, subBundles)
@@ -249,9 +233,23 @@ case class Top(cOpt: CompilerOptions) {
 
         // Compile the WDL workflow into an Intermediate
         // Representation (IR)
-        val bundle: IR.Bundle = new GenerateIR(cOpt.verbose).apply(everythingBundle, allSources, language,
-                                                                   cOpt.locked, cOpt.reorg)
-        bundle
+        val defaultRuntimeAttrs = cOpt.extras match {
+            case None => WdlRuntimeAttrs(Map.empty)
+            case Some(ex) => ex.defaultRuntimeAttributes
+        }
+
+        val reorgApp: Either[Boolean, ReorgAttrs] = cOpt.extras match {
+
+            case None => Left(cOpt.reorg)
+            case Some(ex) => ex.customReorgAttributes match {
+                case None => Left(cOpt.reorg)
+                case Some(cOrg) => Right(cOrg)
+            }
+
+        }
+
+        new GenerateIR(cOpt.verbose, defaultRuntimeAttrs).apply(everythingBundle, allSources, language,
+                                                                cOpt.locked, reorgApp)
     }
 
     // Compile IR only

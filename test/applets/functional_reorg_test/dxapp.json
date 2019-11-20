@@ -1,0 +1,59 @@
+{
+  "name": "functional_reorg_test",
+  "title": "Functional Reorg Test",
+  "summary": "Functional test of incorporated reorg app",
+  "dxapi": "1.0.0",
+  "inputSpec": [
+    {
+      "name": "___reorg_conf",
+      "label": "Config",
+      "help": "",
+      "class": "file",
+      "patterns": ["*"],
+      "optional": true
+    },
+    {
+      "name": "___reorg_status",
+      "label": "Config",
+      "help": "",
+      "class": "string",
+      "optional": true
+    }
+  ],
+  "outputSpec": [
+    {
+      "name": "outputs",
+      "label": "Outputs",
+      "help": "",
+      "class": "array:file",
+      "patterns": ["*"]
+    }
+  ],
+  "runSpec": {
+    "interpreter": "python2.7",
+    "timeoutPolicy": {
+      "*": {
+        "hours": 48
+      }
+    },
+    "distribution": "Ubuntu",
+    "release": "16.04",
+    "file": "code.py"
+  },
+  "access": {
+    "network": [
+      "*"
+    ],
+    "project": "CONTRIBUTE"
+  },
+  "ignoreReuse": false,
+  "regionalOptions": {
+    "aws:us-east-1": {
+      "systemRequirements": {
+        "*": {
+          "instanceType": "mem1_ssd1_x4"
+        }
+      }
+    }
+  }
+}

@@ -10,7 +10,8 @@ import wom.types._
 import dxWDL.base._
 import dxWDL.util._
 
-case class GenerateIR(verbose: Verbose) {
+case class GenerateIR(verbose: Verbose,
+                      defaultRuntimeAttrs: WdlRuntimeAttrs) {
     val verbose2 : Boolean = verbose.containsKey("GenerateIR")
 
     def sortByDependencies(allCallables: Vector[Callable]) : Vector[Callable] = {
@@ -59,8 +60,19 @@ case class GenerateIR(verbose: Verbose) {
                 Utils.trace(verbose2, s"immediateDeps(${c.name}) = ${deps}")
                 deps.subsetOf(readyNames)
             }
-            if (satisfiedCallables.isEmpty)
-                throw new Exception("Sanity: cannot find the next callable to compile.")
+            if (satisfiedCallables.isEmpty) {
+                val stuck = callables.map(_.name).toSet -- readyNames
+                val stuckWaitingOn : Map[String, Set[String]] = stuck.map{ name =>
+                    name -> (immediateDeps(name) -- readyNames)
+                }.toMap
+                val explanationLines = stuckWaitingOn.mkString("\n")
+                throw new Exception(s"""|Sanity: cannot find the next callable to compile.
+                                        |ready = ${readyNames}
+                                        |stuck = ${stuck}
+                                        |stuckWaitingOn =
+                                        |${explanationLines}
+                                        |""".stripMargin)
+            }
             satisfiedCallables
         }
 
@@ -84,9 +96,9 @@ case class GenerateIR(verbose: Verbose) {
                                 callables: Map[String, IR.Callable],
                                 language: Language.Value,
                                 locked : Boolean,
-                                reorg : Boolean) : (IR.Workflow, Vector[IR.Callable]) = {
+                                reorg : Either[Boolean, ReorgAttrs]) : (IR.Workflow, Vector[IR.Callable]) = {
         // sort from low to high according to the source lines.
-        val callsLoToHi = ParseWomSourceFile.scanForCalls(wf.innerGraph, wfSource)
+        val callsLoToHi = ParseWomSourceFile(verbose.on).scanForCalls(wf.innerGraph, wfSource)
 
         // Make a list of all task/workflow calls made inside the block. We will need to link
         // to the equivalent dx:applets and dx:workflows.
@@ -110,9 +122,9 @@ case class GenerateIR(verbose: Verbose) {
             WdlCodeGen(verbose, typeAliases, language).standAloneWorkflow(wfSource,
                                                                           callablesUsedInWorkflow)
 
-        val gir = new GenerateIRWorkflow(wf, wfSource, wfSourceStandAlone,
-                                         callsLoToHi, callables, language, verbose)
-        gir.apply(locked, reorg)
+        val gir = new GenerateIRWorkflow(
+            wf, wfSource, wfSourceStandAlone, callsLoToHi, callables, language, verbose, reorg)
+        gir.apply(locked)
     }
 
     // Entry point for compiling tasks and workflows into IR
@@ -123,13 +135,14 @@ case class GenerateIR(verbose: Verbose) {
                                 callables: Map[String, IR.Callable],
                                 language: Language.Value,
                                 locked: Boolean,
-                                reorg: Boolean) : (IR.Callable, Vector[IR.Callable]) = {
+                                reorg: Either[Boolean, ReorgAttrs]) : (IR.Callable, Vector[IR.Callable]) = {
         def compileTask2(task : CallableTaskDefinition) = {
             val taskSourceCode = taskDir.get(task.name) match {
                 case None => throw new Exception(s"Did not find task ${task.name}")
                 case Some(x) => x
             }
-            GenerateIRTask(verbose, typeAliases, language).apply(task, taskSourceCode)
+            GenerateIRTask(verbose, typeAliases,
+                           language, defaultRuntimeAttrs).apply(task, taskSourceCode)
         }
         callable match {
             case exec : ExecutableTaskDefinition =>
@@ -156,7 +169,7 @@ case class GenerateIR(verbose: Verbose) {
               allSources: Map[String, WorkflowSource],
               language: Language.Value,
               locked: Boolean,
-              reorg: Boolean) : IR.Bundle = {
+              reorg: Either[Boolean, ReorgAttrs]) : IR.Bundle = {
         Utils.trace(verbose.on, s"IR pass")
         Utils.traceLevelInc()
 
@@ -166,14 +179,14 @@ case class GenerateIR(verbose: Verbose) {
         // There is no built-in method for this.
         val taskDir = allSources.foldLeft(Map.empty[String, String]) {
             case (accu, (filename, srcCode)) =>
-                val d = ParseWomSourceFile.scanForTasks(srcCode)
+                val d = ParseWomSourceFile(verbose.on).scanForTasks(srcCode)
                 accu ++ d
         }
         Utils.trace(verbose.on, s"tasks=${taskDir.keys}")
 
         val workflowDir = allSources.foldLeft(Map.empty[String, String]) {
             case (accu, (filename, srcCode)) =>
-                ParseWomSourceFile.scanForWorkflow(srcCode) match {
+                ParseWomSourceFile(verbose.on).scanForWorkflow(srcCode) match {
                     case None =>
                         accu
                     case Some((wfName, wfSource)) =>

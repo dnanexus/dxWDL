@@ -7,16 +7,20 @@ import java.nio.file.{Path, Paths, Files}
 import java.util.Base64
 import java.util.zip.{GZIPOutputStream, GZIPInputStream}
 import scala.collection.JavaConverters._
+import scala.collection.immutable.TreeMap
 import scala.concurrent._
+import spray.json._
 import ExecutionContext.Implicits.global
 import scala.sys.process._
 import wom.types._
 
 object Utils {
-    val DXAPI_NUM_OBJECTS_LIMIT = 1000 // maximal number of objects in a single API request
     val APPLET_LOG_MSG_LIMIT = 1000
     val CHECKSUM_PROP = "dxWDL_checksum"
     val DEFAULT_RUNTIME_DEBUG_LEVEL = 1
+    val DEFAULT_APPLET_TIMEOUT_IN_DAYS = 2
+    val DXFUSE_MAX_MEMORY_CONSUMPTION = 300 * 1024 * 1024 // how much memory dxfuse takes
+    val DXAPI_NUM_OBJECTS_LIMIT = 1000 // maximal number of objects in a single API request
     val DX_WDL_ASSET = "dxWDLrt"
     val DX_URL_PREFIX = "dx://"
     val DX_WDL_RUNTIME_CONF_FILE = "dxWDL_runtime.conf"
@@ -29,6 +33,12 @@ object Utils {
     val MAX_STAGE_NAME_LEN = 60       // maximal length of a workflow stage name
     val MAX_NUM_FILES_MOVE_LIMIT = 1000
     val UBUNTU_VERSION = "16.04"
+    val VERSION_PROP = "dxWDL_version"
+    val REORG_CONFIG = "___reorg_conf"
+    val REORG_STATUS = "___reorg_status"
+    val REORG_STATUS_COMPLETE = "completed"
+
+
     var traceLevel = 0
 
     // The version lives in application.conf
@@ -304,4 +314,56 @@ object Utils {
     def error(msg: String) : Unit = {
         System.err.println(Console.RED + msg + Console.RESET)
     }
+
+    // Make a JSON value deterministically sorted.  This is used to
+    // ensure that the checksum does not change when maps
+    // are ordered in different ways.
+    //
+    // Note: this does not handle the case where of arrays that
+    // may have different equivalent orderings.
+    def makeDeterministic(jsValue : JsValue) : JsValue = {
+        jsValue match {
+            case JsObject(m : Map[String, JsValue]) =>
+                val m2 = m.map{
+                    case (k, v) => k -> makeDeterministic(v)
+                }.toMap
+                val tree = TreeMap(m2.toArray:_*)
+                JsObject(tree)
+            case other =>
+                other
+        }
+    }
+
+    // Concatenate the elements, until hitting a size limit
+    def buildLimitedSizeName(elements: Seq[String], maxLen: Int) : String = {
+        if (elements.isEmpty)
+            return "[]"
+        val (_, concat) = elements.tail.foldLeft((false, elements(0))){
+            case ((true, accu), _) =>
+                // stopping condition reached, we have reached the size limit
+                (true, accu)
+
+            case ((false, accu), _) if accu.size >= maxLen =>
+                // move into stopping condition
+                (true, accu)
+
+            case ((false, accu), elem) =>
+                val tentative = accu + ", " + elem
+                if (tentative.size > maxLen) {
+                    // not enough space
+                    (true, accu)
+                } else {
+                    // still have space
+                    (false, tentative)
+                }
+        }
+        "[" + concat + "]"
+    }
 }
+
+
+class PermissionDeniedException(s:String) extends Exception(s){}
+
+class InvalidInputException(s:String) extends Exception(s){}
+
+class IllegalArgumentException(s:String) extends Exception(s){}

@@ -18,7 +18,7 @@ class SortTypeAliasesTest extends FlatSpec with Matchers {
     it should "sort type aliases properly" in {
         val path = pathFromBasename("struct", "many_structs.wdl")
         val wfSourceCode = Utils.readFileContent(path)
-        val (_, _, typeAliases: Map[String, WomType]) = ParseWomSourceFile.parseWdlWorkflow(wfSourceCode)
+        val (_, _, typeAliases: Map[String, WomType]) = ParseWomSourceFile(false).parseWdlWorkflow(wfSourceCode)
 
 
         val defs : Vector[(String, WomType)] = SortTypeAliases(verbose).apply(typeAliases.toVector)

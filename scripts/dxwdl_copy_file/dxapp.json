@@ -1,0 +1,93 @@
+{
+  "name": "dxwdl_copy_file",
+  "title": "Copy File",
+  "summary": "copy a file to a different region",
+  "dxapi": "1.0.0",
+  "version": "0.1.10",
+  "inputSpec": [
+    {
+      "name": "url",
+      "help": "",
+      "class": "string",
+      "optional": false
+    },
+    {
+      "name": "folder",
+      "help": "Folder where to place the file",
+      "class": "string",
+      "optional": false
+    },
+    {
+      "name": "filename",
+      "help": "",
+      "class": "string",
+      "optional": false
+    }
+  ],
+  "outputSpec": [
+    {
+      "name" : "ofile",
+      "class" : "file",
+      "optional" : false
+    }
+  ],
+  "runSpec": {
+    "interpreter": "bash",
+    "timeoutPolicy": {
+      "*": {
+        "hours": 6
+      }
+    },
+    "distribution": "Ubuntu",
+    "release": "16.04",
+    "file": "code.sh"
+  },
+  "authorizedUsers": [
+    "PUBLIC"
+  ],
+  "regionalOptions": {
+    "aws:us-east-1": {
+      "systemRequirements": {
+        "*": {
+          "instanceType": "mem1_ssd1_x2"
+        }
+      }
+    },
+    "azure:westeurope": {
+      "systemRequirements": {
+        "*": {
+          "instanceType": "azure:mem2_ssd1_x2"
+        }
+      }
+    },
+    "azure:westus": {
+      "systemRequirements": {
+        "*": {
+          "instanceType": "azure:mem2_ssd1_x2"
+        }
+      }
+    },
+    "aws:ap-southeast-2": {
+      "systemRequirements": {
+        "*": {
+          "instanceType": "mem1_ssd1_x2"
+        }
+      }
+    },
+    "aws:eu-central-1": {
+      "systemRequirements": {
+        "*": {
+          "instanceType": "mem1_ssd1_x2"
+        }
+      }
+    }
+  },
+  "details": {},
+  "access": {
+    "network": [
+      "*"
+    ],
+    "project": "CONTRIBUTE"
+  },
+  "ignoreReuse": true
+}

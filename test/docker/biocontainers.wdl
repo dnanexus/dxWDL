@@ -1,11 +1,13 @@
 version 1.0
 
+# check that the docker option is passed correctly from the extras file.
+
 task biocontainers {
     command {
-        echo "hello"
+        # check that bwa actually exists in the docker image
+        samtools --help
     }
     runtime {
-        docker: "biocontainers/bwa"
         memory: "16 GB"
     }
     output {

@@ -20,12 +20,13 @@ case class WdlCodeGen(verbose: Verbose,
         language match {
             case Language.WDLvDraft2 => ""
             case Language.WDLv1_0 => "version 1.0"
+            case Language.WDLv2_0 => "version development"
             case other =>
                 throw new Exception(s"Unsupported language version ${other}")
         }
     }
 
-    private def genDefaultValueOfType(wdlType: WomType) : WomValue = {
+    def genDefaultValueOfType(wdlType: WomType) : WomValue = {
         wdlType match {
             case WomBooleanType => WomBoolean(true)
             case WomIntegerType => WomInteger(0)
@@ -56,11 +57,19 @@ case class WdlCodeGen(verbose: Verbose,
 
             case WomPairType(lType, rType) => WomPair(genDefaultValueOfType(lType),
                                                       genDefaultValueOfType(rType))
+
+            case WomCompositeType(typeMap, structName) =>
+                val m = typeMap.map{
+                    case (fieldName, t) =>
+                        fieldName -> genDefaultValueOfType(t)
+                }.toMap
+                WomObject(m, WomObjectType)
+
             case _ => throw new Exception(s"Unhandled type ${wdlType}")
         }
     }
 
-/*
+    /*
 Create a header for a task/workflow. This is an empty task
 that includes the input and output definitions. It is used
 to
@@ -101,14 +110,26 @@ task Add {
                         |  outputs= ${callable.outputVars.map(_.name)}"""
                         .stripMargin)*/
 
-        val inputs = callable.inputVars.map{ cVar =>
-            s"    ${typeName(cVar.womType)} ${cVar.name}"
-        }.mkString("\n")
+        // Sort the inputs by name, so the result will be deterministic.
+        val inputs =
+            callable.inputVars
+                .sortWith(_.name < _.name)
+                .map{ case cVar =>
+                    cVar.default match {
+                        case None =>
+                            s"    ${typeName(cVar.womType)} ${cVar.name}"
+                        case Some(womValue) =>
+                            s"    ${typeName(cVar.womType)} ${cVar.name} = ${womValue.toWomString}"
+                    }
+            }.mkString("\n")
 
-        val outputs = callable.outputVars.map{ cVar =>
-            val defaultVal = genDefaultValueOfType(cVar.womType)
-            s"    ${typeName(cVar.womType)} ${cVar.name} = ${defaultVal.toWomString}"
-        }.mkString("\n")
+        val outputs =
+            callable.outputVars
+                .sortWith(_.name < _.name)
+                .map{ case cVar =>
+                    val defaultVal = genDefaultValueOfType(cVar.womType)
+                    s"    ${typeName(cVar.womType)} ${cVar.name} = ${defaultVal.toWomString}"
+            }.mkString("\n")
 
         language match {
             case Language.WDLvDraft2 =>
@@ -123,7 +144,7 @@ task Add {
                         |  }
                         |}""".stripMargin
                 )
-            case Language.WDLv1_0 =>
+            case Language.WDLv1_0 | Language.WDLv2_0 =>
                 WdlCodeSnippet(
                     s"""|task ${callable.name} {
                         |  input {
@@ -170,7 +191,7 @@ task Add {
                     |  }
                     |${metaSection}
                     |}""".stripMargin
-            case Language.WDLv1_0 =>
+            case Language.WDLv1_0 | Language.WDLv2_0  =>
                 s"""|task ${appletName} {
                     |  input {
                     |${inputs}
@@ -181,6 +202,7 @@ task Add {
                     |  }
                     |${metaSection}
                     |}""".stripMargin
+
             case other =>
                 throw new Exception(s"Unsupported language version ${other}")
         }
@@ -193,7 +215,7 @@ task Add {
                                  |
                                  |${taskSourceCode}
                                  |""".stripMargin
-        ParseWomSourceFile.validateWdlCode(taskStandalone, language)
+        ParseWomSourceFile(false).validateWdlCode(taskStandalone, language)
 
         WdlCodeSnippet(taskSourceCode)
     }
@@ -205,6 +227,7 @@ task Add {
     //   call lib.Multiply as mul { ... }
     //   call lib.Add { ... }
     //   call lib.Nice as nice { ... }
+    //   call lib.Hello
     // }
     //
     // rewrite the workflow, and remove the calls to external libraries.
@@ -213,21 +236,36 @@ task Add {
     //   call Multiply as mul { ... }
     //   call Add { ... }
     //   call Nice as nice { ... }
+    //   call Nice as nice { ... }
+    //   call Hello
     // }
     //
-    private val callLibrary: Regex = "^(\\s*)call(\\s+)(\\w+)\\.(\\w+)(\\s+)(.+)".r
+    private val callLibrary:       Regex = "^(\\s*)call(\\s+)(\\w+)\\.(\\w+)(\\s+)(.+)".r
+    private val callLibraryNoArgs: Regex = "^(\\s*)call(\\s+)(\\w+)\\.(\\w+)(\\s*)".r
     private def flattenWorkflow(wdlWfSource: String) : String = {
         val originalLines = wdlWfSource.split("\n").toList
         val cleanLines = originalLines.map { line =>
             val allMatches = callLibrary.findAllMatchIn(line).toList
             assert(allMatches.size <= 1)
-            if (allMatches.isEmpty) {
-                line
+            val newLine =
+                if (allMatches.isEmpty) {
+                    line
+                } else {
+                    val m = allMatches(0)
+                    val callee : String = m.group(4)
+                    val rest = m.group(6)
+                    s"call ${callee} ${rest}"
+                }
+
+            // call with no arguments
+            val allMatches2 = callLibraryNoArgs.findAllMatchIn(newLine).toList
+            assert(allMatches2.size <= 1)
+            if (allMatches2.isEmpty) {
+                newLine
             } else {
-                val m = allMatches(0)
+                val m = allMatches2(0)
                 val callee : String = m.group(4)
-                val rest = m.group(6)
-                s"call ${callee} ${rest}"
+                s"call ${callee}"
             }
         }
         cleanLines.mkString("\n")
@@ -262,7 +300,7 @@ task Add {
                  originalTaskSource).mkString("\n")
 
         // Make sure this is actually valid WDL
-        ParseWomSourceFile.validateWdlCode(wdlWfSource, language)
+        ParseWomSourceFile(false).validateWdlCode(wdlWfSource, language)
 
         WdlCodeSnippet(wdlWfSource)
     }
@@ -284,7 +322,7 @@ task Add {
                     val sourceCode = callable match {
                         case IR.Applet(_, _, _, _, _, IR.AppletKindTask(_), taskSourceCode) =>
                             // This is a task, include its source code, instead of a header.
-                            val taskDir = ParseWomSourceFile.scanForTasks(taskSourceCode)
+                            val taskDir = ParseWomSourceFile(false).scanForTasks(taskSourceCode)
                             assert(taskDir.size == 1)
                             val taskBody = taskDir.values.head
                             WdlCodeSnippet(taskBody)
@@ -296,20 +334,25 @@ task Add {
                     accu + (callable.name -> sourceCode)
                 }
             }
-        val tasks = taskStubs.map{case (name, wdlCode) => wdlCode.value}.mkString("\n\n")
 
+        // sort the task order by name, so the generated code will be deterministic
+        val tasksStr = taskStubs
+            .toVector
+            .sortWith(_._1 < _._1)
+            .map{case (name, wdlCode) => wdlCode.value}
+            .mkString("\n\n")
         val wfWithoutImportCalls = flattenWorkflow(originalWorkflowSource)
         val wdlWfSource =
             List(versionString() + "\n",
                  "# struct definitions",
                  typeAliasDefinitions,
                  "# Task headers",
-                 tasks,
+                 tasksStr,
                  "# Workflow with imports made local",
                  wfWithoutImportCalls).mkString("\n")
 
         // Make sure this is actually valid WDL
-        ParseWomSourceFile.validateWdlCode(wdlWfSource, language)
+        ParseWomSourceFile(false).validateWdlCode(wdlWfSource, language)
 
         WdlCodeSnippet(wdlWfSource)
     }

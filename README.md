@@ -1,18 +1,16 @@
-XF<a href="https://travis-ci.org/dnanexus/dxWDL"><img src="https://travis-ci.org/dnanexus/dxWDL.svg?branch=master"/></a>
+<a href="https://travis-ci.org/dnanexus/dxWDL"><img src="https://travis-ci.org/dnanexus/dxWDL.svg?branch=master"/></a>
 
 dxWDL takes a bioinformatics pipeline written in the
 [Workflow Description Language (WDL)](http://www.openwdl.org/)
 and compiles it to an equivalent workflow on the DNAnexus platform.
-It provides a reasonably complete set of WDL features.
-WDL draft-2, and version 1.0 are supported, with a few exceptions:
-* Calls with missing arguments have limited support
-* Nested scatters are not supported (see [clarification](#Nested-Scatters) below).
+WDL draft-2, version 1.0, and the development version are supported. Note
+that calls with missing arguments have limited support.
 
 A high level list of changes between draft-2 and version 1.0 is
 provided [here](doc/WdlVersionChanges.md).
 
 ## Setup
-Prerequisites: DNAnexus platform account, dx-toolkit, java 8+, python 2.7.
+Prerequisites: DNAnexus platform account, dx-toolkit, java 8+, python 2.7/3.x.
 
 Make sure you've installed the dx-toolkit CLI, and initialized it with
 `dx login`. Download the latest compiler jar file from the
@@ -99,38 +97,32 @@ dx run bam_chrom_counter -i0.file=file-xxxx
 At runtime this looks like this:
 ![this](doc/bam_chrom_counter.png)
 
-## Nested Scatters
+## Strict syntax
 
-This is where a single WDL workflow has a scatter within another scatter. For example:
+One of the compiler phases takes a workflow apart, and extracts standalone tasks and sub-workflows. This requires a lexical analysis on the WDL program. It currently uses a simple regular expression to detect task/workflow start and end. This means that a task has to adhere to the following rules:
+1. no extra text is allows after the final closing bracket
+2. within the task body, closing brackets may not start at the beginning of a line.
+
+Here is an example to avoid:
 ```wdl
-workflow w {
-    scatter (i in [1,2,3]) {
-        scatter (j in [10, 100]) {
-           Int a_ij = i + j
-        }
-    }
+task foo {
+input {
+    File ref
+}
+command {
+    ls -lh ~{ref}
+}
 }
 ```
-You can work around this current limitation, by splitting out the inner scatter
-into a separate workflow. For example:
 
-
+It should be written like this:
 ```wdl
-workflow w {
-    scatter (i in [1,2,3]) {
-        call w2 { i = i }
-    }
-}
-
-workflow w2 {
+task foo {
     input {
-        Int i
+        File ref
     }
-    scatter (j in [10, 100]) {
-        Int a_ij = i + j
-    }
-    output {
-        Array[Int] a_ij
+    command {
+        ls -lh ~{ref}
     }
 }
 ```

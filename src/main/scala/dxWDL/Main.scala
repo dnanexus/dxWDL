@@ -25,7 +25,7 @@ object Main extends App {
     }
     object InternalOp extends Enumeration {
         val Collect,
-            WfOutputs, WfInputs, WorkflowOutputReorg,
+            WfOutputs, WfInputs, WorkflowOutputReorg, WfCustomReorgOutputs,
             WfFragment,
             TaskCheckInstanceType, TaskEpilog, TaskProlog, TaskRelaunch = Value
     }
@@ -45,8 +45,8 @@ object Main extends App {
     // runtime, not at compile time. On the cloud instance running the
     // job, the user is "dnanexus", and the home directory is
     // "/home/dnanexus".
-    private def buildRuntimePathConfig(verbose: Boolean) : DxPathConfig = {
-        DxPathConfig.apply(baseDNAxDir, verbose)
+    private def buildRuntimePathConfig(streamAllFiles: Boolean, verbose: Boolean) : DxPathConfig = {
+        DxPathConfig.apply(baseDNAxDir, streamAllFiles, verbose)
     }
 
     private def normKey(s: String) : String= {
@@ -169,6 +169,9 @@ object Main extends App {
                     case "runtimeDebugLevel" =>
                         checkNumberOfArguments(keyword, 1, subargs)
                         (keyword, subargs.head)
+                    case "streamAllFiles" =>
+                        checkNumberOfArguments(keyword, 0, subargs)
+                        ("streamAllFiles", "")
                     case "verbose" =>
                         checkNumberOfArguments(keyword, 0, subargs)
                         (keyword, "")
@@ -304,6 +307,17 @@ object Main extends App {
         rtDebugLvl
     }
 
+    private def parseStreamAllFiles(s: String) : Boolean = {
+        s.toLowerCase match {
+            case "true" => true
+            case "false" => false
+            case other =>
+                throw new Exception(s"""|the streamAllFiles flag must be a boolean (true,false).
+                                        |Value ${other} is illegal."""
+                                        .stripMargin.replaceAll("\n", " "))
+        }
+    }
+
     // Get basic information about the dx environment, and process
     // the compiler flags
     private def compilerOptions(options: OptionsMap) : CompilerOptions = {
@@ -347,6 +361,23 @@ object Main extends App {
             case Some(List(numberStr)) => Some(parseRuntimeDebugLevel(numberStr))
             case _ => throw new Exception("debug level specified twice")
         }
+
+        if ( extras != None ) {
+
+            if (extras.contains("reorg")  && (options contains "reorg")) {
+
+                throw new InvalidInputException("ERROR: cannot provide --reorg option when reorg is specified in extras.")
+
+            }
+
+            if (extras.contains("reorg") && (options contains "locked")) {
+
+                throw new InvalidInputException("ERROR: cannot provide --locked option when reorg is specified in extras.")
+
+            }
+
+        }
+
         CompilerOptions(options contains "archive",
                         compileMode,
                         defaults,
@@ -359,6 +390,7 @@ object Main extends App {
                         options contains "locked",
                         options contains "projectWideReuse",
                         options contains "reorg",
+                        options contains "streamAllFiles",
                         runtimeDebugLevel,
                         verbose)
     }
@@ -427,7 +459,7 @@ object Main extends App {
 
                 case CompilerFlag.All
                        | CompilerFlag.NativeWithoutRuntimeAsset =>
-                    val dxPathConfig = DxPathConfig.apply(baseDNAxDir, cOpt.verbose.on)
+                    val dxPathConfig = DxPathConfig.apply(baseDNAxDir, cOpt.streamAllFiles, cOpt.verbose.on)
                     val retval = top.apply(sourceFile, folder, dxProject, dxPathConfig)
                     val desc = retval.getOrElse("")
                     return SuccessfulTermination(desc)
@@ -512,13 +544,15 @@ object Main extends App {
                            jobOutputPath: Path,
                            dxPathConfig : DxPathConfig,
                            dxIoFunctions : DxIoFunctions,
+                           defaultRuntimeAttributes : Option[WdlRuntimeAttrs],
                            rtDebugLvl: Int): Termination = {
         // Parse the inputs, convert to WOM values. Delay downloading files
         // from the platform, we may not need to access them.
+        val verbose = rtDebugLvl > 0
         val inputLines : String = Utils.readFileContent(jobInputPath)
         val originalInputs : JsValue = inputLines.parseJson
 
-        val (task, typeAliases) = ParseWomSourceFile.parseWdlTask(taskSourceCode)
+        val (task, typeAliases) = ParseWomSourceFile(verbose).parseWdlTask(taskSourceCode)
 
         // setup the utility directories that the task-runner employs
         dxPathConfig.createCleanDirs()
@@ -527,7 +561,7 @@ object Main extends App {
         val inputs = jobInputOutput.loadInputs(originalInputs, task)
         val taskRunner = exec.TaskRunner(task, taskSourceCode, typeAliases, instanceTypeDB,
                                          dxPathConfig, dxIoFunctions, jobInputOutput,
-                                         rtDebugLvl)
+                                         defaultRuntimeAttributes, rtDebugLvl)
 
         // Running tasks
         op match {
@@ -577,15 +611,18 @@ object Main extends App {
                                    jobOutputPath: Path,
                                    dxPathConfig : DxPathConfig,
                                    dxIoFunctions : DxIoFunctions,
+                                   defaultRuntimeAttributes : Option[WdlRuntimeAttrs],
                                    rtDebugLvl: Int): Termination = {
         val dxProject = DxUtils.dxCrntProject
+        //val dxProject = DxUtils.dxEnv.getProjectContext()
+        val verbose = rtDebugLvl > 0
 
         // Parse the inputs, convert to WOM values. Delay downloading files
         // from the platform, we may not need to access them.
         val inputLines : String = Utils.readFileContent(jobInputPath)
         val inputsRaw : JsValue = inputLines.parseJson
 
-        val (wf, taskDir, typeAliases) = ParseWomSourceFile.parseWdlWorkflow(womSourceCode)
+        val (wf, taskDir, typeAliases) = ParseWomSourceFile(verbose).parseWdlWorkflow(womSourceCode)
 
         // setup the utility directories that the frag-runner employs
         val fragInputOutput = new exec.WfFragInputOutput(dxIoFunctions, dxProject, rtDebugLvl, typeAliases)
@@ -601,6 +638,7 @@ object Main extends App {
                                                            dxPathConfig, dxIoFunctions,
                                                            inputsRaw,
                                                            fragInputOutput,
+                                                           defaultRuntimeAttributes,
                                                            rtDebugLvl)
                     fragRunner.apply(fragInputs.blockPath, fragInputs.env, RunnerWfFragmentMode.Launch)
                 case InternalOp.Collect =>
@@ -610,6 +648,7 @@ object Main extends App {
                                                            dxPathConfig, dxIoFunctions,
                                                            inputsRaw,
                                                            fragInputOutput,
+                                                           defaultRuntimeAttributes,
                                                            rtDebugLvl)
                     fragRunner.apply(fragInputs.blockPath, fragInputs.env, RunnerWfFragmentMode.Collect)
                 case InternalOp.WfInputs =>
@@ -618,16 +657,26 @@ object Main extends App {
                                                      rtDebugLvl)
                     wfInputs.apply(fragInputs.env)
                 case InternalOp.WfOutputs =>
-                    val wfOutputs = new exec.WfOutputs(wf, womSourceCode, typeAliases,
+                    val wfOutputs = new exec.
+                    WfOutputs(wf, womSourceCode, typeAliases,
                                                        dxPathConfig, dxIoFunctions,
                                                        rtDebugLvl)
                     wfOutputs.apply(fragInputs.env)
+
+                case InternalOp.WfCustomReorgOutputs =>
+                    val wfCustomReorgOutputs = new exec.WfOutputs(
+                        wf, womSourceCode, typeAliases, dxPathConfig, dxIoFunctions, rtDebugLvl
+                    )
+                    // add ___reconf_status as output.
+                    wfCustomReorgOutputs.apply(fragInputs.env, addStatus = true)
+
                 case InternalOp.WorkflowOutputReorg =>
                     val wfReorg = new exec.WorkflowOutputReorg(wf, womSourceCode, typeAliases,
                                                                dxPathConfig, dxIoFunctions,
                                                                rtDebugLvl)
                     val refDxFiles = fragInputOutput.findRefDxFiles(inputsRaw, metaInfo)
                     wfReorg.apply(refDxFiles)
+
                 case _ =>
                     throw new Exception(s"Illegal workflow fragment operation ${op}")
             }
@@ -646,7 +695,8 @@ object Main extends App {
     // details field stored on the platform
     private def retrieveFromDetails(jobInfoPath: Path) : (String,
                                                           InstanceTypeDB,
-                                                          JsValue) = {
+                                                          JsValue,
+                                                          Option[WdlRuntimeAttrs]) = {
         val jobInfo = Utils.readFileContent(jobInfoPath).parseJson
         val applet: DXApplet = jobInfo.asJsObject.fields.get("applet") match {
             case None =>
@@ -673,7 +723,12 @@ object Main extends App {
         val dbRaw = Utils.base64DecodeAndGunzip(instanceTypeDBEncoded)
         val instanceTypeDB = dbRaw.parseJson.convertTo[InstanceTypeDB]
 
-        (womSourceCode, instanceTypeDB, details)
+        val runtimeAttrs : Option[WdlRuntimeAttrs] = details.asJsObject.fields.get("runtimeAttrs") match {
+            case None => None
+            case Some(JsNull) => None
+            case Some(x) => Some(x.convertTo[WdlRuntimeAttrs])
+        }
+        (womSourceCode, instanceTypeDB, details, runtimeAttrs)
     }
 
     // Make a list of all the files cloned for access by this applet.
@@ -694,18 +749,20 @@ object Main extends App {
         operation match {
             case None =>
                 UnsuccessfulTermination(s"unknown internal action ${args.head}")
-            case Some(op) if args.length == 3 =>
+            case Some(op) if args.length == 4 =>
                 val homeDir = Paths.get(args(1))
                 val rtDebugLvl = parseRuntimeDebugLevel(args(2))
+                val streamAllFiles = parseStreamAllFiles(args(3))
                 val (jobInputPath, jobOutputPath, jobErrorPath, jobInfoPath) =
                     Utils.jobFilesOfHomeDir(homeDir)
-                val dxPathConfig = buildRuntimePathConfig(rtDebugLvl >= 1)
+                val dxPathConfig = buildRuntimePathConfig(streamAllFiles, rtDebugLvl >= 1)
                 val fileInfoDir = runtimeBulkFileDescribe(jobInputPath)
                 val dxIoFunctions = DxIoFunctions(fileInfoDir, dxPathConfig, rtDebugLvl)
 
                 // Get the WOM source code (currently WDL, could be also CWL in the future)
                 // Parse the inputs, convert to WOM values.
-                val (womSourceCode, instanceTypeDB, metaInfo) = retrieveFromDetails(jobInfoPath)
+                val (womSourceCode, instanceTypeDB, metaInfo, defaultRuntimeAttrs) =
+                    retrieveFromDetails(jobInfoPath)
 
                 try {
                     op match {
@@ -713,17 +770,20 @@ object Main extends App {
                                 InternalOp.WfFragment |
                                 InternalOp.WfInputs |
                                 InternalOp.WfOutputs |
-                                InternalOp.WorkflowOutputReorg =>
+                                InternalOp.WorkflowOutputReorg |
+                                InternalOp.WfCustomReorgOutputs =>
                             workflowFragAction(op, womSourceCode, instanceTypeDB, metaInfo,
                                                jobInputPath, jobOutputPath,
-                                               dxPathConfig, dxIoFunctions, rtDebugLvl)
+                                               dxPathConfig, dxIoFunctions,
+                                               defaultRuntimeAttrs, rtDebugLvl)
                         case InternalOp.TaskCheckInstanceType|
                                 InternalOp.TaskEpilog|
                                 InternalOp.TaskProlog|
                                 InternalOp.TaskRelaunch =>
                             taskAction(op, womSourceCode, instanceTypeDB,
                                        jobInputPath, jobOutputPath,
-                                       dxPathConfig, dxIoFunctions, rtDebugLvl)
+                                       dxPathConfig, dxIoFunctions,
+                                       defaultRuntimeAttrs, rtDebugLvl)
                     }
                 } catch {
                     case e : Throwable =>
@@ -806,8 +866,10 @@ object Main extends App {
     val termination = dispatchCommand(args)
 
     termination match {
-        case SuccessfulTermination(s) => println(s)
-        case SuccessfulTerminationIR(s) => println("Intermediate representation")
+        case SuccessfulTermination(s) =>
+            println(s)
+        case SuccessfulTerminationIR(s) =>
+            println("Intermediate representation")
         case BadUsageTermination(s) if (s == "") =>
             Console.err.println(usageMessage)
             System.exit(1)
@@ -818,4 +880,5 @@ object Main extends App {
             Utils.error(s)
             System.exit(1)
     }
+    System.exit(0)
 }

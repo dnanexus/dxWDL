@@ -25,7 +25,9 @@ test_files={}
 test_failing=set(["bad_status",
                   "bad_status2",
                   "just_fail_wf",
-                  "missing_output"])
+                  "missing_output",
+                  "docker_retry"
+                  ])
 
 wdl_v1_list = [
      # calling native dx applets/apps
@@ -45,26 +47,39 @@ wdl_v1_list = [
     # workflows with nested blocks
     "two_levels",
     "param_passing",
+    "nested_scatter",
+
+    # Map with a File key
+    "map_file_key",
 
     # defaults and parameter passing
     "top",
+    "subworkflow_with_default",
 
     # can we download from a container?
     "download_from_container",
 
     # input file with pairs
     "echo_pairs",
-    "array_structs"
+    "array_structs",
+
+    # Missing optional output files, returned as none, instead
+    # of an error
+    "missing_optional_output_file",
+
+    # streaming
+    "streaming_inputs"
 ]
 
 # docker image tests
 docker_test_list = [
     "broad_genomics",
+    "biocontainers",
     "private_registry",
     "native_docker_file_image",
     "native_docker_file_image_gzip",
     "samtools_count",
-    "hostname_is_jobid"
+    "hostname_is_jobid",
 ]
 
 # wdl draft-2
@@ -105,9 +120,6 @@ single_tasks_list = [
 
 # Tests run in continuous integration. We remove the native app test,
 # because we don't want to give permissions for creating platform apps.
-#ci_test_list = copy.deepcopy(medium_test_list)
-#ci_test_list.remove("call_native_app")
-#ci_test_list.remove("platform_asset")
 ci_test_list = [
     "advanced",
     "call_native",
@@ -141,11 +153,10 @@ test_unlocked=["array_structs",
                "optionals",
                "shapes"]
 
-test_extras=["instance_types"]
-test_private_registry=["private_registry"]
 test_import_dirs=["A"]
-TestMetaData = namedtuple('TestMetaData', 'name kind')
-TestDesc = namedtuple('TestDesc', 'name kind wdl_source wdl_input dx_input results')
+TestMetaData = namedtuple('TestMetaData', ['name','kind'])
+TestDesc = namedtuple('TestDesc',
+                      ['name', 'kind', 'wdl_source', 'wdl_input', 'dx_input', 'results', 'extras'])
 
 ######################################################################
 # Read a JSON file
@@ -203,25 +214,25 @@ def register_test(dir_path, tname):
     if not os.path.exists(wdl_file):
         raise RuntimeError("Test file {} does not exist".format(path))
     metadata = get_metadata(wdl_file)
+    desc = TestDesc(name = metadata.name,
+                    kind = metadata.kind,
+                    wdl_source= wdl_file,
+                    wdl_input= None,
+                    dx_input= None,
+                    results= os.path.join(dir_path, tname + "_results.json"),
+                    extras = None)
 
+    # Verify the input file, and add it (if it exists)
     wdl_input= os.path.join(dir_path, tname + "_input.json")
     if os.path.exists(wdl_input):
-        # Verify the validity of the input file
         verify_json_file(wdl_input)
-        desc = TestDesc(name = metadata.name,
-                        kind = metadata.kind,
-                        wdl_source= wdl_file,
-                        wdl_input= wdl_input,
-                        dx_input= os.path.join(dir_path, tname + "_input.dx.json"),
-                        results= os.path.join(dir_path, tname + "_results.json"))
-    else:
-        # empty input file
-        desc = TestDesc(name = metadata.name,
-                        kind = metadata.kind,
-                        wdl_source= wdl_file,
-                        wdl_input= None,
-                        dx_input= None,
-                        results= os.path.join(dir_path, tname + "_results.json"))
+        desc = desc._replace(wdl_input= wdl_input,
+                             dx_input= os.path.join(dir_path, tname + "_input.dx.json"))
+
+    # Add an extras file (if it exists)
+    extras = os.path.join(dir_path, tname + "_extras.json")
+    if os.path.exists(extras):
+        desc = desc._replace(extras = extras)
 
     test_files[tname] = desc
     desc
@@ -494,10 +505,8 @@ def compiler_per_test_flags(tname):
         if desc.wdl_input is not None:
             flags.append("-inputs")
             flags.append(desc.wdl_input)
-    if tname in test_extras:
-        flags += ["--extras", os.path.join(top_dir, "test/extras.json")]
-    if tname in test_private_registry:
-        flags += ["--extras", os.path.join(top_dir, "test/extras_private_registry.json")]
+    if desc.extras is not None:
+        flags += ["--extras", os.path.join(top_dir, desc.extras)]
     if tname in test_import_dirs:
         flags += ["--imports", os.path.join(top_dir, "test/imports/lib")]
     return flags
@@ -542,7 +551,7 @@ def native_call_setup(project, applet_folder, version_id):
     subprocess.check_output(cmdline_draft2)
 
     cmdline_v1 = cmdline_common + [ "--language", "wdl_v1.0",
-                                    "--output", os.path.join(top_dir, "test/basic/dx_extern.wdl")]
+                                    "--output", os.path.join(top_dir, "test/wdl_1_0/dx_extern.wdl")]
     print(" ".join(cmdline_v1))
     subprocess.check_output(cmdline_v1)
 
@@ -561,7 +570,7 @@ def native_call_app_setup(version_id):
         subprocess.check_output(cmdline)
 
     # build WDL wrapper tasks in test/dx_extern.wdl
-    header_file = os.path.join(top_dir, "test/basic/dx_app_extern.wdl")
+    header_file = os.path.join(top_dir, "test/wdl_1_0/dx_app_extern.wdl")
     cmdline = [ "java", "-jar",
                 os.path.join(top_dir, "dxWDL-{}.jar".format(version_id)),
                 "dxni",
@@ -630,10 +639,6 @@ def main():
     argparser.add_argument("--compile-mode", help="Compilation mode")
     argparser.add_argument("--debug", help="Run applets with debug-hold, and allow ssh",
                            action="store_true", default=False)
-    argparser.add_argument("--do-not-build", help="Do not assemble the dxWDL jar file",
-                           action="store_true", default=False)
-    argparser.add_argument("--extras", help="run extra tests",
-                           action="store_true", default=False)
     argparser.add_argument("--force", help="Remove old versions of applets and workflows",
                            action="store_true", default=False)
     argparser.add_argument("--folder", help="Use an existing folder, instead of building dxWDL")
@@ -647,6 +652,8 @@ def main():
                            action="store_true", default=False)
     argparser.add_argument("--project", help="DNAnexus project ID",
                            default="dxWDL_playground")
+    argparser.add_argument("--stream-all-files", help="Stream all input files with dxfs2",
+                           action="store_true", default=False)
     argparser.add_argument("--runtime-debug-level",
                            help="printing verbosity of task/workflow runner, {0,1,2}")
     argparser.add_argument("--test", help="Run a test, or a subgroup of tests",
@@ -691,8 +698,7 @@ def main():
     }
 
     # build the dxWDL jar file, only on us-east-1
-    if not args.do_not_build:
-        util.build(project, base_folder, version_id, top_dir, test_dict)
+    util.build(project, base_folder, version_id, top_dir, test_dict)
 
     if args.unlocked:
         # Disable all locked workflows
@@ -711,6 +717,8 @@ def main():
         compiler_flags.append("-force")
     if args.verbose:
         compiler_flags.append("-verbose")
+    if args.stream_all_files:
+        compiler_flags.append("-streamAllFiles")
     if args.verbose_key:
         for key in args.verbose_key:
             compiler_flags += ["-verboseKey", key]
@@ -736,10 +744,6 @@ def main():
             run_test_subset(project, runnable, test_folder, args.debug)
     finally:
         print("Completed running tasks in {}".format(args.project))
-
-    if args.extras:
-        print("Copy workflow and run in alternate project ")
-        copy_wf_test("linear", project, applet_folder, args.debug)
 
 if __name__ == '__main__':
     main()

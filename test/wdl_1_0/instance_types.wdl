@@ -154,11 +154,28 @@ task Shortcut {
 }
 
 
+task GPUSpec {
+    input {}
+    command {
+        echo "On a GPU instance"
+    }
+    runtime {
+        gpu : true
+        memory: "2 GiB"
+    }
+    output {
+        String retval = read_string(stdout())
+    }
+}
+
 workflow instance_types {
     input {
         Int i
         File fruits
     }
+
+    ### Check that we can use GPU instances
+    call GPUSpec
 
     ### Disk space tests
     call DiskSpaceSpec { input: disk_req_gb=90 }
@@ -187,6 +204,7 @@ workflow instance_types {
     call Shortcut
 
     output {
+        String GPUSpec_retval = GPUSpec.retval
         String MemorySpec_retval = MemorySpec.retval
         String DiskSpaceSpec_retval = DiskSpaceSpec.retval
         String NumCoresSpec_retval = NumCoresSpec.retval

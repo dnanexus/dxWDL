@@ -52,7 +52,7 @@ object TaskRunnerUtils {
     // ]
     def readManifestGetDockerImageName(buf: String) : String = {
         val jso = buf.parseJson
-	val elem = jso match {
+        val elem = jso match {
             case JsArray(elements) if elements.size >= 1 => elements.head
             case other => throw new Exception(s"bad value ${other} for manifest, expecting non empty array")
         }
@@ -84,10 +84,12 @@ case class TaskRunner(task: CallableTaskDefinition,
                       dxPathConfig : DxPathConfig,
                       dxIoFunctions : DxIoFunctions,
                       jobInputOutput : JobInputOutput,
+                      defaultRuntimeAttrs : Option[WdlRuntimeAttrs],
                       runtimeDebugLevel: Int) {
     private val verbose = (runtimeDebugLevel >= 1)
     private val maxVerboseLevel = (runtimeDebugLevel == 2)
-    private val wdlVarLinksConverter = WdlVarLinksConverter(dxIoFunctions.fileInfoDir, typeAliases)
+    private val utlVerbose = Verbose(runtimeDebugLevel >= 1, false, Set.empty)
+    private val wdlVarLinksConverter = WdlVarLinksConverter(utlVerbose, dxIoFunctions.fileInfoDir, typeAliases)
     private val DOCKER_TARBALLS_DIR = "/tmp/docker-tarballs"
 
     // check if the command section is empty
@@ -158,17 +160,52 @@ case class TaskRunner(task: CallableTaskDefinition,
 
     // Figure out if a docker image is specified. If so, return it as a string.
     private def dockerImageEval(env: Map[String, WomValue]) : Option[String] = {
-        task.runtimeAttributes.attributes.get("docker") match {
-            case None => None
+        val dImg : Option[WomValue] = task.runtimeAttributes.attributes.get("docker") match {
+            case None =>
+                defaultRuntimeAttrs match {
+                    case None => None
+                    case Some(dra) => dra.m.get("docker")
+                }
             case Some(expr) =>
-                val result: ErrorOr[WomValue] =
-                    expr.evaluateValue(env, dxIoFunctions)
+                val result: ErrorOr[WomValue] = expr.evaluateValue(env, dxIoFunctions)
                 result match {
-                    case Valid(WomString(s)) => Some(s)
-                    case _ =>
-                        throw new AppInternalException(s"docker is not a string expression ${expr}")
+                    case Valid(x) => Some(x)
+                    case Invalid(_) =>
+                        throw new AppInternalException(s"Invalid wom expression ${expr}")
                 }
         }
+        dImg match {
+            case None => None
+            case Some(WomString(s)) => Some(s)
+            case Some(other) =>
+                throw new AppInternalException(s"docker is not a string expression ${other}")
+        }
+    }
+
+    private def pullImage(dImg: String): Option[String] = {
+
+        var retry_count = 5;
+        while (retry_count > 0){
+            try {
+                val (outstr, errstr) = Utils.execCommand(s"docker pull ${dImg}")
+
+                Utils.appletLog(verbose, s"""|output:
+                                             |${outstr}
+                                             |stderr:
+                                             |${errstr}""".stripMargin)
+                return Some(dImg)
+            } catch {
+                // ideally should catch specific exception.
+                case e: Throwable =>
+                    retry_count = retry_count - 1
+                    Utils.appletLog(verbose,
+                        s"""Failed to pull docker image:
+                           |${dImg}. Retrying... ${5 - retry_count}
+                    """.stripMargin)
+                    Thread.sleep(1000)
+            }
+        }
+        throw new RuntimeException(s"Unable to pull docker image: ${dImg} after 5 tries")
     }
 
     private def dockerImage(env: Map[String, WomValue]) : Option[String] = {
@@ -182,9 +219,9 @@ case class TaskRunner(task: CallableTaskDefinition,
                 // 3. figure out the image name
                 Utils.appletLog(verbose, s"looking up dx:url ${url}")
                 val dxFile = DxPath.resolveDxURLFile(url)
-		val fileName = dxFile.describe().getName
+                val fileName = dxFile.describe().getName
                 val tarballDir = Paths.get(DOCKER_TARBALLS_DIR)
-	        Utils.safeMkdir(tarballDir)
+                Utils.safeMkdir(tarballDir)
                 val localTar : Path = tarballDir.resolve(fileName)
 
                 Utils.appletLog(verbose, s"downloading docker tarball to ${localTar}")
@@ -192,7 +229,7 @@ case class TaskRunner(task: CallableTaskDefinition,
 
                 Utils.appletLog(verbose, "figuring out the image name")
                 val (mContent, _) = Utils.execCommand(s"tar --to-stdout -xf ${localTar} manifest.json")
-            	Utils.appletLog(verbose, s"""|manifest content:
+                Utils.appletLog(verbose, s"""|manifest content:
                                              |${mContent}
                                              |""".stripMargin)
                 val repo = TaskRunnerUtils.readManifestGetDockerImageName(mContent)
@@ -206,13 +243,27 @@ case class TaskRunner(task: CallableTaskDefinition,
                                              |${errstr}""".stripMargin)
                 Some(repo)
 
-            case _ => dImg
+            case Some(dImg) =>
+                pullImage(dImg)
+
+            case _ =>
+                dImg
         }
     }
 
+    // Figure how much memory is available for this container/image
+    //
+    // We may need to check the cgroup itself. Not sure how portable that is.
+    //val totalAvailableMemoryBytes = Utils.readFileContent("/sys/fs/cgroup/memory/memory.limit_in_bytes").toInt
+    //
+    private def availableMemory() : Long = {
+        val mbean = ManagementFactory.getOperatingSystemMXBean()
+            .asInstanceOf[com.sun.management.OperatingSystemMXBean]
+        mbean.getTotalPhysicalMemorySize()
+    }
+
     private def getRuntimeEnvironment() : RuntimeEnvironment = {
-        val mbean = ManagementFactory.getOperatingSystemMXBean().asInstanceOf[com.sun.management.OperatingSystemMXBean]
-        val physicalMemorySize = mbean.getTotalPhysicalMemorySize()
+        val physicalMemorySize = availableMemory()
         val numCores = Runtime.getRuntime().availableProcessors()
 
         import eu.timepit.refined._
@@ -280,16 +331,25 @@ case class TaskRunner(task: CallableTaskDefinition,
         dxPathConfig.script.toFile.setExecutable(true)
     }
 
-    private def writeDockerSubmitBashScript(imgName: String) : Unit = {
+    private def writeDockerSubmitBashScript(imgName: String,
+                                            dxfuseRunning: Boolean) : Unit = {
         // The user wants to use a docker container with the
-        // image [imgName]. We implement this with dx-docker.
-        // There may be corner cases where the image will run
-        // into permission limitations due to security.
+        // image [imgName].
         //
         // Map the home directory into the container, so that
         // we can reach the result files, and upload them to
         // the platform.
         //
+
+        // Limit the docker container to leave some memory for the rest of the
+        // ongoing system services, for example, dxfuse.
+
+        val totalAvailableMemoryBytes = availableMemory()
+        val memCap =
+            if (dxfuseRunning)
+                totalAvailableMemoryBytes - Utils.DXFUSE_MAX_MEMORY_CONSUMPTION
+            else
+                totalAvailableMemoryBytes
         val dockerRunScript =
             s"""|#!/bin/bash -x
                 |
@@ -304,6 +364,7 @@ case class TaskRunner(task: CallableTaskDefinition,
                 |
                 |# run as in the original configuration
                 |docker run \\
+                |  --memory=${memCap} \\
                 |  --cidfile ${dxPathConfig.dockerCid} \\
                 |  $${extraFlags} \\
                 |  --entrypoint /bin/bash \\
@@ -387,24 +448,19 @@ case class TaskRunner(task: CallableTaskDefinition,
         //
         // Note: this may be overly conservative,
         // because some of the files may not actually be accessed.
-        val (localizedInputs, dxUrl2path, bashSnippetVec, dxdaManifest) =
+        val (localizedInputs, dxUrl2path, dxdaManifest, dxfuseManifest) =
             jobInputOutput.localizeFiles(task.parameterMeta, taskInputs, dxPathConfig.inputFilesDir)
-
-        // deal with files that need streaming
-        if (bashSnippetVec.size > 0) {
-            // set up all the named pipes
-            val path = dxPathConfig.setupStreams
-            Utils.appletLog(maxVerboseLevel,
-                            s"writing bash script for stream(s) set up to ${path}")
-            val snippet = bashSnippetVec.mkString("\n")
-            Utils.writeFileContent(path, snippet)
-            path.toFile.setExecutable(true)
-        }
 
         // build a manifest for dxda, if there are files to download
         val DxdaManifest(manifestJs) = dxdaManifest
         if (manifestJs.asJsObject.fields.size > 0) {
             Utils.writeFileContent(dxPathConfig.dxdaManifest, manifestJs.prettyPrint)
+        }
+
+        // build a manifest for dxfuse
+        val DxfuseManifest(manifest2Js) = dxfuseManifest
+        if (manifest2Js != JsNull) {
+            Utils.writeFileContent(dxPathConfig.dxfuseManifest, manifest2Js.prettyPrint)
         }
 
         val inputs = localizedInputs.map{ case (inpDfn, value) =>
@@ -425,7 +481,7 @@ case class TaskRunner(task: CallableTaskDefinition,
         docker match {
             case Some(img) =>
                 // write a script that launches the actual command inside a docker image.
-                writeDockerSubmitBashScript(img)
+                writeDockerSubmitBashScript(img, manifest2Js != JsNull)
             case None => ()
         }
 
@@ -498,16 +554,23 @@ case class TaskRunner(task: CallableTaskDefinition,
 
         def evalAttr(attrName: String) : Option[WomValue] = {
             task.runtimeAttributes.attributes.get(attrName) match {
-                case None => None
-                case Some(expr) => Some(getErrorOr(expr.evaluateValue(inputs, dxIoFunctions)))
+                case None =>
+                    // try the defaults
+                    defaultRuntimeAttrs match {
+                        case None => None
+                        case Some(dra) => dra.m.get(attrName)
+                    }
+                case Some(expr) =>
+                    Some(getErrorOr(expr.evaluateValue(inputs, dxIoFunctions)))
             }
         }
 
-        val dxInstaceType = evalAttr(Extras.DX_INSTANCE_TYPE_ATTR)
+        val dxInstanceType = evalAttr("dx_instance_type")
         val memory = evalAttr("memory")
         val diskSpace = evalAttr("disks")
         val cores = evalAttr("cpu")
-        val iTypeRaw = InstanceTypeDB.parse(dxInstaceType, memory, diskSpace, cores)
+        val gpu = evalAttr("gpu")
+        val iTypeRaw = InstanceTypeDB.parse(dxInstanceType, memory, diskSpace, cores, gpu)
         val iType = instanceTypeDB.apply(iTypeRaw)
         Utils.appletLog(verbose, s"""|calcInstanceType memory=${memory} disk=${diskSpace}
                                      |cores=${cores} instancetype=${iType}"""
