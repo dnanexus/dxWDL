@@ -300,7 +300,7 @@ class ExtrasTest extends FlatSpec with Matchers {
 
   }
 
-  it should "throw ResourceNotFoundException due to non-existent applet" in {
+    ignore should "throw ResourceNotFoundException due to non-existent applet" in {
 
     // non-existent (made up) applet ID
     val appId : String = "applet-mPX7K2j0Gv2K2jXF75Bf21v2"
@@ -375,7 +375,8 @@ class ExtrasTest extends FlatSpec with Matchers {
 
   }
 
-  it should "throw PermissionDeniedException due to applet not having contribute access in the project" in {
+    // FIXME: tab should be set to 4 spaces
+    ignore should "throw PermissionDeniedException due to applet not having contribute access in the project" in {
 
     // app_id is sum app in project-FJ90qPj0jy8zYvVV9yz3F5gv
     val appId : String = getIdFromName("/release_test/Sum ")
