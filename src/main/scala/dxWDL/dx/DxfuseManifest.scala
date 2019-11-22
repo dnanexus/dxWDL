@@ -3,16 +3,16 @@
 
 package dxWDL.dx
 
-import com.dnanexus.{DXFile}
 import java.nio.file.Path
 import spray.json._
 
 import dxWDL.util.DxIoFunctions
+import dxWDL.dx.DxFile
 
 case class DxfuseManifest(value : JsValue)
 
 object DxfuseManifest {
-    def apply(file2LocalMapping: Map[DXFile, Path],
+    def apply(file2LocalMapping: Map[DxFile, Path],
               dxIoFunctions : DxIoFunctions) : DxfuseManifest = {
         if (file2LocalMapping.isEmpty)
             return DxfuseManifest(JsNull)

@@ -321,30 +321,6 @@ public class DXEnvironment {
         }
 
         /**
-         * Sets the current job to the specified job.
-         *
-         * @param job job object
-         *
-         * @return the same Builder object
-         */
-        public Builder setJob(DXJob job) {
-            jobId = Preconditions.checkNotNull(job).getId();
-            return this;
-        }
-
-        /**
-         * Sets the project context to the specified project.
-         *
-         * @param projectContext project context
-         *
-         * @return the same Builder object
-         */
-        public Builder setProjectContext(DXProject projectContext) {
-            projectContextId = Preconditions.checkNotNull(projectContext).getId();
-            return this;
-        }
-
-        /**
          * Sets the security context to use to authenticate to the Platform.
          *
          * @param json security context JSON
@@ -527,11 +503,8 @@ public class DXEnvironment {
      *
      * @return job object, or {@code null} if the currently running job cannot be determined
      */
-    public DXJob getJob() {
-        if (jobId == null) {
-            return null;
-        }
-        return DXJob.getInstanceWithEnvironment(jobId, this);
+    public String getJob() {
+        return jobId
     }
 
     /**
@@ -539,11 +512,8 @@ public class DXEnvironment {
      *
      * @return project, or {@code null} if the project context cannot be determined
      */
-    public DXProject getProjectContext() {
-        if (projectContextId == null) {
-            return null;
-        }
-        return DXProject.getInstanceWithEnvironment(projectContextId, this);
+    public String getProjectContext() {
+        return projectContextId
     }
 
     /**

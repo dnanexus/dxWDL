@@ -28,7 +28,7 @@ case class Native(dxWDLrtId: Option[String],
                   dxObjDir: DxObjectDirectory,
                   instanceTypeDB: InstanceTypeDB,
                   dxPathConfig: DxPathConfig,
-                  fileInfoDir : Map[DXFile, DxDescribe],
+                  fileInfoDir : Map[DxFile, DxDescribe],
                   typeAliases: Map[String, WomType],
                   extras: Option[Extras],
                   runtimeDebugLevel: Option[Int],
@@ -62,8 +62,8 @@ case class Native(dxWDLrtId: Option[String],
             case Some(id) =>
                 // Open the archive
                 // Extract the archive from the details field
-                val record = DXRecord.getInstance(id)
-                val descOptions = DXDataObject.DescribeOptions.get().inProject(dxProject).withDetails
+                val record = DxRecord.getInstance(id)
+                val descOptions = DxDataObject.DescribeOptions.get().inProject(dxProject).withDetails
 
                 val desc = describe(record, details=true)
 
@@ -407,7 +407,7 @@ case class Native(dxWDLrtId: Option[String],
     //   None: build is required
     //   Some(dxobject) : the right object is already on the platform
     private def isBuildRequired(name: String,
-                                digest: String) : Option[DXDataObject] = {
+                                digest: String) : Option[DxDataObject] = {
         // Have we built this applet already, but placed it elsewhere in the project?
         dxObjDir.lookupOtherVersions(name, digest) match {
             case None => ()
@@ -569,7 +569,7 @@ case class Native(dxWDLrtId: Option[String],
         val runSpecWithExtras = runSpec ++ defaultTimeout ++ extraRunSpec ++ taskSpecificRunSpec
 
         // - If the docker image is a tarball, add a link in the details field.
-        val dockerFile: Option[DXFile] = applet.docker match {
+        val dockerFile: Option[DxFile] = applet.docker match {
             case IR.DockerImageNone => None
             case IR.DockerImageNetwork => None
             case IR.DockerImageDxFile(_, dxfile) =>
@@ -768,7 +768,7 @@ case class Native(dxWDLrtId: Option[String],
     // if the WDL code has changed.
     private def buildAppletIfNeeded(applet: IR.Applet,
                                     execDict: Map[String, ExecRecord])
-            : (DXApplet, Vector[ExecLinkInfo]) = {
+            : (DxApplet, Vector[ExecLinkInfo]) = {
         Utils.trace(verbose2, s"Compiling applet ${applet.name}")
 
         // limit the applet dictionary, only to actual dependencies
@@ -800,13 +800,13 @@ case class Native(dxWDLrtId: Option[String],
                 // Compile a WDL snippet into an applet.
                 val rep = DXAPI.appletNew(DxUtils.jsonNodeOfJsValue(appletApiRequest), classOf[JsonNode])
                 val id = apiParseReplyID(rep)
-                val dxApplet = DXApplet.getInstance(id)
+                val dxApplet = DxApplet.getInstance(id)
                 dxObjDir.insert(applet.name, dxApplet, digest)
                 dxApplet
             case Some(dxObj) =>
                 // Old applet exists, and it has not changed. Return the
                 // applet-id.
-                dxObj.asInstanceOf[DXApplet]
+                dxObj.asInstanceOf[DxApplet]
         }
         (dxApplet, aplLinks.values.toVector)
     }
@@ -997,10 +997,10 @@ case class Native(dxWDLrtId: Option[String],
         (digest, reqWithEverything)
     }
 
-    private def buildWorkflow(req: JsValue) : DXWorkflow = {
+    private def buildWorkflow(req: JsValue) : DxWorkflow = {
         val rep = DXAPI.workflowNew(DxUtils.jsonNodeOfJsValue(req), classOf[JsonNode])
         val id = apiParseReplyID(rep)
-        val dxwf = DXWorkflow.getInstance(id)
+        val dxwf = DxWorkflow.getInstance(id)
 
         // Close the workflow
         if (!leaveWorkflowsOpen)
@@ -1024,7 +1024,7 @@ case class Native(dxWDLrtId: Option[String],
             case Some(dxObj) =>
                 // Old workflow exists, and it has not changed.
                 // we need to find a way to get the dependencies.
-                dxObj.asInstanceOf[DXWorkflow]
+                dxObj.asInstanceOf[DxWorkflow]
         }
     }
 

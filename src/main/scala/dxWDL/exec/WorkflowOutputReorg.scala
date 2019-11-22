@@ -6,7 +6,7 @@
 package dxWDL.exec
 
 // DX bindings
-import com.dnanexus.{DXAPI, DXAnalysis, DXContainer, DXFile}
+import com.dnanexus.DXAPI
 import com.fasterxml.jackson.databind.JsonNode
 import scala.collection.JavaConverters._
 import spray.json._
@@ -31,8 +31,8 @@ case class WorkflowOutputReorg(wf: WorkflowDefinition,
     //
     // In other words, this code is an efficient replacement for:
     // files.map(_.describe().getName())
-    def bulkGetFilenames(files: Seq[DXFile], dxProject: DxProject) : Vector[String] = {
-        val info : Map[DXFile, DxDescribe] = DxBulkDescribe.apply(files)
+    def bulkGetFilenames(files: Seq[DxFile], dxProject: DxProject) : Vector[String] = {
+        val info : Map[DxFile, DxDescribe] = DxBulkDescribe.apply(files)
         info.values.map(_.name).toVector
     }
 
@@ -47,7 +47,7 @@ case class WorkflowOutputReorg(wf: WorkflowDefinition,
     // file. Instead, we find all the output files that do not also
     // appear in the input.
     def analysisFileOutputs(dxProject: DxProject,
-                            dxAnalysis: DXAnalysis) : Vector[DXFile]= {
+                            dxAnalysis: DxAnalysis) : Vector[DxFile]= {
         val req = JsObject("fields" -> JsObject(
                                "input" -> JsBoolean(true),
                                "output" -> JsBoolean(true)))
@@ -62,9 +62,9 @@ case class WorkflowOutputReorg(wf: WorkflowDefinition,
             case Some(x) => x
         }
 
-        val fileOutputs : Set[DXFile] = DxUtils.findDxFiles(outputs).toSet
-        val fileInputs: Set[DXFile] = DxUtils.findDxFiles(inputs).toSet
-        val realOutputs:Set[DXFile] = fileOutputs.toSet -- fileInputs.toSet
+        val fileOutputs : Set[DxFile] = DxUtils.findDxFiles(outputs).toSet
+        val fileInputs: Set[DxFile] = DxUtils.findDxFiles(inputs).toSet
+        val realOutputs:Set[DxFile] = fileOutputs.toSet -- fileInputs.toSet
         Utils.appletLog(verbose, s"analysis has ${fileOutputs.size} output files")
         Utils.appletLog(verbose, s"analysis has ${fileInputs.size} input files")
         Utils.appletLog(verbose, s"analysis has ${realOutputs.size} real outputs")
@@ -74,12 +74,12 @@ case class WorkflowOutputReorg(wf: WorkflowDefinition,
             Utils.appletLog(verbose, s"WARNING: Large number of outputs (${realOutputs.size}), not moving objects")
             return Vector.empty
         }
-        val realFreshOutputs:Map[DXFile, DxDescribe] =
+        val realFreshOutputs:Map[DxFile, DxDescribe] =
             DxBulkDescribe.apply(realOutputs.toSeq)
 
         // Retain only files that were created AFTER the analysis started
         val anlCreateTs:java.util.Date = dxAnalysis.describe.getCreationDate()
-        val outputFiles: Vector[DXFile] = realFreshOutputs.flatMap{
+        val outputFiles: Vector[DxFile] = realFreshOutputs.flatMap{
             case (dxFile, desc) =>
                 val creationDate = new java.util.Date(desc.created)
                 if (creationDate.compareTo(anlCreateTs) >= 0)
@@ -93,7 +93,7 @@ case class WorkflowOutputReorg(wf: WorkflowDefinition,
     }
 
     // Move all intermediate results to a sub-folder
-    def moveIntermediateResultFiles(exportFiles: Vector[DXFile]): Unit = {
+    def moveIntermediateResultFiles(exportFiles: Vector[DxFile]): Unit = {
         val dxEnv = DxUtils.dxEnv
         val dxProject = dxEnv.getProjectContext()
         val dxProjDesc = dxProject.describe
@@ -103,7 +103,7 @@ case class WorkflowOutputReorg(wf: WorkflowDefinition,
         Utils.appletLog(verbose, s"proj=${dxProjDesc.getName} outFolder=${outFolder}")
 
         // find all analysis output files
-        val analysisFiles: Vector[DXFile] = analysisFileOutputs(dxProject, dxAnalysis)
+        val analysisFiles: Vector[DxFile] = analysisFileOutputs(dxProject, dxAnalysis)
         if (analysisFiles.isEmpty)
             return
 
@@ -133,7 +133,7 @@ case class WorkflowOutputReorg(wf: WorkflowDefinition,
     }
 
 
-    def apply(wfOutputFiles: Vector[DXFile]) : Map[String, JsValue] = {
+    def apply(wfOutputFiles: Vector[DxFile]) : Map[String, JsValue] = {
         Utils.appletLog(verbose, s"dxWDL version: ${Utils.getVersion()}")
 
         // Reorganize directory structure

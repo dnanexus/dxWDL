@@ -1,6 +1,5 @@
 package dxWDL.util
 
-import com.dnanexus.DXFile
 import java.nio.file.{Files, FileSystems, Paths, PathMatcher}
 import scala.collection.JavaConverters._
 import scala.concurrent.{ExecutionContext, Future}
@@ -10,9 +9,9 @@ import wom.expression.IoFunctionSet.IoElement
 import wom.values._
 
 import dxWDL.base.{AppInternalException, Utils}
-import dxWDL.dx.{DxDescribe, DxUtils}
+import dxWDL.dx.{DxDescribe, DxFile, DxUtils}
 
-case class DxPathFunctions(fileInfoDir : Map[DXFile, DxDescribe],
+case class DxPathFunctions(fileInfoDir : Map[DxFile, DxDescribe],
                            config: DxPathConfig,
                            runtimeDebugLevel: Int) extends PathFunctionSet {
 
@@ -77,7 +76,7 @@ case class DxPathFunctions(fileInfoDir : Map[DXFile, DxDescribe],
     override def stderr: String = config.stderr.toString
 }
 
-case class DxIoFunctions(fileInfoDir : Map[DXFile, DxDescribe],
+case class DxIoFunctions(fileInfoDir : Map[DxFile, DxDescribe],
                          config: DxPathConfig,
                          runtimeDebugLevel: Int) extends IoFunctionSet {
     private val verbose = runtimeDebugLevel >= 1

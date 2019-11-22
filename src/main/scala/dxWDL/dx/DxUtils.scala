@@ -1,12 +1,11 @@
 package dxWDL.dx
 
-import com.dnanexus._
+import com.dnanexus.DXEnvironment
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.databind.JsonNode
 import java.nio.file.{Path, Files}
 import spray.json._
 import wom.types._
-
 
 import dxWDL.base.{AppInternalException, Utils, Verbose}
 
@@ -15,7 +14,7 @@ object DxUtils {
     private val UPLOAD_RETRY_LIMIT = 3
 
     lazy val dxEnv = DXEnvironment.create()
-    lazy val dxCrntProject = DxProject(dxEnv.getProjectContext().getId)
+    lazy val dxCrntProject = DxProject(dxEnv.getProjectContext())
 
     def isDxId(objName : String) : Boolean = {
         objName match {
@@ -27,19 +26,19 @@ object DxUtils {
         }
     }
 
-    def convertToDxObject(objName : String,
-                          container : Option[DXContainer]) : Option[DXDataObject] = {
+    def convertToDxDataObject(objName : String,
+                          container : Option[DxContainer]) : Option[DxDataObject] = {
         // If the object is a file-id (or something like it), then
         // shortcut the expensive findDataObjects call.
-        val dxobj : Option[DXDataObject] = objName match {
+        val dxobj : Option[DxObject] = objName match {
             case _ if objName.startsWith("applet-") =>
-                Some(DXApplet.getInstance(objName))
+                Some(DxApplet(objName, None))
             case _ if objName.startsWith("file-") =>
-                Some(DXFile.getInstance(objName))
+                Some(DxFile(objName, None))
             case _  if objName.startsWith("record-") =>
-                Some(DXRecord.getInstance(objName))
+                Some(DxRecord(objName, None))
             case _ if objName.startsWith("workflow-") =>
-                Some(DXWorkflow.getInstance(objName))
+                Some(DxWorkflow(objName, None))
             case _ =>
                 None
         }
@@ -51,31 +50,31 @@ object DxUtils {
         container match {
             case None =>
                 return dxobj
-            case Some(dxcont) if dxcont.isInstanceOf[DXContainer] =>
+            case Some(dxcont) if dxcont.isInstanceOf[DxContainer] =>
                 return dxobj
             case _ =>
                 ()
         }
 
         // set the project
-        val dxProj = container.get.asInstanceOf[DXProject]
+        val dxProj = DxProject(container.get.getId)
 
-        val dxobjWithProj : DXDataObject = dxobj.get match {
-            case apl : DXApplet =>
-                DXApplet.getInstance(apl.getId, dxProj)
-            case dxFile : DXFile =>
-                DXApplet.getInstance(dxFile.getId, dxProj)
-            case record : DXRecord =>
-                DXRecord.getInstance(record.getId, dxProj)
-            case wf : DXWorkflow =>
-                DXWorkflow.getInstance(wf.getId, dxProj)
+        val dxobjWithProj : DxDataObject = dxobj.get match {
+            case apl : DxApplet =>
+                DxApplet(apl.getId, Some(dxProj))
+            case dxFile : DxFile =>
+                DxFile(dxFile.getId, Some(dxProj))
+            case record : DxRecord =>
+                DxRecord(record.getId, Some(dxProj))
+            case wf : DxWorkflow =>
+                DxWorkflow(wf.getId, Some(dxProj))
             case other =>
                 other
         }
         Some(dxobjWithProj)
     }
 
-    def dxDataObjectToURL(dxObj: DXDataObject) : String = {
+    def dxDataObjectToURL(dxObj: DxDataObject) : String = {
         s"${Utils.DX_URL_PREFIX}${dxObj.getId}"
     }
 
@@ -130,10 +129,10 @@ object DxUtils {
 
     // Search through a JSON value for all the dx:file links inside it. Returns
     // those as a vector.
-    def findDxFiles(jsValue: JsValue) : Vector[DXFile] = {
+    def findDxFiles(jsValue: JsValue) : Vector[DxFile] = {
         jsValue match {
             case JsBoolean(_) | JsNumber(_) | JsString(_) | JsNull =>
-                Vector.empty[DXFile]
+                Vector.empty[DxFile]
             case JsObject(_) if isDxFile(jsValue) =>
                 Vector(dxFileFromJsValue(jsValue))
             case JsObject(fields) =>
@@ -160,12 +159,12 @@ object DxUtils {
 
     // Create a dx link to a field in an execution. The execution could
     // be a job or an analysis.
-    def makeEBOR(dxExec: DXExecution, fieldName: String) : JsValue = {
-        if (dxExec.isInstanceOf[DXJob]) {
+    def makeEBOR(dxExec: DxExecution, fieldName: String) : JsValue = {
+        if (dxExec.isInstanceOf[DxJob]) {
             JsObject("$dnanexus_link" -> JsObject(
                          "field" -> JsString(fieldName),
                          "job" -> JsString(dxExec.getId)))
-        } else if (dxExec.isInstanceOf[DXAnalysis]) {
+        } else if (dxExec.isInstanceOf[DxAnalysis]) {
             JsObject("$dnanexus_link" -> JsObject(
                          "field" -> JsString(fieldName),
                          "analysis" -> JsString(dxExec.getId)))
@@ -177,8 +176,8 @@ object DxUtils {
     def runSubJob(entryPoint:String,
                   instanceType:Option[String],
                   inputs:JsValue,
-                  dependsOn: Vector[DXExecution],
-                  verbose: Boolean) : DXJob = {
+                  dependsOn: Vector[DxExecution],
+                  verbose: Boolean) : DxJob = {
         val fields = Map(
             "function" -> JsString(entryPoint),
             "input" -> inputs
@@ -207,7 +206,7 @@ object DxUtils {
             case _ => throw new AppInternalException(
                 s"Bad format returned from jobNew ${info.prettyPrint}")
         }
-        DXJob.getInstance(id)
+        DxJob(id)
     }
 
     // describe a project, and extract fields that not currently available
@@ -239,7 +238,7 @@ object DxUtils {
     //
     //  {"$dnanexus_link": "file-F0J6JbQ0ZvgVz1J9q5qKfkqP"}
     //
-    def dxFileFromJsValue(jsValue : JsValue) : DXFile = {
+    def dxFileFromJsValue(jsValue : JsValue) : DxFile = {
         val innerObj = jsValue match {
             case JsObject(fields) =>
                 fields.get("$dnanexus_link") match {
@@ -270,17 +269,17 @@ object DxUtils {
         }
 
         projId match {
-            case None => DXFile.getInstance(fid)
-            case Some(pid) => DXFile.getInstance(fid, DxProject.getInstance(pid))
+            case None => DxFile(fid)
+            case Some(pid) => DxFile(fid, Some(DxProject(pid)))
         }
     }
 
-    def dxFileToJsValue(dxFile: DXFile) : JsValue = {
+    def dxFileToJsValue(dxFile: DxFile) : JsValue = {
         jsValueOfJsonNode(dxFile.getLinkAsJson)
     }
 
     // copy asset to local project, if it isn't already here.
-    def cloneAsset(assetRecord: DXRecord,
+    def cloneAsset(assetRecord: DxRecord,
                    dxProject: DxProject,
                    pkgName: String,
                    rmtProject: DxProject,
@@ -311,7 +310,7 @@ object DxUtils {
         val existingRecords = exists.filter(_.startsWith("record-"))
         existingRecords.size match {
             case 0 =>
-                val localAssetRecord = DXRecord.getInstance(assetRecord.getId)
+                val localAssetRecord = DxRecord(assetRecord.getId, None)
                 Utils.trace(verbose.on, s"Created ${localAssetRecord.getId} pointing to asset ${pkgName}")
             case 1 =>
                 Utils.trace(verbose.on, s"The project already has a record pointing to asset ${pkgName}")
@@ -326,9 +325,9 @@ object DxUtils {
     //
     // Note: this function assumes that the target path does not exist yet
     def downloadFile(path: Path,
-                     dxfile: DXFile,
+                     dxfile: DxFile,
                      verbose: Boolean) : Unit = {
-        def downloadOneFile(path: Path, dxfile: DXFile, counter: Int) : Boolean = {
+        def downloadOneFile(path: Path, dxfile: DxFile, counter: Int) : Boolean = {
             val fid = dxfile.getId()
             try {
                 // Use dx download. Quote the path, because it may contains spaces.
@@ -361,7 +360,7 @@ object DxUtils {
     // Upload a local file to the platform, and return a json link.
     // Use 'dx upload' as a separate process.
     def uploadFile(path: Path,
-                   verbose: Boolean) : DXFile = {
+                   verbose: Boolean) : DxFile = {
         if (!Files.exists(path))
             throw new AppInternalException(s"Output file ${path.toString} is missing")
         def uploadOneFile(path: Path, counter: Int) : Option[String] = {
@@ -387,7 +386,7 @@ object DxUtils {
             Utils.appletLog(verbose, s"upload file ${path.toString} (try=${counter})")
             uploadOneFile(path, counter) match {
                 case Some(fid) =>
-                   return DXFile.getInstance(fid)
+                   return DxFile(fid)
                 case None => ()
             }
             counter = counter + 1
@@ -404,7 +403,7 @@ object DxUtils {
     }
 
     // Read the contents of a platform file into a string
-    def downloadString(dxFile: DXFile,
+    def downloadString(dxFile: DxFile,
                        verbose: Boolean) : String = {
         // We don't want to use the dxjava implementation
         //val bytes = dxFile.downloadBytes()

@@ -1,7 +1,5 @@
 package dxWDL
 
-import com.dnanexus._
-import com.fasterxml.jackson.databind.JsonNode
 import com.typesafe.config._
 import java.nio.file.{Path, Paths}
 import scala.collection.mutable.HashMap
@@ -698,24 +696,21 @@ object Main extends App {
                                                           JsValue,
                                                           Option[WdlRuntimeAttrs]) = {
         val jobInfo = Utils.readFileContent(jobInfoPath).parseJson
-        val applet: DXApplet = jobInfo.asJsObject.fields.get("applet") match {
+        val applet: DxApplet = jobInfo.asJsObject.fields.get("applet") match {
             case None =>
                 Utils.trace(true,
                             s"""|applet field not found locally, performing
                                 |an API call.
                                 |""".stripMargin)
-                val dxJob : DXJob = DxUtils.dxEnv.getJob()
-                dxJob.describe().getApplet()
+                val dxJob = DxJob(DxUtils.dxEnv.getJob())
+                dxJob.getApplet()
             case Some(JsString(x)) =>
-                DXApplet.getInstance(x)
+                DxApplet(x, None)
             case Some(other) =>
                 throw new Exception(s"malformed applet field ${other} in job info")
         }
 
-        val descOptions = DXDataObject.DescribeOptions.get().withDetails
-        val details: JsValue = DxUtils.jsValueOfJsonNode(
-            applet.describe(descOptions).getDetails(classOf[JsonNode]))
-
+        val details: JsValue = applet.describe(Vector(Field.Details)).details.get
         val JsString(womSourceCodeEncoded) = details.asJsObject.fields("womSourceCode")
         val womSourceCode = Utils.base64DecodeAndGunzip(womSourceCodeEncoded)
 
@@ -733,7 +728,7 @@ object Main extends App {
 
     // Make a list of all the files cloned for access by this applet.
     // Bulk describe all the them.
-    private def runtimeBulkFileDescribe(jobInputPath: Path) : Map[DXFile, DxDescribe] = {
+    private def runtimeBulkFileDescribe(jobInputPath: Path) : Map[DxFile, DxDescribe] = {
         val inputs: JsValue = Utils.readFileContent(jobInputPath).parseJson
 
         val allFilesReferenced = inputs.asJsObject.fields.flatMap{
@@ -741,7 +736,13 @@ object Main extends App {
         }.toVector
 
         // Describe all the files, in one go
-        DxBulkDescribe.apply(allFilesReferenced)
+        val descAll = DxBulkDescribe.apply(allFilesReferenced.map(_.id).toVector, Vector.empty)
+        descAll.map{
+            case (DxFile(fid, proj), desc) =>
+                DxFile(fid, proj) -> desc
+            case (other, _) =>
+                throw new Exception(s"wrong object type ${other} (should be a file)")
+        }.toMap
     }
 
     def internalOp(args : Seq[String]) : Termination = {

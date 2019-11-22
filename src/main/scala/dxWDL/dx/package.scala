@@ -47,10 +47,10 @@ case class DxFilePart(state: String,
 
 // This is similar to DXDataObject.Describe
 case class DxDescribe(name : String,
+                      id : String,
                       folder: String,
                       size : Option[Long],
                       container: DxContainer, // a project or a container
-                      dxobj : DXDataObject,
                       created : Long,
                       modified : Long,
                       properties: Map[String, String],
@@ -59,28 +59,104 @@ case class DxDescribe(name : String,
                       parts : Option[Map[Int, DxFilePart]],
                       details : Option[JsValue])
 
-// A DNAx executable. An app, applet, or workflow.
-case class DxExec(id: String) {
-    def getId : String = id
+// Extra fields for describe
+object Field extends Enumeration {
+    val Details, Parts = Value
 }
 
-
-class DxDataObject {
-    def getId : String
-}
-
-case class DxContainer(id: String) {
-    def getId : String = id
-}
-
-case class DxRecord(id : string) {
+sealed trait DxObject {
+    val id : String
     def getId : String = id
 
-    def describe()
+    def describe(extraFields: Vector[Field.Value] = Vector.empty[Field.Value]) : DxDescribe = {
+        DxBulkDescribe.apply(Vector(id), extraFields)
+    }
 }
 
-// A stand in for the DXWorkflow.Stage inner class (we don't have a constructor for it)
-case class DXWorkflowStage(id: String) {
+sealed trait DxDataObject extends DxObject
+
+case class DxContainer(id: String) extends DxDataObject
+object DxContainer {
+    def getInstance(id : String) : DxContainer = {
+        if (id.startsWith("container-"))
+            return DxContainer(id, None)
+        if (id.startsWith("project-"))
+            return DxProject(id, None)
+        throw new IllegalArgumentException(s"${id} isn't a container")
+    }
+}
+
+case class DxRecord(id : String,
+                    proj : Option[DxProject]) extends DxDataObject
+object DxRecord {
+    def getInstance(id : String) : DxRecord = {
+        if (id.startsWith("record-"))
+            return DxRecord(id, None)
+        throw new IllegalArgumentException(s"${id} isn't a record")
+    }
+}
+
+
+case class DxFile(id : String,
+                  proj : Option[DxProject]) extends DxDataObject
+object DxFile {
+    def getInstance(id : String) : DxFile = {
+        if (id.startsWith("file-"))
+            return DxFile(id, None)
+        throw new IllegalArgumentException(s"${id} isn't a file")
+    }
+}
+
+case class FolderContents(dataObjects: List[DxDataObject],
+                          subfolders : List[String])
+
+// A project is a subtype of a container
+case class DxProject(id: String) extends DxContainer {
+    def getInstance(id : String) : DxProject = {
+        if (id.startsWith("project-"))
+            return DxProject(id, None)
+        throw new IllegalArgumentException(s"${id} isn't a project")
+    }
+
+    def listFolder(path : String) : FolderContents = ???
+
+    def newFolder(folderPath : String, parents : Boolean) : Unit = ???
+
+    def move(files: List[DxDataObject], destinationFolder : String) : Unit = ???
+}
+
+// Objects that can be run on the platform
+sealed trait DxExecutable extends DxDataObject
+case class DxApplet(id : String,
+                    proj : Option[DxProject]) extends DxExecutable
+object DxApplet {
+    def getInstance(id : String) : DxApplet = {
+        if (id.startsWith("applet-"))
+            return DxApplet(id, None)
+        throw new IllegalArgumentException(s"${id} isn't an applet")
+    }
+}
+
+case class DxWorkflow(id : String,
+                      proj : Option[DxProject]) extends DxExecutable
+object DxWorkflow {
+    def getInstance(id : String) : DxWorkflow = {
+        if (id.startsWith("workflow-"))
+            return DxApplet(id, None)
+        throw new IllegalArgumentException(s"${id} isn't a workflow")
+    }
+}
+
+// Actual executions on the platform. There are jobs and analyses
+sealed trait DxExecution
+case class DxAnalysis(id : String) extends DxObject with DxExecution
+case class DxJob(id : String) extends DxObject with DxExecution {
+    def getApplet() : DxApplet = ???
+}
+
+
+// A stand in for the DxWorkflow.Stage inner class (we don't have a constructor for it)
+case class DxWorkflowStage(id: String) {
     def getId() = id
 
     def getInputReference(inputName:String) : JsValue = {
@@ -92,64 +168,5 @@ case class DXWorkflowStage(id: String) {
         JsObject("$dnanexus_link" -> JsObject(
                      "stage" -> JsString(id),
                      "outputField" -> JsString(outputName)))
-    }
-}
-
-
-// Information used to link applets that call other applets. For example, a scatter
-// applet calls applets that implement tasks.
-case class ExecLinkInfo(name: String,
-                        inputs: Map[String, WomType],
-                        outputs: Map[String, WomType],
-                        dxExec: DxExec)
-
-object ExecLinkInfo {
-    // Serialize applet input definitions, so they could be used
-    // at runtime.
-    def writeJson(ali: ExecLinkInfo,
-                  typeAliases: Map[String, WomType]) : JsValue = {
-        val womTypeConverter = WomTypeSerialization(typeAliases)
-
-        val appInputDefs: Map[String, JsString] = ali.inputs.map{
-            case (name, womType) => name -> JsString(womTypeConverter.toString(womType))
-        }.toMap
-        val appOutputDefs: Map[String, JsString] = ali.outputs.map{
-            case (name, womType) => name -> JsString(womTypeConverter.toString(womType))
-        }.toMap
-        JsObject(
-            "name" -> JsString(ali.name),
-            "inputs" -> JsObject(TreeMap(appInputDefs.toArray:_*)),
-            "outputs" -> JsObject(TreeMap(appOutputDefs.toArray:_*)),
-            "id" -> JsString(ali.dxExec.getId)
-        )
-    }
-
-    def readJson(aplInfo: JsValue,
-                 typeAliases: Map[String, WomType]) : ExecLinkInfo = {
-        val womTypeConverter = WomTypeSerialization(typeAliases)
-
-        val name = aplInfo.asJsObject.fields("name") match {
-            case JsString(x) => x
-            case _ => throw new Exception("Bad JSON")
-        }
-        val inputDefs = aplInfo.asJsObject.fields("inputs").asJsObject.fields.map{
-            case (key, JsString(womTypeStr)) => key -> womTypeConverter.fromString(womTypeStr)
-            case _ => throw new Exception("Bad JSON")
-        }.toMap
-        val outputDefs = aplInfo.asJsObject.fields("outputs").asJsObject.fields.map{
-            case (key, JsString(womTypeStr)) => key -> womTypeConverter.fromString(womTypeStr)
-            case _ => throw new Exception("Bad JSON")
-        }.toMap
-        val dxExec = aplInfo.asJsObject.fields("id") match {
-            case JsString(execId) =>
-                if (execId.startsWith("app-") ||
-                        execId.startsWith("applet-") ||
-                        execId.startsWith("workflow-"))
-                    DxExec(execId)
-                else
-                    throw new Exception(s"${execId} is not an app/applet/workflow")
-            case _ => throw new Exception("Bad JSON")
-        }
-        ExecLinkInfo(name, inputDefs, outputDefs, dxExec)
     }
 }

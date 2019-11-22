@@ -2,11 +2,9 @@
 
 package dxWDL.dx
 
-import com.dnanexus.{DXAPI, DXFile}
+import com.dnanexus.DXAPI
 import com.fasterxml.jackson.databind.JsonNode
 import spray.json._
-
-
 
 // maximal number of objects in a single API request
 import dxWDL.base.Utils.DXAPI_NUM_OBJECTS_LIMIT
@@ -36,10 +34,10 @@ object DxBulkDescribe {
         }.toMap
     }
 
-    private def submitRequest(oids : Vector[String],
-                              extraFields : Vector[String]) : Map[DXFile, DxDescribe] = {
+    private def submitRequest(objIds : Vector[String],
+                              extraFields : Vector[String]) : Map[DxObject, DxDescribe] = {
         val requestFields = Map("objects" ->
-                                   JsArray(oids.map{x => JsString(x) }))
+                                   JsArray(objIds.map{x => JsString(x) }))
 
         // extra describe options, if specified
         val extraDescribeFields : Map[String, JsValue] =
@@ -64,7 +62,6 @@ object DxBulkDescribe {
             case other => throw new Exception(s"API call returned invalid data ${other}")
         }
         resultsPerObj.zipWithIndex.map{ case (jsv, i) =>
-            val dxFile = dxFiles(i)
             val dxFullDesc = jsv.asJsObject.fields.get("describe") match {
                 case None =>
                     throw new Exception(s"Could not describe object ${dxFile.getId}")
@@ -72,40 +69,39 @@ object DxBulkDescribe {
                     val dxDesc =
                         descJs.asJsObject.getFields("name", "folder", "size", "id", "project", "created", "modified") match {
                             case Seq(JsString(name), JsString(folder),
-                                     JsNumber(size), JsString(fid), JsString(projectId),
+                                     JsNumber(size), JsString(oid), JsString(projectId),
                                      JsNumber(created), JsNumber(modified)) =>
-                                assert(fid == dxFile.getId)
-                            // This could be a container, not a project.
-                            val dxContainer = DXContainer.getInstance(projectId)
-                            DxDescribe(name,
-                                       folder,
-                                       Some(size.toLong),
-                                       dxContainer,
-                                       DxUtils.convertToDxObject(fid, Some(dxContainer)).get,
-                                       created.toLong,
-                                       modified.toLong,
-                                       Map.empty,
-                                       None,
-                                       None,
-                                       None)
-                        case _ =>
-                            throw new Exception(s"bad describe object ${descJs}")
-                    }
+                                // This could be a container, not a project.
+                                val dxContainer = DXContainer.getInstance(projectId)
+                                val dxObj = DxUtils.convertToDxObject(fid, Some(dxContainer)).get
+                                DxDescribe(name,
+                                           folder,
+                                           Some(size.toLong),
+                                           dxContainer,
+                                           dxObj,
+                                           created.toLong,
+                                           modified.toLong,
+                                           Map.empty,
+                                           None,
+                                           None,
+                                           None)
+                            case _ =>
+                                throw new Exception(s"bad describe object ${descJs}")
+                        }
 
                     // The parts may be empty, only files have it, and we don't always ask for it.
                     val parts = descJs.asJsObject.fields.get("parts").map(parseFileParts)
                     dxDesc.copy(parts = parts)
             }
-            dxFile -> dxFullDesc
+            dxFullDesc.dxObj -> dxFullDesc
         }.toMap
     }
 
     // Describe the names of all the files in one batch. This is much more efficient
     // than submitting file describes one-by-one.
-    def apply(files: Seq[DXFile],
-              parts : Boolean = false,
-              details : Boolean = false) : Map[DXFile, DxDescribe] = {
-        if (files.isEmpty) {
+    def apply(objIds: Seq[String],
+              extraFields : Vector[Field.Value]) : Map[DxObject, DxDescribe] = {
+        if (dataObjs.isEmpty) {
             // avoid an unnessary API call; this is important for unit tests
             // that do not have a network connection.
             return Map.empty
@@ -114,16 +110,15 @@ object DxBulkDescribe {
         // Limit on number of objects in one API request
         val slices = files.grouped(DXAPI_NUM_OBJECTS_LIMIT).toList
 
-        var extraFields = Vector.empty[String]
-        if (parts)
-            extraFields = extraFields :+ "parts"
-        if (details)
-            extraFields = extraFields :+ "details"
+        val extraFields = extraFields.map{
+            case Details => "details"
+            case Parts => "parts"
+        }.toSet.toVector
 
         // iterate on the ranges
-        slices.foldLeft(Map.empty[DXFile, DxDescribe]) {
-            case (accu, fileRange) =>
-                accu ++ submitRequest(fileRange.toVector, extraFields)
+        slices.foldLeft(Map.empty[DxObject, DxDescribe]) {
+            case (accu, objRange) =>
+                accu ++ submitRequest(objRange.toVector, extraFields)
         }
     }
 }

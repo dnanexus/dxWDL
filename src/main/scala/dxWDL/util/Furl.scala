@@ -15,17 +15,16 @@
 
 package dxWDL.util
 
-import com.dnanexus.{DXContainer, DXFile, DXProject}
 import dxWDL.base.Utils
 import dxWDL.base.Utils.DX_URL_PREFIX
-import dxWDL.dx.{DxPath, DxDescribe, DxProject}
+import dxWDL.dx._
 
 sealed trait Furl
 
 case class FurlLocal(path : String) extends Furl
 case class FurlDx(value : String,
                   dxProj : Option[DxProject],
-                  dxFile: DXFile) extends Furl
+                  dxFile: DxFile) extends Furl
 
 object Furl {
     // From a string such as:
@@ -43,7 +42,7 @@ object Furl {
         dxFile.getProject match {
             case dxProj : DxProject =>
                 FurlDx(buf, Some(dxProj), dxFile)
-            case cont : DXContainer =>
+            case cont : DxContainer =>
                 FurlDx(buf, None, dxFile)
             case _ =>
                 throw new Exception(s"Invalid path ${buf}")
@@ -77,8 +76,8 @@ object Furl {
     // We need to change the standard so that the conversion from file to
     // string is well defined, and requires an explicit conversion function.
     //
-    def dxFileToFurl(dxFile: DXFile,
-                     fileInfoDir: Map[DXFile, DxDescribe]) : FurlDx = {
+    def dxFileToFurl(dxFile: DxFile,
+                     fileInfoDir: Map[DxFile, DxDescribe]) : FurlDx = {
         // Try the cache first; if the file isn't there, submit an API call.
         val (folder, name) = fileInfoDir.get(dxFile) match {
             case None =>

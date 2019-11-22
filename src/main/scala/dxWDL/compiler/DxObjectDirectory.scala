@@ -17,12 +17,12 @@ import dxWDL.dx._
 // Keep all the information about an applet in packaged form
 case class DxObjectInfo(name :String,
                         crDate : LocalDateTime,
-                        dxObj : DXDataObject,
+                        dxObj : DxDataObject,
                         digest : Option[String]) {
     lazy val dxClass:String =
         dxObj.getClass.getSimpleName match {
-            case "DXWorkflow" => "Workflow"
-            case "DXApplet" => "Applet"
+            case "DxWorkflow" => "Workflow"
+            case "DxApplet" => "Applet"
             case other => other
         }
 }
@@ -48,7 +48,7 @@ case class DxObjectDirectory(ns: IR.Bundle,
     // not clear this is useful to the majority of users, so it is
     // gated by the [projectWideReuse] flag.
     private val projectWideExecutableDir :
-            Map[String, Vector[(DXDataObject, DxDescribe)]] =
+            Map[String, Vector[(DxDataObject, DxDescribe)]] =
         if (projectWideReuse) projectBulkLookup()
         else Map.empty
 
@@ -65,7 +65,7 @@ case class DxObjectDirectory(ns: IR.Bundle,
     private def bulkLookup() : HashMap[String, Vector[DxObjectInfo]] = {
         // find applets
         val t0 = System.nanoTime()
-        val dxAppletsInFolder: Map[DXDataObject, DxDescribe] =
+        val dxAppletsInFolder: Map[DxDataObject, DxDescribe] =
             DxFindDataObjects(None, verbose).apply(dxProject, Some(folder), false, Some("applet"),
                                                    Vector(CHECKSUM_PROP),
                                                    allExecutableNames.toVector,
@@ -79,7 +79,7 @@ case class DxObjectDirectory(ns: IR.Bundle,
 
         // find workflows
         val t2 = System.nanoTime()
-        val dxWorkflowsInFolder: Map[DXDataObject, DxDescribe] =
+        val dxWorkflowsInFolder: Map[DxDataObject, DxDescribe] =
             DxFindDataObjects(None, verbose).apply(dxProject, Some(folder), false, Some("workflow"),
                                                    Vector(CHECKSUM_PROP),
                                                    allExecutableNames.toVector,
@@ -131,9 +131,9 @@ case class DxObjectDirectory(ns: IR.Bundle,
     // findDataObjects can be an expensive call, both on the server and client sides.
     // We limit it by filtering on the CHECKSUM property, which is attached only to generated
     // applets and workflows.
-    private def projectBulkLookup() : Map[String, Vector[(DXDataObject, DxDescribe)]] = {
+    private def projectBulkLookup() : Map[String, Vector[(DxDataObject, DxDescribe)]] = {
         val t0 = System.nanoTime()
-        val dxAppletsInProject: Map[DXDataObject, DxDescribe] =
+        val dxAppletsInProject: Map[DxDataObject, DxDescribe] =
             DxFindDataObjects(None, verbose).apply(dxProject, None, true, Some("applet"),
                                                    Vector(CHECKSUM_PROP),
                                                    allExecutableNames.toVector,
@@ -144,7 +144,7 @@ case class DxObjectDirectory(ns: IR.Bundle,
         Utils.trace(verbose.on,
                     s"Found ${nrApplets} applets matching expected names in project ${dxProject.getId} (${diffMSec} millisec)")
 
-        val hm = HashMap.empty[String, Vector[(DXDataObject, DxDescribe)]]
+        val hm = HashMap.empty[String, Vector[(DxDataObject, DxDescribe)]]
         dxAppletsInProject.foreach{ case (dxObj, desc) =>
             desc.properties.get(CHECKSUM_PROP) match {
                 case None => ()
@@ -172,7 +172,7 @@ case class DxObjectDirectory(ns: IR.Bundle,
     // Note: in case of checksum collision, there could be several hits.
     // Return only the one that starts with the name we are looking for.
     def lookupOtherVersions(execName: String, digest: String)
-            : Option[(DXDataObject, DxDescribe)] = {
+            : Option[(DxDataObject, DxDescribe)] = {
         val checksumMatches = projectWideExecutableDir.get(digest) match {
             case None => return None
             case Some(vec) => vec
@@ -185,7 +185,7 @@ case class DxObjectDirectory(ns: IR.Bundle,
         return Some(checksumAndNameMatches.head)
     }
 
-    def insert(name:String, dxObj:DXDataObject, digest: String) : Unit = {
+    def insert(name:String, dxObj:DxDataObject, digest: String) : Unit = {
         val aInfo = DxObjectInfo(name, LocalDateTime.now, dxObj, Some(digest))
         objDir(name) = Vector(aInfo)
     }

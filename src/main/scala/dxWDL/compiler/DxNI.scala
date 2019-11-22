@@ -43,7 +43,7 @@ task mk_int_list {
   */
 package dxWDL.compiler
 
-import com.dnanexus.{DXAPI, DXApplet, DXDataObject}
+import com.dnanexus.DXAPI
 import com.fasterxml.jackson.databind.JsonNode
 import java.nio.file.{Files, Path}
 import scala.util.matching.Regex
@@ -133,18 +133,18 @@ case class DxNI(verbose: Verbose,
     private def search(dxProject: DxProject,
                        folder: String,
                        recursive: Boolean) : Vector[String] = {
-        val dxObjectsInFolder : Map[DXDataObject, DxDescribe] =
+        val dxObjectsInFolder : Map[DxDataObject, DxDescribe] =
             DxFindDataObjects(None, verbose).apply(dxProject, Some(folder), recursive, None,
                                                    Vector.empty, Vector.empty, true)
 
         // we just want the applets
-        val dxAppletsInFolder : Map[DXApplet, DxDescribe]= dxObjectsInFolder.collect{
-            case (dxobj, desc) if dxobj.isInstanceOf[DXApplet] =>
-                (dxobj.asInstanceOf[DXApplet], desc)
+        val dxAppletsInFolder : Map[DxApplet, DxDescribe]= dxObjectsInFolder.collect{
+            case (dxobj, desc) if dxobj.isInstanceOf[DxApplet] =>
+                (dxobj.asInstanceOf[DxApplet], desc)
         }
 
         // Filter out applets that are WDL tasks
-        val nativeApplets: Map[DXApplet, DxDescribe] = dxAppletsInFolder.flatMap{
+        val nativeApplets: Map[DxApplet, DxDescribe] = dxAppletsInFolder.flatMap{
             case (apl, desc) =>
                 desc.properties.get(Utils.CHECKSUM_PROP) match {
                     case Some(_) => None
@@ -379,7 +379,7 @@ object DxNI {
             Utils.warning(verbose, s"Found no DX native applets in ${folder}")
             return
         }
-        val projName = dxProject.describe.name
+        val projName = dxProject.describe().name
 
         // add comment describing how the file was created
         val languageHeader = new WdlCodeGen(verbose, Map.empty, language).versionString()
