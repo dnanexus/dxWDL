@@ -264,7 +264,7 @@ case class Native(dxWDLrtId: Option[String],
             |       dxfuse_log=/var/log/dxfuse.log
             |       nohup sudo -E dxfuse -readOnly -uid $$(id -u) -gid $$(id -g) ${dxPathConfig.dxfuseMountpoint.toString} ${dxPathConfig.dxfuseManifest.toString} &
             |       dxfuse_err_code=$$?
-            |       if [[ $$dxfuse_err_code != 0]]; then
+            |       if [[ $$dxfuse_err_code != 0 ]]; then
             |           echo "error starting dxfuse, rc=$$dxfuse_err_code"
             |           if [[ -f $$dxfuse_log ]]; then
             |               cat $$dxfuse_log
