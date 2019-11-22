@@ -64,7 +64,7 @@ object DxBulkDescribe {
         resultsPerObj.zipWithIndex.map{ case (jsv, i) =>
             val dxFullDesc = jsv.asJsObject.fields.get("describe") match {
                 case None =>
-                    throw new Exception(s"Could not describe object ${dxFile.getId}")
+                    throw new Exception(s"Could not describe object ${objIds(i)}")
                 case Some(descJs) =>
                     val dxDesc =
                         descJs.asJsObject.getFields("name", "folder", "size", "id", "project", "created", "modified") match {
@@ -72,8 +72,8 @@ object DxBulkDescribe {
                                      JsNumber(size), JsString(oid), JsString(projectId),
                                      JsNumber(created), JsNumber(modified)) =>
                                 // This could be a container, not a project.
-                                val dxContainer = DXContainer.getInstance(projectId)
-                                val dxObj = DxUtils.convertToDxObject(fid, Some(dxContainer)).get
+                                val dxContainer = DxContainer.getInstance(projectId)
+                                val dxObj = DxUtils.convertToDxObject(oid, Some(dxContainer)).get
                                 DxDescribe(name,
                                            folder,
                                            Some(size.toLong),
@@ -84,6 +84,7 @@ object DxBulkDescribe {
                                            Map.empty,
                                            None,
                                            None,
+                                           None,
                                            None)
                             case _ =>
                                 throw new Exception(s"bad describe object ${descJs}")
@@ -91,7 +92,8 @@ object DxBulkDescribe {
 
                     // The parts may be empty, only files have it, and we don't always ask for it.
                     val parts = descJs.asJsObject.fields.get("parts").map(parseFileParts)
-                    dxDesc.copy(parts = parts)
+                    val details = descJs.asJsObject.fields.get("details")
+                    dxDesc.copy(parts = parts, details = details)
             }
             dxFullDesc.dxObj -> dxFullDesc
         }.toMap
@@ -99,7 +101,7 @@ object DxBulkDescribe {
 
     // Describe the names of all the files in one batch. This is much more efficient
     // than submitting file describes one-by-one.
-    def apply(objIds: Seq[String],
+    def apply(objIds: Seq[DxObject],
               extraFields : Vector[Field.Value]) : Map[DxObject, DxDescribe] = {
         if (dataObjs.isEmpty) {
             // avoid an unnessary API call; this is important for unit tests

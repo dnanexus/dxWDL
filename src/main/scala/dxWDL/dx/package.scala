@@ -69,13 +69,13 @@ sealed trait DxObject {
     def getId() : String = id
 
     def describe() : DxDescribe = {
-        val results = DxBulkDescribe.apply(Vector(id), Vector.empty)
+        val results = DxBulkDescribe.apply(this, Vector.empty)
         assert(results.size == 1)
         results.values.head
     }
 
     def describe(fields: Vector[Field.Value]) : DxDescribe = {
-        val results = DxBulkDescribe.apply(Vector(id), fields)
+        val results = DxBulkDescribe.apply(this, fields)
         assert(results.size == 1)
         results.values.head
     }

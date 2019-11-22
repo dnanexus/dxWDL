@@ -6,7 +6,6 @@ package dxWDL.compiler
 import com.fasterxml.jackson.databind.JsonNode
 import com.dnanexus._
 import java.security.MessageDigest
-import scala.collection.JavaConverters._
 import scala.collection.immutable.TreeMap
 import spray.json._
 import DefaultJsonProtocol._
@@ -1009,7 +1008,7 @@ case class Native(dxWDLrtId: Option[String],
     // - Calculate the workflow checksum from the intermediate representation
     // - Do not rebuild the workflow if it has a correct checksum
     private def buildWorkflowIfNeeded(wf: IR.Workflow,
-                                      execDict: Map[String, ExecRecord]) : DXWorkflow = {
+                                      execDict: Map[String, ExecRecord]) : DxWorkflow = {
         val (digest, wfNewReq) = workflowNewReq(wf, execDict)
         val buildRequired = isBuildRequired(wf.name, digest)
         buildRequired match {
@@ -1037,23 +1036,23 @@ case class Native(dxWDLrtId: Option[String],
                         val execRecord = apl.kind match {
                             case IR.AppletKindNative(id) =>
                                 // native applets do not depend on other data-objects
-                                ExecRecord(apl, DxExec(id), Vector.empty)
+                                ExecRecord(apl, DxApplet.getInstance(id), Vector.empty)
                             case IR.AppletKindWorkflowCustomReorg(id) =>
                                 // does this has to be a different class?
-                                ExecRecord(apl, DxExec(id), Vector.empty)
+                                ExecRecord(apl, DxApplet.getInstance(id), Vector.empty)
                             case _ =>
                                 val (dxApplet, dependencies) = buildAppletIfNeeded(apl, accu)
-                                ExecRecord(apl, DxExec(dxApplet.getId), dependencies)
+                                ExecRecord(apl, dxApplet, dependencies)
                         }
                         accu + (apl.name -> execRecord)
                     case wf : IR.Workflow =>
                         val dxwfl = buildWorkflowIfNeeded(wf, accu)
-                        accu + (wf.name -> ExecRecord(wf, DxExec(dxwfl.getId), Vector.empty))
+                        accu + (wf.name -> ExecRecord(wf, dxwfl, Vector.empty))
                 }
         }
 
         // build the toplevel workflow, if it is defined
-        val primary : Option[DxExec] = bundle.primaryCallable.flatMap{ callable =>
+        val primary : Option[DxExecutable] = bundle.primaryCallable.flatMap{ callable =>
             execDict.get(callable.name) match {
                 case None => None
                 case Some(ExecRecord(_, dxExec, _)) => Some(dxExec)
