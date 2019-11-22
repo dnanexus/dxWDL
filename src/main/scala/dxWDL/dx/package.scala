@@ -66,10 +66,18 @@ object Field extends Enumeration {
 
 sealed trait DxObject {
     val id : String
-    def getId : String = id
+    def getId() : String = id
 
-    def describe(extraFields: Vector[Field.Value] = Vector.empty[Field.Value]) : DxDescribe = {
-        DxBulkDescribe.apply(Vector(id), extraFields)
+    def describe() : DxDescribe = {
+        val results = DxBulkDescribe.apply(Vector(id), Vector.empty)
+        assert(results.size == 1)
+        results.values.head
+    }
+
+    def describe(fields: Vector[Field.Value]) : DxDescribe = {
+        val results = DxBulkDescribe.apply(Vector(id), fields)
+        assert(results.size == 1)
+        results.values.head
     }
 }
 
@@ -122,7 +130,9 @@ case class DxProject(id: String) extends DxContainer {
 
     def newFolder(folderPath : String, parents : Boolean) : Unit = ???
 
-    def move(files: List[DxDataObject], destinationFolder : String) : Unit = ???
+    def move(files: Vector[DxDataObject], destinationFolder : String) : Unit = ???
+
+    def removeObjects(objs : Vector[DxDataObject]) : Unit = ???
 }
 
 // Objects that can be run on the platform
@@ -138,7 +148,10 @@ object DxApplet {
 }
 
 case class DxWorkflow(id : String,
-                      proj : Option[DxProject]) extends DxExecutable
+                      proj : Option[DxProject]) extends DxExecutable {
+    def close() : Unit = ???
+}
+
 object DxWorkflow {
     def getInstance(id : String) : DxWorkflow = {
         if (id.startsWith("workflow-"))

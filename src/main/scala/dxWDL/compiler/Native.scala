@@ -38,7 +38,7 @@ case class Native(dxWDLrtId: Option[String],
                   locked: Boolean,
                   verbose: Verbose) {
     case class ExecRecord(callable: IR.Callable,
-                          dxExec: DxExec,
+                          dxExec: DxExecutable,
                           links: Vector[ExecLinkInfo])
 
     private val verbose2:Boolean = verbose.containsKey("Native")
@@ -63,18 +63,14 @@ case class Native(dxWDLrtId: Option[String],
                 // Open the archive
                 // Extract the archive from the details field
                 val record = DxRecord.getInstance(id)
-                val descOptions = DxDataObject.DescribeOptions.get().inProject(dxProject).withDetails
-
-                val desc = describe(record, details=true)
-
-                val details = DxUtils.jsValueOfJsonNode(
-                    record.describe(descOptions).getDetails(classOf[JsonNode]))
+                val desc = record.describe(Vector(Field.Details))
+                val details = desc.details.get
                 val dxLink = details.asJsObject.fields.get("archiveFileId") match {
                     case Some(x) => x
                     case None => throw new Exception(s"record does not have an archive field ${details}")
                 }
                 val dxFile = DxUtils.dxFileFromJsValue(dxLink)
-                val name = dxFile.describe.getName()
+                val name = dxFile.describe().name
                 Some(JsObject(
                          "name" -> JsString(name),
                          "id" -> JsObject("$dnanexus_link" -> JsString(dxFile.getId()))
@@ -450,7 +446,7 @@ case class Native(dxWDLrtId: Option[String],
                     // may be several versions, all are removed.
                     val objs = existingDxObjs.map(_.dxObj)
                     Utils.trace(verbose.on, s"Removing old ${name} ${objs.map(_.getId)}")
-                    dxProject.removeObjects(objs.asJava)
+                    dxProject.removeObjects(objs)
                 } else {
                     val dxClass = existingDxObjs.head.dxClass
                     throw new Exception(s"""|${dxClass} ${name} already exists in
@@ -466,7 +462,7 @@ case class Native(dxWDLrtId: Option[String],
 
     // Create linking information for a dx:executable
     private def genLinkInfo(irCall: IR.Callable,
-                            dxObj: DxExec) : ExecLinkInfo = {
+                            dxObj: DxExecutable) : ExecLinkInfo = {
         val callInputDefs: Map[String, WomType] = irCall.inputVars.map{
             case CVar(name, wdlType, _) => (name -> wdlType)
         }.toMap

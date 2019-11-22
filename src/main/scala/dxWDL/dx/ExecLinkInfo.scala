@@ -8,7 +8,7 @@ import wom.types._
 case class ExecLinkInfo(name: String,
                         inputs: Map[String, WomType],
                         outputs: Map[String, WomType],
-                        dxExec: DxExec)
+                        dxExec: DxExecutable)
 
 object ExecLinkInfo {
     // Serialize applet input definitions, so they could be used

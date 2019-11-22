@@ -216,7 +216,7 @@ case class DxObjectDirectory(ns: IR.Bundle,
 
         // move the object to the new location
         newFolder(destFolder)
-        dxProject.move(List(objInfo.dxObj), destFolder)
+        dxProject.move(Vector(objInfo.dxObj), destFolder)
 
         // add the date to the object name
         val formatter = DateTimeFormatter.ofPattern("EE MMM dd kk:mm:ss yyyy")
