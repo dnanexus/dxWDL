@@ -14,6 +14,13 @@ import ExecutionContext.Implicits.global
 import scala.sys.process._
 import wom.types._
 
+
+class PermissionDeniedException(s:String) extends Exception(s){}
+
+class InvalidInputException(s:String) extends Exception(s){}
+
+class IllegalArgumentException(s:String) extends Exception(s){}
+
 object Utils {
     val APPLET_LOG_MSG_LIMIT = 1000
     val CHECKSUM_PROP = "dxWDL_checksum"
@@ -196,8 +203,9 @@ object Utils {
 
 
     // Run a child process and collect stdout and stderr into strings
-    def execCommand(cmdLine : String, timeout: Option[Int] = None) : (String, String) = {
-
+    def execCommand(cmdLine : String,
+                    timeout: Option[Int] = None,
+                    quiet: Boolean = false) : (String, String) = {
         val cmds = Seq("/bin/sh", "-c", cmdLine)
         val outStream = new StringBuilder()
         val errStream = new StringBuilder()
@@ -213,8 +221,10 @@ object Utils {
                 // the standard in of the child job to the parent
                 val retcode = p.exitValue()
                 if (retcode != 0) {
-                    System.err.println(s"STDOUT: ${outStream.toString()}")
-                    System.err.println(s"STDERR: ${errStream.toString()}")
+                    if (!quiet) {
+                        System.err.println(s"STDOUT: ${outStream.toString()}")
+                        System.err.println(s"STDERR: ${errStream.toString()}")
+                    }
                     throw new Exception(s"Error running command ${cmdLine}")
                 }
             case Some(nSec) =>
@@ -360,10 +370,3 @@ object Utils {
         "[" + concat + "]"
     }
 }
-
-
-class PermissionDeniedException(s:String) extends Exception(s){}
-
-class InvalidInputException(s:String) extends Exception(s){}
-
-class IllegalArgumentException(s:String) extends Exception(s){}

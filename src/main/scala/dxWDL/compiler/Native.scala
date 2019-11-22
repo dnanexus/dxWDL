@@ -261,12 +261,30 @@ case class Native(dxWDLrtId: Option[String],
             |
             |       # run dxfuse so that it will not exit after the bash script exists.
             |       echo "mounting dxfuse on ${dxPathConfig.dxfuseMountpoint.toString}"
+            |       dxfuse_log=/var/log/dxfuse.log
             |       nohup sudo -E dxfuse -readOnly -uid $$(id -u) -gid $$(id -g) ${dxPathConfig.dxfuseMountpoint.toString} ${dxPathConfig.dxfuseManifest.toString} &
+            |       dxfuse_err_code=$$?
+            |       if [[ $$dxfuse_err_code != 0 ]]; then
+            |           echo "error starting dxfuse, rc=$$dxfuse_err_code"
+            |           if [[ -f $$dxfuse_log ]]; then
+            |               cat $$dxfuse_log
+            |           fi
+            |           exit 1
+            |       fi
             |       disown %1
             |
             |       # wait for the mount to start.
-            |       sleep 2
-            |       cat /var/log/dxfuse.log
+            |       cnt=0
+            |       while [[ ! -f $$dxfuse_log ]]; do
+            |           echo "Waiting for dxfuse to start"
+            |           sleep 1
+            |           cnt=$$((cnt + 1))
+            |           if [[ $$cnt == 30 ]]; then
+            |              echo "waited 30 seconds, but dxfuse didn't start"
+            |              exit 1
+            |           fi
+            |       done
+            |       cat $$dxfuse_log
             |    fi
             |
             |    echo "bash command encapsulation script:"
