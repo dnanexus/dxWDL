@@ -8,7 +8,6 @@ package dxWDL.exec
 // DX bindings
 import com.dnanexus.DXAPI
 import com.fasterxml.jackson.databind.JsonNode
-import scala.collection.JavaConverters._
 import spray.json._
 import wom.callable.{WorkflowDefinition}
 import wom.types.WomType
@@ -32,7 +31,8 @@ case class WorkflowOutputReorg(wf: WorkflowDefinition,
     // In other words, this code is an efficient replacement for:
     // files.map(_.describe().getName())
     def bulkGetFilenames(files: Seq[DxFile], dxProject: DxProject) : Vector[String] = {
-        val info : Map[DxFile, DxDescribe] = DxBulkDescribe.apply(files)
+        val infoRaw : Map[DxObject, DxDescribe] = DxBulkDescribe.apply(files.toVector)
+        val info = infoRaw.map{ case (dxobj, desc) => dxobj.asInstanceOf[DxFile] -> desc }.toMap
         info.values.map(_.name).toVector
     }
 
@@ -74,8 +74,10 @@ case class WorkflowOutputReorg(wf: WorkflowDefinition,
             Utils.appletLog(verbose, s"WARNING: Large number of outputs (${realOutputs.size}), not moving objects")
             return Vector.empty
         }
-        val realFreshOutputs:Map[DxFile, DxDescribe] =
-            DxBulkDescribe.apply(realOutputs.toSeq)
+        val realFreshOutputs : Map[DxFile, DxDescribe] =
+            DxBulkDescribe.apply(realOutputs.toVector).map {
+                case (dxobj, desc) => dxobj.asInstanceOf[DxFile] -> desc
+            }.toMap
 
         // Retain only files that were created AFTER the analysis started
         val anlCreateTs:java.util.Date = dxAnalysis.describe.getCreationDate()
@@ -95,12 +97,12 @@ case class WorkflowOutputReorg(wf: WorkflowDefinition,
     // Move all intermediate results to a sub-folder
     def moveIntermediateResultFiles(exportFiles: Vector[DxFile]): Unit = {
         val dxEnv = DxUtils.dxEnv
-        val dxProject = dxEnv.getProjectContext()
+        val dxProject = DxProject(dxEnv.getProjectContext())
         val dxProjDesc = dxProject.describe
-        val dxAnalysis = dxEnv.getJob.describe.getAnalysis
-        val outFolder = dxAnalysis.describe.getFolder
+        val dxAnalysis = DxJob(dxEnv.getJob).getAnalysis
+        val outFolder = dxAnalysis.describe.folder
         val intermFolder = outFolder + "/" + Utils.INTERMEDIATE_RESULTS_FOLDER
-        Utils.appletLog(verbose, s"proj=${dxProjDesc.getName} outFolder=${outFolder}")
+        Utils.appletLog(verbose, s"proj=${dxProjDesc.name} outFolder=${outFolder}")
 
         // find all analysis output files
         val analysisFiles: Vector[DxFile] = analysisFileOutputs(dxProject, dxAnalysis)
@@ -120,16 +122,15 @@ case class WorkflowOutputReorg(wf: WorkflowDefinition,
 
         // Move all non exported results to the subdir. Do this in
         // a single API call, to improve performance.
-        val folderContents:DXContainer.FolderContents = dxProject.listFolder(outFolder)
-        val subFolders: List[String] = folderContents.getSubfolders().asScala.toList
-        Utils.appletLog(verbose, s"subfolders=${subFolders}")
-        if (!(subFolders contains intermFolder)) {
+        val folderContents : FolderContents = dxProject.listFolder(outFolder)
+        Utils.appletLog(verbose, s"subfolders=${folderContents.subFolders}")
+        if (!(folderContents.subFolders contains intermFolder)) {
             Utils.appletLog(verbose, s"Creating intermediate results sub-folder ${intermFolder}")
-            dxProject.newFolder(intermFolder)
+            dxProject.newFolder(intermFolder, true)
         } else {
             Utils.appletLog(verbose, s"Intermediate results sub-folder ${intermFolder} already exists")
         }
-        dxProject.moveObjects(intermediateFiles.asJava, intermFolder)
+        dxProject.moveObjects(intermediateFiles, intermFolder)
     }
 
 

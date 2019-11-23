@@ -336,18 +336,6 @@ public class DXEnvironment {
         }
 
         /**
-         * Sets the workspace to the specified container.
-         *
-         * @param workspace workspace container
-         *
-         * @return the same Builder object
-         */
-        public Builder setWorkspace(DXContainer workspace) {
-            workspaceId = Preconditions.checkNotNull(workspace).getId();
-            return this;
-        }
-
-        /**
          * Disables automatic retry of HTTP requests.
          *
          * @param disableRetryLogic boolean
@@ -504,7 +492,7 @@ public class DXEnvironment {
      * @return job object, or {@code null} if the currently running job cannot be determined
      */
     public String getJob() {
-        return jobId
+        return jobId;
     }
 
     /**
@@ -513,7 +501,7 @@ public class DXEnvironment {
      * @return project, or {@code null} if the project context cannot be determined
      */
     public String getProjectContext() {
-        return projectContextId
+        return projectContextId;
     }
 
     /**
@@ -535,20 +523,6 @@ public class DXEnvironment {
      */
     JsonNode getSecurityContextJson() {
         return this.securityContext;
-    }
-
-    /**
-     * Returns the temporary workspace of the currently running job, or the current project if this
-     * method is called outside the Execution Environment.
-     *
-     * @return {@code DXContainer} for the container, or {@code null} if the container cannot be
-     *         determined
-     */
-    public DXContainer getWorkspace() {
-        if (this.workspaceId == null) {
-            return null;
-        }
-        return DXContainer.getInstanceWithEnvironment(this.workspaceId, this);
     }
 
     /**

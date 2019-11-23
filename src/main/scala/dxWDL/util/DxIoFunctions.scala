@@ -58,7 +58,7 @@ case class DxPathFunctions(fileInfoDir : Map[DxFile, DxDescribe],
                 fileInfoDir.get(fdx.dxFile) match {
                     case None =>
                         // perform an API call to get the file name
-                        fdx.dxFile.describe().getName()
+                        fdx.dxFile.describe().name
                     case Some(desc) =>
                         desc.name
                 }
@@ -195,23 +195,23 @@ case class DxIoFunctions(fileInfoDir : Map[DxFile, DxDescribe],
       * Return the size of the file located at "path"
       */
     override def size(path: String): Future[Long] = {
-        val size = Furl.parse(path) match {
+        Furl.parse(path) match {
             case FurlLocal(localPath) =>
                 val p = Paths.get(localPath)
-                p.toFile.length
+                Future(p.toFile.length)
             case fdx : FurlDx =>
-                pathFunctions.fileInfoDir.get(fdx.dxFile) match {
+                val ssize : Option[Long] = pathFunctions.fileInfoDir.get(fdx.dxFile) match {
                     case None =>
                         // perform an API call to get the size
-                        fdx.dxFile.describe().getSize()
+                        fdx.dxFile.describe().size
                     case Some(desc) =>
-                        desc.size match {
-                            case None => throw new Exception("missing size field")
-                            case Some(sz) => sz
-                        }
+                        desc.size
+                }
+                ssize match {
+                    case None => throw new Exception("missing size field")
+                    case Some(sz) => Future(sz)
                 }
         }
-        Future(size)
     }
 
     /**

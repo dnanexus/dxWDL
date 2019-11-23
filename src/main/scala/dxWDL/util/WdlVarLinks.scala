@@ -321,7 +321,7 @@ case class WdlVarLinksConverter(verbose: Verbose,
                 case DxlValue(jsn) =>
                     // files that are embedded in the structure
                     val dxFiles = DxUtils.findDxFiles(jsn)
-                    val jsFiles = dxFiles.map(x => DxUtils.jsValueOfJsonNode(x.getLinkAsJson))
+                    val jsFiles = dxFiles.map(_.getLinkAsJson)
                     // Dx allows hashes as an input/output type. If the JSON value is
                     // not a hash (js-object), we need to add an outer layer to it.
                     val jsn1 = JsObject("___" -> jsn)

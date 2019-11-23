@@ -219,7 +219,7 @@ case class TaskRunner(task: CallableTaskDefinition,
                 // 3. figure out the image name
                 Utils.appletLog(verbose, s"looking up dx:url ${url}")
                 val dxFile = DxPath.resolveDxURLFile(url)
-                val fileName = dxFile.describe().getName
+                val fileName = dxFile.describe().name
                 val tarballDir = Paths.get(DOCKER_TARBALLS_DIR)
                 Utils.safeMkdir(tarballDir)
                 val localTar : Path = tarballDir.resolve(fileName)
@@ -590,12 +590,12 @@ case class TaskRunner(task: CallableTaskDefinition,
         Utils.appletLog(verbose, s"required instance type: ${requiredInstanceType}")
 
         // Figure out which instance we are on right now
-        val dxJob = DxUtils.dxEnv.getJob()
+        val dxJob = DxJob(DxUtils.dxEnv.getJob())
 
         val descFieldReq = JsObject("fields" -> JsObject("instanceType" -> JsBoolean(true)))
         val retval: JsValue =
             DxUtils.jsValueOfJsonNode(
-                DXAPI.jobDescribe(dxJob.getId,
+                DXAPI.jobDescribe(dxJob.id,
                                   DxUtils.jsonNodeOfJsValue(descFieldReq),
                                   classOf[JsonNode]))
         val crntInstanceType:String = retval.asJsObject.fields.get("instanceType") match {

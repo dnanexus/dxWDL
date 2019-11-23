@@ -36,13 +36,12 @@ object Furl {
         val s = buf.substring(DX_URL_PREFIX.length)
         val proj_file = s.split("::")(0)
         val dxFile = DxPath.resolveDxURLFile(DX_URL_PREFIX + proj_file)
-        val dxProj = dxFile.getProject
-        if (dxProj == null)
-            return FurlDx(buf, None, dxFile)
-        dxFile.getProject match {
-            case dxProj : DxProject =>
-                FurlDx(buf, Some(dxProj), dxFile)
-            case cont : DxProject =>
+        dxFile.project match {
+            case None =>
+                FurlDx(buf, None, dxFile)
+            case Some(DxProject(proj)) if proj.startsWith("project-") =>
+                FurlDx(buf, Some(DxProject(proj)), dxFile)
+            case Some(DxProject(proj)) if proj.startsWith("container-") =>
                 FurlDx(buf, None, dxFile)
             case _ =>
                 throw new Exception(s"Invalid path ${buf}")
@@ -82,22 +81,22 @@ object Furl {
         val (folder, name) = fileInfoDir.get(dxFile) match {
             case None =>
                 val desc = dxFile.describe
-                 (desc.getFolder, desc.getName)
+                (desc.folder, desc.name)
             case Some(miniDesc) =>
                 (miniDesc.folder, miniDesc.name)
         }
         val logicalName = s"${folder}/${name}"
         val fid = dxFile.getId
-        val proj = dxFile.getProject
-        if (proj == null) {
-            FurlDx(s"${DX_URL_PREFIX}${fid}::${logicalName}",
-                   None,
-                   dxFile)
-        } else {
-            val projId = proj.getId
-            FurlDx(s"${DX_URL_PREFIX}${projId}:${fid}::${logicalName}",
-                   Some(DxProject.getInstance(projId)),
-                   dxFile)
+        dxFile.project match {
+            case None =>
+                FurlDx(s"${DX_URL_PREFIX}${fid}::${logicalName}",
+                       None,
+                       dxFile)
+            case Some(proj) =>
+                val projId = proj.getId
+                FurlDx(s"${DX_URL_PREFIX}${projId}:${fid}::${logicalName}",
+                       Some(DxProject.getInstance(projId)),
+                       dxFile)
         }
     }
 }

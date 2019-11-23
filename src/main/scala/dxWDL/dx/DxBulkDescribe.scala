@@ -102,7 +102,7 @@ object DxBulkDescribe {
     // Describe the names of all the files in one batch. This is much more efficient
     // than submitting file describes one-by-one.
     def apply(objs: Vector[DxObject],
-              extraFields : Vector[Field.Value]) : Map[DxObject, DxDescribe] = {
+              extraFields : Vector[Field.Value] = Vector.empty) : Map[DxObject, DxDescribe] = {
         if (objs.isEmpty) {
             // avoid an unnessary API call; this is important for unit tests
             // that do not have a network connection.

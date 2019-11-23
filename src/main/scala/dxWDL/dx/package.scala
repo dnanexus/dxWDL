@@ -52,7 +52,9 @@ case class DxDescribe(name : String,
                       inputSpec : Option[Vector[IOParameter]],
                       outputSpec : Option[Vector[IOParameter]],
                       parts : Option[Map[Int, DxFilePart]],
-                      details : Option[JsValue])
+                      details : Option[JsValue]) {
+    def getCreationDate() : java.util.Date = new java.util.Date(created)
+}
 
 // Extra fields for describe
 object Field extends Enumeration {
@@ -117,7 +119,7 @@ object DxDataObject {
 }
 
 case class DxRecord(id : String,
-                    proj : Option[DxProject]) extends DxDataObject
+                    project : Option[DxProject]) extends DxDataObject
 object DxRecord {
     def getInstance(id : String) : DxRecord = {
         if (id.startsWith("record-"))
@@ -128,9 +130,9 @@ object DxRecord {
 
 
 case class DxFile(id : String,
-                  proj : Option[DxProject]) extends DxDataObject {
+                  project : Option[DxProject]) extends DxDataObject {
     def getLinkAsJson : JsValue = {
-        proj match {
+        project match {
             case None =>
                 JsObject("$dnanexus_link" -> JsString(id))
             case Some(p) =>
@@ -151,7 +153,7 @@ object DxFile {
 }
 
 case class FolderContents(dataObjects: List[DxDataObject],
-                          subfolders : List[String])
+                          subFolders : List[String])
 
 // A project is a subtype of a container
 case class DxProject(id: String) extends DxDataObject {
@@ -159,7 +161,7 @@ case class DxProject(id: String) extends DxDataObject {
 
     def newFolder(folderPath : String, parents : Boolean) : Unit = ???
 
-    def move(files: Vector[DxDataObject], destinationFolder : String) : Unit = ???
+    def moveObjects(files: Vector[DxDataObject], destinationFolder : String) : Unit = ???
 
     def removeObjects(objs : Vector[DxDataObject]) : Unit = ???
 }
@@ -176,8 +178,12 @@ object DxProject {
 
 // Objects that can be run on the platform
 sealed trait DxExecutable extends DxDataObject
+
 case class DxApplet(id : String,
-                    proj : Option[DxProject]) extends DxExecutable
+                    project : Option[DxProject]) extends DxExecutable {
+    def newRun() : DxJob = ???
+}
+
 object DxApplet {
     def getInstance(id : String) : DxApplet = {
         if (id.startsWith("applet-"))
@@ -189,8 +195,11 @@ object DxApplet {
 case class DxApp(id : String) extends DxExecutable
 
 case class DxWorkflow(id : String,
-                      proj : Option[DxProject]) extends DxExecutable {
+                      project : Option[DxProject]) extends DxExecutable {
     def close() : Unit = ???
+    def newRun(input : JsValue,
+               name : String,
+               properties: Map[String, String]) : DxAnalysis = ???
 }
 
 object DxWorkflow {
@@ -217,6 +226,9 @@ object DxAnalysis {
 case class DxJob(id : String) extends DxObject with DxExecution {
     def getApplet() : DxApplet = ???
     def getParentJob() : DxJob = ???
+
+    // which analysis does this job belong to?
+    def getAnalysis : DxAnalysis = ???
 }
 
 object DxJob {
