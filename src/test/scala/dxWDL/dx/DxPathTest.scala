@@ -1,15 +1,13 @@
 package dxWDL.dx
 
-import com.dnanexus.{DXFile, DXProject}
 import org.scalatest.{FlatSpec, Matchers}
 import spray.json._
-
-import dxWDL.base.Utils
+import dxWDL.base._
 
 class DxPathTest extends FlatSpec with Matchers {
 
     val TEST_PROJECT = "dxWDL_playground"
-    lazy val dxTestProject : DXProject =
+    lazy val dxTestProject : DxProject =
         try {
             DxPath.resolveProject(TEST_PROJECT)
         } catch {
@@ -31,20 +29,20 @@ class DxPathTest extends FlatSpec with Matchers {
     it should "handle files in a root directory" in {
         val path = s"${TEST_PROJECT}:/Readme.md"
         val expectedId = describeDxFilePath(path)
-        val dxFile : DXFile = DxPath.resolveDxURLFile(s"dx://${path}")
+        val dxFile : DxFile = DxPath.resolveDxURLFile(s"dx://${path}")
         dxFile.getId shouldBe(expectedId)
     }
 
     it should "handle files in a subdirectory directory" in {
         val path = s"${TEST_PROJECT}:/test_data/fileA"
         val expectedId = describeDxFilePath(path)
-        val dxFile : DXFile = DxPath.resolveDxURLFile(s"dx://${path}")
+        val dxFile : DxFile = DxPath.resolveDxURLFile(s"dx://${path}")
         dxFile.getId shouldBe(expectedId)
     }
 
     it should "handle files with a colon" in {
         val expectedId = describeDxFilePath(s"${TEST_PROJECT}:/x*.txt")
-        val dxFile : DXFile = DxPath.resolveDxURLFile(s"dx://${TEST_PROJECT}:/x:x.txt")
+        val dxFile : DxFile = DxPath.resolveDxURLFile(s"dx://${TEST_PROJECT}:/x:x.txt")
         dxFile.getId shouldBe(expectedId)
     }
 }
