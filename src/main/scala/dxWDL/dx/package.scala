@@ -1,11 +1,6 @@
 package dxWDL.dx
 
-import com.dnanexus._
-import scala.collection.immutable.TreeMap
 import spray.json._
-import wom.types._
-
-import dxWDL.base.WomTypeSerialization
 
 object DxIOClass extends Enumeration {
     val INT, FLOAT, STRING, BOOLEAN, FILE,
@@ -47,10 +42,10 @@ case class DxFilePart(state: String,
 
 // This is similar to DXDataObject.Describe
 case class DxDescribe(name : String,
-                      id : String,
                       folder: String,
                       size : Option[Long],
-                      container: DxContainer, // a project or a container
+                      container: DxProject, // a project or a container
+                      dxobj : DxObject,
                       created : Long,
                       modified : Long,
                       properties: Map[String, String],
@@ -69,13 +64,13 @@ sealed trait DxObject {
     def getId() : String = id
 
     def describe() : DxDescribe = {
-        val results = DxBulkDescribe.apply(this, Vector.empty)
+        val results = DxBulkDescribe.apply(Vector(this), Vector.empty)
         assert(results.size == 1)
         results.values.head
     }
 
     def describe(fields: Vector[Field.Value]) : DxDescribe = {
-        val results = DxBulkDescribe.apply(this, fields)
+        val results = DxBulkDescribe.apply(Vector(this), fields)
         assert(results.size == 1)
         results.values.head
     }
@@ -83,14 +78,41 @@ sealed trait DxObject {
 
 sealed trait DxDataObject extends DxObject
 
-case class DxContainer(id: String) extends DxDataObject
-object DxContainer {
-    def getInstance(id : String) : DxContainer = {
-        if (id.startsWith("container-"))
-            return DxContainer(id, None)
-        if (id.startsWith("project-"))
-            return DxProject(id, None)
-        throw new IllegalArgumentException(s"${id} isn't a container")
+object DxDataObject {
+    // core implementation
+    def getInstance(id : String,
+                    container: Option[DxProject]) : DxDataObject = {
+        id match {
+            case _ if id.startsWith("container-") =>
+                DxProject(id)
+            case _ if id.startsWith("project-") =>
+                DxProject(id)
+            case _ if id.startsWith("file-") =>
+                DxFile(id, container)
+            case _ if id.startsWith("record-") =>
+                DxRecord(id, container)
+            case _ if id.startsWith("applet-") =>
+                DxApplet(id, container)
+            case _ if id.startsWith("workflow-") =>
+                DxWorkflow(id, container)
+            case _ =>
+                throw new IllegalArgumentException(s"${id} does not belong to a know class")
+        }
+    }
+
+    // convenience methods
+    def getInstance(id : String,
+                    container: DxProject) : DxDataObject = {
+        getInstance(id, Some(container))
+    }
+
+    def getInstance(id : String) : DxDataObject = {
+        getInstance(id, None)
+    }
+
+    private val prefixes = List("container-", "project-", "file-", "record-", "applet-", "workflow-")
+    def isDataObject(id : String) : Boolean = {
+        prefixes.exists{ p => id.startsWith(p) }
     }
 }
 
@@ -106,7 +128,20 @@ object DxRecord {
 
 
 case class DxFile(id : String,
-                  proj : Option[DxProject]) extends DxDataObject
+                  proj : Option[DxProject]) extends DxDataObject {
+    def getLinkAsJson : JsValue = {
+        proj match {
+            case None =>
+                JsObject("$dnanexus_link" -> JsString(id))
+            case Some(p) =>
+                JsObject( "$dnanexus_link" -> JsObject(
+                             "project" -> JsString(p.id),
+                             "id" -> JsString(id)
+                         ))
+        }
+    }
+}
+
 object DxFile {
     def getInstance(id : String) : DxFile = {
         if (id.startsWith("file-"))
@@ -119,13 +154,7 @@ case class FolderContents(dataObjects: List[DxDataObject],
                           subfolders : List[String])
 
 // A project is a subtype of a container
-case class DxProject(id: String) extends DxContainer {
-    def getInstance(id : String) : DxProject = {
-        if (id.startsWith("project-"))
-            return DxProject(id, None)
-        throw new IllegalArgumentException(s"${id} isn't a project")
-    }
-
+case class DxProject(id: String) extends DxDataObject {
     def listFolder(path : String) : FolderContents = ???
 
     def newFolder(folderPath : String, parents : Boolean) : Unit = ???
@@ -133,6 +162,16 @@ case class DxProject(id: String) extends DxContainer {
     def move(files: Vector[DxDataObject], destinationFolder : String) : Unit = ???
 
     def removeObjects(objs : Vector[DxDataObject]) : Unit = ???
+}
+
+object DxProject {
+    def getInstance(id : String) : DxProject = {
+        if (id.startsWith("container-"))
+            return DxProject(id)
+        if (id.startsWith("project-"))
+            return DxProject(id)
+        throw new IllegalArgumentException(s"${id} isn't a container")
+    }
 }
 
 // Objects that can be run on the platform
@@ -147,6 +186,8 @@ object DxApplet {
     }
 }
 
+case class DxApp(id : String) extends DxExecutable
+
 case class DxWorkflow(id : String,
                       proj : Option[DxProject]) extends DxExecutable {
     def close() : Unit = ???
@@ -155,16 +196,35 @@ case class DxWorkflow(id : String,
 object DxWorkflow {
     def getInstance(id : String) : DxWorkflow = {
         if (id.startsWith("workflow-"))
-            return DxApplet(id, None)
+            return DxWorkflow(id, None)
         throw new IllegalArgumentException(s"${id} isn't a workflow")
     }
 }
 
 // Actual executions on the platform. There are jobs and analyses
-sealed trait DxExecution
+sealed trait DxExecution extends DxObject
+
 case class DxAnalysis(id : String) extends DxObject with DxExecution
+
+object DxAnalysis {
+    def getInstance(id : String) : DxAnalysis = {
+        if (id.startsWith("analysis-"))
+            return DxAnalysis(id)
+        throw new IllegalArgumentException(s"${id} isn't a job")
+    }
+}
+
 case class DxJob(id : String) extends DxObject with DxExecution {
     def getApplet() : DxApplet = ???
+    def getParentJob() : DxJob = ???
+}
+
+object DxJob {
+    def getInstance(id : String) : DxJob = {
+        if (id.startsWith("job-"))
+            return DxJob(id)
+        throw new IllegalArgumentException(s"${id} isn't a job")
+    }
 }
 
 

@@ -152,17 +152,13 @@ object DxPath {
                 }
 
                 // could be a container, not a project
-                val dxContainer : Option[DxContainer] = fields.get("project") match {
-                    case Some(JsString(x)) => Some(DxContainer.getInstance(x))
+                val dxContainer : Option[DxProject] = fields.get("project") match {
+                    case Some(JsString(x)) => Some(DxProject.getInstance(x))
                     case _ => None
                 }
 
                 // safe conversion to a dx-object
-                val dxobj = DxUtils.convertToDxObject(dxid, dxContainer) match {
-                    case None => throw new Exception(s"Bad dxid=${dxid}")
-                    case Some(x) => x
-                }
-
+                val dxobj = DxDataObject.getInstance(dxid, dxContainer)
                 path -> dxobj
         }.toMap
     }
@@ -176,17 +172,17 @@ object DxPath {
 
         for (p <- allDxPaths) {
             val components = parse(p)
-            DxUtils.convertToDxObject(components.name, None) match {
-                case None =>
-                    rest = rest :+ components
-                case Some(dxobj) =>
-                    val dxobjWithProj = components.projName match {
-                        case None => dxobj
-                        case Some(pid) =>
-                            val dxProj = resolveProject(pid)
-                            DxDataObject.getInstance(dxobj.getId, dxProj)
-                    }
-                    alreadyResolved = alreadyResolved + (p -> dxobjWithProj)
+            if (DxDataObject.isDataObject(components.name)) {
+                rest = rest :+ components
+            } else {
+                val dxobj = DxDataObject.getInstance(components.name, None)
+                val dxobjWithProj = components.projName match {
+                    case None => dxobj
+                    case Some(pid) =>
+                        val dxProj = resolveProject(pid)
+                        DxDataObject.getInstance(dxobj.getId, dxProj)
+                }
+                alreadyResolved = alreadyResolved + (p -> dxobjWithProj)
             }
         }
         (alreadyResolved, rest)
@@ -236,11 +232,9 @@ object DxPath {
         val components = parse(dxPath)
         components.projName match {
             case None =>
-                resolveOnePath(dxPath,
-                              DxUtils.dxEnv.getProjectContext())
+                resolveOnePath(dxPath, DxUtils.dxCrntProject)
             case Some(pName) =>
-                resolveOnePath(dxPath,
-                              resolveProject(pName))
+                resolveOnePath(dxPath, resolveProject(pName))
         }
     }
 

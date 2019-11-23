@@ -638,7 +638,8 @@ object Extras {
             throw new IllegalArgumentException("dxId must match applet-[A-Za-z0-9]{24}")
         }
 
-        val dxUploadCmd = s"""dx describe ${reorgAppId} --json"""
+        // FIXME: This needs to be done --without-- using dx. Use java/scala describe instead.
+/*        val dxUploadCmd = s"""dx describe ${reorgAppId} --json"""
 
         val (outmsg, errmsg) = Utils.execCommand(dxUploadCmd, None)
 
@@ -654,7 +655,7 @@ object Extras {
         if (!isValid) {
             throw new PermissionDeniedException(s"ERROR: App(let) for custom reorg stage ${reorgAppId } does not " +
               s"have CONTRIBUTOR or ADMINISTRATOR access and this is required.")
-        }
+        }*/
     }
 
     private def verifyInputs(reorgConf: String): Unit= {
@@ -680,6 +681,8 @@ object Extras {
         veryifyReorgApp(reorgAppId)
         verifyInputs(reorgConf)
 
+        // FIXME: this shouldn't be printed out when running tests. During tests, nothing should
+        // be printed out, some software relies on this assumption.
         Utils.trace(
             true,
             s"""|Writing your own applet for reorganization purposes is tricky. If you are not careful,

@@ -12,7 +12,7 @@ resolvers ++= Seq(
 )
 
 // reduce the maximum number of errors shown by the Scala compiler
-maxErrors := 10
+maxErrors := 7
 
 //coverageEnabled := true
 

@@ -472,7 +472,7 @@ class GenerateIRTest extends FlatSpec with Matchers {
     }
 
     // ignore for now as the test will fail in staging
-    it should "Compile a workflow with a custom reorg applet" taggedAs(ProdTest) in {
+    ignore should "Compile a workflow with a custom reorg applet" taggedAs(ProdTest) in {
         val path = pathFromBasename("compiler", basename="wf_custom_reorg.wdl")
 
         val extrasPath = pathFromBasename("compiler/extras", basename="extras_custom_reorg.json")
@@ -498,7 +498,7 @@ class GenerateIRTest extends FlatSpec with Matchers {
     }
 
     // ignore for now as the test will fail in staging
-    it should "Compile a workflow on the platform with the config file in the input" taggedAs(ProdTest)  in {
+    ignore should "Compile a workflow on the platform with the config file in the input" taggedAs(ProdTest)  in {
         val path = pathFromBasename("compiler", basename="wf_custom_reorg.wdl")
 
         val extrasPath = pathFromBasename("compiler/extras", basename="extras_custom_reorg_config.json")
@@ -547,7 +547,7 @@ class GenerateIRTest extends FlatSpec with Matchers {
     }
 
     // ignore for now as the test will fail in staging
-    it should "Compile a workflow on the platform without config file in the input" taggedAs(ProdTest) in {
+    ignore should "Compile a workflow on the platform without config file in the input" taggedAs(ProdTest) in {
         // This works in conjunction with "Compile a workflow on the platform with the config file in the input".
         // There is less assertions here.
         val path = pathFromBasename("compiler", basename="wf_custom_reorg.wdl")
@@ -564,7 +564,3 @@ class GenerateIRTest extends FlatSpec with Matchers {
 
     }
 }
-
-
-
-

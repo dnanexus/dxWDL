@@ -1,7 +1,9 @@
 package dxWDL.dx
 
 import spray.json._
+import scala.collection.immutable.TreeMap
 import wom.types._
+import dxWDL.base._
 
 // Information used to link applets that call other applets. For example, a scatter
 // applet calls applets that implement tasks.
@@ -48,13 +50,10 @@ object ExecLinkInfo {
             case _ => throw new Exception("Bad JSON")
         }.toMap
         val dxExec = aplInfo.asJsObject.fields("id") match {
-            case JsString(execId) =>
-                if (execId.startsWith("app-") ||
-                        execId.startsWith("applet-") ||
-                        execId.startsWith("workflow-"))
-                    DxExec(execId)
-                else
-                    throw new Exception(s"${execId} is not an app/applet/workflow")
+            case JsString(id) if id.startsWith("app-") => DxApp(id)
+            case JsString(id) if id.startsWith("applet-") => DxApplet(id, None)
+            case JsString(id) if id.startsWith("workflow-") => DxWorkflow(id, None)
+            case JsString(id) => throw new Exception(s"${id} is not an app/applet/workflow")
             case _ => throw new Exception("Bad JSON")
         }
         ExecLinkInfo(name, inputDefs, outputDefs, dxExec)

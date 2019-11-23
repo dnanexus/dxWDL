@@ -19,7 +19,7 @@ task Add {
 package dxWDL.exec
 
 import cats.data.Validated.{Invalid, Valid}
-import com.dnanexus.{DXAPI, DXJob}
+import com.dnanexus.DXAPI
 import com.fasterxml.jackson.databind.JsonNode
 import common.validation.ErrorOr.ErrorOr
 import java.lang.management._
@@ -620,7 +620,7 @@ case class TaskRunner(task: CallableTaskDefinition,
         val instanceType:String = calcInstanceType(inputs)
 
         // Run a sub-job with the "body" entry point, and the required instance type
-        val dxSubJob : DXJob = DxUtils.runSubJob("body", Some(instanceType), originalInputs,
+        val dxSubJob : DxJob = DxUtils.runSubJob("body", Some(instanceType), originalInputs,
                                                  Vector.empty, maxVerboseLevel)
 
         // Return promises (JBORs) for all the outputs. Since the signature of the sub-job

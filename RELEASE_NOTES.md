@@ -1,14 +1,16 @@
 # Release Notes
 
-## 1.37
-
-- Upgraded to dxfuse version [0.13](https://github.com/dnanexus/dxfuse/releases/tag/v0.13)
+## 1.40
 - Replaced the dxjava package with scala code. The dnanexus calls now go through the low-level DXAPI java
 module.
 
 
-## 1.36 18-Nov-2019
+## 1.36.1 22-Nov-2019
 
+- Upgraded to dxfuse version [0.13](https://github.com/dnanexus/dxfuse/releases/tag/v0.13)
+- Making dxfuse startup script more robust
+
+## 1.36 18-Nov-2019
 Added a mechanism for a custom reorganization applet, it can be used instead of the built in --reorg option.
 You can use it to reorganize workflow file results after it completes.
 

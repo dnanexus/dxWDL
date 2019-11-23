@@ -34,10 +34,10 @@ object DxBulkDescribe {
         }.toMap
     }
 
-    private def submitRequest(objIds : Vector[String],
+    private def submitRequest(objs : Vector[DxObject],
                               extraFields : Vector[String]) : Map[DxObject, DxDescribe] = {
         val requestFields = Map("objects" ->
-                                   JsArray(objIds.map{x => JsString(x) }))
+                                   JsArray(objs.map{ x : DxObject => JsString(x.id) }))
 
         // extra describe options, if specified
         val extraDescribeFields : Map[String, JsValue] =
@@ -64,7 +64,7 @@ object DxBulkDescribe {
         resultsPerObj.zipWithIndex.map{ case (jsv, i) =>
             val dxFullDesc = jsv.asJsObject.fields.get("describe") match {
                 case None =>
-                    throw new Exception(s"Could not describe object ${objIds(i)}")
+                    throw new Exception(s"Could not describe object ${objs(i)}")
                 case Some(descJs) =>
                     val dxDesc =
                         descJs.asJsObject.getFields("name", "folder", "size", "id", "project", "created", "modified") match {
@@ -72,8 +72,8 @@ object DxBulkDescribe {
                                      JsNumber(size), JsString(oid), JsString(projectId),
                                      JsNumber(created), JsNumber(modified)) =>
                                 // This could be a container, not a project.
-                                val dxContainer = DxContainer.getInstance(projectId)
-                                val dxObj = DxUtils.convertToDxObject(oid, Some(dxContainer)).get
+                                val dxContainer = DxProject.getInstance(projectId)
+                                val dxObj = DxDataObject.getInstance(oid, dxContainer)
                                 DxDescribe(name,
                                            folder,
                                            Some(size.toLong),
@@ -95,32 +95,32 @@ object DxBulkDescribe {
                     val details = descJs.asJsObject.fields.get("details")
                     dxDesc.copy(parts = parts, details = details)
             }
-            dxFullDesc.dxObj -> dxFullDesc
+            dxFullDesc.dxobj -> dxFullDesc
         }.toMap
     }
 
     // Describe the names of all the files in one batch. This is much more efficient
     // than submitting file describes one-by-one.
-    def apply(objIds: Seq[DxObject],
+    def apply(objs: Vector[DxObject],
               extraFields : Vector[Field.Value]) : Map[DxObject, DxDescribe] = {
-        if (dataObjs.isEmpty) {
+        if (objs.isEmpty) {
             // avoid an unnessary API call; this is important for unit tests
             // that do not have a network connection.
             return Map.empty
         }
 
         // Limit on number of objects in one API request
-        val slices = files.grouped(DXAPI_NUM_OBJECTS_LIMIT).toList
+        val slices = objs.grouped(DXAPI_NUM_OBJECTS_LIMIT).toList
 
-        val extraFields = extraFields.map{
-            case Details => "details"
-            case Parts => "parts"
+        val extraFieldsStr = extraFields.map{
+            case Field.Details => "details"
+            case Field.Parts => "parts"
         }.toSet.toVector
 
         // iterate on the ranges
         slices.foldLeft(Map.empty[DxObject, DxDescribe]) {
             case (accu, objRange) =>
-                accu ++ submitRequest(objRange.toVector, extraFields)
+                accu ++ submitRequest(objRange.toVector, extraFieldsStr)
         }
     }
 }

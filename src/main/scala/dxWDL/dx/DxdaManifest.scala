@@ -3,7 +3,6 @@
 
 package dxWDL.dx
 
-import com.dnanexus.{DXFile, DXContainer}
 import java.nio.file.Path
 import spray.json._
 
@@ -57,15 +56,16 @@ object DxdaManifest {
     }
 
     // The project is just a hint. The files don't have to actually reside in it.
-    def apply(file2LocalMapping: Map[DXFile, Path]) : DxdaManifest = {
+    def apply(file2LocalMapping: Map[DxFile, Path]) : DxdaManifest = {
 
         // collect all the information per file
-        val fileDescs : Map[DXFile, DxDescribe] = DxBulkDescribe.apply(file2LocalMapping.keys.toVector,
-                                                                       parts = true)
+        val objDescs : Map[DxObject, DxDescribe] = DxBulkDescribe.apply(file2LocalMapping.keys.toVector,
+                                                                         Vector(Field.Parts))
+        val fileDescs = objDescs.map{case (obj, desc) => obj.asInstanceOf[DxFile] -> desc }.toMap
 
         // create a sub-map per container
-        val fileDescsByContainer : Map[DXContainer, Map[DXFile, DxDescribe]] =
-            fileDescs.foldLeft(Map.empty[DXContainer, Map[DXFile, DxDescribe]]) {
+        val fileDescsByContainer : Map[DxProject, Map[DxFile, DxDescribe]] =
+            fileDescs.foldLeft(Map.empty[DxProject, Map[DxFile, DxDescribe]]) {
                 case (accu, (dxFile, dxDesc)) =>
                     val container = dxDesc.container
                     accu.get(container) match {

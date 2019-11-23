@@ -87,16 +87,16 @@ case class DxFindDataObjects(limit: Option[Int],
         }
 
         DxDescribe(name, folder, size,
-                   dxProject.asInstanceOf[DxContainer], dxobj,
+                   dxProject.asInstanceOf[DxProject], dxobj,
                    created, modified,
-                   properties, inputSpec, outputSpec, None)
+                   properties, inputSpec, outputSpec, None, None)
     }
 
     private def parseOneResult(jsv : JsValue) : (DxDataObject, DxDescribe) = {
         jsv.asJsObject.getFields("project", "id", "describe") match {
             case Seq(JsString(projectId), JsString(dxid), desc) =>
                 val dxProj = DxProject.getInstance(projectId)
-                val dxobj = DxUtils.convertToDxDataObject(dxid, Some(dxProj)).get
+                val dxobj = DxDataObject.getInstance(dxid, dxProj)
                 (dxobj, parseDescribe(desc, dxobj, dxProj))
             case _ => throw new Exception(
                 s"""|malformed result: expecting {project, id, describe} fields, got:

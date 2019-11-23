@@ -283,7 +283,7 @@ object Main extends App {
                                             |the platform""".stripMargin)
             }
         Utils.trace(verbose.on,
-                    s"""|project ID: ${dxProject.getId}
+                    s"""|project ID: ${dxProject.id}
                         |folder: ${dxFolder}""".stripMargin)
         (dxProject, dxFolder)
     }

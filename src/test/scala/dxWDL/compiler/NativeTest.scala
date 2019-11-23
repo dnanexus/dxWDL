@@ -3,6 +3,7 @@ package dxWDL.compiler
 import java.nio.file.{Path, Paths}
 
 import org.scalatest.{FlatSpec, Matchers}
+import org.scalatest.BeforeAndAfterAll
 
 import scala.io.Source
 import dxWDL.Main
@@ -17,7 +18,7 @@ import spray.json._
 // This tests the compiler Native mode, however, it creates
 // dnanexus applets and workflows that are not runnable.
 
-class NativeTest extends FlatSpec with Matchers {
+class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
     private def pathFromBasename(dir: String, basename: String) : Path = {
         val p = getClass.getResource(s"/${dir}/${basename}").getPath
         Paths.get(p)
@@ -38,6 +39,25 @@ class NativeTest extends FlatSpec with Matchers {
                            "-force",
                            "-locked",
                            "-quiet")
+
+    override def beforeAll() : Unit = {
+        // building necessary applets before starting the tests
+        val native_applets = Vector("native_concat",
+                                    "native_diff",
+                                    "native_mk_list",
+                                    "native_sum",
+                                    "native_sum_012")
+        val topDir = Paths.get(System.getProperty("user.dir"))
+        native_applets.foreach { app =>
+            try {
+                val (stdout, stderr) = Utils.execCommand(s"dx build $topDir/test/applets/$app --destination /unit_tests/applets/",
+                                                         quiet=true)
+            } catch {
+                case _: Throwable =>
+            }
+        }
+    }
+
 
     it should "Native compile a single WDL task" taggedAs(NativeTestXX) in {
         val path = pathFromBasename("compiler", "add.wdl")
@@ -111,7 +131,7 @@ class NativeTest extends FlatSpec with Matchers {
         tasks.keys shouldBe(Set("native_sum", "native_sum_012", "native_mk_list", "native_diff", "native_concat"))
     }
 
-    ignore should "be able to include license information in details" in {
+    it should "be able to include license information in details" in {
         val expected =
             """
               |[
@@ -164,7 +184,7 @@ class NativeTest extends FlatSpec with Matchers {
         ) shouldBe a [Main.SuccessfulTermination]
     }
 
-    ignore should "make default task timeout 48 hours" taggedAs(NativeTestXX) in {
+    it should "make default task timeout 48 hours" taggedAs(NativeTestXX) in {
         val path = pathFromBasename("compiler", "add_timeout.wdl")
         val appId = Main.compile(
             path.toString :: "--force" :: cFlags
@@ -190,7 +210,7 @@ class NativeTest extends FlatSpec with Matchers {
                                       "minutes" -> JsNumber(0)))
     }
 
-    ignore should "timeout can be overriden from the extras file" taggedAs(NativeTestXX, EdgeTest) in {
+    it should "timeout can be overriden from the extras file" taggedAs(NativeTestXX, EdgeTest) in {
         val path = pathFromBasename("compiler", "add_timeout_override.wdl")
         val extraPath = pathFromBasename("compiler/extras",  "short_timeout.json")
         val appId = Main.compile(
@@ -216,7 +236,7 @@ class NativeTest extends FlatSpec with Matchers {
 
     }
 
-    ignore should "allow choosing GPU instances" taggedAs(NativeTestXX, EdgeTest) in {
+    it should "allow choosing GPU instances" taggedAs(NativeTestXX, EdgeTest) in {
         val path = pathFromBasename("compiler", "GPU2.wdl")
 
         val appId = Main.compile(path.toString :: cFlags) match {

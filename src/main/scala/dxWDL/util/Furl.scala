@@ -42,7 +42,7 @@ object Furl {
         dxFile.getProject match {
             case dxProj : DxProject =>
                 FurlDx(buf, Some(dxProj), dxFile)
-            case cont : DxContainer =>
+            case cont : DxProject =>
                 FurlDx(buf, None, dxFile)
             case _ =>
                 throw new Exception(s"Invalid path ${buf}")

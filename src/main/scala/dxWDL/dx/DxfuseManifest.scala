@@ -7,7 +7,6 @@ import java.nio.file.Path
 import spray.json._
 
 import dxWDL.util.DxIoFunctions
-import dxWDL.dx.DxFile
 
 case class DxfuseManifest(value : JsValue)
 

@@ -58,7 +58,7 @@ Note: the compiler ensures that the scatter will call exactly one call.
 package dxWDL.exec
 
 // DX bindings
-import com.dnanexus.{DXAPI, DXExecution, DXJob}
+import com.dnanexus.DXAPI
 import com.fasterxml.jackson.databind.JsonNode
 import spray.json._
 import wom.callable.Callable._
@@ -73,7 +73,7 @@ import dxWDL.util._
 case class ChildExecDesc(execName: String,
                          seqNum: Int,
                          outputs: Map[String, JsValue],
-                         exec: DXExecution)
+                         exec: DxExecution)
 
 case class CollectSubJobs(jobInputOutput : JobInputOutput,
                           inputsRaw : JsValue,
@@ -86,13 +86,13 @@ case class CollectSubJobs(jobInputOutput : JobInputOutput,
     private val wdlVarLinksConverter = WdlVarLinksConverter(verbose, Map.empty, typeAliases)
 
     // Launch a subjob to collect the outputs
-    def launch(childJobs: Vector[DXExecution],
+    def launch(childJobs: Vector[DxExecution],
                exportTypes: Map[String, WomType]) : Map[String, WdlVarLinks] = {
         assert(!childJobs.isEmpty)
 
         // Run a sub-job with the "collect" entry point.
         // We need to provide the exact same inputs.
-        val dxSubJob : DXJob = DxUtils.runSubJob("collect",
+        val dxSubJob : DxJob = DxUtils.runSubJob("collect",
                                                  Some(instanceTypeDB.defaultInstanceType),
                                                  inputsRaw,
                                                  childJobs,
@@ -106,12 +106,12 @@ case class CollectSubJobs(jobInputOutput : JobInputOutput,
         }.toMap
     }
 
-    private def findChildExecs() : Vector[DXExecution] = {
+    private def findChildExecs() : Vector[DxExecution] = {
          // get the parent job
-        val dxJob = DxUtils.dxEnv.getJob()
-        val parentJob: DXJob = dxJob.describe().getParentJob()
+        val dxJob = DxJob(DxUtils.dxEnv.getJob())
+        val parentJob: DxJob = dxJob.getParentJob()
 
-        val childExecs : Vector[DXExecution] = DxFindExecutions.apply(Some(parentJob))
+        val childExecs : Vector[DxExecution] = DxFindExecutions.apply(Some(parentJob))
 
         // make sure the collect subjob is not included. Theoretically,
         // it should not be returned as a search result, becase we did
@@ -122,7 +122,7 @@ case class CollectSubJobs(jobInputOutput : JobInputOutput,
 
     // Describe all the scatter child jobs. Use a bulk-describe
     // for efficiency.
-    private def describeChildExecs(execs: Vector[DXExecution]) : Vector[ChildExecDesc] = {
+    private def describeChildExecs(execs: Vector[DxExecution]) : Vector[ChildExecDesc] = {
         val jobInfoReq:Vector[JsValue] = execs.map{ job =>
             JsObject(
                 "id" -> JsString(job.getId),
@@ -172,7 +172,7 @@ case class CollectSubJobs(jobInputOutput : JobInputOutput,
         //   1) child job-ids
         //   2) field names
         //   3) WDL types
-        val childExecs:Vector[DXExecution] = findChildExecs()
+        val childExecs:Vector[DxExecution] = findChildExecs()
         System.err.println(s"childExecs=${childExecs}")
 
         // describe all the job outputs and which applet they were running
