@@ -174,6 +174,40 @@ case class FolderContents(dataObjects: Vector[DxDataObject],
 // A project is a subtype of a container
 case class DxProject(id: String) extends DxDataObject {
 
+    override def describe() : DxDescribe = {
+        val response = DXAPI.projectDescribe(id, classOf[JsonNode], DxUtils.dxEnv)
+        val descJs:JsValue = DxUtils.jsValueOfJsonNode(response)
+        val desc = descJs.asJsObject.getFields("name", "size", "created", "modified") match {
+            case Seq(JsString(name), JsNumber(created), JsNumber(modified)) =>
+                DxDescribe(name,
+                           "/",
+                           Some(0),
+                           this,
+                           this,
+                           created.toLong,
+                           modified.toLong,
+                           Map.empty,
+                           None,
+                           None,
+                           None,
+                           None,
+                           None,
+                           None,
+                           None)
+            case other =>
+                throw new Exception(s"malformed JSON ${other}")
+        }
+        desc
+    }
+
+    override def describe(field: Field.Value) : DxDescribe = {
+        throw new Exception("not supported")
+    }
+
+    override def describe(fields: Vector[Field.Value]) : DxDescribe = {
+        throw new Exception("not supported")
+    }
+
     def listFolder(path : String) : FolderContents = {
         val request = JsObject("folder" -> JsString(path))
         val response = id match {
