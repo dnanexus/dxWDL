@@ -486,6 +486,7 @@ object Main extends App {
             dxProject.listFolder(folder)
         } catch {
             case e : Throwable =>
+                System.err.println(s"err when validating folder ${folder} : ${e}")
                 return UnsuccessfulTermination(s"Folder ${folder} is invalid")
         }
 

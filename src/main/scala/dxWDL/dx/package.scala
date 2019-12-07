@@ -175,33 +175,45 @@ case class FolderContents(dataObjects: Vector[DxDataObject],
 case class DxProject(id: String) extends DxDataObject {
 
     def listFolder(path : String) : FolderContents = {
-        val request = JsObject(
-            "folder" -> JsString(path),
-            "only" -> JsString("all"),
-            "includeHidden" -> JsTrue)
+        val request = JsObject("folder" -> JsString(path))
         val response = id match {
             case _ if (id.startsWith("container-")) =>
                 DXAPI.containerListFolder(id,
-                                         DxUtils.jsonNodeOfJsValue(request),
-                                         classOf[JsonNode],
-                                         DxUtils.dxEnv)
+                                          DxUtils.jsonNodeOfJsValue(request),
+                                          classOf[JsonNode],
+                                          DxUtils.dxEnv)
             case _  if (id.startsWith("project-")) =>
                 DXAPI.projectListFolder(id,
-                                       DxUtils.jsonNodeOfJsValue(request),
-                                       classOf[JsonNode],
-                                       DxUtils.dxEnv)
+                                        DxUtils.jsonNodeOfJsValue(request),
+                                        classOf[JsonNode],
+                                        DxUtils.dxEnv)
             case _ =>
                 throw new Exception(s"invalid project id ${id}" )
         }
         val repJs:JsValue = DxUtils.jsValueOfJsonNode(response)
 
-        val objs = repJs.asJsObject.fields.get("objects").map{
-            case JsString(x) =>
-                DxDataObject.getInstance(x, Some(this))
+        // extract object ids
+        val objsJs = repJs.asJsObject.fields("objects") match {
+            case JsArray(a) => a
+            case _ => throw new Exception("not an array")
+        }
+        val objs = objsJs.map{
+            case JsObject(fields) =>
+                fields.get("id") match {
+                    case Some(JsString(id)) => DxDataObject.getInstance(id, Some(this))
+                    case other =>
+                        throw new Exception(s"malformed json reply ${other}")
+                }
             case other =>
                 throw new Exception(s"malformed json reply ${other}")
         }.toVector
-	val subdirs = repJs.asJsObject.fields.get("folders").map{
+
+        // extract sub folders
+	val subdirsJs = repJs.asJsObject.fields("folders") match {
+            case JsArray(a) => a
+            case _ => throw new Exception("not an array")
+        }
+        val subdirs = subdirsJs.map{
             case JsString(x) => x
             case other =>
                 throw new Exception(s"malformed json reply ${other}")
