@@ -99,7 +99,7 @@ case class WorkflowOutputReorg(wf: WorkflowDefinition,
         val dxEnv = DxUtils.dxEnv
         val dxProject = DxProject(dxEnv.getProjectContext())
         val dxProjDesc = dxProject.describe
-        val dxAnalysis = DxJob(dxEnv.getJob).getAnalysis
+        val dxAnalysis = DxJob(dxEnv.getJob).describe(Field.Analysis).getAnalysis()
         val outFolder = dxAnalysis.describe.folder
         val intermFolder = outFolder + "/" + Utils.INTERMEDIATE_RESULTS_FOLDER
         Utils.appletLog(verbose, s"proj=${dxProjDesc.name} outFolder=${outFolder}")

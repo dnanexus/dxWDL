@@ -109,7 +109,7 @@ case class CollectSubJobs(jobInputOutput : JobInputOutput,
     private def findChildExecs() : Vector[DxExecution] = {
          // get the parent job
         val dxJob = DxJob(DxUtils.dxEnv.getJob())
-        val parentJob: DxJob = dxJob.getParentJob()
+        val parentJob: DxJob = dxJob.describe(Field.ParentJob).getParentJob()
 
         val childExecs : Vector[DxExecution] = DxFindExecutions.apply(Some(parentJob))
 

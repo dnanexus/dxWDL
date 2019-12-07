@@ -703,14 +703,14 @@ object Main extends App {
                                 |an API call.
                                 |""".stripMargin)
                 val dxJob = DxJob(DxUtils.dxEnv.getJob())
-                dxJob.getApplet()
+                dxJob.describe(Field.Applet).getApplet()
             case Some(JsString(x)) =>
                 DxApplet(x, None)
             case Some(other) =>
                 throw new Exception(s"malformed applet field ${other} in job info")
         }
 
-        val details: JsValue = applet.describe(Vector(Field.Details)).details.get
+        val details: JsValue = applet.describe(Field.Details).details.get
         val JsString(womSourceCodeEncoded) = details.asJsObject.fields("womSourceCode")
         val womSourceCode = Utils.base64DecodeAndGunzip(womSourceCodeEncoded)
 

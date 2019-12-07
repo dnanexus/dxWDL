@@ -173,8 +173,6 @@ object DxPath {
         for (p <- allDxPaths) {
             val components = parse(p)
             if (DxDataObject.isDataObject(components.name)) {
-                rest = rest :+ components
-            } else {
                 val dxobj = DxDataObject.getInstance(components.name, None)
                 val dxobjWithProj = components.projName match {
                     case None => dxobj
@@ -183,6 +181,8 @@ object DxPath {
                         DxDataObject.getInstance(dxobj.getId, dxProj)
                 }
                 alreadyResolved = alreadyResolved + (p -> dxobjWithProj)
+            } else {
+                rest = rest :+ components
             }
         }
         (alreadyResolved, rest)

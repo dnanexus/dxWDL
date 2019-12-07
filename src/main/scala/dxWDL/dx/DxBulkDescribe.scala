@@ -85,6 +85,9 @@ object DxBulkDescribe {
                                            None,
                                            None,
                                            None,
+                                           None,
+                                           None,
+                                           None,
                                            None)
                             case _ =>
                                 throw new Exception(s"bad describe object ${descJs}")
@@ -93,7 +96,23 @@ object DxBulkDescribe {
                     // The parts may be empty, only files have it, and we don't always ask for it.
                     val parts = descJs.asJsObject.fields.get("parts").map(parseFileParts)
                     val details = descJs.asJsObject.fields.get("details")
-                    dxDesc.copy(parts = parts, details = details)
+                    val applet = descJs.asJsObject.fields.get("applet").map{
+                        case JsString(x) => DxApplet.getInstance(x)
+                        case other => throw new Exception(s"malformed json ${other}")
+                    }
+                    val parentJob = descJs.asJsObject.fields.get("parentJob").map{
+                        case JsString(x) => DxJob.getInstance(x)
+                        case other => throw new Exception(s"malformed json ${other}")
+                    }
+                    val analysis = descJs.asJsObject.fields.get("analysis").map{
+                        case JsString(x) => DxAnalysis.getInstance(x)
+                        case other => throw new Exception(s"malformed json ${other}")
+                    }
+                    dxDesc.copy(parts = parts,
+                                details = details,
+                                applet = applet,
+                                parentJob = parentJob,
+                                analysis = analysis)
             }
             dxFullDesc.dxobj -> dxFullDesc
         }.toMap
@@ -115,6 +134,9 @@ object DxBulkDescribe {
         val extraFieldsStr = extraFields.map{
             case Field.Details => "details"
             case Field.Parts => "parts"
+            case Field.Applet => "applet"
+            case Field.ParentJob => "parentJob"
+            case Field.Analysis => "analysis"
         }.toSet.toVector
 
         // iterate on the ranges

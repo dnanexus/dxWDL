@@ -427,8 +427,9 @@ case class WfFragRunner(wf: WorkflowDefinition,
                 val workflow = DxWorkflow.getInstance(dxExecId)
                 val dxAnalysis :DxAnalysis = workflow.newRun(
                     input = callInputs,
-                    name = dbgName,
-                    properties = Map("seq_number" -> seqNum.toString))
+                    name = dbgName)
+                val props = Map("seq_number" -> seqNum.toString)
+                dxAnalysis.setProperties(props)
                 dxAnalysis
             } else {
                 throw new Exception(s"Unsupported execution ${dxExecId}")
