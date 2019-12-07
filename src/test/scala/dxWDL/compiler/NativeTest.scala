@@ -42,7 +42,7 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
 
     override def beforeAll() : Unit = {
         // build the directory with the native applets
-/*        Utils.execCommand(
+        Utils.execCommand(
             s"dx mkdir -p ${TEST_PROJECT}:/unit_tests/applets/",
                 quiet=true)
 
@@ -61,7 +61,7 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
             } catch {
                 case _: Throwable =>
             }
-        } */
+        }
     }
 
 
