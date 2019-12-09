@@ -101,18 +101,20 @@ object DxDataObject {
     def getInstance(id : String,
                     container: Option[DxProject]) : DxDataObject = {
         id match {
-            case _ if id.startsWith("container-") =>
+            case "container-[A-Za-z0-9]{24}".r =>
                 DxProject(id)
-            case _ if id.startsWith("project-") =>
+/*            case _ if id.startsWith("project-") =>
                 DxProject(id)
             case _ if id.startsWith("file-") =>
                 DxFile(id, container)
             case _ if id.startsWith("record-") =>
                 DxRecord(id, container)
+            case _ if id.startsWith("app-") =>
+                DxApp(id)
             case _ if id.startsWith("applet-") =>
                 DxApplet(id, container)
             case _ if id.startsWith("workflow-") =>
-                DxWorkflow(id, container)
+                DxWorkflow(id, container) */
             case _ =>
                 throw new IllegalArgumentException(s"${id} does not belong to a know class")
         }
@@ -128,9 +130,15 @@ object DxDataObject {
         getInstance(id, None)
     }
 
-    private val prefixes = List("container-", "project-", "file-", "record-", "applet-", "workflow-")
     def isDataObject(id : String) : Boolean = {
-        prefixes.exists{ p => id.startsWith(p) }
+        try {
+            val o = getInstance(id, None)
+            Utils.ignore(o)
+            true
+        } catch {
+            case e : IllegalArgumentException =>
+                false
+        }
     }
 }
 
@@ -162,6 +170,7 @@ case class DxFile(id : String,
 
 object DxFile {
     def getInstance(id : String) : DxFile = {
+        //[0-9A-Za-z]{24}
         if (id.startsWith("file-"))
             return DxFile(id, None)
         throw new IllegalArgumentException(s"${id} isn't a file")
@@ -347,6 +356,14 @@ object DxApplet {
 }
 
 case class DxApp(id : String) extends DxExecutable
+
+object DxApp {
+    def getInstance(id : String) : DxApp = {
+        if (id.startsWith("app-"))
+            return DxApp(id)
+        throw new IllegalArgumentException(s"${id} isn't an app")
+    }
+}
 
 case class DxWorkflow(id : String,
                       project : Option[DxProject]) extends DxExecutable {
