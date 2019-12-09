@@ -1,7 +1,7 @@
 package dxWDL.base
 
 import com.dnanexus.AccessLevel
-//import com.dnanexus.exceptions.ResourceNotFoundException
+import com.dnanexus.exceptions.ResourceNotFoundException
 import dxWDL.compiler.EdgeTest
 import org.scalatest.{FlatSpec, Matchers}
 import spray.json._
@@ -323,7 +323,7 @@ class ExtrasTest extends FlatSpec with Matchers {
 
     }
 
-    it should "throw IllegalArgumentException due to invalid file ID" taggedAs (EdgeTest) in {
+    it should "throw IllegalArgumentException due to invalid file ID" in {
 
         // app_id is mummer nucmer app in project-FJ90qPj0jy8zYvVV9yz3F5gv
 
@@ -343,7 +343,7 @@ class ExtrasTest extends FlatSpec with Matchers {
         }
     }
 
-    it should "throw ResourceNotFoundException due to non-existant file" in {
+    it should "throw ResourceNotFoundException due to non-existant file" taggedAs(EdgeTest) in {
 
         // app_id is mummer nucmer app in project-FJ90qPj0jy8zYvVV9yz3F5gv
 
@@ -358,16 +358,15 @@ class ExtrasTest extends FlatSpec with Matchers {
                 |}
                 |""".stripMargin.parseJson
 
-//        val thrown = intercept[ResourceNotFoundException] {
+        val thrown = intercept[ResourceNotFoundException] {
             Extras.parse(reorg, verbose)
-//        }
-/*
+        }
+
         val fileId : String = inputs.replace("dx://", "")
 
         thrown.getMessage should be  (
             s""""${fileId}" is not a recognized ID"""
         )
- */
     }
 
     // FIXME: tab should be set to 4 spaces

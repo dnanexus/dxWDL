@@ -76,21 +76,23 @@ sealed trait DxObject {
     def getId() : String = id
 
     def describe() : DxDescribe = {
-        val results = DxBulkDescribe.apply(Vector(this), Vector.empty)
-        assert(results.size == 1)
-        results.values.head
+        describe(Vector.empty)
     }
 
     def describe(field: Field.Value) : DxDescribe = {
-        val results = DxBulkDescribe.apply(Vector(this), Vector(field))
-        assert(results.size == 1)
-        results.values.head
+        describe(Vector(field))
     }
 
     def describe(fields: Vector[Field.Value]) : DxDescribe = {
         val results = DxBulkDescribe.apply(Vector(this), fields)
-        assert(results.size == 1)
-        results.values.head
+        results.size match {
+            case 0 =>
+                throw new com.dnanexus.exceptions.ResourceNotFoundException(id, 404)
+            case 1 =>
+                results.values.head
+            case num =>
+                throw new Exception(s"sanity: ${num} results found")
+        }
     }
 }
 

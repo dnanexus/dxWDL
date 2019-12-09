@@ -2,6 +2,7 @@
 
 package dxWDL.dx
 
+import com.dnanexus.exceptions.ResourceNotFoundException
 import com.dnanexus.DXAPI
 import com.fasterxml.jackson.databind.JsonNode
 import spray.json._
@@ -64,7 +65,7 @@ object DxBulkDescribe {
         resultsPerObj.zipWithIndex.map{ case (jsv, i) =>
             val dxFullDesc = jsv.asJsObject.fields.get("describe") match {
                 case None =>
-                    throw new Exception(s"Could not describe object ${objs(i)}")
+                    throw new ResourceNotFoundException(s""""${objs(i).id}" is not a recognized ID""", 404)
                 case Some(descJs) =>
                     val dxDesc =
                         descJs.asJsObject.getFields("name", "folder", "size", "id", "project", "created", "modified") match {
