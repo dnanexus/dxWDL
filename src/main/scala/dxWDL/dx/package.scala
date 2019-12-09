@@ -97,24 +97,27 @@ sealed trait DxObject {
 sealed trait DxDataObject extends DxObject
 
 object DxDataObject {
-    // core implementation
+    // We are expecting string like:
+    //    record-FgG51b00xF63k86F13pqFv57
+    //    file-FV5fqXj0ffPB9bKP986j5kVQ
+    //
     def getInstance(id : String,
                     container: Option[DxProject]) : DxDataObject = {
-        id match {
-            case "container-[A-Za-z0-9]{24}".r =>
-                DxProject(id)
-/*            case _ if id.startsWith("project-") =>
-                DxProject(id)
-            case _ if id.startsWith("file-") =>
-                DxFile(id, container)
-            case _ if id.startsWith("record-") =>
-                DxRecord(id, container)
-            case _ if id.startsWith("app-") =>
-                DxApp(id)
-            case _ if id.startsWith("applet-") =>
-                DxApplet(id, container)
-            case _ if id.startsWith("workflow-") =>
-                DxWorkflow(id, container) */
+        val parts = id.split("-")
+        if (parts.length != 2)
+            throw new IllegalArgumentException(s"${id} is not of the form class-alphnumeric{24}")
+        val klass = parts(0)
+        val numLetters = parts(1)
+        if (!numLetters.matches("[A-Za-z0-9]{24}"))
+            throw new IllegalArgumentException(s"${numLetters} does not match [A-Za-z0-9]{24}")
+
+        klass match {
+            case "project" => DxProject(id)
+            case "file" => DxFile(id, container)
+            case "record" => DxRecord(id, container)
+            case "app" => DxApp(id)
+            case "applet" => DxApplet(id, container)
+            case "workflow" => DxWorkflow(id, container)
             case _ =>
                 throw new IllegalArgumentException(s"${id} does not belong to a know class")
         }
@@ -146,9 +149,11 @@ case class DxRecord(id : String,
                     project : Option[DxProject]) extends DxDataObject
 object DxRecord {
     def getInstance(id : String) : DxRecord = {
-        if (id.startsWith("record-"))
-            return DxRecord(id, None)
-        throw new IllegalArgumentException(s"${id} isn't a record")
+         DxDataObject.getInstance(id) match {
+             case r : DxRecord => r
+             case _ =>
+                 throw new IllegalArgumentException(s"${id} isn't a record")
+         }
     }
 }
 
@@ -170,10 +175,11 @@ case class DxFile(id : String,
 
 object DxFile {
     def getInstance(id : String) : DxFile = {
-        //[0-9A-Za-z]{24}
-        if (id.startsWith("file-"))
-            return DxFile(id, None)
-        throw new IllegalArgumentException(s"${id} isn't a file")
+        DxDataObject.getInstance(id) match {
+             case f : DxFile => f
+             case _ =>
+                throw new IllegalArgumentException(s"${id} isn't a file")
+        }
     }
 }
 
@@ -333,11 +339,11 @@ case class DxProject(id: String) extends DxDataObject {
 
 object DxProject {
     def getInstance(id : String) : DxProject = {
-        if (id.startsWith("container-"))
-            return DxProject(id)
-        if (id.startsWith("project-"))
-            return DxProject(id)
-        throw new IllegalArgumentException(s"${id} isn't a container")
+        DxDataObject.getInstance(id) match {
+             case p : DxProject => p
+             case _ =>
+                throw new IllegalArgumentException(s"${id} isn't a project")
+        }
     }
 }
 
@@ -349,9 +355,11 @@ case class DxApplet(id : String,
 
 object DxApplet {
     def getInstance(id : String) : DxApplet = {
-        if (id.startsWith("applet-"))
-            return DxApplet(id, None)
-        throw new IllegalArgumentException(s"${id} isn't an applet")
+        DxDataObject.getInstance(id) match {
+             case a : DxApplet => a
+             case _ =>
+                throw new IllegalArgumentException(s"${id} isn't an applet")
+        }
     }
 }
 
@@ -359,9 +367,11 @@ case class DxApp(id : String) extends DxExecutable
 
 object DxApp {
     def getInstance(id : String) : DxApp = {
-        if (id.startsWith("app-"))
-            return DxApp(id)
-        throw new IllegalArgumentException(s"${id} isn't an app")
+        DxDataObject.getInstance(id) match {
+             case a : DxApp => a
+             case _ =>
+                throw new IllegalArgumentException(s"${id} isn't an app")
+        }
     }
 }
 
@@ -395,9 +405,11 @@ case class DxWorkflow(id : String,
 
 object DxWorkflow {
     def getInstance(id : String) : DxWorkflow = {
-        if (id.startsWith("workflow-"))
-            return DxWorkflow(id, None)
-        throw new IllegalArgumentException(s"${id} isn't a workflow")
+        DxDataObject.getInstance(id) match {
+             case wf : DxWorkflow => wf
+             case _ =>
+                throw new IllegalArgumentException(s"${id} isn't a workflow")
+        }
     }
 }
 

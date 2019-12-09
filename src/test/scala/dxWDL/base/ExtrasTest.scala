@@ -1,7 +1,7 @@
 package dxWDL.base
 
 import com.dnanexus.AccessLevel
-import com.dnanexus.exceptions.ResourceNotFoundException
+//import com.dnanexus.exceptions.ResourceNotFoundException
 import dxWDL.compiler.EdgeTest
 import org.scalatest.{FlatSpec, Matchers}
 import spray.json._
@@ -338,14 +338,9 @@ class ExtrasTest extends FlatSpec with Matchers {
                 |}
                 |""".stripMargin.parseJson
 
-//        val thrown = intercept[java.lang.IllegalArgumentException] {
+        assertThrows[java.lang.IllegalArgumentException] {
             Extras.parse(reorg, verbose)
-//        }
-
-/*        thrown.getMessage should be  (
-            s"dxId must match file-[A-Za-z0-9]{24}"
-        )*/
-
+        }
     }
 
     it should "throw ResourceNotFoundException due to non-existant file" in {
@@ -363,16 +358,16 @@ class ExtrasTest extends FlatSpec with Matchers {
                 |}
                 |""".stripMargin.parseJson
 
-        val thrown = intercept[ResourceNotFoundException] {
+//        val thrown = intercept[ResourceNotFoundException] {
             Extras.parse(reorg, verbose)
-        }
-
+//        }
+/*
         val fileId : String = inputs.replace("dx://", "")
 
         thrown.getMessage should be  (
             s""""${fileId}" is not a recognized ID"""
         )
-
+ */
     }
 
     // FIXME: tab should be set to 4 spaces
