@@ -704,14 +704,14 @@ object Main extends App {
                                 |an API call.
                                 |""".stripMargin)
                 val dxJob = DxJob(DxUtils.dxEnv.getJob())
-                dxJob.describe(Field.Applet).getApplet()
+                dxJob.describe().applet
             case Some(JsString(x)) =>
                 DxApplet(x, None)
             case Some(other) =>
                 throw new Exception(s"malformed applet field ${other} in job info")
         }
 
-        val details: JsValue = applet.describe(Field.Details).details.get
+        val details: JsValue = applet.describe().details.get
         val JsString(womSourceCodeEncoded) = details.asJsObject.fields("womSourceCode")
         val womSourceCode = Utils.base64DecodeAndGunzip(womSourceCodeEncoded)
 
@@ -729,7 +729,7 @@ object Main extends App {
 
     // Make a list of all the files cloned for access by this applet.
     // Bulk describe all the them.
-    private def runtimeBulkFileDescribe(jobInputPath: Path) : Map[DxFile, DxDescribe] = {
+    private def runtimeBulkFileDescribe(jobInputPath: Path) : Map[DxFile, DxFileDescribe] = {
         val inputs: JsValue = Utils.readFileContent(jobInputPath).parseJson
 
         val allFilesReferenced = inputs.asJsObject.fields.flatMap{

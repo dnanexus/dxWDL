@@ -40,59 +40,32 @@ case class IOParameter(name: String,
                        ioClass: DxIOClass.Value,
                        optional : Boolean)
 
-case class DxFilePart(state: String,
-                      size: Long,
-                      md5: String)
-
-// This is similar to DXDataObject.Describe
-case class DxDescribe(name : String,
-                      folder: String,
-                      size : Option[Long],
-                      container: DxProject, // a project or a container
-                      dxobj : DxObject,
-                      created : Long,
-                      modified : Long,
-                      properties: Map[String, String],
-                      inputSpec : Option[Vector[IOParameter]],
-                      outputSpec : Option[Vector[IOParameter]],
-                      parts : Option[Map[Int, DxFilePart]],
-                      details : Option[JsValue],
-                      applet : Option[DxApplet],
-                      parentJob : Option[DxJob],
-                      analysis : Option[DxAnalysis]) {
-    def getCreationDate() : java.util.Date = new java.util.Date(created)
-    def getApplet() : DxApplet = applet.get
-    def getParentJob() : DxJob = parentJob.get
-    def getAnalysis() : DxAnalysis = analysis.get
-}
-
 // Extra fields for describe
 object Field extends Enumeration {
-    val Details, Parts, Applet, ParentJob, Analysis = Value
+    val Details, Parts = Value
+}
+
+sealed trait DxObjectDescribe {
+    val project : String
+    val id  : String
+    val name : String
+    val created : Long
+    val modified : Long
+    val properties: Map[String, String]
+    val details : Option[JsValue]
 }
 
 sealed trait DxObject {
     val id : String
     def getId() : String = id
+    def describe() : DxObjectDescribe
 
-    def describe() : DxDescribe = {
-        describe(Vector.empty)
-    }
-
-    def describe(field: Field.Value) : DxDescribe = {
-        describe(Vector(field))
-    }
-
-    def describe(fields: Vector[Field.Value]) : DxDescribe = {
-        val results = DxBulkDescribe.apply(Vector(this), fields)
-        results.size match {
-            case 0 =>
-                throw new com.dnanexus.exceptions.ResourceNotFoundException(id, 404)
-            case 1 =>
-                results.values.head
-            case num =>
-                throw new Exception(s"sanity: ${num} results found")
-        }
+    def fromJsonProperties(props : JsValue) : Map[String, String] = {
+        props.asJsObject.fields.map{
+            case (k,JsString(v)) => k -> v
+            case (_,_) =>
+                throw new Exception(s"malform JSON properties ${props}")
+        }.toMap
     }
 }
 
@@ -104,7 +77,7 @@ object DxDataObject {
     //    file-FV5fqXj0ffPB9bKP986j5kVQ
     //
     def getInstance(id : String,
-                    container: Option[DxProject]) : DxDataObject = {
+                    container: Option[DxProject] = None) : DxDataObject = {
         val parts = id.split("-")
         if (parts.length != 2)
             throw new IllegalArgumentException(s"${id} is not of the form class-alphnumeric{24}")
@@ -131,10 +104,6 @@ object DxDataObject {
         getInstance(id, Some(container))
     }
 
-    def getInstance(id : String) : DxDataObject = {
-        getInstance(id, None)
-    }
-
     def isDataObject(id : String) : Boolean = {
         try {
             val o = getInstance(id, None)
@@ -147,8 +116,38 @@ object DxDataObject {
     }
 }
 
+case class DxRecordDescribe(project : String,
+                            id  : String,
+                            name : String,
+                            folder: String,
+                            created : Long,
+                            modified : Long,
+                            properties: Map[String, String],
+                            details : Option[JsValue]) extends DxObjectDescribe
+
 case class DxRecord(id : String,
-                    project : Option[DxProject]) extends DxDataObject
+                    project : Option[DxProject]) extends DxDataObject {
+    def describe() : DxRecordDescribe = {
+        val response = DXAPI.recordDescribe(id, classOf[JsonNode], DxUtils.dxEnv)
+        val descJs:JsValue = DxUtils.jsValueOfJsonNode(response)
+        val desc = descJs.asJsObject.getFields("project", "id", "name", "folder",
+                                               "created", "modified", "properties",
+                                               "details") match {
+            case Seq(JsString(project), JsString(id),
+                     JsString(name), JsString(folder), JsNumber(created), JsNumber(modified), properties, details) =>
+                DxRecordDescribe(project,
+                                 id,
+                                 name,
+                                 folder,
+                                 created.toLong,
+                                 modified.toLong,
+                                 fromJsonProperties(properties),
+                                 Some(details))
+        }
+        desc
+    }
+}
+
 object DxRecord {
     def getInstance(id : String) : DxRecord = {
          DxDataObject.getInstance(id) match {
@@ -160,8 +159,27 @@ object DxRecord {
 }
 
 
+case class DxFilePart(state: String,
+                      size: Long,
+                      md5: String)
+
+case class DxFileDescribe(project : String,
+                          id : String,
+                          name : String,
+                          folder: String,
+                          created : Long,
+                          modified : Long,
+                          properties : Map[String, String],
+                          details : Option[JsValue],
+                          size : Option[Long],
+                          parts : Option[Map[Int, DxFilePart]]) extends DxObjectDescribe {
+    def getCreationDate() : java.util.Date = new java.util.Date(created)
+}
 case class DxFile(id : String,
                   project : Option[DxProject]) extends DxDataObject {
+
+    def describe() : DxFileDescribe = ???
+
     def getLinkAsJson : JsValue = {
         project match {
             case None =>
@@ -183,46 +201,44 @@ object DxFile {
                 throw new IllegalArgumentException(s"${id} isn't a file")
         }
     }
+
+    def getInstance(id : String, project : DxProject) : DxFile = {
+        DxDataObject.getInstance(id, Some(project)) match {
+             case f : DxFile => f
+             case _ =>
+                throw new IllegalArgumentException(s"${id} isn't a file")
+        }
+    }
 }
 
 case class FolderContents(dataObjects: Vector[DxDataObject],
                           subFolders : Vector[String])
 
+case class DxProjectDescribe(project : String,
+                             id : String,
+                             name : String,
+                             folder: String,
+                             created : Long,
+                             modified : Long,
+                             properties : Map[String, String],
+                             details : Option[JsValue]) extends DxObjectDescribe
+
 // A project is a subtype of a container
 case class DxProject(id: String) extends DxDataObject {
-
-    override def describe() : DxDescribe = {
+    def describe() : DxProjectDescribe = {
         val response = DXAPI.projectDescribe(id, classOf[JsonNode], DxUtils.dxEnv)
         val descJs:JsValue = DxUtils.jsValueOfJsonNode(response)
-        val desc = descJs.asJsObject.getFields("name", "size", "created", "modified") match {
+        val desc = descJs.asJsObject.getFields("name", "created", "modified") match {
             case Seq(JsString(name), JsNumber(created), JsNumber(modified)) =>
-                DxDescribe(name,
-                           "/",
-                           Some(0),
-                           this,
-                           this,
-                           created.toLong,
-                           modified.toLong,
-                           Map.empty,
-                           None,
-                           None,
-                           None,
-                           None,
-                           None,
-                           None,
-                           None)
+                DxProjectDescribe(id, id, name, "/",
+                                  created.toLong,
+                                  modified.toLong,
+                                  Map.empty,
+                                  None)
             case other =>
                 throw new Exception(s"malformed JSON ${other}")
         }
         desc
-    }
-
-    override def describe(field: Field.Value) : DxDescribe = {
-        throw new Exception("not supported")
-    }
-
-    override def describe(fields: Vector[Field.Value]) : DxDescribe = {
-        throw new Exception("not supported")
     }
 
     def listFolder(path : String) : FolderContents = {
@@ -352,8 +368,21 @@ object DxProject {
 // Objects that can be run on the platform
 sealed trait DxExecutable extends DxDataObject
 
+case class DxAppletDescribe(project : String,
+                            id : String,
+                            name : String,
+                            folder: String,
+                            created : Long,
+                            modified : Long,
+                            properties : Map[String, String],
+                            details : Option[JsValue],
+                            inputSpec : Option[Vector[IOParameter]],
+                            outputSpec : Option[Vector[IOParameter]]) extends DxObjectDescribe
+
 case class DxApplet(id : String,
-                    project : Option[DxProject]) extends DxExecutable
+                    project : Option[DxProject]) extends DxExecutable {
+    def describe() : DxAppletDescribe = ???
+}
 
 object DxApplet {
     def getInstance(id : String) : DxApplet = {
@@ -365,7 +394,19 @@ object DxApplet {
     }
 }
 
-case class DxApp(id : String) extends DxExecutable
+case class DxAppDescribe(project : String,
+                         id  : String,
+                         name : String,
+                         created : Long,
+                         modified : Long,
+                         properties: Map[String, String],
+                         details : Option[JsValue],
+                         inputSpec : Option[Vector[IOParameter]],
+                         outputSpec : Option[Vector[IOParameter]]) extends DxObjectDescribe
+
+case class DxApp(id : String) extends DxExecutable {
+    def describe() : DxAppDescribe = ???
+}
 
 object DxApp {
     def getInstance(id : String) : DxApp = {
@@ -377,8 +418,20 @@ object DxApp {
     }
 }
 
+case class DxWorkflowDescribe(project : String,
+                              id  : String,
+                              name : String,
+                              created : Long,
+                              modified : Long,
+                              properties: Map[String, String],
+                              details : Option[JsValue],
+                              inputSpec : Option[Vector[IOParameter]],
+                              outputSpec : Option[Vector[IOParameter]]) extends DxObjectDescribe
+
 case class DxWorkflow(id : String,
                       project : Option[DxProject]) extends DxExecutable {
+    def describe() : DxWorkflowDescribe = ???
+
     def close() : Unit = {
         DXAPI.workflowClose(id,
                             classOf[JsonNode],
@@ -418,7 +471,18 @@ object DxWorkflow {
 // Actual executions on the platform. There are jobs and analyses
 sealed trait DxExecution extends DxObject
 
+
+case class DxAnalysisDescribe(project : String,
+                              id  : String,
+                              name : String,
+                              created : Long,
+                              modified : Long,
+                              properties: Map[String, String],
+                              details : Option[JsValue]) extends DxObjectDescribe
+
 case class DxAnalysis(id : String) extends DxObject with DxExecution {
+    def describe() : DxAnalysisDescribe = ???
+
     def setProperties(props: Map[String, String]) : Unit = {
         val request = JsObject(
             "properties" -> JsObject(props.map{ case (k,v) =>
@@ -442,7 +506,22 @@ object DxAnalysis {
     }
 }
 
-case class DxJob(id : String) extends DxObject with DxExecution
+
+case class DxJobDescribe(project : String,
+                         id  : String,
+                         name : String,
+                         folder: String,
+                         created : Long,
+                         modified : Long,
+                         properties: Map[String, String],
+                         details : Option[JsValue],
+                         applet : DxApplet,
+                         parentJob : Option[DxJob],
+                         analysis : Option[DxAnalysis]) extends DxObjectDescribe
+
+case class DxJob(id : String) extends DxObject with DxExecution {
+    def describe() : DxJobDescribe = ???
+}
 
 object DxJob {
     def getInstance(id : String) : DxJob = {

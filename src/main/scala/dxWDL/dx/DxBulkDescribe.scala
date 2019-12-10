@@ -35,8 +35,8 @@ object DxBulkDescribe {
         }.toMap
     }
 
-    private def submitRequest(objs : Vector[DxObject],
-                              extraFields : Vector[String]) : Map[DxObject, DxDescribe] = {
+    private def submitRequest(objs : Vector[DxFile],
+                              extraFields : Vector[String]) : Map[DxFile, DxFileDescribe] = {
         val requestFields = Map("objects" ->
                                    JsArray(objs.map{ x : DxObject => JsString(x.id) }))
 
@@ -63,33 +63,29 @@ object DxBulkDescribe {
             case other => throw new Exception(s"API call returned invalid data ${other}")
         }
         resultsPerObj.zipWithIndex.map{ case (jsv, i) =>
-            val dxFullDesc = jsv.asJsObject.fields.get("describe") match {
+            val (dxFile, dxFullDesc) = jsv.asJsObject.fields.get("describe") match {
                 case None =>
                     throw new ResourceNotFoundException(s""""${objs(i).id}" is not a recognized ID""", 404)
                 case Some(descJs) =>
-                    val dxDesc =
+                    val (dxFile, dxDesc) =
                         descJs.asJsObject.getFields("name", "folder", "size", "id", "project", "created", "modified") match {
                             case Seq(JsString(name), JsString(folder),
                                      JsNumber(size), JsString(oid), JsString(projectId),
                                      JsNumber(created), JsNumber(modified)) =>
                                 // This could be a container, not a project.
                                 val dxContainer = DxProject.getInstance(projectId)
-                                val dxObj = DxDataObject.getInstance(oid, dxContainer)
-                                DxDescribe(name,
-                                           folder,
-                                           Some(size.toLong),
-                                           dxContainer,
-                                           dxObj,
-                                           created.toLong,
-                                           modified.toLong,
-                                           Map.empty,
-                                           None,
-                                           None,
-                                           None,
-                                           None,
-                                           None,
-                                           None,
-                                           None)
+                                val dxFile = DxFile.getInstance(oid, dxContainer)
+                                val desc = DxFileDescribe(projectId,
+                                                          oid,
+                                                          name,
+                                                          folder,
+                                                          created.toLong,
+                                                          modified.toLong,
+                                                          Map.empty,
+                                                          None,
+                                                          Some(size.toLong),
+                                                          None)
+                                (dxFile, desc)
                             case _ =>
                                 throw new Exception(s"bad describe object ${descJs}")
                         }
@@ -97,32 +93,17 @@ object DxBulkDescribe {
                     // The parts may be empty, only files have it, and we don't always ask for it.
                     val parts = descJs.asJsObject.fields.get("parts").map(parseFileParts)
                     val details = descJs.asJsObject.fields.get("details")
-                    val applet = descJs.asJsObject.fields.get("applet").map{
-                        case JsString(x) => DxApplet.getInstance(x)
-                        case other => throw new Exception(s"malformed json ${other}")
-                    }
-                    val parentJob = descJs.asJsObject.fields.get("parentJob").map{
-                        case JsString(x) => DxJob.getInstance(x)
-                        case other => throw new Exception(s"malformed json ${other}")
-                    }
-                    val analysis = descJs.asJsObject.fields.get("analysis").map{
-                        case JsString(x) => DxAnalysis.getInstance(x)
-                        case other => throw new Exception(s"malformed json ${other}")
-                    }
-                    dxDesc.copy(parts = parts,
-                                details = details,
-                                applet = applet,
-                                parentJob = parentJob,
-                                analysis = analysis)
+                    val dxDescFull = dxDesc.copy(parts = parts, details = details)
+                    (dxFile, dxDescFull)
             }
-            dxFullDesc.dxobj -> dxFullDesc
+            dxFile -> dxFullDesc
         }.toMap
     }
 
     // Describe the names of all the files in one batch. This is much more efficient
     // than submitting file describes one-by-one.
-    def apply(objs: Vector[DxObject],
-              extraFields : Vector[Field.Value] = Vector.empty) : Map[DxObject, DxDescribe] = {
+    def apply(objs: Vector[DxFile],
+              extraFields : Vector[Field.Value] = Vector.empty) : Map[DxFile, DxFileDescribe] = {
         if (objs.isEmpty) {
             // avoid an unnessary API call; this is important for unit tests
             // that do not have a network connection.
@@ -135,13 +116,10 @@ object DxBulkDescribe {
         val extraFieldsStr = extraFields.map{
             case Field.Details => "details"
             case Field.Parts => "parts"
-            case Field.Applet => "applet"
-            case Field.ParentJob => "parentJob"
-            case Field.Analysis => "analysis"
         }.toSet.toVector
 
         // iterate on the ranges
-        slices.foldLeft(Map.empty[DxObject, DxDescribe]) {
+        slices.foldLeft(Map.empty[DxFile, DxFileDescribe]) {
             case (accu, objRange) =>
                 accu ++ submitRequest(objRange.toVector, extraFieldsStr)
         }
