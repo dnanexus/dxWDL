@@ -453,7 +453,7 @@ class GenerateIRTest extends FlatSpec with Matchers {
         retval shouldBe a[Main.SuccessfulTerminationIR]
     }
 
-    it should "detect a request for GPU" taggedAs(EdgeTest) in {
+    it should "detect a request for GPU" in {
         val path = pathFromBasename("compiler", "GPU.wdl")
         val retval = Main.compile(path.toString
 //                                      :: "--verbose"
@@ -563,4 +563,27 @@ class GenerateIRTest extends FlatSpec with Matchers {
         retval shouldBe a [Main.SuccessfulTermination]
 
     }
+
+    it should "pass as subworkflows do not have expression statement in output block" taggedAs(EdgeTest)  in {
+        val path = pathFromBasename("subworkflows", basename="trains.wdl")
+
+
+        val retval = Main.compile(
+            path.toString :: cFlags
+        )
+        retval shouldBe a [Main.SuccessfulTerminationIR]
+    }
+
+    // this is currently failing.
+    it should "pass with subworkflows having expression" taggedAs(EdgeTest)  in {
+        val path = pathFromBasename("subworkflows", basename="trains_station.wdl")
+
+
+        val retval = Main.compile(
+            path.toString :: cFlags
+        )
+        retval shouldBe a [Main.SuccessfulTerminationIR]
+    }
+
+
 }
