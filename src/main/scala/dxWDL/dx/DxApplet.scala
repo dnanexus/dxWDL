@@ -19,12 +19,16 @@ case class DxApplet(id : String,
                     project : Option[DxProject]) extends DxExecutable {
     def describe(fields : Set[Field.Value] = Set.empty) : DxAppletDescribe = {
         val projSpec = DxObject.maybeSpecifyProject(project)
-        val baseFields = DxObject.requestFields(fields)
-        val allFields = baseFields ++ Map("project" -> JsTrue,
-                                          "folder"  -> JsTrue,
-                                          "inputSpec" -> JsTrue,
-                                          "outputSpec" -> JsTrue)
-        val request = JsObject(projSpec + ("fields" -> JsObject(allFields)))
+        val defaultFields = Set(Field.Project,
+                                Field.Id,
+                                Field.Name,
+                                Field.Folder,
+                                Field.Created,
+                                Field.Modified,
+                                Field.InputSpec,
+                                Field.OutputSpec)
+        val allFields = fields ++ defaultFields
+        val request = JsObject(projSpec + "fields" -> DxObject.requestFields(allFields))
         val response = DXAPI.appletDescribe(id,
                                             DxUtils.jsonNodeOfJsValue(request),
                                             classOf[JsonNode],

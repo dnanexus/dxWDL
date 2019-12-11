@@ -711,7 +711,7 @@ object Main extends App {
                 throw new Exception(s"malformed applet field ${other} in job info")
         }
 
-        val details: JsValue = applet.describe().details.get
+        val details: JsValue = applet.describe(Set(Field.Details)).details.get
         val JsString(womSourceCodeEncoded) = details.asJsObject.fields("womSourceCode")
         val womSourceCode = Utils.base64DecodeAndGunzip(womSourceCodeEncoded)
 

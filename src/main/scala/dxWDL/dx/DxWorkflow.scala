@@ -19,13 +19,16 @@ case class DxWorkflow(id : String,
                       project : Option[DxProject]) extends DxExecutable {
     def describe(fields : Set[Field.Value] = Set.empty) : DxWorkflowDescribe = {
         val projSpec = DxObject.maybeSpecifyProject(project)
-        val baseFields = DxObject.requestFields(fields)
-        val allFields = baseFields ++ Map("project" -> JsTrue,
-                                          "folder"  -> JsTrue,
-                                          "size" -> JsTrue,
-                                          "inputSpec" -> JsTrue,
-                                          "outputSpec" -> JsTrue)
-        val request = JsObject(projSpec + ("fields" -> JsObject(allFields)))
+        val defaultFields = Set(Field.Project,
+                                Field.Id,
+                                Field.Name,
+                                Field.Folder,
+                                Field.Created,
+                                Field.Modified,
+                                Field.InputSpec,
+                                Field.OutputSpec)
+        val allFields = fields ++ defaultFields
+        val request = JsObject(projSpec + "fields" -> DxObject.requestFields(allFields))
         val response = DXAPI.workflowDescribe(id,
                                               DxUtils.jsonNodeOfJsValue(request),
                                               classOf[JsonNode],
@@ -34,11 +37,11 @@ case class DxWorkflow(id : String,
         val desc = descJs.asJsObject.getFields("project", "id", "name", "folder",
                                                "created", "modified",
                                                "inputSpec", "outputSpec") match {
-            case Seq(JsString(project), JsString(id),
-                     JsString(name), JsString(folder), JsNumber(created),
-                     JsNumber(modified), JsNumber(size),
+            case Seq(JsString(projectId), JsString(id),
+                     JsString(name), JsString(folder),
+                     JsNumber(created), JsNumber(modified),
                      JsArray(inputSpec), JsArray(outputSpec)) =>
-                DxWorkflowDescribe(project,
+                DxWorkflowDescribe(projectId,
                                    id,
                                    name,
                                    folder,

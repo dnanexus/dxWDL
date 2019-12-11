@@ -15,10 +15,14 @@ case class DxAppDescribe(id  : String,
 
 case class DxApp(id : String) extends DxExecutable {
     def describe(fields : Set[Field.Value] = Set.empty) : DxAppDescribe = {
-        val baseFields = DxObject.requestFields(fields)
-        val allFields = baseFields ++ Map("inputSpec" -> JsTrue,
-                                          "outputSpec" -> JsTrue)
-        val request = JsObject("fields" -> JsObject(allFields))
+        val defaultFields = Set(Field.Id,
+                                Field.Name,
+                                Field.Created,
+                                Field.Modified,
+                                Field.InputSpec,
+                                Field.OutputSpec)
+        val allFields = fields ++ defaultFields
+        val request = JsObject("fields" -> DxObject.requestFields(allFields))
         val response = DXAPI.appDescribe(id,
                                          DxUtils.jsonNodeOfJsValue(request),
                                          classOf[JsonNode],

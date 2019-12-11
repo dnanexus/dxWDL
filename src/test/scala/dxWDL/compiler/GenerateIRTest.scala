@@ -567,7 +567,7 @@ class GenerateIRTest extends FlatSpec with Matchers {
 
     }
 
-    it should "pass as subworkflows do not have expression statement in output block" taggedAs(EdgeTest)  in {
+    it should "pass as subworkflows do not have expression statement in output block" taggedAs(EdgeTest) in {
         val path = pathFromBasename("subworkflows", basename="trains.wdl")
 
 
@@ -581,9 +581,11 @@ class GenerateIRTest extends FlatSpec with Matchers {
     it should "pass with subworkflows having expression" taggedAs(EdgeTest)  in {
         val path = pathFromBasename("subworkflows", basename="trains_station.wdl")
 
-
         val retval = Main.compile(
-            path.toString :: cFlags
+            path.toString
+                :: "--verbose"
+                :: "--verboseKey" :: "GenerateIR"
+                :: cFlags
         )
         retval shouldBe a [Main.SuccessfulTerminationIR]
     }

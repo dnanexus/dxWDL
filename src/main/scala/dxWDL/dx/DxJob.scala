@@ -19,19 +19,23 @@ case class DxJob(id : String,
                  project : Option[DxProject] = None) extends DxObject with DxExecution {
     def describe(fields : Set[Field.Value] = Set.empty) : DxJobDescribe = {
         val projSpec = DxObject.maybeSpecifyProject(project)
-        val baseFields = DxObject.requestFields(fields)
-        val allFields = baseFields ++ Map("applet" -> JsTrue,
-                                          "parentJob"  -> JsTrue,
-                                          "analysis" -> JsTrue)
-        val request = JsObject(projSpec + ("fields" -> JsObject(allFields)))
+        val defaultFields = Set(Field.Project,
+                                Field.Id,
+                                Field.Name,
+                                Field.Created,
+                                Field.Modified,
+                                Field.Applet,
+                                Field.ParentJob,
+                                Field.Analysis)
+        val allFields = fields ++ defaultFields
+        val request = JsObject(projSpec + "fields" -> DxObject.requestFields(allFields))
         val response = DXAPI.analysisDescribe(id,
                                               DxUtils.jsonNodeOfJsValue(request),
                                               classOf[JsonNode],
                                               DxUtils.dxEnv)
         val descJs:JsValue = DxUtils.jsValueOfJsonNode(response)
-        val desc = descJs.asJsObject.getFields("project", "id", "name", "folder",
-                                               "created", "modified",
-                                               "applet") match {
+        val desc = descJs.asJsObject.getFields("project", "id", "name",
+                                               "created", "modified", "applet") match {
             case Seq(JsString(project), JsString(id), JsString(name),
                      JsNumber(created), JsNumber(modified), JsString(applet)) =>
                 DxJobDescribe(project,

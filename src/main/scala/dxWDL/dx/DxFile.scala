@@ -24,11 +24,15 @@ case class DxFile(id : String,
 
     def describe(fields : Set[Field.Value] = Set.empty) : DxFileDescribe = {
         val projSpec = DxObject.maybeSpecifyProject(project)
-        val baseFields = DxObject.requestFields(fields)
-        val allFields = baseFields ++ Map("project" -> JsTrue,
-                                          "folder"  -> JsTrue,
-                                          "size" -> JsTrue)
-        val request = JsObject(projSpec + ("fields" -> JsObject(allFields)))
+        val defaultFields = Set(Field.Project,
+                                Field.Id,
+                                Field.Name,
+                                Field.Folder,
+                                Field.Created,
+                                Field.Modified,
+                                Field.Size)
+        val allFields = fields ++ defaultFields
+        val request = JsObject(projSpec + "fields" -> DxObject.requestFields(allFields))
         val response = DXAPI.fileDescribe(id,
                                           DxUtils.jsonNodeOfJsValue(request),
                                           classOf[JsonNode],

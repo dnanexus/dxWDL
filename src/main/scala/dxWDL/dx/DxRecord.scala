@@ -17,11 +17,14 @@ case class DxRecord(id : String,
                     project : Option[DxProject]) extends DxDataObject {
     def describe(fields : Set[Field.Value] = Set.empty) : DxRecordDescribe = {
         val projSpec = DxObject.maybeSpecifyProject(project)
-        val baseFields = DxObject.requestFields(fields)
-        val allFields = baseFields ++ Map("project" -> JsTrue,
-                                          "folder"  -> JsTrue,
-                                          "size" -> JsTrue)
-        val request = JsObject(projSpec + ("fields" -> JsObject(allFields)))
+        val defaultFields = Set(Field.Project,
+                                Field.Id,
+                                Field.Name,
+                                Field.Folder,
+                                Field.Created,
+                                Field.Modified)
+        val allFields = fields ++ defaultFields
+        val request = JsObject(projSpec + "fields" -> DxObject.requestFields(allFields))
         val response = DXAPI.recordDescribe(id,
                                             DxUtils.jsonNodeOfJsValue(request),
                                             classOf[JsonNode],
@@ -29,9 +32,10 @@ case class DxRecord(id : String,
         val descJs:JsValue = DxUtils.jsValueOfJsonNode(response)
         val desc = descJs.asJsObject.getFields("project", "id", "name", "folder",
                                                "created", "modified") match {
-            case Seq(JsString(project), JsString(id),
-                     JsString(name), JsString(folder), JsNumber(created), JsNumber(modified)) =>
-                DxRecordDescribe(project,
+            case Seq(JsString(projectId), JsString(id),
+                     JsString(name), JsString(folder),
+                     JsNumber(created), JsNumber(modified)) =>
+                DxRecordDescribe(projectId,
                                  id,
                                  name,
                                  folder,

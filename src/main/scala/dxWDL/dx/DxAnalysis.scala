@@ -19,10 +19,15 @@ case class DxAnalysis(id : String,
                       project : Option[DxProject]) extends DxObject with DxExecution {
     def describe(fields : Set[Field.Value] = Set.empty) : DxAnalysisDescribe = {
         val projSpec = DxObject.maybeSpecifyProject(project)
-        val baseFields = DxObject.requestFields(fields)
-        val allFields = baseFields ++ Map("project" -> JsTrue,
-                                          "folder"  -> JsTrue)
-        val request = JsObject(projSpec + ("fields" -> JsObject(allFields)))
+        val defaultFields = Set(Field.Project,
+                                Field.Id,
+                                Field.Name,
+                                Field.Folder,
+                                Field.Created,
+                                Field.Modified)
+        val allFields = fields ++ defaultFields
+        val request = JsObject(projSpec +
+                                   "fields" -> DxObject.requestFields(allFields))
         val response = DXAPI.analysisDescribe(id,
                                               DxUtils.jsonNodeOfJsValue(request),
                                               classOf[JsonNode],

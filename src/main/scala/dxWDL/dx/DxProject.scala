@@ -6,10 +6,8 @@ import spray.json._
 
 import dxWDL.base.Utils
 
-case class DxProjectDescribe(project : String,
-                             id : String,
+case class DxProjectDescribe(id : String,
                              name : String,
-                             folder: String,
                              created : Long,
                              modified : Long,
                              properties : Option[Map[String, String]],
@@ -22,7 +20,11 @@ case class FolderContents(dataObjects: Vector[DxDataObject],
 // A project is a subtype of a container
 case class DxProject(id: String) extends DxDataObject {
     def describe(fields : Set[Field.Value] = Set.empty) : DxProjectDescribe = {
-        val request = JsObject("fields" -> JsObject(DxObject.requestFields(fields)))
+        val defaultFields = Set(Field.Id,
+                                Field.Name,
+                                Field.Created,
+                                Field.Modified)
+        val request = JsObject("fields" -> DxObject.requestFields(defaultFields))
         val response =
             if (id.startsWith("project-"))
                 DXAPI.projectDescribe(id,
@@ -35,12 +37,10 @@ case class DxProject(id: String) extends DxDataObject {
                                         classOf[JsonNode],
                                         DxUtils.dxEnv)
         val descJs:JsValue = DxUtils.jsValueOfJsonNode(response)
-        val desc = descJs.asJsObject.getFields("name", "created", "modified") match {
-            case Seq(JsString(name), JsNumber(created), JsNumber(modified)) =>
+        val desc = descJs.asJsObject.getFields("id", "name", "created", "modified") match {
+            case Seq(JsString(id), JsString(name), JsNumber(created), JsNumber(modified)) =>
                 DxProjectDescribe(id,
-                                  id,
                                   name,
-                                  "/",
                                   created.toLong,
                                   modified.toLong,
                                   None,

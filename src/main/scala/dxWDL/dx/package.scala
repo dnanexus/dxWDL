@@ -40,7 +40,15 @@ case class IOParameter(name: String,
 
 // Extra fields for describe
 object Field extends Enumeration {
-    val Details, Parts, Properties = Value
+    val Analysis, Applet,
+        Created,
+        Details, Folder,
+        Id, InputSpec,
+        Modified,
+        Name,
+        OutputSpec,
+        ParentJob, Parts, Project, Properties,
+        Size = Value
 }
 
 trait DxObjectDescribe {
@@ -119,21 +127,29 @@ object DxObject {
         }
     }
 
-    def requestFields(fields : Set[Field.Value]) : Map[String, JsValue] = {
-        val baseFields = Map("id" -> JsTrue,
-                             "name" -> JsTrue,
-                             "created" -> JsTrue,
-                             "modified" -> JsTrue)
-        val optFields = fields.map{
-            case Field.Details =>
-                "details" -> JsTrue
-            case Field.Parts =>
-                "parts" -> JsTrue
-            case Field.Properties =>
-                "properties" -> JsTrue
-        }.toMap
-        optFields ++ baseFields
+    def requestFields(fields : Set[Field.Value]) : JsValue = {
+        val defaultFields = Set(Field.Id, Field.Name, Field.Created, Field.Modified)
+        val allFields = fields ++ defaultFields
+        val allFieldsString = allFields.map{
+            case Field.Analysis => "analysis"
+            case Field.Applet => "applet"
+            case Field.Created => "created"
+            case Field.Details => "details"
+            case Field.Folder => "folder"
+            case Field.Id => "id"
+            case Field.InputSpec => "inputSpec"
+            case Field.Modified => "modified"
+            case Field.Name => "name"
+            case Field.OutputSpec => "outputSpec"
+            case Field.Parts => "parts"
+            case Field.Project => "project"
+            case Field.Properties => "properties"
+            case Field.Size => "size"
+        }
+        val m : Map[String, JsValue] = allFieldsString.map{ x => x -> JsTrue }.toMap
+        JsObject(m)
     }
+
 }
 
 // Objects that can be run on the platform
