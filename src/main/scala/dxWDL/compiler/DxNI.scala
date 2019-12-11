@@ -268,7 +268,7 @@ case class DxNI(verbose: Verbose,
             checkedGetIoSpec(name, x)
         }.toVector
         val normName = normalizeAppName(name)
-        DxAppDescribe("", id, normName, "", 0, 0, None, None, Some(inputSpec), Some(outputSpec))
+        DxAppDescribe(id, normName, 0, 0, None, None, Some(inputSpec), Some(outputSpec))
     }
 
     private def appToWdlInterface(dxApp: DxAppDescribe) : String = {

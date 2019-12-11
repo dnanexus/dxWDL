@@ -50,7 +50,7 @@ case class WorkflowOutputReorg(wf: WorkflowDefinition,
         val req = JsObject("fields" -> JsObject(
                                "input" -> JsBoolean(true),
                                "output" -> JsBoolean(true)))
-        val rep = DXAPI.analysisDescribe(dxAnalysis.getId(), req, classOf[JsonNode])
+        val rep = DXAPI.analysisDescribe(dxAnalysis.id, req, classOf[JsonNode])
         val repJs:JsValue = DxUtils.jsValueOfJsonNode(rep)
         val outputs = repJs.asJsObject.fields.get("output") match {
             case None => throw new Exception("Failed to get analysis outputs")
@@ -106,12 +106,12 @@ case class WorkflowOutputReorg(wf: WorkflowDefinition,
         if (analysisFiles.isEmpty)
             return
 
-        val exportIds:Set[String] = exportFiles.map(_.getId).toSet
+        val exportIds:Set[String] = exportFiles.map(_.id).toSet
         val exportNames:Seq[String] = bulkGetFilenames(exportFiles, dxProject)
         Utils.appletLog(verbose, s"exportFiles=${exportNames}")
 
         // Figure out which of the files should be kept
-        val intermediateFiles = analysisFiles.filter(x => !(exportIds contains x.getId))
+        val intermediateFiles = analysisFiles.filter(x => !(exportIds contains x.id))
         val iNames:Seq[String] = bulkGetFilenames(intermediateFiles, dxProject)
         Utils.appletLog(verbose, s"intermediate files=${iNames}")
         if (intermediateFiles.isEmpty)

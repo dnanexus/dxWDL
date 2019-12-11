@@ -62,7 +62,7 @@ case class Native(dxWDLrtId: Option[String],
                 // Open the archive
                 // Extract the archive from the details field
                 val record = DxRecord.getInstance(id)
-                val desc = record.describe(Vector(Field.Details))
+                val desc = record.describe(Set(Field.Details))
                 val details = desc.details.get
                 val dxLink = details.asJsObject.fields.get("archiveFileId") match {
                     case Some(x) => x
@@ -72,7 +72,7 @@ case class Native(dxWDLrtId: Option[String],
                 val name = dxFile.describe().name
                 Some(JsObject(
                          "name" -> JsString(name),
-                         "id" -> JsObject("$dnanexus_link" -> JsString(dxFile.getId()))
+                         "id" -> JsObject("$dnanexus_link" -> JsString(dxFile.id))
                      ))
         }
 
@@ -425,7 +425,16 @@ case class Native(dxWDLrtId: Option[String],
         dxObjDir.lookupOtherVersions(name, digest) match {
             case None => ()
             case Some((dxObj, desc)) =>
-                Utils.trace(verbose.on, s"Found existing version of ${name} in folder ${desc.folder}")
+                dxObj match {
+                    case a : DxAppDescribe =>
+                        Utils.trace(verbose.on, s"Found existing version of app ${name}")
+                    case apl : DxAppletDescribe =>
+                        Utils.trace(verbose.on, s"Found existing version of applet ${name} in folder ${apl.folder}")
+                    case wf : DxWorkflowDescribe =>
+                        Utils.trace(verbose.on, s"Found existing version of workflow ${name} in folder ${wf.folder}")
+                    case other =>
+                        throw new Exception(s"bad object ${other}")
+                }
                 return Some(dxObj)
         }
 
@@ -449,7 +458,7 @@ case class Native(dxWDLrtId: Option[String],
             case _ =>
                 val dxClass = existingDxObjs.head.dxClass
                 Utils.warning(verbose, s"""|More than one ${dxClass} ${name} found in
-                                           |path ${dxProject.getId()}:${folder}""".stripMargin)
+                                           |path ${dxProject.id}:${folder}""".stripMargin)
                 true
         }
 
@@ -462,12 +471,12 @@ case class Native(dxWDLrtId: Option[String],
                     // the dx:object exists, and needs to be removed. There
                     // may be several versions, all are removed.
                     val objs = existingDxObjs.map(_.dxObj)
-                    Utils.trace(verbose.on, s"Removing old ${name} ${objs.map(_.getId)}")
+                    Utils.trace(verbose.on, s"Removing old ${name} ${objs.map(_.id)}")
                     dxProject.removeObjects(objs)
                 } else {
                     val dxClass = existingDxObjs.head.dxClass
                     throw new Exception(s"""|${dxClass} ${name} already exists in
-                                            | ${dxProject.getId}:${folder}""".stripMargin)
+                                            | ${dxProject.id}:${folder}""".stripMargin)
                 }
             }
             None
@@ -766,7 +775,7 @@ case class Native(dxWDLrtId: Option[String],
 	// still being able to reuse it.
         val reqWithEverything =
             JsObject(req.asJsObject.fields ++ Map(
-                               "project" -> JsString(dxProject.getId),
+                               "project" -> JsString(dxProject.id),
                                "folder" -> JsString(folder),
                                "parents" -> JsBoolean(true),
                                "properties" ->
@@ -1003,7 +1012,7 @@ case class Native(dxWDLrtId: Option[String],
 	// still being able to reuse it.
         val reqWithEverything =
             JsObject(reqWithChecksum.asJsObject.fields ++ Map(
-                         "project" -> JsString(dxProject.getId),
+                         "project" -> JsString(dxProject.id),
                          "folder" -> JsString(folder),
                          "parents" -> JsBoolean(true)
                      ))

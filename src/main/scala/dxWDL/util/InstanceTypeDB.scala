@@ -419,7 +419,7 @@ object InstanceTypeDB extends DefaultJsonProtocol {
                  DXJSON.getObjectBuilder().put(availableField, true)
                      .build())
             .build()
-        val rep = DXAPI.projectDescribe(dxProject.getId(), req, classOf[JsonNode])
+        val rep = DXAPI.projectDescribe(dxProject.id, req, classOf[JsonNode])
         val repJs:JsValue = DxUtils.jsValueOfJsonNode(rep)
         val availableInstanceTypes:JsValue =
             repJs.asJsObject.fields.get(availableField) match {

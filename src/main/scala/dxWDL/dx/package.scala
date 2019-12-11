@@ -46,10 +46,8 @@ object Field extends Enumeration {
 }
 
 sealed trait DxObjectDescribe {
-    val project : String   // the project ID
     val id  : String
     val name : String
-    val folder : String
     val created : Long
     val modified : Long
     val properties: Option[Map[String, String]]
@@ -60,7 +58,7 @@ sealed trait DxObjectDescribe {
 
 sealed trait DxObject {
     val id : String
-    def getId() : String = id
+    def getId : String = id
     def describe(fields : Set[Field.Value]) : DxObjectDescribe
 }
 
@@ -97,16 +95,46 @@ object DxObject {
         }.toMap
     }
 
-    def requestFields(fields : Set[Field.Value]) : JsValue = {
-        val m = fields.map{
+
+    private def checkedGetIoSpec(jsv: JsValue) : IOParameter = {
+        jsv.asJsObject.getFields("name", "class", "optional") match {
+            case Seq(JsString(name), JsString(klass),JsBoolean(opt)) =>
+                val ioClass = DxIOClass.fromString(klass)
+                IOParameter(name, ioClass, opt)
+            case other =>
+                throw new Exception(s"Malformed io spec ${other}")
+        }
+    }
+
+    def parseIOSpec(specs : Vector[JsValue]) : Vector[IOParameter] = {
+        specs.map(ioSpec => checkedGetIoSpec(ioSpec)).toVector
+    }
+
+    def maybeSpecifyProject(project : Option[DxProject]) : Map[String, JsValue] = {
+        project match {
+            case None =>
+                // we don't know the project.
+                Map.empty
+            case Some(p) =>
+                // We know the project, this makes the search more efficient.
+                Map("project" -> JsString(p.id))
+        }
+    }
+
+    def requestFields(fields : Set[Field.Value]) : Map[String, JsValue] = {
+        val baseFields = Map("id" -> JsTrue,
+                             "name" -> JsTrue,
+                             "created" -> JsTrue,
+                             "modified" -> JsTrue)
+        val optFields = fields.map{
             case Field.Details =>
-                "details" -> JsBoolean(true)
+                "details" -> JsTrue
             case Field.Parts =>
-                "parts" -> JsBoolean(true)
+                "parts" -> JsTrue
             case Field.Properties =>
-                "properties" -> JsBoolean(true)
+                "properties" -> JsTrue
         }.toMap
-        JsObject(m)
+        optFields ++ baseFields
     }
 }
 
@@ -169,7 +197,7 @@ case class DxRecordDescribe(project : String,
 case class DxRecord(id : String,
                     project : Option[DxProject]) extends DxDataObject {
     def describe(fields : Set[Field.Value] = Set.empty) : DxRecordDescribe = {
-        val request = JsObject("fields" -> DxObject.requestFields(fields))
+        val request = JsObject("fields" -> JsObject(DxObject.requestFields(fields)))
         val response = DXAPI.recordDescribe(id,
                                             DxUtils.jsonNodeOfJsValue(request),
                                             classOf[JsonNode],
@@ -225,22 +253,12 @@ case class DxFile(id : String,
                   project : Option[DxProject]) extends DxDataObject {
 
     def describe(fields : Set[Field.Value] = Set.empty) : DxFileDescribe = {
-        val reqBase : Map[String, JsValue] = project match {
-            case None =>
-                // we don't know the project.
-                Map.empty
-            case Some(p) =>
-                // We know the project, this makes the search more efficient.
-                Map("project" -> JsString(p.id))
-        }
-/*        val fieldMap = requestFields(fields)
-        val request =
-            if (fieldMap.isEmpty) {
-                JsObject(reqBase)
-            } else {
-                JsObject(reqBase + ("fields" -> fieldMap))
- }*/
-        val request = JsObject(reqBase + ("fields" -> DxObject.requestFields(fields)))
+        val projSpec = DxObject.maybeSpecifyProject(project)
+        val baseFields = DxObject.requestFields(fields)
+        val allFields = baseFields ++ Map("project" -> JsTrue,
+                                          "folder"  -> JsTrue,
+                                          "size" -> JsTrue)
+        val request = JsObject(projSpec + ("fields" -> JsObject(allFields)))
         val response = DXAPI.fileDescribe(id,
                                           DxUtils.jsonNodeOfJsValue(request),
                                           classOf[JsonNode],
@@ -260,6 +278,8 @@ case class DxFile(id : String,
                                None,
                                None,
                                None)
+            case _ =>
+                throw new Exception(s"Malformed JSON ${descJs}")
         }
 
         val details = descJs.asJsObject.fields.get("details")
@@ -314,11 +334,18 @@ case class DxProjectDescribe(project : String,
 // A project is a subtype of a container
 case class DxProject(id: String) extends DxDataObject {
     def describe(fields : Set[Field.Value] = Set.empty) : DxProjectDescribe = {
-        val request = JsObject("fields" -> DxObject.requestFields(fields))
-        val response = DXAPI.projectDescribe(id,
-                                             DxUtils.jsonNodeOfJsValue(request),
-                                             classOf[JsonNode],
-                                             DxUtils.dxEnv)
+        val request = JsObject("fields" -> JsObject(DxObject.requestFields(fields)))
+        val response =
+            if (id.startsWith("project-"))
+                DXAPI.projectDescribe(id,
+                                      DxUtils.jsonNodeOfJsValue(request),
+                                      classOf[JsonNode],
+                                      DxUtils.dxEnv)
+            else
+                DXAPI.containerDescribe(id,
+                                        DxUtils.jsonNodeOfJsValue(request),
+                                        classOf[JsonNode],
+                                        DxUtils.dxEnv)
         val descJs:JsValue = DxUtils.jsValueOfJsonNode(response)
         val desc = descJs.asJsObject.getFields("name", "created", "modified") match {
             case Seq(JsString(name), JsNumber(created), JsNumber(modified)) =>
@@ -330,8 +357,8 @@ case class DxProject(id: String) extends DxDataObject {
                                   modified.toLong,
                                   None,
                                   None)
-            case other =>
-                throw new Exception(s"malformed JSON ${other}")
+            case _ =>
+                throw new Exception(s"malformed JSON ${descJs}")
         }
         val details = descJs.asJsObject.fields.get("details")
         val props = descJs.asJsObject.fields.get("properties").map(DxObject.parseJsonProperties)
@@ -478,7 +505,45 @@ case class DxAppletDescribe(project : String,
 
 case class DxApplet(id : String,
                     project : Option[DxProject]) extends DxExecutable {
-    def describe(fields : Set[Field.Value] = Set.empty) : DxAppletDescribe = ???
+    def describe(fields : Set[Field.Value] = Set.empty) : DxAppletDescribe = {
+        val projSpec = DxObject.maybeSpecifyProject(project)
+        val baseFields = DxObject.requestFields(fields)
+        val allFields = baseFields ++ Map("project" -> JsTrue,
+                                          "folder"  -> JsTrue,
+                                          "size" -> JsTrue,
+                                          "inputSpec" -> JsTrue,
+                                          "outputSpec" -> JsTrue)
+        val request = JsObject(projSpec + ("fields" -> JsObject(allFields)))
+        val response = DXAPI.appletDescribe(id,
+                                            DxUtils.jsonNodeOfJsValue(request),
+                                            classOf[JsonNode],
+                                            DxUtils.dxEnv)
+        val descJs:JsValue = DxUtils.jsValueOfJsonNode(response)
+        val desc = descJs.asJsObject.getFields("project", "id", "name", "folder",
+                                               "created", "modified",
+                                               "inputSpec", "outputSpec") match {
+            case Seq(JsString(project), JsString(id),
+                     JsString(name), JsString(folder), JsNumber(created),
+                     JsNumber(modified), JsNumber(size),
+                     JsArray(inputSpec), JsArray(outputSpec)) =>
+                DxAppletDescribe(project,
+                                 id,
+                                 name,
+                                 folder,
+                                 created.toLong,
+                                 modified.toLong,
+                                 None,
+                                 None,
+                                 Some(DxObject.parseIOSpec(inputSpec.toVector)),
+                                 Some(DxObject.parseIOSpec(outputSpec.toVector)))
+            case _ =>
+                throw new Exception(s"Malformed JSON ${descJs}")
+        }
+
+        val details = descJs.asJsObject.fields.get("details")
+        val props = descJs.asJsObject.fields.get("properties").map(DxObject.parseJsonProperties)
+        desc.copy(details = details, properties = props)
+    }
 }
 
 object DxApplet {
@@ -491,10 +556,8 @@ object DxApplet {
     }
 }
 
-case class DxAppDescribe(project : String,  // This will always be the empty string
-                         id  : String,
+case class DxAppDescribe(id  : String,
                          name : String,
-                         folder : String,  // This will always be the empty string
                          created : Long,
                          modified : Long,
                          properties: Option[Map[String, String]],
@@ -503,7 +566,38 @@ case class DxAppDescribe(project : String,  // This will always be the empty str
                          outputSpec : Option[Vector[IOParameter]]) extends DxObjectDescribe
 
 case class DxApp(id : String) extends DxExecutable {
-    def describe(fields : Set[Field.Value] = Set.empty) : DxAppDescribe = ???
+    def describe(fields : Set[Field.Value] = Set.empty) : DxAppDescribe = {
+        val baseFields = DxObject.requestFields(fields)
+        val allFields = baseFields ++ Map("inputSpec" -> JsTrue,
+                                          "outputSpec" -> JsTrue)
+        val request = JsObject("fields" -> JsObject(allFields))
+        val response = DXAPI.appDescribe(id,
+                                         DxUtils.jsonNodeOfJsValue(request),
+                                         classOf[JsonNode],
+                                         DxUtils.dxEnv)
+        val descJs:JsValue = DxUtils.jsValueOfJsonNode(response)
+        val desc = descJs.asJsObject.getFields("id", "name",
+                                               "created", "modified",
+                                               "inputSpec", "outputSpec") match {
+            case Seq(JsString(id), JsString(name),
+                     JsNumber(created), JsNumber(modified),
+                     JsArray(inputSpec), JsArray(outputSpec)) =>
+                DxAppDescribe(id,
+                              name,
+                              created.toLong,
+                              modified.toLong,
+                              None,
+                              None,
+                              Some(DxObject.parseIOSpec(inputSpec.toVector)),
+                              Some(DxObject.parseIOSpec(outputSpec.toVector)))
+            case _ =>
+                throw new Exception(s"Malformed JSON ${descJs}")
+        }
+
+        val details = descJs.asJsObject.fields.get("details")
+        val props = descJs.asJsObject.fields.get("properties").map(DxObject.parseJsonProperties)
+        desc.copy(details = details, properties = props)
+    }
 }
 
 object DxApp {
@@ -529,7 +623,45 @@ case class DxWorkflowDescribe(project : String,
 
 case class DxWorkflow(id : String,
                       project : Option[DxProject]) extends DxExecutable {
-    def describe(fields : Set[Field.Value] = Set.empty) : DxWorkflowDescribe = ???
+    def describe(fields : Set[Field.Value] = Set.empty) : DxWorkflowDescribe = {
+        val projSpec = DxObject.maybeSpecifyProject(project)
+        val baseFields = DxObject.requestFields(fields)
+        val allFields = baseFields ++ Map("project" -> JsTrue,
+                                          "folder"  -> JsTrue,
+                                          "size" -> JsTrue,
+                                          "inputSpec" -> JsTrue,
+                                          "outputSpec" -> JsTrue)
+        val request = JsObject(projSpec + ("fields" -> JsObject(allFields)))
+        val response = DXAPI.workflowDescribe(id,
+                                              DxUtils.jsonNodeOfJsValue(request),
+                                              classOf[JsonNode],
+                                              DxUtils.dxEnv)
+        val descJs:JsValue = DxUtils.jsValueOfJsonNode(response)
+        val desc = descJs.asJsObject.getFields("project", "id", "name", "folder",
+                                               "created", "modified",
+                                               "inputSpec", "outputSpec") match {
+            case Seq(JsString(project), JsString(id),
+                     JsString(name), JsString(folder), JsNumber(created),
+                     JsNumber(modified), JsNumber(size),
+                     JsArray(inputSpec), JsArray(outputSpec)) =>
+                DxWorkflowDescribe(project,
+                                   id,
+                                   name,
+                                   folder,
+                                   created.toLong,
+                                   modified.toLong,
+                                   None,
+                                   None,
+                                   Some(DxObject.parseIOSpec(inputSpec.toVector)),
+                                   Some(DxObject.parseIOSpec(outputSpec.toVector)))
+            case _ =>
+                throw new Exception(s"Malformed JSON ${descJs}")
+        }
+
+        val details = descJs.asJsObject.fields.get("details")
+        val props = descJs.asJsObject.fields.get("properties").map(DxObject.parseJsonProperties)
+        desc.copy(details = details, properties = props)
+    }
 
     def close() : Unit = {
         DXAPI.workflowClose(id,
@@ -574,14 +706,46 @@ sealed trait DxExecution extends DxObject
 case class DxAnalysisDescribe(project : String,
                               id  : String,
                               name : String,
-                              folder : String,  // This will always be the empty string
+                              folder : String,
                               created : Long,
                               modified : Long,
                               properties: Option[Map[String, String]],
                               details : Option[JsValue]) extends DxObjectDescribe
 
-case class DxAnalysis(id : String) extends DxObject with DxExecution {
-    def describe(fields : Set[Field.Value] = Set.empty) : DxAnalysisDescribe = ???
+case class DxAnalysis(id : String,
+                      project : Option[DxProject]) extends DxObject with DxExecution {
+    def describe(fields : Set[Field.Value] = Set.empty) : DxAnalysisDescribe = {
+        val projSpec = DxObject.maybeSpecifyProject(project)
+        val baseFields = DxObject.requestFields(fields)
+        val allFields = baseFields ++ Map("project" -> JsTrue,
+                                          "folder"  -> JsTrue)
+        val request = JsObject(projSpec + ("fields" -> JsObject(allFields)))
+        val response = DXAPI.analysisDescribe(id,
+                                              DxUtils.jsonNodeOfJsValue(request),
+                                              classOf[JsonNode],
+                                              DxUtils.dxEnv)
+        val descJs:JsValue = DxUtils.jsValueOfJsonNode(response)
+        val desc = descJs.asJsObject.getFields("project", "id", "name", "folder",
+                                               "created", "modified") match {
+            case Seq(JsString(project), JsString(id),
+                     JsString(name), JsString(folder), JsNumber(created),
+                     JsNumber(modified), JsNumber(size)) =>
+                DxWorkflowDescribe(project,
+                                   id,
+                                   name,
+                                   folder,
+                                   created.toLong,
+                                   modified.toLong,
+                                   None,
+                                   None)
+            case _ =>
+                throw new Exception(s"Malformed JSON ${descJs}")
+        }
+
+        val details = descJs.asJsObject.fields.get("details")
+        val props = descJs.asJsObject.fields.get("properties").map(DxObject.parseJsonProperties)
+        desc.copy(details = details, properties = props)
+    }
 
     def setProperties(props: Map[String, String]) : Unit = {
         val request = JsObject(
@@ -610,7 +774,6 @@ object DxAnalysis {
 case class DxJobDescribe(project : String,
                          id  : String,
                          name : String,
-                         folder : String,  // This will always be the empty string
                          created : Long,
                          modified : Long,
                          properties: Option[Map[String, String]],

@@ -27,16 +27,12 @@ object DxfuseManifest {
                 val relParentDir = "/" + parentDir.stripPrefix(mountDir)
 
                 val fDesc = dxIoFunctions.fileInfoDir(dxFile)
-                val size = fDesc.size match {
-                    case None => throw new Exception(s"File is missing the size field ${fDesc}")
-                    case Some(x) => x
-                }
                 JsObject(
                     "proj_id" -> JsString(fDesc.project),
                     "file_id" -> JsString(dxFile.id),
                     "parent" -> JsString(relParentDir),
                     "fname" -> JsString(fDesc.name),
-                    "size" -> JsNumber(size),
+                    "size" -> JsNumber(fDesc.size),
                     "ctime" -> JsNumber(fDesc.created),
                     "mtime" -> JsNumber(fDesc.modified))
         }.toVector

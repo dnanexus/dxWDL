@@ -89,8 +89,8 @@ case class DxFindDataObjects(limit: Option[Int],
 
         dxobj match {
             case _ : DxApp =>
-                DxAppDescribe("", dxobj.id,
-                              name, "",
+                DxAppDescribe(dxobj.id,
+                              name,
                               created, modified,
                               Some(properties), details, inputSpec, outputSpec)
             case _ : DxApplet =>

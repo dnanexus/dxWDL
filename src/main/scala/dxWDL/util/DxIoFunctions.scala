@@ -200,17 +200,14 @@ case class DxIoFunctions(fileInfoDir : Map[DxFile, DxFileDescribe],
                 val p = Paths.get(localPath)
                 Future(p.toFile.length)
             case fdx : FurlDx =>
-                val ssize : Option[Long] = pathFunctions.fileInfoDir.get(fdx.dxFile) match {
+                val ssize : Long = pathFunctions.fileInfoDir.get(fdx.dxFile) match {
                     case None =>
                         // perform an API call to get the size
                         fdx.dxFile.describe().size
                     case Some(desc) =>
                         desc.size
                 }
-                ssize match {
-                    case None => throw new Exception("missing size field")
-                    case Some(sz) => Future(sz)
-                }
+                Future(ssize)
         }
     }
 
