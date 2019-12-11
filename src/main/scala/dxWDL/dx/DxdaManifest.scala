@@ -33,11 +33,11 @@ object DxdaManifest {
  */
 
     // create a manifest for a single file
-    private def processFile(desc : DxDescribe,
+    private def processFile(desc : DxFileDescribe,
                             destination : Path) : JsValue = {
         val partsRaw : Map[Int, DxFilePart] = desc.parts match {
             case None => throw new Exception(
-                s"""|No options for file ${desc.dxobj.getId},
+                s"""|No options for file ${desc.id},
                     |name=${desc.name} folder=${desc.folder}""".stripMargin)
             case Some(x) => x
         }
@@ -49,7 +49,7 @@ object DxdaManifest {
         val destinationFile : java.io.File = destination.toFile()
         val name = destinationFile.getName()
         val folder = destinationFile.getParent().toString
-        JsObject("id" -> JsString(desc.dxobj.getId),
+        JsObject("id" -> JsString(desc.id),
                  "name" -> JsString(name),
                  "folder" -> JsString(folder),
                  "parts" -> JsObject(parts))
@@ -59,15 +59,14 @@ object DxdaManifest {
     def apply(file2LocalMapping: Map[DxFile, Path]) : DxdaManifest = {
 
         // collect all the information per file
-        val objDescs : Map[DxObject, DxDescribe] = DxBulkDescribe.apply(file2LocalMapping.keys.toVector,
-                                                                         Vector(Field.Parts))
-        val fileDescs = objDescs.map{case (obj, desc) => obj.asInstanceOf[DxFile] -> desc }.toMap
+        val fileDescs : Map[DxFile, DxFileDescribe] =
+            DxBulkDescribe.apply(file2LocalMapping.keys.toVector, Vector(Field.Parts))
 
         // create a sub-map per container
-        val fileDescsByContainer : Map[DxProject, Map[DxFile, DxDescribe]] =
-            fileDescs.foldLeft(Map.empty[DxProject, Map[DxFile, DxDescribe]]) {
+        val fileDescsByContainer : Map[DxProject, Map[DxFile, DxFileDescribe]] =
+            fileDescs.foldLeft(Map.empty[DxProject, Map[DxFile, DxFileDescribe]]) {
                 case (accu, (dxFile, dxDesc)) =>
-                    val container = dxDesc.container
+                    val container = DxProject.getInstance(dxDesc.project)
                     accu.get(container) match {
                         case None =>
                             accu + (container -> Map(dxFile -> dxDesc))

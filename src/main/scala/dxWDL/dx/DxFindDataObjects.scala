@@ -32,7 +32,7 @@ case class DxFindDataObjects(limit: Option[Int],
 
     private def parseDescribe(jsv: JsValue,
                               dxobj : DxDataObject,
-                              dxProject: DxProject) : DxDescribe = {
+                              dxProject: DxProject) : DxObjectDescribe = {
         val size = jsv.asJsObject.fields.get("size") match {
             case None => None
             case Some(JsNumber(size)) => Some(size.toLong)
@@ -85,15 +85,35 @@ case class DxFindDataObjects(limit: Option[Int],
             case Some(JsNumber(date)) => date.toLong
             case Some(other) => throw new Exception(s"malformed created field ${other}")
         }
+        val details : Option[JsValue] = jsv.asJsObject.fields.get("details")
 
-        DxDescribe(name, folder, size,
-                   dxProject.asInstanceOf[DxProject], dxobj,
-                   created, modified,
-                   properties, inputSpec, outputSpec,
-                   None, None, None, None, None)
+        dxobj match {
+            case _ : DxApp =>
+                DxAppDescribe("", dxobj.id,
+                              name, "",
+                              created, modified,
+                              Some(properties), details, inputSpec, outputSpec)
+            case _ : DxApplet =>
+                DxAppletDescribe(dxProject.id, dxobj.id,
+                                 name, folder,
+                                 created, modified,
+                                 Some(properties), details, inputSpec, outputSpec)
+            case _ : DxWorkflow =>
+                DxAppletDescribe(dxProject.id, dxobj.id,
+                                 name, folder,
+                                 created, modified,
+                                 Some(properties), details, inputSpec, outputSpec)
+            case _ : DxFile =>
+                DxFileDescribe(dxProject.id, dxobj.id,
+                               name, folder,
+                               created, modified,
+                               size.get, Some(properties), details, None)
+            case other =>
+                throw new Exception(s"unsupported object ${other}")
+        }
     }
 
-    private def parseOneResult(jsv : JsValue) : (DxDataObject, DxDescribe) = {
+    private def parseOneResult(jsv : JsValue) : (DxDataObject, DxObjectDescribe) = {
         jsv.asJsObject.getFields("project", "id", "describe") match {
             case Seq(JsString(projectId), JsString(dxid), desc) =>
                 val dxProj = DxProject.getInstance(projectId)
@@ -129,7 +149,7 @@ case class DxFindDataObjects(limit: Option[Int],
                               klass: Option[String],
                               propertyConstraints: Vector[String],
                               nameConstraints : Vector[String],
-                              withInputOutputSpec : Boolean) : (Map[DxDataObject, DxDescribe], Option[JsValue]) = {
+                              withInputOutputSpec : Boolean) : (Map[DxDataObject, DxObjectDescribe], Option[JsValue]) = {
         val describeFields = Map("name" -> JsBoolean(true),
                                  "folder" -> JsBoolean(true),
                                  "size" -> JsBoolean(true),
@@ -199,7 +219,7 @@ case class DxFindDataObjects(limit: Option[Int],
             case Some(other : JsObject) => Some(other)
             case Some(other) => throw new Exception(s"malformed ${other.prettyPrint}")
         }
-        val results : Vector[(DxDataObject, DxDescribe)] =
+        val results : Vector[(DxDataObject, DxObjectDescribe)] =
             repJs.asJsObject.fields.get("results") match {
                 case None => throw new Exception(s"missing results field ${repJs}")
                 case Some(JsArray(results)) => results.map(parseOneResult)
@@ -216,14 +236,14 @@ case class DxFindDataObjects(limit: Option[Int],
               withProperties : Vector[String], // object must have these properties
               nameConstraints : Vector[String], // the object name has to be one of these strings
               withInputOutputSpec : Boolean  // should the IO spec be described?
-    ) : Map[DxDataObject, DxDescribe] = {
+    ) : Map[DxDataObject, DxObjectDescribe] = {
         klassRestriction.map{ k =>
             if (!(Set("record", "file", "applet", "workflow") contains k))
                 throw new Exception("class limitation must be one of {record, file, applet, workflow}")
         }
         val scope = buildScope(dxProject, folder, recurse)
 
-        var allResults = Map.empty[DxDataObject, DxDescribe]
+        var allResults = Map.empty[DxDataObject, DxObjectDescribe]
         var cursor : Option[JsValue] = None
         do {
             val (results, next) = submitRequest(scope, dxProject, cursor, klassRestriction,

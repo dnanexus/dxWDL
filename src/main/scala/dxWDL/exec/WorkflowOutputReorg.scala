@@ -31,8 +31,7 @@ case class WorkflowOutputReorg(wf: WorkflowDefinition,
     // In other words, this code is an efficient replacement for:
     // files.map(_.describe().getName())
     def bulkGetFilenames(files: Seq[DxFile], dxProject: DxProject) : Vector[String] = {
-        val infoRaw : Map[DxObject, DxDescribe] = DxBulkDescribe.apply(files.toVector)
-        val info = infoRaw.map{ case (dxobj, desc) => dxobj.asInstanceOf[DxFile] -> desc }.toMap
+        val info : Map[DxFile, DxFileDescribe] = DxBulkDescribe.apply(files.toVector)
         info.values.map(_.name).toVector
     }
 
@@ -74,13 +73,11 @@ case class WorkflowOutputReorg(wf: WorkflowDefinition,
             Utils.appletLog(verbose, s"WARNING: Large number of outputs (${realOutputs.size}), not moving objects")
             return Vector.empty
         }
-        val realFreshOutputs : Map[DxFile, DxDescribe] =
-            DxBulkDescribe.apply(realOutputs.toVector).map {
-                case (dxobj, desc) => dxobj.asInstanceOf[DxFile] -> desc
-            }.toMap
+        val realFreshOutputs : Map[DxFile, DxFileDescribe] =
+            DxBulkDescribe.apply(realOutputs.toVector)
 
         // Retain only files that were created AFTER the analysis started
-        val anlCreateTs:java.util.Date = dxAnalysis.describe.getCreationDate()
+        val anlCreateTs:java.util.Date = dxAnalysis.describe().getCreationDate()
         val outputFiles: Vector[DxFile] = realFreshOutputs.flatMap{
             case (dxFile, desc) =>
                 val creationDate = new java.util.Date(desc.created)
@@ -98,9 +95,9 @@ case class WorkflowOutputReorg(wf: WorkflowDefinition,
     def moveIntermediateResultFiles(exportFiles: Vector[DxFile]): Unit = {
         val dxEnv = DxUtils.dxEnv
         val dxProject = DxProject(dxEnv.getProjectContext())
-        val dxProjDesc = dxProject.describe
-        val dxAnalysis = DxJob(dxEnv.getJob).describe(Field.Analysis).getAnalysis()
-        val outFolder = dxAnalysis.describe.folder
+        val dxProjDesc = dxProject.describe()
+        val dxAnalysis = DxJob(dxEnv.getJob).describe().analysis.get
+        val outFolder = dxAnalysis.describe().folder
         val intermFolder = outFolder + "/" + Utils.INTERMEDIATE_RESULTS_FOLDER
         Utils.appletLog(verbose, s"proj=${dxProjDesc.name} outFolder=${outFolder}")
 

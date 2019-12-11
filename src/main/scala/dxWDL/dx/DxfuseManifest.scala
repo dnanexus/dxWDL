@@ -32,8 +32,8 @@ object DxfuseManifest {
                     case Some(x) => x
                 }
                 JsObject(
-                    "proj_id" -> JsString(fDesc.container.getId),
-                    "file_id" -> JsString(dxFile.getId),
+                    "proj_id" -> JsString(fDesc.project),
+                    "file_id" -> JsString(dxFile.id),
                     "parent" -> JsString(relParentDir),
                     "fname" -> JsString(fDesc.name),
                     "size" -> JsNumber(size),

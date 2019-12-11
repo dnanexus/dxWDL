@@ -53,15 +53,6 @@ import wom.types._
 import dxWDL.base._
 import dxWDL.dx._
 
-case class IoSpec(name: String,
-                  ioClass: DxIOClass.Value,
-                  optional: Boolean)
-
-case class DxApp(name: String,
-                 id: String,
-                 inputSpec: Map[String, IoSpec],
-                 outputSpec: Map[String, IoSpec])
-
 case class DxNI(verbose: Verbose,
                 language: Language.Value) {
 
@@ -109,7 +100,7 @@ case class DxNI(verbose: Verbose,
     // We can translate with primitive types, and their arrays. Hashes cannot
     // be translated; applets that have them cannot be converted.
     private def wdlTypesOfDxApplet(aplName: String,
-                                   desc: DxDescribe) :
+                                   desc: DxAppletDescribe) :
             (Map[String, WomType], Map[String, WomType]) = {
         Utils.trace(verbose.on, s"analyzing applet ${aplName}")
         val inputSpec:Map[String, WomType] =
@@ -133,22 +124,26 @@ case class DxNI(verbose: Verbose,
     private def search(dxProject: DxProject,
                        folder: String,
                        recursive: Boolean) : Vector[String] = {
-        val dxObjectsInFolder : Map[DxDataObject, DxDescribe] =
+        val dxObjectsInFolder : Map[DxDataObject, DxObjectDescribe] =
             DxFindDataObjects(None, verbose).apply(dxProject, Some(folder), recursive, None,
                                                    Vector.empty, Vector.empty, true)
 
         // we just want the applets
-        val dxAppletsInFolder : Map[DxApplet, DxDescribe]= dxObjectsInFolder.collect{
+        val dxAppletsInFolder : Map[DxApplet, DxAppletDescribe]= dxObjectsInFolder.collect{
             case (dxobj, desc) if dxobj.isInstanceOf[DxApplet] =>
-                (dxobj.asInstanceOf[DxApplet], desc)
+                (dxobj.asInstanceOf[DxApplet], desc.asInstanceOf[DxAppletDescribe])
         }
 
         // Filter out applets that are WDL tasks
-        val nativeApplets: Map[DxApplet, DxDescribe] = dxAppletsInFolder.flatMap{
+        val nativeApplets: Map[DxApplet, DxAppletDescribe] = dxAppletsInFolder.flatMap{
             case (apl, desc) =>
-                desc.properties.get(Utils.CHECKSUM_PROP) match {
-                    case Some(_) => None
-                    case None => Some(apl -> desc)
+                desc.properties match {
+                    case None => None
+                    case Some(props) =>
+                        props.get(Utils.CHECKSUM_PROP) match {
+                            case Some(_) => None
+                            case None => Some(apl -> desc)
+                        }
                 }
         }.toMap
 
@@ -216,14 +211,14 @@ case class DxNI(verbose: Verbose,
     }
 
     private def checkedGetIoSpec(appName: String,
-                                 jsv: JsValue) : IoSpec = {
+                                 jsv: JsValue) : IOParameter = {
         val name = checkedGetJsString(jsv, "name")
         val ioClassRaw = checkedGetJsString(jsv, "class")
         val ioClass = DxIOClass.fromString(ioClassRaw)
         if (ioClass == DxIOClass.HASH)
             throw new Exception(s"app ${appName} has field ${name} with non WDL-native io class HASH")
         val optional = checkedGetJsBooleanOrFalse(jsv, "optional")
-        IoSpec(name, ioClass, optional)
+        IOParameter(name, ioClass, optional)
     }
 
 
@@ -259,7 +254,7 @@ case class DxNI(verbose: Verbose,
         }
     }
 
-    private def checkedGetApp(jsv: JsValue) : DxApp = {
+    private def checkedGetApp(jsv: JsValue) : DxAppDescribe = {
         val id: String = checkedGetJsString(jsv, "id")
         val desc: JsObject = checkedGetJsObject(jsv, "describe")
         val name: String = checkedGetJsString(desc, "name")
@@ -267,25 +262,23 @@ case class DxNI(verbose: Verbose,
         val outputSpecJs = checkedGetJsArray(desc, "outputSpec")
 
         val inputSpec = inputSpecJs.map{ x =>
-            val spec = checkedGetIoSpec(name, x)
-            spec.name -> spec
-        }.toMap
+            checkedGetIoSpec(name, x)
+        }.toVector
         val outputSpec = outputSpecJs.map{ x =>
-            val spec = checkedGetIoSpec(name, x)
-            spec.name -> spec
-        }.toMap
+            checkedGetIoSpec(name, x)
+        }.toVector
         val normName = normalizeAppName(name)
-        DxApp(normName, id, inputSpec, outputSpec)
+        DxAppDescribe("", id, normName, "", 0, 0, None, None, Some(inputSpec), Some(outputSpec))
     }
 
-    private def appToWdlInterface(dxApp: DxApp) : String = {
+    private def appToWdlInterface(dxApp: DxAppDescribe) : String = {
         val inputSpec:Map[String, WomType] =
-            dxApp.inputSpec.map{ case (_,ioSpec) =>
+            dxApp.inputSpec.get.map{ ioSpec =>
                 ioSpec.name -> wdlTypeOfIOClass(dxApp.name, ioSpec.name,
                                                 ioSpec.ioClass, ioSpec.optional)
             }.toMap
         val outputSpec:Map[String, WomType] =
-            dxApp.outputSpec.map{ case (_,ioSpec) =>
+            dxApp.outputSpec.get.map{ ioSpec =>
                 ioSpec.name -> wdlTypeOfIOClass(dxApp.name, ioSpec.name,
                                                 ioSpec.ioClass, ioSpec.optional)
             }.toMap

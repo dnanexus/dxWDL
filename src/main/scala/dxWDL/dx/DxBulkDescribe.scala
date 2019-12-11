@@ -12,29 +12,6 @@ import dxWDL.base.Utils.DXAPI_NUM_OBJECTS_LIMIT
 
 object DxBulkDescribe {
 
-    // Parse the parts from a description of a file
-    // The format is something like this:
-    // {
-    //  "1": {
-    //    "md5": "71565d7f4dc0760457eb252a31d45964",
-    //    "size": 42,
-    //    "state": "complete"
-    //  }
-    //}
-    //
-    private def parseFileParts(jsv: JsValue) : Map[Int, DxFilePart] = {
-        //System.out.println(jsv.prettyPrint)
-        jsv.asJsObject.fields.map{
-            case (partNumber, partDesc) =>
-                val dxPart = partDesc.asJsObject.getFields("md5", "size", "state") match {
-                    case Seq(JsString(md5), JsNumber(size), JsString(state)) =>
-                        DxFilePart(state, size.toLong, md5)
-                    case _ => throw new Exception(s"malformed part description ${partDesc.prettyPrint}")
-                }
-                partNumber.toInt -> dxPart
-        }.toMap
-    }
-
     private def submitRequest(objs : Vector[DxFile],
                               extraFields : Vector[String]) : Map[DxFile, DxFileDescribe] = {
         val requestFields = Map("objects" ->
@@ -81,9 +58,9 @@ object DxBulkDescribe {
                                                           folder,
                                                           created.toLong,
                                                           modified.toLong,
-                                                          Map.empty,
+                                                          size.toLong,
                                                           None,
-                                                          Some(size.toLong),
+                                                          None,
                                                           None)
                                 (dxFile, desc)
                             case _ =>
@@ -91,7 +68,7 @@ object DxBulkDescribe {
                         }
 
                     // The parts may be empty, only files have it, and we don't always ask for it.
-                    val parts = descJs.asJsObject.fields.get("parts").map(parseFileParts)
+                    val parts = descJs.asJsObject.fields.get("parts").map(DxObject.parseFileParts)
                     val details = descJs.asJsObject.fields.get("details")
                     val dxDescFull = dxDesc.copy(parts = parts, details = details)
                     (dxFile, dxDescFull)

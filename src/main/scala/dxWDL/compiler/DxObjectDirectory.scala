@@ -48,7 +48,7 @@ case class DxObjectDirectory(ns: IR.Bundle,
     // not clear this is useful to the majority of users, so it is
     // gated by the [projectWideReuse] flag.
     private val projectWideExecutableDir :
-            Map[String, Vector[(DxDataObject, DxDescribe)]] =
+            Map[String, Vector[(DxDataObject, DxObjectDescribe)]] =
         if (projectWideReuse) projectBulkLookup()
         else Map.empty
 
@@ -65,7 +65,7 @@ case class DxObjectDirectory(ns: IR.Bundle,
     private def bulkLookup() : HashMap[String, Vector[DxObjectInfo]] = {
         // find applets
         val t0 = System.nanoTime()
-        val dxAppletsInFolder: Map[DxDataObject, DxDescribe] =
+        val dxAppletsInFolder: Map[DxDataObject, DxObjectDescribe] =
             DxFindDataObjects(None, verbose).apply(dxProject, Some(folder), false, Some("applet"),
                                                    Vector(CHECKSUM_PROP),
                                                    allExecutableNames.toVector,
@@ -79,7 +79,7 @@ case class DxObjectDirectory(ns: IR.Bundle,
 
         // find workflows
         val t2 = System.nanoTime()
-        val dxWorkflowsInFolder: Map[DxDataObject, DxDescribe] =
+        val dxWorkflowsInFolder: Map[DxDataObject, DxObjectDescribe] =
             DxFindDataObjects(None, verbose).apply(dxProject, Some(folder), false, Some("workflow"),
                                                    Vector(CHECKSUM_PROP),
                                                    allExecutableNames.toVector,
@@ -98,7 +98,7 @@ case class DxObjectDirectory(ns: IR.Bundle,
                 val creationDate = new java.util.Date(desc.created)
                 val crLdt:LocalDateTime = LocalDateTime.ofInstant(creationDate.toInstant(),
                                                                   ZoneId.systemDefault())
-                val chksum = desc.properties.get(CHECKSUM_PROP)
+                val chksum = desc.properties.flatMap{ p => p.get(CHECKSUM_PROP) }
                 DxObjectInfo(desc.name, crLdt, dxObj, chksum)
         }.toList
 
@@ -131,9 +131,9 @@ case class DxObjectDirectory(ns: IR.Bundle,
     // findDataObjects can be an expensive call, both on the server and client sides.
     // We limit it by filtering on the CHECKSUM property, which is attached only to generated
     // applets and workflows.
-    private def projectBulkLookup() : Map[String, Vector[(DxDataObject, DxDescribe)]] = {
+    private def projectBulkLookup() : Map[String, Vector[(DxDataObject, DxObjectDescribe)]] = {
         val t0 = System.nanoTime()
-        val dxAppletsInProject: Map[DxDataObject, DxDescribe] =
+        val dxAppletsInProject: Map[DxDataObject, DxObjectDescribe] =
             DxFindDataObjects(None, verbose).apply(dxProject, None, true, Some("applet"),
                                                    Vector(CHECKSUM_PROP),
                                                    allExecutableNames.toVector,
@@ -144,9 +144,10 @@ case class DxObjectDirectory(ns: IR.Bundle,
         Utils.trace(verbose.on,
                     s"Found ${nrApplets} applets matching expected names in project ${dxProject.getId} (${diffMSec} millisec)")
 
-        val hm = HashMap.empty[String, Vector[(DxDataObject, DxDescribe)]]
+        val hm = HashMap.empty[String, Vector[(DxDataObject, DxObjectDescribe)]]
         dxAppletsInProject.foreach{ case (dxObj, desc) =>
-            desc.properties.get(CHECKSUM_PROP) match {
+            val chksum = desc.properties.flatMap{ p => p.get(CHECKSUM_PROP) }
+            chksum match {
                 case None => ()
                 case Some(digest) =>
                     if (hm contains digest)
@@ -172,7 +173,7 @@ case class DxObjectDirectory(ns: IR.Bundle,
     // Note: in case of checksum collision, there could be several hits.
     // Return only the one that starts with the name we are looking for.
     def lookupOtherVersions(execName: String, digest: String)
-            : Option[(DxDataObject, DxDescribe)] = {
+            : Option[(DxDataObject, DxObjectDescribe)] = {
         val checksumMatches = projectWideExecutableDir.get(digest) match {
             case None => return None
             case Some(vec) => vec
