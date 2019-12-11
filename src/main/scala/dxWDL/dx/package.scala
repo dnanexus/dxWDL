@@ -554,6 +554,14 @@ object DxApplet {
                 throw new IllegalArgumentException(s"${id} isn't an applet")
         }
     }
+
+    def getInstance(id : String, project : DxProject) : DxApplet = {
+        DxDataObject.getInstance(id, Some(project)) match {
+            case a : DxApplet => a
+            case _ =>
+                throw new IllegalArgumentException(s"${id} isn't an applet")
+        }
+    }
 }
 
 case class DxAppDescribe(id  : String,
@@ -730,7 +738,7 @@ case class DxAnalysis(id : String,
             case Seq(JsString(project), JsString(id),
                      JsString(name), JsString(folder), JsNumber(created),
                      JsNumber(modified), JsNumber(size)) =>
-                DxWorkflowDescribe(project,
+                DxAnalysisDescribe(project,
                                    id,
                                    name,
                                    folder,
@@ -765,7 +773,7 @@ case class DxAnalysis(id : String,
 object DxAnalysis {
     def getInstance(id : String) : DxAnalysis = {
         if (id.startsWith("analysis-"))
-            return DxAnalysis(id)
+            return DxAnalysis(id, None)
         throw new IllegalArgumentException(s"${id} isn't an analysis")
     }
 }
@@ -782,14 +790,60 @@ case class DxJobDescribe(project : String,
                          parentJob : Option[DxJob],
                          analysis : Option[DxAnalysis]) extends DxObjectDescribe
 
-case class DxJob(id : String) extends DxObject with DxExecution {
-    def describe(fields : Set[Field.Value] = Set.empty) : DxJobDescribe = ???
+case class DxJob(id : String,
+                 project : Option[DxProject] = None) extends DxObject with DxExecution {
+    def describe(fields : Set[Field.Value] = Set.empty) : DxJobDescribe = {
+        val projSpec = DxObject.maybeSpecifyProject(project)
+        val baseFields = DxObject.requestFields(fields)
+        val allFields = baseFields ++ Map("applet" -> JsTrue,
+                                          "parentJob"  -> JsTrue,
+                                          "analysis" -> JsTrue)
+        val request = JsObject(projSpec + ("fields" -> JsObject(allFields)))
+        val response = DXAPI.analysisDescribe(id,
+                                              DxUtils.jsonNodeOfJsValue(request),
+                                              classOf[JsonNode],
+                                              DxUtils.dxEnv)
+        val descJs:JsValue = DxUtils.jsValueOfJsonNode(response)
+        val desc = descJs.asJsObject.getFields("project", "id", "name", "folder",
+                                               "created", "modified",
+                                               "applet") match {
+            case Seq(JsString(project), JsString(id), JsString(name),
+                     JsNumber(created), JsNumber(modified), JsString(applet)) =>
+                DxJobDescribe(project,
+                              id,
+                              name,
+                              created.toLong,
+                              modified.toLong,
+                              None,
+                              None,
+                              DxApplet.getInstance(applet),
+                              None,
+                              None)
+            case _ =>
+                throw new Exception(s"Malformed JSON ${descJs}")
+        }
+
+        val details = descJs.asJsObject.fields.get("details")
+        val props = descJs.asJsObject.fields.get("properties").map(DxObject.parseJsonProperties)
+        val parentJob = descJs.asJsObject.fields.get("parentJob").map{
+            case JsString(x) => DxJob.getInstance(x)
+            case other => throw new Exception(s"should be a job ${other}")
+        }
+        val analysis = descJs.asJsObject.fields.get("analysis").map{
+            case JsString(x) => DxAnalysis.getInstance(x)
+            case other => throw new Exception(s"should be an analysis ${other}")
+        }
+        desc.copy(details = details,
+                  properties = props,
+                  parentJob = parentJob,
+                  analysis = analysis)
+    }
 }
 
 object DxJob {
     def getInstance(id : String) : DxJob = {
         if (id.startsWith("job-"))
-            return DxJob(id)
+            return DxJob(id, None)
         throw new IllegalArgumentException(s"${id} isn't a job")
     }
 }
