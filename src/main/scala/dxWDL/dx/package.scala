@@ -164,6 +164,7 @@ object DxDataObject {
 
         klass match {
             case "project" => DxProject(id)
+            case "container" => DxProject(id)
             case "file" => DxFile(id, container)
             case "record" => DxRecord(id, container)
             case "app" => DxApp(id)
