@@ -60,7 +60,7 @@ object DxdaManifest {
 
         // collect all the information per file
         val fileDescs : Map[DxFile, DxFileDescribe] =
-            DxBulkDescribe.apply(file2LocalMapping.keys.toVector, Vector(Field.Parts))
+            DxFile.bulkDescribe(file2LocalMapping.keys.toVector, Set(Field.Parts))
 
         // create a sub-map per container
         val fileDescsByContainer : Map[DxProject, Map[DxFile, DxFileDescribe]] =

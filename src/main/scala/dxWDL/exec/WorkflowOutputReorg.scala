@@ -31,7 +31,7 @@ case class WorkflowOutputReorg(wf: WorkflowDefinition,
     // In other words, this code is an efficient replacement for:
     // files.map(_.describe().getName())
     def bulkGetFilenames(files: Seq[DxFile], dxProject: DxProject) : Vector[String] = {
-        val info : Map[DxFile, DxFileDescribe] = DxBulkDescribe.apply(files.toVector)
+        val info : Map[DxFile, DxFileDescribe] = DxFile.bulkDescribe(files.toVector)
         info.values.map(_.name).toVector
     }
 
@@ -74,7 +74,7 @@ case class WorkflowOutputReorg(wf: WorkflowDefinition,
             return Vector.empty
         }
         val realFreshOutputs : Map[DxFile, DxFileDescribe] =
-            DxBulkDescribe.apply(realOutputs.toVector)
+            DxFile.bulkDescribe(realOutputs.toVector)
 
         // Retain only files that were created AFTER the analysis started
         val anlCreateTs:java.util.Date = dxAnalysis.describe().getCreationDate()

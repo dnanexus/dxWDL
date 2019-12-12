@@ -28,7 +28,7 @@ case class DxJob(id : String,
                                 Field.ParentJob,
                                 Field.Analysis)
         val allFields = fields ++ defaultFields
-        val request = JsObject(projSpec + "fields" -> DxObject.requestFields(allFields))
+        val request = JsObject(projSpec + ("fields" -> DxObject.requestFields(allFields)))
         val response = DXAPI.analysisDescribe(id,
                                               DxUtils.jsonNodeOfJsValue(request),
                                               classOf[JsonNode],

@@ -211,7 +211,7 @@ case class Top(cOpt: CompilerOptions) {
                                      accu.dxFiles ++ res.dxFiles)
         }
 
-        val allDescribe = DxBulkDescribe.apply(allResults.dxFiles, Vector.empty)
+        val allDescribe = DxFile.bulkDescribe(allResults.dxFiles)
         val allFiles : Map[DxFile, DxFileDescribe] = allDescribe.map{
             case (f : DxFile, desc) => f -> desc
             case _ => throw new Exception("has to be all files")

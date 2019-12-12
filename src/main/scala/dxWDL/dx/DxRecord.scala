@@ -24,7 +24,7 @@ case class DxRecord(id : String,
                                 Field.Created,
                                 Field.Modified)
         val allFields = fields ++ defaultFields
-        val request = JsObject(projSpec + "fields" -> DxObject.requestFields(allFields))
+        val request = JsObject(projSpec + ("fields" -> DxObject.requestFields(allFields)))
         val response = DXAPI.recordDescribe(id,
                                             DxUtils.jsonNodeOfJsValue(request),
                                             classOf[JsonNode],
@@ -58,5 +58,13 @@ object DxRecord {
              case _ =>
                  throw new IllegalArgumentException(s"${id} isn't a record")
          }
+    }
+
+    def getInstance(id : String, project : DxProject) : DxRecord = {
+        DxDataObject.getInstance(id, Some(project)) match {
+             case f : DxRecord => f
+             case _ =>
+                throw new IllegalArgumentException(s"${id} isn't a record")
+        }
     }
 }

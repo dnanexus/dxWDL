@@ -737,7 +737,7 @@ object Main extends App {
         }.toVector
 
         // Describe all the files, in one go
-        val descAll = DxBulkDescribe.apply(allFilesReferenced, Vector.empty)
+        val descAll = DxFile.bulkDescribe(allFilesReferenced)
         descAll.map{
             case (DxFile(fid, proj), desc) =>
                 DxFile(fid, proj) -> desc

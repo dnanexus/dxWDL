@@ -40,14 +40,20 @@ case class IOParameter(name: String,
 
 // Extra fields for describe
 object Field extends Enumeration {
-    val Analysis, Applet,
+    val Analysis,
+        Applet,
         Created,
-        Details, Folder,
-        Id, InputSpec,
+        Details,
+        Folder,
+        Id,
+        InputSpec,
         Modified,
         Name,
         OutputSpec,
-        ParentJob, Parts, Project, Properties,
+        ParentJob,
+        Parts,
+        Project,
+        Properties,
         Size = Value
 }
 
@@ -78,38 +84,20 @@ object DxObject {
     }
 
 
-    // Parse the parts from a description of a file
-    // The format is something like this:
-    // {
-    //  "1": {
-    //    "md5": "71565d7f4dc0760457eb252a31d45964",
-    //    "size": 42,
-    //    "state": "complete"
-    //  }
-    //}
-    //
-    def parseFileParts(jsv: JsValue) : Map[Int, DxFilePart] = {
-        //System.out.println(jsv.prettyPrint)
-        jsv.asJsObject.fields.map{
-            case (partNumber, partDesc) =>
-                val dxPart = partDesc.asJsObject.getFields("md5", "size", "state") match {
-                    case Seq(JsString(md5), JsNumber(size), JsString(state)) =>
-                        DxFilePart(state, size.toLong, md5)
-                    case _ => throw new Exception(s"malformed part description ${partDesc.prettyPrint}")
-                }
-                partNumber.toInt -> dxPart
-        }.toMap
-    }
-
-
     private def checkedGetIoSpec(jsv: JsValue) : IOParameter = {
-        jsv.asJsObject.getFields("name", "class", "optional") match {
-            case Seq(JsString(name), JsString(klass),JsBoolean(opt)) =>
+        val ioParam = jsv.asJsObject.getFields("name", "class") match {
+            case Seq(JsString(name), JsString(klass)) =>
                 val ioClass = DxIOClass.fromString(klass)
-                IOParameter(name, ioClass, opt)
+                IOParameter(name, ioClass, false)
             case other =>
                 throw new Exception(s"Malformed io spec ${other}")
         }
+
+        val optFlag = jsv.asJsObject.fields.get("optional") match {
+            case Some(JsBoolean(b)) => b
+            case None => false
+        }
+        ioParam.copy(optional = optFlag)
     }
 
     def parseIOSpec(specs : Vector[JsValue]) : Vector[IOParameter] = {
@@ -128,9 +116,7 @@ object DxObject {
     }
 
     def requestFields(fields : Set[Field.Value]) : JsValue = {
-        val defaultFields = Set(Field.Id, Field.Name, Field.Created, Field.Modified)
-        val allFields = fields ++ defaultFields
-        val allFieldsString = allFields.map{
+        val fieldStrings = fields.map{
             case Field.Analysis => "analysis"
             case Field.Applet => "applet"
             case Field.Created => "created"
@@ -141,12 +127,13 @@ object DxObject {
             case Field.Modified => "modified"
             case Field.Name => "name"
             case Field.OutputSpec => "outputSpec"
+            case Field.ParentJob => "parentJob"
             case Field.Parts => "parts"
             case Field.Project => "project"
             case Field.Properties => "properties"
             case Field.Size => "size"
-        }
-        val m : Map[String, JsValue] = allFieldsString.map{ x => x -> JsTrue }.toMap
+        }.toVector
+        val m : Map[String, JsValue] = fieldStrings.map{ x => x -> JsTrue }.toMap
         JsObject(m)
     }
 

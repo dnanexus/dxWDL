@@ -28,7 +28,7 @@ case class DxApplet(id : String,
                                 Field.InputSpec,
                                 Field.OutputSpec)
         val allFields = fields ++ defaultFields
-        val request = JsObject(projSpec + "fields" -> DxObject.requestFields(allFields))
+        val request = JsObject(projSpec + ("fields" -> DxObject.requestFields(allFields)))
         val response = DXAPI.appletDescribe(id,
                                             DxUtils.jsonNodeOfJsValue(request),
                                             classOf[JsonNode],

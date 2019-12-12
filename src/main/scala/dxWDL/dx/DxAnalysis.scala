@@ -27,7 +27,7 @@ case class DxAnalysis(id : String,
                                 Field.Modified)
         val allFields = fields ++ defaultFields
         val request = JsObject(projSpec +
-                                   "fields" -> DxObject.requestFields(allFields))
+                                   ("fields" -> DxObject.requestFields(allFields)))
         val response = DXAPI.analysisDescribe(id,
                                               DxUtils.jsonNodeOfJsValue(request),
                                               classOf[JsonNode],
@@ -61,10 +61,10 @@ case class DxAnalysis(id : String,
                                          k -> JsString(v)
                                      })
         )
-        val response = DXAPI.workflowRun(id,
-                                         DxUtils.jsonNodeOfJsValue(request),
-                                         classOf[JsonNode],
-                                         DxUtils.dxEnv)
+        val response = DXAPI.analysisSetProperties(id,
+                                                   DxUtils.jsonNodeOfJsValue(request),
+                                                   classOf[JsonNode],
+                                                   DxUtils.dxEnv)
         val repJs:JsValue = DxUtils.jsValueOfJsonNode(response)
         Utils.ignore(repJs)
     }
