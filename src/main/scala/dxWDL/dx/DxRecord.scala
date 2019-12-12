@@ -53,7 +53,7 @@ case class DxRecord(id : String,
 
 object DxRecord {
     def getInstance(id : String) : DxRecord = {
-         DxDataObject.getInstance(id) match {
+         DxObject.getInstance(id) match {
              case r : DxRecord => r
              case _ =>
                  throw new IllegalArgumentException(s"${id} isn't a record")
@@ -61,7 +61,7 @@ object DxRecord {
     }
 
     def getInstance(id : String, project : DxProject) : DxRecord = {
-        DxDataObject.getInstance(id, Some(project)) match {
+        DxObject.getInstance(id, Some(project)) match {
              case f : DxRecord => f
              case _ =>
                 throw new IllegalArgumentException(s"${id} isn't a record")

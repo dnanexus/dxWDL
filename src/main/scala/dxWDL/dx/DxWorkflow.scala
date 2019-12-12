@@ -88,7 +88,15 @@ case class DxWorkflow(id : String,
 
 object DxWorkflow {
     def getInstance(id : String) : DxWorkflow = {
-        DxDataObject.getInstance(id) match {
+        DxObject.getInstance(id) match {
+             case wf : DxWorkflow => wf
+             case _ =>
+                throw new IllegalArgumentException(s"${id} isn't a workflow")
+        }
+    }
+
+    def getInstance(id : String, project : DxProject ) : DxWorkflow = {
+        DxObject.getInstance(id, Some(project)) match {
              case wf : DxWorkflow => wf
              case _ =>
                 throw new IllegalArgumentException(s"${id} isn't a workflow")

@@ -2,8 +2,6 @@ package dxWDL.dx
 
 import spray.json._
 
-import dxWDL.base.Utils
-
 object DxIOClass extends Enumeration {
     val INT, FLOAT, STRING, BOOLEAN, FILE,
         ARRAY_OF_INTS, ARRAY_OF_FLOATS, ARRAY_OF_STRINGS, ARRAY_OF_BOOLEANS, ARRAY_OF_FILES,
@@ -137,23 +135,12 @@ object DxObject {
         JsObject(m)
     }
 
-}
-
-// Objects that can be run on the platform
-trait DxExecutable extends DxDataObject
-
-// Actual executions on the platform. There are jobs and analyses
-trait DxExecution extends DxObject
-
-trait DxDataObject extends DxObject
-
-object DxDataObject {
     // We are expecting string like:
     //    record-FgG51b00xF63k86F13pqFv57
     //    file-FV5fqXj0ffPB9bKP986j5kVQ
     //
     def getInstance(id : String,
-                    container: Option[DxProject] = None) : DxDataObject = {
+                    container: Option[DxProject] = None) : DxObject = {
         val parts = id.split("-")
         if (parts.length != 2)
             throw new IllegalArgumentException(s"${id} is not of the form class-alphnumeric{24}")
@@ -170,6 +157,8 @@ object DxDataObject {
             case "app" => DxApp(id)
             case "applet" => DxApplet(id, container)
             case "workflow" => DxWorkflow(id, container)
+            case "job" => DxJob(id, container)
+            case "analysis" => DxAnalysis(id, container)
             case _ =>
                 throw new IllegalArgumentException(s"${id} does not belong to a know class")
         }
@@ -177,21 +166,28 @@ object DxDataObject {
 
     // convenience methods
     def getInstance(id : String,
-                    container: DxProject) : DxDataObject = {
+                    container: DxProject) : DxObject = {
         getInstance(id, Some(container))
     }
 
     def isDataObject(id : String) : Boolean = {
         try {
             val o = getInstance(id, None)
-            Utils.ignore(o)
-            true
+            o.isInstanceOf[DxDataObject]
         } catch {
             case e : IllegalArgumentException =>
                 false
         }
     }
 }
+
+trait DxDataObject extends DxObject
+
+// Objects that can be run on the platform
+trait DxExecutable extends DxDataObject
+
+// Actual executions on the platform. There are jobs and analyses
+trait DxExecution extends DxObject
 
 // A stand in for the DxWorkflow.Stage inner class (we don't have a constructor for it)
 case class DxWorkflowStage(id: String) {

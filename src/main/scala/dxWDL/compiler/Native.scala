@@ -1063,11 +1063,11 @@ case class Native(dxWDLrtId: Option[String],
                         val execRecord = apl.kind match {
                             case IR.AppletKindNative(id) =>
                                 // native applets do not depend on other data-objects
-                                val dxExec = DxDataObject.getInstance(id).asInstanceOf[DxExecutable]
+                                val dxExec = DxObject.getInstance(id).asInstanceOf[DxExecutable]
                                 ExecRecord(apl, dxExec, Vector.empty)
                             case IR.AppletKindWorkflowCustomReorg(id) =>
                                 // does this has to be a different class?
-                                val dxExec = DxDataObject.getInstance(id).asInstanceOf[DxExecutable]
+                                val dxExec = DxObject.getInstance(id).asInstanceOf[DxExecutable]
                                 ExecRecord(apl, dxExec, Vector.empty)
                             case _ =>
                                 val (dxApplet, dependencies) = buildAppletIfNeeded(apl, accu)

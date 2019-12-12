@@ -64,7 +64,7 @@ case class DxApplet(id : String,
 
 object DxApplet {
     def getInstance(id : String) : DxApplet = {
-        DxDataObject.getInstance(id) match {
+        DxObject.getInstance(id) match {
              case a : DxApplet => a
              case _ =>
                 throw new IllegalArgumentException(s"${id} isn't an applet")
@@ -72,7 +72,7 @@ object DxApplet {
     }
 
     def getInstance(id : String, project : DxProject) : DxApplet = {
-        DxDataObject.getInstance(id, Some(project)) match {
+        DxObject.getInstance(id, Some(project)) match {
             case a : DxApplet => a
             case _ =>
                 throw new IllegalArgumentException(s"${id} isn't an applet")

@@ -86,7 +86,7 @@ case class DxFile(id : String,
 
 object DxFile {
     def getInstance(id : String) : DxFile = {
-        DxDataObject.getInstance(id) match {
+        DxObject.getInstance(id) match {
              case f : DxFile => f
              case _ =>
                 throw new IllegalArgumentException(s"${id} isn't a file")
@@ -94,7 +94,7 @@ object DxFile {
     }
 
     def getInstance(id : String, project : DxProject) : DxFile = {
-        DxDataObject.getInstance(id, Some(project)) match {
+        DxObject.getInstance(id, Some(project)) match {
              case f : DxFile => f
              case _ =>
                 throw new IllegalArgumentException(s"${id} isn't a file")

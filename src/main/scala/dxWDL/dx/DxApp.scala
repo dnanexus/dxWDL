@@ -54,7 +54,7 @@ case class DxApp(id : String) extends DxExecutable {
 
 object DxApp {
     def getInstance(id : String) : DxApp = {
-        DxDataObject.getInstance(id) match {
+        DxObject.getInstance(id) match {
              case a : DxApp => a
              case _ =>
                 throw new IllegalArgumentException(s"${id} isn't an app")

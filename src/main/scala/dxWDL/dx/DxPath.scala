@@ -158,8 +158,8 @@ object DxPath {
                 }
 
                 // safe conversion to a dx-object
-                val dxobj = DxDataObject.getInstance(dxid, dxContainer)
-                path -> dxobj
+                val dxobj = DxObject.getInstance(dxid, dxContainer)
+                path -> dxobj.asInstanceOf[DxDataObject]
         }.toMap
     }
 
@@ -172,13 +172,14 @@ object DxPath {
 
         for (p <- allDxPaths) {
             val components = parse(p)
-            if (DxDataObject.isDataObject(components.name)) {
-                val dxobj = DxDataObject.getInstance(components.name, None)
+            if (DxObject.isDataObject(components.name)) {
+                val o = DxObject.getInstance(components.name, None)
+                val dxDataObj = o.asInstanceOf[DxDataObject]
                 val dxobjWithProj = components.projName match {
-                    case None => dxobj
+                    case None => dxDataObj
                     case Some(pid) =>
                         val dxProj = resolveProject(pid)
-                        DxDataObject.getInstance(dxobj.getId, dxProj)
+                        DxObject.getInstance(dxDataObj.getId, dxProj).asInstanceOf[DxDataObject]
                 }
                 alreadyResolved = alreadyResolved + (p -> dxobjWithProj)
             } else {

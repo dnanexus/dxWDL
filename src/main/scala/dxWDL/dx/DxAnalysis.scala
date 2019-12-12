@@ -72,8 +72,18 @@ case class DxAnalysis(id : String,
 
 object DxAnalysis {
     def getInstance(id : String) : DxAnalysis = {
-        if (id.startsWith("analysis-"))
-            return DxAnalysis(id, None)
-        throw new IllegalArgumentException(s"${id} isn't an analysis")
+        DxObject.getInstance(id, None) match {
+             case j : DxAnalysis => j
+             case _ =>
+                throw new IllegalArgumentException(s"${id} isn't a analysis")
+        }
+    }
+
+    def getInstance(id : String, project : DxProject) : DxAnalysis = {
+        DxObject.getInstance(id, Some(project)) match {
+             case j : DxAnalysis => j
+             case _ =>
+                throw new IllegalArgumentException(s"${id} isn't a analysis")
+        }
     }
 }

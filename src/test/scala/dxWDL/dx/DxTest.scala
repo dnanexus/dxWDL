@@ -21,7 +21,7 @@ class DxTest extends FlatSpec with Matchers {
     }
 
 
-    it should "describe a file with details" in {
+    ignore should "describe a file with details" in {
         val record = DxFile.getInstance("file-FJ1qyg80ffP9v6gVPxKz9pQ7", dxTestProject)
         val desc = record.describe()
         System.out.println(desc)

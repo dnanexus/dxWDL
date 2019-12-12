@@ -71,8 +71,18 @@ case class DxJob(id : String,
 
 object DxJob {
     def getInstance(id : String) : DxJob = {
-        if (id.startsWith("job-"))
-            return DxJob(id, None)
-        throw new IllegalArgumentException(s"${id} isn't a job")
+        DxObject.getInstance(id, None) match {
+             case j : DxJob => j
+             case _ =>
+                throw new IllegalArgumentException(s"${id} isn't a job")
+        }
+    }
+
+    def getInstance(id : String, project : DxProject) : DxJob = {
+        DxObject.getInstance(id, Some(project)) match {
+             case j : DxJob => j
+             case _ =>
+                throw new IllegalArgumentException(s"${id} isn't a job")
+        }
     }
 }

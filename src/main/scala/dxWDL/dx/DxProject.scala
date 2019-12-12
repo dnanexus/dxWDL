@@ -79,7 +79,9 @@ case class DxProject(id: String) extends DxDataObject {
         val objs = objsJs.map{
             case JsObject(fields) =>
                 fields.get("id") match {
-                    case Some(JsString(id)) => DxDataObject.getInstance(id, Some(this))
+                    case Some(JsString(id)) =>
+                        val o = DxObject.getInstance(id, Some(this))
+                        o.asInstanceOf[DxDataObject]
                     case other =>
                         throw new Exception(s"malformed json reply ${other}")
                 }
@@ -169,7 +171,7 @@ case class DxProject(id: String) extends DxDataObject {
 
 object DxProject {
     def getInstance(id : String) : DxProject = {
-        DxDataObject.getInstance(id) match {
+        DxObject.getInstance(id) match {
              case p : DxProject => p
              case _ =>
                 throw new IllegalArgumentException(s"${id} isn't a project")

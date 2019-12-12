@@ -117,8 +117,9 @@ case class DxFindDataObjects(limit: Option[Int],
         jsv.asJsObject.getFields("project", "id", "describe") match {
             case Seq(JsString(projectId), JsString(dxid), desc) =>
                 val dxProj = DxProject.getInstance(projectId)
-                val dxobj = DxDataObject.getInstance(dxid, dxProj)
-                (dxobj, parseDescribe(desc, dxobj, dxProj))
+                val dxObj = DxObject.getInstance(dxid, dxProj)
+                val dxDataObj = dxObj.asInstanceOf[DxDataObject]
+                (dxDataObj, parseDescribe(desc, dxDataObj, dxProj))
             case _ => throw new Exception(
                 s"""|malformed result: expecting {project, id, describe} fields, got:
                     |${jsv.prettyPrint}
