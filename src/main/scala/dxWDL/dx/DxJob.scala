@@ -54,13 +54,17 @@ case class DxJob(id : String,
 
         val details = descJs.asJsObject.fields.get("details")
         val props = descJs.asJsObject.fields.get("properties").map(DxObject.parseJsonProperties)
-        val parentJob = descJs.asJsObject.fields.get("parentJob").map{
-            case JsString(x) => DxJob.getInstance(x)
-            case other => throw new Exception(s"should be a job ${other}")
+        val parentJob : Option[DxJob] = descJs.asJsObject.fields.get("parentJob") match {
+            case None => None
+            case Some(JsNull) => None
+            case Some(JsString(x)) => Some(DxJob.getInstance(x))
+            case Some(other) => throw new Exception(s"should be a job ${other}")
         }
-        val analysis = descJs.asJsObject.fields.get("analysis").map{
-            case JsString(x) => DxAnalysis.getInstance(x)
-            case other => throw new Exception(s"should be an analysis ${other}")
+        val analysis = descJs.asJsObject.fields.get("analysis") match {
+            case None => None
+            case Some(JsNull) => None
+            case Some(JsString(x)) => Some(DxAnalysis.getInstance(x))
+            case Some(other) => throw new Exception(s"should be an analysis ${other}")
         }
         desc.copy(details = details,
                   properties = props,
