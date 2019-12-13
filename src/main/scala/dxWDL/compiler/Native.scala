@@ -397,6 +397,9 @@ case class Native(dxWDLrtId: Option[String],
                                   |fields = ${JsObject(fields).prettyPrint}
                                   |
                                   |""".stripMargin)
+
+        // We need to sort the hash-tables. They are natually unsorted,
+        // causing the same object to have different checksums.
         val jsDet = Utils.makeDeterministic(JsObject(fields))
         val digest = chksum(jsDet.prettyPrint)
 
@@ -407,11 +410,21 @@ case class Native(dxWDLrtId: Option[String],
                 case None => Map.empty
                 case other => throw new Exception(s"Bad properties json value ${other}")
             }
-        val checksumField = Map(Utils.CHECKSUM_PROP -> JsString(digest))
-        val props = Map("properties" ->
-                            JsObject(preExistingProps ++ checksumField))
-        val reqChk = (fields - "properies") ++ props
-        (digest, JsObject(reqChk))
+        val props = preExistingProps ++ Map(
+            Utils.VERSION_PROP -> JsString(Utils.getVersion()),
+            Utils.CHECKSUM_PROP -> JsString(digest)
+        )
+
+        // Add properties and attributes we don't want to fall under the checksum
+        // This allows, for example, moving the dx:executable, while
+	// still being able to reuse it.
+        val req = JsObject(fields ++ Map(
+                               "project" -> JsString(dxProject.id),
+                               "folder" -> JsString(folder),
+                               "parents" -> JsBoolean(true),
+                               "properties" -> JsObject(props)
+                           ))
+        (digest, req)
     }
 
     // Do we need to build this applet/workflow?
@@ -768,20 +781,7 @@ case class Native(dxWDLrtId: Option[String],
             else Map("access" -> access)
 
         // Add a checksum
-        val (digest, req) = checksumReq(applet.name, reqCore ++ accessField)
-
-        // Add properties we do not want to fall under the checksum.
-        // This allows, for example, moving the dx:executable, while
-	// still being able to reuse it.
-        val reqWithEverything =
-            JsObject(req.asJsObject.fields ++ Map(
-                               "project" -> JsString(dxProject.id),
-                               "folder" -> JsString(folder),
-                               "parents" -> JsBoolean(true),
-                               "properties" ->
-                                   JsObject(Utils.VERSION_PROP -> JsString(Utils.getVersion()))
-                     ))
-        (digest, reqWithEverything)
+        checksumReq(applet.name, reqCore ++ accessField)
     }
 
     // Rebuild the applet if needed.
