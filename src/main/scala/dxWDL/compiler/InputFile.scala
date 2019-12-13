@@ -169,7 +169,7 @@ case class InputFileScan(bundle: IR.Bundle,
     }
 }
 
-case class InputFile(fileInfoDir: Map[DxFile, DxFileDescribe],
+case class InputFile(fileInfoDir: Map[String, (DxFile, DxFileDescribe)],
                      path2file: Map[String, DxFile],
                      typeAliases: Map[String, WomType],
                      verbose: Verbose) {

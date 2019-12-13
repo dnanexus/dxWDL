@@ -11,7 +11,7 @@ import wom.values._
 import dxWDL.base.{AppInternalException, Utils}
 import dxWDL.dx.{DxFileDescribe, DxFile, DxUtils}
 
-case class DxPathFunctions(fileInfoDir : Map[DxFile, DxFileDescribe],
+case class DxPathFunctions(fileInfoDir : Map[String, (DxFile, DxFileDescribe)],
                            config: DxPathConfig,
                            runtimeDebugLevel: Int) extends PathFunctionSet {
 
@@ -55,11 +55,11 @@ case class DxPathFunctions(fileInfoDir : Map[DxFile, DxFileDescribe],
                 val p = Paths.get(localPath)
                 p.getFileName.toString
             case fdx : FurlDx =>
-                fileInfoDir.get(fdx.dxFile) match {
+                fileInfoDir.get(fdx.dxFile.id) match {
                     case None =>
                         // perform an API call to get the file name
                         fdx.dxFile.describe().name
-                    case Some(desc) =>
+                    case Some((_,desc)) =>
                         desc.name
                 }
         }
@@ -76,7 +76,7 @@ case class DxPathFunctions(fileInfoDir : Map[DxFile, DxFileDescribe],
     override def stderr: String = config.stderr.toString
 }
 
-case class DxIoFunctions(fileInfoDir : Map[DxFile, DxFileDescribe],
+case class DxIoFunctions(fileInfoDir : Map[String, (DxFile, DxFileDescribe)],
                          config: DxPathConfig,
                          runtimeDebugLevel: Int) extends IoFunctionSet {
     private val verbose = runtimeDebugLevel >= 1
@@ -200,11 +200,11 @@ case class DxIoFunctions(fileInfoDir : Map[DxFile, DxFileDescribe],
                 val p = Paths.get(localPath)
                 Future(p.toFile.length)
             case fdx : FurlDx =>
-                val ssize : Long = pathFunctions.fileInfoDir.get(fdx.dxFile) match {
+                val ssize : Long = pathFunctions.fileInfoDir.get(fdx.dxFile.id) match {
                     case None =>
                         // perform an API call to get the size
                         fdx.dxFile.describe().size
-                    case Some(desc) =>
+                    case Some((_, desc)) =>
                         desc.size
                 }
                 Future(ssize)

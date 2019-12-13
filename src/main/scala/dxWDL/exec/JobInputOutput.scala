@@ -338,7 +338,7 @@ case class JobInputOutput(dxIoFunctions : DxIoFunctions,
                     case dxUrl: FurlDx if streamingFiles contains dxUrl =>
                         // file should be streamed
                         val existingFiles = accu.values.toSet
-                        val desc = dxIoFunctions.fileInfoDir(dxUrl.dxFile)
+                        val (_, desc) = dxIoFunctions.fileInfoDir(dxUrl.dxFile.id)
                         val path = createUniqueDownloadPath(desc.name, dxUrl.dxFile, existingFiles,
                                                             dxIoFunctions.config.dxfuseMountpoint)
                         accu + (dxUrl -> path)
@@ -346,7 +346,7 @@ case class JobInputOutput(dxIoFunctions : DxIoFunctions,
                     case dxUrl: FurlDx =>
                         // The file needs to be localized
                         val existingFiles = accu.values.toSet
-                        val desc = dxIoFunctions.fileInfoDir(dxUrl.dxFile)
+                        val (_, desc) = dxIoFunctions.fileInfoDir(dxUrl.dxFile.id)
                         val path = createUniqueDownloadPath(desc.name, dxUrl.dxFile, existingFiles,
                                                             inputsDir)
                         accu + (dxUrl -> path)
@@ -362,10 +362,10 @@ case class JobInputOutput(dxIoFunctions : DxIoFunctions,
         val dxfuseManifest = DxfuseManifest.apply(filesToMount, dxIoFunctions)
 
         // Create a manifest for the download agent (dxda)
-        val filesToDownloadWithDxda : Map[DxFile, Path] =
+        val filesToDownloadWithDxda : Map[String, (DxFile, Path)] =
             furl2path.collect{
                 case (dxUrl: FurlDx, localPath) if !(streamingFiles contains dxUrl) =>
-                    dxUrl.dxFile -> localPath
+                    dxUrl.dxFile.id -> (dxUrl.dxFile, localPath)
             }
         val dxdaManifest = DxdaManifest.apply(filesToDownloadWithDxda)
 

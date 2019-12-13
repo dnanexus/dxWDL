@@ -76,7 +76,7 @@ case class Top(cOpt: CompilerOptions) {
                               folder: String,
                               dxProject: DxProject,
                               runtimePathConfig: DxPathConfig,
-                              fileInfoDir: Map[DxFile, DxFileDescribe]) : CompilationResults = {
+                              fileInfoDir: Map[String, (DxFile, DxFileDescribe)]) : CompilationResults = {
         val dxWDLrtId: Option[String] = cOpt.compileMode match {
             case CompilerFlag.IR =>
                 throw new Exception("Invalid value IR for compilation mode")
@@ -197,7 +197,7 @@ case class Top(cOpt: CompilerOptions) {
     // reduces the number of API calls.
     private def bulkFileDescribe(bundle: IR.Bundle,
                                  dxProject: DxProject) : (Map[String, DxFile],
-                                                          Map[DxFile, DxFileDescribe]) = {
+                                                          Map[String, (DxFile, DxFileDescribe)]) = {
         val defResults : InputFileScanResults = cOpt.defaults match {
             case None => InputFileScanResults(Map.empty, Vector.empty)
             case Some(path) =>
@@ -212,8 +212,8 @@ case class Top(cOpt: CompilerOptions) {
         }
 
         val allDescribe = DxFile.bulkDescribe(allResults.dxFiles)
-        val allFiles : Map[DxFile, DxFileDescribe] = allDescribe.map{
-            case (f : DxFile, desc) => f -> desc
+        val allFiles : Map[String, (DxFile, DxFileDescribe)] = allDescribe.map{
+            case (f : DxFile, desc) => f.id -> (f, desc)
             case _ => throw new Exception("has to be all files")
         }.toMap
         (allResults.path2file, allFiles)
@@ -258,7 +258,7 @@ case class Top(cOpt: CompilerOptions) {
     // Compile IR only
     private def handleInputFiles(bundle: IR.Bundle,
                                  path2file: Map[String, DxFile],
-                                 fileInfoDir: Map[DxFile, DxFileDescribe]) : IR.Bundle = {
+                                 fileInfoDir: Map[String, (DxFile, DxFileDescribe)]) : IR.Bundle = {
         val bundle2: IR.Bundle = cOpt.defaults match {
             case None => bundle
             case Some(path) =>

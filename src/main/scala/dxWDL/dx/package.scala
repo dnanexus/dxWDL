@@ -82,7 +82,7 @@ object DxObject {
     }
 
 
-    private def checkedGetIoSpec(jsv: JsValue) : IOParameter = {
+    def parseIoParam(jsv: JsValue) : IOParameter = {
         val ioParam = jsv.asJsObject.getFields("name", "class") match {
             case Seq(JsString(name), JsString(klass)) =>
                 val ioClass = DxIOClass.fromString(klass)
@@ -99,7 +99,7 @@ object DxObject {
     }
 
     def parseIOSpec(specs : Vector[JsValue]) : Vector[IOParameter] = {
-        specs.map(ioSpec => checkedGetIoSpec(ioSpec)).toVector
+        specs.map(ioSpec => parseIoParam(ioSpec)).toVector
     }
 
     def maybeSpecifyProject(project : Option[DxProject]) : Map[String, JsValue] = {

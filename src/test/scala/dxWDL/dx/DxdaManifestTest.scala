@@ -61,11 +61,11 @@ class DxdaManifestTest extends FlatSpec with Matchers {
         // resolve the paths
         val resolvedObjects : Map[String, DxDataObject] = DxPath.resolveBulk(fileDir.keys.toVector,
                                                                              dxTestProject)
-        val filesInManifest : Map[DxFile, Path] = resolvedObjects.map{
+        val filesInManifest : Map[String, (DxFile, Path)] = resolvedObjects.map{
             case (dxPath, dataObj) =>
                 val dxFile = dataObj.asInstanceOf[DxFile]
                 val local : Path = fileDir(dxPath)
-                dxFile -> local
+                dxFile.id -> (dxFile, local)
         }.toMap
 
         // create a manifest

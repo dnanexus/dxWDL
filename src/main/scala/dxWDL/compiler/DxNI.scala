@@ -174,15 +174,6 @@ case class DxNI(verbose: Verbose,
         }.flatten.toVector
     }
 
-    private def checkedGetJsBooleanOrFalse(jsv: JsValue,
-                                           fieldName: String) : Boolean = {
-        val fields = jsv.asJsObject.fields
-        fields.get(fieldName) match {
-            case Some(JsBoolean(x)) => x
-            case other => false
-        }
-    }
-
     private def checkedGetJsString(jsv: JsValue,
                                    fieldName: String) : String = {
         val fields = jsv.asJsObject.fields
@@ -212,15 +203,13 @@ case class DxNI(verbose: Verbose,
 
     private def checkedGetIoSpec(appName: String,
                                  jsv: JsValue) : IOParameter = {
-        val name = checkedGetJsString(jsv, "name")
-        val ioClassRaw = checkedGetJsString(jsv, "class")
-        val ioClass = DxIOClass.fromString(ioClassRaw)
-        if (ioClass == DxIOClass.HASH)
-            throw new Exception(s"app ${appName} has field ${name} with non WDL-native io class HASH")
-        val optional = checkedGetJsBooleanOrFalse(jsv, "optional")
-        IOParameter(name, ioClass, optional)
+        val ioParam = DxObject.parseIoParam(jsv)
+        if (ioParam.ioClass == DxIOClass.HASH)
+            throw new Exception(s"""|app ${appName} has field ${ioParam.name}
+                                    |with non WDL-native io class HASH"""
+                                    .stripMargin.replaceAll("\n", " "))
+        ioParam
     }
-
 
     // App names can have characters that are illegal in WDL.
     // 1) Leave only number, letters, and underscores

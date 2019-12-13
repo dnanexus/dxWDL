@@ -26,7 +26,7 @@ object DxfuseManifest {
                 assert(parentDir.startsWith(mountDir))
                 val relParentDir = "/" + parentDir.stripPrefix(mountDir)
 
-                val fDesc = dxIoFunctions.fileInfoDir(dxFile)
+                val (_,fDesc) = dxIoFunctions.fileInfoDir(dxFile.id)
                 JsObject(
                     "proj_id" -> JsString(fDesc.project),
                     "file_id" -> JsString(dxFile.id),

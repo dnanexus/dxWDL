@@ -56,22 +56,24 @@ object DxdaManifest {
     }
 
     // The project is just a hint. The files don't have to actually reside in it.
-    def apply(file2LocalMapping: Map[DxFile, Path]) : DxdaManifest = {
-
+    def apply(file2LocalMapping: Map[String, (DxFile, Path)]) : DxdaManifest = {
         // collect all the information per file
-        val fileDescs : Map[DxFile, DxFileDescribe] =
-            DxFile.bulkDescribe(file2LocalMapping.keys.toVector, Set(Field.Parts))
+        val files : Vector[DxFile] = file2LocalMapping.values.map(_._1).toVector
+        val fileDescs : Map[String, (DxFile, DxFileDescribe)] =
+            DxFile.bulkDescribe(files, Set(Field.Parts)).map {
+                case (dxFile, desc) => dxFile.id -> (dxFile, desc)
+            }.toMap
 
         // create a sub-map per container
-        val fileDescsByContainer : Map[DxProject, Map[DxFile, DxFileDescribe]] =
-            fileDescs.foldLeft(Map.empty[DxProject, Map[DxFile, DxFileDescribe]]) {
-                case (accu, (dxFile, dxDesc)) =>
+        val fileDescsByContainer : Map[DxProject, Map[String, (DxFile, DxFileDescribe)]] =
+            fileDescs.foldLeft(Map.empty[DxProject, Map[String, (DxFile, DxFileDescribe)]]) {
+                case (accu, (fid, (dxFile, dxDesc))) =>
                     val container = DxProject.getInstance(dxDesc.project)
                     accu.get(container) match {
                         case None =>
-                            accu + (container -> Map(dxFile -> dxDesc))
+                            accu + (container -> Map(dxFile.id -> (dxFile, dxDesc)))
                         case Some(m) =>
-                            accu + (container -> (m + (dxFile -> dxDesc)))
+                            accu + (container -> (m + (dxFile.id -> (dxFile, dxDesc))))
                     }
             }
 
@@ -79,8 +81,8 @@ object DxdaManifest {
             case (dxContainer, fileDescs) =>
                 val projectFilesToLocalPath : Vector[JsValue] =
                     fileDescs.map{
-                        case (dxFile, dxDesc) =>
-                            val local: Path = file2LocalMapping(dxFile)
+                        case (fid, (dxFile, dxDesc)) =>
+                            val (_, local: Path) = file2LocalMapping(fid)
                             processFile(dxDesc, local)
                     }.toVector
                 dxContainer.getId -> JsArray(projectFilesToLocalPath)

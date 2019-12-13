@@ -729,7 +729,7 @@ object Main extends App {
 
     // Make a list of all the files cloned for access by this applet.
     // Bulk describe all the them.
-    private def runtimeBulkFileDescribe(jobInputPath: Path) : Map[DxFile, DxFileDescribe] = {
+    private def runtimeBulkFileDescribe(jobInputPath: Path) : Map[String, (DxFile, DxFileDescribe)] = {
         val inputs: JsValue = Utils.readFileContent(jobInputPath).parseJson
 
         val allFilesReferenced = inputs.asJsObject.fields.flatMap{
@@ -740,7 +740,7 @@ object Main extends App {
         val descAll = DxFile.bulkDescribe(allFilesReferenced)
         descAll.map{
             case (DxFile(fid, proj), desc) =>
-                DxFile(fid, proj) -> desc
+                fid -> (DxFile(fid, proj), desc)
             case (other, _) =>
                 throw new Exception(s"wrong object type ${other} (should be a file)")
         }.toMap

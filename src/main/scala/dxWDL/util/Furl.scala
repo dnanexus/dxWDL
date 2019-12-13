@@ -76,13 +76,13 @@ object Furl {
     // string is well defined, and requires an explicit conversion function.
     //
     def dxFileToFurl(dxFile: DxFile,
-                     fileInfoDir: Map[DxFile, DxFileDescribe]) : FurlDx = {
+                     fileInfoDir: Map[String, (DxFile, DxFileDescribe)]) : FurlDx = {
         // Try the cache first; if the file isn't there, submit an API call.
-        val (folder, name) = fileInfoDir.get(dxFile) match {
+        val (folder, name) = fileInfoDir.get(dxFile.id) match {
             case None =>
                 val desc = dxFile.describe()
                 (desc.folder, desc.name)
-            case Some(miniDesc) =>
+            case Some((_,miniDesc)) =>
                 (miniDesc.folder, miniDesc.name)
         }
         val logicalName = s"${folder}/${name}"

@@ -34,7 +34,7 @@ case class DxlExec(dxExec: DxExecution, varName: String) extends DxLink
 case class WdlVarLinks(womType: WomType, dxlink: DxLink)
 
 case class WdlVarLinksConverter(verbose: Verbose,
-                                fileInfoDir: Map[DxFile, DxFileDescribe],
+                                fileInfoDir: Map[String, (DxFile, DxFileDescribe)],
                                 typeAliases: Map[String, WomType]) {
     val womTypeSerializer = WomTypeSerialization(typeAliases)
 
