@@ -1,6 +1,5 @@
 package dxWDL.exec
 
-import com.dnanexus.{DXFile, DXProject}
 import spray.json._
 import wom.types._
 import wom.values._
@@ -14,7 +13,7 @@ case class WfFragInput(blockPath: Vector[Int],
                        execLinkInfo : Map[String, ExecLinkInfo])
 
 case class WfFragInputOutput(dxIoFunctions : DxIoFunctions,
-                             dxProject: DXProject,
+                             dxProject: DxProject,
                              runtimeDebugLevel: Int,
                              typeAliases: Map[String, WomType]) {
     val verbose = runtimeDebugLevel >= 1
@@ -89,7 +88,7 @@ case class WfFragInputOutput(dxIoFunctions : DxIoFunctions,
 
     // find all the dx:files that are referenced from the inputs
     def findRefDxFiles(inputs : JsValue,
-                       metaInfo: JsValue) : Vector[DXFile] = {
+                       metaInfo: JsValue) : Vector[DxFile] = {
         val regularFields : Map[String, JsValue] = inputs
             .asJsObject.fields
             .filter{ case (fieldName,_) => !fieldName.endsWith(Utils.FLAT_FILES_SUFFIX) }

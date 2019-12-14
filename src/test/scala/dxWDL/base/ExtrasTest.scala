@@ -12,10 +12,10 @@ class ExtrasTest extends FlatSpec with Matchers {
     val verbose = Verbose(true, true, Set.empty)
 
     private def getIdFromName(name: String): String = {
-      val (stdout, stderr) = Utils.execCommand(s"dx describe ${name} --json")
-      stdout.parseJson.asJsObject match {
-        case JsObject(x) => JsObject(x).fields("id").convertTo[String]
-      }
+        val (stdout, stderr) = Utils.execCommand(s"dx describe ${name} --json")
+        stdout.parseJson.asJsObject match {
+            case JsObject(x) => JsObject(x).fields("id").convertTo[String]
+        }
     }
 
     it should "recognize restartable entry points" in {
@@ -30,7 +30,7 @@ class ExtrasTest extends FlatSpec with Matchers {
 
         val extras = Extras.parse(runtimeAttrs, verbose)
         extras.defaultTaskDxAttributes should be (Some(
-            DxAttrs(Some(DxRunSpec(None, None, Some("all"), None)), None)))
+                                                      DxAttrs(Some(DxRunSpec(None, None, Some("all"), None)), None)))
     }
 
     it should "invalid runSpec I" in {
@@ -125,18 +125,18 @@ class ExtrasTest extends FlatSpec with Matchers {
         val extras = Extras.parse(js, verbose)
         extras.defaultTaskDxAttributes should be (
             Some(DxAttrs(Some(DxRunSpec(
-                           Some(DxAccess(Some(Vector("*")),
-                                         Some(AccessLevel.CONTRIBUTE),
-                                         Some(AccessLevel.VIEW),
-                                         Some(true),
-                                         None)),
-                           Some(DxExecPolicy(Some(Map("*" -> 3)),
-                                             None)),
-                           None,
-                           Some(DxTimeout(None,
-                                          Some(12),
-                                          None))
-                       )), None)))
+                                  Some(DxAccess(Some(Vector("*")),
+                                                Some(AccessLevel.CONTRIBUTE),
+                                                Some(AccessLevel.VIEW),
+                                                Some(true),
+                                                None)),
+                                  Some(DxExecPolicy(Some(Map("*" -> 3)),
+                                                    None)),
+                                  None,
+                                  Some(DxTimeout(None,
+                                                 Some(12),
+                                                 None))
+                              )), None)))
     }
 
 
@@ -163,11 +163,11 @@ class ExtrasTest extends FlatSpec with Matchers {
 
         val restartPolicy = Map("UnresponsiveWorker" -> 2, "JMInternalError" -> 0, "ExecutionError" -> 4)
         extras.defaultTaskDxAttributes should be (Some(DxAttrs(Some(DxRunSpec(
-                                                           None,
-                                                           Some(DxExecPolicy(Some(restartPolicy), Some(5))),
-                                                           None,
-                                                           None)
-                                                  ), None)))
+                                                                        None,
+                                                                        Some(DxExecPolicy(Some(restartPolicy), Some(5))),
+                                                                        None,
+                                                                        None)
+                                                               ), None)))
     }
 
     it should "recognize error in complex execution policy" in {
@@ -202,12 +202,12 @@ class ExtrasTest extends FlatSpec with Matchers {
         // inputs is Readme.md file in project-FJ90qPj0jy8zYvVV9yz3F5gv
         val reorg: JsValue   =
             s"""|{
-               | "custom_reorg" : {
-               |    "app_id" :"${appId}",
-               |    "conf" : "${fileId}"
-               |  }
-               |}
-               |""".stripMargin.parseJson
+                | "custom_reorg" : {
+                |    "app_id" :"${appId}",
+                |    "conf" : "${fileId}"
+                |  }
+                |}
+                |""".stripMargin.parseJson
 
         val extras = Extras.parse(reorg, verbose)
         extras.customReorgAttributes  should be (
@@ -239,188 +239,182 @@ class ExtrasTest extends FlatSpec with Matchers {
         // app_id is mummer nucmer app in project-FJ90qPj0jy8zYvVV9yz3F5gv
         val appId : String = getIdFromName("/release_test/mummer_nucmer_aligner")
         val reorg: JsValue   =
-        s"""|{
-            | "custom_reorg" : {
-            |    "app_id" : "${appId}"
-            |  }
-            |}
-            |""".stripMargin.parseJson
+            s"""|{
+                | "custom_reorg" : {
+                |    "app_id" : "${appId}"
+                |  }
+                |}
+                |""".stripMargin.parseJson
 
 
-      val thrown = intercept[dxWDL.base.IllegalArgumentException] {
-          Extras.parse(reorg, verbose)
-      }
+        val thrown = intercept[dxWDL.base.IllegalArgumentException] {
+            Extras.parse(reorg, verbose)
+        }
 
-      //thrown.getMessage should contain  ("inputs must be specified in the custom_reorg section.")
-      thrown.getMessage should be  (
-          "conf must be specified in the custom_reorg section. Please set the value to null if there is no conf file."
-      )
+        //thrown.getMessage should contain  ("inputs must be specified in the custom_reorg section.")
+        thrown.getMessage should be  (
+            "conf must be specified in the custom_reorg section. Please set the value to null if there is no conf file."
+        )
     }
 
     it should "Allow inputs to be null in custom reorg" in {
 
-      // app_id is mummer nucmer app in project-FJ90qPj0jy8zYvVV9yz3F5gv
-      val appId : String = getIdFromName("/release_test/mummer_nucmer_aligner")
-      val reorg: JsValue   =
-        s"""|{
-            | "custom_reorg" : {
-            |    "app_id" : "${appId}",
-            |    "conf" : null
-            |  }
-            |}
-            |""".stripMargin.parseJson
+        // app_id is mummer nucmer app in project-FJ90qPj0jy8zYvVV9yz3F5gv
+        val appId : String = getIdFromName("/release_test/mummer_nucmer_aligner")
+        val reorg: JsValue   =
+            s"""|{
+                | "custom_reorg" : {
+                |    "app_id" : "${appId}",
+                |    "conf" : null
+                |  }
+                |}
+                |""".stripMargin.parseJson
 
 
-      val extras = Extras.parse(reorg, verbose)
-      extras.customReorgAttributes should be (
-        Some(ReorgAttrs(appId, ""))
-      )
-  }
-
-  it should "throw IllegalArgumentException due to invalid applet ID" in {
-
-    // invalid applet ID
-    val appId : String = "applet-123456"
-    val reorg : JsValue =
-      s"""|{
-          |  "custom_reorg" : {
-          |      "app_id" : "${appId}",
-          |      "conf": null
-          |   }
-          |}
-          |""".stripMargin.parseJson
-
-    val thrown = intercept[dxWDL.base.IllegalArgumentException] {
-      Extras.parse(reorg, verbose)
+        val extras = Extras.parse(reorg, verbose)
+        extras.customReorgAttributes should be (
+            Some(ReorgAttrs(appId, ""))
+        )
     }
 
-    thrown.getMessage should be  (
-      s"dxId must match applet-[A-Za-z0-9]{24}"
-    )
+    it should "throw IllegalArgumentException due to invalid applet ID" in {
 
-  }
+        // invalid applet ID
+        val appId : String = "applet-123456"
+        val reorg : JsValue =
+            s"""|{
+                |  "custom_reorg" : {
+                |      "app_id" : "${appId}",
+                |      "conf": null
+                |   }
+                |}
+                |""".stripMargin.parseJson
+
+        val thrown = intercept[dxWDL.base.IllegalArgumentException] {
+            Extras.parse(reorg, verbose)
+        }
+
+        thrown.getMessage should be  (
+            s"dxId must match applet-[A-Za-z0-9]{24}"
+        )
+
+    }
 
     ignore should "throw ResourceNotFoundException due to non-existent applet" in {
 
-    // non-existent (made up) applet ID
-    val appId : String = "applet-mPX7K2j0Gv2K2jXF75Bf21v2"
-    val reorg : JsValue =
-      s"""|{
-          |  "custom_reorg" : {
-          |      "app_id" : "${appId}",
-          |      "conf": null
-          |   }
-          |}
-          |""".stripMargin.parseJson
+        // non-existent (made up) applet ID
+        val appId : String = "applet-mPX7K2j0Gv2K2jXF75Bf21v2"
+        val reorg : JsValue =
+            s"""|{
+                |  "custom_reorg" : {
+                |      "app_id" : "${appId}",
+                |      "conf": null
+                |   }
+                |}
+                |""".stripMargin.parseJson
 
-    val thrown = intercept[Exception] {
-      Extras.parse(reorg, verbose)
+        val thrown = intercept[Exception] {
+            Extras.parse(reorg, verbose)
+        }
+
+        thrown.getMessage should be  (
+            s"""Error running command dx describe $appId --json"""
+        )
+
     }
 
-    thrown.getMessage should be  (
-      s"""Error running command dx describe $appId --json"""
-    )
+    it should "throw IllegalArgumentException due to invalid file ID" in {
 
-  }
+        // app_id is mummer nucmer app in project-FJ90qPj0jy8zYvVV9yz3F5gv
 
-  it should "throw IllegalArgumentException due to invalid file ID" in {
+        val appId : String = getIdFromName("/release_test/mummer_nucmer_aligner")
+        val inputs : String = "file-1223445"
+        val reorg : JsValue =
+            s"""|{
+                |  "custom_reorg" : {
+                |      "app_id" : "${appId}",
+                |      "conf": "${inputs}"
+                |   }
+                |}
+                |""".stripMargin.parseJson
 
-    // app_id is mummer nucmer app in project-FJ90qPj0jy8zYvVV9yz3F5gv
-
-    val appId : String = getIdFromName("/release_test/mummer_nucmer_aligner")
-    val inputs : String = "file-1223445"
-    val reorg : JsValue =
-      s"""|{
-          |  "custom_reorg" : {
-          |      "app_id" : "${appId}",
-          |      "conf": "${inputs}"
-          |   }
-          |}
-          |""".stripMargin.parseJson
-
-    val thrown = intercept[java.lang.IllegalArgumentException] {
-      Extras.parse(reorg, verbose)
+        assertThrows[java.lang.IllegalArgumentException] {
+            Extras.parse(reorg, verbose)
+        }
     }
 
-    thrown.getMessage should be  (
-      s"dxId must match file-[A-Za-z0-9]{24}"
-    )
+    it should "throw ResourceNotFoundException due to non-existant file" taggedAs(EdgeTest) in {
 
-  }
+        // app_id is mummer nucmer app in project-FJ90qPj0jy8zYvVV9yz3F5gv
 
-  it should "throw ResourceNotFoundException due to non-existant file" in {
+        val appId : String = getIdFromName("/release_test/mummer_nucmer_aligner")
+        val inputs : String = "dx://file-AZBYlBQ0jy1qpqJz17gpXFf8"
+        val reorg : JsValue =
+            s"""|{
+                |  "custom_reorg" : {
+                |      "app_id" : "${appId}",
+                |      "conf": "${inputs}"
+                |   }
+                |}
+                |""".stripMargin.parseJson
 
-    // app_id is mummer nucmer app in project-FJ90qPj0jy8zYvVV9yz3F5gv
+        val thrown = intercept[ResourceNotFoundException] {
+            Extras.parse(reorg, verbose)
+        }
 
-    val appId : String = getIdFromName("/release_test/mummer_nucmer_aligner")
-    val inputs : String = "dx://file-AZBYlBQ0jy1qpqJz17gpXFf8"
-    val reorg : JsValue =
-      s"""|{
-          |  "custom_reorg" : {
-          |      "app_id" : "${appId}",
-          |      "conf": "${inputs}"
-          |   }
-          |}
-          |""".stripMargin.parseJson
+        val fileId : String = inputs.replace("dx://", "")
 
-    val thrown = intercept[ResourceNotFoundException] {
-      Extras.parse(reorg, verbose)
+        thrown.getMessage should be  (
+            s""""${fileId}" is not a recognized ID"""
+        )
     }
-
-    val fileId : String = inputs.replace("dx://", "")
-
-    thrown.getMessage should be  (
-      s""""${fileId}" is not a recognized ID"""
-    )
-
-  }
 
     // FIXME: tab should be set to 4 spaces
     ignore should "throw PermissionDeniedException due to applet not having contribute access in the project" in {
 
-    // app_id is sum app in project-FJ90qPj0jy8zYvVV9yz3F5gv
-    val appId : String = getIdFromName("/release_test/Sum ")
-    val reorg: JsValue =
-      s"""|{
-          | "custom_reorg" : {
-          |    "app_id" : "${appId}",
-          |    "conf": "null"
-          |  }
-          |}
-          |""".stripMargin.parseJson
+        // app_id is sum app in project-FJ90qPj0jy8zYvVV9yz3F5gv
+        val appId : String = getIdFromName("/release_test/Sum ")
+        val reorg: JsValue =
+            s"""|{
+                | "custom_reorg" : {
+                |    "app_id" : "${appId}",
+                |    "conf": "null"
+                |  }
+                |}
+                |""".stripMargin.parseJson
 
-    val thrown = intercept[PermissionDeniedException] {
-      Extras.parse(reorg, verbose)
+        val thrown = intercept[PermissionDeniedException] {
+            Extras.parse(reorg, verbose)
 
+        }
+
+        thrown.getMessage should be (
+            s"ERROR: App(let) for custom reorg stage ${appId} does not " +
+                s"have CONTRIBUTOR or ADMINISTRATOR access and this is required."
+        )
     }
 
-    thrown.getMessage should be (
-      s"ERROR: App(let) for custom reorg stage ${appId} does not " +
-        s"have CONTRIBUTOR or ADMINISTRATOR access and this is required."
-    )
-  }
+    it should "take app id as well as applet id for custom reorg" in {
 
-  it should "take app id as well as applet id for custom reorg" taggedAs (EdgeTest) in {
+        val appId : String = getIdFromName("cloud_workstation")
+        val reorg: JsValue =
+            s"""|{
+                | "custom_reorg" : {
+                |    "app_id" : "${appId}",
+                |    "conf": null
+                |  }
+                |}
+                |""".stripMargin.parseJson
 
-    val appId : String = getIdFromName("cloud_workstation")
-    val reorg: JsValue =
-      s"""|{
-          | "custom_reorg" : {
-          |    "app_id" : "${appId}",
-          |    "conf": null
-          |  }
-          |}
-          |""".stripMargin.parseJson
+        val extras = Extras.parse(reorg, verbose)
+        extras.customReorgAttributes  should be (
+            Some(ReorgAttrs(appId, ""))
+        )
+    }
 
-    val extras = Extras.parse(reorg, verbose)
-    extras.customReorgAttributes  should be (
-      Some(ReorgAttrs(appId, ""))
-    )
-  }
-
-  it should "generate valid JSON execution policy" in {
-    val expectedJs : JsValue =
-        """|{
+    it should "generate valid JSON execution policy" in {
+        val expectedJs : JsValue =
+            """|{
                | "executionPolicy": {
                |    "restartOn": {
                |       "*": 5
@@ -471,7 +465,7 @@ class ExtrasTest extends FlatSpec with Matchers {
             case None =>
                 throw new Exception("Wrong type for dockerOpt")
             case Some(docker) =>
-                 docker should equal (WomString("quay.io/encode-dcc/atac-seq-pipeline:v1"))
+                docker should equal (WomString("quay.io/encode-dcc/atac-seq-pipeline:v1"))
         }
     }
 
@@ -529,16 +523,16 @@ class ExtrasTest extends FlatSpec with Matchers {
         val extras = Extras.parse(runSpec, verbose)
         extras.defaultTaskDxAttributes should be (
             Some(DxAttrs(Some(DxRunSpec(
-                     None,
-                     None,
-                     None,
-                     Some(DxTimeout(None, Some(12), None))
-                 )), None)))
+                                  None,
+                                  None,
+                                  None,
+                                  Some(DxTimeout(None, Some(12), None))
+                              )), None)))
         extras.perTaskDxAttributes should be (
             Map("Multiply" -> DxAttrs(Some(DxRunSpec(Some(DxAccess(None, Some(AccessLevel.UPLOAD), None, None, None)),
-                                        None, None, Some(DxTimeout(None, None, Some(30))))), None),
+                                                     None, None, Some(DxTimeout(None, None, Some(30))))), None),
                 "Add" -> DxAttrs(Some(DxRunSpec(None, None, None, Some(DxTimeout(None, None, Some(30))))), None)
-        ))
+            ))
     }
 
     it should "include optional details and runSpec in per task attributes" in {
@@ -594,24 +588,24 @@ class ExtrasTest extends FlatSpec with Matchers {
         val extras = Extras.parse(runSpec, verbose)
         extras.defaultTaskDxAttributes should be (
             Some(DxAttrs(Some(DxRunSpec(
-                None,
-                None,
-                None,
-                Some(DxTimeout(None, Some(12), None))
-            )), None)))
+                                  None,
+                                  None,
+                                  None,
+                                  Some(DxTimeout(None, Some(12), None))
+                              )), None)))
 
         extras.perTaskDxAttributes should be (
             Map("Add" -> DxAttrs(
-                Some(DxRunSpec(
-                    None, None, None, Some(DxTimeout(None, None, Some(30))))),
-                Some(DxDetails(Some(
-                    List(DxLicense(
-                        "GATK4",
-                        "https://github.com/broadinstitute/gatk",
-                        "GATK-4.0.1.2",
-                        "BSD-3-Clause",
-                        "https://github.com/broadinstitute/LICENSE.TXT",
-                        "Broad Institute")))))),
+                    Some(DxRunSpec(
+                             None, None, None, Some(DxTimeout(None, None, Some(30))))),
+                    Some(DxDetails(Some(
+                                       List(DxLicense(
+                                                "GATK4",
+                                                "https://github.com/broadinstitute/gatk",
+                                                "GATK-4.0.1.2",
+                                                "BSD-3-Clause",
+                                                "https://github.com/broadinstitute/LICENSE.TXT",
+                                                "Broad Institute")))))),
                 "Multiply" -> DxAttrs(
                     Some(DxRunSpec(Some(DxAccess(None,Some(AccessLevel.UPLOAD),None,None,None)), None, None, Some(DxTimeout(None, None, Some(30))))), None)
             )
@@ -655,18 +649,18 @@ class ExtrasTest extends FlatSpec with Matchers {
                 DxAttrs(
                     Some(DxRunSpec(None,None,None,Some(DxTimeout(None,Some(12),None)))),
                     None
-            )))
+                )))
         extras.perTaskDxAttributes should be (
             Map("Add" -> DxAttrs(
-                None,
-                Some(DxDetails(Some(
-                    List(DxLicense(
-                        "GATK4",
-                        "https://github.com/broadinstitute/gatk",
-                        "GATK-4.0.1.2",
-                        "BSD-3-Clause",
-                        "https://github.com/broadinstitute/LICENSE.TXT",
-                        "Broad Institute"))))))
+                    None,
+                    Some(DxDetails(Some(
+                                       List(DxLicense(
+                                                "GATK4",
+                                                "https://github.com/broadinstitute/gatk",
+                                                "GATK-4.0.1.2",
+                                                "BSD-3-Clause",
+                                                "https://github.com/broadinstitute/LICENSE.TXT",
+                                                "Broad Institute"))))))
             )
         )
     }
@@ -736,31 +730,31 @@ class ExtrasTest extends FlatSpec with Matchers {
     it should "convert DxLicense to JsValue" in {
 
         val dxDetailsJson : JsValue =
-          """|[
-             |   {
-             |      "author":"author1",
-             |      "license":"license1",
-             |      "licenseUrl":"licenseURL",
-             |      "name":"name",
-             |      "repoUrl":"repoURL",
-             |      "version":"version1"
-             |   },
-             |   {
-             |      "author":"author2",
-             |      "license":"license2",
-             |      "licenseUrl":"licenseURL",
-             |      "name":"name2",
-             |      "repoUrl":"repoURL",
-             |      "version":"version2"
-             |   }
-             |]
-             |""".stripMargin.parseJson
+            """|[
+               |   {
+               |      "author":"author1",
+               |      "license":"license1",
+               |      "licenseUrl":"licenseURL",
+               |      "name":"name",
+               |      "repoUrl":"repoURL",
+               |      "version":"version1"
+               |   },
+               |   {
+               |      "author":"author2",
+               |      "license":"license2",
+               |      "licenseUrl":"licenseURL",
+               |      "name":"name2",
+               |      "repoUrl":"repoURL",
+               |      "version":"version2"
+               |   }
+               |]
+               |""".stripMargin.parseJson
 
 
         val upstreamProjects  = List(
             DxLicense("name", "repoURL", "version1", "license1", "licenseURL", "author1"),
             DxLicense("name2", "repoURL", "version2", "license2", "licenseURL", "author2"),
-        )
+            )
 
         val dxDetails = DxDetails(Some(upstreamProjects))
 
@@ -782,7 +776,7 @@ class ExtrasTest extends FlatSpec with Matchers {
 
         val dxAttrs: DxAttrs = DxAttrs(
             Some(DxRunSpec(
-                None, None, None, Some(DxTimeout(None, None, Some(30))))),
+                     None, None, None, Some(DxTimeout(None, None, Some(30))))),
             None
         )
 
@@ -806,7 +800,7 @@ class ExtrasTest extends FlatSpec with Matchers {
     it should "all DxAttr to return Details Json" in {
 
         val expectedContent =
-          """
+            """
             |[
             |  {
             |    "name": "GATK4",
@@ -825,15 +819,15 @@ class ExtrasTest extends FlatSpec with Matchers {
         val dxAttrs: DxAttrs = DxAttrs(
             None,
             Some(DxDetails(Some(
-                List(DxLicense(
-                    "GATK4",
-                    "https://github.com/broadinstitute/gatk",
-                    "GATK-4.0.1.2",
-                    "BSD-3-Clause",
-                    "https://github.com/broadinstitute/LICENSE.TXT",
-                    "Broad Institute")
-                )
-            ))
+                               List(DxLicense(
+                                        "GATK4",
+                                        "https://github.com/broadinstitute/gatk",
+                                        "GATK-4.0.1.2",
+                                        "BSD-3-Clause",
+                                        "https://github.com/broadinstitute/LICENSE.TXT",
+                                        "Broad Institute")
+                               )
+                           ))
             )
         )
 

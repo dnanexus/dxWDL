@@ -27,14 +27,14 @@ price       comparative price
 
 package dxWDL.util
 
-import com.dnanexus.{DXAPI, DXJSON, DXProject}
+import com.dnanexus.{DXAPI, DXJSON}
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.node.ObjectNode
 import spray.json._
 import wom.values._
 
 import dxWDL.base.{Utils, Verbose}
-import dxWDL.dx.DxUtils
+import dxWDL.dx._
 
 // Request for an instance type
 case class InstanceTypeReq(dxInstanceType: Option[String],
@@ -399,7 +399,7 @@ object InstanceTypeDB extends DefaultJsonProtocol {
 
     // Query the platform for the available instance types in
     // this project.
-    private def queryAvailableInstanceTypes(dxProject: DXProject) : Map[String, DxInstanceType] = {
+    private def queryAvailableInstanceTypes(dxProject: DxProject) : Map[String, DxInstanceType] = {
         // get List of supported OSes
         def getSupportedOSes(js: JsValue) : Vector[(String, String)]= {
             val osSupported:Vector[JsValue] = js.asJsObject.fields.get("os") match {
@@ -419,7 +419,7 @@ object InstanceTypeDB extends DefaultJsonProtocol {
                  DXJSON.getObjectBuilder().put(availableField, true)
                      .build())
             .build()
-        val rep = DXAPI.projectDescribe(dxProject.getId(), req, classOf[JsonNode])
+        val rep = DXAPI.projectDescribe(dxProject.id, req, classOf[JsonNode])
         val repJs:JsValue = DxUtils.jsValueOfJsonNode(rep)
         val availableInstanceTypes:JsValue =
             repJs.asJsObject.fields.get(availableField) match {
@@ -509,7 +509,7 @@ object InstanceTypeDB extends DefaultJsonProtocol {
         return true
     }
 
-    private def queryNoPrices(dxProject: DXProject) : InstanceTypeDB = {
+    private def queryNoPrices(dxProject: DxProject) : InstanceTypeDB = {
         // Figure out the available instances by describing the project
         val allAvailableIT = queryAvailableInstanceTypes(dxProject)
 
@@ -521,7 +521,7 @@ object InstanceTypeDB extends DefaultJsonProtocol {
         InstanceTypeDB(false, iTypes)
     }
 
-    private def queryWithPrices(dxProject: DXProject) : InstanceTypeDB = {
+    private def queryWithPrices(dxProject: DxProject) : InstanceTypeDB = {
         // Figure out the available instances by describing the project
         val allAvailableIT = queryAvailableInstanceTypes(dxProject)
 
@@ -539,7 +539,7 @@ object InstanceTypeDB extends DefaultJsonProtocol {
         InstanceTypeDB(true, iTypes)
     }
 
-    def query(dxProject: DXProject, verbose:Verbose) : InstanceTypeDB = {
+    def query(dxProject: DxProject, verbose:Verbose) : InstanceTypeDB = {
         try {
             queryWithPrices(dxProject)
         } catch {
