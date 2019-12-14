@@ -48,6 +48,11 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
         "-quiet",  "--folder", "/reorg_tests")
 
     override def beforeAll() : Unit = {
+        // build the directory with the native applets
+        Utils.execCommand(
+            s"dx mkdir -p ${TEST_PROJECT}:/unit_tests/applets/",
+                quiet=true)
+
         // building necessary applets before starting the tests
         val native_applets = Vector("native_concat",
                                     "native_diff",
@@ -59,8 +64,9 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
         val topDir = Paths.get(System.getProperty("user.dir"))
         native_applets.foreach { app =>
             try {
-                val (stdout, stderr) = Utils.execCommand(s"dx build $topDir/test/applets/$app --destination /unit_tests/applets/",
-                                                         quiet=true)
+                val (stdout, stderr) = Utils.execCommand(
+                    s"dx build $topDir/test/applets/$app --destination ${TEST_PROJECT}:/unit_tests/applets/",
+                    quiet=true)
             } catch {
                 case _: Throwable =>
             }
@@ -146,7 +152,7 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
         ) shouldBe a [Main.SuccessfulTermination]
     }
 
-    it should "be able to build interfaces to native applets" taggedAs(NativeTestXX) in {
+    it should "be able to build interfaces to native applets" taggedAs(NativeTestXX, EdgeTest) in {
         val outputPath = "/tmp/dx_extern.wdl"
         Main.dxni(
             List("--force", "--quiet",
@@ -243,7 +249,7 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
                                       "minutes" -> JsNumber(0)))
     }
 
-    it should "timeout can be overriden from the extras file" taggedAs(NativeTestXX, EdgeTest) in {
+    it should "timeout can be overriden from the extras file" taggedAs(NativeTestXX) in {
         val path = pathFromBasename("compiler", "add_timeout_override.wdl")
         val extraPath = pathFromBasename("compiler/extras",  "short_timeout.json")
         val appId = Main.compile(
@@ -269,7 +275,7 @@ class NativeTest extends FlatSpec with Matchers with BeforeAndAfterAll {
 
     }
 
-    it should "allow choosing GPU instances" taggedAs(NativeTestXX, EdgeTest) in {
+    it should "allow choosing GPU instances" taggedAs(NativeTestXX) in {
         val path = pathFromBasename("compiler", "GPU2.wdl")
 
         val appId = Main.compile(path.toString :: cFlags) match {

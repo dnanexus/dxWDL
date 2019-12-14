@@ -1,6 +1,5 @@
 package dxWDL.util
 
-import com.dnanexus.DXFile
 import java.nio.file.{Files, FileSystems, Paths, PathMatcher}
 import scala.collection.JavaConverters._
 import scala.concurrent.{ExecutionContext, Future}
@@ -10,9 +9,9 @@ import wom.expression.IoFunctionSet.IoElement
 import wom.values._
 
 import dxWDL.base.{AppInternalException, Utils}
-import dxWDL.dx.{DxDescribe, DxUtils}
+import dxWDL.dx.{DxFileDescribe, DxFile, DxUtils}
 
-case class DxPathFunctions(fileInfoDir : Map[DXFile, DxDescribe],
+case class DxPathFunctions(fileInfoDir : Map[String, (DxFile, DxFileDescribe)],
                            config: DxPathConfig,
                            runtimeDebugLevel: Int) extends PathFunctionSet {
 
@@ -56,11 +55,11 @@ case class DxPathFunctions(fileInfoDir : Map[DXFile, DxDescribe],
                 val p = Paths.get(localPath)
                 p.getFileName.toString
             case fdx : FurlDx =>
-                fileInfoDir.get(fdx.dxFile) match {
+                fileInfoDir.get(fdx.dxFile.id) match {
                     case None =>
                         // perform an API call to get the file name
-                        fdx.dxFile.describe().getName()
-                    case Some(desc) =>
+                        fdx.dxFile.describe().name
+                    case Some((_,desc)) =>
                         desc.name
                 }
         }
@@ -77,7 +76,7 @@ case class DxPathFunctions(fileInfoDir : Map[DXFile, DxDescribe],
     override def stderr: String = config.stderr.toString
 }
 
-case class DxIoFunctions(fileInfoDir : Map[DXFile, DxDescribe],
+case class DxIoFunctions(fileInfoDir : Map[String, (DxFile, DxFileDescribe)],
                          config: DxPathConfig,
                          runtimeDebugLevel: Int) extends IoFunctionSet {
     private val verbose = runtimeDebugLevel >= 1
@@ -196,23 +195,20 @@ case class DxIoFunctions(fileInfoDir : Map[DXFile, DxDescribe],
       * Return the size of the file located at "path"
       */
     override def size(path: String): Future[Long] = {
-        val size = Furl.parse(path) match {
+        Furl.parse(path) match {
             case FurlLocal(localPath) =>
                 val p = Paths.get(localPath)
-                p.toFile.length
+                Future(p.toFile.length)
             case fdx : FurlDx =>
-                pathFunctions.fileInfoDir.get(fdx.dxFile) match {
+                val ssize : Long = pathFunctions.fileInfoDir.get(fdx.dxFile.id) match {
                     case None =>
                         // perform an API call to get the size
-                        fdx.dxFile.describe().getSize()
-                    case Some(desc) =>
-                        desc.size match {
-                            case None => throw new Exception("missing size field")
-                            case Some(sz) => sz
-                        }
+                        fdx.dxFile.describe().size
+                    case Some((_, desc)) =>
+                        desc.size
                 }
+                Future(ssize)
         }
-        Future(size)
     }
 
     /**
