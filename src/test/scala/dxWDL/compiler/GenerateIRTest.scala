@@ -1,21 +1,46 @@
 package dxWDL.compiler
 
-
+import java.io.{BufferedWriter, File, FileWriter}
 import java.nio.file.{Path, Paths}
-import org.scalatest.{FlatSpec, Matchers}
+
+import org.scalatest.{BeforeAndAfterAll, FlatSpec, Matchers}
 import org.scalatest.Inside._
-import wom.callable.{CallableTaskDefinition}
+import wom.callable.CallableTaskDefinition
 import wom.callable.MetaValueElement
-
-
 import dxWDL.Main
 import dxWDL.base.Utils
-import dxWDL.dx.DxUtils
+import dxWDL.dx.{DxPath, DxUtils}
 import spray.json._
 
 // These tests involve compilation -without- access to the platform.
 //
-class GenerateIRTest extends FlatSpec with Matchers {
+class GenerateIRTest extends FlatSpec with Matchers with BeforeAndAfterAll {
+
+    val TEST_PROJECT = "dxWDL_playground"
+
+    lazy val dxTestProject =
+        try {
+            DxPath.resolveProject(TEST_PROJECT)
+        } catch {
+            case e : Exception =>
+                throw new Exception(s"""|Could not find project ${TEST_PROJECT}, you probably need to be logged into
+                                        |the platform""".stripMargin)
+        }
+
+    override def beforeAll() : Unit = {
+        // building necessary applets before starting the tests
+        val native_applets = Vector("functional_reorg_test")
+        val topDir = Paths.get(System.getProperty("user.dir"))
+        native_applets.foreach { app =>
+            try {
+                val (stdout, stderr) = Utils.execCommand(s"dx build $topDir/test/applets/$app --destination /unit_tests/applets/",
+                    quiet=true)
+            } catch {
+                case _: Throwable =>
+            }
+        }
+    }
+
     private def pathFromBasename(dir: String, basename: String) : Path = {
         val p = getClass.getResource(s"/${dir}/${basename}").getPath
         Paths.get(p)
@@ -498,16 +523,39 @@ class GenerateIRTest extends FlatSpec with Matchers {
     }
 
     // ignore for now as the test will fail in staging
-    ignore should "Compile a workflow on the platform with the config file in the input" taggedAs(ProdTest)  in {
-        val path = pathFromBasename("compiler", basename="wf_custom_reorg.wdl")
+    it should "Compile a workflow with subworkflows on the platform with the config file in the input" taggedAs(EdgeTest)  in {
+        val path = pathFromBasename("subworkflows", basename="trains_station.wdl")
 
-        val extrasPath = pathFromBasename("compiler/extras", basename="extras_custom_reorg_config.json")
+        val (app_stdout, app_stderr) = Utils.execCommand(
+            s"dx describe /unit_tests/applets/functional_reorg_test --json")
+
+        val applet_id = app_stdout.parseJson.asJsObject.fields.get("id") match {
+            case Some(JsString(x)) => x
+            case other => throw new Exception(s"Unexpected result ${other}")
+        }
+
+        val extrasContent =
+            s"""|{
+                | "custom_reorg" : {
+                |    "app_id" : "${applet_id}",
+                |    "conf" : null
+                |  }
+                |}
+                |""".stripMargin
+
+
+        val tmp_extras = File.createTempFile("reorg-", ".json")
+        tmp_extras.deleteOnExit()
+
+        val bw = new BufferedWriter(new FileWriter(tmp_extras))
+        bw.write(extrasContent)
+        bw.close()
 
         // remove locked workflow flag
         val cFlags2 = cFlags.drop(5) ++ Vector("--folder", "/reorg_tests")
 
         val retval = Main.compile(
-            path.toString :: "-extras" :: extrasPath.toString :: cFlags2
+            path.toString :: "-extras" :: tmp_extras.toString :: cFlags2
         )
         retval shouldBe a [Main.SuccessfulTermination]
         val wfId: String = retval match {
@@ -533,7 +581,7 @@ class GenerateIRTest extends FlatSpec with Matchers {
         }
 
         reorgDetails.getFields("id", "executable") shouldBe Seq(
-            JsString("stage-reorg"), JsString("applet-Fg623fj0jy8q7jjv9xV6q5fQ")
+            JsString("stage-reorg"), JsString(s"${applet_id}")
         )
         // There should be 3 inputs, the output from output stage and the custom reorg config file.
         val reorgInput: JsObject = reorgDetails.fields("input") match {

@@ -15,8 +15,7 @@ workflow trains {
         }
     }
 
-    Array[String] f_results = flatten(check_route.result)
     output {
-        Array[String] results = f_results
+        Array[String] results = flatten(check_route.result)
     }
 }
