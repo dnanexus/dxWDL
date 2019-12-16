@@ -5,7 +5,7 @@
   "dxapi": "1.0.0",
   "inputSpec": [
     {
-      "name": "___reorg_conf",
+      "name": "reorg_conf___",
       "label": "Config",
       "help": "",
       "class": "file",
@@ -13,7 +13,7 @@
       "optional": true
     },
     {
-      "name": "___reorg_status",
+      "name": "reorg_status___",
       "label": "Config",
       "help": "",
       "class": "string",
